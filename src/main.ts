@@ -48,14 +48,17 @@ function bootstrap() {
 
   mainLayout.appendChild(centerArea);
 
-  // 4. Inicializa Viewport WebGL (Three.js)
+  // Insere mainLayout no DOM antes de instanciar o Viewport para garantir dimensões não nulas
+  appContainer.appendChild(mainLayout);
+
+  // 4. Inicializa Viewport WebGL (Three.js) com dimensões reais já computadas pelo DOM
   const viewport = new Viewport(viewportContainer, graph, globalEventBus);
 
-  // 5. Inicializa Barra de Ferramentas
+  // 5. Inicializa Barra de Ferramentas e posiciona no topo
   const toolbar = new Toolbar(appContainer, graph, viewport, codeModal);
+  appContainer.insertBefore(toolbar.getContainer(), mainLayout);
 
-  // 6. Insere layout principal e sidebar de propriedades
-  appContainer.appendChild(mainLayout);
+  // 6. Sidebar de propriedades (Inspetor) dentro de mainLayout
   new Inspector(mainLayout, graph, globalEventBus);
 
   // 7. Console de Execução & Build na base da área central

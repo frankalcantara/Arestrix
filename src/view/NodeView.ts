@@ -65,6 +65,7 @@ export class NodeView {
     });
     this.headerMesh = new THREE.Mesh(headerGeo, headerMat);
     this.headerMesh.position.z = 2;
+    this.headerMesh.userData = { nodeId: this.nodeData.id, isBody: true };
     this.group.add(this.headerMesh);
 
     // 4. Badge e Tipografia Nítida (SEM SOMBRAS NEM GLOW - REGRA DO USUÁRIO)
@@ -106,6 +107,7 @@ export class NodeView {
     this.badgeSprite = new THREE.Sprite(badgeMat);
     this.badgeSprite.scale.set(110, 18, 1);
     this.badgeSprite.position.set(0, height / 2 - headerHeight / 2, 4);
+    this.badgeSprite.userData = { nodeId: this.nodeData.id, isBody: true };
     this.group.add(this.badgeSprite);
 
     // B. Título do Nó (Label)
@@ -132,6 +134,7 @@ export class NodeView {
     this.titleSprite = new THREE.Sprite(titleMat);
     this.titleSprite.scale.set(width - 24, 26, 1);
     this.titleSprite.position.set(0, height / 2 - headerHeight - 20, 4);
+    this.titleSprite.userData = { nodeId: this.nodeData.id, isBody: true };
     this.group.add(this.titleSprite);
   }
 
@@ -265,6 +268,7 @@ export class NodeView {
     this.titleSprite = new THREE.Sprite(titleMat);
     this.titleSprite.scale.set(width - 24, 26, 1);
     this.titleSprite.position.set(0, height / 2 - headerHeight - 20, 4);
+    this.titleSprite.userData = { nodeId: this.nodeData.id, isBody: true };
     this.group.add(this.titleSprite);
   }
 

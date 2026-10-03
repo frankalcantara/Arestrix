@@ -170,11 +170,19 @@ export class Toolbar {
     });
   }
 
+  public getContainer(): HTMLElement {
+    return this.container;
+  }
+
   private createNewNode(type: TaskflowNodeType): void {
     const existingCount = this.graph.getAllNodes().length;
     const id = `node_${Date.now()}`;
-    const x = (Math.random() - 0.5) * 300;
-    const y = (Math.random() - 0.5) * 300;
+    
+    // Posiciona no centro visível da visão atual do usuário com offset escalonado
+    const center = this.viewport.getCameraCenter();
+    const offset = (existingCount % 6) * 35;
+    const x = Math.round((center.x + offset) / 10) * 10;
+    const y = Math.round((center.y - offset) / 10) * 10;
 
     const labelMap: Record<TaskflowNodeType, string> = {
       static: `Agente_Worker_${existingCount + 1}`,
@@ -187,6 +195,9 @@ export class Toolbar {
     const node = this.graph.buildNode(id, labelMap[type], type, x, y);
     const cmd = new AddNodeCommand(this.graph, node);
     this.graph.commandManager.execute(cmd);
+
+    // Seleciona e destaca imediatamente o nó recém-criado para abrir no Inspetor
+    this.viewport.selectNode(id);
   }
 
   public loadDemoComplexSystem(): void {

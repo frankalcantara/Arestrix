@@ -33,7 +33,7 @@ body, html {
 
 /* --- Toolbar Superior Estilo Soft Neomorphic --- */
 .app-toolbar {
-  height: 64px;
+  min-height: 64px;
   background-color: var(--surface-card);
   margin: 12px 18px 0 18px;
   border-radius: 20px;
@@ -45,6 +45,8 @@ body, html {
   gap: 12px;
   z-index: 100;
   flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .toolbar-brand {

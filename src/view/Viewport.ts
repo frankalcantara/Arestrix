@@ -26,6 +26,7 @@ export class Viewport {
 
   private isRunning: boolean = true;
   private frustumSize: number = 1000;
+  private resizeObserver!: ResizeObserver;
 
   constructor(container: HTMLElement, graph: Graph, bus: EventBus) {
     this.container = container;
@@ -36,8 +37,11 @@ export class Viewport {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(THEME.canvasBackground);
 
-    // 2. Camera Ortográfica
-    const aspect = this.container.clientWidth / this.container.clientHeight;
+    // 2. Camera Ortográfica com dimensões seguras (evita NaN se o contêiner estiver com 0px)
+    const initialW = this.container.clientWidth > 0 ? this.container.clientWidth : Math.max(window.innerWidth - 380, 800);
+    const initialH = this.container.clientHeight > 0 ? this.container.clientHeight : Math.max(window.innerHeight - 120, 600);
+    const aspect = initialW / initialH;
+
     this.camera = new THREE.OrthographicCamera(
       (this.frustumSize * aspect) / -2,
       (this.frustumSize * aspect) / 2,
@@ -50,13 +54,21 @@ export class Viewport {
 
     // 3. Renderizador WebGL
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+    this.renderer.setSize(initialW, initialH);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.container.appendChild(this.renderer.domElement);
 
     // 4. Grid Infinito e Controlador de Câmera
     this.grid = new InfiniteGrid(this.scene);
     this.cameraController = new CameraController(this.camera, this.renderer.domElement, this.frustumSize);
+
+    // 5. Observador de Redimensionamento do DOM para sincronizar automaticamente
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => {
+        this.onResize();
+      });
+      this.resizeObserver.observe(this.container);
+    }
 
     // 5. Gerenciador de Interações e Raycasting
     this.interactionManager = new InteractionManager(
@@ -240,9 +252,17 @@ export class Viewport {
     this.cameraController.fitToBounds(bounds, 120);
   }
 
-  private onResize(): void {
-    const width = this.container.clientWidth;
-    const height = this.container.clientHeight;
+  public selectNode(id: string | null): void {
+    this.interactionManager.selectNode(id);
+  }
+
+  public getCameraCenter(): THREE.Vector2 {
+    return new THREE.Vector2(this.camera.position.x, this.camera.position.y);
+  }
+
+  public onResize(): void {
+    const width = this.container.clientWidth > 0 ? this.container.clientWidth : Math.max(window.innerWidth - 380, 800);
+    const height = this.container.clientHeight > 0 ? this.container.clientHeight : Math.max(window.innerHeight - 120, 600);
 
     const aspect = width / height;
     this.camera.left = (this.frustumSize * aspect) / -2;
@@ -262,8 +282,8 @@ export class Viewport {
     if (!this.isRunning) return;
     requestAnimationFrame(() => this.animate());
 
-    const width = this.container.clientWidth;
-    const height = this.container.clientHeight;
+    const width = this.container.clientWidth || 800;
+    const height = this.container.clientHeight || 600;
 
     // Atualiza shader do grid infinito
     this.grid.update(this.camera, width, height);
@@ -274,6 +294,7 @@ export class Viewport {
   dispose(): void {
     this.isRunning = false;
     window.removeEventListener('resize', this.onResize);
+    this.resizeObserver?.disconnect();
     this.clearAllViews();
     this.renderer.dispose();
   }

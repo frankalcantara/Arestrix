@@ -88,6 +88,17 @@ export class InteractionManager {
     window.addEventListener('pointermove', this.onPointerMove.bind(this));
     window.addEventListener('pointerup', this.onPointerUp.bind(this));
     window.addEventListener('keydown', this.onKeyDown.bind(this));
+
+    globalEventBus.on('node:removed', ({ id }: { id: string }) => {
+      if (this.selectedNodeId === id) {
+        this.selectNode(null);
+      }
+    });
+
+    globalEventBus.on('graph:cleared', () => {
+      this.selectNode(null);
+      this.selectEdge(null);
+    });
   }
 
   private updatePointer(e: PointerEvent): void {
