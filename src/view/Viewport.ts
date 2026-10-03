@@ -245,11 +245,11 @@ export class Viewport {
 
     const bounds = new THREE.Box2();
     nodes.forEach(n => {
-      bounds.expandByPoint(new THREE.Vector2(n.position.x - 120, n.position.y - 70));
-      bounds.expandByPoint(new THREE.Vector2(n.position.x + 120, n.position.y + 70));
+      bounds.expandByPoint(new THREE.Vector2(n.position.x - 145, n.position.y - 80));
+      bounds.expandByPoint(new THREE.Vector2(n.position.x + 145, n.position.y + 80));
     });
 
-    this.cameraController.fitToBounds(bounds, 120);
+    this.cameraController.fitToBounds(bounds, 80);
   }
 
   public selectNode(id: string | null): void {

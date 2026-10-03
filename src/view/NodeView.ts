@@ -12,6 +12,7 @@ export class NodeView {
   private borderLine!: THREE.LineLoop;
   private titleSprite!: THREE.Sprite;
   private badgeSprite!: THREE.Sprite;
+  private portLabelSprites: THREE.Sprite[] = [];
 
   private portMeshes: Map<string, THREE.Mesh> = new Map();
   private portHitboxes: Map<string, THREE.Mesh> = new Map();
@@ -27,7 +28,7 @@ export class NodeView {
 
   private buildNode(): void {
     const width = THEME.nodeBody.width;
-    const height = Math.max(THEME.nodeBody.height, 40 + Math.max(this.nodeData.inputs.length, this.nodeData.outputs.length) * 24);
+    const height = Math.max(THEME.nodeBody.height, 60 + Math.max(this.nodeData.inputs.length, this.nodeData.outputs.length) * 28);
     const radius = THEME.nodeBody.borderRadius;
     const typeTheme = THEME.nodeTypes[this.nodeData.type] || THEME.nodeTypes.static;
 
@@ -56,7 +57,7 @@ export class NodeView {
     this.group.add(this.borderLine);
 
     // 3. Header Colorido
-    const headerHeight = 28;
+    const headerHeight = THEME.nodeBody.headerHeight;
     const headerShape = this.createHeaderShape(width, height, headerHeight, radius);
     const headerGeo = new THREE.ShapeGeometry(headerShape);
     const headerMat = new THREE.MeshBasicMaterial({
@@ -68,11 +69,10 @@ export class NodeView {
     this.headerMesh.userData = { nodeId: this.nodeData.id, isBody: true };
     this.group.add(this.headerMesh);
 
-    // 4. Badge e Tipografia Nítida (SEM SOMBRAS NEM GLOW - REGRA DO USUÁRIO)
-    // Criamos texturas HiDPI com renderizacao vetorial de texto nítido
+    // 4. Badge e Tipografia Nítida em Alto Contraste (SEM SOMBRAS NEM GLOW - REGRA DO USUÁRIO)
     this.createTypography(width, height, headerHeight, typeTheme);
 
-    // 5. Portas de Entrada e Saída
+    // 5. Portas de Entrada e Saída com Rótulos Visíveis
     this.createPorts(width, height, headerHeight);
   }
 
@@ -82,86 +82,117 @@ export class NodeView {
    * Alternativas limpas: cor de contraste, peso tipográfico 700/800, badge de fundo limpo."
    */
   private createTypography(width: number, height: number, headerHeight: number, typeTheme: any): void {
-    // A. Badge de Tipo no Topo
-    const badgeCanvas = document.createElement('canvas');
-    badgeCanvas.width = 380;
-    badgeCanvas.height = 64;
-    const bCtx = badgeCanvas.getContext('2d')!;
-    bCtx.imageSmoothingEnabled = false;
-
-    // Fundo da Pílula / Badge limpo com cantos arredondados
-    bCtx.fillStyle = `#${typeTheme.badgeBg.toString(16).padStart(6, '0')}`;
-    this.roundRect(bCtx, 10, 10, 360, 44, 8);
-    bCtx.fill();
-
-    // Texto do Badge perfeitamente nítido e em alto peso
-    bCtx.fillStyle = '#FFFFFF';
-    bCtx.font = 'bold 22px Inter, system-ui, sans-serif';
-    bCtx.textAlign = 'center';
-    bCtx.textBaseline = 'middle';
-    bCtx.fillText(typeTheme.label, 190, 32);
-
-    const badgeTexture = new THREE.CanvasTexture(badgeCanvas);
-    badgeTexture.minFilter = THREE.LinearFilter;
-    const badgeMat = new THREE.SpriteMaterial({ map: badgeTexture, transparent: true });
-    this.badgeSprite = new THREE.Sprite(badgeMat);
-    this.badgeSprite.scale.set(110, 18, 1);
-    this.badgeSprite.position.set(0, height / 2 - headerHeight / 2, 4);
-    this.badgeSprite.userData = { nodeId: this.nodeData.id, isBody: true };
+    this.badgeSprite = this.createBadgeSprite(height, headerHeight, typeTheme);
     this.group.add(this.badgeSprite);
 
-    // B. Título do Nó (Label)
-    const titleCanvas = document.createElement('canvas');
-    titleCanvas.width = 512;
-    titleCanvas.height = 80;
-    const tCtx = titleCanvas.getContext('2d')!;
-
-    // Fundo de pílula suave e limpo (Slate 100)
-    tCtx.fillStyle = '#F1F5F9';
-    this.roundRect(tCtx, 8, 8, 496, 64, 12);
-    tCtx.fill();
-
-    // Texto com peso tipográfico 800 e alto contraste limpo (#1E2538) - ZERO SOMBRAS
-    tCtx.fillStyle = '#1E2538';
-    tCtx.font = '800 28px Inter, system-ui, sans-serif';
-    tCtx.textAlign = 'center';
-    tCtx.textBaseline = 'middle';
-    tCtx.fillText(this.nodeData.label, 256, 40);
-
-    const titleTexture = new THREE.CanvasTexture(titleCanvas);
-    titleTexture.minFilter = THREE.LinearFilter;
-    const titleMat = new THREE.SpriteMaterial({ map: titleTexture, transparent: true });
-    this.titleSprite = new THREE.Sprite(titleMat);
-    this.titleSprite.scale.set(width - 24, 26, 1);
-    this.titleSprite.position.set(0, height / 2 - headerHeight - 20, 4);
-    this.titleSprite.userData = { nodeId: this.nodeData.id, isBody: true };
+    this.titleSprite = this.createTitleSprite(width, height, headerHeight, this.nodeData.label);
     this.group.add(this.titleSprite);
+  }
+
+  private createBadgeSprite(height: number, headerHeight: number, typeTheme: any): THREE.Sprite {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 80;
+    const ctx = canvas.getContext('2d')!;
+    ctx.imageSmoothingEnabled = true;
+
+    // Fundo da Pílula / Badge limpo
+    ctx.fillStyle = `#${typeTheme.badgeBg.toString(16).padStart(6, '0')}`;
+    this.roundRect(ctx, 8, 8, 496, 64, 16);
+    ctx.fill();
+
+    // Texto do Badge perfeitamente nítido e em alto peso (SEM SOMBRAS)
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '800 32px Inter, system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(typeTheme.label, 256, 40);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+
+    const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(170, 26, 1);
+    sprite.position.set(0, height / 2 - headerHeight / 2, 4);
+    sprite.userData = { nodeId: this.nodeData.id, isBody: true };
+    return sprite;
+  }
+
+  private createTitleSprite(width: number, height: number, headerHeight: number, label: string): THREE.Sprite {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 160;
+    const ctx = canvas.getContext('2d')!;
+    ctx.imageSmoothingEnabled = true;
+
+    // Fundo de pílula suave e limpo (Slate 100 com borda suave Slate 200)
+    ctx.fillStyle = '#F1F5F9';
+    this.roundRect(ctx, 8, 8, 1008, 144, 20);
+    ctx.fill();
+
+    ctx.strokeStyle = '#CBD5E1';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Medição e escala dinâmica para que títulos longos fiquem grandes e sem corte
+    let fontSize = 46;
+    ctx.font = `800 ${fontSize}px Inter, system-ui, -apple-system, sans-serif`;
+    const textW = ctx.measureText(label).width;
+    const maxTextW = 940;
+    if (textW > maxTextW) {
+      fontSize = Math.max(26, Math.floor(fontSize * (maxTextW / textW)));
+      ctx.font = `800 ${fontSize}px Inter, system-ui, -apple-system, sans-serif`;
+    }
+
+    // Texto com peso tipográfico 800 e alto contraste (#0F172A) - ZERO SOMBRAS
+    ctx.fillStyle = '#0F172A';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, 512, 80);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+
+    const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(width - 24, 38, 1);
+    sprite.position.set(0, height / 2 - headerHeight - 24, 4);
+    sprite.userData = { nodeId: this.nodeData.id, isBody: true };
+    return sprite;
   }
 
   private createPorts(width: number, height: number, headerHeight: number): void {
     const halfW = width / 2;
     const halfH = height / 2;
-    const usableH = height - headerHeight - 20;
+
+    // Zona de portas abaixo do título
+    const titleBottom = (halfH - headerHeight - 24) - 20;
+    const cardBottom = -halfH + 12;
+    const portZoneHeight = titleBottom - cardBottom;
 
     // Portas de Entrada (Esquerda)
     const inCount = this.nodeData.inputs.length;
     this.nodeData.inputs.forEach((port, idx) => {
-      const spacing = usableH / (inCount + 1);
-      const py = halfH - headerHeight - (idx + 1) * spacing;
-      this.createSinglePort(port, -halfW, py);
+      const spacing = portZoneHeight / (inCount + 1);
+      const py = titleBottom - (idx + 1) * spacing;
+      this.createSinglePort(port, -halfW, py, true);
     });
 
     // Portas de Saída (Direita)
     const outCount = this.nodeData.outputs.length;
     this.nodeData.outputs.forEach((port, idx) => {
-      const spacing = usableH / (outCount + 1);
-      const py = halfH - headerHeight - (idx + 1) * spacing;
-      this.createSinglePort(port, halfW, py);
+      const spacing = portZoneHeight / (outCount + 1);
+      const py = titleBottom - (idx + 1) * spacing;
+      this.createSinglePort(port, halfW, py, false);
     });
   }
 
-  private createSinglePort(port: IPort, px: number, py: number): void {
-    const isInput = port.direction === 'input';
+  private createSinglePort(port: IPort, px: number, py: number, isInput: boolean): void {
     const isConditionBranch = port.conditionBranchIndex !== undefined;
 
     let portColor = isInput ? THEME.port.inputColor : THEME.port.outputColor;
@@ -169,7 +200,7 @@ export class NodeView {
       portColor = port.conditionBranchIndex === 0 ? 0x10b981 : 0xf59e0b;
     }
 
-    // Circulo visual da porta
+    // 1. Círculo visual da porta
     const portGeo = new THREE.CircleGeometry(THEME.port.radius, 16);
     const portMat = new THREE.MeshBasicMaterial({ color: portColor });
     const portMesh = new THREE.Mesh(portGeo, portMat);
@@ -183,7 +214,7 @@ export class NodeView {
     this.group.add(portMesh);
     this.portMeshes.set(port.id, portMesh);
 
-    // Hitbox invisivel expandida para clique facil
+    // 2. Hitbox invisível expandida para clique/conexão fácil
     const hitGeo = new THREE.CircleGeometry(THEME.port.hitboxRadius, 12);
     const hitMat = new THREE.MeshBasicMaterial({ visible: false });
     const hitMesh = new THREE.Mesh(hitGeo, hitMat);
@@ -196,12 +227,69 @@ export class NodeView {
     };
     this.group.add(hitMesh);
     this.portHitboxes.set(port.id, hitMesh);
+
+    // 3. Rótulo legível da porta (IN / OUT / TRUE / FALSE) em alto contraste
+    this.createPortLabel(port, px, py, isInput);
+  }
+
+  private createPortLabel(port: IPort, px: number, py: number, isInput: boolean): void {
+    const isConditionBranch = port.conditionBranchIndex !== undefined;
+    const canvas = document.createElement('canvas');
+    canvas.width = 220;
+    canvas.height = 60;
+    const ctx = canvas.getContext('2d')!;
+    ctx.imageSmoothingEnabled = true;
+
+    let text = isInput ? (port.name ? port.name.toUpperCase() : 'IN') : (port.name ? port.name.toUpperCase() : 'OUT');
+    let textColor = '#64748B'; // Slate 500
+    let fontSize = 28;
+
+    if (!isInput && isConditionBranch) {
+      if (port.conditionBranchIndex === 0) {
+        text = 'TRUE (0)';
+        textColor = '#059669'; // Emerald 600
+        fontSize = 26;
+      } else {
+        text = 'FALSE (1)';
+        textColor = '#D97706'; // Amber 600
+        fontSize = 26;
+      }
+    }
+
+    ctx.font = `800 ${fontSize}px Inter, system-ui, -apple-system, sans-serif`;
+    ctx.fillStyle = textColor;
+    ctx.textBaseline = 'middle';
+
+    const spriteWidth = isInput ? 44 : 58;
+    const spriteHeight = 15;
+    const spriteX = isInput ? px + 36 : px - 44;
+
+    if (isInput) {
+      ctx.textAlign = 'left';
+      ctx.fillText(text, 6, 30);
+    } else {
+      ctx.textAlign = 'right';
+      ctx.fillText(text, 214, 30);
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+
+    const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const labelSprite = new THREE.Sprite(mat);
+    labelSprite.scale.set(spriteWidth, spriteHeight, 1);
+    labelSprite.position.set(spriteX, py, 4);
+    labelSprite.userData = { nodeId: this.nodeData.id, isBody: true };
+
+    this.group.add(labelSprite);
+    this.portLabelSprites.push(labelSprite);
   }
 
   getPortWorldPosition(portId: string): THREE.Vector3 {
     const mesh = this.portMeshes.get(portId);
     if (!mesh) {
-      // Fallback para a borda lateral
       return this.group.position.clone();
     }
     const worldPos = new THREE.Vector3();
@@ -219,7 +307,6 @@ export class NodeView {
   setExecutionState(state: 'idle' | 'running' | 'completed'): void {
     const borderMat = this.borderLine.material as THREE.LineBasicMaterial;
     if (state === 'running') {
-      // Destaque limpo de execução: cor contrastante e elevação em Z
       borderMat.color.setHex(0x10b981);
       this.group.position.z = 15;
     } else if (state === 'completed') {
@@ -241,34 +328,14 @@ export class NodeView {
   updateLabel(newLabel: string): void {
     this.nodeData.label = newLabel;
     this.group.remove(this.titleSprite);
+    this.titleSprite.material.map?.dispose();
     this.titleSprite.material.dispose();
 
     const width = THEME.nodeBody.width;
-    const height = Math.max(THEME.nodeBody.height, 40 + Math.max(this.nodeData.inputs.length, this.nodeData.outputs.length) * 24);
-    const headerHeight = 28;
+    const height = Math.max(THEME.nodeBody.height, 60 + Math.max(this.nodeData.inputs.length, this.nodeData.outputs.length) * 28);
+    const headerHeight = THEME.nodeBody.headerHeight;
 
-    const titleCanvas = document.createElement('canvas');
-    titleCanvas.width = 512;
-    titleCanvas.height = 80;
-    const tCtx = titleCanvas.getContext('2d')!;
-
-    tCtx.fillStyle = '#F1F5F9';
-    this.roundRect(tCtx, 8, 8, 496, 64, 12);
-    tCtx.fill();
-
-    tCtx.fillStyle = '#1E2538';
-    tCtx.font = '800 28px Inter, system-ui, sans-serif';
-    tCtx.textAlign = 'center';
-    tCtx.textBaseline = 'middle';
-    tCtx.fillText(newLabel, 256, 40);
-
-    const titleTexture = new THREE.CanvasTexture(titleCanvas);
-    titleTexture.minFilter = THREE.LinearFilter;
-    const titleMat = new THREE.SpriteMaterial({ map: titleTexture, transparent: true });
-    this.titleSprite = new THREE.Sprite(titleMat);
-    this.titleSprite.scale.set(width - 24, 26, 1);
-    this.titleSprite.position.set(0, height / 2 - headerHeight - 20, 4);
-    this.titleSprite.userData = { nodeId: this.nodeData.id, isBody: true };
+    this.titleSprite = this.createTitleSprite(width, height, headerHeight, newLabel);
     this.group.add(this.titleSprite);
   }
 
@@ -330,8 +397,21 @@ export class NodeView {
     (this.borderLine.material as THREE.Material).dispose();
     this.headerMesh.geometry.dispose();
     (this.headerMesh.material as THREE.Material).dispose();
-    this.titleSprite.material.dispose();
-    this.badgeSprite.material.dispose();
+    
+    if (this.titleSprite) {
+      this.titleSprite.material.map?.dispose();
+      this.titleSprite.material.dispose();
+    }
+    if (this.badgeSprite) {
+      this.badgeSprite.material.map?.dispose();
+      this.badgeSprite.material.dispose();
+    }
+
+    this.portLabelSprites.forEach(s => {
+      s.material.map?.dispose();
+      s.material.dispose();
+    });
+    this.portLabelSprites = [];
 
     this.portMeshes.forEach(m => {
       m.geometry.dispose();

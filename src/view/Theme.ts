@@ -6,44 +6,45 @@ export const THEME = {
   gridMajor: 0xe2e8f0,        // Grade suave Slate 200
   gridMinor: 0xf1f5f9,        // Grade fina Slate 100
 
-  // Nós por tipo (Cores da paleta da imagem: Laranja, Ciano, Âmbar, Verde, Púrpura)
+  // Nós por tipo (Cores da paleta: Laranja, Ciano, Âmbar, Verde, Púrpura, Azul)
   nodeTypes: {
     static: {
-      color: 0x3b82f6,        // Azul Real (Active item na imagem)
-      badgeBg: 0x2563eb,
+      color: 0x3b82f6,        // Azul Real
+      badgeBg: 0x1d4ed8,      // Azul 700 (mais contraste)
       textColor: '#ffffff',
       label: 'STATIC TASK'
     },
     condition: {
-      color: 0xff7828,        // Laranja Vibrante da imagem
-      badgeBg: 0xe06015,
+      color: 0xff7828,        // Laranja Vibrante
+      badgeBg: 0xc2410c,      // Laranja 700 (mais contraste)
       textColor: '#ffffff',
       label: 'CONDITION TASK'
     },
     subflow: {
-      color: 0x8b5cf6,        // Púrpura da imagem (Reports)
-      badgeBg: 0x7c3aed,
+      color: 0x8b5cf6,        // Púrpura
+      badgeBg: 0x6d28d9,      // Púrpura 700
       textColor: '#ffffff',
       label: 'SUBFLOW TASK'
     },
     module: {
-      color: 0x10b981,        // Verde da imagem (Payrolls)
-      badgeBg: 0x059669,
+      color: 0x10b981,        // Verde
+      badgeBg: 0x047857,      // Verde 700
       textColor: '#ffffff',
       label: 'MODULE TASK'
     },
     critical: {
-      color: 0x06b6d4,        // Ciano / Turquesa da imagem (Events)
-      badgeBg: 0x0891b2,
+      color: 0x06b6d4,        // Ciano
+      badgeBg: 0x0e7490,      // Ciano 700
       textColor: '#ffffff',
       label: 'CRITICAL TASK'
     }
   } as Record<TaskflowNodeType, { color: number; badgeBg: number; textColor: string; label: string }>,
 
-  // Corpo dos Nós (Cartão Branco com Elevação Suave)
+  // Corpo dos Nós (Cartão Branco com Elevação Suave e Proporções Ampliadas)
   nodeBody: {
-    width: 210,
-    height: 105,
+    width: 260,
+    height: 130,
+    headerHeight: 36,
     borderRadius: 16,
     fillColor: 0xffffff,      // Branco puro
     borderColor: 0xe2e8f0,    // Borda muito suave
@@ -53,11 +54,11 @@ export const THEME = {
 
   // Portas / Sockets
   port: {
-    radius: 7,
+    radius: 8,
     inputColor: 0x3b82f6,     // Azul
     outputColor: 0xff7828,    // Laranja
     hoverColor: 0x10b981,     // Verde hover
-    hitboxRadius: 18
+    hitboxRadius: 20
   },
 
   // Arestas / Linhas Curvas (Inspiradas nas linhas de tendência da imagem)
@@ -73,13 +74,13 @@ export const THEME = {
   // Regras Estritas de Tipografia Nítida (Zero sombras/glows em textos)
   typography: {
     fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-    titleSize: 13,
-    titleWeight: '700',
-    badgeSize: 9,
+    titleSize: 18,
+    titleWeight: '800',
+    badgeSize: 13,
     badgeWeight: '800',
-    portSize: 10,
-    portWeight: '600',
+    portSize: 11,
+    portWeight: '700',
     focusedOpacity: 1.0,
-    unfocusedOpacity: 0.45
+    unfocusedOpacity: 0.5
   }
 };

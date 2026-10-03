@@ -203,11 +203,11 @@ export class Toolbar {
   public loadDemoComplexSystem(): void {
     this.graph.clear();
 
-    const n1 = this.graph.createNode('node_perceive', '1. Percepcao_Ambiente', 'static', -400, 100);
-    const n2 = this.graph.createNode('node_state_lock', '2. Atualizar_Estado_Global', 'critical', -150, 100);
-    const n3 = this.graph.createNode('node_evaluator', '3. Avaliacao_Convergencia', 'condition', 120, 100);
-    const n4 = this.graph.createNode('node_cluster', '4. Decomposicao_Subflow', 'subflow', 400, 180);
-    const n5 = this.graph.createNode('node_cleanup', '5. Modulo_Consolidacao', 'module', 680, 180);
+    const n1 = this.graph.createNode('node_perceive', '1. Percepcao_Ambiente', 'static', -480, 80);
+    const n2 = this.graph.createNode('node_state_lock', '2. Atualizar_Estado_Global', 'critical', -160, 80);
+    const n3 = this.graph.createNode('node_evaluator', '3. Avaliacao_Convergencia', 'condition', 160, 80);
+    const n4 = this.graph.createNode('node_cluster', '4. Decomposicao_Subflow', 'subflow', 480, 160);
+    const n5 = this.graph.createNode('node_cleanup', '5. Modulo_Consolidacao', 'module', 800, 160);
 
     // Conexoes
     this.graph.createEdge(n1.id, n1.outputs[0].id, n2.id, n2.inputs[0].id);
