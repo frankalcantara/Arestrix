@@ -7,6 +7,7 @@ import { Inspector } from './ui/Inspector.ts';
 import { CodeModal } from './ui/CodeModal.ts';
 import { ConsolePanel } from './ui/ConsolePanel.ts';
 import { BreadcrumbsBar } from './ui/BreadcrumbsBar.ts';
+import { TemplateModal } from './ui/TemplateModal.ts';
 
 function bootstrap() {
   const appContainer = document.querySelector<HTMLDivElement>('#app');
@@ -54,8 +55,11 @@ function bootstrap() {
   // 4. Inicializa Viewport WebGL (Three.js) com dimensões reais já computadas pelo DOM
   const viewport = new Viewport(viewportContainer, graph, globalEventBus);
 
-  // 5. Inicializa Barra de Ferramentas e posiciona no topo
-  const toolbar = new Toolbar(appContainer, graph, viewport, codeModal);
+  // 5. Modal de Templates de Agentes & Plugins
+  const templateModal = new TemplateModal(graph, viewport);
+
+  // 6. Inicializa Barra de Ferramentas e posiciona no topo
+  const toolbar = new Toolbar(appContainer, graph, viewport, codeModal, templateModal);
   appContainer.insertBefore(toolbar.getContainer(), mainLayout);
 
   // 6. Sidebar de propriedades (Inspetor) dentro de mainLayout

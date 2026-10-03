@@ -42,6 +42,8 @@ export interface INodeData {
   customLambdaBody?: string;
   criticalSectionId?: string; // ID da CriticalSection associada, se houver
   childGraph?: IGraphSchema;  // Subgrafo hierárquico aninhado (Subflow / Module)
+  templateId?: string;        // ID do template de origem (opcional)
+  requiredHeaders?: string[]; // Headers C++20 adicionais requeridos por este agente
 }
 
 export interface IBreadcrumbItem {

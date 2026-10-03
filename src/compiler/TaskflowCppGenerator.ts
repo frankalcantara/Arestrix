@@ -26,13 +26,40 @@ export class TaskflowCppGenerator {
     code += `#include <chrono>\n`;
     code += `#include <memory>\n`;
     code += `#include <random>\n`;
-    code += `#include <syncstream> // C++20 synchronized streams\n\n`;
+    code += `#include <queue>\n`;
+    code += `#include <mutex>\n`;
+    code += `#include <unordered_map>\n`;
+    code += `#include <syncstream> // C++20 synchronized streams\n`;
+
+    // Headers adicionais declarados pelos templates de nós
+    const extraHeaders = new Set<string>();
+    nodes.forEach(n => {
+      n.requiredHeaders?.forEach(h => extraHeaders.add(h));
+      if (n.childGraph) {
+        n.childGraph.nodes.forEach(cn => cn.requiredHeaders?.forEach(h => extraHeaders.add(h)));
+      }
+    });
+    extraHeaders.forEach(h => {
+      if (!code.includes(h)) {
+        code += `#include ${h}\n`;
+      }
+    });
+    code += `\n`;
 
     code += `// Estrutura de Estado Compartilhado de Agentes (C++20)\n`;
     code += `struct AgentContext {\n`;
     code += `  std::string pipeline_name = "${meta.graphName}";\n`;
     code += `  uint64_t tick_count = 0;\n`;
-    code += `  bool abort_requested = false;\n`;
+    code += `  bool abort_requested = false;\n\n`;
+    code += `  // Buffer concorrente para agentes de fila e mensageria\n`;
+    code += `  std::queue<std::string> task_queue;\n`;
+    code += `  std::mutex queue_mutex;\n\n`;
+    code += `  // Armazenamento relacional/transacional protegido para persistência\n`;
+    code += `  std::unordered_map<std::string, std::string> persistent_store;\n`;
+    code += `  std::mutex db_mutex;\n\n`;
+    code += `  // Metricas e heurísticas de inferência de agentes LLM\n`;
+    code += `  double last_confidence_score = 0.0;\n`;
+    code += `  int retry_counter = 0;\n`;
     code += `};\n\n`;
 
     code += `int main(int argc, char* argv[]) {\n`;
@@ -44,9 +71,17 @@ export class TaskflowCppGenerator {
     code += `  tf::Taskflow tf("${meta.graphName}");\n\n`;
 
     if (hasCritical) {
-      code += `  // Secao Critica para isolar agentes concorrentes (tf::CriticalSection)\n`;
-      code += `  tf::CriticalSection critical_sec(1);\n\n`;
+      code += `  // Secao Critica / Semaforo de Concorrencia (tf::Semaphore com contagem 1)\n`;
+      code += `  tf::Semaphore critical_sec(1);\n\n`;
     }
+
+    // 0. Tarefa de Bootstrap / Inicializacao do Pipeline (Garante ativacao sem deadlock em loops)
+    code += `  // ------------------------------------------------------------------------\n`;
+    code += `  // Bootstrap de Inicializacao e Ativacao do Pipeline\n`;
+    code += `  // ------------------------------------------------------------------------\n`;
+    code += `  auto task_bootstrap = tf.emplace([&ctx]() {\n`;
+    code += `    std::osyncstream(std::cout) << ">>> [Pipeline " << ctx.pipeline_name << "] Ambiente ativado.\\n";\n`;
+    code += `  }).name("Pipeline_Bootstrap");\n\n`;
 
     // 1. Instanciacao dos Nós / Tarefas
     code += `  // ------------------------------------------------------------------------\n`;
@@ -117,6 +152,18 @@ export class TaskflowCppGenerator {
     code += `  // ------------------------------------------------------------------------\n`;
     code += `  // Grafo de Dependencias e Precedencias\n`;
     code += `  // ------------------------------------------------------------------------\n`;
+
+    // Conecta a tarefa de bootstrap a todos os nós de entrada (sem predecessores não-feedback)
+    const entryNodes = nodes.filter(n => {
+      const incoming = edges.filter(e => e.targetNodeId === n.id);
+      return incoming.length === 0 || incoming.every(e => e.isFeedbackLoop);
+    });
+
+    if (entryNodes.length > 0) {
+      const targets = entryNodes.map(n => `task_${this.sanitizeIdentifier(n.id)}`);
+      code += `  // Ativacao inicial pelo Bootstrap (previne deadlocks em pipelines com loops)\n`;
+      code += `  task_bootstrap.precede(${targets.join(', ')});\n\n`;
+    }
 
     // Processar tarefas normais vs condicionais
     nodes.forEach(node => {

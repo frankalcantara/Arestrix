@@ -2,16 +2,19 @@ import { Graph } from '../core/Graph.ts';
 import { INodeData } from '../core/types.ts';
 import { EventBus } from '../core/EventBus.ts';
 import { RemoveNodeCommand, UpdateNodeCommand } from '../core/history/GraphCommands.ts';
+import { AgentTemplateRegistry } from '../core/templates/AgentTemplateRegistry.ts';
 
 export class Inspector {
   private container: HTMLElement;
   private graph: Graph;
   private bus: EventBus;
   private currentNodeId: string | null = null;
+  private registry: AgentTemplateRegistry;
 
   constructor(parent: HTMLElement, graph: Graph, bus: EventBus) {
     this.graph = graph;
     this.bus = bus;
+    this.registry = AgentTemplateRegistry.getInstance();
 
     this.container = document.createElement('aside');
     this.container.className = 'inspector-panel';
@@ -38,6 +41,16 @@ export class Inspector {
         this.renderEmpty();
       }
     });
+
+    this.bus.on('node:updated', (node: INodeData) => {
+      if (this.currentNodeId === node.id) {
+        // Atualiza campos que podem ter mudado se não estiverem com foco
+        const activeEl = document.activeElement;
+        if (!activeEl || !this.container.contains(activeEl)) {
+          this.renderNode(node);
+        }
+      }
+    });
   }
 
   private renderEmpty(): void {
@@ -45,15 +58,20 @@ export class Inspector {
       <div class="empty-state">
         <div class="empty-icon">⚙️</div>
         <div class="empty-title">Nenhum Nó Selecionado</div>
-        <div class="empty-desc">Clique em um nó na tela para inspecionar e editar suas propriedades, regras e lambdas C++20.</div>
+        <div class="empty-desc">Clique em um nó na tela para inspecionar e editar suas propriedades, parâmetros de template e lambdas C++20.</div>
       </div>
     `;
   }
 
   private renderNode(node: INodeData): void {
+    const tpl = node.templateId ? this.registry.getTemplate(node.templateId) : undefined;
+
     this.container.innerHTML = `
       <div class="inspector-header">
-        <span class="inspector-badge badge-${node.type}">${node.type.toUpperCase()}</span>
+        <div class="inspector-header-left">
+          <span class="inspector-badge badge-${node.type}">${node.type.toUpperCase()}</span>
+          ${tpl ? `<span class="inspector-template-tag">${tpl.icon} ${this.escapeHtml(tpl.name)}</span>` : ''}
+        </div>
         <button class="btn-close" id="btn-deselect-node">&times;</button>
       </div>
 
@@ -87,12 +105,22 @@ export class Inspector {
         </div>
         ` : ''}
 
+        <!-- Seção de Parâmetros do Agente -->
+        ${this.renderParametersSection(node, tpl)}
+
         <div class="form-group">
-          <label class="form-label" for="node-lambda">Corpo do Lambda C++20</label>
+          <div class="lambda-header-row">
+            <label class="form-label" for="node-lambda">Corpo do Lambda C++20</label>
+            ${tpl ? `
+              <button id="btn-sync-lambda" class="btn-sync-action" title="Recompõe o código lambda com os parâmetros atuais">
+                🔄 Sincronizar Lambda
+              </button>
+            ` : ''}
+          </div>
           <div class="code-editor-header">
             <span>auto task = tf.emplace([...](...) {</span>
           </div>
-          <textarea id="node-lambda" class="form-textarea code-font" rows="7">${this.escapeHtml(node.customLambdaBody || '')}</textarea>
+          <textarea id="node-lambda" class="form-textarea code-font" rows="8">${this.escapeHtml(node.customLambdaBody || '')}</textarea>
           <div class="code-editor-footer">
             <span>});</span>
           </div>
@@ -118,11 +146,12 @@ export class Inspector {
       </div>
     `;
 
-    // Eventos do formulário
+    // Bind subflow
     this.container.querySelector('#btn-dive-subflow')?.addEventListener('click', () => {
       this.graph.diveIntoSubflow(node.id);
     });
 
+    // Tipo
     const typeSelect = this.container.querySelector('#node-type-select') as HTMLSelectElement;
     let oldType = node.type;
     typeSelect?.addEventListener('change', () => {
@@ -140,7 +169,7 @@ export class Inspector {
       }
     });
 
-    // Eventos do formulário
+    // Label
     const labelInput = this.container.querySelector('#node-label') as HTMLInputElement;
     let initialLabel = node.label;
     labelInput?.addEventListener('focus', () => {
@@ -163,6 +192,28 @@ export class Inspector {
       }
     });
 
+    // Parâmetros
+    this.bindParameterInputs(node, tpl);
+
+    // Sincronizar Lambda
+    this.container.querySelector('#btn-sync-lambda')?.addEventListener('click', () => {
+      if (tpl) {
+        const newBody = tpl.generateLambdaBody(node.parameters, node.label);
+        const oldBody = node.customLambdaBody || '';
+        const cmd = new UpdateNodeCommand(
+          this.graph,
+          node.id,
+          { customLambdaBody: oldBody },
+          { customLambdaBody: newBody },
+          `Sincronizar lambda de "${node.label}"`
+        );
+        this.graph.commandManager.execute(cmd);
+        const lambdaTextarea = this.container.querySelector('#node-lambda') as HTMLTextAreaElement;
+        if (lambdaTextarea) lambdaTextarea.value = newBody;
+      }
+    });
+
+    // Lambda
     const lambdaInput = this.container.querySelector('#node-lambda') as HTMLTextAreaElement;
     let initialLambda = node.customLambdaBody || '';
     lambdaInput?.addEventListener('focus', () => {
@@ -185,16 +236,130 @@ export class Inspector {
       }
     });
 
+    // Deselect
     const deselectBtn = this.container.querySelector('#btn-deselect-node');
     deselectBtn?.addEventListener('click', () => {
       this.bus.emit('node:deselected');
     });
 
+    // Delete
     const deleteBtn = this.container.querySelector('#btn-delete-node');
     deleteBtn?.addEventListener('click', () => {
       if (confirm(`Deseja realmente excluir o nó "${node.label}"?`)) {
         const cmd = new RemoveNodeCommand(this.graph, node.id);
         this.graph.commandManager.execute(cmd);
+      }
+    });
+  }
+
+  private renderParametersSection(node: INodeData, tpl?: any): string {
+    const params = node.parameters || {};
+    const keys = Object.keys(params);
+
+    if (keys.length === 0 && !tpl) {
+      return '';
+    }
+
+    let rowsHtml = '';
+
+    if (tpl) {
+      Object.entries(tpl.parameters).forEach(([key, def]: [string, any]) => {
+        const val = params[key] !== undefined ? params[key] : def.defaultValue;
+        rowsHtml += `
+          <div class="param-row">
+            <div class="param-label-group">
+              <span class="param-name">${this.escapeHtml(def.label)}</span>
+              <span class="param-desc">${this.escapeHtml(def.description)}</span>
+            </div>
+            <div class="param-input-wrap">
+              ${def.type === 'select' ? `
+                <select class="form-select param-input" data-param-key="${key}">
+                  ${(def.options || []).map((opt: string) => `
+                    <option value="${opt}" ${String(val) === String(opt) ? 'selected' : ''}>${opt}</option>
+                  `).join('')}
+                </select>
+              ` : def.type === 'boolean' ? `
+                <input type="checkbox" class="param-checkbox param-input" data-param-key="${key}" ${val ? 'checked' : ''} />
+              ` : `
+                <input type="${def.type === 'number' ? 'number' : 'text'}" 
+                       step="${def.type === 'number' ? 'any' : undefined}"
+                       class="form-input param-input" 
+                       data-param-key="${key}" 
+                       value="${this.escapeHtml(String(val))}" />
+              `}
+            </div>
+          </div>
+        `;
+      });
+    } else {
+      keys.forEach(key => {
+        const val = params[key];
+        rowsHtml += `
+          <div class="param-row">
+            <div class="param-label-group">
+              <span class="param-name">${this.escapeHtml(key)}</span>
+            </div>
+            <div class="param-input-wrap">
+              <input type="text" class="form-input param-input" data-param-key="${key}" value="${this.escapeHtml(String(val))}" />
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    return `
+      <div class="inspector-section">
+        <div class="section-title">⚙️ Parâmetros do Agente</div>
+        <div class="params-container">
+          ${rowsHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  private bindParameterInputs(node: INodeData, tpl?: any): void {
+    const inputs = this.container.querySelectorAll('.param-input');
+    inputs.forEach(inputEl => {
+      const key = inputEl.getAttribute('data-param-key');
+      if (!key) return;
+
+      const handleChange = () => {
+        let newVal: any;
+        if (inputEl instanceof HTMLInputElement && inputEl.type === 'checkbox') {
+          newVal = inputEl.checked;
+        } else if (inputEl instanceof HTMLInputElement && inputEl.type === 'number') {
+          newVal = parseFloat(inputEl.value) || 0;
+        } else {
+          newVal = (inputEl as HTMLInputElement | HTMLSelectElement).value;
+        }
+
+        const oldParams = { ...node.parameters };
+        const newParams = { ...node.parameters, [key]: newVal };
+
+        let extraUpdates: Partial<INodeData> = { parameters: newParams };
+
+        // Se o nó veio de um template, atualiza o lambda automaticamente com novos parâmetros
+        if (tpl) {
+          const updatedLambda = tpl.generateLambdaBody(newParams, node.label);
+          extraUpdates.customLambdaBody = updatedLambda;
+          const lambdaEl = this.container.querySelector('#node-lambda') as HTMLTextAreaElement;
+          if (lambdaEl) lambdaEl.value = updatedLambda;
+        }
+
+        const cmd = new UpdateNodeCommand(
+          this.graph,
+          node.id,
+          { parameters: oldParams },
+          extraUpdates,
+          `Alterar parâmetro "${key}" em ${node.label}`
+        );
+        this.graph.commandManager.execute(cmd);
+      };
+
+      if (inputEl instanceof HTMLSelectElement || (inputEl instanceof HTMLInputElement && inputEl.type === 'checkbox')) {
+        inputEl.addEventListener('change', handleChange);
+      } else {
+        inputEl.addEventListener('blur', handleChange);
       }
     });
   }

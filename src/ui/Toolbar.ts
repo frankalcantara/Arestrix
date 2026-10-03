@@ -8,16 +8,20 @@ import { AddNodeCommand } from '../core/history/GraphCommands.ts';
 import { IHistoryState } from '../core/history/CommandManager.ts';
 import { globalEventBus } from '../core/EventBus.ts';
 
+import { TemplateModal } from './TemplateModal.ts';
+
 export class Toolbar {
   private container: HTMLElement;
   private graph: Graph;
   private viewport: Viewport;
   private codeModal: CodeModal;
+  private templateModal: TemplateModal;
 
-  constructor(parent: HTMLElement, graph: Graph, viewport: Viewport, codeModal: CodeModal) {
+  constructor(parent: HTMLElement, graph: Graph, viewport: Viewport, codeModal: CodeModal, templateModal: TemplateModal) {
     this.graph = graph;
     this.viewport = viewport;
     this.codeModal = codeModal;
+    this.templateModal = templateModal;
 
     this.container = document.createElement('header');
     this.container.className = 'app-toolbar';
@@ -63,6 +67,15 @@ export class Toolbar {
         <button class="tool-btn btn-node-subflow" data-type="subflow">+ Subflow</button>
         <button class="tool-btn btn-node-module" data-type="module">+ Módulo</button>
         <button class="tool-btn btn-node-crit" data-type="critical">+ Crítico</button>
+      </div>
+
+      <div class="toolbar-separator"></div>
+
+      <!-- BIBLIOTECA DE TEMPLATES & PLUGINS DE AGENTES -->
+      <div class="toolbar-group">
+        <button id="btn-open-templates" class="tool-btn btn-templates-action" title="Abrir catálogo de templates de agentes especializados e plugins dinâmicos">
+          🧩 Templates de Agentes
+        </button>
       </div>
 
       <div class="toolbar-separator"></div>
@@ -120,6 +133,11 @@ export class Toolbar {
         const type = (e.currentTarget as HTMLElement).getAttribute('data-type') as TaskflowNodeType;
         this.createNewNode(type);
       });
+    });
+
+    // Abrir Modal de Templates de Agentes
+    this.container.querySelector('#btn-open-templates')?.addEventListener('click', () => {
+      this.templateModal.show();
     });
 
     // Validar grafo

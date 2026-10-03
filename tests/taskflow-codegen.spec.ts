@@ -30,7 +30,7 @@ describe('Compilador e Gerador de Código Taskflow C++20', () => {
 
     const code = TaskflowCppGenerator.generateSource(graph);
 
-    expect(code).toContain('tf::CriticalSection critical_sec(1);');
+    expect(code).toContain('tf::Semaphore critical_sec(1);');
     expect(code).toContain('task_crit_node.acquire(critical_sec);');
     expect(code).toContain('task_crit_node.release(critical_sec);');
   });
