@@ -1,0 +1,507 @@
+/* ==========================================================================
+   Design System: Soft Neomorphic / Claymorphic Modern UI (Padrão HR-Dashboard)
+   Diretriz Estrita: Zero sombras/glows em fontes (sombras aplicadas apenas a containers)
+   ========================================================================== */
+
+:root {
+  /* --- Cores de Fundo e Superfícies --- */
+  --bg-gradient: linear-gradient(135deg, #f5f7fc 0%, #fdf3f4 50%, #fcf7f2 100%);
+  --surface-card: #ffffff;
+  --surface-sidebar: #ffffff;
+  --surface-pill: #ffffff;
+  --surface-track: #f1f5f9;
+
+  /* --- Cores de Texto (Alto Contraste Limpo) --- */
+  --text-primary: #1e2538;     /* Títulos e números principais */
+  --text-secondary: #64748b;   /* Legendas e subtítulos */
+  --text-muted: #94a3b8;       /* Placeholders e rótulos terciários */
+  --text-inverse: #ffffff;     /* Texto sobre botões e badges coloridos */
+
+  /* --- Paleta de Cores e Gradientes de Destaque --- */
+  --accent-orange: #ff7828;
+  --accent-orange-hover: #ea6514;
+  --gradient-orange: linear-gradient(135deg, #ff7828 0%, #ff9548 100%);
+  --gradient-blue: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+  --gradient-cyan: linear-gradient(135deg, #06b6d4 0%, #38bdf8 100%);
+  --gradient-amber: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+  --gradient-green: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+  --gradient-purple: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+  --slate-line: #5b7290;
+
+  /* --- Sombras de Contêineres (Elevação Neomórfica Suave) --- */
+  --shadow-card: 0 14px 34px -8px rgba(30, 41, 59, 0.06), 0 4px 12px -2px rgba(30, 41, 59, 0.02);
+  --shadow-card-hover: 0 20px 40px -10px rgba(30, 41, 59, 0.09), 0 6px 16px -3px rgba(30, 41, 59, 0.03);
+  --shadow-pill: 0 4px 14px rgba(30, 41, 59, 0.04), 0 2px 6px rgba(30, 41, 59, 0.02);
+  --shadow-button-orange: 0 8px 20px rgba(255, 120, 40, 0.35);
+  --shadow-active-item: 0 10px 25px rgba(59, 130, 246, 0.16);
+
+  /* --- Raios de Borda --- */
+  --radius-card: 22px;
+  --radius-pill: 9999px;
+  --radius-button: 14px;
+  --radius-sidebar: 32px;
+  --radius-tooltip: 16px;
+
+  /* --- Tipografia --- */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ==========================================================================
+   1. LAYOUT GLOBAL & CONTAINER
+   ========================================================================== */
+.neo-app-wrapper {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg-gradient);
+  font-family: var(--font-family);
+  color: var(--text-primary);
+  overflow: hidden;
+  position: relative;
+}
+
+/* ==========================================================================
+   2. SIDEBAR VERTICAL FLUTUANTE
+   ========================================================================== */
+.neo-sidebar {
+  width: 84px;
+  background-color: var(--surface-sidebar);
+  border-top-right-radius: var(--radius-sidebar);
+  border-bottom-right-radius: var(--radius-sidebar);
+  box-shadow: 4px 0 24px rgba(30, 41, 59, 0.04);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 0;
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+.neo-sidebar-logo {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 28px;
+  cursor: pointer;
+}
+
+.neo-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  align-items: center;
+  flex: 1;
+}
+
+.neo-nav-item {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  background-color: transparent;
+  border: none;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.neo-nav-item:hover {
+  color: var(--text-primary);
+  background-color: #f8fafc;
+}
+
+/* Item Ativo com Destaque */
+.neo-nav-item.active {
+  background-color: #ffffff;
+  color: #3b82f6;
+  box-shadow: var(--shadow-active-item);
+}
+
+.neo-nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: -18px;
+  width: 4px;
+  height: 24px;
+  background-color: #3b82f6;
+  border-radius: 0 4px 4px 0;
+}
+
+/* ==========================================================================
+   3. ÁREA DE CONTEÚDO PRINCIPAL & HEADER
+   ========================================================================== */
+.neo-main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 36px;
+  overflow-y: auto;
+  gap: 24px;
+}
+
+.neo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.neo-header-titles h1 {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  letter-spacing: -0.4px;
+}
+
+.neo-header-titles p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.neo-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Controles em Pílula (Pill Controls) */
+.neo-pill-btn {
+  background-color: var(--surface-pill);
+  border-radius: var(--radius-pill);
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-pill);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.neo-pill-btn:hover {
+  color: var(--text-primary);
+  box-shadow: var(--shadow-card);
+}
+
+.neo-pill-search {
+  background-color: var(--surface-pill);
+  border-radius: var(--radius-pill);
+  padding: 8px 18px;
+  box-shadow: var(--shadow-pill);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 220px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+}
+
+.neo-pill-search input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13px;
+  color: var(--text-primary);
+  width: 100%;
+}
+
+.neo-pill-search input::placeholder {
+  color: var(--text-muted);
+}
+
+.neo-icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: var(--surface-pill);
+  box-shadow: var(--shadow-pill);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.neo-icon-btn:hover {
+  color: var(--text-primary);
+}
+
+.neo-badge-dot {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 7px;
+  height: 7px;
+  background-color: #ef4444;
+  border-radius: 50%;
+  border: 1px solid #ffffff;
+}
+
+.neo-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: var(--shadow-pill);
+  object-fit: cover;
+}
+
+/* Botão Primário Laranja Vibrante */
+.neo-btn-primary {
+  background: var(--gradient-orange);
+  color: var(--text-inverse);
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: var(--radius-button);
+  padding: 10px 20px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--shadow-button-orange);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.neo-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(255, 120, 40, 0.45);
+}
+
+/* ==========================================================================
+   4. CARDS E GRIDS DE CONTEÚDO
+   ========================================================================== */
+.neo-section-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  letter-spacing: -0.3px;
+}
+
+.neo-card {
+  background-color: var(--surface-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  padding: 20px 24px;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.neo-card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* Grade de KPI Cards */
+.neo-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.neo-kpi-card {
+  background-color: var(--surface-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Mini Gauge Circular com Ícone de Tendência */
+.neo-mini-gauge {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 4px;
+}
+
+.neo-gauge-orange { background: conic-gradient(var(--accent-orange) 0% 75%, #f1f5f9 75% 100%); }
+.neo-gauge-cyan   { background: conic-gradient(#06b6d4 0% 45%, #f1f5f9 45% 100%); }
+.neo-gauge-amber  { background: conic-gradient(#f59e0b 0% 85%, #f1f5f9 85% 100%); }
+.neo-gauge-green  { background: conic-gradient(#10b981 0% 60%, #f1f5f9 60% 100%); }
+.neo-gauge-purple { background: conic-gradient(#8b5cf6 0% 90%, #f1f5f9 90% 100%); }
+
+.neo-mini-gauge-inner {
+  width: 100%;
+  height: 100%;
+  background-color: #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.neo-kpi-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.neo-kpi-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+}
+
+.neo-kpi-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-top: 3px;
+}
+
+/* ==========================================================================
+   5. CARDS DE GRÁFICOS & ESTATÍSTICAS
+   ========================================================================== */
+.neo-dashboard-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 22px;
+  margin-bottom: 22px;
+}
+
+.neo-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.neo-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Semicírculo de Satisfação (Gauge) */
+.neo-semicircle-gauge-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 16px 0;
+}
+
+.neo-gauge-center-badge {
+  position: absolute;
+  top: 45%;
+  width: 48px;
+  height: 48px;
+  background-color: #ffffff;
+  border-radius: 50%;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.neo-gauge-percentage {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-top: -10px;
+}
+
+.neo-gauge-scale {
+  display: flex;
+  justify-content: space-between;
+  width: 180px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+/* Barras de Progresso Horizontais em Cápsula */
+.neo-progress-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.neo-progress-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.neo-progress-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.neo-progress-track {
+  width: 100%;
+  height: 8px;
+  background-color: var(--surface-track);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.neo-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+}
+
+.fill-orange { background: var(--gradient-orange); }
+.fill-cyan   { background: var(--gradient-cyan); }
+.fill-green  { background: var(--gradient-green); }
+.fill-purple { background: var(--gradient-purple); }
+
+/* ==========================================================================
+   6. TOOLTIPS FLUTUANTES ELEVADOS
+   ========================================================================== */
+.neo-floating-tooltip {
+  background-color: #ffffff;
+  border-radius: var(--radius-tooltip);
+  box-shadow: 0 12px 28px rgba(30, 41, 59, 0.12), 0 2px 8px rgba(30, 41, 59, 0.04);
+  padding: 12px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.neo-tooltip-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.neo-tooltip-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}

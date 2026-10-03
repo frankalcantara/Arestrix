@@ -1,0 +1,11 @@
+node_modules/
+dist/
+workspace_run/
+__pycache__/
+*.pyc
+*.exe
+*.obj
+*.pdb
+*.ilk
+.DS_Store
+*.local
