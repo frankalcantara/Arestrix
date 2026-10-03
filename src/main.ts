@@ -6,6 +6,7 @@ import { Toolbar } from './ui/Toolbar.ts';
 import { Inspector } from './ui/Inspector.ts';
 import { CodeModal } from './ui/CodeModal.ts';
 import { ConsolePanel } from './ui/ConsolePanel.ts';
+import { BreadcrumbsBar } from './ui/BreadcrumbsBar.ts';
 
 function bootstrap() {
   const appContainer = document.querySelector<HTMLDivElement>('#app');
@@ -37,6 +38,9 @@ function bootstrap() {
 
   const centerArea = document.createElement('div');
   centerArea.className = 'center-area';
+
+  // Barra de Breadcrumbs hierárquica
+  new BreadcrumbsBar(centerArea, graph, globalEventBus);
 
   const viewportContainer = document.createElement('div');
   viewportContainer.className = 'viewport-container';

@@ -41,6 +41,12 @@ export interface INodeData {
   parameters: Record<string, string | number | boolean>;
   customLambdaBody?: string;
   criticalSectionId?: string; // ID da CriticalSection associada, se houver
+  childGraph?: IGraphSchema;  // Subgrafo hierárquico aninhado (Subflow / Module)
+}
+
+export interface IBreadcrumbItem {
+  nodeId?: string;
+  title: string;
 }
 
 export interface IEdgeData {

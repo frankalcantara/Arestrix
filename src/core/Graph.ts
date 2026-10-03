@@ -5,15 +5,23 @@ import {
   IGraphMetadata, 
   DEFAULT_COMPILER_CONFIG,
   TaskflowNodeType,
-  IPort
+  IPort,
+  IBreadcrumbItem
 } from './types.ts';
 import { globalEventBus, EventBus } from './EventBus.ts';
+
+interface INavigationFrame {
+  schema: IGraphSchema;
+  parentNodeId: string;
+  parentLabel: string;
+}
 
 export class Graph {
   private nodes: Map<string, INodeData> = new Map();
   private edges: Map<string, IEdgeData> = new Map();
   private metadata: IGraphMetadata;
   private bus: EventBus;
+  private navigationStack: INavigationFrame[] = [];
 
   constructor(bus: EventBus = globalEventBus, initialMetadata?: Partial<IGraphMetadata>) {
     this.bus = bus;
@@ -272,5 +280,171 @@ export class Graph {
     this.edges.clear();
     this.bus.emit('graph:cleared');
     this.bus.emit('graph:changed');
+  }
+
+  // --- Navegação Hierárquica e Subflows Aninhados ---
+
+  isAtRoot(): boolean {
+    return this.navigationStack.length === 0;
+  }
+
+  getBreadcrumbs(): IBreadcrumbItem[] {
+    const rootName = this.navigationStack.length > 0 
+      ? this.navigationStack[0].schema.metadata.graphName 
+      : this.metadata.graphName;
+
+    const items: IBreadcrumbItem[] = [
+      { title: rootName }
+    ];
+
+    for (let i = 0; i < this.navigationStack.length; i++) {
+      items.push({
+        nodeId: this.navigationStack[i].parentNodeId,
+        title: this.navigationStack[i].parentLabel
+      });
+    }
+
+    return items;
+  }
+
+  diveIntoSubflow(subflowNodeId: string): boolean {
+    const node = this.getNode(subflowNodeId);
+    if (!node || (node.type !== 'subflow' && node.type !== 'module')) {
+      return false;
+    }
+
+    // Se o nó não tiver childGraph, inicializa com template demonstrativo
+    if (!node.childGraph || node.childGraph.nodes.length === 0) {
+      node.childGraph = this.createDefaultSubflowTemplate(node);
+    }
+
+    // 1. Salva o snapshot do grafo atual na pilha
+    const currentSnapshot = this.toJSON();
+    this.navigationStack.push({
+      schema: currentSnapshot,
+      parentNodeId: node.id,
+      parentLabel: node.label
+    });
+
+    // 2. Carrega o subgrafo como o grafo ativo no canvas
+    const targetChild = node.childGraph;
+    this.fromJSON(targetChild);
+
+    this.bus.emit('graph:hierarchy-changed', {
+      isAtRoot: false,
+      breadcrumbs: this.getBreadcrumbs(),
+      parentNodeId: node.id
+    });
+
+    return true;
+  }
+
+  navigateUp(): boolean {
+    if (this.isAtRoot()) return false;
+
+    // 1. Snapshot do subgrafo filho atual
+    const currentChildSnapshot = this.toJSON();
+
+    // 2. Desempilha o pai
+    const parentFrame = this.navigationStack.pop()!;
+    const parentSchema = parentFrame.schema;
+
+    // 3. Atualiza o childGraph no nó correspondente do pai
+    const parentNodeIndex = parentSchema.nodes.findIndex(n => n.id === parentFrame.parentNodeId);
+    if (parentNodeIndex !== -1) {
+      parentSchema.nodes[parentNodeIndex].childGraph = currentChildSnapshot;
+    }
+
+    // 4. Recarrega o pai
+    this.fromJSON(parentSchema);
+
+    this.bus.emit('graph:hierarchy-changed', {
+      isAtRoot: this.isAtRoot(),
+      breadcrumbs: this.getBreadcrumbs()
+    });
+
+    return true;
+  }
+
+  navigateToBreadcrumb(index: number): boolean {
+    if (index < 0 || index >= this.getBreadcrumbs().length) return false;
+
+    // Se for o nível atual, nada a fazer
+    const targetStepsUp = (this.getBreadcrumbs().length - 1) - index;
+    for (let i = 0; i < targetStepsUp; i++) {
+      this.navigateUp();
+    }
+    return true;
+  }
+
+  /**
+   * Constrói o schema completo do grafo raiz integrando todos os subgrafos salvos.
+   */
+  getRootSchema(): IGraphSchema {
+    if (this.isAtRoot()) {
+      return this.toJSON();
+    }
+    // Cria cópia profunda da raiz
+    const rootSchema = JSON.parse(JSON.stringify(this.navigationStack[0].schema)) as IGraphSchema;
+    
+    // Atualiza a cadeia até o nível atual
+    let currentTarget = rootSchema;
+    for (let i = 0; i < this.navigationStack.length; i++) {
+      const frame = this.navigationStack[i];
+      const targetNode = currentTarget.nodes.find(n => n.id === frame.parentNodeId);
+      if (targetNode) {
+        if (i === this.navigationStack.length - 1) {
+          targetNode.childGraph = this.toJSON();
+        } else {
+          targetNode.childGraph = JSON.parse(JSON.stringify(this.navigationStack[i + 1].schema));
+          currentTarget = targetNode.childGraph!;
+        }
+      }
+    }
+    return rootSchema;
+  }
+
+  private createDefaultSubflowTemplate(parentNode: INodeData): IGraphSchema {
+    return {
+      version: '1.0.0',
+      metadata: {
+        graphName: `${parentNode.label}_Subflow`,
+        description: `Subgrafo de decomposição dinâmica para ${parentNode.label}`,
+        targetStandard: 'C++20',
+        compilerConfig: { ...this.metadata.compilerConfig },
+        version: '1.0.0'
+      },
+      nodes: [
+        {
+          id: `${parentNode.id}_child_1`,
+          label: 'Sub_Worker_Alpha',
+          type: 'static',
+          position: { x: -180, y: 0, z: 0 },
+          inputs: [{ id: `${parentNode.id}_c1_in`, name: 'in', direction: 'input', type: 'flow' }],
+          outputs: [{ id: `${parentNode.id}_c1_out`, name: 'out', direction: 'output', type: 'flow' }],
+          parameters: {},
+          customLambdaBody: `std::osyncstream(std::cout) << "[${parentNode.label}] Executando Sub-Worker Alpha\\n";`
+        },
+        {
+          id: `${parentNode.id}_child_2`,
+          label: 'Sub_Worker_Beta',
+          type: 'static',
+          position: { x: 180, y: 0, z: 0 },
+          inputs: [{ id: `${parentNode.id}_c2_in`, name: 'in', direction: 'input', type: 'flow' }],
+          outputs: [{ id: `${parentNode.id}_c2_out`, name: 'out', direction: 'output', type: 'flow' }],
+          parameters: {},
+          customLambdaBody: `std::osyncstream(std::cout) << "[${parentNode.label}] Executando Sub-Worker Beta\\n";`
+        }
+      ],
+      edges: [
+        {
+          id: `edge_${parentNode.id}_c1_to_c2`,
+          sourceNodeId: `${parentNode.id}_child_1`,
+          sourcePortId: `${parentNode.id}_c1_out`,
+          targetNodeId: `${parentNode.id}_child_2`,
+          targetPortId: `${parentNode.id}_c2_in`
+        }
+      ]
+    };
   }
 }

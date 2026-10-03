@@ -77,6 +77,7 @@ export class InteractionManager {
 
   private bindEvents(): void {
     this.domElement.addEventListener('pointerdown', this.onPointerDown.bind(this));
+    this.domElement.addEventListener('dblclick', this.onDoubleClick.bind(this));
     window.addEventListener('pointermove', this.onPointerMove.bind(this));
     window.addEventListener('pointerup', this.onPointerUp.bind(this));
     window.addEventListener('keydown', this.onKeyDown.bind(this));
@@ -295,6 +296,37 @@ export class InteractionManager {
       if (this.selectedNodeId) {
         this.graph.removeNode(this.selectedNodeId);
         this.selectNode(null);
+      }
+    }
+
+    // Tecla Escape para voltar ao nível pai se estiver dentro de um subflow
+    if (e.key === 'Escape') {
+      if (!this.graph.isAtRoot()) {
+        this.graph.navigateUp();
+      }
+    }
+  }
+
+  private onDoubleClick(e: MouseEvent): void {
+    if (e.button !== 0) return;
+    this.updatePointer(e as any);
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+
+    const nodeTargets: THREE.Object3D[] = [];
+    this.nodeViews.forEach(nv => {
+      nv.group.traverse(obj => {
+        if (obj.userData?.isBody) {
+          nodeTargets.push(obj);
+        }
+      });
+    });
+
+    const intersects = this.raycaster.intersectObjects(nodeTargets, false);
+    if (intersects.length > 0) {
+      const hitNodeId = intersects[0].object.userData.nodeId;
+      const nodeData = this.graph.getNode(hitNodeId);
+      if (nodeData && (nodeData.type === 'subflow' || nodeData.type === 'module')) {
+        this.graph.diveIntoSubflow(hitNodeId);
       }
     }
   }

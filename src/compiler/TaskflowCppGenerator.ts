@@ -5,9 +5,10 @@ export class TaskflowCppGenerator {
    * Gera o código fonte principal C++20 usando a API do Taskflow.
    */
   static generateSource(graph: Graph): string {
-    const meta = graph.getMetadata();
-    const nodes = graph.getAllNodes();
-    const edges = graph.getAllEdges();
+    const rootSchema = graph.getRootSchema();
+    const meta = rootSchema.metadata;
+    const nodes = rootSchema.nodes;
+    const edges = rootSchema.edges;
     const hasCritical = nodes.some(n => n.type === 'critical');
 
     let code = `// ============================================================================\n`;
@@ -65,7 +66,11 @@ export class TaskflowCppGenerator {
         case 'subflow': {
           code += `  // Nó de Subfluxo Dinamico: ${label}\n`;
           code += `  auto task_${sanitizedId} = tf.emplace([&ctx](tf::Subflow& sf) {\n`;
-          code += this.indent(node.customLambdaBody || `std::osyncstream(std::cout) << "[Subflow] Executando ${label}\\n";`, 4) + `\n`;
+          if (node.childGraph && node.childGraph.nodes.length > 0) {
+            code += this.indent(this.generateSubflowInternalCode(node.childGraph), 4) + `\n`;
+          } else {
+            code += this.indent(node.customLambdaBody || `std::osyncstream(std::cout) << "[Subflow] Executando ${label}\\n";`, 4) + `\n`;
+          }
           code += `  }).name("${label}");\n\n`;
           break;
         }
@@ -73,9 +78,13 @@ export class TaskflowCppGenerator {
         case 'module': {
           code += `  // Nó de Modulo (Subgrafo Reutilizavel): ${label}\n`;
           code += `  tf::Taskflow module_flow_${sanitizedId}("${label}_Module");\n`;
-          code += `  auto mod_task_${sanitizedId} = module_flow_${sanitizedId}.emplace([]() {\n`;
-          code += `    std::osyncstream(std::cout) << "Dentro do modulo ${label}\\n";\n`;
-          code += `  });\n`;
+          if (node.childGraph && node.childGraph.nodes.length > 0) {
+            code += this.indent(this.generateModuleInternalCode(node.childGraph, sanitizedId), 2) + `\n`;
+          } else {
+            code += `  auto mod_task_${sanitizedId} = module_flow_${sanitizedId}.emplace([]() {\n`;
+            code += `    std::osyncstream(std::cout) << "Dentro do modulo ${label}\\n";\n`;
+            code += `  });\n`;
+          }
           code += `  auto task_${sanitizedId} = tf.composed_of(module_flow_${sanitizedId}).name("${label}");\n\n`;
           break;
         }
@@ -248,6 +257,42 @@ if %errorlevel% equ 0 (
 `;
 
     return { ps1, bat };
+  }
+
+  private static generateSubflowInternalCode(schema: any): string {
+    let out = `// Decomposição dinâmica interna do subfluxo: ${schema.metadata.graphName}\n`;
+    schema.nodes.forEach((child: any) => {
+      const sId = this.sanitizeIdentifier(child.id);
+      out += `auto sf_task_${sId} = sf.emplace([&ctx]() {\n`;
+      out += this.indent(child.customLambdaBody || `std::osyncstream(std::cout) << "Executando ${child.label}\\n";`, 2) + `\n`;
+      out += `}).name("${child.label}");\n`;
+    });
+
+    schema.edges.forEach((edge: any) => {
+      const srcId = this.sanitizeIdentifier(edge.sourceNodeId);
+      const tgtId = this.sanitizeIdentifier(edge.targetNodeId);
+      out += `sf_task_${srcId}.precede(sf_task_${tgtId});\n`;
+    });
+
+    return out;
+  }
+
+  private static generateModuleInternalCode(schema: any, moduleId: string): string {
+    let out = `// Tarefas internas encapsuladas do módulo\n`;
+    schema.nodes.forEach((child: any) => {
+      const sId = this.sanitizeIdentifier(child.id);
+      out += `auto mod_task_${sId} = module_flow_${moduleId}.emplace([&ctx]() {\n`;
+      out += this.indent(child.customLambdaBody || `std::osyncstream(std::cout) << "Modulo: ${child.label}\\n";`, 2) + `\n`;
+      out += `}).name("${child.label}");\n`;
+    });
+
+    schema.edges.forEach((edge: any) => {
+      const srcId = this.sanitizeIdentifier(edge.sourceNodeId);
+      const tgtId = this.sanitizeIdentifier(edge.targetNodeId);
+      out += `mod_task_${srcId}.precede(mod_task_${tgtId});\n`;
+    });
+
+    return out;
   }
 
   private static sanitizeIdentifier(id: string): string {

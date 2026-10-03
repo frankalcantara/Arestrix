@@ -239,7 +239,92 @@ body, html {
   flex: 1;
   height: 100%;
   position: relative;
-  gap: 14px;
+  gap: 10px;
+}
+
+/* --- Breadcrumbs Bar Hierárquica --- */
+.breadcrumbs-bar {
+  height: 42px;
+  background-color: var(--surface-card);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-pill);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.breadcrumbs-trail {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.breadcrumb-item {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+.breadcrumb-item:hover {
+  background-color: #f1f5f9;
+  color: var(--text-primary);
+}
+
+.breadcrumb-item.active {
+  background-color: #eff6ff;
+  color: #2563eb;
+  font-weight: 800;
+}
+
+.breadcrumb-separator {
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 700;
+  user-select: none;
+}
+
+.btn-navigate-up {
+  background: var(--gradient-orange);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 5px 14px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: var(--shadow-button-orange);
+  transition: transform 0.15s ease;
+}
+.btn-navigate-up:hover {
+  transform: translateY(-1px);
+}
+
+.btn-dive-action {
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  width: 100%;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-dive-action:hover {
+  background-color: #2563eb;
+  color: #ffffff;
 }
 
 .viewport-container {

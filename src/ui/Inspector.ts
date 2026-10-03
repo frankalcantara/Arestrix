@@ -78,6 +78,14 @@ export class Inspector {
           </select>
         </div>
 
+        ${(node.type === 'subflow' || node.type === 'module') ? `
+        <div class="form-group">
+          <button id="btn-dive-subflow" class="btn btn-dive-action">
+            📂 Abrir Subgrafo Filho (Duplo-clique)
+          </button>
+        </div>
+        ` : ''}
+
         <div class="form-group">
           <label class="form-label" for="node-lambda">Corpo do Lambda C++20</label>
           <div class="code-editor-header">
@@ -108,6 +116,17 @@ export class Inspector {
         </div>
       </div>
     `;
+
+    // Eventos do formulário
+    this.container.querySelector('#btn-dive-subflow')?.addEventListener('click', () => {
+      this.graph.diveIntoSubflow(node.id);
+    });
+
+    const typeSelect = this.container.querySelector('#node-type-select') as HTMLSelectElement;
+    typeSelect?.addEventListener('change', () => {
+      const newType = typeSelect.value as any;
+      this.graph.updateNode(node.id, { type: newType });
+    });
 
     // Eventos do formulário
     const labelInput = this.container.querySelector('#node-label') as HTMLInputElement;
