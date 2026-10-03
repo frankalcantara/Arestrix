@@ -213,6 +213,21 @@ export class NodeView {
     this.group.position.z = selected ? 10 : 0;
   }
 
+  setExecutionState(state: 'idle' | 'running' | 'completed'): void {
+    const borderMat = this.borderLine.material as THREE.LineBasicMaterial;
+    if (state === 'running') {
+      // Destaque limpo de execução: cor contrastante e elevação em Z
+      borderMat.color.setHex(0x10b981);
+      this.group.position.z = 15;
+    } else if (state === 'completed') {
+      borderMat.color.setHex(0x059669);
+      this.group.position.z = 5;
+    } else {
+      borderMat.color.setHex(this.isSelected ? THEME.nodeBody.borderSelected : THEME.nodeBody.borderColor);
+      this.group.position.z = this.isSelected ? 10 : 0;
+    }
+  }
+
   updatePosition(x: number, y: number): void {
     this.group.position.x = x;
     this.group.position.y = y;

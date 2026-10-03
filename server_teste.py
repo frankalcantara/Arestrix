@@ -235,12 +235,50 @@ class NodeForgeServerHandler(SimpleHTTPRequestHandler):
             run_stdout = (run_proc.stdout or "") + (run_proc.stderr or "")
             elapsed_ms = int((time.time() - start_time) * 1000)
 
-            full_output = f"[COMPILADOR MSVC C++20]\n{compile_stdout.strip()}\n\n[EXECUCAO DOS AGENTES TASKFLOW]\n{run_stdout.strip()}"
+            # Extrai eventos de telemetria emitidos pelo NodeForgeObserver
+            telemetry_events = []
+            clean_run_lines = []
+
+            for line in run_stdout.splitlines():
+                if line.startswith("[NF_TELEMETRY:ENTER]"):
+                    parts = line.replace("[NF_TELEMETRY:ENTER]", "").strip().split()
+                    task_id = ""
+                    worker_id = 0
+                    for p in parts:
+                        if p.startswith("Task="):
+                            task_id = p.split("=")[1]
+                        elif p.startswith("Worker="):
+                            try:
+                                worker_id = int(p.split("=")[1])
+                            except Exception:
+                                pass
+                    if task_id:
+                        telemetry_events.append({"type": "enter", "taskId": task_id, "worker": worker_id})
+                elif line.startswith("[NF_TELEMETRY:EXIT]"):
+                    parts = line.replace("[NF_TELEMETRY:EXIT]", "").strip().split()
+                    task_id = ""
+                    worker_id = 0
+                    for p in parts:
+                        if p.startswith("Task="):
+                            task_id = p.split("=")[1]
+                        elif p.startswith("Worker="):
+                            try:
+                                worker_id = int(p.split("=")[1])
+                            except Exception:
+                                pass
+                    if task_id:
+                        telemetry_events.append({"type": "exit", "taskId": task_id, "worker": worker_id})
+                else:
+                    clean_run_lines.append(line)
+
+            clean_run_stdout = "\n".join(clean_run_lines)
+            full_output = f"[COMPILADOR MSVC C++20]\n{compile_stdout.strip()}\n\n[EXECUCAO DOS AGENTES TASKFLOW]\n{clean_run_stdout.strip()}"
 
             self.send_json_response({
                 "success": run_proc.returncode == 0,
                 "stage": "run",
                 "stdout": full_output,
+                "telemetryEvents": telemetry_events,
                 "elapsedMs": elapsed_ms
             })
             return
@@ -313,6 +351,10 @@ def main():
 
     # 2. Garante arquivos do build da interface
     ensure_build()
+
+    if "--test-only" in sys.argv:
+        print(f"\n{GREEN}{BOLD}[SUCESSO] Todos os testes e o build foram validados com exito!{RESET}")
+        sys.exit(0)
 
     # 3. Inicia servidor HTTP com API de build e run
     print(f"\n{CYAN}>>> [3/3] Iniciando servidor NodeForge Studio em http://{HOST}:{PORT}...{RESET}")

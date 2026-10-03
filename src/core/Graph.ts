@@ -9,6 +9,7 @@ import {
   IBreadcrumbItem
 } from './types.ts';
 import { globalEventBus, EventBus } from './EventBus.ts';
+import { CommandManager } from './history/CommandManager.ts';
 
 interface INavigationFrame {
   schema: IGraphSchema;
@@ -22,9 +23,11 @@ export class Graph {
   private metadata: IGraphMetadata;
   private bus: EventBus;
   private navigationStack: INavigationFrame[] = [];
+  public readonly commandManager: CommandManager;
 
   constructor(bus: EventBus = globalEventBus, initialMetadata?: Partial<IGraphMetadata>) {
     this.bus = bus;
+    this.commandManager = new CommandManager(this.bus);
     this.metadata = {
       graphName: 'AgentTaskflowGraph',
       description: 'Orquestração de Agentes Concorrentes com Taskflow C++20',
@@ -33,6 +36,24 @@ export class Graph {
       version: '1.0.0',
       ...initialMetadata
     };
+  }
+
+  // --- Histórico de Edição (Undo / Redo) ---
+
+  undo(): boolean {
+    return this.commandManager.undo();
+  }
+
+  redo(): boolean {
+    return this.commandManager.redo();
+  }
+
+  canUndo(): boolean {
+    return this.commandManager.canUndo();
+  }
+
+  canRedo(): boolean {
+    return this.commandManager.canRedo();
   }
 
   // --- Operações com Nós ---
@@ -46,7 +67,7 @@ export class Graph {
     this.bus.emit('graph:changed');
   }
 
-  createNode(
+  buildNode(
     id: string, 
     label: string, 
     type: TaskflowNodeType, 
@@ -69,7 +90,7 @@ export class Graph {
       ];
     }
 
-    const node: INodeData = {
+    return {
       id,
       label,
       type,
@@ -79,7 +100,16 @@ export class Graph {
       parameters: {},
       customLambdaBody: this.getDefaultLambdaBody(type, label)
     };
+  }
 
+  createNode(
+    id: string, 
+    label: string, 
+    type: TaskflowNodeType, 
+    x: number, 
+    y: number
+  ): INodeData {
+    const node = this.buildNode(id, label, type, x, y);
     this.addNode(node);
     return node;
   }
@@ -278,6 +308,7 @@ export class Graph {
     const nodeIds = Array.from(this.nodes.keys());
     nodeIds.forEach(id => this.removeNode(id));
     this.edges.clear();
+    this.commandManager.clear();
     this.bus.emit('graph:cleared');
     this.bus.emit('graph:changed');
   }

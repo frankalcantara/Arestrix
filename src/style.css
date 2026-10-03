@@ -124,6 +124,13 @@ body, html {
   transition: all 0.15s ease;
 }
 
+.tool-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+  box-shadow: none;
+}
+
 /* Botão de Ação Primária: Laranja Vibrante da Imagem (+ Create Notice) */
 .btn-run-action {
   background: var(--gradient-orange);

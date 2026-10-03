@@ -19,6 +19,7 @@ export class TaskflowCppGenerator {
     code += `// ============================================================================\n\n`;
 
     code += `#include <taskflow/taskflow.hpp>\n`;
+    code += `#include "NodeForgeObserver.hpp"\n`;
     code += `#include <iostream>\n`;
     code += `#include <vector>\n`;
     code += `#include <string>\n`;
@@ -38,6 +39,8 @@ export class TaskflowCppGenerator {
     code += `  std::osyncstream(std::cout) << ">>> Iniciando pipeline Taskflow: ${meta.graphName}...\\n";\n\n`;
     code += `  AgentContext ctx;\n`;
     code += `  tf::Executor executor;\n`;
+    code += `  // Plugin de Telemetria Desacoplado em Tempo Real (tf::ObserverInterface)\n`;
+    code += `  auto live_observer = executor.make_observer<nodeforge::LiveTelemetryObserver>();\n`;
     code += `  tf::Taskflow tf("${meta.graphName}");\n\n`;
 
     if (hasCritical) {

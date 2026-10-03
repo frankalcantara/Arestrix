@@ -83,10 +83,44 @@ export class Viewport {
     this.bus.on('node:added', (node: INodeData) => this.onNodeAdded(node));
     this.bus.on('node:removed', ({ id }: { id: string }) => this.onNodeRemoved(id));
     this.bus.on('node:updated', (node: INodeData) => this.onNodeUpdated(node));
+    this.bus.on('node:moved', ({ id, position }: { id: string; position: { x: number; y: number } }) => this.onNodeMoved(id, position));
     this.bus.on('edge:added', (edge: IEdgeData) => this.onEdgeAdded(edge));
     this.bus.on('edge:removed', (edge: IEdgeData) => this.onEdgeRemoved(edge.id));
     this.bus.on('graph:cleared', () => this.clearAllViews());
     this.bus.on('graph:loaded', () => this.syncFromGraph());
+    this.bus.on('telemetry:task-enter', (data: { taskId: string; worker?: number }) => this.onTelemetryEnter(data));
+    this.bus.on('telemetry:task-exit', (data: { taskId: string; worker?: number }) => this.onTelemetryExit(data));
+    this.bus.on('telemetry:reset', () => this.onTelemetryReset());
+  }
+
+  private onTelemetryEnter(data: { taskId: string; worker?: number }): void {
+    const nv = this.findNodeView(data.taskId);
+    if (nv) {
+      nv.setExecutionState('running');
+    }
+  }
+
+  private onTelemetryExit(data: { taskId: string; worker?: number }): void {
+    const nv = this.findNodeView(data.taskId);
+    if (nv) {
+      nv.setExecutionState('completed');
+    }
+  }
+
+  private findNodeView(key: string): NodeView | undefined {
+    let nv = this.nodeViews.get(key);
+    if (!nv) {
+      for (const view of this.nodeViews.values()) {
+        if (view.nodeData.label === key || view.nodeData.id === key) {
+          return view;
+        }
+      }
+    }
+    return nv;
+  }
+
+  private onTelemetryReset(): void {
+    this.nodeViews.forEach(nv => nv.setExecutionState('idle'));
   }
 
   private onNodeAdded(nodeData: INodeData): void {
@@ -106,10 +140,37 @@ export class Viewport {
     }
   }
 
+  private onNodeMoved(id: string, position: { x: number; y: number }): void {
+    const nodeView = this.nodeViews.get(id);
+    if (nodeView) {
+      nodeView.updatePosition(position.x, position.y);
+      this.updateConnectedEdgesForNode(id);
+    }
+  }
+
+  public updateConnectedEdgesForNode(nodeId: string): void {
+    const edges = this.graph.getEdgesForNode(nodeId);
+    edges.forEach(edge => {
+      const conn = this.connectionViews.get(edge.id);
+      const src = this.nodeViews.get(edge.sourceNodeId);
+      const tgt = this.nodeViews.get(edge.targetNodeId);
+      if (conn && src && tgt) {
+        const start = src.getPortWorldPosition(edge.sourcePortId);
+        const end = tgt.getPortWorldPosition(edge.targetPortId);
+        conn.updateCurve(start, end);
+      }
+    });
+  }
+
   private onNodeUpdated(nodeData: INodeData): void {
     const nodeView = this.nodeViews.get(nodeData.id);
     if (nodeView) {
-      nodeView.updateLabel(nodeData.label);
+      if (nodeView.nodeData.type !== nodeData.type) {
+        this.onNodeRemoved(nodeData.id);
+        this.onNodeAdded(nodeData);
+      } else {
+        nodeView.updateLabel(nodeData.label);
+      }
     }
   }
 

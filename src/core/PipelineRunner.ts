@@ -60,6 +60,10 @@ export class PipelineRunner {
         return false;
       }
 
+      if (result.telemetryEvents && result.telemetryEvents.length > 0) {
+        this.playTelemetryEvents(result.telemetryEvents);
+      }
+
       globalEventBus.emit('pipeline:success', {
         stdout: result.stdout,
         elapsedMs: result.elapsedMs || 0
@@ -73,5 +77,28 @@ export class PipelineRunner {
       });
       return false;
     }
+  }
+
+  private static playTelemetryEvents(events: Array<{ type: string; taskId: string; worker?: number }>): void {
+    if (!events || events.length === 0) return;
+
+    let delay = 0;
+    const stepDelay = 280; // ms entre passos para animação visual perceptível e limpa
+
+    events.forEach((evt) => {
+      setTimeout(() => {
+        if (evt.type === 'enter') {
+          globalEventBus.emit('telemetry:task-enter', { taskId: evt.taskId, worker: evt.worker });
+        } else if (evt.type === 'exit') {
+          globalEventBus.emit('telemetry:task-exit', { taskId: evt.taskId, worker: evt.worker });
+        }
+      }, delay);
+      delay += stepDelay;
+    });
+
+    // Reset após a conclusão da animação
+    setTimeout(() => {
+      globalEventBus.emit('telemetry:reset');
+    }, delay + 1800);
   }
 }

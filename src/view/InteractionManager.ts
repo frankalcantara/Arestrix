@@ -8,6 +8,12 @@ import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { THEME } from './Theme.ts';
 import { globalEventBus } from '../core/EventBus.ts';
+import { 
+  MoveNodeCommand, 
+  AddEdgeCommand, 
+  RemoveNodeCommand, 
+  RemoveEdgeCommand 
+} from '../core/history/GraphCommands.ts';
 
 export class InteractionManager {
   private camera: THREE.OrthographicCamera;
@@ -24,6 +30,7 @@ export class InteractionManager {
 
   // Estados de Interacao
   private draggedNodeView: NodeView | null = null;
+  private dragStartPos: { x: number; y: number } | null = null;
   private dragOffset: THREE.Vector3 = new THREE.Vector3();
   private selectedNodeId: string | null = null;
   private selectedEdgeId: string | null = null;
@@ -142,6 +149,7 @@ export class InteractionManager {
       if (nv) {
         this.selectNode(hitNodeId);
         this.draggedNodeView = nv;
+        this.dragStartPos = { x: nv.nodeData.position.x, y: nv.nodeData.position.y };
         this.dragOffset.set(
           nv.group.position.x - worldCursor.x,
           nv.group.position.y - worldCursor.y,
@@ -189,7 +197,19 @@ export class InteractionManager {
 
   private onPointerUp(e: PointerEvent): void {
     if (this.draggedNodeView) {
+      const finalX = this.draggedNodeView.nodeData.position.x;
+      const finalY = this.draggedNodeView.nodeData.position.y;
+      if (this.dragStartPos && (finalX !== this.dragStartPos.x || finalY !== this.dragStartPos.y)) {
+        const cmd = new MoveNodeCommand(
+          this.graph,
+          this.draggedNodeView.nodeData.id,
+          this.dragStartPos,
+          { x: finalX, y: finalY }
+        );
+        this.graph.commandManager.record(cmd);
+      }
       this.draggedNodeView = null;
+      this.dragStartPos = null;
     }
 
     if (this.isConnecting) {
@@ -213,12 +233,17 @@ export class InteractionManager {
         // Conectar apenas se o destino for porta de entrada e nó diferente (ou loopback suportado)
         if (direction === 'input' && this.connectingSourceNodeId && this.connectingSourcePortId) {
           try {
-            this.graph.createEdge(
-              this.connectingSourceNodeId,
-              this.connectingSourcePortId,
+            const edgeId = `edge_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+            const edgeData = {
+              id: edgeId,
+              sourceNodeId: this.connectingSourceNodeId,
+              sourcePortId: this.connectingSourcePortId,
               targetNodeId,
-              targetPortId
-            );
+              targetPortId,
+              type: 'flow' as const
+            };
+            const cmd = new AddEdgeCommand(this.graph, edgeData);
+            this.graph.commandManager.execute(cmd);
           } catch (err) {
             console.warn('Falha ao conectar nós:', err);
           }
@@ -291,11 +316,37 @@ export class InteractionManager {
   }
 
   private onKeyDown(e: KeyboardEvent): void {
-    // Tecla Delete ou Backspace para remover nó selecionado
-    if ((e.key === 'Delete' || e.key === 'Backspace') && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
+    const isEditingText = ['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName);
+
+    // Ctrl+Z (Desfazer / Undo)
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
+      if (!isEditingText) {
+        e.preventDefault();
+        this.graph.undo();
+        return;
+      }
+    }
+
+    // Ctrl+Y ou Ctrl+Shift+Z (Refazer / Redo)
+    if (((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'z' || e.key === 'Z'))) {
+      if (!isEditingText) {
+        e.preventDefault();
+        this.graph.redo();
+        return;
+      }
+    }
+
+    // Tecla Delete ou Backspace para remover nó ou aresta selecionada
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !isEditingText) {
       if (this.selectedNodeId) {
-        this.graph.removeNode(this.selectedNodeId);
+        const cmd = new RemoveNodeCommand(this.graph, this.selectedNodeId);
+        this.graph.commandManager.execute(cmd);
         this.selectNode(null);
+      } else if (this.selectedEdgeId) {
+        const cmd = new RemoveEdgeCommand(this.graph, this.selectedEdgeId);
+        this.graph.commandManager.execute(cmd);
+        this.selectEdge(null);
       }
     }
 

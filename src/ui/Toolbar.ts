@@ -4,6 +4,9 @@ import { Viewport } from '../view/Viewport.ts';
 import { CodeModal } from './CodeModal.ts';
 import { TaskflowNodeType } from '../core/types.ts';
 import { PipelineRunner } from '../core/PipelineRunner.ts';
+import { AddNodeCommand } from '../core/history/GraphCommands.ts';
+import { IHistoryState } from '../core/history/CommandManager.ts';
+import { globalEventBus } from '../core/EventBus.ts';
 
 export class Toolbar {
   private container: HTMLElement;
@@ -32,6 +35,14 @@ export class Toolbar {
           <span class="brand-name">NodeForge</span>
           <span class="brand-sub">Auto Build & Run Studio</span>
         </div>
+      </div>
+
+      <div class="toolbar-separator"></div>
+
+      <!-- HISTORICO UNDO / REDO -->
+      <div class="toolbar-group">
+        <button id="btn-undo" class="tool-btn btn-secondary" title="Desfazer (Ctrl+Z)" disabled>↶ Desfazer</button>
+        <button id="btn-redo" class="tool-btn btn-secondary" title="Refazer (Ctrl+Y)" disabled>↷ Refazer</button>
       </div>
 
       <div class="toolbar-separator"></div>
@@ -69,6 +80,33 @@ export class Toolbar {
         <button id="btn-clear-graph" class="tool-btn btn-danger-outline">🗑️ Limpar</button>
       </div>
     `;
+
+    // Desfazer / Refazer
+    const btnUndo = this.container.querySelector('#btn-undo') as HTMLButtonElement;
+    const btnRedo = this.container.querySelector('#btn-redo') as HTMLButtonElement;
+
+    btnUndo?.addEventListener('click', () => {
+      this.graph.undo();
+    });
+
+    btnRedo?.addEventListener('click', () => {
+      this.graph.redo();
+    });
+
+    globalEventBus.on('history:changed', (state: IHistoryState) => {
+      if (btnUndo) {
+        btnUndo.disabled = !state.canUndo;
+        btnUndo.title = state.canUndo && state.undoDesc 
+          ? `Desfazer: ${state.undoDesc} (Ctrl+Z)` 
+          : 'Desfazer (Ctrl+Z)';
+      }
+      if (btnRedo) {
+        btnRedo.disabled = !state.canRedo;
+        btnRedo.title = state.canRedo && state.redoDesc 
+          ? `Refazer: ${state.redoDesc} (Ctrl+Y)` 
+          : 'Refazer (Ctrl+Y)';
+      }
+    });
 
     // Evento de Execução Principal (Compilar e Rodar)
     this.container.querySelector('#btn-run-pipeline')?.addEventListener('click', () => {
@@ -146,7 +184,9 @@ export class Toolbar {
       critical: `Shared_State_Lock_${existingCount + 1}`
     };
 
-    this.graph.createNode(id, labelMap[type], type, x, y);
+    const node = this.graph.buildNode(id, labelMap[type], type, x, y);
+    const cmd = new AddNodeCommand(this.graph, node);
+    this.graph.commandManager.execute(cmd);
   }
 
   public loadDemoComplexSystem(): void {

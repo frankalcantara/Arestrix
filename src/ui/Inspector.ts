@@ -1,6 +1,7 @@
 import { Graph } from '../core/Graph.ts';
 import { INodeData } from '../core/types.ts';
 import { EventBus } from '../core/EventBus.ts';
+import { RemoveNodeCommand, UpdateNodeCommand } from '../core/history/GraphCommands.ts';
 
 export class Inspector {
   private container: HTMLElement;
@@ -123,20 +124,65 @@ export class Inspector {
     });
 
     const typeSelect = this.container.querySelector('#node-type-select') as HTMLSelectElement;
+    let oldType = node.type;
     typeSelect?.addEventListener('change', () => {
       const newType = typeSelect.value as any;
-      this.graph.updateNode(node.id, { type: newType });
+      if (newType !== oldType) {
+        const cmd = new UpdateNodeCommand(
+          this.graph,
+          node.id,
+          { type: oldType },
+          { type: newType },
+          `Alterar tipo de "${node.label}" para ${newType}`
+        );
+        this.graph.commandManager.execute(cmd);
+        oldType = newType;
+      }
     });
 
     // Eventos do formulário
     const labelInput = this.container.querySelector('#node-label') as HTMLInputElement;
+    let initialLabel = node.label;
+    labelInput?.addEventListener('focus', () => {
+      initialLabel = labelInput.value;
+    });
     labelInput?.addEventListener('input', () => {
       this.graph.updateNode(node.id, { label: labelInput.value });
     });
+    labelInput?.addEventListener('blur', () => {
+      if (labelInput.value !== initialLabel) {
+        const cmd = new UpdateNodeCommand(
+          this.graph,
+          node.id,
+          { label: initialLabel },
+          { label: labelInput.value },
+          `Renomear nó para "${labelInput.value}"`
+        );
+        this.graph.commandManager.record(cmd);
+        initialLabel = labelInput.value;
+      }
+    });
 
     const lambdaInput = this.container.querySelector('#node-lambda') as HTMLTextAreaElement;
+    let initialLambda = node.customLambdaBody || '';
+    lambdaInput?.addEventListener('focus', () => {
+      initialLambda = lambdaInput.value;
+    });
     lambdaInput?.addEventListener('input', () => {
       this.graph.updateNode(node.id, { customLambdaBody: lambdaInput.value });
+    });
+    lambdaInput?.addEventListener('blur', () => {
+      if (lambdaInput.value !== initialLambda) {
+        const cmd = new UpdateNodeCommand(
+          this.graph,
+          node.id,
+          { customLambdaBody: initialLambda },
+          { customLambdaBody: lambdaInput.value },
+          `Editar lambda de "${node.label}"`
+        );
+        this.graph.commandManager.record(cmd);
+        initialLambda = lambdaInput.value;
+      }
     });
 
     const deselectBtn = this.container.querySelector('#btn-deselect-node');
@@ -147,7 +193,8 @@ export class Inspector {
     const deleteBtn = this.container.querySelector('#btn-delete-node');
     deleteBtn?.addEventListener('click', () => {
       if (confirm(`Deseja realmente excluir o nó "${node.label}"?`)) {
-        this.graph.removeNode(node.id);
+        const cmd = new RemoveNodeCommand(this.graph, node.id);
+        this.graph.commandManager.execute(cmd);
       }
     });
   }
