@@ -51,10 +51,10 @@ export class Toolbar {
 
       <div class="toolbar-separator"></div>
 
-      <!-- ACAO PRIMARIA NORMAL: COMPILAR E EXECUTAR -->
+            <!-- ACAO PRIMARIA NORMAL: COMPILAR E EXECUTAR -->
       <div class="toolbar-group">
-        <button id="btn-run-pipeline" class="tool-btn btn-run-action" title="Compila com MSVC C++20 e executa o pipeline de agentes imediatamente (F5)">
-          ▶ Executar Pipeline (F5)
+        <button id="btn-run-pipeline" class="tool-btn btn-run-action" style="background:var(--gradient-blue); color:white;" title="Gera o código C++ e Compila (F5)">
+          ▶ Build (C++)
         </button>
       </div>
 
@@ -62,11 +62,14 @@ export class Toolbar {
 
       <div class="toolbar-group">
         <span class="toolbar-group-label">Nós:</span>
-        <button class="tool-btn btn-node-static" data-type="static">+ Estático</button>
-        <button class="tool-btn btn-node-cond" data-type="condition">+ Condição</button>
-        <button class="tool-btn btn-node-subflow" data-type="subflow">+ Subflow</button>
-        <button class="tool-btn btn-node-module" data-type="module">+ Módulo</button>
-        <button class="tool-btn btn-node-crit" data-type="critical">+ Crítico</button>
+        <select id="select-add-node" class="tool-btn btn-secondary" style="outline:none; cursor:pointer; min-width: 130px;">
+          <option value="" disabled selected>+ Adicionar...</option>
+          <option value="static">Estático (Task)</option>
+          <option value="condition">Condição (Branch)</option>
+          <option value="subflow">Subflow (Aninhado)</option>
+          <option value="module">Módulo</option>
+          <option value="critical">Crítico (Mutex)</option>
+        </select>
       </div>
 
       <div class="toolbar-separator"></div>
@@ -126,13 +129,13 @@ export class Toolbar {
       this.executePipeline();
     });
 
-    // Eventos de criacao de nos
-    const nodeButtons = this.container.querySelectorAll('[data-type]');
-    nodeButtons.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const type = (e.currentTarget as HTMLElement).getAttribute('data-type') as TaskflowNodeType;
-        this.createNewNode(type);
-      });
+        // Eventos de criacao de nos
+    this.container.querySelector('#select-add-node')?.addEventListener('change', (e) => {
+      const select = e.currentTarget as HTMLSelectElement;
+      if (select.value) {
+        this.createNewNode(select.value as TaskflowNodeType);
+        select.value = ""; // Reseta o seletor após adicionar
+      }
     });
 
     // Abrir Modal de Templates de Agentes
@@ -246,3 +249,5 @@ export class Toolbar {
     }, 100);
   }
 }
+
+

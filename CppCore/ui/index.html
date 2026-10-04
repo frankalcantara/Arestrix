@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NodeForge - C++ Edition</title>
+    <style>
+        /* 
+         * DIRETRIZ GLOBAL APLICADA: 
+         * - Zero sombras em textos (sem text-shadow). 
+         * - Contraste e peso tipográfico usados para destaque.
+         */
+        
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-secondary: #64748b;
+            --primary-accent: #2563eb;
+            --primary-hover: #1d4ed8;
+            --radius: 12px;
+        }
+
+        body {
+            font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none; /* Aspecto nativo */
+        }
+
+        .container {
+            background: var(--card-bg);
+            padding: 2.5rem;
+            border-radius: var(--radius);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); /* Sombra APENAS no box, NUNCA no texto */
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .badge {
+            display: inline-block;
+            background-color: #dbeafe;
+            color: var(--primary-accent);
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            font-weight: 700; /* Peso para destacar, sem glow */
+            margin-bottom: 1rem;
+        }
+
+        h1 {
+            margin: 0 0 0.5rem 0;
+            font-weight: 800;
+            font-size: 1.8rem;
+            letter-spacing: -0.025em;
+        }
+
+        p {
+            color: var(--text-secondary);
+            font-weight: 500;
+            line-height: 1.5;
+            margin-bottom: 2rem;
+        }
+
+        button {
+            background-color: var(--primary-accent);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .secondary-btn {
+            background-color: transparent;
+            color: var(--text-secondary);
+            border: 1px solid #e2e8f0;
+        }
+
+        .secondary-btn:hover {
+            background-color: #f1f5f9;
+            color: var(--text-main);
+        }
+
+        /* Status log console */
+        #log {
+            margin-top: 1.5rem;
+            font-family: Consolas, monospace;
+            font-size: 0.85rem;
+            color: #10b981; /* Cor de sucesso para logs */
+            font-weight: 700;
+            height: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="badge">WebUI + C++ Backend</div>
+        <h1>NodeForge</h1>
+        <p>A mesma qualidade visual, com a velocidade e controle de memória imbatíveis do C++.</p>
+        
+        <button onclick="testarProcessamento()">Testar Backend C++</button>
+        <button class="secondary-btn" onclick="webui.call('exit_app')">Encerrar Aplicação</button>
+
+        <div id="log">Pronto.</div>
+    </div>
+
+    <!-- Script essencial do WebUI -->
+    <script src="webui.js"></script>
+    
+    <script>
+        // Função JS que interage com o C++
+        async function testarProcessamento() {
+            const logEl = document.getElementById('log');
+            logEl.style.color = '#3b82f6';
+            logEl.innerText = "Enviando dados pro C++...";
+            
+            // Chama a função 'process_data' no C++
+            const respostaCpp = await webui.call('process_data', 'Dados JS puros');
+            
+            logEl.style.color = '#10b981';
+            logEl.innerText = respostaCpp;
+        }
+    </script>
+</body>
+</html>

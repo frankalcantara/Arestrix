@@ -1,10 +1,11 @@
 import { Graph } from '../core/Graph.ts';
-import { TaskflowCppGenerator } from '../compiler/TaskflowCppGenerator.ts';
 
 export class CodeModal {
   private modalOverlay: HTMLElement;
   private graph: Graph;
   private currentTab: 'cpp' | 'msvc' | 'cmake' | 'makefile' = 'cpp';
+  
+  private codeCache: any = { cpp: '', cmake: '', make: '', msvc_ps1: '' };
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -12,11 +13,21 @@ export class CodeModal {
     this.modalOverlay = document.createElement('div');
     this.modalOverlay.className = 'modal-overlay hidden';
     document.body.appendChild(this.modalOverlay);
-
-    this.render();
   }
 
-  show(): void {
+  async show(): Promise<void> {
+    // Busca do C++ as strings prontas!
+    try {
+      // @ts-ignore
+      if (typeof webui !== 'undefined') {
+        // @ts-ignore
+        const response = await webui.call("get_cpp_preview", "");
+        this.codeCache = JSON.parse(response);
+      }
+    } catch (e) {
+      console.error("Erro ao buscar preview do C++", e);
+    }
+    
     this.render();
     this.modalOverlay.classList.remove('hidden');
   }
@@ -27,22 +38,18 @@ export class CodeModal {
 
   private render(): void {
     const meta = this.graph.getMetadata();
-    const cppCode = TaskflowCppGenerator.generateSource(this.graph);
-    const cmakeCode = TaskflowCppGenerator.generateCMakeLists(this.graph);
-    const makeCode = TaskflowCppGenerator.generateMakefile(this.graph);
-    const msvcScripts = TaskflowCppGenerator.generateMsvcBuildScript(this.graph);
-
-    let activeCode = cppCode;
+    
+    let activeCode = this.codeCache.cpp;
     let filename = 'main.cpp';
 
     if (this.currentTab === 'msvc') {
-      activeCode = msvcScripts.ps1;
+      activeCode = this.codeCache.msvc_ps1;
       filename = 'build_msvc.ps1';
     } else if (this.currentTab === 'cmake') {
-      activeCode = cmakeCode;
+      activeCode = this.codeCache.cmake;
       filename = 'CMakeLists.txt';
     } else if (this.currentTab === 'makefile') {
-      activeCode = makeCode;
+      activeCode = this.codeCache.make;
       filename = 'Makefile';
     }
 
@@ -74,8 +81,7 @@ export class CodeModal {
             <span>Arquivo: <strong>${filename}</strong></span>
           </div>
           <div class="footer-actions">
-            <button id="btn-copy-code" class="btn btn-secondary">📋 Copiar Código</button>
-            <button id="btn-download-file" class="btn btn-primary">💾 Baixar ${filename}</button>
+            <button id="btn-copy-code" class="btn btn-secondary">📋 Copiar</button>
           </div>
         </div>
       </div>
@@ -99,28 +105,20 @@ export class CodeModal {
     const copyBtn = this.modalOverlay.querySelector('#btn-copy-code');
     copyBtn?.addEventListener('click', () => {
       navigator.clipboard.writeText(activeCode).then(() => {
-        copyBtn.textContent = '✅ Copiado!';
-        setTimeout(() => { copyBtn.textContent = '📋 Copiar Código'; }, 2000);
+        const ogText = copyBtn.innerHTML;
+        copyBtn.innerHTML = '✅ Copiado!';
+        setTimeout(() => copyBtn.innerHTML = ogText, 2000);
       });
-    });
-
-    const downloadBtn = this.modalOverlay.querySelector('#btn-download-file');
-    downloadBtn?.addEventListener('click', () => {
-      const blob = new Blob([activeCode], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
     });
   }
 
-  private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+  private escapeHtml(unsafe: string): string {
+    if (!unsafe) return '';
+    return unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 }

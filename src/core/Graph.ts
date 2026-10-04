@@ -62,6 +62,18 @@ export class Graph {
     if (this.nodes.has(node.id)) {
       throw new Error(`Node with id "${node.id}" already exists.`);
     }
+    
+    // NOVO: Espelha o estado imediatamente no backend C++
+    try {
+      // @ts-ignore
+      if (typeof webui !== 'undefined') {
+        // @ts-ignore
+        webui.call("add_node", JSON.stringify(node));
+      }
+    } catch (e) {
+      console.warn("WebUI C++ backend not detected, running pure local.");
+    }
+
     this.nodes.set(node.id, { ...node });
     this.bus.emit('node:added', node);
     this.bus.emit('graph:changed');
@@ -152,6 +164,11 @@ export class Graph {
   removeNode(id: string): void {
     if (!this.nodes.has(id)) return;
 
+    try {
+      // @ts-ignore
+      if (typeof webui !== 'undefined') webui.call("remove_node", id);
+    } catch(e) {}
+
     // Remover arestas conectadas a este nó
     const connectedEdges = this.getEdgesForNode(id);
     connectedEdges.forEach(edge => this.removeEdge(edge.id));
@@ -175,6 +192,15 @@ export class Graph {
     if (this.edges.has(edge.id)) {
       throw new Error(`Edge with id "${edge.id}" already exists.`);
     }
+
+    // NOVO: Espelha a aresta no C++
+    try {
+      // @ts-ignore
+      if (typeof webui !== 'undefined') {
+        // @ts-ignore
+        webui.call("add_edge", JSON.stringify(edge));
+      }
+    } catch (e) {}
 
     const source = this.nodes.get(edge.sourceNodeId);
     const target = this.nodes.get(edge.targetNodeId);
@@ -225,6 +251,11 @@ export class Graph {
   removeEdge(id: string): void {
     const edge = this.edges.get(id);
     if (!edge) return;
+
+    try {
+      // @ts-ignore
+      if (typeof webui !== 'undefined') webui.call("remove_edge", id);
+    } catch(e) {}
 
     this.edges.delete(id);
     this.bus.emit('edge:removed', edge);
@@ -305,6 +336,11 @@ export class Graph {
   }
 
   clear(): void {
+    try {
+      // @ts-ignore
+      if (typeof webui !== 'undefined') webui.call("clear_graph");
+    } catch(e) {}
+    
     const nodeIds = Array.from(this.nodes.keys());
     nodeIds.forEach(id => this.removeNode(id));
     this.edges.clear();
