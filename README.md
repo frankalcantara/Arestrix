@@ -1,14 +1,14 @@
-# NodeForge ⚡
+# TaskForge ⚡
 
-**NodeForge** is a high-performance, next-generation visual node graph orchestrator and IDE built with **Three.js (WebGL)** and **TypeScript** for modeling, visualizing, and generating concurrent, heterogeneous agent pipelines powered by **Taskflow in C++20**.
+**TaskForge** is a high-performance, next-generation visual node graph orchestrator and IDE built with **Three.js (WebGL)** and **TypeScript** for modeling, visualizing, and generating concurrent, heterogeneous agent pipelines powered by **Taskflow in C++20**.
 
 ---
 
-## 💡 What is NodeForge?
+## 💡 What is TaskForge?
 
 Modern concurrent applications—ranging from multi-agent AI orchestrators to high-throughput data processing and physics engines—demand fine-grained task parallelism, dynamic subflow decomposition, stochastic conditional branching, and mutual exclusion. 
 
-While C++20 and the **Taskflow** library provide a world-class parallel runtime, hand-crafting complex task graphs with feedback loops and nested subflows in raw code can be tedious and error-prone.
+While C++20 and the (**Taskflow**)[https://github.com/taskflow/taskflow] library provide a world-class parallel runtime, hand-crafting complex task graphs with feedback loops and nested subflows in raw code can be tedious and error-prone.
 
 **NodeForge** bridges this gap by providing an intuitive, interactive 2.5D visual canvas with instant C++20 code generation, automated MSVC / CMake compilation, and live telemetry observability.
 
