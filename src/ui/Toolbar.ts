@@ -36,7 +36,7 @@ export class Toolbar {
       <div class="toolbar-brand">
         <div class="brand-logo">⚡</div>
         <div class="brand-text">
-          <span class="brand-name">NodeForge</span>
+          <span class="brand-name">TaskForge</span>
           <span class="brand-sub">Auto Build & Run Studio</span>
         </div>
       </div>

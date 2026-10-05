@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 
-namespace nodeforge {
+namespace taskforge {
 namespace core {
 
 class Graph {
@@ -43,4 +43,4 @@ private:
 };
 
 } // namespace core
-} // namespace nodeforge
+} // namespace taskforge

@@ -1,7 +1,7 @@
 #include "Graph.hpp"
 #include <iostream>
 
-namespace nodeforge {
+namespace taskforge {
 namespace core {
 
 Graph::Graph() {
@@ -140,4 +140,4 @@ void Graph::clear() {
 }
 
 } // namespace core
-} // namespace nodeforge
+} // namespace taskforge

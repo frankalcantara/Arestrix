@@ -7,15 +7,15 @@
 #include <filesystem>
 
 // Instância global do nosso grafo central em C++
-nodeforge::core::Graph globalGraph;
+taskforge::core::Graph globalGraph;
 
 // Wrapper JS -> C++ (Preview Code)
 void ui_get_cpp_preview(webui::window::event* e) {
     nlohmann::json result;
-    result["cpp"] = nodeforge::compiler::TaskflowGenerator::generateSource(globalGraph);
-    result["cmake"] = nodeforge::compiler::TaskflowGenerator::generateCMakeLists(globalGraph);
-    result["make"] = nodeforge::compiler::TaskflowGenerator::generateMakefile(globalGraph);
-    auto msvc = nodeforge::compiler::TaskflowGenerator::generateMsvcBuildScript(globalGraph);
+    result["cpp"] = taskforge::compiler::TaskflowGenerator::generateSource(globalGraph);
+    result["cmake"] = taskforge::compiler::TaskflowGenerator::generateCMakeLists(globalGraph);
+    result["make"] = taskforge::compiler::TaskflowGenerator::generateMakefile(globalGraph);
+    auto msvc = taskforge::compiler::TaskflowGenerator::generateMsvcBuildScript(globalGraph);
     result["msvc_ps1"] = msvc.ps1;
     
     e->return_string(result.dump());
@@ -25,11 +25,11 @@ void ui_get_cpp_preview(webui::window::event* e) {
 void ui_generate_cpp_code(webui::window::event* e) {
     try {
         std::cout << "[C++] Gerando codigo C++ Taskflow a partir do grafo atual...\n";
-        std::string cppCode = nodeforge::compiler::TaskflowGenerator::generateSource(globalGraph);
-        std::string cmakeCode = nodeforge::compiler::TaskflowGenerator::generateCMakeLists(globalGraph);
-        auto msvcScripts = nodeforge::compiler::TaskflowGenerator::generateMsvcBuildScript(globalGraph);
+        std::string cppCode = taskforge::compiler::TaskflowGenerator::generateSource(globalGraph);
+        std::string cmakeCode = taskforge::compiler::TaskflowGenerator::generateCMakeLists(globalGraph);
+        auto msvcScripts = taskforge::compiler::TaskflowGenerator::generateMsvcBuildScript(globalGraph);
         
-        std::filesystem::path rootPath = "C:\\Projetos\\NodeForge\\Output";
+        std::filesystem::path rootPath = std::filesystem::current_path() / "Output";
         std::filesystem::create_directories(rootPath);
         
         std::ofstream fileCpp(rootPath / "main.cpp");
@@ -56,7 +56,7 @@ void ui_generate_cpp_code(webui::window::event* e) {
 void ui_add_node(webui::window::event* e) {
     std::string jsonStr = e->get_string();
     try {
-        auto nodeData = nlohmann::json::parse(jsonStr).get<nodeforge::core::NodeData>();
+        auto nodeData = nlohmann::json::parse(jsonStr).get<taskforge::core::NodeData>();
         bool success = globalGraph.addNode(nodeData);
         e->return_bool(success);
     } catch(const std::exception& ex) {
@@ -69,7 +69,7 @@ void ui_add_node(webui::window::event* e) {
 void ui_add_edge(webui::window::event* e) {
     std::string jsonStr = e->get_string();
     try {
-        auto edgeData = nlohmann::json::parse(jsonStr).get<nodeforge::core::EdgeData>();
+        auto edgeData = nlohmann::json::parse(jsonStr).get<taskforge::core::EdgeData>();
         bool success = globalGraph.addEdge(edgeData);
         e->return_bool(success);
     } catch(const std::exception& ex) {
@@ -110,7 +110,7 @@ void exit_app(webui::window::event* e) {
 }
 
 int main() {
-    std::cout << "[C++] Inicializando NodeForge Engine (C++)..." << std::endl;
+    std::cout << "[C++] Inicializando TaskForge Engine (C++)..." << std::endl;
 
     webui::window win;
 

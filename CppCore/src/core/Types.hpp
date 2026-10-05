@@ -8,7 +8,7 @@
 
 using json = nlohmann::json;
 
-namespace nodeforge {
+namespace taskforge {
 namespace core {
 
 enum class TaskflowNodeType {
@@ -83,10 +83,10 @@ struct GraphMetadata {
 };
 
 } // namespace core
-} // namespace nodeforge
+} // namespace taskforge
 
 // MACROS de serialização automática nlohmann
-namespace nodeforge {
+namespace taskforge {
 namespace core {
 
 // Serialização de Enums
@@ -184,4 +184,4 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(CompilerConfig, compiler, cppStandard, buildS
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(GraphMetadata, graphName, description, targetStandard, compilerConfig, version)
 
 } // namespace core
-} // namespace nodeforge
+} // namespace taskforge

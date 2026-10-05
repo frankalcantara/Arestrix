@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <sstream>
 
-namespace nodeforge {
+namespace taskforge {
 namespace compiler {
 
 std::string TaskflowGenerator::sanitizeIdentifier(const std::string& id) {
@@ -43,7 +43,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
     }
 
     std::string code = "// ============================================================================\n";
-    code += "// Gerado automaticamente por NodeForge (C++ Engine) - Visual Taskflow IDE\n";
+    code += "// Gerado automaticamente por TaskForge (C++ Engine) - Visual Taskflow IDE\n";
     code += "// Pipeline: " + meta.graphName + "\n";
     code += "// Descricao: " + meta.description + "\n";
     code += "// Padrao C++: " + meta.targetStandard + " | Compilador: " + meta.compilerConfig.compiler + "\n";
@@ -250,4 +250,4 @@ TaskflowGenerator::MsvcScripts TaskflowGenerator::generateMsvcBuildScript(const 
 }
 
 } // namespace compiler
-} // namespace nodeforge
+} // namespace taskforge

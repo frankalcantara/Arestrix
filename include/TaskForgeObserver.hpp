@@ -6,7 +6,7 @@
 #include <string>
 #include <syncstream>
 
-namespace nodeforge {
+namespace taskforge {
 
 /**
  * @class LiveTelemetryObserver
@@ -43,4 +43,4 @@ public:
     }
 };
 
-} // namespace nodeforge
+} // namespace taskforge

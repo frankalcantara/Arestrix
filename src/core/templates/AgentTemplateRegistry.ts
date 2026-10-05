@@ -2,7 +2,7 @@ import { IAgentTemplate, ISerializedTemplatePlugin } from './AgentTemplateTypes.
 import { BUILTIN_TEMPLATES } from './BuiltinTemplates.ts';
 import { INodeData, IPort } from '../types.ts';
 
-const STORAGE_KEY = 'nodeforge_custom_agent_plugins';
+const STORAGE_KEY = 'taskforge_custom_agent_plugins';
 
 export class AgentTemplateRegistry {
   private static instance: AgentTemplateRegistry | null = null;
@@ -67,7 +67,7 @@ export class AgentTemplateRegistry {
   }
 
   /**
-   * Instancia um nó do NodeForge a partir de um template.
+   * Instancia um nó do TaskForge a partir de um template.
    */
   public instantiateNode(
     templateId: string, 
@@ -202,7 +202,7 @@ export class AgentTemplateRegistry {
             parameters: item.parameters || {},
             requiredHeaders: item.requiredHeaders || ['<syncstream>'],
             isCustomPlugin: true,
-            author: item.author || 'Usuário NodeForge',
+            author: item.author || 'Usuário TaskForge',
             version: item.version || '1.0.0',
             generateLambdaBody: (params, label) => {
               let body = item.lambdaBodyTemplate || '// Plugin de Tarefa Customizado\nstd::cout << "[Plugin] ' + label + '\\n";';

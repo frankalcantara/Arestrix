@@ -1,6 +1,6 @@
 # TaskForge ⚡
 
-**TaskForge** is a high-performance, next-generation visual node graph orchestrator and IDE built with **Three.js (WebGL)** and **TypeScript** for modeling, visualizing, and generating concurrent, heterogeneous agent pipelines powered by **Taskflow in C++20**.
+**TaskForge** is a high-performance, next-generation visual node graph orchestrator and IDE built with **Three.js (WebGL)**, **TypeScript**, and a native **C++ Backend (WebUI)** for modeling, visualizing, and generating concurrent, heterogeneous agent pipelines powered by **Taskflow in C++20**.
 
 ---
 
@@ -8,7 +8,7 @@
 
 Modern concurrent applications—ranging from multi-agent AI orchestrators to high-throughput data processing and physics engines—demand fine-grained task parallelism, dynamic subflow decomposition, stochastic conditional branching, and mutual exclusion. 
 
-While C++20 and the [**Taskflow**](https://github.com/taskflow/taskflow) library provide a world-class parallel runtime, hand-crafting complex task graphs with feedback loops and nested subflows in raw code can be tedious and error-prone.
+While C++20 and the **Taskflow** library provide a world-class parallel runtime, hand-crafting complex task graphs with feedback loops and nested subflows in raw code can be tedious and error-prone.
 
 **TaskForge** bridges this gap by providing an intuitive, interactive 2.5D visual canvas with instant C++20 code generation, automated MSVC / CMake compilation, and live telemetry observability.
 
@@ -16,65 +16,70 @@ While C++20 and the [**Taskflow**](https://github.com/taskflow/taskflow) library
 
 TaskForge follows a strict, decoupled three-tier architecture:
 
-1. **Pure Logical Layer (`src/core/`)**:
+1. **Pure Logical Layer (Frontend `src/core/`)**:
    - In-memory graph data structure (`Graph`).
-   - Directed Acyclic Graph (DAG) topological validation alongside managed conditional feedback loops.
    - Subflow graph nesting (hierarchical child graphs).
    - Reversible editing history powered by the **Command Pattern** (`CommandManager`, `ICommand`), with undo/redo support (`Ctrl+Z` / `Ctrl+Y`).
    - Headless C++20 Taskflow code generator (`TaskflowCodegen`).
 
-2. **Visual & Interaction Layer (`src/view/`)**:
+2. **Visual & Interaction Layer (Frontend `src/view/`)**:
    - Hardware-accelerated Three.js WebGL canvas.
    - Smooth 2.5D orthographic camera with cursor-centered exponential zoom and drag panning (`CameraController`).
    - Procedural infinite background grid rendered with custom GPU shaders (`InfiniteGrid`).
    - High-contrast, Soft Neomorphic design: rounded node cards, crisp pill badges, and bold typography.
    - Smooth cubic Bézier connections using Three.js Fat Lines (`Line2`).
-   - HiDPI canvas sprites with dynamic font auto-scaling to ensure long node titles remain clear and readable at all camera distances.
 
-3. **Compiler & Native Toolchain Bridge (`src/core/codegen/`)**:
+3. **Compiler & Native Toolchain Bridge (Backend `CppCore/`)**:
+   - A lightweight, native C++ application wrapped with **WebUI** that statically serves the Vite-built frontend.
    - First-class support for **MSVC (`cl.exe`)** on Windows as the default C++20 compiler.
-   - Modular build configuration emitting `build_msvc.ps1`, `CMakeLists.txt`, `Makefile`, and direct build scripts.
    - Decoupled real-time execution observer header (`include/TaskForgeObserver.hpp`) for live WebGL telemetry feedback via WebSocket.
 
 ---
 
-## ⚡ Built via "Vibe Coding"
+## 🚀 How to Run TaskForge
 
-> *"Vibe coding is the art of steering high-level architecture, design aesthetics, and technical constraints in real-time collaboration with an AI coding partner—turning ideas into production-ready software at the speed of thought."*
+The project is now unified under a fast C++ backend using WebUI, giving you a native Desktop App feel while leveraging the Three.js WebGL canvas.
 
-TaskForge is being **vibe coded** from scratch using **Google Antigravity**. 
+### Prerequisites
 
-Rather than writing boilerplate line-by-line, the creator acts as the systems architect and design director:
-- Establishing strict engineering constraints (such as C++20 MSVC standards, zero-shadow typography rules, and decoupled layers).
-- Iterating rapidly on visual feel, usability, and edge cases.
-- Driving features like subflow drill-down, live telemetry observers, and undo/redo histories through continuous interactive flow.
+1. **Node.js** (v18.0+) & **npm** (for building the frontend).
+2. **Python 3** (for the automated build script).
+3. **Windows environment** with Microsoft Visual C++ (MSVC) from Visual Studio 2022 or Build Tools installed (with C++20 support `/std:c++20` and `nmake`).
 
-This project demonstrates that "vibe coding" is not just for trivial scripts—it can produce robust, strictly typed TypeScript codebases, complex WebGL vector graphics, comprehensive unit test suites (19/19 passing), and production-grade C++20 templates.
+### 1. Build and Launch the Full App (Recommended)
 
----
+To compile the TypeScript frontend, build the C++ WebUI backend, and launch the standalone Desktop App, simply run the Python dev script from the `CppCore` directory:
 
-## 📍 Where We Are (Current Status & Roadmap)
-
-TaskForge is in active, rapid development. Here is the current progress:
-
-```
-[Phase 1: Hierarchical Subflows]   ──▶ COMPLETED  (Nested graphs, Breadcrumbs, Recursive Codegen)
-[Phase 2: Live Telemetry Observer] ──▶ COMPLETED  (TaskForgeObserver.hpp, WebSocket, Visual Node States)
-[Phase 3: Command Pattern Undo/Redo]─▶ COMPLETED  (ICommand, History, Toolbar, Ctrl+Z / Ctrl+Y)
-[HiDPI Typography & Port Labels]   ──▶ COMPLETED  (Zero-shadow, Bold 800, Auto-scaling, Socket badges)
-[Phase 4: Dynamic C++ Plugin System] ──▶ IN PROGRESS (Hot-reloading runtime Taskflow tasks from DLLs)
-[Phase 5: Execution Profiler & Dashboard] ──▶ PLANNED  (Gantt timeline, worker thread utilization)
+```bash
+# From the root of the project:
+cd CppCore
+python dev.py
 ```
 
-### ✅ Implemented Features:
-- **Interactive Three.js Canvas**: Smooth zoom/pan, node dragging, multi-selection, and rubberband port-to-port wire creation.
-- **Strict Clean Typography**: Zero text-shadows or blur glows. High-contrast Slate 900 text on Slate 100 pill containers, bold 800 type weights, and crisp vector outlines.
-- **Labeled Sockets**: Clear input (`IN`) and output (`OUT`) port indicators, plus dedicated conditional branch labels (`TRUE [0]` / `FALSE [1]`).
-- **Phase 1 — Hierarchical Subflows & Drill-down**: Double-click subflow nodes to enter nested child graphs; navigate back using the floating Breadcrumbs bar; recursive C++20 code generation.
-- **Phase 2 — Live Telemetry Observer**: Decoupled `TaskForge::LiveTelemetryObserver` in C++ with real-time WebGL node borders (`running` in emerald, `completed` in dark green).
-- **Phase 3 — Full Undo/Redo Engine**: Non-destructive graph mutations with command encapsulation (`AddNodeCommand`, `MoveNodeCommand`, `AddEdgeCommand`, etc.), keyboard shortcuts, and toolbar buttons.
-- **C++20 Taskflow Code Generator**: Generates complete, compilable C++20 programs with MSVC, CMake, or Makefile scripts.
-- **Automated Test Suite**: 19 automated tests in Vitest verifying graph invariants, cycle handling, subflow codegen, and undo/redo stacks.
+*What this does:*
+1. Runs `npm run build` in the root folder to compile the TS/Three.js frontend into `dist/`.
+2. Downloads and extracts the `webui` static library if it's missing.
+3. Automatically locates your MSVC installation and runs `nmake -f Makefile` to compile `app.exe`.
+4. Launches `app.exe`, which opens the TaskForge Visual Studio window.
+
+### 2. Run the Web Studio Only (Dev Mode)
+
+If you are only editing the TypeScript/Three.js visual layer and want Hot-Module Replacement (HMR) without the C++ backend:
+
+```bash
+# From the root of the project:
+npm install
+npm run dev
+```
+
+*Note: In web-only dev mode, native C++ compilation/execution features won't work, but you can still design graphs and view generated code.*
+
+### 3. Run Automated Tests
+
+To verify the graph data structures, topological sorting, and cycle detection:
+```bash
+npm run test
+```
 
 ---
 
@@ -90,6 +95,8 @@ TaskForge maps high-level visual graph nodes to native **Taskflow** primitives:
 | **Module Task** | Green (`#10B981`) | `tf::Task (tf.composed_of(...))` | Reusable, modular task subgraphs. |
 | **Critical Section**| Cyan (`#06B6D4`) | `tf::CriticalSection (acquire/release)` | Mutex-guarded atomic sections across concurrent threads. |
 
+---
+
 ## 🎨 Design System Guidelines
 
 TaskForge follows strict visual rules to ensure maximum clarity and ergonomics:
@@ -99,6 +106,6 @@ TaskForge follows strict visual rules to ensure maximum clarity and ergonomics:
 
 ---
 
-## 📄 License
+## 📜 License
 
 MIT License. Designed and developed with passion and AI collaboration.

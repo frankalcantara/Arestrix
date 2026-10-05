@@ -3,7 +3,7 @@
 #include "../core/Graph.hpp"
 #include <string>
 
-namespace nodeforge {
+namespace taskforge {
 namespace compiler {
 
 class TaskflowGenerator {
@@ -24,4 +24,4 @@ private:
 };
 
 } // namespace compiler
-} // namespace nodeforge
+} // namespace taskforge

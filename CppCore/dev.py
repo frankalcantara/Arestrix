@@ -96,13 +96,12 @@ def build():
 
 if __name__ == "__main__":
     print("[Setup] Construindo o Frontend (Vite)...")
-    subprocess.run(["npm", "run", "build"], cwd=r"C:\Projetos\NodeForge", shell=True)
+    subprocess.run(["npm", "run", "build"], cwd=os.path.join(os.getcwd(), ".."), shell=True)
     
     setup_webui()
     build()
 
-    print("[App] Iniciando NodeForge C++...")
-    # Executa o C++ a partir da pasta raiz (C:\Projetos\NodeForge) 
-    # para que ele enxergue corretamente a pasta 'dist'.
+    print("[App] Iniciando TaskForge C++...")
+    # Executa o C++ a partir da pasta raiz para que ele enxergue corretamente a pasta 'dist'.
     app_path = os.path.join(os.getcwd(), "app.exe")
-    subprocess.run([app_path], cwd=r"C:\Projetos\NodeForge")
+    subprocess.run([app_path], cwd=os.path.join(os.getcwd(), ".."))
