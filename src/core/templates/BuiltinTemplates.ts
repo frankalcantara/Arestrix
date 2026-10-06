@@ -299,7 +299,7 @@ std::osyncstream(std::cout) << "[${label}] Quorum de ${quorum} agentes atingido.
   {
     id: 'cuda_kernel_agent',
     name: 'Agente de Aceleracao GPU (CUDA)',
-    category: 'Computacao de Alta Performance',
+    category: 'Visão & Processamento',
     icon: '🚀',
     taskType: 'cuda',
     description: 'Envia dados pesados (tensores/matrizes) para execucao massivamente paralela via tf::cudaFlow. Requer suporte a C++20 com CUDA.',
