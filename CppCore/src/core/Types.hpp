@@ -16,7 +16,8 @@ enum class TaskflowNodeType {
     Condition,
     Subflow,
     Module,
-    Critical
+    Critical,
+    Cuda
 };
 
 enum class PortDirection { Input, Output };
@@ -95,7 +96,8 @@ NLOHMANN_JSON_SERIALIZE_ENUM(TaskflowNodeType, {
     {TaskflowNodeType::Condition, "condition"},
     {TaskflowNodeType::Subflow, "subflow"},
     {TaskflowNodeType::Module, "module"},
-    {TaskflowNodeType::Critical, "critical"}
+    {TaskflowNodeType::Critical, "critical"},
+    {TaskflowNodeType::Cuda, "cuda"}
 })
 
 NLOHMANN_JSON_SERIALIZE_ENUM(PortDirection, {

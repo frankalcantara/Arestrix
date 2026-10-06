@@ -94,6 +94,7 @@ export class Inspector {
             <option value="subflow" ${node.type === 'subflow' ? 'selected' : ''}>Subflow Task (Dinamico)</option>
             <option value="module" ${node.type === 'module' ? 'selected' : ''}>Module Task (Hierarquico)</option>
             <option value="critical" ${node.type === 'critical' ? 'selected' : ''}>Critical Section (Mutex Concorrente)</option>
+              <option value="cuda" ${node.type === 'cuda' ? 'selected' : ''}>CUDA Kernel (GPU Acelerado)</option>
           </select>
         </div>
 

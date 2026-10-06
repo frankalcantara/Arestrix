@@ -295,5 +295,49 @@ t4.precede(merge);`;
 std::osyncstream(std::cout) << "[${label}] Coletando votos dos agentes especializados (Estrategia: ${strategy})...\\n";
 std::osyncstream(std::cout) << "[${label}] Quorum de ${quorum} agentes atingido. Veredito final consolidado com sucesso!\\n";`;
     }
+    },
+  {
+    id: 'cuda_kernel_agent',
+    name: 'Agente de Aceleracao GPU (CUDA)',
+    category: 'Computacao de Alta Performance',
+    icon: '🚀',
+    taskType: 'cuda',
+    description: 'Envia dados pesados (tensores/matrizes) para execucao massivamente paralela via tf::cudaFlow. Requer suporte a C++20 com CUDA.',
+    inputs: [
+      { name: 'tensor_in', type: 'data', dataType: 'std::vector<float>' },
+      { name: 'trigger', type: 'flow' }
+    ],
+    outputs: [
+      { name: 'tensor_out', type: 'data', dataType: 'std::vector<float>' }
+    ],
+    parameters: {
+      gridSize: {
+        label: 'Tamanho do Grid',
+        type: 'number',
+        defaultValue: 256,
+        description: 'Tamanho do grid de blocos CUDA'
+      },
+      blockSize: {
+        label: 'Tamanho do Bloco',
+        type: 'number',
+        defaultValue: 1024,
+        description: 'Tamanho do bloco de threads'
+      }
+    },
+    requiredHeaders: ['<taskflow/cuda/cudaflow.hpp>'],
+    generateLambdaBody: (params, label) => {
+      const grid = params.gridSize || 256;
+      const block = params.blockSize || 1024;
+      return `// tf::cudaFlow kernel dispatcher: ${label}
+// Configuracao: Grid=${grid}, Block=${block}
+
+cf.kernel(${grid}, ${block}, 0, [] __device__ (float* in, float* out) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    // Logica do Kernel aqui (Operacao por elemento)
+    out[idx] = in[idx] * 2.0f; 
+}, /* ptr_in */, /* ptr_out */);
+
+std::osyncstream(std::cout) << "[CUDA] Kernel disparado (" << ${grid} << "x" << ${block} << " threads)\n";`;
+    }
   }
 ];

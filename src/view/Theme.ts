@@ -37,6 +37,12 @@ export const THEME = {
       badgeBg: 0x0e7490,      // Ciano 700
       textColor: '#ffffff',
       label: 'CRITICAL TASK'
+    },
+    cuda: {
+      color: 0x14b8a6,        // Teal (Turquesa escuro) 
+      badgeBg: 0x0f766e,      // Teal 700
+      textColor: '#ffffff',
+      label: 'CUDA KERNEL'
     }
   } as Record<TaskflowNodeType, { color: number; badgeBg: number; textColor: string; label: string }>,
 

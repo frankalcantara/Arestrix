@@ -16,9 +16,9 @@ describe('Fase 4: Catalogo de Templates de Agentes & Sistema de Plugins Dinamico
   });
 
   describe('1. Catalogo e Registro de Templates Built-in', () => {
-    it('deve inicializar com todos os 5 templates de agentes especializados', () => {
+    it('deve inicializar com todos os 6 templates de agentes especializados', () => {
       const templates = registry.getAllTemplates();
-      expect(templates.length).toBeGreaterThanOrEqual(5);
+      expect(templates.length).toBeGreaterThanOrEqual(6);
       
       const ids = templates.map(t => t.id);
       expect(ids).toContain('consensus_module_agent');
@@ -26,6 +26,7 @@ describe('Fase 4: Catalogo de Templates de Agentes & Sistema de Plugins Dinamico
       expect(ids).toContain('concurrent_queue_worker');
       expect(ids).toContain('sqlite_persistence_agent');
       expect(ids).toContain('vision_pipeline_subflow');
+      expect(ids).toContain('cuda_kernel_agent');
     });
 
     it('deve recuperar template especifico por ID', () => {
@@ -151,7 +152,7 @@ describe('Fase 4: Catalogo de Templates de Agentes & Sistema de Plugins Dinamico
       expect(typeof json).toBe('string');
       const parsed = JSON.parse(json);
       expect(Array.isArray(parsed)).toBe(true);
-      expect(parsed.length).toBeGreaterThanOrEqual(5);
+      expect(parsed.length).toBeGreaterThanOrEqual(6);
     });
   });
 });

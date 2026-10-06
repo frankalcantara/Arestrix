@@ -3,7 +3,8 @@ export type TaskflowNodeType =
   | 'condition'   // tf::Task (retorna int) - Avaliação de branch estocástico/limiar
   | 'subflow'     // tf::Task (recebe tf::Subflow&) - Decomposição dinâmica em runtime
   | 'module'      // tf::Task (tf.composed_of) - Módulo hierárquico encapsulado
-  | 'critical';   // tf::CriticalSection - Bloco com controle estrito de concorrência
+  | 'critical'    // tf::CriticalSection - Bloco com controle estrito de concorrencia
+  | 'cuda';       // tf::cudaFlow - Agente com Aceleracao CUDA C++20
 
 export type PortDirection = 'input' | 'output';
 export type PortType = 'flow' | 'data';

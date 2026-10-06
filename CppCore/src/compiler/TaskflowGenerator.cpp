@@ -98,6 +98,16 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
             std::string body = node.customLambdaBody.empty() ? "return 0;" : node.customLambdaBody;
             code += indent(body, 4) + "\n";
             code += "  }).name(\"" + label + "\");\n\n";
+        } else if (node.type == core::TaskflowNodeType::Cuda) {
+            code += "  auto task_" + sId + " = tf.emplace([&ctx](tf::cudaFlow& cf) {\n";
+            std::string body = node.customLambdaBody.empty() ? "// kernels CUDA C++20 aqui;" : node.customLambdaBody;
+            code += indent(body, 4) + "\n";
+            code += "  }).name(\"" + label + "\");\n\n";
+        } else if (node.type == core::TaskflowNodeType::Subflow || node.type == core::TaskflowNodeType::Module) {
+            code += "  auto task_" + sId + " = tf.emplace([&ctx](tf::Subflow& sf) {\n";
+            std::string body = node.customLambdaBody.empty() ? "// subflow hierarquico;" : node.customLambdaBody;
+            code += indent(body, 4) + "\n";
+            code += "  }).name(\"" + label + "\");\n\n";
         } else {
             code += "  auto task_" + sId + " = tf.emplace([&ctx]() {\n";
             std::string body = node.customLambdaBody.empty() ? "std::osyncstream(std::cout) << \"Executando " + label + "\\n\";" : node.customLambdaBody;
