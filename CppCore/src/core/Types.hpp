@@ -17,7 +17,8 @@ enum class TaskflowNodeType {
     Subflow,
     Module,
     Critical,
-    Cuda
+    Cuda,
+    Agent
 };
 
 enum class PortDirection { Input, Output };
@@ -97,7 +98,8 @@ NLOHMANN_JSON_SERIALIZE_ENUM(TaskflowNodeType, {
     {TaskflowNodeType::Subflow, "subflow"},
     {TaskflowNodeType::Module, "module"},
     {TaskflowNodeType::Critical, "critical"},
-    {TaskflowNodeType::Cuda, "cuda"}
+    {TaskflowNodeType::Cuda, "cuda"},
+    {TaskflowNodeType::Agent, "agent"}
 })
 
 NLOHMANN_JSON_SERIALIZE_ENUM(PortDirection, {

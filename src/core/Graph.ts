@@ -121,6 +121,12 @@ export class Graph {
         { id: `${id}_out_0`, name: 'branch 0', direction: 'output', type: 'flow', conditionBranchIndex: 0 },
         { id: `${id}_out_1`, name: 'branch 1', direction: 'output', type: 'flow', conditionBranchIndex: 1 }
       ];
+    } else if (type === 'agent') {
+      inputs.push({ id: `${id}_in_prompt`, name: 'prompt_in', direction: 'input', type: 'data', dataType: 'std::string' });
+      outputs = [
+        { id: `${id}_out_0`, name: 'out', direction: 'output', type: 'flow' },
+        { id: `${id}_out_data`, name: 'artifact_out', direction: 'output', type: 'data', dataType: 'std::string' }
+      ];
     } else {
       outputs = [
         { id: `${id}_out_0`, name: 'out', direction: 'output', type: 'flow' }
@@ -135,7 +141,12 @@ export class Graph {
       inputs,
       outputs,
       parameters: {},
-      customLambdaBody: this.getDefaultLambdaBody(type, label)
+      customLambdaBody: this.getDefaultLambdaBody(type, label),
+      agentSettings: type === 'agent' ? {
+        inheritSandbox: true,
+        inheritModel: true,
+        inheritCodeMode: true
+      } : undefined
     };
   }
 
@@ -161,6 +172,10 @@ export class Graph {
         return `// Módulo reutilizável composto de outro subgrafo`;
       case 'critical':
         return `// Seção crítica com acesso exclusivo a recursos compartilhados\nstd::cout << "Acesso exclusivo seguro pelo agente ${label}\\n";`;
+      case 'cuda':
+        return `// Kernel CUDA acelerado na GPU: ${label}\nstd::cout << "[CUDA: ${label}] Executando kernel na GPU...\\n";`;
+      case 'agent':
+        return `// Agente Autônomo Code Mode: ${label}\n// Invocação em sandbox/VM isolada com streaming de eventos\nstd::cout << "[Agent: ${label}] Disparando no sandbox isolado...\\n";`;
       case 'static':
       default:
         return `// Execução computacional determinística do agente: ${label}\nstd::cout << "Executando agente: ${label}\\n";`;

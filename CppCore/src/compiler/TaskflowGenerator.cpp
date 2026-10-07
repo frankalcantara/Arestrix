@@ -108,6 +108,13 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
             std::string body = node.customLambdaBody.empty() ? "// subflow hierarquico;" : node.customLambdaBody;
             code += indent(body, 4) + "\n";
             code += "  }).name(\"" + label + "\");\n\n";
+        } else if (node.type == core::TaskflowNodeType::Agent) {
+            code += "  auto task_" + sId + " = tf.emplace([&ctx]() {\n";
+            std::string body = node.customLambdaBody.empty() 
+                ? "std::osyncstream(std::cout) << \"[Agent: " + label + "] Executando no sandbox isolado (Code Mode)...\\n\";" 
+                : node.customLambdaBody;
+            code += indent(body, 4) + "\n";
+            code += "  }).name(\"" + label + "\");\n\n";
         } else {
             code += "  auto task_" + sId + " = tf.emplace([&ctx]() {\n";
             std::string body = node.customLambdaBody.empty() ? "std::osyncstream(std::cout) << \"Executando " + label + "\\n\";" : node.customLambdaBody;

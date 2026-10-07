@@ -201,4 +201,25 @@ describe('Fase 7: Sistema de Configurações de Agentes, Sandbox & Herança', ()
       expect(nCProvider).toBe('deepseek');
     });
   });
+  describe('3. Nó Especializado de Agente Code Mode (Fase 8)', () => {
+    it('deve instanciar nó de tipo agent com portas de flow e data padronizadas e herança ativa', () => {
+      const node = graph.buildNode('node_agent_test', 'Agente Autônomo', 'agent', 100, 200);
+      expect(node.type).toBe('agent');
+      expect(node.inputs.length).toBe(2);
+      expect(node.inputs[0].name).toBe('in');
+      expect(node.inputs[1].name).toBe('prompt_in');
+      expect(node.inputs[1].type).toBe('data');
+      
+      expect(node.outputs.length).toBe(2);
+      expect(node.outputs[0].name).toBe('out');
+      expect(node.outputs[1].name).toBe('artifact_out');
+      expect(node.outputs[1].type).toBe('data');
+
+      expect(node.agentSettings).toBeDefined();
+      expect(node.agentSettings?.inheritSandbox).toBe(true);
+      expect(node.agentSettings?.inheritModel).toBe(true);
+      expect(node.agentSettings?.inheritCodeMode).toBe(true);
+      expect(node.customLambdaBody).toContain('[Agent: Agente Autônomo]');
+    });
+  });
 });

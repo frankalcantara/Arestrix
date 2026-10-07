@@ -63,6 +63,7 @@ export class GraphvizGenerator {
       case 'module': color = '#10b981'; break;
       case 'critical': color = '#06b6d4'; break;
       case 'cuda': color = '#14b8a6'; break;
+      case 'agent': color = '#6366f1'; break;
     }
 
     // Para subflows, podemos indicar no ródulo
@@ -71,6 +72,8 @@ export class GraphvizGenerator {
       extra = '\\n(Subgraph)';
     } else if (node.type === 'cuda') {
       extra = '\\n(GPU Kernel)';
+    } else if (node.type === 'agent') {
+      extra = '\\n(Code Mode Agent)';
     }
 
     return `  "${node.id}" [label="${label}${extra}", fillcolor="${color}", fontcolor="${fontColor}", color="${color}"];\n`;

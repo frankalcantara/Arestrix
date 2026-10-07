@@ -43,6 +43,12 @@ export const THEME = {
       badgeBg: 0x0f766e,      // Teal 700
       textColor: '#ffffff',
       label: 'CUDA KERNEL'
+    },
+    agent: {
+      color: 0x6366f1,        // Indigo 500 (Vibrante)
+      badgeBg: 0x4338ca,      // Indigo 700 (Alto Contraste)
+      textColor: '#ffffff',
+      label: 'AGENT CODE MODE'
     }
   } as Record<TaskflowNodeType, { color: number; badgeBg: number; textColor: string; label: string }>,
 

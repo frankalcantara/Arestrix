@@ -73,6 +73,8 @@ export class Toolbar {
           <option value="subflow">Subflow (Aninhado)</option>
           <option value="module">Módulo</option>
           <option value="critical">Crítico (Mutex)</option>
+          <option value="agent">Agente (Code Mode / IA)</option>
+          <option value="cuda">CUDA (Kernel GPU)</option>
         </select>
       </div>
 
@@ -235,7 +237,8 @@ export class Toolbar {
       subflow: `Dynamic_Cluster_${existingCount + 1}`,
       module: `Module_Pipeline_${existingCount + 1}`,
       critical: `Shared_State_Lock_${existingCount + 1}`,
-      cuda: `GPU_Kernel_${existingCount + 1}`
+      cuda: `GPU_Kernel_${existingCount + 1}`,
+      agent: `Agente_CodeMode_${existingCount + 1}`
     };
 
     const node = this.graph.buildNode(id, labelMap[type], type, x, y);
