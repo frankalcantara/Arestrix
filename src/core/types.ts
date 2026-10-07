@@ -32,6 +32,55 @@ export interface IPort {
   conditionBranchIndex?: number; // Para nós de condição (0, 1, 2...)
 }
 
+
+// --- Configuracoes de Agentes, Code Mode e Sandbox/VM ---
+
+export type LLMProvider = 'anthropic' | 'deepseek' | 'google' | 'openai' | 'jev' | 'local';
+
+export type SandboxIsolationLevel = 'container' | 'microvm' | 'host_direct';
+export type SandboxNetworkPolicy = 'offline' | 'egress_llm_only' | 'full';
+
+export interface ISandboxPolicy {
+  isolationLevel: SandboxIsolationLevel;
+  network: SandboxNetworkPolicy;
+  maxMemoryMB: number;
+  timeoutSeconds: number;
+  readOnlyMounts: string[];
+  readWriteMounts: string[];
+}
+
+export interface IModelConfig {
+  provider: LLMProvider;
+  model: string;
+  skillPath?: string;
+  promptTemplate?: string;
+  temperature?: number;
+}
+
+export type CodeModeTool = 'write' | 'edit' | 'read' | 'bash' | 'validate_svg';
+
+export interface ICodeModeConfig {
+  allowedTools: CodeModeTool[];
+  customScripts: string[];
+}
+
+export interface IGlobalPipelineDefaults {
+  sandbox: ISandboxPolicy;
+  model: IModelConfig;
+  codeMode: ICodeModeConfig;
+}
+
+export interface INodeAgentSettings {
+  inheritSandbox: boolean;
+  sandbox?: Partial<ISandboxPolicy>;
+
+  inheritModel: boolean;
+  model?: Partial<IModelConfig>;
+
+  inheritCodeMode: boolean;
+  codeMode?: Partial<ICodeModeConfig>;
+}
+
 export interface INodeData {
   id: string;
   label: string;
@@ -45,6 +94,7 @@ export interface INodeData {
   childGraph?: IGraphSchema;  // Subgrafo hierárquico aninhado (Subflow / Module)
   templateId?: string;        // ID do template de origem (opcional)
   requiredHeaders?: string[]; // Headers C++20 adicionais requeridos por este agente
+  agentSettings?: INodeAgentSettings;
 }
 
 export interface IBreadcrumbItem {
@@ -67,6 +117,7 @@ export interface IGraphMetadata {
   targetStandard: 'C++20';
   compilerConfig: ICompilerConfig;
   version: string;
+  globalDefaults?: IGlobalPipelineDefaults;
 }
 
 export interface IGraphSchema {
@@ -98,4 +149,26 @@ export const DEFAULT_COMPILER_CONFIG: ICompilerConfig = {
   enableOpenMP: false,
   enableCuda: false,
   extraFlags: ['/std:c++20', '/EHsc', '/O2']
+};
+
+
+export const DEFAULT_PIPELINE_DEFAULTS: IGlobalPipelineDefaults = {
+  sandbox: {
+    isolationLevel: 'container',
+    network: 'egress_llm_only',
+    maxMemoryMB: 512,
+    timeoutSeconds: 300,
+    readOnlyMounts: ['plano.md', '.agents/'],
+    readWriteMounts: ['aulas/']
+  },
+  model: {
+    provider: 'deepseek',
+    model: 'deepseek-flash',
+    skillPath: '.agents/redigir-math/SKILL.md',
+    promptTemplate: 'Processe o artigo  conforme as diretrizes do plano.md'
+  },
+  codeMode: {
+    allowedTools: ['write', 'edit', 'read', 'bash', 'validate_svg'],
+    customScripts: ['python scripts/audit_exercises.py']
+  }
 };

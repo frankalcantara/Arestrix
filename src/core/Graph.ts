@@ -4,6 +4,8 @@ import {
   IGraphSchema, 
   IGraphMetadata, 
   DEFAULT_COMPILER_CONFIG,
+  IGlobalPipelineDefaults,
+  DEFAULT_PIPELINE_DEFAULTS,
   TaskflowNodeType,
   IPort,
   IBreadcrumbItem
@@ -34,8 +36,31 @@ export class Graph {
       targetStandard: 'C++20',
       compilerConfig: { ...DEFAULT_COMPILER_CONFIG },
       version: '1.0.0',
+      globalDefaults: JSON.parse(JSON.stringify(DEFAULT_PIPELINE_DEFAULTS)),
       ...initialMetadata
     };
+  }
+
+
+  // --- Configuracoes Globais do Pipeline de Agentes ---
+
+  getGlobalDefaults(): IGlobalPipelineDefaults {
+    if (!this.metadata.globalDefaults) {
+      this.metadata.globalDefaults = JSON.parse(JSON.stringify(DEFAULT_PIPELINE_DEFAULTS));
+    }
+    return this.metadata.globalDefaults!;
+  }
+
+  updateGlobalDefaults(defaults: Partial<IGlobalPipelineDefaults>): void {
+    const current = this.getGlobalDefaults();
+    this.metadata.globalDefaults = {
+      ...current,
+      ...defaults,
+      sandbox: { ...current.sandbox, ...(defaults.sandbox || {}) },
+      model: { ...current.model, ...(defaults.model || {}) },
+      codeMode: { ...current.codeMode, ...(defaults.codeMode || {}) }
+    };
+    this.bus.emit('graph:defaults-updated', this.metadata.globalDefaults);
   }
 
   // --- Histórico de Edição (Undo / Redo) ---

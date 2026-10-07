@@ -115,6 +115,31 @@ export class InteractionManager {
 
     const worldCursor = this.cameraController.screenToWorld(e.clientX, e.clientY);
 
+    // 0. Checa clique em Botões de Ação do Nó (Fase 7: 🛡️ Sandbox, 🧠 Modelo, 🔧 Tools)
+    const actionTargets: THREE.Object3D[] = [];
+    this.nodeViews.forEach(nv => {
+      nv.group.traverse(obj => {
+        if (obj.userData?.isActionHitbox) {
+          actionTargets.push(obj);
+        }
+      });
+    });
+
+    const actionIntersects = this.raycaster.intersectObjects(actionTargets, false);
+    if (actionIntersects.length > 0) {
+      const hit = actionIntersects[0].object;
+      const { nodeId, actionType } = hit.userData;
+      this.selectNode(nodeId);
+      if (actionType === 'sandbox') {
+        globalEventBus.emit('node:open-sandbox-modal', nodeId);
+      } else if (actionType === 'model') {
+        globalEventBus.emit('node:open-model-modal', nodeId);
+      } else if (actionType === 'tools') {
+        globalEventBus.emit('node:open-tools-modal', nodeId);
+      }
+      return;
+    }
+
     // 1. Checa clique em Portas (Sockets)
     const portTargets: THREE.Object3D[] = [];
     this.nodeViews.forEach(nv => {
@@ -203,7 +228,21 @@ export class InteractionManager {
         const startPos = srcNv.getPortWorldPosition(this.connectingSourcePortId);
         this.updateRubberBand(startPos, worldCursor);
       }
+      return;
     }
+
+    // C. Cursor Hover feedback
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    const interactiveTargets: THREE.Object3D[] = [];
+    this.nodeViews.forEach(nv => {
+      nv.group.traverse(obj => {
+        if (obj.userData?.isActionHitbox || obj.userData?.isPortHitbox) {
+          interactiveTargets.push(obj);
+        }
+      });
+    });
+    const hits = this.raycaster.intersectObjects(interactiveTargets, false);
+    this.domElement.style.cursor = hits.length > 0 ? 'pointer' : 'default';
   }
 
   private onPointerUp(e: PointerEvent): void {

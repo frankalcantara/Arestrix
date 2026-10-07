@@ -9,6 +9,7 @@ import { IHistoryState } from '../core/history/CommandManager.ts';
 import { globalEventBus } from '../core/EventBus.ts';
 
 import { TemplateModal } from './TemplateModal.ts';
+import { GlobalDefaultsModal } from './GlobalDefaultsModal.ts';
 import { GraphvizGenerator } from '../core/GraphvizGenerator.ts';
 
 export class Toolbar {
@@ -17,12 +18,14 @@ export class Toolbar {
   private viewport: Viewport;
   private codeModal: CodeModal;
   private templateModal: TemplateModal;
+  private globalDefaultsModal: GlobalDefaultsModal;
 
-  constructor(parent: HTMLElement, graph: Graph, viewport: Viewport, codeModal: CodeModal, templateModal: TemplateModal) {
+  constructor(parent: HTMLElement, graph: Graph, viewport: Viewport, codeModal: CodeModal, templateModal: TemplateModal, globalDefaultsModal: GlobalDefaultsModal) {
     this.graph = graph;
     this.viewport = viewport;
     this.codeModal = codeModal;
     this.templateModal = templateModal;
+    this.globalDefaultsModal = globalDefaultsModal;
 
     this.container = document.createElement('header');
     this.container.className = 'app-toolbar';
@@ -79,6 +82,15 @@ export class Toolbar {
       <div class="toolbar-group">
         <button id="btn-open-templates" class="tool-btn btn-templates-action" title="Abrir catálogo de templates de agentes especializados e plugins dinâmicos">
           🧩 Templates de Agentes
+        </button>
+      </div>
+
+      <div class="toolbar-separator"></div>
+
+      <!-- PADROES GLOBAIS DO PIPELINE (FASE 7) -->
+      <div class="toolbar-group">
+        <button id="btn-pipeline-defaults" class="tool-btn btn-secondary" title="Configurar padrões globais de Máquina Virtual, Provedor e Ferramentas">
+          ⚙️ Padrões do Pipeline
         </button>
       </div>
 
@@ -143,6 +155,11 @@ export class Toolbar {
     // Abrir Modal de Templates de Agentes
     this.container.querySelector('#btn-open-templates')?.addEventListener('click', () => {
       this.templateModal.show();
+    });
+
+    // Abrir Modal de Padrões Globais do Pipeline (Fase 7)
+    this.container.querySelector('#btn-pipeline-defaults')?.addEventListener('click', () => {
+      this.globalDefaultsModal.show();
     });
 
     // Validar grafo

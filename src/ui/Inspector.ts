@@ -98,6 +98,22 @@ export class Inspector {
           </select>
         </div>
 
+        <!-- Painel Rapido de Modais Flutuantes do Agente (Fase 7) -->
+        <div class="agent-quick-modals-box">
+          <div class="agent-modals-title">Configurações Avançadas do Agente</div>
+          <div class="agent-modals-row">
+            <button class="btn-agent-modal-pill" id="btn-open-node-sandbox" title="Configurar Nível de Isolamento da VM, RAM e Pastas">
+              🛡️ Sandbox & Máquina Virtual
+            </button>
+            <button class="btn-agent-modal-pill" id="btn-open-node-model" title="Configurar Provedor (Opus, DeepSeek, Jev), Modelo e Prompt">
+              🧠 Modelo de IA, Skill & Prompt
+            </button>
+            <button class="btn-agent-modal-pill" id="btn-open-node-tools" title="Configurar Ferramentas Code Mode (write, edit, bash)">
+              🔧 Ferramentas Code Mode
+            </button>
+          </div>
+        </div>
+
         ${(node.type === 'subflow' || node.type === 'module') ? `
         <div class="form-group">
           <button id="btn-dive-subflow" class="btn btn-dive-action">
@@ -146,6 +162,17 @@ export class Inspector {
         </div>
       </div>
     `;
+
+    // Modais Flutuantes de Agente (Fase 7)
+    this.container.querySelector('#btn-open-node-sandbox')?.addEventListener('click', () => {
+      this.bus.emit('node:open-sandbox-modal', node.id);
+    });
+    this.container.querySelector('#btn-open-node-model')?.addEventListener('click', () => {
+      this.bus.emit('node:open-model-modal', node.id);
+    });
+    this.container.querySelector('#btn-open-node-tools')?.addEventListener('click', () => {
+      this.bus.emit('node:open-tools-modal', node.id);
+    });
 
     // Bind subflow
     this.container.querySelector('#btn-dive-subflow')?.addEventListener('click', () => {

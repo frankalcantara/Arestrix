@@ -8,6 +8,10 @@ import { CodeModal } from './ui/CodeModal.ts';
 import { ConsolePanel } from './ui/ConsolePanel.ts';
 import { BreadcrumbsBar } from './ui/BreadcrumbsBar.ts';
 import { TemplateModal } from './ui/TemplateModal.ts';
+import { GlobalDefaultsModal } from './ui/GlobalDefaultsModal.ts';
+import { NodeSandboxModal } from './ui/modals/NodeSandboxModal.ts';
+import { NodeModelModal } from './ui/modals/NodeModelModal.ts';
+import { NodeToolsModal } from './ui/modals/NodeToolsModal.ts';
 
 function bootstrap() {
   const appContainer = document.querySelector<HTMLDivElement>('#app');
@@ -55,11 +59,20 @@ function bootstrap() {
   // 4. Inicializa Viewport WebGL (Three.js) com dimensões reais já computadas pelo DOM
   const viewport = new Viewport(viewportContainer, graph, globalEventBus);
 
-  // 5. Modal de Templates de Agentes & Plugins
+  // 5. Modais de Agentes, Code Mode e Sandbox/VM (Fase 7)
   const templateModal = new TemplateModal(graph, viewport);
+  const globalDefaultsModal = new GlobalDefaultsModal(graph);
+  const nodeSandboxModal = new NodeSandboxModal(graph);
+  const nodeModelModal = new NodeModelModal(graph);
+  const nodeToolsModal = new NodeToolsModal(graph);
+
+  // Escuta eventos dos botoes de acao rapida nos nós e no inspetor
+  globalEventBus.on('node:open-sandbox-modal', (nodeId: string) => nodeSandboxModal.open(nodeId));
+  globalEventBus.on('node:open-model-modal', (nodeId: string) => nodeModelModal.open(nodeId));
+  globalEventBus.on('node:open-tools-modal', (nodeId: string) => nodeToolsModal.open(nodeId));
 
   // 6. Inicializa Barra de Ferramentas e posiciona no topo
-  const toolbar = new Toolbar(appContainer, graph, viewport, codeModal, templateModal);
+  const toolbar = new Toolbar(appContainer, graph, viewport, codeModal, templateModal, globalDefaultsModal);
   appContainer.insertBefore(toolbar.getContainer(), mainLayout);
 
   // 6. Sidebar de propriedades (Inspetor) dentro de mainLayout
