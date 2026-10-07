@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { INodeData, IPort } from '../core/types.ts';
 import { THEME } from './Theme.ts';
+import { globalEventBus } from '../core/EventBus.ts';
 
 export class NodeView {
   public group: THREE.Group;
@@ -15,6 +16,8 @@ export class NodeView {
   private portLabelSprites: THREE.Sprite[] = [];
   private actionButtonsSprite?: THREE.Sprite;
   private actionHitboxes: THREE.Mesh[] = [];
+  private telemetrySprite?: THREE.Sprite;
+  private telemetryHandler?: (ev: any) => void;
 
   private portMeshes: Map<string, THREE.Mesh> = new Map();
   private portHitboxes: Map<string, THREE.Mesh> = new Map();
@@ -26,6 +29,10 @@ export class NodeView {
     this.group.userData = { nodeId: nodeData.id, isNode: true };
 
     this.buildNode();
+
+    // Telemetria de Agente em Tempo Real (Fase 10)
+    this.telemetryHandler = (ev: any) => this.handleTelemetry(ev);
+    globalEventBus.on(`agent:telemetry:${nodeData.id}`, this.telemetryHandler);
   }
 
   private buildNode(): void {
@@ -473,7 +480,101 @@ export class NodeView {
     ctx.closePath();
   }
 
+
+  private handleTelemetry(ev: any): void {
+    const p = ev.payload || {};
+    let text = '';
+    let bg = '#F1F5F9';
+    let border = '#CBD5E1';
+    let textCol = '#475569';
+
+    if (ev.type === 'thinking') {
+      const kb = p.thinkingChars ? (p.thinkingChars / 1024).toFixed(1) : '0';
+      text = `🧠 Raciocinando (${kb} KB)`;
+      bg = '#EEF2FF';
+      border = '#6366F1';
+      textCol = '#4338CA';
+    } else if (ev.type === 'tool_start') {
+      text = `🔧 ${p.toolName || 'tool'}`;
+      bg = '#F0F9FF';
+      border = '#0284C7';
+      textCol = '#0369A1';
+    } else if (ev.type === 'tool_end') {
+      const ok = p.toolSuccess !== false;
+      text = ok ? `✔ ${p.toolName || 'tool'} ok` : `✖ ${p.toolName || 'tool'} falhou`;
+      bg = ok ? '#ECFDF5' : '#FEF2F2';
+      border = ok ? '#10B981' : '#EF4444';
+      textCol = ok ? '#047857' : '#B91C1C';
+    } else if (ev.type === 'rate_limit') {
+      text = `⚠️ Rate Limit 429 (${p.retrySeconds || 15}s)`;
+      bg = '#FFFBEB';
+      border = '#F59E0B';
+      textCol = '#B45309';
+    } else if (ev.type === 'status') {
+      text = `⏱ ${p.status || 'ativo'}`;
+      bg = '#F8FAFC';
+      border = '#94A3B8';
+      textCol = '#334155';
+    } else {
+      return;
+    }
+
+    this.renderTelemetryBadge(text, bg, border, textCol);
+  }
+
+  private renderTelemetryBadge(text: string, bg: string, border: string, textCol: string): void {
+    const width = THEME.nodeBody.width;
+    const height = Math.max(THEME.nodeBody.height, 60 + Math.max(this.nodeData.inputs.length, this.nodeData.outputs.length) * 28);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 600;
+    canvas.height = 80;
+    const ctx = canvas.getContext('2d')!;
+    ctx.imageSmoothingEnabled = true;
+
+    // Fundo da Pílula limpo
+    ctx.fillStyle = bg;
+    this.roundRect(ctx, 4, 4, 592, 72, 36);
+    ctx.fill();
+
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // Texto com peso tipográfico 800 e ZERO sombras
+    ctx.fillStyle = textCol;
+    ctx.font = '800 32px "Segoe UI Emoji", "Apple Color Emoji", Inter, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 300, 40);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+
+    if (!this.telemetrySprite) {
+      const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+      this.telemetrySprite = new THREE.Sprite(mat);
+      this.telemetrySprite.scale.set(width - 20, 24, 1);
+      this.telemetrySprite.position.set(0, -height / 2 - 16, 5);
+      this.telemetrySprite.userData = { nodeId: this.nodeData.id, isBody: false };
+      this.group.add(this.telemetrySprite);
+    } else {
+      this.telemetrySprite.material.map?.dispose();
+      this.telemetrySprite.material.map = texture;
+      this.telemetrySprite.material.needsUpdate = true;
+    }
+  }
+
   dispose(): void {
+    if (this.telemetryHandler) {
+      globalEventBus.off(`agent:telemetry:${this.nodeData.id}`, this.telemetryHandler);
+    }
+    if (this.telemetrySprite) {
+      this.telemetrySprite.material.map?.dispose();
+      this.telemetrySprite.material.dispose();
+    }
     this.bodyMesh.geometry.dispose();
     (this.bodyMesh.material as THREE.Material).dispose();
     this.borderLine.geometry.dispose();

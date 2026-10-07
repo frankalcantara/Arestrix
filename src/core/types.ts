@@ -82,6 +82,30 @@ export interface INodeAgentSettings {
   codeMode?: Partial<ICodeModeConfig>;
 }
 
+
+// --- Telemetria de Agentes em Tempo Real (Fase 10) ---
+
+export type AgentExecutionStatus = 'idle' | 'running' | 'thinking' | 'tool_call' | 'settled' | 'error' | 'success';
+
+export interface IAgentTelemetryPayload {
+  thinkingChars?: number;
+  thinkingPreview?: string;
+  toolName?: string;
+  toolArgs?: string;
+  toolSuccess?: boolean;
+  retrySeconds?: number;
+  status?: AgentExecutionStatus;
+  detail?: string;
+  logLine?: string;
+}
+
+export interface IAgentTelemetryEvent {
+  nodeId: string;
+  type: 'thinking' | 'tool_start' | 'tool_end' | 'rate_limit' | 'status' | 'log';
+  timestamp: number;
+  payload: IAgentTelemetryPayload;
+}
+
 export interface INodeData {
   id: string;
   label: string;

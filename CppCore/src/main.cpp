@@ -2,6 +2,7 @@
 #include "core/Graph.hpp"
 #include "compiler/TaskflowGenerator.hpp"
 #include "sandbox/SandboxManager.hpp"
+#include "sandbox/AgentTelemetryEmitter.hpp"
 #include <iostream>
 #include <string>
 #include <fstream>
@@ -141,6 +142,12 @@ int main() {
     win.bind("get_graph_state", ui_get_graph_state);
     win.bind("get_sandbox_status", ui_get_sandbox_status);
     win.bind("exit_app", exit_app);
+
+    // Registra o Emitter de Telemetria de Agentes em Tempo Real (Fase 10)
+    taskforge::sandbox::AgentTelemetryEmitter::setCallback([&win](const std::string& jsonMsg) {
+        std::string jsCode = "if (window.onTaskForgeTelemetry) { window.onTaskForgeTelemetry(" + jsonMsg + "); }";
+        win.run(jsCode);
+    });
 
     std::cout << "[C++] Servindo a UI oficial..." << std::endl;
     win.show("dist/index.html");

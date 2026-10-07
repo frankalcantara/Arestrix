@@ -64,6 +64,48 @@ export class ConsolePanel {
       this.addLine(`[ERRO NO ESTÁGIO: ${data.stage.toUpperCase()}]`, 'line-error');
       this.addLine(data.error, 'line-error');
     });
+
+    // Telemetria Granular de Agentes em Tempo Real (Fase 10)
+    globalEventBus.on('agent:telemetry', (ev: any) => {
+      this.handleAgentTelemetry(ev);
+    });
+  }
+
+  private handleAgentTelemetry(ev: any): void {
+    const timeStr = new Date(ev.timestamp || Date.now()).toLocaleTimeString('pt-BR');
+    const p = ev.payload || {};
+    const prefix = `[${timeStr}] [${ev.nodeId}]`;
+
+    switch (ev.type) {
+      case 'thinking': {
+        const kb = p.thinkingChars ? (p.thinkingChars / 1024).toFixed(1) : '0';
+        this.addLine(`${prefix} 🧠 Raciocinando (thinking)… ${kb} KB gerados`, 'line-thinking');
+        break;
+      }
+      case 'tool_start': {
+        this.addLine(`${prefix} 🔧 ${p.toolName || 'tool'} ${p.toolArgs || ''}`, 'line-tool-start');
+        break;
+      }
+      case 'tool_end': {
+        const ok = p.toolSuccess !== false;
+        this.addLine(`${prefix} ${ok ? '✔' : '✖'} ${p.toolName || 'tool'} ${ok ? 'concluído' : 'FALHOU'}`, ok ? 'line-tool-ok' : 'line-tool-err');
+        break;
+      }
+      case 'rate_limit': {
+        this.addLine(`${prefix} ⚠️ [RATE LIMIT 429] Aguardando ${p.retrySeconds || 15}s para retry... ${p.detail || ''}`, 'line-rate-limit');
+        break;
+      }
+      case 'status': {
+        this.addLine(`${prefix} ⏱ Status: ${p.status} ${p.detail ? '- ' + p.detail : ''}`, 'line-info');
+        break;
+      }
+      case 'log': {
+        if (p.logLine) {
+          this.addLine(`${prefix} ${p.logLine}`, 'line-default');
+        }
+        break;
+      }
+    }
   }
 
   addLine(text: string, className: string = 'line-default'): void {

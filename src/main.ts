@@ -83,6 +83,15 @@ function bootstrap() {
 
   // 8. Carrega o cenário de agentes demonstrativo complexo com loops de condição e seções críticas
   toolbar.loadDemoComplexSystem();
+
+  // 9. Bridge de Telemetria de Agentes em Tempo Real (Fase 10)
+  // @ts-ignore
+  window.onTaskForgeTelemetry = (data: any) => {
+    if (data && data.event) {
+      globalEventBus.emit('agent:telemetry', data.event);
+      globalEventBus.emit(`agent:telemetry:${data.event.nodeId}`, data.event);
+    }
+  };
 }
 
 // Inicializa no carregamento do DOM

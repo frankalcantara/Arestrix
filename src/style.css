@@ -1461,3 +1461,30 @@ body, html {
   border-color: #94a3b8;
   transform: translateY(-1px);
 }
+
+
+/* Telemetria de Agentes no Console (Fase 10) */
+.line-thinking {
+  color: #6366f1;
+  font-weight: 700;
+}
+.line-tool-start {
+  color: #0284c7;
+  font-weight: 700;
+}
+.line-tool-ok {
+  color: #16a34a;
+  font-weight: 700;
+}
+.line-tool-err {
+  color: #dc2626;
+  font-weight: 800;
+}
+.line-rate-limit {
+  color: #b45309;
+  background-color: #fef3c7;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 800;
+  display: inline-block;
+}
