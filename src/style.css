@@ -1488,3 +1488,165 @@ body, html {
   font-weight: 800;
   display: inline-block;
 }
+
+/* Modal de Execução em Lote & Resume Engine (Fase 11) */
+.batch-pipeline-modal-dialog {
+  width: 960px;
+  max-width: 92vw;
+  height: 85vh;
+}
+
+.batch-matrix-wrapper {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background-color: #ffffff;
+}
+
+.batch-status-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+
+.batch-status-table th {
+  background-color: #f8fafc;
+  color: #475569;
+  font-weight: 800;
+  padding: 10px 14px;
+  border-bottom: 2px solid #e2e8f0;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.batch-status-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+}
+
+.batch-status-table tr:hover td {
+  background-color: #f8fafc;
+}
+
+.batch-item-cell {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.batch-stage-cell {
+  text-align: center;
+}
+
+.batch-actions-cell {
+  text-align: center;
+}
+
+.batch-item-reset-btn {
+  background: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 13px;
+  transition: all 0.15s ease;
+}
+
+.batch-item-reset-btn:hover {
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+}
+
+/* Pílulas de Estado do Checkpoint (Sem sombras, alto contraste) */
+.pill-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 800;
+  text-shadow: none;
+  border: 1px solid transparent;
+}
+
+.pill-pending {
+  background-color: #f1f5f9;
+  color: #64748b;
+  border-color: #e2e8f0;
+}
+
+.pill-running {
+  background-color: #e0f2fe;
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+
+.pill-completed {
+  background-color: #dcfce7;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.pill-cached {
+  background-color: #ede9fe;
+  color: #6d28d9;
+  border-color: #ddd6fe;
+}
+
+.pill-error {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.btn-clean-primary {
+  background: var(--gradient-blue);
+  color: #ffffff;
+  border: none;
+  padding: 8px 18px;
+  border-radius: var(--radius-pill);
+  font-weight: 800;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-clean-primary:hover {
+  opacity: 0.95;
+  transform: translateY(-1px);
+}
+
+.btn-clean-secondary {
+  background-color: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-clean-secondary:hover {
+  background-color: #e2e8f0;
+}
+
+.btn-clean-danger {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  font-weight: 800;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-clean-danger:hover {
+  background-color: #fecaca;
+}
+

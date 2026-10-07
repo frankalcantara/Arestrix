@@ -111,13 +111,13 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
         } else if (node.type == core::TaskflowNodeType::Agent) {
             code += "  auto task_" + sId + " = tf.emplace([&ctx]() {\n";
             std::string body = node.customLambdaBody.empty() 
-                ? "std::osyncstream(std::cout) << \"[Agent: " + label + "] Executando no sandbox isolado (Code Mode)...\\n\";" 
+                ? "std::cout << \"[Agent: " + label + "] Executando no sandbox isolado (Code Mode)...\\n\";" 
                 : node.customLambdaBody;
             code += indent(body, 4) + "\n";
             code += "  }).name(\"" + label + "\");\n\n";
         } else {
             code += "  auto task_" + sId + " = tf.emplace([&ctx]() {\n";
-            std::string body = node.customLambdaBody.empty() ? "std::osyncstream(std::cout) << \"Executando " + label + "\\n\";" : node.customLambdaBody;
+            std::string body = node.customLambdaBody.empty() ? "std::cout << \"Executando " + label + "\\n\";" : node.customLambdaBody;
             code += indent(body, 4) + "\n";
             code += "  }).name(\"" + label + "\");\n\n";
         }
@@ -191,7 +191,118 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
     code += "  executor.run(tf).wait();\n\n";
     code += "  auto end = std::chrono::high_resolution_clock::now();\n";
     code += "  auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();\n";
-    code += "  std::osyncstream(std::cout) << \">>> Pipeline concluido com sucesso em \" << elapsed_ms << \" ms.\\n\";\n\n";
+    code += "  std::cout << \">>> Pipeline concluido com sucesso em \" << elapsed_ms << \" ms.\\n\";\n\n";
+    code += "  return 0;\n";
+    code += "}\n";
+
+    return code;
+}
+
+std::string TaskflowGenerator::generateBatchSource(
+    const core::Graph& graph, 
+    const std::vector<std::string>& batchItems, 
+    const std::vector<std::string>& serializedStages, 
+    const std::string& stateFilePath
+) {
+    auto meta = graph.getMetadata();
+    const auto& nodes = graph.getNodes();
+    const auto& edges = graph.getEdges();
+
+    std::string code = "// ============================================================================\n";
+    code += "// Gerado por TaskForge (C++ Batch DAG & Resume Engine)\n";
+    code += "// Pipeline: " + meta.graphName + " (Lote de " + std::to_string(batchItems.size()) + " itens)\n";
+    code += "// Arquivo de Checkpoint: " + stateFilePath + "\n";
+    code += "// ============================================================================\n\n";
+
+    code += "#include <taskflow/taskflow.hpp>\n";
+    code += "#include <iostream>\n";
+    code += "#include <vector>\n";
+    code += "#include <string>\n";
+    code += "#include <chrono>\n";
+    code += "#include <mutex>\n";
+    code += "#include \"sandbox/PipelineResumeEngine.hpp\"\n";
+    code += "#include \"sandbox/AgentTelemetryEmitter.hpp\"\n\n";
+
+    code += "int main() {\n";
+    code += "  std::cout << \">>> Inicializando Pipeline em Lote TaskForge...\\n\";\n";
+    code += "  tf::Executor executor;\n";
+    code += "  tf::Taskflow tf(\"BatchMultiAgentPipeline\");\n\n";
+    code += "  auto& resumeEngine = taskforge::sandbox::PipelineResumeEngine::getInstance();\n";
+    code += "  resumeEngine.setStateFilePath(\"" + stateFilePath + "\");\n\n";
+
+    // Instancia tarefas por item e por nó
+    for (size_t itemIdx = 0; itemIdx < batchItems.size(); ++itemIdx) {
+        const std::string& itemId = batchItems[itemIdx];
+        std::string sItemId = sanitizeIdentifier(itemId);
+
+        code += "  // --- Tarefas para o Item: " + itemId + " ---\n";
+        for (const auto& pair : nodes) {
+            const auto& node = pair.second;
+            std::string sNodeId = sanitizeIdentifier(node.id);
+            std::string taskVar = "task_" + sItemId + "_" + sNodeId;
+            std::string taskName = itemId + " :: " + node.label;
+
+            code += "  auto " + taskVar + " = tf.emplace([&resumeEngine, itemId = std::string(\"" + itemId + "\")]() {\n";
+            code += "    taskforge::sandbox::ArtifactValidationRule rule;\n";
+            code += "    rule.targetPathPattern = \"aulas/{itemId}.md\";\n";
+            code += "    rule.minSizeBytes = 200;\n";
+            code += "    rule.checkLogExitCode = true;\n\n";
+            code += "    if (resumeEngine.isStageCompleted(itemId, \"" + node.id + "\", rule)) {\n";
+            code += "      std::cout << \"[CHECKPOINT:RESUME] \" << itemId << \" :: " + node.label + " ja concluido. Reaproveitando artefato.\\n\";\n";
+            code += "      taskforge::sandbox::AgentTelemetryEmitter::emitStatus(\"" + node.id + "\", \"settled\", \"Recuperado do Checkpoint\");\n";
+            code += "      return;\n";
+            code += "    }\n\n";
+            code += "    resumeEngine.markStageStarted(itemId, \"" + node.id + "\");\n";
+            code += "    taskforge::sandbox::AgentTelemetryEmitter::emitStatus(\"" + node.id + "\", \"running\", \"Executando item \" + itemId);\n";
+            code += "    std::cout << \"[EXECUTANDO] \" << itemId << \" :: " + node.label + "\\n\";\n";
+            
+            // Lambda customizada ou padrão
+            if (!node.customLambdaBody.empty()) {
+                code += indent(node.customLambdaBody, 4) + "\n";
+            } else {
+                code += "    // Execucao no Sandbox/MicroVM...\\n";
+            }
+
+            code += "    resumeEngine.markStageSuccess(itemId, \"" + node.id + "\", \"aulas/\" + itemId + \".md\");\n";
+            code += "    taskforge::sandbox::AgentTelemetryEmitter::emitStatus(\"" + node.id + "\", \"settled\", \"Concluido com sucesso\");\n";
+            code += "  }).name(\"" + taskName + "\");\n\n";
+        }
+
+        // Dependências internas do item
+        code += "  // Dependencias internas do Item: " + itemId + "\n";
+        for (const auto& pair : nodes) {
+            const auto& node = pair.second;
+            std::string sFrom = "task_" + sItemId + "_" + sanitizeIdentifier(node.id);
+
+            for (const auto& epair : edges) {
+                if (epair.second.sourceNodeId == node.id && !epair.second.isFeedbackLoop) {
+                    std::string sTo = "task_" + sItemId + "_" + sanitizeIdentifier(epair.second.targetNodeId);
+                    code += "  " + sFrom + ".precede(" + sTo + ");\n";
+                }
+            }
+        }
+        code += "\n";
+    }
+
+    // Encadeamento serial de etapas pesadas (serializedStages) entre itens adjacentes
+    if (!serializedStages.empty() && batchItems.size() > 1) {
+        code += "  // --- Encadeamento Serial Entre Itens (Limite de Concorrencia de Etapas Pesadas) ---\n";
+        for (const auto& stageId : serializedStages) {
+            std::string sStage = sanitizeIdentifier(stageId);
+            for (size_t i = 0; i < batchItems.size() - 1; ++i) {
+                std::string sItemCurr = sanitizeIdentifier(batchItems[i]);
+                std::string sItemNext = sanitizeIdentifier(batchItems[i + 1]);
+                code += "  task_" + sItemCurr + "_" + sStage + ".precede(task_" + sItemNext + "_" + sStage + ");\n";
+            }
+        }
+        code += "\n";
+    }
+
+    code += "  auto start = std::chrono::high_resolution_clock::now();\n";
+    code += "  executor.run(tf).wait();\n";
+    code += "  auto end = std::chrono::high_resolution_clock::now();\n";
+    code += "  auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();\n";
+    code += "  std::cout << \">>> Lote de \" << " + std::to_string(batchItems.size()) + " << \" artigos finalizado com sucesso em \" << elapsed_ms << \" ms.\\n\";\n\n";
     code += "  return 0;\n";
     code += "}\n";
 

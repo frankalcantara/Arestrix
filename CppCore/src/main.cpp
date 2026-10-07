@@ -3,6 +3,7 @@
 #include "compiler/TaskflowGenerator.hpp"
 #include "sandbox/SandboxManager.hpp"
 #include "sandbox/AgentTelemetryEmitter.hpp"
+#include "sandbox/PipelineResumeEngine.hpp"
 #include <iostream>
 #include <string>
 #include <fstream>
@@ -121,6 +122,30 @@ void ui_get_sandbox_status(webui::window::event* e) {
     e->return_string(status.dump());
 }
 
+// Wrapper de comunicação JS -> C++ (Obter Checkpoint do Resume Engine)
+void ui_get_pipeline_checkpoint(webui::window::event* e) {
+    auto& engine = taskforge::sandbox::PipelineResumeEngine::getInstance();
+    nlohmann::json st = engine.getStateJson();
+    e->return_string(st.dump());
+}
+
+// Wrapper de comunicação JS -> C++ (Resetar Checkpoint)
+void ui_reset_pipeline_checkpoint(webui::window::event* e) {
+    std::string payload = e->get_string();
+    std::string itemId = "";
+    std::string stageId = "";
+    try {
+        if (!payload.empty() && payload[0] == '{') {
+            auto j = nlohmann::json::parse(payload);
+            itemId = j.value("itemId", "");
+            stageId = j.value("stageId", "");
+        }
+    } catch (...) {}
+    auto& engine = taskforge::sandbox::PipelineResumeEngine::getInstance();
+    engine.resetCheckpoint(itemId, stageId);
+    e->return_bool(true);
+}
+
 void exit_app(webui::window::event* e) {
     std::cout << "[C++] Comando de encerramento recebido." << std::endl;
     webui::exit();
@@ -141,6 +166,8 @@ int main() {
     win.bind("get_cpp_preview", ui_get_cpp_preview);
     win.bind("get_graph_state", ui_get_graph_state);
     win.bind("get_sandbox_status", ui_get_sandbox_status);
+    win.bind("get_pipeline_checkpoint", ui_get_pipeline_checkpoint);
+    win.bind("reset_pipeline_checkpoint", ui_reset_pipeline_checkpoint);
     win.bind("exit_app", exit_app);
 
     // Registra o Emitter de Telemetria de Agentes em Tempo Real (Fase 10)

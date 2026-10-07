@@ -113,6 +113,42 @@ export class NodeToolsModal {
               <div class="form-hint">Scripts Python/Node que o agente pode disparar via terminal com timeout supervisionado.</div>
             </div>
           </div>
+
+          <!-- Validação de Artefato & Resume Engine (Fase 11) -->
+          <div class="settings-section-card" style="margin-top: 16px;">
+            <div class="section-card-header">
+              <span class="section-card-icon">🛡️</span>
+              <div class="section-card-titles">
+                <h3 class="section-card-title">Validação de Artefato & Resume Engine</h3>
+                <p class="section-card-desc">Critérios para considerar esta etapa concluída e permitir auto-recuperação</p>
+              </div>
+            </div>
+
+            <div class="form-row-grid">
+              <div class="form-group full-width">
+                <label class="form-label" for="node-artifact-pattern">Padrão de Caminho do Artefato</label>
+                <input type="text" id="node-artifact-pattern" class="form-input" value="${this.escapeHtml((settings.validationRules && settings.validationRules[0]?.targetPathPattern) || '')}" placeholder="aulas/{itemId}.md" />
+                <div class="form-hint">Suporta interpolação com <code>{itemId}</code> ou <code>{id}</code>.</div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="node-artifact-min-size">Tamanho Mínimo (Bytes)</label>
+                <input type="number" id="node-artifact-min-size" class="form-input" value="${(settings.validationRules && settings.validationRules[0]?.minSizeBytes) || 0}" min="0" step="100" />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="node-artifact-regex">Regex de Conteúdo (Opcional)</label>
+                <input type="text" id="node-artifact-regex" class="form-input" value="${this.escapeHtml((settings.validationRules && settings.validationRules[0]?.contentPattern) || '')}" placeholder="^---[\\s\\S]+---" />
+              </div>
+
+              <div class="form-group full-width">
+                <label class="clean-checkbox-label">
+                  <input type="checkbox" id="chk-node-serial-batch" ${settings.isSerialAcrossBatch ? 'checked' : ''} />
+                  <span><strong>Execução Serial no Lote:</strong> Gargalo de concorrência — processa apenas 1 artigo por vez nesta etapa.</span>
+                </label>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="modal-footer">
@@ -193,10 +229,25 @@ export class NodeToolsModal {
       };
     }
 
+    // Regras de validação de artefato e encadeamento em lote
+    const artPattern = (this.overlay.querySelector('#node-artifact-pattern') as HTMLInputElement)?.value.trim() || '';
+    const minBytes = parseInt((this.overlay.querySelector('#node-artifact-min-size') as HTMLInputElement)?.value, 10) || 0;
+    const artRegex = (this.overlay.querySelector('#node-artifact-regex') as HTMLInputElement)?.value.trim() || '';
+    const isSerial = (this.overlay.querySelector('#chk-node-serial-batch') as HTMLInputElement)?.checked || false;
+
+    const validationRules = artPattern ? [{
+      targetPathPattern: artPattern,
+      minSizeBytes: minBytes,
+      contentPattern: artRegex,
+      checkLogExitCode: true
+    }] : undefined;
+
     const updatedSettings = {
       ...currentSettings,
       inheritCodeMode: inherit,
-      codeMode: inherit ? undefined : newToolsData
+      codeMode: inherit ? undefined : newToolsData,
+      validationRules,
+      isSerialAcrossBatch: isSerial
     };
 
     const cmd = new UpdateNodeCommand(
@@ -204,7 +255,7 @@ export class NodeToolsModal {
       node.id,
       { agentSettings: node.agentSettings },
       { agentSettings: updatedSettings },
-      `Alterar ferramentas Code Mode de "${node.label}"`
+      `Alterar ferramentas e validação de "${node.label}"`
     );
     this.graph.commandManager.execute(cmd);
   }

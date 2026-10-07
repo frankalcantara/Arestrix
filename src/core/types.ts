@@ -80,6 +80,52 @@ export interface INodeAgentSettings {
 
   inheritCodeMode: boolean;
   codeMode?: Partial<ICodeModeConfig>;
+
+  // Validação de Artefato & Resume Engine (Fase 11)
+  validationRules?: IArtifactValidationRule[];
+  isSerialAcrossBatch?: boolean; // Se esta etapa roda sequencialmente entre os itens do lote
+}
+
+// --- Pipelines Parametrizados em Lote & Resume Engine (Fase 11) ---
+
+export interface IArtifactValidationRule {
+  targetPathPattern: string;      // ex: "aulas/{itemId}.md"
+  minSizeBytes?: number;           // ex: 1000
+  contentPattern?: string;        // ex: "^---[\\s\\S]+---"
+  checkLogExitCode?: boolean;     // true procura "EXIT CODE: 0"
+}
+
+export type StageCheckpointStatus = 'pendente' | 'executando' | 'concluido' | 'erro';
+
+export interface IStageCheckpointInfo {
+  status: StageCheckpointStatus;
+  completedAt?: string;
+  startedAt?: string;
+  logFile?: string;
+  artifactPath?: string;
+  recoveredFromArtifact?: boolean;
+  errorMessage?: string;
+}
+
+export interface IItemCheckpointInfo {
+  itemId: string;
+  status: 'pendente' | 'em_progresso' | 'concluido' | 'erro';
+  stages: Record<string, IStageCheckpointInfo>;
+}
+
+export interface IPipelineCheckpointState {
+  pipelineId: string;
+  lastUpdated: string;
+  items: Record<string, IItemCheckpointInfo>;
+}
+
+export interface IBatchPipelineConfig {
+  items: string[];
+  serializedStages: string[];
+  maxConcurrency: number;
+  cooldownMs: number;
+  stateFilePath: string;
+  autoResume: boolean;
 }
 
 
