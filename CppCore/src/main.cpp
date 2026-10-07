@@ -1,6 +1,7 @@
 #include "webui.hpp"
 #include "core/Graph.hpp"
 #include "compiler/TaskflowGenerator.hpp"
+#include "sandbox/SandboxManager.hpp"
 #include <iostream>
 #include <string>
 #include <fstream>
@@ -104,6 +105,21 @@ void ui_get_graph_state(webui::window::event* e) {
     e->return_string(state.dump());
 }
 
+// Wrapper de comunicação JS -> C++ (Status dos Drivers de Sandbox)
+void ui_get_sandbox_status(webui::window::event* e) {
+    nlohmann::json status;
+    auto& mgr = taskforge::sandbox::SandboxManager::instance();
+    auto docker = mgr.getDriver(taskforge::sandbox::IsolationType::Container);
+    auto microvm = mgr.getDriver(taskforge::sandbox::IsolationType::MicroVM);
+    auto host = mgr.getDriver(taskforge::sandbox::IsolationType::HostDirect);
+
+    status["docker"] = docker->isAvailable();
+    status["microvm"] = microvm->isAvailable();
+    status["host"] = host->isAvailable();
+
+    e->return_string(status.dump());
+}
+
 void exit_app(webui::window::event* e) {
     std::cout << "[C++] Comando de encerramento recebido." << std::endl;
     webui::exit();
@@ -123,6 +139,7 @@ int main() {
     win.bind("generate_cpp_code", ui_generate_cpp_code);
     win.bind("get_cpp_preview", ui_get_cpp_preview);
     win.bind("get_graph_state", ui_get_graph_state);
+    win.bind("get_sandbox_status", ui_get_sandbox_status);
     win.bind("exit_app", exit_app);
 
     std::cout << "[C++] Servindo a UI oficial..." << std::endl;
