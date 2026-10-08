@@ -35,10 +35,13 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
     const auto& edges = graph.getEdges();
 
     bool hasCritical = false;
+    bool hasCuda = false;
     for (const auto& pair : nodes) {
         if (pair.second.type == core::TaskflowNodeType::Critical) {
             hasCritical = true;
-            break;
+        }
+        if (pair.second.type == core::TaskflowNodeType::Cuda) {
+            hasCuda = true;
         }
     }
 
@@ -50,6 +53,9 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
     code += "// ============================================================================\n\n";
 
     code += "#include <taskflow/taskflow.hpp>\n";
+    if (hasCuda) {
+        code += "#include <taskflow/cuda/cudaflow.hpp>\n";
+    }
     code += "#include <iostream>\n";
     code += "#include <vector>\n";
     code += "#include <string>\n";
@@ -99,8 +105,17 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
             code += indent(body, 4) + "\n";
             code += "  }).name(\"" + label + "\");\n\n";
         } else if (node.type == core::TaskflowNodeType::Cuda) {
-            code += "  auto task_" + sId + " = tf.emplace([&ctx](tf::cudaFlow& cf) {\n";
-            std::string body = node.customLambdaBody.empty() ? "// kernels CUDA C++20 aqui;" : node.customLambdaBody;
+            code += "  auto task_" + sId + " = tf.emplace([&ctx]() {\n";
+            std::string defaultCudaBody = 
+                "// Taskflow 4.1+ Native CUDA Graph (tf::cudaGraph / tf::cudaGraphExec)\n"
+                "tf::cudaGraph cg;\n"
+                "// Construcao do grafo CUDA nativo (kernels, memcpys)\n"
+                "tf::cudaGraphExec exec(cg);\n"
+                "tf::cudaStream stream;\n"
+                "stream.run(exec);\n"
+                "stream.synchronize();\n"
+                "std::osyncstream(std::cout) << \"[CUDA: " + label + "] Grafo GPU executado com sucesso.\\n\";";
+            std::string body = node.customLambdaBody.empty() ? defaultCudaBody : node.customLambdaBody;
             code += indent(body, 4) + "\n";
             code += "  }).name(\"" + label + "\");\n\n";
         } else if (node.type == core::TaskflowNodeType::Subflow || node.type == core::TaskflowNodeType::Module) {

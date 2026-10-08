@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "server:test": "python server_teste.py"
+    "app:dev": "python CppCore/dev.py"
   },
   "dependencies": {
     "lucide": "^0.453.0",

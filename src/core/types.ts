@@ -4,7 +4,7 @@ export type TaskflowNodeType =
   | 'subflow'     // tf::Task (recebe tf::Subflow&) - Decomposição dinâmica em runtime
   | 'module'      // tf::Task (tf.composed_of) - Módulo hierárquico encapsulado
   | 'critical'    // tf::CriticalSection - Bloco com controle estrito de concorrencia
-  | 'cuda'        // tf::cudaFlow - Agente com Aceleracao CUDA C++20
+  | 'cuda'        // tf::cudaGraph / cudaGraphExec - Agente com Aceleracao CUDA C++20 (Taskflow 4.1+)
   | 'agent';      // Agente Autônomo Code Mode em Sandbox/VM Isolada
 
 export type PortDirection = 'input' | 'output';
@@ -20,7 +20,7 @@ export interface ICompilerConfig {
   taskflowIncludePath: string;
   outputBinaryName: string;
   enableOpenMP: boolean;
-  enableCuda: boolean; // tf::cudaFlow
+  enableCuda: boolean; // tf::cudaGraph / cudaGraphExec (Taskflow 4.1+)
   extraFlags: string[];
 }
 

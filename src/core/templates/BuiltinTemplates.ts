@@ -302,7 +302,7 @@ std::osyncstream(std::cout) << "[${label}] Quorum de ${quorum} agentes atingido.
     category: 'Visão & Processamento',
     icon: '🚀',
     taskType: 'cuda',
-    description: 'Envia dados pesados (tensores/matrizes) para execucao massivamente paralela via tf::cudaFlow. Requer suporte a C++20 com CUDA.',
+    description: 'Envia dados pesados (tensores/matrizes) para execucao massivamente paralela via tf::cudaGraph / cudaGraphExec (Taskflow 4.1+). Requer suporte a C++20 com CUDA.',
     inputs: [
       { name: 'tensor_in', type: 'data', dataType: 'std::vector<float>' },
       { name: 'trigger', type: 'flow' }
@@ -328,16 +328,21 @@ std::osyncstream(std::cout) << "[${label}] Quorum de ${quorum} agentes atingido.
     generateLambdaBody: (params, label) => {
       const grid = params.gridSize || 256;
       const block = params.blockSize || 1024;
-      return `// tf::cudaFlow kernel dispatcher: ${label}
-// Configuracao: Grid=${grid}, Block=${block}
-
-cf.kernel(${grid}, ${block}, 0, [] __device__ (float* in, float* out) {
+      return `// Taskflow 4.1+ Native CUDA Graph dispatcher: ${label}
+// Configuracao de lancamento: Grid=${grid}, Block=${block}
+tf::cudaGraph cg;
+cg.kernel(dim3(${grid}), dim3(${block}), 0, [] __device__ (float* in, float* out) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     // Logica do Kernel aqui (Operacao por elemento)
-    out[idx] = in[idx] * 2.0f; 
+    out[idx] = in[idx] * 2.0f;
 }, /* ptr_in */, /* ptr_out */);
 
-std::osyncstream(std::cout) << "[CUDA] Kernel disparado (" << ${grid} << "x" << ${block} << " threads)\n";`;
+tf::cudaGraphExec exec(cg);
+tf::cudaStream stream;
+stream.run(exec);
+stream.synchronize();
+
+std::osyncstream(std::cout) << "[CUDA] Grafo de kernel disparado (" << ${grid} << "x" << ${block} << " threads)\\n";`;
     }
   }
 ];
