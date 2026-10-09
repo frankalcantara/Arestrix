@@ -122,7 +122,7 @@ npm install
 
 #### Mode 1: Full Standalone Desktop Application (Native C++ + WebUI) — *Recommended*
 
-This mode compiles the C++ native backend (`app.exe`), starts a dedicated desktop window, and provides full access to native MSVC compilation, sandboxes, streaming telemetry, and MCP server transports.
+This mode compiles the C++ native backend (`arestrix.exe`), starts a dedicated desktop window, and provides full access to native MSVC compilation, sandboxes, streaming telemetry, and MCP server transports.
 
 To build everything automatically and launch:
 
@@ -135,16 +135,20 @@ python dev.py
 1. **Frontend Compilation**: Runs `npm run build` at the root folder, compiling TypeScript, Three.js, and CSS into a single bundled `dist/index.html` (via `vite-plugin-singlefile`).
 2. **WebUI Static Library**: Verifies and extracts the pre-built `webui-2-static.lib` in `vendor/webui` if missing.
 3. **MSVC Environment Auto-Detection**: Uses `vswhere.exe` to automatically locate Visual Studio, activates the `vcvars64.bat` 64-bit toolchain, and invokes `nmake -f Makefile`.
-4. **C++ Compilation**: Compiles `src/main.cpp`, `Graph.cpp`, `TaskflowGenerator.cpp`, sandbox drivers, `AgentBlackboard.cpp`, `SemanticMemoryEngine.cpp`, `McpClient.cpp`, and `McpRegistry.cpp` into `CppCore/app.exe`.
-5. **Desktop Studio Launch**: Starts `app.exe`, opening the standalone Arestrix Studio desktop window with bidirectional RPC bindings.
+4. **C++ Compilation**: Compiles all engine sources into `arestrix.exe` (and synchronizes it both in `CppCore/` and at the project root).
+5. **Desktop Studio Launch**: Starts `arestrix.exe`, opening the standalone Arestrix Studio desktop window with bidirectional RPC bindings.
 
 💡 **Instant Quick Launch (When Already Built):**  
-If `CppCore/app.exe` and `dist/index.html` are already compiled, you can launch the app directly without recompiling:
+If `arestrix.exe` and `dist/index.html` are already compiled, you can launch the app directly from either the project root or `CppCore`:
 ```powershell
+# From the project root:
+.\arestrix.exe
+
+# Or from CppCore:
 cd CppCore
-.\app.exe
+.\arestrix.exe
 ```
-*(Or simply double-click `CppCore\app.exe` directly in Windows Explorer).*
+*(Or simply double-click `arestrix.exe` directly in Windows Explorer).*
 
 ---
 
@@ -195,7 +199,7 @@ To compile only the frontend assets into production distribution files:
 ```powershell
 npm run build
 ```
-- Compiles TypeScript and packages all CSS and assets into a singlefile inlined `dist/index.html` consumed in-memory by `app.exe`.
+- Compiles TypeScript and packages all CSS and assets into a singlefile inlined `dist/index.html` consumed in-memory by `arestrix.exe`.
 
 ---
 

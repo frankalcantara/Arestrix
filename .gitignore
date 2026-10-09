@@ -7,5 +7,7 @@ __pycache__/
 *.obj
 *.pdb
 *.ilk
+*.exp
+*.lib
 .DS_Store
 *.local

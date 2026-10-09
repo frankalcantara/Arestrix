@@ -89,6 +89,23 @@ def build():
             sys.exit(1)
             
         print("[Build] Compilação concluída com sucesso!")
+        
+        # Sincroniza dist para dentro de CppCore se existir
+        root_dist = os.path.join(os.getcwd(), "..", "dist")
+        local_dist = os.path.join(os.getcwd(), "dist")
+        if os.path.exists(root_dist):
+            if os.path.exists(local_dist):
+                shutil.rmtree(local_dist)
+            shutil.copytree(root_dist, local_dist)
+
+        # Copia arestrix.exe para a raiz do projeto e mantém compatibilidade com app.exe
+        target_exe = os.path.join(os.getcwd(), "arestrix.exe")
+        root_exe = os.path.join(os.getcwd(), "..", "arestrix.exe")
+        compat_exe = os.path.join(os.getcwd(), "app.exe")
+        if os.path.exists(target_exe):
+            shutil.copyfile(target_exe, root_exe)
+            shutil.copyfile(target_exe, compat_exe)
+
     except FileNotFoundError:
         print("[Erro] O compilador C++ da Microsoft não foi encontrado.")
         print("Certifique-se de que o 'Desenvolvimento para Desktop com C++' está instalado no Visual Studio.")
@@ -102,6 +119,5 @@ if __name__ == "__main__":
     build()
 
     print("[App] Iniciando Arestrix C++...")
-    # Executa o C++ a partir da pasta raiz para que ele enxergue corretamente a pasta 'dist'.
-    app_path = os.path.join(os.getcwd(), "app.exe")
+    app_path = os.path.join(os.getcwd(), "arestrix.exe")
     subprocess.run([app_path], cwd=os.path.join(os.getcwd(), ".."))

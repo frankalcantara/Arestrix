@@ -13,6 +13,16 @@
 #include <string>
 #include <fstream>
 #include <filesystem>
+#include <vector>
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 // Instância global do nosso grafo central em C++
 taskforge::core::Graph globalGraph;
@@ -371,8 +381,95 @@ void exit_app(webui::window::event* e) {
     webui::exit();
 }
 
+namespace {
+
+// Determina o diretório base onde residem a pasta dist/ e os recursos do projeto
+std::filesystem::path findProjectRoot() {
+    std::vector<std::filesystem::path> candidates;
+
+    // 1. Diretório de trabalho atual e seu diretório pai
+    std::error_code ec;
+    std::filesystem::path cwd = std::filesystem::current_path(ec);
+    if (!cwd.empty()) {
+        candidates.push_back(cwd);
+        candidates.push_back(cwd.parent_path());
+    }
+
+    // 2. Diretório onde o executável reside e seu diretório pai
+#ifdef _WIN32
+    wchar_t exeBuffer[MAX_PATH];
+    if (GetModuleFileNameW(NULL, exeBuffer, MAX_PATH) > 0) {
+        std::filesystem::path exeDir = std::filesystem::path(exeBuffer).parent_path();
+        candidates.push_back(exeDir);
+        candidates.push_back(exeDir.parent_path());
+    }
+#endif
+
+    // Se qualquer candidato for a subpasta 'CppCore', prioriza seu diretório pai
+    for (auto& candidate : candidates) {
+        if (!candidate.empty() && candidate.filename() == "CppCore") {
+            candidate = candidate.parent_path();
+        }
+    }
+
+    // Prioridade 1: pasta que contenha package.json e dist/index.html (raiz canônica do Arestrix)
+    for (const auto& candidate : candidates) {
+        if (!candidate.empty()) {
+            if (std::filesystem::exists(candidate / "package.json", ec) &&
+                std::filesystem::exists(candidate / "dist" / "index.html", ec)) {
+                return std::filesystem::weakly_canonical(candidate, ec);
+            }
+        }
+    }
+
+    // Prioridade 2: pasta que contenha package.json ou arestrix.project.json
+    for (const auto& candidate : candidates) {
+        if (!candidate.empty()) {
+            if (std::filesystem::exists(candidate / "package.json", ec) ||
+                std::filesystem::exists(candidate / "arestrix.project.json", ec)) {
+                return std::filesystem::weakly_canonical(candidate, ec);
+            }
+        }
+    }
+
+    // Prioridade 3: pasta que contenha dist/index.html
+    for (const auto& candidate : candidates) {
+        if (!candidate.empty()) {
+            if (std::filesystem::exists(candidate / "dist" / "index.html", ec)) {
+                return std::filesystem::weakly_canonical(candidate, ec);
+            }
+        }
+    }
+
+    // Prioridade 4: fallback para ui/index.html ou CppCore/ui/index.html
+    for (const auto& candidate : candidates) {
+        if (!candidate.empty()) {
+            if (std::filesystem::exists(candidate / "ui" / "index.html", ec)) {
+                return std::filesystem::weakly_canonical(candidate, ec);
+            }
+            if (std::filesystem::exists(candidate / "CppCore" / "ui" / "index.html", ec)) {
+                return std::filesystem::weakly_canonical(candidate, ec);
+            }
+        }
+    }
+
+    return cwd;
+}
+
+} // namespace
+
 int main() {
     std::cout << "[C++] Inicializando Arestrix Engine (C++)..." << std::endl;
+
+    std::filesystem::path projectRoot = findProjectRoot();
+    std::cout << "[C++] Raiz do projeto identificada: " << projectRoot.string() << std::endl;
+
+    // Alinha o diretório de trabalho com a raiz do projeto para consistência de arquivos e diretórios
+    std::error_code ec;
+    std::filesystem::current_path(projectRoot, ec);
+    if (ec) {
+        std::cerr << "[C++ Aviso] Nao foi possivel definir current_path: " << ec.message() << std::endl;
+    }
 
     webui::window win;
 
@@ -412,8 +509,29 @@ int main() {
         win.run(jsCode);
     });
 
-    std::cout << "[C++] Servindo a UI oficial..." << std::endl;
-    win.show("dist/index.html");
+    std::filesystem::path distDir = projectRoot / "dist";
+    std::filesystem::path distIndex = distDir / "index.html";
+    std::filesystem::path uiIndex = projectRoot / "ui" / "index.html";
+    if (!std::filesystem::exists(uiIndex)) {
+        uiIndex = projectRoot / "CppCore" / "ui" / "index.html";
+    }
+
+    if (std::filesystem::exists(distIndex)) {
+        std::cout << "[C++] Servindo a UI oficial: " << distIndex.string() << std::endl;
+        bool rootOk = win.set_root_folder(distDir.string());
+        if (rootOk) {
+            win.show("index.html");
+        } else {
+            win.show("dist/index.html");
+        }
+    } else if (std::filesystem::exists(uiIndex)) {
+        std::cout << "[C++] Servindo UI de desenvolvimento: " << uiIndex.string() << std::endl;
+        win.set_root_folder(uiIndex.parent_path().string());
+        win.show("index.html");
+    } else {
+        std::cerr << "[C++ Erro] index.html nao foi encontrado em dist/ ou ui/." << std::endl;
+        win.show("<html><head><title>Arestrix</title><style>body{font-family:Segoe UI,sans-serif;padding:2rem;background:#0f172a;color:#f8fafc;text-align:center;}</style></head><body><h1>Arestrix Studio</h1><p>Frontend nao encontrado em dist/index.html.</p><p>Execute <code>npm run build</code> na pasta raiz do projeto.</p></body></html>");
+    }
 
     webui::wait();
     return 0;
