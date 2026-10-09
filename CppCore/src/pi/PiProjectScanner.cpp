@@ -100,72 +100,67 @@ PiProjectScanResult PiProjectScanner::scan(const std::string& directoryPath) {
         res.destinationDiagramsDir = (root / "outputs" / "diagrams").string();
     }
 
-    // 6. Monta as etapas do pipeline
-    res.stages = {
-        {
-            "1-redigir",
-            "1. Redação do Artigo",
-            res.defaultModel,
-            ".agents/redigir-math/SKILL.md",
-            "Gere o artigo {itemId} baseado no plano.md. Salve em aulas/{itemId}.md",
-            "aulas/{itemId}.md",
-            1000
-        },
-        {
-            "2-frontmatter",
-            "2. Inserção de Frontmatter",
-            "deepseek-flash",
-            ".agents/criar-frontmatter/SKILL.md",
-            "Leia aulas/{itemId}.md, monte o frontmatter e insira no topo com a ferramenta edit.",
-            "aulas/{itemId}.md",
-            1000
-        },
-        {
-            "3-planejar-svg",
-            "3. Planejamento de SVGs",
-            "deepseek-flash",
-            ".agents/planejar-svg/SKILL.md",
-            "Leia aulas/{itemId}.md. Planeje todos os diagramas SVG e salve em aulas/{itemId}-svg-plan.md",
-            "aulas/{itemId}-svg-plan.md",
-            200
-        },
-        {
-            "4-criar-svg",
-            "4. Criação e Validação dos SVGs",
-            "deepseek-flash",
-            ".agents/criar-svg/SKILL.md",
-            "Leia aulas/{itemId}.md e o plano de SVG. Crie os arquivos em ../matematica/assets/diagrams/ e insira os links no artigo.",
-            "../matematica/assets/diagrams/",
-            100
-        },
-        {
-            "4b-validar-svg",
-            "4b. Validação Visual dos SVGs (Jev)",
-            "deepseek-flash",
-            ".agents/validar-svg/SKILL.md",
-            "Valide visualmente os SVGs e escreva o relatório em aulas/{itemId}-validacao-svg.md",
-            "aulas/{itemId}-validacao-svg.md",
-            50
-        },
-        {
-            "5-animar-svg",
-            "5. Animação dos SVGs",
-            "deepseek-flash",
-            ".agents/animar-svg/SKILL.md",
-            "Injete as classes .anim-* e keyframes nos arquivos SVG planejados.",
-            "../matematica/assets/diagrams/",
-            100
-        },
-        {
-            "6-publicar",
-            "6. Publicação no Blog Matemática",
-            "taskflow_static",
-            "",
-            "Copia o artigo concluído para _posts/matematica com a data e slug canônico.",
-            res.destinationPostsDir,
-            1000
+    // 6. Monta as etapas do pipeline de forma genérica
+    std::filesystem::path orqPath = root / "orquestrador.js";
+    bool orqFound = false;
+
+    if (std::filesystem::exists(orqPath)) {
+        try {
+            std::ifstream fOrq(orqPath);
+            std::string line;
+            std::string curId, curNome, curSkill, curModel;
+            while (std::getline(fOrq, line)) {
+                std::smatch m;
+                if (std::regex_search(line, m, std::regex(R"(id:\s*['"`]([^'"`]+)['"`])"))) {
+                    curId = m[1].str();
+                }
+                if (std::regex_search(line, m, std::regex(R"(nome:\s*['"`]([^'"`]+)['"`])"))) {
+                    curNome = m[1].str();
+                }
+                if (std::regex_search(line, m, std::regex(R"(skill:\s*['"`]([^'"`]+)['"`])"))) {
+                    curSkill = m[1].str();
+                }
+                if (std::regex_search(line, m, std::regex(R"(modelo:\s*([a-zA-Z0-9_-]+))"))) {
+                    curModel = m[1].str();
+                    if (curModel == "MODELO_REDACAO") curModel = res.defaultModel;
+                    else if (curModel == "MODELO_DEMAIS") curModel = "deepseek-flash";
+                }
+                if (line.find('}') != std::string::npos && !curId.empty() && !curNome.empty()) {
+                    PiStageInfo st;
+                    st.id = curId;
+                    st.name = curNome;
+                    st.model = curModel.empty() ? res.defaultModel : curModel;
+                    st.skillPath = curSkill;
+                    st.prompt = "Execute a tarefa para " + curNome;
+                    st.validationTarget = "artefato_validado";
+                    st.minSizeBytes = 100;
+                    res.stages.push_back(st);
+
+                    curId.clear();
+                    curNome.clear();
+                    curSkill.clear();
+                    curModel.clear();
+                    orqFound = true;
+                }
+            }
+        } catch (...) {}
+    }
+
+    // Se nenhuma etapa foi encontrada no orquestrador, cria etapas dinâmicas a partir das skills encontradas
+    if (!orqFound && !res.skills.empty()) {
+        int idx = 1;
+        for (const auto& sk : res.skills) {
+            PiStageInfo st;
+            st.id = sk.id;
+            st.name = std::to_string(idx++) + ". " + sk.name;
+            st.model = res.defaultModel;
+            st.skillPath = sk.path;
+            st.prompt = "Execute a tarefa correspondente à skill " + sk.name;
+            st.validationTarget = "";
+            st.minSizeBytes = 100;
+            res.stages.push_back(st);
         }
-    };
+    }
 
     return res;
 }

@@ -1,43 +1,29 @@
 import { Graph } from '../Graph.ts';
 import { ProjectManager } from '../ProjectManager.ts';
 import { EventBus, globalEventBus } from '../EventBus.ts';
-import { INodeAgentSettings, IArtifactValidationRule } from '../types.ts';
+import { INodeAgentSettings, IArtifactValidationRule, INodeData } from '../types.ts';
+import { 
+  GenericPiProjectScanner, 
+  IPiProjectScanResult, 
+  IPiStageInfo, 
+  IPiSkillInfo, 
+  IPiMcpToolInfo 
+} from './GenericPiProjectScanner.ts';
+import { 
+  DefaultIntelligenceService, 
+  IImportAIValidationResult, 
+  IAIValidatedStage 
+} from '../ai/DefaultIntelligenceService.ts';
 
-export interface IPiSkillInfo {
-  id: string;
-  name: string;
-  path: string;
-  description: string;
-}
-
-export interface IPiStageInfo {
-  id: string;
-  name: string;
-  model: string;
-  skillPath: string;
-  prompt: string;
-  validationTarget: string;
-  minSizeBytes: number;
-}
-
-export interface IPiProjectScanResult {
-  isValid: boolean;
-  rootPath: string;
-  projectName: string;
-  defaultProvider: string;
-  defaultModel: string;
-  destinationPostsDir: string;
-  destinationDiagramsDir: string;
-  skills: IPiSkillInfo[];
-  stages: IPiStageInfo[];
-  articles: string[];
-  completedArticlesCount: number;
-  totalArticlesCount: number;
-  stateFilePath: string;
-}
+export type { IPiProjectScanResult, IPiStageInfo, IPiSkillInfo, IPiMcpToolInfo };
 
 export class PiProjectImporter {
   private static instance: PiProjectImporter;
+  private intelligenceService: DefaultIntelligenceService;
+
+  private constructor() {
+    this.intelligenceService = DefaultIntelligenceService.getInstance();
+  }
 
   public static getInstance(): PiProjectImporter {
     if (!PiProjectImporter.instance) {
@@ -70,7 +56,7 @@ export class PiProjectImporter {
   }
 
   /**
-   * Varre e analisa o diretório de um projeto Pi
+   * Varre e analisa estaticamente o diretório de QUALQUER projeto Pi de forma genérica
    */
   public async scanProject(dirPath: string): Promise<IPiProjectScanResult> {
     try {
@@ -78,45 +64,62 @@ export class PiProjectImporter {
         const raw = await (window as any).webui.call('scan_pi_project', dirPath);
         if (raw) {
           const res = JSON.parse(raw) as IPiProjectScanResult;
-          if (res && res.isValid) {
+          if (res && res.isValid && res.stages && res.stages.length > 0) {
             return res;
           }
         }
       }
     } catch (e) {
-      console.warn('[PiProjectImporter] Falha na varredura nativa C++, usando analisador estrutural:', e);
+      console.warn('[PiProjectImporter] WebUI scanner indisponível, usando GenericPiProjectScanner:', e);
     }
 
-    // Fallback estruturado inteligente para testes e execução local
-    return this.createFallbackScanResult(dirPath);
+    return GenericPiProjectScanner.scan(dirPath);
   }
 
   /**
-   * Importa o projeto Pi analisado, sintetiza o grafo Taskflow C++20 e ativa o workspace
+   * Executa a validação e refinamento semântico por IA usando o Modelo Padrão do Arestrix
+   */
+  public async validateWithDefaultIntelligence(scan: IPiProjectScanResult): Promise<IImportAIValidationResult> {
+    return this.intelligenceService.analyzeAndValidatePiImport(scan);
+  }
+
+  /**
+   * Importa o projeto Pi analisado e validado, sintetizando dinamicamente o grafo no Arestrix
    */
   public async importProject(
     scan: IPiProjectScanResult,
     graph: Graph,
     projectManager: ProjectManager = ProjectManager.getInstance(globalEventBus),
-    bus?: EventBus
+    bus?: EventBus,
+    aiValidation?: IImportAIValidationResult
   ): Promise<boolean> {
     if (!scan || !scan.isValid) return false;
     const activeBus = bus || (graph as any).bus || globalEventBus;
 
-    // 1. Atualiza e salva o manifesto do projeto no ProjectManager
+    // 1. Obtém a validação da IA (ou executa agora se não foi passada previamente)
+    const validation = aiValidation || await this.validateWithDefaultIntelligence(scan);
+    const stagesToCreate = validation.verifiedStages && validation.verifiedStages.length > 0
+      ? validation.verifiedStages
+      : this.convertScanStagesToValidated(scan.stages, scan.defaultModel);
+
+    // 2. Cria o manifesto do projeto dinâmico no ProjectManager
+    const isPiMat = scan.rootPath.toLowerCase().includes('pi-matematica') || scan.projectName.toLowerCase().includes('matem');
+    const projectId = isPiMat
+      ? 'pi-matematica'
+      : scan.projectName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-');
     await projectManager.createProject({
-      projectId: 'pi-matematica',
-      name: scan.projectName || 'Pi Matemática - Produção de Artigos',
+      projectId,
+      name: scan.projectName,
       version: '1.0.0',
-      description: 'Pipeline Concorrente de Produção de Artigos e SVGs Matemáticos com Taskflow C++20 e Pi CLI',
+      description: validation.summary || `Pipeline de Agentes importado do projeto Pi "${scan.projectName}"`,
       rootPath: scan.rootPath,
       pipelines: [
         {
           id: 'main',
-          name: 'Pipeline Editorial & SVGs',
+          name: 'Pipeline Principal Pi',
           file: 'pipelines/main.json',
           isPrimary: true,
-          description: 'Pipeline de 6 etapas de redação, frontmatter, SVGs, validação e publicação'
+          description: `Pipeline com ${stagesToCreate.length} etapas gerado pelo Arestrix Studio`
         }
       ],
       database: {
@@ -126,106 +129,108 @@ export class PiProjectImporter {
       environment: {
         PI_PROVIDER: scan.defaultProvider || 'deepseek',
         PI_DEFAULT_MODEL: scan.defaultModel || 'deepseek-v4-pro',
-        DEST_POSTS_DIR: scan.destinationPostsDir,
-        DEST_DIAGRAMS_DIR: scan.destinationDiagramsDir
+        DEST_POSTS_DIR: scan.destinationPostsDir || '',
+        DEST_DIAGRAMS_DIR: scan.destinationDiagramsDir || ''
       }
     }, graph);
 
-    // 2. Limpa o grafo atual para injetar o pipeline novo
+    // 3. Limpa o grafo atual para injetar o novo pipeline dinâmico
     graph.clear();
 
-    // 3. Monta as etapas do Grafo
-    // Etapa 1: Redação (Reasoning pesado com DeepSeek v4-pro)
-    const n1 = graph.createNode('node_pi_redigir', '1. Redacao_Artigo', 'agent', -640, 80);
-    n1.agentSettings = this.createAgentSettings(
-      scan.defaultModel || 'deepseek-v4-pro',
-      '.agents/redigir-math/SKILL.md',
-      'Gere o artigo {itemId} baseado no plano.md. A sua saída deve salvar o conteúdo em aulas/{itemId}.md usando a ferramenta write.',
-      [{ targetPathPattern: 'aulas/{itemId}.md', minSizeBytes: 1000 }],
-      true // Serializado entre itens de lote
-    );
-    graph.updateNode(n1.id, { agentSettings: n1.agentSettings });
+    // 4. Monta os nós dinamicamente distribuídos no Canvas
+    const total = stagesToCreate.length;
+    const createdNodes: Map<string, INodeData> = new Map();
 
-    // Etapa 2: Frontmatter Jekyll
-    const n2 = graph.createNode('node_pi_frontmatter', '2. Frontmatter_Jekyll', 'agent', -400, 80);
-    n2.agentSettings = this.createAgentSettings(
-      'deepseek-flash',
-      '.agents/criar-frontmatter/SKILL.md',
-      'Aplique o skill front-matter: leia aulas/{itemId}.md, monte o frontmatter e insira no topo usando edit.',
-      [{ targetPathPattern: 'aulas/{itemId}.md', contentPattern: '^---[\\s\\S]+---' }]
-    );
-    graph.updateNode(n2.id, { agentSettings: n2.agentSettings });
+    stagesToCreate.forEach((st, idx) => {
+      // Distribuição linear horizontal espaçada em 250px
+      const x = Math.round((idx - (total - 1) / 2) * 250);
+      const y = 80;
 
-    // Etapa 3: Planejamento de SVGs
-    const n3 = graph.createNode('node_pi_planejar_svg', '3. Planejamento_SVG', 'agent', -160, 80);
-    n3.agentSettings = this.createAgentSettings(
-      'deepseek-flash',
-      '.agents/planejar-svg/SKILL.md',
-      'Leia aulas/{itemId}.md. Planeje todos os diagramas SVG e salve em aulas/{itemId}-svg-plan.md.',
-      [{ targetPathPattern: 'aulas/{itemId}-svg-plan.md', minSizeBytes: 200 }]
-    );
-    graph.updateNode(n3.id, { agentSettings: n3.agentSettings });
+      // Normaliza o ID para permitir compatibilidade canônica ('1-redigir' -> 'node_pi_redigir')
+      const cleanId = st.id.replace(/^[0-9]+[a-z]?-/, '').replace(/[^a-zA-Z0-9_]/g, '_');
+      const nodeId = `node_pi_${cleanId}`;
+      const nodeType = st.nodeType || (st.isDeterministic ? 'static' : 'agent');
 
-    // Etapa 4: Criação Física dos SVGs
-    const n4 = graph.createNode('node_pi_criar_svg', '4. Criacao_Validacao_SVG', 'agent', 80, 80);
-    n4.agentSettings = this.createAgentSettings(
-      'deepseek-flash',
-      '.agents/criar-svg/SKILL.md',
-      'Leia aulas/{itemId}.md e o plano de SVG. Escreva os SVGs em ../matematica/assets/diagrams/ e insira os links no artigo.',
-      [{ targetPathPattern: '../matematica/assets/diagrams/', checkLogExitCode: true }]
-    );
-    graph.updateNode(n4.id, { agentSettings: n4.agentSettings });
+      const node = graph.createNode(nodeId, st.label, nodeType, x, y);
 
-    // Etapa 5: Validação Visual Jev
-    const n5 = graph.createNode('node_pi_validar_svg', '4b. Validacao_Visual_Jev', 'agent', 320, 80);
-    n5.agentSettings = this.createAgentSettings(
-      'deepseek-flash',
-      '.agents/validar-svg/SKILL.md',
-      'Valide visualmente os SVGs e escreva o relatório em aulas/{itemId}-validacao-svg.md.',
-      [{ targetPathPattern: 'aulas/{itemId}-validacao-svg.md', minSizeBytes: 50, checkLogExitCode: true }]
-    );
-    graph.updateNode(n5.id, { agentSettings: n5.agentSettings });
+      if (nodeType === 'agent') {
+        node.agentSettings = this.createAgentSettings(
+          st.model || scan.defaultModel || 'deepseek-v4-pro',
+          st.skillPath || '',
+          st.promptTemplate,
+          st.validationRules || [],
+          idx === 0 // Primeira etapa serializada por padrão
+        );
+        graph.updateNode(node.id, { agentSettings: node.agentSettings });
+      } else if (nodeType === 'static') {
+        node.parameters = {
+          action: st.id,
+          description: st.promptTemplate,
+          destinationDir: scan.destinationPostsDir || '../matematica/_posts/matematica'
+        };
+        graph.updateNode(node.id, { parameters: node.parameters });
+      }
 
-    // Etapa 6: Animação dos SVGs
-    const n6 = graph.createNode('node_pi_animar_svg', '5. Animacao_Keyframes_SVG', 'agent', 560, 80);
-    n6.agentSettings = this.createAgentSettings(
-      'deepseek-flash',
-      '.agents/animar-svg/SKILL.md',
-      'Injete as classes .anim-* e @keyframes nos SVGs criados.',
-      [{ targetPathPattern: '../matematica/assets/diagrams/', checkLogExitCode: true }]
-    );
-    graph.updateNode(n6.id, { agentSettings: n6.agentSettings });
+      createdNodes.set(st.id, node);
+      createdNodes.set(nodeId, node);
+      createdNodes.set(`node_${st.id.replace(/[^a-zA-Z0-9_]/g, '_')}`, node);
+    });
 
-    // Etapa 7: Publicação no Blog Matemática (Static Task C++20)
-    const n7 = graph.createNode('node_pi_publicar', '6. Publicar_Post_Matematica', 'static', 800, 80);
-    n7.parameters = {
-      action: 'publish_jekyll_post',
-      destinationDir: scan.destinationPostsDir || '../matematica/_posts/matematica',
-      sourceDir: 'aulas'
-    };
-    graph.updateNode(n7.id, { parameters: n7.parameters });
+    // 5. Conecta as arestas verificadas (ou sequenciais se não especificadas)
+    if (validation.verifiedEdges && validation.verifiedEdges.length > 0) {
+      validation.verifiedEdges.forEach(edge => {
+        const srcNode = createdNodes.get(edge.fromNodeId) || createdNodes.get(`node_${edge.fromNodeId}`);
+        const tgtNode = createdNodes.get(edge.toNodeId) || createdNodes.get(`node_${edge.toNodeId}`);
 
-    // 4. Cria Conexões Bézier Direcionadas entre todas as etapas
-    graph.createEdge(n1.id, n1.outputs[0].id, n2.id, n2.inputs[0].id);
-    graph.createEdge(n2.id, n2.outputs[0].id, n3.id, n3.inputs[0].id);
-    graph.createEdge(n3.id, n3.outputs[0].id, n4.id, n4.inputs[0].id);
-    graph.createEdge(n4.id, n4.outputs[0].id, n5.id, n5.inputs[0].id);
-    graph.createEdge(n5.id, n5.outputs[0].id, n6.id, n6.inputs[0].id);
-    graph.createEdge(n6.id, n6.outputs[0].id, n7.id, n7.inputs[0].id);
+        if (srcNode && tgtNode && srcNode.outputs.length > 0 && tgtNode.inputs.length > 0) {
+          graph.createEdge(srcNode.id, srcNode.outputs[0].id, tgtNode.id, tgtNode.inputs[0].id);
+        }
+      });
+    } else {
+      // Conexão sequencial de fallback
+      const nodesList = Array.from(new Set(createdNodes.values()));
+      for (let i = 0; i < nodesList.length - 1; i++) {
+        const src = nodesList[i];
+        const tgt = nodesList[i + 1];
+        if (src.outputs.length > 0 && tgt.inputs.length > 0) {
+          graph.createEdge(src.id, src.outputs[0].id, tgt.id, tgt.inputs[0].id);
+        }
+      }
+    }
 
-    // 5. Configura e emite os parâmetros de lote para o Batch Engine
-    const articles = scan.articles && scan.articles.length > 0 ? scan.articles : ['ART-001', 'ART-002', 'ART-003'];
+    // 6. Configura e emite os parâmetros para o Batch Engine
+    const workItems = (validation.batchSettings?.workItems && validation.batchSettings.workItems.length > 0)
+      ? validation.batchSettings.workItems
+      : (scan.workItems && scan.workItems.length > 0 ? scan.workItems : ['ITEM-001', 'ITEM-002']);
+
     activeBus.emit('batch:configure', {
-      items: articles,
-      serializedStages: ['1-redigir'],
-      maxConcurrency: 1,
-      cooldownMs: 2000,
-      stateFilePath: scan.stateFilePath || 'aulas/pipeline-state.json',
+      items: workItems,
+      serializedStages: [stagesToCreate[0]?.id || 'etapa_1'],
+      maxConcurrency: validation.batchSettings?.suggestedConcurrency || scan.maxConcurrency || 1,
+      cooldownMs: validation.batchSettings?.cooldownMs || scan.cooldownMs || 2000,
+      stateFilePath: validation.batchSettings?.stateFile || scan.stateFilePath || 'pipeline-state.json',
       autoResume: true
     });
 
     activeBus.emit('project:changed', projectManager.getCurrentProject());
     return true;
+  }
+
+  private convertScanStagesToValidated(stages: IPiStageInfo[], defaultModel: string): IAIValidatedStage[] {
+    return stages.map(st => ({
+      id: st.id,
+      label: st.name,
+      nodeType: st.isDeterministic ? 'static' : 'agent',
+      role: `Agente para ${st.name}`,
+      model: st.model || defaultModel,
+      skillPath: st.skillPath,
+      promptTemplate: st.prompt,
+      validationRules: st.validationTarget ? [{
+        targetPathPattern: st.validationTarget,
+        minSizeBytes: st.minSizeBytes || 1000
+      }] : undefined,
+      isDeterministic: st.isDeterministic
+    }));
   }
 
   private createAgentSettings(
@@ -242,77 +247,37 @@ export class PiProjectImporter {
         network: 'egress_llm_only',
         maxMemoryMB: 2048,
         timeoutSeconds: 3600,
-        readOnlyMounts: ['plano.md', '.agents/'],
-        readWriteMounts: ['aulas/', '../matematica/']
+        readOnlyMounts: ['.agents/'],
+        readWriteMounts: ['output/']
       },
       inheritModel: false,
       model: {
         provider: 'deepseek',
-        model: model,
-        skillPath: skillPath,
+        model,
+        skillPath,
         promptTemplate: prompt,
-        temperature: 0.3
+        temperature: 0.2
       },
       inheritCodeMode: false,
       codeMode: {
-        allowedTools: ['read', 'write', 'edit', 'bash', 'validate_svg'],
-        customScripts: ['python audit_exercises.py', 'python validate_svg.py']
+        allowedTools: ['write', 'edit', 'read'],
+        customScripts: []
       },
       inheritMemory: false,
       memory: {
         enabled: true,
         persistent: true,
-        projectId: 'pi-matematica',
-        readBlackboard: true,
-        writeBlackboard: true,
-        semanticLessons: true,
-        recordLessons: true,
-        allowedKeys: ['article_metadata', 'svg_manifest', 'audit_report'],
-        domains: ['math_editorial', 'svg_animation']
+        domains: ['pipeline', 'agents']
       },
-      validationRules: validationRules,
-      isSerialAcrossBatch: isSerialAcrossBatch
+      validationRules,
+      isSerialAcrossBatch
     };
   }
 
+  /**
+   * Cria resultado de fallback seguro em caso de ambiente restrito
+   */
   public createFallbackScanResult(dirPath: string): IPiProjectScanResult {
-    const isPiMat = dirPath.toLowerCase().includes('pi-matematica');
-
-    // Gera lista curricular padrão ART-001 até ART-040 se for pi-matematica
-    const articles: string[] = [];
-    for (let i = 1; i <= 40; i++) {
-      articles.push(`ART-${String(i).padStart(3, '0')}`);
-    }
-
-    return {
-      isValid: true,
-      rootPath: dirPath,
-      projectName: isPiMat ? 'Pi Matemática - Produção de Artigos e SVGs' : 'Projeto Pi',
-      defaultProvider: 'deepseek',
-      defaultModel: 'deepseek-v4-pro',
-      destinationPostsDir: '../matematica/_posts/matematica',
-      destinationDiagramsDir: '../matematica/assets/diagrams',
-      skills: [
-        { id: 'redigir-math', name: 'redigir-math', path: '.agents/redigir-math/SKILL.md', description: 'Redação rigorosa de artigos atômicos de matemática' },
-        { id: 'criar-frontmatter', name: 'criar-frontmatter', path: '.agents/criar-frontmatter/SKILL.md', description: 'Geração de frontmatter YAML Jekyll canônico' },
-        { id: 'planejar-svg', name: 'planejar-svg', path: '.agents/planejar-svg/SKILL.md', description: 'Planejamento de diagramas e ilustrações conceituais' },
-        { id: 'criar-svg', name: 'criar-svg', path: '.agents/criar-svg/SKILL.md', description: 'Criação física de arquivos SVG com validação' },
-        { id: 'validar-svg', name: 'validar-svg', path: '.agents/validar-svg/SKILL.md', description: 'Validação visual assistida por Jev' },
-        { id: 'animar-svg', name: 'animar-svg', path: '.agents/animar-svg/SKILL.md', description: 'Injeção de keyframes e classes de animação suave' }
-      ],
-      stages: [
-        { id: '1-redigir', name: '1. Redação do Artigo', model: 'deepseek-v4-pro', skillPath: '.agents/redigir-math/SKILL.md', prompt: 'Gere o artigo {itemId}', validationTarget: 'aulas/{itemId}.md', minSizeBytes: 1000 },
-        { id: '2-frontmatter', name: '2. Inserção de Frontmatter', model: 'deepseek-flash', skillPath: '.agents/criar-frontmatter/SKILL.md', prompt: 'Aplique o frontmatter', validationTarget: 'aulas/{itemId}.md', minSizeBytes: 1000 },
-        { id: '3-planejar-svg', name: '3. Planejamento de SVGs', model: 'deepseek-flash', skillPath: '.agents/planejar-svg/SKILL.md', prompt: 'Planeje os SVGs', validationTarget: 'aulas/{itemId}-svg-plan.md', minSizeBytes: 200 },
-        { id: '4-criar-svg', name: '4. Criação e Validação dos SVGs', model: 'deepseek-flash', skillPath: '.agents/criar-svg/SKILL.md', prompt: 'Crie os SVGs em ../matematica/assets/diagrams/', validationTarget: '../matematica/assets/diagrams/', minSizeBytes: 100 },
-        { id: '4b-validar-svg', name: '4b. Validação Visual dos SVGs (Jev)', model: 'deepseek-flash', skillPath: '.agents/validar-svg/SKILL.md', prompt: 'Valide os SVGs com Jev', validationTarget: 'aulas/{itemId}-validacao-svg.md', minSizeBytes: 50 },
-        { id: '5-animar-svg', name: '5. Animação dos SVGs', model: 'deepseek-flash', skillPath: '.agents/animar-svg/SKILL.md', prompt: 'Injete keyframes de animação', validationTarget: '../matematica/assets/diagrams/', minSizeBytes: 100 },
-        { id: '6-publicar', name: '6. Publicação no Blog Matemática', model: 'taskflow_static', skillPath: '', prompt: 'Copia para _posts/matematica', validationTarget: '../matematica/_posts/matematica', minSizeBytes: 1000 }
-      ],
-      articles: articles,
-      completedArticlesCount: 39,
-      totalArticlesCount: 195,
-      stateFilePath: 'aulas/pipeline-state.json'
-    };
+    return GenericPiProjectScanner.scan(dirPath) as any;
   }
 }

@@ -5,6 +5,9 @@ import { INodeAgentSettings, INodeMemoryConfig } from '../../core/types.ts';
 import { PiProjectImporter, IPiProjectScanResult } from '../../core/pi/PiProjectImporter.ts';
 import { ProjectManager } from '../../core/ProjectManager.ts';
 import { globalEventBus } from '../../core/EventBus.ts';
+import type { IImportAIValidationResult } from '../../core/ai/DefaultIntelligenceService.ts';
+import { EnvGuidanceModal } from './EnvGuidanceModal.ts';
+import { EnvironmentManager } from '../../core/env/EnvironmentManager.ts';
 
 export class ImportPiModal {
   private modal?: HTMLElement;
@@ -12,14 +15,19 @@ export class ImportPiModal {
   private viewport?: Viewport;
   private projectImporter: PiProjectImporter;
   private projectManager: ProjectManager;
+  private envManager: EnvironmentManager;
+
   private activeTab: 'project' | 'chat' = 'project';
   private currentScanResult: IPiProjectScanResult | null = null;
+  private aiValidationResult: IImportAIValidationResult | null = null;
+  private isValidatingAI: boolean = false;
 
   constructor(graph: Graph, viewport?: Viewport) {
     this.graph = graph;
     this.viewport = viewport;
     this.projectImporter = PiProjectImporter.getInstance();
     this.projectManager = ProjectManager.getInstance(globalEventBus);
+    this.envManager = EnvironmentManager.getInstance();
 
     if (typeof document !== 'undefined') {
       this.modal = document.createElement('div');
@@ -38,18 +46,14 @@ export class ImportPiModal {
 
   public async show(): Promise<void> {
     if (!this.modal) return;
-
-    // Resposta visual imediata ao clique
     this.modal.style.display = 'flex';
     this.render();
 
-    // Se ainda não temos o resultado do scan, carrega de forma assíncrona
     if (!this.currentScanResult) {
       try {
         await this.initKnownProject();
       } catch (err) {
-        console.warn('[ImportPiModal] Falha ao escanear projeto Pi, usando fallback:', err);
-        this.currentScanResult = this.projectImporter.createFallbackScanResult('C:/Projetos/frankalcantara.github.io.worktrees/pi-matematica');
+        console.warn('[ImportPiModal] Falha ao escanear projeto Pi:', err);
       }
       this.render();
     }
@@ -68,7 +72,6 @@ export class ImportPiModal {
       this.currentScanResult = await this.projectImporter.scanProject(defaultPath);
     } catch (e) {
       console.warn('[ImportPiModal] initKnownProject erro:', e);
-      this.currentScanResult = this.projectImporter.createFallbackScanResult('C:/Projetos/frankalcantara.github.io.worktrees/pi-matematica');
     }
   }
 
@@ -76,54 +79,56 @@ export class ImportPiModal {
     if (!this.modal) return;
 
     this.modal.innerHTML = `
-      <div class="modal-window" style="max-width: 860px; width: 94%; max-height: 90vh; display: flex; flex-direction: column;">
-        <!-- Header -->
-        <div class="modal-header" style="border-bottom: 2px solid #0d9488; padding-bottom: 12px;">
+      <div class="modal-window" style="max-width: 880px; width: 94%; max-height: 90vh; display: flex; flex-direction: column; background: #ffffff; border-radius: 8px; border: 1px solid #cbd5e1; box-shadow: 0 16px 40px rgba(0,0,0,0.18);">
+        <!-- Header Estilo Office -->
+        <div class="modal-header" style="border-bottom: 2px solid #0d9488; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <div style="width: 38px; height: 38px; background: #0d9488; color: white; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800;">
+            <div style="width: 38px; height: 38px; background: #0d9488; color: white; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800;">
               π
             </div>
             <div>
-              <h3 style="margin: 0; font-size: 17px; font-weight: 800; color: #0f172a; text-shadow: none;">
-                Importação Oficial do Pi (Pi.ai / Pi CLI)
+              <h3 style="margin: 0; font-size: 16px; font-weight: 800; color: #0f172a; text-shadow: none;">
+                Importação Genérica de Projetos Pi (Pi.ai / Pi CLI)
               </h3>
               <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748b; text-shadow: none;">
-                Importe workspaces completos de produção ou conversas de raciocínio empático do Pi
+                Varredura profunda de Agentes, Skills, MCP e Orquestração com Garantia por IA
               </p>
             </div>
           </div>
-          <button id="btn-close-pi-modal" class="modal-close-btn">&times;</button>
+          <button id="btn-close-pi-modal" class="modal-close-btn" style="background: transparent; border: none; font-size: 20px; color: #64748b; cursor: pointer;">&times;</button>
         </div>
 
         <!-- Abas do Modal -->
-        <div style="display: flex; gap: 4px; padding: 12px 0 0 0; border-bottom: 1px solid #e2e8f0;">
-          <button class="tool-btn ${this.activeTab === 'project' ? 'btn-action' : 'btn-secondary'}" id="pi-tab-project" style="font-weight: 700; font-size: 12px; border-radius: 8px 8px 0 0; ${this.activeTab === 'project' ? 'background: #0d9488; color: white;' : ''}">
-            📁 Projeto Completo (Pasta Local do Disco)
+        <div style="display: flex; gap: 4px; padding: 8px 18px 0 18px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+          <button class="tool-btn ${this.activeTab === 'project' ? 'btn-action' : 'btn-secondary'}" id="pi-tab-project" style="font-weight: 700; font-size: 12px; border-radius: 6px 6px 0 0; ${this.activeTab === 'project' ? 'background: #0d9488; color: white;' : ''}">
+            📁 Projeto Completo (Qualquer Diretório Local)
           </button>
-          <button class="tool-btn ${this.activeTab === 'chat' ? 'btn-action' : 'btn-secondary'}" id="pi-tab-chat" style="font-weight: 700; font-size: 12px; border-radius: 8px 8px 0 0; ${this.activeTab === 'chat' ? 'background: #0d9488; color: white;' : ''}">
-            💬 Conversa / Prompt Rápido
+          <button class="tool-btn ${this.activeTab === 'chat' ? 'btn-action' : 'btn-secondary'}" id="pi-tab-chat" style="font-weight: 700; font-size: 12px; border-radius: 6px 6px 0 0; ${this.activeTab === 'chat' ? 'background: #0d9488; color: white;' : ''}">
+            💬 Diálogo Individual do Pi
           </button>
         </div>
 
         <!-- Conteúdo do Modal -->
-        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 18px 0; display: flex; flex-direction: column; gap: 16px;">
+        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 16px;">
           ${this.activeTab === 'project' ? this.renderProjectTab() : this.renderChatTab()}
         </div>
 
         <!-- Footer -->
-        <div class="modal-footer" style="border-top: 1px solid #e2e8f0; padding-top: 14px; display: flex; justify-content: space-between; align-items: center;">
+        <div class="modal-footer" style="border-top: 1px solid #e2e8f0; padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
           <span style="font-size: 12px; color: #64748b;" id="pi-status-msg">
-            ${this.activeTab === 'project' ? 'Pronto para sintetizar o grafo completo do projeto Pi' : 'Pronto para sintetizar agente a partir do diálogo'}
+            ${this.activeTab === 'project' 
+              ? (this.aiValidationResult ? '✅ Estrutura validada pela IA e pronta para sintetização' : 'Pronto para analisar e sintetizar') 
+              : 'Pronto para sintetizar agente a partir do diálogo'}
           </span>
           <div style="display: flex; gap: 10px;">
             <button id="btn-cancel-pi" class="tool-btn btn-secondary">Cancelar</button>
             ${this.activeTab === 'project' ? `
               <button id="btn-import-project-now" class="tool-btn btn-action" style="background: #0d9488; color: white; font-weight: 800; padding: 8px 22px;">
-                🚀 Importar Projeto e Montar Grafo Visual
+                🚀 Sintetizar no Grafo do Arestrix
               </button>
             ` : `
               <button id="btn-inject-pi-agent" class="tool-btn btn-action" style="background: #0d9488; color: white; font-weight: 700; padding: 8px 18px;">
-                🚀 Injetar Agente do Pi no Grafo
+                🚀 Injetar Agente no Grafo
               </button>
             `}
           </div>
@@ -137,95 +142,138 @@ export class ImportPiModal {
   private renderProjectTab(): string {
     const scan = this.currentScanResult;
     const defaultPath = scan?.rootPath || 'C:/Projetos/frankalcantara.github.io.worktrees/pi-matematica';
+    const ai = this.aiValidationResult;
 
     return `
-      <!-- Card Informativo Super Simples -->
-      <div style="background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
-        <div>
-          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
-            <span style="background: #0d9488; color: white; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 9999px;">1-CLIQUE</span>
-            <span style="font-size: 13px; font-weight: 800; color: #115e59;">Importador Automático de Workspaces Pi</span>
-          </div>
-          <p style="margin: 0; font-size: 12px; color: #134e4a; line-height: 1.4;">
-            Detecta automaticamente as etapas do <code>pipeline.js</code> / <code>orquestrador.js</code>, as skills em <code>.agents/</code>, o catálogo de artigos em <code>plano.md</code> e a pasta de publicação no blog <code>matematica</code>.
-          </p>
-        </div>
-        <button id="btn-auto-detect-pi" class="tool-btn btn-secondary" style="font-weight: 800; font-size: 12px; border-color: #0d9488; color: #0f766e; white-space: nowrap;">
-          ⚡ Auto-Detectar pi-matematica
-        </button>
-      </div>
-
-      <!-- Caminho da Pasta -->
+      <!-- 1. Seleção do Diretório do Projeto -->
       <div>
         <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">
-          Diretório Raiz do Projeto Pi:
+          Diretório Raiz de Qualquer Projeto Pi:
         </label>
         <div style="display: flex; gap: 8px;">
-          <input type="text" id="pi-dir-input" value="${this.escapeHtml(defaultPath)}" style="flex: 1; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; font-weight: 600;">
+          <input type="text" id="pi-dir-input" value="${this.escapeHtml(defaultPath)}" placeholder="C:/Caminho/Para/Seu/Projeto/Pi" style="flex: 1; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 600;">
           <button id="btn-rescan-pi" class="tool-btn btn-secondary" style="font-weight: 700; font-size: 12px; white-space: nowrap;">
-            🔍 Inspecionar Pasta
+            🔍 1. Analisar Recursos Estáticos
           </button>
         </div>
       </div>
 
-      <!-- Preview Estrutural do Projeto Detectado -->
+      <!-- 2. Resumo dos Recursos Estáticos Detectados -->
       ${scan ? `
-        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 16px;">📚</span>
+              <span style="font-size: 18px;">📦</span>
               <strong style="font-size: 14px; color: #0f172a;">${this.escapeHtml(scan.projectName)}</strong>
             </div>
-            <span style="background: #e0f2fe; color: #0369a1; font-size: 11px; font-weight: 800; padding: 2px 10px; border-radius: 9999px;">
-              Provedor: ${scan.defaultProvider.toUpperCase()} (${scan.defaultModel})
+            <span style="background: #f0fdfa; color: #0d9488; border: 1px solid #99f6e4; font-size: 11px; font-weight: 800; padding: 2px 10px; border-radius: 4px;">
+              ${scan.defaultProvider.toUpperCase()} / ${scan.defaultModel}
             </span>
           </div>
 
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; font-size: 12px; margin-bottom: 14px;">
-            <div style="background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
-              <span style="color: #64748b; display: block; font-size: 11px; font-weight: 700;">SKILLS DETECTADAS</span>
-              <strong style="font-size: 14px; color: #0f172a;">${scan.skills.length} Skills</strong>
-              <small style="display: block; color: #64748b; margin-top: 2px;">redigir, frontmatter, svgs, animar...</small>
+          <!-- Grid de Métricas de Recursos -->
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; font-size: 12px; margin-bottom: 14px;">
+            <div style="background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+              <span style="color: #64748b; display: block; font-size: 10.5px; font-weight: 700;">AGENTES / SKILLS</span>
+              <strong style="font-size: 15px; color: #0f172a;">${scan.skills.length}</strong>
+              <small style="display: block; color: #64748b; margin-top: 2px;">descobertas em .agents/</small>
             </div>
 
-            <div style="background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
-              <span style="color: #64748b; display: block; font-size: 11px; font-weight: 700;">CATÁLOGO DE ARTIGOS</span>
-              <strong style="font-size: 14px; color: #0f172a;">${scan.articles.length > 0 ? scan.articles.length : scan.totalArticlesCount} Artigos</strong>
-              <small style="display: block; color: #16a34a; font-weight: 700; margin-top: 2px;">ART-001 a ART-195</small>
+            <div style="background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+              <span style="color: #64748b; display: block; font-size: 10.5px; font-weight: 700;">FERRAMENTAS / MCP</span>
+              <strong style="font-size: 15px; color: #0f172a;">${scan.mcpTools.length + scan.defaultTools.length}</strong>
+              <small style="display: block; color: #64748b; margin-top: 2px;">scripts e mcp servers</small>
             </div>
 
-            <div style="background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
-              <span style="color: #64748b; display: block; font-size: 11px; font-weight: 700;">DESTINO DE PUBLICAÇÃO</span>
-              <strong style="font-size: 12px; color: #0f172a;">Blog Matemática</strong>
-              <small style="display: block; color: #64748b; margin-top: 2px; font-family: monospace;">_posts/matematica</small>
+            <div style="background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+              <span style="color: #64748b; display: block; font-size: 10.5px; font-weight: 700;">ETAPAS DO PIPELINE</span>
+              <strong style="font-size: 15px; color: #0f172a;">${scan.stages.length}</strong>
+              <small style="display: block; color: #64748b; margin-top: 2px;">${scan.orchestrationSourceFile || 'deduzidas'}</small>
+            </div>
+
+            <div style="background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+              <span style="color: #64748b; display: block; font-size: 10.5px; font-weight: 700;">ITENS DE LOTE</span>
+              <strong style="font-size: 15px; color: #0f172a;">${scan.workItems?.length || 0}</strong>
+              <small style="display: block; color: #16a34a; font-weight: 700; margin-top: 2px;">itens de trabalho</small>
             </div>
           </div>
 
-          <!-- Etapas do DAG que serão geradas -->
+          <!-- Etapas Reais Descobertas Dinamicamente -->
           <div>
-            <span style="display: block; font-size: 11.5px; font-weight: 800; color: #475569; text-transform: uppercase; margin-bottom: 8px;">
-              Fluxo Visual Taskflow C++20 a Ser Montado (7 Etapas Concorrentes):
+            <span style="display: block; font-size: 11px; font-weight: 800; color: #475569; text-transform: uppercase; margin-bottom: 6px;">
+              Fluxo Sequencial Descoberto no Projeto:
             </span>
             <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 11.5px;">
-              <span style="background: #e0e7ff; color: #3730a3; padding: 4px 10px; border-radius: 6px; font-weight: 700;">1. Redação</span>
-              <span>➔</span>
-              <span style="background: #e0e7ff; color: #3730a3; padding: 4px 10px; border-radius: 6px; font-weight: 700;">2. Frontmatter</span>
-              <span>➔</span>
-              <span style="background: #e0e7ff; color: #3730a3; padding: 4px 10px; border-radius: 6px; font-weight: 700;">3. Planejar SVG</span>
-              <span>➔</span>
-              <span style="background: #e0e7ff; color: #3730a3; padding: 4px 10px; border-radius: 6px; font-weight: 700;">4. Criar SVG</span>
-              <span>➔</span>
-              <span style="background: #e0e7ff; color: #3730a3; padding: 4px 10px; border-radius: 6px; font-weight: 700;">4b. Validar Jev</span>
-              <span>➔</span>
-              <span style="background: #e0e7ff; color: #3730a3; padding: 4px 10px; border-radius: 6px; font-weight: 700;">5. Animar SVG</span>
-              <span>➔</span>
-              <span style="background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 6px; font-weight: 800;">6. Publicar Blog</span>
+              ${scan.stages.map((st, i) => `
+                <span style="background: ${st.isDeterministic ? '#f1f5f9' : '#eff6ff'}; color: ${st.isDeterministic ? '#475569' : '#1d4ed8'}; border: 1px solid ${st.isDeterministic ? '#cbd5e1' : '#bfdbfe'}; padding: 3px 8px; border-radius: 4px; font-weight: 700;">
+                  ${this.escapeHtml(st.name)}
+                </span>
+                ${i < scan.stages.length - 1 ? '<span style="color: #94a3b8; font-weight: 800;">➔</span>' : ''}
+              `).join('')}
             </div>
           </div>
         </div>
+
+        <!-- 3. Validação e Garantia com o Modelo Padrão do Arestrix (IA) -->
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">🧠</span>
+              <strong style="font-size: 13.5px; color: #166534;">
+                2. Garantia de Importação pelo Modelo Padrão (IA Central do Arestrix)
+              </strong>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button id="btn-env-guidance" class="tool-btn btn-secondary" style="font-size: 11px; font-weight: 700; padding: 4px 10px; border-color: #cbd5e1;">
+                🔑 Gerenciar DEEPSEEK_API_KEY
+              </button>
+              <button id="btn-validate-ai" class="tool-btn btn-action" style="background: #16a34a; color: white; font-size: 12px; font-weight: 800; padding: 5px 14px;" ${this.isValidatingAI ? 'disabled' : ''}>
+                ${this.isValidatingAI ? '⏳ Analisando...' : '🔍 Validar com Modelo Padrão'}
+              </button>
+            </div>
+          </div>
+
+          <p style="margin: 0 0 10px 0; font-size: 12px; color: #15803d; line-height: 1.45;">
+            O modelo padrão analisa os scripts, prompts e dependências para auditar a orquestração e garantir que nenhum recurso, ferramenta MCP ou regra de validação foi omitida.
+          </p>
+
+          ${ai ? `
+            <div style="background: #ffffff; border: 1px solid #86efac; border-radius: 6px; padding: 12px; font-size: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="background: #dcfce7; color: #15803d; font-weight: 800; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
+                  Índice de Confiabilidade: ${ai.confidenceScore}%
+                </span>
+                ${ai.missingEnvKey ? `
+                  <span style="background: #fef3c7; color: #92400e; font-weight: 700; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
+                    ⚠️ Validação Estática (Chave ${ai.missingEnvKey} ausente no ambiente)
+                  </span>
+                ` : `
+                  <span style="background: #e0f2fe; color: #0284c7; font-weight: 700; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
+                    ✅ Validação Semântica por IA Concluída
+                  </span>
+                `}
+              </div>
+              <p style="margin: 0 0 8px 0; color: #1f2937; line-height: 1.4;">
+                <strong>Diagnóstico da IA:</strong> ${this.escapeHtml(ai.summary)}
+              </p>
+              ${ai.auditFindings && ai.auditFindings.length > 0 ? `
+                <div style="border-top: 1px solid #f3f4f6; padding-top: 6px; margin-top: 6px;">
+                  <strong style="color: #4b5563; font-size: 11px;">Apontamentos de Integridade:</strong>
+                  <ul style="margin: 4px 0 0 0; padding-left: 16px; color: #4b5563; font-size: 11.5px; line-height: 1.4;">
+                    ${ai.auditFindings.map(f => `<li>${this.escapeHtml(f)}</li>`).join('')}
+                  </ul>
+                </div>
+              ` : ''}
+            </div>
+          ` : `
+            <div style="background: rgba(255,255,255,0.7); border: 1px dashed #86efac; border-radius: 6px; padding: 10px; font-size: 11.5px; color: #166534; text-align: center;">
+              Clique em "Validar com Modelo Padrão" para submeter a estrutura à IA central antes da sintetização.
+            </div>
+          `}
+        </div>
       ` : `
-        <div style="padding: 20px; background: #f8fafc; border-radius: 8px; text-align: center; color: #64748b;">
-          Clique em "Inspecionar Pasta" para analisar a estrutura do projeto.
+        <div style="padding: 24px; background: #f8fafc; border-radius: 8px; text-align: center; color: #64748b; border: 1px dashed #cbd5e1;">
+          Informe o caminho da pasta e clique em "1. Analisar Recursos Estáticos" para iniciar.
         </div>
       `}
     `;
@@ -233,64 +281,48 @@ export class ImportPiModal {
 
   private renderChatTab(): string {
     return `
-      <!-- Card de Apresentação / Badge de Conversa -->
-      <div style="background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
-        <div>
-          <span style="font-size: 12.5px; font-weight: 700; color: #115e59;">Diálogo e Síntese de Agente Individual</span>
-          <p style="margin: 2px 0 0 0; font-size: 12px; color: #134e4a;">
-            Cole aqui uma conversa ou reflexão do Pi.ai para converter a persona em um nó de agente isolado no grafo.
-          </p>
-        </div>
-        <button id="btn-load-sample-pi" class="tool-btn btn-secondary" style="font-weight: 700; font-size: 11.5px; white-space: nowrap; border-color: #0d9488; color: #0f766e;">
-          📋 Carregar Exemplo
-        </button>
+      <div style="background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px; padding: 12px;">
+        <span style="font-size: 12.5px; font-weight: 700; color: #115e59;">Diálogo e Síntese de Agente Individual</span>
+        <p style="margin: 2px 0 0 0; font-size: 12px; color: #134e4a;">
+          Cole um diálogo ou prompt do Pi para instanciar um Agente no canvas do Arestrix.
+        </p>
       </div>
 
-      <!-- Campos de Entrada -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
         <div>
           <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">
-            Nome do Agente no Grafo:
+            Nome do Agente:
           </label>
-          <input type="text" id="pi-agent-name" value="Agente_Pi_Mentor" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; font-weight: 600;">
+          <input type="text" id="pi-agent-name" value="Agente_Pi_Mentor" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 600;">
         </div>
-
         <div>
           <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">
-            Estilo de Raciocínio Cognitivo:
+            Estilo Cognitivo:
           </label>
-          <select id="pi-agent-style" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; font-weight: 600;">
-            <option value="empathetic_dialogue">Diálogo Empático e Investigativo (Padrão Pi)</option>
-            <option value="strategic_advisor">Conselheiro Estratégico & Crítico</option>
-            <option value="step_by_step_tutor">Tutor Passo a Passo Metódico</option>
-            <option value="deep_synthesizer">Sintetizador Conciso de Ideias Complexas</option>
+          <select id="pi-agent-style" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 600;">
+            <option value="empathetic_dialogue">Empático / Investigativo</option>
+            <option value="rigorous_math">Raciocínio Matemático Estrito</option>
+            <option value="system_architect">Arquiteto de Sistemas Concorrentes</option>
           </select>
         </div>
       </div>
 
-      <!-- Histórico / Transcrição da Conversa -->
       <div>
         <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">
-          Histórico da Conversa / Exportação do Pi.ai:
+          Transcrição da Conversa / Instruções:
         </label>
-        <textarea id="pi-conversation-input" rows="7" placeholder="Cole o diálogo do Pi aqui..." style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: monospace; font-size: 12px; line-height: 1.4; resize: vertical;"></textarea>
+        <textarea id="pi-conversation-input" rows="6" placeholder="Cole o diálogo do Pi aqui..." style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-family: monospace; font-size: 12px; line-height: 1.4; resize: vertical;"></textarea>
       </div>
 
-      <!-- Configuração de Memória -->
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px;">
-        <h4 style="font-size: 12.5px; font-weight: 800; color: #1e293b; margin-bottom: 8px;">
-          ⚙️ Memória do Agente Pi (Fase 12)
-        </h4>
-        <div style="display: flex; gap: 20px; align-items: center;">
-          <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; cursor: pointer;">
-            <input type="checkbox" id="pi-memory-enable" checked>
-            Ativar Memória do Agente
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; cursor: pointer;">
-            <input type="checkbox" id="pi-memory-persist" checked>
-            Persistir entre Sessões (Disco)
-          </label>
-        </div>
+      <div style="display: flex; gap: 16px; align-items: center; font-size: 12px;">
+        <label style="display: flex; align-items: center; gap: 6px; font-weight: 600; cursor: pointer;">
+          <input type="checkbox" id="pi-memory-enable" checked>
+          Ativar Blackboard de Memória Semântica
+        </label>
+        <label style="display: flex; align-items: center; gap: 6px; font-weight: 600; cursor: pointer;">
+          <input type="checkbox" id="pi-memory-persist" checked>
+          Persistir no Disco
+        </label>
       </div>
     `;
   }
@@ -301,7 +333,7 @@ export class ImportPiModal {
     this.modal.querySelector('#btn-close-pi-modal')?.addEventListener('click', () => this.hide());
     this.modal.querySelector('#btn-cancel-pi')?.addEventListener('click', () => this.hide());
 
-    // Alternador de Abas
+    // Abas
     this.modal.querySelector('#pi-tab-project')?.addEventListener('click', () => {
       this.activeTab = 'project';
       this.render();
@@ -312,57 +344,83 @@ export class ImportPiModal {
       this.render();
     });
 
-    // Auto-detectar
-    this.modal.querySelector('#btn-auto-detect-pi')?.addEventListener('click', async () => {
-      const input = this.modal?.querySelector('#pi-dir-input') as HTMLInputElement;
-      const target = 'C:/Projetos/frankalcantara.github.io.worktrees/pi-matematica';
-      if (input) input.value = target;
-      this.currentScanResult = await this.projectImporter.scanProject(target);
-      this.render();
-    });
-
-    // Re-scan
+    // 1. Analisar recursos estáticos da pasta
     this.modal.querySelector('#btn-rescan-pi')?.addEventListener('click', async () => {
       const input = this.modal?.querySelector('#pi-dir-input') as HTMLInputElement;
       const pathVal = input?.value.trim() || 'C:/Projetos/frankalcantara.github.io.worktrees/pi-matematica';
+      const scanBtn = this.modal?.querySelector('#btn-rescan-pi') as HTMLButtonElement;
+      if (scanBtn) {
+        scanBtn.disabled = true;
+        scanBtn.textContent = '🔍 Varrendo...';
+      }
+
       this.currentScanResult = await this.projectImporter.scanProject(pathVal);
+      this.aiValidationResult = null; // Reseta validação anterior ao trocar/reescanear pasta
       this.render();
     });
 
-    // Importar Projeto Completo
+    // 2. Botão de Orientação de Variável de Ambiente
+    this.modal.querySelector('#btn-env-guidance')?.addEventListener('click', () => {
+      EnvGuidanceModal.getInstance().show('DEEPSEEK_API_KEY', async () => {
+        if (this.currentScanResult) {
+          await this.executeAIValidation();
+        }
+      });
+    });
+
+    // 3. Validar com Modelo Padrão por IA
+    this.modal.querySelector('#btn-validate-ai')?.addEventListener('click', async () => {
+      await this.executeAIValidation();
+    });
+
+    // 4. Importar Projeto Completo e Sintetizar Grafo
     this.modal.querySelector('#btn-import-project-now')?.addEventListener('click', async () => {
       await this.executeProjectImport();
     });
 
-    // Botões do Chat
-    this.modal.querySelector('#btn-load-sample-pi')?.addEventListener('click', () => {
-      const input = this.modal?.querySelector('#pi-conversation-input') as HTMLTextAreaElement;
-      if (input) {
-        input.value = [
-          'User: Pi, como estruturar o pipeline de matemática para concursos?',
-          'Pi: Vamos dividir em 6 etapas claras: Redação aprofundada, Frontmatter Jekyll, Planejamento de SVGs conceituais, Criação com validação visual, Animação suave e Publicação direta no blog!'
-        ].join('\n');
-      }
-    });
-
+    // Injetar Agente no Chat
     this.modal.querySelector('#btn-inject-pi-agent')?.addEventListener('click', () => {
       this.injectPiAgent();
     });
+  }
+
+  private async executeAIValidation(): Promise<void> {
+    if (!this.currentScanResult) return;
+
+    // Checa se a chave existe no ambiente antes de chamar
+    const hasKey = await this.envManager.hasEnvVar('DEEPSEEK_API_KEY');
+    if (!hasKey) {
+      EnvGuidanceModal.getInstance().show('DEEPSEEK_API_KEY', async () => {
+        await this.executeAIValidation();
+      });
+      return;
+    }
+
+    this.isValidatingAI = true;
+    this.render();
+
+    this.aiValidationResult = await this.projectImporter.validateWithDefaultIntelligence(this.currentScanResult);
+    this.isValidatingAI = false;
+    this.render();
   }
 
   public async executeProjectImport(dirPath?: string): Promise<boolean> {
     const pathVal = dirPath || (this.modal?.querySelector('#pi-dir-input') as HTMLInputElement)?.value.trim() || 'C:/Projetos/frankalcantara.github.io.worktrees/pi-matematica';
     const scan = this.currentScanResult || await this.projectImporter.scanProject(pathVal);
 
-    const ok = await this.projectImporter.importProject(scan, this.graph, this.projectManager);
+    const ok = await this.projectImporter.importProject(
+      scan, 
+      this.graph, 
+      this.projectManager, 
+      undefined, 
+      this.aiValidationResult || undefined
+    );
+
     if (ok) {
       if (this.viewport) {
         setTimeout(() => this.viewport?.zoomToFit(), 150);
       }
       this.hide();
-      if (typeof alert !== 'undefined') {
-        alert(`✅ Projeto "${scan.projectName}" importado com sucesso!\nGrafo concorrente montado com 7 etapas e lote configurado.`);
-      }
       return true;
     }
     return false;
@@ -380,14 +438,10 @@ export class ImportPiModal {
     const conversation = options?.conversation || convInput?.value?.trim() || '';
 
     const systemPrompt = [
-      `# AGENTE PI (INFLECTION COGNITIVE ENGINE) - ${agentName}`,
+      `# AGENTE PI - ${agentName}`,
       `Estilo Cognitivo: ${style}`,
-      `Diretrizes Principais: Raciocínio empático, investigação socrática, rigor metodológico e decomposição de problemas complexos.`,
-      conversation ? `\n--- HISTÓRICO E CONTEXTO DE ORIGEM (PI.AI) ---\n${conversation}` : '',
-      `\n--- INSTRUÇÕES OPERACIONAIS TASKFLOW ---`,
-      `- Receba o prompt de entrada na porta 'prompt_in'.`,
-      `- Processe com precisão e gere o artefato final na porta 'artifact_out'.`,
-      `- Registre aprendizados e regras preventivas no Blackboard de Memória.`
+      `Diretrizes: Raciocínio lógico e modular.`,
+      conversation ? `\n--- CONTEXTO ORIGINAL ---\n${conversation}` : ''
     ].join('\n');
 
     const nodeId = `pi_agent_${Date.now()}`;
@@ -404,8 +458,8 @@ export class ImportPiModal {
       writeBlackboard: true,
       semanticLessons: true,
       recordLessons: true,
-      allowedKeys: ['pi_insights', 'lesson_learned', 'architecture_decision'],
-      domains: ['strategy', 'architecture']
+      allowedKeys: ['pi_insights'],
+      domains: ['strategy']
     };
 
     const agentSettings: INodeAgentSettings = {
@@ -427,8 +481,8 @@ export class ImportPiModal {
       },
       inheritCodeMode: false,
       codeMode: {
-        allowedTools: ['read', 'write', 'bash'],
-        customScripts: ['scripts/pi/run_task.py']
+        allowedTools: ['read', 'write'],
+        customScripts: []
       },
       inheritMemory: false,
       memory: memoryConfig
@@ -444,9 +498,6 @@ export class ImportPiModal {
     }
 
     this.hide();
-    if (typeof alert !== 'undefined') {
-      alert(`✅ ${agentName} sintetizado com sucesso a partir do Pi e inserido no grafo!`);
-    }
   }
 
   private escapeHtml(str: string): string {

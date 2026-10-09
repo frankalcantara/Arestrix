@@ -390,6 +390,41 @@ void ui_get_known_pi_projects(webui::window::event* e) {
     }
 }
 
+// Wrapper JS -> C++ (Obter Variável de Ambiente do SO)
+void ui_get_env_var(webui::window::event* e) {
+    std::string key = e->get_string();
+    const char* val = std::getenv(key.c_str());
+    if (val && std::string(val).length() > 0) {
+        e->return_string(std::string(val));
+    } else {
+        e->return_string("");
+    }
+}
+
+// Wrapper JS -> C++ (Gravar Variável de Ambiente do Usuário no SO)
+void ui_set_env_var(webui::window::event* e) {
+    try {
+        std::string jsonStr = e->get_string();
+        auto j = nlohmann::json::parse(jsonStr);
+        std::string key = j.value("key", "");
+        std::string val = j.value("value", "");
+        if (!key.empty() && !val.empty()) {
+#ifdef _WIN32
+            std::string cmd = "setx " + key + " \"" + val + "\" >nul 2>&1";
+            int ret = std::system(cmd.c_str());
+            _putenv_s(key.c_str(), val.c_str());
+            e->return_bool(ret == 0);
+            return;
+#else
+            setenv(key.c_str(), val.c_str(), 1);
+            e->return_bool(true);
+            return;
+#endif
+        }
+    } catch (...) {}
+    e->return_bool(false);
+}
+
 void exit_app(webui::window::event* e) {
     std::cout << "[C++] Comando de encerramento recebido." << std::endl;
     webui::exit();
@@ -515,6 +550,8 @@ int main() {
     win.bind("list_recent_projects", ui_list_recent_projects);
     win.bind("scan_pi_project", ui_scan_pi_project);
     win.bind("get_known_pi_projects", ui_get_known_pi_projects);
+    win.bind("get_env_var", ui_get_env_var);
+    win.bind("set_env_var", ui_set_env_var);
     win.bind("exit_app", exit_app);
 
     // Registra o Emitter de Telemetria de Agentes em Tempo Real (Fase 10)
