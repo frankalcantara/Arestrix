@@ -22,6 +22,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <shlobj.h>
 #endif
 
 // Instância global do nosso grafo central em C++
@@ -425,6 +426,68 @@ void ui_set_env_var(webui::window::event* e) {
     e->return_bool(false);
 }
 
+// Wrapper JS -> C++ (Selecionar Pasta Nativa do Windows via IFileOpenDialog)
+void ui_pick_folder(webui::window::event* e) {
+    std::string selectedPath = "";
+#ifdef _WIN32
+    HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    IFileOpenDialog *pFileOpen = nullptr;
+    hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_ALL, IID_IFileOpenDialog, reinterpret_cast<void**>(&pFileOpen));
+    if (SUCCEEDED(hr) && pFileOpen) {
+        FILEOPENDIALOGOPTIONS opt;
+        if (SUCCEEDED(pFileOpen->GetOptions(&opt))) {
+            pFileOpen->SetOptions(opt | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
+        }
+        pFileOpen->SetTitle(L"Selecione o Diretório Raiz do Projeto Pi");
+        hr = pFileOpen->Show(NULL);
+        if (SUCCEEDED(hr)) {
+            IShellItem *pItem = nullptr;
+            hr = pFileOpen->GetResult(&pItem);
+            if (SUCCEEDED(hr) && pItem) {
+                PWSTR pszFilePath = nullptr;
+                hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath);
+                if (SUCCEEDED(hr) && pszFilePath) {
+                    int size_needed = WideCharToMultiByte(CP_UTF8, 0, pszFilePath, -1, NULL, 0, NULL, NULL);
+                    if (size_needed > 1) {
+                        std::string str(size_needed - 1, 0);
+                        WideCharToMultiByte(CP_UTF8, 0, pszFilePath, -1, &str[0], size_needed, NULL, NULL);
+                        selectedPath = str;
+                    }
+                    CoTaskMemFree(pszFilePath);
+                }
+                pItem->Release();
+            }
+        }
+        pFileOpen->Release();
+    }
+    CoUninitialize();
+#endif
+    e->return_string(selectedPath);
+}
+
+// Wrapper JS -> C++ (Listar Subdiretórios para Navegação Interativa)
+void ui_list_subdirectories(webui::window::event* e) {
+    try {
+        std::string dirPath = e->get_string();
+        if (dirPath.empty()) dirPath = "C:/Projetos";
+        std::filesystem::path p(dirPath);
+        nlohmann::json j = nlohmann::json::array();
+        if (std::filesystem::exists(p) && std::filesystem::is_directory(p)) {
+            for (const auto& entry : std::filesystem::directory_iterator(p)) {
+                if (entry.is_directory()) {
+                    j.push_back({
+                        {"name", entry.path().filename().string()},
+                        {"path", entry.path().string()}
+                    });
+                }
+            }
+        }
+        e->return_string(j.dump());
+    } catch (...) {
+        e->return_string("[]");
+    }
+}
+
 void exit_app(webui::window::event* e) {
     std::cout << "[C++] Comando de encerramento recebido." << std::endl;
     webui::exit();
@@ -552,6 +615,8 @@ int main() {
     win.bind("get_known_pi_projects", ui_get_known_pi_projects);
     win.bind("get_env_var", ui_get_env_var);
     win.bind("set_env_var", ui_set_env_var);
+    win.bind("pick_folder", ui_pick_folder);
+    win.bind("list_subdirectories", ui_list_subdirectories);
     win.bind("exit_app", exit_app);
 
     // Registra o Emitter de Telemetria de Agentes em Tempo Real (Fase 10)

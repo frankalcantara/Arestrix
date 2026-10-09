@@ -226,6 +226,9 @@ nlohmann::json PiProjectScanner::toJson(const PiProjectScanResult& res) {
     }
 
     j["articles"] = res.articles;
+    j["workItems"] = res.articles;
+    j["defaultTools"] = nlohmann::json::array();
+    j["mcpTools"] = nlohmann::json::array();
     return j;
 }
 
