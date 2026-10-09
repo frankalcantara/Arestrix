@@ -17,6 +17,9 @@ export class ImportHermesModal {
       this.modal.className = 'modal-backdrop';
       this.modal.id = 'modal-import-hermes';
       this.modal.style.display = 'none';
+      this.modal.addEventListener('click', (e: MouseEvent) => {
+        if (e.target === this.modal) this.hide();
+      });
       document.body.appendChild(this.modal);
       this.render();
     }

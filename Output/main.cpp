@@ -43,14 +43,56 @@ int main(int argc, char* argv[]) {
     std::osyncstream(std::cout) << ">>> [Pipeline " << ctx.pipeline_name << "] Ambiente ativado.\n";
   }).name("Pipeline_Bootstrap");
 
-  auto task_node_1791104413586 = tf.emplace([&ctx]() {
-    // Execução computacional determinística do agente: Agente_Worker_6
-    std::cout << "Executando agente: Agente_Worker_6\n";
-  }).name("Agente_Worker_6");
+  auto task_node_pi_redigir = tf.emplace([&ctx]() {
+    // Agente Autônomo Code Mode: 1. Redacao_Artigo
+    // Invocação em sandbox/VM isolada com streaming de eventos
+    std::cout << "[Agent: 1. Redacao_Artigo] Disparando no sandbox isolado...\n";
+  }).name("1. Redacao_Artigo");
+
+  auto task_node_pi_planejar_svg = tf.emplace([&ctx]() {
+    // Agente Autônomo Code Mode: 3. Planejamento_SVG
+    // Invocação em sandbox/VM isolada com streaming de eventos
+    std::cout << "[Agent: 3. Planejamento_SVG] Disparando no sandbox isolado...\n";
+  }).name("3. Planejamento_SVG");
+
+  auto task_node_pi_frontmatter = tf.emplace([&ctx]() {
+    // Agente Autônomo Code Mode: 2. Frontmatter_Jekyll
+    // Invocação em sandbox/VM isolada com streaming de eventos
+    std::cout << "[Agent: 2. Frontmatter_Jekyll] Disparando no sandbox isolado...\n";
+  }).name("2. Frontmatter_Jekyll");
+
+  auto task_node_pi_publicar = tf.emplace([&ctx]() {
+    // Execução computacional determinística do agente: 6. Publicar_Post_Matematica
+    std::cout << "Executando agente: 6. Publicar_Post_Matematica\n";
+  }).name("6. Publicar_Post_Matematica");
+
+  auto task_node_pi_criar_svg = tf.emplace([&ctx]() {
+    // Agente Autônomo Code Mode: 4. Criacao_Validacao_SVG
+    // Invocação em sandbox/VM isolada com streaming de eventos
+    std::cout << "[Agent: 4. Criacao_Validacao_SVG] Disparando no sandbox isolado...\n";
+  }).name("4. Criacao_Validacao_SVG");
+
+  auto task_node_pi_validar_svg = tf.emplace([&ctx]() {
+    // Agente Autônomo Code Mode: 4b. Validacao_Visual_Jev
+    // Invocação em sandbox/VM isolada com streaming de eventos
+    std::cout << "[Agent: 4b. Validacao_Visual_Jev] Disparando no sandbox isolado...\n";
+  }).name("4b. Validacao_Visual_Jev");
+
+  auto task_node_pi_animar_svg = tf.emplace([&ctx]() {
+    // Agente Autônomo Code Mode: 5. Animacao_Keyframes_SVG
+    // Invocação em sandbox/VM isolada com streaming de eventos
+    std::cout << "[Agent: 5. Animacao_Keyframes_SVG] Disparando no sandbox isolado...\n";
+  }).name("5. Animacao_Keyframes_SVG");
 
   // Dependencias e Precedencias
-  task_bootstrap.precede(task_node_1791104413586);
+  task_bootstrap.precede(task_node_pi_redigir);
 
+  task_node_pi_redigir.precede(task_node_pi_frontmatter);
+  task_node_pi_planejar_svg.precede(task_node_pi_criar_svg);
+  task_node_pi_frontmatter.precede(task_node_pi_planejar_svg);
+  task_node_pi_criar_svg.precede(task_node_pi_validar_svg);
+  task_node_pi_validar_svg.precede(task_node_pi_animar_svg);
+  task_node_pi_animar_svg.precede(task_node_pi_publicar);
 
   std::osyncstream(std::cout) << ">>> Disparando execucao no pool de threads...\n";
   auto start = std::chrono::high_resolution_clock::now();
@@ -59,7 +101,7 @@ int main(int argc, char* argv[]) {
 
   auto end = std::chrono::high_resolution_clock::now();
   auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-  std::osyncstream(std::cout) << ">>> Pipeline concluido com sucesso em " << elapsed_ms << " ms.\n";
+  std::cout << ">>> Pipeline concluido com sucesso em " << elapsed_ms << " ms.\n";
 
   return 0;
 }

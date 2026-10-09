@@ -17,6 +17,9 @@ export class ImportClaudeModal {
       this.modal.className = 'modal-backdrop';
       this.modal.id = 'modal-import-claude';
       this.modal.style.display = 'none';
+      this.modal.addEventListener('click', (e: MouseEvent) => {
+        if (e.target === this.modal) this.hide();
+      });
       document.body.appendChild(this.modal);
       this.render();
     }

@@ -1,0 +1,1019 @@
+/* ==========================================================================
+   Arestrix Studio - Microsoft Office & Visio Workspace Design System
+   Padrão Corporativo Microsoft Office (Word / Excel / PowerPoint / Visio)
+   Diretriz Estrita: Zero sombras/glows em fontes (text-shadow: none !important)
+   ========================================================================== */
+
+/* --- Layout Global da Janela Office --- */
+body, html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #f3f2f1;
+  color: #242424;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  background-color: #f3f2f1;
+  overflow: hidden;
+}
+
+/* Garante regra estrita de zero sombras em texto em toda a aplicação */
+*, *::before, *::after {
+  text-shadow: none !important;
+}
+
+/* --- Layout Principal Ancorado (Main Layout Docked) --- */
+.main-layout {
+  display: flex;
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+  background-color: #f3f2f1;
+  width: 100%;
+}
+
+/* --- Área Central (Canvas + Navegação + Terminal Inferior) --- */
+.center-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  position: relative;
+  gap: 0;
+  overflow: hidden;
+  background-color: #ffffff;
+  border-right: 1px solid #cbd5e1;
+}
+
+/* --- Barra de Navegação Hierárquica / Breadcrumbs (Office Explorer Bar) --- */
+.breadcrumbs-bar {
+  height: 32px;
+  background-color: #f8fafc;
+  border-bottom: 1px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  flex-shrink: 0;
+  z-index: 20;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.breadcrumbs-trail {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.breadcrumb-item {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.12s ease;
+}
+
+.breadcrumb-item:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+.breadcrumb-item.active {
+  background-color: #eff6ff;
+  border-color: #bfdbfe;
+  color: #0f6cbd;
+  font-weight: 700;
+}
+
+.breadcrumb-separator {
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 2px;
+  user-select: none;
+}
+
+.btn-navigate-up {
+  background-color: #ffffff;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: none;
+  transition: all 0.12s ease;
+}
+
+.btn-navigate-up:hover {
+  background-color: #f1f5f9;
+  color: #0f172a;
+  border-color: #94a3b8;
+}
+
+/* --- Contêiner do Canvas do Grafo (Visio Drawing Canvas) --- */
+.viewport-container {
+  flex: 1;
+  height: 100%;
+  position: relative;
+  background-color: #ffffff;
+  border-radius: 0;
+  box-shadow: none;
+  border: none;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.viewport-container canvas {
+  display: block;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+/* --- Mini-Barra Flutuante de Controles do Canvas (Visio Canvas HUD) --- */
+.office-canvas-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background-color: rgba(255, 255, 255, 0.96);
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 3px;
+  backdrop-filter: blur(4px);
+}
+
+.canvas-hud-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.canvas-hud-btn:hover {
+  background-color: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.canvas-hud-btn.active {
+  background-color: #eff6ff;
+  color: #0f6cbd;
+  border-color: #93c5fd;
+}
+
+.canvas-hud-sep {
+  width: 1px;
+  height: 18px;
+  background-color: #cbd5e1;
+  margin: 0 2px;
+}
+
+/* --- Console / Terminal Ancorado na Base (Docked Bottom Drawer) --- */
+.console-panel.office-docked-console {
+  height: 190px;
+  background-color: #ffffff;
+  border-radius: 0;
+  box-shadow: none;
+  border-top: 1px solid #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  z-index: 60;
+  overflow: hidden;
+  position: relative;
+  transition: height 0.15s ease;
+}
+
+.console-panel.collapsed {
+  height: 42px !important;
+}
+
+.office-console-splitter {
+  height: 5px;
+  width: 100%;
+  background: #e2e8f0;
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
+  user-select: none;
+}
+
+.office-console-splitter:hover {
+  background-color: #0f6cbd;
+}
+
+.splitter-grip {
+  width: 36px;
+  height: 2px;
+  background-color: #94a3b8;
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.office-console-header {
+  height: 36px;
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  flex-shrink: 0;
+}
+
+.office-console-tabs-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.office-console-tab-btn {
+  border: none;
+  background: transparent;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.12s ease;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.office-console-tab-btn:hover {
+  color: #0f172a;
+  background-color: #f1f5f9;
+}
+
+.office-console-tab-btn.active {
+  color: #0f6cbd;
+  font-weight: 700;
+  border-bottom-color: #0f6cbd;
+  background-color: #ffffff;
+}
+
+.office-console-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-console-office {
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-console-office:hover {
+  background-color: #f1f5f9;
+  color: #0f172a;
+  border-color: #94a3b8;
+}
+
+.console-views-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.office-console-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  font-family: 'Consolas', 'Cascadia Code', 'Courier New', monospace;
+  font-size: 11.5px;
+  line-height: 1.45;
+  background-color: #ffffff;
+  color: #1e293b;
+  user-select: text;
+}
+
+.console-status-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+  margin-left: 6px;
+}
+
+/* --- Painel de Tarefas Lateral (Office Task Pane / Formatar Agente) --- */
+.inspector-panel.office-task-pane {
+  background-color: #ffffff;
+  border-radius: 0;
+  box-shadow: none;
+  border-left: none;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  z-index: 50;
+  flex-shrink: 0;
+  min-width: 260px;
+  max-width: 85vw;
+}
+
+.office-task-pane-header {
+  height: 38px;
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  flex-shrink: 0;
+}
+
+.office-task-pane-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.office-tp-icon {
+  font-size: 14px;
+}
+
+.office-tp-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.1px;
+}
+
+.office-task-pane-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.office-tp-btn-icon {
+  background: transparent;
+  border: 1px solid transparent;
+  font-size: 13px;
+  color: #64748b;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 3px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+}
+
+.office-tp-btn-icon:hover {
+  color: #0f172a;
+  background-color: #e2e8f0;
+  border-color: #cbd5e1;
+}
+
+.office-tp-width-btn {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 2px 7px !important;
+  color: #0f6cbd !important;
+  background-color: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
+  border-radius: 3px !important;
+  gap: 3px !important;
+  cursor: pointer;
+}
+
+.office-tp-width-btn:hover {
+  background-color: #dbeafe !important;
+  border-color: #93c5fd !important;
+}
+
+.office-tp-close-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  font-size: 16px;
+  color: #64748b;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+}
+
+.office-tp-close-btn:hover {
+  color: #ef4444;
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+}
+
+/* Splitter Vertical Físico entre Canvas e Painel de Tarefas */
+.office-task-pane-splitter {
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  background-color: #e2e8f0;
+  border-left: 1px solid #cbd5e1;
+  border-right: 1px solid #cbd5e1;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 55;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Área de captura expandida (Hitbox de 13px) */
+.office-task-pane-splitter::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
+  cursor: col-resize;
+  z-index: 56;
+}
+
+.office-task-pane-splitter:hover,
+.office-task-pane-splitter.resizing {
+  background-color: #0f6cbd;
+  border-color: #0f6cbd;
+}
+
+.office-task-pane-splitter .splitter-grip-v {
+  width: 1px;
+  height: 24px;
+  background-color: #94a3b8;
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.office-task-pane-splitter:hover .splitter-grip-v,
+.office-task-pane-splitter.resizing .splitter-grip-v {
+  background-color: #ffffff;
+}
+
+/* Modo Recolhido */
+.inspector-panel.office-task-pane.collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  border-left: none !important;
+  overflow: hidden !important;
+}
+
+/* Fita de Reabertura Rápida quando Recolhido */
+.office-task-pane-toggle-strip {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  z-index: 55;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-right: none;
+  border-radius: 4px 0 0 4px;
+  padding: 8px 5px;
+  cursor: pointer;
+  box-shadow: -2px 2px 8px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.15s ease;
+}
+
+.office-task-pane-toggle-strip:hover {
+  background-color: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.office-task-pane-toggle-strip .strip-icon {
+  font-size: 14px;
+}
+
+.office-task-pane-toggle-strip .strip-text {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f6cbd;
+  letter-spacing: 0.5px;
+}
+
+/* Modo Janela Flutuante (Floating Tool Window) */
+.inspector-panel.office-task-pane.is-floating {
+  position: fixed !important;
+  top: 100px;
+  right: 24px;
+  width: 380px !important;
+  height: 580px !important;
+  max-height: 85vh;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18), 0 4px 12px rgba(15, 23, 42, 0.08) !important;
+  z-index: 1000 !important;
+  overflow: hidden;
+}
+
+.inspector-panel.office-task-pane.is-floating .office-task-pane-header {
+  cursor: move;
+  border-radius: 5px 5px 0 0;
+  user-select: none;
+  background-color: #f1f5f9;
+}
+
+.inspector-panel.office-task-pane.is-floating .office-task-pane-splitter {
+  display: none;
+}
+
+.office-task-pane-tabs {
+  display: flex;
+  align-items: stretch;
+  height: 32px;
+  background-color: #f1f5f9;
+  border-bottom: 1px solid #cbd5e1;
+  padding: 0 8px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.office-tp-tab {
+  border: none;
+  background: transparent;
+  padding: 0 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.12s ease;
+}
+
+.office-tp-tab:hover {
+  color: #0f172a;
+  background-color: #e2e8f0;
+}
+
+.office-tp-tab.active {
+  color: #0f6cbd;
+  font-weight: 700;
+  border-bottom-color: #0f6cbd;
+  background-color: #ffffff;
+}
+
+.office-task-pane-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.office-tp-tab-content {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.office-tp-tab-content.active {
+  display: flex;
+}
+
+.office-tp-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.office-tp-section-header {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.office-node-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.office-field-hint {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+/* --- Controles de Formulário no Padrão Fluent UI / Office --- */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.form-input, .form-select, .form-textarea {
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  padding: 6px 8px;
+  color: #1e293b;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  user-select: text;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  border-color: #0f6cbd;
+  box-shadow: 0 0 0 1px #0f6cbd;
+}
+
+.form-input-readonly {
+  background-color: #f8fafc;
+  color: #64748b;
+  border-color: #e2e8f0;
+  cursor: not-allowed;
+}
+
+.form-textarea.code-font {
+  font-family: 'Consolas', 'Cascadia Code', 'Courier New', monospace;
+  font-size: 11.5px;
+  line-height: 1.45;
+  tab-size: 2;
+  white-space: pre;
+  background-color: #f8fafc;
+}
+
+/* --- Grade de Ações de Governança / IA (Command Grid) --- */
+.agent-command-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agent-command-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.12s ease;
+}
+
+.agent-command-card:hover {
+  border-color: #0f6cbd;
+  background-color: #eff6ff;
+}
+
+.cmd-icon {
+  font-size: 16px;
+  margin-top: 1px;
+}
+
+.cmd-details {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.cmd-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.cmd-desc {
+  font-size: 10.5px;
+  color: #64748b;
+}
+
+/* --- Empty State: Propriedades do Diagrama --- */
+.office-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.office-stat-card {
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.stat-number {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f6cbd;
+}
+
+.stat-label {
+  font-size: 10.5px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.office-hint-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  font-size: 11.5px;
+  color: #1e40af;
+  line-height: 1.4;
+  margin-top: 8px;
+}
+
+.hint-icon {
+  font-size: 14px;
+}
+
+.hint-text strong {
+  font-weight: 700;
+}
+
+.empty-ports-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  font-style: italic;
+  padding: 4px 0;
+}
+
+/* --- Barra de Status do Microsoft Office (Docked Bottom Status Bar) --- */
+.office-statusbar {
+  height: 26px;
+  background-color: #0f6cbd;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  font-size: 11px;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 500;
+  z-index: 100;
+  flex-shrink: 0;
+  user-select: none;
+  border-top: 1px solid #005a9e;
+}
+
+.office-statusbar-left, .office-statusbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.office-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.office-status-dot.status-ready {
+  background-color: #86efac;
+}
+
+.office-status-dot.status-compiling {
+  background-color: #fde047;
+  animation: sb-pulse 1s infinite alternate;
+}
+
+.office-status-dot.status-running {
+  background-color: #67e8f9;
+  animation: sb-pulse 0.8s infinite alternate;
+}
+
+.office-status-dot.status-error {
+  background-color: #fca5a5;
+}
+
+@keyframes sb-pulse {
+  from { opacity: 0.5; }
+  to { opacity: 1; }
+}
+
+.office-status-text {
+  font-weight: 600;
+  letter-spacing: -0.1px;
+}
+
+.office-status-sep {
+  opacity: 0.5;
+  font-size: 10px;
+}
+
+.office-status-stats {
+  font-weight: 500;
+  opacity: 0.95;
+}
+
+.office-status-center {
+  display: flex;
+  align-items: center;
+}
+
+.office-status-mode {
+  font-weight: 600;
+  opacity: 0.9;
+  letter-spacing: 0.2px;
+}
+
+.office-sb-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #ffffff;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 3px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.12s ease;
+}
+
+.office-sb-btn:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.office-sb-btn.active {
+  background-color: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.office-sb-icon {
+  font-size: 12px;
+}
+
+/* Slider de Zoom do Office */
+.office-zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.office-zoom-btn {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  transition: background-color 0.12s ease;
+}
+
+.office-zoom-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.office-zoom-slider {
+  width: 90px;
+  height: 4px;
+  accent-color: #ffffff;
+  cursor: pointer;
+}
+
+.office-zoom-label {
+  min-width: 36px;
+  text-align: right;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 1px 3px;
+  border-radius: 2px;
+}
+
+.office-zoom-label:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Botões do Office */
+.btn-dive-action {
+  background-color: #eff6ff;
+  color: #0f6cbd;
+  border: 1px solid #bfdbfe;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 7px 10px;
+  border-radius: 3px;
+  width: 100%;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-dive-action:hover {
+  background-color: #0f6cbd;
+  color: #ffffff;
+}
+
+.btn-sync-action {
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  color: #0f6cbd;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.btn-sync-action:hover {
+  background-color: #eff6ff;
+  border-color: #93c5fd;
+}

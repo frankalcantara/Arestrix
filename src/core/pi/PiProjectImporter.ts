@@ -275,7 +275,7 @@ export class PiProjectImporter {
     };
   }
 
-  private createFallbackScanResult(dirPath: string): IPiProjectScanResult {
+  public createFallbackScanResult(dirPath: string): IPiProjectScanResult {
     const isPiMat = dirPath.toLowerCase().includes('pi-matematica');
 
     // Gera lista curricular padrão ART-001 até ART-040 se for pi-matematica

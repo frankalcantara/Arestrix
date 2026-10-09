@@ -4,22 +4,56 @@ import { EventBus } from '../core/EventBus.ts';
 import { RemoveNodeCommand, UpdateNodeCommand } from '../core/history/GraphCommands.ts';
 import { AgentTemplateRegistry } from '../core/templates/AgentTemplateRegistry.ts';
 
+/**
+ * Arestrix Studio - Microsoft Office Task Pane (Painel de Tarefas / Formatar Agente)
+ * Painel dinâmico, redimensionável por splitter, recolhível e destacável em janela flutuante.
+ */
 export class Inspector {
   private container: HTMLElement;
   private graph: Graph;
   private bus: EventBus;
   private currentNodeId: string | null = null;
   private registry: AgentTemplateRegistry;
+  private activeTab: 'general' | 'lambda' | 'agent' | 'ports' = 'general';
+
+  // Estados de layout dinâmico (não-fixo)
+  private isCollapsed: boolean = false;
+  private isFloating: boolean = false;
+  private panelWidth: number = 360;
+  private toggleStripEl!: HTMLElement;
+  private splitterEl!: HTMLElement;
 
   constructor(parent: HTMLElement, graph: Graph, bus: EventBus) {
     this.graph = graph;
     this.bus = bus;
     this.registry = AgentTemplateRegistry.getInstance();
 
+    // 1. Splitter físico permanente entre o Canvas e o Painel de Tarefas
+    this.splitterEl = document.createElement('div');
+    this.splitterEl.className = 'office-task-pane-splitter';
+    this.splitterEl.title = 'Arraste para redimensionar a largura do painel (ou clique duas vezes para alternar)';
+    this.splitterEl.innerHTML = `<div class="splitter-grip-v"></div>`;
+    parent.appendChild(this.splitterEl);
+
+    // 2. Contêiner principal do Task Pane
     this.container = document.createElement('aside');
-    this.container.className = 'inspector-panel';
+    this.container.className = 'inspector-panel office-task-pane';
+    this.container.style.width = `${this.panelWidth}px`;
     parent.appendChild(this.container);
 
+    // 3. Fita lateral de reabertura quando recolhido
+    this.toggleStripEl = document.createElement('div');
+    this.toggleStripEl.className = 'office-task-pane-toggle-strip';
+    this.toggleStripEl.style.display = 'none';
+    this.toggleStripEl.title = 'Expandir Painel de Propriedades (Ctrl+P)';
+    this.toggleStripEl.innerHTML = `
+      <span class="strip-icon">⚙️</span>
+      <span class="strip-text">Propriedades</span>
+    `;
+    this.toggleStripEl.addEventListener('click', () => this.toggleCollapse(false));
+    parent.appendChild(this.toggleStripEl);
+
+    this.initSplitterDrag();
     this.renderEmpty();
     this.bindEvents();
   }
@@ -27,6 +61,9 @@ export class Inspector {
   private bindEvents(): void {
     this.bus.on('node:selected', (node: INodeData) => {
       this.currentNodeId = node.id;
+      if (this.isCollapsed) {
+        this.toggleCollapse(false);
+      }
       this.renderNode(node);
     });
 
@@ -44,127 +81,485 @@ export class Inspector {
 
     this.bus.on('node:updated', (node: INodeData) => {
       if (this.currentNodeId === node.id) {
-        // Atualiza campos que podem ter mudado se não estiverem com foco
         const activeEl = document.activeElement;
         if (!activeEl || !this.container.contains(activeEl)) {
           this.renderNode(node);
         }
       }
     });
+
+    const onGraphChange = () => {
+      if (!this.currentNodeId) {
+        this.renderEmpty();
+      }
+    };
+    this.bus.on('node:added', onGraphChange);
+    this.bus.on('edge:added', onGraphChange);
+    this.bus.on('edge:removed', onGraphChange);
+    this.bus.on('graph:loaded', onGraphChange);
   }
 
+  /**
+   * Alterna entre modo Painel Ancorado (Docked) e Janela Flutuante (Floating Tool Window)
+   */
+  public toggleFloat(): void {
+    this.isFloating = !this.isFloating;
+    if (this.isFloating) {
+      this.isCollapsed = false;
+      this.container.classList.remove('collapsed');
+      this.container.classList.add('is-floating');
+      this.toggleStripEl.style.display = 'none';
+      this.splitterEl.style.display = 'none';
+
+      // Posiciona a janela flutuante no canto superior direito do workspace
+      const defaultLeft = Math.max(20, window.innerWidth - this.panelWidth - 30);
+      const defaultTop = 110;
+      this.container.style.left = `${defaultLeft}px`;
+      this.container.style.top = `${defaultTop}px`;
+      this.container.style.width = `${this.panelWidth}px`;
+      this.container.style.height = '580px';
+    } else {
+      this.container.classList.remove('is-floating');
+      this.container.style.left = '';
+      this.container.style.top = '';
+      this.container.style.height = '100%';
+      this.container.style.width = `${this.panelWidth}px`;
+      this.splitterEl.style.display = 'flex';
+    }
+
+    if (this.currentNodeId) {
+      const node = this.graph.getNode(this.currentNodeId);
+      if (node) this.renderNode(node);
+      else this.renderEmpty();
+    } else {
+      this.renderEmpty();
+    }
+  }
+
+  /**
+   * Recolhe ou expande o painel de propriedades
+   */
+  public toggleCollapse(force?: boolean): void {
+    if (this.isFloating) {
+      this.toggleFloat();
+      return;
+    }
+
+    this.isCollapsed = force !== undefined ? force : !this.isCollapsed;
+    if (this.isCollapsed) {
+      this.container.classList.add('collapsed');
+      this.container.style.width = '0px';
+      this.splitterEl.style.display = 'none';
+      this.toggleStripEl.style.display = 'flex';
+    } else {
+      this.container.classList.remove('collapsed');
+      this.container.style.width = `${this.panelWidth}px`;
+      this.splitterEl.style.display = 'flex';
+      this.toggleStripEl.style.display = 'none';
+    }
+  }
+
+  /**
+   * Gerencia arraste do splitter físico para redimensionamento da largura do painel
+   */
+  private initSplitterDrag(): void {
+    let startX = 0;
+    let startWidth = 0;
+    let isDragging = false;
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!isDragging) return;
+      const dx = startX - e.clientX; // Arrastar para a esquerda expande
+      const newWidth = Math.max(260, Math.min(window.innerWidth - 300, startWidth + dx));
+      this.setWidth(newWidth);
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (!isDragging) return;
+      isDragging = false;
+      this.splitterEl.classList.remove('resizing');
+      document.body.style.cursor = '';
+      try {
+        this.splitterEl.releasePointerCapture(e.pointerId);
+      } catch {
+        // Ignora caso não suporte capture
+      }
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+    };
+
+    this.splitterEl.addEventListener('pointerdown', (e: PointerEvent) => {
+      if (this.isFloating || this.isCollapsed) return;
+      e.preventDefault();
+      isDragging = true;
+      startX = e.clientX;
+      startWidth = this.container.offsetWidth || this.panelWidth;
+      this.splitterEl.classList.add('resizing');
+      document.body.style.cursor = 'col-resize';
+      try {
+        this.splitterEl.setPointerCapture(e.pointerId);
+      } catch {
+        // Fallback para listeners na janela
+      }
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+      window.addEventListener('pointercancel', onPointerUp);
+    });
+
+    this.splitterEl.addEventListener('dblclick', () => {
+      if (this.isFloating) return;
+      if (this.panelWidth > 450) {
+        this.setWidth(360);
+      } else {
+        this.setWidth(560);
+      }
+    });
+  }
+
+  /**
+   * Altera a largura do painel em pixels
+   */
+  public setWidth(newWidth: number): void {
+    this.panelWidth = Math.max(260, Math.min(window.innerWidth - 300, Math.round(newWidth)));
+    this.container.style.width = `${this.panelWidth}px`;
+    const widthVal = this.container.querySelector('.tp-width-val');
+    if (widthVal) {
+      widthVal.textContent = `${this.panelWidth}px`;
+    }
+  }
+
+  public getWidth(): number {
+    return this.panelWidth;
+  }
+
+  /**
+   * Alterna entre presets rápidos de largura
+   */
+  public cycleWidth(): void {
+    const presets = [340, 480, 640, 820];
+    const currentIndex = presets.findIndex(p => Math.abs(p - this.panelWidth) < 40);
+    const nextIndex = (currentIndex + 1) % presets.length;
+    this.setWidth(presets[nextIndex]);
+  }
+
+  /**
+   * Configura controles de cabeçalho do painel e arraste flutuante
+   */
+  private initPaneControls(): void {
+    // 1. Alternar Largura (Presets rápidos)
+    this.container.querySelector('#btn-cycle-width')?.addEventListener('click', () => {
+      this.cycleWidth();
+    });
+
+    // 2. Arraste da Janela Flutuante pela Barra de Título
+    const header = this.container.querySelector('.office-task-pane-header') as HTMLElement;
+    if (header && this.isFloating) {
+      let startMouseX = 0;
+      let startMouseY = 0;
+      let startLeft = 0;
+      let startTop = 0;
+
+      const onDragMove = (e: PointerEvent) => {
+        const dx = e.clientX - startMouseX;
+        const dy = e.clientY - startMouseY;
+        this.container.style.left = `${Math.max(10, Math.min(window.innerWidth - 100, startLeft + dx))}px`;
+        this.container.style.top = `${Math.max(40, Math.min(window.innerHeight - 100, startTop + dy))}px`;
+      };
+
+      const onDragUp = () => {
+        window.removeEventListener('pointermove', onDragMove);
+        window.removeEventListener('pointerup', onDragUp);
+      };
+
+      header.addEventListener('pointerdown', (e: PointerEvent) => {
+        // Ignora cliques nos botões de ação
+        if ((e.target as HTMLElement).closest('button')) return;
+        e.preventDefault();
+        startMouseX = e.clientX;
+        startMouseY = e.clientY;
+        startLeft = this.container.offsetLeft;
+        startTop = this.container.offsetTop;
+        window.addEventListener('pointermove', onDragMove);
+        window.addEventListener('pointerup', onDragUp);
+      });
+    }
+
+    // 3. Botões de ação do cabeçalho
+    this.container.querySelector('#btn-toggle-float')?.addEventListener('click', () => {
+      this.toggleFloat();
+    });
+
+    this.container.querySelector('#btn-toggle-collapse')?.addEventListener('click', () => {
+      this.toggleCollapse();
+    });
+
+    this.container.querySelector('#btn-deselect-node')?.addEventListener('click', () => {
+      if (this.currentNodeId) {
+        this.bus.emit('node:deselected');
+      } else {
+        this.toggleCollapse(true);
+      }
+    });
+  }
+
+  /**
+   * Renderiza propriedades gerais do diagrama quando nenhum nó está selecionado
+   */
   private renderEmpty(): void {
+    const meta = this.graph.getMetadata();
+    const nodeCount = this.graph.getAllNodes().length;
+    const edgeCount = this.graph.getAllEdges().length;
+
     this.container.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">⚙️</div>
-        <div class="empty-title">Nenhum Nó Selecionado</div>
-        <div class="empty-desc">Clique em um nó na tela para inspecionar e editar suas propriedades, parâmetros de template e lambdas C++20.</div>
+      <div class="office-task-pane-header">
+        <div class="office-task-pane-title-group">
+          <span class="office-tp-icon">📐</span>
+          <span class="office-tp-title">Propriedades do Diagrama</span>
+        </div>
+        <div class="office-task-pane-actions">
+          <button class="office-tp-btn-icon office-tp-width-btn" id="btn-cycle-width" title="Alternar Largura (340px / 480px / 640px / 820px)">
+            ↔ <span class="tp-width-val">${this.panelWidth}px</span>
+          </button>
+          <button class="office-tp-btn-icon" id="btn-toggle-float" title="${this.isFloating ? 'Ancorar à Direita (Dock)' : 'Destacar Janela Flutuante (Float)'}">
+            ${this.isFloating ? '📌' : '🗖'}
+          </button>
+          <button class="office-tp-btn-icon" id="btn-toggle-collapse" title="Recolher Painel">
+            ${this.isCollapsed ? '◀' : '▶'}
+          </button>
+          <button class="office-tp-close-btn" id="btn-deselect-node" title="Recolher">&times;</button>
+        </div>
+      </div>
+
+      <div class="office-task-pane-body">
+        <div class="office-tp-section">
+          <div class="office-tp-section-header">
+            <span>Informações do Pipeline</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nome do Grafo</label>
+            <input type="text" class="form-input form-input-readonly" value="${this.escapeHtml(meta.graphName || 'Arestrix Pipeline')}" readonly />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Compilador & Padrão</label>
+            <input type="text" class="form-input form-input-readonly" value="MSVC C++20 (/std:c++20 /EHsc /O2)" readonly />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Descrição</label>
+            <textarea class="form-textarea form-input-readonly" rows="3" readonly>${this.escapeHtml(meta.description || 'Pipeline Concorrente com Taskflow C++20')}</textarea>
+          </div>
+        </div>
+
+        <div class="office-tp-section">
+          <div class="office-tp-section-header">
+            <span>Estatísticas do Workspace</span>
+          </div>
+          <div class="office-stats-grid">
+            <div class="office-stat-card">
+              <span class="stat-number">${nodeCount}</span>
+              <span class="stat-label">Nós / Agentes</span>
+            </div>
+            <div class="office-stat-card">
+              <span class="stat-number">${edgeCount}</span>
+              <span class="stat-label">Conexões</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="office-hint-callout">
+          <div class="hint-icon">💡</div>
+          <div class="hint-text">
+            <strong>Dica do Visio:</strong> Clique em qualquer nó no canvas para inspecionar parâmetros, código lambda C++20, governança de IA e isolamento em Sandbox.
+          </div>
+        </div>
       </div>
     `;
+
+    this.initPaneControls();
   }
 
   private renderNode(node: INodeData): void {
     const tpl = node.templateId ? this.registry.getTemplate(node.templateId) : undefined;
+    const typeLabel = (node.type || 'static').toUpperCase();
 
     this.container.innerHTML = `
-      <div class="inspector-header">
-        <div class="inspector-header-left">
-          <span class="inspector-badge badge-${node.type}">${node.type.toUpperCase()}</span>
-          ${tpl ? `<span class="inspector-template-tag">${tpl.icon} ${this.escapeHtml(tpl.name)}</span>` : ''}
+      <!-- Cabeçalho do Task Pane Office -->
+      <div class="office-task-pane-header">
+        <div class="office-task-pane-title-group">
+          <span class="office-tp-icon">⚙️</span>
+          <span class="office-tp-title">Propriedades da Forma</span>
         </div>
-        <button class="btn-close" id="btn-deselect-node">&times;</button>
+        <div class="office-task-pane-actions">
+          <button class="office-tp-btn-icon office-tp-width-btn" id="btn-cycle-width" title="Alternar Largura (340px / 480px / 640px / 820px)">
+            ↔ <span class="tp-width-val">${this.panelWidth}px</span>
+          </button>
+          <button class="office-tp-btn-icon" id="btn-toggle-float" title="${this.isFloating ? 'Ancorar à Direita (Dock)' : 'Destacar Janela Flutuante (Float)'}">
+            ${this.isFloating ? '📌' : '🗖'}
+          </button>
+          <button class="office-tp-btn-icon" id="btn-toggle-collapse" title="Recolher Painel">
+            ${this.isCollapsed ? '◀' : '▶'}
+          </button>
+          <button class="office-tp-close-btn" id="btn-deselect-node" title="Fechar Painel">&times;</button>
+        </div>
       </div>
 
-      <div class="inspector-body">
-        <div class="form-group">
-          <label class="form-label" for="node-label">Nome do Agente / Rótulo</label>
-          <input type="text" id="node-label" class="form-input" value="${this.escapeHtml(node.label)}" />
-        </div>
+      <!-- Abas de Navegação do Task Pane Office -->
+      <div class="office-task-pane-tabs">
+        <button class="office-tp-tab ${this.activeTab === 'general' ? 'active' : ''}" data-tab="general">Geral</button>
+        <button class="office-tp-tab ${this.activeTab === 'lambda' ? 'active' : ''}" data-tab="lambda">C++20</button>
+        <button class="office-tp-tab ${this.activeTab === 'agent' ? 'active' : ''}" data-tab="agent">Governança & IA</button>
+        <button class="office-tp-tab ${this.activeTab === 'ports' ? 'active' : ''}" data-tab="ports">Conexões</button>
+      </div>
 
-        <div class="form-group">
-          <label class="form-label">Identificador Único</label>
-          <input type="text" class="form-input form-input-readonly" value="${node.id}" readonly />
-        </div>
+      <div class="office-task-pane-body">
+        <!-- ABA 1: GERAL -->
+        <div class="office-tp-tab-content ${this.activeTab === 'general' ? 'active' : ''}" id="tp-content-general">
+          <div class="office-node-badge-row">
+            <span class="inspector-badge badge-${node.type}">${typeLabel}</span>
+            ${tpl ? `<span class="inspector-template-tag">${tpl.icon} ${this.escapeHtml(tpl.name)}</span>` : ''}
+          </div>
 
-        <div class="form-group">
-          <label class="form-label">Tipo de Tarefa Taskflow</label>
-          <select id="node-type-select" class="form-select">
-            <option value="static" ${node.type === 'static' ? 'selected' : ''}>Static Task (Deterministico)</option>
-            <option value="condition" ${node.type === 'condition' ? 'selected' : ''}>Condition Task (Decisão / Branch)</option>
-            <option value="subflow" ${node.type === 'subflow' ? 'selected' : ''}>Subflow Task (Dinamico)</option>
-            <option value="module" ${node.type === 'module' ? 'selected' : ''}>Module Task (Hierarquico)</option>
-            <option value="critical" ${node.type === 'critical' ? 'selected' : ''}>Critical Section (Mutex Concorrente)</option>
+          <div class="form-group">
+            <label class="form-label" for="node-label">Rótulo / Nome do Nó</label>
+            <input type="text" id="node-label" class="form-input" value="${this.escapeHtml(node.label)}" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Identificador Único (ID)</label>
+            <input type="text" class="form-input form-input-readonly" value="${node.id}" readonly />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Tipo de Tarefa Taskflow</label>
+            <select id="node-type-select" class="form-select">
+              <option value="static" ${node.type === 'static' ? 'selected' : ''}>Static Task (Deterministico)</option>
+              <option value="condition" ${node.type === 'condition' ? 'selected' : ''}>Condition Task (Decisão / Branch)</option>
+              <option value="subflow" ${node.type === 'subflow' ? 'selected' : ''}>Subflow Task (Dinamico)</option>
+              <option value="module" ${node.type === 'module' ? 'selected' : ''}>Module Task (Hierarquico)</option>
+              <option value="critical" ${node.type === 'critical' ? 'selected' : ''}>Critical Section (Mutex Concorrente)</option>
               <option value="cuda" ${node.type === 'cuda' ? 'selected' : ''}>CUDA Kernel (GPU Acelerado)</option>
-          </select>
-        </div>
+              <option value="agent" ${node.type === 'agent' ? 'selected' : ''}>Agent (Code Mode IA)</option>
+            </select>
+          </div>
 
-        <!-- Painel Rapido de Modais Flutuantes do Agente (Fase 7) -->
-        <div class="agent-quick-modals-box">
-          <div class="agent-modals-title">Configurações Avançadas do Agente</div>
-          <div class="agent-modals-row">
-            <button class="btn-agent-modal-pill" id="btn-open-node-sandbox" title="Configurar Nível de Isolamento da VM, RAM e Pastas">
-              🛡️ Sandbox & Máquina Virtual
-            </button>
-            <button class="btn-agent-modal-pill" id="btn-open-node-model" title="Configurar Provedor (Opus, DeepSeek, Jev), Modelo e Prompt">
-              🧠 Modelo de IA, Skill & Prompt
-            </button>
-            <button class="btn-agent-modal-pill" id="btn-open-node-tools" title="Configurar Ferramentas Code Mode (write, edit, bash) e Conectores MCP">
-              🔧 Ferramentas & MCP
-            </button>
-            <button class="btn-agent-modal-pill" id="btn-open-node-memory" title="Configurar Acesso à Memória (Blackboard & Semântica)">
-              💾 Memória & Contexto
-            </button>
+          ${(node.type === 'subflow' || node.type === 'module') ? `
+            <div class="form-group">
+              <button id="btn-dive-subflow" class="btn btn-dive-action">
+                📂 Abrir Subgrafo Filho (Duplo-clique)
+              </button>
+            </div>
+          ` : ''}
+
+          <!-- Seção de Parâmetros do Template / Agente -->
+          ${this.renderParametersSection(node, tpl)}
+
+          <div class="form-actions" style="margin-top: 16px;">
+            <button id="btn-delete-node" class="btn btn-danger">Excluir Nó do Grafo</button>
           </div>
         </div>
 
-        ${(node.type === 'subflow' || node.type === 'module') ? `
-        <div class="form-group">
-          <button id="btn-dive-subflow" class="btn btn-dive-action">
-            📂 Abrir Subgrafo Filho (Duplo-clique)
-          </button>
-        </div>
-        ` : ''}
-
-        <!-- Seção de Parâmetros do Agente -->
-        ${this.renderParametersSection(node, tpl)}
-
-        <div class="form-group">
-          <div class="lambda-header-row">
-            <label class="form-label" for="node-lambda">Corpo do Lambda C++20</label>
+        <!-- ABA 2: C++20 LAMBDA -->
+        <div class="office-tp-tab-content ${this.activeTab === 'lambda' ? 'active' : ''}" id="tp-content-lambda">
+          <div class="office-tp-section-header">
+            <span>Corpo do Lambda C++20 Concorrente</span>
             ${tpl ? `
               <button id="btn-sync-lambda" class="btn-sync-action" title="Recompõe o código lambda com os parâmetros atuais">
-                🔄 Sincronizar Lambda
+                🔄 Sincronizar
               </button>
             ` : ''}
           </div>
+
           <div class="code-editor-header">
             <span>auto task = tf.emplace([...](...) {</span>
           </div>
-          <textarea id="node-lambda" class="form-textarea code-font" rows="8">${this.escapeHtml(node.customLambdaBody || '')}</textarea>
+          <textarea id="node-lambda" class="form-textarea code-font" rows="12">${this.escapeHtml(node.customLambdaBody || '')}</textarea>
           <div class="code-editor-footer">
             <span>});</span>
           </div>
+          <div class="office-field-hint">Código executado nativamente pelo Taskflow dentro da thread pool MSVC.</div>
         </div>
 
-        <div class="inspector-section">
-          <div class="section-title">Portas de Conexão</div>
-          <div class="port-list">
-            <div class="port-sublist">
-              <span class="port-sublist-title">Entradas (${node.inputs.length})</span>
-              ${node.inputs.map(p => `<span class="port-tag in-tag">${p.name}</span>`).join('')}
-            </div>
-            <div class="port-sublist">
-              <span class="port-sublist-title">Saídas (${node.outputs.length})</span>
-              ${node.outputs.map(p => `<span class="port-tag out-tag">${p.name}</span>`).join('')}
-            </div>
+        <!-- ABA 3: GOVERNANÇA & IA -->
+        <div class="office-tp-tab-content ${this.activeTab === 'agent' ? 'agent active' : ''}" id="tp-content-agent">
+          <div class="office-tp-section-header">
+            <span>Configurações Avançadas do Agente</span>
+          </div>
+
+          <div class="agent-command-grid">
+            <button class="agent-command-card" id="btn-open-node-sandbox">
+              <span class="cmd-icon">🛡️</span>
+              <div class="cmd-details">
+                <span class="cmd-name">Sandbox & Máquina Virtual</span>
+                <span class="cmd-desc">Nível de isolamento, limites de RAM e pastas</span>
+              </div>
+            </button>
+
+            <button class="agent-command-card" id="btn-open-node-model">
+              <span class="cmd-icon">🧠</span>
+              <div class="cmd-details">
+                <span class="cmd-name">Modelo de IA & Prompt</span>
+                <span class="cmd-desc">Provedor LLM, temperatura e system prompt</span>
+              </div>
+            </button>
+
+            <button class="agent-command-card" id="btn-open-node-tools">
+              <span class="cmd-icon">🔧</span>
+              <div class="cmd-details">
+                <span class="cmd-name">Ferramentas & Protocolo MCP</span>
+                <span class="cmd-desc">Write, edit, bash e servidores MCP</span>
+              </div>
+            </button>
+
+            <button class="agent-command-card" id="btn-open-node-memory">
+              <span class="cmd-icon">💾</span>
+              <div class="cmd-details">
+                <span class="cmd-name">Memória & Blackboard</span>
+                <span class="cmd-desc">Memória vetorial, semântica e persistência</span>
+              </div>
+            </button>
           </div>
         </div>
 
-        <div class="form-actions">
-          <button id="btn-delete-node" class="btn btn-danger">Excluir Nó</button>
+        <!-- ABA 4: PORTAS E CONEXÕES -->
+        <div class="office-tp-tab-content ${this.activeTab === 'ports' ? 'active' : ''}" id="tp-content-ports">
+          <div class="office-tp-section-header">
+            <span>Mapeamento de Fluxo do Visio</span>
+          </div>
+          <div class="port-list">
+            <div class="port-sublist">
+              <span class="port-sublist-title">Portas de Entrada (${node.inputs.length})</span>
+              ${node.inputs.length === 0 ? '<span class="empty-ports-hint">Nenhuma entrada (Nó Raiz / Produtor)</span>' : ''}
+              ${node.inputs.map(p => `<span class="port-tag in-tag">📥 ${p.name}</span>`).join('')}
+            </div>
+            <div class="port-sublist" style="margin-top: 12px;">
+              <span class="port-sublist-title">Portas de Saída (${node.outputs.length})</span>
+              ${node.outputs.length === 0 ? '<span class="empty-ports-hint">Nenhuma saída (Nó Folha / Consumidor)</span>' : ''}
+              ${node.outputs.map(p => `<span class="port-tag out-tag">📤 ${p.name}</span>`).join('')}
+            </div>
+          </div>
         </div>
       </div>
     `;
+
+    this.initPaneControls();
+
+    // Bind das Abas
+    const tabBtns = this.container.querySelectorAll('.office-tp-tab');
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const targetTab = (e.currentTarget as HTMLElement).getAttribute('data-tab') as any;
+        if (targetTab) {
+          this.activeTab = targetTab;
+          tabBtns.forEach(b => b.classList.remove('active'));
+          (e.currentTarget as HTMLElement).classList.add('active');
+
+          const contents = this.container.querySelectorAll('.office-tp-tab-content');
+          contents.forEach(c => c.classList.remove('active'));
+          const targetContent = this.container.querySelector(`#tp-content-${targetTab}`);
+          if (targetContent) targetContent.classList.add('active');
+        }
+      });
+    });
 
     // Modais Flutuantes de Agente (Fase 7 & 12)
     this.container.querySelector('#btn-open-node-sandbox')?.addEventListener('click', () => {
@@ -180,7 +575,7 @@ export class Inspector {
       this.bus.emit('node:open-memory-modal', node.id);
     });
 
-    // Bind subflow
+    // Subflow
     this.container.querySelector('#btn-dive-subflow')?.addEventListener('click', () => {
       this.graph.diveIntoSubflow(node.id);
     });
@@ -247,7 +642,7 @@ export class Inspector {
       }
     });
 
-    // Lambda
+    // Lambda textarea
     const lambdaInput = this.container.querySelector('#node-lambda') as HTMLTextAreaElement;
     let initialLambda = node.customLambdaBody || '';
     lambdaInput?.addEventListener('focus', () => {
@@ -268,12 +663,6 @@ export class Inspector {
         this.graph.commandManager.record(cmd);
         initialLambda = lambdaInput.value;
       }
-    });
-
-    // Deselect
-    const deselectBtn = this.container.querySelector('#btn-deselect-node');
-    deselectBtn?.addEventListener('click', () => {
-      this.bus.emit('node:deselected');
     });
 
     // Delete
@@ -342,8 +731,10 @@ export class Inspector {
     }
 
     return `
-      <div class="inspector-section">
-        <div class="section-title">⚙️ Parâmetros do Agente</div>
+      <div class="office-tp-section" style="margin-top: 14px;">
+        <div class="office-tp-section-header">
+          <span>⚙️ Parâmetros da Tarefa</span>
+        </div>
         <div class="params-container">
           ${rowsHtml}
         </div>
@@ -372,7 +763,6 @@ export class Inspector {
 
         let extraUpdates: Partial<INodeData> = { parameters: newParams };
 
-        // Se o nó veio de um template, atualiza o lambda automaticamente com novos parâmetros
         if (tpl) {
           const updatedLambda = tpl.generateLambdaBody(newParams, node.label);
           extraUpdates.customLambdaBody = updatedLambda;

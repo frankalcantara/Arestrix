@@ -14,6 +14,8 @@ import { NodeModelModal } from './ui/modals/NodeModelModal.ts';
 import { NodeToolsModal } from './ui/modals/NodeToolsModal.ts';
 import { NodeMemoryModal } from './ui/modals/NodeMemoryModal.ts';
 import { ProjectManager } from './core/ProjectManager.ts';
+import { StatusBar } from './ui/StatusBar.ts';
+import { CanvasControls } from './ui/CanvasControls.ts';
 
 function bootstrap() {
   const appContainer = document.querySelector<HTMLDivElement>('#app');
@@ -65,6 +67,9 @@ function bootstrap() {
   // 4. Inicializa Viewport WebGL (Three.js) com dimensões reais já computadas pelo DOM
   const viewport = new Viewport(viewportContainer, graph, globalEventBus);
 
+  // Controles Flutuantes do Grafo / HUD do Visio
+  new CanvasControls(viewportContainer, viewport, globalEventBus);
+
   // 5. Modais de Agentes, Code Mode e Sandbox/VM (Fase 7)
   const templateModal = new TemplateModal(graph, viewport);
   const globalDefaultsModal = new GlobalDefaultsModal(graph);
@@ -79,17 +84,20 @@ function bootstrap() {
   globalEventBus.on('node:open-tools-modal', (nodeId: string) => nodeToolsModal.open(nodeId));
   globalEventBus.on('node:open-memory-modal', (nodeId: string) => nodeMemoryModal.open(nodeId));
 
-  // 6. Inicializa Barra de Ferramentas e posiciona no topo
+  // 6. Inicializa Barra de Ferramentas Ribbon e posiciona no topo
   const toolbar = new Toolbar(appContainer, graph, viewport, codeModal, templateModal, globalDefaultsModal);
   appContainer.insertBefore(toolbar.getContainer(), mainLayout);
 
-  // 6. Sidebar de propriedades (Inspetor) dentro de mainLayout
+  // 7. Sidebar de propriedades (Inspetor / Task Pane Office) dentro de mainLayout
   new Inspector(mainLayout, graph, globalEventBus);
 
-  // 7. Console de Execução & Build na base da área central
+  // 8. Console de Execução & Build na base da área central (Docked Bottom Drawer)
   new ConsolePanel(centerArea);
 
-  // 8. Carrega o cenário de agentes demonstrativo complexo com loops de condição e seções críticas
+  // 9. Barra de Status do Microsoft Office na base absoluta da aplicação
+  new StatusBar(appContainer, graph, viewport, globalEventBus);
+
+  // 10. Carrega o cenário de agentes demonstrativo complexo com loops de condição e seções críticas
   toolbar.loadDemoComplexSystem();
 
   // 9. Bridge de Telemetria de Agentes em Tempo Real (Fase 10)

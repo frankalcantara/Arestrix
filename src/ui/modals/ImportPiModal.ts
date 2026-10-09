@@ -26,16 +26,32 @@ export class ImportPiModal {
       this.modal.className = 'modal-backdrop';
       this.modal.id = 'modal-import-pi';
       this.modal.style.display = 'none';
+      this.modal.addEventListener('click', (e: MouseEvent) => {
+        if (e.target === this.modal) {
+          this.hide();
+        }
+      });
       document.body.appendChild(this.modal);
       this.render();
     }
   }
 
   public async show(): Promise<void> {
-    if (this.modal) {
-      await this.initKnownProject();
+    if (!this.modal) return;
+
+    // Resposta visual imediata ao clique
+    this.modal.style.display = 'flex';
+    this.render();
+
+    // Se ainda não temos o resultado do scan, carrega de forma assíncrona
+    if (!this.currentScanResult) {
+      try {
+        await this.initKnownProject();
+      } catch (err) {
+        console.warn('[ImportPiModal] Falha ao escanear projeto Pi, usando fallback:', err);
+        this.currentScanResult = this.projectImporter.createFallbackScanResult('C:/Projetos/frankalcantara.github.io.worktrees/pi-matematica');
+      }
       this.render();
-      this.modal.style.display = 'flex';
     }
   }
 
@@ -46,9 +62,14 @@ export class ImportPiModal {
   }
 
   private async initKnownProject(): Promise<void> {
-    const known = await this.projectImporter.getKnownProjects();
-    const defaultPath = known.length > 0 ? known[0] : 'C:/Projetos/frankalcantara.github.io.worktrees/pi-matematica';
-    this.currentScanResult = await this.projectImporter.scanProject(defaultPath);
+    try {
+      const known = await this.projectImporter.getKnownProjects();
+      const defaultPath = known.length > 0 ? known[0] : 'C:/Projetos/frankalcantara.github.io.worktrees/pi-matematica';
+      this.currentScanResult = await this.projectImporter.scanProject(defaultPath);
+    } catch (e) {
+      console.warn('[ImportPiModal] initKnownProject erro:', e);
+      this.currentScanResult = this.projectImporter.createFallbackScanResult('C:/Projetos/frankalcantara.github.io.worktrees/pi-matematica');
+    }
   }
 
   private render(): void {

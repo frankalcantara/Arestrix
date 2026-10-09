@@ -256,6 +256,18 @@ export class Viewport {
     this.interactionManager.selectNode(id);
   }
 
+  public getCameraController(): CameraController {
+    return this.cameraController;
+  }
+
+  public toggleGrid(): boolean {
+    return this.grid.toggleVisible();
+  }
+
+  public isGridVisible(): boolean {
+    return this.grid.isVisible();
+  }
+
   public getCameraCenter(): THREE.Vector2 {
     return new THREE.Vector2(this.camera.position.x, this.camera.position.y);
   }

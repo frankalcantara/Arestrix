@@ -69,4 +69,17 @@ export class InfiniteGrid {
     mat.uniforms.uCameraPos.value.set(camera.position.x, camera.position.y);
     mat.uniforms.uZoom.value = camera.zoom;
   }
+
+  toggleVisible(): boolean {
+    this.mesh.visible = !this.mesh.visible;
+    return this.mesh.visible;
+  }
+
+  setVisible(visible: boolean): void {
+    this.mesh.visible = visible;
+  }
+
+  isVisible(): boolean {
+    return this.mesh.visible;
+  }
 }

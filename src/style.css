@@ -1,8 +1,9 @@
 @import './styles/soft-neomorphic-theme.css';
 @import './styles/office-ribbon.css';
+@import './styles/office-workspace.css';
 
 /* ==========================================================================
-   Arestrix Studio - Soft Neomorphic Theme Implementation
+   Arestrix Studio - Microsoft Office & Visio Fluent Interface
    Diretriz Estrita: Zero sombras/glows em fontes (sombras apenas em containers)
    ========================================================================== */
 
@@ -11,15 +12,16 @@
   margin: 0;
   padding: 0;
   user-select: none;
+  text-shadow: none !important;
 }
 
 body, html {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--bg-gradient);
-  color: var(--text-primary);
-  font-family: var(--font-family);
+  background-color: #f3f2f1;
+  color: #242424;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -29,7 +31,8 @@ body, html {
   width: 100vw;
   height: 100vh;
   position: relative;
-  background: var(--bg-gradient);
+  background-color: #f3f2f1;
+  overflow: hidden;
 }
 
 /* --- Toolbar Superior Estilo Soft Neomorphic --- */
@@ -233,352 +236,55 @@ body, html {
   color: #ffffff;
 }
 
-/* --- Layout Principal --- */
-.main-layout {
-  display: flex;
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-  padding: 14px 18px 14px 18px;
-  gap: 16px;
-}
-
-.center-area {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  height: 100%;
-  position: relative;
-  gap: 10px;
-}
-
-/* --- Breadcrumbs Bar Hierárquica --- */
-.breadcrumbs-bar {
-  height: 42px;
-  background-color: var(--surface-card);
-  border-radius: var(--radius-pill);
-  box-shadow: var(--shadow-pill);
-  border: 1px solid rgba(255, 255, 255, 0.95);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  flex-shrink: 0;
-}
-
-.breadcrumbs-trail {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.breadcrumb-item {
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-pill);
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.15s ease;
-}
-.breadcrumb-item:hover {
-  background-color: #f1f5f9;
-  color: var(--text-primary);
-}
-
-.breadcrumb-item.active {
-  background-color: #eff6ff;
-  color: #2563eb;
-  font-weight: 800;
-}
-
-.breadcrumb-separator {
-  color: #94a3b8;
-  font-size: 14px;
-  font-weight: 700;
-  user-select: none;
-}
-
-.btn-navigate-up {
-  background: var(--gradient-orange);
-  color: var(--text-inverse);
-  border: none;
-  border-radius: var(--radius-pill);
-  padding: 5px 14px;
-  font-size: 11px;
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow: var(--shadow-button-orange);
-  transition: transform 0.15s ease;
-}
-.btn-navigate-up:hover {
-  transform: translateY(-1px);
-}
-
-.btn-dive-action {
-  background-color: #eff6ff;
-  color: #1d4ed8;
-  border: 1px solid #bfdbfe;
-  font-weight: 800;
-  font-size: 12px;
-  padding: 9px 12px;
-  border-radius: 12px;
-  width: 100%;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.btn-dive-action:hover {
-  background-color: #2563eb;
-  color: #ffffff;
-}
-
-.viewport-container {
-  flex: 1;
-  height: 100%;
-  position: relative;
-  background-color: #ffffff;
-  border-radius: 22px;
-  box-shadow: var(--shadow-card);
-  border: 1px solid rgba(255, 255, 255, 0.95);
-  overflow: hidden;
-}
-
-/* --- Console de Execução & Build na base --- */
-.console-panel {
-  height: 185px;
-  background-color: #ffffff;
-  border-radius: 20px;
-  box-shadow: var(--shadow-card);
-  border: 1px solid rgba(255, 255, 255, 0.95);
-  display: flex;
-  flex-direction: column;
-  z-index: 60;
-  overflow: hidden;
-  transition: height 0.2s ease;
-}
-
-.console-panel.collapsed {
-  height: 44px;
-}
-
-.console-header {
-  height: 44px;
-  background-color: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-}
-
-.console-title-group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.console-title {
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--text-secondary);
-  letter-spacing: 0.5px;
-}
-
-.console-status-badge {
-  font-size: 10px;
-  font-weight: 800;
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-}
-
-.status-idle { background-color: #e2e8f0; color: #475569; }
-.status-compiling { background-color: #fef3c7; color: #b45309; }
-.status-running { background-color: #dbeafe; color: #1d4ed8; }
-.status-success { background-color: #d1fae5; color: #047857; }
-.status-error { background-color: #fee2e2; color: #b91c1c; }
-
-.console-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.btn-console {
-  background-color: #ffffff;
-  border: 1px solid #e2e8f0;
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  box-shadow: var(--shadow-pill);
-}
-.btn-console:hover {
-  background-color: #f1f5f9;
-  color: var(--text-primary);
-}
-
-.console-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 10px 16px;
-  font-family: 'Consolas', 'Courier New', monospace;
-  font-size: 12px;
-  line-height: 1.5;
-  user-select: text;
-  background-color: #ffffff;
-}
-
-.console-line {
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.line-info { color: #0284c7; }
-.line-warning { color: #d97706; }
-.line-success { color: #059669; font-weight: 700; }
-.line-error { color: #dc2626; font-weight: 700; }
-.line-output { color: #1e2538; font-weight: 600; }
-.line-muted { color: #94a3b8; }
-
-/* --- Inspector Lateral em Cartão Branco Elevado --- */
-.inspector-panel {
-  width: 330px;
-  background-color: #ffffff;
-  border-radius: 22px;
-  box-shadow: var(--shadow-card);
-  border: 1px solid rgba(255, 255, 255, 0.95);
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow-y: auto;
-  z-index: 50;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 24px;
-  text-align: center;
-  height: 100%;
-}
-
-.empty-icon {
-  font-size: 32px;
-  margin-bottom: 12px;
-  opacity: 0.7;
-}
-
-.empty-title {
-  font-weight: 800;
-  font-size: 14px;
-  color: var(--text-primary);
-  margin-bottom: 6px;
-}
-
-.empty-desc {
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.5;
-}
-
-.inspector-header {
-  padding: 16px 20px;
-  background-color: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.inspector-badge {
-  font-size: 10px;
-  font-weight: 800;
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  letter-spacing: 0.5px;
-}
-
-.badge-static { background-color: #dbeafe; color: #1d4ed8; }
-.badge-condition { background-color: #ffedd5; color: #c2410c; }
-.badge-subflow { background-color: #ede9fe; color: #6d28d9; }
-.badge-module { background-color: #d1fae5; color: #047857; }
-.badge-critical { background-color: #cffafe; color: #0e7490; }
-
-.btn-close {
-  background: none;
-  border: none;
-  color: #94a3b8;
-  font-size: 20px;
-  cursor: pointer;
-  padding: 0 4px;
-  line-height: 1;
-}
-.btn-close:hover {
-  color: var(--text-primary);
-}
-
-.inspector-body {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
+/* --- Área Útil, Grafo, Console, Painel de Tarefas e Status Bar gerenciados por office-workspace.css --- */
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .form-label {
   font-size: 11px;
-  font-weight: 800;
-  color: var(--text-secondary);
-  text-transform: uppercase;
+  font-weight: 600;
+  color: #475569;
 }
 
 .form-input, .form-select, .form-textarea {
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 10px 12px;
-  color: var(--text-primary);
-  font-size: 13px;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  padding: 6px 8px;
+  color: #1e293b;
+  font-size: 12px;
   font-family: inherit;
   outline: none;
   user-select: text;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .form-input:focus, .form-select:focus, .form-textarea:focus {
-  border-color: #3b82f6;
+  border-color: #0f6cbd;
   background-color: #ffffff;
-  box-shadow: var(--shadow-pill);
+  box-shadow: 0 0 0 1px #0f6cbd;
 }
 
 .form-input-readonly {
-  background-color: #f1f5f9;
+  background-color: #f8fafc;
   color: #64748b;
+  border-color: #e2e8f0;
   cursor: not-allowed;
 }
 
 .code-editor-header, .code-editor-footer {
-  font-family: 'Consolas', 'Courier New', monospace;
+  font-family: 'Consolas', 'Cascadia Code', 'Courier New', monospace;
   font-size: 11px;
   color: #64748b;
   padding: 2px 4px;
 }
 
 .form-textarea.code-font {
-  font-family: 'Consolas', 'Courier New', monospace;
-  font-size: 12px;
+  font-family: 'Consolas', 'Cascadia Code', 'Courier New', monospace;
+  font-size: 11.5px;
   line-height: 1.45;
   tab-size: 2;
   white-space: pre;
@@ -587,13 +293,13 @@ body, html {
 
 .inspector-section {
   border-top: 1px solid #e2e8f0;
-  padding-top: 14px;
+  padding-top: 12px;
 }
 
 .section-title {
   font-size: 11px;
-  font-weight: 800;
-  color: var(--text-secondary);
+  font-weight: 700;
+  color: #475569;
   text-transform: uppercase;
   margin-bottom: 8px;
 }
@@ -614,25 +320,26 @@ body, html {
 .port-sublist-title {
   font-size: 11px;
   color: #64748b;
+  font-weight: 600;
   width: 100%;
 }
 
 .port-tag {
   font-size: 11px;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: var(--radius-pill);
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
 }
 
 .in-tag {
   background-color: #eff6ff;
-  color: #1d4ed8;
+  color: #0f6cbd;
   border: 1px solid #bfdbfe;
 }
 
 .out-tag {
   background-color: #fff7ed;
-  color: #c2410c;
+  color: #c43e1c;
   border: 1px solid #fed7aa;
 }
 
@@ -641,25 +348,26 @@ body, html {
 }
 
 .btn {
-  padding: 10px 16px;
-  border-radius: var(--radius-button);
+  padding: 6px 14px;
+  border-radius: 4px;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   border: 1px solid transparent;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s ease;
+  transition: all 0.12s ease;
 }
 
 .btn-primary {
-  background: var(--gradient-blue);
+  background-color: #0f6cbd;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+  border: 1px solid #0f6cbd;
 }
 .btn-primary:hover {
-  transform: translateY(-1px);
+  background-color: #115ea3;
+  border-color: #115ea3;
 }
 
 .btn-danger {
@@ -700,6 +408,63 @@ body, html {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* --- Modais de Conectores & Importação (Pi, Claude, OpenAI, Hermes, Excel) --- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2500;
+}
+
+.modal-backdrop.hidden {
+  display: none !important;
+}
+
+.modal-window {
+  background-color: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  animation: modal-fade-scale 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-primary);
+}
+
+@keyframes modal-fade-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .modal-header {

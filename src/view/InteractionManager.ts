@@ -85,6 +85,11 @@ export class InteractionManager {
   private bindEvents(): void {
     this.domElement.addEventListener('pointerdown', this.onPointerDown.bind(this));
     this.domElement.addEventListener('dblclick', this.onDoubleClick.bind(this));
+    this.domElement.addEventListener('pointercancel', () => {
+      if (this.cameraController.getIsPanning()) {
+        this.cameraController.stopPan();
+      }
+    });
     window.addEventListener('pointermove', this.onPointerMove.bind(this));
     window.addEventListener('pointerup', this.onPointerUp.bind(this));
     window.addEventListener('keydown', this.onKeyDown.bind(this));
@@ -197,9 +202,16 @@ export class InteractionManager {
       }
     }
 
-    // 3. Clique no vazio -> desselecionar
+    // 3. Clique no vazio -> desselecionar e iniciar Pan do Canvas
+    e.preventDefault();
     this.selectNode(null);
     this.selectEdge(null);
+    this.cameraController.startPan(e.clientX, e.clientY);
+    try {
+      this.domElement.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignora erro se ambiente de teste não suportar pointer capture
+    }
   }
 
   private onPointerMove(e: PointerEvent): void {
@@ -248,6 +260,15 @@ export class InteractionManager {
   }
 
   private onPointerUp(e: PointerEvent): void {
+    if (this.cameraController.getIsPanning()) {
+      this.cameraController.stopPan();
+      try {
+        this.domElement.releasePointerCapture(e.pointerId);
+      } catch {
+        // Ignora erro se ambiente de teste não suportar
+      }
+    }
+
     if (this.draggedNodeView) {
       const finalX = this.draggedNodeView.nodeData.position.x;
       const finalY = this.draggedNodeView.nodeData.position.y;

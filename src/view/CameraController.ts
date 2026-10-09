@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { globalEventBus } from '../core/EventBus.ts';
 
 export class CameraController {
   private camera: THREE.OrthographicCamera;
@@ -6,6 +7,7 @@ export class CameraController {
   private frustumSize: number = 1000;
   private isPanning: boolean = false;
   private panStart: THREE.Vector2 = new THREE.Vector2();
+  private lastClientPos: THREE.Vector2 = new THREE.Vector2();
   private cameraStart: THREE.Vector3 = new THREE.Vector3();
 
   // Limites de zoom
@@ -44,37 +46,40 @@ export class CameraController {
       // Desloca a camera para manter o ponto sob o mouse estavel
       this.camera.position.x += (worldBefore.x - worldAfter.x);
       this.camera.position.y += (worldBefore.y - worldAfter.y);
+
+      globalEventBus.emit('camera:zoom-changed', { zoom: this.camera.zoom });
     }, { passive: false });
 
     // Inicio de Pan com botao do meio (wheel) ou botao direito
     this.domElement.addEventListener('pointerdown', (e: PointerEvent) => {
       if (e.button === 1 || e.button === 2 || (e.button === 0 && e.altKey)) {
         e.preventDefault();
-        this.isPanning = true;
-        this.panStart.set(e.clientX, e.clientY);
-        this.cameraStart.copy(this.camera.position);
-        this.domElement.style.cursor = 'grab';
+        this.startPan(e.clientX, e.clientY);
       }
     });
 
-    window.addEventListener('pointermove', (e: PointerEvent) => {
-      if (this.isPanning) {
-        const dx = e.clientX - this.panStart.x;
-        const dy = e.clientY - this.panStart.y;
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pointermove', (e: PointerEvent) => {
+        if (this.isPanning) {
+          const dx = e.clientX - this.lastClientPos.x;
+          const dy = e.clientY - this.lastClientPos.y;
+          this.lastClientPos.set(e.clientX, e.clientY);
+          this.panBy(dx, dy);
+        }
+      });
 
-        // Na camera ortografica, a escala de deslocamento do mundo e proporcional ao zoom
-        const scale = (this.frustumSize / this.domElement.clientHeight) / this.camera.zoom;
-        this.camera.position.x = this.cameraStart.x - dx * scale;
-        this.camera.position.y = this.cameraStart.y + dy * scale;
-      }
-    });
+      window.addEventListener('pointerup', (e: PointerEvent) => {
+        if (this.isPanning && (e.button === 1 || e.button === 2 || e.button === 0)) {
+          this.stopPan();
+        }
+      });
 
-    window.addEventListener('pointerup', (e: PointerEvent) => {
-      if (this.isPanning && (e.button === 1 || e.button === 2 || e.button === 0)) {
-        this.isPanning = false;
-        this.domElement.style.cursor = 'default';
-      }
-    });
+      window.addEventListener('pointercancel', () => {
+        if (this.isPanning) {
+          this.stopPan();
+        }
+      });
+    }
 
     // Impede menu de contexto do botao direito para uso no pan
     this.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -127,12 +132,62 @@ export class CameraController {
     this.camera.zoom = THREE.MathUtils.clamp(Math.min(zoomX, zoomY), this.minZoom, 1.5);
     this.camera.position.set(center.x, center.y, this.camera.position.z);
     this.camera.updateProjectionMatrix();
+    globalEventBus.emit('camera:zoom-changed', { zoom: this.camera.zoom });
   }
 
   reset(): void {
     this.camera.position.set(0, 0, 1000);
     this.camera.zoom = 1;
     this.camera.updateProjectionMatrix();
+    globalEventBus.emit('camera:zoom-changed', { zoom: this.camera.zoom });
+  }
+
+  getZoom(): number {
+    return this.camera.zoom;
+  }
+
+  setZoom(newZoom: number): void {
+    this.camera.zoom = THREE.MathUtils.clamp(newZoom, this.minZoom, this.maxZoom);
+    this.camera.updateProjectionMatrix();
+    globalEventBus.emit('camera:zoom-changed', { zoom: this.camera.zoom });
+  }
+
+  zoomIn(factor: number = 1.15): void {
+    this.setZoom(this.camera.zoom * factor);
+  }
+
+  zoomOut(factor: number = 0.85): void {
+    this.setZoom(this.camera.zoom * factor);
+  }
+
+  panBy(screenDx: number, screenDy: number): void {
+    const domH = this.domElement.clientHeight || this.domElement.parentElement?.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 800) || 800;
+    const scale = (this.frustumSize / domH) / this.camera.zoom;
+    this.camera.position.x -= screenDx * scale;
+    this.camera.position.y += screenDy * scale;
+    this.camera.updateMatrixWorld();
+    globalEventBus.emit('camera:panned', { x: this.camera.position.x, y: this.camera.position.y });
+  }
+
+  startPan(clientX: number, clientY: number): void {
+    this.isPanning = true;
+    this.panStart.set(clientX, clientY);
+    this.lastClientPos.set(clientX, clientY);
+    this.cameraStart.copy(this.camera.position);
+    this.domElement.style.cursor = 'grabbing';
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.style.cursor = 'grabbing';
+    }
+  }
+
+  stopPan(): void {
+    if (this.isPanning) {
+      this.isPanning = false;
+      this.domElement.style.cursor = 'default';
+      if (typeof document !== 'undefined' && document.body) {
+        document.body.style.cursor = '';
+      }
+    }
   }
 
   getIsPanning(): boolean {

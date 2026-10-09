@@ -1,97 +1,97 @@
 import { TaskflowNodeType } from '../core/types.ts';
 
 export const THEME = {
-  // Paleta de Fundo e Canvas (Soft Neomorphic)
-  canvasBackground: 0xf6f8fc, // Fundo claro pastel
-  gridMajor: 0xe2e8f0,        // Grade suave Slate 200
-  gridMinor: 0xf1f5f9,        // Grade fina Slate 100
+  // Paleta de Fundo e Canvas (Microsoft Visio Technical Diagramming)
+  canvasBackground: 0xfafbfc, // Fundo límpido técnico de prancheta Visio
+  gridMajor: 0xd9e2ec,        // Grade principal Visio Slate 300
+  gridMinor: 0xedf2f7,        // Grade fina Visio Slate 100
 
-  // Nós por tipo (Cores da paleta: Laranja, Ciano, Âmbar, Verde, Púrpura, Azul)
+  // Nós por tipo (Cores da paleta corporativa Microsoft Office Fluent)
   nodeTypes: {
     static: {
-      color: 0x3b82f6,        // Azul Real
-      badgeBg: 0x1d4ed8,      // Azul 700 (mais contraste)
+      color: 0x0f6cbd,        // Azul Clássico Office / Visio
+      badgeBg: 0x115ea3,      // Azul 700 Office
       textColor: '#ffffff',
       label: 'STATIC TASK'
     },
     condition: {
-      color: 0xff7828,        // Laranja Vibrante
-      badgeBg: 0xc2410c,      // Laranja 700 (mais contraste)
+      color: 0xc43e1c,        // Laranja PowerPoint / Rust
+      badgeBg: 0x9e2f14,      // Rust 700
       textColor: '#ffffff',
       label: 'CONDITION TASK'
     },
     subflow: {
-      color: 0x8b5cf6,        // Púrpura
-      badgeBg: 0x6d28d9,      // Púrpura 700
+      color: 0x5c2d91,        // Púrpura Teams / OneNote
+      badgeBg: 0x44206a,      // Púrpura 700
       textColor: '#ffffff',
       label: 'SUBFLOW TASK'
     },
     module: {
-      color: 0x10b981,        // Verde
-      badgeBg: 0x047857,      // Verde 700
+      color: 0x107c41,        // Verde Excel
+      badgeBg: 0x0c592e,      // Verde 700
       textColor: '#ffffff',
       label: 'MODULE TASK'
     },
     critical: {
-      color: 0x06b6d4,        // Ciano
-      badgeBg: 0x0e7490,      // Ciano 700
+      color: 0x008272,        // Ciano SharePoint / Azure
+      badgeBg: 0x005c51,      // Teal 700
       textColor: '#ffffff',
       label: 'CRITICAL TASK'
     },
     cuda: {
-      color: 0x14b8a6,        // Teal (Turquesa escuro) 
-      badgeBg: 0x0f766e,      // Teal 700
+      color: 0x0078d4,        // Azul Cyan Fluent
+      badgeBg: 0x005a9e,      // Azul Fluent 700
       textColor: '#ffffff',
       label: 'CUDA KERNEL'
     },
     agent: {
-      color: 0x6366f1,        // Indigo 500 (Vibrante)
-      badgeBg: 0x4338ca,      // Indigo 700 (Alto Contraste)
+      color: 0x4f46e5,        // Indigo Fluent IA
+      badgeBg: 0x3730a3,      // Indigo 700
       textColor: '#ffffff',
       label: 'AGENT CODE MODE'
     }
   } as Record<TaskflowNodeType, { color: number; badgeBg: number; textColor: string; label: string }>,
 
-  // Corpo dos Nós (Cartão Branco com Elevação Suave e Proporções Ampliadas)
+  // Corpo dos Nós (Cartão Branco Técnico Visio com bordas limpas de 6px)
   nodeBody: {
     width: 260,
     height: 130,
-    headerHeight: 36,
-    borderRadius: 16,
+    headerHeight: 32,
+    borderRadius: 6,          // Cantos limpos e precisos do padrão Visio
     fillColor: 0xffffff,      // Branco puro
-    borderColor: 0xe2e8f0,    // Borda muito suave
-    borderSelected: 0xff7828, // Laranja selecionado
+    borderColor: 0xcbd5e1,    // Borda nítida 1px cinza neutro
+    borderSelected: 0x0f6cbd, // Azul Office selecionado
     borderWidth: 2
   },
 
-  // Portas / Sockets
+  // Portas / Conectores Visio
   port: {
-    radius: 8,
-    inputColor: 0x3b82f6,     // Azul
-    outputColor: 0xff7828,    // Laranja
-    hoverColor: 0x10b981,     // Verde hover
-    hitboxRadius: 20
+    radius: 7,
+    inputColor: 0x0f6cbd,     // Azul Office
+    outputColor: 0xc43e1c,    // Laranja Office
+    hoverColor: 0x107c41,     // Verde hover
+    hitboxRadius: 18
   },
 
-  // Arestas / Linhas Curvas (Inspiradas nas linhas de tendência da imagem)
+  // Arestas / Linhas Conectoras do Visio
   edge: {
-    defaultColor: 0x5b7290,   // Azul ardósia suave da imagem
-    selectedColor: 0xff7828,  // Laranja em foco
-    feedbackColor: 0xf59e0b,  // Dourado para feedback loops
-    activeFlowColor: 0x10b981,// Verde
-    lineWidth: 3.5,
+    defaultColor: 0x64748b,   // Linha de conector Visio
+    selectedColor: 0x0f6cbd,  // Azul Office de seleção
+    feedbackColor: 0xd97706,  // Âmbar para feedback loops
+    activeFlowColor: 0x107c41,// Verde de execução ativa
+    lineWidth: 3.0,
     pulseSpeed: 1.5
   },
 
   // Regras Estritas de Tipografia Nítida (Zero sombras/glows em textos)
   typography: {
-    fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+    fontFamily: 'Segoe UI, Inter, -apple-system, BlinkMacSystemFont, sans-serif',
     titleSize: 18,
-    titleWeight: '800',
-    badgeSize: 13,
-    badgeWeight: '800',
+    titleWeight: '700',
+    badgeSize: 12,
+    badgeWeight: '700',
     portSize: 11,
-    portWeight: '700',
+    portWeight: '600',
     focusedOpacity: 1.0,
     unfocusedOpacity: 0.5
   }

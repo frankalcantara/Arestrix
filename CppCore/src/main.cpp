@@ -364,16 +364,30 @@ void ui_list_recent_projects(webui::window::event* e) {
 
 // Wrapper JS -> C++ (Escanear Projeto Pi)
 void ui_scan_pi_project(webui::window::event* e) {
-    std::string pathStr = e->get_string();
-    auto result = taskforge::pi::PiProjectScanner::scan(pathStr);
-    e->return_string(taskforge::pi::PiProjectScanner::toJson(result).dump());
+    try {
+        std::string pathStr = e->get_string();
+        std::cout << "[C++] Varredura de projeto Pi requisitada: " << pathStr << std::endl;
+        auto result = taskforge::pi::PiProjectScanner::scan(pathStr);
+        std::string dump = taskforge::pi::PiProjectScanner::toJson(result).dump();
+        e->return_string(dump);
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_scan_pi_project: " << ex.what() << std::endl;
+        e->return_string("{}");
+    }
 }
 
 // Wrapper JS -> C++ (Obter Projetos Pi Conhecidos)
 void ui_get_known_pi_projects(webui::window::event* e) {
-    auto list = taskforge::pi::PiProjectScanner::getKnownPiProjects();
-    nlohmann::json j = list;
-    e->return_string(j.dump());
+    try {
+        std::cout << "[C++] Obtendo lista de projetos Pi conhecidos no disco..." << std::endl;
+        auto list = taskforge::pi::PiProjectScanner::getKnownPiProjects();
+        nlohmann::json j = list;
+        std::string dump = j.dump();
+        e->return_string(dump);
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_get_known_pi_projects: " << ex.what() << std::endl;
+        e->return_string("[]");
+    }
 }
 
 void exit_app(webui::window::event* e) {
