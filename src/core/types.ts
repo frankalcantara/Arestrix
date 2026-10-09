@@ -63,12 +63,70 @@ export type CodeModeTool = 'write' | 'edit' | 'read' | 'bash' | 'validate_svg';
 export interface ICodeModeConfig {
   allowedTools: CodeModeTool[];
   customScripts: string[];
+  mcpServers?: string[];      // IDs dos servidores MCP ativos
+  allowedMcpTools?: string[]; // Lista de nomes de ferramentas MCP autorizadas para o agente
 }
+
+// --- Integração Model Context Protocol (MCP) (Fase 13) ---
+export type McpTransportType = 'stdio' | 'sse';
+
+export interface IMcpToolDefinition {
+  name: string;
+  description: string;
+  inputSchema?: Record<string, any>;
+  serverId: string;
+}
+
+export interface IMcpServerConfig {
+  id: string;
+  name: string;
+  transport: McpTransportType;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+  isEnabled: boolean;
+  cachedTools?: IMcpToolDefinition[];
+}
+
+export interface IMcpCallResult {
+  success: boolean;
+  content: string;
+  isError: boolean;
+  errorMessage?: string;
+  durationSeconds?: number;
+}
+
+// --- Arquitetura de Memória Heterogênea (Fase 12) ---
+// Memória NÃO é padrão e nem obrigatória (Opt-in seletivo por agente em cada projeto)
+export interface INodeMemoryConfig {
+  enabled: boolean;          // Padrão: false (Não é padrão e nem obrigatória)
+  persistent: boolean;       // false = efêmera (apenas sessão/RAM); true = persistente entre sessões (disco)
+  projectId?: string;        // Identificador / namespace do projeto para isolamento estrito
+  readBlackboard: boolean;   // Leitura da memória de trabalho intra-pipeline
+  writeBlackboard: boolean;  // Escrita de deltas no Blackboard
+  semanticLessons: boolean;  // Consulta de lições aprendidas (semântica)
+  recordLessons: boolean;    // Registro de novas lições derivadas de falhas/auditorias
+  allowedKeys?: string[];    // Chaves específicas do Blackboard (vazio = todas autorizadas)
+  domains?: string[];        // Domínios semânticos (ex: ["svg_typography", "validation"])
+}
+
+export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {
+  enabled: false,
+  persistent: false,
+  readBlackboard: false,
+  writeBlackboard: false,
+  semanticLessons: false,
+  recordLessons: false,
+  allowedKeys: [],
+  domains: []
+};
 
 export interface IGlobalPipelineDefaults {
   sandbox: ISandboxPolicy;
   model: IModelConfig;
   codeMode: ICodeModeConfig;
+  memory?: INodeMemoryConfig;
 }
 
 export interface INodeAgentSettings {
@@ -80,6 +138,9 @@ export interface INodeAgentSettings {
 
   inheritCodeMode: boolean;
   codeMode?: Partial<ICodeModeConfig>;
+
+  inheritMemory?: boolean;
+  memory?: Partial<INodeMemoryConfig>;
 
   // Validação de Artefato & Resume Engine (Fase 11)
   validationRules?: IArtifactValidationRule[];
@@ -183,12 +244,51 @@ export interface IEdgeData {
 }
 
 export interface IGraphMetadata {
+  projectId?: string;
   graphName: string;
   description: string;
   targetStandard: 'C++20';
   compilerConfig: ICompilerConfig;
   version: string;
   globalDefaults?: IGlobalPipelineDefaults;
+}
+
+// --- Conceito de Projetos & Workspaces Isolados (Fase 14) ---
+
+export interface IProjectPipelineRef {
+  id: string;
+  name: string;
+  file: string; // caminho relativo a raiz do workspace (ex: "pipelines/main.json")
+  isPrimary: boolean;
+  description?: string;
+}
+
+export interface IProjectDatabaseConfig {
+  type: 'sqlite' | 'postgres';
+  filePath?: string;
+  url?: string;
+}
+
+export interface IProjectManifest {
+  projectId: string;
+  name: string;
+  version: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+  rootPath: string;
+  pipelines: IProjectPipelineRef[];
+  globalDefaults?: IGlobalPipelineDefaults;
+  database?: IProjectDatabaseConfig;
+  environment?: Record<string, string>;
+}
+
+export interface IRecentProjectItem {
+  projectId: string;
+  name: string;
+  rootPath: string;
+  manifestPath: string;
+  lastOpened: string;
 }
 
 export interface IGraphSchema {
@@ -241,5 +341,8 @@ export const DEFAULT_PIPELINE_DEFAULTS: IGlobalPipelineDefaults = {
   codeMode: {
     allowedTools: ['write', 'edit', 'read', 'bash', 'validate_svg'],
     customScripts: ['python scripts/audit_exercises.py']
+  },
+  memory: {
+    ...DEFAULT_NODE_MEMORY_CONFIG
   }
 };

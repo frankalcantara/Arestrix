@@ -227,7 +227,7 @@ export class TemplateModal {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'taskforge_agent_templates.json';
+      a.download = 'arestrix_agent_templates.json';
       a.click();
       URL.revokeObjectURL(url);
     });

@@ -139,9 +139,9 @@ describe('Fase 4: Catalogo de Templates de Agentes & Sistema de Plugins Dinamico
       expect(tpl).toBeDefined();
 
       const node = registry.instantiateNode('rest_api_fetcher', 'API_Agent', 0, 0, {
-        endpointUrl: 'https://taskforge.dev/metrics'
+        endpointUrl: 'https://arestrix.dev/metrics'
       });
-      expect(node.customLambdaBody).toContain('https://taskforge.dev/metrics');
+      expect(node.customLambdaBody).toContain('https://arestrix.dev/metrics');
       expect(node.customLambdaBody).toContain('API_Agent');
 
       registry.unregisterTemplate('rest_api_fetcher');

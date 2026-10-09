@@ -253,7 +253,7 @@ void PipelineResumeEngine::resetCheckpoint(const std::string& itemId, const std:
     std::lock_guard<std::mutex> lock(m_mutex);
     if (itemId.empty()) {
         m_state = {
-            {"pipelineId", "taskforge-batch"},
+            {"pipelineId", "arestrix-batch"},
             {"lastUpdated", currentTimestamp()},
             {"items", nlohmann::json::object()}
         };
@@ -293,7 +293,7 @@ void PipelineResumeEngine::loadFromDisk() {
     }
 
     m_state = {
-        {"pipelineId", "taskforge-batch"},
+        {"pipelineId", "arestrix-batch"},
         {"lastUpdated", currentTimestamp()},
         {"items", nlohmann::json::object()}
     };

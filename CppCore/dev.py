@@ -101,7 +101,7 @@ if __name__ == "__main__":
     setup_webui()
     build()
 
-    print("[App] Iniciando TaskForge C++...")
+    print("[App] Iniciando Arestrix C++...")
     # Executa o C++ a partir da pasta raiz para que ele enxergue corretamente a pasta 'dist'.
     app_path = os.path.join(os.getcwd(), "app.exe")
     subprocess.run([app_path], cwd=os.path.join(os.getcwd(), ".."))

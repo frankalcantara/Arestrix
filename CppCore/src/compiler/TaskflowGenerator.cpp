@@ -46,7 +46,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
     }
 
     std::string code = "// ============================================================================\n";
-    code += "// Gerado automaticamente por TaskForge (C++ Engine) - Visual Taskflow IDE\n";
+    code += "// Gerado automaticamente por Arestrix (C++ Engine) - Visual Taskflow IDE\n";
     code += "// Pipeline: " + meta.graphName + "\n";
     code += "// Descricao: " + meta.description + "\n";
     code += "// Padrao C++: " + meta.targetStandard + " | Compilador: " + meta.compilerConfig.compiler + "\n";
@@ -224,7 +224,7 @@ std::string TaskflowGenerator::generateBatchSource(
     const auto& edges = graph.getEdges();
 
     std::string code = "// ============================================================================\n";
-    code += "// Gerado por TaskForge (C++ Batch DAG & Resume Engine)\n";
+    code += "// Gerado por Arestrix (C++ Batch DAG & Resume Engine)\n";
     code += "// Pipeline: " + meta.graphName + " (Lote de " + std::to_string(batchItems.size()) + " itens)\n";
     code += "// Arquivo de Checkpoint: " + stateFilePath + "\n";
     code += "// ============================================================================\n\n";
@@ -235,15 +235,24 @@ std::string TaskflowGenerator::generateBatchSource(
     code += "#include <string>\n";
     code += "#include <chrono>\n";
     code += "#include <mutex>\n";
+    code += "#include <filesystem>\n";
     code += "#include \"sandbox/PipelineResumeEngine.hpp\"\n";
-    code += "#include \"sandbox/AgentTelemetryEmitter.hpp\"\n\n";
+    code += "#include \"sandbox/AgentTelemetryEmitter.hpp\"\n";
+    code += "#include \"memory/AgentBlackboard.hpp\"\n";
+    code += "#include \"memory/SemanticMemoryEngine.hpp\"\n";
+    code += "#include \"mcp/McpRegistry.hpp\"\n\n";
+
+    std::string projId = meta.projectId.empty() ? "default" : meta.projectId;
 
     code += "int main() {\n";
-    code += "  std::cout << \">>> Inicializando Pipeline em Lote TaskForge...\\n\";\n";
+    code += "  std::cout << \">>> Inicializando Pipeline em Lote Arestrix...\\n\";\n";
     code += "  tf::Executor executor;\n";
     code += "  tf::Taskflow tf(\"BatchMultiAgentPipeline\");\n\n";
     code += "  auto& resumeEngine = taskforge::sandbox::PipelineResumeEngine::getInstance();\n";
     code += "  resumeEngine.setStateFilePath(\"" + stateFilePath + "\");\n\n";
+    code += "  const std::string projectId = \"" + projId + "\";\n";
+    code += "  auto& blackboard = taskforge::memory::AgentBlackboard::getInstance();\n";
+    code += "  auto& semanticMemory = taskforge::memory::SemanticMemoryEngine::getInstance();\n\n";
 
     // Instancia tarefas por item e por nó
     for (size_t itemIdx = 0; itemIdx < batchItems.size(); ++itemIdx) {
@@ -257,11 +266,30 @@ std::string TaskflowGenerator::generateBatchSource(
             std::string taskVar = "task_" + sItemId + "_" + sNodeId;
             std::string taskName = itemId + " :: " + node.label;
 
-            code += "  auto " + taskVar + " = tf.emplace([&resumeEngine, itemId = std::string(\"" + itemId + "\")]() {\n";
+            code += "  auto " + taskVar + " = tf.emplace([&resumeEngine, &blackboard, &semanticMemory, itemId = std::string(\"" + itemId + "\")]() {\n";
+            std::string ruleTargetPattern = "aulas/{itemId}.md";
+            int ruleMinBytes = 200;
+            std::string ruleContentPattern = "";
+            bool ruleCheckExitCode = true;
+
+            if (node.agentSettings.is_object() && 
+                node.agentSettings.contains("validationRules") && 
+                node.agentSettings["validationRules"].is_array() && 
+                !node.agentSettings["validationRules"].empty()) {
+                const auto& vr = node.agentSettings["validationRules"][0];
+                ruleTargetPattern = vr.value("targetPathPattern", "aulas/{itemId}.md");
+                ruleMinBytes = vr.value("minSizeBytes", 200);
+                ruleContentPattern = vr.value("contentPattern", "");
+                ruleCheckExitCode = vr.value("checkLogExitCode", true);
+            }
+
             code += "    taskforge::sandbox::ArtifactValidationRule rule;\n";
-            code += "    rule.targetPathPattern = \"aulas/{itemId}.md\";\n";
-            code += "    rule.minSizeBytes = 200;\n";
-            code += "    rule.checkLogExitCode = true;\n\n";
+            code += "    rule.targetPathPattern = \"" + ruleTargetPattern + "\";\n";
+            code += "    rule.minSizeBytes = " + std::to_string(ruleMinBytes) + ";\n";
+            if (!ruleContentPattern.empty()) {
+                code += "    rule.contentPattern = \"" + ruleContentPattern + "\";\n";
+            }
+            code += "    rule.checkLogExitCode = " + std::string(ruleCheckExitCode ? "true" : "false") + ";\n\n";
             code += "    if (resumeEngine.isStageCompleted(itemId, \"" + node.id + "\", rule)) {\n";
             code += "      std::cout << \"[CHECKPOINT:RESUME] \" << itemId << \" :: " + node.label + " ja concluido. Reaproveitando artefato.\\n\";\n";
             code += "      taskforge::sandbox::AgentTelemetryEmitter::emitStatus(\"" + node.id + "\", \"settled\", \"Recuperado do Checkpoint\");\n";
@@ -270,15 +298,98 @@ std::string TaskflowGenerator::generateBatchSource(
             code += "    resumeEngine.markStageStarted(itemId, \"" + node.id + "\");\n";
             code += "    taskforge::sandbox::AgentTelemetryEmitter::emitStatus(\"" + node.id + "\", \"running\", \"Executando item \" + itemId);\n";
             code += "    std::cout << \"[EXECUTANDO] \" << itemId << \" :: " + node.label + "\\n\";\n";
-            
-            // Lambda customizada ou padrão
-            if (!node.customLambdaBody.empty()) {
-                code += indent(node.customLambdaBody, 4) + "\n";
-            } else {
-                code += "    // Execucao no Sandbox/MicroVM...\\n";
+
+            // Injeção de Memória Heterogênea (se ativada pelo usuário para este agente)
+            bool memEnabled = false;
+            bool memReadBb = false;
+            bool memWriteBb = false;
+            bool memSemLessons = false;
+            if (node.agentSettings.is_object()) {
+                bool inherit = node.agentSettings.value("inheritMemory", true);
+                nlohmann::json m = nlohmann::json::object();
+                if (!inherit && node.agentSettings.contains("memory") && node.agentSettings["memory"].is_object()) {
+                    m = node.agentSettings["memory"];
+                } else if (meta.globalDefaults.is_object() && meta.globalDefaults.contains("memory")) {
+                    m = meta.globalDefaults["memory"];
+                }
+                memEnabled = m.value("enabled", false);
+                memReadBb = m.value("readBlackboard", false);
+                memWriteBb = m.value("writeBlackboard", false);
+                memSemLessons = m.value("semanticLessons", false);
             }
 
-            code += "    resumeEngine.markStageSuccess(itemId, \"" + node.id + "\", \"aulas/\" + itemId + \".md\");\n";
+            if (memEnabled) {
+                if (memSemLessons) {
+                    code += "    auto semCtx = semanticMemory.formatPromptContext(projectId);\n";
+                    code += "    if (!semCtx.empty()) { std::cout << \"[MEMÓRIA:SEMÂNTICA] Injetando contexto no prompt para \" << itemId << \"\\n\"; }\n";
+                }
+                if (memReadBb) {
+                    code += "    auto bbSnap = blackboard.exportSnapshot(projectId, itemId);\n";
+                    code += "    if (!bbSnap.empty()) { std::cout << \"[MEMÓRIA:BLACKBOARD] Snapshot carregado para \" << itemId << \"\\n\"; }\n";
+                }
+            }
+            
+            if (node.agentSettings.contains("codeMode") && node.agentSettings["codeMode"].contains("allowedMcpTools")) {
+                auto mcpTools = node.agentSettings["codeMode"]["allowedMcpTools"].get<std::vector<std::string>>();
+                if (!mcpTools.empty()) {
+                    code += "    // MCP: Ferramentas externas conectadas\n";
+                    code += "    auto& mcpRegistry = taskforge::mcp::McpRegistry::getInstance();\n";
+                    code += "    (void)mcpRegistry;\n";
+                }
+            }
+
+            // Lambda customizada ou despacho específico (Pi CLI / Static Publish / MicroVM)
+            if (!node.customLambdaBody.empty()) {
+                code += indent(node.customLambdaBody, 4) + "\n";
+            } else if (node.type == core::TaskflowNodeType::Agent) {
+                std::string skillPath = "";
+                std::string modelName = "deepseek-v4-pro";
+                std::string provider = "deepseek";
+                std::string promptTpl = "";
+                if (node.agentSettings.is_object() && node.agentSettings.contains("model") && node.agentSettings["model"].is_object()) {
+                    skillPath = node.agentSettings["model"].value("skillPath", "");
+                    modelName = node.agentSettings["model"].value("model", "deepseek-v4-pro");
+                    provider = node.agentSettings["model"].value("provider", "deepseek");
+                    promptTpl = node.agentSettings["model"].value("promptTemplate", "");
+                }
+                if (!skillPath.empty() || !promptTpl.empty()) {
+                    code += "    // Invocacao do Pi CLI com Skill e Prompt parametrizados pelo lote\n";
+                    code += "    std::string piCmd = \"pi --no-session --approve --mode text --provider " + provider + " --model " + modelName;
+                    if (!skillPath.empty()) {
+                        code += " --skill " + skillPath;
+                    }
+                    code += " --print \\\"" + promptTpl + "\\\"\";\n";
+                    code += "    std::cout << \"[PI:CLI] \" << piCmd << \"\\n\";\n";
+                } else {
+                    code += "    // Execucao no Sandbox isolado (Code Mode)...\\n";
+                }
+            } else if (node.type == core::TaskflowNodeType::Static && 
+                       node.parameters.find("action") != node.parameters.end() && 
+                       node.parameters.at("action").is_string() && 
+                       node.parameters.at("action").get<std::string>() == "publish_jekyll_post") {
+                std::string destDir = "../matematica/_posts/matematica";
+                auto itDest = node.parameters.find("destinationDir");
+                if (itDest != node.parameters.end() && itDest->second.is_string()) {
+                    destDir = itDest->second.get<std::string>();
+                }
+                code += "    // Publicacao do post no blog Jekyll destino\n";
+                code += "    std::cout << \"[PUBLICAR] Artigo \" << itemId << \" enviado para " + destDir + "\\n\";\n";
+                code += "    std::error_code ec;\n";
+                code += "    std::filesystem::create_directories(\"" + destDir + "\", ec);\n";
+                code += "    std::string srcFile = \"aulas/\" + itemId + \".md\";\n";
+                code += "    std::string dstFile = \"" + destDir + "/\" + itemId + \".md\";\n";
+                code += "    if (std::filesystem::exists(srcFile)) {\n";
+                code += "      std::filesystem::copy_file(srcFile, dstFile, std::filesystem::copy_options::overwrite_existing, ec);\n";
+                code += "    }\n";
+            } else {
+                code += "    // Execucao estatica padrao\\n";
+            }
+
+            if (memEnabled && memWriteBb) {
+                code += "    blackboard.set(projectId, itemId, \"last_stage\", \"" + node.id + "\");\n";
+            }
+
+            code += "    resumeEngine.markStageSuccess(itemId, \"" + node.id + "\", rule.targetPathPattern);\n";
             code += "    taskforge::sandbox::AgentTelemetryEmitter::emitStatus(\"" + node.id + "\", \"settled\", \"Concluido com sucesso\");\n";
             code += "  }).name(\"" + taskName + "\");\n\n";
         }
@@ -318,6 +429,11 @@ std::string TaskflowGenerator::generateBatchSource(
     code += "  auto end = std::chrono::high_resolution_clock::now();\n";
     code += "  auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();\n";
     code += "  std::cout << \">>> Lote de \" << " + std::to_string(batchItems.size()) + " << \" artigos finalizado com sucesso em \" << elapsed_ms << \" ms.\\n\";\n\n";
+    code += "  // --- Persistencia & Gestao de Memoria Heterogenea ao Final da Sessao ---\n";
+    code += "  blackboard.saveToDisk(projectId);\n";
+    code += "  semanticMemory.saveToDisk(projectId);\n";
+    code += "  blackboard.clearSession(projectId);\n";
+    code += "  semanticMemory.clearSession(projectId);\n\n";
     code += "  return 0;\n";
     code += "}\n";
 

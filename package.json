@@ -1,5 +1,6 @@
 {
-  "name": "task-forge",
+  "name": "arestrix",
+  "description": "Arestrix - Visual Node Graph Orchestrator for Concurrent Multi-Agent Pipelines with Taskflow C++20 and Three.js",
   "private": true,
   "version": "0.1.0",
   "type": "module",

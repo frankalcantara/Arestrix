@@ -28,7 +28,7 @@ export class ConsolePanel {
         </div>
       </div>
       <div class="console-body" id="console-body">
-        <div class="console-line line-info">[TaskForge] Sistema pronto. Clique em "▶ Executar Pipeline" ou pressione F5 para compilar com MSVC e executar os agentes.</div>
+        <div class="console-line line-info">[Arestrix] Sistema pronto. Clique em "▶ Executar Pipeline" ou pressione F5 para compilar com MSVC e executar os agentes.</div>
       </div>
     `;
 

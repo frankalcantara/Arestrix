@@ -45,6 +45,7 @@ export class NodeToolsModal {
         };
 
     const allowed = effectiveTools.allowedTools || [];
+    const allowedMcp = effectiveTools.allowedMcpTools || [];
 
     this.overlay.innerHTML = `
       <div class="modal-dialog node-settings-modal-dialog">
@@ -105,6 +106,17 @@ export class NodeToolsModal {
                 <span class="tool-pill-name">tools.validate_svg</span>
                 <span class="tool-pill-desc">Validador de sintaxe e renderização</span>
               </label>
+            </div>
+
+            <!-- Ferramentas MCP (Model Context Protocol) -->
+            <div style="margin-top: 18px; border-top: 1px solid var(--border-color); padding-top: 14px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                <label class="form-label" style="margin: 0; font-weight: 700;">🔌 Ferramentas MCP (Model Context Protocol)</label>
+                <span style="font-size: 11px; color: var(--text-secondary);">Conectores remotos/locais</span>
+              </div>
+              <div class="tools-checkbox-grid">
+                ${this.renderMcpToolsList(allowedMcp, isInherited)}
+              </div>
             </div>
 
             <div class="form-group" style="margin-top: 16px;">
@@ -188,7 +200,7 @@ export class NodeToolsModal {
       }
     });
 
-    this.overlay.querySelectorAll('.node-tool-check').forEach(chk => {
+    this.overlay.querySelectorAll('.node-tool-check, .node-mcp-tool-check').forEach(chk => {
       chk.addEventListener('change', (e) => {
         const input = e.target as HTMLInputElement;
         const pill = input.closest('.tool-checkbox-pill');
@@ -203,6 +215,26 @@ export class NodeToolsModal {
       this.saveNodeTools(node, inheritCheck.checked);
       this.hide();
     });
+  }
+
+  private renderMcpToolsList(allowedMcp: string[], isInherited: boolean): string {
+    const knownMcpTools = [
+      { name: 'read_file', desc: 'Lê arquivos locais via MCP', server: 'filesystem' },
+      { name: 'write_file', desc: 'Grava arquivos locais via MCP', server: 'filesystem' },
+      { name: 'list_directory', desc: 'Lista diretórios via MCP', server: 'filesystem' },
+      { name: 'fetch_url', desc: 'Requisição HTTP remota via MCP', server: 'fetch' }
+    ];
+
+    return knownMcpTools.map(t => {
+      const isChecked = allowedMcp.includes(t.name);
+      return `
+        <label class="tool-checkbox-pill ${isChecked ? 'checked' : ''}">
+          <input type="checkbox" class="node-mcp-tool-check" value="${t.name}" ${isChecked ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
+          <span class="tool-pill-name">mcp.${this.escapeHtml(t.name)}</span>
+          <span class="tool-pill-desc">${this.escapeHtml(t.desc)} (${this.escapeHtml(t.server)})</span>
+        </label>
+      `;
+    }).join('');
   }
 
   private saveNodeTools(node: INodeData, inherit: boolean): void {
@@ -220,12 +252,18 @@ export class NodeToolsModal {
         allowedTools.push(chk.value as CodeModeTool);
       });
 
+      const allowedMcpTools: string[] = [];
+      this.overlay.querySelectorAll<HTMLInputElement>('.node-mcp-tool-check:checked').forEach(chk => {
+        allowedMcpTools.push(chk.value);
+      });
+
       const scriptsRaw = (this.overlay.querySelector('#node-custom-scripts') as HTMLInputElement)?.value || '';
       const customScripts = scriptsRaw.split(',').map(s => s.trim()).filter(Boolean);
 
       newToolsData = {
         allowedTools,
-        customScripts
+        customScripts,
+        allowedMcpTools
       };
     }
 

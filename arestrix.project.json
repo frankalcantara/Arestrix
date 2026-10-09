@@ -1,0 +1,25 @@
+{
+  "createdAt": "2026-10-09T16:11:22Z",
+  "database": {
+    "filePath": "storage/database.sqlite",
+    "type": "sqlite",
+    "url": ""
+  },
+  "description": "Workspace nativo inicial do Arestrix Studio",
+  "environment": {},
+  "globalDefaults": {},
+  "name": "Workspace Padrão",
+  "pipelines": [
+    {
+      "description": "",
+      "file": "pipelines/main.json",
+      "id": "main",
+      "isPrimary": true,
+      "name": "Pipeline Principal"
+    }
+  ],
+  "projectId": "default-workspace",
+  "rootPath": "C:\\Projetos\\NodeForge",
+  "updatedAt": "2026-10-09T16:12:33Z",
+  "version": "1.0.0"
+}

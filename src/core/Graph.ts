@@ -6,6 +6,7 @@ import {
   DEFAULT_COMPILER_CONFIG,
   IGlobalPipelineDefaults,
   DEFAULT_PIPELINE_DEFAULTS,
+  DEFAULT_NODE_MEMORY_CONFIG,
   TaskflowNodeType,
   IPort,
   IBreadcrumbItem
@@ -44,6 +45,18 @@ export class Graph {
 
   // --- Configuracoes Globais do Pipeline de Agentes ---
 
+  getProjectId(): string {
+    if (!this.metadata.projectId) {
+      this.metadata.projectId = this.metadata.graphName.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    }
+    return this.metadata.projectId;
+  }
+
+  setProjectId(id: string): void {
+    this.metadata.projectId = id;
+    this.bus.emit('graph:project-changed', id);
+  }
+
   getGlobalDefaults(): IGlobalPipelineDefaults {
     if (!this.metadata.globalDefaults) {
       this.metadata.globalDefaults = JSON.parse(JSON.stringify(DEFAULT_PIPELINE_DEFAULTS));
@@ -58,7 +71,8 @@ export class Graph {
       ...defaults,
       sandbox: { ...current.sandbox, ...(defaults.sandbox || {}) },
       model: { ...current.model, ...(defaults.model || {}) },
-      codeMode: { ...current.codeMode, ...(defaults.codeMode || {}) }
+      codeMode: { ...current.codeMode, ...(defaults.codeMode || {}) },
+      memory: { ...(current.memory || DEFAULT_NODE_MEMORY_CONFIG), ...(defaults.memory || {}) }
     };
     this.bus.emit('graph:defaults-updated', this.metadata.globalDefaults);
   }
@@ -145,7 +159,8 @@ export class Graph {
       agentSettings: type === 'agent' ? {
         inheritSandbox: true,
         inheritModel: true,
-        inheritCodeMode: true
+        inheritCodeMode: true,
+        inheritMemory: true
       } : undefined
     };
   }

@@ -54,6 +54,7 @@ struct NodeData {
     std::string criticalSectionId;
     std::string templateId;
     std::vector<std::string> requiredHeaders;
+    json agentSettings;
 };
 
 struct EdgeData {
@@ -82,6 +83,8 @@ struct GraphMetadata {
     std::string targetStandard;
     CompilerConfig compilerConfig;
     std::string version;
+    std::string projectId = "default";
+    json globalDefaults = json::object();
 };
 
 } // namespace core
@@ -145,7 +148,8 @@ inline void to_json(json& j, const NodeData& n) {
         {"customLambdaBody", n.customLambdaBody},
         {"criticalSectionId", n.criticalSectionId},
         {"templateId", n.templateId},
-        {"requiredHeaders", n.requiredHeaders}
+        {"requiredHeaders", n.requiredHeaders},
+        {"agentSettings", n.agentSettings}
     };
 }
 inline void from_json(const json& j, NodeData& n) {
@@ -162,6 +166,7 @@ inline void from_json(const json& j, NodeData& n) {
     if(j.contains("criticalSectionId")) j.at("criticalSectionId").get_to(n.criticalSectionId);
     if(j.contains("templateId")) j.at("templateId").get_to(n.templateId);
     if(j.contains("requiredHeaders")) j.at("requiredHeaders").get_to(n.requiredHeaders);
+    if(j.contains("agentSettings")) j.at("agentSettings").get_to(n.agentSettings);
 }
 
 // Serialização manual de EdgeData para campos opcionais
@@ -185,7 +190,27 @@ inline void from_json(const json& j, EdgeData& e) {
 }
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(CompilerConfig, compiler, cppStandard, buildSystem, taskflowIncludePath, outputBinaryName, enableOpenMP, enableCuda, extraFlags)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(GraphMetadata, graphName, description, targetStandard, compilerConfig, version)
+
+inline void to_json(json& j, const GraphMetadata& m) {
+    j = json{
+        {"graphName", m.graphName},
+        {"description", m.description},
+        {"targetStandard", m.targetStandard},
+        {"compilerConfig", m.compilerConfig},
+        {"version", m.version},
+        {"projectId", m.projectId},
+        {"globalDefaults", m.globalDefaults}
+    };
+}
+inline void from_json(const json& j, GraphMetadata& m) {
+    m.graphName = j.value("graphName", "");
+    m.description = j.value("description", "");
+    m.targetStandard = j.value("targetStandard", "C++20");
+    if(j.contains("compilerConfig")) j.at("compilerConfig").get_to(m.compilerConfig);
+    m.version = j.value("version", "1.0.0");
+    m.projectId = j.value("projectId", "default");
+    if(j.contains("globalDefaults")) j.at("globalDefaults").get_to(m.globalDefaults);
+}
 
 } // namespace core
 } // namespace taskforge

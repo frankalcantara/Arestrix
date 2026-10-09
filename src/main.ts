@@ -12,10 +12,16 @@ import { GlobalDefaultsModal } from './ui/GlobalDefaultsModal.ts';
 import { NodeSandboxModal } from './ui/modals/NodeSandboxModal.ts';
 import { NodeModelModal } from './ui/modals/NodeModelModal.ts';
 import { NodeToolsModal } from './ui/modals/NodeToolsModal.ts';
+import { NodeMemoryModal } from './ui/modals/NodeMemoryModal.ts';
+import { ProjectManager } from './core/ProjectManager.ts';
 
 function bootstrap() {
   const appContainer = document.querySelector<HTMLDivElement>('#app');
   if (!appContainer) throw new Error('#app root element not found.');
+
+  // 0. Inicializa gerenciador de projetos
+  const projectManager = ProjectManager.getInstance(globalEventBus);
+  projectManager.init();
 
   // 1. Instância do Grafo Central com compilador padrão MSVC C++20
   const graph = new Graph(globalEventBus, {
@@ -65,11 +71,13 @@ function bootstrap() {
   const nodeSandboxModal = new NodeSandboxModal(graph);
   const nodeModelModal = new NodeModelModal(graph);
   const nodeToolsModal = new NodeToolsModal(graph);
+  const nodeMemoryModal = new NodeMemoryModal(graph);
 
   // Escuta eventos dos botoes de acao rapida nos nós e no inspetor
   globalEventBus.on('node:open-sandbox-modal', (nodeId: string) => nodeSandboxModal.open(nodeId));
   globalEventBus.on('node:open-model-modal', (nodeId: string) => nodeModelModal.open(nodeId));
   globalEventBus.on('node:open-tools-modal', (nodeId: string) => nodeToolsModal.open(nodeId));
+  globalEventBus.on('node:open-memory-modal', (nodeId: string) => nodeMemoryModal.open(nodeId));
 
   // 6. Inicializa Barra de Ferramentas e posiciona no topo
   const toolbar = new Toolbar(appContainer, graph, viewport, codeModal, templateModal, globalDefaultsModal);
@@ -85,13 +93,16 @@ function bootstrap() {
   toolbar.loadDemoComplexSystem();
 
   // 9. Bridge de Telemetria de Agentes em Tempo Real (Fase 10)
-  // @ts-ignore
-  window.onTaskForgeTelemetry = (data: any) => {
+  const onTelemetryHandler = (data: any) => {
     if (data && data.event) {
       globalEventBus.emit('agent:telemetry', data.event);
       globalEventBus.emit(`agent:telemetry:${data.event.nodeId}`, data.event);
     }
   };
+  // @ts-ignore
+  window.onArestrixTelemetry = onTelemetryHandler;
+  // @ts-ignore
+  window.onTaskForgeTelemetry = onTelemetryHandler;
 }
 
 // Inicializa no carregamento do DOM

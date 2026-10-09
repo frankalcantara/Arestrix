@@ -136,6 +136,8 @@ export class InteractionManager {
         globalEventBus.emit('node:open-model-modal', nodeId);
       } else if (actionType === 'tools') {
         globalEventBus.emit('node:open-tools-modal', nodeId);
+      } else if (actionType === 'memory') {
+        globalEventBus.emit('node:open-memory-modal', nodeId);
       }
       return;
     }

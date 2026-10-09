@@ -20,7 +20,7 @@ export class BatchPipelineModal {
     autoResume: true
   };
   private checkpointState: IPipelineCheckpointState = {
-    pipelineId: 'taskforge-batch',
+    pipelineId: 'arestrix-batch',
     lastUpdated: new Date().toISOString(),
     items: {}
   };
@@ -339,6 +339,7 @@ export class BatchPipelineModal {
       this.hide();
 
       // Dispara evento de execução em lote para ouvintes da aplicação
+      window.dispatchEvent(new CustomEvent('arestrix:batch-run', { detail: this.config }));
       window.dispatchEvent(new CustomEvent('taskforge:batch-run', { detail: this.config }));
     });
   }

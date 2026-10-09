@@ -108,8 +108,11 @@ export class Inspector {
             <button class="btn-agent-modal-pill" id="btn-open-node-model" title="Configurar Provedor (Opus, DeepSeek, Jev), Modelo e Prompt">
               🧠 Modelo de IA, Skill & Prompt
             </button>
-            <button class="btn-agent-modal-pill" id="btn-open-node-tools" title="Configurar Ferramentas Code Mode (write, edit, bash)">
-              🔧 Ferramentas Code Mode
+            <button class="btn-agent-modal-pill" id="btn-open-node-tools" title="Configurar Ferramentas Code Mode (write, edit, bash) e Conectores MCP">
+              🔧 Ferramentas & MCP
+            </button>
+            <button class="btn-agent-modal-pill" id="btn-open-node-memory" title="Configurar Acesso à Memória (Blackboard & Semântica)">
+              💾 Memória & Contexto
             </button>
           </div>
         </div>
@@ -163,7 +166,7 @@ export class Inspector {
       </div>
     `;
 
-    // Modais Flutuantes de Agente (Fase 7)
+    // Modais Flutuantes de Agente (Fase 7 & 12)
     this.container.querySelector('#btn-open-node-sandbox')?.addEventListener('click', () => {
       this.bus.emit('node:open-sandbox-modal', node.id);
     });
@@ -172,6 +175,9 @@ export class Inspector {
     });
     this.container.querySelector('#btn-open-node-tools')?.addEventListener('click', () => {
       this.bus.emit('node:open-tools-modal', node.id);
+    });
+    this.container.querySelector('#btn-open-node-memory')?.addEventListener('click', () => {
+      this.bus.emit('node:open-memory-modal', node.id);
     });
 
     // Bind subflow

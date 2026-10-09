@@ -11,7 +11,7 @@ export class GraphvizGenerator {
     dot += `  fontname="Helvetica,Arial,sans-serif"\n`;
     dot += `  node [fontname="Helvetica,Arial,sans-serif", style="filled,rounded", shape="box"]\n`;
     dot += `  edge [fontname="Helvetica,Arial,sans-serif"]\n`;
-    dot += `  label="${meta.description}\\n\\nGerado por TaskForge"\n`;
+    dot += `  label="${meta.description}\\n\\nGerado por Arestrix"\n`;
     dot += `  labelloc="t"\n\n`;
 
     // Nós

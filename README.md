@@ -1,20 +1,20 @@
-# TaskForge ⚡
+# Arestrix ⚡
 
-**TaskForge** is a high-performance, next-generation visual node graph orchestrator and IDE built with **Three.js (WebGL)**, **TypeScript**, and a native **C++ Backend (WebUI)** for modeling, visualizing, and executing concurrent, heterogeneous agent pipelines powered by **Taskflow in C++20**.
+**Arestrix** is a high-performance, next-generation visual node graph orchestrator and IDE built with **Three.js (WebGL)**, **TypeScript**, and a native **C++ Backend (WebUI)** for modeling, visualizing, and executing concurrent, heterogeneous agent pipelines powered by **Taskflow in C++20**.
 
 ---
 
-## 💡 What is TaskForge?
+## 💡 What is Arestrix?
 
 Modern concurrent applications—ranging from autonomous multi-agent pipelines to high-throughput data processing and compute engines—demand fine-grained task parallelism, dynamic subflow decomposition, stochastic conditional branching, and strict execution isolation.
 
 While C++20 and the **Taskflow** library provide a world-class parallel runtime, hand-crafting complex task graphs with feedback loops, nested subflows, and sandboxed AI workers in raw code can be tedious and error-prone.
 
-**TaskForge** bridges this gap by providing an intuitive 2.5D visual canvas with instant C++20 code generation, automated MSVC compilation, native sandbox execution drivers, real-time streaming telemetry, and a persistent resume engine.
+**Arestrix** bridges this gap by providing an intuitive 2.5D visual canvas with instant C++20 code generation, automated MSVC compilation, native sandbox execution drivers, real-time streaming telemetry, and a persistent resume engine.
 
 ### Core Architectural Layers
 
-TaskForge follows a decoupled three-tier architecture:
+Arestrix follows a decoupled three-tier architecture:
 
 1. **Pure Logical Layer (Frontend `src/core/`)**:
    - In-memory graph data structure (`Graph`) with topological sorting and cycle detection.
@@ -39,7 +39,7 @@ TaskForge follows a decoupled three-tier architecture:
 
 ## 🤖 Autonomous Agents & Code Mode Orchestration
 
-TaskForge features first-class support for autonomous AI agents based on the **Code Mode** paradigm, allowing each node in the DAG to act as an isolated worker with fine-grained permissions:
+Arestrix features first-class support for autonomous AI agents based on the **Code Mode** paradigm, allowing each node in the DAG to act as an isolated worker with fine-grained permissions:
 
 ### 1. Isolated Sandbox & MicroVM Drivers
 Each agent node can be configured to execute within its own secure environment:
@@ -69,56 +69,139 @@ For complex multi-stage pipelines processing large collections of items (e.g. ar
 
 ---
 
-## 🚀 How to Run TaskForge
+## 🚀 How to Run Arestrix
 
-The project is unified under a fast C++ backend using WebUI, giving you a native Desktop App experience while leveraging the Three.js WebGL canvas.
+The project is unified under a fast C++ backend using **WebUI**, giving you a native Windows Desktop experience while leveraging the Three.js WebGL canvas.
 
-### Prerequisites
+### 📦 Prerequisites & Toolchain Setup
 
-1. **Node.js** (v18.0+) & **npm** (for building the frontend).
-2. **Python 3** (for the automated build script).
-3. **Windows environment** with Microsoft Visual C++ (MSVC) from Visual Studio 2022 or Build Tools installed (with C++20 support `/std:c++20` and `nmake`).
+Ensure the following prerequisites and packages are installed on your Windows environment:
 
-### 1. Build and Launch the Full App (Recommended)
+1. **Node.js (v18.0+) & npm**:
+   - Download from [nodejs.org](https://nodejs.org/) or install via Windows Package Manager:
+     ```powershell
+     winget install OpenJS.NodeJS.LTS
+     ```
+   - Installs frontend packages: Three.js, Vite, TypeScript, Vitest, and `vite-plugin-singlefile`.
 
-To compile the TypeScript frontend, build the C++ WebUI backend, and launch the standalone Desktop App:
+2. **Python 3 (v3.10+)**:
+   - Download from [python.org](https://www.python.org/) or install via winget:
+     ```powershell
+     winget install Python.Python.3.12
+     ```
+   - Powers the automated build script (`CppCore/dev.py`) using standard library utilities.
 
-```bash
-# From the root of the project:
+3. **Visual Studio 2022 (Community or Build Tools) with MSVC C++20**:
+   - Install Visual Studio Community or Visual Studio Build Tools:
+     ```powershell
+     winget install Microsoft.VisualStudio.2022.Community
+     ```
+   - **Required Workload**: Select **"Desktop development with C++"** (*Desenvolvimento para Desktop com C++*).
+   - **Key Components**: MSVC v143 (x64/x86 C++20 build tools `/std:c++20`), Windows 10/11 SDK, and `nmake.exe`.
+
+4. **Optional Enhancements**:
+   - **Docker Desktop / Podman**: If you plan to isolate agent tasks inside container sandboxes (Phase 9/11).
+   - **Graphviz (`dot`)**: If you wish to export standalone SVG architecture diagrams:
+     ```powershell
+     winget install Graphviz.Graphviz
+     ```
+
+---
+
+### 🔧 First-Time Installation
+
+Clone the repository and install the frontend dependencies:
+
+```powershell
+npm install
+```
+
+---
+
+### 🏃 Execution Modes
+
+#### Mode 1: Full Standalone Desktop Application (Native C++ + WebUI) — *Recommended*
+
+This mode compiles the C++ native backend (`app.exe`), starts a dedicated desktop window, and provides full access to native MSVC compilation, sandboxes, streaming telemetry, and MCP server transports.
+
+To build everything automatically and launch:
+
+```powershell
 cd CppCore
 python dev.py
 ```
 
-*What this does:*
-1. Runs `npm run build` in the root folder to compile the TS/Three.js frontend into `dist/`.
-2. Downloads and extracts the `webui` static library if it's missing.
-3. Automatically locates your MSVC installation and runs `nmake -f Makefile` to compile `app.exe`.
-4. Launches `app.exe`, which opens the TaskForge Visual Studio window.
+**What `python dev.py` executes automatically under the hood:**
+1. **Frontend Compilation**: Runs `npm run build` at the root folder, compiling TypeScript, Three.js, and CSS into a single bundled `dist/index.html` (via `vite-plugin-singlefile`).
+2. **WebUI Static Library**: Verifies and extracts the pre-built `webui-2-static.lib` in `vendor/webui` if missing.
+3. **MSVC Environment Auto-Detection**: Uses `vswhere.exe` to automatically locate Visual Studio, activates the `vcvars64.bat` 64-bit toolchain, and invokes `nmake -f Makefile`.
+4. **C++ Compilation**: Compiles `src/main.cpp`, `Graph.cpp`, `TaskflowGenerator.cpp`, sandbox drivers, `AgentBlackboard.cpp`, `SemanticMemoryEngine.cpp`, `McpClient.cpp`, and `McpRegistry.cpp` into `CppCore/app.exe`.
+5. **Desktop Studio Launch**: Starts `app.exe`, opening the standalone Arestrix Studio desktop window with bidirectional RPC bindings.
 
-### 2. Run the Web Studio Only (Dev Mode)
+💡 **Instant Quick Launch (When Already Built):**  
+If `CppCore/app.exe` and `dist/index.html` are already compiled, you can launch the app directly without recompiling:
+```powershell
+cd CppCore
+.\app.exe
+```
+*(Or simply double-click `CppCore\app.exe` directly in Windows Explorer).*
 
-If you are only editing the TypeScript/Three.js visual layer and want Hot-Module Replacement (HMR) without the C++ backend:
+---
 
-```bash
-# From the root of the project:
-npm install
+#### Mode 2: Web Studio Development Mode (Vite Hot-Module Replacement)
+
+If you are editing the Three.js 2.5D canvas, shaders, UI modais, or styling and want instantaneous Hot-Module Replacement (HMR) inside your browser:
+
+```powershell
+cd c:\Projetos\NodeForge
 npm run dev
 ```
 
-*Note: In web-only dev mode, native C++ compilation/execution features won't work, but you can still design graphs and view generated code.*
+- Opens the Vite development server at `http://localhost:5173/`.
+- **Supported in Web Mode**: Visual DAG editing, 2.5D camera pan/zoom, subflow breadcrumbs, C++ Taskflow code preview, and JSON graph export/import.
+- *Note:* Native Windows OS subprocess execution, direct MSVC compilation (`cl.exe`), and live stdio MCP process spawning require the native C++ backend (Mode 1).
 
-### 3. Run Automated Tests
+---
 
-To run the complete test suite (graph validation, history undo/redo, agent inheritance, telemetry, and batch resume engine):
-```bash
-npm run test
+#### Mode 3: Automated Unit Test Suite (Vitest)
+
+To run the complete test suite verifying DAG validation, reversible editing history, agent settings inheritance, live streaming telemetry, batch resume engine, memory architecture, and MCP protocol integration:
+
+```powershell
+cd c:\Projetos\NodeForge
+npm test
 ```
+
+**Test Coverage Summary (59/59 tests passing in 12 test suites):**
+- `tests/graph-validation.spec.ts`: Topological sorting, DFS cycle checks, feedback loops, conditional branches.
+- `tests/history-undo-redo.spec.ts`: Command Pattern undo/redo stack (`Ctrl+Z` / `Ctrl+Y`) and parameter mutations.
+- `tests/subflow-hierarchy.spec.ts`: Nested subflow drill-down, parent graph isolation, and breadcrumb navigation.
+- `tests/agent-templates.spec.ts`: Template catalogue, dynamic parameter binding, and custom lambda generation.
+- `tests/agent-settings-inheritance.spec.ts`: Pipeline global defaults cascading, per-node overrides, and tool configuration.
+- `tests/agent-telemetry.spec.ts`: Real-time streaming thinking accumulation, tool execution events, and 429 rate-limit backoff.
+- `tests/batch-resume-engine.spec.ts`: Atomic checkpoint state files, physical artifact filesystem validation, and auto-recovery.
+- `tests/agent-memory-config.spec.ts`: Heterogeneous memory architecture, opt-in rules (default disabled), ephemeral RAM vs. persistent disk, and project-level scoping.
+- `tests/mcp-protocol.spec.ts`: Model Context Protocol server configuration, stdio/sse transports, tool assignment, and undo/redo support.
+- `tests/project-management.spec.ts`: Multi-project workspace isolation, manifest schema validation, MRU history, and memory scope separation.
+- `tests/office-ribbon-interface.spec.ts`: Microsoft Office Fluent Ribbon interface, Backstage View, QAT shortcuts, and connector ingestion (Pi, Claude, OpenAI, Hermes, Excel).
+- `tests/pi-project-importer.spec.ts`: Native Pi agent project scanner, 1-click import modal, automatic 7-stage DAG generation (`redigir-math`, `criar-frontmatter`, `planejar-svg`, `criar-svg`, `validar-svg`, `animar-svg`, `publicar`), and seamless batch integration.
+
+---
+
+#### Mode 4: Standalone Frontend Build
+
+To compile only the frontend assets into production distribution files:
+
+```powershell
+npm run build
+```
+- Compiles TypeScript and packages all CSS and assets into a singlefile inlined `dist/index.html` consumed in-memory by `app.exe`.
 
 ---
 
 ## 🧩 Taskflow Node Mapping
 
-TaskForge maps visual graph nodes directly to native **Taskflow** primitives:
+Arestrix maps visual graph nodes directly to native **Taskflow** primitives:
 
 | Node Type | Color / Badge | Taskflow Semantic | Purpose in Concurrent Pipeline |
 | :--- | :--- | :--- | :--- |
@@ -128,6 +211,33 @@ TaskForge maps visual graph nodes directly to native **Taskflow** primitives:
 | **Module Task** | Green (`#10B981`) | `tf::Task (tf.composed_of(...))` | Reusable, modular task subgraphs. |
 | **Critical Section**| Cyan (`#06B6D4`) | `tf::CriticalSection (acquire/release)` | Mutex-guarded atomic sections across concurrent threads. |
 | **Agent Task** | Indigo (`#6366F1`) | `tf::Task (Sandbox / MicroVM)` | Autonomous Code Mode agent with isolated VM, multi-provider model routing, and artifact validation. |
+
+---
+
+## 🏛️ Modern Architecture: Office Ribbon, Workspaces & Ingestion
+
+Arestrix includes enterprise-grade desktop UX and model ingestion capabilities:
+
+1. **Microsoft Office Ribbon UI Standard (Fase Concluída ✅)**:
+   - Modern Ribbon bar with functional tabs (*Arquivo / Backstage*, *Página Inicial*, *Inserir*, *Agentes & Tools*, *Conectores & Importação*, *Dados & Memória*, *Execução & Lote*).
+   - Chunked tool groups with bottom labels, Quick Access Toolbar (Save, Undo, Redo, Run F5), and clean soft-neomorphic badges strictly respecting the zero text-shadow rule.
+   - Quick search / Tell-Me box (*"💡 O que você deseja fazer?"*) and Ribbon auto-collapse shortcut (`Ctrl+F1`).
+
+2. **Project Governance & Workspace Encapsulation (Fase Concluída ✅)**:
+   - First-class Project entities with native C++20 backend management (`arestrix.project.json`).
+   - Strict isolation of memory namespaces (Blackboard / Semantic Lessons), sandboxes, working directories, and pipelines per workspace.
+   - Recent projects MRU management and 3-tab Project Manager Hub.
+
+3. **External AI Assistant & Spreadsheet Ingestion Engine (Phases 15 to 20)**:
+   - **Pi Agent Real Project & CLI Ingestion (Fase Concluída ✅ 🎯)**:
+     - 1-Clique para importar projetos reais do Pi CLI (ex.: `pi-matematica`).
+     - Scanner C++ nativo e TS que inspeciona `.pi/settings.json`, habilidades em `.agents/*/SKILL.md`, `plano.md` e checkpoints em `pipeline-state.json`.
+     - Síntese visual imediata de pipeline Taskflow C++20 em 7 estágios: Redação (`deepseek-v4-pro`), Frontmatter Jekyll, Planejamento SVG, Criação SVG, Validação Visual Jev, Animação Keyframes e Publicação Estática.
+     - Encadeamento linear Bézier, regras de validação física de artefatos por regex/bytes e lote configurado com 195 artigos.
+   - **Claude (Anthropic)**: XML structured prompt and artifact conversion.
+   - **OpenAI (ChatGPT / Assistants)**: Export threads and tools mapping.
+   - **Hermes (Nous Research)**: Scratchpad logic for local offline microVMs.
+   - **Excel Modernization Engine**: Deconstruction of complex multi-sheet spreadsheets into relational SQLite databases and concurrent 4-agent DAGs.
 
 ---
 

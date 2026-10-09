@@ -2,7 +2,8 @@ import { IAgentTemplate, ISerializedTemplatePlugin } from './AgentTemplateTypes.
 import { BUILTIN_TEMPLATES } from './BuiltinTemplates.ts';
 import { INodeData, IPort } from '../types.ts';
 
-const STORAGE_KEY = 'taskforge_custom_agent_plugins';
+const STORAGE_KEY = 'arestrix_custom_agent_plugins';
+const LEGACY_STORAGE_KEY = 'taskforge_custom_agent_plugins';
 
 export class AgentTemplateRegistry {
   private static instance: AgentTemplateRegistry | null = null;
@@ -67,7 +68,7 @@ export class AgentTemplateRegistry {
   }
 
   /**
-   * Instancia um nó do TaskForge a partir de um template.
+   * Instancia um nó do Arestrix a partir de um template.
    */
   public instantiateNode(
     templateId: string, 
@@ -202,7 +203,7 @@ export class AgentTemplateRegistry {
             parameters: item.parameters || {},
             requiredHeaders: item.requiredHeaders || ['<syncstream>'],
             isCustomPlugin: true,
-            author: item.author || 'Usuário TaskForge',
+            author: item.author || 'Usuário Arestrix',
             version: item.version || '1.0.0',
             generateLambdaBody: (params, label) => {
               let body = item.lambdaBodyTemplate || '// Plugin de Tarefa Customizado\nstd::cout << "[Plugin] ' + label + '\\n";';
@@ -272,7 +273,10 @@ export class AgentTemplateRegistry {
   private loadCustomPluginsFromStorage(): void {
     if (typeof localStorage === 'undefined') return;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      let raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+      }
       if (raw) {
         this.importTemplatesFromJSON(raw);
       }

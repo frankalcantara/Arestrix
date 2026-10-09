@@ -185,6 +185,85 @@ export class GlobalDefaultsModal {
               <label class="form-label" for="def-custom-scripts">Scripts Utilitários Permitidos</label>
               <input type="text" id="def-custom-scripts" class="form-input" value="${this.escapeHtml(defaults.codeMode.customScripts.join(', '))}" placeholder="python scripts/audit_exercises.py" />
             </div>
+
+            <div class="form-group" style="margin-top: 14px;">
+              <label class="form-label" for="def-mcp-tools">Ferramentas MCP Autorizadas por Padrão</label>
+              <input type="text" id="def-mcp-tools" class="form-input" value="${this.escapeHtml((defaults.codeMode.allowedMcpTools || []).join(', '))}" placeholder="read_file, write_file, fetch_url" />
+              <div class="form-hint">Nomes de ferramentas MCP herdadas por padrão nos nós de agente (separadas por vírgula).</div>
+            </div>
+          </div>
+
+          <!-- 4. Memória Heterogênea do Pipeline (Fase 12) -->
+          <div class="settings-section-card">
+            <div class="section-card-header">
+              <span class="section-card-icon">💾</span>
+              <div class="section-card-titles">
+                <h3 class="section-card-title">Memória Heterogênea do Pipeline</h3>
+                <p class="section-card-desc">Memória NÃO é padrão e nem obrigatória. Configure os padrões globais do projeto.</p>
+              </div>
+            </div>
+
+            <div class="memory-enable-toggle-row">
+              <label class="memory-toggle-label">
+                <input type="checkbox" id="def-memory-enabled" ${defaults.memory?.enabled ? 'checked' : ''} />
+                <span class="memory-toggle-text">Habilitar Memória Global por Padrão (Opt-in)</span>
+              </label>
+            </div>
+
+            <div class="form-group" style="margin-top: 10px;">
+              <label class="form-label">Regime Padrão de Persistência</label>
+              <div class="memory-persistence-options">
+                <label class="persistence-radio-card ${!defaults.memory?.persistent ? 'selected' : ''}">
+                  <input type="radio" name="def-memory-persistence" value="ephemeral" ${!defaults.memory?.persistent ? 'checked' : ''} />
+                  <div class="persistence-card-content">
+                    <span class="persistence-card-title">⚪ Efêmera (Sessão / RAM)</span>
+                    <span class="persistence-card-desc">Memória em cache volátil. Descartada ao encerrar/reiniciar a sessão.</span>
+                  </div>
+                </label>
+
+                <label class="persistence-radio-card ${defaults.memory?.persistent ? 'selected' : ''}">
+                  <input type="radio" name="def-memory-persistence" value="persistent" ${defaults.memory?.persistent ? 'checked' : ''} />
+                  <div class="persistence-card-content">
+                    <span class="persistence-card-title">🟣 Persistente Entre Sessões</span>
+                    <span class="persistence-card-desc">Gravação atômica em disco para retenção de lições e dados históricos.</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div class="memory-perms-grid" style="margin-top: 14px;">
+              <label class="memory-perm-item">
+                <input type="checkbox" id="def-mem-read-bb" ${defaults.memory?.readBlackboard ? 'checked' : ''} />
+                <div>
+                  <span class="perm-item-title">Leitura do Blackboard</span>
+                  <span class="perm-item-desc">Memória de trabalho intra-pipeline</span>
+                </div>
+              </label>
+
+              <label class="memory-perm-item">
+                <input type="checkbox" id="def-mem-write-bb" ${defaults.memory?.writeBlackboard ? 'checked' : ''} />
+                <div>
+                  <span class="perm-item-title">Escrita no Blackboard</span>
+                  <span class="perm-item-desc">Publicação de deltas estruturados</span>
+                </div>
+              </label>
+
+              <label class="memory-perm-item">
+                <input type="checkbox" id="def-mem-read-lessons" ${defaults.memory?.semanticLessons ? 'checked' : ''} />
+                <div>
+                  <span class="perm-item-title">Consultar Lições Aprendidas</span>
+                  <span class="perm-item-desc">Injeção preventiva no system prompt</span>
+                </div>
+              </label>
+
+              <label class="memory-perm-item">
+                <input type="checkbox" id="def-mem-write-lessons" ${defaults.memory?.recordLessons ? 'checked' : ''} />
+                <div>
+                  <span class="perm-item-title">Registrar Novas Lições</span>
+                  <span class="perm-item-desc">Indexação de auditorias e erros</span>
+                </div>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -275,6 +354,16 @@ export class GlobalDefaultsModal {
     const scriptsRaw = (this.overlay.querySelector('#def-custom-scripts') as HTMLInputElement)?.value || '';
     const customScripts = scriptsRaw.split(',').map(s => s.trim()).filter(Boolean);
 
+    const mcpRaw = (this.overlay.querySelector('#def-mcp-tools') as HTMLInputElement)?.value || '';
+    const allowedMcpTools = mcpRaw.split(',').map(s => s.trim()).filter(Boolean);
+
+    const memEnabled = (this.overlay.querySelector('#def-memory-enabled') as HTMLInputElement)?.checked || false;
+    const memPersistent = (this.overlay.querySelector('input[name="def-memory-persistence"]:checked') as HTMLInputElement)?.value === 'persistent';
+    const memReadBb = (this.overlay.querySelector('#def-mem-read-bb') as HTMLInputElement)?.checked || false;
+    const memWriteBb = (this.overlay.querySelector('#def-mem-write-bb') as HTMLInputElement)?.checked || false;
+    const memReadLessons = (this.overlay.querySelector('#def-mem-read-lessons') as HTMLInputElement)?.checked || false;
+    const memWriteLessons = (this.overlay.querySelector('#def-mem-write-lessons') as HTMLInputElement)?.checked || false;
+
     const newDefaults: IGlobalPipelineDefaults = {
       sandbox: {
         isolationLevel,
@@ -292,7 +381,18 @@ export class GlobalDefaultsModal {
       },
       codeMode: {
         allowedTools,
-        customScripts
+        customScripts,
+        allowedMcpTools
+      },
+      memory: {
+        enabled: memEnabled,
+        persistent: memPersistent,
+        readBlackboard: memReadBb,
+        writeBlackboard: memWriteBb,
+        semanticLessons: memReadLessons,
+        recordLessons: memWriteLessons,
+        allowedKeys: [],
+        domains: []
       }
     };
 

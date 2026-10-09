@@ -8,11 +8,11 @@ namespace sandbox {
 
 class DockerSandboxDriver : public ISandboxDriver {
 private:
-    std::string defaultImage = "taskforge-agent-sandbox:latest";
+    std::string defaultImage = "arestrix-agent-sandbox:latest";
     HostProcessDriver processExecutor;
 
 public:
-    explicit DockerSandboxDriver(const std::string& image = "taskforge-agent-sandbox:latest");
+    explicit DockerSandboxDriver(const std::string& image = "arestrix-agent-sandbox:latest");
     ~DockerSandboxDriver() override = default;
 
     std::string getName() const override { return "DockerSandboxDriver"; }

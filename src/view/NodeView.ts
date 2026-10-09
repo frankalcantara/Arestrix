@@ -181,21 +181,21 @@ export class NodeView {
 
   private createActionButtons(width: number, height: number, _headerHeight: number): void {
     const canvas = document.createElement('canvas');
-    canvas.width = 360;
+    canvas.width = 480;
     canvas.height = 80;
     const ctx = canvas.getContext('2d')!;
     ctx.imageSmoothingEnabled = true;
 
     // Fundo da Pílula Soft Neomorphic branca pura com borda suave
     ctx.fillStyle = '#FFFFFF';
-    this.roundRect(ctx, 4, 4, 352, 72, 36);
+    this.roundRect(ctx, 4, 4, 472, 72, 36);
     ctx.fill();
 
     ctx.strokeStyle = '#CBD5E1';
     ctx.lineWidth = 4;
     ctx.stroke();
 
-    // Divisórias sutis
+    // Divisórias sutis entre os 4 botões
     ctx.strokeStyle = '#E2E8F0';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -203,9 +203,11 @@ export class NodeView {
     ctx.lineTo(120, 66);
     ctx.moveTo(240, 14);
     ctx.lineTo(240, 66);
+    ctx.moveTo(360, 14);
+    ctx.lineTo(360, 66);
     ctx.stroke();
 
-    // Ícones em alto contraste (sem sombras)
+    // Ícones em alto contraste (sem sombras - regra global)
     ctx.font = '800 36px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -213,6 +215,7 @@ export class NodeView {
     ctx.fillText('🛡️', 60, 42);
     ctx.fillText('🧠', 180, 42);
     ctx.fillText('🔧', 300, 42);
+    ctx.fillText('💾', 420, 42);
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.generateMipmaps = true;
@@ -222,7 +225,7 @@ export class NodeView {
     const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
     this.actionButtonsSprite = new THREE.Sprite(mat);
 
-    const spriteW = 82;
+    const spriteW = 108;
     const spriteH = 20;
     this.actionButtonsSprite.scale.set(spriteW, spriteH, 1);
 
@@ -233,16 +236,17 @@ export class NodeView {
     this.actionButtonsSprite.userData = { nodeId: this.nodeData.id, isBody: false };
     this.group.add(this.actionButtonsSprite);
 
-    // 3 Hitboxes circulares individuais para cada botão
-    const buttonSpacing = spriteW / 3;
-    const actions: { type: 'sandbox' | 'model' | 'tools'; xOffset: number }[] = [
-      { type: 'sandbox', xOffset: posX - buttonSpacing },
-      { type: 'model', xOffset: posX },
-      { type: 'tools', xOffset: posX + buttonSpacing }
+    // 4 Hitboxes circulares individuais para cada botão
+    const buttonSpacing = spriteW / 4;
+    const actions: { type: 'sandbox' | 'model' | 'tools' | 'memory'; xOffset: number }[] = [
+      { type: 'sandbox', xOffset: posX - 1.5 * buttonSpacing },
+      { type: 'model', xOffset: posX - 0.5 * buttonSpacing },
+      { type: 'tools', xOffset: posX + 0.5 * buttonSpacing },
+      { type: 'memory', xOffset: posX + 1.5 * buttonSpacing }
     ];
 
     actions.forEach(act => {
-      const hitGeo = new THREE.CircleGeometry(11, 16);
+      const hitGeo = new THREE.CircleGeometry(10.5, 16);
       const hitMat = new THREE.MeshBasicMaterial({ visible: false });
       const hitMesh = new THREE.Mesh(hitGeo, hitMat);
       hitMesh.position.set(act.xOffset, posY, 8);
