@@ -77,6 +77,9 @@ export class BackstageView {
             <li class="backstage-nav-item ${this.activeSection === 'export' ? 'active' : ''}" data-section="export">
               <span>📤</span> Exportar Código
             </li>
+            <li class="backstage-nav-item" id="btn-backstage-github-repos">
+              <span>🌐</span> Repositórios GitHub
+            </li>
             <li class="backstage-nav-item" id="btn-backstage-options">
               <span>⚙️</span> Opções do Studio
             </li>
@@ -265,6 +268,12 @@ export class BackstageView {
     this.overlay.querySelector('#btn-backstage-options')?.addEventListener('click', () => {
       this.close();
       this.globalDefaultsModal.show();
+    });
+
+    // Repositórios do GitHub
+    this.overlay.querySelector('#btn-backstage-github-repos')?.addEventListener('click', () => {
+      this.close();
+      globalEventBus.emit('modal:open-github-repos');
     });
 
     // Criar Projeto

@@ -137,7 +137,7 @@ export abstract class BaseModal {
     // Implementado pelas subclasses
   }
 
-  public open(): void {
+  public open(..._args: any[]): void {
     this.render();
     this.overlay.classList.remove('hidden');
     this.isOpen = true;

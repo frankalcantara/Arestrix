@@ -339,8 +339,12 @@ export class OfficeRibbon {
               <span class="ribbon-btn-icon">📚</span>
               <span class="ribbon-btn-label">Biblioteca de<br>Templates</span>
             </button>
+            <button class="ribbon-btn-large" id="ribbon-btn-github-repos" title="Gerenciar repositórios open source globais do GitHub para o catálogo de Skills">
+              <span class="ribbon-btn-icon">🌐</span>
+              <span class="ribbon-btn-label">Repositórios<br>GitHub</span>
+            </button>
           </div>
-          <div class="office-ribbon-group-title">Catálogo</div>
+          <div class="office-ribbon-group-title">Catálogo & Skills</div>
         </div>
       </div>
 
@@ -525,6 +529,8 @@ export class OfficeRibbon {
           this.projectMemoryModal.show();
         } else if (val.includes('lote') || val.includes('batch')) {
           this.batchPipelineModal.open();
+        } else if (val.includes('github') || val.includes('repo') || val.includes('repositório') || val.includes('skill')) {
+          globalEventBus.emit('modal:open-github-repos');
         } else {
           if (typeof alert !== 'undefined') alert(`Comando "${tellMeInput.value}" localizado! Abrindo opções correspondentes.`);
           this.switchTab('connectors');
@@ -574,6 +580,7 @@ export class OfficeRibbon {
     this.container.querySelector('#ribbon-btn-tools-code')?.addEventListener('click', () => this.globalDefaultsModal.show());
     this.container.querySelector('#ribbon-btn-mcp-mgr')?.addEventListener('click', () => this.mcpServersModal.show());
     this.container.querySelector('#ribbon-btn-open-templates-tab')?.addEventListener('click', () => this.templateModal.show());
+    this.container.querySelector('#ribbon-btn-github-repos')?.addEventListener('click', () => globalEventBus.emit('modal:open-github-repos'));
 
     // 9. Botões da Aba Conectores & Importação
     this.container.querySelector('#ribbon-btn-import-pi')?.addEventListener('click', () => this.importPiModal.show());

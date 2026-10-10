@@ -1,4 +1,5 @@
 import { Graph } from '../core/Graph.ts';
+import { globalEventBus } from '../core/EventBus.ts';
 import { IGlobalPipelineDefaults, LLMProvider, SandboxIsolationLevel, SandboxNetworkPolicy, CodeModeTool, DEFAULT_PIPELINE_DEFAULTS } from '../core/types.ts';
 import { ModalWindowManager, IModalWindowController } from './modals/ModalWindowManager.ts';
 
@@ -71,7 +72,12 @@ export class GlobalDefaultsModal {
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="def-skill">Arquivo de Skill / Instruções Padrão</label>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label class="form-label" for="def-skill" style="margin: 0;">Arquivo de Skill / Instruções Padrão</label>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-defaults-open-github-repos" style="font-size: 11px; padding: 2px 8px; font-weight: 600;">
+                  🌐 Repositórios GitHub...
+                </button>
+              </div>
               <input type="text" id="def-skill" class="form-input" value="${this.escapeHtml(defaults.model.skillPath || '')}" placeholder=".agents/sua-skill/SKILL.md" />
             </div>
 
@@ -299,6 +305,11 @@ export class GlobalDefaultsModal {
     // Fechar
     this.overlay.querySelector('#btn-close-defaults-modal')?.addEventListener('click', () => this.hide());
     this.overlay.querySelector('#btn-cancel-defaults')?.addEventListener('click', () => this.hide());
+
+    // Abrir repositórios do GitHub
+    this.overlay.querySelector('#btn-defaults-open-github-repos')?.addEventListener('click', () => {
+      globalEventBus.emit('modal:open-github-repos');
+    });
 
     // Toggle estilo das pílulas de ferramentas
     this.overlay.querySelectorAll('.def-tool-check').forEach(chk => {

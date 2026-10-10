@@ -2355,3 +2355,14 @@ body, html {
   font-family: Consolas, monospace;
 }
 
+/* Modais de Repositórios GitHub e Skills */
+.github-repos-modal-dialog,
+.node-skills-modal-dialog {
+  max-width: 92vw;
+  max-height: 90vh;
+}
+
+.chk-global-toggle-repo {
+  accent-color: #0f6cbd;
+}
+
