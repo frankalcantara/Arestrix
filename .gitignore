@@ -28,3 +28,7 @@ build/
 *.o
 *.d
 *.a.tmp
+
+# Planilhas reais de teste (nao versionar)
+teste-excel/
+tests/fixtures/real/

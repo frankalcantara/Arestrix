@@ -1,5 +1,7 @@
 import { EnvironmentManager } from '../env/EnvironmentManager.ts';
 import type { IPiProjectScanResult } from '../pi/GenericPiProjectScanner.ts';
+import { VALID_ROLES, buildExcelImportPrompt, ExcelPromptStore } from '../excel/ExcelImportPrompt.ts';
+import type { RegionRole, WorkbookModel } from '../excel/WorkbookModel.ts';
 
 declare const process: any;
 
@@ -43,6 +45,18 @@ export interface IImportAIValidationResult {
   auditFindings: string[];
   missingEnvKey?: string;
   rawAIResponse?: string;
+}
+
+export interface IExcelReviewResult {
+  isSuccess: boolean;
+  confidenceScore: number;
+  summary: string;
+  regionCorrections: Array<{ regionId: string; role: RegionRole; reason: string }>;
+  tableSuggestions: Array<{ regionId: string; tableName: string; primaryKey: string | null; notes?: string }>;
+  findings: string[];
+  questionsForUser: string[];
+  missingEnvKey?: string;
+  error?: string;
 }
 
 /**
@@ -240,6 +254,46 @@ INSTRUÇÕES OBRIGATÓRIAS:
 
     // Se a API falhou mas temos a análise estática, usa os dados estáticos refinados
     return this.buildFallbackResultWithStaticData(scan);
+  }
+
+  /**
+   * Revisa o Raio-X de uma planilha com o modelo padrão, usando o prompt do agente de importação
+   * (editável no modal). Recebe só a estrutura. A resposta é tratada como dado não confiável:
+   * só ficam ids de região que existem e papéis válidos.
+   */
+  public async reviewExcelImport(model: WorkbookModel, promptTemplate: string = ExcelPromptStore.get()): Promise<IExcelReviewResult> {
+    const empty: IExcelReviewResult = { isSuccess: false, confidenceScore: 0, summary: '', regionCorrections: [], tableSuggestions: [], findings: [], questionsForUser: [] };
+    const apiKey = await this.envManager.getEnvVar(this.envKeyName);
+
+    if (!this.customApiCaller && (this.isTestEnvironment() || !apiKey)) {
+      return { ...empty, missingEnvKey: this.envKeyName, error: `Defina ${this.envKeyName} no ambiente para usar o modelo padrão.` };
+    }
+
+    try {
+      const prompt = buildExcelImportPrompt(model, promptTemplate);
+      const raw = this.customApiCaller ? await this.customApiCaller(apiKey ?? '', prompt) : await this.callDeepSeekApi(apiKey as string, prompt);
+      const parsed = this.cleanAndParseJsonResponse(raw);
+
+      const known = new Set(model.sheets.flatMap(s => s.regions.map(r => r.id)));
+      const text = (v: unknown, max = 400): string => (typeof v === 'string' ? v.slice(0, max) : '');
+      const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(x => text(x)).filter(Boolean).slice(0, 50) : []);
+
+      return {
+        isSuccess: true,
+        confidenceScore: Math.max(0, Math.min(100, Number(parsed.confidenceScore) || 0)),
+        summary: text(parsed.summary, 1000),
+        regionCorrections: (Array.isArray(parsed.regionCorrections) ? parsed.regionCorrections : [])
+          .filter((c: any) => c && known.has(c.regionId) && VALID_ROLES.includes(c.role))
+          .map((c: any) => ({ regionId: c.regionId as string, role: c.role as RegionRole, reason: text(c.reason) })),
+        tableSuggestions: (Array.isArray(parsed.tableSuggestions) ? parsed.tableSuggestions : [])
+          .filter((t: any) => t && known.has(t.regionId) && typeof t.tableName === 'string')
+          .map((t: any) => ({ regionId: t.regionId as string, tableName: text(t.tableName, 64), primaryKey: typeof t.primaryKey === 'string' ? text(t.primaryKey, 64) : null, notes: text(t.notes) || undefined })),
+        findings: list(parsed.findings),
+        questionsForUser: list(parsed.questionsForUser)
+      };
+    } catch (e) {
+      return { ...empty, error: `Falha na revisão pelo modelo: ${(e as Error).message}` };
+    }
   }
 
   /**

@@ -12,6 +12,7 @@
     "app:dev": "python CppCore/dev.py"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
     "lucide": "^0.453.0",
     "three": "^0.169.0",
     "troika-three-text": "^0.50.1"

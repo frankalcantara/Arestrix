@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import ExcelJS from 'exceljs';
 import { Graph } from '../src/core/Graph.ts';
 import { EventBus } from '../src/core/EventBus.ts';
 import { ProjectManager } from '../src/core/ProjectManager.ts';
@@ -75,35 +76,45 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
     expect(hermesNode?.agentSettings?.model?.model).toBe('hermes-3-llama-3.1-70b');
   });
 
-  it('deve desconstruir planilha complexa do Excel em banco relacional SQLite e rede de 4 agentes concorrentes', () => {
+  it('deve analisar um .xlsx (Raio-X) e gerar o grafo de regiões com as dependências', async () => {
+    const wb = new ExcelJS.Workbook();
+    const dados = wb.addWorksheet('Dados');
+    ['Item', 'Valor'].forEach((h, i) => (dados.getCell(1, i + 1).value = h));
+    [['a', 10], ['b', 20], ['c', 30]].forEach(([n, v], i) => {
+      dados.getCell(i + 2, 1).value = n;
+      dados.getCell(i + 2, 2).value = v;
+    });
+    const resumo = wb.addWorksheet('Resumo');
+    resumo.getCell('A1').value = 'Total';
+    resumo.getCell('B1').value = { formula: 'SUM(Dados!B2:B4)', result: 60 };
+    const bytes = new Uint8Array(await wb.xlsx.writeBuffer());
+
     const excelModal = new ImportExcelModal(graph);
-    excelModal.synthesizeSpreadsheetSystem();
+    await excelModal.analyzeBytes(bytes, 'teste.xlsx');
 
+    const model = excelModal.getModel();
+    expect(model).not.toBeNull();
+    expect(model!.stats.regions).toBe(2);
+    expect(model!.dependencies).toEqual([{ from: 'Dados!A1:B4', to: 'Resumo!A1:B1', formulaCount: 1 }]);
+    expect(JSON.parse(excelModal.exportJson()).schemaVersion).toBe(1);
+
+    excelModal.generateRegionGraph();
     const nodes = graph.getAllNodes();
-    expect(nodes.length).toBe(4);
-
-    const ingestNode = nodes.find(n => n.id === 'node_excel_ingest');
-    const calcNode = nodes.find(n => n.id === 'node_excel_calc');
-    const evalNode = nodes.find(n => n.id === 'node_excel_eval');
-    const reportNode = nodes.find(n => n.id === 'node_excel_report');
-
-    expect(ingestNode).toBeDefined();
-    expect(calcNode).toBeDefined();
-    expect(evalNode).toBeDefined();
-    expect(reportNode).toBeDefined();
-
-    // Valida arestas e loops de feedback
+    expect(nodes.map(n => n.label).sort()).toEqual(['Dados_A1_B4', 'Resumo_A1_B1']);
     const edges = graph.getAllEdges();
-    expect(edges.length).toBe(4);
+    expect(edges).toHaveLength(1);
+    const from = nodes.find(n => n.label === 'Dados_A1_B4')!;
+    const to = nodes.find(n => n.label === 'Resumo_A1_B1')!;
+    expect(edges[0]).toMatchObject({ sourceNodeId: from.id, targetNodeId: to.id });
+  });
 
-    // Feedback loop de inconsistência de auditoria
-    const feedbackEdge = edges.find(e => e.sourceNodeId === 'node_excel_eval' && e.targetNodeId === 'node_excel_ingest');
-    expect(feedbackEdge).toBeDefined();
-
-    // Banco de dados deve ter sido atualizado no manifesto do projeto
-    const proj = projectManager.getCurrentProject();
-    expect(proj.database?.type).toBe('sqlite');
-    expect(proj.database?.filePath).toBe('storage/database.sqlite');
+  it('deve informar erro legível quando o arquivo não é um .xlsx', async () => {
+    const excelModal = new ImportExcelModal(graph);
+    await excelModal.analyzeBytes(new TextEncoder().encode('a,b,c'), 'dados.csv');
+    expect(excelModal.getModel()).toBeNull();
+    const before = graph.getAllNodes().length;
+    excelModal.generateRegionGraph(); // sem modelo: não faz nada
+    expect(graph.getAllNodes().length).toBe(before);
   });
 
   it('deve validar estrutura das classes CSS da Ribbon compatíveis com o padrão Microsoft Office Fluent', () => {
