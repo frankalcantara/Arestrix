@@ -1,3 +1,8 @@
+#include <mutex>
+#include <filesystem>
+#include <vector>
+#include <string>
+#include <ctime>
 #include "ProjectManager.hpp"
 #include "../memory/AgentBlackboard.hpp"
 #include "../memory/SemanticMemoryEngine.hpp"

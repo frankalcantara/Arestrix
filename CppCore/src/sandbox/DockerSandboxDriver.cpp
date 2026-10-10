@@ -1,3 +1,4 @@
+#include <string>
 #include "DockerSandboxDriver.hpp"
 #include <sstream>
 #include <iostream>

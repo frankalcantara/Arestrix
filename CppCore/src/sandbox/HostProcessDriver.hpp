@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include "ISandboxDriver.hpp"
 
 namespace taskforge {

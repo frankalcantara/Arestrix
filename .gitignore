@@ -17,3 +17,14 @@ Manual_de_Marca/
 
 # Documentos de planejamento privados
 PLANO_DE_IMPLEMENTACAO.md
+
+# Duvidas e rascunhos de design (nao versionados)
+DUVIDAS_*.md
+
+# Binarios e objetos de build Linux
+arestrix
+CppCore/arestrix
+build/
+*.o
+*.d
+*.a.tmp

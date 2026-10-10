@@ -114,8 +114,8 @@ export class EnvironmentManager {
     // 2. Se rodando em Node.js com child_process disponível
     try {
       if (typeof process !== 'undefined' && process.platform === 'win32') {
-        // @ts-ignore
-        const { execSync } = await import('child_process');
+        const cpName = 'child_process';
+        const { execSync } = await import(/* @vite-ignore */ cpName);
         execSync(`setx ${keyName} "${cleanValue}"`, { stdio: 'ignore' });
         process.env[keyName] = cleanValue;
         return true;

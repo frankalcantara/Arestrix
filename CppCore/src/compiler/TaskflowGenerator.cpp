@@ -1,3 +1,5 @@
+#include <cstdint>
+#include <cctype>
 #include "TaskflowGenerator.hpp"
 #include <algorithm>
 #include <sstream>
@@ -121,6 +123,25 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
         } else if (node.type == core::TaskflowNodeType::Subflow || node.type == core::TaskflowNodeType::Module) {
             code += "  auto task_" + sId + " = tf.emplace([&ctx](tf::Subflow& sf) {\n";
             std::string body = node.customLambdaBody.empty() ? "// subflow hierarquico;" : node.customLambdaBody;
+            code += indent(body, 4) + "\n";
+            code += "  }).name(\"" + label + "\");\n\n";
+        } else if (node.type == core::TaskflowNodeType::Fork || node.type == core::TaskflowNodeType::Join) {
+            // Fork: despachante (suas arestas de saida iniciam ramos paralelos no executor).
+            // Join: barreira (so executa depois que todos os predecessores terminam, garantido por precede()).
+            const bool isFork = node.type == core::TaskflowNodeType::Fork;
+            size_t branches = 0;
+            for (const auto& epair : edges) {
+                const auto& e = epair.second;
+                if (e.isFeedbackLoop) continue;
+                if (isFork ? (e.sourceNodeId == node.id) : (e.targetNodeId == node.id)) ++branches;
+            }
+            code += "  auto task_" + sId + " = tf.emplace([&ctx]() {\n";
+            std::string body = node.customLambdaBody;
+            if (body.empty()) {
+                body = isFork
+                    ? "std::osyncstream(std::cout) << \"[Fork: " + label + "] Disparando " + std::to_string(branches) + " ramos paralelos.\\n\";"
+                    : "std::osyncstream(std::cout) << \"[Join: " + label + "] Barreira liberada: " + std::to_string(branches) + " ramos sincronizados.\\n\";";
+            }
             code += indent(body, 4) + "\n";
             code += "  }).name(\"" + label + "\");\n\n";
         } else if (node.type == core::TaskflowNodeType::Agent) {

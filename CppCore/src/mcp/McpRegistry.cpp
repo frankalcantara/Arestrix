@@ -1,3 +1,6 @@
+#include <mutex>
+#include <vector>
+#include <string>
 #include "McpRegistry.hpp"
 #include <fstream>
 #include <iostream>

@@ -155,7 +155,7 @@ export class McpServersModal {
               </div>
               <div class="form-group" style="margin-top: 8px;">
                 <label class="form-label" for="mcp-input-args">Argumentos (separados por espaço)</label>
-                <input type="text" id="mcp-input-args" class="form-input" placeholder="ex: -y @modelcontextprotocol/server-filesystem C:\\Projetos" />
+                <input type="text" id="mcp-input-args" class="form-input" placeholder="ex: -y @modelcontextprotocol/server-filesystem ./workspace" />
               </div>
             </div>
 

@@ -1,0 +1,95 @@
+# Arestrix - build do backend C++ no Linux (Ubuntu) com GCC
+# Equivalente ao Makefile (nmake/MSVC) usado no Windows.
+#
+# Uso:
+#   make -f Makefile.linux                # C++23 (padrao)
+#   make -f Makefile.linux STD=c++20      # compatibilidade com C++20
+#   make -f Makefile.linux CXX=clang++    # outro compilador
+#   make -f Makefile.linux run            # compila e executa
+#   make -f Makefile.linux setup          # baixa a lib WebUI para Linux, se faltar
+#   make -f Makefile.linux clean
+#
+# Pre-requisitos (Ubuntu): sudo apt install build-essential curl unzip
+# GCC 13+ aceita -std=c++23; GCC 11/12 aceitam apenas -std=c++2b (tratado abaixo).
+
+CXX      ?= g++
+STD      ?= c++23
+
+# GCC < 13 nao conhece "c++23" (apenas "c++2b"): usa o alias quando necessario.
+ifeq ($(STD),c++23)
+  ifeq ($(shell echo 'int main(){}' | $(CXX) -std=c++23 -x c++ -fsyntax-only - >/dev/null 2>&1 && echo ok),)
+    STD_FLAG := -std=c++2b
+  else
+    STD_FLAG := -std=c++23
+  endif
+else
+  STD_FLAG := -std=$(STD)
+endif
+
+WEBUI_VERSION = 2.4.2
+WEBUI_DIR     = vendor/webui
+WEBUI_LIB     = $(WEBUI_DIR)/linux/libwebui-2-static.a
+
+CXXFLAGS ?= -O2 -Wall -Wextra -Wno-unused-parameter
+CXXFLAGS += $(STD_FLAG) -pthread -MMD -MP
+INCLUDES  = -I$(WEBUI_DIR)/include -Ivendor/json/include
+LDLIBS    = $(WEBUI_LIB) -pthread -ldl -lm
+
+TARGET    = arestrix
+BUILD_DIR = build/linux
+
+# Manter sincronizada com a lista SRC do Makefile (nmake).
+SRC = src/main.cpp \
+      src/core/Graph.cpp \
+      src/compiler/TaskflowGenerator.cpp \
+      src/sandbox/HostProcessDriver.cpp \
+      src/sandbox/DockerSandboxDriver.cpp \
+      src/sandbox/MicroVMSandboxDriver.cpp \
+      src/sandbox/SandboxManager.cpp \
+      src/sandbox/PipelineResumeEngine.cpp \
+      src/memory/AgentBlackboard.cpp \
+      src/memory/SemanticMemoryEngine.cpp \
+      src/mcp/McpClient.cpp \
+      src/mcp/McpRegistry.cpp \
+      src/project/ProjectManager.cpp \
+      src/pi/PiProjectScanner.cpp
+
+OBJ = $(SRC:%.cpp=$(BUILD_DIR)/%.o)
+DEP = $(OBJ:.o=.d)
+
+.PHONY: all run setup clean info
+
+all: $(TARGET)
+
+$(TARGET): $(OBJ) $(WEBUI_LIB)
+	$(CXX) $(OBJ) -o $@ $(LDLIBS)
+	cp -f $(TARGET) ../$(TARGET)
+
+$(BUILD_DIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+
+$(WEBUI_LIB):
+	@$(MAKE) -f Makefile.linux setup
+
+# Baixa a biblioteca estatica do WebUI para Linux/GCC (os headers ja estao em vendor/webui/include)
+setup:
+	@if [ ! -f $(WEBUI_LIB) ]; then \
+	  echo "[Setup] Baixando WebUI $(WEBUI_VERSION) para Linux (gcc-x64)..."; \
+	  mkdir -p $(WEBUI_DIR)/linux build/tmp && \
+	  curl -fL -o build/tmp/webui.zip https://github.com/webui-dev/webui/releases/download/$(WEBUI_VERSION)/webui-linux-gcc-x64.zip && \
+	  unzip -oj build/tmp/webui.zip 'webui-linux-gcc-x64/libwebui-2-static.a' -d $(WEBUI_DIR)/linux && \
+	  rm -rf build/tmp; \
+	else echo "[Setup] WebUI ja presente."; fi
+
+run: all
+	cd .. && ./$(TARGET)
+
+info:
+	@echo "CXX      = $(CXX)"
+	@echo "STD_FLAG = $(STD_FLAG)"
+
+clean:
+	rm -rf $(BUILD_DIR) $(TARGET) ../$(TARGET)
+
+-include $(DEP)

@@ -1,3 +1,6 @@
+#include <filesystem>
+#include <vector>
+#include <string>
 #include "PiProjectScanner.hpp"
 #include <fstream>
 #include <sstream>
@@ -163,9 +166,9 @@ PiProjectScanResult PiProjectScanner::scan(const std::string& directoryPath) {
 
 std::vector<std::string> PiProjectScanner::getKnownPiProjects() {
     std::vector<std::string> valid;
-    // Lista dinamicamente pastas com .agents ou .pi em C:/Projetos se existirem
+    // Lista dinamicamente pastas com .agents ou .pi dentro da pasta onde o Arestrix roda
     try {
-        std::filesystem::path base("C:/Projetos");
+        std::filesystem::path base = std::filesystem::current_path();
         if (std::filesystem::exists(base) && std::filesystem::is_directory(base)) {
             for (const auto& entry : std::filesystem::directory_iterator(base)) {
                 if (entry.is_directory()) {

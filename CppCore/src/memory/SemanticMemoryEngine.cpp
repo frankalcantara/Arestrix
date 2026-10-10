@@ -1,3 +1,11 @@
+#include <mutex>
+#include <fstream>
+#include <filesystem>
+#include <vector>
+#include <string>
+#include <ctime>
+#include <cctype>
+#include <utility>
 #include "SemanticMemoryEngine.hpp"
 #include <iostream>
 #include <sstream>

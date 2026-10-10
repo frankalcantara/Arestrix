@@ -82,10 +82,11 @@ export class GenericPiProjectScanner {
 
     try {
       if (typeof process !== 'undefined' && process.versions && process.versions.node) {
-        // @ts-ignore
-        fsModule = await import('fs');
-        // @ts-ignore
-        pathModule = await import('path');
+        // Especificadores em variável + @vite-ignore: Vite não tenta empacotar módulos Node no bundle do navegador
+        const fsName = 'fs';
+        const pathName = 'path';
+        fsModule = await import(/* @vite-ignore */ fsName);
+        pathModule = await import(/* @vite-ignore */ pathName);
         if (fsModule && fsModule.existsSync && fsModule.existsSync(cleanPath)) {
           hasFs = true;
         }

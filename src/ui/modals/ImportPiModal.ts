@@ -29,7 +29,7 @@ export class ImportPiModal {
   private aiValidationResult: IImportAIValidationResult | null = null;
   private isValidatingAI: boolean = false;
   private isScanning: boolean = false;
-  private selectedDirPath: string = 'C:/Projetos';
+  private selectedDirPath: string = '';
   private shouldValidateWithAI: boolean = true;
 
   constructor(graph: Graph, viewport?: Viewport) {
@@ -59,7 +59,7 @@ export class ImportPiModal {
     this.modal.style.display = 'flex';
 
     if (!this.selectedDirPath) {
-      this.selectedDirPath = 'C:/Projetos';
+      this.selectedDirPath = await this.getWorkingDir();
     }
 
     this.render();
@@ -100,6 +100,21 @@ export class ImportPiModal {
       this.isScanning = false;
       this.render();
     }
+  }
+
+  /**
+   * Pasta onde o Arestrix está rodando (backend C++); vazio fora do modo nativo
+   */
+  private async getWorkingDir(): Promise<string> {
+    try {
+      if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
+        const dir = await (window as any).webui.call('get_working_dir');
+        if (dir && typeof dir === 'string') return dir.trim();
+      }
+    } catch (err) {
+      console.warn('[ImportPiModal] Falha ao obter pasta de trabalho:', err);
+    }
+    return '';
   }
 
   /**
@@ -190,7 +205,7 @@ export class ImportPiModal {
 
   private renderProjectTab(): string {
     const scan = this.currentScanResult;
-    const currentPath = this.selectedDirPath || scan?.rootPath || 'C:/Projetos';
+    const currentPath = this.selectedDirPath || scan?.rootPath || '';
     const ai = this.aiValidationResult;
 
     const skillsCount = scan?.skills?.length || 0;
@@ -399,7 +414,7 @@ export class ImportPiModal {
         const rel = input.files[0].webkitRelativePath;
         const topFolder = rel ? rel.split('/')[0] : '';
         if (topFolder) {
-          const current = this.selectedDirPath || 'C:/Projetos';
+          const current = this.selectedDirPath || await this.getWorkingDir();
           const newPath = `${current.replace(/[\/\\][^\/\\]*$/, '')}/${topFolder}`;
           await this.rescanPath(newPath);
         }
@@ -468,7 +483,7 @@ export class ImportPiModal {
   }
 
   public async executeProjectImport(dirPath?: string): Promise<boolean> {
-    const pathVal = dirPath || (this.modal?.querySelector('#pi-dir-input') as HTMLInputElement)?.value.trim() || this.selectedDirPath || 'C:/Projetos';
+    const pathVal = dirPath || (this.modal?.querySelector('#pi-dir-input') as HTMLInputElement)?.value.trim() || this.selectedDirPath || await this.getWorkingDir();
     const scan = this.currentScanResult || await this.projectImporter.scanProject(pathVal);
 
     const ok = await this.projectImporter.importProject(

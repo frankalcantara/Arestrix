@@ -197,8 +197,9 @@ INSTRUÇÕES OBRIGATÓRIAS:
       return this.buildFallbackResultWithStaticData(scan);
     }
 
-    // Se a chave não estiver no ambiente, devolve resultado estruturado com aviso de chave ausente
-    if (!apiKey) {
+    // Se a chave não estiver no ambiente (e não há caller injetado, que dispensa a chave),
+    // devolve resultado estruturado com aviso de chave ausente
+    if (!apiKey && !this.customApiCaller) {
       return this.buildFallbackResultWithStaticData(scan, this.envKeyName);
     }
 
@@ -206,8 +207,8 @@ INSTRUÇÕES OBRIGATÓRIAS:
 
     try {
       const rawResponse = this.customApiCaller
-        ? await this.customApiCaller(apiKey, prompt)
-        : await this.callDeepSeekApi(apiKey, prompt);
+        ? await this.customApiCaller(apiKey ?? '', prompt)
+        : await this.callDeepSeekApi(apiKey as string, prompt);
 
       const parsed = this.cleanAndParseJsonResponse(rawResponse);
 

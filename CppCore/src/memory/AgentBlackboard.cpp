@@ -1,3 +1,10 @@
+#include <mutex>
+#include <shared_mutex>
+#include <fstream>
+#include <filesystem>
+#include <vector>
+#include <string>
+#include <cctype>
 #include "AgentBlackboard.hpp"
 #include <iostream>
 

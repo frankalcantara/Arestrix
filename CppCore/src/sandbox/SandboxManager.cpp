@@ -1,3 +1,4 @@
+#include <memory>
 #include "SandboxManager.hpp"
 #include <iostream>
 

@@ -7,6 +7,10 @@ import urllib.request
 import zipfile
 import shutil
 import sys
+import platform
+
+IS_WINDOWS = platform.system() == "Windows"
+EXE_NAME = "arestrix.exe" if IS_WINDOWS else "arestrix"
 
 PORT = 8000
 UI_DIR = "ui"
@@ -25,6 +29,9 @@ def serve():
         httpd.serve_forever()
 
 def setup_webui():
+    if not IS_WINDOWS:
+        # No Linux a lib estatica (vendor/webui/linux) ja vem no repositorio; o Makefile.linux baixa se faltar
+        return
     if not os.path.exists("vendor/webui/include"):
         print("[Setup] Baixando biblioteca WebUI (C++) para MSVC...")
         os.makedirs("vendor", exist_ok=True)
@@ -69,7 +76,32 @@ def find_vcvars():
         return vcvars
     return None
 
+def build_linux():
+    print("[Build] Compilando o backend em C++ com GCC (Makefile.linux)...")
+    std = os.environ.get("ARESTRIX_STD", "c++23")
+    try:
+        result = subprocess.run(["make", "-k", "-f", "Makefile.linux", f"STD={std}"], capture_output=True, text=True)
+    except FileNotFoundError:
+        print("[Erro] 'make'/'g++' nao encontrados. Instale: sudo apt install build-essential curl unzip")
+        sys.exit(1)
+    if result.returncode != 0:
+        print("[Erro de Build] A compilação falhou:\n", result.stdout, "\n", result.stderr)
+        sys.exit(1)
+    print("[Build] Compilação concluída com sucesso!")
+    sync_dist()
+
+def sync_dist():
+    # Sincroniza dist para dentro de CppCore se existir
+    root_dist = os.path.join(os.getcwd(), "..", "dist")
+    local_dist = os.path.join(os.getcwd(), "dist")
+    if os.path.exists(root_dist):
+        if os.path.exists(local_dist):
+            shutil.rmtree(local_dist)
+        shutil.copytree(root_dist, local_dist)
+
 def build():
+    if not IS_WINDOWS:
+        return build_linux()
     print("[Build] Compilando o backend em C++ com MSVC...")
     
     vcvars = find_vcvars()
@@ -78,7 +110,8 @@ def build():
         if vcvars:
             print(f"[Build] Ambiente MSVC detectado automaticamente: {vcvars}")
             # Roda nmake dentro do ambiente configurado
-            cmd = f'call "{vcvars}" && nmake -nologo -f Makefile'
+            std = os.environ.get("ARESTRIX_STD_MSVC", "/std:c++latest")
+            cmd = f'call "{vcvars}" && nmake -nologo -f Makefile STD={std}'
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
         else:
             print("[Build] vswhere não encontrou o Visual Studio. Tentando nmake direto...")
@@ -113,11 +146,11 @@ def build():
 
 if __name__ == "__main__":
     print("[Setup] Construindo o Frontend (Vite)...")
-    subprocess.run(["npm", "run", "build"], cwd=os.path.join(os.getcwd(), ".."), shell=True)
+    subprocess.run(["npm", "run", "build"], cwd=os.path.join(os.getcwd(), ".."), shell=IS_WINDOWS)
     
     setup_webui()
     build()
 
     print("[App] Iniciando Arestrix C++...")
-    app_path = os.path.join(os.getcwd(), "arestrix.exe")
+    app_path = os.path.join(os.getcwd(), EXE_NAME)
     subprocess.run([app_path], cwd=os.path.join(os.getcwd(), ".."))

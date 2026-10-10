@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include "webui.hpp"
 #include "core/Graph.hpp"
 #include "compiler/TaskflowGenerator.hpp"
@@ -469,6 +470,25 @@ void ui_pick_folder(webui::window::event* e) {
         pFileOpen->Release();
     }
     CoUninitialize();
+#else
+    // Linux: usa o seletor grafico disponivel (zenity ou kdialog); sem nenhum, devolve vazio e a UI usa o fallback HTML5
+    const char* pickers[] = {
+        "zenity --file-selection --directory --title='Selecione a Pasta do Projeto' 2>/dev/null",
+        "kdialog --getexistingdirectory . 2>/dev/null"
+    };
+    for (const char* cmd : pickers) {
+        FILE* pipe = popen(cmd, "r");
+        if (!pipe) continue;
+        char buf[4096];
+        std::string out;
+        while (fgets(buf, sizeof(buf), pipe)) out += buf;
+        int status = pclose(pipe);
+        while (!out.empty() && (out.back() == '\n' || out.back() == '\r')) out.pop_back();
+        if (status == 0 && !out.empty()) {
+            selectedPath = out;
+            break;
+        }
+    }
 #endif
     e->return_string(selectedPath);
 }
@@ -477,8 +497,7 @@ void ui_pick_folder(webui::window::event* e) {
 void ui_list_subdirectories(webui::window::event* e) {
     try {
         std::string dirPath = e->get_string();
-        if (dirPath.empty()) dirPath = "C:/Projetos";
-        std::filesystem::path p(dirPath);
+        std::filesystem::path p = dirPath.empty() ? std::filesystem::current_path() : std::filesystem::path(dirPath);
         nlohmann::json j = nlohmann::json::array();
         if (std::filesystem::exists(p) && std::filesystem::is_directory(p)) {
             for (const auto& entry : std::filesystem::directory_iterator(p)) {
@@ -494,6 +513,14 @@ void ui_list_subdirectories(webui::window::event* e) {
     } catch (...) {
         e->return_string("[]");
     }
+}
+
+// Wrapper JS -> C++ (Pasta de trabalho onde o Arestrix esta rodando)
+void ui_get_working_dir(webui::window::event* e) {
+    std::error_code ec;
+    std::filesystem::path cwd = std::filesystem::current_path(ec);
+    std::string out = ec ? "" : cwd.generic_string();
+    e->return_string(out);
 }
 
 void exit_app(webui::window::event* e) {
@@ -625,6 +652,7 @@ int main() {
     win.bind("set_env_var", ui_set_env_var);
     win.bind("pick_folder", ui_pick_folder);
     win.bind("list_subdirectories", ui_list_subdirectories);
+    win.bind("get_working_dir", ui_get_working_dir);
     win.bind("exit_app", exit_app);
 
     // Registra o Emitter de Telemetria de Agentes em Tempo Real (Fase 10)
@@ -640,21 +668,26 @@ int main() {
         uiIndex = projectRoot / "CppCore" / "ui" / "index.html";
     }
 
+    bool shown = true;
     if (std::filesystem::exists(distIndex)) {
         std::cout << "[C++] Servindo a UI oficial: " << distIndex.string() << std::endl;
         bool rootOk = win.set_root_folder(distDir.string());
-        if (rootOk) {
-            win.show("index.html");
-        } else {
-            win.show("dist/index.html");
-        }
+        shown = rootOk ? win.show("index.html") : win.show("dist/index.html");
     } else if (std::filesystem::exists(uiIndex)) {
         std::cout << "[C++] Servindo UI de desenvolvimento: " << uiIndex.string() << std::endl;
         win.set_root_folder(uiIndex.parent_path().string());
-        win.show("index.html");
+        shown = win.show("index.html");
     } else {
         std::cerr << "[C++ Erro] index.html nao foi encontrado em dist/ ou ui/." << std::endl;
         win.show("<html><head><title>Arestrix</title><style>body{font-family:Segoe UI,sans-serif;padding:2rem;background:#0f172a;color:#f8fafc;text-align:center;}</style></head><body><h1>Arestrix Studio</h1><p>Frontend nao encontrado em dist/index.html.</p><p>Execute <code>npm run build</code> na pasta raiz do projeto.</p></body></html>");
+    }
+
+    if (!shown) {
+        // Nenhum navegador foi aberto automaticamente (ex.: Linux/WSL sem xdg-open): o servidor local continua ativo
+        std::cout << "[C++ Aviso] Nao foi possivel abrir um navegador automaticamente.\n"
+                  << "[C++] Abra manualmente no navegador: " << win.get_url() << "\n"
+                  << "[C++] (ou instale um navegador / xdg-utils; no WSL: sudo apt install wslu xdg-utils)" << std::endl;
+        webui::set_timeout(0); // espera indefinidamente pela primeira conexao
     }
 
     webui::wait();
