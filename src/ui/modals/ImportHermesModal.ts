@@ -3,6 +3,11 @@ import { Viewport } from '../../view/Viewport.ts';
 import { AddNodeCommand } from '../../core/history/GraphCommands.ts';
 import { INodeAgentSettings } from '../../core/types.ts';
 
+/**
+ * Arestrix Studio - Diálogo de Importação do Hermes (Nous Research)
+ * Padrão Microsoft Office (Fluent Dialog)
+ * Rigoroso respeito: Zero sombras/glows em fontes
+ */
 export class ImportHermesModal {
   private modal?: HTMLElement;
   private graph: Graph;
@@ -41,59 +46,50 @@ export class ImportHermesModal {
   private render(): void {
     if (!this.modal) return;
     this.modal.innerHTML = `
-      <div class="modal-window" style="max-width: 800px; width: 92%; max-height: 90vh; display: flex; flex-direction: column;">
-        <div class="modal-header" style="border-bottom: 2px solid #ec4899; padding-bottom: 12px;">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <div style="width: 38px; height: 38px; background: #ec4899; color: white; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800;">
-              🔮
-            </div>
-            <div>
-              <h3 style="margin: 0; font-size: 17px; font-weight: 800; color: #0f172a; text-shadow: none;">
-                Importação Hermes (Nous Research / OpenHermes / Hermes 3)
-              </h3>
-              <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748b; text-shadow: none;">
-                Importe datasets de instrução, raciocínio agêntico aberto e fluxos do Hermes
-              </p>
-            </div>
-          </div>
-          <button id="btn-close-hermes-modal" class="modal-close-btn">&times;</button>
-        </div>
-
-        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 18px 0; display: flex; flex-direction: column; gap: 16px;">
-          <div style="background: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 10px; padding: 14px;">
-            <p style="margin: 0; font-size: 12px; color: #9d174d;">
-              O Hermes é pioneiro em execução autônoma de chamadas de funções abertas, raciocínio em cadeia com tags <code>&lt;scratchpad&gt;</code> e execução local sem telemetria externa.
+      <div class="modal-window" style="max-width: 680px; width: 92%; max-height: 88vh; display: flex; flex-direction: column;">
+        <!-- Cabeçalho Estilo Office -->
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title">Importar Agente Hermes</h3>
+            <p style="margin: 2px 0 0 0; font-size: 12px; color: #616161; font-family: 'Segoe UI', sans-serif;">
+              Configure as diretrizes de raciocínio local (Scratchpad / Function Calling) e o modelo Hermes.
             </p>
           </div>
+          <button id="btn-close-hermes-modal" class="modal-close-btn" title="Fechar">&times;</button>
+        </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-            <div>
-              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Nome do Agente:</label>
-              <input type="text" id="hermes-agent-name" value="Agente_Hermes_Local" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px;">
+        <!-- Corpo do Diálogo -->
+        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+          <div class="office-group" style="margin-bottom: 0;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+              <div>
+                <label class="office-label" for="hermes-agent-name">Nome do agente:</label>
+                <input type="text" id="hermes-agent-name" class="office-input" value="Agente_Hermes_Local">
+              </div>
+              <div>
+                <label class="office-label" for="hermes-model-select">Modelo Hermes:</label>
+                <select id="hermes-model-select" class="office-select">
+                  <option value="hermes-3-llama-3.1-70b">Hermes 3 (Llama 3.1 70B)</option>
+                  <option value="hermes-3-llama-3.1-8b">Hermes 3 (Llama 3.1 8B)</option>
+                  <option value="openhermes-2.5-mistral-7b">OpenHermes 2.5 (Mistral 7B)</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Modelo Hermes:</label>
-              <select id="hermes-model-select" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px;">
-                <option value="hermes-3-llama-3.1-70b">Hermes 3 (Llama 3.1 70B - Raciocínio & Ferramentas)</option>
-                <option value="hermes-3-llama-3.1-8b">Hermes 3 (Llama 3.1 8B - Alta Velocidade Local)</option>
-                <option value="openhermes-2.5-mistral-7b">OpenHermes 2.5 (Mistral 7B)</option>
-              </select>
-            </div>
-          </div>
 
-          <div>
-            <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">
-              System Prompt com Scratchpad & Funções:
-            </label>
-            <textarea id="hermes-prompt-input" rows="7" placeholder="Cole o system prompt ou dataset de instrução aqui..." style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: monospace; font-size: 12px;"></textarea>
+            <div>
+              <label class="office-label" for="hermes-prompt-input">Instruções do sistema (Scratchpad & Funções):</label>
+              <textarea id="hermes-prompt-input" class="office-textarea" rows="8" placeholder="Cole o system prompt com tags <scratchpad> ou dataset de instrução aqui..."></textarea>
+            </div>
           </div>
         </div>
 
-        <div class="modal-footer" style="border-top: 1px solid #e2e8f0; padding-top: 14px; display: flex; justify-content: flex-end; gap: 10px;">
-          <button id="btn-cancel-hermes" class="tool-btn btn-secondary">Cancelar</button>
-          <button id="btn-inject-hermes-agent" class="tool-btn btn-action" style="background: #ec4899; color: white; font-weight: 700;">
-            🚀 Injetar Agente Hermes
-          </button>
+        <!-- Rodapé Estilo Office -->
+        <div class="modal-footer">
+          <span class="footer-info">Pronto para criar o nó.</span>
+          <div class="footer-actions">
+            <button id="btn-cancel-hermes" class="tool-btn btn-secondary">Cancelar</button>
+            <button id="btn-inject-hermes-agent" class="tool-btn btn-action">Importar</button>
+          </div>
         </div>
       </div>
     `;
@@ -155,8 +151,5 @@ export class ImportHermesModal {
     }
 
     this.hide();
-    if (typeof alert !== 'undefined') {
-      alert(`✅ ${agentName} inserido no grafo!`);
-    }
   }
 }

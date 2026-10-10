@@ -3,6 +3,11 @@ import { Viewport } from '../../view/Viewport.ts';
 import { AddNodeCommand } from '../../core/history/GraphCommands.ts';
 import { INodeAgentSettings } from '../../core/types.ts';
 
+/**
+ * Arestrix Studio - Diálogo de Importação da OpenAI (ChatGPT / Assistants)
+ * Padrão Microsoft Office (Fluent Dialog)
+ * Rigoroso respeito: Zero sombras/glows em fontes
+ */
 export class ImportOpenAiModal {
   private modal?: HTMLElement;
   private graph: Graph;
@@ -41,59 +46,50 @@ export class ImportOpenAiModal {
   private render(): void {
     if (!this.modal) return;
     this.modal.innerHTML = `
-      <div class="modal-window" style="max-width: 800px; width: 92%; max-height: 90vh; display: flex; flex-direction: column;">
-        <div class="modal-header" style="border-bottom: 2px solid #10a37f; padding-bottom: 12px;">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <div style="width: 38px; height: 38px; background: #10a37f; color: white; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800;">
-              🟢
-            </div>
-            <div>
-              <h3 style="margin: 0; font-size: 17px; font-weight: 800; color: #0f172a; text-shadow: none;">
-                Importação OpenAI (ChatGPT / Assistants API)
-              </h3>
-              <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748b; text-shadow: none;">
-                Importe threads de conversas, Custom GPTs ou configurações de Assistants
-              </p>
-            </div>
-          </div>
-          <button id="btn-close-openai-modal" class="modal-close-btn">&times;</button>
-        </div>
-
-        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 18px 0; display: flex; flex-direction: column; gap: 16px;">
-          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 14px;">
-            <p style="margin: 0; font-size: 12px; color: #166534;">
-              Suporte a exportação de dados do ChatGPT (<code>conversations.json</code>) e definições de ferramentas (Code Interpreter, Function Calling) mapeadas para Code Mode no Arestrix.
+      <div class="modal-window" style="max-width: 680px; width: 92%; max-height: 88vh; display: flex; flex-direction: column;">
+        <!-- Cabeçalho Estilo Office -->
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title">Importar Agente OpenAI</h3>
+            <p style="margin: 2px 0 0 0; font-size: 12px; color: #616161; font-family: 'Segoe UI', sans-serif;">
+              Configure as instruções e o modelo OpenAI (ChatGPT / Assistants) para o nó do grafo.
             </p>
           </div>
+          <button id="btn-close-openai-modal" class="modal-close-btn" title="Fechar">&times;</button>
+        </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-            <div>
-              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Nome do Agente:</label>
-              <input type="text" id="openai-agent-name" value="Agente_GPT4o" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px;">
+        <!-- Corpo do Diálogo -->
+        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+          <div class="office-group" style="margin-bottom: 0;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+              <div>
+                <label class="office-label" for="openai-agent-name">Nome do agente:</label>
+                <input type="text" id="openai-agent-name" class="office-input" value="Agente_GPT4o">
+              </div>
+              <div>
+                <label class="office-label" for="openai-model-select">Modelo OpenAI:</label>
+                <select id="openai-model-select" class="office-select">
+                  <option value="gpt-4o">GPT-4o</option>
+                  <option value="o1-preview">o1 (Raciocínio Avançado)</option>
+                  <option value="gpt-4o-mini">GPT-4o Mini</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Modelo OpenAI:</label>
-              <select id="openai-model-select" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px;">
-                <option value="gpt-4o">GPT-4o (Omni Multimodal)</option>
-                <option value="o1-preview">o1 (Raciocínio Lógico Complexo)</option>
-                <option value="gpt-4o-mini">GPT-4o Mini (Econômico)</option>
-              </select>
-            </div>
-          </div>
 
-          <div>
-            <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">
-              Instruções do Sistema / Histórico Exportado:
-            </label>
-            <textarea id="openai-prompt-input" rows="7" placeholder="Cole as instruções ou o arquivo de conversa aqui..." style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: monospace; font-size: 12px;"></textarea>
+            <div>
+              <label class="office-label" for="openai-prompt-input">Instruções do sistema (System Prompt / Contexto):</label>
+              <textarea id="openai-prompt-input" class="office-textarea" rows="8" placeholder="Cole as instruções ou o histórico exportado da OpenAI aqui..."></textarea>
+            </div>
           </div>
         </div>
 
-        <div class="modal-footer" style="border-top: 1px solid #e2e8f0; padding-top: 14px; display: flex; justify-content: flex-end; gap: 10px;">
-          <button id="btn-cancel-openai" class="tool-btn btn-secondary">Cancelar</button>
-          <button id="btn-inject-openai-agent" class="tool-btn btn-action" style="background: #10a37f; color: white; font-weight: 700;">
-            🚀 Injetar Agente OpenAI
-          </button>
+        <!-- Rodapé Estilo Office -->
+        <div class="modal-footer">
+          <span class="footer-info">Pronto para criar o nó.</span>
+          <div class="footer-actions">
+            <button id="btn-cancel-openai" class="tool-btn btn-secondary">Cancelar</button>
+            <button id="btn-inject-openai-agent" class="tool-btn btn-action">Importar</button>
+          </div>
         </div>
       </div>
     `;
@@ -155,8 +151,5 @@ export class ImportOpenAiModal {
     }
 
     this.hide();
-    if (typeof alert !== 'undefined') {
-      alert(`✅ ${agentName} inserido no grafo!`);
-    }
   }
 }

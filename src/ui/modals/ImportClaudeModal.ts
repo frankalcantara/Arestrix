@@ -3,6 +3,11 @@ import { Viewport } from '../../view/Viewport.ts';
 import { AddNodeCommand } from '../../core/history/GraphCommands.ts';
 import { INodeAgentSettings } from '../../core/types.ts';
 
+/**
+ * Arestrix Studio - Diálogo de Importação do Claude (Anthropic)
+ * Padrão Microsoft Office (Fluent Dialog)
+ * Rigoroso respeito: Zero sombras/glows em fontes
+ */
 export class ImportClaudeModal {
   private modal?: HTMLElement;
   private graph: Graph;
@@ -41,59 +46,50 @@ export class ImportClaudeModal {
   private render(): void {
     if (!this.modal) return;
     this.modal.innerHTML = `
-      <div class="modal-window" style="max-width: 800px; width: 92%; max-height: 90vh; display: flex; flex-direction: column;">
-        <div class="modal-header" style="border-bottom: 2px solid #8b5cf6; padding-bottom: 12px;">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <div style="width: 38px; height: 38px; background: #8b5cf6; color: white; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800;">
-              ⚡
-            </div>
-            <div>
-              <h3 style="margin: 0; font-size: 17px; font-weight: 800; color: #0f172a; text-shadow: none;">
-                Importação do Claude (Anthropic Claude 3.5 Sonnet / Opus)
-              </h3>
-              <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748b; text-shadow: none;">
-                Importe artefatos, conversas e prompts estruturados do Claude para tarefas C++20
-              </p>
-            </div>
-          </div>
-          <button id="btn-close-claude-modal" class="modal-close-btn">&times;</button>
-        </div>
-
-        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 18px 0; display: flex; flex-direction: column; gap: 16px;">
-          <div style="background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 10px; padding: 14px;">
-            <p style="margin: 0; font-size: 12px; color: #581c87;">
-              Ingestão de históricos de conversas do Claude, prompts de sistema com tags XML (<code>&lt;context&gt;</code>, <code>&lt;rules&gt;</code>) e conversão em nós de agentes com isolamento em container.
+      <div class="modal-window" style="max-width: 680px; width: 92%; max-height: 88vh; display: flex; flex-direction: column;">
+        <!-- Cabeçalho Estilo Office -->
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title">Importar Agente Claude</h3>
+            <p style="margin: 2px 0 0 0; font-size: 12px; color: #616161; font-family: 'Segoe UI', sans-serif;">
+              Configure as instruções e o modelo Anthropic Claude para ingestão no grafo.
             </p>
           </div>
+          <button id="btn-close-claude-modal" class="modal-close-btn" title="Fechar">&times;</button>
+        </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-            <div>
-              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Nome do Agente:</label>
-              <input type="text" id="claude-agent-name" value="Agente_Claude_Sonnet" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px;">
+        <!-- Corpo do Diálogo -->
+        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+          <div class="office-group" style="margin-bottom: 0;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+              <div>
+                <label class="office-label" for="claude-agent-name">Nome do agente:</label>
+                <input type="text" id="claude-agent-name" class="office-input" value="Agente_Claude_Sonnet">
+              </div>
+              <div>
+                <label class="office-label" for="claude-model-select">Modelo Anthropic:</label>
+                <select id="claude-model-select" class="office-select">
+                  <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+                  <option value="claude-3-opus">Claude 3 Opus</option>
+                  <option value="claude-3-5-haiku">Claude 3.5 Haiku</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Modelo Anthropic:</label>
-              <select id="claude-model-select" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px;">
-                <option value="claude-3-5-sonnet">Claude 3.5 Sonnet (Recomendado)</option>
-                <option value="claude-3-opus">Claude 3 Opus (Raciocínio Profundo)</option>
-                <option value="claude-3-5-haiku">Claude 3.5 Haiku (Ultra Rápido)</option>
-              </select>
-            </div>
-          </div>
 
-          <div>
-            <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">
-              System Prompt / Instruções com Tags XML:
-            </label>
-            <textarea id="claude-prompt-input" rows="7" placeholder="Cole as instruções do Claude aqui..." style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: monospace; font-size: 12px;"></textarea>
+            <div>
+              <label class="office-label" for="claude-prompt-input">Instruções do sistema (System Prompt / Tags XML):</label>
+              <textarea id="claude-prompt-input" class="office-textarea" rows="8" placeholder="Cole as instruções estruturadas ou contexto do Claude aqui..."></textarea>
+            </div>
           </div>
         </div>
 
-        <div class="modal-footer" style="border-top: 1px solid #e2e8f0; padding-top: 14px; display: flex; justify-content: flex-end; gap: 10px;">
-          <button id="btn-cancel-claude" class="tool-btn btn-secondary">Cancelar</button>
-          <button id="btn-inject-claude-agent" class="tool-btn btn-action" style="background: #8b5cf6; color: white; font-weight: 700;">
-            🚀 Injetar Agente Claude
-          </button>
+        <!-- Rodapé Estilo Office -->
+        <div class="modal-footer">
+          <span class="footer-info">Pronto para criar o nó.</span>
+          <div class="footer-actions">
+            <button id="btn-cancel-claude" class="tool-btn btn-secondary">Cancelar</button>
+            <button id="btn-inject-claude-agent" class="tool-btn btn-action">Importar</button>
+          </div>
         </div>
       </div>
     `;
@@ -155,8 +151,5 @@ export class ImportClaudeModal {
     }
 
     this.hide();
-    if (typeof alert !== 'undefined') {
-      alert(`✅ ${agentName} inserido no grafo!`);
-    }
   }
 }

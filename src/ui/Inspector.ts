@@ -438,6 +438,8 @@ export class Inspector {
               <option value="module" ${node.type === 'module' ? 'selected' : ''}>Module Task (Hierarquico)</option>
               <option value="critical" ${node.type === 'critical' ? 'selected' : ''}>Critical Section (Mutex Concorrente)</option>
               <option value="cuda" ${node.type === 'cuda' ? 'selected' : ''}>CUDA Kernel (GPU Acelerado)</option>
+              <option value="fork" ${node.type === 'fork' ? 'selected' : ''}>Fork Task (Despachante Concorrente)</option>
+              <option value="join" ${node.type === 'join' ? 'selected' : ''}>Join Task (Barreira de Sincronização)</option>
               <option value="agent" ${node.type === 'agent' ? 'selected' : ''}>Agent (Code Mode IA)</option>
             </select>
           </div>
@@ -517,6 +519,14 @@ export class Inspector {
                 <span class="cmd-desc">Memória vetorial, semântica e persistência</span>
               </div>
             </button>
+
+            <button class="agent-command-card" id="btn-open-node-skills">
+              <span class="cmd-icon">📜</span>
+              <div class="cmd-details">
+                <span class="cmd-name">Habilidades & Skills (SKILL.md)</span>
+                <span class="cmd-desc">Editor Markdown, prompt e importação GitHub</span>
+              </div>
+            </button>
           </div>
         </div>
 
@@ -573,6 +583,9 @@ export class Inspector {
     });
     this.container.querySelector('#btn-open-node-memory')?.addEventListener('click', () => {
       this.bus.emit('node:open-memory-modal', node.id);
+    });
+    this.container.querySelector('#btn-open-node-skills')?.addEventListener('click', () => {
+      this.bus.emit('node:open-skills-modal', node.id);
     });
 
     // Subflow

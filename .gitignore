@@ -11,3 +11,6 @@ __pycache__/
 *.lib
 .DS_Store
 *.local
+
+# Manual de marca e ativos visuais
+Manual_de_Marca/

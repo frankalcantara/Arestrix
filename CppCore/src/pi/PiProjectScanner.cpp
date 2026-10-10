@@ -18,7 +18,8 @@ PiProjectScanResult PiProjectScanner::scan(const std::string& directoryPath) {
 
     res.isValid = true;
     res.rootPath = std::filesystem::canonical(root).string();
-    res.projectName = "Pi Matemática - Produção de Artigos";
+    res.projectName = root.filename().string();
+    if (res.projectName.empty()) res.projectName = "Projeto Pi";
 
     // 1. Inspeciona .pi/settings.json
     std::filesystem::path settingsPath = root / ".pi" / "settings.json";
@@ -90,15 +91,10 @@ PiProjectScanResult PiProjectScanner::scan(const std::string& directoryPath) {
         } catch (...) {}
     }
 
-    // 5. Inspeciona pasta de destino (matematica)
-    std::filesystem::path matDir = root.parent_path() / "matematica";
-    if (std::filesystem::exists(matDir)) {
-        res.destinationPostsDir = (matDir / "_posts" / "matematica").string();
-        res.destinationDiagramsDir = (matDir / "assets" / "diagrams").string();
-    } else {
-        res.destinationPostsDir = (root / "outputs" / "_posts").string();
-        res.destinationDiagramsDir = (root / "outputs" / "diagrams").string();
-    }
+    // 5. Configura pastas de saida padrao do projeto
+    std::filesystem::path outputsDir = root / "outputs";
+    res.destinationPostsDir = (outputsDir / "posts").string();
+    res.destinationDiagramsDir = (outputsDir / "diagrams").string();
 
     // 6. Monta as etapas do pipeline de forma genérica
     std::filesystem::path orqPath = root / "orquestrador.js";
@@ -166,26 +162,20 @@ PiProjectScanResult PiProjectScanner::scan(const std::string& directoryPath) {
 }
 
 std::vector<std::string> PiProjectScanner::getKnownPiProjects() {
-    std::vector<std::string> candidates = {
-        "C:/Projetos/frankalcantara.github.io.worktrees/pi-matematica",
-        "C:\\Projetos\\frankalcantara.github.io.worktrees\\pi-matematica",
-        "C:/Projetos/PiAgente",
-        "C:\\Projetos\\PiAgente"
-    };
-
     std::vector<std::string> valid;
-    for (const auto& pathStr : candidates) {
-        if (std::filesystem::exists(pathStr) && std::filesystem::is_directory(pathStr)) {
-            std::string canonical = std::filesystem::canonical(pathStr).string();
-            bool jaExiste = false;
-            for (const auto& v : valid) {
-                if (v == canonical) { jaExiste = true; break; }
-            }
-            if (!jaExiste) {
-                valid.push_back(canonical);
+    // Lista dinamicamente pastas com .agents ou .pi em C:/Projetos se existirem
+    try {
+        std::filesystem::path base("C:/Projetos");
+        if (std::filesystem::exists(base) && std::filesystem::is_directory(base)) {
+            for (const auto& entry : std::filesystem::directory_iterator(base)) {
+                if (entry.is_directory()) {
+                    if (std::filesystem::exists(entry.path() / ".agents") || std::filesystem::exists(entry.path() / ".pi")) {
+                        valid.push_back(std::filesystem::canonical(entry.path()).string());
+                    }
+                }
             }
         }
-    }
+    } catch (...) {}
     return valid;
 }
 

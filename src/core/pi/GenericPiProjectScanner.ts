@@ -21,6 +21,7 @@ export interface IPiSkillInfo {
   description: string;
   tools?: string[];
   systemPrompt?: string;
+  markdownContent?: string;
 }
 
 export interface IPiStageInfo {
@@ -33,6 +34,7 @@ export interface IPiStageInfo {
   minSizeBytes?: number;
   isDeterministic?: boolean;
   dependencies?: string[];
+  parallelBranch?: 'content' | 'visual' | 'sync' | string;
 }
 
 export interface IPiMcpToolInfo {
@@ -105,12 +107,7 @@ export class GenericPiProjectScanner {
    */
   private static scanWithFileSystem(rootPath: string, fs: any, path: any): IPiProjectScanResult {
     const folderBase = path.basename(rootPath);
-    let derivedName = folderBase;
-    if (folderBase.toLowerCase().includes('pi-matematica')) {
-      derivedName = 'Pi Matemática (frankalcantara.github.io)';
-    } else {
-      derivedName = folderBase.replace(/[-_]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
-    }
+    const derivedName = folderBase.replace(/[-_]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'Projeto Pi';
 
     const result: IPiProjectScanResult = {
       isValid: true,
@@ -296,11 +293,11 @@ export class GenericPiProjectScanner {
       } catch {}
     }
 
-    // Destinos de publicação
-    const postsDir = path.join(rootPath, '..', 'matematica', '_posts', 'matematica');
-    if (fs.existsSync(postsDir)) {
-      result.destinationPostsDir = postsDir;
-      result.destinationDiagramsDir = path.join(rootPath, '..', 'matematica', 'assets', 'diagrams');
+    // Destinos de publicação neutros
+    const outputsDir = path.join(rootPath, 'outputs');
+    if (fs.existsSync(outputsDir)) {
+      result.destinationPostsDir = path.join(outputsDir, 'posts');
+      result.destinationDiagramsDir = path.join(outputsDir, 'diagrams');
     }
 
     return result;
@@ -344,7 +341,8 @@ export class GenericPiProjectScanner {
       path: skillPath,
       description,
       tools,
-      systemPrompt: content.slice(0, 1000)
+      systemPrompt: content.slice(0, 1500),
+      markdownContent: content
     };
   }
 
@@ -381,6 +379,17 @@ export class GenericPiProjectScanner {
         const skillPath = mSkill ? mSkill[1] : '';
         const prompt = mPrompt ? mPrompt[1].trim() : `Execute a etapa ${mNome[1]}`;
 
+        // Determina se pertence ao branch de redação/texto ou visual/diagramas
+        const lowerId = mId[1].toLowerCase();
+        let branch: 'content' | 'visual' | 'sync' = 'content';
+        if (lowerId.includes('svg') || lowerId.includes('diagram') || lowerId.includes('imagem') || lowerId.includes('visual') || lowerId.includes('animar')) {
+          branch = 'visual';
+        } else if (lowerId.includes('publicar') || lowerId.includes('exportar') || lowerId.includes('deploy')) {
+          branch = 'sync';
+        } else {
+          branch = 'content';
+        }
+
         // Verifica se é tarefa estática / determinística
         const isDeterministic = rawObj.includes('fs.copyFile') || rawObj.includes('publicar') || rawObj.includes('taskflow_static');
 
@@ -391,6 +400,7 @@ export class GenericPiProjectScanner {
           skillPath,
           prompt,
           isDeterministic,
+          parallelBranch: branch,
           validationTarget: rawObj.includes('validarArtefato') ? 'artefatos_validados' : undefined
         });
       }
@@ -400,12 +410,13 @@ export class GenericPiProjectScanner {
     if (code.includes('publicarArtigo') && !stages.some(s => s.id.includes('publicar'))) {
       stages.push({
         id: '6-publicar',
-        name: '6. Publicação no Blog Matemática',
+        name: '6. Publicação e Exportação de Artefatos',
         model: 'taskflow_static',
         skillPath: '',
-        prompt: 'Copia o artigo gerado para _posts/matematica canônico',
+        prompt: 'Copia artefatos gerados para pasta de publicação canônica',
         isDeterministic: true,
-        validationTarget: '../matematica/_posts/matematica',
+        parallelBranch: 'sync',
+        validationTarget: 'outputs/posts',
         minSizeBytes: 1000
       });
     }
@@ -417,38 +428,161 @@ export class GenericPiProjectScanner {
    * Fallback de varredura heurística para testes e ambientes em memória
    */
   private static scanHeuristic(rootPath: string, projectName: string): IPiProjectScanResult {
-    const isPiMat = rootPath.toLowerCase().includes('pi-matematica');
-    const items = ['ART-001', 'ART-002', 'ART-003'];
+    const items = ['ITEM-001', 'ITEM-002', 'ITEM-003'];
     return {
       isValid: true,
       rootPath,
-      projectName: isPiMat ? 'Pi Matemática (frankalcantara.github.io)' : (projectName || 'Projeto Pi'),
+      projectName: projectName || 'Projeto Pi',
       defaultProvider: 'deepseek',
       defaultModel: 'deepseek-v4-pro',
       defaultTools: ['+codemode'],
       skills: [
-        { id: 'redigir-math', name: 'Redigir Artigo Matemático', path: '.agents/redigir-math/SKILL.md', description: 'Redação densa com rigor matemático' },
-        { id: 'criar-frontmatter', name: 'Inserir Frontmatter Jekyll', path: '.agents/criar-frontmatter/SKILL.md', description: 'Metadados canônicos do blog' },
-        { id: 'planejar-svg', name: 'Planejamento de Ilustrações SVG', path: '.agents/planejar-svg/SKILL.md', description: 'Roteiro e especificações de diagramas' },
-        { id: 'criar-svg', name: 'Criação Física de SVGs', path: '.agents/criar-svg/SKILL.md', description: 'Geração de código vetorial e validação' },
-        { id: 'validar-svg', name: 'Validação Visual Jev', path: '.agents/validar-svg/SKILL.md', description: 'Inspeção de rendering e contraste' },
-        { id: 'animar-svg', name: 'Animação de SVGs', path: '.agents/animar-svg/SKILL.md', description: 'Injeção de keyframes e interatividade' }
+        {
+          id: 'redigir-math',
+          name: 'Redigir Artigo Técnico e Conceitual',
+          path: '.agents/redigir-math/SKILL.md',
+          description: 'Redação densa com rigor formal e demonstrações analíticas',
+          tools: ['write', 'edit', 'read'],
+          systemPrompt: `# DIRETRIZES DE REDAÇÃO TÉCNICA E CONCEITUAL\nVocê é um redator técnico de precisão. Estruture conteúdo com densidade, sem lugares-comuns. Fórmulas KaTeX inline com $...$ e em bloco com $$...$$.`,
+          markdownContent: `---
+name: "Redigir Artigo Técnico e Conceitual"
+description: "Redação densa com rigor formal e demonstrações analíticas"
+license: "MIT"
+tools:
+  - write
+  - edit
+  - read
+---
+
+# Redigir Artigo Técnico e Conceitual
+
+Esta habilidade capacita o agente a redigir artigos profundos, densos e estruturados.
+
+## Regras
+1. Abordagem exaustiva e rigorosa.
+2. Renderização de fórmulas matemáticas com sintaxe KaTeX: inline \`$f(x)$\` e bloco \`$$...$$\`.
+3. Proibição de introduções superficiais ou redundâncias.`
+        },
+        {
+          id: 'criar-frontmatter',
+          name: 'Inserir Frontmatter Canônico',
+          path: '.agents/criar-frontmatter/SKILL.md',
+          description: 'Metadados canônicos para publicação estática (Jekyll/Hugo/Astro)',
+          tools: ['edit', 'read'],
+          systemPrompt: `# DIRETRIZES DE FRONTMATTER\nMonte bloco YAML canônico com title, date, categories, tags, math: true e layout.`,
+          markdownContent: `---
+name: "Inserir Frontmatter Canônico"
+description: "Metadados canônicos para publicação estática"
+license: "MIT"
+tools:
+  - edit
+  - read
+---
+
+# Inserir Frontmatter Canônico
+
+Injeção e saneamento de cabeçalhos YAML padronizados em documentos markdown.`
+        },
+        {
+          id: 'planejar-svg',
+          name: 'Planejamento de Ilustrações SVG',
+          path: '.agents/planejar-svg/SKILL.md',
+          description: 'Roteiro e especificações visuais de diagramas e ilustrações vetoriais',
+          tools: ['write', 'read'],
+          systemPrompt: `# DIRETRIZES DE PLANEJAMENTO SVG\nPlaneje o layout visual do diagrama com viewBox, pontos focais e sem sombras em texto.`,
+          markdownContent: `---
+name: "Planejamento de Ilustrações SVG"
+description: "Roteiro e especificações visuais de diagramas vetoriais"
+license: "MIT"
+tools:
+  - write
+  - read
+---
+
+# Planejamento de Ilustrações SVG
+
+Mapeamento conceitual de layouts, paleta de cores e hierarquia de nós.`
+        },
+        {
+          id: 'criar-svg',
+          name: 'Criação Física de SVGs',
+          path: '.agents/criar-svg/SKILL.md',
+          description: 'Geração de código vetorial limpo, sem sombras em texto e com alto contraste',
+          tools: ['write', 'edit', 'validate_svg'],
+          systemPrompt: `# DIRETRIZES DE CRIAÇÃO VETORIAL SVG\nNUNCA utilize feDropShadow, feGaussianBlur ou text-shadow sobre texto. Use cores de contraste e pesos 700/800.`,
+          markdownContent: `---
+name: "Criação Física de SVGs"
+description: "Geração de código vetorial limpo com proibição estrita de sombras em fontes"
+license: "Apache-2.0"
+tools:
+  - write
+  - edit
+  - validate_svg
+---
+
+# Criação Física de SVGs
+
+Produção de arquivos SVG autocontidos de precisão geométrica.
+
+## Regra Estrita
+- ZERO sombras ou glows em elementos textuais.`
+        },
+        {
+          id: 'validar-svg',
+          name: 'Validação Visual Jev',
+          path: '.agents/validar-svg/SKILL.md',
+          description: 'Inspeção de rendering, contraste WCAG e conformidade visual',
+          tools: ['read', 'validate_svg'],
+          systemPrompt: `# DIRETRIZES DE VALIDAÇÃO VISUAL\nVerifique integridade do arquivo SVG e conformidade de tipografia e viewBox.`,
+          markdownContent: `---
+name: "Validação Visual Jev"
+description: "Inspeção de rendering e auditoria tipográfica"
+license: "MIT"
+tools:
+  - read
+  - validate_svg
+---
+
+# Validação Visual Jev
+
+Auditoria automatizada de qualidade vetorial e visual.`
+        },
+        {
+          id: 'animar-svg',
+          name: 'Animação de SVGs',
+          path: '.agents/animar-svg/SKILL.md',
+          description: 'Injeção de keyframes CSS limpos e interatividade fluida',
+          tools: ['edit', 'write'],
+          systemPrompt: `# DIRETRIZES DE ANIMAÇÃO\nInjete animações CSS suaves respeitando a nitidez das fontes sem blur.`,
+          markdownContent: `---
+name: "Animação de SVGs"
+description: "Injeção de keyframes CSS e microinterações"
+license: "MIT"
+tools:
+  - edit
+  - write
+---
+
+# Animação de SVGs
+
+Animações vetoriais acessíveis com transform e stroke-dashoffset.`
+        }
       ],
       stages: [
-        { id: '1-redigir', name: '1. Redação do Artigo', model: 'deepseek-v4-pro', skillPath: '.agents/redigir-math/SKILL.md', prompt: 'Gere o artigo baseado no plano.md' },
-        { id: '2-frontmatter', name: '2. Inserção de Frontmatter', model: 'deepseek-flash', skillPath: '.agents/criar-frontmatter/SKILL.md', prompt: 'Monte o frontmatter Jekyll canônico' },
-        { id: '3-planejar-svg', name: '3. Planejamento de SVGs', model: 'deepseek-flash', skillPath: '.agents/planejar-svg/SKILL.md', prompt: 'Planeje diagramas e ilustrações' },
-        { id: '4-criar-svg', name: '4. Criação Física de SVGs', model: 'deepseek-flash', skillPath: '.agents/criar-svg/SKILL.md', prompt: 'Crie os arquivos SVG no diretório de assets' },
-        { id: '4b-validar-svg', name: '4b. Validação Visual Jev', model: 'deepseek-flash', skillPath: '.agents/validar-svg/SKILL.md', prompt: 'Valide visualmente com Jev' },
-        { id: '5-animar-svg', name: '5. Animação de SVGs', model: 'deepseek-flash', skillPath: '.agents/animar-svg/SKILL.md', prompt: 'Injete classes de animação e keyframes' },
-        { id: '6-publicar', name: '6. Publicação no Blog', model: 'taskflow_static', prompt: 'Copia artigo para _posts canônico', isDeterministic: true }
+        { id: '1-redigir', name: '1. Redação do Artigo', model: 'deepseek-v4-pro', skillPath: '.agents/redigir-math/SKILL.md', prompt: 'Gere o artigo baseado no plano.md', parallelBranch: 'content' },
+        { id: '2-frontmatter', name: '2. Inserção de Frontmatter', model: 'deepseek-flash', skillPath: '.agents/criar-frontmatter/SKILL.md', prompt: 'Monte o frontmatter Jekyll canônico', parallelBranch: 'content' },
+        { id: '3-planejar-svg', name: '3. Planejamento de SVGs', model: 'deepseek-flash', skillPath: '.agents/planejar-svg/SKILL.md', prompt: 'Planeje diagramas e ilustrações', parallelBranch: 'visual' },
+        { id: '4-criar-svg', name: '4. Criação Física de SVGs', model: 'deepseek-flash', skillPath: '.agents/criar-svg/SKILL.md', prompt: 'Crie os arquivos SVG no diretório de assets', parallelBranch: 'visual' },
+        { id: '4b-validar-svg', name: '4b. Validação Visual Jev', model: 'deepseek-flash', skillPath: '.agents/validar-svg/SKILL.md', prompt: 'Valide visualmente com Jev', parallelBranch: 'visual' },
+        { id: '5-animar-svg', name: '5. Animação de SVGs', model: 'deepseek-flash', skillPath: '.agents/animar-svg/SKILL.md', prompt: 'Injete classes de animação e keyframes', parallelBranch: 'visual' },
+        { id: '6-publicar', name: '6. Publicação no Blog', model: 'taskflow_static', prompt: 'Copia artigo para _posts canônico', isDeterministic: true, parallelBranch: 'sync' }
       ],
       mcpTools: [
         { name: 'codemode_script', type: 'script', path: 'codemode_script.js', description: 'Execução de ferramentas e validações' }
       ],
       orchestrationType: 'script',
       orchestrationSourceFile: 'orquestrador.js',
-      maxConcurrency: 1,
+      maxConcurrency: 2,
       cooldownMs: 2000,
       stateFilePath: 'aulas/pipeline-state.json',
       workItems: items,

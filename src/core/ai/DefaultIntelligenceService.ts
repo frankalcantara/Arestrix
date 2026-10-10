@@ -6,7 +6,7 @@ declare const process: any;
 export interface IAIValidatedStage {
   id: string;
   label: string;
-  nodeType: 'agent' | 'static' | 'condition' | 'subflow';
+  nodeType: 'agent' | 'static' | 'condition' | 'subflow' | 'fork' | 'join';
   role: string;
   model: string;
   skillPath?: string;
@@ -116,9 +116,9 @@ export class DefaultIntelligenceService {
 
     return `
 Você é o Engenheiro Central de Inteligência do Arestrix Studio.
-O Arestrix Studio é uma IDE visual de orquestração concorrente de Agentes de IA baseada em Taskflow C++20 (DAG com nós de Agente, Nós Estáticos Determinísticos, Condições/Validações e Subfluxos).
+O Arestrix Studio é uma IDE visual de orquestração concorrente de Agentes de IA baseada em Taskflow C++20 (DAG com nós de Agente, Nós Estáticos Determinísticos, Despachantes Fork, Barreiras Join, Condições e Subfluxos).
 
-Sua missão é analisar os recursos de um projeto importado do ecossistema Pi (Pi.ai / Pi CLI), validar a orquestração e gerar a estrutura exata do grafo para o Arestrix Studio, assegurando que nada foi perdido ou mapeado incorretamente.
+Sua missão é analisar os recursos de um projeto importado do ecossistema Pi (Pi.ai / Pi CLI), validar a orquestração e gerar a estrutura exata do grafo para o Arestrix Studio, assegurando fidelidade total à sua arquitetura concorrente.
 
 [DADOS DO PROJETO DETECTADO]
 - Nome: ${scan.projectName}
@@ -144,15 +144,15 @@ ${codeSnippet}
 \`\`\`
 
 INSTRUÇÕES OBRIGATÓRIAS:
-1. Examine a sequência lógica de execução: cada agente produz artefatos que alimentam a próxima etapa.
-2. Identifique quais nós devem ser do tipo "agent" (requerem LLM e prompt) e quais devem ser "static" (scripts determinísticos, como cópia de arquivos, Jekyll build, validação estática).
-3. Conecte as dependências sequenciais corretas em "verifiedEdges".
+1. Analise o fluxo e a concorrência: quando houver processos paralelos ou independentes (ex: redação de artigo executando de forma independente do pipeline de ilustração/SVGs), crie nós do tipo "fork" (despachante concorrente) e "join" (barreira de sincronização). NUNCA linearize um processo que é concorrente!
+2. Identifique os tipos de nós: "agent" (requerem LLM e prompt), "static" (scripts determinísticos como publicação), "fork" (disparo paralelo) e "join" (barreira sincronizadora).
+3. Conecte as dependências corretas em "verifiedEdges" refletindo a bifurcação e sincronização.
 4. Configure as regras de validação de saída de cada etapa (arquivos esperados, tamanho mínimo).
 5. Responda ESTRITAMENTE em formato JSON VÁLIDO sem markdown ao redor, seguindo esta estrutura exata:
 
 {
   "confidenceScore": 95,
-  "summary": "Resumo objetivo da função deste projeto Pi e de como seu pipeline opera",
+  "summary": "Resumo objetivo da função deste projeto Pi e de como seu pipeline opera com concorrência e agentes",
   "verifiedStages": [
     {
       "id": "id_curto_sem_espacos",
@@ -173,12 +173,12 @@ INSTRUÇÕES OBRIGATÓRIAS:
   ],
   "batchSettings": {
     "hasBatch": true,
-    "suggestedConcurrency": 1,
+    "suggestedConcurrency": 2,
     "cooldownMs": 2000,
     "stateFile": "aulas/pipeline-state.json"
   },
   "auditFindings": [
-    "Apontamento 1 sobre a integridade da importação",
+    "Apontamento 1 sobre a concorrência e integridade da importação",
     "Apontamento 2 sobre modelos recomendados ou ferramentas"
   ]
 }
@@ -221,14 +221,14 @@ INSTRUÇÕES OBRIGATÓRIAS:
           verifiedEdges: parsed.verifiedEdges || this.generateDefaultSequentialEdges(parsed.verifiedStages),
           batchSettings: parsed.batchSettings || {
             hasBatch: (scan.workItems && scan.workItems.length > 0) || false,
-            suggestedConcurrency: scan.maxConcurrency || 1,
+            suggestedConcurrency: scan.maxConcurrency || 2,
             cooldownMs: scan.cooldownMs || 2000,
             stateFile: scan.stateFilePath || 'pipeline-state.json',
             workItems: scan.workItems
           },
           auditFindings: parsed.auditFindings || [
-            'Estrutura de agentes e skills alinhada com as diretrizes do Arestrix.',
-            'Conexões sequenciais de dados verificadas.'
+            'Topologia concorrente mapeada com fidelidade aos agentes e orquestração do Pi.',
+            'Conexões de dados e sincronizações validadas.'
           ],
           rawAIResponse: rawResponse
         };
@@ -323,6 +323,129 @@ INSTRUÇÕES OBRIGATÓRIAS:
    * Constrói resultado confiável a partir da análise estática caso a API não esteja acessível
    */
   public buildFallbackResultWithStaticData(scan: IPiProjectScanResult, missingKey?: string): IImportAIValidationResult {
+    const contentStages = scan.stages.filter(s => s.parallelBranch === 'content');
+    const visualStages = scan.stages.filter(s => s.parallelBranch === 'visual');
+    const syncStages = scan.stages.filter(s => s.parallelBranch === 'sync' || (s.isDeterministic && s.id.includes('publicar')));
+
+    // Se possui ramos paralelos identificados (redação independente de visual/diagramas)
+    if (contentStages.length > 0 && visualStages.length > 0) {
+      const stages: IAIValidatedStage[] = [
+        {
+          id: 'fork_dispatch',
+          label: 'Despachante Concorrente',
+          nodeType: 'fork',
+          role: 'Despachante de Concorrência Taskflow C++20',
+          model: 'taskflow_static',
+          promptTemplate: 'Dispara múltiplos agentes e pipelines simultaneamente',
+          isDeterministic: true
+        },
+        ...contentStages.map(st => ({
+          id: st.id,
+          label: st.name,
+          nodeType: 'agent' as const,
+          role: `Agente de Redação e Texto (${st.name})`,
+          model: st.model || scan.defaultModel || 'deepseek-v4-pro',
+          skillPath: st.skillPath,
+          promptTemplate: st.prompt,
+          validationRules: st.validationTarget ? [{
+            targetPathPattern: st.validationTarget,
+            minSizeBytes: st.minSizeBytes || 1000
+          }] : undefined,
+          isDeterministic: false
+        })),
+        ...visualStages.map(st => ({
+          id: st.id,
+          label: st.name,
+          nodeType: 'agent' as const,
+          role: `Agente de Diagramas & Ilustrações (${st.name})`,
+          model: st.model || scan.defaultModel || 'deepseek-flash',
+          skillPath: st.skillPath,
+          promptTemplate: st.prompt,
+          validationRules: st.validationTarget ? [{
+            targetPathPattern: st.validationTarget,
+            minSizeBytes: st.minSizeBytes || 1000
+          }] : undefined,
+          isDeterministic: false
+        })),
+        {
+          id: 'join_barrier',
+          label: 'Barreira de Sincronização',
+          nodeType: 'join',
+          role: 'Barreira de Sincronização Taskflow C++20',
+          model: 'taskflow_static',
+          promptTemplate: 'Aguarda a conclusão independente da redação e dos diagramas',
+          isDeterministic: true
+        },
+        ...syncStages.map(st => ({
+          id: st.id,
+          label: st.name,
+          nodeType: (st.isDeterministic ? 'static' : 'agent') as any,
+          role: `Consolidação e Publicação (${st.name})`,
+          model: st.model || 'taskflow_static',
+          skillPath: st.skillPath,
+          promptTemplate: st.prompt,
+          validationRules: st.validationTarget ? [{
+            targetPathPattern: st.validationTarget,
+            minSizeBytes: st.minSizeBytes || 1000
+          }] : undefined,
+          isDeterministic: st.isDeterministic || false
+        }))
+      ];
+
+      const edges: IAIValidatedEdge[] = [
+        // Fork dispara início do ramo de redação e do ramo de diagramas
+        { fromNodeId: 'fork_dispatch', toNodeId: contentStages[0].id, type: 'flow' },
+        { fromNodeId: 'fork_dispatch', toNodeId: visualStages[0].id, type: 'flow' }
+      ];
+
+      // Encadeamento do ramo de conteúdo
+      for (let i = 0; i < contentStages.length - 1; i++) {
+        edges.push({ fromNodeId: contentStages[i].id, toNodeId: contentStages[i + 1].id, type: 'flow' });
+      }
+      // Fim do ramo de conteúdo converge na barreira Join
+      edges.push({ fromNodeId: contentStages[contentStages.length - 1].id, toNodeId: 'join_barrier', type: 'flow' });
+
+      // Encadeamento do ramo visual
+      for (let i = 0; i < visualStages.length - 1; i++) {
+        edges.push({ fromNodeId: visualStages[i].id, toNodeId: visualStages[i + 1].id, type: 'flow' });
+      }
+      // Fim do ramo visual converge na barreira Join
+      edges.push({ fromNodeId: visualStages[visualStages.length - 1].id, toNodeId: 'join_barrier', type: 'flow' });
+
+      // Join prossegue para publicação se houver
+      if (syncStages.length > 0) {
+        edges.push({ fromNodeId: 'join_barrier', toNodeId: syncStages[0].id, type: 'flow' });
+        for (let i = 0; i < syncStages.length - 1; i++) {
+          edges.push({ fromNodeId: syncStages[i].id, toNodeId: syncStages[i + 1].id, type: 'flow' });
+        }
+      }
+
+      return {
+        isSuccess: true,
+        confidenceScore: missingKey ? 88 : 95,
+        summary: `Projeto "${scan.projectName}" estruturado com topologia concorrente (Despachante Fork, Redação independente, Pipeline de Diagramas e Barreira Join) refletindo o orquestrador do Pi.`,
+        projectName: scan.projectName,
+        verifiedStages: stages,
+        verifiedEdges: edges,
+        batchSettings: {
+          hasBatch: (scan.workItems && scan.workItems.length > 0) || false,
+          suggestedConcurrency: scan.maxConcurrency || 2,
+          cooldownMs: scan.cooldownMs || 2000,
+          stateFile: scan.stateFilePath || 'pipeline-state.json',
+          workItems: scan.workItems
+        },
+        auditFindings: [
+          'Topologia concorrente mapeada: Redação e criação de SVG rodam em paralelo.',
+          'Barreira de sincronização (Join) garante convergência antes da publicação final.',
+          missingKey 
+            ? `Chave ${missingKey} não configurada nas variáveis de ambiente. A validação semântica profunda por IA foi ignorada para não bloquear a importação.`
+            : 'Validação estrutural local concluída com sucesso.'
+        ],
+        missingEnvKey: missingKey
+      };
+    }
+
+    // Fallback sequencial padrão caso não haja ramos concorrentes identificados
     const stages: IAIValidatedStage[] = scan.stages.map((st) => ({
       id: st.id,
       label: st.name,

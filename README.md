@@ -188,7 +188,7 @@ npm test
 - `tests/mcp-protocol.spec.ts`: Model Context Protocol server configuration, stdio/sse transports, tool assignment, and undo/redo support.
 - `tests/project-management.spec.ts`: Multi-project workspace isolation, manifest schema validation, MRU history, and memory scope separation.
 - `tests/office-ribbon-interface.spec.ts`: Microsoft Office Fluent Ribbon interface, Backstage View, QAT shortcuts, and connector ingestion (Pi, Claude, OpenAI, Hermes, Excel).
-- `tests/pi-project-importer.spec.ts`: Native Pi agent project scanner, 1-click import modal, automatic 7-stage DAG generation (`redigir-math`, `criar-frontmatter`, `planejar-svg`, `criar-svg`, `validar-svg`, `animar-svg`, `publicar`), and seamless batch integration.
+- `tests/pi-project-importer.spec.ts`: Scanner nativo de projetos Pi, importação dinâmica de agentes, habilidades e orquestração Taskflow C++20.
 
 ---
 
@@ -234,10 +234,9 @@ Arestrix includes enterprise-grade desktop UX and model ingestion capabilities:
 
 3. **External AI Assistant & Spreadsheet Ingestion Engine (Phases 15 to 20)**:
    - **Pi Agent Real Project & CLI Ingestion (Fase Concluída ✅ 🎯)**:
-     - 1-Clique para importar projetos reais do Pi CLI (ex.: `pi-matematica`).
+     - 1-Clique para importar projetos locais do Pi CLI com varredura dinâmica de qualquer repositório.
      - Scanner C++ nativo e TS que inspeciona `.pi/settings.json`, habilidades em `.agents/*/SKILL.md`, `plano.md` e checkpoints em `pipeline-state.json`.
-     - Síntese visual imediata de pipeline Taskflow C++20 em 7 estágios: Redação (`deepseek-v4-pro`), Frontmatter Jekyll, Planejamento SVG, Criação SVG, Validação Visual Jev, Animação Keyframes e Publicação Estática.
-     - Encadeamento linear Bézier, regras de validação física de artefatos por regex/bytes e lote configurado com 195 artigos.
+     - Síntese visual imediata de pipeline Taskflow C++20: Agentes autônomos, ferramentas MCP e validação física de artefatos.
    - **Claude (Anthropic)**: XML structured prompt and artifact conversion.
    - **OpenAI (ChatGPT / Assistants)**: Export threads and tools mapping.
    - **Hermes (Nous Research)**: Scratchpad logic for local offline microVMs.

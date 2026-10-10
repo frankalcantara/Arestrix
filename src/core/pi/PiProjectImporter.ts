@@ -48,11 +48,8 @@ export class PiProjectImporter {
       console.warn('[PiProjectImporter] Falha ao consultar projetos conhecidos via WebUI:', e);
     }
 
-    // Candidatos padrão conhecidos no ambiente
-    return [
-      'C:/Projetos/frankalcantara.github.io.worktrees/pi-matematica',
-      'C:/Projetos/PiAgente'
-    ];
+    // Nenhum candidato hardcoded
+    return [];
   }
 
   /**
@@ -103,10 +100,13 @@ export class PiProjectImporter {
       : this.convertScanStagesToValidated(scan.stages, scan.defaultModel);
 
     // 2. Cria o manifesto do projeto dinâmico no ProjectManager
-    const isPiMat = scan.rootPath.toLowerCase().includes('pi-matematica') || scan.projectName.toLowerCase().includes('matem');
-    const projectId = isPiMat
-      ? 'pi-matematica'
-      : scan.projectName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-');
+    const projectId = scan.projectName
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9_-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '') || 'projeto-pi';
     await projectManager.createProject({
       projectId,
       name: scan.projectName,
@@ -137,14 +137,48 @@ export class PiProjectImporter {
     // 3. Limpa o grafo atual para injetar o novo pipeline dinâmico
     graph.clear();
 
-    // 4. Monta os nós dinamicamente distribuídos no Canvas
-    const total = stagesToCreate.length;
+    // 4. Monta os nós dinamicamente distribuídos no Canvas com layout 2D não-linear
     const createdNodes: Map<string, INodeData> = new Map();
 
+    // Identifica ramos concorrentes para cálculo de coordenadas 2D
+    const contentStagesList = stagesToCreate.filter(s => 
+      s.nodeType === 'agent' && (s.id.includes('redigir') || s.id.includes('frontmatter') || s.id.includes('conteudo') || s.id.includes('texto') || s.id.startsWith('1-') || s.id.startsWith('2-'))
+    );
+    const visualStagesList = stagesToCreate.filter(s => 
+      s.nodeType === 'agent' && (s.id.includes('svg') || s.id.includes('diagram') || s.id.includes('imagem') || s.id.includes('visual') || s.id.includes('animar') || s.id.startsWith('3-') || s.id.startsWith('4') || s.id.startsWith('5-'))
+    );
+    const hasParallelBranches = contentStagesList.length > 0 && visualStagesList.length > 0;
+
+    let contentIdx = 0;
+    let visualIdx = 0;
+
     stagesToCreate.forEach((st, idx) => {
-      // Distribuição linear horizontal espaçada em 250px
-      const x = Math.round((idx - (total - 1) / 2) * 250);
-      const y = 80;
+      let x = 0;
+      let y = 50;
+
+      if (st.nodeType === 'fork') {
+        x = -450;
+        y = 50;
+      } else if (st.nodeType === 'join') {
+        x = 900;
+        y = 50;
+      } else if (hasParallelBranches && (st.id.includes('redigir') || contentStagesList.some(c => c.id === st.id))) {
+        // Ramo A: Redação / Conteúdo (Posicionado acima, y = 200)
+        x = -150 + (contentIdx++) * 300;
+        y = 200;
+      } else if (hasParallelBranches && (st.id.includes('svg') || visualStagesList.some(v => v.id === st.id))) {
+        // Ramo B: Pipeline de Diagramas e SVGs (Posicionado abaixo, y = -100)
+        x = -250 + (visualIdx++) * 280;
+        y = -100;
+      } else if (st.isDeterministic && (st.id.includes('publicar') || st.id.includes('exportar'))) {
+        x = 1200;
+        y = 50;
+      } else {
+        // Distribuição balanceada horizontal padrão
+        const total = stagesToCreate.length;
+        x = Math.round((idx - (total - 1) / 2) * 260);
+        y = (idx % 2 === 0) ? 90 : 10;
+      }
 
       // Normaliza o ID para permitir compatibilidade canônica ('1-redigir' -> 'node_pi_redigir')
       const cleanId = st.id.replace(/^[0-9]+[a-z]?-/, '').replace(/[^a-zA-Z0-9_]/g, '_');
@@ -154,19 +188,63 @@ export class PiProjectImporter {
       const node = graph.createNode(nodeId, st.label, nodeType, x, y);
 
       if (nodeType === 'agent') {
+        // Ingestão completa das habilidades (skills) físicas do agente
+        const matchingSkill = scan.skills.find(s => 
+          (st.skillPath && s.path === st.skillPath) ||
+          s.id === st.id ||
+          st.id.includes(s.id) ||
+          s.id.includes(st.id) ||
+          st.label.toLowerCase().includes(s.name.toLowerCase())
+        );
+
+        let nodeSkills: any[] = [];
+        let activeSkillId: string | undefined = undefined;
+
+        if (matchingSkill) {
+          const nodeSkill = {
+            id: matchingSkill.id,
+            name: matchingSkill.name,
+            description: matchingSkill.description,
+            markdownContent: matchingSkill.markdownContent || `# ${matchingSkill.name}\n\n${matchingSkill.description}`,
+            systemPrompt: matchingSkill.systemPrompt || matchingSkill.description,
+            tools: matchingSkill.tools || ['write', 'edit', 'read'],
+            license: 'MIT',
+            sourceUrl: matchingSkill.path,
+            updatedAt: new Date().toISOString()
+          };
+          nodeSkills = [nodeSkill];
+          activeSkillId = nodeSkill.id;
+        } else {
+          // Cria skill padrão formatada baseada no papel/prompt do agente
+          const defaultSkill = {
+            id: `skill-${cleanId}`,
+            name: st.label,
+            description: st.role || `Habilidade especializada para ${st.label}`,
+            markdownContent: `# ${st.label}\n\n${st.promptTemplate || 'Instruções operacionais do agente'}\n\n## Regras de Execução\n- Execute as tarefas com rigor e precisão.\n- Valide os artefatos gerados.`,
+            systemPrompt: st.promptTemplate || `Você é o agente responsável por ${st.label}.`,
+            tools: ['write', 'edit', 'read'],
+            license: 'MIT',
+            updatedAt: new Date().toISOString()
+          };
+          nodeSkills = [defaultSkill];
+          activeSkillId = defaultSkill.id;
+        }
+
         node.agentSettings = this.createAgentSettings(
           st.model || scan.defaultModel || 'deepseek-v4-pro',
           st.skillPath || '',
           st.promptTemplate,
           st.validationRules || [],
-          idx === 0 // Primeira etapa serializada por padrão
+          idx === 0, // Primeira etapa serializada por padrão
+          nodeSkills,
+          activeSkillId
         );
         graph.updateNode(node.id, { agentSettings: node.agentSettings });
       } else if (nodeType === 'static') {
         node.parameters = {
           action: st.id,
           description: st.promptTemplate,
-          destinationDir: scan.destinationPostsDir || '../matematica/_posts/matematica'
+          destinationDir: scan.destinationPostsDir || 'outputs/posts'
         };
         graph.updateNode(node.id, { parameters: node.parameters });
       }
@@ -206,7 +284,7 @@ export class PiProjectImporter {
     activeBus.emit('batch:configure', {
       items: workItems,
       serializedStages: [stagesToCreate[0]?.id || 'etapa_1'],
-      maxConcurrency: validation.batchSettings?.suggestedConcurrency || scan.maxConcurrency || 1,
+      maxConcurrency: validation.batchSettings?.suggestedConcurrency || scan.maxConcurrency || 2,
       cooldownMs: validation.batchSettings?.cooldownMs || scan.cooldownMs || 2000,
       stateFilePath: validation.batchSettings?.stateFile || scan.stateFilePath || 'pipeline-state.json',
       autoResume: true
@@ -238,7 +316,9 @@ export class PiProjectImporter {
     skillPath: string,
     prompt: string,
     validationRules: IArtifactValidationRule[] = [],
-    isSerialAcrossBatch: boolean = false
+    isSerialAcrossBatch: boolean = false,
+    skills: any[] = [],
+    activeSkillId?: string
   ): INodeAgentSettings {
     return {
       inheritSandbox: false,
@@ -269,6 +349,8 @@ export class PiProjectImporter {
         persistent: true,
         domains: ['pipeline', 'agents']
       },
+      skills,
+      activeSkillId,
       validationRules,
       isSerialAcrossBatch
     };

@@ -438,8 +438,16 @@ void ui_pick_folder(webui::window::event* e) {
         if (SUCCEEDED(pFileOpen->GetOptions(&opt))) {
             pFileOpen->SetOptions(opt | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
         }
-        pFileOpen->SetTitle(L"Selecione o Diretório Raiz do Projeto Pi");
-        hr = pFileOpen->Show(NULL);
+        pFileOpen->SetTitle(L"Selecione a Pasta do Projeto");
+        HWND hwndOwner = GetForegroundWindow();
+        if (!hwndOwner) {
+            hwndOwner = GetActiveWindow();
+        }
+        if (hwndOwner) {
+            SetForegroundWindow(hwndOwner);
+            BringWindowToTop(hwndOwner);
+        }
+        hr = pFileOpen->Show(hwndOwner);
         if (SUCCEEDED(hr)) {
             IShellItem *pItem = nullptr;
             hr = pFileOpen->GetResult(&pItem);

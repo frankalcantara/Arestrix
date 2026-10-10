@@ -75,32 +75,29 @@ export class McpServersModal {
     this.overlay.innerHTML = `
       <div class="modal-dialog project-memory-modal-dialog" style="max-width: 900px;">
         <div class="modal-header">
-          <div class="modal-title-group">
-            <div class="modal-header-icon">🔌</div>
-            <div>
-              <h2 class="modal-title">Conectores MCP (Model Context Protocol)</h2>
-              <div class="modal-subtitle">Projeto: <strong>${this.escapeHtml(this.graph.getProjectId())}</strong> | Conectores MCP e ferramentas padronizadas para seus agentes</div>
-            </div>
+          <div>
+            <h2 class="modal-title">Conectores MCP (Model Context Protocol)</h2>
+            <div style="font-size: 12px; color: #616161; margin-top: 2px;">Projeto: <strong>${this.escapeHtml(this.graph.getProjectId())}</strong> &mdash; Servidores MCP e ferramentas padronizadas</div>
           </div>
-          <button class="modal-close-btn" id="btn-close-mcp-modal">&times;</button>
+          <button class="modal-close-btn" id="btn-close-mcp-modal" title="Fechar">&times;</button>
         </div>
 
         <div class="modal-body-scrollable">
           <!-- Toolbar de Ações MCP -->
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
             <div style="display: flex; gap: 8px; align-items: center;">
-              <span class="inheritance-status-badge badge-inherited" style="font-weight: 700;">
+              <span style="font-size: 11px; font-weight: 600; color: #0f6cbd; background: #eef6fc; padding: 2px 8px; border-radius: 2px; border: 1px solid #c7e0f4;">
                 ${this.servers.length} SERVIDORES REGISTRADOS
               </span>
-              <span class="inheritance-status-badge badge-overridden" style="font-weight: 700;">
+              <span style="font-size: 11px; font-weight: 600; color: #107c41; background: #f1fbf4; padding: 2px 8px; border-radius: 2px; border: 1px solid #c3edd3;">
                 ${this.getTotalToolsCount()} FERRAMENTAS DISPONÍVEIS
               </span>
             </div>
             <div style="display: flex; gap: 8px;">
-              <button id="btn-mcp-refresh" class="btn-action-pill" style="background: var(--surface-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
-                🔄 Atualizar
+              <button id="btn-mcp-refresh" class="tool-btn btn-secondary">
+                Atualizar
               </button>
-              <button id="btn-mcp-add-new" class="btn-action-pill" style="background: var(--gradient-blue); color: #fff;">
+              <button id="btn-mcp-add-new" class="tool-btn btn-action">
                 + Novo Servidor
               </button>
             </div>
@@ -109,7 +106,6 @@ export class McpServersModal {
           <!-- Formulário de Adição/Edição (Oculto por padrão) -->
           <div id="mcp-form-container" class="settings-section-card hidden" style="margin-bottom: 20px; border: 1px solid var(--border-color);">
             <div class="section-card-header">
-              <span class="section-card-icon">⚙️</span>
               <div class="section-card-titles">
                 <h3 class="section-card-title" id="mcp-form-title">Registrar Novo Servidor MCP</h3>
                 <p class="section-card-desc">Configure o transporte stdio ou SSE</p>
@@ -118,12 +114,12 @@ export class McpServersModal {
 
             <!-- Presets rápidos -->
             <div style="margin: 12px 0;">
-              <label class="form-label">Presets Rápidos:</label>
+              <label class="form-label">Modelos Pré-definidos:</label>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="filesystem">📁 Filesystem Local</button>
-                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="fetch">🌐 Web Fetch</button>
-                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="sqlite">🗄️ SQLite Database</button>
-                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="github">🐙 GitHub (npx)</button>
+                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="filesystem">Filesystem Local</button>
+                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="fetch">Web Fetch</button>
+                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="sqlite">SQLite Database</button>
+                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="github">GitHub (npx)</button>
               </div>
             </div>
 

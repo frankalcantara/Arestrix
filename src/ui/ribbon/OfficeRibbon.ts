@@ -691,7 +691,9 @@ export class OfficeRibbon {
       module: `Module_Pipeline_${existingCount + 1}`,
       critical: `Shared_State_Lock_${existingCount + 1}`,
       cuda: `GPU_Kernel_${existingCount + 1}`,
-      agent: `Agente_CodeMode_${existingCount + 1}`
+      agent: `Agente_CodeMode_${existingCount + 1}`,
+      fork: `Fork_Dispatcher_${existingCount + 1}`,
+      join: `Join_Barrier_${existingCount + 1}`
     };
 
     const node = this.graph.buildNode(id, labelMap[type], type, x, y);

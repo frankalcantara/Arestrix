@@ -393,34 +393,51 @@ body, html {
   z-index: 1000;
 }
 
+/* ==========================================================================
+   DIÁLOGOS E JANELAS MODAIS - PADRÃO MICROSOFT OFFICE (FLUENT DESIGN)
+   Zero sombras/glows em fontes (text-shadow: none !important)
+   ========================================================================== */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(32, 31, 30, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+}
+
 .modal-overlay.hidden {
-  display: none;
+  display: none !important;
 }
 
 .modal-dialog {
   width: 820px;
-  max-width: 90vw;
-  height: 80vh;
+  max-width: 92vw;
+  max-height: 88vh;
   background-color: #ffffff;
-  border-radius: 24px;
-  box-shadow: var(--shadow-card-hover);
-  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  border: 1px solid #d1d1d1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  color: #242424;
 }
 
-/* --- Modais de Conectores & Importação (Pi, Claude, OpenAI, Hermes, Excel) --- */
+/* --- Modais de Conectores & Importação (Padrão Office) --- */
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background-color: rgba(15, 23, 42, 0.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background-color: rgba(32, 31, 30, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2500;
+  z-index: 3000;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
 }
 
 .modal-backdrop.hidden {
@@ -429,103 +446,127 @@ body, html {
 
 .modal-window {
   background-color: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  border: 1px solid #d1d1d1;
   overflow: hidden;
-  animation: modal-fade-scale 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  animation: modal-fade-scale 0.14s ease-out;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  color: #242424;
 }
 
 .modal-close-btn {
   background: transparent;
   border: none;
-  font-size: 22px;
+  font-size: 14px;
   line-height: 1;
-  color: var(--text-secondary);
+  color: #616161;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 8px;
-  transition: all 0.15s ease;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 2px;
+  transition: background-color 0.1s ease, color 0.1s ease;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .modal-close-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: var(--text-primary);
+  background: #f3f2f1;
+  color: #242424;
+}
+
+.modal-close-btn:active {
+  background: #e1dfdd;
 }
 
 @keyframes modal-fade-scale {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(6px);
+    transform: scale(0.98);
   }
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: scale(1);
   }
 }
 
 .modal-header {
-  padding: 18px 24px;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 10px 16px;
+  border-bottom: 1px solid #edebe9;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #f8fafc;
+  background-color: #ffffff;
 }
 
 .modal-title-group {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .modal-title {
-  font-size: 16px;
-  font-weight: 800;
-  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  color: #242424;
+  margin: 0;
+  letter-spacing: normal;
+  text-shadow: none !important;
 }
 
 .compiler-badge {
   font-size: 11px;
-  font-weight: 800;
-  background: var(--gradient-blue);
+  font-weight: 600;
+  background: #0f6cbd;
   color: #ffffff;
-  padding: 3px 10px;
-  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  border-radius: 2px;
+  text-shadow: none !important;
 }
 
 .modal-tabs {
   display: flex;
-  background-color: #f1f5f9;
-  border-bottom: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  border-bottom: 1px solid #edebe9;
   padding: 0 16px;
+  gap: 16px;
 }
 
 .tab-btn {
-  padding: 12px 16px;
+  padding: 8px 4px;
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 700;
+  color: #616161;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: color 0.1s ease, border-color 0.1s ease;
+  font-family: 'Segoe UI', sans-serif;
+  text-shadow: none !important;
+}
+
+.tab-btn:hover:not(.active) {
+  color: #242424;
 }
 
 .tab-btn.active {
-  color: #3b82f6;
-  border-bottom-color: #3b82f6;
+  color: #0f6cbd;
+  border-bottom-color: #0f6cbd;
 }
 
 .modal-body {
   flex: 1;
-  padding: 18px;
+  padding: 16px;
   overflow: auto;
-  background-color: #f8fafc;
+  background-color: #ffffff;
+  color: #242424;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .code-container {
@@ -534,29 +575,185 @@ body, html {
 
 .code-block {
   font-family: 'Consolas', 'Courier New', monospace;
-  font-size: 13px;
-  color: #1e2538;
+  font-size: 12px;
+  color: #242424;
   user-select: text;
-  line-height: 1.5;
+  line-height: 1.45;
+  background: #f8f9fa;
+  border: 1px solid #edebe9;
+  border-radius: 2px;
+  padding: 10px;
 }
 
 .modal-footer {
-  padding: 16px 24px;
-  border-top: 1px solid #e2e8f0;
+  padding: 12px 16px;
+  border-top: 1px solid #edebe9;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
-  background-color: #ffffff;
+  background-color: #f3f2f1;
+  gap: 8px;
 }
 
 .footer-info {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: #616161;
+  margin-right: auto;
+  text-shadow: none !important;
 }
 
 .footer-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+}
+
+/* Controles de Formulário e Botões Padrão Office */
+.btn-office-primary,
+.tool-btn.btn-action {
+  background-color: #0f6cbd !important;
+  color: #ffffff !important;
+  border: 1px solid #0f6cbd !important;
+  border-radius: 4px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  padding: 5px 18px !important;
+  min-width: 80px !important;
+  height: 32px !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-family: 'Segoe UI', sans-serif !important;
+  text-shadow: none !important;
+  transition: background-color 0.1s ease, border-color 0.1s ease !important;
+  box-shadow: none !important;
+}
+
+.btn-office-primary:hover,
+.tool-btn.btn-action:hover {
+  background-color: #115ea3 !important;
+  border-color: #115ea3 !important;
+}
+
+.btn-office-primary:active,
+.tool-btn.btn-action:active {
+  background-color: #0c3b5e !important;
+  border-color: #0c3b5e !important;
+}
+
+.btn-office-secondary,
+.tool-btn.btn-secondary {
+  background-color: #ffffff !important;
+  color: #242424 !important;
+  border: 1px solid #8a8886 !important;
+  border-radius: 4px !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  padding: 5px 16px !important;
+  min-width: 80px !important;
+  height: 32px !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-family: 'Segoe UI', sans-serif !important;
+  text-shadow: none !important;
+  transition: background-color 0.1s ease, border-color 0.1s ease !important;
+  box-shadow: none !important;
+}
+
+.btn-office-secondary:hover,
+.tool-btn.btn-secondary:hover {
+  background-color: #f3f2f1 !important;
+  border-color: #323130 !important;
+}
+
+.btn-office-secondary:active,
+.tool-btn.btn-secondary:active {
+  background-color: #edebe9 !important;
+}
+
+.office-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #323130;
+  margin-bottom: 4px;
+  font-family: 'Segoe UI', sans-serif;
+  text-shadow: none !important;
+}
+
+.office-input {
+  width: 100%;
+  height: 32px;
+  padding: 5px 8px;
+  border: 1px solid #8a8886;
+  border-radius: 2px;
+  font-size: 13px;
+  color: #242424;
+  background-color: #ffffff;
+  font-family: 'Segoe UI', sans-serif;
+  box-sizing: border-box;
+  text-shadow: none !important;
+  transition: border-color 0.1s ease;
+}
+
+.office-input:focus {
+  border-color: #0f6cbd;
+  outline: 1px solid #0f6cbd;
+}
+
+.office-select {
+  width: 100%;
+  height: 32px;
+  padding: 5px 8px;
+  border: 1px solid #8a8886;
+  border-radius: 2px;
+  font-size: 13px;
+  color: #242424;
+  background-color: #ffffff;
+  font-family: 'Segoe UI', sans-serif;
+  box-sizing: border-box;
+}
+
+.office-select:focus {
+  border-color: #0f6cbd;
+  outline: 1px solid #0f6cbd;
+}
+
+.office-textarea {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #8a8886;
+  border-radius: 2px;
+  font-size: 12px;
+  color: #242424;
+  background-color: #ffffff;
+  font-family: 'Consolas', monospace;
+  box-sizing: border-box;
+  line-height: 1.4;
+}
+
+.office-textarea:focus {
+  border-color: #0f6cbd;
+  outline: 1px solid #0f6cbd;
+}
+
+.office-group {
+  background-color: #faf9f8;
+  border: 1px solid #edebe9;
+  border-radius: 4px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.office-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #323130;
+  margin-bottom: 8px;
+  display: block;
+  text-shadow: none !important;
 }
 
 /* ==========================================================================
@@ -1638,5 +1835,114 @@ body, html {
   color: #64748b;
   margin-top: 2px;
   line-height: 1.25;
+}
+
+/* --- Modal de Habilidades & Skills (Padrão Microsoft Office) --- */
+.node-skills-modal-dialog {
+  max-width: 780px;
+  width: 92vw;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow: hidden;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.node-skills-modal-dialog * {
+  text-shadow: none !important;
+}
+
+.office-modal-tab-bar {
+  display: flex;
+  background: #f3f4f6;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0 16px;
+  gap: 4px;
+}
+
+.office-modal-tab-btn {
+  padding: 9px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #4b5563;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.office-modal-tab-btn:hover {
+  color: #111827;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.office-modal-tab-btn.active {
+  color: #0f6cbd;
+  border-bottom-color: #0f6cbd;
+  background: #ffffff;
+  font-weight: 700;
+}
+
+.skills-tab-pane {
+  display: none;
+}
+
+.skills-tab-pane.active {
+  display: block;
+}
+
+.office-subtab-group {
+  display: flex;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.office-subtab-btn {
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.office-subtab-btn.active {
+  color: #0f6cbd;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.github-skill-card:hover {
+  border-color: #0f6cbd !important;
+  box-shadow: 0 2px 8px rgba(15, 108, 189, 0.08);
+}
+
+.office-markdown-preview {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #242424;
+}
+
+.office-markdown-preview h1,
+.office-markdown-preview h2,
+.office-markdown-preview h3,
+.office-markdown-preview h4 {
+  text-shadow: none !important;
+}
+
+.office-markdown-preview code {
+  font-family: Consolas, monospace;
 }
 

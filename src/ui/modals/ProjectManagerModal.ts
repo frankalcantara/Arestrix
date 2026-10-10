@@ -37,26 +37,23 @@ export class ProjectManagerModal {
     this.overlay.innerHTML = `
       <div class="modal-dialog project-memory-modal-dialog" style="max-width: 860px;">
         <div class="modal-header">
-          <div class="modal-title-group">
-            <div class="modal-header-icon">📁</div>
-            <div>
-              <h2 class="modal-title">Gerenciador de Projetos & Workspaces</h2>
-              <div class="modal-subtitle">Projeto Ativo: <strong>${this.escapeHtml(cur.name)}</strong> (ID: <code>${this.escapeHtml(cur.projectId)}</code>)</div>
-            </div>
+          <div>
+            <h2 class="modal-title">Gerenciador de Projetos</h2>
+            <div style="font-size: 12px; color: #616161; margin-top: 2px;">Projeto Ativo: <strong>${this.escapeHtml(cur.name)}</strong> (ID: <code>${this.escapeHtml(cur.projectId)}</code>)</div>
           </div>
-          <button class="modal-close-btn" id="btn-close-proj-manager">&times;</button>
+          <button class="modal-close-btn" id="btn-close-proj-manager" title="Fechar">&times;</button>
         </div>
 
-        <!-- Abas de Navegação -->
-        <div style="display: flex; gap: 8px; border-bottom: 1px solid var(--border-color); padding: 0 24px; background: rgba(0,0,0,0.03);">
-          <button class="tool-btn btn-secondary ${this.activeTab === 'recents' ? 'btn-active' : ''}" id="tab-btn-recents" style="border-radius: 8px 8px 0 0; border-bottom: none; font-weight: 700;">
-            📁 Projetos Recentes (${recents.length})
+        <!-- Abas de Navegação Estilo Office -->
+        <div class="modal-tabs">
+          <button class="tab-btn ${this.activeTab === 'recents' ? 'active' : ''}" id="tab-btn-recents">
+            Projetos Recentes (${recents.length})
           </button>
-          <button class="tool-btn btn-secondary ${this.activeTab === 'create' ? 'btn-active' : ''}" id="tab-btn-create" style="border-radius: 8px 8px 0 0; border-bottom: none; font-weight: 700;">
-            ✨ Novo Projeto
+          <button class="tab-btn ${this.activeTab === 'create' ? 'active' : ''}" id="tab-btn-create">
+            Novo Projeto
           </button>
-          <button class="tool-btn btn-secondary ${this.activeTab === 'settings' ? 'btn-active' : ''}" id="tab-btn-settings" style="border-radius: 8px 8px 0 0; border-bottom: none; font-weight: 700;">
-            ⚙️ Configurações do Projeto Ativo
+          <button class="tab-btn ${this.activeTab === 'settings' ? 'active' : ''}" id="tab-btn-settings">
+            Configurações do Projeto Ativo
           </button>
         </div>
 
@@ -74,12 +71,12 @@ export class ProjectManagerModal {
   private renderRecentsTab(recents: any[], current: IProjectManifest): string {
     return `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <span class="section-card-desc">Selecione um projeto aberto anteriormente para carregar seu workspace e pipelines</span>
+        <span style="font-size: 12px; color: #616161;">Selecione um projeto aberto anteriormente para carregar seu workspace e pipelines</span>
         <div style="display: flex; gap: 8px;">
-          <button id="btn-browse-project" class="btn-action-pill" style="background: var(--surface-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
-            📂 Abrir Outro Diretório...
+          <button id="btn-browse-project" class="tool-btn btn-secondary">
+            Abrir Outro Diretório...
           </button>
-          <button id="btn-go-to-create" class="btn-action-pill" style="background: var(--gradient-blue); color: white;">
+          <button id="btn-go-to-create" class="tool-btn btn-action">
             + Criar Novo Projeto
           </button>
         </div>
@@ -87,19 +84,19 @@ export class ProjectManagerModal {
 
       <div style="display: flex; flex-direction: column; gap: 10px;">
         ${recents.length === 0 ? `
-          <div style="padding: 32px; text-align: center; color: var(--text-secondary); background: var(--surface-bg); border-radius: 8px;">
+          <div style="padding: 32px; text-align: center; color: #616161; background: #faf9f8; border: 1px solid #edebe9; border-radius: 4px;">
             Nenhum projeto registrado no histórico recente. Clique em "+ Criar Novo Projeto" para começar.
           </div>
         ` : recents.map(r => {
           const isCurrent = r.projectId === current.projectId;
           return `
-            <div class="settings-section-card" style="padding: 14px; border: 1px solid ${isCurrent ? 'var(--accent-color)' : 'var(--border-color)'}; display: flex; justify-content: space-between; align-items: center;">
+            <div style="padding: 12px; border: 1px solid ${isCurrent ? '#0f6cbd' : '#edebe9'}; border-radius: 4px; background: #ffffff; display: flex; justify-content: space-between; align-items: center;">
               <div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <strong style="font-size: 15px; color: var(--text-primary); font-weight: 700;">${this.escapeHtml(r.name)}</strong>
+                  <strong style="font-size: 14px; color: #242424; font-weight: 600;">${this.escapeHtml(r.name)}</strong>
                   ${isCurrent ? `
-                    <span class="inheritance-status-badge badge-inherited" style="font-weight: 700; font-size: 10px;">
-                      🟢 ATIVO
+                    <span style="background: #eef6fc; color: #0f6cbd; border: 1px solid #c7e0f4; padding: 2px 8px; border-radius: 2px; font-weight: 600; font-size: 10px;">
+                      ATIVO
                     </span>
                   ` : ''}
                 </div>

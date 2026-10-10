@@ -5,7 +5,9 @@ export type TaskflowNodeType =
   | 'module'      // tf::Task (tf.composed_of) - Módulo hierárquico encapsulado
   | 'critical'    // tf::CriticalSection - Bloco com controle estrito de concorrencia
   | 'cuda'        // tf::cudaGraph / cudaGraphExec - Agente com Aceleracao CUDA C++20 (Taskflow 4.1+)
-  | 'agent';      // Agente Autônomo Code Mode em Sandbox/VM Isolada
+  | 'agent'       // Agente Autônomo Code Mode em Sandbox/VM Isolada
+  | 'fork'        // tf::Task - Despachante Concorrente / Disparo Paralelo
+  | 'join';       // tf::Task - Barreira de Sincronização / Consolidação Concorrente
 
 export type PortDirection = 'input' | 'output';
 export type PortType = 'flow' | 'data';
@@ -129,6 +131,43 @@ export interface IGlobalPipelineDefaults {
   memory?: INodeMemoryConfig;
 }
 
+export interface INodeSkill {
+  id: string;
+  name: string;
+  description: string;
+  markdownContent: string;  // Conteúdo Markdown completo do SKILL.md
+  systemPrompt: string;     // Prompt operacional/regras do sistema
+  tools: string[];          // Ferramentas autorizadas
+  license?: string;         // Licença (MIT, Apache-2.0, etc.)
+  sourceUrl?: string;       // URL do repositório/arquivo no GitHub
+  updatedAt?: string;       // Timestamp da última edição
+}
+
+export interface IGitHubSkillRepo {
+  id: string;
+  repo: string;             // ex: "anthropics/skills-hub"
+  name: string;
+  description: string;
+  license: string;          // ex: "MIT"
+  branch: string;           // "main"
+  isDefault: boolean;
+  isEnabled: boolean;
+}
+
+export interface IGitHubSkillItem {
+  id: string;
+  name: string;
+  description: string;
+  repoId: string;
+  repoName: string;
+  category: string;
+  markdownContent: string;
+  systemPrompt: string;
+  tools: string[];
+  license: string;
+  githubUrl?: string;
+}
+
 export interface INodeAgentSettings {
   inheritSandbox: boolean;
   sandbox?: Partial<ISandboxPolicy>;
@@ -141,6 +180,10 @@ export interface INodeAgentSettings {
 
   inheritMemory?: boolean;
   memory?: Partial<INodeMemoryConfig>;
+
+  // Habilidades e Skills completas do Agente (Conteúdo Markdown & Prompts)
+  skills?: INodeSkill[];
+  activeSkillId?: string;
 
   // Validação de Artefato & Resume Engine (Fase 11)
   validationRules?: IArtifactValidationRule[];

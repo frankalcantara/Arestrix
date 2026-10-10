@@ -49,6 +49,18 @@ export const THEME = {
       badgeBg: 0x3730a3,      // Indigo 700
       textColor: '#ffffff',
       label: 'AGENT CODE MODE'
+    },
+    fork: {
+      color: 0x008272,        // Teal / Despachante Concorrente Fluent
+      badgeBg: 0x005c51,      // Teal 700
+      textColor: '#ffffff',
+      label: 'FORK / DISPACHER'
+    },
+    join: {
+      color: 0x5c2d91,        // Púrpura / Barreira de Sincronização Fluent
+      badgeBg: 0x44206a,      // Púrpura 700
+      textColor: '#ffffff',
+      label: 'JOIN / BARRIER'
     }
   } as Record<TaskflowNodeType, { color: number; badgeBg: number; textColor: string; label: string }>,
 
