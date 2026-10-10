@@ -1,13 +1,18 @@
 import { Graph } from '../../core/Graph.ts';
 import { INodeData, IModelConfig, LLMProvider } from '../../core/types.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
+import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
+import { SkillEditorModal } from './SkillEditorModal.ts';
 
 export class NodeModelModal {
   private overlay: HTMLElement;
   private graph: Graph;
+  private windowController?: IModalWindowController;
+  private skillEditorModal: SkillEditorModal;
 
   constructor(graph: Graph) {
     this.graph = graph;
+    this.skillEditorModal = new SkillEditorModal();
 
     this.overlay = document.createElement('div');
     this.overlay.className = 'modal-overlay hidden';
@@ -22,6 +27,7 @@ export class NodeModelModal {
 
     this.render(node);
     this.overlay.classList.remove('hidden');
+    this.windowController?.bringToFront();
   }
 
   public hide(): void {
@@ -44,19 +50,16 @@ export class NodeModelModal {
           ...(settings.model || {})
         };
 
+    const titleBarHtml = ModalWindowManager.createTitleBarHTML({
+      title: 'Modelo de IA, Skill & Prompt',
+      subtitle: `Nó: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id})`,
+      icon: '🧠',
+      closeBtnId: 'btn-close-model-modal'
+    });
+
     this.overlay.innerHTML = `
       <div class="modal-dialog node-settings-modal-dialog">
-        <div class="modal-header">
-          <div class="modal-title-group">
-            <div class="modal-header-icon">🧠</div>
-            <div>
-              <h2 class="modal-title">Modelo de IA, Skill & Prompt</h2>
-              <div class="modal-subtitle">Nó: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id})</div>
-            </div>
-          </div>
-          <button class="modal-close-btn" id="btn-close-model-modal">&times;</button>
-        </div>
-
+        ${titleBarHtml}
         <div class="modal-body-scrollable">
           <!-- Toggle de Herança -->
           <div class="inheritance-toggle-card">
@@ -94,7 +97,11 @@ export class NodeModelModal {
 
             <div class="form-group">
               <label class="form-label" for="node-skill-path">Arquivo de Skill (.md)</label>
-              <input type="text" id="node-skill-path" class="form-input" value="${this.escapeHtml(effectiveModel.skillPath || '')}" placeholder=".agents/redigir-math/SKILL.md" ${isInherited ? 'disabled' : ''} />
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="text" id="node-skill-path" class="form-input" style="flex: 1;" value="${this.escapeHtml(effectiveModel.skillPath || '')}" placeholder=".agents/redigir-math/SKILL.md" ${isInherited ? 'disabled' : ''} />
+                <button type="button" class="btn btn-secondary-pill" id="btn-edit-skill-modal" title="Abrir editor de Markdown para este skill" style="white-space: nowrap; padding: 6px 12px; font-size: 12px;">✎ Editar Skill</button>
+                <button type="button" class="btn btn-secondary-pill" id="btn-new-skill-modal" title="Criar um novo arquivo de skill a partir do template padrão" style="white-space: nowrap; padding: 6px 12px; font-size: 12px;">＋ Novo Skill</button>
+              </div>
               <div class="form-hint">Caminho relativo para as diretrizes e instruções de especialização do agente.</div>
             </div>
 
@@ -117,6 +124,14 @@ export class NodeModelModal {
         </div>
       </div>
     `;
+
+    const dialog = this.overlay.querySelector('.modal-dialog') as HTMLElement;
+    if (dialog) {
+      this.windowController = ModalWindowManager.attach({
+        dialog,
+        onClose: () => this.hide()
+      });
+    }
 
     this.bindDialogEvents(node);
   }
@@ -157,6 +172,41 @@ export class NodeModelModal {
       else if (val === 'google') modelInput.value = 'gemini-2.5-flash';
       else if (val === 'openai') modelInput.value = 'gpt-4o';
       else if (val === 'jev') modelInput.value = 'jev-svg-validator';
+    });
+
+    const skillPathInput = this.overlay.querySelector('#node-skill-path') as HTMLInputElement;
+
+    this.overlay.querySelector('#btn-edit-skill-modal')?.addEventListener('click', () => {
+      const isInherited = inheritCheck.checked;
+      const path = skillPathInput?.value.trim() || `.agents/${(node.label || 'agent').toLowerCase().replace(/[^a-z0-9_-]/g, '-')}/SKILL.md`;
+      this.skillEditorModal.openSkill({
+        path,
+        nodeId: node.id,
+        nodeLabel: node.label,
+        readOnly: isInherited,
+        onSave: (savedPath) => {
+          if (skillPathInput) {
+            skillPathInput.value = savedPath;
+          }
+        }
+      });
+    });
+
+    this.overlay.querySelector('#btn-new-skill-modal')?.addEventListener('click', () => {
+      const isInherited = inheritCheck.checked;
+      const suggestedSlug = (node.label || 'agent').toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+      const suggestedPath = `.agents/${suggestedSlug}/SKILL.md`;
+      this.skillEditorModal.openSkill({
+        path: suggestedPath,
+        nodeId: node.id,
+        nodeLabel: node.label,
+        readOnly: isInherited,
+        onSave: (savedPath) => {
+          if (skillPathInput) {
+            skillPathInput.value = savedPath;
+          }
+        }
+      });
     });
 
     this.overlay.querySelector('#btn-save-model-modal')?.addEventListener('click', () => {

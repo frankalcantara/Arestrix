@@ -1,9 +1,11 @@
 import { Graph } from '../../core/Graph.ts';
 import { IMcpServerConfig, IMcpCallResult } from '../../core/types.ts';
+import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 
 export class McpServersModal {
   private overlay: HTMLElement;
   private graph: Graph;
+  private windowController?: IModalWindowController;
   private servers: IMcpServerConfig[] = [];
   private selectedServerId: string | null = null;
 
@@ -19,6 +21,7 @@ export class McpServersModal {
 
   public show(): void {
     this.overlay.classList.remove('hidden');
+    this.windowController?.bringToFront();
     this.refreshServers();
   }
 
@@ -72,15 +75,16 @@ export class McpServersModal {
   }
 
   private render(): void {
+    const titleBarHtml = ModalWindowManager.createTitleBarHTML({
+      title: 'Conectores MCP (Model Context Protocol)',
+      subtitle: `Projeto: <strong>${this.escapeHtml(this.graph.getProjectId())}</strong> &mdash; Servidores MCP e ferramentas padronizadas`,
+      icon: '🔌',
+      closeBtnId: 'btn-close-mcp-modal'
+    });
+
     this.overlay.innerHTML = `
       <div class="modal-dialog project-memory-modal-dialog" style="max-width: 900px;">
-        <div class="modal-header">
-          <div>
-            <h2 class="modal-title">Conectores MCP (Model Context Protocol)</h2>
-            <div style="font-size: 12px; color: #616161; margin-top: 2px;">Projeto: <strong>${this.escapeHtml(this.graph.getProjectId())}</strong> &mdash; Servidores MCP e ferramentas padronizadas</div>
-          </div>
-          <button class="modal-close-btn" id="btn-close-mcp-modal" title="Fechar">&times;</button>
-        </div>
+        ${titleBarHtml}
 
         <div class="modal-body-scrollable">
           <!-- Toolbar de Ações MCP -->
@@ -225,6 +229,16 @@ export class McpServersModal {
         </div>
       </div>
     `;
+
+    const dialog = this.overlay.querySelector('.modal-dialog') as HTMLElement;
+    if (dialog) {
+      this.windowController = ModalWindowManager.attach({
+        dialog,
+        minWidth: 560,
+        minHeight: 400,
+        onClose: () => this.hide()
+      });
+    }
 
     this.bindInternalEvents();
   }

@@ -1,8 +1,10 @@
 import { Graph } from '../../core/Graph.ts';
+import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 
 export class ProjectMemoryModal {
   private overlay: HTMLElement;
   private graph: Graph;
+  private windowController?: IModalWindowController;
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -17,6 +19,7 @@ export class ProjectMemoryModal {
   public show(): void {
     this.render();
     this.overlay.classList.remove('hidden');
+    this.windowController?.bringToFront();
     this.refreshMemoryData();
   }
 
@@ -30,18 +33,16 @@ export class ProjectMemoryModal {
     const isGloballyPersistent = !!defaults.memory?.persistent;
     const isGloballyEnabled = !!defaults.memory?.enabled;
 
+    const titleBarHtml = ModalWindowManager.createTitleBarHTML({
+      title: 'Central de Memória Heterogênea do Projeto',
+      subtitle: `Projeto: <strong>${this.escapeHtml(projectId)}</strong> | Grafo: ${this.escapeHtml(this.graph.getMetadata().graphName)}`,
+      icon: '💾',
+      closeBtnId: 'btn-close-project-mem'
+    });
+
     this.overlay.innerHTML = `
       <div class="modal-dialog project-memory-modal-dialog">
-        <div class="modal-header">
-          <div class="modal-title-group">
-            <div class="modal-header-icon">💾</div>
-            <div>
-              <h2 class="modal-title">Central de Memória Heterogênea do Projeto</h2>
-              <div class="modal-subtitle">Projeto: <strong>${this.escapeHtml(projectId)}</strong> | Grafo: ${this.escapeHtml(this.graph.getMetadata().graphName)}</div>
-            </div>
-          </div>
-          <button class="modal-close-btn" id="btn-close-project-mem">&times;</button>
-        </div>
+        ${titleBarHtml}
 
         <div class="modal-body-scrollable">
           <!-- Overview Cards -->
@@ -136,6 +137,16 @@ Carregando estado do Blackboard...
         </div>
       </div>
     `;
+
+    const dialog = this.overlay.querySelector('.modal-dialog') as HTMLElement;
+    if (dialog) {
+      this.windowController = ModalWindowManager.attach({
+        dialog,
+        minWidth: 540,
+        minHeight: 400,
+        onClose: () => this.hide()
+      });
+    }
 
     this.attachDialogEvents();
   }

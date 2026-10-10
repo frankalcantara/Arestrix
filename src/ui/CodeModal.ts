@@ -1,8 +1,10 @@
 import { Graph } from '../core/Graph.ts';
+import { ModalWindowManager, IModalWindowController } from './modals/ModalWindowManager.ts';
 
 export class CodeModal {
   private modalOverlay: HTMLElement;
   private graph: Graph;
+  private windowController?: IModalWindowController;
   private currentTab: 'cpp' | 'msvc' | 'cmake' | 'makefile' = 'cpp';
   
   private codeCache: any = { cpp: '', cmake: '', make: '', msvc_ps1: '' };
@@ -30,6 +32,7 @@ export class CodeModal {
     
     this.render();
     this.modalOverlay.classList.remove('hidden');
+    this.windowController?.bringToFront();
   }
 
   hide(): void {
@@ -53,15 +56,16 @@ export class CodeModal {
       filename = 'Makefile';
     }
 
+    const titleBarHtml = ModalWindowManager.createTitleBarHTML({
+      title: 'Exportador Taskflow C++20',
+      subtitle: `Compilador Alvo: ${meta.compilerConfig.compiler.toUpperCase()} (Windows MSVC)`,
+      icon: '⚡',
+      closeBtnId: 'btn-close-modal'
+    });
+
     this.modalOverlay.innerHTML = `
       <div class="modal-dialog">
-        <div class="modal-header">
-          <div class="modal-title-group">
-            <h2 class="modal-title">Exportador Taskflow C++20</h2>
-            <span class="compiler-badge">Compilador Alvo: ${meta.compilerConfig.compiler.toUpperCase()} (Windows MSVC)</span>
-          </div>
-          <button class="btn-close" id="btn-close-modal">&times;</button>
-        </div>
+        ${titleBarHtml}
 
         <div class="modal-tabs">
           <button class="tab-btn ${this.currentTab === 'cpp' ? 'active' : ''}" data-tab="cpp">main.cpp (C++20)</button>
@@ -86,6 +90,16 @@ export class CodeModal {
         </div>
       </div>
     `;
+
+    const dialog = this.modalOverlay.querySelector('.modal-dialog') as HTMLElement;
+    if (dialog) {
+      this.windowController = ModalWindowManager.attach({
+        dialog,
+        minWidth: 540,
+        minHeight: 380,
+        onClose: () => this.hide()
+      });
+    }
 
     // Eventos
     this.modalOverlay.querySelector('#btn-close-modal')?.addEventListener('click', () => this.hide());

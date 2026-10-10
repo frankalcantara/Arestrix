@@ -14,6 +14,8 @@ import {
   RemoveNodeCommand, 
   RemoveEdgeCommand 
 } from '../core/history/GraphCommands.ts';
+import { getNodeAction, NodeActionType } from './NodeActions.ts';
+import { CanvasTooltip } from '../ui/CanvasTooltip.ts';
 
 export class InteractionManager {
   private camera: THREE.OrthographicCamera;
@@ -40,6 +42,10 @@ export class InteractionManager {
   private connectingSourceNodeId: string | null = null;
   private connectingSourcePortId: string | null = null;
   private rubberBandLine: Line2 | null = null;
+
+  // Fase 15.2: hover com tooltip e destaque de botões de ação
+  private tooltip: CanvasTooltip = new CanvasTooltip(350);
+  private hoveredActionNode: NodeView | null = null;
 
   constructor(
     camera: THREE.OrthographicCamera,
@@ -94,6 +100,10 @@ export class InteractionManager {
     window.addEventListener('pointerup', this.onPointerUp.bind(this));
     window.addEventListener('keydown', this.onKeyDown.bind(this));
 
+    // Tooltip: oculta em zoom (wheel) e ao sair do canvas
+    this.domElement.addEventListener('wheel', () => this.clearHover(), { passive: true });
+    this.domElement.addEventListener('pointerleave', () => this.clearHover());
+
     globalEventBus.on('node:removed', ({ id }: { id: string }) => {
       if (this.selectedNodeId === id) {
         this.selectNode(null);
@@ -120,29 +130,27 @@ export class InteractionManager {
 
     const worldCursor = this.cameraController.screenToWorld(e.clientX, e.clientY);
 
-    // 0. Checa clique em Botões de Ação do Nó (Fase 7: 🛡️ Sandbox, 🧠 Modelo, 🔧 Tools)
+    // 0. Checa clique em Botões de Ação do Nó (Fase 15.2: catálogo com 5 ações)
     const actionTargets: THREE.Object3D[] = [];
     this.nodeViews.forEach(nv => {
-      nv.group.traverse(obj => {
-        if (obj.userData?.isActionHitbox) {
-          actionTargets.push(obj);
-        }
-      });
+      if (nv.group.visible && nv.isDetailVisible()) {
+        nv.group.traverseVisible(obj => {
+          if (obj.userData?.isActionHitbox) {
+            actionTargets.push(obj);
+          }
+        });
+      }
     });
 
     const actionIntersects = this.raycaster.intersectObjects(actionTargets, false);
     if (actionIntersects.length > 0) {
       const hit = actionIntersects[0].object;
       const { nodeId, actionType } = hit.userData;
+      this.clearHover();
       this.selectNode(nodeId);
-      if (actionType === 'sandbox') {
-        globalEventBus.emit('node:open-sandbox-modal', nodeId);
-      } else if (actionType === 'model') {
-        globalEventBus.emit('node:open-model-modal', nodeId);
-      } else if (actionType === 'tools') {
-        globalEventBus.emit('node:open-tools-modal', nodeId);
-      } else if (actionType === 'memory') {
-        globalEventBus.emit('node:open-memory-modal', nodeId);
+      const actionDef = getNodeAction(actionType);
+      if (actionDef) {
+        globalEventBus.emit(actionDef.event, nodeId);
       }
       return;
     }
@@ -245,18 +253,69 @@ export class InteractionManager {
       return;
     }
 
-    // C. Cursor Hover feedback
+    // C. Cursor Hover feedback & Tooltip (Fase 15.2)
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const interactiveTargets: THREE.Object3D[] = [];
     this.nodeViews.forEach(nv => {
-      nv.group.traverse(obj => {
-        if (obj.userData?.isActionHitbox || obj.userData?.isPortHitbox) {
-          interactiveTargets.push(obj);
-        }
-      });
+      if (nv.group.visible) {
+        nv.group.traverseVisible(obj => {
+          if (
+            obj.userData?.isActionHitbox ||
+            obj.userData?.isPortHitbox ||
+            (obj.userData?.isBody && obj.userData?.tooltip)
+          ) {
+            interactiveTargets.push(obj);
+          }
+        });
+      }
     });
+
     const hits = this.raycaster.intersectObjects(interactiveTargets, false);
-    this.domElement.style.cursor = hits.length > 0 ? 'pointer' : 'default';
+    if (hits.length > 0) {
+      this.domElement.style.cursor = 'pointer';
+      const hit = hits[0].object;
+      const u = hit.userData;
+
+      // Se for ação da barra, destaca o botão
+      if (u.isActionHitbox) {
+        const nv = this.nodeViews.get(u.nodeId);
+        if (nv && this.hoveredActionNode !== nv) {
+          if (this.hoveredActionNode) this.hoveredActionNode.setHoveredAction(null);
+          this.hoveredActionNode = nv;
+        }
+        nv?.setHoveredAction(u.actionType as NodeActionType);
+      } else if (this.hoveredActionNode) {
+        this.hoveredActionNode.setHoveredAction(null);
+        this.hoveredActionNode = null;
+      }
+
+      // Exibe tooltip com rótulo e descrição
+      if (u.tooltip) {
+        const worldPos = new THREE.Vector3();
+        hit.getWorldPosition(worldPos);
+        const screenPos = this.cameraController.worldToScreen(worldPos);
+        const key = `${u.nodeId || ''}_${u.actionType || u.portId || 'body'}`;
+        this.tooltip.show(
+          key,
+          { title: u.tooltip, description: u.tooltipDescription },
+          screenPos.x,
+          screenPos.y
+        );
+      } else {
+        this.tooltip.hide();
+      }
+    } else {
+      this.domElement.style.cursor = 'default';
+      this.clearHover();
+    }
+  }
+
+  private clearHover(): void {
+    if (this.hoveredActionNode) {
+      this.hoveredActionNode.setHoveredAction(null);
+      this.hoveredActionNode = null;
+    }
+    this.tooltip.hide();
   }
 
   private onPointerUp(e: PointerEvent): void {
@@ -457,5 +516,14 @@ export class InteractionManager {
 
   setResolution(w: number, h: number): void {
     (this.rubberBandLine?.material as LineMaterial)?.resolution.set(w, h);
+  }
+
+  getTooltip(): CanvasTooltip {
+    return this.tooltip;
+  }
+
+  dispose(): void {
+    this.clearHover();
+    this.tooltip.dispose();
   }
 }

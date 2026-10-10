@@ -14,6 +14,7 @@ import { NodeModelModal } from './ui/modals/NodeModelModal.ts';
 import { NodeToolsModal } from './ui/modals/NodeToolsModal.ts';
 import { NodeMemoryModal } from './ui/modals/NodeMemoryModal.ts';
 import { NodeSkillsModal } from './ui/modals/NodeSkillsModal.ts';
+import { SkillEditorModal } from './ui/modals/SkillEditorModal.ts';
 import { ProjectManager } from './core/ProjectManager.ts';
 import { StatusBar } from './ui/StatusBar.ts';
 import { CanvasControls } from './ui/CanvasControls.ts';
@@ -79,6 +80,7 @@ function bootstrap() {
   const nodeToolsModal = new NodeToolsModal(graph);
   const nodeMemoryModal = new NodeMemoryModal(graph);
   const nodeSkillsModal = new NodeSkillsModal(graph);
+  const skillEditorModal = new SkillEditorModal();
 
   // Escuta eventos dos botoes de acao rapida nos nós e no inspetor
   globalEventBus.on('node:open-sandbox-modal', (nodeId: string) => nodeSandboxModal.open(nodeId));
@@ -86,6 +88,7 @@ function bootstrap() {
   globalEventBus.on('node:open-tools-modal', (nodeId: string) => nodeToolsModal.open(nodeId));
   globalEventBus.on('node:open-memory-modal', (nodeId: string) => nodeMemoryModal.open(nodeId));
   globalEventBus.on('node:open-skills-modal', (nodeId: string, initialTab?: any) => nodeSkillsModal.open(nodeId, initialTab));
+  globalEventBus.on('node:open-skill-editor', (opts: any) => skillEditorModal.openSkill(opts));
 
   // 6. Inicializa Barra de Ferramentas Ribbon e posiciona no topo
   const toolbar = new Toolbar(appContainer, graph, viewport, codeModal, templateModal, globalDefaultsModal);

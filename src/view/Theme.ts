@@ -65,15 +65,22 @@ export const THEME = {
   } as Record<TaskflowNodeType, { color: number; badgeBg: number; textColor: string; label: string }>,
 
   // Corpo dos Nós (Cartão Branco Técnico Visio com bordas limpas de 6px)
+  // Fase 15.2: cartão mais largo, header mais alto e espaçamento de portas maior para legibilidade.
   nodeBody: {
-    width: 260,
-    height: 130,
-    headerHeight: 32,
+    width: 300,
+    height: 150,
+    headerHeight: 38,
     borderRadius: 6,          // Cantos limpos e precisos do padrão Visio
     fillColor: 0xffffff,      // Branco puro
-    borderColor: 0xcbd5e1,    // Borda nítida 1px cinza neutro
+    borderColor: 0xcbd5e1,    // Borda nítida cinza neutro
     borderSelected: 0x0f6cbd, // Azul Office selecionado
-    borderWidth: 2
+    borderWidth: 1.5,         // Espessura real (anel geométrico, não LineLoop de 1px)
+    selectionWidth: 3,        // Anel externo de seleção / execução
+    paddingX: 16,
+    titleGap: 12,             // Distância entre o header e o título
+    titleMaxLines: 2,
+    portSpacing: 32,
+    portZoneBottomPadding: 14
   },
 
   // Portas / Conectores Visio
@@ -82,7 +89,8 @@ export const THEME = {
     inputColor: 0x0f6cbd,     // Azul Office
     outputColor: 0xc43e1c,    // Laranja Office
     hoverColor: 0x107c41,     // Verde hover
-    hitboxRadius: 18
+    hitboxRadius: 18,
+    labelOffset: 16
   },
 
   // Arestas / Linhas Conectoras do Visio
@@ -96,15 +104,39 @@ export const THEME = {
   },
 
   // Regras Estritas de Tipografia Nítida (Zero sombras/glows em textos)
+  // Fase 15.2: tamanhos em unidades de mundo, renderizados como SDF vetorial (troika-three-text).
   typography: {
     fontFamily: 'Segoe UI, Inter, -apple-system, BlinkMacSystemFont, sans-serif',
     titleSize: 18,
-    titleWeight: '700',
-    badgeSize: 12,
-    badgeWeight: '700',
-    portSize: 11,
-    portWeight: '600',
+    titleWeight: 700,
+    titleColor: '#0F172A',    // Slate 900
+    badgeSize: 13,            // Rótulo de tipo no header (ex.: AGENT CODE MODE)
+    badgeWeight: 700,
+    badgeColor: '#FFFFFF',
+    badgeLetterSpacing: 0.04,
+    portSize: 13,
+    portWeight: 600,
+    portColor: '#334155',     // Slate 700 (contraste >= 7:1 sobre branco)
+    telemetrySize: 12,
+    telemetryWeight: 600,
     focusedOpacity: 1.0,
     unfocusedOpacity: 0.5
+  },
+
+  // Barra de ações flutuante acima do nó (ícones vetoriais Lucide)
+  actionBar: {
+    buttonSize: 26,
+    buttonGap: 4,
+    iconSize: 15,
+    padding: 4,
+    offsetY: 6,
+    fill: 0xffffff,
+    border: 0xcbd5e1,
+    hoverFill: 0xeef2ff
+  },
+
+  // Nível de detalhe: abaixo deste zoom, rótulos de portas e barra de ações são ocultados
+  lod: {
+    detailZoomThreshold: 0.45
   }
 };

@@ -103,6 +103,9 @@ export class Viewport {
     this.bus.on('telemetry:task-enter', (data: { taskId: string; worker?: number }) => this.onTelemetryEnter(data));
     this.bus.on('telemetry:task-exit', (data: { taskId: string; worker?: number }) => this.onTelemetryExit(data));
     this.bus.on('telemetry:reset', () => this.onTelemetryReset());
+    this.bus.on('camera:zoom-changed', ({ zoom }: { zoom: number }) => {
+      this.nodeViews.forEach(nv => nv.setDetailLevel(zoom));
+    });
   }
 
   private onTelemetryEnter(data: { taskId: string; worker?: number }): void {
@@ -139,6 +142,7 @@ export class Viewport {
     if (this.nodeViews.has(nodeData.id)) return;
 
     const nodeView = new NodeView(nodeData);
+    nodeView.setDetailLevel(this.cameraController.getZoom());
     this.scene.add(nodeView.group);
     this.nodeViews.set(nodeData.id, nodeView);
   }
@@ -308,6 +312,7 @@ export class Viewport {
     window.removeEventListener('resize', this.onResize);
     this.resizeObserver?.disconnect();
     this.clearAllViews();
+    this.interactionManager.dispose();
     this.renderer.dispose();
   }
 }

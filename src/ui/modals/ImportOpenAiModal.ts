@@ -2,6 +2,7 @@ import { Graph } from '../../core/Graph.ts';
 import { Viewport } from '../../view/Viewport.ts';
 import { AddNodeCommand } from '../../core/history/GraphCommands.ts';
 import { INodeAgentSettings } from '../../core/types.ts';
+import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 
 /**
  * Arestrix Studio - Diálogo de Importação da OpenAI (ChatGPT / Assistants)
@@ -12,6 +13,7 @@ export class ImportOpenAiModal {
   private modal?: HTMLElement;
   private graph: Graph;
   private viewport?: Viewport;
+  private windowController?: IModalWindowController;
 
   constructor(graph: Graph, viewport?: Viewport) {
     this.graph = graph;
@@ -34,6 +36,7 @@ export class ImportOpenAiModal {
     if (this.modal) {
       this.render();
       this.modal.style.display = 'flex';
+      this.windowController?.bringToFront();
     }
   }
 
@@ -45,18 +48,17 @@ export class ImportOpenAiModal {
 
   private render(): void {
     if (!this.modal) return;
+
+    const titleBarHtml = ModalWindowManager.createTitleBarHTML({
+      title: 'Importar Agente OpenAI',
+      subtitle: 'Configure as instruções e o modelo OpenAI (ChatGPT / Assistants) para o nó do grafo.',
+      icon: '🤖',
+      closeBtnId: 'btn-close-openai-modal'
+    });
+
     this.modal.innerHTML = `
       <div class="modal-window" style="max-width: 680px; width: 92%; max-height: 88vh; display: flex; flex-direction: column;">
-        <!-- Cabeçalho Estilo Office -->
-        <div class="modal-header">
-          <div>
-            <h3 class="modal-title">Importar Agente OpenAI</h3>
-            <p style="margin: 2px 0 0 0; font-size: 12px; color: #616161; font-family: 'Segoe UI', sans-serif;">
-              Configure as instruções e o modelo OpenAI (ChatGPT / Assistants) para o nó do grafo.
-            </p>
-          </div>
-          <button id="btn-close-openai-modal" class="modal-close-btn" title="Fechar">&times;</button>
-        </div>
+        ${titleBarHtml}
 
         <!-- Corpo do Diálogo -->
         <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
@@ -93,6 +95,16 @@ export class ImportOpenAiModal {
         </div>
       </div>
     `;
+
+    const dialog = this.modal.querySelector?.('.modal-window') as HTMLElement;
+    if (dialog) {
+      this.windowController = ModalWindowManager.attach({
+        dialog,
+        minWidth: 540,
+        minHeight: 400,
+        onClose: () => this.hide()
+      });
+    }
 
     this.bindEvents();
   }

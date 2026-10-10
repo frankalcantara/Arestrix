@@ -1,9 +1,11 @@
 import { Graph } from '../core/Graph.ts';
 import { IGlobalPipelineDefaults, LLMProvider, SandboxIsolationLevel, SandboxNetworkPolicy, CodeModeTool, DEFAULT_PIPELINE_DEFAULTS } from '../core/types.ts';
+import { ModalWindowManager, IModalWindowController } from './modals/ModalWindowManager.ts';
 
 export class GlobalDefaultsModal {
   private overlay: HTMLElement;
   private graph: Graph;
+  private windowController?: IModalWindowController;
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -18,6 +20,7 @@ export class GlobalDefaultsModal {
   public show(): void {
     this.render();
     this.overlay.classList.remove('hidden');
+    this.windowController?.bringToFront();
   }
 
   public hide(): void {
@@ -27,19 +30,16 @@ export class GlobalDefaultsModal {
   private render(): void {
     const defaults = this.graph.getGlobalDefaults();
 
+    const titleBarHtml = ModalWindowManager.createTitleBarHTML({
+      title: 'Padrões Globais do Pipeline de Agentes',
+      subtitle: 'Configure o ambiente padrão (VM, Provedor e Ferramentas) herdado pelos nós do grafo',
+      icon: '⚙️',
+      closeBtnId: 'btn-close-defaults-modal'
+    });
+
     this.overlay.innerHTML = `
       <div class="modal-dialog global-defaults-dialog">
-        <div class="modal-header">
-          <div class="modal-title-group">
-            <div class="modal-header-icon">⚙️</div>
-            <div>
-              <h2 class="modal-title">Padrões Globais do Pipeline de Agentes</h2>
-              <div class="modal-subtitle">Configure o ambiente padrão (VM, Provedor e Ferramentas) herdado pelos nós do grafo</div>
-            </div>
-          </div>
-          <button class="modal-close-btn" id="btn-close-defaults-modal">&times;</button>
-        </div>
-
+        ${titleBarHtml}
         <div class="modal-body-scrollable">
           <!-- 1. Provedor & Modelo de IA -->
           <div class="settings-section-card">
@@ -275,6 +275,16 @@ export class GlobalDefaultsModal {
         </div>
       </div>
     `;
+
+    const dialog = this.overlay.querySelector('.modal-dialog') as HTMLElement;
+    if (dialog) {
+      this.windowController = ModalWindowManager.attach({
+        dialog,
+        minWidth: 540,
+        minHeight: 400,
+        onClose: () => this.hide()
+      });
+    }
 
     this.bindDialogEvents();
   }

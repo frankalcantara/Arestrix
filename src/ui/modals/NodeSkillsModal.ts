@@ -2,6 +2,7 @@ import { Graph } from '../../core/Graph.ts';
 import { INodeData, INodeSkill } from '../../core/types.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
 import { GitHubSkillsRegistry } from '../../core/skills/GitHubSkillsRegistry.ts';
+import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 
 /**
  * Arestrix Studio - Diálogo de Habilidades & Skills do Agente (Padrão Microsoft Office)
@@ -15,6 +16,7 @@ export class NodeSkillsModal {
   private overlay: HTMLElement;
   private graph: Graph;
   private registry: GitHubSkillsRegistry;
+  private windowController?: IModalWindowController;
   private activeTab: 'editor' | 'github' | 'repos' = 'editor';
   private markdownViewMode: 'edit' | 'preview' = 'edit';
   private selectedCategory: string = 'todas';
@@ -42,6 +44,7 @@ export class NodeSkillsModal {
     this.ensureNodeHasSkill(node);
     this.render(node);
     this.overlay.classList.remove('hidden');
+    this.windowController?.bringToFront();
   }
 
   public hide(): void {
@@ -106,21 +109,16 @@ export class NodeSkillsModal {
     const reposList = this.registry.getRepositories();
     const githubSkills = this.registry.searchSkills(this.searchQuery, this.selectedCategory);
 
+    const titleBarHtml = ModalWindowManager.createTitleBarHTML({
+      title: 'Habilidades & Skills do Agente (SKILL.md)',
+      subtitle: `Agente: <strong style="color: #0f6cbd;">${this.escapeHtml(node.label)}</strong> (ID: <code>${node.id}</code>)`,
+      icon: '📜',
+      closeBtnId: 'btn-close-skills-modal'
+    });
+
     this.overlay.innerHTML = `
       <div class="modal-dialog node-skills-modal-dialog">
-        <!-- Cabeçalho Office Fluent -->
-        <div class="modal-header">
-          <div class="modal-title-group">
-            <div class="modal-header-icon" style="background: #eff6fc; color: #0f6cbd; border: 1px solid #c7e0f4; border-radius: 4px; padding: 4px 8px; font-weight: 700;">📜</div>
-            <div>
-              <h2 class="modal-title" style="font-size: 16px; font-weight: 700; color: #242424; margin: 0;">Habilidades & Skills do Agente (SKILL.md)</h2>
-              <div class="modal-subtitle" style="font-size: 12px; color: #616161; margin-top: 2px;">
-                Agente: <strong style="color: #0f6cbd;">${this.escapeHtml(node.label)}</strong> (ID: <code>${node.id}</code>)
-              </div>
-            </div>
-          </div>
-          <button class="modal-close-btn" id="btn-close-skills-modal" title="Fechar (Esc)">&times;</button>
-        </div>
+        ${titleBarHtml}
 
         <!-- Abas no Padrão Office -->
         <div class="office-modal-tab-bar">
@@ -394,6 +392,16 @@ export class NodeSkillsModal {
         </div>
       </div>
     `;
+
+    const dialog = this.overlay.querySelector('.modal-dialog') as HTMLElement;
+    if (dialog) {
+      this.windowController = ModalWindowManager.attach({
+        dialog,
+        minWidth: 540,
+        minHeight: 400,
+        onClose: () => this.hide()
+      });
+    }
 
     this.bindModalControls(node, currentSkill);
   }

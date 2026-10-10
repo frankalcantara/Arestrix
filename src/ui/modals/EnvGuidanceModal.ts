@@ -1,4 +1,5 @@
 import { EnvironmentManager, IEnvKeyGuidance } from '../../core/env/EnvironmentManager.ts';
+import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 
 /**
  * Arestrix Studio - Diálogo de Orientação e Gravação de Variáveis de Ambiente
@@ -11,6 +12,7 @@ export class EnvGuidanceModal {
   private currentGuidance?: IEnvKeyGuidance;
   private envManager: EnvironmentManager;
   private onSavedCallback?: () => void;
+  private windowController?: IModalWindowController;
 
   private constructor() {
     this.envManager = EnvironmentManager.getInstance();
@@ -42,6 +44,7 @@ export class EnvGuidanceModal {
     if (!this.modal) return;
     this.modal.style.display = 'flex';
     this.render();
+    this.windowController?.bringToFront();
   }
 
   public hide(): void {
@@ -54,18 +57,16 @@ export class EnvGuidanceModal {
     if (!this.modal || !this.currentGuidance) return;
     const g = this.currentGuidance;
 
+    const titleBarHtml = ModalWindowManager.createTitleBarHTML({
+      title: `Variável de Ambiente: ${g.keyName}`,
+      subtitle: 'Política de Segurança e Proteção de Chaves de API do Arestrix',
+      icon: '🛡️',
+      closeBtnId: 'btn-close-env-modal'
+    });
+
     this.modal.innerHTML = `
       <div class="modal-window" style="max-width: 660px; width: 92%; max-height: 88vh; display: flex; flex-direction: column;">
-        <!-- Cabeçalho Estilo Office -->
-        <div class="modal-header">
-          <div>
-            <h3 class="modal-title">Variável de Ambiente: ${g.keyName}</h3>
-            <p style="margin: 2px 0 0 0; font-size: 12px; color: #616161; font-family: 'Segoe UI', sans-serif;">
-              Política de Segurança e Proteção de Chaves de API do Arestrix
-            </p>
-          </div>
-          <button id="btn-close-env-modal" class="modal-close-btn" title="Fechar">&times;</button>
-        </div>
+        ${titleBarHtml}
 
         <!-- Corpo do Diálogo -->
         <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
@@ -132,6 +133,16 @@ export class EnvGuidanceModal {
         </div>
       </div>
     `;
+
+    const dialog = this.modal.querySelector?.('.modal-window') as HTMLElement;
+    if (dialog) {
+      this.windowController = ModalWindowManager.attach({
+        dialog,
+        minWidth: 540,
+        minHeight: 400,
+        onClose: () => this.hide()
+      });
+    }
 
     this.bindEvents();
   }

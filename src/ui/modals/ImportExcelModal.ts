@@ -2,6 +2,7 @@ import { Graph } from '../../core/Graph.ts';
 import { Viewport } from '../../view/Viewport.ts';
 import { ProjectManager } from '../../core/ProjectManager.ts';
 import { globalEventBus } from '../../core/EventBus.ts';
+import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 
 /**
  * Arestrix Studio - Diálogo de Importação do Excel (Modernização de Planilhas)
@@ -13,6 +14,7 @@ export class ImportExcelModal {
   private graph: Graph;
   private viewport?: Viewport;
   private projectManager: ProjectManager;
+  private windowController?: IModalWindowController;
 
   constructor(graph: Graph, viewport?: Viewport) {
     this.graph = graph;
@@ -36,6 +38,7 @@ export class ImportExcelModal {
     if (this.modal) {
       this.render();
       this.modal.style.display = 'flex';
+      this.windowController?.bringToFront();
     }
   }
 
@@ -47,18 +50,17 @@ export class ImportExcelModal {
 
   private render(): void {
     if (!this.modal) return;
+
+    const titleBarHtml = ModalWindowManager.createTitleBarHTML({
+      title: 'Importar Planilha do Excel',
+      subtitle: 'Converta pastas de trabalho (.xlsx) em bancos de dados relacionais e pipelines de agentes concorrentes.',
+      icon: '📊',
+      closeBtnId: 'btn-close-excel-modal'
+    });
+
     this.modal.innerHTML = `
       <div class="modal-window" style="max-width: 760px; width: 92%; max-height: 88vh; display: flex; flex-direction: column;">
-        <!-- Cabeçalho Estilo Office -->
-        <div class="modal-header">
-          <div>
-            <h3 class="modal-title">Importar Planilha do Excel</h3>
-            <p style="margin: 2px 0 0 0; font-size: 12px; color: #616161; font-family: 'Segoe UI', sans-serif;">
-              Converta pastas de trabalho (.xlsx) em bancos de dados relacionais e pipelines de agentes concorrentes.
-            </p>
-          </div>
-          <button id="btn-close-excel-modal" class="modal-close-btn" title="Fechar">&times;</button>
-        </div>
+        ${titleBarHtml}
 
         <!-- Corpo do Diálogo -->
         <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
@@ -134,6 +136,16 @@ export class ImportExcelModal {
         </div>
       </div>
     `;
+
+    const dialog = this.modal.querySelector?.('.modal-window') as HTMLElement;
+    if (dialog) {
+      this.windowController = ModalWindowManager.attach({
+        dialog,
+        minWidth: 580,
+        minHeight: 440,
+        onClose: () => this.hide()
+      });
+    }
 
     this.bindEvents();
   }

@@ -3,12 +3,14 @@ import { IAgentTemplate } from '../core/templates/AgentTemplateTypes.ts';
 import { Graph } from '../core/Graph.ts';
 import { Viewport } from '../view/Viewport.ts';
 import { AddNodeCommand } from '../core/history/GraphCommands.ts';
+import { ModalWindowManager, IModalWindowController } from './modals/ModalWindowManager.ts';
 
 export class TemplateModal {
   private overlay: HTMLElement;
   private graph: Graph;
   private viewport: Viewport;
   private registry: AgentTemplateRegistry;
+  private windowController?: IModalWindowController;
   private activeCategory: string = 'Todos';
 
   constructor(graph: Graph, viewport: Viewport) {
@@ -27,6 +29,7 @@ export class TemplateModal {
     this.activeCategory = 'Todos';
     this.render();
     this.overlay.classList.remove('hidden');
+    this.windowController?.bringToFront();
   }
 
   public hide(): void {
@@ -40,18 +43,16 @@ export class TemplateModal {
       ? allTemplates
       : allTemplates.filter(t => t.category === this.activeCategory);
 
+    const titleBarHtml = ModalWindowManager.createTitleBarHTML({
+      title: 'Biblioteca de Templates de Agentes & Plugins',
+      subtitle: 'Tarefas especializadas e componentes desacoplados para Taskflow C++20',
+      icon: '🧩',
+      closeBtnId: 'btn-close-template-modal'
+    });
+
     this.overlay.innerHTML = `
       <div class="modal-dialog template-modal-dialog">
-        <div class="modal-header">
-          <div class="modal-title-group">
-            <span class="modal-title-icon">🧩</span>
-            <div>
-              <div class="modal-title">Biblioteca de Templates de Agentes & Plugins</div>
-              <div class="modal-subtitle">Tarefas especializadas e componentes desacoplados para Taskflow C++20</div>
-            </div>
-          </div>
-          <button class="btn-close" id="btn-close-template-modal">&times;</button>
-        </div>
+        ${titleBarHtml}
 
         <!-- Barra de Ações Rápidas -->
         <div class="template-action-bar">
@@ -105,6 +106,16 @@ export class TemplateModal {
         </div>
       </div>
     `;
+
+    const dialog = this.overlay.querySelector('.modal-dialog') as HTMLElement;
+    if (dialog) {
+      this.windowController = ModalWindowManager.attach({
+        dialog,
+        minWidth: 640,
+        minHeight: 480,
+        onClose: () => this.hide()
+      });
+    }
 
     this.bindEvents();
   }

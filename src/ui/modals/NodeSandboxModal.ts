@@ -1,10 +1,12 @@
 import { Graph } from '../../core/Graph.ts';
 import { INodeData, ISandboxPolicy, SandboxIsolationLevel, SandboxNetworkPolicy } from '../../core/types.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
+import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 
 export class NodeSandboxModal {
   private overlay: HTMLElement;
   private graph: Graph;
+  private windowController?: IModalWindowController;
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -22,6 +24,7 @@ export class NodeSandboxModal {
 
     this.render(node);
     this.overlay.classList.remove('hidden');
+    this.windowController?.bringToFront();
   }
 
   public hide(): void {
@@ -44,19 +47,16 @@ export class NodeSandboxModal {
           ...(settings.sandbox || {})
         };
 
+    const titleBarHtml = ModalWindowManager.createTitleBarHTML({
+      title: 'Sandbox & Máquina Virtual',
+      subtitle: `Nó: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id})`,
+      icon: '🛡️',
+      closeBtnId: 'btn-close-sandbox-modal'
+    });
+
     this.overlay.innerHTML = `
       <div class="modal-dialog node-settings-modal-dialog">
-        <div class="modal-header">
-          <div class="modal-title-group">
-            <div class="modal-header-icon">🛡️</div>
-            <div>
-              <h2 class="modal-title">Sandbox & Máquina Virtual</h2>
-              <div class="modal-subtitle">Nó: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id})</div>
-            </div>
-          </div>
-          <button class="modal-close-btn" id="btn-close-sandbox-modal">&times;</button>
-        </div>
-
+        ${titleBarHtml}
         <div class="modal-body-scrollable">
           <!-- Toggle de Herança -->
           <div class="inheritance-toggle-card">
@@ -125,6 +125,14 @@ export class NodeSandboxModal {
         </div>
       </div>
     `;
+
+    const dialog = this.overlay.querySelector('.modal-dialog') as HTMLElement;
+    if (dialog) {
+      this.windowController = ModalWindowManager.attach({
+        dialog,
+        onClose: () => this.hide()
+      });
+    }
 
     this.bindDialogEvents(node);
   }

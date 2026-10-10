@@ -1,5 +1,6 @@
 import { Graph } from '../../core/Graph.ts';
 import { IBatchPipelineConfig, IPipelineCheckpointState, INodeData } from '../../core/types.ts';
+import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 
 declare global {
   interface Window {
@@ -11,6 +12,7 @@ declare global {
 export class BatchPipelineModal {
   private overlay: HTMLElement;
   private graph: Graph;
+  private windowController?: IModalWindowController;
   private config: IBatchPipelineConfig = {
     items: ['ART-001', 'ART-002', 'ART-003'],
     serializedStages: [],
@@ -39,6 +41,7 @@ export class BatchPipelineModal {
     await this.fetchCheckpointState();
     this.render();
     this.overlay.classList.remove('hidden');
+    this.windowController?.bringToFront();
   }
 
   public hide(): void {
@@ -95,19 +98,16 @@ export class BatchPipelineModal {
       }
     });
 
+    const titleBarHtml = ModalWindowManager.createTitleBarHTML({
+      title: 'Orquestrador em Lote & Resume Engine',
+      subtitle: 'Processe múltiplos artigos/tarefas em paralelo com persistência e auto-recuperação',
+      icon: '📦',
+      closeBtnId: 'btn-close-batch-modal'
+    });
+
     this.overlay.innerHTML = `
       <div class="modal-dialog batch-pipeline-modal-dialog">
-        <div class="modal-header">
-          <div class="modal-title-group">
-            <div class="modal-header-icon">📦</div>
-            <div>
-              <h2 class="modal-title">Orquestrador em Lote & Resume Engine</h2>
-              <div class="modal-subtitle">Processe múltiplos artigos/tarefas em paralelo com persistência e auto-recuperação</div>
-            </div>
-          </div>
-          <button class="modal-close-btn" id="btn-close-batch-modal">&times;</button>
-        </div>
-
+        ${titleBarHtml}
         <div class="modal-body-scrollable">
           <!-- 1. Configuração de Itens e Concorrência -->
           <div class="settings-section-card">
@@ -254,6 +254,16 @@ export class BatchPipelineModal {
         </div>
       </div>
     `;
+
+    const dialog = this.overlay.querySelector('.modal-dialog') as HTMLElement;
+    if (dialog) {
+      this.windowController = ModalWindowManager.attach({
+        dialog,
+        minWidth: 600,
+        minHeight: 450,
+        onClose: () => this.hide()
+      });
+    }
 
     this.bindDialogEvents();
   }

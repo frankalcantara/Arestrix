@@ -1,11 +1,13 @@
 import { Graph } from '../../core/Graph.ts';
 import { ProjectManager } from '../../core/ProjectManager.ts';
 import { IProjectManifest } from '../../core/types.ts';
+import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 
 export class ProjectManagerModal {
   private overlay: HTMLElement;
   private graph: Graph;
   private projectManager: ProjectManager;
+  private windowController?: IModalWindowController;
   private activeTab: 'recents' | 'create' | 'settings' = 'recents';
 
   constructor(graph: Graph) {
@@ -24,6 +26,7 @@ export class ProjectManagerModal {
     await this.projectManager.init();
     this.render();
     this.overlay.classList.remove('hidden');
+    this.windowController?.bringToFront();
   }
 
   public hide(): void {
@@ -34,15 +37,16 @@ export class ProjectManagerModal {
     const cur = this.projectManager.getCurrentProject();
     const recents = this.projectManager.listRecentProjects();
 
+    const titleBarHtml = ModalWindowManager.createTitleBarHTML({
+      title: 'Gerenciador de Projetos',
+      subtitle: `Projeto Ativo: <strong>${this.escapeHtml(cur.name)}</strong> (ID: <code>${this.escapeHtml(cur.projectId)}</code>)`,
+      icon: '📂',
+      closeBtnId: 'btn-close-proj-manager'
+    });
+
     this.overlay.innerHTML = `
       <div class="modal-dialog project-memory-modal-dialog" style="max-width: 860px;">
-        <div class="modal-header">
-          <div>
-            <h2 class="modal-title">Gerenciador de Projetos</h2>
-            <div style="font-size: 12px; color: #616161; margin-top: 2px;">Projeto Ativo: <strong>${this.escapeHtml(cur.name)}</strong> (ID: <code>${this.escapeHtml(cur.projectId)}</code>)</div>
-          </div>
-          <button class="modal-close-btn" id="btn-close-proj-manager" title="Fechar">&times;</button>
-        </div>
+        ${titleBarHtml}
 
         <!-- Abas de Navegação Estilo Office -->
         <div class="modal-tabs">
@@ -64,6 +68,16 @@ export class ProjectManagerModal {
         </div>
       </div>
     `;
+
+    const dialog = this.overlay.querySelector('.modal-dialog') as HTMLElement;
+    if (dialog) {
+      this.windowController = ModalWindowManager.attach({
+        dialog,
+        minWidth: 560,
+        minHeight: 400,
+        onClose: () => this.hide()
+      });
+    }
 
     this.bindInternalEvents(cur);
   }

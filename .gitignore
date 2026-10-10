@@ -12,6 +12,10 @@ __pycache__/
 .DS_Store
 *.local
 
+# Claude Code: worktrees por tarefa e configuracao pessoal
+.claude/worktrees/
+.claude/settings.local.json
+
 # Manual de marca e ativos visuais
 Manual_de_Marca/
 

@@ -8,6 +8,7 @@ import { globalEventBus } from '../../core/EventBus.ts';
 import type { IImportAIValidationResult } from '../../core/ai/DefaultIntelligenceService.ts';
 import { EnvGuidanceModal } from './EnvGuidanceModal.ts';
 import { EnvironmentManager } from '../../core/env/EnvironmentManager.ts';
+import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 
 declare const process: any;
 
@@ -23,6 +24,7 @@ export class ImportPiModal {
   private projectImporter: PiProjectImporter;
   private projectManager: ProjectManager;
   private envManager: EnvironmentManager;
+  private windowController?: IModalWindowController;
 
   private activeTab: 'project' | 'chat' = 'project';
   private currentScanResult: IPiProjectScanResult | null = null;
@@ -57,6 +59,7 @@ export class ImportPiModal {
   public async show(): Promise<void> {
     if (!this.modal) return;
     this.modal.style.display = 'flex';
+    this.windowController?.bringToFront();
 
     if (!this.selectedDirPath) {
       this.selectedDirPath = 'C:/Projetos';
@@ -131,18 +134,16 @@ export class ImportPiModal {
     if (!this.modal) return;
 
     try {
+      const titleBarHtml = ModalWindowManager.createTitleBarHTML({
+        title: 'Importar Projeto Pi',
+        subtitle: 'Importe projetos do ecossistema Pi (Pi CLI / Pi.ai) para a arquitetura Taskflow C++20 do Arestrix.',
+        icon: '🥧',
+        closeBtnId: 'btn-close-pi-modal'
+      });
+
       this.modal.innerHTML = `
         <div class="modal-window" style="max-width: 760px; width: 92%; max-height: 88vh; display: flex; flex-direction: column;">
-          <!-- Cabeçalho Estilo Microsoft Office -->
-          <div class="modal-header">
-            <div>
-              <h3 class="modal-title">Importar Projeto Pi</h3>
-              <p style="margin: 2px 0 0 0; font-size: 12px; color: #616161; font-family: 'Segoe UI', sans-serif;">
-                Importe projetos do ecossistema Pi (Pi CLI / Pi.ai) para a arquitetura Taskflow C++20 do Arestrix.
-              </p>
-            </div>
-            <button id="btn-close-pi-modal" class="modal-close-btn" title="Fechar">&times;</button>
-          </div>
+          ${titleBarHtml}
 
           <!-- Abas Estilo Office Pivot -->
           <div class="modal-tabs">
@@ -181,6 +182,16 @@ export class ImportPiModal {
           </div>
         </div>
       `;
+
+      const dialog = this.modal.querySelector?.('.modal-window') as HTMLElement;
+      if (dialog) {
+        this.windowController = ModalWindowManager.attach({
+          dialog,
+          minWidth: 580,
+          minHeight: 440,
+          onClose: () => this.hide()
+        });
+      }
 
       this.bindEvents();
     } catch (err) {
