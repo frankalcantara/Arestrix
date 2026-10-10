@@ -50,6 +50,10 @@ export interface RegionModel {
   rowLabels?: string[]; // só com orientation "rows": rótulos da primeira coluna (no máximo 40)
   rowCount: number;
   formulaPatterns: FormulaPattern[];
+  /** Definido pela revisão do agente: tabela de destino sugerida para a região. */
+  table?: { name: string; primaryKey: string | null; notes?: string };
+  /** Papel antes da correção aplicada pela revisão. */
+  detectedRole?: RegionRole;
 }
 
 export interface SheetModel {
@@ -77,5 +81,14 @@ export interface WorkbookModel {
   externalLinks: { target: string; usedBy: RegionRef[] }[];
   dependencies: { from: RegionId; to: RegionId; formulaCount: number }[]; // "to" lê de "from"
   risks: Risk[];
+  /** Resultado da revisão do agente, já aplicado ao modelo. */
+  review?: {
+    summary: string;
+    confidenceScore: number;
+    findings: string[];
+    appliedRoles: number;
+    appliedTables: number;
+    questions: { text: string; answer?: string }[];
+  };
   stats: { sheets: number; regions: number; cells: number; formulaCells: number };
 }

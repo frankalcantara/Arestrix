@@ -271,7 +271,7 @@ INSTRUÇÕES OBRIGATÓRIAS:
 
     try {
       const prompt = buildExcelImportPrompt(model, promptTemplate);
-      const raw = this.customApiCaller ? await this.customApiCaller(apiKey ?? '', prompt) : await this.callDeepSeekApi(apiKey as string, prompt);
+      const raw = this.customApiCaller ? await this.customApiCaller(apiKey ?? '', prompt) : await this.callDeepSeekApi(apiKey as string, prompt, { maxTokens: 8192, timeoutMs: 120000 });
       const parsed = this.cleanAndParseJsonResponse(raw);
 
       const known = new Set(model.sheets.flatMap(s => s.regions.map(r => r.id)));
@@ -299,7 +299,7 @@ INSTRUÇÕES OBRIGATÓRIAS:
   /**
    * Realiza a chamada HTTP segura para o endpoint da API LLM (DeepSeek / OpenAI compatible)
    */
-  private async callDeepSeekApi(apiKey: string, prompt: string): Promise<string> {
+  private async callDeepSeekApi(apiKey: string, prompt: string, opts: { maxTokens?: number; timeoutMs?: number } = {}): Promise<string> {
     const endpoint = 'https://api.deepseek.com/chat/completions';
 
     const payload = {
@@ -315,11 +315,12 @@ INSTRUÇÕES OBRIGATÓRIAS:
         }
       ],
       temperature: 0.1,
+      ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
       response_format: { type: 'json_object' }
     };
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), opts.timeoutMs ?? 15000);
 
     try {
       const resp = await fetch(endpoint, {
@@ -331,14 +332,15 @@ INSTRUÇÕES OBRIGATÓRIAS:
         body: JSON.stringify(payload),
         signal: controller.signal
       });
-      clearTimeout(timeoutId);
-
       if (!resp.ok) {
+        clearTimeout(timeoutId);
         const errText = await resp.text();
         throw new Error(`Erro na API DeepSeek (${resp.status}): ${errText}`);
       }
 
       const data = await resp.json();
+      clearTimeout(timeoutId);
+      if (data?.choices?.[0]?.finish_reason === 'length') throw new Error('resposta do modelo cortada por limite de tokens');
       return data?.choices?.[0]?.message?.content || '';
     } catch (e) {
       clearTimeout(timeoutId);

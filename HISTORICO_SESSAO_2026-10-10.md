@@ -69,6 +69,28 @@ SheetJS 0.18.5 do npm tem CVEs; o CDN do 0.20.3 estava bloqueado no sandbox).
 Ajustes feitos depois de testar com planilhas reais: `OFFSET`/`ROW` posicionais não geram ciclo; itens nas linhas (`orientation: 'rows'`);
 pares rótulo/valor separados por uma coluna em branco são fundidos.
 
+## 3.1 Onde paramos exatamente
+
+- Branch `importa_excel`, último commit `51576b8` (já no remoto). Árvore limpa antes desta edição do histórico.
+- O Frank **definiu `DEEPSEEK_API_KEY` no ambiente** (fora do repositório; instruções dadas: Windows `SetEnvironmentVariable ... "User"`;
+  Linux/WSL `~/.config/arestrix/env` com `chmod 600`, carregado pelo `~/.bashrc`).
+- **Esta sessão não enxergava a chave** (o Claude Code herda o ambiente de quando iniciou) **e o sandbox bloqueia `api.deepseek.com`**
+  (`deny network-outbound`). Por isso a revisão com o modelo real **ainda não foi rodada**: só testada com chamador falso.
+- No `npm run dev` (navegador) a chave não chega ao app: `process.env` não existe lá; só o modo nativo lê via `get_env_var` do backend C++.
+
+### Para continuar (duas rotas)
+
+A. **Pelo aplicativo, fora do sandbox (sem liberar nada):** terminal novo (para pegar a variável) → `[ -n "$DEEPSEEK_API_KEY" ] && echo ok`
+   → iniciar o Arestrix nativo (`python3 dev.py`) → modal de importação do Excel → `teste-excel/Valuation_Modelo.xlsx` → **Revisar com IA**.
+   Se faltar a chave, o modal mostra "Defina DEEPSEEK_API_KEY no ambiente…". Depois, trazer o resultado para a sessão ajustar o prompt.
+
+B. **Pela sessão do Claude Code:** liberar `api.deepseek.com` no sandbox e iniciar a sessão com a chave já no ambiente. Aí o Claude roda a
+   revisão no Valuation e ajusta o prompt. Isso envia ao DeepSeek a **estrutura** da planilha (abas, títulos, cabeçalhos, rótulos de linha,
+   fórmulas em R1C1, riscos; nunca valores, nome de arquivo nem hash). Decidir se a estrutura do Valuation é sensível antes.
+
+Abrir a sessão nova **na raiz do repositório** (`cd ~/projetos/NodeForge && claude`). Para a rota B, pode ser preciso
+`npm install --cache "$TMPDIR/npm-cache"` caso o `~/.npm` continue somente leitura no sandbox.
+
 ## 4. Próximos passos
 
 1. **Nunca testamos o modelo real**: definir `DEEPSEEK_API_KEY` e rodar "Revisar com IA" em `Valuation_Modelo.xlsx`; ajustar o prompt.
