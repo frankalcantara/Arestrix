@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import { Graph } from '../src/core/Graph.ts';
 import { EventBus } from '../src/core/EventBus.ts';
 import { ProjectManager } from '../src/core/ProjectManager.ts';
@@ -7,6 +7,146 @@ import { ImportExcelModal } from '../src/ui/modals/ImportExcelModal.ts';
 import { ImportClaudeModal } from '../src/ui/modals/ImportClaudeModal.ts';
 import { ImportOpenAiModal } from '../src/ui/modals/ImportOpenAiModal.ts';
 import { ImportHermesModal } from '../src/ui/modals/ImportHermesModal.ts';
+import { OfficeRibbon } from '../src/ui/ribbon/OfficeRibbon.ts';
+
+class MockElement {
+  tagName: string;
+  className: string = '';
+  id: string = '';
+  type: string = '';
+  title: string = '';
+  checked: boolean = false;
+  textContent: string = '';
+  style: Record<string, string> = {};
+  children: MockElement[] = [];
+  parentNode: MockElement | null = null;
+  attributes: Record<string, string> = {};
+  private _html: string = '';
+  private _listeners: Record<string, Function[]> = {};
+
+  get classList() {
+    return {
+      add: (...classes: string[]) => {
+        const set = new Set(this.className.split(/\s+/).filter(Boolean));
+        classes.forEach(c => set.add(c));
+        this.className = Array.from(set).join(' ');
+      },
+      remove: (...classes: string[]) => {
+        const set = new Set(this.className.split(/\s+/).filter(Boolean));
+        classes.forEach(c => set.delete(c));
+        this.className = Array.from(set).join(' ');
+      },
+      contains: (cls: string) => {
+        return this.className.split(/\s+/).includes(cls);
+      }
+    };
+  }
+
+  constructor(tagName: string = 'DIV') {
+    this.tagName = tagName.toUpperCase();
+  }
+
+  get innerHTML(): string {
+    return this._html;
+  }
+
+  set innerHTML(html: string) {
+    this._html = html;
+    this.children = [];
+    parseHTMLToMock(html, this);
+  }
+
+  appendChild(child: MockElement) {
+    child.parentNode = this;
+    this.children.push(child);
+    return child;
+  }
+
+  addEventListener(event: string, fn: Function) {
+    this._listeners[event] = this._listeners[event] || [];
+    this._listeners[event].push(fn);
+  }
+
+  click() {
+    (this._listeners['click'] || []).forEach(fn => fn({ preventDefault: () => {}, stopPropagation: () => {} }));
+  }
+
+  contains(child: any): boolean {
+    if (child === this) return true;
+    return this.children.some(c => c.contains(child));
+  }
+
+  querySelector(selector: string): MockElement | null {
+    for (const child of this.children) {
+      if (child.matches(selector)) return child;
+      const found = child.querySelector(selector);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  querySelectorAll(selector: string): MockElement[] {
+    const list: MockElement[] = [];
+    for (const child of this.children) {
+      if (child.matches(selector)) list.push(child);
+      list.push(...child.querySelectorAll(selector));
+    }
+    return list;
+  }
+
+  matches(sel: string): boolean {
+    if (sel.startsWith('#')) return this.id === sel.slice(1);
+    if (sel.startsWith('.')) return this.className.split(/\s+/).includes(sel.slice(1));
+    return this.tagName.toLowerCase() === sel.toLowerCase();
+  }
+}
+
+function parseHTMLToMock(html: string, root: MockElement) {
+  const tokenRegex = /<(\/)?([a-zA-Z0-9\-]+)([^>]*?)>|([^<]+)/g;
+  const stack: MockElement[] = [root];
+  let match: RegExpExecArray | null;
+
+  while ((match = tokenRegex.exec(html)) !== null) {
+    const [, isClosing, tagName, attrs, text] = match;
+    if (text) {
+      const trimmed = text.trim();
+      if (trimmed && stack.length > 0) {
+        const top = stack[stack.length - 1];
+        top.textContent = top.textContent ? `${top.textContent} ${trimmed}` : trimmed;
+      }
+      continue;
+    }
+
+    if (isClosing) {
+      if (stack.length > 1) {
+        stack.pop();
+      }
+    } else {
+      const el = new MockElement(tagName);
+      if (attrs) {
+        const idMatch = attrs.match(/id=["']([^"']+)["']/);
+        if (idMatch) el.id = idMatch[1];
+
+        const classMatch = attrs.match(/class=["']([^"']+)["']/);
+        if (classMatch) el.className = classMatch[1];
+
+        const titleMatch = attrs.match(/title=["']([^"']+)["']/);
+        if (titleMatch) el.title = titleMatch[1];
+
+        const typeMatch = attrs.match(/type=["']([^"']+)["']/);
+        if (typeMatch) el.type = typeMatch[1];
+
+        if (attrs.includes('checked')) el.checked = true;
+      }
+      stack[stack.length - 1].appendChild(el);
+
+      const isSelfClosing = attrs?.endsWith('/') || ['img', 'br', 'hr', 'input'].includes(tagName.toLowerCase());
+      if (!isSelfClosing) {
+        stack.push(el);
+      }
+    }
+  }
+}
 
 describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importação', () => {
   let bus: EventBus;
@@ -124,5 +264,148 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
     expect(ribbonClasses).toContain('office-backstage-overlay');
     expect(ribbonClasses).toContain('ribbon-btn-large');
     expect(ribbonClasses.length).toBe(9);
+  });
+
+  describe('Salvamento Automático (AutoSave) na Barra de Títulos', () => {
+    let ribbon: OfficeRibbon;
+    let parent: any;
+    let originalDoc: any;
+    let originalWin: any;
+
+    beforeAll(() => {
+      originalDoc = (globalThis as any).document;
+      originalWin = (globalThis as any).window;
+
+      const mockBody = new MockElement('BODY');
+      (globalThis as any).document = {
+        createElement: (tag: string) => new MockElement(tag),
+        body: mockBody,
+        querySelector: (selector: string) => mockBody.querySelector(selector),
+        querySelectorAll: (selector: string) => mockBody.querySelectorAll(selector)
+      };
+
+      (globalThis as any).window = {
+        addEventListener: () => {},
+        removeEventListener: () => {}
+      };
+
+      const storageMap = new Map<string, string>();
+      (globalThis as any).localStorage = {
+        getItem: (k: string) => storageMap.get(k) ?? null,
+        setItem: (k: string, v: string) => storageMap.set(k, String(v)),
+        removeItem: (k: string) => storageMap.delete(k),
+        clear: () => storageMap.clear()
+      };
+    });
+
+    afterAll(() => {
+      (globalThis as any).document = originalDoc;
+      (globalThis as any).window = originalWin;
+      delete (globalThis as any).localStorage;
+    });
+
+    beforeEach(() => {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.clear();
+      }
+      parent = (globalThis as any).document.createElement('div');
+      const fakeViewport = {
+        getCameraCenter: () => ({ x: 0, y: 0 }),
+        zoomToFit: () => {}
+      } as any;
+      const fakeCodeModal = { show: () => {} } as any;
+      const fakeTemplateModal = { show: () => {} } as any;
+      const fakeGlobalDefaultsModal = { show: () => {} } as any;
+
+      ribbon = new OfficeRibbon(
+        parent,
+        graph,
+        fakeViewport,
+        fakeCodeModal,
+        fakeTemplateModal,
+        fakeGlobalDefaultsModal
+      );
+    });
+
+    it('deve exibir o switch de salvamento automático ativado por padrão ao lado do ícone de disquete', () => {
+      const container = ribbon.getContainer();
+      const autosaveGroup = container.querySelector('.office-autosave-group');
+      const toggle = container.querySelector('#qat-toggle-autosave') as HTMLInputElement;
+      const label = container.querySelector('#qat-autosave-label');
+      const badge = container.querySelector('#qat-autosave-badge');
+      const saveBtn = container.querySelector('#qat-btn-save');
+
+      expect(autosaveGroup).toBeDefined();
+      expect(toggle).toBeDefined();
+      expect(toggle.checked).toBe(true);
+      expect(ribbon.getAutoSaveEnabled()).toBe(true);
+      expect(label?.textContent).toBe('Salvamento Automático');
+      expect(badge?.textContent).toBe('✓');
+      expect(saveBtn).toBeDefined();
+
+      // Verifica se o switch precede ou é adjacente ao botão de salvar
+      const qatButtons = container.querySelector('.office-qat-buttons');
+      expect(qatButtons?.contains(autosaveGroup!)).toBe(true);
+      expect(qatButtons?.contains(saveBtn!)).toBe(true);
+    });
+
+    it('deve salvar todo o projeto, grafo avulso e configurações de ambiente ao chamar saveAll', async () => {
+      // Adiciona nó e atualiza defaults globais
+      graph.createNode('node_autosave_1', 'Agente Auditor', 'agent', 10, 20);
+      graph.updateGlobalDefaults({
+        sandbox: { timeoutMs: 45000, maxMemoryMb: 1024 }
+      });
+
+      const ok = await ribbon.saveAll(true);
+      expect(ok).toBe(true);
+
+      // Verifica se o grafo avulso foi salvo no localStorage
+      const standalone = localStorage.getItem('arestrix_standalone_graph');
+      expect(standalone).toBeDefined();
+      const parsedStandalone = JSON.parse(standalone!);
+      expect(parsedStandalone.nodes.length).toBe(1);
+      expect(parsedStandalone.nodes[0].label).toBe('Agente Auditor');
+
+      // Verifica se as configurações de ambiente / defaults globais foram salvas
+      const savedDefaults = localStorage.getItem('arestrix_global_defaults');
+      expect(savedDefaults).toBeDefined();
+      const parsedDefaults = JSON.parse(savedDefaults!);
+      expect(parsedDefaults.sandbox.timeoutMs).toBe(45000);
+
+      // Verifica se o projeto ativo tem os defaults sincronizados
+      const currentProj = projectManager.getCurrentProject();
+      expect(currentProj.globalDefaults?.sandbox?.timeoutMs).toBe(45000);
+    });
+
+    it('deve acionar o salvamento imediato ao clicar no botão do disquete (qat-btn-save)', async () => {
+      graph.createNode('node_manual_save', 'Agente Manual', 'agent', 50, 50);
+
+      const saveBtn = ribbon.getContainer().querySelector('#qat-btn-save') as any;
+      expect(saveBtn).toBeDefined();
+
+      // Dispara o clique e aguarda a conclusão assíncrona
+      saveBtn.click();
+      await new Promise(r => setTimeout(r, 50));
+
+      const standalone = localStorage.getItem('arestrix_standalone_graph');
+      expect(standalone).toBeDefined();
+      expect(standalone).toContain('Agente Manual');
+    });
+
+    it('deve permitir desativar e reativar o Salvamento Automático respeitando a escolha do usuário', () => {
+      const toggle = ribbon.getContainer().querySelector('#qat-toggle-autosave') as HTMLInputElement;
+
+      // Desativa
+      ribbon.setAutoSaveEnabled(false);
+      expect(ribbon.getAutoSaveEnabled()).toBe(false);
+      expect(toggle.checked).toBe(false);
+      expect(localStorage.getItem('arestrix_autosave_enabled')).toBe('false');
+
+      // Reativa
+      ribbon.setAutoSaveEnabled(true);
+      expect(ribbon.getAutoSaveEnabled()).toBe(true);
+      expect(toggle.checked).toBe(true);
+      expect(localStorage.getItem('arestrix_autosave_enabled')).toBe('true');
+    });
   });
 });

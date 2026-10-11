@@ -120,7 +120,21 @@ function bootstrap() {
         const current = projectManager.getCurrentProject();
         await projectManager.loadProject(current.rootPath || current.projectId, graph);
       } else {
-        graph.clear();
+        const standalone = typeof localStorage !== 'undefined' ? localStorage.getItem('arestrix_standalone_graph') : null;
+        if (standalone) {
+          try {
+            const schema = JSON.parse(standalone);
+            if (schema && Array.isArray(schema.nodes) && schema.nodes.length > 0) {
+              graph.fromJSON(schema);
+            } else {
+              graph.clear();
+            }
+          } catch (_) {
+            graph.clear();
+          }
+        } else {
+          graph.clear();
+        }
       }
     } catch (e) {
       console.warn('[Arestrix] Falha ao restaurar último projeto salvo:', e);

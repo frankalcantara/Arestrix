@@ -7,6 +7,7 @@ import { PipelineRunner } from '../../core/PipelineRunner.ts';
 import { AddNodeCommand } from '../../core/history/GraphCommands.ts';
 import { IHistoryState } from '../../core/history/CommandManager.ts';
 import { globalEventBus } from '../../core/EventBus.ts';
+import { ProjectManager } from '../../core/ProjectManager.ts';
 
 import { TemplateModal } from '../TemplateModal.ts';
 import { GlobalDefaultsModal } from '../GlobalDefaultsModal.ts';
@@ -46,6 +47,12 @@ export class OfficeRibbon {
   private activeTab: 'home' | 'insert' | 'agents' | 'connectors' | 'data' | 'run' = 'home';
   private isCollapsed: boolean = false;
 
+  // AutoSave (Salvamento Automático)
+  private projectManager: ProjectManager;
+  private isAutoSaveEnabled: boolean = true;
+  private autoSaveDebounceTimer: any = null;
+  private isSaving: boolean = false;
+
   constructor(
     parent: HTMLElement,
     graph: Graph,
@@ -67,6 +74,14 @@ export class OfficeRibbon {
     this.projectMemoryModal = projectMemoryModal || new ProjectMemoryModal(graph);
     this.mcpServersModal = mcpServersModal || new McpServersModal(graph);
     this.projectManagerModal = projectManagerModal || new ProjectManagerModal(graph);
+    this.projectManager = ProjectManager.getInstance(globalEventBus);
+
+    if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem('arestrix_autosave_enabled');
+      this.isAutoSaveEnabled = stored !== 'false';
+    } else {
+      this.isAutoSaveEnabled = true;
+    }
 
     // Inicializa modais específicos
     this.backstageView = new BackstageView(this.graph, this.codeModal, this.globalDefaultsModal);
@@ -76,13 +91,18 @@ export class OfficeRibbon {
     this.importHermesModal = new ImportHermesModal(this.graph, this.viewport);
     this.importExcelModal = new ImportExcelModal(this.graph, this.viewport);
 
-    this.container = document.createElement('header');
-    this.container.className = 'office-ribbon-container';
-    parent.appendChild(this.container);
-
-    this.render();
-    this.bindKeyboardShortcuts();
-    this.bindBusEvents();
+    if (typeof document !== 'undefined') {
+      this.container = document.createElement('header');
+      this.container.className = 'office-ribbon-container';
+      if (parent && parent.appendChild) {
+        parent.appendChild(this.container);
+      }
+      this.render();
+      this.bindKeyboardShortcuts();
+      this.bindBusEvents();
+    } else {
+      this.container = { querySelector: () => null, querySelectorAll: () => [] } as any;
+    }
   }
 
   public getContainer(): HTMLElement {
@@ -103,7 +123,17 @@ export class OfficeRibbon {
 
           <!-- Acesso Rápido -->
           <div class="office-qat-buttons">
-            <button id="qat-btn-save" class="office-qat-btn" title="Salvar Workspace (Ctrl+S)">💾</button>
+            <!-- Switch de Salvamento Automático (Estilo Microsoft Office) -->
+            <div class="office-autosave-group" title="Salvamento Automático: Salva automaticamente todo o projeto, grafo e configurações a cada modificação">
+              <label class="office-autosave-switch" for="qat-toggle-autosave">
+                <input type="checkbox" id="qat-toggle-autosave" ${this.isAutoSaveEnabled ? 'checked' : ''}>
+                <span class="office-autosave-slider"></span>
+              </label>
+              <span class="office-autosave-label" id="qat-autosave-label">Salvamento Automático</span>
+              <span class="office-autosave-badge" id="qat-autosave-badge" title="Todas as alterações foram salvas">✓</span>
+            </div>
+
+            <button id="qat-btn-save" class="office-qat-btn" title="Salvar Agora (Ctrl+S)">💾</button>
             <button id="qat-btn-undo" class="office-qat-btn" title="Desfazer (Ctrl+Z)" disabled>↶</button>
             <button id="qat-btn-redo" class="office-qat-btn" title="Refazer (Ctrl+Y)" disabled>↷</button>
             <button id="qat-btn-run" class="office-qat-btn" style="color: #0f6cbd;" title="Compilar & Executar (F5)">▶</button>
@@ -500,9 +530,23 @@ export class OfficeRibbon {
       this.toggleCollapse();
     });
 
-    // 4. QAT Buttons
+    // 4. QAT Buttons & AutoSave Switch
+    const autoSaveToggle = this.container.querySelector('#qat-toggle-autosave') as HTMLInputElement;
+    autoSaveToggle?.addEventListener('change', () => {
+      this.isAutoSaveEnabled = autoSaveToggle.checked;
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem('arestrix_autosave_enabled', this.isAutoSaveEnabled ? 'true' : 'false');
+        } catch (_) {}
+      }
+      this.updateAutoSaveBadge(this.isAutoSaveEnabled ? 'saved' : 'disabled');
+      if (this.isAutoSaveEnabled) {
+        this.saveNow();
+      }
+    });
+
     this.container.querySelector('#qat-btn-save')?.addEventListener('click', async () => {
-      await this.backstageView.open('info');
+      await this.saveNow();
     });
 
     this.container.querySelector('#qat-btn-undo')?.addEventListener('click', () => this.graph.undo());
@@ -657,6 +701,134 @@ export class OfficeRibbon {
     globalEventBus.on('modal:open-project-manager', (tab?: any) => {
       this.projectManagerModal.show(tab || 'settings');
     });
+
+    // Gatilhos de Salvamento Automático a cada modificação (estilo Office)
+    const onModification = () => {
+      if (this.isAutoSaveEnabled && !this.isSaving) {
+        this.triggerAutoSave();
+      }
+    };
+
+    globalEventBus.on('graph:changed', onModification);
+    globalEventBus.on('node:moved', onModification);
+    globalEventBus.on('graph:defaults-updated', onModification);
+    globalEventBus.on('project:updated', onModification);
+    globalEventBus.on('history:changed', onModification);
+  }
+
+  public getAutoSaveEnabled(): boolean {
+    return this.isAutoSaveEnabled;
+  }
+
+  public setAutoSaveEnabled(enabled: boolean): void {
+    this.isAutoSaveEnabled = enabled;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('arestrix_autosave_enabled', enabled ? 'true' : 'false');
+      } catch (_) {}
+    }
+    const chk = this.container.querySelector('#qat-toggle-autosave') as HTMLInputElement;
+    if (chk) chk.checked = enabled;
+    this.updateAutoSaveBadge(enabled ? 'saved' : 'disabled');
+    if (enabled) {
+      this.saveNow();
+    }
+  }
+
+  public triggerAutoSave(immediate: boolean = false): void {
+    if (!this.isAutoSaveEnabled) return;
+    if (this.autoSaveDebounceTimer) {
+      clearTimeout(this.autoSaveDebounceTimer);
+      this.autoSaveDebounceTimer = null;
+    }
+    if (immediate) {
+      this.saveAll(true);
+    } else {
+      this.autoSaveDebounceTimer = setTimeout(() => {
+        this.saveAll(true);
+      }, 500);
+    }
+  }
+
+  public async saveNow(): Promise<boolean> {
+    if (this.autoSaveDebounceTimer) {
+      clearTimeout(this.autoSaveDebounceTimer);
+      this.autoSaveDebounceTimer = null;
+    }
+    return await this.saveAll(false);
+  }
+
+  public async saveAll(isAuto: boolean = false): Promise<boolean> {
+    if (this.isSaving) return false;
+    this.isSaving = true;
+    this.updateAutoSaveBadge('saving');
+
+    try {
+      // 1. Sincroniza metadados e configurações globais com o projeto ativo
+      const globalDefaults = this.graph.getGlobalDefaults();
+      this.projectManager.updateProjectMetadata({
+        globalDefaults
+      }, this.graph);
+
+      // 2. Salva o projeto e pipeline via ProjectManager
+      await this.projectManager.saveProject(this.graph);
+
+      // 3. Salva também o grafo avulso e estado no localStorage
+      const graphJson = this.graph.toJSON();
+      const graphStr = JSON.stringify(graphJson, null, 2);
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem('arestrix_standalone_graph', graphStr);
+          localStorage.setItem('arestrix_last_saved_graph', graphStr);
+          localStorage.setItem('arestrix_global_defaults', JSON.stringify(globalDefaults, null, 2));
+          const env = this.projectManager.getCurrentProject().environment || {};
+          localStorage.setItem('arestrix_environment_vars', JSON.stringify(env, null, 2));
+        } catch (_) {}
+      }
+
+      // 4. Emite evento global de salvamento
+      globalEventBus.emit('autosave:saved', { isAuto, timestamp: new Date().toISOString() });
+
+      this.updateAutoSaveBadge('saved');
+      return true;
+    } catch (e) {
+      console.warn('[AutoSave] Falha ao executar salvamento:', e);
+      this.updateAutoSaveBadge('error');
+      return false;
+    } finally {
+      this.isSaving = false;
+    }
+  }
+
+  private updateAutoSaveBadge(state: 'saved' | 'saving' | 'error' | 'disabled'): void {
+    const badge = this.container.querySelector('#qat-autosave-badge') as HTMLElement;
+    const label = this.container.querySelector('#qat-autosave-label') as HTMLElement;
+    if (!badge || !label) return;
+
+    if (!this.isAutoSaveEnabled) {
+      badge.textContent = '○';
+      badge.className = 'office-autosave-badge disabled';
+      badge.title = 'Salvamento automático desativado';
+      label.textContent = 'Salvamento Automático';
+      return;
+    }
+
+    if (state === 'saving') {
+      badge.textContent = '⏳';
+      badge.className = 'office-autosave-badge saving';
+      badge.title = 'Salvando alterações...';
+      label.textContent = 'Salvando...';
+    } else if (state === 'saved') {
+      badge.textContent = '✓';
+      badge.className = 'office-autosave-badge saved';
+      badge.title = 'Todas as alterações foram salvas';
+      label.textContent = 'Salvamento Automático';
+    } else if (state === 'error') {
+      badge.textContent = '⚠️';
+      badge.className = 'office-autosave-badge error';
+      badge.title = 'Erro ao salvar alterações';
+      label.textContent = 'Falha ao salvar';
+    }
   }
 
   public executePipeline(): void {
@@ -675,6 +847,12 @@ export class OfficeRibbon {
 
   private bindKeyboardShortcuts(): void {
     window.addEventListener('keydown', (e: KeyboardEvent) => {
+      // Ctrl+S salva imediatamente todo o projeto e grafo
+      if (e.ctrlKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        this.saveNow();
+      }
+
       // F5 ou Ctrl+Enter dispara o build e run automático
       if (e.key === 'F5' || (e.ctrlKey && e.key === 'Enter')) {
         e.preventDefault();
