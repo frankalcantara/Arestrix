@@ -8,6 +8,7 @@ export class ProjectManager {
   private bus: EventBus;
   private currentProject: IProjectManifest;
   private recentProjects: IRecentProjectItem[] = [];
+  private pipelineStorage: Map<string, string> = new Map();
 
   private constructor(bus: EventBus = globalEventBus) {
     this.bus = bus;
@@ -113,7 +114,9 @@ export class ProjectManager {
     });
 
     if (graph) {
+      graph.clear();
       this.syncWithGraph(graph);
+      await this.savePipeline(graph);
     }
 
     this.bus.emit('project:created', this.currentProject);
@@ -123,8 +126,11 @@ export class ProjectManager {
 
   public async loadProject(pathOrDir: string, graph?: Graph): Promise<boolean> {
     try {
+      const existing = this.recentProjects.find(r => r.projectId === pathOrDir || r.rootPath === pathOrDir || r.manifestPath === pathOrDir);
+      const effectivePath = existing ? (existing.rootPath || existing.manifestPath) : pathOrDir;
+
       if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
-        const ok = await (window as any).webui.call('load_project', pathOrDir);
+        const ok = await (window as any).webui.call('load_project', effectivePath);
         if (ok) {
           const raw = await (window as any).webui.call('get_current_project');
           if (raw) {
@@ -135,7 +141,6 @@ export class ProjectManager {
         }
       } else {
         // Fallback local se rodando em testes
-        const existing = this.recentProjects.find(r => r.rootPath === pathOrDir || r.manifestPath === pathOrDir);
         if (existing) {
           this.currentProject = {
             ...this.createDefaultManifest(),
@@ -163,6 +168,7 @@ export class ProjectManager {
 
       if (graph) {
         this.syncWithGraph(graph);
+        await this.loadPipeline(graph);
       }
 
       this.bus.emit('project:loaded', this.currentProject);
@@ -189,8 +195,68 @@ export class ProjectManager {
     return true;
   }
 
-  public async saveProject(_graph?: Graph): Promise<boolean> {
-    return this.saveCurrentProject();
+  public async saveProject(graph?: Graph): Promise<boolean> {
+    const ok = await this.saveCurrentProject();
+    if (graph) {
+      await this.savePipeline(graph);
+    }
+    return ok;
+  }
+
+  public async savePipeline(graph: Graph): Promise<boolean> {
+    try {
+      const schema = graph.toJSON();
+      const jsonStr = JSON.stringify(schema, null, 2);
+      this.pipelineStorage.set(this.currentProject.projectId, jsonStr);
+      if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
+        await (window as any).webui.call('save_pipeline', jsonStr);
+      }
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem(`arestrix_pipeline_${this.currentProject.projectId}`, jsonStr);
+        } catch (_) {}
+      }
+      return true;
+    } catch (e) {
+      console.warn('[ProjectManager] Falha ao salvar pipeline:', e);
+      return false;
+    }
+  }
+
+  public async loadPipeline(graph: Graph): Promise<boolean> {
+    try {
+      let rawPipeline = '';
+      if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
+        rawPipeline = await (window as any).webui.call('load_pipeline');
+      }
+      if (!rawPipeline && typeof localStorage !== 'undefined') {
+        try {
+          rawPipeline = localStorage.getItem(`arestrix_pipeline_${this.currentProject.projectId}`) || '';
+        } catch (_) {}
+      }
+      if (!rawPipeline) {
+        rawPipeline = this.pipelineStorage.get(this.currentProject.projectId) || '';
+      }
+
+      if (rawPipeline && rawPipeline.trim()) {
+        const schema = JSON.parse(rawPipeline);
+        if (schema && Array.isArray(schema.nodes)) {
+          graph.fromJSON(schema);
+          return true;
+        }
+      }
+      // Se não há pipeline salvo ou estiver vazio, limpa o grafo
+      graph.clear();
+      return true;
+    } catch (e) {
+      console.warn('[ProjectManager] Falha ao carregar pipeline:', e);
+      graph.clear();
+      return false;
+    }
+  }
+
+  public hasActiveProject(): boolean {
+    return !!this.currentProject && !!this.currentProject.projectId && this.currentProject.projectId !== 'default-workspace';
   }
 
   public updateProjectMetadata(partial: Partial<IProjectManifest>, graph?: Graph): void {
@@ -227,6 +293,11 @@ export class ProjectManager {
     if (this.recentProjects.length > 15) {
       this.recentProjects = this.recentProjects.slice(0, 15);
     }
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('arestrix_recent_projects', JSON.stringify(this.recentProjects));
+      } catch (_) {}
+    }
   }
 
   // Auxiliar para reset em testes unitários
@@ -234,5 +305,6 @@ export class ProjectManager {
     if (bus) this.bus = bus;
     this.currentProject = this.createDefaultManifest();
     this.recentProjects = [];
+    this.pipelineStorage.clear();
   }
 }

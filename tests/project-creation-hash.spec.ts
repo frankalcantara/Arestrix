@@ -92,5 +92,48 @@ describe('Geração de ID Único com Hash e Ajuste do Formulário de Criação d
       expect(current.projectId).toBe(hashProjectName(projectName));
       expect(current.projectId).toHaveLength(64);
     });
+
+    it('deve ZERAR e LIMPAR o grafo completamente ao criar um novo projeto', async () => {
+      // Pré-popula o grafo com nós simulando resquício de tela anterior
+      graph.createNode('node_old_1', 'Antigo Nó 1', 'agent', 0, 0);
+      graph.createNode('node_old_2', 'Antigo Nó 2', 'condition', 100, 100);
+      expect(graph.getAllNodes().length).toBe(2);
+
+      // Cria um novo projeto
+      await projectManager.createProject({
+        name: 'Projeto Limpo do Zero'
+      }, graph);
+
+      // O grafo deve ter sido completamente zerado e limpo (0 nós e 0 arestas)
+      expect(graph.getAllNodes().length).toBe(0);
+      expect(graph.getAllEdges().length).toBe(0);
+    });
+
+    it('deve salvar e restaurar nós do grafo ao salvar e recarregar o projeto', async () => {
+      await projectManager.createProject({
+        projectId: 'proj_com_grafo',
+        name: 'Projeto com Nós',
+        rootPath: 'C:/Workspaces/ProjGrafo'
+      }, graph);
+
+      // Adiciona nós ao projeto
+      const n1 = graph.createNode('node_novo_1', 'Agente Ingestão', 'agent', 50, 50);
+      const n2 = graph.createNode('node_novo_2', 'Decisão Filtro', 'condition', 250, 50);
+      graph.createEdge(n1.id, n1.outputs[0].id, n2.id, n2.inputs[0].id);
+
+      // Salva o projeto junto com o grafo
+      await projectManager.saveProject(graph);
+
+      // Simula alteração/limpeza temporária
+      graph.clear();
+      expect(graph.getAllNodes().length).toBe(0);
+
+      // Recarrega o projeto
+      await projectManager.loadProject('C:/Workspaces/ProjGrafo', graph);
+
+      // Nós e arestas devem ter sido restaurados
+      expect(graph.getAllNodes().length).toBe(2);
+      expect(graph.getAllEdges().length).toBe(1);
+    });
   });
 });

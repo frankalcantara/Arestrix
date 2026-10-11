@@ -12,6 +12,7 @@
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <sstream>
 #include <filesystem>
 #include <vector>
 #ifdef _WIN32
@@ -349,6 +350,54 @@ void ui_save_project(webui::window::event* e) {
     }
 }
 
+// Wrapper de comunicação JS -> C++ (Salvar Pipeline JSON)
+void ui_save_pipeline(webui::window::event* e) {
+    std::string payload = e->get_string();
+    try {
+        auto& pm = taskforge::project::ProjectManager::getInstance();
+        std::string root = pm.getActiveProjectRoot();
+        if (root.empty()) root = std::filesystem::current_path().string();
+
+        std::filesystem::path pipeDir = std::filesystem::path(root) / "pipelines";
+        std::filesystem::create_directories(pipeDir);
+        std::filesystem::path pipeFile = pipeDir / "main.json";
+
+        std::ofstream f(pipeFile);
+        if (f.is_open()) {
+            f << payload;
+            f.close();
+            e->return_bool(true);
+            return;
+        }
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_save_pipeline: " << ex.what() << "\n";
+    }
+    e->return_bool(false);
+}
+
+// Wrapper de comunicação JS -> C++ (Carregar Pipeline JSON)
+void ui_load_pipeline(webui::window::event* e) {
+    try {
+        auto& pm = taskforge::project::ProjectManager::getInstance();
+        std::string root = pm.getActiveProjectRoot();
+        if (root.empty()) root = std::filesystem::current_path().string();
+
+        std::filesystem::path pipeFile = std::filesystem::path(root) / "pipelines" / "main.json";
+        if (std::filesystem::exists(pipeFile)) {
+            std::ifstream f(pipeFile);
+            if (f.is_open()) {
+                std::stringstream buffer;
+                buffer << f.rdbuf();
+                e->return_string(buffer.str());
+                return;
+            }
+        }
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_load_pipeline: " << ex.what() << "\n";
+    }
+    e->return_string("");
+}
+
 // Wrapper de comunicação JS -> C++ (Obter Projeto Ativo)
 void ui_get_current_project(webui::window::event* e) {
     auto proj = taskforge::project::ProjectManager::getInstance().getCurrentProject();
@@ -617,6 +666,8 @@ int main() {
     win.bind("create_project", ui_create_project);
     win.bind("load_project", ui_load_project);
     win.bind("save_project", ui_save_project);
+    win.bind("save_pipeline", ui_save_pipeline);
+    win.bind("load_pipeline", ui_load_pipeline);
     win.bind("get_current_project", ui_get_current_project);
     win.bind("list_recent_projects", ui_list_recent_projects);
     win.bind("scan_pi_project", ui_scan_pi_project);

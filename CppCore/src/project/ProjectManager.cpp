@@ -144,6 +144,17 @@ bool ProjectManager::loadProject(const std::string& pathOrDir) {
     }
 
     if (!std::filesystem::exists(manifestPath)) {
+        std::filesystem::path inProjects = std::filesystem::current_path() / "projects" / pathOrDir;
+        if (std::filesystem::is_directory(inProjects)) {
+            if (std::filesystem::exists(inProjects / "arestrix.project.json")) {
+                manifestPath = inProjects / "arestrix.project.json";
+            } else if (std::filesystem::exists(inProjects / "taskforge.project.json")) {
+                manifestPath = inProjects / "taskforge.project.json";
+            }
+        }
+    }
+
+    if (!std::filesystem::exists(manifestPath)) {
         std::cerr << "[ProjectManager] Arquivo de manifesto nao encontrado: " << manifestPath.string() << "\n";
         return false;
     }

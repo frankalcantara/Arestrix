@@ -106,8 +106,28 @@ function bootstrap() {
   // 9. Barra de Status do Microsoft Office na base absoluta da aplicação
   new StatusBar(appContainer, graph, viewport, globalEventBus);
 
-  // 10. Carrega o cenário de agentes demonstrativo complexo com loops de condição e seções críticas
-  toolbar.loadDemoComplexSystem();
+  // 10. Restaura o último projeto salvo ou inicializa com grafo limpo/zerado
+  const restoreLastSavedProject = async () => {
+    try {
+      await projectManager.init();
+      const recents = projectManager.listRecentProjects();
+      if (recents.length > 0) {
+        const lastProject = recents[0];
+        console.log(`[Arestrix] Restaurando último projeto salvo: ${lastProject.name} (${lastProject.rootPath || lastProject.projectId})`);
+        const targetPath = lastProject.rootPath || lastProject.manifestPath || lastProject.projectId;
+        await projectManager.loadProject(targetPath, graph);
+      } else if (projectManager.hasActiveProject()) {
+        const current = projectManager.getCurrentProject();
+        await projectManager.loadProject(current.rootPath || current.projectId, graph);
+      } else {
+        graph.clear();
+      }
+    } catch (e) {
+      console.warn('[Arestrix] Falha ao restaurar último projeto salvo:', e);
+      graph.clear();
+    }
+  };
+  restoreLastSavedProject();
 
   // 9. Bridge de Telemetria de Agentes em Tempo Real (Fase 10)
   const onTelemetryHandler = (data: any) => {

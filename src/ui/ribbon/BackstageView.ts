@@ -187,7 +187,7 @@ export class BackstageView {
                     <td><small style="color: #64748b;">${this.escapeHtml(item.rootPath)}</small></td>
                     <td>${new Date(item.lastOpened).toLocaleString()}</td>
                     <td style="text-align: right;">
-                      <button class="tool-btn btn-secondary btn-mru-open" data-id="${item.projectId}" style="padding: 4px 10px; font-size: 11.5px; font-weight: 700;">
+                      <button class="tool-btn btn-secondary btn-mru-open" data-id="${item.projectId}" data-path="${this.escapeHtml(item.rootPath)}" style="padding: 4px 10px; font-size: 11.5px; font-weight: 700;">
                         Abrir
                       </button>
                     </td>
@@ -303,9 +303,9 @@ export class BackstageView {
     // Abrir item recente
     this.overlay.querySelectorAll<HTMLButtonElement>('.btn-mru-open').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const pId = btn.dataset.id;
-        if (pId) {
-          await this.projectManager.loadProject(pId, this.graph);
+        const pTarget = btn.dataset.path || btn.dataset.id;
+        if (pTarget) {
+          await this.projectManager.loadProject(pTarget, this.graph);
           if (typeof alert !== 'undefined') alert('✅ Projeto carregado!');
           this.close();
         }
