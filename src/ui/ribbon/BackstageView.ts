@@ -2,6 +2,7 @@ import { Graph } from '../../core/Graph.ts';
 import { ProjectManager } from '../../core/ProjectManager.ts';
 import { globalEventBus } from '../../core/EventBus.ts';
 import { IProjectManifest, IRecentProjectItem } from '../../core/types.ts';
+import { hashProjectName } from '../../core/hash.ts';
 import { CodeModal } from '../CodeModal.ts';
 import { GlobalDefaultsModal } from '../GlobalDefaultsModal.ts';
 
@@ -143,12 +144,7 @@ export class BackstageView {
 
           <div style="max-width: 600px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px;">
             <div style="margin-bottom: 16px;">
-              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">ID Único do Projeto:</label>
-              <input type="text" id="backstage-new-id" value="projeto_${Date.now()}" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;">
-            </div>
-
-            <div style="margin-bottom: 16px;">
-              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Nome de Exibição:</label>
+              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Nome do Projeto:</label>
               <input type="text" id="backstage-new-name" placeholder="Ex: Auditoria de Agentes 2026" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;">
             </div>
 
@@ -279,12 +275,11 @@ export class BackstageView {
     // Criar Projeto
     this.overlay.querySelector('#btn-backstage-create-submit')?.addEventListener('click', async () => {
       if (!this.overlay) return;
-      const idInput = this.overlay.querySelector('#backstage-new-id') as HTMLInputElement;
       const nameInput = this.overlay.querySelector('#backstage-new-name') as HTMLInputElement;
       const descInput = this.overlay.querySelector('#backstage-new-desc') as HTMLTextAreaElement;
 
-      const pId = idInput?.value.trim() || `proj_${Date.now()}`;
       const pName = nameInput?.value.trim() || 'Novo Projeto';
+      const pId = hashProjectName(pName);
       const pDesc = descInput?.value.trim() || '';
 
       await this.projectManager.createProject({

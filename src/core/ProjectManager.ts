@@ -1,6 +1,7 @@
 import { EventBus, globalEventBus } from './EventBus.ts';
 import { IProjectManifest, IRecentProjectItem } from './types.ts';
 import { Graph } from './Graph.ts';
+import { hashProjectName } from './hash.ts';
 
 export class ProjectManager {
   private static instance: ProjectManager;
@@ -70,14 +71,15 @@ export class ProjectManager {
 
   public async createProject(manifest: Partial<IProjectManifest>, graph?: Graph): Promise<boolean> {
     const now = new Date().toISOString();
+    const projectId = manifest.projectId || hashProjectName(manifest.name || 'Novo Projeto');
     const fullManifest: IProjectManifest = {
-      projectId: manifest.projectId || `proj_${Date.now()}`,
+      projectId,
       name: manifest.name || 'Novo Projeto',
       version: manifest.version || '1.0.0',
       description: manifest.description || '',
       createdAt: now,
       updatedAt: now,
-      rootPath: manifest.rootPath || `./projects/${manifest.projectId || 'projeto'}`,
+      rootPath: manifest.rootPath || `./projects/${projectId}`,
       pipelines: manifest.pipelines && manifest.pipelines.length > 0 ? manifest.pipelines : [
         {
           id: 'main',
