@@ -350,6 +350,51 @@ void ui_save_project(webui::window::event* e) {
     }
 }
 
+// Wrapper de comunicação JS -> C++ (Apagar Projeto)
+void ui_delete_project(webui::window::event* e) {
+    std::string payload = e->get_string();
+    std::string projectId = "";
+    std::string rootPath = "";
+    bool deleteFiles = true;
+    try {
+        if (!payload.empty() && payload[0] == '{') {
+            auto j = nlohmann::json::parse(payload);
+            projectId = j.value("projectId", "");
+            rootPath = j.value("rootPath", "");
+            deleteFiles = j.value("deleteFiles", true);
+        } else {
+            projectId = payload;
+        }
+    } catch (...) {}
+
+    auto& pm = taskforge::project::ProjectManager::getInstance();
+    if (!projectId.empty()) {
+        pm.removeRecentProject(projectId);
+    }
+    if (!rootPath.empty()) {
+        pm.removeRecentProject(rootPath);
+    }
+
+    if (deleteFiles && !rootPath.empty()) {
+        std::error_code ec;
+        std::filesystem::path p(rootPath);
+        if (std::filesystem::exists(p, ec) && std::filesystem::is_directory(p, ec)) {
+            std::filesystem::path norm = std::filesystem::weakly_canonical(p, ec);
+            std::filesystem::path rootP = norm.root_path();
+            std::filesystem::path currentP = std::filesystem::current_path(ec);
+            if (norm != rootP && norm != currentP && !norm.empty()) {
+                std::cout << "[ProjectManager] Apagando projeto e arquivos no disco: " << norm.string() << std::endl;
+                std::filesystem::remove_all(norm, ec);
+                if (ec) {
+                    std::cerr << "[ProjectManager Erro] Falha ao remover diretorio: " << ec.message() << std::endl;
+                }
+            }
+        }
+    }
+
+    e->return_bool(true);
+}
+
 // Wrapper de comunicação JS -> C++ (Salvar Pipeline JSON)
 void ui_save_pipeline(webui::window::event* e) {
     std::string payload = e->get_string();
@@ -473,6 +518,13 @@ void ui_set_env_var(webui::window::event* e) {
         }
     } catch (...) {}
     e->return_bool(false);
+}
+
+// Wrapper JS -> C++ (Retorna o diretório de execução atual onde o Arestrix foi aberto)
+void ui_get_current_working_dir(webui::window::event* e) {
+    std::error_code ec;
+    std::filesystem::path cwd = std::filesystem::current_path(ec);
+    e->return_string(cwd.string());
 }
 
 // Wrapper JS -> C++ (Selecionar Pasta Nativa do Windows via IFileOpenDialog)
@@ -666,6 +718,7 @@ int main() {
     win.bind("create_project", ui_create_project);
     win.bind("load_project", ui_load_project);
     win.bind("save_project", ui_save_project);
+    win.bind("delete_project", ui_delete_project);
     win.bind("save_pipeline", ui_save_pipeline);
     win.bind("load_pipeline", ui_load_pipeline);
     win.bind("get_current_project", ui_get_current_project);
@@ -675,6 +728,7 @@ int main() {
     win.bind("get_env_var", ui_get_env_var);
     win.bind("set_env_var", ui_set_env_var);
     win.bind("pick_folder", ui_pick_folder);
+    win.bind("get_current_working_dir", ui_get_current_working_dir);
     win.bind("list_subdirectories", ui_list_subdirectories);
     win.bind("exit_app", exit_app);
 

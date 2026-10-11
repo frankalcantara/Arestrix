@@ -240,7 +240,7 @@ bool ProjectManager::addRecentProject(const RecentProjectItem& item) {
 bool ProjectManager::removeRecentProject(const std::string& projectId) {
     std::lock_guard<std::mutex> lock(mutex_);
     for (auto it = recentProjects_.begin(); it != recentProjects_.end(); ++it) {
-        if (it->projectId == projectId) {
+        if (it->projectId == projectId || it->rootPath == projectId || it->manifestPath == projectId) {
             recentProjects_.erase(it);
             saveRecentProjectsToDisk();
             return true;

@@ -1,6 +1,7 @@
 import { Graph } from '../../core/Graph.ts';
 import { ProjectManager } from '../../core/ProjectManager.ts';
 import { IProjectManifest } from '../../core/types.ts';
+import { hashProjectName } from '../../core/hash.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 
 export class ProjectManagerModal {
@@ -9,37 +10,55 @@ export class ProjectManagerModal {
   private projectManager: ProjectManager;
   private windowController?: IModalWindowController;
   private activeTab: 'recents' | 'create' | 'settings' = 'recents';
+  private defaultWorkspaceDir: string = '';
 
   constructor(graph: Graph) {
     this.graph = graph;
     this.projectManager = ProjectManager.getInstance();
 
-    this.overlay = document.createElement('div');
-    this.overlay.className = 'modal-overlay hidden';
-    document.body.appendChild(this.overlay);
-
-    this.bindEvents();
+    if (typeof document !== 'undefined') {
+      this.overlay = document.createElement('div');
+      this.overlay.className = 'modal-overlay hidden';
+      document.body.appendChild(this.overlay);
+      this.bindEvents();
+    } else {
+      this.overlay = {} as any;
+    }
   }
 
   public async show(tab: 'recents' | 'create' | 'settings' = 'recents'): Promise<void> {
     this.activeTab = tab;
     await this.projectManager.init();
+    await this.resolveDefaultWorkspaceDir();
     this.render();
-    this.overlay.classList.remove('hidden');
+    if (this.overlay && this.overlay.classList) {
+      this.overlay.classList.remove('hidden');
+    }
     this.windowController?.bringToFront();
   }
 
+  private async resolveDefaultWorkspaceDir(): Promise<void> {
+    try {
+      this.defaultWorkspaceDir = await this.projectManager.getDefaultWorkspaceDirectory();
+    } catch (_) {
+      this.defaultWorkspaceDir = '';
+    }
+  }
+
   public hide(): void {
-    this.overlay.classList.add('hidden');
+    if (this.overlay && this.overlay.classList) {
+      this.overlay.classList.add('hidden');
+    }
   }
 
   private render(): void {
+    if (!this.overlay || typeof this.overlay.querySelector !== 'function') return;
     const cur = this.projectManager.getCurrentProject();
     const recents = this.projectManager.listRecentProjects();
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
       title: 'Gerenciador de Projetos',
-      subtitle: `Projeto Ativo: <strong>${this.escapeHtml(cur.name)}</strong> (ID: <code>${this.escapeHtml(cur.projectId)}</code>)`,
+      subtitle: `Projeto Ativo: <strong>${this.escapeHtml(cur.name)}</strong>`,
       icon: '📂',
       closeBtnId: 'btn-close-proj-manager'
     });
@@ -84,13 +103,13 @@ export class ProjectManagerModal {
 
   private renderRecentsTab(recents: any[], current: IProjectManifest): string {
     return `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px;">
         <span style="font-size: 12px; color: #616161;">Selecione um projeto aberto anteriormente para carregar seu workspace e pipelines</span>
-        <div style="display: flex; gap: 8px;">
-          <button id="btn-browse-project" class="tool-btn btn-secondary">
+        <div style="display: flex; gap: 8px; flex-shrink: 0;">
+          <button id="btn-browse-project" class="tool-btn btn-secondary" style="white-space: nowrap; height: 36px; padding: 0 16px; font-size: 13px;">
             Abrir Outro Diretório...
           </button>
-          <button id="btn-go-to-create" class="tool-btn btn-action">
+          <button id="btn-go-to-create" class="tool-btn btn-action" style="white-space: nowrap; height: 36px; padding: 0 16px; font-size: 13px;">
             + Criar Novo Projeto
           </button>
         </div>
@@ -104,8 +123,8 @@ export class ProjectManagerModal {
         ` : recents.map(r => {
           const isCurrent = r.projectId === current.projectId;
           return `
-            <div style="padding: 12px; border: 1px solid ${isCurrent ? '#0f6cbd' : '#edebe9'}; border-radius: 4px; background: #ffffff; display: flex; justify-content: space-between; align-items: center;">
-              <div>
+            <div style="padding: 14px 18px; border: 1px solid ${isCurrent ? '#0f6cbd' : '#edebe9'}; border-radius: 6px; background: #ffffff; display: flex; justify-content: space-between; align-items: center; gap: 16px;">
+              <div style="flex: 1; min-width: 0;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <strong style="font-size: 14px; color: #242424; font-weight: 600;">${this.escapeHtml(r.name)}</strong>
                   ${isCurrent ? `
@@ -114,21 +133,18 @@ export class ProjectManagerModal {
                     </span>
                   ` : ''}
                 </div>
-                <div style="margin-top: 4px; font-family: monospace; font-size: 11px; color: var(--text-secondary);">
-                  ID: <strong>${this.escapeHtml(r.projectId)}</strong> | Caminho: <code>${this.escapeHtml(r.rootPath)}</code>
+                <div style="margin-top: 5px; font-size: 12px; color: #64748b; word-break: break-all;">
+                  Caminho: <code>${this.escapeHtml(r.rootPath)}</code>
                 </div>
               </div>
 
-              <div>
-                ${isCurrent ? `
-                  <button class="tool-btn btn-secondary" disabled style="opacity: 0.6; cursor: default;">
-                    Em Execução
-                  </button>
-                ` : `
-                  <button class="btn-open-recent-project tool-btn btn-action" data-path="${this.escapeHtml(r.rootPath)}" data-id="${this.escapeHtml(r.projectId)}">
-                    Abrir Workspace
-                  </button>
-                `}
+              <div style="flex-shrink: 0; display: flex; align-items: center; gap: 8px;">
+                <select class="recent-project-action-select recents-modal-action-select" data-id="${this.escapeHtml(r.projectId)}" data-path="${this.escapeHtml(r.rootPath)}" data-name="${this.escapeHtml(r.name)}">
+                  <option value="" disabled selected>Opções ▾</option>
+                  <option value="open">📂 Abrir Projeto</option>
+                  <option value="manage">⚙️ Gerenciar</option>
+                  <option value="delete">🗑️ Apagar Projeto...</option>
+                </select>
               </div>
             </div>
           `;
@@ -138,57 +154,66 @@ export class ProjectManagerModal {
   }
 
   private renderCreateTab(): string {
+    const defaultPath = this.defaultWorkspaceDir || '';
+
     return `
-      <div class="settings-section-card" style="padding: 16px;">
+      <div class="settings-section-card" style="padding: 20px;">
         <div class="section-card-header">
           <span class="section-card-icon">🚀</span>
           <div class="section-card-titles">
             <h3 class="section-card-title">Criar Novo Workspace de Projeto</h3>
-            <p class="section-card-desc">Configuração do manifesto .forgeproj com isolamento de pipelines, memória e sandboxes</p>
+            <p class="section-card-desc">Configuração do manifesto com isolamento de pipelines, memória e sandboxes</p>
           </div>
         </div>
 
-        <div class="form-row-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px;">
-          <div class="form-group">
-            <label class="form-label" for="new-proj-name">Nome do Projeto *</label>
-            <input type="text" id="new-proj-name" class="form-input" placeholder="ex: Fechamento Contábil Q3" />
+        <div class="form-group" style="margin-top: 16px;">
+          <label class="form-label" for="new-proj-name" style="font-weight: 600; color: #323130; margin-bottom: 6px; display: block;">Nome do Projeto *</label>
+          <input type="text" id="new-proj-name" class="form-input" placeholder="ex: Fechamento Contábil Q3" style="width: 100%; box-sizing: border-box;" />
+        </div>
+
+        <div class="form-group" style="margin-top: 14px;">
+          <label class="form-label" for="new-proj-path" style="font-weight: 600; color: #323130; margin-bottom: 6px; display: block;">Diretório Raiz do Workspace *</label>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="new-proj-path" class="form-input" value="${this.escapeHtml(defaultPath)}" placeholder="Selecione ou digite o diretório do projeto..." style="flex: 1; box-sizing: border-box;" />
+            <button type="button" id="btn-browse-new-proj-path" class="tool-btn btn-secondary" style="white-space: nowrap; height: 36px; padding: 0 16px; font-size: 13px; flex-shrink: 0;">
+              Procurar...
+            </button>
           </div>
-          <div class="form-group">
-            <label class="form-label" for="new-proj-id">Identificador Único (slug) *</label>
-            <input type="text" id="new-proj-id" class="form-input" placeholder="ex: fechamento_contabil_q3" />
+          <div class="form-hint" style="margin-top: 4px; font-size: 11px; color: #64748b;">
+            O Arestrix criará automaticamente as subpastas <code>pipelines/</code>, <code>storage/</code> e <code>output/</code>.
           </div>
         </div>
 
-        <div class="form-group" style="margin-top: 12px;">
-          <label class="form-label" for="new-proj-path">Diretório Raiz do Workspace *</label>
-          <input type="text" id="new-proj-path" class="form-input" placeholder="C:\\ArestrixProjects\\FechamentoContabil" />
-          <div class="form-hint">O Arestrix criará automaticamente as subpastas <code>pipelines/</code>, <code>storage/</code> e <code>output/</code>.</div>
+        <div class="form-group" style="margin-top: 14px;">
+          <label class="form-label" for="new-proj-desc" style="font-weight: 600; color: #323130; margin-bottom: 6px; display: block;">Descrição do Projeto</label>
+          <textarea id="new-proj-desc" class="form-input" style="height: 60px; width: 100%; box-sizing: border-box;" placeholder="Finalidade, escopo e regras deste pipeline..."></textarea>
         </div>
 
-        <div class="form-group" style="margin-top: 12px;">
-          <label class="form-label" for="new-proj-desc">Descrição do Projeto</label>
-          <textarea id="new-proj-desc" class="form-input" style="height: 60px;" placeholder="Finalidade, escopo e regras deste pipeline..."></textarea>
-        </div>
-
-        <div class="form-group" style="margin-top: 12px;">
-          <label class="form-label">Template Inicial de Pipeline:</label>
-          <div style="display: flex; gap: 10px; margin-top: 6px;">
-            <label class="tool-checkbox-pill checked">
-              <input type="radio" name="new-proj-template" value="empty" checked />
-              <span class="tool-pill-name">Pipeline Vazio</span>
+        <div class="form-group" style="margin-top: 14px;">
+          <label class="form-label" style="font-weight: 600; color: #323130; margin-bottom: 8px; display: block;">Template Inicial de Pipeline:</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 6px;">
+            <label class="template-choice-card selected" style="display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 14px 16px; border: 1.5px solid #0f6cbd; border-radius: 8px; background-color: #f0f7fd; cursor: pointer; transition: all 0.15s ease; user-select: none; box-sizing: border-box;">
+              <input type="radio" name="new-proj-template" value="empty" checked style="accent-color: #0f6cbd; width: 18px; height: 18px; margin: 0; cursor: pointer; flex-shrink: 0;" />
+              <div class="template-choice-info">
+                <span class="template-choice-title">Pipeline Vazio</span>
+                <span class="template-choice-desc">Inicia com um grafo limpo e pronto para modelagem.</span>
+              </div>
             </label>
-            <label class="tool-checkbox-pill">
-              <input type="radio" name="new-proj-template" value="agents" />
-              <span class="tool-pill-name">Pipeline Multi-Agente IA</span>
+            <label class="template-choice-card" style="display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid #cbd5e1; border-radius: 8px; background-color: #ffffff; cursor: pointer; transition: all 0.15s ease; user-select: none; box-sizing: border-box;">
+              <input type="radio" name="new-proj-template" value="agents" style="accent-color: #0f6cbd; width: 18px; height: 18px; margin: 0; cursor: pointer; flex-shrink: 0;" />
+              <div class="template-choice-info">
+                <span class="template-choice-title">Pipeline Multi-Agente IA</span>
+                <span class="template-choice-desc">Arquitetura multi-agente com orquestração inicial.</span>
+              </div>
             </label>
           </div>
         </div>
 
-        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
-          <button id="btn-cancel-create-proj" class="btn-action-pill" style="background: var(--surface-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px;">
+          <button id="btn-cancel-create-proj" class="tool-btn btn-secondary" style="height: 36px; padding: 0 18px; font-size: 13px;">
             Cancelar
           </button>
-          <button id="btn-submit-create-proj" class="btn-action-pill" style="background: var(--gradient-blue); color: white;">
+          <button id="btn-submit-create-proj" class="tool-btn btn-action" style="height: 36px; padding: 0 20px; font-size: 13px; font-weight: 600;">
             🚀 Criar e Ativar Workspace
           </button>
         </div>
@@ -255,12 +280,14 @@ export class ProjectManagerModal {
   }
 
   private bindEvents(): void {
+    if (!this.overlay || typeof this.overlay.addEventListener !== 'function') return;
     this.overlay.addEventListener('click', (e) => {
       if (e.target === this.overlay) this.hide();
     });
   }
 
   private bindInternalEvents(current: IProjectManifest): void {
+    if (!this.overlay || typeof this.overlay.querySelector !== 'function') return;
     this.overlay.querySelector('#btn-close-proj-manager')?.addEventListener('click', () => this.hide());
 
     this.overlay.querySelector('#tab-btn-recents')?.addEventListener('click', () => {
@@ -283,17 +310,46 @@ export class ProjectManagerModal {
       this.render();
     });
 
-    // Abrir projeto recente
-    this.overlay.querySelectorAll('.btn-open-recent-project').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const path = (e.currentTarget as HTMLElement).getAttribute('data-path');
-        if (path) {
-          const ok = await this.projectManager.loadProject(path, this.graph);
-          if (ok) {
-            alert(`Workspace '${path}' carregado com sucesso!`);
-            this.hide();
-          } else {
-            alert(`Falha ao abrir workspace: ${path}`);
+    // Ações de projeto recente no Modal (Dropdown Estilo Office)
+    this.overlay.querySelectorAll<HTMLSelectElement>('.recents-modal-action-select').forEach(select => {
+      select.addEventListener('change', async () => {
+        const action = select.value;
+        const pId = select.dataset.id || '';
+        const pPath = select.dataset.path || '';
+        const pName = select.dataset.name || 'Projeto';
+        const pTarget = pPath || pId;
+
+        // Restaura dropdown para o placeholder
+        select.value = '';
+
+        if (action === 'open') {
+          if (pTarget) {
+            const ok = await this.projectManager.loadProject(pTarget, this.graph);
+            if (ok) {
+              if (typeof alert !== 'undefined') alert(`Workspace '${pName}' carregado com sucesso!`);
+              this.hide();
+            } else {
+              if (typeof alert !== 'undefined') alert(`Falha ao abrir workspace: ${pName}`);
+            }
+          }
+        } else if (action === 'manage') {
+          if (pTarget) {
+            const cur = this.projectManager.getCurrentProject();
+            if (cur.projectId !== pId && cur.rootPath !== pPath) {
+              await this.projectManager.loadProject(pTarget, this.graph);
+            }
+          }
+          this.activeTab = 'settings';
+          this.render();
+        } else if (action === 'delete') {
+          const confirmed = typeof confirm !== 'undefined'
+            ? confirm(`Tem certeza que deseja apagar o projeto inteiro "${pName}" e todos os seus arquivos do disco?\n\nEsta operação é permanente e não poderá ser desfeita.`)
+            : true;
+
+          if (confirmed) {
+            await this.projectManager.deleteProject(pId || pPath, true, this.graph);
+            if (typeof alert !== 'undefined') alert(`🗑️ Projeto "${pName}" apagado com sucesso.`);
+            this.render();
           }
         }
       });
@@ -313,30 +369,67 @@ export class ProjectManagerModal {
       }
     });
 
-    // Nome -> slug automático no formulário de criação
-    const newNameInput = this.overlay.querySelector('#new-proj-name') as HTMLInputElement;
-    const newIdInput = this.overlay.querySelector('#new-proj-id') as HTMLInputElement;
-    const newPathInput = this.overlay.querySelector('#new-proj-path') as HTMLInputElement;
+    // Seleção de pasta para o novo workspace (Procurar...)
+    this.overlay.querySelector('#btn-browse-new-proj-path')?.addEventListener('click', async () => {
+      try {
+        if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
+          const picked = await (window as any).webui.call('pick_folder');
+          if (picked && picked.trim()) {
+            const pathInput = this.overlay.querySelector('#new-proj-path') as HTMLInputElement;
+            if (pathInput) pathInput.value = picked.trim();
+          }
+        } else {
+          const pathInput = this.overlay.querySelector('#new-proj-path') as HTMLInputElement;
+          const manual = prompt('Informe o caminho do diretório do workspace:', pathInput?.value || '');
+          if (manual && manual.trim()) {
+            if (pathInput) pathInput.value = manual.trim();
+          }
+        }
+      } catch (e) {
+        console.warn('Falha ao abrir seletor de pasta:', e);
+      }
+    });
 
-    if (newNameInput && newIdInput && newPathInput) {
-      newNameInput.addEventListener('input', () => {
-        const slug = newNameInput.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
-        newIdInput.value = slug;
-        newPathInput.value = `./projects/${slug}`;
+    // Toggle visual dos cards de template
+    const templateRadios = this.overlay.querySelectorAll<HTMLInputElement>('input[name="new-proj-template"]');
+    templateRadios.forEach(radio => {
+      radio.addEventListener('change', () => {
+        this.overlay.querySelectorAll('.template-choice-card').forEach(card => {
+          card.classList.remove('selected');
+          (card as HTMLElement).style.borderColor = '#cbd5e1';
+          (card as HTMLElement).style.backgroundColor = '#ffffff';
+        });
+        const parentCard = radio.closest('.template-choice-card') as HTMLElement;
+        if (parentCard) {
+          parentCard.classList.add('selected');
+          parentCard.style.borderColor = '#0f6cbd';
+          parentCard.style.backgroundColor = '#f0f7fd';
+        }
       });
-    }
+    });
 
-    // Criar projeto
+    // Cancelar criação e retornar à lista de recentes
+    this.overlay.querySelector('#btn-cancel-create-proj')?.addEventListener('click', () => {
+      this.activeTab = 'recents';
+      this.render();
+    });
+
+    // Criar projeto com ID derivado de hash sobre o Nome do Projeto
     this.overlay.querySelector('#btn-submit-create-proj')?.addEventListener('click', async () => {
       const name = (this.overlay.querySelector('#new-proj-name') as HTMLInputElement)?.value.trim();
-      const id = (this.overlay.querySelector('#new-proj-id') as HTMLInputElement)?.value.trim();
       const path = (this.overlay.querySelector('#new-proj-path') as HTMLInputElement)?.value.trim();
       const desc = (this.overlay.querySelector('#new-proj-desc') as HTMLTextAreaElement)?.value.trim();
 
-      if (!name || !id || !path) {
-        alert('Por favor, preencha Nome, ID e Diretório Raiz do projeto.');
+      if (!name) {
+        alert('Por favor, preencha o Nome do Projeto.');
         return;
       }
+      if (!path) {
+        alert('Por favor, informe o Diretório Raiz do workspace.');
+        return;
+      }
+
+      const id = hashProjectName(name);
 
       const ok = await this.projectManager.createProject({
         name,

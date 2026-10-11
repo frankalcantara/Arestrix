@@ -4,6 +4,7 @@ import { ProjectManager } from '../src/core/ProjectManager.ts';
 import { EventBus } from '../src/core/EventBus.ts';
 import { Graph } from '../src/core/Graph.ts';
 import { BackstageView } from '../src/ui/ribbon/BackstageView.ts';
+import { ProjectManagerModal } from '../src/ui/modals/ProjectManagerModal.ts';
 
 describe('Geração de ID Único com Hash e Ajuste do Formulário de Criação de Projeto', () => {
   let bus: EventBus;
@@ -60,6 +61,91 @@ describe('Geração de ID Único com Hash e Ajuste do Formulário de Criação d
       expect(html).toContain('Nome do Projeto:');
       expect(html).toContain('id="backstage-new-name"');
       expect(html).not.toContain('Nome de Exibição:');
+    });
+
+    it('deve exibir a lista de projetos recentes na tela Informações abaixo de ações rápidas de manutenção', () => {
+      const backstage = new BackstageView(graph, {} as any, {} as any);
+      (backstage as any).activeSection = 'info';
+      const recents = [
+        { projectId: 'p1', name: 'Proj Alpha', rootPath: 'C:/Alpha', lastOpened: new Date().toISOString() }
+      ];
+      const html = (backstage as any).renderSectionContent(projectManager.getCurrentProject(), recents);
+
+      expect(html).toContain('Ações Rápidas de Manutenção');
+      expect(html).toContain('Projetos Recentes');
+      expect(html).toContain('Proj Alpha');
+      expect(html).toContain('recent-project-action-select');
+      expect(html).toContain('Opções ▾');
+      expect(html).toContain('Abrir Projeto');
+      expect(html).toContain('Gerenciar');
+      expect(html).toContain('Apagar Projeto...');
+
+      const manutencaoIdx = html.indexOf('Ações Rápidas de Manutenção');
+      const recentsIdx = html.indexOf('Projetos Recentes');
+      expect(recentsIdx).toBeGreaterThan(manutencaoIdx);
+    });
+
+    it('deve repetir a lista de projetos recentes na tela Novo Projeto com o dropdown de opções', () => {
+      const backstage = new BackstageView(graph, {} as any, {} as any);
+      (backstage as any).activeSection = 'new';
+      const recents = [
+        { projectId: 'p1', name: 'Proj Alpha', rootPath: 'C:/Alpha', lastOpened: new Date().toISOString() }
+      ];
+      const html = (backstage as any).renderSectionContent(projectManager.getCurrentProject(), recents);
+
+      expect(html).toContain('Criar Novo Projeto');
+      expect(html).toContain('Projetos Recentes');
+      expect(html).toContain('Proj Alpha');
+      expect(html).toContain('recent-project-action-select');
+      expect(html).toContain('Opções ▾');
+    });
+
+    it('deve exibir a lista de grafos recentes ANTES da lista de projetos recentes na tela Abrir Recente', () => {
+      const backstage = new BackstageView(graph, {} as any, {} as any);
+      (backstage as any).activeSection = 'open';
+      const recents = [
+        { projectId: 'p1', name: 'Proj Alpha', rootPath: 'C:/Alpha', lastOpened: new Date().toISOString() }
+      ];
+      const currentProj = {
+        ...projectManager.getCurrentProject(),
+        pipelines: [
+          { id: 'main', name: 'Pipeline Principal', file: 'pipelines/main.json', isPrimary: true }
+        ]
+      };
+      const html = (backstage as any).renderSectionContent(currentProj, recents);
+
+      expect(html).toContain('Grafos Recentes do Workspace Ativo');
+      expect(html).toContain('Pipeline Principal');
+      expect(html).toContain('btn-pipeline-load');
+      expect(html).toContain('Projetos Recentes');
+      expect(html).toContain('Proj Alpha');
+      expect(html).toContain('recent-project-action-select');
+
+      const grafosIdx = html.indexOf('Grafos Recentes do Workspace Ativo');
+      const projetosIdx = html.indexOf('Projetos Recentes');
+      expect(grafosIdx).toBeGreaterThan(-1);
+      expect(projetosIdx).toBeGreaterThan(grafosIdx);
+    });
+
+    it('deve carregar projetos recentes logo na primeira abertura de backstage.open()', async () => {
+      await projectManager.createProject({
+        name: 'Projeto Existente 1',
+        rootPath: 'C:/Projetos/P1'
+      });
+      await projectManager.createProject({
+        name: 'Projeto Existente 2',
+        rootPath: 'C:/Projetos/P2'
+      });
+
+      const backstage = new BackstageView(graph, {} as any, {} as any);
+      await backstage.open('info');
+
+      const html = (backstage as any).renderSectionContent(
+        projectManager.getCurrentProject(),
+        projectManager.listRecentProjects()
+      );
+      expect(html).toContain('Projeto Existente 1');
+      expect(html).toContain('Projeto Existente 2');
     });
   });
 
@@ -134,6 +220,126 @@ describe('Geração de ID Único com Hash e Ajuste do Formulário de Criação d
       // Nós e arestas devem ter sido restaurados
       expect(graph.getAllNodes().length).toBe(2);
       expect(graph.getAllEdges().length).toBe(1);
+    });
+  });
+
+  describe('Modal Gerenciador de Projetos (ProjectManagerModal)', () => {
+    it('NÃO deve exibir o campo Identificador Único na aba Novo Projeto', () => {
+      const modal = new ProjectManagerModal(graph);
+      const html = (modal as any).renderCreateTab();
+
+      expect(html).not.toContain('Identificador Único (slug)');
+      expect(html).not.toContain('id="new-proj-id"');
+      expect(html).toContain('id="new-proj-name"');
+      expect(html).toContain('Nome do Projeto *');
+    });
+
+    it('deve posicionar os seletores de template à esquerda dos nomes em um grid espaçoso', () => {
+      const modal = new ProjectManagerModal(graph);
+      const html = (modal as any).renderCreateTab();
+
+      // Verifica se utiliza template-choice-card e template-choice-info
+      expect(html).toContain('class="template-choice-card');
+      expect(html).toContain('class="template-choice-title">Pipeline Vazio</span>');
+      expect(html).toContain('class="template-choice-title">Pipeline Multi-Agente IA</span>');
+
+      // Verifica que o input radio precede o título/informação do template (ficando à esquerda)
+      const emptyIdx = html.indexOf('Pipeline Vazio');
+      const radioEmptyIdx = html.indexOf('value="empty"');
+      expect(radioEmptyIdx).toBeGreaterThan(-1);
+      expect(radioEmptyIdx).toBeLessThan(emptyIdx);
+
+      const agentsIdx = html.indexOf('Pipeline Multi-Agente IA');
+      const radioAgentsIdx = html.indexOf('value="agents"');
+      expect(radioAgentsIdx).toBeGreaterThan(-1);
+      expect(radioAgentsIdx).toBeLessThan(agentsIdx);
+    });
+
+    it('deve carregar o campo Diretório Raiz do workspace com pasta dinâmica e botão Procurar', async () => {
+      // Simula projeto recente para resolução de diretório
+      await projectManager.createProject({
+        name: 'Projeto de Teste Prévio',
+        rootPath: 'C:/Workspaces/ProjetosRecentes/Teste1'
+      });
+
+      const modal = new ProjectManagerModal(graph);
+      await (modal as any).resolveDefaultWorkspaceDir();
+      const html = (modal as any).renderCreateTab();
+
+      expect(html).toContain('Diretório Raiz do Workspace *');
+      expect(html).toContain('id="new-proj-path"');
+      expect(html).toContain('value="C:/Workspaces/ProjetosRecentes/Teste1"');
+      expect(html).toContain('id="btn-browse-new-proj-path"');
+      expect(html).toContain('Procurar...');
+    });
+
+    it('deve equipar a lista de projetos recentes com dropdown de ações (Opções ▾) contendo Abrir, Gerenciar e Apagar', () => {
+      const modal = new ProjectManagerModal(graph);
+      const recents = [
+        {
+          projectId: 'p_123',
+          name: 'Projeto Auditoria Anual',
+          rootPath: 'C:/Workspaces/Auditoria',
+          lastOpened: new Date().toISOString()
+        }
+      ];
+      const html = (modal as any).renderRecentsTab(recents, { projectId: 'outro', name: 'Outro' } as any);
+
+      expect(html).toContain('recents-modal-action-select');
+      expect(html).toContain('recent-project-action-select');
+      expect(html).toContain('Opções ▾');
+      expect(html).toContain('value="open">📂 Abrir Projeto</option>');
+      expect(html).toContain('value="manage">⚙️ Gerenciar</option>');
+      expect(html).toContain('value="delete">🗑️ Apagar Projeto...</option>');
+    });
+  });
+
+  describe('Exclusão de Projetos e Ações do Dropdown (deleteProject)', () => {
+    it('deve remover o projeto da lista de recentes ao chamar deleteProject', async () => {
+      await projectManager.createProject({
+        projectId: 'proj_para_apagar',
+        name: 'Projeto Provisório',
+        rootPath: 'C:/Projetos/Provisorio'
+      });
+      await projectManager.createProject({
+        projectId: 'proj_fixo',
+        name: 'Projeto Fixo',
+        rootPath: 'C:/Projetos/Fixo'
+      });
+
+      expect(projectManager.listRecentProjects().length).toBe(2);
+
+      const ok = await projectManager.deleteProject('proj_para_apagar', false);
+      expect(ok).toBe(true);
+
+      const remaining = projectManager.listRecentProjects();
+      expect(remaining.length).toBe(1);
+      expect(remaining[0].projectId).toBe('proj_fixo');
+    });
+
+    it('deve resetar o projeto ativo para o workspace padrão e limpar o grafo se o projeto apagado for o ativo', async () => {
+      await projectManager.createProject({
+        projectId: 'proj_ativo_apagar',
+        name: 'Projeto Ativo Para Apagar',
+        rootPath: 'C:/Projetos/AtivoApagar'
+      }, graph);
+
+      // Popula grafo com nó
+      graph.createNode('node_ativo_1', 'Nó Ativo', 'agent', 10, 10);
+      expect(graph.getAllNodes().length).toBe(1);
+      expect(projectManager.getCurrentProject().projectId).toBe('proj_ativo_apagar');
+
+      // Apaga o projeto ativo
+      let eventPayload: any = null;
+      bus.on('project:deleted', (data) => {
+        eventPayload = data;
+      });
+
+      await projectManager.deleteProject('proj_ativo_apagar', false, graph);
+
+      expect(eventPayload).toEqual({ projectId: 'proj_ativo_apagar', rootPath: 'C:/Projetos/AtivoApagar' });
+      expect(projectManager.getCurrentProject().projectId).toBe('default-workspace');
+      expect(graph.getAllNodes().length).toBe(0);
     });
   });
 });

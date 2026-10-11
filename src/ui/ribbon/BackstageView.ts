@@ -30,8 +30,11 @@ export class BackstageView {
     }
   }
 
-  public open(section: 'info' | 'new' | 'open' | 'export' = 'info'): void {
+  public async open(section: 'info' | 'new' | 'open' | 'export' = 'info'): Promise<void> {
     this.activeSection = section;
+    try {
+      await this.projectManager.init();
+    } catch (_) {}
     if (this.overlay) {
       this.render();
       this.overlay.classList.add('open');
@@ -97,6 +100,52 @@ export class BackstageView {
     this.bindInternalEvents();
   }
 
+  private renderRecentProjectsTable(recentList: IRecentProjectItem[]): string {
+    if (!recentList || recentList.length === 0) {
+      return `
+        <div style="padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; color: #64748b; font-size: 13px;">
+          Nenhum projeto recente registrado no histórico.
+        </div>
+      `;
+    }
+
+    return `
+      <table class="backstage-mru-table" style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr>
+            <th style="text-align: left; padding: 10px 14px;">Nome do Projeto</th>
+            <th style="text-align: left; padding: 10px 14px;">Localização (Diretório)</th>
+            <th style="text-align: left; padding: 10px 14px;">Último Acesso</th>
+            <th style="text-align: right; padding: 10px 14px;">Ação</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${recentList.map(item => `
+            <tr>
+              <td style="padding: 10px 14px;">
+                <strong style="color: #0f172a; font-size: 13px;">${this.escapeHtml(item.name)}</strong>
+              </td>
+              <td style="padding: 10px 14px;">
+                <code style="color: #475569; font-size: 11.5px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">${this.escapeHtml(item.rootPath)}</code>
+              </td>
+              <td style="padding: 10px 14px; font-size: 12px; color: #64748b;">
+                ${item.lastOpened ? new Date(item.lastOpened).toLocaleString() : 'Recentemente'}
+              </td>
+              <td style="text-align: right; padding: 10px 14px;">
+                <select class="recent-project-action-select backstage-project-action-select" data-id="${item.projectId}" data-path="${this.escapeHtml(item.rootPath)}" data-name="${this.escapeHtml(item.name)}">
+                  <option value="" disabled selected>Opções ▾</option>
+                  <option value="open">📂 Abrir Projeto</option>
+                  <option value="manage">⚙️ Gerenciar</option>
+                  <option value="delete">🗑️ Apagar Projeto...</option>
+                </select>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
   private renderSectionContent(proj: IProjectManifest, recentList: IRecentProjectItem[]): string {
     switch (this.activeSection) {
       case 'info':
@@ -128,12 +177,19 @@ export class BackstageView {
             </div>
           </div>
 
-          <div style="margin-top: 10px;">
+          <div style="margin-top: 14px;">
             <h4 style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 8px;">Ações Rápidas de Manutenção</h4>
             <div style="display: flex; gap: 10px;">
               <button class="tool-btn btn-secondary" id="btn-quick-sync-db" style="font-weight: 700;">🔄 Sincronizar Banco</button>
               <button class="tool-btn btn-secondary" id="btn-quick-clean-cache" style="font-weight: 700;">🧹 Limpar Cache do Resume</button>
             </div>
+          </div>
+
+          <!-- LISTA DE PROJETOS RECENTES (ESTILO OFFICE) -->
+          <div style="margin-top: 26px;">
+            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📂 Projetos Recentes</h3>
+            <p class="backstage-header-sub" style="margin-bottom: 12px;">Selecione um projeto acessado recentemente para carregar instantaneamente.</p>
+            ${this.renderRecentProjectsTable(recentList)}
           </div>
         `;
 
@@ -142,60 +198,90 @@ export class BackstageView {
           <h2 class="backstage-header-title">Criar Novo Projeto</h2>
           <p class="backstage-header-sub">Configure um novo workspace isolado com estrutura de diretórios e pipelines.</p>
 
-          <div style="max-width: 600px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px;">
+          <div style="max-width: 650px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-bottom: 28px;">
             <div style="margin-bottom: 16px;">
               <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Nome do Projeto:</label>
-              <input type="text" id="backstage-new-name" placeholder="Ex: Auditoria de Agentes 2026" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;">
+              <input type="text" id="backstage-new-name" placeholder="Ex: Auditoria de Agentes 2026" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
             </div>
 
-            <div style="margin-bottom: 24px;">
+            <div style="margin-bottom: 20px;">
               <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Descrição do Propósito:</label>
-              <textarea id="backstage-new-desc" rows="3" placeholder="Objetivo e escopo deste projeto..." style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;"></textarea>
+              <textarea id="backstage-new-desc" rows="3" placeholder="Objetivo e escopo deste projeto..." style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; box-sizing: border-box;"></textarea>
             </div>
 
             <div style="display: flex; gap: 12px;">
-              <button class="tool-btn btn-action" id="btn-backstage-create-submit" style="background: #0f6cbd; color: #fff; font-weight: 700; padding: 10px 20px;">Criar e Abrir Workspace</button>
+              <button class="tool-btn btn-action" id="btn-backstage-create-submit" style="background: #0f6cbd; color: #fff; font-weight: 700; padding: 10px 22px; height: 38px; font-size: 13px;">
+                🚀 Criar e Abrir Workspace
+              </button>
             </div>
+          </div>
+
+          <!-- LISTA DE PROJETOS RECENTES (REPETIDA NA TELA NOVO PROJETO) -->
+          <div>
+            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📂 Projetos Recentes</h3>
+            <p class="backstage-header-sub" style="margin-bottom: 12px;">Ou continue trabalhando em um dos projetos acessados recentemente:</p>
+            ${this.renderRecentProjectsTable(recentList)}
           </div>
         `;
 
       case 'open':
         return `
-          <h2 class="backstage-header-title">Projetos Recentes</h2>
-          <p class="backstage-header-sub">Selecione um projeto acessado recentemente para carregar instantaneamente.</p>
+          <h2 class="backstage-header-title">Abrir Recente</h2>
+          <p class="backstage-header-sub">Acesse pipelines do workspace atual ou abra outros projetos salvos recentemente.</p>
 
-          ${recentList.length === 0 ? `
-            <div style="padding: 24px; background: #f8fafc; border-radius: 8px; color: #64748b; font-size: 13px;">
-              Nenhum projeto recente registrado. Crie um novo projeto para começar.
-            </div>
-          ` : `
-            <table class="backstage-mru-table">
-              <thead>
-                <tr>
-                  <th>Nome do Projeto</th>
-                  <th>ID do Workspace</th>
-                  <th>Caminho Raiz</th>
-                  <th>Último Acesso</th>
-                  <th style="text-align: right;">Ação</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${recentList.map(item => `
+          <!-- 1. LISTA DE GRAFOS RECENTES DO WORKSPACE ATIVO -->
+          <div style="margin-bottom: 28px;">
+            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📊 Grafos Recentes do Workspace Ativo</h3>
+            <p class="backstage-header-sub" style="margin-bottom: 12px;">Pipelines disponíveis no projeto atual (<strong>${this.escapeHtml(proj.name)}</strong>):</p>
+
+            ${(proj.pipelines && proj.pipelines.length > 0) ? `
+              <table class="backstage-mru-table" style="width: 100%; border-collapse: collapse;">
+                <thead>
                   <tr>
-                    <td><strong>${this.escapeHtml(item.name)}</strong></td>
-                    <td><code>${this.escapeHtml(item.projectId)}</code></td>
-                    <td><small style="color: #64748b;">${this.escapeHtml(item.rootPath)}</small></td>
-                    <td>${new Date(item.lastOpened).toLocaleString()}</td>
-                    <td style="text-align: right;">
-                      <button class="tool-btn btn-secondary btn-mru-open" data-id="${item.projectId}" data-path="${this.escapeHtml(item.rootPath)}" style="padding: 4px 10px; font-size: 11.5px; font-weight: 700;">
-                        Abrir
-                      </button>
-                    </td>
+                    <th style="text-align: left; padding: 10px 14px;">Nome do Grafo</th>
+                    <th style="text-align: left; padding: 10px 14px;">Arquivo</th>
+                    <th style="text-align: left; padding: 10px 14px;">Tipo</th>
+                    <th style="text-align: left; padding: 10px 14px;">Descrição</th>
+                    <th style="text-align: right; padding: 10px 14px;">Ação</th>
                   </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          `}
+                </thead>
+                <tbody>
+                  ${proj.pipelines.map(p => `
+                    <tr>
+                      <td style="padding: 10px 14px;">
+                        <strong style="color: #0f172a; font-size: 13px;">${this.escapeHtml(p.name)}</strong>
+                      </td>
+                      <td style="padding: 10px 14px;">
+                        <code style="color: #475569; font-size: 11.5px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">${this.escapeHtml(p.file)}</code>
+                      </td>
+                      <td style="padding: 10px 14px;">
+                        ${p.isPrimary ? '<span class="badge-inherited" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700;">PRINCIPAL</span>' : '<span style="color: #64748b; font-size: 11px;">Subgrafo</span>'}
+                      </td>
+                      <td style="padding: 10px 14px; font-size: 12px; color: #64748b;">
+                        ${this.escapeHtml(p.description || 'Pipeline de execução')}
+                      </td>
+                      <td style="text-align: right; padding: 10px 14px;">
+                        <button class="tool-btn btn-secondary btn-pipeline-load" data-file="${this.escapeHtml(p.file)}" style="padding: 6px 14px; font-size: 12px; font-weight: 700; white-space: nowrap; height: 32px; display: inline-flex; align-items: center;">
+                          Carregar no Canvas
+                        </button>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : `
+              <div style="padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; color: #64748b; font-size: 13px;">
+                Nenhum grafo cadastrado no projeto atual.
+              </div>
+            `}
+          </div>
+
+          <!-- 2. LISTA DE PROJETOS RECENTES (DEPOIS DA LISTA DE GRAFOS) -->
+          <div>
+            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📂 Projetos Recentes</h3>
+            <p class="backstage-header-sub" style="margin-bottom: 12px;">Selecione um projeto acessado anteriormente para carregar:</p>
+            ${this.renderRecentProjectsTable(recentList)}
+          </div>
         `;
 
       case 'export':
@@ -242,10 +328,13 @@ export class BackstageView {
     });
 
     this.overlay.querySelectorAll<HTMLElement>('.backstage-nav-item[data-section]').forEach(item => {
-      item.addEventListener('click', () => {
+      item.addEventListener('click', async () => {
         const sec = item.dataset.section as any;
         if (sec) {
           this.activeSection = sec;
+          try {
+            await this.projectManager.init();
+          } catch (_) {}
           this.render();
         }
       });
@@ -300,15 +389,53 @@ export class BackstageView {
       this.close();
     });
 
-    // Abrir item recente
-    this.overlay.querySelectorAll<HTMLButtonElement>('.btn-mru-open').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const pTarget = btn.dataset.path || btn.dataset.id;
-        if (pTarget) {
-          await this.projectManager.loadProject(pTarget, this.graph);
-          if (typeof alert !== 'undefined') alert('✅ Projeto carregado!');
+    // Ações de projeto recente no Backstage (Dropdown Estilo Office)
+    this.overlay.querySelectorAll<HTMLSelectElement>('.backstage-project-action-select').forEach(select => {
+      select.addEventListener('change', async () => {
+        const action = select.value;
+        const pId = select.dataset.id || '';
+        const pPath = select.dataset.path || '';
+        const pName = select.dataset.name || 'Projeto';
+        const pTarget = pPath || pId;
+
+        // Restaura dropdown para o placeholder
+        select.value = '';
+
+        if (action === 'open') {
+          if (pTarget) {
+            await this.projectManager.loadProject(pTarget, this.graph);
+            if (typeof alert !== 'undefined') alert(`✅ Projeto "${pName}" carregado com sucesso!`);
+            this.close();
+          }
+        } else if (action === 'manage') {
+          if (pTarget) {
+            const cur = this.projectManager.getCurrentProject();
+            if (cur.projectId !== pId && cur.rootPath !== pPath) {
+              await this.projectManager.loadProject(pTarget, this.graph);
+            }
+          }
           this.close();
+          globalEventBus.emit('modal:open-project-manager', 'settings');
+        } else if (action === 'delete') {
+          const confirmed = typeof confirm !== 'undefined'
+            ? confirm(`Tem certeza que deseja apagar o projeto inteiro "${pName}" e todos os seus arquivos do disco?\n\nEsta operação é permanente e não poderá ser desfeita.`)
+            : true;
+
+          if (confirmed) {
+            await this.projectManager.deleteProject(pId || pPath, true, this.graph);
+            if (typeof alert !== 'undefined') alert(`🗑️ Projeto "${pName}" apagado com sucesso.`);
+            this.render();
+          }
         }
+      });
+    });
+
+    // Carregar grafo/pipeline recente do workspace
+    this.overlay.querySelectorAll<HTMLButtonElement>('.btn-pipeline-load').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await this.projectManager.loadPipeline(this.graph);
+        if (typeof alert !== 'undefined') alert('✅ Grafo carregado no canvas!');
+        this.close();
       });
     });
 

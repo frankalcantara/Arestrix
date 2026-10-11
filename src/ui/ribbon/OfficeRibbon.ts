@@ -481,8 +481,8 @@ export class OfficeRibbon {
 
   private bindInternalEvents(): void {
     // 1. Menu Arquivo (Backstage View)
-    this.container.querySelector('#tab-btn-file')?.addEventListener('click', () => {
-      this.backstageView.open('info');
+    this.container.querySelector('#tab-btn-file')?.addEventListener('click', async () => {
+      await this.backstageView.open('info');
     });
 
     // 2. Alternador de Abas
@@ -501,8 +501,8 @@ export class OfficeRibbon {
     });
 
     // 4. QAT Buttons
-    this.container.querySelector('#qat-btn-save')?.addEventListener('click', () => {
-      this.backstageView.open('info');
+    this.container.querySelector('#qat-btn-save')?.addEventListener('click', async () => {
+      await this.backstageView.open('info');
     });
 
     this.container.querySelector('#qat-btn-undo')?.addEventListener('click', () => this.graph.undo());
@@ -594,7 +594,9 @@ export class OfficeRibbon {
     this.container.querySelector('#ribbon-btn-memory-hub')?.addEventListener('click', () => this.projectMemoryModal.show());
     this.container.querySelector('#ribbon-btn-mem-blackboard')?.addEventListener('click', () => this.projectMemoryModal.show());
     this.container.querySelector('#ribbon-btn-mem-lessons')?.addEventListener('click', () => this.projectMemoryModal.show());
-    this.container.querySelector('#ribbon-btn-sqlite-db')?.addEventListener('click', () => this.backstageView.open('info'));
+    this.container.querySelector('#ribbon-btn-sqlite-db')?.addEventListener('click', async () => {
+      await this.backstageView.open('info');
+    });
 
     // 11. Botões da Aba Execução & Lote
     this.container.querySelector('#ribbon-btn-run-tab')?.addEventListener('click', () => this.executePipeline());
@@ -649,6 +651,11 @@ export class OfficeRibbon {
     // Export SVG acionado externamente
     globalEventBus.on('ribbon:export-svg', () => {
       this.exportGraphvizSVG();
+    });
+
+    // Abertura do Modal de Gerenciamento de Projetos acionado externamente
+    globalEventBus.on('modal:open-project-manager', (tab?: any) => {
+      this.projectManagerModal.show(tab || 'settings');
     });
   }
 

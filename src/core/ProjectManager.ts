@@ -13,6 +13,21 @@ export class ProjectManager {
   private constructor(bus: EventBus = globalEventBus) {
     this.bus = bus;
     this.currentProject = this.createDefaultManifest();
+    this.loadFromLocalStorageSync();
+  }
+
+  private loadFromLocalStorageSync(): void {
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('arestrix_recent_projects');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            this.recentProjects = parsed;
+          }
+        }
+      } catch (_) {}
+    }
   }
 
   public static getInstance(bus: EventBus = globalEventBus): ProjectManager {
@@ -62,12 +77,43 @@ export class ProjectManager {
         }
         const rawRecents = await (window as any).webui.call('list_recent_projects');
         if (rawRecents) {
-          this.recentProjects = JSON.parse(rawRecents);
+          const parsed = JSON.parse(rawRecents);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            this.recentProjects = parsed;
+          }
         }
       }
     } catch (e) {
       console.warn('[ProjectManager] Usando modo em memória local:', e);
     }
+
+    if (this.recentProjects.length === 0 && typeof localStorage !== 'undefined') {
+      this.loadFromLocalStorageSync();
+    }
+  }
+
+  public async getDefaultWorkspaceDirectory(): Promise<string> {
+    // 1. Tenta recuperar pasta corrente de execução onde o Arestrix foi aberto via C++ WebUI
+    try {
+      if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
+        const cwd = await (window as any).webui.call('get_current_working_dir');
+        if (cwd && cwd.trim()) {
+          return cwd.trim();
+        }
+      }
+    } catch (_) {}
+
+    // 2. Se houver projeto salvo no histórico recente, utiliza o diretório dele
+    if (this.recentProjects && this.recentProjects.length > 0 && this.recentProjects[0].rootPath) {
+      return this.recentProjects[0].rootPath;
+    }
+
+    // 3. Fallback para rootPath do projeto ativo se diferente de default '.'
+    if (this.currentProject && this.currentProject.rootPath && this.currentProject.rootPath !== '.') {
+      return this.currentProject.rootPath;
+    }
+
+    return '.';
   }
 
   public async createProject(manifest: Partial<IProjectManifest>, graph?: Graph): Promise<boolean> {
@@ -201,6 +247,53 @@ export class ProjectManager {
       await this.savePipeline(graph);
     }
     return ok;
+  }
+
+  public async deleteProject(projectIdOrPath: string, deleteFiles: boolean = true, graph?: Graph): Promise<boolean> {
+    const target = this.recentProjects.find(
+      r => r.projectId === projectIdOrPath || r.rootPath === projectIdOrPath || r.manifestPath === projectIdOrPath
+    );
+    const pId = target ? target.projectId : projectIdOrPath;
+    const pRoot = target ? target.rootPath : (projectIdOrPath !== pId ? projectIdOrPath : '');
+
+    // 1. Remove da lista de projetos recentes
+    this.recentProjects = this.recentProjects.filter(
+      r => r.projectId !== pId && r.rootPath !== pRoot && r.manifestPath !== projectIdOrPath
+    );
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('arestrix_recent_projects', JSON.stringify(this.recentProjects));
+        localStorage.removeItem(`arestrix_pipeline_${pId}`);
+      } catch (_) {}
+    }
+    this.pipelineStorage.delete(pId);
+
+    // 2. Notifica backend C++ via WebUI se disponível
+    try {
+      if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
+        await (window as any).webui.call('delete_project', JSON.stringify({
+          projectId: pId,
+          rootPath: pRoot,
+          deleteFiles
+        }));
+      }
+    } catch (e) {
+      console.warn('[ProjectManager] Erro ao comunicar delete_project:', e);
+    }
+
+    // 3. Se era o projeto ativo, reseta para o manifest padrão e limpa grafo
+    const isActive = this.currentProject.projectId === pId || (pRoot && this.currentProject.rootPath === pRoot);
+    if (isActive) {
+      this.currentProject = this.createDefaultManifest();
+      if (graph) {
+        graph.clear();
+        this.syncWithGraph(graph);
+      }
+      this.bus.emit('project:changed', this.currentProject);
+    }
+
+    this.bus.emit('project:deleted', { projectId: pId, rootPath: pRoot });
+    return true;
   }
 
   public async savePipeline(graph: Graph): Promise<boolean> {

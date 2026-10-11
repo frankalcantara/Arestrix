@@ -118,6 +118,10 @@ if __name__ == "__main__":
     setup_webui()
     build()
 
+    if "build" in sys.argv or "--no-run" in sys.argv or "--build-only" in sys.argv:
+        print("[Dev] Build concluído com sucesso!")
+        sys.exit(0)
+
     print("[App] Iniciando Arestrix C++...")
     app_path = os.path.join(os.getcwd(), "arestrix.exe")
     subprocess.run([app_path], cwd=os.path.join(os.getcwd(), ".."))
