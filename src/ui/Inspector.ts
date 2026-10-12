@@ -354,7 +354,7 @@ export class Inspector {
           <div class="office-stats-grid">
             <div class="office-stat-card">
               <span class="stat-number">${nodeCount}</span>
-              <span class="stat-label">Nós / Agentes</span>
+              <span class="stat-label">Vértices / Agentes</span>
             </div>
             <div class="office-stat-card">
               <span class="stat-number">${edgeCount}</span>
@@ -366,7 +366,7 @@ export class Inspector {
         <div class="office-hint-callout">
           <div class="hint-icon">💡</div>
           <div class="hint-text">
-            <strong>Dica:</strong> Clique em qualquer nó no canvas para inspecionar parâmetros, código lambda C++20, governança de IA e isolamento em Sandbox.
+            <strong>Dica:</strong> Clique em qualquer vértice no canvas para inspecionar parâmetros, código lambda C++20, governança de IA e isolamento em Sandbox.
           </div>
         </div>
       </div>
@@ -384,7 +384,7 @@ export class Inspector {
       <div class="office-task-pane-header">
         <div class="office-task-pane-title-group">
           <span class="office-tp-icon">⚙️</span>
-          <span class="office-tp-title">Propriedades da Forma</span>
+          <span class="office-tp-title">Propriedade do Vértice</span>
         </div>
         <div class="office-task-pane-actions">
           <button class="office-tp-btn-icon" id="btn-toggle-float" title="${this.isFloating ? 'Ancorar à Direita (Dock)' : 'Destacar Janela Flutuante (Float)'}">
@@ -414,7 +414,7 @@ export class Inspector {
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="node-label">Rótulo / Nome do Nó</label>
+            <label class="form-label" for="node-label">Rótulo / Nome do Vértice</label>
             <input type="text" id="node-label" class="form-input" value="${this.escapeHtml(node.label)}" />
           </div>
 
@@ -438,6 +438,14 @@ export class Inspector {
             </select>
           </div>
 
+          <div class="form-group" style="margin-top: 8px;">
+            <div class="office-task-desc-box" id="node-task-desc-box" style="padding: 10px 12px; background: #faf9f8; border: 1px solid #edebe9; border-left: 3px solid #0f6cbd; border-radius: 4px; font-size: 12px; line-height: 1.5; color: #323130;">
+              <p style="margin: 0;" id="node-task-explanation-p">
+                ${this.getTaskTypeExplanation(node.type)}
+              </p>
+            </div>
+          </div>
+
           ${(node.type === 'subflow' || node.type === 'module') ? `
             <div class="form-group">
               <button id="btn-dive-subflow" class="btn btn-dive-action">
@@ -450,7 +458,7 @@ export class Inspector {
           ${this.renderParametersSection(node, tpl)}
 
           <div class="form-actions" style="margin-top: 16px;">
-            <button id="btn-delete-node" class="btn btn-danger">Excluir Nó do Grafo</button>
+            <button id="btn-delete-node" class="btn btn-danger">Excluir Vértice do Grafo</button>
           </div>
         </div>
 
@@ -532,12 +540,12 @@ export class Inspector {
           <div class="port-list">
             <div class="port-sublist">
               <span class="port-sublist-title">Portas de Entrada (${node.inputs.length})</span>
-              ${node.inputs.length === 0 ? '<span class="empty-ports-hint">Nenhuma entrada (Nó Raiz / Produtor)</span>' : ''}
+              ${node.inputs.length === 0 ? '<span class="empty-ports-hint">Nenhuma entrada (Vértice Raiz / Produtor)</span>' : ''}
               ${node.inputs.map(p => `<span class="port-tag in-tag">📥 ${p.name}</span>`).join('')}
             </div>
             <div class="port-sublist" style="margin-top: 12px;">
               <span class="port-sublist-title">Portas de Saída (${node.outputs.length})</span>
-              ${node.outputs.length === 0 ? '<span class="empty-ports-hint">Nenhuma saída (Nó Folha / Consumidor)</span>' : ''}
+              ${node.outputs.length === 0 ? '<span class="empty-ports-hint">Nenhuma saída (Vértice Folha / Consumidor)</span>' : ''}
               ${node.outputs.map(p => `<span class="port-tag out-tag">📤 ${p.name}</span>`).join('')}
             </div>
           </div>
@@ -592,6 +600,10 @@ export class Inspector {
     let oldType = node.type;
     typeSelect?.addEventListener('change', () => {
       const newType = typeSelect.value as any;
+      const explanationP = this.container.querySelector('#node-task-explanation-p');
+      if (explanationP) {
+        explanationP.textContent = this.getTaskTypeExplanation(newType);
+      }
       if (newType !== oldType) {
         const cmd = new UpdateNodeCommand(
           this.graph,
@@ -621,7 +633,7 @@ export class Inspector {
           node.id,
           { label: initialLabel },
           { label: labelInput.value },
-          `Renomear nó para "${labelInput.value}"`
+          `Renomear vértice para "${labelInput.value}"`
         );
         this.graph.commandManager.record(cmd);
         initialLabel = labelInput.value;
@@ -675,7 +687,7 @@ export class Inspector {
     // Delete
     const deleteBtn = this.container.querySelector('#btn-delete-node');
     deleteBtn?.addEventListener('click', () => {
-      if (confirm(`Deseja realmente excluir o nó "${node.label}"?`)) {
+      if (confirm(`Deseja realmente excluir o vértice "${node.label}"?`)) {
         const cmd = new RemoveNodeCommand(this.graph, node.id);
         this.graph.commandManager.execute(cmd);
       }
@@ -793,6 +805,31 @@ export class Inspector {
         inputEl.addEventListener('blur', handleChange);
       }
     });
+  }
+
+  private getTaskTypeExplanation(type: string): string {
+    switch (type) {
+      case 'static':
+        return 'Tarefa estática determinística do Taskflow (tf::Task). Executa rotinas procedurais em C++20 com garantias sequenciais ou concorrentes baseadas em grafo de dependências.';
+      case 'condition':
+        return 'Tarefa de decisão e ramificação condicional (tf::Task retornando int). Avalia predicados em tempo de execução para direcionar o fluxo de controle para a ramificação correspondente.';
+      case 'subflow':
+        return 'Tarefa dinâmica de decomposição hierárquica (tf::Subflow). Instancia e expande novos grafos de tarefas filhas em tempo de execução dentro do thread pool MSVC, permitindo paralelismo recursivo.';
+      case 'module':
+        return 'Módulo hierárquico independente e reutilizável (tf::Task via tf.composed_of). Encapsula outro grafo completo em um único vértice estruturado, promovendo composição modular.';
+      case 'critical':
+        return 'Seção crítica de exclusão mútua (tf::CriticalSection). Sincroniza o acesso a recursos compartilhados e evita condições de corrida entre tarefas concorrentes no fluxo de trabalho.';
+      case 'cuda':
+        return 'Tarefa acelerada por GPU (tf::cudaGraph / cudaGraphExec). Despacha fluxos de processamento massivamente paralelos diretamente para a arquitetura de vídeo sob C++20.';
+      case 'fork':
+        return 'Despachante concorrente (tf::Task). Dispara paralelamente ramos múltiplos de execução simultânea no pipeline (como geração de conteúdo e compilação de diagramas).';
+      case 'join':
+        return 'Barreira de sincronização e consolidação (tf::Task). Aguarda a conclusão rigorosa de todas as ramificações concorrentes antes de prosseguir com as etapas subsequentes.';
+      case 'agent':
+        return 'Vértice de Agente de IA com governança e sandbox. Opera com modelos de linguagem (Code Mode), ferramentas MCP e permissões de isolamento em contêiner ou microVM.';
+      default:
+        return 'Tarefa de execução do grafo Taskflow C++20.';
+    }
   }
 
   private escapeHtml(text: string): string {

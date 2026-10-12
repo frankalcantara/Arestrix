@@ -52,7 +52,7 @@ export class NodeToolsModal {
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
       title: 'Ferramentas Code Mode',
-      subtitle: `Nó: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id})`,
+      subtitle: `Vértice: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id})`,
       icon: '🔧',
       closeBtnId: 'btn-close-tools-modal'
     });
@@ -71,7 +71,7 @@ export class NodeToolsModal {
               </div>
             </label>
             <div class="inheritance-status-badge ${isInherited ? 'badge-inherited' : 'badge-overridden'}">
-              ${isInherited ? 'HERDADO DO PIPELINE' : 'CUSTOMIZADO PARA ESTE NÓ'}
+              ${isInherited ? 'HERDADO DO PIPELINE' : 'CUSTOMIZADO PARA ESTE VÉRTICE'}
             </div>
           </div>
 
@@ -139,7 +139,7 @@ export class NodeToolsModal {
             <div class="form-row-grid">
               <div class="form-group full-width">
                 <label class="form-label" for="node-artifact-pattern">Padrão de Caminho do Artefato</label>
-                <input type="text" id="node-artifact-pattern" class="form-input" value="${this.escapeHtml((settings.validationRules && settings.validationRules[0]?.targetPathPattern) || '')}" placeholder="aulas/{itemId}.md" />
+                <input type="text" id="node-artifact-pattern" class="form-input" value="${this.escapeHtml((settings.validationRules && settings.validationRules[0]?.targetPathPattern) || '')}" placeholder="output/{itemId}.md" />
                 <div class="form-hint">Suporta interpolação com <code>{itemId}</code> ou <code>{id}</code>.</div>
               </div>
 

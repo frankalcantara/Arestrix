@@ -246,8 +246,8 @@ export class OfficeRibbon {
               <span class="ribbon-btn-label">+ Tarefa</span>
             </button>
             <div class="ribbon-col-stack">
-              <select id="ribbon-select-add-node" class="ribbon-select" title="Adicionar nó específico">
-                <option value="" disabled selected>+ Mais Nós...</option>
+              <select id="ribbon-select-add-node" class="ribbon-select" title="Adicionar vértice específico">
+                <option value="" disabled selected>+ Mais Vértices...</option>
                 <option value="static">Estático (Task)</option>
                 <option value="condition">Condição (Branch)</option>
                 <option value="subflow">Subflow (Aninhado)</option>
@@ -261,7 +261,7 @@ export class OfficeRibbon {
               </button>
             </div>
           </div>
-          <div class="office-ribbon-group-title">Nós do Grafo</div>
+          <div class="office-ribbon-group-title">Vértices do Grafo</div>
         </div>
 
         <!-- Grupo Execução Primária -->
@@ -599,7 +599,7 @@ export class OfficeRibbon {
     this.container.querySelector('#ribbon-btn-redo')?.addEventListener('click', () => this.graph.redo());
     this.container.querySelector('#ribbon-btn-zoom-fit')?.addEventListener('click', () => this.viewport.zoomToFit());
     this.container.querySelector('#ribbon-btn-clear')?.addEventListener('click', () => {
-      if (confirm('Deseja realmente limpar todo o fluxo de nós?')) {
+      if (confirm('Deseja realmente limpar todo o fluxo de vértices?')) {
         this.graph.clear();
       }
     });

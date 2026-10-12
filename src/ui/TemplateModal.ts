@@ -100,7 +100,7 @@ export class TemplateModal {
 
         <div class="modal-footer">
           <div class="footer-info">
-            💡 Os nós instanciados herdam portas de dados, lambdas C++20 otimizados e suporte a histórico <strong>Desfazer (Ctrl+Z)</strong>.
+            💡 Os vértices instanciados herdam portas de dados, lambdas C++20 otimizados e suporte a histórico <strong>Desfazer (Ctrl+Z)</strong>.
           </div>
           <button id="btn-close-modal-bottom" class="btn btn-secondary">Fechar</button>
         </div>

@@ -45,7 +45,7 @@ export class GitHubReposModal extends BaseModal {
           <span style="font-size: 20px; line-height: 1;">🌐</span>
           <div style="font-size: 12px; color: #242424; line-height: 1.45;">
             <strong>Governança Global de Repositórios:</strong> Estes repositórios open source fornecem habilidades prontas para todo o workspace.
-            Habilitar ou desabilitar um projeto aqui afeta a disponibilidade de suas skills no catálogo de importação de todos os nós de agentes.
+            Habilitar ou desabilitar um projeto aqui afeta a disponibilidade de suas skills no catálogo de importação de todos os vértices de agentes.
           </div>
         </div>
 

@@ -165,7 +165,7 @@ export class ImportPiModal {
             <span class="footer-info" id="pi-status-msg">
               ${this.isScanning ? 'Analisando projeto...' : (this.activeTab === 'project' 
                 ? (this.currentScanResult?.isValid ? 'Projeto analisado e pronto para importação.' : 'Selecione uma pasta de projeto válida.') 
-                : 'Pronto para criar o nó de diálogo.')}
+                : 'Pronto para criar o vértice de diálogo.')}
             </span>
             <div class="footer-actions">
               <button id="btn-cancel-pi" class="tool-btn btn-secondary">Cancelar</button>
@@ -307,7 +307,7 @@ export class ImportPiModal {
             </div>
           ` : `
             <div style="font-size: 11.5px; color: #616161;">
-              A validação verifica a correspondência entre os scripts do projeto e os nós do Arestrix.
+              A validação verifica a correspondência entre os scripts do projeto e os vértices do Arestrix.
             </div>
           `}
         </div>

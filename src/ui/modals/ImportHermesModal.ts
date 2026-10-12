@@ -87,7 +87,7 @@ export class ImportHermesModal {
 
         <!-- Rodapé Estilo Office -->
         <div class="modal-footer">
-          <span class="footer-info">Pronto para criar o nó.</span>
+          <span class="footer-info">Pronto para criar o vértice.</span>
           <div class="footer-actions">
             <button id="btn-cancel-hermes" class="tool-btn btn-secondary">Cancelar</button>
             <button id="btn-inject-hermes-agent" class="tool-btn btn-action">Importar</button>

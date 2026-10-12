@@ -219,7 +219,7 @@ export class BackstageView {
 
             <div class="backstage-info-card">
               <h4>⚡ Estatísticas do Pipeline</h4>
-              <p><strong>Nós Ativos:</strong> ${this.graph.getAllNodes().length}</p>
+              <p><strong>Vértices Ativos:</strong> ${this.graph.getAllNodes().length}</p>
               <p><strong>Arestas / Links:</strong> ${this.graph.getAllEdges().length}</p>
               <p><strong>Pipelines Vinculados:</strong> ${proj.pipelines.length}</p>
             </div>
@@ -437,7 +437,7 @@ export class BackstageView {
           <div class="backstage-cards-grid">
             <div class="backstage-info-card">
               <h4>💻 Código Fonte C++20</h4>
-              <p>Gere e visualize o arquivo <code>main.cpp</code> completo com tarefas Taskflow e lambdas dos nós.</p>
+              <p>Gere e visualize o arquivo <code>main.cpp</code> completo com tarefas Taskflow e lambdas dos vértices.</p>
               <button class="tool-btn btn-action" id="btn-backstage-open-codemodal" style="background: #0f6cbd; color: white; font-weight: 700;">Ver Código C++</button>
             </div>
 

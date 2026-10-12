@@ -66,7 +66,7 @@ export class NodeMemoryModal {
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
       title: 'Memória do Agente & Contexto',
-      subtitle: `Nó: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id}) | Projeto: <strong>${this.escapeHtml(projectId)}</strong>`,
+      subtitle: `Vértice: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id}) | Projeto: <strong>${this.escapeHtml(projectId)}</strong>`,
       icon: '💾',
       closeBtnId: 'btn-close-memory-modal'
     });
@@ -85,7 +85,7 @@ export class NodeMemoryModal {
               </div>
             </label>
             <div class="inheritance-status-badge ${isInherited ? 'badge-inherited' : 'badge-overridden'}">
-              ${isInherited ? 'HERDADO DO PIPELINE' : 'CUSTOMIZADO PARA ESTE NÓ'}
+              ${isInherited ? 'HERDADO DO PIPELINE' : 'CUSTOMIZADO PARA ESTE VÉRTICE'}
             </div>
           </div>
 

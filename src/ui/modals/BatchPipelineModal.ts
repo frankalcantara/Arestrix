@@ -160,7 +160,7 @@ export class BatchPipelineModal {
             </div>
 
             <div class="tools-checkbox-grid">
-              ${agentNodes.length === 0 ? '<div class="empty-hint">Nenhum nó de Agente encontrado no grafo atual.</div>' : ''}
+              ${agentNodes.length === 0 ? '<div class="empty-hint">Nenhum vértice de Agente encontrado no grafo atual.</div>' : ''}
               ${agentNodes.map(node => {
                 const checked = serializedSet.has(node.id) ? 'checked' : '';
                 return `

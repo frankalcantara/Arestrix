@@ -109,9 +109,9 @@ export class NodeSkillsModal extends BaseModal {
   }
 
   protected renderBody(): string {
-    if (!this.activeNodeId) return '<div style="padding: 20px;">Nenhum nó ativo selecionado.</div>';
+    if (!this.activeNodeId) return '<div style="padding: 20px;">Nenhum vértice ativo selecionado.</div>';
     const node = this.graph.getNode(this.activeNodeId);
-    if (!node) return '<div style="padding: 20px;">Nó não encontrado.</div>';
+    if (!node) return '<div style="padding: 20px;">Vértice não encontrado.</div>';
 
     const currentSkill = this.getActiveSkill(node);
     const skillsList = node.agentSettings?.skills || [];
@@ -120,7 +120,7 @@ export class NodeSkillsModal extends BaseModal {
     const activeReposCount = reposList.filter(r => r.isEnabled).length;
 
     return `
-      <!-- Abas no Padrão Office (Apenas 2: O nó decide sua habilidade ou importa do catálogo global) -->
+      <!-- Abas no Padrão Office (Apenas 2: O vértice decide sua habilidade ou importa do catálogo global) -->
       <div class="office-modal-tab-bar">
         <button class="office-modal-tab-btn ${this.activeTab === 'editor' ? 'active' : ''}" data-tab="editor">
           📝 Habilidade do Agente & Editor
@@ -137,7 +137,7 @@ export class NodeSkillsModal extends BaseModal {
       ` : ''}
 
       <div style="padding: 16px 20px;">
-        <!-- ABA 1: EDITOR MANUAL DE SKILL E PROMPT DO NÓ -->
+        <!-- ABA 1: EDITOR MANUAL DE SKILL E PROMPT DO VÉRTICE -->
         <div class="skills-tab-pane ${this.activeTab === 'editor' ? 'active' : ''}" id="pane-editor">
           <div class="office-section-card" style="margin-bottom: 14px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -474,7 +474,7 @@ export class NodeSkillsModal extends BaseModal {
       this.render();
     });
 
-    // Botões de Importar Skill do GitHub para este Nó
+    // Botões de Importar Skill do GitHub para este Vértice
     this.dialog.querySelectorAll<HTMLButtonElement>('.btn-import-github-skill').forEach(btn => {
       btn.addEventListener('click', () => {
         const skillId = btn.getAttribute('data-skill-id');

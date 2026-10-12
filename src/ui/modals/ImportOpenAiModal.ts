@@ -51,7 +51,7 @@ export class ImportOpenAiModal {
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
       title: 'Importar Agente OpenAI',
-      subtitle: 'Configure as instruções e o modelo OpenAI (ChatGPT / Assistants) para o nó do grafo.',
+      subtitle: 'Configure as instruções e o modelo OpenAI (ChatGPT / Assistants) para o vértice do grafo.',
       icon: '🤖',
       closeBtnId: 'btn-close-openai-modal'
     });
@@ -63,7 +63,7 @@ export class ImportOpenAiModal {
         <!-- Corpo do Diálogo -->
         <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
           <div class="office-group" style="margin-bottom: 0;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div style="grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; display: grid;">
               <div>
                 <label class="office-label" for="openai-agent-name">Nome do agente:</label>
                 <input type="text" id="openai-agent-name" class="office-input" value="Agente_GPT4o">
@@ -87,7 +87,7 @@ export class ImportOpenAiModal {
 
         <!-- Rodapé Estilo Office -->
         <div class="modal-footer">
-          <span class="footer-info">Pronto para criar o nó.</span>
+          <span class="footer-info">Pronto para criar o vértice.</span>
           <div class="footer-actions">
             <button id="btn-cancel-openai" class="tool-btn btn-secondary">Cancelar</button>
             <button id="btn-inject-openai-agent" class="tool-btn btn-action">Importar</button>

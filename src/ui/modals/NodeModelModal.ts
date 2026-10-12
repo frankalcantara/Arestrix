@@ -52,7 +52,7 @@ export class NodeModelModal {
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
       title: 'Modelo de IA, Skill & Prompt',
-      subtitle: `Nó: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id})`,
+      subtitle: `Vértice: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id})`,
       icon: '🧠',
       closeBtnId: 'btn-close-model-modal'
     });
@@ -71,7 +71,7 @@ export class NodeModelModal {
               </div>
             </label>
             <div class="inheritance-status-badge ${isInherited ? 'badge-inherited' : 'badge-overridden'}">
-              ${isInherited ? 'HERDADO DO PIPELINE' : 'CUSTOMIZADO PARA ESTE NÓ'}
+              ${isInherited ? 'HERDADO DO PIPELINE' : 'CUSTOMIZADO PARA ESTE VÉRTICE'}
             </div>
           </div>
 
@@ -98,7 +98,7 @@ export class NodeModelModal {
             <div class="form-group">
               <label class="form-label" for="node-skill-path">Arquivo de Skill (.md)</label>
               <div style="display: flex; gap: 8px; align-items: center;">
-                <input type="text" id="node-skill-path" class="form-input" style="flex: 1;" value="${this.escapeHtml(effectiveModel.skillPath || '')}" placeholder=".agents/redigir-math/SKILL.md" ${isInherited ? 'disabled' : ''} />
+                <input type="text" id="node-skill-path" class="form-input" style="flex: 1;" value="${this.escapeHtml(effectiveModel.skillPath || '')}" placeholder=".agents/default/SKILL.md" ${isInherited ? 'disabled' : ''} />
                 <button type="button" class="btn btn-secondary-pill" id="btn-edit-skill-modal" title="Abrir editor de Markdown para este skill" style="white-space: nowrap; padding: 6px 12px; font-size: 12px;">✎ Editar Skill</button>
                 <button type="button" class="btn btn-secondary-pill" id="btn-new-skill-modal" title="Criar um novo arquivo de skill a partir do template padrão" style="white-space: nowrap; padding: 6px 12px; font-size: 12px;">＋ Novo Skill</button>
               </div>

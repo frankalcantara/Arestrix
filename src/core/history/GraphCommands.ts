@@ -149,7 +149,7 @@ export class RemoveEdgeCommand implements ICommand {
 }
 
 /**
- * Comando para atualizar propriedades de um nó (nome, tipo, corpo lambda).
+ * Comando para atualizar propriedades de um vértice (nome, tipo, corpo lambda).
  */
 export class UpdateNodeCommand implements ICommand {
   readonly description: string;

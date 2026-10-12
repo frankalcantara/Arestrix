@@ -383,18 +383,18 @@ export const DEFAULT_PIPELINE_DEFAULTS: IGlobalPipelineDefaults = {
     network: 'egress_llm_only',
     maxMemoryMB: 512,
     timeoutSeconds: 300,
-    readOnlyMounts: ['plano.md', '.agents/'],
-    readWriteMounts: ['aulas/']
+    readOnlyMounts: [],
+    readWriteMounts: []
   },
   model: {
     provider: 'deepseek',
     model: 'deepseek-flash',
-    skillPath: '.agents/redigir-math/SKILL.md',
-    promptTemplate: 'Processe o artigo  conforme as diretrizes do plano.md'
+    skillPath: '',
+    promptTemplate: ''
   },
   codeMode: {
     allowedTools: ['write', 'edit', 'read', 'bash', 'validate_svg'],
-    customScripts: ['python scripts/audit_exercises.py']
+    customScripts: []
   },
   memory: {
     ...DEFAULT_NODE_MEMORY_CONFIG

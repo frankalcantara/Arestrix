@@ -78,7 +78,7 @@ export class SkillEditorModal extends BaseModal {
     this.saveCallback = options.onSave;
 
     const subtitleText = options.nodeLabel
-      ? `Nó: ${options.nodeLabel} · ${this.currentPath}`
+      ? `Vértice: ${options.nodeLabel} · ${this.currentPath}`
       : this.currentPath;
 
     this.config.subtitle = subtitleText;

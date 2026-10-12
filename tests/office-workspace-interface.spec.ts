@@ -225,4 +225,108 @@ describe('Área Útil do Grafo: Padrão Microsoft Office / Visio Fluent UI', () 
       (globalThis as any).window = origWin;
     }
   });
+
+  it('deve exibir "Propriedade do Vértice" e caixa de texto explicativa da tarefa quando um vértice estiver selecionado', async () => {
+    const origDoc = (globalThis as any).document;
+    const origWin = (globalThis as any).window;
+
+    const createMockElement = (tag: string) => {
+      const el: any = {
+        tagName: tag.toUpperCase(),
+        className: '',
+        style: {},
+        children: [] as any[],
+        _html: '',
+        set innerHTML(val: string) { this._html = val; },
+        get innerHTML() { return this._html; },
+        querySelector: (sel: string) => {
+          const mockEl: any = {
+            tagName: 'DIV',
+            value: '',
+            textContent: '',
+            style: {},
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            classList: { add: () => {}, remove: () => {}, contains: () => false }
+          };
+          if (sel === '.office-tp-title') {
+            const m = el._html.match(/<span class="office-tp-title">([^<]+)<\/span>/);
+            mockEl.textContent = m ? m[1] : '';
+            return mockEl;
+          }
+          if (sel === '#node-task-explanation-p' || sel === '.office-task-desc-box p') {
+            const m = el._html.match(/<p style="[^"]*" id="node-task-explanation-p">\s*([^<]+)\s*<\/p>/);
+            mockEl.textContent = m ? m[1].trim() : '';
+            return mockEl;
+          }
+          if (sel === '#node-label') {
+            const m = el._html.match(/id="node-label"[^>]*value="([^"]*)"/);
+            mockEl.value = m ? m[1] : '';
+            return mockEl;
+          }
+          return mockEl;
+        },
+        querySelectorAll: () => [],
+        addEventListener: () => {},
+        classList: { add: () => {}, remove: () => {}, contains: () => false },
+        appendChild: (child: any) => { el.children.push(child); return child; },
+        insertBefore: (child: any) => { el.children.push(child); return child; }
+      };
+      return el;
+    };
+
+    (globalThis as any).document = {
+      createElement: createMockElement,
+      body: { style: {} }
+    };
+    (globalThis as any).window = {
+      innerWidth: 1920,
+      innerHeight: 1080,
+      addEventListener: () => {},
+      removeEventListener: () => {}
+    };
+
+    try {
+      const { Inspector } = await import('../src/ui/Inspector.ts');
+      const { Graph } = await import('../src/core/Graph.ts');
+      const { EventBus } = await import('../src/core/EventBus.ts');
+
+      const parent = createMockElement('div');
+      const bus = new EventBus();
+      const graph = new Graph(bus);
+
+      const inspector = new Inspector(parent, graph, bus);
+
+      // Cria e seleciona um nó
+      const node = graph.buildNode('node_1', 'Vértice de Teste', 'static', 0, 0);
+      graph.addNode(node);
+
+      bus.emit('node:selected', node);
+
+      const containerHtml = (inspector as any).container.innerHTML;
+
+      // 1. Título deve ser estritamente "Propriedade do Vértice"
+      expect(containerHtml).toContain('Propriedade do Vértice');
+      expect(containerHtml).not.toContain('Propriedades da Forma');
+
+      // 2. Rótulo deve ser "Rótulo / Nome do Vértice"
+      expect(containerHtml).toContain('Rótulo / Nome do Vértice');
+
+      // 3. Deve conter a caixa de texto com o parágrafo explicativo da tarefa
+      expect(containerHtml).toContain('office-task-desc-box');
+      expect(containerHtml).toContain('id="node-task-explanation-p"');
+      expect(containerHtml).toContain('Tarefa estática determinística do Taskflow (tf::Task)');
+
+      // 4. Teste de troca para fork
+      const explanationFork = (inspector as any).getTaskTypeExplanation('fork');
+      expect(explanationFork).toContain('Despachante concorrente');
+
+      // 5. Teste de troca para join
+      const explanationJoin = (inspector as any).getTaskTypeExplanation('join');
+      expect(explanationJoin).toContain('Barreira de sincronização');
+    } finally {
+      (globalThis as any).document = origDoc;
+      (globalThis as any).window = origWin;
+    }
+  });
 });

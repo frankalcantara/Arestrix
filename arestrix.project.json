@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-10-12T00:26:20.331Z",
+  "createdAt": "2026-10-12T01:38:36.941Z",
   "database": {
     "filePath": "storage/database.sqlite",
     "type": "sqlite",
@@ -16,9 +16,7 @@
         "bash",
         "validate_svg"
       ],
-      "customScripts": [
-        "python scripts/audit_exercises.py"
-      ]
+      "customScripts": []
     },
     "memory": {
       "allowedKeys": [],
@@ -32,21 +30,16 @@
     },
     "model": {
       "model": "deepseek-flash",
-      "promptTemplate": "Processe o artigo  conforme as diretrizes do plano.md",
+      "promptTemplate": "",
       "provider": "deepseek",
-      "skillPath": ".agents/redigir-math/SKILL.md"
+      "skillPath": ""
     },
     "sandbox": {
       "isolationLevel": "container",
       "maxMemoryMB": 512,
       "network": "egress_llm_only",
-      "readOnlyMounts": [
-        "plano.md",
-        ".agents/"
-      ],
-      "readWriteMounts": [
-        "aulas/"
-      ],
+      "readOnlyMounts": [],
+      "readWriteMounts": [],
       "timeoutSeconds": 300
     }
   },
@@ -62,6 +55,6 @@
   ],
   "projectId": "default-workspace",
   "rootPath": ".",
-  "updatedAt": "2026-10-12T00:26:20Z",
+  "updatedAt": "2026-10-12T01:39:20Z",
   "version": "1.0.0"
 }

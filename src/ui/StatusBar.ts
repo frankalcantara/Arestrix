@@ -43,7 +43,7 @@ export class StatusBar {
         <span class="office-status-dot status-ready" id="sb-status-dot" title="Status do Sistema"></span>
         <span class="office-status-text" id="sb-status-text">Pronto</span>
         <span class="office-status-sep">|</span>
-        <span class="office-status-stats" id="sb-stats-text">0 nós, 0 conexões</span>
+        <span class="office-status-stats" id="sb-stats-text">0 vértices, 0 conexões</span>
       </div>
 
       <div class="office-statusbar-center">
@@ -144,7 +144,7 @@ export class StatusBar {
   private updateStats(): void {
     const nodeCount = this.graph.getAllNodes().length;
     const edgeCount = this.graph.getAllEdges().length;
-    this.statsTextEl.textContent = `${nodeCount} ${nodeCount === 1 ? 'nó' : 'nós'}, ${edgeCount} ${edgeCount === 1 ? 'conexão' : 'conexões'}`;
+    this.statsTextEl.textContent = `${nodeCount} ${nodeCount === 1 ? 'vértice' : 'vértices'}, ${edgeCount} ${edgeCount === 1 ? 'conexão' : 'conexões'}`;
   }
 
   public setStatus(text: string, dotClass: 'status-ready' | 'status-compiling' | 'status-running' | 'status-error'): void {

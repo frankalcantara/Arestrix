@@ -49,7 +49,7 @@ export class NodeSandboxModal {
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
       title: 'Sandbox & Máquina Virtual',
-      subtitle: `Nó: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id})`,
+      subtitle: `Vértice: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id})`,
       icon: '🛡️',
       closeBtnId: 'btn-close-sandbox-modal'
     });
@@ -68,7 +68,7 @@ export class NodeSandboxModal {
               </div>
             </label>
             <div class="inheritance-status-badge ${isInherited ? 'badge-inherited' : 'badge-overridden'}">
-              ${isInherited ? 'HERDADO DO PIPELINE' : 'CUSTOMIZADO PARA ESTE NÓ'}
+              ${isInherited ? 'HERDADO DO PIPELINE' : 'CUSTOMIZADO PARA ESTE VÉRTICE'}
             </div>
           </div>
 
@@ -107,13 +107,13 @@ export class NodeSandboxModal {
 
             <div class="form-group">
               <label class="form-label" for="node-sandbox-ro">Montagens Somente-Leitura (RO)</label>
-              <input type="text" id="node-sandbox-ro" class="form-input" value="${this.escapeHtml((effectiveSandbox.readOnlyMounts || []).join(', '))}" placeholder="plano.md, .agents/" ${isInherited ? 'disabled' : ''} />
+              <input type="text" id="node-sandbox-ro" class="form-input" value="${this.escapeHtml((effectiveSandbox.readOnlyMounts || []).join(', '))}" placeholder=".agents/, shared/" ${isInherited ? 'disabled' : ''} />
               <div class="form-hint">Caminhos montados com flag de proteção contra escrita.</div>
             </div>
 
             <div class="form-group">
               <label class="form-label" for="node-sandbox-rw">Pastas de Escrita Permitida (RW)</label>
-              <input type="text" id="node-sandbox-rw" class="form-input" value="${this.escapeHtml((effectiveSandbox.readWriteMounts || []).join(', '))}" placeholder="aulas/${node.id}.md, assets/" ${isInherited ? 'disabled' : ''} />
+              <input type="text" id="node-sandbox-rw" class="form-input" value="${this.escapeHtml((effectiveSandbox.readWriteMounts || []).join(', '))}" placeholder="output/, assets/" ${isInherited ? 'disabled' : ''} />
               <div class="form-hint">Apenas estas pastas podem ser modificadas pelas ferramentas do agente.</div>
             </div>
           </div>
