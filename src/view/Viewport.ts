@@ -25,8 +25,15 @@ export class Viewport {
   private connectionViews: Map<string, ConnectionView> = new Map();
 
   private isRunning: boolean = true;
-  private frustumSize: number = 1000;
+  private frustumSize: number = 850;
   private resizeObserver!: ResizeObserver;
+
+  // Camada Vetorial SVG Nativa para Vértices e Conexões
+  private svgLayer!: SVGSVGElement;
+  private svgRoot!: SVGGElement;
+  private svgEdgesLayer!: SVGGElement;
+  private svgNodesLayer!: SVGGElement;
+  private svgEdgePaths: Map<string, SVGPathElement> = new Map();
 
   constructor(container: HTMLElement, graph: Graph, bus: EventBus) {
     this.container = container;
@@ -57,6 +64,9 @@ export class Viewport {
     this.renderer.setSize(initialW, initialH);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.container.appendChild(this.renderer.domElement);
+
+    // 3.1 Camada Vetorial SVG Nativa (Vértices e Arestas Nítidas em Qualquer Zoom)
+    this.initSvgOverlay();
 
     // 4. Grid Infinito e Controlador de Câmera
     this.grid = new InfiniteGrid(this.scene);
@@ -134,6 +144,27 @@ export class Viewport {
     return nv;
   }
 
+  private initSvgOverlay(): void {
+    if (typeof document === 'undefined') return;
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    this.svgLayer = document.createElementNS(SVG_NS, 'svg');
+    this.svgLayer.setAttribute('class', 'arestrix-canvas-svg-layer');
+
+    this.svgRoot = document.createElementNS(SVG_NS, 'g');
+    this.svgRoot.setAttribute('class', 'arestrix-svg-root');
+
+    this.svgEdgesLayer = document.createElementNS(SVG_NS, 'g');
+    this.svgEdgesLayer.setAttribute('class', 'arestrix-svg-edges');
+
+    this.svgNodesLayer = document.createElementNS(SVG_NS, 'g');
+    this.svgNodesLayer.setAttribute('class', 'arestrix-svg-nodes');
+
+    this.svgRoot.appendChild(this.svgEdgesLayer);
+    this.svgRoot.appendChild(this.svgNodesLayer);
+    this.svgLayer.appendChild(this.svgRoot);
+    this.container.appendChild(this.svgLayer);
+  }
+
   private onTelemetryReset(): void {
     this.nodeViews.forEach(nv => nv.setExecutionState('idle'));
   }
@@ -141,7 +172,7 @@ export class Viewport {
   private onNodeAdded(nodeData: INodeData): void {
     if (this.nodeViews.has(nodeData.id)) return;
 
-    const nodeView = new NodeView(nodeData);
+    const nodeView = new NodeView(nodeData, this.svgNodesLayer, this.interactionManager.getTooltip());
     nodeView.setDetailLevel(this.cameraController.getZoom());
     this.scene.add(nodeView.group);
     this.nodeViews.set(nodeData.id, nodeView);
@@ -170,12 +201,39 @@ export class Viewport {
       const conn = this.connectionViews.get(edge.id);
       const src = this.nodeViews.get(edge.sourceNodeId);
       const tgt = this.nodeViews.get(edge.targetNodeId);
-      if (conn && src && tgt) {
+      if (src && tgt) {
         const start = src.getPortWorldPosition(edge.sourcePortId);
         const end = tgt.getPortWorldPosition(edge.targetPortId);
-        conn.updateCurve(start, end);
+        if (conn) conn.updateCurve(start, end);
+        this.updateSvgEdgeCurve(edge.id, start, end, !!edge.isFeedbackLoop);
       }
     });
+  }
+
+  private updateSvgEdgeCurve(edgeId: string, start: THREE.Vector3, end: THREE.Vector3, isFeedback: boolean): void {
+    const path = this.svgEdgePaths.get(edgeId);
+    if (!path) return;
+
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    let cp1x: number, cp1y: number, cp2x: number, cp2y: number;
+
+    if (isFeedback || dx < 40) {
+      const curvature = Math.max(Math.abs(dy) * 0.6, 120);
+      const verticalOffset = dy >= 0 ? curvature : -curvature;
+      cp1x = start.x + 80;
+      cp1y = -(start.y + verticalOffset);
+      cp2x = end.x - 80;
+      cp2y = -(end.y + verticalOffset);
+    } else {
+      const controlDist = Math.max(dx * 0.45, 60);
+      cp1x = start.x + controlDist;
+      cp1y = -start.y;
+      cp2x = end.x - controlDist;
+      cp2y = -end.y;
+    }
+
+    path.setAttribute('d', `M ${start.x} ${-start.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${end.x} ${-end.y}`);
   }
 
   private onNodeUpdated(nodeData: INodeData): void {
@@ -201,6 +259,21 @@ export class Viewport {
     this.scene.add(connView.line);
     this.connectionViews.set(edgeData.id, connView);
 
+    // Conecta aresta no SVG
+    if (this.svgEdgesLayer && typeof document !== 'undefined') {
+      const SVG_NS = 'http://www.w3.org/2000/svg';
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('class', 'arestrix-svg-edge');
+      path.setAttribute('id', `svg-edge-${edgeData.id}`);
+      const isFeedback = !!edgeData.isFeedbackLoop;
+      path.setAttribute('stroke', isFeedback ? '#D97706' : '#64748B');
+      path.setAttribute('stroke-width', '3');
+      path.setAttribute('fill', 'none');
+      if (isFeedback) path.setAttribute('stroke-dasharray', '8 4');
+      this.svgEdgesLayer.appendChild(path);
+      this.svgEdgePaths.set(edgeData.id, path);
+    }
+
     // Conectar aos pontos de mundo atuais dos nós
     const src = this.nodeViews.get(edgeData.sourceNodeId);
     const tgt = this.nodeViews.get(edgeData.targetNodeId);
@@ -208,6 +281,7 @@ export class Viewport {
       const start = src.getPortWorldPosition(edgeData.sourcePortId);
       const end = tgt.getPortWorldPosition(edgeData.targetPortId);
       connView.updateCurve(start, end);
+      this.updateSvgEdgeCurve(edgeData.id, start, end, !!edgeData.isFeedbackLoop);
     }
   }
 
@@ -218,6 +292,12 @@ export class Viewport {
       connView.dispose();
       this.connectionViews.delete(edgeId);
     }
+
+    const svgPath = this.svgEdgePaths.get(edgeId);
+    if (svgPath && svgPath.parentNode) {
+      svgPath.parentNode.removeChild(svgPath);
+      this.svgEdgePaths.delete(edgeId);
+    }
   }
 
   private clearAllViews(): void {
@@ -226,6 +306,11 @@ export class Viewport {
       cv.dispose();
     });
     this.connectionViews.clear();
+
+    this.svgEdgePaths.forEach(p => {
+      if (p.parentNode) p.parentNode.removeChild(p);
+    });
+    this.svgEdgePaths.clear();
 
     this.nodeViews.forEach(nv => {
       this.scene.remove(nv.group);
@@ -304,6 +389,14 @@ export class Viewport {
     // Atualiza shader do grid infinito
     this.grid.update(this.camera, width, height);
 
+    // Sincroniza matriz da camada SVG vetorial com a câmera Three.js (perfeita em qualquer zoom)
+    if (this.svgRoot) {
+      const scale = (height / this.frustumSize) * this.camera.zoom;
+      const cx = width / 2 - this.camera.position.x * scale;
+      const cy = height / 2 + this.camera.position.y * scale;
+      this.svgRoot.setAttribute('transform', `matrix(${scale}, 0, 0, ${scale}, ${cx}, ${cy})`);
+    }
+
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -313,6 +406,9 @@ export class Viewport {
     this.resizeObserver?.disconnect();
     this.clearAllViews();
     this.interactionManager.dispose();
+    if (this.svgLayer?.parentNode) {
+      this.svgLayer.parentNode.removeChild(this.svgLayer);
+    }
     this.renderer.dispose();
   }
 }

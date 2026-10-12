@@ -114,6 +114,11 @@ export class InteractionManager {
       this.selectNode(null);
       this.selectEdge(null);
     });
+
+    // Ponte de Eventos da Camada Vetorial SVG
+    globalEventBus.on('node:start-drag', ({ nodeId, clientX, clientY }: any) => this.startDragNode(nodeId, clientX, clientY));
+    globalEventBus.on('node:start-connecting', ({ nodeId, portId, clientX, clientY }: any) => this.startConnectingPort(nodeId, portId, clientX, clientY));
+    globalEventBus.on('node:complete-connecting', ({ nodeId, portId }: any) => this.completeConnectingPort(nodeId, portId));
   }
 
   private updatePointer(e: PointerEvent): void {
@@ -512,6 +517,58 @@ export class InteractionManager {
         this.graph.diveIntoSubflow(hitNodeId);
       }
     }
+  }
+
+  public startDragNode(nodeId: string, clientX: number, clientY: number): void {
+    const nv = this.nodeViews.get(nodeId);
+    if (!nv) return;
+    const worldCursor = this.cameraController.screenToWorld(clientX, clientY);
+    this.selectNode(nodeId);
+    this.draggedNodeView = nv;
+    this.dragStartPos = { x: nv.nodeData.position.x, y: nv.nodeData.position.y };
+    this.dragOffset.set(
+      nv.group.position.x - worldCursor.x,
+      nv.group.position.y - worldCursor.y,
+      0
+    );
+  }
+
+  public startConnectingPort(nodeId: string, portId: string, clientX: number, clientY: number): void {
+    const worldCursor = this.cameraController.screenToWorld(clientX, clientY);
+    this.isConnecting = true;
+    this.connectingSourceNodeId = nodeId;
+    this.connectingSourcePortId = portId;
+    if (this.rubberBandLine) this.rubberBandLine.visible = true;
+    const nv = this.nodeViews.get(nodeId);
+    if (nv) {
+      const startPos = nv.getPortWorldPosition(portId);
+      this.updateRubberBand(startPos, worldCursor);
+    }
+  }
+
+  public completeConnectingPort(targetNodeId: string, targetPortId: string): void {
+    if (!this.isConnecting || !this.connectingSourceNodeId || !this.connectingSourcePortId) return;
+    if (this.connectingSourceNodeId === targetNodeId) {
+      this.cancelConnecting();
+      return;
+    }
+    const edgeId = `edge_${Date.now()}`;
+    const cmd = new AddEdgeCommand(this.graph, {
+      id: edgeId,
+      sourceNodeId: this.connectingSourceNodeId,
+      sourcePortId: this.connectingSourcePortId,
+      targetNodeId,
+      targetPortId
+    });
+    this.graph.commandManager.record(cmd);
+    this.cancelConnecting();
+  }
+
+  public cancelConnecting(): void {
+    this.isConnecting = false;
+    this.connectingSourceNodeId = null;
+    this.connectingSourcePortId = null;
+    if (this.rubberBandLine) this.rubberBandLine.visible = false;
   }
 
   setResolution(w: number, h: number): void {

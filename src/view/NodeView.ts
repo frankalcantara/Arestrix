@@ -1,23 +1,21 @@
 import * as THREE from 'three';
 import type { Text } from 'troika-three-text';
 import { INodeData, IPort } from '../core/types.ts';
-import { THEME } from './Theme.ts';
+import { THEME, getContrastTextColor } from './Theme.ts';
 import { globalEventBus } from '../core/EventBus.ts';
 import { createNodeLabel, updateNodeLabel, disposeNodeLabel, fitTextToLines } from './text/NodeText.ts';
 import { createIconMesh, disposeIconMesh, LucideIconNode } from './icons/VectorIcons.ts';
 import { NODE_ACTIONS, NODE_TYPE_ICONS, NodeActionType } from './NodeActions.ts';
 import { Brain, Wrench, CircleCheck, CircleX, TriangleAlert, Timer } from 'lucide';
+import { SvgNodeView } from './SvgNodeView.ts';
+import { CanvasTooltip } from '../ui/CanvasTooltip.ts';
 
 /**
- * Arestrix - Visualização de Nó no Canvas WebGL (Fase 15.2: Legibilidade Vetorial)
+ * Arestrix - Visualização de Vértice (Nó) no Canvas WebGL & SVG Híbrido
  *
- * - Toda tipografia é SDF vetorial (troika-three-text): nítida em qualquer zoom, sem distorção.
- * - Ícones são geometria vetorial (Lucide -> SVGLoader), não emojis rasterizados.
- * - Header limpo: rótulo de tipo em branco direto sobre a cor do tipo (sem pílula de fundo).
- * - Título sem caixa cinza; truncamento em até 2 linhas com texto completo no tooltip.
- * - Borda e anel de seleção em geometria real (LineLoop do WebGL é sempre 1px).
- * - Barra de ações com 5 botões identificáveis e metadados de tooltip.
- * - Nível de detalhe (LOD) por zoom.
+ * - Representação visual vetorial SVG nativa: nítida em qualquer zoom, sem distorção ou borrão BMP.
+ * - Contraste WCAG 2.1 garantido na barra de título do vértice.
+ * - Suporte a Three.js para compatibilidade de hitboxes e testes.
  *
  * REGRA GLOBAL: zero sombras/glows em textos. Destaque por cor, peso ou opacidade.
  */
@@ -43,6 +41,7 @@ export class NodeView {
   public group: THREE.Group;
   public nodeData: INodeData;
   public isSelected: boolean = false;
+  public svgNodeView: SvgNodeView | null = null;
 
   private width: number;
   private height: number;
@@ -82,7 +81,7 @@ export class NodeView {
     return Math.max(b.height, Math.ceil(content));
   }
 
-  constructor(nodeData: INodeData) {
+  constructor(nodeData: INodeData, svgContainer?: SVGGElement, tooltip?: CanvasTooltip) {
     this.nodeData = nodeData;
     this.width = THEME.nodeBody.width;
     this.height = NodeView.computeHeight(nodeData);
@@ -92,6 +91,21 @@ export class NodeView {
     this.group.userData = { nodeId: nodeData.id, isNode: true };
 
     this.buildNode();
+
+    // Se um contêiner SVG for fornecido (ambiente com DOM), instancia a visualização vetorial pura
+    if (svgContainer && typeof document !== 'undefined') {
+      this.svgNodeView = new SvgNodeView(nodeData, svgContainer, tooltip ?? new CanvasTooltip(), globalEventBus);
+      // No navegador, a representação visual primária é o SVG puro (100% nítido, sem artefatos BMP).
+      // As malhas Three.js visuais ficam ocultas, mantendo hitboxes para eventuais raycasts.
+      this.bodyMesh.visible = false;
+      this.headerMesh.visible = false;
+      this.borderMesh.visible = false;
+      if (this.typeIcon) this.typeIcon.visible = false;
+      this.typeLabel.visible = false;
+      this.titleLabel.visible = false;
+      this.portLabels.forEach(l => (l.visible = false));
+      if (this.actionBar) this.actionBar.visible = false;
+    }
 
     // Telemetria de Agente em Tempo Real (Fase 10)
     this.telemetryHandler = (ev: any) => this.handleTelemetry(ev);
@@ -146,18 +160,20 @@ export class NodeView {
   }
 
   /**
-   * Header limpo: ícone + rótulo de tipo em branco direto sobre a cor sólida (sem pílula).
-   * Título em Slate 900, peso 700, alinhado à esquerda, até 2 linhas (sem caixa cinza).
+   * Header limpo: ícone + rótulo de tipo com contraste garantido WCAG 2.1 sobre a cor sólida.
+   * Título em Slate 900, peso 700, alinhado à esquerda, até 2 linhas.
    */
-  private createTypography(typeTheme: { label: string }): void {
+  private createTypography(typeTheme: { color: number | string; label: string }): void {
     const b = THEME.nodeBody;
     const t = THEME.typography;
     const left = -this.width / 2 + b.paddingX;
     const headerCenterY = this.height / 2 - b.headerHeight / 2;
 
+    const contrastColor = getContrastTextColor(typeTheme.color);
+
     const typeIconDef = NODE_TYPE_ICONS[this.nodeData.type] ?? NODE_TYPE_ICONS.static;
     const iconSize = 16;
-    this.typeIcon = createIconMesh(typeIconDef.name, typeIconDef.icon, iconSize, t.badgeColor);
+    this.typeIcon = createIconMesh(typeIconDef.name, typeIconDef.icon, iconSize, contrastColor);
     this.typeIcon.position.set(left + iconSize / 2, headerCenterY, 5);
     this.group.add(this.typeIcon);
 
@@ -165,7 +181,7 @@ export class NodeView {
       text: typeTheme.label,
       size: t.badgeSize,
       weight: t.badgeWeight as 700,
-      color: t.badgeColor,
+      color: contrastColor,
       letterSpacing: t.badgeLetterSpacing,
       anchorX: 'left',
       anchorY: 'middle',
@@ -395,6 +411,7 @@ export class NodeView {
     this.portLabels.forEach(l => (l.visible = visible));
     if (this.actionBar) this.actionBar.visible = visible;
     if (!visible) this.setHoveredAction(null);
+    this.svgNodeView?.setDetailLevel(zoom);
   }
 
   isDetailVisible(): boolean {
@@ -414,11 +431,13 @@ export class NodeView {
   setSelected(selected: boolean): void {
     this.isSelected = selected;
     this.refreshOutline();
+    this.svgNodeView?.setSelected(selected);
   }
 
   setExecutionState(state: 'idle' | 'running' | 'completed'): void {
     this.executionState = state;
     this.refreshOutline();
+    this.svgNodeView?.setExecutionState(state);
   }
 
   private refreshOutline(): void {
@@ -448,6 +467,7 @@ export class NodeView {
     this.group.position.y = y;
     this.nodeData.position.x = x;
     this.nodeData.position.y = y;
+    this.svgNodeView?.updatePosition(x, y);
   }
 
   updateLabel(newLabel: string): void {
@@ -456,6 +476,7 @@ export class NodeView {
     const fitted = fitTextToLines(newLabel, THEME.typography.titleSize, this.width - b.paddingX * 2, b.titleMaxLines);
     updateNodeLabel(this.titleLabel, fitted.text);
     this.titleHitbox.userData.tooltip = fitted.truncated ? newLabel : undefined;
+    this.svgNodeView?.updateLabel(newLabel);
   }
 
   // --- Telemetria (badge vetorial abaixo do nó) ---
@@ -583,6 +604,9 @@ export class NodeView {
   }
 
   dispose(): void {
+    this.svgNodeView?.dispose();
+    this.svgNodeView = null;
+
     if (this.telemetryHandler) {
       globalEventBus.off(`agent:telemetry:${this.nodeData.id}`, this.telemetryHandler);
     }

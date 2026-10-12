@@ -153,6 +153,61 @@ body, html {
   touch-action: none;
 }
 
+/* --- Camada Vetorial SVG Nativa dos Vértices e Conexões --- */
+.arestrix-canvas-svg-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 5;
+}
+
+.arestrix-svg-vertex {
+  pointer-events: auto;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.arestrix-svg-vertex text {
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: 'Segoe UI', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+.arestrix-svg-vertex .vertex-header-label,
+.arestrix-svg-vertex .vertex-title-line,
+.arestrix-svg-vertex .vertex-port-label {
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+.arestrix-svg-action-btn {
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.arestrix-svg-action-btn:hover .action-btn-hover-bg {
+  fill: #EEF2FF !important;
+}
+
+.arestrix-svg-edge {
+  pointer-events: stroke;
+  cursor: pointer;
+  stroke-linecap: round;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease;
+}
+
+.arestrix-svg-edge:hover {
+  stroke: #0F6CBD !important;
+  stroke-width: 4px !important;
+}
+
 /* --- Mini-Barra Flutuante de Controles do Canvas (Canvas HUD) --- */
 .office-canvas-controls {
   position: absolute;

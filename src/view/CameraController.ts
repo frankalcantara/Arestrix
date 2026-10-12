@@ -4,7 +4,7 @@ import { globalEventBus } from '../core/EventBus.ts';
 export class CameraController {
   private camera: THREE.OrthographicCamera;
   private domElement: HTMLElement;
-  private frustumSize: number = 1000;
+  private frustumSize: number = 850;
   private isPanning: boolean = false;
   private panStart: THREE.Vector2 = new THREE.Vector2();
   private lastClientPos: THREE.Vector2 = new THREE.Vector2();
@@ -14,7 +14,7 @@ export class CameraController {
   private minZoom: number = 0.2;
   private maxZoom: number = 3.5;
 
-  constructor(camera: THREE.OrthographicCamera, domElement: HTMLElement, frustumSize: number = 1000) {
+  constructor(camera: THREE.OrthographicCamera, domElement: HTMLElement, frustumSize: number = 850) {
     this.camera = camera;
     this.domElement = domElement;
     this.frustumSize = frustumSize;

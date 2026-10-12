@@ -86,8 +86,8 @@ describe('NodeView - Tipografia Vetorial SDF e Geometria Nítida (Fase 15.2)', (
   });
 
   it('deve adotar proporções legíveis e escala tipográfica precisa do THEME.typography', () => {
-    expect(THEME.nodeBody.width).toBe(300);
-    expect(THEME.nodeBody.headerHeight).toBe(38);
+    expect(THEME.nodeBody.width).toBe(340);
+    expect(THEME.nodeBody.headerHeight).toBe(44);
     expect(THEME.typography.titleSize).toBe(18);
     expect(THEME.typography.badgeSize).toBe(13);
     expect(THEME.typography.portSize).toBe(13);

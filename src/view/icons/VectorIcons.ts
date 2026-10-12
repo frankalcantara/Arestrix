@@ -36,6 +36,37 @@ export function lucideToSvgMarkup(icon: LucideIconNode, strokeWidth: number = LU
 }
 
 /**
+ * Cria um grupo SVG nativo com os traços do ícone Lucide, escalado e colorido para exibição no DOM SVG.
+ */
+export function createLucideSvgElement(
+  icon: LucideIconNode,
+  size: number = 18,
+  color: string = '#000000',
+  strokeWidth: number = LUCIDE_STROKE_WIDTH
+): SVGGElement {
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  g.setAttribute('class', 'arestrix-lucide-icon');
+
+  const children = (icon[2] ?? []) as Array<[string, Record<string, string | number>]>;
+  children.forEach(([tag, attrs]) => {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    Object.entries(attrs).forEach(([k, v]) => {
+      if (k !== 'key') el.setAttribute(k, String(v));
+    });
+    el.setAttribute('stroke', color);
+    el.setAttribute('stroke-width', String(strokeWidth));
+    el.setAttribute('stroke-linecap', 'round');
+    el.setAttribute('stroke-linejoin', 'round');
+    el.setAttribute('fill', 'none');
+    g.appendChild(el);
+  });
+
+  const scale = size / 24;
+  g.setAttribute('transform', `scale(${scale})`);
+  return g;
+}
+
+/**
  * Retorna uma geometria vetorial (centralizada na origem, eixo Y para cima) do ícone,
  * escalada para caber num quadrado de `size` unidades de mundo.
  * Retorna null em ambientes sem DOMParser (ex.: testes em Node).
