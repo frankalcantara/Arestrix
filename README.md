@@ -232,6 +232,25 @@ Arestrix includes enterprise-grade desktop UX and model ingestion capabilities:
    - Strict isolation of memory namespaces (Blackboard / Semantic Lessons), sandboxes, working directories, and pipelines per workspace.
    - Recent projects MRU management and 3-tab Project Manager Hub.
 
+### 📁 Conceptual Architecture: Workspace vs. Project
+
+Arestrix strictly delineates between the **Workspace** (physical infrastructure container & OS isolation) and the **Project** (logical business entity & governance).
+
+| Dimension | Workspace (Physical Container & Environment) | Project (Logical Governance & Purpose) |
+| :--- | :--- | :--- |
+| **Core Concept** | The physical filesystem sandbox, OS isolation boundary, and local storage runtime. | The purposeful business unit, DAG orchestration workflow, and identity. |
+| **Manifest / Core File** | Physical directory (`rootPath`) housing `pipelines/`, `storage/`, and `output/`. | `arestrix.project.json` (`projectId`, `name`, `version`, `description`). |
+| **Persistence & Storage** | Local SQLite database (`storage/database.sqlite`), checkpoint state files. | Pipeline schemas (`pipelines/main.json`), child subflow definitions. |
+| **Execution Boundary** | Sandbox isolation level (`container`, `microvm`, `local`), CPU/RAM constraints (e.g., 512MB), directory mounts, local `.env` variables. | Model routing (Claude, DeepSeek, Gemini), master prompt templates, Code Mode tool permissions (`write`, `edit`, `read`, `bash`). |
+| **Cognitive Memory Scope** | Local cache, physical vector index stores, and thread-safe lock mechanisms. | Scoped Blackboard and Semantic Lessons isolated strictly per `projectId` to prevent cross-contamination. |
+| **Analogy** | The **Workshop / IDE Workspace** (filesystem root, tools, terminals, environment). | The **Product / Solution** being engineered inside the workshop. |
+
+#### Architectural Isolation Model
+1. **Physical Decoupling**: Each workspace encapsulates its own filesystem sandbox (`rootPath`), database, and execution environment. Workspaces can reside anywhere across local and mapped drives.
+2. **Logical Governance**: Projects are first-class citizens identified by deterministic hashes (`hashProjectName`). When switching projects, Arestrix seamlessly rebinds the memory namespaces (clearing Blackboard sessions and scoping semantic retrieval) so distinct projects never leak context or credentials.
+3. **Multi-Pipeline Composition**: A single project workspace can host multiple pipelines (`pipelines/main.json`, specialized subflows, and batch evaluation DAGs), all sharing the workspace's environment configuration while maintaining independent execution graphs.
+
+
 3. **External AI Assistant & Spreadsheet Ingestion Engine (Phases 15 to 20)**:
    - **Pi Agent Real Project & CLI Ingestion (Fase Concluída ✅ 🎯)**:
      - 1-Clique para importar projetos locais do Pi CLI com varredura dinâmica de qualquer repositório.

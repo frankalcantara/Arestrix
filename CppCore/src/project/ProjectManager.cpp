@@ -29,11 +29,37 @@ ProjectManager& ProjectManager::getInstance() {
 
 ProjectManager::ProjectManager() {
     loadRecentProjectsFromDisk();
-    ensureDefaultProject();
+    bool loaded = false;
+    if (!recentProjects_.empty()) {
+        const auto& recent = recentProjects_.front();
+        std::string targetPath = !recent.manifestPath.empty() ? recent.manifestPath : recent.rootPath;
+        if (targetPath.empty()) targetPath = recent.projectId;
+        loaded = loadProject(targetPath);
+    }
+    if (!loaded) {
+        ensureDefaultProject();
+    }
 }
 
 void ProjectManager::ensureDefaultProject() {
     if (currentProject_.projectId.empty()) {
+        std::filesystem::path localManifest = std::filesystem::current_path() / "arestrix.project.json";
+        if (std::filesystem::exists(localManifest)) {
+            try {
+                std::ifstream f(localManifest);
+                if (f.is_open()) {
+                    nlohmann::json j;
+                    f >> j;
+                    ProjectManifest manifest = j.get<ProjectManifest>();
+                    if (!manifest.projectId.empty() && manifest.projectId != "default-workspace") {
+                        manifest.rootPath = std::filesystem::current_path().string();
+                        currentProject_ = manifest;
+                        return;
+                    }
+                }
+            } catch (...) {}
+        }
+
         currentProject_.projectId = "default-workspace";
         currentProject_.name = "Workspace Padrão";
         currentProject_.version = "1.0.0";

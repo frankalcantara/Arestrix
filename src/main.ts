@@ -106,8 +106,8 @@ function bootstrap() {
   // 9. Barra de Status do Microsoft Office na base absoluta da aplicação
   new StatusBar(appContainer, graph, viewport, globalEventBus);
 
-  // 10. Restaura o último projeto salvo ou inicializa com grafo limpo/zerado
-  const restoreLastSavedProject = async () => {
+  // 10. Restaura o último projeto salvo e abre a tela Arquivo (Backstage View)
+  const initializeApplicationState = async () => {
     try {
       await projectManager.init();
       const recents = projectManager.listRecentProjects();
@@ -136,12 +136,19 @@ function bootstrap() {
           graph.clear();
         }
       }
+
+      setTimeout(() => {
+        viewport.zoomToFit();
+      }, 60);
     } catch (e) {
       console.warn('[Arestrix] Falha ao restaurar último projeto salvo:', e);
       graph.clear();
+    } finally {
+      // Abre na tela que aparece quando clicamos no botão arquivo (Backstage View)
+      await toolbar.openBackstage('info');
     }
   };
-  restoreLastSavedProject();
+  initializeApplicationState();
 
   // 9. Bridge de Telemetria de Agentes em Tempo Real (Fase 10)
   const onTelemetryHandler = (data: any) => {

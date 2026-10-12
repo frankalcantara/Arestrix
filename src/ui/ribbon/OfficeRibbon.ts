@@ -996,6 +996,14 @@ export class OfficeRibbon {
     window.open(url, '_blank');
   }
 
+  public getBackstageView(): BackstageView {
+    return this.backstageView;
+  }
+
+  public openBackstage(section: 'info' | 'new' | 'open' | 'saveas' | 'export' = 'info'): Promise<void> {
+    return this.backstageView.open(section);
+  }
+
   private escapeHtml(str: string): string {
     return str
       .replace(/&/g, '&amp;')

@@ -34,6 +34,17 @@ export class BackstageView {
 
       this.render();
       this.bindEvents();
+
+      globalEventBus.on('project:changed', () => {
+        if (this.isOpen()) {
+          this.render();
+        }
+      });
+      globalEventBus.on('project:loaded', () => {
+        if (this.isOpen()) {
+          this.render();
+        }
+      });
     }
   }
 
@@ -410,7 +421,7 @@ export class BackstageView {
               <div>
                 <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Tipo de Arquivo:</label>
                 <select id="saveas-select-format" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 600; color: #0f172a; box-sizing: border-box; background: #ffffff;">
-                  <option value="arestrix" ${this.saveAsFormat === 'arestrix' ? 'selected' : ''}>Pacote Arestrix Comprimido (*.arestrix) - Padrão Office</option>
+                  <option value="arestrix" ${this.saveAsFormat === 'arestrix' ? 'selected' : ''}>Pacote Arestrix Comprimido (*.arestrix)</option>
                   <option value="json" ${this.saveAsFormat === 'json' ? 'selected' : ''}>Manifesto do Projeto JSON (*.json)</option>
                 </select>
               </div>

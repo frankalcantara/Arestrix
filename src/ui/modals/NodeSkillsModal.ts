@@ -120,7 +120,7 @@ export class NodeSkillsModal extends BaseModal {
     const activeReposCount = reposList.filter(r => r.isEnabled).length;
 
     return `
-      <!-- Abas no Padrão Office (Apenas 2: O vértice decide sua habilidade ou importa do catálogo global) -->
+      <!-- Abas de Navegação (Apenas 2: O vértice decide sua habilidade ou importa do catálogo global) -->
       <div class="office-modal-tab-bar">
         <button class="office-modal-tab-btn ${this.activeTab === 'editor' ? 'active' : ''}" data-tab="editor">
           📝 Habilidade do Agente & Editor
@@ -511,7 +511,7 @@ export class NodeSkillsModal extends BaseModal {
   }
 
   /**
-   * Renderizador simples e seguro de Markdown para HTML, com formatação limpa no padrão Office
+   * Renderizador simples e seguro de Markdown para HTML, com formatação limpa e moderna
    * e estrito respeito à proibição de sombras/glows em texto.
    */
   private renderMarkdownToHtml(markdown: string): string {

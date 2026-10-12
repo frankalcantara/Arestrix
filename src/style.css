@@ -428,7 +428,7 @@ body, html {
   color: #242424;
 }
 
-/* --- Modais de Conectores & Importação (Padrão Office) --- */
+/* --- Modais de Conectores & Importação --- */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1016,7 +1016,7 @@ body, html {
   gap: 8px;
 }
 
-/* Controles de Formulário e Botões Padrão Office */
+/* Controles de Formulário e Botões Primários */
 .btn-office-primary,
 .tool-btn.btn-action {
   background-color: #0f6cbd !important;

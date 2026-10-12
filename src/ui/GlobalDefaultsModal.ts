@@ -48,7 +48,7 @@ export class GlobalDefaultsModal {
       <div class="modal-dialog global-defaults-dialog" style="max-width: 780px; width: 92%; max-height: 88vh; display: flex; flex-direction: column;">
         ${titleBarHtml}
 
-        <!-- Abas no Padrão Office / Modal Tabs -->
+        <!-- Abas do Modal / Modal Tabs -->
         <div class="modal-tabs">
           <button type="button" class="tab-btn ${this.activeTab === 'model' ? 'active' : ''}" data-tab="model">
             🧠 Provedor & Modelo
