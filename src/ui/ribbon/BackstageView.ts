@@ -142,7 +142,7 @@ export class BackstageView {
               <span>📂</span> Abrir Recente
             </li>
             <li class="backstage-nav-item" id="btn-backstage-save">
-              <span>💾</span> Salvar Workspace
+              <span>💾</span> Salvar Projeto
             </li>
             <li class="backstage-nav-item ${this.activeSection === 'saveas' ? 'active' : ''}" data-section="saveas">
               <span>📥</span> Salvar Como
@@ -220,11 +220,14 @@ export class BackstageView {
       case 'info':
         return `
           <h2 class="backstage-header-title">Informações do Projeto</h2>
-          <p class="backstage-header-sub">Gerencie o manifesto e propriedades deste workspace do Arestrix Studio.</p>
+          <p class="backstage-header-sub">Gerencie o manifesto do projeto e a infraestrutura do workspace no Arestrix Studio.</p>
 
           <div class="backstage-cards-grid">
             <div class="backstage-info-card">
-              <h4>📁 Identificação do Workspace</h4>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h4 style="margin: 0;">📁 Identificação do Projeto</h4>
+                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">📦 Escopo do Projeto</span>
+              </div>
               <p><strong>Nome:</strong> ${this.escapeHtml(proj.name)}</p>
               <p><strong>ID:</strong> <code>${this.escapeHtml(proj.projectId)}</code></p>
               <p><strong>Versão:</strong> ${this.escapeHtml(proj.version)}</p>
@@ -232,17 +235,23 @@ export class BackstageView {
             </div>
 
             <div class="backstage-info-card">
-              <h4>🗄️ Armazenamento & Banco de Dados</h4>
-              <p><strong>Tipo:</strong> ${proj.database?.type || 'SQLite (Padrão)'}</p>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h4 style="margin: 0;">🛠️ Diretório & Armazenamento</h4>
+                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">🛠️ Escopo do Workspace</span>
+              </div>
+              <p><strong>Tipo de Persistência:</strong> ${proj.database?.type || 'SQLite (Padrão)'}</p>
               <p><strong>Arquivo DB:</strong> <code>${this.escapeHtml(proj.database?.filePath || 'storage/database.sqlite')}</code></p>
-              <p><strong>Diretório Raiz:</strong> <code>${this.escapeHtml(proj.rootPath)}</code></p>
+              <p><strong>Diretório Físico:</strong> <code>${this.escapeHtml(proj.rootPath)}</code></p>
             </div>
 
             <div class="backstage-info-card">
-              <h4>⚡ Estatísticas do Pipeline</h4>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h4 style="margin: 0;">⚡ Grafo & Pipelines</h4>
+                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">📦 Escopo do Projeto</span>
+              </div>
               <p><strong>Vértices Ativos:</strong> ${this.graph.getAllNodes().length}</p>
               <p><strong>Arestas / Links:</strong> ${this.graph.getAllEdges().length}</p>
-              <p><strong>Pipelines Vinculados:</strong> ${proj.pipelines ? proj.pipelines.length : 0}</p>
+              <p><strong>Pipelines Cadastrados:</strong> ${proj.pipelines ? proj.pipelines.length : 0}</p>
             </div>
           </div>
 
@@ -265,7 +274,7 @@ export class BackstageView {
       case 'new':
         return `
           <h2 class="backstage-header-title">Criar Novo Projeto</h2>
-          <p class="backstage-header-sub">Configure um novo workspace isolado com estrutura de diretórios e pipelines.</p>
+          <p class="backstage-header-sub">Configure um novo projeto isolado com estrutura de diretórios e pipelines no workspace.</p>
 
           <div style="max-width: 650px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-bottom: 28px;">
             <div style="margin-bottom: 16px;">
@@ -280,7 +289,7 @@ export class BackstageView {
 
             <div style="display: flex; gap: 12px;">
               <button class="tool-btn btn-action" id="btn-backstage-create-submit" style="background: #0f6cbd; color: #fff; font-weight: 700; padding: 10px 22px; height: 38px; font-size: 13px;">
-                🚀 Criar e Abrir Workspace
+                🚀 Criar e Abrir Projeto
               </button>
             </div>
           </div>
@@ -296,11 +305,11 @@ export class BackstageView {
       case 'open':
         return `
           <h2 class="backstage-header-title">Abrir Recente</h2>
-          <p class="backstage-header-sub">Acesse pipelines do workspace atual ou abra outros projetos salvos recentemente.</p>
+          <p class="backstage-header-sub">Acesse pipelines do projeto atual ou abra outros projetos salvos no histórico.</p>
 
-          <!-- 1. LISTA DE GRAFOS RECENTES DO WORKSPACE ATIVO -->
+          <!-- 1. LISTA DE GRAFOS RECENTES DO PROJETO ATIVO -->
           <div style="margin-bottom: 28px;">
-            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📊 Grafos Recentes do Workspace Ativo</h3>
+            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📊 Grafos Recentes do Workspace Ativo <span style="font-size: 11px; font-weight: normal; color: #0f6cbd;">(📦 Pipelines do Projeto)</span></h3>
             <p class="backstage-header-sub" style="margin-bottom: 12px;">Pipelines disponíveis no projeto atual (<strong>${this.escapeHtml(proj.name)}</strong>):</p>
 
             ${(proj.pipelines && proj.pipelines.length > 0) ? `
@@ -489,7 +498,10 @@ export class BackstageView {
           <!-- 1. IDENTIFICAÇÃO E PASTAS FÍSICAS DO WORKSPACE NA MÁQUINA DO USUÁRIO -->
           <div class="backstage-cards-grid" style="margin-bottom: 24px;">
             <div class="backstage-info-card">
-              <h4>📁 Pastas Físicas do Workspace</h4>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h4 style="margin: 0;">📁 Pastas Físicas do Workspace</h4>
+                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">🛠️ Escopo do Workspace</span>
+              </div>
               <p><strong>Raiz do Workspace:</strong> <code>${this.escapeHtml(dirs.root)}</code></p>
               <p><strong>Habilidades Instaladas:</strong> <code>${this.escapeHtml(dirs.skills)}</code></p>
               <p><strong>Servidores MCP:</strong> <code>${this.escapeHtml(dirs.mcps)}</code></p>
@@ -502,7 +514,10 @@ export class BackstageView {
             </div>
 
             <div class="backstage-info-card">
-              <h4>🛡️ Governança & Políticas do Studio</h4>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h4 style="margin: 0;">🛡️ Governança Global da Aplicação</h4>
+                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">🏢 Escopo Global do Studio</span>
+              </div>
               <p><strong>Auditoria Automática de Skills:</strong> <span class="badge-inherited" style="font-weight: 700;">ATIVADA</span></p>
               <p><strong>Tipografia & Design:</strong> <span style="color: #0f766e; font-weight: 700;">Zero Sombras/Glows em Fontes</span></p>
               <p><strong>Modo de Isolamento:</strong> Sandbox C++20 Seguro</p>
@@ -522,7 +537,10 @@ export class BackstageView {
             <div class="backstage-cards-grid">
               <div class="backstage-info-card" style="display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
-                  <h4>🤖 Agente Auditor de Workspace</h4>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <h4 style="margin: 0;">🤖 Agente Auditor</h4>
+                    <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">🛠️ Escopo do Workspace</span>
+                  </div>
                   <p style="font-size: 12px; color: #475569; margin-bottom: 8px;">
                     Audita em tempo real todas as habilidades dos agentes ativos, verifica violações de segurança e conformidade estrita de tipografia vetorial.
                   </p>
@@ -534,7 +552,10 @@ export class BackstageView {
 
               <div class="backstage-info-card" style="display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
-                  <h4>📊 Linter & Validador de Grafos</h4>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <h4 style="margin: 0;">📊 Linter & Validador</h4>
+                    <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">📦 Escopo do Projeto</span>
+                  </div>
                   <p style="font-size: 12px; color: #475569; margin-bottom: 8px;">
                     Executa análise topológica, detecta ciclos de nós órfãos e valida compatibilidade de tipos de dados nos fluxos do grafo atual.
                   </p>
@@ -546,7 +567,10 @@ export class BackstageView {
 
               <div class="backstage-info-card" style="display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
-                  <h4>🚀 Pipeline do Projeto</h4>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <h4 style="margin: 0;">🚀 Pipeline do Projeto</h4>
+                    <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">📦 Escopo do Projeto</span>
+                  </div>
                   <p style="font-size: 12px; color: #475569; margin-bottom: 8px;">
                     Dispara a execução do projeto no ambiente do workspace, inicializando persistência SQLite e telemetria de tarefas.
                   </p>
@@ -562,7 +586,7 @@ export class BackstageView {
 
           <!-- 3. CATÁLOGO DE RECURSOS PRÉ-APROVADOS NO WORKSPACE -->
           <div style="margin-bottom: 28px;">
-            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">🛡️ Catálogo de Habilidades e MCPs Pré-Aprovados</h3>
+            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">🛡️ Catálogo de Habilidades e MCPs Pré-Aprovados <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">🛠️ Escopo do Workspace</span></h3>
             <p class="backstage-header-sub" style="margin-bottom: 14px;">Recursos homologados e certificados para uso imediato em agentes e nós do sistema.</p>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">

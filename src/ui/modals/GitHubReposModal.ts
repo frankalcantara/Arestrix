@@ -19,7 +19,7 @@ export class GitHubReposModal extends BaseModal {
     super({
       id: 'github-repos-modal',
       title: 'Repositórios do GitHub (Catálogo Global de Skills)',
-      subtitle: 'Gerencie os projetos open source autorizados que alimentam a biblioteca global de Skills',
+      subtitle: '🏢 Escopo Global do Studio: Gerencie os projetos open source autorizados na aplicação',
       icon: '🌐',
       minWidth: 740,
       minHeight: 540,
@@ -40,12 +40,11 @@ export class GitHubReposModal extends BaseModal {
 
     return `
       <div style="padding: 16px 20px;">
-        <!-- CALLOUT DE INFORMAÇÃO GLOBAL -->
+        <!-- CALLOUT DE INFORMAÇÃO GLOBAL DO STUDIO -->
         <div class="office-info-callout" style="margin-bottom: 16px; background: #f0f7ff; border: 1px solid #c7e0f4; border-radius: 4px; padding: 12px 16px; display: flex; align-items: flex-start; gap: 12px;">
-          <span style="font-size: 20px; line-height: 1;">🌐</span>
+          <span style="font-size: 20px; line-height: 1;">🏢</span>
           <div style="font-size: 12px; color: #242424; line-height: 1.45;">
-            <strong>Governança Global de Repositórios:</strong> Estes repositórios open source fornecem habilidades prontas para todo o workspace.
-            Habilitar ou desabilitar um projeto aqui afeta a disponibilidade de suas skills no catálogo de importação de todos os vértices de agentes.
+            <strong>Governança Global do Studio:</strong> Estes repositórios open source fornecem habilidades prontas para o catálogo global da aplicação (Studio). Habilitar ou desabilitar um repositório aqui afeta a disponibilidade de suas skills para importação em qualquer workspace ou projeto.
           </div>
         </div>
 

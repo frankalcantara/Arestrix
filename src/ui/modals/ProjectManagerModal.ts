@@ -104,7 +104,7 @@ export class ProjectManagerModal {
   private renderRecentsTab(recents: any[], current: IProjectManifest): string {
     return `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px;">
-        <span style="font-size: 12px; color: #616161;">Selecione um projeto aberto anteriormente para carregar seu workspace e pipelines</span>
+        <span style="font-size: 12px; color: #616161;">Selecione um projeto aberto anteriormente para carregar suas pipelines e configurações do workspace</span>
         <div style="display: flex; gap: 8px; flex-shrink: 0;">
           <button id="btn-browse-project" class="tool-btn btn-secondary" style="white-space: nowrap; height: 36px; padding: 0 16px; font-size: 13px;">
             Abrir Outro Diretório...
@@ -161,8 +161,8 @@ export class ProjectManagerModal {
         <div class="section-card-header">
           <span class="section-card-icon">🚀</span>
           <div class="section-card-titles">
-            <h3 class="section-card-title">Criar Novo Workspace de Projeto</h3>
-            <p class="section-card-desc">Configuração do manifesto com isolamento de pipelines, memória e sandboxes</p>
+            <h3 class="section-card-title">Criar Novo Projeto <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">📦 Escopo do Projeto</span></h3>
+            <p class="section-card-desc">Configuração do manifesto com isolamento de pipelines, memória e diretório no workspace</p>
           </div>
         </div>
 
@@ -172,15 +172,15 @@ export class ProjectManagerModal {
         </div>
 
         <div class="form-group" style="margin-top: 14px;">
-          <label class="form-label" for="new-proj-path" style="font-weight: 600; color: #323130; margin-bottom: 6px; display: block;">Diretório Raiz do Workspace *</label>
+          <label class="form-label" for="new-proj-path" style="font-weight: 600; color: #323130; margin-bottom: 6px; display: block;">Diretório Raiz do Workspace * <span style="font-size: 10px; color: #0f6cbd; font-weight: normal;">(Armazenamento Físico 🛠️)</span></label>
           <div style="display: flex; gap: 8px;">
-            <input type="text" id="new-proj-path" class="form-input" value="${this.escapeHtml(defaultPath)}" placeholder="Selecione ou digite o diretório do projeto..." style="flex: 1; box-sizing: border-box;" />
+            <input type="text" id="new-proj-path" class="form-input" value="${this.escapeHtml(defaultPath)}" placeholder="Selecione ou digite o diretório físico do workspace..." style="flex: 1; box-sizing: border-box;" />
             <button type="button" id="btn-browse-new-proj-path" class="tool-btn btn-secondary" style="white-space: nowrap; height: 36px; padding: 0 16px; font-size: 13px; flex-shrink: 0;">
               Procurar...
             </button>
           </div>
           <div class="form-hint" style="margin-top: 4px; font-size: 11px; color: #64748b;">
-            O Arestrix criará automaticamente as subpastas <code>pipelines/</code>, <code>storage/</code> e <code>output/</code>.
+            O Arestrix criará automaticamente as pastas de infraestrutura <code>.workspace/</code>, <code>pipelines/</code>, <code>storage/</code> e <code>output/</code> neste diretório.
           </div>
         </div>
 
@@ -191,7 +191,7 @@ export class ProjectManagerModal {
 
         <div class="form-group" style="margin-top: 14px;">
           <label class="form-label" style="font-weight: 600; color: #323130; margin-bottom: 8px; display: block;">Template Inicial de Pipeline:</label>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 6px;">
+          <div style="grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 6px; display: grid;">
             <label class="template-choice-card selected" style="display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 14px 16px; border: 1.5px solid #0f6cbd; border-radius: 8px; background-color: #f0f7fd; cursor: pointer; transition: all 0.15s ease; user-select: none; box-sizing: border-box;">
               <input type="radio" name="new-proj-template" value="empty" checked style="accent-color: #0f6cbd; width: 18px; height: 18px; margin: 0; cursor: pointer; flex-shrink: 0;" />
               <div class="template-choice-info">
@@ -214,7 +214,7 @@ export class ProjectManagerModal {
             Cancelar
           </button>
           <button id="btn-submit-create-proj" class="tool-btn btn-action" style="height: 36px; padding: 0 20px; font-size: 13px; font-weight: 600;">
-            🚀 Criar e Ativar Workspace
+            🚀 Criar e Ativar Projeto
           </button>
         </div>
       </div>
@@ -229,8 +229,8 @@ export class ProjectManagerModal {
         <div class="section-card-header">
           <span class="section-card-icon">⚙️</span>
           <div class="section-card-titles">
-            <h3 class="section-card-title">Propriedades do Workspace Ativo</h3>
-            <p class="section-card-desc">Manifesto: <code>${this.escapeHtml(current.rootPath)}/arestrix.project.json</code></p>
+            <h3 class="section-card-title">Propriedades do Projeto Ativo <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">📦 Escopo do Projeto</span></h3>
+            <p class="section-card-desc">Manifesto: <code>${this.escapeHtml(current.rootPath)}/arestrix.project.json</code> (armazenado no diretório do 🛠️ Workspace)</p>
           </div>
         </div>
 
@@ -252,9 +252,9 @@ export class ProjectManagerModal {
 
         <div class="form-row-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
           <div class="form-group">
-            <label class="form-label" for="edit-proj-db-path">Arquivo do Banco de Dados Relacional (SQLite)</label>
+            <label class="form-label" for="edit-proj-db-path">Arquivo do Banco de Dados Relacional (SQLite) <span style="font-size: 10px; color: #0f6cbd;">🛠️ Workspace</span></label>
             <input type="text" id="edit-proj-db-path" class="form-input" value="${this.escapeHtml(current.database?.filePath || 'storage/database.sqlite')}" />
-            <div class="form-hint">Caminho relativo à raiz do workspace.</div>
+            <div class="form-hint">Caminho físico relativo à raiz do workspace no disco.</div>
           </div>
           <div class="form-group">
             <label class="form-label">Pipelines Cadastrados</label>
@@ -265,14 +265,14 @@ export class ProjectManagerModal {
         </div>
 
         <div class="form-group" style="margin-top: 12px;">
-          <label class="form-label" for="edit-proj-env">Variáveis de Ambiente do Workspace (.env)</label>
-          <textarea id="edit-proj-env" class="form-input" style="height: 70px; font-family: monospace; font-size: 12px;" placeholder="CHAVE_API=valor\nMODO=producao">${this.escapeHtml(envEntries)}</textarea>
-          <div class="form-hint">Variáveis injetadas no ambiente dos subprocessos e sandboxes deste projeto.</div>
+          <label class="form-label" for="edit-proj-env">Variáveis de Ambiente Locais do Projeto (.env)</label>
+          <textarea id="edit-proj-env" class="form-input" style="height: 70px; font-family: monospace; font-size: 12px;" placeholder="VAR_LOCAL=valor\nMODO=producao">${this.escapeHtml(envEntries)}</textarea>
+          <div class="form-hint">Variáveis injetadas no ambiente de execução deste projeto (chaves de LLM globais são gerenciadas no 🏢 Studio).</div>
         </div>
 
         <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
           <button id="btn-save-proj-settings" class="btn-action-pill" style="background: var(--gradient-blue); color: white;">
-            💾 Salvar Alterações do Workspace
+            💾 Salvar Alterações do Projeto
           </button>
         </div>
       </div>
@@ -326,10 +326,10 @@ export class ProjectManagerModal {
           if (pTarget) {
             const ok = await this.projectManager.loadProject(pTarget, this.graph);
             if (ok) {
-              if (typeof alert !== 'undefined') alert(`Workspace '${pName}' carregado com sucesso!`);
+              if (typeof alert !== 'undefined') alert(`Projeto '${pName}' carregado com sucesso!`);
               this.hide();
             } else {
-              if (typeof alert !== 'undefined') alert(`Falha ao abrir workspace: ${pName}`);
+              if (typeof alert !== 'undefined') alert(`Falha ao abrir projeto: ${pName}`);
             }
           }
         } else if (action === 'manage') {
@@ -361,10 +361,10 @@ export class ProjectManagerModal {
       if (path && path.trim()) {
         const ok = await this.projectManager.loadProject(path.trim(), this.graph);
         if (ok) {
-          alert(`Workspace carregado com sucesso!`);
+          alert(`Projeto carregado com sucesso!`);
           this.hide();
         } else {
-          alert(`Falha ao carregar workspace: ${path}`);
+          alert(`Falha ao carregar projeto: ${path}`);
         }
       }
     });
@@ -380,7 +380,7 @@ export class ProjectManagerModal {
           }
         } else {
           const pathInput = this.overlay.querySelector('#new-proj-path') as HTMLInputElement;
-          const manual = prompt('Informe o caminho do diretório do workspace:', pathInput?.value || '');
+          const manual = prompt('Informe o caminho do diretório do workspace físico:', pathInput?.value || '');
           if (manual && manual.trim()) {
             if (pathInput) pathInput.value = manual.trim();
           }
@@ -425,7 +425,7 @@ export class ProjectManagerModal {
         return;
       }
       if (!path) {
-        alert('Por favor, informe o Diretório Raiz do workspace.');
+        alert('Por favor, informe o Diretório do workspace físico.');
         return;
       }
 

@@ -53,7 +53,7 @@ export class ImportExcelModal {
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
       title: 'Importar Planilha do Excel',
-      subtitle: 'Converta pastas de trabalho (.xlsx) em bancos de dados relacionais e pipelines de agentes concorrentes.',
+      subtitle: 'Converta planilhas (.xlsx) em persistência no 🛠️ Workspace e agentes no 📦 Projeto.',
       icon: '📊',
       closeBtnId: 'btn-close-excel-modal'
     });

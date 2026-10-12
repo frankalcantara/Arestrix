@@ -51,7 +51,7 @@ export class ImportOpenAiModal {
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
       title: 'Importar Agente OpenAI',
-      subtitle: 'Configure as instruções e o modelo OpenAI (ChatGPT / Assistants) para o vértice do grafo.',
+      subtitle: 'Configure as instruções e o modelo OpenAI (ChatGPT / Assistants) para o 📦 Projeto Ativo.',
       icon: '🤖',
       closeBtnId: 'btn-close-openai-modal'
     });

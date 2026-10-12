@@ -76,8 +76,8 @@ export class McpServersModal {
 
   private render(): void {
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Conectores MCP (Model Context Protocol)',
-      subtitle: `Projeto: <strong>${this.escapeHtml(this.graph.getProjectId())}</strong> &mdash; Servidores MCP e ferramentas padronizadas`,
+      title: 'Conectores & Servidores MCP (Model Context Protocol)',
+      subtitle: `🛠️ Workspace: <strong>Servidores Homologados</strong> | 📦 Projeto: <strong>${this.escapeHtml(this.graph.getProjectId())}</strong>`,
       icon: '🔌',
       closeBtnId: 'btn-close-mcp-modal'
     });
@@ -87,11 +87,19 @@ export class McpServersModal {
         ${titleBarHtml}
 
         <div class="modal-body-scrollable">
+          <!-- Callout de Escopo do Workspace -->
+          <div class="office-info-callout" style="margin-bottom: 14px; background: #f0f7ff; border: 1px solid #c7e0f4; border-radius: 4px; padding: 10px 14px; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 16px;">🛠️</span>
+            <div style="font-size: 12px; color: #242424; line-height: 1.4;">
+              <strong>Escopo do Workspace:</strong> Os servidores MCP são instalados na infraestrutura do diretório físico (<code>.workspace/mcps</code>) e suas ferramentas ficam disponíveis para uso nos nós do projeto ativo.
+            </div>
+          </div>
+
           <!-- Toolbar de Ações MCP -->
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
             <div style="display: flex; gap: 8px; align-items: center;">
               <span style="font-size: 11px; font-weight: 600; color: #0f6cbd; background: #eef6fc; padding: 2px 8px; border-radius: 2px; border: 1px solid #c7e0f4;">
-                ${this.servers.length} SERVIDORES REGISTRADOS
+                ${this.servers.length} SERVIDORES DO WORKSPACE
               </span>
               <span style="font-size: 11px; font-weight: 600; color: #107c41; background: #f1fbf4; padding: 2px 8px; border-radius: 2px; border: 1px solid #c3edd3;">
                 ${this.getTotalToolsCount()} FERRAMENTAS DISPONÍVEIS

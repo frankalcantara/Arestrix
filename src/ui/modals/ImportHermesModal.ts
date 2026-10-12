@@ -51,7 +51,7 @@ export class ImportHermesModal {
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
       title: 'Importar Agente Hermes',
-      subtitle: 'Configure as diretrizes de raciocínio local (Scratchpad / Function Calling) e o modelo Hermes.',
+      subtitle: 'Configure diretrizes de raciocínio local (Scratchpad / Function Calling) para o 📦 Projeto Ativo.',
       icon: '🏛️',
       closeBtnId: 'btn-close-hermes-modal'
     });

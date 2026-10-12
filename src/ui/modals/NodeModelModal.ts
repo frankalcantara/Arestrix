@@ -51,8 +51,8 @@ export class NodeModelModal {
         };
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Modelo de IA, Skill & Prompt',
-      subtitle: `Vértice: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id})`,
+      title: 'Modelo de IA & Prompt (Agente do Projeto)',
+      subtitle: `📦 Vértice do Projeto: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id}) | Credenciais no 🏢 Studio`,
       icon: '🧠',
       closeBtnId: 'btn-close-model-modal'
     });

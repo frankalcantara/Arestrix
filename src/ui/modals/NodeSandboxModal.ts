@@ -48,8 +48,8 @@ export class NodeSandboxModal {
         };
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Sandbox & Máquina Virtual',
-      subtitle: `Vértice: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id})`,
+      title: 'Sandbox & Isolamento de VM (Infraestrutura do Workspace)',
+      subtitle: `🛠️ Escopo do Workspace: Fronteira de isolamento para o vértice <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id})`,
       icon: '🛡️',
       closeBtnId: 'btn-close-sandbox-modal'
     });

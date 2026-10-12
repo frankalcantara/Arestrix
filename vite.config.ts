@@ -9,5 +9,8 @@ export default defineConfig({
   },
   build: {
     target: 'esnext'
+  },
+  test: {
+    include: ['tests/**/*.spec.ts', 'tests/**/*.test.ts']
   }
-});
+} as any);

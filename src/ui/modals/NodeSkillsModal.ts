@@ -65,7 +65,7 @@ export class NodeSkillsModal extends BaseModal {
 
       this.activeNodeId = nodeId;
       this.ensureNodeHasSkill(node);
-      this.config.subtitle = `Agente: <strong style="color: #0f6cbd;">${this.escapeHtml(node.label)}</strong> (ID: <code>${node.id}</code>)`;
+      this.config.subtitle = `📦 Vértice do Projeto: <strong style="color: #0f6cbd;">${this.escapeHtml(node.label)}</strong> (ID: <code>${node.id}</code>) | Catálogo do 🛠️ Workspace`;
     }
 
     this.activeTab = initialTab;
@@ -139,16 +139,16 @@ export class NodeSkillsModal extends BaseModal {
     const currentAudit = this.workspaceAuditor.auditSkill(currentSkill);
 
     return `
-      <!-- Abas de Navegação (3 Abas: Habilidades Pré-Aprovadas do Workspace, Editor da Habilidade do Agente e Catálogo GitHub) -->
+      <!-- Abas de Navegação Particionadas por Escopo -->
       <div class="office-modal-tab-bar">
         <button class="office-modal-tab-btn ${this.activeTab === 'workspace' ? 'active' : ''}" data-tab="workspace">
           🛡️ Habilidades Pré-Aprovadas do Workspace
         </button>
         <button class="office-modal-tab-btn ${this.activeTab === 'editor' ? 'active' : ''}" data-tab="editor">
-          📝 Habilidade do Agente & Editor
+          📝 [Projeto] Habilidade do Agente & Editor
         </button>
         <button class="office-modal-tab-btn ${this.activeTab === 'github' ? 'active' : ''}" data-tab="github">
-          🌐 Importar do Catálogo (GitHub Open Source)
+          🌐 [Studio] Importar do Catálogo (GitHub Open Source)
         </button>
       </div>
 

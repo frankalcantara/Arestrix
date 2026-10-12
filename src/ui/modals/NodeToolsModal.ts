@@ -51,8 +51,8 @@ export class NodeToolsModal {
     const allowedMcp = effectiveTools.allowedMcpTools || [];
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Ferramentas Code Mode',
-      subtitle: `Vértice: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id})`,
+      title: 'Ferramentas Code Mode & Conectores MCP',
+      subtitle: `📦 Vértice do Projeto: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id}) | 🛠️ Servidores MCP do Workspace`,
       icon: '🔧',
       closeBtnId: 'btn-close-tools-modal'
     });

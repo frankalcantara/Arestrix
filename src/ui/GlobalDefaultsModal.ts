@@ -39,7 +39,7 @@ export class GlobalDefaultsModal {
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
       title: 'Padrões Globais do Pipeline de Agentes',
-      subtitle: 'Configure o ambiente padrão (VM, Provedor e Ferramentas) herdado pelos vértices do grafo',
+      subtitle: 'Configure os padrões particionados por escopo: 🏢 Studio (Credenciais Globais), 🛠️ Workspace (Sandbox & VM) e 📦 Projeto (Modelos, Ferramentas e Memória)',
       icon: '⚙️',
       closeBtnId: 'btn-close-defaults-modal'
     });
@@ -48,30 +48,30 @@ export class GlobalDefaultsModal {
       <div class="modal-dialog global-defaults-dialog" style="max-width: 780px; width: 92%; max-height: 88vh; display: flex; flex-direction: column;">
         ${titleBarHtml}
 
-        <!-- Abas do Modal / Modal Tabs -->
+        <!-- Abas do Modal / Modal Tabs com Escopos Claros -->
         <div class="modal-tabs">
           <button type="button" class="tab-btn ${this.activeTab === 'model' ? 'active' : ''}" data-tab="model">
-            🧠 Provedor & Modelo
+            🧠 [Projeto] Provedor & Modelo
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'sandbox' ? 'active' : ''}" data-tab="sandbox">
-            🛡️ VM & Isolamento
+            🛡️ [Workspace] VM & Sandbox
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'tools' ? 'active' : ''}" data-tab="tools">
-            💻 Ferramentas Code Mode
+            💻 [Projeto] Ferramentas
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'memory' ? 'active' : ''}" data-tab="memory">
-            💾 Memória do Pipeline
+            💾 [Projeto] Memória
           </button>
         </div>
 
         <div class="modal-body-scrollable" style="flex: 1; overflow-y: auto; padding: 16px;">
-          <!-- ABA 1: Provedor & Modelo -->
+          <!-- ABA 1: Provedor & Modelo (Projeto) + Credenciais Globais (Studio) -->
           <div class="tab-pane" id="pane-tab-model" style="${this.activeTab === 'model' ? '' : 'display: none;'}">
             <div class="settings-section-card">
               <div class="section-card-header">
                 <span class="section-card-icon">🧠</span>
                 <div class="section-card-titles">
-                  <h3 class="section-card-title">Provedor de IA & Modelo Padrão</h3>
+                  <h3 class="section-card-title">Provedor de IA & Modelo Padrão <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">📦 Escopo do Projeto</span></h3>
                   <p class="section-card-desc">Modelo base atribuído a novos vértices ou vértices com herança ativada</p>
                 </div>
               </div>
@@ -95,16 +95,17 @@ export class GlobalDefaultsModal {
                 </div>
               </div>
 
-              <!-- Seção de Conexão com API e Credenciais do Ambiente -->
+              <!-- Seção de Conexão com API e Credenciais Globais do Studio -->
               <div style="margin-top: 14px; padding: 12px; background: #faf9f8; border: 1px solid #edebe9; border-radius: 6px;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px;">
                   <div>
                     <div style="font-weight: 700; font-size: 13px; color: #242424; display: flex; align-items: center; gap: 8px;">
                       <span>🔑 Credenciais & Conexão de API</span>
+                      <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">🏢 Escopo Global do Studio</span>
                       <span id="api-key-indicator" style="font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; background: #f3f2f1; color: #616161;">Verificando...</span>
                     </div>
                     <p style="margin: 4px 0 0 0; font-size: 12px; color: #616161; line-height: 1.4;">
-                      As credenciais de API são protegidas e lidas diretamente das variáveis de ambiente do sistema operacional (Windows).
+                      As credenciais de API são globais da aplicação (Studio), protegidas e lidas diretamente das variáveis de ambiente do sistema operacional (Windows).
                     </p>
                   </div>
                   <div style="display: flex; gap: 8px; flex-shrink: 0;">
@@ -161,14 +162,14 @@ export class GlobalDefaultsModal {
             </div>
           </div>
 
-          <!-- ABA 2: VM & Sandbox -->
+          <!-- ABA 2: VM & Sandbox (Workspace) -->
           <div class="tab-pane" id="pane-tab-sandbox" style="${this.activeTab === 'sandbox' ? '' : 'display: none;'}">
             <div class="settings-section-card">
               <div class="section-card-header">
                 <span class="section-card-icon">🛡️</span>
                 <div class="section-card-titles">
-                  <h3 class="section-card-title">Máquina Virtual & Política de Sandbox</h3>
-                  <p class="section-card-desc">Ambiente de isolamento e fronteira de segurança dos agentes</p>
+                  <h3 class="section-card-title">Máquina Virtual & Política de Sandbox <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">🛠️ Escopo do Workspace</span></h3>
+                  <p class="section-card-desc">Ambiente de isolamento e fronteira de segurança física dos agentes no diretório do workspace</p>
                 </div>
               </div>
 
@@ -214,19 +215,19 @@ export class GlobalDefaultsModal {
                 <div class="form-group">
                   <label class="form-label" for="def-rw-mounts">Pastas de Escrita Permitida (RW)</label>
                   <input type="text" id="def-rw-mounts" class="form-input" value="${this.escapeHtml(defaults.sandbox.readWriteMounts.join(', '))}" placeholder="output/, dist/" />
-                  <div class="form-hint">Separado por vírgulas. Acesso exclusivo de escrita.</div>
+                  <div class="form-hint">Separado por vírgulas. Acesso exclusivo de escrita no workspace.</div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- ABA 3: Ferramentas Code Mode -->
+          <!-- ABA 3: Ferramentas Code Mode (Projeto) -->
           <div class="tab-pane" id="pane-tab-tools" style="${this.activeTab === 'tools' ? '' : 'display: none;'}">
             <div class="settings-section-card">
               <div class="section-card-header">
                 <span class="section-card-icon">🔧</span>
                 <div class="section-card-titles">
-                  <h3 class="section-card-title">Ferramentas Code Mode Habilitadas</h3>
+                  <h3 class="section-card-title">Ferramentas Code Mode Habilitadas <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">📦 Escopo do Projeto</span></h3>
                   <p class="section-card-desc">Operações procedurais que o agente pode invocar dentro da sua VM</p>
                 </div>
               </div>
@@ -269,21 +270,21 @@ export class GlobalDefaultsModal {
               </div>
 
               <div class="form-group" style="margin-top: 14px;">
-                <label class="form-label" for="def-mcp-tools">Ferramentas MCP Autorizadas por Padrão</label>
+                <label class="form-label" for="def-mcp-tools">Ferramentas MCP Autorizadas por Padrão <span style="font-size: 10px; color: #0f6cbd;">🛠️ Servidores do Workspace</span></label>
                 <input type="text" id="def-mcp-tools" class="form-input" value="${this.escapeHtml((defaults.codeMode.allowedMcpTools || []).join(', '))}" placeholder="read_file, write_file, fetch_url" />
-                <div class="form-hint">Nomes de ferramentas MCP herdadas por padrão nos vértices de agente (separadas por vírgula).</div>
+                <div class="form-hint">Nomes de ferramentas dos servidores MCP instalados no Workspace herdadas por padrão nos agentes do projeto.</div>
               </div>
             </div>
           </div>
 
-          <!-- ABA 4: Memória Heterogênea do Pipeline -->
+          <!-- ABA 4: Memória Heterogênea do Pipeline (Projeto) -->
           <div class="tab-pane" id="pane-tab-memory" style="${this.activeTab === 'memory' ? '' : 'display: none;'}">
             <div class="settings-section-card">
               <div class="section-card-header">
                 <span class="section-card-icon">💾</span>
                 <div class="section-card-titles">
-                  <h3 class="section-card-title">Memória Heterogênea do Pipeline</h3>
-                  <p class="section-card-desc">Memória NÃO é padrão e nem obrigatória. Configure os padrões globais do projeto.</p>
+                  <h3 class="section-card-title">Memória Heterogênea do Pipeline <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">📦 Escopo do Projeto</span></h3>
+                  <p class="section-card-desc">Blackboard e Lições cognitivas com isolamento estrito pelo ID do projeto. Memória NÃO é padrão e nem obrigatória (Opt-in).</p>
                 </div>
               </div>
 

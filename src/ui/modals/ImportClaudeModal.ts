@@ -51,7 +51,7 @@ export class ImportClaudeModal {
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
       title: 'Importar Agente Claude',
-      subtitle: 'Configure as instruções e o modelo Anthropic Claude para ingestão no grafo.',
+      subtitle: 'Configure as instruções e o modelo Anthropic Claude para ingestão no 📦 Projeto Ativo.',
       icon: '🧠',
       closeBtnId: 'btn-close-claude-modal'
     });

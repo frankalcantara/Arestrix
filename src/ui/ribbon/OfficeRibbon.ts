@@ -152,7 +152,7 @@ export class OfficeRibbon {
         </div>
 
         <div class="office-titlebar-center">
-          <button id="qat-btn-project" class="office-project-indicator" title="Gerenciador de Projetos e Workspaces (Fase 14)">
+          <button id="qat-btn-project" class="office-project-indicator" title="Gerenciador de Projetos no Workspace">
             📁 <span id="office-active-project-name">${this.escapeHtml(projectName)}</span>
           </button>
         </div>
@@ -361,7 +361,7 @@ export class OfficeRibbon {
               <span class="ribbon-btn-label">Ferramentas<br>Code Mode</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Segurança & Sandbox</div>
+          <div class="office-ribbon-group-title">Segurança (Workspace)</div>
         </div>
 
         <div class="office-ribbon-group">
@@ -371,7 +371,7 @@ export class OfficeRibbon {
               <span class="ribbon-btn-label">Servidores<br>MCP</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Protocolo MCP</div>
+          <div class="office-ribbon-group-title">Servidores (Workspace)</div>
         </div>
 
         <div class="office-ribbon-group">
@@ -385,7 +385,7 @@ export class OfficeRibbon {
               <span class="ribbon-btn-label">Repositórios<br>GitHub</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Catálogo & Skills</div>
+          <div class="office-ribbon-group-title">Catálogo Global (Studio)</div>
         </div>
       </div>
 
@@ -463,17 +463,17 @@ export class OfficeRibbon {
               </button>
             </div>
           </div>
-          <div class="office-ribbon-group-title">Memória do Workspace</div>
+          <div class="office-ribbon-group-title">Memória do Projeto</div>
         </div>
 
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-sqlite-db">
               <span class="ribbon-btn-icon">🗄️</span>
-              <span class="ribbon-btn-label">Banco SQLite<br>do Projeto</span>
+              <span class="ribbon-btn-label">Banco SQLite<br>(Workspace)</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Persistência Relacional</div>
+          <div class="office-ribbon-group-title">Armazenamento do Workspace</div>
         </div>
       </div>
 

@@ -34,8 +34,8 @@ export class ProjectMemoryModal {
     const isGloballyEnabled = !!defaults.memory?.enabled;
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Central de Memória Heterogênea do Projeto',
-      subtitle: `Projeto: <strong>${this.escapeHtml(projectId)}</strong> | Grafo: ${this.escapeHtml(this.graph.getMetadata().graphName)}`,
+      title: 'Central de Memória do Projeto (Blackboard & Lições)',
+      subtitle: `📦 Escopo do Projeto: <strong>${this.escapeHtml(projectId)}</strong> | Grafo: ${this.escapeHtml(this.graph.getMetadata().graphName)} (Isolamento por ID)`,
       icon: '💾',
       closeBtnId: 'btn-close-project-mem'
     });

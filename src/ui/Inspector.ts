@@ -331,25 +331,21 @@ export class Inspector {
       <div class="office-task-pane-body">
         <div class="office-tp-section">
           <div class="office-tp-section-header">
-            <span>Informações do Pipeline</span>
+            <span>Informações do Grafo (📦 Projeto)</span>
           </div>
           <div class="form-group">
             <label class="form-label">Nome do Grafo</label>
             <input type="text" class="form-input form-input-readonly" value="${this.escapeHtml(meta.graphName || 'Arestrix Pipeline')}" readonly />
           </div>
           <div class="form-group">
-            <label class="form-label">Compilador & Padrão</label>
-            <input type="text" class="form-input form-input-readonly" value="MSVC C++20 (/std:c++20 /EHsc /O2)" readonly />
-          </div>
-          <div class="form-group">
             <label class="form-label">Descrição</label>
-            <textarea class="form-textarea form-input-readonly" rows="3" readonly>${this.escapeHtml(meta.description || 'Pipeline Concorrente com Taskflow C++20')}</textarea>
+            <textarea class="form-textarea form-input-readonly" rows="2" readonly>${this.escapeHtml(meta.description || 'Pipeline Concorrente com Taskflow C++20')}</textarea>
           </div>
         </div>
 
         <div class="office-tp-section">
           <div class="office-tp-section-header">
-            <span>Estatísticas do Workspace</span>
+            <span>Estatísticas do Grafo (📦 Projeto)</span>
           </div>
           <div class="office-stats-grid">
             <div class="office-stat-card">
@@ -360,6 +356,20 @@ export class Inspector {
               <span class="stat-number">${edgeCount}</span>
               <span class="stat-label">Conexões</span>
             </div>
+          </div>
+        </div>
+
+        <div class="office-tp-section">
+          <div class="office-tp-section-header">
+            <span>Ambiente Físico (🛠️ Workspace)</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Compilador & Runtime</label>
+            <input type="text" class="form-input form-input-readonly" value="MSVC C++20 Taskflow (/std:c++20 /O2)" readonly />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Banco SQLite</label>
+            <input type="text" class="form-input form-input-readonly" value="storage/database.sqlite" readonly />
           </div>
         </div>
 
@@ -493,40 +503,40 @@ export class Inspector {
             <button class="agent-command-card" id="btn-open-node-sandbox">
               <span class="cmd-icon">🛡️</span>
               <div class="cmd-details">
-                <span class="cmd-name">Sandbox & Máquina Virtual</span>
-                <span class="cmd-desc">Nível de isolamento, limites de RAM e pastas</span>
+                <span class="cmd-name">Sandbox & Isolamento <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">🛠️ Workspace</span></span>
+                <span class="cmd-desc">Nível de isolamento, limites de RAM e pastas no host</span>
               </div>
             </button>
 
             <button class="agent-command-card" id="btn-open-node-model">
               <span class="cmd-icon">🧠</span>
               <div class="cmd-details">
-                <span class="cmd-name">Modelo de IA & Prompt</span>
-                <span class="cmd-desc">Provedor LLM, temperatura e system prompt</span>
+                <span class="cmd-name">Modelo de IA & Prompt <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">📦 Projeto</span></span>
+                <span class="cmd-desc">Provedor LLM, temperatura e diretrizes de prompt</span>
               </div>
             </button>
 
             <button class="agent-command-card" id="btn-open-node-tools">
               <span class="cmd-icon">🔧</span>
               <div class="cmd-details">
-                <span class="cmd-name">Ferramentas & Protocolo MCP</span>
-                <span class="cmd-desc">Write, edit, bash e servidores MCP</span>
+                <span class="cmd-name">Ferramentas & MCP <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">🛠️ / 📦</span></span>
+                <span class="cmd-desc">Tools code mode do projeto e servidores MCP do workspace</span>
               </div>
             </button>
 
             <button class="agent-command-card" id="btn-open-node-memory">
               <span class="cmd-icon">💾</span>
               <div class="cmd-details">
-                <span class="cmd-name">Memória & Blackboard</span>
-                <span class="cmd-desc">Memória vetorial, semântica e persistência</span>
+                <span class="cmd-name">Memória & Blackboard <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">📦 Projeto</span></span>
+                <span class="cmd-desc">Memória cognitiva isolada por ID de projeto</span>
               </div>
             </button>
 
             <button class="agent-command-card" id="btn-open-node-skills">
               <span class="cmd-icon">📜</span>
               <div class="cmd-details">
-                <span class="cmd-name">Habilidades & Skills (SKILL.md)</span>
-                <span class="cmd-desc">Editor Markdown, prompt e importação GitHub</span>
+                <span class="cmd-name">Habilidades & Skills <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">🛠️ / 📦</span></span>
+                <span class="cmd-desc">Editor SKILL.md e habilidades homologadas no workspace</span>
               </div>
             </button>
           </div>

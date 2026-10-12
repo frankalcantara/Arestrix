@@ -65,8 +65,8 @@ export class NodeMemoryModal {
     }
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Memória do Agente & Contexto',
-      subtitle: `Vértice: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id}) | Projeto: <strong>${this.escapeHtml(projectId)}</strong>`,
+      title: 'Memória do Agente (Blackboard & Lições)',
+      subtitle: `📦 Escopo do Projeto: Vértice <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id}) | Projeto: <strong>${this.escapeHtml(projectId)}</strong>`,
       icon: '💾',
       closeBtnId: 'btn-close-memory-modal'
     });

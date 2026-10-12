@@ -136,7 +136,7 @@ export class ImportPiModal {
     try {
       const titleBarHtml = ModalWindowManager.createTitleBarHTML({
         title: 'Importar Projeto Pi',
-        subtitle: 'Importe projetos do ecossistema Pi (Pi CLI / Pi.ai) para a arquitetura Taskflow C++20 do Arestrix.',
+        subtitle: 'Importe projetos e agentes do ecossistema Pi para o 📦 Projeto Ativo no 🛠️ Workspace.',
         icon: '🥧',
         closeBtnId: 'btn-close-pi-modal'
       });

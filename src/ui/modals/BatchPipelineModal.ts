@@ -100,7 +100,7 @@ export class BatchPipelineModal {
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
       title: 'Orquestrador em Lote & Resume Engine',
-      subtitle: 'Processe múltiplos artigos/tarefas em paralelo com persistência e auto-recuperação',
+      subtitle: `📦 Projeto: <strong>${this.escapeHtml(this.graph.getProjectId())}</strong> | Execução em lote e auto-recuperação no 🛠️ Workspace`,
       icon: '📦',
       closeBtnId: 'btn-close-batch-modal'
     });
