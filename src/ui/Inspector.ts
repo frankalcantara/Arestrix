@@ -318,9 +318,6 @@ export class Inspector {
           <span class="office-tp-title">Propriedades do Diagrama</span>
         </div>
         <div class="office-task-pane-actions">
-          <button class="office-tp-btn-icon office-tp-width-btn" id="btn-cycle-width" title="Alternar Largura (340px / 480px / 640px / 820px)">
-            ↔ <span class="tp-width-val">${this.panelWidth}px</span>
-          </button>
           <button class="office-tp-btn-icon" id="btn-toggle-float" title="${this.isFloating ? 'Ancorar à Direita (Dock)' : 'Destacar Janela Flutuante (Float)'}">
             ${this.isFloating ? '📌' : '🗖'}
           </button>
@@ -369,7 +366,7 @@ export class Inspector {
         <div class="office-hint-callout">
           <div class="hint-icon">💡</div>
           <div class="hint-text">
-            <strong>Dica do Visio:</strong> Clique em qualquer nó no canvas para inspecionar parâmetros, código lambda C++20, governança de IA e isolamento em Sandbox.
+            <strong>Dica:</strong> Clique em qualquer nó no canvas para inspecionar parâmetros, código lambda C++20, governança de IA e isolamento em Sandbox.
           </div>
         </div>
       </div>
@@ -390,9 +387,6 @@ export class Inspector {
           <span class="office-tp-title">Propriedades da Forma</span>
         </div>
         <div class="office-task-pane-actions">
-          <button class="office-tp-btn-icon office-tp-width-btn" id="btn-cycle-width" title="Alternar Largura (340px / 480px / 640px / 820px)">
-            ↔ <span class="tp-width-val">${this.panelWidth}px</span>
-          </button>
           <button class="office-tp-btn-icon" id="btn-toggle-float" title="${this.isFloating ? 'Ancorar à Direita (Dock)' : 'Destacar Janela Flutuante (Float)'}">
             ${this.isFloating ? '📌' : '🗖'}
           </button>
@@ -533,7 +527,7 @@ export class Inspector {
         <!-- ABA 4: PORTAS E CONEXÕES -->
         <div class="office-tp-tab-content ${this.activeTab === 'ports' ? 'active' : ''}" id="tp-content-ports">
           <div class="office-tp-section-header">
-            <span>Mapeamento de Fluxo do Visio</span>
+            <span>Mapeamento de Fluxo de Execução</span>
           </div>
           <div class="port-list">
             <div class="port-sublist">

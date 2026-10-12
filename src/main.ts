@@ -70,7 +70,7 @@ function bootstrap() {
   // 4. Inicializa Viewport WebGL (Three.js) com dimensões reais já computadas pelo DOM
   const viewport = new Viewport(viewportContainer, graph, globalEventBus);
 
-  // Controles Flutuantes do Grafo / HUD do Visio
+  // Controles Flutuantes do Grafo / HUD do Diagrama
   new CanvasControls(viewportContainer, viewport, globalEventBus);
 
   // 5. Modais de Agentes, Code Mode e Sandbox/VM (Fase 7)

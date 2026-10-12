@@ -4,7 +4,7 @@ import { EventBus } from '../core/EventBus.ts';
 
 /**
  * Arestrix Studio - Microsoft Office Status Bar
- * Barra de status autêntica no padrão Microsoft Office (Word / Excel / Visio).
+ * Barra de status autêntica no padrão Microsoft Office.
  * Exibe status em tempo real, modo de compilação, estatísticas e o clássico Zoom Slider.
  */
 export class StatusBar {
@@ -51,7 +51,7 @@ export class StatusBar {
       </div>
 
       <div class="office-statusbar-right">
-        <button id="sb-btn-grid" class="office-sb-btn" title="Alternar Grade Visio (G)">
+        <button id="sb-btn-grid" class="office-sb-btn" title="Alternar Grade (G)">
           <span class="office-sb-icon">⊞</span> Grade
         </button>
         <button id="sb-btn-fit" class="office-sb-btn" title="Ajustar ao Conteúdo (Ctrl+0)">

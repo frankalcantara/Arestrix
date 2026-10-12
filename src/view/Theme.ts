@@ -1,15 +1,15 @@
 import { TaskflowNodeType } from '../core/types.ts';
 
 export const THEME = {
-  // Paleta de Fundo e Canvas (Microsoft Visio Technical Diagramming)
-  canvasBackground: 0xfafbfc, // Fundo límpido técnico de prancheta Visio
-  gridMajor: 0xd9e2ec,        // Grade principal Visio Slate 300
-  gridMinor: 0xedf2f7,        // Grade fina Visio Slate 100
+  // Paleta de Fundo e Canvas (Technical Diagramming)
+  canvasBackground: 0xfafbfc, // Fundo límpido técnico de prancheta
+  gridMajor: 0xd9e2ec,        // Grade principal Slate 300
+  gridMinor: 0xedf2f7,        // Grade fina Slate 100
 
   // Nós por tipo (Cores da paleta corporativa Microsoft Office Fluent)
   nodeTypes: {
     static: {
-      color: 0x0f6cbd,        // Azul Clássico Office / Visio
+      color: 0x0f6cbd,        // Azul Clássico Office
       badgeBg: 0x115ea3,      // Azul 700 Office
       textColor: '#ffffff',
       label: 'STATIC TASK'
@@ -64,13 +64,13 @@ export const THEME = {
     }
   } as Record<TaskflowNodeType, { color: number; badgeBg: number; textColor: string; label: string }>,
 
-  // Corpo dos Nós (Cartão Branco Técnico Visio com bordas limpas de 6px)
+  // Corpo dos Nós (Cartão Branco Técnico com bordas limpas de 6px)
   // Fase 15.2: cartão mais largo, header mais alto e espaçamento de portas maior para legibilidade.
   nodeBody: {
     width: 300,
     height: 150,
     headerHeight: 38,
-    borderRadius: 6,          // Cantos limpos e precisos do padrão Visio
+    borderRadius: 6,          // Cantos limpos e precisos
     fillColor: 0xffffff,      // Branco puro
     borderColor: 0xcbd5e1,    // Borda nítida cinza neutro
     borderSelected: 0x0f6cbd, // Azul Office selecionado
@@ -83,7 +83,7 @@ export const THEME = {
     portZoneBottomPadding: 14
   },
 
-  // Portas / Conectores Visio
+  // Portas / Conectores
   port: {
     radius: 7,
     inputColor: 0x0f6cbd,     // Azul Office
@@ -93,9 +93,9 @@ export const THEME = {
     labelOffset: 16
   },
 
-  // Arestas / Linhas Conectoras do Visio
+  // Arestas / Linhas Conectoras do Diagrama
   edge: {
-    defaultColor: 0x64748b,   // Linha de conector Visio
+    defaultColor: 0x64748b,   // Linha de conector neutro
     selectedColor: 0x0f6cbd,  // Azul Office de seleção
     feedbackColor: 0xd97706,  // Âmbar para feedback loops
     activeFlowColor: 0x107c41,// Verde de execução ativa

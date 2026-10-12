@@ -2,8 +2,8 @@ import { Viewport } from '../view/Viewport.ts';
 import { EventBus } from '../core/EventBus.ts';
 
 /**
- * Arestrix Studio - Canvas Controls (Visio HUD)
- * Mini-barra de ferramentas flutuante sobre o canvas no padrão Microsoft Visio / Office.
+ * Arestrix Studio - Canvas Controls (HUD)
+ * Mini-barra de ferramentas flutuante sobre o canvas no padrão Microsoft Office.
  */
 export class CanvasControls {
   private container: HTMLElement;
@@ -37,7 +37,7 @@ export class CanvasControls {
         <span>1:1</span>
       </button>
       <div class="canvas-hud-sep"></div>
-      <button id="canvas-ctrl-grid" class="canvas-hud-btn active" title="Alternar Grade Visio">
+      <button id="canvas-ctrl-grid" class="canvas-hud-btn active" title="Alternar Grade">
         <span>⊞</span>
       </button>
     `;
