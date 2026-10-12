@@ -716,6 +716,12 @@
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 20px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .backstage-info-card h4 {
@@ -735,6 +741,24 @@
   line-height: 1.5;
   margin-bottom: 12px;
   text-shadow: none !important;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.backstage-info-card code {
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  color: #334155;
+  background-color: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 4px 8px;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  display: inline-block;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .backstage-mru-table {

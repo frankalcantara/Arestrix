@@ -176,7 +176,7 @@ cd c:\Projetos\NodeForge
 npm test
 ```
 
-**Test Coverage Summary (163/163 tests passing in 26 test suites):**
+**Test Coverage Summary (164/164 tests passing in 26 test suites):**
 - `tests/graph-validation.spec.ts`: Topological sorting, DFS cycle checks, feedback loops, conditional branches.
 - `tests/history-undo-redo.spec.ts`: Command Pattern undo/redo stack (`Ctrl+Z` / `Ctrl+Y`) and parameter mutations.
 - `tests/subflow-hierarchy.spec.ts`: Nested subflow drill-down, parent graph isolation, and breadcrumb navigation.

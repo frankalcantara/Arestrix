@@ -85,6 +85,23 @@ describe('Geração de ID Único com Hash e Ajuste do Formulário de Criação d
       expect(recentsIdx).toBeGreaterThan(manutencaoIdx);
     });
 
+    it('deve formatar o ID do projeto e o Diretório Físico na tela Informações com estilos anti-overflow (word-break e overflow-wrap)', () => {
+      const backstage = new BackstageView(graph, {} as any, {} as any);
+      (backstage as any).activeSection = 'info';
+      const cur = {
+        ...projectManager.getCurrentProject(),
+        projectId: 'proj_hash_super_longo_que_nao_deve_vazar_do_card_de_informacoes_1234567890',
+        rootPath: 'C:/Diretorio/Super/Profundo/E/Extremamente/Longo/Que/Nao/Deve/Vazar/Do/Card'
+      };
+      const html = (backstage as any).renderSectionContent(cur, []);
+
+      expect(html).toContain('Informações do Projeto');
+      expect(html).toContain('word-break: break-all');
+      expect(html).toContain('overflow-wrap: anywhere');
+      expect(html).toContain('proj_hash_super_longo');
+      expect(html).toContain('Super/Profundo');
+    });
+
     it('deve repetir a lista de projetos recentes na tela Novo Projeto com o dropdown de opções', () => {
       const backstage = new BackstageView(graph, {} as any, {} as any);
       (backstage as any).activeSection = 'new';
@@ -164,7 +181,8 @@ describe('Geração de ID Único com Hash e Ajuste do Formulário de Criação d
       expect(activeProject.name).toBe(projectName);
       expect(activeProject.projectId).toBe(generatedId);
       expect(activeProject.projectId).toHaveLength(64);
-      expect(activeProject.rootPath).toBe(`./projects/${generatedId}`);
+      expect(activeProject.rootPath).toBe(`./projects/${projectName}`);
+      expect(activeProject.rootPath).not.toContain(generatedId);
     });
 
     it('deve aplicar hash ao nome do projeto automaticamente se projectId não for fornecido', async () => {
@@ -177,6 +195,7 @@ describe('Geração de ID Único com Hash e Ajuste do Formulário de Criação d
       expect(current.name).toBe(projectName);
       expect(current.projectId).toBe(hashProjectName(projectName));
       expect(current.projectId).toHaveLength(64);
+      expect(current.rootPath).toBe(`./projects/${projectName}`);
     });
 
     it('deve ZERAR e LIMPAR o grafo completamente ao criar um novo projeto', async () => {

@@ -223,35 +223,44 @@ export class BackstageView {
           <p class="backstage-header-sub">Gerencie o manifesto do projeto e a infraestrutura do workspace no Arestrix Studio.</p>
 
           <div class="backstage-cards-grid">
-            <div class="backstage-info-card">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <h4 style="margin: 0;">📁 Identificação do Projeto</h4>
-                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">📦 Escopo do Projeto</span>
+            <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
+                <h4 style="margin: 0; min-width: 0;">📁 Identificação do Projeto</h4>
+                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">📦 Escopo do Projeto</span>
               </div>
-              <p><strong>Nome:</strong> ${this.escapeHtml(proj.name)}</p>
-              <p><strong>ID:</strong> <code>${this.escapeHtml(proj.projectId)}</code></p>
-              <p><strong>Versão:</strong> ${this.escapeHtml(proj.version)}</p>
-              <p><strong>Descrição:</strong> ${this.escapeHtml(proj.description || 'Sem descrição')}</p>
+              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>Nome:</strong> ${this.escapeHtml(proj.name)}</p>
+              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;">
+                <strong>ID:</strong>
+                <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.projectId)}</code>
+              </p>
+              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>Versão:</strong> ${this.escapeHtml(proj.version)}</p>
+              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>Descrição:</strong> ${this.escapeHtml(proj.description || 'Sem descrição')}</p>
             </div>
 
-            <div class="backstage-info-card">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <h4 style="margin: 0;">🛠️ Diretório & Armazenamento</h4>
-                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">🛠️ Escopo do Workspace</span>
+            <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
+                <h4 style="margin: 0; min-width: 0;">🛠️ Diretório & Armazenamento</h4>
+                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">🛠️ Escopo do Workspace</span>
               </div>
-              <p><strong>Tipo de Persistência:</strong> ${proj.database?.type || 'SQLite (Padrão)'}</p>
-              <p><strong>Arquivo DB:</strong> <code>${this.escapeHtml(proj.database?.filePath || 'storage/database.sqlite')}</code></p>
-              <p><strong>Diretório Físico:</strong> <code>${this.escapeHtml(proj.rootPath)}</code></p>
+              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>Tipo de Persistência:</strong> ${proj.database?.type || 'SQLite (Padrão)'}</p>
+              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;">
+                <strong>Arquivo DB:</strong>
+                <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.database?.filePath || 'storage/database.sqlite')}</code>
+              </p>
+              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;">
+                <strong>Diretório Físico:</strong>
+                <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.rootPath)}</code>
+              </p>
             </div>
 
-            <div class="backstage-info-card">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <h4 style="margin: 0;">⚡ Grafo & Pipelines</h4>
-                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">📦 Escopo do Projeto</span>
+            <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
+                <h4 style="margin: 0; min-width: 0;">⚡ Grafo & Pipelines</h4>
+                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">📦 Escopo do Projeto</span>
               </div>
-              <p><strong>Vértices Ativos:</strong> ${this.graph.getAllNodes().length}</p>
-              <p><strong>Arestas / Links:</strong> ${this.graph.getAllEdges().length}</p>
-              <p><strong>Pipelines Cadastrados:</strong> ${proj.pipelines ? proj.pipelines.length : 0}</p>
+              <p style="margin-bottom: 8px;"><strong>Vértices Ativos:</strong> ${this.graph.getAllNodes().length}</p>
+              <p style="margin-bottom: 8px;"><strong>Arestas / Links:</strong> ${this.graph.getAllEdges().length}</p>
+              <p style="margin-bottom: 8px;"><strong>Pipelines Cadastrados:</strong> ${proj.pipelines ? proj.pipelines.length : 0}</p>
             </div>
           </div>
 
@@ -280,6 +289,12 @@ export class BackstageView {
             <div style="margin-bottom: 16px;">
               <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Nome do Projeto:</label>
               <input type="text" id="backstage-new-name" placeholder="Ex: Auditoria de Agentes 2026" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+            </div>
+
+            <div style="margin-bottom: 16px;">
+              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Diretório Físico do Workspace (Armazenamento Físico 🛠️):</label>
+              <input type="text" id="backstage-new-path" placeholder="./projects/[Nome do Projeto]" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+              <span style="font-size: 11px; color: #64748b; margin-top: 4px; display: block;">Se deixado em branco, a pasta física adotará o nome do projeto em <code>./projects/</code>.</span>
             </div>
 
             <div style="margin-bottom: 20px;">
@@ -864,15 +879,19 @@ export class BackstageView {
     this.overlay.querySelector('#btn-backstage-create-submit')?.addEventListener('click', async () => {
       if (!this.overlay) return;
       const nameInput = this.overlay.querySelector('#backstage-new-name') as HTMLInputElement;
+      const pathInput = this.overlay.querySelector('#backstage-new-path') as HTMLInputElement;
       const descInput = this.overlay.querySelector('#backstage-new-desc') as HTMLTextAreaElement;
 
       const pName = nameInput?.value.trim() || 'Novo Projeto';
       const pId = hashProjectName(pName);
       const pDesc = descInput?.value.trim() || '';
+      const customPath = pathInput?.value.trim();
+      const effectivePath = customPath || `./projects/${pName}`;
 
       await this.projectManager.createProject({
         projectId: pId,
         name: pName,
+        rootPath: effectivePath,
         description: pDesc,
         pipelines: [
           {

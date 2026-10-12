@@ -85,7 +85,8 @@ bool ProjectManager::createProject(ProjectManifest manifest) {
     }
 
     if (manifest.rootPath.empty()) {
-        std::filesystem::path defaultDir = std::filesystem::current_path() / "projects" / manifest.projectId;
+        std::string dirName = manifest.name.empty() ? manifest.projectId : manifest.name;
+        std::filesystem::path defaultDir = std::filesystem::current_path() / "projects" / dirName;
         manifest.rootPath = defaultDir.string();
     }
 

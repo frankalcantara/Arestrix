@@ -133,8 +133,8 @@ export class ProjectManagerModal {
                     </span>
                   ` : ''}
                 </div>
-                <div style="margin-top: 5px; font-size: 12px; color: #64748b; word-break: break-all;">
-                  Caminho: <code>${this.escapeHtml(r.rootPath)}</code>
+                <div style="margin-top: 5px; font-size: 12px; color: #64748b; word-break: break-all; overflow-wrap: anywhere;">
+                  Caminho: <code style="word-break: break-all; overflow-wrap: anywhere; max-width: 100%; display: inline-block;">${this.escapeHtml(r.rootPath)}</code>
                 </div>
               </div>
 
@@ -230,7 +230,7 @@ export class ProjectManagerModal {
           <span class="section-card-icon">⚙️</span>
           <div class="section-card-titles">
             <h3 class="section-card-title">Propriedades do Projeto Ativo <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">📦 Escopo do Projeto</span></h3>
-            <p class="section-card-desc">Manifesto: <code>${this.escapeHtml(current.rootPath)}/arestrix.project.json</code> (armazenado no diretório do 🛠️ Workspace)</p>
+            <p class="section-card-desc" style="word-break: break-all; overflow-wrap: anywhere;">Manifesto: <code style="word-break: break-all; overflow-wrap: anywhere; max-width: 100%; display: inline-block;">${this.escapeHtml(current.rootPath)}/arestrix.project.json</code> (armazenado no diretório do 🛠️ Workspace)</p>
           </div>
         </div>
 

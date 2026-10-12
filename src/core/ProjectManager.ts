@@ -267,15 +267,17 @@ export class ProjectManager {
 
   public async createProject(manifest: Partial<IProjectManifest>, graph?: Graph): Promise<boolean> {
     const now = new Date().toISOString();
-    const projectId = manifest.projectId || hashProjectName(manifest.name || 'Novo Projeto');
+    const projectName = manifest.name || 'Novo Projeto';
+    const projectId = manifest.projectId || hashProjectName(projectName);
+    const defaultRootPath = `./projects/${projectName}`;
     const fullManifest: IProjectManifest = {
       projectId,
-      name: manifest.name || 'Novo Projeto',
+      name: projectName,
       version: manifest.version || '1.0.0',
       description: manifest.description || '',
       createdAt: now,
       updatedAt: now,
-      rootPath: manifest.rootPath || `./projects/${projectId}`,
+      rootPath: manifest.rootPath || defaultRootPath,
       pipelines: manifest.pipelines && manifest.pipelines.length > 0 ? manifest.pipelines : [
         {
           id: 'main',
