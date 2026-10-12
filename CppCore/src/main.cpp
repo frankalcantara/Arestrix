@@ -880,6 +880,82 @@ void ui_write_workspace_asset(webui::window::event* e) {
     }
 }
 
+// Wrapper JS -> C++ (Gravar Arquivo de Skill SKILL.md no Disco)
+void ui_write_skill_file(webui::window::event* e) {
+    try {
+        std::string payload = e->get_string();
+        if (payload.empty()) {
+            e->return_string("{\"ok\":false,\"error\":\"Payload vazio\"}");
+            return;
+        }
+        auto j = nlohmann::json::parse(payload);
+        std::string filePath = j.value("path", j.value("filePath", ""));
+        std::string content = j.value("content", "");
+
+        if (filePath.empty()) {
+            e->return_string("{\"ok\":false,\"error\":\"Caminho vazio\"}");
+            return;
+        }
+
+        std::filesystem::path p(filePath);
+        if (p.has_parent_path()) {
+            std::filesystem::create_directories(p.parent_path());
+        }
+
+        std::ofstream out(p, std::ios::out | std::ios::trunc);
+        if (!out.is_open()) {
+            e->return_string("{\"ok\":false,\"error\":\"Falha ao abrir arquivo para escrita\"}");
+            return;
+        }
+        out << content;
+        out.close();
+
+        std::cout << "[C++] Skill gravado no disco: " << filePath << "\n";
+        e->return_string("{\"ok\":true}");
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_write_skill_file: " << ex.what() << "\n";
+        nlohmann::json err;
+        err["ok"] = false;
+        err["error"] = ex.what();
+        e->return_string(err.dump());
+    }
+}
+
+// Wrapper JS -> C++ (Ler Arquivo de Skill SKILL.md do Disco)
+void ui_read_skill_file(webui::window::event* e) {
+    try {
+        std::string filePath = e->get_string();
+        if (filePath.empty()) {
+            e->return_string("{\"ok\":false,\"error\":\"Caminho vazio\"}");
+            return;
+        }
+        std::filesystem::path p(filePath);
+        if (!std::filesystem::exists(p) || !std::filesystem::is_regular_file(p)) {
+            e->return_string("{\"ok\":false,\"error\":\"Arquivo nao encontrado\"}");
+            return;
+        }
+
+        std::ifstream in(p, std::ios::in);
+        if (!in.is_open()) {
+            e->return_string("{\"ok\":false,\"error\":\"Falha ao abrir arquivo para leitura\"}");
+            return;
+        }
+        std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        in.close();
+
+        nlohmann::json resp;
+        resp["ok"] = true;
+        resp["content"] = content;
+        e->return_string(resp.dump());
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_read_skill_file: " << ex.what() << "\n";
+        nlohmann::json err;
+        err["ok"] = false;
+        err["error"] = ex.what();
+        e->return_string(err.dump());
+    }
+}
+
 void exit_app(webui::window::event* e) {
     std::cout << "[C++] Comando de encerramento recebido." << std::endl;
     webui::exit();
@@ -1018,6 +1094,8 @@ int main() {
     win.bind("load_arestrix_file", ui_load_arestrix_file);
     win.bind("ensure_workspace_directories", ui_ensure_workspace_directories);
     win.bind("write_workspace_asset", ui_write_workspace_asset);
+    win.bind("write_skill_file", ui_write_skill_file);
+    win.bind("read_skill_file", ui_read_skill_file);
     win.bind("open_in_vscode", ui_open_in_vscode);
     win.bind("exit_app", exit_app);
 

@@ -456,5 +456,27 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
         }
       }
     });
+
+    it('deve abrir o modal de Repositórios GitHub diretamente sobre a Backstage View sem fechá-la', async () => {
+      const { globalEventBus } = await import('../src/core/EventBus.ts');
+      let githubModalEventFired = false;
+      globalEventBus.on('modal:open-github-repos', () => {
+        githubModalEventFired = true;
+      });
+
+      await ribbon.openBackstage('info');
+      const backstage = ribbon.getBackstageView();
+      expect(backstage.isOpen()).toBe(true);
+
+      const overlay = backstage.getOverlay();
+      const btnGithub = overlay?.querySelector('#btn-backstage-github-repos') as any;
+      expect(btnGithub).toBeDefined();
+
+      btnGithub?.click();
+
+      expect(githubModalEventFired).toBe(true);
+      expect(backstage.isOpen()).toBe(true);
+    });
   });
 });
+

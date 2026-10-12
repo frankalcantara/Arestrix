@@ -671,10 +671,65 @@ body, html {
 }
 
 /* --- Editor de Skill em Markdown (Fase 15.2) --- */
+.skill-editor-modal-dialog {
+  display: flex !important;
+  flex-direction: column !important;
+  min-width: 680px;
+  min-height: 480px;
+}
+
+.skill-editor-modal-dialog .modal-body-scrollable {
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  padding: 12px 16px !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.skill-editor-modal-dialog .skill-editor-container {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  gap: 8px !important;
+}
+
+.skill-editor-modal-dialog .skill-panes-wrapper {
+  display: flex !important;
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  gap: 10px !important;
+}
+
+.skill-editor-modal-dialog .skill-pane {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  height: 100% !important;
+}
+
+.skill-editor-modal-dialog .skill-textarea {
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.skill-editor-modal-dialog .skill-preview-render {
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow-y: auto !important;
+}
+
 .skill-editor-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 220px);
+  flex: 1;
   min-height: 420px;
   gap: 8px;
 }

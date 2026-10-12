@@ -651,9 +651,24 @@ export class BackstageView {
     }
   }
 
+  private hasActiveModal(): boolean {
+    if (typeof document === 'undefined') return false;
+    const modalOverlays = document.querySelectorAll('.modal-overlay');
+    for (let i = 0; i < modalOverlays.length; i++) {
+      const el = modalOverlays[i] as HTMLElement;
+      if (el.classList ? !el.classList.contains('hidden') : !el.className?.includes('hidden')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private bindEvents(): void {
     window.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Escape' && this.isOpen()) {
+        if (this.hasActiveModal()) {
+          return;
+        }
         this.close();
       }
     });
@@ -869,13 +884,11 @@ export class BackstageView {
     });
 
     this.overlay.querySelector('#btn-open-global-defaults-modal')?.addEventListener('click', () => {
-      this.close();
       this.globalDefaultsModal.show();
     });
 
-    // Repositórios do GitHub
+    // Repositórios do GitHub (Abre diretamente sobre a BackstageView)
     this.overlay.querySelector('#btn-backstage-github-repos')?.addEventListener('click', () => {
-      this.close();
       globalEventBus.emit('modal:open-github-repos');
     });
 

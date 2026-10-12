@@ -70,88 +70,215 @@ const x = 42;
   describe('2. Ciclo de Vida do SkillEditorModal e Integração', () => {
     let originalDoc: any;
     let originalWin: any;
+    let windowListeners: Record<string, Function[]> = {};
+
+    class MockElement {
+      tagName: string;
+      className: string = '';
+      id: string = '';
+      type: string = '';
+      value: string = '';
+      title: string = '';
+      checked: boolean = false;
+      textContent: string = '';
+      style: Record<string, string> = {};
+      children: MockElement[] = [];
+      parentNode: MockElement | null = null;
+      attributes: Record<string, string> = {};
+      offsetLeft: number = 100;
+      offsetTop: number = 100;
+      offsetWidth: number = 800;
+      offsetHeight: number = 600;
+      private _html: string = '';
+      private _listeners: Record<string, Function[]> = {};
+
+      get classList() {
+        return {
+          add: (...classes: string[]) => {
+            const set = new Set(this.className.split(/\s+/).filter(Boolean));
+            classes.forEach(c => set.add(c));
+            this.className = Array.from(set).join(' ');
+          },
+          remove: (...classes: string[]) => {
+            const set = new Set(this.className.split(/\s+/).filter(Boolean));
+            classes.forEach(c => set.delete(c));
+            this.className = Array.from(set).join(' ');
+          },
+          contains: (cls: string) => this.className.split(/\s+/).includes(cls)
+        };
+      }
+
+      constructor(tagName: string = 'DIV') {
+        this.tagName = tagName.toUpperCase();
+      }
+
+      get innerHTML(): string {
+        if (this.children.length === 0) return this._html || this.textContent;
+        return this.children.map(c => {
+          const cls = c.className ? ` class="${c.className}"` : '';
+          const id = c.id ? ` id="${c.id}"` : '';
+          return `<${c.tagName.toLowerCase()}${id}${cls}>${c.innerHTML || c.textContent}</${c.tagName.toLowerCase()}>`;
+        }).join('');
+      }
+
+      set innerHTML(html: string) {
+        this._html = html;
+        this.children = [];
+        parseHTMLToMock(html, this);
+      }
+
+      appendChild(child: MockElement) {
+        child.parentNode = this;
+        this.children.push(child);
+        return child;
+      }
+
+      removeChild(child: MockElement) {
+        const idx = this.children.indexOf(child);
+        if (idx !== -1) {
+          this.children.splice(idx, 1);
+          child.parentNode = null;
+        }
+        return child;
+      }
+
+      addEventListener(event: string, fn: Function) {
+        this._listeners[event] = this._listeners[event] || [];
+        this._listeners[event].push(fn);
+      }
+
+      removeEventListener(event: string, fn: Function) {
+        if (this._listeners[event]) {
+          this._listeners[event] = this._listeners[event].filter(f => f !== fn);
+        }
+      }
+
+      dispatchEvent(e: any) {
+        (this._listeners[e?.type || 'click'] || []).forEach(fn => fn(e));
+      }
+
+      click() {
+        this.dispatchEvent({ type: 'click', preventDefault: () => {}, stopPropagation: () => {} });
+      }
+
+      querySelector(selector: string): MockElement | null {
+        for (const child of this.children) {
+          if (child.matches(selector)) return child;
+          const found = child.querySelector(selector);
+          if (found) return found;
+        }
+        return null;
+      }
+
+      querySelectorAll(selector: string): MockElement[] {
+        const list: MockElement[] = [];
+        for (const child of this.children) {
+          if (child.matches(selector)) list.push(child);
+          list.push(...child.querySelectorAll(selector));
+        }
+        return list;
+      }
+
+      getAttribute(attr: string): string | null {
+        return this.attributes[attr] || null;
+      }
+
+      setAttribute(attr: string, val: string) {
+        this.attributes[attr] = val;
+      }
+
+      matches(sel: string): boolean {
+        if (sel.includes(',')) {
+          return sel.split(',').map(s => s.trim()).some(part => this.matches(part));
+        }
+        if (sel.startsWith('#')) return this.id === sel.slice(1);
+        if (sel.startsWith('.')) return this.className.split(/\s+/).includes(sel.slice(1));
+        return this.tagName.toLowerCase() === sel.toLowerCase();
+      }
+
+      closest(sel: string): MockElement | null {
+        let curr: MockElement | null = this;
+        while (curr) {
+          if (curr.matches(sel)) return curr;
+          curr = curr.parentNode;
+        }
+        return null;
+      }
+
+      getBoundingClientRect() {
+        return { left: 100, top: 100, width: 800, height: 600, right: 900, bottom: 700 };
+      }
+    }
+
+    function parseHTMLToMock(html: string, root: MockElement) {
+      const tokenRegex = /<(\/)?([a-zA-Z0-9\-]+)([^>]*?)>|([^<]+)/g;
+      const stack: MockElement[] = [root];
+      let match: RegExpExecArray | null;
+
+      while ((match = tokenRegex.exec(html)) !== null) {
+        const [, isClosing, tagName, attrs, text] = match;
+        if (text) {
+          const trimmed = text.trim();
+          if (trimmed && stack.length > 0) {
+            const top = stack[stack.length - 1];
+            top.textContent = top.textContent ? `${top.textContent} ${trimmed}` : trimmed;
+          }
+          continue;
+        }
+
+        if (isClosing) {
+          if (stack.length > 1) stack.pop();
+        } else {
+          const el = new MockElement(tagName);
+          if (attrs) {
+            const attrRegex = /([a-zA-Z0-9\-]+)(?:="([^"]*?)")?/g;
+            let attrMatch;
+            while ((attrMatch = attrRegex.exec(attrs)) !== null) {
+              const [, name, val] = attrMatch;
+              const v = val !== undefined ? val : '';
+              el.setAttribute(name, v);
+              if (name === 'id') el.id = v;
+              if (name === 'class') el.className = v;
+              if (name === 'value') el.value = v;
+            }
+          }
+          const parent = stack[stack.length - 1];
+          parent.appendChild(el);
+          const selfClosing = ['input', 'img', 'br', 'hr'].includes(tagName.toLowerCase());
+          if (!selfClosing) stack.push(el);
+        }
+      }
+    }
 
     beforeEach(() => {
       originalDoc = (globalThis as any).document;
       originalWin = (globalThis as any).window;
+      windowListeners = {};
 
-      const elements = new Map<string, any>();
+      const mockBody = new MockElement('BODY');
+
       (globalThis as any).document = {
-        createElement: (tag: string) => {
-          const el: any = {
-            tagName: tag.toUpperCase(),
-            className: '',
-            id: '',
-            style: {},
-            children: [] as any[],
-            classList: {
-              add: (cls: string) => {
-                if (!el.className.split(' ').includes(cls)) {
-                  el.className = (el.className + ' ' + cls).trim();
-                }
-              },
-              remove: (cls: string) => {
-                el.className = el.className.split(' ').filter((c: string) => c !== cls).join(' ');
-              },
-              contains: (cls: string) => el.className.split(' ').includes(cls)
-            },
-            _html: '',
-            set innerHTML(val: string) { this._html = val; },
-            get innerHTML() { return this._html; },
-            _listeners: {} as Record<string, Function[]>,
-            addEventListener(ev: string, fn: Function) {
-              this._listeners[ev] = this._listeners[ev] || [];
-              this._listeners[ev].push(fn);
-            },
-            removeEventListener: () => {},
-            dispatchEvent(e: any) {
-              (this._listeners[e?.type || 'click'] || []).forEach(fn => fn(e));
-            },
-            click() { this.dispatchEvent({ type: 'click' }); },
-            appendChild(child: any) {
-              child.parentNode = this;
-              this.children.push(child);
-              return child;
-            },
-            removeChild(child: any) {
-              const idx = this.children.indexOf(child);
-              if (idx !== -1) this.children.splice(idx, 1);
-              child.parentNode = null;
-              return child;
-            },
-            getBoundingClientRect: () => ({ left: 100, top: 100, width: 800, height: 600, right: 900, bottom: 700 }),
-            closest: (sel: string) => {
-              let cur: any = el;
-              while (cur) {
-                if (cur.className && (cur.className.includes('modal-overlay') || cur.className.includes('modal-backdrop'))) {
-                  return cur;
-                }
-                cur = cur.parentNode;
-              }
-              return null;
-            },
-            querySelector: (sel: string) => {
-              if (sel.startsWith('#')) {
-                const id = sel.slice(1);
-                return elements.get(id) || null;
-              }
-              return null;
-            },
-            querySelectorAll: () => []
-          };
-          return el;
-        },
-        body: {
-          appendChild: () => {},
-          removeChild: () => {}
-        }
+        createElement: (tag: string) => new MockElement(tag),
+        body: mockBody,
+        querySelector: (sel: string) => mockBody.querySelector(sel),
+        querySelectorAll: (sel: string) => mockBody.querySelectorAll(sel)
       };
 
       (globalThis as any).window = {
         innerWidth: 1280,
         innerHeight: 800,
-        addEventListener: () => {},
-        removeEventListener: () => {}
+        addEventListener: (ev: string, fn: Function) => {
+          windowListeners[ev] = windowListeners[ev] || [];
+          windowListeners[ev].push(fn);
+        },
+        removeEventListener: (ev: string, fn: Function) => {
+          if (windowListeners[ev]) {
+            windowListeners[ev] = windowListeners[ev].filter(f => f !== fn);
+          }
+        },
+        dispatchEvent: (e: any) => {
+          (windowListeners[e?.type || 'click'] || []).forEach(fn => fn(e));
+        }
       };
     });
 
@@ -176,6 +303,101 @@ const x = 42;
       expect((modal as any).currentPath).toBe('.agents/pesquisa/SKILL.md');
       expect((modal as any).isReadOnly).toBe(true);
       expect((modal as any).currentContent).toBe('# Teste Inicial');
+
+      modal.destroy();
+    });
+
+    it('deve abrir ocupando toda a área da tela por padrão e permitir alterar o tamanho / restaurar', () => {
+      const modal = new SkillEditorModal();
+      modal.openSkill({
+        path: '.agents/escrita/SKILL.md',
+        initialContent: '# Escrita Criativa'
+      });
+
+      const controller = modal.getController();
+      expect(controller).toBeDefined();
+      expect(controller?.isMaximized()).toBe(true);
+
+      const dialog = (modal as any).dialog as MockElement;
+      expect(dialog.classList.contains('is-maximized')).toBe(true);
+
+      // Permite restaurar e alterar o tamanho
+      controller?.restore();
+      expect(controller?.isMaximized()).toBe(false);
+      expect(dialog.classList.contains('is-maximized')).toBe(false);
+
+      modal.destroy();
+    });
+
+    it('deve salvar o skill e fechar o modal ao clicar no botão salvar', async () => {
+      const modal = new SkillEditorModal();
+      let savedPath = '';
+      let savedContent = '';
+
+      modal.openSkill({
+        path: '.agents/assistente/SKILL.md',
+        initialContent: '# Assistente V1',
+        onSave: (path, content) => {
+          savedPath = path;
+          savedContent = content;
+        }
+      });
+
+      expect((modal as any).isOpen).toBe(true);
+
+      const dialog = (modal as any).dialog as MockElement;
+      const saveBtn = dialog.querySelector('#btn-save-skill-editor') as MockElement;
+      expect(saveBtn).not.toBeNull();
+
+      // Altera o conteúdo no textarea
+      const textarea = dialog.querySelector('#skill-editor-textarea') as MockElement;
+      if (textarea) textarea.value = '# Assistente V2 Atualizado';
+
+      saveBtn.click();
+
+      expect(savedPath).toBe('.agents/assistente/SKILL.md');
+      expect(savedContent).toBe('# Assistente V2 Atualizado');
+      // Modal DEVE estar fechado
+      expect((modal as any).isOpen).toBe(false);
+
+      modal.destroy();
+    });
+
+    it('deve salvar o skill e fechar o modal ao pressionar a tecla de atalho Ctrl+S', async () => {
+      const modal = new SkillEditorModal();
+      let savedPath = '';
+      let savedContent = '';
+
+      modal.openSkill({
+        path: '.agents/analista/SKILL.md',
+        initialContent: '# Analista V1',
+        onSave: (path, content) => {
+          savedPath = path;
+          savedContent = content;
+        }
+      });
+
+      expect((modal as any).isOpen).toBe(true);
+
+      const dialog = (modal as any).dialog as MockElement;
+      const textarea = dialog.querySelector('#skill-editor-textarea') as MockElement;
+      if (textarea) textarea.value = '# Analista V2 via Ctrl+S';
+
+      // Simula evento Ctrl+S na janela
+      const keyEvent = {
+        type: 'keydown',
+        key: 's',
+        ctrlKey: true,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn()
+      };
+      (globalThis as any).window.dispatchEvent(keyEvent);
+
+      expect(keyEvent.preventDefault).toHaveBeenCalled();
+      expect(savedPath).toBe('.agents/analista/SKILL.md');
+      expect(savedContent).toBe('# Analista V2 via Ctrl+S');
+      // Modal DEVE estar fechado
+      expect((modal as any).isOpen).toBe(false);
 
       modal.destroy();
     });

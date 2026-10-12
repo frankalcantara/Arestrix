@@ -336,12 +336,27 @@ export class ModalWindowManager {
     const maximize = () => {
       if (isMaximized) return;
 
-      savedState = {
-        left: dialog.offsetLeft,
-        top: dialog.offsetTop,
-        width: dialog.offsetWidth,
-        height: dialog.offsetHeight
-      };
+      const curW = dialog.offsetWidth;
+      const curH = dialog.offsetHeight;
+      if (curW > 100 && curH > 100) {
+        savedState = {
+          left: dialog.offsetLeft,
+          top: dialog.offsetTop,
+          width: curW,
+          height: curH
+        };
+      } else if (!savedState) {
+        const viewW = (typeof window !== 'undefined' ? window.innerWidth : 1280) || 1280;
+        const viewH = (typeof window !== 'undefined' ? window.innerHeight : 800) || 800;
+        const w = Math.min(viewW - 40, Math.max(minWidth, 840));
+        const h = Math.min(viewH - 40, Math.max(minHeight, 560));
+        savedState = {
+          left: Math.max(10, Math.round((viewW - w) / 2)),
+          top: Math.max(10, Math.round((viewH - h) / 2)),
+          width: w,
+          height: h
+        };
+      }
 
       isMaximized = true;
       dialog.classList?.add?.('is-maximized');
@@ -369,7 +384,7 @@ export class ModalWindowManager {
       isMaximized = false;
       dialog.classList?.remove?.('is-maximized');
 
-      if (savedState && dialog.style) {
+      if (savedState && savedState.width > 100 && savedState.height > 100 && dialog.style) {
         dialog.style.left = `${savedState.left}px`;
         dialog.style.top = `${savedState.top}px`;
         dialog.style.width = `${savedState.width}px`;

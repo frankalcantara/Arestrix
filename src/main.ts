@@ -80,7 +80,7 @@ function bootstrap() {
   const nodeToolsModal = new NodeToolsModal(graph);
   const nodeMemoryModal = new NodeMemoryModal(graph);
   const nodeSkillsModal = new NodeSkillsModal(graph, globalEventBus);
-  const skillEditorModal = new SkillEditorModal();
+  const skillEditorModal = new SkillEditorModal(graph);
   const gitHubReposModal = new GitHubReposModal(globalEventBus);
 
   // Escuta eventos dos botoes de acao rapida nos nós e no inspetor

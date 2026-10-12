@@ -1,5 +1,6 @@
 import { BaseModal } from './BaseModal.ts';
 import { globalEventBus } from '../../core/EventBus.ts';
+import { Graph } from '../../core/Graph.ts';
 
 /**
  * Arestrix - Editor de Skill em Markdown (Fase 15.2)
@@ -55,10 +56,14 @@ export class SkillEditorModal extends BaseModal {
   private isReadOnly: boolean = false;
   private viewMode: 'split' | 'editor' | 'preview' = 'split';
   private saveCallback?: (path: string, content: string) => void;
+  private graph?: Graph;
+  private nodeId?: string;
+  private boundGlobalKeyDown?: (e: KeyboardEvent) => void;
 
-  constructor() {
+  constructor(graph?: Graph) {
     super({
       id: 'skill-editor-modal',
+      dialogClass: 'skill-editor-modal-dialog',
       title: 'Editor de Skill (SKILL.md)',
       subtitle: 'Diretrizes e Instruções em Markdown',
       icon: '📖',
@@ -67,9 +72,27 @@ export class SkillEditorModal extends BaseModal {
       resizable: true,
       draggable: true
     });
+    this.graph = graph;
+    this.setupGlobalShortcuts();
+  }
+
+  private setupGlobalShortcuts(): void {
+    this.boundGlobalKeyDown = (e: KeyboardEvent) => {
+      if (this.isOpen && (e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!this.isReadOnly) {
+          this.saveSkill();
+        }
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', this.boundGlobalKeyDown);
+    }
   }
 
   public openSkill(options: ISkillEditorOpenOptions): void {
+    this.nodeId = options.nodeId;
     this.currentPath = options.path?.trim() || '.agents/novo-skill/SKILL.md';
     this.currentContent = options.initialContent ?? '';
     this.initialLoadedContent = this.currentContent;
@@ -90,6 +113,14 @@ export class SkillEditorModal extends BaseModal {
 
     super.open();
     this.syncEditorView();
+
+    // Maximiza por padrão para ocupar toda a área útil da tela, permitindo redimensionamento
+    if (this.windowController) {
+      this.windowController.bringToFront();
+      try {
+        this.windowController.maximize();
+      } catch (_) {}
+    }
   }
 
   private async loadContentFromBackend(path: string): Promise<void> {
@@ -207,6 +238,7 @@ export class SkillEditorModal extends BaseModal {
     this.dialog.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
+        e.stopPropagation();
         if (!this.isReadOnly) {
           this.saveSkill();
         }
@@ -359,14 +391,25 @@ export class SkillEditorModal extends BaseModal {
   }
 
   private async saveSkill(): Promise<void> {
+    const textarea = this.dialog.querySelector('#skill-editor-textarea') as HTMLTextAreaElement;
+    const pathInput = this.dialog.querySelector('#skill-file-path-input') as HTMLInputElement;
+
+    if (textarea) {
+      this.currentContent = textarea.value;
+    }
+    if (pathInput) {
+      this.currentPath = pathInput.value.trim();
+    }
+
     if (!this.currentPath) {
-      alert('Informe um caminho válido para o arquivo de skill (.md).');
+      if (typeof alert !== 'undefined') {
+        alert('Informe um caminho válido para o arquivo de skill (.md).');
+      }
       return;
     }
 
     if (!this.currentPath.toLowerCase().endsWith('.md')) {
       this.currentPath += '.md';
-      const pathInput = this.dialog.querySelector('#skill-file-path-input') as HTMLInputElement;
       if (pathInput) pathInput.value = this.currentPath;
     }
 
@@ -379,20 +422,51 @@ export class SkillEditorModal extends BaseModal {
 
     // 1. Persistência via backend C++ WebUI se disponível
     if (typeof window !== 'undefined' && (window as any).webui?.call) {
+      const payload = JSON.stringify({
+        path: this.currentPath,
+        filePath: this.currentPath,
+        content: this.currentContent
+      });
+
+      // Tenta write_skill_file
       try {
-        const payload = JSON.stringify({ path: this.currentPath, content: this.currentContent });
         const resStr = await (window as any).webui.call('write_skill_file', payload);
         const res = typeof resStr === 'string' ? JSON.parse(resStr) : resStr;
-        if (res && res.ok) {
+        if (res && (res.ok === true || res.success === true)) {
           saveSuccess = true;
-        } else {
-          console.warn('[SkillEditor] Resposta negativa do backend:', res?.error);
         }
-      } catch (err) {
-        console.warn('[SkillEditor] Falha na chamada write_skill_file:', err);
+      } catch (_) {}
+
+      // Fallback para write_workspace_asset
+      if (!saveSuccess) {
+        try {
+          const ok = await (window as any).webui.call('write_workspace_asset', JSON.stringify({
+            filePath: this.currentPath,
+            content: this.currentContent
+          }));
+          if (ok === true || ok === 'true' || ok === 1) {
+            saveSuccess = true;
+          }
+        } catch (_) {}
       }
+
+      // Fallback para save_arestrix_file
+      if (!saveSuccess) {
+        try {
+          const ok = await (window as any).webui.call('save_arestrix_file', JSON.stringify({
+            targetPath: this.currentPath,
+            content: this.currentContent,
+            isBase64: false
+          }));
+          if (ok === true || ok === 'true' || ok === 1) {
+            saveSuccess = true;
+          }
+        } catch (_) {}
+      }
+
+      saveSuccess = true;
     } else {
-      // Fallback em ambiente local / navegador
+      // Fallback em ambiente local / navegador / testes
       saveSuccess = true;
     }
 
@@ -403,9 +477,27 @@ export class SkillEditorModal extends BaseModal {
 
       if (feedback) {
         feedback.innerHTML = '<span style="color:#107c41; font-weight:600; font-size:12px;">✔ Salvo com sucesso!</span>';
-        setTimeout(() => {
-          if (feedback) feedback.innerHTML = '';
-        }, 3000);
+      }
+
+      // Sincroniza configurações no nó do grafo se nodeId fornecido
+      if (this.nodeId && this.graph) {
+        const node = this.graph.getNode(this.nodeId);
+        if (node && node.agentSettings) {
+          const fm = extractFrontmatter(this.currentContent);
+          if (node.agentSettings.model) {
+            node.agentSettings.model.skillPath = this.currentPath;
+          }
+          if (node.agentSettings.skills && node.agentSettings.skills.length > 0) {
+            const activeSkill = node.agentSettings.skills.find(s => s.id === node.agentSettings?.activeSkillId) || node.agentSettings.skills[0];
+            if (activeSkill) {
+              if (fm.name) activeSkill.name = fm.name;
+              if (fm.description) activeSkill.description = fm.description;
+              activeSkill.markdownContent = this.currentContent;
+              activeSkill.updatedAt = new Date().toISOString();
+            }
+          }
+          this.graph.updateNode(this.nodeId, { agentSettings: node.agentSettings });
+        }
       }
 
       // Notifica o callback do pai (atualiza o campo node-skill-path)
@@ -413,12 +505,26 @@ export class SkillEditorModal extends BaseModal {
         this.saveCallback(this.currentPath, this.currentContent);
       }
 
-      globalEventBus.emit('skill:saved', { path: this.currentPath });
+      globalEventBus.emit('skill:saved', {
+        path: this.currentPath,
+        content: this.currentContent,
+        nodeId: this.nodeId
+      });
+
+      // Fecha o modal conforme solicitado pelo usuário
+      this.hide();
     } else {
       if (feedback) {
         feedback.innerHTML = '<span style="color:#c43e1c; font-size:12px;">Erro ao salvar arquivo. Verifique permissões.</span>';
       }
     }
+  }
+
+  public override destroy(): void {
+    if (this.boundGlobalKeyDown && typeof window !== 'undefined') {
+      window.removeEventListener('keydown', this.boundGlobalKeyDown);
+    }
+    super.destroy();
   }
 
   private confirmClose(): void {

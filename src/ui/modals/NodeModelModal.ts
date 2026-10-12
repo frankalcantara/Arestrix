@@ -12,7 +12,7 @@ export class NodeModelModal {
 
   constructor(graph: Graph) {
     this.graph = graph;
-    this.skillEditorModal = new SkillEditorModal();
+    this.skillEditorModal = new SkillEditorModal(this.graph);
 
     this.overlay = document.createElement('div');
     this.overlay.className = 'modal-overlay hidden';
