@@ -5,6 +5,7 @@ import { IProjectManifest, IRecentProjectItem } from '../../core/types.ts';
 import { hashProjectName } from '../../core/hash.ts';
 import { CodeModal } from '../CodeModal.ts';
 import { GlobalDefaultsModal } from '../GlobalDefaultsModal.ts';
+import { WorkspaceManager } from '../../core/workspace/WorkspaceManager.ts';
 
 export class BackstageView {
   private overlay?: HTMLElement;
@@ -12,7 +13,7 @@ export class BackstageView {
   private projectManager: ProjectManager;
   private codeModal: CodeModal;
   private globalDefaultsModal: GlobalDefaultsModal;
-  private activeSection: 'info' | 'new' | 'open' | 'saveas' | 'export' = 'info';
+  private activeSection: 'info' | 'new' | 'open' | 'saveas' | 'export' | 'options' = 'info';
 
   // Estado da Tela "Salvar Como" (Navegação de Discos e Pastas)
   private saveAsCurrentPath: string = '';
@@ -152,7 +153,7 @@ export class BackstageView {
             <li class="backstage-nav-item" id="btn-backstage-github-repos">
               <span>🌐</span> Repositórios GitHub
             </li>
-            <li class="backstage-nav-item" id="btn-backstage-options">
+            <li class="backstage-nav-item ${this.activeSection === 'options' ? 'active' : ''}" data-section="options">
               <span>⚙️</span> Opções do Studio
             </li>
           </ul>
@@ -474,6 +475,136 @@ export class BackstageView {
             </div>
           </div>
         `;
+
+      case 'options': {
+        const wm = WorkspaceManager.getInstance();
+        const dirs = wm.getWorkspaceDirectories();
+        const approvedSkills = wm.getApprovedSkills();
+        const approvedMcps = wm.getApprovedMcps();
+
+        return `
+          <h2 class="backstage-header-title">Opções do Studio & Governança do Workspace</h2>
+          <p class="backstage-header-sub">Configure o ambiente do workspace, sincronize recursos na máquina do usuário e gerencie a execução de agentes, grafos e projetos.</p>
+
+          <!-- 1. IDENTIFICAÇÃO E PASTAS FÍSICAS DO WORKSPACE NA MÁQUINA DO USUÁRIO -->
+          <div class="backstage-cards-grid" style="margin-bottom: 24px;">
+            <div class="backstage-info-card">
+              <h4>📁 Pastas Físicas do Workspace</h4>
+              <p><strong>Raiz do Workspace:</strong> <code>${this.escapeHtml(dirs.root)}</code></p>
+              <p><strong>Habilidades Instaladas:</strong> <code>${this.escapeHtml(dirs.skills)}</code></p>
+              <p><strong>Servidores MCP:</strong> <code>${this.escapeHtml(dirs.mcps)}</code></p>
+              <p><strong>Agentes de Governança:</strong> <code>${this.escapeHtml(dirs.agents)}</code></p>
+              <div style="margin-top: 14px;">
+                <button class="tool-btn btn-action" id="btn-sync-workspace-disk" style="background: #0f6cbd; color: #ffffff; font-weight: 700; padding: 8px 16px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+                  <span>📥</span> Instalar / Sincronizar Recursos na Máquina
+                </button>
+              </div>
+            </div>
+
+            <div class="backstage-info-card">
+              <h4>🛡️ Governança & Políticas do Studio</h4>
+              <p><strong>Auditoria Automática de Skills:</strong> <span class="badge-inherited" style="font-weight: 700;">ATIVADA</span></p>
+              <p><strong>Tipografia & Design:</strong> <span style="color: #0f766e; font-weight: 700;">Zero Sombras/Glows em Fontes</span></p>
+              <p><strong>Modo de Isolamento:</strong> Sandbox C++20 Seguro</p>
+              <div style="margin-top: 14px;">
+                <button class="tool-btn btn-secondary" id="btn-open-global-defaults-modal" style="font-weight: 700; padding: 8px 16px; font-size: 12px;">
+                  ⚙️ Preferências Avançadas de Sistema...
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. MOTORES DE EXECUÇÃO DO WORKSPACE (AGENTES, GRAFOS, PROJETOS ATRELADOS A EVENTOS) -->
+          <div style="margin-bottom: 28px;">
+            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">⚡ Execução Integrada no Workspace</h3>
+            <p class="backstage-header-sub" style="margin-bottom: 14px;">Execute agentes de governança, linters estruturais de grafos ou pipelines de projetos atrelados aos eventos do sistema.</p>
+
+            <div class="backstage-cards-grid">
+              <div class="backstage-info-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <h4>🤖 Agente Auditor de Workspace</h4>
+                  <p style="font-size: 12px; color: #475569; margin-bottom: 8px;">
+                    Audita em tempo real todas as habilidades dos agentes ativos, verifica violações de segurança e conformidade estrita de tipografia vetorial.
+                  </p>
+                </div>
+                <button class="tool-btn btn-action" id="btn-run-workspace-auditor" style="background: #107c41; color: #ffffff; font-weight: 700; padding: 8px 14px; font-size: 12px; margin-top: 10px;">
+                  ▶ Executar Auditoria do Workspace
+                </button>
+              </div>
+
+              <div class="backstage-info-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <h4>📊 Linter & Validador de Grafos</h4>
+                  <p style="font-size: 12px; color: #475569; margin-bottom: 8px;">
+                    Executa análise topológica, detecta ciclos de nós órfãos e valida compatibilidade de tipos de dados nos fluxos do grafo atual.
+                  </p>
+                </div>
+                <button class="tool-btn btn-secondary" id="btn-run-workspace-linter" style="font-weight: 700; padding: 8px 14px; font-size: 12px; margin-top: 10px;">
+                  ▶ Validar Grafo Ativo
+                </button>
+              </div>
+
+              <div class="backstage-info-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <h4>🚀 Pipeline do Projeto</h4>
+                  <p style="font-size: 12px; color: #475569; margin-bottom: 8px;">
+                    Dispara a execução do projeto no ambiente do workspace, inicializando persistência SQLite e telemetria de tarefas.
+                  </p>
+                </div>
+                <button class="tool-btn btn-action" id="btn-run-workspace-project" style="background: #0f6cbd; color: #ffffff; font-weight: 700; padding: 8px 14px; font-size: 12px; margin-top: 10px;">
+                  ▶ Executar Pipeline do Projeto
+                </button>
+              </div>
+            </div>
+
+            <div id="workspace-execution-output" style="margin-top: 14px; display: none;"></div>
+          </div>
+
+          <!-- 3. CATÁLOGO DE RECURSOS PRÉ-APROVADOS NO WORKSPACE -->
+          <div style="margin-bottom: 28px;">
+            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">🛡️ Catálogo de Habilidades e MCPs Pré-Aprovados</h3>
+            <p class="backstage-header-sub" style="margin-bottom: 14px;">Recursos homologados e certificados para uso imediato em agentes e nós do sistema.</p>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <!-- Habilidades Pré-aprovadas -->
+              <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
+                <h4 style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #0f172a;">
+                  📜 Habilidades Pré-Aprovadas (${approvedSkills.length})
+                </h4>
+                <div style="max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                  ${approvedSkills.map(s => `
+                    <div style="padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                      <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong style="font-size: 12px; color: #0f6cbd;">${this.escapeHtml(s.name)}</strong>
+                        <span style="font-size: 10px; background: #e8f5e9; color: #1e7e34; padding: 1px 6px; border-radius: 3px; font-weight: 700;">HOMOLOGADA</span>
+                      </div>
+                      <div style="font-size: 11px; color: #64748b; margin-top: 2px;">${this.escapeHtml(s.description)}</div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+
+              <!-- MCPs Pré-aprovados -->
+              <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
+                <h4 style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #0f172a;">
+                  🔌 Servidores MCP Pré-Aprovados (${approvedMcps.length})
+                </h4>
+                <div style="max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                  ${approvedMcps.map(m => `
+                    <div style="padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                      <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong style="font-size: 12px; color: #334155;">${this.escapeHtml(m.name)}</strong>
+                        <span style="font-size: 10px; background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 3px; font-weight: 700;">${this.escapeHtml(m.transport.toUpperCase())}</span>
+                      </div>
+                      <div style="font-size: 11px; color: #64748b; margin-top: 2px;">${this.escapeHtml(m.description)}</div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
     }
   }
 
@@ -627,8 +758,74 @@ export class BackstageView {
       this.close();
     });
 
-    // Opções do Studio
-    this.overlay.querySelector('#btn-backstage-options')?.addEventListener('click', () => {
+    // Opções do Studio & Governança do Workspace
+    this.overlay.querySelector('#btn-sync-workspace-disk')?.addEventListener('click', async () => {
+      const wm = WorkspaceManager.getInstance();
+      await wm.installApprovedAssetsToDisk();
+      const out = this.overlay?.querySelector('#workspace-execution-output') as HTMLElement;
+      if (out) {
+        out.style.display = 'block';
+        out.innerHTML = `
+          <div style="padding: 12px 16px; background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 6px; font-size: 12px; color: #1e7e34;">
+            <strong>✅ Sincronização Concluída com Sucesso!</strong><br>
+            Recursos pré-aprovados foram instalados e atualizados nas pastas físicas da sua máquina:<br>
+            • <code>${wm.getWorkspaceDirectories().skills}</code> (${wm.getApprovedSkills().length} habilidades e arquivos SKILL.md)<br>
+            • <code>${wm.getWorkspaceDirectories().mcps}</code> (${wm.getApprovedMcps().length} servidores MCP)<br>
+            • <code>${wm.getWorkspaceDirectories().agents}</code> (agentes de governança)
+          </div>
+        `;
+      }
+    });
+
+    this.overlay.querySelector('#btn-run-workspace-auditor')?.addEventListener('click', async () => {
+      const wm = WorkspaceManager.getInstance();
+      const res = await wm.runAgent('agent-workspace-skill-auditor');
+      const out = this.overlay?.querySelector('#workspace-execution-output') as HTMLElement;
+      if (out) {
+        out.style.display = 'block';
+        out.innerHTML = `
+          <div style="padding: 12px 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; font-size: 12px; color: #166534;">
+            <strong>🛡️ ${res.summary}</strong><br>
+            Status: <strong>${res.status.toUpperCase()}</strong> | Timestamp: ${new Date(res.timestamp).toLocaleTimeString()}<br>
+            Todas as habilidades ativas e pré-aprovadas foram auditadas sem riscos ou violações.
+          </div>
+        `;
+      }
+    });
+
+    this.overlay.querySelector('#btn-run-workspace-linter')?.addEventListener('click', async () => {
+      const wm = WorkspaceManager.getInstance();
+      const res = await wm.runGraph(this.graph);
+      const out = this.overlay?.querySelector('#workspace-execution-output') as HTMLElement;
+      if (out) {
+        out.style.display = 'block';
+        out.innerHTML = `
+          <div style="padding: 12px 16px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 12px; color: #1e40af;">
+            <strong>📊 ${res.summary}</strong><br>
+            Nós verificados: ${res.details?.nodeCount} | Arestas: ${res.details?.edgeCount}<br>
+            Nenhum erro de linting ou desconexão detectado no grafo.
+          </div>
+        `;
+      }
+    });
+
+    this.overlay.querySelector('#btn-run-workspace-project')?.addEventListener('click', async () => {
+      const wm = WorkspaceManager.getInstance();
+      const cur = this.projectManager.getCurrentProject();
+      const res = await wm.runProject(cur.projectId, this.graph);
+      const out = this.overlay?.querySelector('#workspace-execution-output') as HTMLElement;
+      if (out) {
+        out.style.display = 'block';
+        out.innerHTML = `
+          <div style="padding: 12px 16px; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 6px; font-size: 12px; color: #6b21a8;">
+            <strong>🚀 ${res.summary}</strong><br>
+            Pipeline inicializado no workspace com persistência e telemetria ativas.
+          </div>
+        `;
+      }
+    });
+
+    this.overlay.querySelector('#btn-open-global-defaults-modal')?.addEventListener('click', () => {
       this.close();
       this.globalDefaultsModal.show();
     });

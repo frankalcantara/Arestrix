@@ -4,13 +4,16 @@ import { INodeData, INodeSkill } from '../../core/types.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
 import { GitHubSkillsRegistry } from '../../core/skills/GitHubSkillsRegistry.ts';
 import { EventBus } from '../../core/EventBus.ts';
+import { WorkspaceManager } from '../../core/workspace/WorkspaceManager.ts';
+import { WorkspaceSkillAuditorAgent } from '../../core/workspace/WorkspaceSkillAuditorAgent.ts';
 
 /**
  * Arestrix Studio - Diálogo de Habilidades & Skills do Agente (Padrão Microsoft Office)
  * 
  * Permite ao nó individual do agente:
- * 1. Edição manual completa do SKILL.md (Editor Markdown com visualizador e campo de prompt do agente).
- * 2. Escolher e importar habilidades open source a partir do catálogo global fornecido
+ * 1. Escolher e importar Habilidades Pré-Aprovadas do Workspace com auditoria e certificação.
+ * 2. Edição manual completa do SKILL.md (Editor Markdown com visualizador e campo de prompt do agente).
+ * 3. Escolher e importar habilidades open source a partir do catálogo global fornecido
  *    pelos repositórios do GitHub configurados no sistema.
  * 
  * NOTA: A gestão dos repositórios autorizados do GitHub é global do sistema (via GitHubReposModal).
@@ -18,12 +21,16 @@ import { EventBus } from '../../core/EventBus.ts';
 export class NodeSkillsModal extends BaseModal {
   private graph: Graph;
   private registry: GitHubSkillsRegistry;
+  private workspaceManager: WorkspaceManager;
+  private workspaceAuditor: WorkspaceSkillAuditorAgent;
   private bus?: EventBus;
   private activeNodeId: string | null = null;
-  private activeTab: 'editor' | 'github' = 'editor';
+  private activeTab: 'workspace' | 'editor' | 'github' = 'workspace';
   private markdownViewMode: 'edit' | 'preview' = 'edit';
   private selectedCategory: string = 'todas';
   private searchQuery: string = '';
+  private workspaceCategoryFilter: string = 'todas';
+  private workspaceSearchQuery: string = '';
   private notificationMessage: string | null = null;
   private notificationType: 'success' | 'info' | 'warning' = 'success';
 
@@ -40,6 +47,8 @@ export class NodeSkillsModal extends BaseModal {
     this.graph = graph;
     this.bus = bus;
     this.registry = GitHubSkillsRegistry.getInstance();
+    this.workspaceManager = WorkspaceManager.getInstance(bus);
+    this.workspaceAuditor = WorkspaceSkillAuditorAgent.getInstance();
 
     // Quando os repositórios globais forem alterados, re-renderiza se estiver aberto na aba github
     this.bus?.on('skills:repositories-updated', () => {
@@ -49,7 +58,7 @@ export class NodeSkillsModal extends BaseModal {
     });
   }
 
-  public override open(nodeId?: string, initialTab: 'editor' | 'github' = 'editor'): void {
+  public override open(nodeId?: string, initialTab: 'workspace' | 'editor' | 'github' = 'workspace'): void {
     if (nodeId) {
       const node = this.graph.getNode(nodeId);
       if (!node) return;
@@ -118,10 +127,23 @@ export class NodeSkillsModal extends BaseModal {
     const githubSkills = this.registry.searchSkills(this.searchQuery, this.selectedCategory);
     const reposList = this.registry.getRepositories();
     const activeReposCount = reposList.filter(r => r.isEnabled).length;
+    const approvedSkills = this.workspaceManager.getApprovedSkills().filter(s => {
+      const matchCat = this.workspaceCategoryFilter === 'todas' || s.category === this.workspaceCategoryFilter;
+      const matchSearch = !this.workspaceSearchQuery ||
+        s.name.toLowerCase().includes(this.workspaceSearchQuery.toLowerCase()) ||
+        s.description.toLowerCase().includes(this.workspaceSearchQuery.toLowerCase()) ||
+        s.tools.some(t => t.toLowerCase().includes(this.workspaceSearchQuery.toLowerCase()));
+      return matchCat && matchSearch;
+    });
+    const approvedMcps = this.workspaceManager.getApprovedMcps();
+    const currentAudit = this.workspaceAuditor.auditSkill(currentSkill);
 
     return `
-      <!-- Abas de Navegação (Apenas 2: O vértice decide sua habilidade ou importa do catálogo global) -->
+      <!-- Abas de Navegação (3 Abas: Habilidades Pré-Aprovadas do Workspace, Editor da Habilidade do Agente e Catálogo GitHub) -->
       <div class="office-modal-tab-bar">
+        <button class="office-modal-tab-btn ${this.activeTab === 'workspace' ? 'active' : ''}" data-tab="workspace">
+          🛡️ Habilidades Pré-Aprovadas do Workspace
+        </button>
         <button class="office-modal-tab-btn ${this.activeTab === 'editor' ? 'active' : ''}" data-tab="editor">
           📝 Habilidade do Agente & Editor
         </button>
@@ -137,8 +159,116 @@ export class NodeSkillsModal extends BaseModal {
       ` : ''}
 
       <div style="padding: 16px 20px;">
-        <!-- ABA 1: EDITOR MANUAL DE SKILL E PROMPT DO VÉRTICE -->
+        <!-- ABA 1: HABILIDADES PRÉ-APROVADAS DO WORKSPACE -->
+        <div class="skills-tab-pane ${this.activeTab === 'workspace' ? 'active' : ''}" id="pane-workspace">
+          <div class="office-info-callout" style="margin-bottom: 14px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 4px; padding: 12px 14px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+            <div style="display: flex; align-items: flex-start; gap: 10px;">
+              <span style="font-size: 20px; line-height: 1;">🛡️</span>
+              <div style="font-size: 12px; color: #166534; line-height: 1.45;">
+                <strong>Habilidades Pré-Aprovadas do Workspace:</strong> Catálogo oficial homologado com governança estrita e certificação de conformidade.
+                Todas as habilidades cumprem integralmente as diretrizes do Arestrix (incluindo política de <strong>Zero Sombras em Tipografia Vetorial SVG</strong> e integridade de artefatos).
+                Instaladas nativamente em <code>.workspace/skills</code> na sua máquina.
+              </div>
+            </div>
+            <div style="font-size: 11px; font-weight: 700; color: #15803d; background: #dcfce7; padding: 4px 8px; border-radius: 4px; border: 1px solid #86efac; white-space: nowrap;">
+              ${approvedSkills.length} Homologadas
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-bottom: 12px; align-items: center;">
+            <div style="flex: 1; position: relative;">
+              <input type="text" id="input-search-workspace-skills" class="form-input" placeholder="Buscar habilidades pré-aprovadas por nome, ferramenta ou palavra-chave..." value="${this.escapeHtml(this.workspaceSearchQuery)}" />
+            </div>
+            <select id="select-workspace-category-filter" class="form-select" style="max-width: 220px;">
+              <option value="todas" ${this.workspaceCategoryFilter === 'todas' ? 'selected' : ''}>Todas as Categorias</option>
+              <option value="Redação & Conteúdo" ${this.workspaceCategoryFilter === 'Redação & Conteúdo' ? 'selected' : ''}>Redação & Conteúdo</option>
+              <option value="Matemática & Ciência" ${this.workspaceCategoryFilter === 'Matemática & Ciência' ? 'selected' : ''}>Matemática & Ciência</option>
+              <option value="Design & Visual" ${this.workspaceCategoryFilter === 'Design & Visual' ? 'selected' : ''}>Design & Visual (SVG)</option>
+              <option value="Engenharia de Software" ${this.workspaceCategoryFilter === 'Engenharia de Software' ? 'selected' : ''}>Engenharia C++20</option>
+              <option value="Dados & Armazenamento" ${this.workspaceCategoryFilter === 'Dados & Armazenamento' ? 'selected' : ''}>Dados & SQL</option>
+              <option value="Engenharia de Prompt" ${this.workspaceCategoryFilter === 'Engenharia de Prompt' ? 'selected' : ''}>Prompt XML</option>
+              <option value="Governança & Auditoria" ${this.workspaceCategoryFilter === 'Governança & Auditoria' ? 'selected' : ''}>Governança & Auditoria</option>
+            </select>
+          </div>
+
+          <!-- Grid de Habilidades Pré-Aprovadas -->
+          <div class="workspace-skills-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; margin-bottom: 20px;">
+            ${approvedSkills.length === 0 ? `
+              <div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: #64748b; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 4px; font-size: 13px;">
+                Nenhuma habilidade pré-aprovada corresponde aos filtros atuais.
+              </div>
+            ` : approvedSkills.map(item => `
+              <div class="workspace-skill-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.15s ease;">
+                <div>
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
+                    <span style="font-size: 14px; font-weight: 700; color: #0f6cbd;">${this.escapeHtml(item.name)}</span>
+                    <span style="background: #e8f5e9; color: #1e7e34; border: 1px solid #c8e6c9; border-radius: 3px; font-size: 10px; font-weight: 700; padding: 2px 6px; white-space: nowrap;">
+                      🛡️ PRÉ-APROVADA
+                    </span>
+                  </div>
+
+                  <div style="font-size: 11px; color: #64748b; margin-bottom: 8px; display: flex; justify-content: space-between;">
+                    <span>📂 ${this.escapeHtml(item.category)} &bull; v${this.escapeHtml(item.version)}</span>
+                    <span style="font-weight: 600;">${this.escapeHtml(item.license)}</span>
+                  </div>
+
+                  <div style="font-size: 12px; color: #334155; line-height: 1.4; margin-bottom: 10px;">
+                    ${this.escapeHtml(item.description)}
+                  </div>
+
+                  <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px;">
+                    ${item.tools.map(t => `<code style="font-size: 10px; background: #f1f5f9; color: #475569; padding: 1px 5px; border-radius: 3px;">${t}</code>`).join('')}
+                  </div>
+
+                  <div style="font-size: 11px; color: #0f766e; background: #f0fdf4; padding: 4px 8px; border-radius: 4px; margin-bottom: 12px; border: 1px solid #dcfce7;">
+                    ✓ Zero Sombras em Textos &bull; Risco de Auditoria: 0/100
+                  </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; border-top: 1px solid #f1f5f9; padding-top: 10px;">
+                  <button class="btn btn-primary btn-sm btn-import-workspace-skill" data-skill-id="${item.id}" style="font-weight: 700;">
+                    📥 Importar para este Agente
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+
+          <!-- Painel Informativo de MCPs Pré-aprovados -->
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <strong style="font-size: 12px; color: #334155;">🔌 Servidores MCP Pré-Aprovados do Workspace (${approvedMcps.length})</strong>
+              <span style="font-size: 11px; color: #64748b;">Instalados em <code>.workspace/mcps</code></span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px;">
+              ${approvedMcps.map(m => `
+                <div style="padding: 6px 10px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 4px;">
+                  <div style="font-size: 11px; font-weight: 700; color: #0f172a;">${this.escapeHtml(m.name)}</div>
+                  <div style="font-size: 10px; color: #64748b;">${this.escapeHtml(m.description)}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+
+        <!-- ABA 2: EDITOR MANUAL DE SKILL E PROMPT DO VÉRTICE -->
         <div class="skills-tab-pane ${this.activeTab === 'editor' ? 'active' : ''}" id="pane-editor">
+          <!-- Callout do Agente de Auditoria do Workspace -->
+          <div class="office-callout" style="margin-bottom: 14px; padding: 10px 14px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; ${currentAudit.status === 'approved' ? 'background: #f0fdf4; border: 1px solid #bbf7d0;' : 'background: #fffbeb; border: 1px solid #fde68a;'}">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 18px;">${currentAudit.status === 'approved' ? '🛡️' : '⚠️'}</span>
+              <div style="font-size: 12px; line-height: 1.4; ${currentAudit.status === 'approved' ? 'color: #166534;' : 'color: #92400e;'}">
+                <strong>Auditoria do Workspace: ${currentAudit.status === 'approved' ? 'APROVADA E HOMOLOGADA' : 'ALERTA DE CONFORMIDADE'}</strong> (Pontuação de Risco: ${currentAudit.riskScore}/100)<br>
+                <span style="font-size: 11px; ${currentAudit.status === 'approved' ? 'color: #15803d;' : 'color: #b45309;'}">
+                  ${currentAudit.warnings.length > 0 ? currentAudit.warnings.join(' &bull; ') : '✓ Habilidade cumpre a regra de Zero Sombras em Fontes e lista de ferramentas autorizadas.'}
+                </span>
+              </div>
+            </div>
+            <span style="font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; white-space: nowrap; ${currentAudit.status === 'approved' ? 'background: #dcfce7; color: #15803d; border: 1px solid #86efac;' : 'background: #fef3c7; color: #b45309; border: 1px solid #fcd34d;'}">
+              ${currentAudit.status === 'approved' ? 'AUDITADA: OK' : 'REQUER ATENÇÃO'}
+            </span>
+          </div>
+
           <div class="office-section-card" style="margin-bottom: 14px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
               <label class="form-label" style="margin: 0; font-weight: 700;">Habilidade em Foco:</label>
@@ -345,10 +475,65 @@ export class NodeSkillsModal extends BaseModal {
     this.dialog.querySelectorAll('.office-modal-tab-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const targetTab = (e.currentTarget as HTMLElement).getAttribute('data-tab') as any;
-        if (targetTab && (targetTab === 'editor' || targetTab === 'github')) {
+        if (targetTab && (targetTab === 'workspace' || targetTab === 'editor' || targetTab === 'github')) {
           this.activeTab = targetTab;
           this.render();
         }
+      });
+    });
+
+    // Busca e Filtros da Aba de Habilidades Pré-Aprovadas do Workspace
+    const wsSearchInput = this.dialog.querySelector('#input-search-workspace-skills') as HTMLInputElement;
+    wsSearchInput?.addEventListener('input', () => {
+      this.workspaceSearchQuery = wsSearchInput.value;
+      this.render();
+      const newWsSearch = this.dialog.querySelector('#input-search-workspace-skills') as HTMLInputElement;
+      if (newWsSearch) {
+        newWsSearch.focus();
+        newWsSearch.setSelectionRange(newWsSearch.value.length, newWsSearch.value.length);
+      }
+    });
+
+    const wsCategorySelect = this.dialog.querySelector('#select-workspace-category-filter') as HTMLSelectElement;
+    wsCategorySelect?.addEventListener('change', () => {
+      this.workspaceCategoryFilter = wsCategorySelect.value;
+      this.render();
+    });
+
+    // Botões de Importar Habilidade Pré-Aprovada do Workspace para este Vértice
+    this.dialog.querySelectorAll<HTMLButtonElement>('.btn-import-workspace-skill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const skillId = btn.getAttribute('data-skill-id');
+        if (!skillId) return;
+
+        const approvedItem = this.workspaceManager.getApprovedSkills().find(s => s.id === skillId);
+        if (!approvedItem) return;
+
+        const nodeSkill = this.workspaceManager.convertToNodeSkill(approvedItem);
+        if (!node.agentSettings) node.agentSettings = { inheritSandbox: false, inheritModel: false, inheritCodeMode: false };
+        if (!node.agentSettings.skills) node.agentSettings.skills = [];
+
+        // Substitui ou adiciona
+        const existingIdx = node.agentSettings.skills.findIndex(s => s.id === nodeSkill.id);
+        if (existingIdx !== -1) {
+          node.agentSettings.skills[existingIdx] = nodeSkill;
+        } else {
+          node.agentSettings.skills.push(nodeSkill);
+        }
+        node.agentSettings.activeSkillId = nodeSkill.id;
+
+        if (node.agentSettings.model) {
+          node.agentSettings.model.promptTemplate = nodeSkill.systemPrompt;
+        }
+
+        const verdict = this.workspaceManager.auditSkill(nodeSkill, true);
+        this.bus?.emit('skill:import-requested', { skill: nodeSkill, nodeId: node.id, isCurated: true });
+
+        this.graph.updateNode(node.id, { agentSettings: node.agentSettings });
+        this.notificationMessage = `🛡️ Habilidade "${nodeSkill.name}" importada com sucesso e certificada pelo Workspace Auditor! (Risco: ${verdict.riskScore}/100)`;
+        this.notificationType = 'success';
+        this.activeTab = 'editor';
+        this.render();
       });
     });
 

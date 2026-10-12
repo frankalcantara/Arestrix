@@ -753,6 +753,74 @@ void ui_load_arestrix_file(webui::window::event* e) {
     }
 }
 
+// Wrapper JS -> C++ (Garantir Pastas do Workspace na Maquina do Usuario)
+void ui_ensure_workspace_directories(webui::window::event* e) {
+    try {
+        std::string payload = e->get_string();
+        std::string root = ".workspace";
+        std::string skills = ".workspace/skills";
+        std::string mcps = ".workspace/mcps";
+        std::string agents = ".workspace/agents";
+
+        if (!payload.empty() && payload[0] == '{') {
+            auto j = nlohmann::json::parse(payload);
+            root = j.value("root", root);
+            skills = j.value("skills", skills);
+            mcps = j.value("mcps", mcps);
+            agents = j.value("agents", agents);
+        }
+
+        std::filesystem::create_directories(root);
+        std::filesystem::create_directories(skills);
+        std::filesystem::create_directories(mcps);
+        std::filesystem::create_directories(agents);
+
+        std::cout << "[C++] Pastas de governanca do Workspace garantidas: " << root << "\n";
+        e->return_bool(true);
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_ensure_workspace_directories: " << ex.what() << "\n";
+        e->return_bool(false);
+    }
+}
+
+// Wrapper JS -> C++ (Gravar Asset / Arquivo do Workspace no Disco)
+void ui_write_workspace_asset(webui::window::event* e) {
+    try {
+        std::string payload = e->get_string();
+        if (payload.empty()) {
+            e->return_bool(false);
+            return;
+        }
+        auto j = nlohmann::json::parse(payload);
+        std::string filePath = j.value("filePath", "");
+        std::string content = j.value("content", "");
+
+        if (filePath.empty()) {
+            e->return_bool(false);
+            return;
+        }
+
+        std::filesystem::path p(filePath);
+        if (p.has_parent_path()) {
+            std::filesystem::create_directories(p.parent_path());
+        }
+
+        std::ofstream out(p, std::ios::out | std::ios::trunc);
+        if (!out.is_open()) {
+            e->return_bool(false);
+            return;
+        }
+        out << content;
+        out.close();
+
+        std::cout << "[C++] Workspace asset gravado: " << filePath << "\n";
+        e->return_bool(true);
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_write_workspace_asset: " << ex.what() << "\n";
+        e->return_bool(false);
+    }
+}
+
 void exit_app(webui::window::event* e) {
     std::cout << "[C++] Comando de encerramento recebido." << std::endl;
     webui::exit();
@@ -889,6 +957,8 @@ int main() {
     win.bind("list_subdirectories", ui_list_subdirectories);
     win.bind("save_arestrix_file", ui_save_arestrix_file);
     win.bind("load_arestrix_file", ui_load_arestrix_file);
+    win.bind("ensure_workspace_directories", ui_ensure_workspace_directories);
+    win.bind("write_workspace_asset", ui_write_workspace_asset);
     win.bind("exit_app", exit_app);
 
     // Registra o Emitter de Telemetria de Agentes em Tempo Real (Fase 10)
