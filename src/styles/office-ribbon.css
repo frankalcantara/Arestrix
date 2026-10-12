@@ -809,3 +809,85 @@
   color: #64748b;
   font-weight: 700;
 }
+
+/* --- Tela Salvar Como (Navegação de Discos e Pastas / Pacotes .arestrix) --- */
+.saveas-drives-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-saveas-drive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+  transition: all 0.15s ease-in-out;
+  cursor: pointer;
+  text-shadow: none !important;
+}
+
+.btn-saveas-drive:hover:not(.active-drive) {
+  background-color: #f1f5f9;
+  border-color: #0f6cbd;
+  color: #0f6cbd;
+}
+
+.btn-saveas-drive.active-drive {
+  background-color: #0f6cbd;
+  color: #ffffff;
+  border-color: #0f6cbd;
+}
+
+.saveas-folders-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.saveas-folder-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  user-select: none;
+  text-shadow: none !important;
+}
+
+.saveas-folder-card:hover {
+  background-color: #f1f5f9;
+  border-color: #0f6cbd;
+  transform: translateY(-1px);
+}
+
+.saveas-folder-card span {
+  text-shadow: none !important;
+}
+
+#saveas-path-preview {
+  display: inline-block;
+  background-color: #e2e8f0;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11.5px;
+  color: #0f172a;
+  text-shadow: none !important;
+}
+
+.backstage-brand-header {
+  user-select: none;
+  text-shadow: none !important;
+}
+
+.backstage-brand-header * {
+  text-shadow: none !important;
+}
+

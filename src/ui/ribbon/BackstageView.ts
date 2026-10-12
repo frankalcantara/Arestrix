@@ -12,7 +12,14 @@ export class BackstageView {
   private projectManager: ProjectManager;
   private codeModal: CodeModal;
   private globalDefaultsModal: GlobalDefaultsModal;
-  private activeSection: 'info' | 'new' | 'open' | 'export' = 'info';
+  private activeSection: 'info' | 'new' | 'open' | 'saveas' | 'export' = 'info';
+
+  // Estado da Tela "Salvar Como" (Navegação de Discos e Pastas)
+  private saveAsCurrentPath: string = '';
+  private saveAsDrives: string[] = ['C:\\'];
+  private saveAsSubdirectories: Array<{ name: string; path: string }> = [];
+  private saveAsFileName: string = '';
+  private saveAsFormat: 'arestrix' | 'json' = 'arestrix';
 
   constructor(graph: Graph, codeModal: CodeModal, globalDefaultsModal: GlobalDefaultsModal) {
     this.graph = graph;
@@ -30,10 +37,29 @@ export class BackstageView {
     }
   }
 
-  public async open(section: 'info' | 'new' | 'open' | 'export' = 'info'): Promise<void> {
+  public async initSaveAsState(): Promise<void> {
+    if (!this.saveAsCurrentPath) {
+      this.saveAsCurrentPath = await this.projectManager.getDefaultWorkspaceDirectory();
+      if (!this.saveAsCurrentPath || this.saveAsCurrentPath === '.') {
+        this.saveAsCurrentPath = 'C:/Projetos';
+      }
+    }
+    this.saveAsCurrentPath = this.saveAsCurrentPath.replace(/\\/g, '/');
+    this.saveAsDrives = await this.projectManager.listDrives();
+    this.saveAsSubdirectories = await this.projectManager.listSubdirectories(this.saveAsCurrentPath);
+    const proj = this.projectManager.getCurrentProject();
+    if (!this.saveAsFileName) {
+      this.saveAsFileName = (proj.name || 'projeto').toLowerCase().replace(/\s+/g, '_');
+    }
+  }
+
+  public async open(section: 'info' | 'new' | 'open' | 'saveas' | 'export' = 'info'): Promise<void> {
     this.activeSection = section;
     try {
       await this.projectManager.init();
+      if (this.activeSection === 'saveas') {
+        await this.initSaveAsState();
+      }
     } catch (_) {}
     if (this.overlay) {
       this.render();
@@ -58,8 +84,27 @@ export class BackstageView {
 
     this.overlay.innerHTML = `
       <div class="office-backstage-container">
-        <!-- BARRA LATERAL OFFICE (AZUL FLUENT) -->
+        <!-- BARRA LATERAL OFFICE (AZUL FLUENT & IDENTIDADE OFICIAL ARESTRIX) -->
         <div class="office-backstage-sidebar">
+          <div class="backstage-brand-header" style="padding: 16px 20px 12px 20px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.12); margin-bottom: 6px;">
+            <div style="width: 28px; height: 28px; flex-shrink: 0;">
+              <svg viewBox="0 0 124 124" width="28" height="28" fill="none" style="display:block;">
+                <g stroke="#F4F2EE" stroke-width="14" stroke-linecap="round">
+                  <line x1="62" y1="21" x2="22" y2="103"/>
+                  <line x1="62" y1="21" x2="102" y2="103"/>
+                </g>
+                <line x1="37" y1="73" x2="87" y2="73" stroke="#E8590C" stroke-width="12" stroke-linecap="round"/>
+                <circle cx="62" cy="21" r="11" fill="#F4F2EE"/>
+                <circle cx="22" cy="103" r="11" fill="#F4F2EE"/>
+                <circle cx="102" cy="103" r="11" fill="#F4F2EE"/>
+              </svg>
+            </div>
+            <div>
+              <div style="font-size: 15px; font-weight: 800; color: #F4F2EE; letter-spacing: -0.3px; line-height: 1;">Arestrix</div>
+              <div style="font-size: 9px; font-weight: 700; color: #E8590C; letter-spacing: 1.2px; text-transform: uppercase; margin-top: 2px;">Studio 2.0</div>
+            </div>
+          </div>
+
           <button class="backstage-back-btn" id="btn-backstage-close" title="Voltar ao Grafo (Esc)">
             <span class="backstage-back-icon">←</span>
             <span>Voltar ao Grafo</span>
@@ -77,6 +122,9 @@ export class BackstageView {
             </li>
             <li class="backstage-nav-item" id="btn-backstage-save">
               <span>💾</span> Salvar Workspace
+            </li>
+            <li class="backstage-nav-item ${this.activeSection === 'saveas' ? 'active' : ''}" data-section="saveas">
+              <span>📥</span> Salvar Como
             </li>
             <li class="backstage-nav-item ${this.activeSection === 'export' ? 'active' : ''}" data-section="export">
               <span>📤</span> Exportar Código
@@ -284,6 +332,103 @@ export class BackstageView {
           </div>
         `;
 
+      case 'saveas':
+        return `
+          <h2 class="backstage-header-title">Salvar Como</h2>
+          <p class="backstage-header-sub">Navegue pelas pastas e unidades de disco do sistema para salvar o pacote comprimido do projeto (<code>.arestrix</code>) ou manifesto JSON.</p>
+
+          <!-- BARRA DE DISCOS & LOCALIZAÇÃO RÁPIDA -->
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 22px; margin-bottom: 22px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Unidades de Disco:</span>
+                <div class="saveas-drives-list" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  ${this.saveAsDrives.map(drive => {
+                    const cleanDrive = drive.replace(/\\/g, '/');
+                    const isCurrent = this.saveAsCurrentPath.toUpperCase().startsWith(cleanDrive.replace(/\/$/, '').toUpperCase());
+                    return `
+                      <button class="tool-btn btn-saveas-drive ${isCurrent ? 'active-drive' : ''}" data-drive="${this.escapeHtml(cleanDrive)}" style="font-weight: 700; padding: 6px 14px; font-size: 12px; border-radius: 6px; ${isCurrent ? 'background: #0f6cbd; color: #ffffff; border: 1px solid #0f6cbd;' : 'background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1;'}">
+                        💾 ${this.escapeHtml(drive)}
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+
+              <button class="tool-btn btn-secondary" id="btn-saveas-browse-native" style="font-weight: 700; padding: 6px 16px; font-size: 12px; height: 32px; display: inline-flex; align-items: center; gap: 6px;">
+                <span>📂</span> Procurar Pasta no Windows...
+              </button>
+            </div>
+
+            <!-- BARRA DE NAVEGAÇÃO DE DIRETÓRIO (BREADCRUMB & SUBIR NÍVEL) -->
+            <div style="display: flex; align-items: center; gap: 10px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 12px;">
+              <button class="tool-btn btn-secondary" id="btn-saveas-up-dir" title="Subir um nível na árvore de pastas" style="padding: 4px 10px; font-size: 12px; font-weight: 700; height: 28px;">
+                📁 ⬆ Subir
+              </button>
+              <button class="tool-btn btn-secondary" id="btn-saveas-refresh-dir" title="Atualizar listagem" style="padding: 4px 10px; font-size: 12px; font-weight: 700; height: 28px;">
+                🔄 Atualizar
+              </button>
+
+              <div style="flex: 1; display: flex; align-items: center; gap: 4px; overflow-x: auto; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #334155; padding: 2px 4px;">
+                <span style="color: #64748b; font-weight: 700;">Local:</span>
+                <span style="font-weight: 600; color: #0f172a;" id="saveas-current-path-display">${this.escapeHtml(this.saveAsCurrentPath)}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ÁREA DE SUBPASTAS PARA NAVEGAÇÃO INTERATIVA -->
+          <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 22px; margin-bottom: 22px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h4 style="font-size: 13px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">Subpastas no Diretório Atual (Clique para abrir)</h4>
+              <span style="font-size: 11.5px; color: #64748b;">${this.saveAsSubdirectories.length} subpastas</span>
+            </div>
+
+            <div class="saveas-folders-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; max-height: 240px; overflow-y: auto; padding: 4px;">
+              ${this.saveAsSubdirectories.length > 0 ? this.saveAsSubdirectories.map(sub => `
+                <div class="saveas-folder-card" data-path="${this.escapeHtml(sub.path)}" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; transition: all 0.15s ease;">
+                  <span style="font-size: 18px;">📁</span>
+                  <span style="font-size: 12.5px; font-weight: 600; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(sub.name)}</span>
+                </div>
+              `).join('') : `
+                <div style="grid-column: 1 / -1; padding: 24px; text-align: center; color: #64748b; font-size: 12.5px; background: #f8fafc; border-radius: 8px;">
+                  Nenhuma subpasta encontrada no diretório atual. Você pode salvar diretamente aqui.
+                </div>
+              `}
+            </div>
+          </div>
+
+          <!-- PAINEL DE SALVAMENTO (ESTILO DIÁLOGO OFFICE SAVE AS) -->
+          <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 20px 24px;">
+            <h4 style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 14px;">Propriedades do Pacote a Salvar</h4>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+              <div>
+                <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Nome do Arquivo / Projeto:</label>
+                <input type="text" id="saveas-input-filename" value="${this.escapeHtml(this.saveAsFileName)}" placeholder="Ex: meu_projeto" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 600; color: #0f172a; box-sizing: border-box;" />
+              </div>
+
+              <div>
+                <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Tipo de Arquivo:</label>
+                <select id="saveas-select-format" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 600; color: #0f172a; box-sizing: border-box; background: #ffffff;">
+                  <option value="arestrix" ${this.saveAsFormat === 'arestrix' ? 'selected' : ''}>Pacote Arestrix Comprimido (*.arestrix) - Padrão Office</option>
+                  <option value="json" ${this.saveAsFormat === 'json' ? 'selected' : ''}>Manifesto do Projeto JSON (*.json)</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+              <div style="font-size: 12px; color: #475569;">
+                <span>Destino final:</span>
+                <code id="saveas-path-preview" style="background: #e2e8f0; padding: 3px 8px; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #0f172a;">${this.escapeHtml(this.saveAsCurrentPath)}/${this.escapeHtml(this.saveAsFileName)}.${this.saveAsFormat}</code>
+              </div>
+
+              <button class="tool-btn btn-action" id="btn-saveas-submit" style="background: #0f6cbd; color: #ffffff; font-weight: 700; padding: 10px 26px; height: 38px; font-size: 13px; display: inline-flex; align-items: center; gap: 8px;">
+                <span>💾</span> Salvar Pacote Arestrix
+              </button>
+            </div>
+          </div>
+        `;
+
       case 'export':
         return `
           <h2 class="backstage-header-title">Exportação de Engenharia C++20</h2>
@@ -334,11 +479,124 @@ export class BackstageView {
           this.activeSection = sec;
           try {
             await this.projectManager.init();
+            if (this.activeSection === 'saveas') {
+              await this.initSaveAsState();
+            }
           } catch (_) {}
           this.render();
         }
       });
     });
+
+    // Controles da Tela "Salvar Como"
+    if (this.activeSection === 'saveas') {
+      // 1. Botões de Unidades de Disco
+      this.overlay.querySelectorAll<HTMLButtonElement>('.btn-saveas-drive').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const drive = btn.dataset.drive;
+          if (drive) {
+            this.saveAsCurrentPath = drive.replace(/\\/g, '/');
+            this.saveAsSubdirectories = await this.projectManager.listSubdirectories(this.saveAsCurrentPath);
+            this.render();
+          }
+        });
+      });
+
+      // 2. Navegação em Pastas
+      this.overlay.querySelectorAll<HTMLElement>('.saveas-folder-card').forEach(card => {
+        card.addEventListener('click', async () => {
+          const p = card.dataset.path;
+          if (p) {
+            this.saveAsCurrentPath = p.replace(/\\/g, '/');
+            this.saveAsSubdirectories = await this.projectManager.listSubdirectories(this.saveAsCurrentPath);
+            this.render();
+          }
+        });
+      });
+
+      // 3. Subir Nível
+      this.overlay.querySelector('#btn-saveas-up-dir')?.addEventListener('click', async () => {
+        const cur = this.saveAsCurrentPath.replace(/\\/g, '/').replace(/\/$/, '');
+        const lastSlash = cur.lastIndexOf('/');
+        if (lastSlash > 0) {
+          this.saveAsCurrentPath = cur.substring(0, lastSlash);
+          if (/^[a-zA-Z]:$/.test(this.saveAsCurrentPath)) {
+            this.saveAsCurrentPath += '/';
+          }
+        } else {
+          this.saveAsCurrentPath = 'C:/';
+        }
+        this.saveAsSubdirectories = await this.projectManager.listSubdirectories(this.saveAsCurrentPath);
+        this.render();
+      });
+
+      // 4. Atualizar
+      this.overlay.querySelector('#btn-saveas-refresh-dir')?.addEventListener('click', async () => {
+        this.saveAsSubdirectories = await this.projectManager.listSubdirectories(this.saveAsCurrentPath);
+        this.render();
+      });
+
+      // 5. Procurar Nativo
+      this.overlay.querySelector('#btn-saveas-browse-native')?.addEventListener('click', async () => {
+        try {
+          if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
+            const picked = await (window as any).webui.call('pick_folder');
+            if (picked && picked.trim()) {
+              this.saveAsCurrentPath = picked.trim().replace(/\\/g, '/');
+              this.saveAsSubdirectories = await this.projectManager.listSubdirectories(this.saveAsCurrentPath);
+              this.render();
+            }
+          }
+        } catch (_) {}
+      });
+
+      // 6. Atualização de Nome do Arquivo
+      const nameInput = this.overlay.querySelector('#saveas-input-filename') as HTMLInputElement;
+      nameInput?.addEventListener('input', () => {
+        this.saveAsFileName = nameInput.value;
+        const preview = this.overlay?.querySelector('#saveas-path-preview');
+        if (preview) {
+          preview.textContent = `${this.saveAsCurrentPath}/${this.saveAsFileName}.${this.saveAsFormat}`;
+        }
+      });
+
+      // 7. Atualização do Formato
+      const formatSelect = this.overlay.querySelector('#saveas-select-format') as HTMLSelectElement;
+      formatSelect?.addEventListener('change', () => {
+        this.saveAsFormat = formatSelect.value as any;
+        const preview = this.overlay?.querySelector('#saveas-path-preview');
+        if (preview) {
+          preview.textContent = `${this.saveAsCurrentPath}/${this.saveAsFileName}.${this.saveAsFormat}`;
+        }
+      });
+
+      // 8. Executar Salvamento do Arquivo
+      this.overlay.querySelector('#btn-saveas-submit')?.addEventListener('click', async () => {
+        const fileName = (this.saveAsFileName || 'projeto').trim();
+        if (!fileName) {
+          if (typeof alert !== 'undefined') alert('Por favor, informe o nome do arquivo.');
+          return;
+        }
+
+        if (this.saveAsFormat === 'arestrix') {
+          const res = await this.projectManager.saveProjectAsArestrix(this.saveAsCurrentPath, fileName, this.graph);
+          if (res && res.success) {
+            if (typeof alert !== 'undefined') {
+              alert(`💾 Pacote Arestrix salvo com sucesso!\n\nArquivo: ${res.filePath}\nO projeto completo, opções e grafos foram comprimidos no pacote .arestrix.`);
+            }
+            this.render();
+          } else {
+            if (typeof alert !== 'undefined') alert('❌ Ocorreu um erro ao salvar o pacote Arestrix.');
+          }
+        } else {
+          const ok = await this.projectManager.saveProject(this.graph);
+          if (ok) {
+            if (typeof alert !== 'undefined') alert(`💾 Projeto e grafos salvos com sucesso em formato JSON!`);
+            this.render();
+          }
+        }
+      });
+    }
 
     if (!this.overlay) return;
 

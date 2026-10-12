@@ -42,8 +42,16 @@
   --radius-sidebar: 32px;
   --radius-tooltip: 16px;
 
+  /* --- Cores Oficiais da Marca Arestrix (Manual de Marca) --- */
+  --brand-grafite: #14151A;
+  --brand-papel: #F4F2EE;
+  --brand-brasa: #E8590C;
+  --brand-ardosia: #4B4F5C;
+  --font-display: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-tech: 'IBM Plex Mono', 'Cascadia Code', monospace;
+
   /* --- Tipografia --- */
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* ==========================================================================

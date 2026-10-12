@@ -334,6 +334,17 @@ export interface IRecentProjectItem {
   lastOpened: string;
 }
 
+export interface IArestrixBundle {
+  format: 'arestrix-package';
+  version: string;
+  generator?: string;
+  exportedAt: string;
+  manifest: IProjectManifest;
+  pipelines: Record<string, IGraphSchema | any>;
+  environment?: Record<string, string>;
+  globalDefaults?: IGlobalPipelineDefaults;
+}
+
 export interface IGraphSchema {
   version: string;
   metadata: IGraphMetadata;

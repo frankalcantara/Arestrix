@@ -1,7 +1,86 @@
 import { EventBus, globalEventBus } from './EventBus.ts';
-import { IProjectManifest, IRecentProjectItem } from './types.ts';
+import { IProjectManifest, IRecentProjectItem, IArestrixBundle } from './types.ts';
 import { Graph } from './Graph.ts';
 import { hashProjectName } from './hash.ts';
+
+// Utilitários de Compressão e Base64 para Pacotes .arestrix
+export async function compressGzip(data: string | Uint8Array): Promise<Uint8Array> {
+  const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+  if (typeof CompressionStream !== 'undefined') {
+    const cs = new CompressionStream('gzip');
+    const writer = cs.writable.getWriter();
+    writer.write(bytes as any);
+    writer.close();
+    const reader = cs.readable.getReader();
+    const chunks: Uint8Array[] = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) chunks.push(value);
+    }
+    const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      result.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return result;
+  }
+  return bytes;
+}
+
+export async function decompressGzip(data: Uint8Array): Promise<string> {
+  if (typeof DecompressionStream !== 'undefined') {
+    const ds = new DecompressionStream('gzip');
+    const writer = ds.writable.getWriter();
+    writer.write(data as any);
+    writer.close();
+    const reader = ds.readable.getReader();
+    const chunks: Uint8Array[] = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) chunks.push(value);
+    }
+    const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      result.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return new TextDecoder().decode(result);
+  }
+  return new TextDecoder().decode(data);
+}
+
+export function uint8ArrayToBase64(bytes: Uint8Array): string {
+  const nodeBuf = (globalThis as any).Buffer;
+  if (nodeBuf && typeof nodeBuf.from === 'function') {
+    return nodeBuf.from(bytes).toString('base64');
+  }
+  let binary = '';
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+export function base64ToUint8Array(base64: string): Uint8Array {
+  const nodeBuf = (globalThis as any).Buffer;
+  if (nodeBuf && typeof nodeBuf.from === 'function') {
+    return new Uint8Array(nodeBuf.from(base64, 'base64'));
+  }
+  const binary = atob(base64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
 
 export class ProjectManager {
   private static instance: ProjectManager;
@@ -391,6 +470,185 @@ export class ProjectManager {
         localStorage.setItem('arestrix_recent_projects', JSON.stringify(this.recentProjects));
       } catch (_) {}
     }
+  }
+
+  // --- Pacote de Projeto Comprimido (.arestrix) ---
+
+  public exportArestrixBundle(graph: Graph): IArestrixBundle {
+    const manifest = this.getCurrentProject();
+    const pipelines: Record<string, any> = {
+      main: graph.toJSON()
+    };
+
+    // Inclui pipelines em cache se houver outros
+    this.pipelineStorage.forEach((val, key) => {
+      try {
+        pipelines[key] = JSON.parse(val);
+      } catch (_) {
+        pipelines[key] = val;
+      }
+    });
+
+    return {
+      format: 'arestrix-package',
+      version: '1.0.0',
+      generator: 'Arestrix Studio 2.0',
+      exportedAt: new Date().toISOString(),
+      manifest,
+      pipelines,
+      environment: manifest.environment || {},
+      globalDefaults: manifest.globalDefaults || graph.getGlobalDefaults()
+    };
+  }
+
+  public async compressArestrixBundle(bundle: IArestrixBundle): Promise<Uint8Array> {
+    const jsonStr = JSON.stringify(bundle, null, 2);
+    return await compressGzip(jsonStr);
+  }
+
+  public async decompressArestrixBundle(data: Uint8Array): Promise<IArestrixBundle> {
+    const jsonStr = await decompressGzip(data);
+    const parsed = JSON.parse(jsonStr);
+    if (!parsed || parsed.format !== 'arestrix-package') {
+      throw new Error('Arquivo não possui o formato de pacote válido do Arestrix (.arestrix)');
+    }
+    return parsed as IArestrixBundle;
+  }
+
+  public async saveProjectAsArestrix(
+    targetDir: string,
+    fileName: string,
+    graph: Graph
+  ): Promise<{ success: boolean; filePath: string; bundle: IArestrixBundle }> {
+    let cleanName = fileName.trim();
+    if (!cleanName) cleanName = this.currentProject.name || 'projeto';
+    if (!cleanName.endsWith('.arestrix')) {
+      cleanName += '.arestrix';
+    }
+
+    const normalizedDir = (targetDir || '.').replace(/\\/g, '/').replace(/\/$/, '');
+    const fullPath = `${normalizedDir}/${cleanName}`;
+
+    const bundle = this.exportArestrixBundle(graph);
+    const baseProjectName = cleanName.replace(/\.arestrix$/, '');
+    bundle.manifest.name = baseProjectName;
+    bundle.manifest.rootPath = normalizedDir;
+    bundle.manifest.updatedAt = new Date().toISOString();
+
+    const compressed = await this.compressArestrixBundle(bundle);
+    const b64 = uint8ArrayToBase64(compressed);
+
+    let savedOnDisk = false;
+    try {
+      if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
+        const ok = await (window as any).webui.call('save_arestrix_file', JSON.stringify({
+          targetPath: fullPath,
+          content: b64,
+          isBase64: true
+        }));
+        savedOnDisk = ok;
+      }
+    } catch (e) {
+      console.warn('[ProjectManager] Erro ao salvar via WebUI:', e);
+    }
+
+    // Se estiver em navegador sem backend C++, dispara download direto do arquivo
+    if (!savedOnDisk && typeof document !== 'undefined' && typeof Blob !== 'undefined') {
+      try {
+        const blob = new Blob([compressed as any], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = cleanName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        savedOnDisk = true;
+      } catch (_) {}
+    }
+
+    this.currentProject = {
+      ...this.currentProject,
+      name: baseProjectName,
+      rootPath: normalizedDir,
+      updatedAt: bundle.manifest.updatedAt
+    };
+
+    this.addRecentItem({
+      projectId: bundle.manifest.projectId || hashProjectName(baseProjectName),
+      name: baseProjectName,
+      rootPath: normalizedDir,
+      manifestPath: fullPath,
+      lastOpened: new Date().toISOString()
+    });
+
+    this.bus.emit('project:saved', this.currentProject);
+    this.bus.emit('project:exported', { filePath: fullPath, bundle });
+
+    return { success: true, filePath: fullPath, bundle };
+  }
+
+  public async loadArestrixBundle(bundle: IArestrixBundle, graph?: Graph): Promise<boolean> {
+    if (!bundle || bundle.format !== 'arestrix-package' || !bundle.manifest) {
+      return false;
+    }
+
+    this.currentProject = {
+      ...this.createDefaultManifest(),
+      ...bundle.manifest
+    };
+
+    if (bundle.pipelines) {
+      for (const [key, pipe] of Object.entries(bundle.pipelines)) {
+        this.pipelineStorage.set(key, JSON.stringify(pipe));
+      }
+      if (bundle.pipelines['main'] && graph) {
+        graph.fromJSON(bundle.pipelines['main']);
+      }
+    }
+
+    this.addRecentItem({
+      projectId: this.currentProject.projectId,
+      name: this.currentProject.name,
+      rootPath: this.currentProject.rootPath,
+      manifestPath: `${this.currentProject.rootPath}/${this.currentProject.name}.arestrix`,
+      lastOpened: new Date().toISOString()
+    });
+
+    if (graph) {
+      this.syncWithGraph(graph);
+    }
+
+    this.bus.emit('project:loaded', this.currentProject);
+    this.bus.emit('project:changed', this.currentProject);
+    return true;
+  }
+
+  public async listDrives(): Promise<string[]> {
+    try {
+      if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
+        const raw = await (window as any).webui.call('list_drives');
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list) && list.length > 0) return list;
+        }
+      }
+    } catch (_) {}
+    return ['C:\\'];
+  }
+
+  public async listSubdirectories(dirPath: string): Promise<Array<{ name: string; path: string }>> {
+    try {
+      if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
+        const raw = await (window as any).webui.call('list_subdirectories', dirPath);
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) return list;
+        }
+      }
+    } catch (_) {}
+    return [];
   }
 
   // Auxiliar para reset em testes unitários

@@ -117,8 +117,19 @@ export class OfficeRibbon {
       <div class="office-titlebar">
         <div class="office-titlebar-left">
           <div class="office-brand-badge">
-            <div class="office-brand-icon">⚡</div>
-            <span>Arestrix Studio</span>
+            <div class="office-brand-icon" style="background: #14151A; display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; padding: 2px;">
+              <svg viewBox="0 0 124 124" width="18" height="18" fill="none" style="display:block;">
+                <g stroke="#F4F2EE" stroke-width="14" stroke-linecap="round">
+                  <line x1="62" y1="21" x2="22" y2="103"/>
+                  <line x1="62" y1="21" x2="102" y2="103"/>
+                </g>
+                <line x1="37" y1="73" x2="87" y2="73" stroke="#E8590C" stroke-width="12" stroke-linecap="round"/>
+                <circle cx="62" cy="21" r="11" fill="#F4F2EE"/>
+                <circle cx="22" cy="103" r="11" fill="#F4F2EE"/>
+                <circle cx="102" cy="103" r="11" fill="#F4F2EE"/>
+              </svg>
+            </div>
+            <span style="font-weight: 800; font-family: 'Space Grotesk', sans-serif; letter-spacing: -0.2px;">Arestrix <span style="color: #E8590C; font-size: 11px; font-weight: 700; letter-spacing: 0.8px;">STUDIO</span></span>
           </div>
 
           <!-- Acesso Rápido -->
@@ -847,6 +858,13 @@ export class OfficeRibbon {
 
   private bindKeyboardShortcuts(): void {
     window.addEventListener('keydown', (e: KeyboardEvent) => {
+      // Ctrl+Shift+S abre a tela "Salvar Como" no Backstage
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        this.backstageView.open('saveas');
+        return;
+      }
+
       // Ctrl+S salva imediatamente todo o projeto e grafo
       if (e.ctrlKey && e.key.toLowerCase() === 's') {
         e.preventDefault();

@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-10-09T16:11:22Z",
+  "createdAt": "2026-10-12T00:04:18.647Z",
   "database": {
     "filePath": "storage/database.sqlite",
     "type": "sqlite",
@@ -7,11 +7,53 @@
   },
   "description": "Workspace nativo inicial do Arestrix Studio",
   "environment": {},
-  "globalDefaults": {},
+  "globalDefaults": {
+    "codeMode": {
+      "allowedTools": [
+        "write",
+        "edit",
+        "read",
+        "bash",
+        "validate_svg"
+      ],
+      "customScripts": [
+        "python scripts/audit_exercises.py"
+      ]
+    },
+    "memory": {
+      "allowedKeys": [],
+      "domains": [],
+      "enabled": false,
+      "persistent": false,
+      "readBlackboard": false,
+      "recordLessons": false,
+      "semanticLessons": false,
+      "writeBlackboard": false
+    },
+    "model": {
+      "model": "deepseek-flash",
+      "promptTemplate": "Processe o artigo  conforme as diretrizes do plano.md",
+      "provider": "deepseek",
+      "skillPath": ".agents/redigir-math/SKILL.md"
+    },
+    "sandbox": {
+      "isolationLevel": "container",
+      "maxMemoryMB": 512,
+      "network": "egress_llm_only",
+      "readOnlyMounts": [
+        "plano.md",
+        ".agents/"
+      ],
+      "readWriteMounts": [
+        "aulas/"
+      ],
+      "timeoutSeconds": 300
+    }
+  },
   "name": "Workspace Padrão",
   "pipelines": [
     {
-      "description": "",
+      "description": "Pipeline central do projeto",
       "file": "pipelines/main.json",
       "id": "main",
       "isPrimary": true,
@@ -19,7 +61,7 @@
     }
   ],
   "projectId": "default-workspace",
-  "rootPath": "C:\\Projetos\\NodeForge",
-  "updatedAt": "2026-10-09T16:12:33Z",
+  "rootPath": ".",
+  "updatedAt": "2026-10-12T00:04:56Z",
   "version": "1.0.0"
 }

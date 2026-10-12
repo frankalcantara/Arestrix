@@ -574,6 +574,69 @@ void ui_pick_folder(webui::window::event* e) {
     e->return_string(selectedPath);
 }
 
+// Helper Base64 para C++
+namespace {
+static const std::string B64_CHARS = 
+             "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+             "abcdefghijklmnopqrstuvwxyz"
+             "0123456789+/";
+
+static std::vector<unsigned char> base64_decode_bytes(const std::string& in) {
+    std::vector<unsigned char> out;
+    std::vector<int> T(256, -1);
+    for (int i = 0; i < 64; i++) T[B64_CHARS[i]] = i;
+
+    int val = 0, valb = -8;
+    for (unsigned char c : in) {
+        if (T[c] == -1) break;
+        val = (val << 6) + T[c];
+        valb += 6;
+        if (valb >= 0) {
+            out.push_back(static_cast<unsigned char>((val >> valb) & 0xFF));
+            valb -= 8;
+        }
+    }
+    return out;
+}
+
+static std::string base64_encode_bytes(const std::vector<unsigned char>& data) {
+    std::string out;
+    int val = 0, valb = -6;
+    for (unsigned char c : data) {
+        val = (val << 8) + c;
+        valb += 8;
+        while (valb >= 0) {
+            out.push_back(B64_CHARS[(val >> valb) & 0x3F]);
+            valb -= 6;
+        }
+    }
+    if (valb > -6) out.push_back(B64_CHARS[((val << 8) >> (valb + 8)) & 0x3F]);
+    while (out.size() % 4) out.push_back('=');
+    return out;
+}
+} // namespace
+
+// Wrapper JS -> C++ (Listar Unidades de Disco Lógicas no Sistema)
+void ui_list_drives(webui::window::event* e) {
+    nlohmann::json drives = nlohmann::json::array();
+#ifdef _WIN32
+    char buffer[512] = {0};
+    DWORD len = GetLogicalDriveStringsA(sizeof(buffer) - 1, buffer);
+    if (len > 0 && len < sizeof(buffer)) {
+        char* p = buffer;
+        while (*p) {
+            std::string driveStr(p);
+            drives.push_back(driveStr);
+            p += driveStr.length() + 1;
+        }
+    }
+#endif
+    if (drives.empty()) {
+        drives.push_back("C:\\");
+    }
+    e->return_string(drives.dump());
+}
+
 // Wrapper JS -> C++ (Listar Subdiretórios para Navegação Interativa)
 void ui_list_subdirectories(webui::window::event* e) {
     try {
@@ -582,18 +645,111 @@ void ui_list_subdirectories(webui::window::event* e) {
         std::filesystem::path p(dirPath);
         nlohmann::json j = nlohmann::json::array();
         if (std::filesystem::exists(p) && std::filesystem::is_directory(p)) {
-            for (const auto& entry : std::filesystem::directory_iterator(p)) {
+            std::vector<std::pair<std::string, std::string>> dirs;
+            for (const auto& entry : std::filesystem::directory_iterator(p, std::filesystem::directory_options::skip_permission_denied)) {
                 if (entry.is_directory()) {
-                    j.push_back({
-                        {"name", entry.path().filename().string()},
-                        {"path", entry.path().string()}
-                    });
+                    dirs.push_back({entry.path().filename().string(), entry.path().string()});
                 }
+            }
+            std::sort(dirs.begin(), dirs.end(), [](const auto& a, const auto& b) {
+                return a.first < b.first;
+            });
+            for (const auto& d : dirs) {
+                j.push_back({
+                    {"name", d.first},
+                    {"path", d.second}
+                });
             }
         }
         e->return_string(j.dump());
     } catch (...) {
         e->return_string("[]");
+    }
+}
+
+// Wrapper JS -> C++ (Salvar Pacote de Projeto Arestrix Comprimido / Binário ou JSON)
+void ui_save_arestrix_file(webui::window::event* e) {
+    try {
+        std::string jsonStr = e->get_string();
+        auto j = nlohmann::json::parse(jsonStr);
+        std::string targetPath = j.value("targetPath", "");
+        std::string content = j.value("content", "");
+        bool isBase64 = j.value("isBase64", false);
+
+        if (targetPath.empty()) {
+            e->return_bool(false);
+            return;
+        }
+
+        std::filesystem::path p(targetPath);
+        if (p.has_parent_path()) {
+            std::filesystem::create_directories(p.parent_path());
+        }
+
+        if (isBase64) {
+            auto bytes = base64_decode_bytes(content);
+            std::ofstream out(p, std::ios::binary);
+            if (!out.is_open()) {
+                e->return_bool(false);
+                return;
+            }
+            out.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+            out.close();
+        } else {
+            std::ofstream out(p, std::ios::binary);
+            if (!out.is_open()) {
+                e->return_bool(false);
+                return;
+            }
+            out.write(content.data(), content.size());
+            out.close();
+        }
+
+        std::cout << "[C++] Pacote Arestrix gravado com sucesso: " << targetPath << "\n";
+        e->return_bool(true);
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_save_arestrix_file: " << ex.what() << "\n";
+        e->return_bool(false);
+    }
+}
+
+// Wrapper JS -> C++ (Carregar Pacote de Projeto Arestrix Comprimido / Binário)
+void ui_load_arestrix_file(webui::window::event* e) {
+    try {
+        std::string payload = e->get_string();
+        std::string filePath = payload;
+        if (!payload.empty() && payload[0] == '{') {
+            auto j = nlohmann::json::parse(payload);
+            filePath = j.value("filePath", "");
+        }
+
+        std::filesystem::path p(filePath);
+        if (!std::filesystem::exists(p) || !std::filesystem::is_regular_file(p)) {
+            e->return_string("{\"success\":false,\"error\":\"Arquivo nao encontrado\"}");
+            return;
+        }
+
+        std::ifstream in(p, std::ios::binary);
+        if (!in.is_open()) {
+            e->return_string("{\"success\":false,\"error\":\"Falha ao abrir arquivo\"}");
+            return;
+        }
+
+        std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        in.close();
+
+        std::string b64 = base64_encode_bytes(bytes);
+        nlohmann::json resp;
+        resp["success"] = true;
+        resp["base64"] = b64;
+        resp["isBase64"] = true;
+        resp["size"] = bytes.size();
+        resp["filePath"] = p.string();
+
+        e->return_string(resp.dump());
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_load_arestrix_file: " << ex.what() << "\n";
+        e->return_string("{\"success\":false,\"error\":\"Excecao interna\"}");
     }
 }
 
@@ -729,7 +885,10 @@ int main() {
     win.bind("set_env_var", ui_set_env_var);
     win.bind("pick_folder", ui_pick_folder);
     win.bind("get_current_working_dir", ui_get_current_working_dir);
+    win.bind("list_drives", ui_list_drives);
     win.bind("list_subdirectories", ui_list_subdirectories);
+    win.bind("save_arestrix_file", ui_save_arestrix_file);
+    win.bind("load_arestrix_file", ui_load_arestrix_file);
     win.bind("exit_app", exit_app);
 
     // Registra o Emitter de Telemetria de Agentes em Tempo Real (Fase 10)
