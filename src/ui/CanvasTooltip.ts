@@ -20,7 +20,7 @@ export class CanvasTooltip {
   private visible: boolean = false;
   private readonly delayMs: number;
 
-  constructor(delayMs: number = 350) {
+  constructor(delayMs: number = 120) {
     this.delayMs = delayMs;
   }
 

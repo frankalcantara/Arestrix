@@ -314,7 +314,8 @@ export class SvgNodeView {
     hitbox.setAttribute('cx', String(px));
     hitbox.setAttribute('cy', String(py));
     hitbox.setAttribute('r', String(THEME.port.hitboxRadius));
-    hitbox.setAttribute('fill', 'transparent');
+    hitbox.setAttribute('fill', 'rgba(0, 0, 0, 0.001)');
+    hitbox.setAttribute('pointer-events', 'all');
     hitbox.setAttribute('data-port-id', port.id);
     hitbox.setAttribute('data-direction', port.direction);
     hitbox.style.cursor = 'crosshair';
@@ -324,9 +325,26 @@ export class SvgNodeView {
     const tooltipTitle = `${port.name || (isInput ? 'in' : 'out')} · ${directionLabel}`;
     const tooltipDesc = port.dataType ? `Tipo: ${port.dataType}` : undefined;
 
-    hitbox.addEventListener('pointerenter', (e: PointerEvent) => {
-      this.tooltip.show(`port_${this.nodeData.id}_${port.id}`, { title: tooltipTitle, description: tooltipDesc }, e.clientX, e.clientY);
-    });
+    // Tooltip SVG nativo acessível
+    const portTitleEl = document.createElementNS(SVG_NS, 'title');
+    portTitleEl.textContent = tooltipDesc ? `${tooltipTitle} (${tooltipDesc})` : tooltipTitle;
+    portGroup.appendChild(portTitleEl);
+
+    const showPortTooltip = (e: PointerEvent) => {
+      let anchorX = e.clientX;
+      let anchorY = e.clientY;
+      if (typeof hitbox.getBoundingClientRect === 'function') {
+        const rect = hitbox.getBoundingClientRect();
+        if (rect.width > 0) {
+          anchorX = rect.left + rect.width / 2;
+          anchorY = rect.top;
+        }
+      }
+      this.tooltip.show(`port_${this.nodeData.id}_${port.id}`, { title: tooltipTitle, description: tooltipDesc }, anchorX, anchorY);
+    };
+
+    hitbox.addEventListener('pointerenter', showPortTooltip);
+    hitbox.addEventListener('pointermove', showPortTooltip);
     hitbox.addEventListener('pointerleave', () => this.tooltip.hide());
 
     if (isInput) {
@@ -379,7 +397,13 @@ export class SvgNodeView {
       const btnGroup = document.createElementNS(SVG_NS, 'g');
       btnGroup.setAttribute('class', 'vertex-action-btn');
       btnGroup.setAttribute('data-action', action.type);
+      btnGroup.setAttribute('pointer-events', 'all');
       btnGroup.style.cursor = 'pointer';
+
+      // Tooltip nativo acessível
+      const titleEl = document.createElementNS(SVG_NS, 'title');
+      titleEl.textContent = `${action.label}: ${action.description}`;
+      btnGroup.appendChild(titleEl);
 
       // Círculo de fundo de hover
       const hoverBg = document.createElementNS(SVG_NS, 'circle');
@@ -388,6 +412,7 @@ export class SvgNodeView {
       hoverBg.setAttribute('r', String(a.buttonSize / 2));
       hoverBg.setAttribute('fill', 'transparent');
       hoverBg.setAttribute('class', 'action-btn-hover-bg');
+      hoverBg.setAttribute('pointer-events', 'none');
       btnGroup.appendChild(hoverBg);
       this.actionHoverBgs.set(action.type, hoverBg);
 
@@ -398,25 +423,39 @@ export class SvgNodeView {
         'transform',
         `translate(${cx - iconSize / 2}, ${cy - iconSize / 2}) scale(${iconSize / 24})`
       );
+      iconEl.setAttribute('pointer-events', 'none');
       btnGroup.appendChild(iconEl);
 
-      // Hitbox do botão
+      // Hitbox do botão com área de captura garantida
       const hit = document.createElementNS(SVG_NS, 'circle');
       hit.setAttribute('cx', String(cx));
       hit.setAttribute('cy', String(cy));
       hit.setAttribute('r', String(a.buttonSize / 2));
-      hit.setAttribute('fill', 'transparent');
+      hit.setAttribute('fill', 'rgba(0, 0, 0, 0.001)');
+      hit.setAttribute('pointer-events', 'all');
 
-      // Interações de hover e clique do botão
-      hit.addEventListener('pointerenter', (e: PointerEvent) => {
+      const showActionTooltip = (e: PointerEvent) => {
         hoverBg.setAttribute('fill', '#EEF2FF');
+        let anchorX = e.clientX;
+        let anchorY = e.clientY;
+        if (typeof hit.getBoundingClientRect === 'function') {
+          const rect = hit.getBoundingClientRect();
+          if (rect.width > 0) {
+            anchorX = rect.left + rect.width / 2;
+            anchorY = rect.top;
+          }
+        }
         this.tooltip.show(
           `act_${this.nodeData.id}_${action.type}`,
           { title: action.label, description: action.description },
-          e.clientX,
-          e.clientY
+          anchorX,
+          anchorY
         );
-      });
+      };
+
+      // Interações de hover e clique do botão
+      hit.addEventListener('pointerenter', showActionTooltip);
+      hit.addEventListener('pointermove', showActionTooltip);
       hit.addEventListener('pointerleave', () => {
         hoverBg.setAttribute('fill', 'transparent');
         this.tooltip.hide();

@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-10-12T01:38:36.941Z",
+  "createdAt": "2026-10-12T02:02:53.519Z",
   "database": {
     "filePath": "storage/database.sqlite",
     "type": "sqlite",
@@ -55,6 +55,6 @@
   ],
   "projectId": "default-workspace",
   "rootPath": ".",
-  "updatedAt": "2026-10-12T01:39:20Z",
+  "updatedAt": "2026-10-12T02:03:52Z",
   "version": "1.0.0"
 }

@@ -44,7 +44,7 @@ export class InteractionManager {
   private rubberBandLine: Line2 | null = null;
 
   // Fase 15.2: hover com tooltip e destaque de botões de ação
-  private tooltip: CanvasTooltip = new CanvasTooltip(350);
+  private tooltip: CanvasTooltip = new CanvasTooltip(120);
   private hoveredActionNode: NodeView | null = null;
 
   constructor(
@@ -259,6 +259,12 @@ export class InteractionManager {
     }
 
     // C. Cursor Hover feedback & Tooltip (Fase 15.2)
+    // Se o cursor estiver sobre a camada SVG (botões de ação, portas ou vértices), não interfere com o hover
+    const targetEl = e.target as HTMLElement | null;
+    if (targetEl && targetEl.closest?.('.arestrix-svg-vertex, .arestrix-canvas-svg-layer')) {
+      return;
+    }
+
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const interactiveTargets: THREE.Object3D[] = [];
     this.nodeViews.forEach(nv => {
