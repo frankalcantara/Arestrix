@@ -1,3 +1,6 @@
 [submodule "third_party/SkillSpector"]
 	path = third_party/SkillSpector
 	url = https://github.com/NVIDIA/SkillSpector
+[submodule "third_party/monaco-editor"]
+	path = third_party/monaco-editor
+	url = https://github.com/microsoft/monaco-editor.git

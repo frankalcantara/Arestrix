@@ -135,7 +135,7 @@ export class ModalWindowManager {
       ModalWindowManager.activeZIndex += 2;
       dialog.style.zIndex = ModalWindowManager.activeZIndex.toString();
       // Se houver um backdrop/overlay pai, também pode acompanhar se necessário
-      const parentOverlay = dialog.closest('.modal-overlay, .modal-backdrop') as HTMLElement;
+      const parentOverlay = typeof dialog.closest === 'function' ? (dialog.closest('.modal-overlay, .modal-backdrop') as HTMLElement) : null;
       if (parentOverlay) {
         parentOverlay.style.zIndex = (ModalWindowManager.activeZIndex - 1).toString();
       }
@@ -187,7 +187,7 @@ export class ModalWindowManager {
       const onPointerDown = (e: PointerEvent) => {
         // Ignora cliques em botões, campos de texto, inputs, seletores e abas
         const target = e.target as HTMLElement;
-        if (target.closest('button, input, select, textarea, a, .tab-btn, .office-tab-btn, [data-no-drag]')) {
+        if (target?.closest?.('button, input, select, textarea, a, .tab-btn, .office-tab-btn, [data-no-drag]')) {
           return;
         }
 

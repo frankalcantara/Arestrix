@@ -2569,3 +2569,153 @@ body, html {
   color: #dc2626;
 }
 
+/* ==========================================================================
+   Modal Exportador Taskflow C++20 - Fullscreen & Editor Monaco
+   ========================================================================== */
+.code-modal-fullscreen-dialog {
+  position: fixed !important;
+  top: 12px !important;
+  left: 12px !important;
+  right: 12px !important;
+  bottom: 12px !important;
+  width: calc(100vw - 24px) !important;
+  height: calc(100vh - 24px) !important;
+  max-width: calc(100vw - 24px) !important;
+  max-height: calc(100vh - 24px) !important;
+  border-radius: 8px !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  margin: 0 !important;
+  background-color: #ffffff;
+  overflow: hidden !important;
+  z-index: 3100;
+}
+
+.code-modal-fullscreen-dialog.theme-dark {
+  background-color: #1e1e1e !important;
+  color: #d4d4d4 !important;
+  border-color: #3f3f46 !important;
+}
+
+.code-modal-fullscreen-dialog .modal-header {
+  flex-shrink: 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.code-modal-fullscreen-dialog.theme-dark .modal-header {
+  background: #252526 !important;
+  border-bottom-color: #3f3f46 !important;
+}
+
+.code-modal-fullscreen-dialog.theme-dark .modal-title {
+  color: #f1f5f9 !important;
+  text-shadow: none !important;
+}
+
+.code-modal-fullscreen-dialog.theme-dark .modal-subtitle {
+  color: #94a3b8 !important;
+  text-shadow: none !important;
+}
+
+.code-modal-fullscreen-dialog .modal-tabs-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 4px 12px 0 12px;
+  gap: 8px;
+}
+
+.code-modal-fullscreen-dialog.theme-dark .modal-tabs-bar {
+  background-color: #252526 !important;
+  border-bottom-color: #333333 !important;
+}
+
+.code-modal-fullscreen-dialog .modal-tabs-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.code-modal-fullscreen-dialog .code-tab-btn {
+  padding: 8px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  text-shadow: none !important;
+}
+
+.code-modal-fullscreen-dialog .code-tab-btn:hover {
+  color: #0f6cbd;
+  background: #f1f5f9;
+}
+
+.code-modal-fullscreen-dialog .code-tab-btn.active {
+  color: #0f6cbd;
+  background: #ffffff;
+  border-color: #e2e8f0;
+  border-bottom-color: #ffffff;
+  font-weight: 700;
+}
+
+.code-modal-fullscreen-dialog.theme-dark .code-tab-btn {
+  color: #94a3b8;
+}
+
+.code-modal-fullscreen-dialog.theme-dark .code-tab-btn:hover {
+  color: #ffffff;
+  background: #2d2d30;
+}
+
+.code-modal-fullscreen-dialog.theme-dark .code-tab-btn.active {
+  color: #ffffff;
+  background: #1e1e1e;
+  border-color: #3f3f46;
+  border-bottom-color: #1e1e1e;
+}
+
+.code-modal-fullscreen-dialog .code-editor-viewport {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.code-modal-fullscreen-dialog.theme-dark .code-editor-viewport {
+  background: #1e1e1e !important;
+}
+
+.code-modal-fullscreen-dialog .modal-footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 18px;
+  background-color: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  font-size: 12px;
+}
+
+.code-modal-fullscreen-dialog.theme-dark .modal-footer {
+  background-color: #252526 !important;
+  border-top-color: #333333 !important;
+  color: #94a3b8 !important;
+}
+
+
