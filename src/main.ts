@@ -26,7 +26,6 @@ function bootstrap() {
 
   // 0. Inicializa gerenciador de projetos
   const projectManager = ProjectManager.getInstance(globalEventBus);
-  projectManager.init();
 
   // 1. Instância do Grafo Central com compilador padrão MSVC C++20
   const graph = new Graph(globalEventBus, {

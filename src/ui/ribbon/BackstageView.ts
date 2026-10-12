@@ -45,6 +45,11 @@ export class BackstageView {
           this.render();
         }
       });
+      globalEventBus.on('project:recents-updated', () => {
+        if (this.isOpen()) {
+          this.render();
+        }
+      });
     }
   }
 
@@ -67,7 +72,7 @@ export class BackstageView {
   public async open(section: 'info' | 'new' | 'open' | 'saveas' | 'export' = 'info'): Promise<void> {
     this.activeSection = section;
     try {
-      await this.projectManager.init();
+      await this.projectManager.init(true);
       if (this.activeSection === 'saveas') {
         await this.initSaveAsState();
       }
@@ -86,6 +91,10 @@ export class BackstageView {
 
   public isOpen(): boolean {
     return this.overlay ? this.overlay.classList.contains('open') : false;
+  }
+
+  public getOverlay(): HTMLElement | undefined {
+    return this.overlay;
   }
 
   private render(): void {
@@ -232,7 +241,7 @@ export class BackstageView {
               <h4>⚡ Estatísticas do Pipeline</h4>
               <p><strong>Vértices Ativos:</strong> ${this.graph.getAllNodes().length}</p>
               <p><strong>Arestas / Links:</strong> ${this.graph.getAllEdges().length}</p>
-              <p><strong>Pipelines Vinculados:</strong> ${proj.pipelines.length}</p>
+              <p><strong>Pipelines Vinculados:</strong> ${proj.pipelines ? proj.pipelines.length : 0}</p>
             </div>
           </div>
 
@@ -489,7 +498,7 @@ export class BackstageView {
         if (sec) {
           this.activeSection = sec;
           try {
-            await this.projectManager.init();
+            await this.projectManager.init(true);
             if (this.activeSection === 'saveas') {
               await this.initSaveAsState();
             }
@@ -733,8 +742,9 @@ export class BackstageView {
     });
   }
 
-  private escapeHtml(str: string): string {
-    return str
+  private escapeHtml(str?: string): string {
+    if (!str) return '';
+    return String(str)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')

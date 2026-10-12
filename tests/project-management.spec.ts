@@ -129,4 +129,80 @@ describe('Fase 14: Conceito de Projetos & Workspaces Isolados', () => {
     await projectManager.loadProject('C:/Workspaces/Hospital', graph);
     expect(graph.getProjectId()).toBe('cliente_hospital');
   });
+
+  it('deve aguardar handshake inicial do WebUI via polling e emitir project:recents-updated', async () => {
+    let recentsEventEmitted = false;
+    bus.on('project:recents-updated', (items) => {
+      if (Array.isArray(items) && items.length > 0) {
+        recentsEventEmitted = true;
+      }
+    });
+
+    let attempts = 0;
+    (globalThis as any).webui = {
+      call: async (method: string) => {
+        attempts++;
+        if (method === 'list_recent_projects') {
+          if (attempts <= 2) {
+            throw new Error('WebSocket is not connected');
+          }
+          return JSON.stringify([
+            {
+              projectId: 'proj_recents_test',
+              name: 'Projeto Recente Teste',
+              rootPath: 'C:/Projetos/RecenteTeste'
+            }
+          ]);
+        }
+        if (method === 'get_current_project') {
+          return JSON.stringify({
+            projectId: 'proj_recents_test',
+            name: 'Projeto Recente Teste',
+            rootPath: 'C:/Projetos/RecenteTeste'
+          });
+        }
+        return '';
+      }
+    };
+
+    try {
+      await projectManager.init(true);
+      expect(attempts).toBeGreaterThanOrEqual(3);
+      expect(recentsEventEmitted).toBe(true);
+      const recents = projectManager.listRecentProjects();
+      expect(recents.length).toBe(1);
+      expect(recents[0].name).toBe('Projeto Recente Teste');
+      expect(projectManager.getCurrentProject().name).toBe('Projeto Recente Teste');
+    } finally {
+      delete (globalThis as any).webui;
+    }
+  });
+
+  it('deve deduplicar chamadas concorrentes a init() sem refazer o polling', async () => {
+    let callCount = 0;
+    (globalThis as any).webui = {
+      call: async (method: string) => {
+        if (method === 'list_recent_projects') {
+          callCount++;
+          await new Promise(r => setTimeout(r, 20));
+          return JSON.stringify([{ projectId: 'p1', name: 'P1', rootPath: '.' }]);
+        }
+        if (method === 'get_current_project') {
+          return JSON.stringify({ projectId: 'p1', name: 'P1' });
+        }
+        return '';
+      }
+    };
+
+    try {
+      await Promise.all([
+        projectManager.init(true),
+        projectManager.init(true),
+        projectManager.init(true)
+      ]);
+      expect(callCount).toBe(1);
+    } finally {
+      delete (globalThis as any).webui;
+    }
+  });
 });

@@ -88,6 +88,8 @@ export class ProjectManager {
   private currentProject: IProjectManifest;
   private recentProjects: IRecentProjectItem[] = [];
   private pipelineStorage: Map<string, string> = new Map();
+  private isInitialized = false;
+  private initPromise: Promise<void> | null = null;
 
   private constructor(bus: EventBus = globalEventBus) {
     this.bus = bus;
@@ -147,28 +149,96 @@ export class ProjectManager {
     return { ...this.currentProject };
   }
 
-  public async init(): Promise<void> {
-    try {
-      if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
-        const rawProj = await (window as any).webui.call('get_current_project');
-        if (rawProj) {
-          this.currentProject = JSON.parse(rawProj);
-        }
-        const rawRecents = await (window as any).webui.call('list_recent_projects');
-        if (rawRecents) {
-          const parsed = JSON.parse(rawRecents);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            this.recentProjects = parsed;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('[ProjectManager] Usando modo em memória local:', e);
+  private getGlobalScope(): any {
+    if (typeof window !== 'undefined' && (window as any).webui) return window;
+    if (typeof globalThis !== 'undefined' && (globalThis as any).webui) return globalThis;
+    if (typeof window !== 'undefined') return window;
+    if (typeof globalThis !== 'undefined') return globalThis;
+    return null;
+  }
+
+  public isWebUIEnvironment(): boolean {
+    const glob = this.getGlobalScope();
+    if (!glob) return false;
+    const hasWebuiGlobal = Boolean(glob.webui);
+    const hasScriptTag = typeof document !== 'undefined' && Boolean(document.querySelector?.('script[src*="webui"]'));
+    return hasWebuiGlobal || hasScriptTag;
+  }
+
+  public async init(forceRefresh = false): Promise<void> {
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+    if (this.isInitialized && !forceRefresh) {
+      return;
     }
 
-    if (this.recentProjects.length === 0 && typeof localStorage !== 'undefined') {
+    this.initPromise = this.performInit();
+    try {
+      await this.initPromise;
+    } finally {
+      this.initPromise = null;
+    }
+  }
+
+  private async performInit(): Promise<void> {
+    if (!this.isWebUIEnvironment()) {
+      if (this.recentProjects.length === 0 && typeof localStorage !== 'undefined') {
+        this.loadFromLocalStorageSync();
+      }
+      this.isInitialized = true;
+      return;
+    }
+
+    let loadedFromWebUI = false;
+    const maxAttempts = 30; // 30 * 50ms = até 1.5s aguardando handshake inicial do WebUI
+    const intervalMs = 50;
+    const glob = this.getGlobalScope();
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const webui = glob ? glob.webui : null;
+      if (webui && typeof webui.call === 'function') {
+        try {
+          const rawRecents = await webui.call('list_recent_projects');
+          if (rawRecents !== undefined) {
+            try {
+              const parsed = typeof rawRecents === 'string' ? JSON.parse(rawRecents) : rawRecents;
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                this.recentProjects = parsed;
+              }
+            } catch (err) {
+              console.warn('[ProjectManager] Erro ao parsear lista de projetos recentes:', err);
+            }
+
+            try {
+              const rawProj = await webui.call('get_current_project');
+              if (rawProj) {
+                const parsedProj = typeof rawProj === 'string' ? JSON.parse(rawProj) : rawProj;
+                if (parsedProj && parsedProj.projectId) {
+                  this.currentProject = parsedProj;
+                }
+              }
+            } catch (err) {
+              console.warn('[ProjectManager] Erro ao obter projeto atual via WebUI:', err);
+            }
+
+            loadedFromWebUI = true;
+            break;
+          }
+        } catch (_) {
+          // Erro esperado enquanto handshake WebSocket ainda está conectando ("WebSocket is not connected")
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+
+    if (!loadedFromWebUI && this.recentProjects.length === 0 && typeof localStorage !== 'undefined') {
       this.loadFromLocalStorageSync();
     }
+
+    this.isInitialized = true;
+    this.bus.emit('project:recents-updated', this.recentProjects);
+    this.bus.emit('project:changed', this.currentProject);
   }
 
   public async getDefaultWorkspaceDirectory(): Promise<string> {
@@ -371,6 +441,7 @@ export class ProjectManager {
       this.bus.emit('project:changed', this.currentProject);
     }
 
+    this.bus.emit('project:recents-updated', this.recentProjects);
     this.bus.emit('project:deleted', { projectId: pId, rootPath: pRoot });
     return true;
   }
@@ -470,6 +541,7 @@ export class ProjectManager {
         localStorage.setItem('arestrix_recent_projects', JSON.stringify(this.recentProjects));
       } catch (_) {}
     }
+    this.bus.emit('project:recents-updated', this.recentProjects);
   }
 
   // --- Pacote de Projeto Comprimido (.arestrix) ---
@@ -657,5 +729,7 @@ export class ProjectManager {
     this.currentProject = this.createDefaultManifest();
     this.recentProjects = [];
     this.pipelineStorage.clear();
+    this.isInitialized = false;
+    this.initPromise = null;
   }
 }

@@ -308,6 +308,10 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
       if (typeof localStorage !== 'undefined') {
         localStorage.clear();
       }
+      ProjectManager.getInstance().resetForTesting();
+      if ((globalThis as any).document?.body) {
+        (globalThis as any).document.body.children = [];
+      }
       parent = (globalThis as any).document.createElement('div');
       const fakeViewport = {
         getCameraCenter: () => ({ x: 0, y: 0 }),
@@ -406,6 +410,51 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
       expect(ribbon.getAutoSaveEnabled()).toBe(true);
       expect(toggle.checked).toBe(true);
       expect(localStorage.getItem('arestrix_autosave_enabled')).toBe('true');
+    });
+
+    it('deve renderizar a tabela com projetos recentes ao abrir o Backstage View pela primeira vez', async () => {
+      const mockWebui = {
+        call: async (method: string) => {
+          if (method === 'list_recent_projects') {
+            return JSON.stringify([
+              {
+                projectId: 'proj_first_open',
+                name: 'CriaVideoMatematica',
+                rootPath: 'C:/Projetos/CriaVideoMatematica'
+              }
+            ]);
+          }
+          if (method === 'get_current_project') {
+            return JSON.stringify({
+              projectId: 'proj_first_open',
+              name: 'CriaVideoMatematica',
+              rootPath: 'C:/Projetos/CriaVideoMatematica'
+            });
+          }
+          return '';
+        }
+      };
+
+      (globalThis as any).webui = mockWebui;
+      if (typeof window !== 'undefined') {
+        (window as any).webui = mockWebui;
+      }
+
+      try {
+        await ribbon.openBackstage('info');
+        const backstage = ribbon.getBackstageView();
+        expect(backstage.isOpen()).toBe(true);
+        const overlay = backstage.getOverlay();
+        expect(overlay).toBeDefined();
+        expect(overlay?.innerHTML).toContain('CriaVideoMatematica');
+        expect(overlay?.innerHTML).toContain('backstage-mru-table');
+        expect(overlay?.innerHTML).not.toContain('Nenhum projeto recente registrado no histórico');
+      } finally {
+        delete (globalThis as any).webui;
+        if (typeof window !== 'undefined') {
+          delete (window as any).webui;
+        }
+      }
     });
   });
 });
