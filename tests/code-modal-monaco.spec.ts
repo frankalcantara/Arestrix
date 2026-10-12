@@ -35,6 +35,16 @@ class MockElement {
       },
       contains: (cls: string) => {
         return this.className.split(/\s+/).includes(cls);
+      },
+      toggle: (cls: string, force?: boolean) => {
+        const has = this.className.split(/\s+/).includes(cls);
+        const shouldAdd = force !== undefined ? force : !has;
+        if (shouldAdd) {
+          this.classList.add(cls);
+        } else {
+          this.classList.remove(cls);
+        }
+        return shouldAdd;
       }
     };
   }
@@ -44,7 +54,12 @@ class MockElement {
   }
 
   get innerHTML(): string {
-    return this._html;
+    if (this.children.length === 0) return this._html || this.textContent;
+    return this.children.map(c => {
+      const cls = c.className ? ` class="${c.className}"` : '';
+      const id = c.id ? ` id="${c.id}"` : '';
+      return `<${c.tagName.toLowerCase()}${id}${cls}>${c.innerHTML || c.textContent}</${c.tagName.toLowerCase()}>`;
+    }).join('');
   }
 
   set innerHTML(html: string) {
@@ -293,13 +308,53 @@ describe('Modal Exportador Taskflow C++20 com Editor Monaco Fullscreen', () => {
     expect(dialog.classList.contains('theme-dark')).toBe(true);
   });
 
-  it('7. Deve possuir botões de ação: Baixar Arquivo, Copiar Código e Gerar no Disco', async () => {
+  it('7. Deve possuir botões de ação: Abrir no VS Code, Baixar Arquivo, Copiar Código e Gerar', async () => {
     await modal.show();
     const overlay = (modal as any).modalOverlay as MockElement;
 
+    expect(overlay.querySelector('#btn-open-vscode')).not.toBeNull();
     expect(overlay.querySelector('#btn-download-code-file')).not.toBeNull();
     expect(overlay.querySelector('#btn-copy-code')).not.toBeNull();
-    expect(overlay.querySelector('#btn-generate-disk')).not.toBeNull();
+    const generateBtn = overlay.querySelector('#btn-generate-disk');
+    expect(generateBtn).not.toBeNull();
+    expect(generateBtn?.textContent).toContain('Gerar');
     expect(overlay.querySelector('#btn-close-code-modal')).not.toBeNull();
   });
+
+  it('8. Deve alternar entre múltiplas abas e retornar à aba inicial preservando o código sem recriar o DOM', async () => {
+    await modal.show();
+    const overlay = (modal as any).modalOverlay as MockElement;
+
+    // Aba inicial: cpp
+    expect((modal as any).currentTab).toBe('cpp');
+    const initialCppCode = modal.getActiveCode();
+    expect(initialCppCode).toContain('#include <taskflow/taskflow.hpp>');
+
+    // Alterna para cmake
+    const cmakeTab = overlay.querySelector('[data-tab="cmake"]') as MockElement;
+    cmakeTab.click();
+    expect((modal as any).currentTab).toBe('cmake');
+    const cmakeCode = modal.getActiveCode();
+    expect(cmakeCode).toContain('find_package(Taskflow REQUIRED)');
+
+    // Alterna para makefile
+    const makefileTab = overlay.querySelector('[data-tab="makefile"]') as MockElement;
+    makefileTab.click();
+    expect((modal as any).currentTab).toBe('makefile');
+    const makeCode = modal.getActiveCode();
+    expect(makeCode).toContain('CXX = cl.exe');
+
+    // Retorna para cpp e verifica se o código permanece íntegro
+    const cppTab = overlay.querySelector('[data-tab="cpp"]') as MockElement;
+    cppTab.click();
+    expect((modal as any).currentTab).toBe('cpp');
+    const returnedCppCode = modal.getActiveCode();
+    expect(returnedCppCode).toBe(initialCppCode);
+    expect(returnedCppCode.length).toBeGreaterThan(0);
+  });
+
+  it('9. Deve refletir a pasta de Output configurada como propriedade do projeto (padrão Output)', () => {
+    expect(modal.getOutputDir()).toBe('Output');
+  });
 });
+

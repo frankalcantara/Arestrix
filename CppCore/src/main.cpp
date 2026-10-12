@@ -24,6 +24,7 @@
 #endif
 #include <windows.h>
 #include <shlobj.h>
+#include <shellapi.h>
 #endif
 
 // Instância global do nosso grafo central em C++
@@ -49,7 +50,22 @@ void ui_generate_cpp_code(webui::window::event* e) {
         std::string cmakeCode = taskforge::compiler::TaskflowGenerator::generateCMakeLists(globalGraph);
         auto msvcScripts = taskforge::compiler::TaskflowGenerator::generateMsvcBuildScript(globalGraph);
         
-        std::filesystem::path rootPath = std::filesystem::current_path() / "Output";
+        std::string outputDirName = "Output";
+        std::string rawArg = e->get_string();
+        if (!rawArg.empty()) {
+            try {
+                if (rawArg.front() == '{') {
+                    auto j = nlohmann::json::parse(rawArg);
+                    if (j.contains("outputDir") && !j["outputDir"].get<std::string>().empty()) {
+                        outputDirName = j["outputDir"].get<std::string>();
+                    }
+                } else {
+                    outputDirName = rawArg;
+                }
+            } catch (...) {}
+        }
+
+        std::filesystem::path rootPath = std::filesystem::current_path() / outputDirName;
         std::filesystem::create_directories(rootPath);
         
         std::ofstream fileCpp(rootPath / "main.cpp");
@@ -60,6 +76,14 @@ void ui_generate_cpp_code(webui::window::event* e) {
         fileCmake << cmakeCode;
         fileCmake.close();
 
+        std::ofstream fileMake(rootPath / "Makefile");
+        fileMake << taskforge::compiler::TaskflowGenerator::generateMakefile(globalGraph);
+        fileMake.close();
+
+        std::ofstream filePs1(rootPath / "build_msvc.ps1");
+        filePs1 << msvcScripts.ps1;
+        filePs1.close();
+
         std::ofstream fileBat(rootPath / "build.bat");
         fileBat << msvcScripts.bat;
         fileBat.close();
@@ -68,6 +92,41 @@ void ui_generate_cpp_code(webui::window::event* e) {
         e->return_bool(true);
     } catch(const std::exception& ex) {
         std::cerr << "[C++ Erro] Falha ao gerar codigo: " << ex.what() << "\n";
+        e->return_bool(false);
+    }
+}
+
+// Wrapper de comunicação JS -> C++ (Abrir no VS Code)
+void ui_open_in_vscode(webui::window::event* e) {
+    try {
+        std::string target = e->get_string();
+        if (target.empty()) {
+            target = "Output";
+        }
+        std::filesystem::path fullPath = std::filesystem::absolute(target);
+        std::cout << "[C++] Abrindo no VS Code: " << fullPath.string() << "\n";
+
+#ifdef _WIN32
+        std::string cmd = "code \"" + fullPath.string() + "\"";
+        STARTUPINFOA si = { sizeof(si) };
+        PROCESS_INFORMATION pi;
+        std::vector<char> cmdVec(cmd.begin(), cmd.end());
+        cmdVec.push_back('\0');
+        BOOL success = CreateProcessA(NULL, cmdVec.data(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+        if (success) {
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+            e->return_bool(true);
+            return;
+        }
+        HINSTANCE res = ShellExecuteA(NULL, "open", "code", ("\"" + fullPath.string() + "\"").c_str(), NULL, SW_SHOWNORMAL);
+        e->return_bool((INT_PTR)res > 32);
+#else
+        std::string cmd = "code \"" + fullPath.string() + "\" &";
+        int res = system(cmd.c_str());
+        e->return_bool(res == 0);
+#endif
+    } catch (...) {
         e->return_bool(false);
     }
 }
@@ -959,6 +1018,7 @@ int main() {
     win.bind("load_arestrix_file", ui_load_arestrix_file);
     win.bind("ensure_workspace_directories", ui_ensure_workspace_directories);
     win.bind("write_workspace_asset", ui_write_workspace_asset);
+    win.bind("open_in_vscode", ui_open_in_vscode);
     win.bind("exit_app", exit_app);
 
     // Registra o Emitter de Telemetria de Agentes em Tempo Real (Fase 10)

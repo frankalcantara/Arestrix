@@ -320,6 +320,7 @@ export interface IProjectManifest {
   createdAt: string;
   updatedAt: string;
   rootPath: string;
+  outputDir?: string;
   pipelines: IProjectPipelineRef[];
   globalDefaults?: IGlobalPipelineDefaults;
   database?: IProjectDatabaseConfig;

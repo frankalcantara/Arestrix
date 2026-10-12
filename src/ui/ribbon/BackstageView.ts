@@ -70,7 +70,7 @@ export class BackstageView {
     }
   }
 
-  public async open(section: 'info' | 'new' | 'open' | 'saveas' | 'export' = 'info'): Promise<void> {
+  public async open(section: 'info' | 'new' | 'open' | 'saveas' | 'export' | 'options' = 'info'): Promise<void> {
     this.activeSection = section;
     try {
       await this.projectManager.init(true);
@@ -148,7 +148,7 @@ export class BackstageView {
               <span>📥</span> Salvar Como
             </li>
             <li class="backstage-nav-item ${this.activeSection === 'export' ? 'active' : ''}" data-section="export">
-              <span>📤</span> Exportar Código
+              <span>📤</span> Exportar
             </li>
             <li class="backstage-nav-item" id="btn-backstage-github-repos">
               <span>🌐</span> Repositórios GitHub
@@ -250,6 +250,10 @@ export class BackstageView {
               <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;">
                 <strong>Diretório Físico:</strong>
                 <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.rootPath)}</code>
+              </p>
+              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;">
+                <strong>Pasta de Saída (Output):</strong>
+                <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.outputDir || 'Output')}</code>
               </p>
             </div>
 
@@ -476,8 +480,8 @@ export class BackstageView {
 
       case 'export':
         return `
-          <h2 class="backstage-header-title">Exportação de Engenharia C++20</h2>
-          <p class="backstage-header-sub">Exporte código nativo Taskflow C++20, scripts de build ou descritores do pipeline.</p>
+          <h2 class="backstage-header-title">Exportação</h2>
+          <p class="backstage-header-sub">Exporte código nativo Taskflow C++20, scripts de compilação ou diagramas visuais do pipeline.</p>
 
           <div class="backstage-cards-grid">
             <div class="backstage-info-card">
@@ -957,19 +961,16 @@ export class BackstageView {
       });
     });
 
-    // Exportações
+    // Exportações (Abre diretamente sobre a BackstageView)
     this.overlay.querySelector('#btn-backstage-open-codemodal')?.addEventListener('click', () => {
-      this.close();
-      this.codeModal.show();
+      this.codeModal.show('cpp');
     });
 
     this.overlay.querySelector('#btn-backstage-export-cmake')?.addEventListener('click', () => {
-      this.close();
-      this.codeModal.show();
+      this.codeModal.show('cmake');
     });
 
     this.overlay.querySelector('#btn-backstage-export-svg')?.addEventListener('click', () => {
-      this.close();
       globalEventBus.emit('ribbon:export-svg');
     });
 

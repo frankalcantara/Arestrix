@@ -128,6 +128,7 @@ export class ProjectManager {
       createdAt: now,
       updatedAt: now,
       rootPath: '.',
+      outputDir: 'Output',
       pipelines: [
         {
           id: 'main',
@@ -147,6 +148,10 @@ export class ProjectManager {
 
   public getCurrentProject(): IProjectManifest {
     return { ...this.currentProject };
+  }
+
+  public getProjectOutputDir(): string {
+    return this.currentProject?.outputDir?.trim() || 'Output';
   }
 
   private getGlobalScope(): any {
@@ -278,6 +283,7 @@ export class ProjectManager {
       createdAt: now,
       updatedAt: now,
       rootPath: manifest.rootPath || defaultRootPath,
+      outputDir: manifest.outputDir || 'Output',
       pipelines: manifest.pipelines && manifest.pipelines.length > 0 ? manifest.pipelines : [
         {
           id: 'main',

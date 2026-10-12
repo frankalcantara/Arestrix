@@ -252,15 +252,21 @@ export class ProjectManagerModal {
 
         <div class="form-row-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
           <div class="form-group">
+            <label class="form-label" for="edit-proj-output-dir">Pasta de Saída / Output <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px;">📦 Escopo do Projeto</span></label>
+            <input type="text" id="edit-proj-output-dir" class="form-input" value="${this.escapeHtml(current.outputDir || 'Output')}" placeholder="Output" />
+            <div class="form-hint">Diretório relativo ao projeto onde código e artefatos de saída são gerados (padrão: Output).</div>
+          </div>
+          <div class="form-group">
             <label class="form-label" for="edit-proj-db-path">Arquivo do Banco de Dados Relacional (SQLite) <span style="font-size: 10px; color: #0f6cbd;">🛠️ Workspace</span></label>
             <input type="text" id="edit-proj-db-path" class="form-input" value="${this.escapeHtml(current.database?.filePath || 'storage/database.sqlite')}" />
             <div class="form-hint">Caminho físico relativo à raiz do workspace no disco.</div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Pipelines Cadastrados</label>
-            <div style="background: rgba(0,0,0,0.1); padding: 8px 12px; border-radius: 6px; font-family: monospace; font-size: 12px;">
-              ${(current.pipelines || []).map(p => `<div>• <strong>${this.escapeHtml(p.name)}</strong> (${this.escapeHtml(p.file)}) ${p.isPrimary ? '<span class="badge-inherited" style="font-size: 9px; padding: 1px 4px;">PRINCIPAL</span>' : ''}</div>`).join('')}
-            </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 12px;">
+          <label class="form-label">Pipelines Cadastrados</label>
+          <div style="background: rgba(0,0,0,0.05); padding: 8px 12px; border-radius: 6px; font-family: monospace; font-size: 12px;">
+            ${(current.pipelines || []).map(p => `<div>• <strong>${this.escapeHtml(p.name)}</strong> (${this.escapeHtml(p.file)}) ${p.isPrimary ? '<span class="badge-inherited" style="font-size: 9px; padding: 1px 4px;">PRINCIPAL</span>' : ''}</div>`).join('')}
           </div>
         </div>
 
@@ -451,6 +457,7 @@ export class ProjectManagerModal {
       const name = (this.overlay.querySelector('#edit-proj-name') as HTMLInputElement)?.value.trim() || current.name;
       const ver = (this.overlay.querySelector('#edit-proj-ver') as HTMLInputElement)?.value.trim() || current.version;
       const desc = (this.overlay.querySelector('#edit-proj-desc') as HTMLTextAreaElement)?.value.trim() || current.description;
+      const outputDir = (this.overlay.querySelector('#edit-proj-output-dir') as HTMLInputElement)?.value.trim() || 'Output';
       const dbPath = (this.overlay.querySelector('#edit-proj-db-path') as HTMLInputElement)?.value.trim() || 'storage/database.sqlite';
       const envRaw = (this.overlay.querySelector('#edit-proj-env') as HTMLTextAreaElement)?.value || '';
 
@@ -469,6 +476,7 @@ export class ProjectManagerModal {
         name,
         version: ver,
         description: desc,
+        outputDir,
         database: { type: 'sqlite', filePath: dbPath },
         environment: envMap
       }, this.graph);
