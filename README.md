@@ -176,7 +176,7 @@ cd c:\Projetos\NodeForge
 npm test
 ```
 
-**Test Coverage Summary (59/59 tests passing in 12 test suites):**
+**Test Coverage Summary (163/163 tests passing in 26 test suites):**
 - `tests/graph-validation.spec.ts`: Topological sorting, DFS cycle checks, feedback loops, conditional branches.
 - `tests/history-undo-redo.spec.ts`: Command Pattern undo/redo stack (`Ctrl+Z` / `Ctrl+Y`) and parameter mutations.
 - `tests/subflow-hierarchy.spec.ts`: Nested subflow drill-down, parent graph isolation, and breadcrumb navigation.
@@ -187,8 +187,13 @@ npm test
 - `tests/agent-memory-config.spec.ts`: Heterogeneous memory architecture, opt-in rules (default disabled), ephemeral RAM vs. persistent disk, and project-level scoping.
 - `tests/mcp-protocol.spec.ts`: Model Context Protocol server configuration, stdio/sse transports, tool assignment, and undo/redo support.
 - `tests/project-management.spec.ts`: Multi-project workspace isolation, manifest schema validation, MRU history, and memory scope separation.
-- `tests/office-ribbon-interface.spec.ts`: Microsoft Office Fluent Ribbon interface, Backstage View, QAT shortcuts, and connector ingestion (Pi, Claude, OpenAI, Hermes, Excel).
-- `tests/pi-project-importer.spec.ts`: Scanner nativo de projetos Pi, importação dinâmica de agentes, habilidades e orquestração Taskflow C++20.
+- `tests/project-creation-hash.spec.ts`: Deterministic project ID hashing (`hashProjectName`), sanitized filesystem paths, and UI creation flow.
+- `tests/workspace-governance.spec.ts`: Pre-approved workspace skills & MCPs catalog, and automated `WorkspaceSkillAuditorAgent` validation.
+- `tests/github-skills-separation.spec.ts`: Global Studio open-source catalog segregation vs. per-node skill binding and import.
+- `tests/node-view-typography.spec.ts` & `tests/node-action-tooltips.spec.ts`: High-DPI SDF vector typography, clean badge pills without text-shadows, and interactive action tooltips.
+- `tests/modal-window-manager.spec.ts`: Multi-window modal stacking, drag header handles, and responsive dialog viewports.
+- `tests/office-ribbon-interface.spec.ts` & `tests/office-workspace-interface.spec.ts`: Microsoft Office Fluent Ribbon interface, Backstage View, QAT shortcuts, and connector ingestion.
+- `tests/pi-project-importer.spec.ts` & `tests/generic-pi-import.spec.ts`: Native Pi project scanner, CLI settings ingestion, and automated Taskflow C++20 DAG synthesis.
 
 ---
 
@@ -232,23 +237,82 @@ Arestrix includes enterprise-grade desktop UX and model ingestion capabilities:
    - Strict isolation of memory namespaces (Blackboard / Semantic Lessons), sandboxes, working directories, and pipelines per workspace.
    - Recent projects MRU management and 3-tab Project Manager Hub.
 
-### 📁 Conceptual Architecture: Workspace vs. Project
+### 🏛️ Tripartite Architecture & UI Scope Separation: Studio vs. Workspace vs. Project
 
-Arestrix strictly delineates between the **Workspace** (physical infrastructure container & OS isolation) and the **Project** (logical business entity & governance).
+Arestrix strictly enforces a **tripartite separation of concerns** across both its architectural backend and its user interface. This guarantees clean modularity, multi-tenant isolation, enterprise security governance, and prevents accidental cross-contamination of credentials, cognitive memory, and filesystem boundaries.
 
-| Dimension | Workspace (Physical Container & Environment) | Project (Logical Governance & Purpose) |
-| :--- | :--- | :--- |
-| **Core Concept** | The physical filesystem sandbox, OS isolation boundary, and local storage runtime. | The purposeful business unit, DAG orchestration workflow, and identity. |
-| **Manifest / Core File** | Physical directory (`rootPath`) housing `pipelines/`, `storage/`, and `output/`. | `arestrix.project.json` (`projectId`, `name`, `version`, `description`). |
-| **Persistence & Storage** | Local SQLite database (`storage/database.sqlite`), checkpoint state files. | Pipeline schemas (`pipelines/main.json`), child subflow definitions. |
-| **Execution Boundary** | Sandbox isolation level (`container`, `microvm`, `local`), CPU/RAM constraints (e.g., 512MB), directory mounts, local `.env` variables. | Model routing (Claude, DeepSeek, Gemini), master prompt templates, Code Mode tool permissions (`write`, `edit`, `read`, `bash`). |
-| **Cognitive Memory Scope** | Local cache, physical vector index stores, and thread-safe lock mechanisms. | Scoped Blackboard and Semantic Lessons isolated strictly per `projectId` to prevent cross-contamination. |
-| **Analogy** | The **Workshop / IDE Workspace** (filesystem root, tools, terminals, environment). | The **Product / Solution** being engineered inside the workshop. |
+```
++-----------------------------------------------------------------------------------+
+| 🏢 STUDIO (Desktop Application & Global Engine)                                  |
+| • WebGL 2.5D Canvas & Camera     • C++20 Taskflow Code Generator & MSVC Compiler  |
+| • Global LLM API Credentials     • Authorized GitHub Open-Source Repositories     |
++-----------------------------------------------------------------------------------+
+                                          |
+                                          v
++-----------------------------------------------------------------------------------+
+| 🛠️ WORKSPACE (Physical Host Environment & Local Storage Infrastructure)            |
+| • Filesystem Root (.workspace/)  • Relational SQLite Storage (database.sqlite)    |
+| • Docker / MicroVM Sandboxes     • Pre-approved MCP Servers & Workspace Skills    |
+| • WorkspaceSkillAuditorAgent     • Local Execution Limits & Directory Mounts      |
++-----------------------------------------------------------------------------------+
+                                          |
+                                          v
++-----------------------------------------------------------------------------------+
+| 📦 PROJECT (Logical Business Purpose & Concurrent DAG Pipelines)                  |
+| • arestrix.project.json          • DAG Pipeline Graphs (pipelines/main.json)      |
+| • Agent Node Prompts & Overrides • Local Project .env Variables                   |
+| • Scoped Blackboard Memory       • Isolated Semantic Lessons by projectId         |
++-----------------------------------------------------------------------------------+
+```
 
-#### Architectural Isolation Model
-1. **Physical Decoupling**: Each workspace encapsulates its own filesystem sandbox (`rootPath`), database, and execution environment. Workspaces can reside anywhere across local and mapped drives.
-2. **Logical Governance**: Projects are first-class citizens identified by deterministic hashes (`hashProjectName`). When switching projects, Arestrix seamlessly rebinds the memory namespaces (clearing Blackboard sessions and scoping semantic retrieval) so distinct projects never leak context or credentials.
-3. **Multi-Pipeline Composition**: A single project workspace can host multiple pipelines (`pipelines/main.json`, specialized subflows, and batch evaluation DAGs), all sharing the workspace's environment configuration while maintaining independent execution graphs.
+#### 📊 Comparative Matrix: The Three Operational Environments
+
+| Dimension | 🏢 Studio (Desktop App / Global) | 🛠️ Workspace (Physical Infrastructure) | 📦 Project (Logical Business Unit) |
+| :--- | :--- | :--- | :--- |
+| **Core Concept** | The desktop application host, rendering engine, and universal compiler toolchain. | The physical filesystem sandbox, OS isolation container, and local storage runtime. | The purposeful business solution, workflow identity, and concurrent DAG execution graph. |
+| **Manifest / Core Files** | `arestrix.exe`, global configuration, and window layouts. | Physical directory (`rootPath`) containing `.workspace/`, `storage/`, and `output/`. | `arestrix.project.json` (`projectId`, `name`, `version`, `description`) and `pipelines/main.json`. |
+| **Persistence & Storage** | Application settings and MRU recent projects index. | Local SQLite relational database (`storage/database.sqlite`), checkpoint states (`pipeline-state.json`). | Pipeline definitions, subflow graph schemas, and scoped output artifacts. |
+| **Credentials & Execution** | Global LLM API keys securely stored via `EnvironmentManager` (Anthropic, OpenAI, DeepSeek, Google). | Execution sandboxes (Docker, MicroVM, Host Job Objects), memory/CPU quotas, directory mounts. | Node-specific model overrides, prompt templates, and local `.env` pipeline variables. |
+| **Skill & MCP Governance** | Global catalog of authorized open-source GitHub repositories (`GitHubSkillsRegistry`). | Pre-approved workspace skills (`.workspace/skills`), approved MCP server daemons, and `WorkspaceSkillAuditorAgent`. | Nodes bind curated skills and MCP tools directly to agent task execution. |
+| **Cognitive Memory** | None (application-level state only). | Physical SQLite tables, local vector embedding indexes, and thread-safe lock primitives. | Scoped Blackboard and Semantic Lessons strictly isolated per `projectId`, preventing data leakage. |
+| **Conceptual Analogy** | **The Factory / Industrial Park** (The building, electricity, universal machine tools). | **The Workshop / Assembly Bay** (The workbench, storage bins, safety gear, local toolbox). | **The Product Being Built** (Blueprints, bill of materials, assembly steps, quality checks). |
+
+---
+
+#### 🖥️ UI Segregation Across Screens and Modals
+
+To ensure users always know which scope they are configuring, every screen, ribbon group, inspector panel, and modal in Arestrix features explicit scope badges and separated sections:
+
+1. **Office Ribbon Bar (`OfficeRibbon.ts`)**:
+   - **Data & Memory Tab**: Explicitly partitioned into **📦 Memória do Projeto** (scoped Blackboard and Semantic Lessons) and **🛠️ Armazenamento do Workspace** (SQLite database file and physical workspace directory).
+   - **Tools Tab**: Highlights **🛠️ MCP Servers** as workspace infrastructure tools available to project nodes.
+
+2. **Backstage View (`BackstageView.ts`)**:
+   - **Info Section (`info`)**: Renders two distinct cards: *📦 Informações do Projeto Ativo* (manifest details, version, and registered pipelines) and *🛠️ Infraestrutura do Workspace Físico* (physical path, database location, and workspace auditor status).
+   - **Open Section (`open`)**: Displays *📊 Grafos Recentes do Workspace Ativo `(📦 Pipelines do Projeto)`* followed by *📂 Projetos Recentes*.
+   - **Options Section (`options`)**: Formally labeled as *🏢 Opções Globais do Studio & 🛠️ Governança do Workspace*, providing access to Studio defaults and workspace security auditing.
+
+3. **Node Inspector Panel (`Inspector.ts`)**:
+   - **Empty State**: Displays separate overview cards for the *📦 Grafo do Projeto Ativo* and the *🛠️ Ambiente do Workspace*.
+   - **Node Action Bar**: Every modal action button is tagged with its operational scope:
+     - `[📦 Projeto]`: Model Configuration (`NodeModelModal`), Cognitive Memory (`NodeMemoryModal`), and Tool Permissions (`NodeToolsModal`).
+     - `[🛠️ Workspace]`: Sandbox Isolation & Host Limits (`NodeSandboxModal`).
+     - `[🛠️ / 📦]`: Node Skills (`NodeSkillsModal` — binds project agent nodes to verified workspace skills).
+
+4. **Dedicated Dialogs & Modals**:
+   - **Global Defaults (`GlobalDefaultsModal.ts`)**: Structured into distinct scope badges: `🏢 Studio` for universal LLM API keys and defaults, `🛠️ Workspace` for sandbox container isolation and approved tools, and `📦 Projeto` for default node models and memory retention.
+   - **Project Manager (`ProjectManagerModal.ts`)**: Clearly separates the logical project metadata (`arestrix.project.json`) from the physical directory (`Diretório Raiz do Workspace 🛠️`). Local project environment variables (`.env`) are strictly separated from Studio global keys.
+   - **GitHub Repositories (`GitHubReposModal.ts`)**: Identified as `🏢 Catálogo Global do Studio`, managing authorized open-source repositories across the entire application.
+   - **MCP Servers (`McpServersModal.ts`)**: Identified as `🛠️ Servidores MCP do Workspace`, providing physical tool daemons for the current host environment.
+   - **Cognitive Memory Modals (`ProjectMemoryModal.ts` & `NodeMemoryModal.ts`)**: Labeled as `📦 Escopo do Projeto`, guaranteeing that memory queries and blackboard key-values remain isolated to the active `projectId`.
+
+---
+
+#### 🛡️ Workspace Skill & MCP Security Governance
+
+To protect users against untrusted tool execution, Arestrix includes an automated governance workflow:
+1. **Pre-Approved Workspace Repositories**: Approved skills and MCP configurations are provisioned inside `.workspace/skills` and `.workspace/mcps` upon workspace initialization.
+2. **Automated Skill Auditor (`WorkspaceSkillAuditorAgent`)**: Whenever a user or an agent imports an external skill, the workspace auditor automatically analyzes its YAML frontmatter, permission requirements, script dependencies, and sandbox safety before authorizing execution within project pipelines.
 
 
 3. **External AI Assistant & Spreadsheet Ingestion Engine (Phases 15 to 20)**:
