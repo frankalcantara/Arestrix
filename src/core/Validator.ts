@@ -22,8 +22,10 @@ export class GraphValidator {
     });
 
     // 2. Verificação de portas em nós de condição
-    nodes.filter(n => n.type === 'condition').forEach(condNode => {
-      condNode.outputs.forEach(port => {
+    nodes.filter(n => n.type === 'condition' || n.type === 'switch').forEach(condNode => {
+      condNode.outputs.forEach((port, portIdx) => {
+        // O 'default' do switch (última porta) pode ficar desconectado: o fluxo apenas termina ali.
+        if (condNode.type === 'switch' && portIdx === condNode.outputs.length - 1) return;
         const hasConnection = edges.some(
           e => e.sourceNodeId === condNode.id && e.sourcePortId === port.id
         );
@@ -45,7 +47,7 @@ export class GraphValidator {
     cycles.forEach(cycle => {
       const hasConditionNode = cycle.some(nodeId => {
         const node = graph.getNode(nodeId);
-        return node && node.type === 'condition';
+        return node && (node.type === 'condition' || node.type === 'switch');
       });
 
       if (!hasConditionNode) {

@@ -199,6 +199,7 @@ const std::vector<std::vector<std::string>>& synonymGroups() {
 std::string typeWords(const std::string& type) {
     if (type == "static") return "static tarefa estatica task";
     if (type == "condition") return "condition condicao decisao ramo branch";
+    if (type == "switch") return "switch selecao caso case multiplos ramos";
     if (type == "subflow") return "subflow subfluxo";
     if (type == "module") return "module modulo";
     if (type == "critical") return "critical secao critica mutex exclusao";
@@ -306,6 +307,13 @@ void indexGraph(const Json& graph, const GraphCtx& ctx, std::vector<std::string>
             std::string h;
             collectStrings(headers, h, 0);
             addField(d, h, 0.5f);
+        }
+        const Json& sw = n["switchSettings"];
+        if (sw.is_object()) {
+            std::string t;
+            collectStrings(sw["rules"], t, 0);
+            collectStrings(sw["instruction"], t, 0);
+            addField(d, t, 1.0f);
         }
         const Json& agent = n["agentSettings"];
         if (agent.is_object()) {

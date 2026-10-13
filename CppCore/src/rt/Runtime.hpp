@@ -68,5 +68,10 @@ struct CompletionResult {
 
 CompletionResult completeText(const CompletionRequest& req);
 
+// Decide o caminho de um vertice switch sem codigo escrito pelo usuario. `specJson` traz o modo
+// ("rules" ou "model"), os rotulos dos casos (o ultimo e o default), a origem do texto, as palavras de cada
+// caso e o modelo. Devolve o indice do caso; lanca std::runtime_error se faltar entrada ou modelo.
+int decideCase(const std::string& nodeId, const std::string& label, const std::string& specJson);
+
 } // namespace rt
 } // namespace taskforge

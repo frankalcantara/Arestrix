@@ -239,9 +239,13 @@ export class Viewport {
   private onNodeUpdated(nodeData: INodeData): void {
     const nodeView = this.nodeViews.get(nodeData.id);
     if (nodeView) {
-      if (nodeView.nodeData.type !== nodeData.type) {
+      const portsOf = (n: INodeData) => JSON.stringify([n.inputs.map(p => [p.id, p.name]), n.outputs.map(p => [p.id, p.name])]);
+      if (nodeView.nodeData.type !== nodeData.type || portsOf(nodeView.nodeData) !== portsOf(nodeData)) {
+        const wasSelected = nodeView.isSelected;
         this.onNodeRemoved(nodeData.id);
         this.onNodeAdded(nodeData);
+        if (wasSelected) this.nodeViews.get(nodeData.id)?.setSelected(true);
+        this.updateConnectedEdgesForNode(nodeData.id);
       } else {
         nodeView.updateLabel(nodeData.label);
       }

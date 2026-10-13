@@ -12,6 +12,7 @@ Each type maps to a Taskflow primitive when the program is generated.
 | :--- | :--- | :--- | :--- |
 | **Static** | Blue | `taskflow.emplace(...)` | Deterministic work. |
 | **Condition** | Orange | A task that returns an `int` | Decisions, convergence checks, feedback loops. Its output ports are numbered branches. |
+| **Switch** | Gold | A task that returns an `int` (the case index) | Choosing one of several paths: one output port per case, plus a `default`. |
 | **Subflow** | Purple | A task that receives `tf::Subflow&` | Decomposing work into a child graph at run time. |
 | **Module** | Green | A reusable composed graph | Packaging a sub-pipeline for reuse. |
 | **Critical** | Teal | `tf::CriticalSection` | Mutually exclusive access to a shared resource. |
@@ -22,6 +23,32 @@ Each type maps to a Taskflow primitive when the program is generated.
 
 Double-click a **subflow** or **module** vertex to open its child graph. `Esc` goes back up; the
 breadcrumb bar above the canvas shows where you are.
+
+### Switch
+
+A **switch** sends the flow down one of several paths. Each **case** is an output port; the last port is always the
+**default**, used when nothing else fits. You decide *how* the path is chosen in the Inspector (**General** tab),
+with no code needed:
+
+| Mode | What it does | Needs |
+| :--- | :--- | :--- |
+| **An AI model decides** *(default)* | The model reads the text and picks one case **by its name**. You can add a guidance sentence ("choose *high* if the patient is at risk"). | A model: the vertex's own (button **Choose this vertex model**), or the pipeline default. |
+| **Look for words in the text** | Goes to the first case whose words appear in the text. Accents and capitals do not matter. | Nothing: no AI, no internet. |
+| **C++ code** *(advanced)* | You write the rule in the **Lambda** tab and return the case number (`0`, `1`, `2`...). | C++ knowledge. |
+
+**What text is analyzed:** the final answer of the previous vertex (an agent), or a file of the project
+(for example `report/audit.txt`).
+
+How it behaves:
+- If the model answers with something that is not one of the case names, the flow follows the **default** (and the console says so).
+- If there is nothing to analyze (the previous vertex wrote no text, the file does not exist) or the model cannot be
+  reached, the pipeline **stops with a clear error**. It never picks a path silently.
+- In code mode, any number outside the range also goes to the **default**.
+- Add, rename and remove cases in the same panel. Removing a case also removes its connections, and one undo brings
+  both back. The default is fixed.
+- An unconnected case is a validation warning; an unconnected default is not (the flow simply ends there).
+- Like a condition, a switch may close a loop (the return edge becomes a feedback edge).
+- To convert a vertex to or from switch, first remove its output connections, because the ports change.
 
 ## Ports and edges
 

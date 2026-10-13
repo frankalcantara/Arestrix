@@ -12,7 +12,8 @@ import {
   Siren,
   Cpu,
   Split,
-  Merge
+  Merge,
+  ListTree
 } from 'lucide';
 import type { TaskflowNodeType } from '../core/types.ts';
 import type { LucideIconNode } from './icons/VectorIcons.ts';
@@ -102,5 +103,6 @@ export const NODE_TYPE_ICONS: Record<TaskflowNodeType, { name: string; icon: Luc
   cuda: { name: 'cpu', icon: Cpu as unknown as LucideIconNode },
   agent: { name: 'bot', icon: Bot as unknown as LucideIconNode },
   fork: { name: 'split', icon: Split as unknown as LucideIconNode },
-  join: { name: 'merge', icon: Merge as unknown as LucideIconNode }
+  join: { name: 'merge', icon: Merge as unknown as LucideIconNode },
+  switch: { name: 'list-tree', icon: ListTree as unknown as LucideIconNode }
 } as Record<TaskflowNodeType, { name: string; icon: LucideIconNode }>;

@@ -46,7 +46,7 @@ redo work for everything, including paste, duplicate and delete.
 | `core/` | Graph and node types, JSON (de)serialization. |
 | `compiler/` | `TaskflowGenerator`: graph → `main.cpp`. Detects loop (feedback) edges. |
 | `build/` | `BuildService`: compiles the generated program with MSVC, g++ or clang++ and runs it. |
-| `rt/` | The **runtime** every generated program links to: HTTPS clients, the agent tool-use loop, confined file tools. |
+| `rt/` | The **runtime** every generated program links to: HTTPS clients, the agent tool-use loop, the switch decision (AI model or keywords), confined file tools. |
 | `sandbox/` | Isolation drivers (host process, Docker, MicroVM), telemetry emitter, resume engine. |
 | `mcp/` | Model Context Protocol client and server registry. |
 | `memory/` | Blackboard and semantic-lessons memory. |

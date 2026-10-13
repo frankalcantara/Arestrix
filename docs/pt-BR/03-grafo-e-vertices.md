@@ -12,6 +12,7 @@ Cada tipo corresponde a uma primitiva do Taskflow quando o programa é gerado.
 | :--- | :--- | :--- | :--- |
 | **Estático** | Azul | `taskflow.emplace(...)` | Trabalho determinístico. |
 | **Condição** | Laranja | Tarefa que retorna um `int` | Decisões, verificação de convergência, laços de feedback. Suas portas de saída são ramos numerados. |
+| **Switch** | Ouro | Tarefa que retorna um `int` (o índice do caso) | Escolher um entre vários caminhos: uma porta de saída por caso, mais um `default`. |
 | **Subfluxo** | Roxo | Tarefa que recebe `tf::Subflow&` | Decompor o trabalho em um grafo filho em tempo de execução. |
 | **Módulo** | Verde | Grafo composto reutilizável | Empacotar um subpipeline para reuso. |
 | **Crítico** | Azul-petróleo | `tf::CriticalSection` | Acesso mutuamente exclusivo a um recurso compartilhado. |
@@ -22,6 +23,32 @@ Cada tipo corresponde a uma primitiva do Taskflow quando o programa é gerado.
 
 Dê duplo clique em um vértice **subfluxo** ou **módulo** para abrir o grafo filho. `Esc` volta um nível; a
 barra de navegação acima do canvas mostra onde você está.
+
+### Switch
+
+Um **switch** manda o fluxo por um entre vários caminhos. Cada **caso** é uma porta de saída; a última porta é sempre o
+**default**, usado quando nada mais serve. Você decide *como* o caminho é escolhido no Inspetor (aba **Geral**), sem
+precisar de código:
+
+| Modo | O que faz | Precisa de |
+| :--- | :--- | :--- |
+| **Um modelo de IA decide** *(padrão)* | O modelo lê o texto e escolhe um caso **pelo nome**. Você pode acrescentar uma orientação ("escolha *alto* se houver risco para o paciente"). | Um modelo: o do próprio vértice (botão **Escolher o modelo deste vértice**) ou o padrão do pipeline. |
+| **Procurar palavras no texto** | Vai para o primeiro caso cujas palavras aparecerem no texto. Acentos e maiúsculas não importam. | Nada: sem IA e sem internet. |
+| **Código C++** *(avançado)* | Você escreve a regra na aba **Lambda** e devolve o número do caso (`0`, `1`, `2`...). | Conhecimento de C++. |
+
+**Que texto é analisado:** a resposta final do vértice anterior (um agente) ou um arquivo do projeto
+(por exemplo `relatorio/auditoria.txt`).
+
+Como se comporta:
+- Se o modelo responder algo que não seja o nome de um caso, o fluxo segue pelo **default** (e o console avisa).
+- Se não houver o que analisar (o vértice anterior não escreveu texto, o arquivo não existe) ou o modelo não puder ser
+  acessado, o pipeline **para com um erro claro**. Ele nunca escolhe um caminho em silêncio.
+- No modo código, qualquer número fora do intervalo também vai para o **default**.
+- Adicione, renomeie e remova casos no mesmo painel. Remover um caso remove também as conexões dele, e um único
+  desfazer restaura os dois. O default é fixo.
+- Um caso sem conexão gera um aviso de validação; o default sem conexão não (o fluxo simplesmente termina ali).
+- Como a condição, o switch pode fechar um laço (a aresta de retorno vira aresta de feedback).
+- Para converter um vértice de/para switch, remova antes as conexões de saída dele, porque as portas mudam.
 
 ## Portas e arestas
 

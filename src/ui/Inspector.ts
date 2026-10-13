@@ -1,7 +1,7 @@
 import { Graph } from '../core/Graph.ts';
-import { INodeData } from '../core/types.ts';
+import { INodeData, IPort, ISwitchSettings, SwitchMode, defaultSwitchSettings } from '../core/types.ts';
 import { EventBus } from '../core/EventBus.ts';
-import { RemoveNodeCommand, UpdateNodeCommand } from '../core/history/GraphCommands.ts';
+import { RemoveNodeCommand, RemoveEdgeCommand, UpdateNodeCommand, CompoundCommand } from '../core/history/GraphCommands.ts';
 import { AgentTemplateRegistry } from '../core/templates/AgentTemplateRegistry.ts';
 import { t } from '../i18n/index.ts';
 
@@ -448,6 +448,7 @@ export class Inspector {
             <label class="form-label">${t('inspector.node_view.taskflow_type')}</label>
             <select id="node-type-select" class="form-select">
               <option value="static" ${node.type === 'static' ? 'selected' : ''}>Static Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Deterministico' : 'Deterministic'})</option>
+              <option value="switch" ${node.type === 'switch' ? 'selected' : ''}>Switch (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Seleção multivia' : 'Multiway selection'})</option>
               <option value="condition" ${node.type === 'condition' ? 'selected' : ''}>Condition Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Decisão / Branch' : 'Decision / Branch'})</option>
               <option value="subflow" ${node.type === 'subflow' ? 'selected' : ''}>Subflow Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Dinamico' : 'Dynamic'})</option>
               <option value="module" ${node.type === 'module' ? 'selected' : ''}>Module Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Hierarquico' : 'Hierarchical'})</option>
@@ -475,8 +476,10 @@ export class Inspector {
             </div>
           ` : ''}
 
+          ${node.type === 'switch' ? this.renderSwitchSection(node) : ''}
+
           <!-- Seção de Parâmetros do Template / Agente -->
-          ${this.renderParametersSection(node, tpl)}
+          ${node.type === 'switch' ? '' : this.renderParametersSection(node, tpl)}
 
           <div class="form-actions" style="margin-top: 16px;">
             <button id="btn-delete-node" class="btn btn-danger">${t('inspector.node_view.delete_node')}</button>
@@ -502,6 +505,7 @@ export class Inspector {
             <span>});</span>
           </div>
           <div class="office-field-hint">${t('inspector.node_view.lambda_hint')}</div>
+          ${node.type === 'switch' && (node.switchSettings?.mode ?? 'code') !== 'code' ? `<div class="office-field-hint" style="color: #a80000;">${t('inspector.switch.lambda_unused')}</div>` : ''}
         </div>
 
         <!-- ABA 3: GOVERNANÇA & IA -->
@@ -558,6 +562,7 @@ export class Inspector {
           <div class="office-tp-section-header">
             <span>${t('inspector.node_view.ports_header')}</span>
           </div>
+
           <div class="port-list">
             <div class="port-sublist">
               <span class="port-sublist-title">${t('inspector.node_view.in_ports_title', { count: node.inputs.length })}</span>
@@ -626,11 +631,34 @@ export class Inspector {
         explanationP.textContent = this.getTaskTypeExplanation(newType);
       }
       if (newType !== oldType) {
+        // De/para switch as portas de saída mudam: só é seguro sem conexões de saída.
+        const crossesSwitch = (newType === 'switch') !== (oldType === 'switch');
+        const hasOutEdges = this.graph.getEdgesForNode(node.id).some(e => e.sourceNodeId === node.id);
+        if (crossesSwitch && hasOutEdges) {
+          typeSelect.value = oldType;
+          if (explanationP) explanationP.textContent = t('inspector.switch.convert_blocked');
+          return;
+        }
+        const current = this.graph.getNode(node.id) ?? node;
+        const oldProps: Partial<INodeData> = { type: oldType };
+        const newProps: Partial<INodeData> = { type: newType };
+        if (crossesSwitch) {
+          oldProps.outputs = JSON.parse(JSON.stringify(current.outputs));
+          newProps.outputs = newType === 'switch'
+            ? Graph.switchOutputs(node.id, ['case 1', 'case 2'])
+            : [{ id: `${node.id}_out_0`, name: 'out', direction: 'output', type: 'flow' }];
+          oldProps.switchSettings = current.switchSettings ? JSON.parse(JSON.stringify(current.switchSettings)) : undefined;
+          newProps.switchSettings = newType === 'switch' ? defaultSwitchSettings('model') : undefined;
+          if (newType === 'switch' && !current.agentSettings) {
+            oldProps.agentSettings = undefined;
+            newProps.agentSettings = { inheritSandbox: true, inheritModel: true, inheritCodeMode: true, inheritMemory: true };
+          }
+        }
         const cmd = new UpdateNodeCommand(
           this.graph,
           node.id,
-          { type: oldType },
-          { type: newType },
+          oldProps,
+          newProps,
           `Alterar tipo de "${node.label}" para ${newType}`
         );
         this.graph.commandManager.execute(cmd);
@@ -663,6 +691,12 @@ export class Inspector {
 
     // Parâmetros
     this.bindParameterInputs(node, tpl);
+
+    // Casos do switch
+    if (node.type === 'switch') {
+      this.bindSwitchCases(node);
+      this.bindSwitchSettings(node);
+    }
 
     // Sincronizar Lambda
     this.container.querySelector('#btn-sync-lambda')?.addEventListener('click', () => {
@@ -828,12 +862,209 @@ export class Inspector {
     });
   }
 
+  // --- Switch: como escolher o caminho (sem código) -------------------------------------------
+
+  private switchSettingsOf(node: INodeData): ISwitchSettings {
+    // Vértices antigos (sem configuração) continuam usando o corpo C++.
+    return node.switchSettings ?? defaultSwitchSettings('code');
+  }
+
+  private renderSwitchSection(node: INodeData): string {
+    const s = this.switchSettingsOf(node);
+    const cases = node.outputs.slice(0, -1);
+    const modeRadio = (mode: SwitchMode, label: string, desc: string) => `
+      <label style="display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; margin-bottom: 6px; border: 1px solid ${s.mode === mode ? '#0f6cbd' : '#edebe9'}; border-radius: 6px; background: ${s.mode === mode ? '#f0f6fc' : '#ffffff'}; cursor: pointer;">
+        <input type="radio" name="switch-mode" class="switch-mode-radio" value="${mode}" ${s.mode === mode ? 'checked' : ''} style="margin-top: 3px;" />
+        <span><strong style="font-size: 12.5px;">${label}</strong><br /><span style="font-size: 11.5px; color: #616161;">${desc}</span></span>
+      </label>`;
+
+    const sourceBlock = s.mode === 'code' ? '' : `
+      <div class="form-group" style="margin-top: 10px;">
+        <label class="form-label" for="switch-source-kind">${t('inspector.switch.source_label')}</label>
+        <select id="switch-source-kind" class="form-select">
+          <option value="previous" ${s.source.kind === 'previous' ? 'selected' : ''}>${t('inspector.switch.source_previous')}</option>
+          <option value="file" ${s.source.kind === 'file' ? 'selected' : ''}>${t('inspector.switch.source_file')}</option>
+        </select>
+        ${s.source.kind === 'file' ? `<input type="text" id="switch-source-path" class="form-input" style="margin-top: 6px; font-family: monospace;" value="${this.escapeHtml(s.source.path ?? '')}" placeholder="${t('inspector.switch.source_path_placeholder')}" />` : `<div class="office-field-hint">${t('inspector.switch.source_previous_hint')}</div>`}
+      </div>`;
+
+    let modeBlock = '';
+    if (s.mode === 'model') {
+      modeBlock = `
+        <div class="form-group" style="margin-top: 10px;">
+          <label class="form-label" for="switch-instruction">${t('inspector.switch.instruction_label')}</label>
+          <textarea id="switch-instruction" class="form-textarea" rows="3" placeholder="${t('inspector.switch.instruction_placeholder')}">${this.escapeHtml(s.instruction ?? '')}</textarea>
+          <div class="office-field-hint">${t('inspector.switch.model_hint')}</div>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-switch-model" style="margin-top: 6px;">${t('inspector.switch.btn_model')}</button>
+        </div>`;
+    } else if (s.mode === 'rules') {
+      modeBlock = `
+        <div class="form-group" style="margin-top: 10px;">
+          <label class="form-label">${t('inspector.switch.rules_label')}</label>
+          ${cases.map(p => `
+            <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 6px;">
+              <span style="width: 110px; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${this.escapeHtml(p.name)}">${this.escapeHtml(p.name)}</span>
+              <input type="text" class="form-input switch-rule" data-port-id="${this.escapeHtml(p.id)}" value="${this.escapeHtml(s.rules[p.id] ?? '')}" placeholder="${t('inspector.switch.rules_placeholder')}" style="flex: 1; height: 30px; font-size: 12px;" />
+            </div>`).join('')}
+          <div class="office-field-hint">${t('inspector.switch.rules_hint')}</div>
+        </div>`;
+    } else {
+      modeBlock = `<div class="office-field-hint" style="margin-top: 10px;">${t('inspector.switch.code_hint')}</div>`;
+    }
+
+    return `
+      <div class="settings-section-card" style="margin-top: 12px; padding: 12px; border: 1px solid #edebe9; border-radius: 6px;">
+        ${this.renderSwitchCases(node)}
+        <div style="font-weight: 700; font-size: 13px; margin: 4px 0 8px;">${t('inspector.switch.mode_title')}</div>
+        ${modeRadio('model', t('inspector.switch.mode_model'), t('inspector.switch.mode_model_desc'))}
+        ${modeRadio('rules', t('inspector.switch.mode_rules'), t('inspector.switch.mode_rules_desc'))}
+        ${modeRadio('code', t('inspector.switch.mode_code'), t('inspector.switch.mode_code_desc'))}
+        ${sourceBlock}
+        ${modeBlock}
+      </div>`;
+  }
+
+  /** Aplica uma alteração nas configurações do switch como um comando desfazível e redesenha o painel. */
+  private updateSwitchSettings(node: INodeData, mutate: (s: ISwitchSettings) => void, description: string, rerender = true): void {
+    const current = this.graph.getNode(node.id);
+    if (!current) return;
+    const old = current.switchSettings ? JSON.parse(JSON.stringify(current.switchSettings)) as ISwitchSettings : undefined;
+    const next: ISwitchSettings = old ? JSON.parse(JSON.stringify(old)) : defaultSwitchSettings('code');
+    mutate(next);
+    this.graph.commandManager.execute(new UpdateNodeCommand(this.graph, node.id, { switchSettings: old }, { switchSettings: next }, description));
+    if (rerender) {
+      const fresh = this.graph.getNode(node.id);
+      if (fresh) this.renderNode(fresh);
+    }
+  }
+
+  private bindSwitchSettings(node: INodeData): void {
+    this.container.querySelectorAll<HTMLInputElement>('.switch-mode-radio').forEach(radio => {
+      radio.addEventListener('change', () => {
+        const mode = radio.value as SwitchMode;
+        this.updateSwitchSettings(node, s => { s.mode = mode; }, 'Alterar o modo de escolha do switch');
+      });
+    });
+    this.container.querySelector('#switch-source-kind')?.addEventListener('change', (e) => {
+      const kind = (e.currentTarget as HTMLSelectElement).value as 'previous' | 'file';
+      this.updateSwitchSettings(node, s => { s.source = { kind, path: s.source.path }; }, 'Alterar a origem do texto do switch');
+    });
+    this.container.querySelector('#switch-source-path')?.addEventListener('change', (e) => {
+      const path = (e.currentTarget as HTMLInputElement).value.trim();
+      this.updateSwitchSettings(node, s => { s.source = { kind: 'file', path }; }, 'Alterar o arquivo do switch', false);
+    });
+    this.container.querySelector('#switch-instruction')?.addEventListener('change', (e) => {
+      const text = (e.currentTarget as HTMLTextAreaElement).value;
+      this.updateSwitchSettings(node, s => { s.instruction = text; }, 'Alterar a orientação do switch', false);
+    });
+    this.container.querySelectorAll<HTMLInputElement>('.switch-rule').forEach(input => {
+      input.addEventListener('change', () => {
+        const portId = input.dataset.portId!;
+        const words = input.value;
+        this.updateSwitchSettings(node, s => { s.rules[portId] = words; }, 'Alterar as palavras de um caso', false);
+      });
+    });
+    this.container.querySelector('#btn-switch-model')?.addEventListener('click', () => {
+      this.bus.emit('node:open-model-modal', node.id);
+    });
+  }
+
+  // --- Switch: casos (portas de saída) -------------------------------------------------------
+
+  private renderSwitchCases(node: INodeData): string {
+    const cases = node.outputs.slice(0, -1);
+    const def = node.outputs[node.outputs.length - 1];
+    return `
+      <div class="port-sublist" id="switch-cases" style="margin-bottom: 14px;">
+        <span class="port-sublist-title">${t('inspector.switch.title')}</span>
+        <div class="office-field-hint" style="margin: 4px 0 8px;">${t('inspector.switch.hint')}</div>
+        ${cases.map((p, i) => `
+          <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 6px;">
+            <span style="width: 22px; font-family: monospace; color: #616161;">${i}</span>
+            <input type="text" class="form-input switch-case-name" data-port-id="${this.escapeHtml(p.id)}" value="${this.escapeHtml(p.name)}" style="flex: 1; height: 30px; font-size: 12px;" />
+            <button type="button" class="btn btn-secondary btn-sm switch-case-remove" data-port-id="${this.escapeHtml(p.id)}" ${cases.length <= 1 ? 'disabled' : ''} title="${t('inspector.switch.remove')}">✕</button>
+          </div>`).join('')}
+        <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 8px;">
+          <span style="width: 22px; font-family: monospace; color: #616161;">${cases.length}</span>
+          <input type="text" class="form-input form-input-readonly" value="${this.escapeHtml(def?.name ?? 'default')}" readonly style="flex: 1; height: 30px; font-size: 12px;" />
+          <span style="font-size: 11px; color: #616161;">${t('inspector.switch.default_tag')}</span>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-switch-add-case">${t('inspector.switch.add')}</button>
+      </div>`;
+  }
+
+  /** Aplica uma nova lista de portas de saída (desfazível); remove as arestas das portas excluídas. */
+  private applySwitchOutputs(node: INodeData, newCases: IPort[], description: string): void {
+    const current = this.graph.getNode(node.id);
+    if (!current) return;
+    const oldOutputs: IPort[] = JSON.parse(JSON.stringify(current.outputs));
+    const def = oldOutputs[oldOutputs.length - 1];
+    const keptIds = new Set([...newCases.map(p => p.id), def.id]);
+    const newOutputs: IPort[] = [...newCases, def].map((p, i) => ({ ...p, conditionBranchIndex: i }));
+
+    const removeEdges = this.graph.getAllEdges()
+      .filter(e => e.sourceNodeId === node.id && !keptIds.has(e.sourcePortId))
+      .map(e => new RemoveEdgeCommand(this.graph, e.id));
+    const oldSettings = current.switchSettings ? JSON.parse(JSON.stringify(current.switchSettings)) as ISwitchSettings : undefined;
+    let newSettings: ISwitchSettings | undefined = undefined;
+    if (oldSettings) {
+      newSettings = JSON.parse(JSON.stringify(oldSettings)) as ISwitchSettings;
+      Object.keys(newSettings.rules).forEach(k => { if (!keptIds.has(k)) delete newSettings!.rules[k]; });
+    }
+    const update = new UpdateNodeCommand(this.graph, node.id,
+      { outputs: oldOutputs, switchSettings: oldSettings }, { outputs: newOutputs, switchSettings: newSettings }, description);
+    this.graph.commandManager.execute(new CompoundCommand(description, [...removeEdges, update]));
+
+    const fresh = this.graph.getNode(node.id);
+    if (fresh) this.renderNode(fresh);
+  }
+
+  private bindSwitchCases(node: INodeData): void {
+    this.container.querySelectorAll<HTMLInputElement>('.switch-case-name').forEach(input => {
+      input.addEventListener('change', () => {
+        const current = this.graph.getNode(node.id);
+        if (!current) return;
+        const cases: IPort[] = JSON.parse(JSON.stringify(current.outputs.slice(0, -1)));
+        const target = cases.find(p => p.id === input.dataset.portId);
+        const name = input.value.trim();
+        if (!target || !name || name === target.name) { input.value = target?.name ?? ''; return; }
+        target.name = name;
+        this.applySwitchOutputs(node, cases, `Renomear caso para "${name}"`);
+      });
+    });
+
+    this.container.querySelectorAll<HTMLButtonElement>('.switch-case-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const current = this.graph.getNode(node.id);
+        if (!current) return;
+        const cases: IPort[] = JSON.parse(JSON.stringify(current.outputs.slice(0, -1)));
+        if (cases.length <= 1) return;
+        this.applySwitchOutputs(node, cases.filter(p => p.id !== btn.dataset.portId), 'Remover caso do switch');
+      });
+    });
+
+    this.container.querySelector('#btn-switch-add-case')?.addEventListener('click', () => {
+      const current = this.graph.getNode(node.id);
+      if (!current) return;
+      const cases: IPort[] = JSON.parse(JSON.stringify(current.outputs.slice(0, -1)));
+      cases.push({
+        id: `${node.id}_case_${Date.now().toString(36)}`,
+        name: `case ${cases.length + 1}`,
+        direction: 'output',
+        type: 'flow'
+      });
+      this.applySwitchOutputs(node, cases, 'Adicionar caso ao switch');
+    });
+  }
+
   private getTaskTypeExplanation(type: string): string {
     switch (type) {
       case 'static':
         return t('inspector.explanations.static');
       case 'condition':
         return t('inspector.explanations.condition');
+      case 'switch':
+        return t('inspector.explanations.switch');
       case 'subflow':
         return t('inspector.explanations.subflow');
       case 'module':

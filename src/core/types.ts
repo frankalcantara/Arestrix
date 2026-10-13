@@ -7,7 +7,8 @@ export type TaskflowNodeType =
   | 'cuda'        // tf::cudaGraph / cudaGraphExec - Agente com Aceleracao CUDA C++20 (Taskflow 4.1+)
   | 'agent'       // Agente Autônomo Code Mode em Sandbox/VM Isolada
   | 'fork'        // tf::Task - Despachante Concorrente / Disparo Paralelo
-  | 'join';       // tf::Task - Barreira de Sincronização / Consolidação Concorrente
+  | 'join'        // tf::Task - Barreira de Sincronização / Consolidação Concorrente
+  | 'switch';     // tf::Task (retorna int) - Seleção multivia: um caso por porta de saída; o último é o 'default'
 
 export type PortDirection = 'input' | 'output';
 export type PortType = 'flow' | 'data';
@@ -256,6 +257,23 @@ export interface IAgentTelemetryEvent {
   payload: IAgentTelemetryPayload;
 }
 
+/** Como um vértice switch escolhe o caminho: sem código (modelo de IA ou palavras) ou com código C++. */
+export type SwitchMode = 'model' | 'rules' | 'code';
+
+export interface ISwitchSettings {
+  mode: SwitchMode;
+  /** De onde vem o texto analisado: resposta final do vértice anterior ou um arquivo do projeto. */
+  source: { kind: 'previous' | 'file'; path?: string };
+  /** Modo 'rules': palavras de cada caso (por id da porta), separadas por vírgula. */
+  rules: Record<string, string>;
+  /** Modo 'model': orientação extra para o modelo ("escolha alto se houver dados pessoais..."). */
+  instruction?: string;
+}
+
+export function defaultSwitchSettings(mode: SwitchMode = 'model'): ISwitchSettings {
+  return { mode, source: { kind: 'previous' }, rules: {}, instruction: '' };
+}
+
 export interface INodeData {
   id: string;
   label: string;
@@ -270,6 +288,7 @@ export interface INodeData {
   templateId?: string;        // ID do template de origem (opcional)
   requiredHeaders?: string[]; // Headers C++20 adicionais requeridos por este agente
   agentSettings?: INodeAgentSettings;
+  switchSettings?: ISwitchSettings; // só para vértices do tipo 'switch'
 }
 
 export interface IBreadcrumbItem {

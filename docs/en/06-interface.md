@@ -10,7 +10,7 @@ The Studio follows the Microsoft Office layout, because most people already know
 | :--- | :--- |
 | **File** | Opens the **Backstage** view (below). |
 | **Home** | Edit & view, *Graph vertices* (**+ Task**, type selector, **Catalog**), execution and governance. |
-| **Insert** | Flow & concurrency (conditions, subflows, fork/join, critical sections), GPU acceleration, cognitive agents. |
+| **Insert** | Flow & concurrency (conditions, switch, subflows, fork/join, critical sections), GPU acceleration, cognitive agents. |
 | **Agents** | Workspace security and skills, MCP servers, the global GitHub skill catalog. |
 | **Connectors** | Import Pi projects, Claude, OpenAI, Hermes, Excel. |
 | **Data** | *Project memory* and *Workspace storage*, kept visibly apart. |

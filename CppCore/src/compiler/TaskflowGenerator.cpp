@@ -66,6 +66,11 @@ std::string TaskflowGenerator::indent(const std::string& text, int spaces) {
 
 namespace {
 
+// Vertices cujo corpo devolve o indice do sucessor (condition) ou do caso (switch): unicos que podem fechar lacos.
+bool isBranching(const core::NodeData& node) {
+    return node.type == core::TaskflowNodeType::Condition || node.type == core::TaskflowNodeType::Switch;
+}
+
 // Texto seguro para comentarios de uma linha (sem quebras de linha).
 std::string commentSafe(std::string s) {
     for (char& c : s) {
@@ -147,7 +152,7 @@ std::set<std::string> computeLoopEdges(const core::Graph& graph, const std::vect
     };
     for (const auto& id : ids) {
         const auto& node = graph.getNodes().at(id);
-        if (node.type != core::TaskflowNodeType::Condition) continue;
+        if (!isBranching(node)) continue;
         for (const auto* e : edges) {
             if (e->sourceNodeId != id || loops.count(e->id)) continue;
             if (reaches(e->targetNodeId, id, e->id)) loops.insert(e->id);
@@ -350,6 +355,65 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
         if (node.type == core::TaskflowNodeType::Condition) {
             lambdaHead = "[&ctx]() -> int";
             body = node.customLambdaBody.empty() ? "return 0;" : node.customLambdaBody;
+        } else if (node.type == core::TaskflowNodeType::Switch) {
+            // Switch: o corpo devolve o indice do caso (0..N-1). Fora do intervalo cai no ultimo
+            // caso ("default"), nunca encerra o fluxo em silencio como uma condition faria.
+            const int caseCount = static_cast<int>(node.outputs.size());
+            std::string selector = node.customLambdaBody.empty() ? "return " + std::to_string(std::max(0, caseCount - 1)) + ";"
+                                                                 : node.customLambdaBody;
+            // Sem codigo: o runtime decide por palavras no texto ou perguntando a um modelo de IA.
+            const json& ss = node.switchSettings;
+            const std::string switchMode = ss.is_object() ? ss.value("mode", std::string("code")) : std::string("code");
+            if (switchMode == "rules" || switchMode == "model") {
+                json spec = json::object();
+                spec["mode"] = switchMode;
+                json labels = json::array();
+                for (const auto& port : node.outputs) labels.push_back(port.name);
+                spec["labels"] = labels;
+
+                json rules = json::array();   // um item por caso, sem o default
+                const json& ruleMap = ss["rules"];
+                for (size_t pi = 0; pi + 1 < node.outputs.size(); ++pi) {
+                    json kws = json::array();
+                    std::string raw = ruleMap.is_object() ? ruleMap.value(node.outputs[pi].id, std::string()) : std::string();
+                    std::string cur;
+                    auto flush = [&]() {
+                        size_t a = cur.find_first_not_of(" \t\r");
+                        size_t b = cur.find_last_not_of(" \t\r");
+                        if (a != std::string::npos) kws.push_back(cur.substr(a, b - a + 1));
+                        cur.clear();
+                    };
+                    for (char c : raw) { if (c == ',' || c == ';' || c == '\n') flush(); else cur += c; }
+                    flush();
+                    rules.push_back(kws);
+                }
+                spec["rules"] = rules;
+                spec["instruction"] = ss.value("instruction", std::string());
+
+                json source = json::object();
+                const json& srcCfg = ss["source"];
+                source["kind"] = srcCfg.is_object() ? srcCfg.value("kind", std::string("previous")) : std::string("previous");
+                source["path"] = srcCfg.is_object() ? srcCfg.value("path", std::string()) : std::string();
+                json from = json::array();
+                for (const auto* e : edges) if (e->targetNodeId == id) from.push_back(e->sourceNodeId);
+                source["from"] = from;
+                spec["source"] = source;
+
+                if (switchMode == "model") {
+                    json agentSpec = buildAgentSpec(graph, node);
+                    spec["provider"] = agentSpec.value("provider", std::string("deepseek"));
+                    spec["model"] = agentSpec.value("model", std::string());
+                    if (agentSpec.contains("temperature")) spec["temperature"] = agentSpec["temperature"];
+                }
+                selector = "return taskforge::rt::decideCase(" + cppString(node.id) + ", " + cppString(label) + ",\n    " +
+                           rawLiteral(spec.dump()) + ");";
+            }
+            lambdaHead = "[&ctx]() -> int";
+            body = "auto arx_select = [&]() -> int {\n" + indent(selector, 4) + "\n};\n" +
+                   "const int arx_cases = " + std::to_string(caseCount) + ";\n" +
+                   "int arx_case = arx_select();\n" +
+                   "if (arx_case < 0 || arx_case >= arx_cases) arx_case = arx_cases - 1;   // default\n" +
+                   "return arx_case;";
         } else if (node.type == core::TaskflowNodeType::Cuda) {
             body = node.customLambdaBody.empty()
                 ? "// Taskflow 4.1+ Native CUDA Graph (tf::cudaGraph / tf::cudaGraphExec)\n"
@@ -406,7 +470,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
         for (const auto* e : edges) if (e->sourceNodeId == id) outEdges.push_back(e);
         if (outEdges.empty()) continue;
 
-        if (node.type == core::TaskflowNodeType::Condition) {
+        if (isBranching(node)) {
             // O indice retornado pela condicao e a posicao do sucessor em precede():
             // monta o vetor por indice de ramo, preenchendo lacunas com tarefas vazias.
             std::map<int, std::vector<std::string>> byBranch;

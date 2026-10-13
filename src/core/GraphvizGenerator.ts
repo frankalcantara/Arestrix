@@ -44,6 +44,10 @@ export class GraphvizGenerator {
         if (srcPort.conditionBranchIndex === 1) edgeColor = '#ef4444'; // Vermelho para false/1
       }
 
+      if (srcNode.type === 'switch' && srcPort) {
+        edgeLabel = ` [${srcPort.name}]`;
+      }
+
       dot += `  "${srcNode.id}" -> "${tgtNode.id}" [color="${edgeColor}", style="${edgeStyle}", label="${edgeLabel}", penwidth=2.0];\n`;
     });
 
@@ -59,6 +63,7 @@ export class GraphvizGenerator {
     switch (node.type) {
       case 'static': color = '#3b82f6'; break;
       case 'condition': color = '#ff7828'; break;
+      case 'switch': color = '#b45309'; break;
       case 'subflow': color = '#8b5cf6'; break;
       case 'module': color = '#10b981'; break;
       case 'critical': color = '#06b6d4'; break;

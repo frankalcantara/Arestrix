@@ -64,6 +64,12 @@ export const THEME = {
       textColor: getContrastTextColor(0xc43e1c),
       label: 'CONDITION TASK'
     },
+    switch: {
+      color: 0x986f0b,        // Ouro Fluent (seleção multivia)
+      badgeBg: 0x75540a,      // Ouro 700
+      textColor: getContrastTextColor(0x986f0b),
+      label: 'SWITCH'
+    },
     subflow: {
       color: 0x5c2d91,        // Púrpura Teams / OneNote
       badgeBg: 0x44206a,      // Púrpura 700

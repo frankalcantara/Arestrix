@@ -9,8 +9,7 @@ import {
   DEFAULT_NODE_MEMORY_CONFIG,
   TaskflowNodeType,
   IPort,
-  IBreadcrumbItem
-} from './types.ts';
+  IBreadcrumbItem, defaultSwitchSettings } from './types.ts';
 import { globalEventBus, EventBus } from './EventBus.ts';
 import { CommandManager } from './history/CommandManager.ts';
 
@@ -118,6 +117,28 @@ export class Graph {
     this.bus.emit('graph:changed');
   }
 
+  /**
+   * Portas de saída de um switch: uma por caso, mais o 'default' sempre por último.
+   * O índice do caso é a posição na lista (conditionBranchIndex), o mesmo valor que o corpo C++ devolve.
+   */
+  static switchOutputs(id: string, caseNames: string[], existing: IPort[] = []): IPort[] {
+    const ports: IPort[] = caseNames.map((name, i) => ({
+      id: existing[i]?.id ?? `${id}_out_${i}`,
+      name,
+      direction: 'output',
+      type: 'flow',
+      conditionBranchIndex: i
+    }));
+    ports.push({
+      id: `${id}_out_default`,
+      name: 'default',
+      direction: 'output',
+      type: 'flow',
+      conditionBranchIndex: caseNames.length
+    });
+    return ports;
+  }
+
   buildNode(
     id: string, 
     label: string, 
@@ -135,6 +156,8 @@ export class Graph {
         { id: `${id}_out_0`, name: 'branch 0', direction: 'output', type: 'flow', conditionBranchIndex: 0 },
         { id: `${id}_out_1`, name: 'branch 1', direction: 'output', type: 'flow', conditionBranchIndex: 1 }
       ];
+    } else if (type === 'switch') {
+      outputs = Graph.switchOutputs(id, ['case 1', 'case 2']);
     } else if (type === 'agent') {
       inputs.push({ id: `${id}_in_prompt`, name: 'prompt_in', direction: 'input', type: 'data', dataType: 'std::string' });
       outputs = [
@@ -156,12 +179,13 @@ export class Graph {
       outputs,
       parameters: {},
       customLambdaBody: this.getDefaultLambdaBody(type, label),
-      agentSettings: type === 'agent' ? {
+      agentSettings: (type === 'agent' || type === 'switch') ? {
         inheritSandbox: true,
         inheritModel: true,
         inheritCodeMode: true,
         inheritMemory: true
-      } : undefined
+      } : undefined,
+      switchSettings: type === 'switch' ? defaultSwitchSettings('model') : undefined
     };
   }
 
@@ -179,6 +203,8 @@ export class Graph {
 
   private getDefaultLambdaBody(type: TaskflowNodeType, label: string): string {
     switch (type) {
+      case 'switch':
+        return `// Switch ${label}: devolva o índice do caso (0, 1, 2...).\n// O último caso é o "default": qualquer valor fora do intervalo vai para ele.\nreturn 0;`;
       case 'condition':
         return `// Decisão de branch do agente ${label}\n// Retorna 0 para ramo 0, 1 para ramo 1\nreturn (rand() % 2);`;
       case 'subflow':
@@ -265,7 +291,7 @@ export class Graph {
     }
 
     // Identificar se a aresta é um loop condicional
-    if (source.type === 'condition') {
+    if (source.type === 'condition' || source.type === 'switch') {
       const sourcePort = source.outputs.find(p => p.id === edge.sourcePortId);
       if (sourcePort && sourcePort.conditionBranchIndex !== undefined) {
         // Se a aresta retorna para o próprio nó ou nó antecedente, marca como loopback

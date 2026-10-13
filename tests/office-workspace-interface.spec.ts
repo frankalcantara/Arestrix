@@ -330,3 +330,77 @@ describe('Área Útil do Grafo: Padrão Microsoft Office / Visio Fluent UI', () 
     }
   });
 });
+
+describe('Inspetor: vértice switch sem código', () => {
+  const mount = async () => {
+    const origDoc = (globalThis as any).document;
+    const origWin = (globalThis as any).window;
+    const createMockElement = (tag: string) => {
+      const el: any = {
+        tagName: tag.toUpperCase(), className: '', style: {}, children: [] as any[], _html: '',
+        set innerHTML(val: string) { this._html = val; },
+        get innerHTML() { return this._html; },
+        querySelector: () => ({ tagName: 'DIV', value: '', textContent: '', style: {}, addEventListener: () => {},
+                                removeEventListener: () => {}, classList: { add: () => {}, remove: () => {}, contains: () => false } }),
+        querySelectorAll: () => [],
+        addEventListener: () => {},
+        classList: { add: () => {}, remove: () => {}, contains: () => false },
+        appendChild: (c: any) => { el.children.push(c); return c; },
+        insertBefore: (c: any) => { el.children.push(c); return c; }
+      };
+      return el;
+    };
+    (globalThis as any).document = { createElement: createMockElement, body: { style: {} } };
+    (globalThis as any).window = { innerWidth: 1920, innerHeight: 1080, addEventListener: () => {}, removeEventListener: () => {} };
+    const { Inspector } = await import('../src/ui/Inspector.ts');
+    const { Graph } = await import('../src/core/Graph.ts');
+    const { EventBus } = await import('../src/core/EventBus.ts');
+    const bus = new EventBus();
+    const graph = new Graph(bus);
+    const inspector = new Inspector(createMockElement('div') as any, graph, bus);
+    return { inspector, graph, bus, restore: () => { (globalThis as any).document = origDoc; (globalThis as any).window = origWin; } };
+  };
+
+  it('novo switch mostra os três modos, com "modelo de IA" marcado, os casos e a origem do texto', async () => {
+    const { inspector, graph, bus, restore } = await mount();
+    try {
+      const node = graph.buildNode('sw1', 'Triagem', 'switch', 0, 0);
+      graph.addNode(node);
+      bus.emit('node:selected', node);
+      const html = (inspector as any).container.innerHTML as string;
+
+      expect(node.switchSettings?.mode).toBe('model');
+      expect(html).toContain('Como este vértice escolhe o caminho');
+      expect(html).toContain('value="model" checked');
+      expect(html).toContain('value="rules"');
+      expect(html).toContain('value="code"');
+      expect(html).toContain('id="btn-switch-add-case"');           // editor de casos na aba Geral
+      expect(html).toContain('id="switch-source-kind"');
+      expect(html).toContain('id="btn-switch-model"');              // atalho para escolher o modelo
+      expect(html).toContain('id="switch-instruction"');
+    } finally { restore(); }
+  });
+
+  it('switch antigo (sem configuração) segue no modo código; o modo palavras mostra um campo por caso', async () => {
+    const { inspector, graph, bus, restore } = await mount();
+    try {
+      const legacy = graph.buildNode('sw2', 'Antigo', 'switch', 0, 0);
+      delete (legacy as any).switchSettings;
+      graph.addNode(legacy);
+      bus.emit('node:selected', legacy);
+      let html = (inspector as any).container.innerHTML as string;
+      expect(html).toContain('value="code" checked');
+      expect(html).not.toContain('id="switch-instruction"');
+
+      const rules = graph.buildNode('sw3', 'Regras', 'switch', 0, 0);
+      rules.switchSettings = { mode: 'rules', source: { kind: 'file', path: 'relatorio.txt' }, rules: { sw3_out_0: 'urgente' } };
+      graph.addNode(rules);
+      bus.emit('node:selected', rules);
+      html = (inspector as any).container.innerHTML as string;
+      expect(html).toContain('value="rules" checked');
+      expect(html.match(/class="form-input switch-rule"/g)?.length).toBe(2);     // case 1 e case 2 (o default não tem palavras)
+      expect(html).toContain('value="urgente"');
+      expect(html).toContain('value="relatorio.txt"');
+    } finally { restore(); }
+  });
+});

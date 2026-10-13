@@ -14,6 +14,8 @@
 #include "mcp/McpClient.hpp"
 #include "core/Graph.hpp"
 #include "platform/Process.hpp"
+#include "rt/Decision.hpp"
+#include "rt/Runtime.hpp"
 #include "rt/Tools.hpp"
 #include "search/ProjectSearch.hpp"
 #include "search/SynonymAgent.hpp"
@@ -406,6 +408,42 @@ TEST(generator_condition_with_gap_uses_noop) {
     CHECK(pos != std::string::npos);
 }
 
+TEST(generator_switch_selects_case_with_default_fallback) {
+    auto base = tutorialGraph();
+    json schema = base.toJson();
+    json& nodes = schema["nodes"];
+    bool found = false;
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        if (nodes[i]["id"] != "cond") continue;
+        nodes[i]["type"] = "switch";
+        nodes[i]["outputs"].push_back(json{{"id", "b2"}, {"name", "default"}, {"direction", "output"}, {"type", "flow"},
+                                           {"dataType", ""}, {"conditionBranchIndex", 2}});
+        found = true;
+    }
+    CHECK(found);
+    taskforge::core::Graph g;
+    g.fromJson(schema);
+    std::string src = taskforge::compiler::TaskflowGenerator::generateSource(g);
+
+    CHECK(src.find("auto arx_select = [&]() -> int {") != std::string::npos);        // o corpo do usuario vira o seletor
+    CHECK(src.find("const int arx_cases = 3;") != std::string::npos);                // 2 casos + default
+    CHECK(src.find("arx_case = arx_cases - 1;") != std::string::npos);               // fora do intervalo -> default
+    CHECK(src.find("audit_decision.txt") != std::string::npos);                      // corpo preservado
+    CHECK(src.find("task_cond.precede(task_done, task_gen)") != std::string::npos);  // casos 0 e 1 como no condition
+    CHECK(src.find("task_bootstrap.precede(task_gen)") != std::string::npos);        // o retorno ainda e laco, nao entrada dupla
+
+    // sem corpo: o seletor cai direto no default
+    for (size_t i = 0; i < nodes.size(); ++i)
+        if (nodes[i]["id"] == "cond") nodes[i]["customLambdaBody"] = "";
+    taskforge::core::Graph g2;
+    g2.fromJson(schema);
+    std::string src2 = taskforge::compiler::TaskflowGenerator::generateSource(g2);
+    CHECK(src2.find("return 2;") != std::string::npos);
+
+    // o tipo "switch" faz roundtrip no JSON
+    CHECK(g.toJson()["nodes"].dump().find("\"type\":\"switch\"") != std::string::npos);
+}
+
 TEST(generator_is_deterministic) {
     auto g = tutorialGraph();
     CHECK(taskforge::compiler::TaskflowGenerator::generateSource(g) == taskforge::compiler::TaskflowGenerator::generateSource(g));
@@ -645,6 +683,113 @@ TEST(search_studio_default_model_comes_from_the_environment) {
     CHECK(m && m->provider == "openai" && m->model != "auto");
 
     for (auto& [k, v] : saved) setv(k.c_str(), v.c_str());
+}
+
+// ---------------------------------------------------------------------------
+// Switch sem codigo (regras por palavras e decisao por modelo)
+// ---------------------------------------------------------------------------
+TEST(decision_keywords_ignore_accents_case_and_respect_word_boundaries) {
+    using namespace taskforge::rt;
+    std::vector<std::vector<std::string>> rules = {{"aprovado", "tudo certo"}, {"erro", "falha cr\xC3\xADtica"}};
+    CHECK(pickByKeywords("STATUS: APROVADO.", rules, 2) == 0);
+    CHECK(pickByKeywords("Revis\xC3\xA3o: tudo CERTO por aqui", rules, 2) == 0);   // frase, caixa mista
+    CHECK(pickByKeywords("houve uma FALHA CRITICA", rules, 2) == 1);              // sem acento casa com acento
+    CHECK(pickByKeywords("um terror de relatorio", rules, 2) == 2);              // "erro" dentro de "terror" nao casa
+    CHECK(pickByKeywords("nada relevante", rules, 2) == 2);                      // default
+    CHECK(pickByKeywords("aprovado mas com erro", rules, 2) == 0);               // ganha a ordem dos casos
+}
+
+TEST(decision_model_reply_is_matched_to_a_label) {
+    using namespace taskforge::rt;
+    std::vector<std::string> labels = {"alto", "m\xC3\xA9" "dio", "baixo", "default"};
+    CHECK(matchLabel("alto", labels, 3) == 0);
+    CHECK(matchLabel("  \"Medio\".\n", labels, 3) == 1);                        // aspas, caixa, acento
+    CHECK(matchLabel("Acho que o caminho e baixo.", labels, 3) == 2);            // rotulo dentro de uma frase
+    CHECK(matchLabel("nao sei dizer", labels, 3) == 3);                          // nao reconhecida: default
+    std::vector<std::string> overlap = {"erro", "erro grave", "default"};
+    CHECK(matchLabel("e um erro grave", overlap, 2) == 1);                       // o rotulo mais longo vence
+
+    std::string prompt = decisionUserPrompt("Classifique o risco.", labels, "texto do relatorio");
+    CHECK(prompt.find("Classifique o risco.") != std::string::npos);
+    CHECK(prompt.find("- baixo") != std::string::npos);
+    CHECK(prompt.find("none of the others fits") != std::string::npos);          // o default e explicado ao modelo
+    CHECK(prompt.find("texto do relatorio") != std::string::npos);
+}
+
+TEST(decision_rules_read_previous_output_or_a_file) {
+    using namespace taskforge::rt;
+    auto root = makeTempDir("decide");
+    fs::path oldCwd = fs::current_path();
+    fs::current_path(root);                       // o workspace do runtime e o diretorio atual
+
+    const std::string spec = R"({"mode":"rules","labels":["aprovado","reprovado","default"],
+        "rules":[["aprovado"],["reprovado","rejeitado"]],
+        "source":{"kind":"previous","path":"","from":["agente_a"]}})";
+
+    // sem saida do vertice anterior: erro explicito, nunca um desvio silencioso
+    bool threw = false;
+    try { decideCase("sw", "Roteador", spec); } catch (const std::exception&) { threw = true; }
+    CHECK(threw);
+
+    writeFile(root / ".arestrix" / "out" / "agente_a.txt", "Resultado: REJEITADO por inconsistencias.");
+    CHECK(decideCase("sw", "Roteador", spec) == 1);
+
+    writeFile(root / ".arestrix" / "out" / "agente_a.txt", "Sem conclusao.");
+    CHECK(decideCase("sw", "Roteador", spec) == 2);                              // default
+
+    // entrada por arquivo do projeto, confinada ao workspace
+    writeFile(root / "report" / "audit.txt", "STATUS: APROVADO");
+    const std::string fileSpec = R"({"mode":"rules","labels":["aprovado","reprovado","default"],
+        "rules":[["aprovado"],["reprovado"]],"source":{"kind":"file","path":"report/audit.txt"}})";
+    CHECK(decideCase("sw", "Roteador", fileSpec) == 0);
+    const std::string escape = R"({"mode":"rules","labels":["a","default"],"rules":[["a"]],
+        "source":{"kind":"file","path":"../fora.txt"}})";
+    threw = false;
+    try { decideCase("sw", "Roteador", escape); } catch (const std::exception&) { threw = true; }
+    CHECK(threw);
+
+    fs::current_path(oldCwd);
+    fs::remove_all(root);
+}
+
+TEST(generator_switch_without_code_calls_the_runtime_decision) {
+    auto base = tutorialGraph();
+    json schema = base.toJson();
+    json& nodes = schema["nodes"];
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        if (nodes[i]["id"] != "cond") continue;
+        nodes[i]["type"] = "switch";
+        nodes[i]["customLambdaBody"] = "";
+        nodes[i]["outputs"] = json::array({
+            json{{"id", "b0"}, {"name", "aprovado"}, {"direction", "output"}, {"type", "flow"}, {"dataType", ""}, {"conditionBranchIndex", 0}},
+            json{{"id", "b1"}, {"name", "reprovado"}, {"direction", "output"}, {"type", "flow"}, {"dataType", ""}, {"conditionBranchIndex", 1}},
+            json{{"id", "b2"}, {"name", "default"}, {"direction", "output"}, {"type", "flow"}, {"dataType", ""}, {"conditionBranchIndex", 2}}});
+        nodes[i]["switchSettings"] = json{{"mode", "model"}, {"instruction", "Decida pelo relatorio."},
+                                          {"source", {{"kind", "previous"}}}, {"rules", json::object()}};
+    }
+    taskforge::core::Graph g;
+    g.fromJson(schema);
+    std::string src = taskforge::compiler::TaskflowGenerator::generateSource(g);
+    CHECK(src.find("taskforge::rt::decideCase(\"cond\"") != std::string::npos);
+    CHECK(src.find("\"labels\":[\"aprovado\",\"reprovado\",\"default\"]") != std::string::npos);
+    CHECK(src.find("\"from\":[\"jev\"]") != std::string::npos);                   // o vertice anterior alimenta a decisao
+    CHECK(src.find("\"provider\":\"deepseek\"") != std::string::npos);            // modelo herdado dos padroes globais
+    CHECK(src.find("\"instruction\":\"Decida pelo relatorio.\"") != std::string::npos);
+    CHECK(src.find("arx_case = arx_cases - 1;") != std::string::npos);            // o fallback para o default continua
+
+    // modo "rules": palavras por porta, sem modelo no spec
+    for (size_t i = 0; i < nodes.size(); ++i)
+        if (nodes[i]["id"] == "cond")
+            nodes[i]["switchSettings"] = json{{"mode", "rules"}, {"source", {{"kind", "file"}, {"path", "audit.txt"}}},
+                                              {"rules", {{"b0", "aprovado, tudo certo"}, {"b1", "reprovado;rejeitado"}}}};
+    taskforge::core::Graph g2;
+    g2.fromJson(schema);
+    std::string src2 = taskforge::compiler::TaskflowGenerator::generateSource(g2);
+    CHECK(src2.find("\"rules\":[[\"aprovado\",\"tudo certo\"],[\"reprovado\",\"rejeitado\"]]") != std::string::npos);
+    CHECK(src2.find("\"path\":\"audit.txt\"") != std::string::npos);
+    auto callPos = src2.find("decideCase(\"cond\"");
+    auto callEnd = src2.find(");", callPos);
+    CHECK(callPos != std::string::npos && src2.substr(callPos, callEnd - callPos).find("\"provider\"") == std::string::npos);   // regras nao usam modelo
 }
 
 int main() {

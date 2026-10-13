@@ -46,7 +46,7 @@ refazer funcionam para tudo, inclusive colar, duplicar e apagar.
 | `core/` | Tipos de grafo e vértice, serialização JSON. |
 | `compiler/` | `TaskflowGenerator`: grafo → `main.cpp`. Detecta arestas de laço (feedback). |
 | `build/` | `BuildService`: compila o programa gerado com MSVC, g++ ou clang++ e o executa. |
-| `rt/` | O **runtime** ao qual todo programa gerado se liga: clientes HTTPS, o laço de uso de ferramentas dos agentes, ferramentas de arquivo confinadas. |
+| `rt/` | O **runtime** ao qual todo programa gerado se liga: clientes HTTPS, o laço de uso de ferramentas dos agentes, a decisão do switch (modelo de IA ou palavras), ferramentas de arquivo confinadas. |
 | `sandbox/` | Drivers de isolamento (processo do host, Docker, MicroVM), emissor de telemetria, motor de retomada. |
 | `mcp/` | Cliente do Model Context Protocol e registro de servidores. |
 | `memory/` | Memória Blackboard e de lições semânticas. |
