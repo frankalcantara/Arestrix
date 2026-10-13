@@ -915,3 +915,39 @@
   text-shadow: none !important;
 }
 
+/* Cartões Interativos do Seletor de Idioma (Opções do Studio) */
+.lang-selector-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  user-select: none;
+  text-align: left;
+  width: 100%;
+  box-sizing: border-box;
+  text-shadow: none !important;
+}
+
+.lang-selector-card:hover {
+  background-color: #f8fafc;
+  border-color: #0f6cbd;
+}
+
+.lang-selector-card.active-lang {
+  background-color: #f0f7ff;
+  border: 2px solid #0f6cbd;
+}
+
+.lang-selector-card.active-lang:hover {
+  background-color: #eaf3fd;
+}
+
+.lang-selector-card * {
+  text-shadow: none !important;
+}
+

@@ -523,20 +523,62 @@ export class BackstageView {
 
           <!-- 0. IDIOMA DO STUDIO (POLIGLOTA / I18N) -->
           <div class="backstage-info-card" style="margin-bottom: 24px; border-left: 4px solid #0f6cbd; background: #ffffff;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: #0f172a;">🌐 ${t('backstage.options.language_group')}</h4>
-              <span class="badge-inherited" style="font-size: 11px; font-weight: 700; color: #0f6cbd; background: #e0f2fe; padding: 2px 8px; border-radius: 4px;">${currentLocale === 'pt-BR' ? 'Português (Brasil)' : 'English (US)'}</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; min-height: 28px;">
+              <div style="display: inline-flex; align-items: center; gap: 8px; line-height: 1;">
+                <span style="font-size: 16px; line-height: 1; display: inline-flex; align-items: center;">🌐</span>
+                <span style="font-size: 14px; font-weight: 700; color: #0f172a; line-height: 1; display: inline-flex; align-items: center;">${t('backstage.options.language_group')}</span>
+              </div>
+              <div style="display: inline-flex; align-items: center; line-height: 1;">
+                <span style="display: inline-flex; align-items: center; justify-content: center; height: 24px; padding: 0 10px; border-radius: 12px; font-size: 11px; font-weight: 700; background: #e0f2fe; color: #0f6cbd; border: 1px solid #c7e0f4; line-height: 1;">
+                  ${currentLocale === 'pt-BR' ? 'Português (Brasil)' : 'English (US)'}
+                </span>
+              </div>
             </div>
-            <p style="font-size: 12.5px; color: #475569; margin-bottom: 14px;">${t('backstage.options.language_desc')}</p>
-            <div style="display: flex; gap: 24px; align-items: center;">
-              <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13.5px; cursor: pointer; color: #1e293b;">
-                <input type="radio" name="backstage_language" value="pt-BR" ${currentLocale === 'pt-BR' ? 'checked' : ''} id="radio-lang-pt">
-                <span>${t('backstage.options.lang_pt_br')}</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13.5px; cursor: pointer; color: #1e293b;">
-                <input type="radio" name="backstage_language" value="en-US" ${currentLocale === 'en-US' ? 'checked' : ''} id="radio-lang-en">
-                <span>${t('backstage.options.lang_en_us')}</span>
-              </label>
+            <p style="font-size: 12.5px; color: #475569; margin-bottom: 14px; line-height: 1.5;">${t('backstage.options.language_desc')}</p>
+
+            <!-- Seletor Visual de Idioma com Cartões Interativos -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+              <!-- Cartão 1: Português (Brasil) -->
+              <div class="lang-selector-card ${currentLocale === 'pt-BR' ? 'active-lang' : ''}" data-lang="pt-BR" id="card-lang-pt">
+                <div style="display: flex; align-items: center; gap: 14px;">
+                  <span style="font-size: 32px; line-height: 1; display: inline-flex; align-items: center;">🇧🇷</span>
+                  <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <div style="font-size: 14px; font-weight: 700; color: #0f172a; line-height: 1.3;">
+                      Português (Brasil)
+                    </div>
+                    <div style="font-size: 11.5px; color: #64748b; line-height: 1.3;">
+                      ${t('backstage.options.pt_subtitle')}
+                    </div>
+                  </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <input type="radio" name="backstage_language" value="pt-BR" ${currentLocale === 'pt-BR' ? 'checked' : ''} id="radio-lang-pt" style="cursor: pointer; width: 18px; height: 18px; accent-color: #0f6cbd; margin: 0;">
+                  <span style="display: inline-flex; align-items: center; justify-content: center; height: 26px; padding: 0 10px; border-radius: 6px; font-size: 11.5px; font-weight: 700; line-height: 1; background: ${currentLocale === 'pt-BR' ? '#0f6cbd' : '#f1f5f9'}; color: ${currentLocale === 'pt-BR' ? '#ffffff' : '#475569'}; border: 1px solid ${currentLocale === 'pt-BR' ? '#0f6cbd' : '#cbd5e1'};">
+                    ${currentLocale === 'pt-BR' ? t('backstage.options.active_badge') : t('backstage.options.select_badge')}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Cartão 2: English (US) -->
+              <div class="lang-selector-card ${currentLocale === 'en-US' ? 'active-lang' : ''}" data-lang="en-US" id="card-lang-en">
+                <div style="display: flex; align-items: center; gap: 14px;">
+                  <span style="font-size: 32px; line-height: 1; display: inline-flex; align-items: center;">🇺🇸</span>
+                  <div style="display: flex; flex-direction: column; gap: 2px;">
+                    <div style="font-size: 14px; font-weight: 700; color: #0f172a; line-height: 1.3;">
+                      English (US)
+                    </div>
+                    <div style="font-size: 11.5px; color: #64748b; line-height: 1.3;">
+                      ${t('backstage.options.en_subtitle')}
+                    </div>
+                  </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <input type="radio" name="backstage_language" value="en-US" ${currentLocale === 'en-US' ? 'checked' : ''} id="radio-lang-en" style="cursor: pointer; width: 18px; height: 18px; accent-color: #0f6cbd; margin: 0;">
+                  <span style="display: inline-flex; align-items: center; justify-content: center; height: 26px; padding: 0 10px; border-radius: 6px; font-size: 11.5px; font-weight: 700; line-height: 1; background: ${currentLocale === 'en-US' ? '#0f6cbd' : '#f1f5f9'}; color: ${currentLocale === 'en-US' ? '#ffffff' : '#475569'}; border: 1px solid ${currentLocale === 'en-US' ? '#0f6cbd' : '#cbd5e1'};">
+                    ${currentLocale === 'en-US' ? t('backstage.options.active_badge') : t('backstage.options.select_badge')}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -723,7 +765,17 @@ export class BackstageView {
       });
     });
 
-    // Seletor de Idioma nas Opções do Studio
+    // Seletor de Idioma nas Opções do Studio (Clique no Card ou no Radio)
+    this.overlay.querySelectorAll<HTMLElement>('.lang-selector-card').forEach(card => {
+      card.addEventListener('click', async (e) => {
+        if ((e.target as HTMLElement).tagName === 'INPUT') return;
+        const lang = card.dataset.lang as any;
+        if (lang && (lang === 'pt-BR' || lang === 'en-US')) {
+          await setLocale(lang);
+        }
+      });
+    });
+
     this.overlay.querySelectorAll<HTMLInputElement>('input[name="backstage_language"]').forEach(radio => {
       radio.addEventListener('change', async () => {
         if (radio.checked) {
