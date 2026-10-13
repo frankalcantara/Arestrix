@@ -1,5 +1,9 @@
 # Arestrix ⚡
 
+<p align="center">
+  <b>🇺🇸 English</b> &nbsp;|&nbsp; <a href="README.pt-BR.md">🇧🇷 Português</a>
+</p>
+
 **Arestrix** is a high-performance, next-generation visual node graph orchestrator and IDE built with **Three.js (WebGL)**, **TypeScript**, and a native **C++ Backend (WebUI)** for modeling, visualizing, and executing concurrent, heterogeneous agent pipelines powered by **Taskflow in C++20**.
 
 ---
@@ -227,12 +231,12 @@ Arestrix maps visual graph nodes directly to native **Taskflow** primitives:
 
 Arestrix includes enterprise-grade desktop UX and model ingestion capabilities:
 
-1. **Microsoft Office Ribbon UI Standard (Fase Concluída ✅)**:
+1. **Microsoft Office Ribbon UI Standard (Phase Complete ✅)**:
    - Modern Ribbon bar with functional tabs (*Arquivo / Backstage*, *Página Inicial*, *Inserir*, *Agentes & Tools*, *Conectores & Importação*, *Dados & Memória*, *Execução & Lote*).
    - Chunked tool groups with bottom labels, Quick Access Toolbar (Save, Undo, Redo, Run F5), and clean soft-neomorphic badges strictly respecting the zero text-shadow rule.
    - Quick search / Tell-Me box (*"💡 O que você deseja fazer?"*) and Ribbon auto-collapse shortcut (`Ctrl+F1`).
 
-2. **Project Governance & Workspace Encapsulation (Fase Concluída ✅)**:
+2. **Project Governance & Workspace Encapsulation (Phase Complete ✅)**:
    - First-class Project entities with native C++20 backend management (`arestrix.project.json`).
    - Strict isolation of memory namespaces (Blackboard / Semantic Lessons), sandboxes, working directories, and pipelines per workspace.
    - Recent projects MRU management and 3-tab Project Manager Hub.
@@ -316,10 +320,10 @@ To protect users against untrusted tool execution, Arestrix includes an automate
 
 
 3. **External AI Assistant & Spreadsheet Ingestion Engine (Phases 15 to 20)**:
-   - **Pi Agent Real Project & CLI Ingestion (Fase Concluída ✅ 🎯)**:
-     - 1-Clique para importar projetos locais do Pi CLI com varredura dinâmica de qualquer repositório.
-     - Scanner C++ nativo e TS que inspeciona `.pi/settings.json`, habilidades em `.agents/*/SKILL.md`, `plano.md` e checkpoints em `pipeline-state.json`.
-     - Síntese visual imediata de pipeline Taskflow C++20: Agentes autônomos, ferramentas MCP e validação física de artefatos.
+   - **Pi Agent Real Project & CLI Ingestion (Phase Complete ✅ 🎯)**:
+     - One-click import of local Pi CLI projects, with dynamic scanning of any repository.
+     - Native C++ and TS scanner that inspects `.pi/settings.json`, skills in `.agents/*/SKILL.md`, `plano.md`, and checkpoints in `pipeline-state.json`.
+     - Immediate visual synthesis of a C++20 Taskflow pipeline: autonomous agents, MCP tools, and physical artifact validation.
    - **Claude (Anthropic)**: XML structured prompt and artifact conversion.
    - **OpenAI (ChatGPT / Assistants)**: Export threads and tools mapping.
    - **Hermes (Nous Research)**: Scratchpad logic for local offline microVMs.
@@ -327,32 +331,32 @@ To protect users against untrusted tool execution, Arestrix includes an automate
 
 ---
 
-## 🌐 Internacionalização & Como Adicionar Novos Idiomas (i18n) / Internationalization
+## 🌐 Internationalization (i18n) & How to Add New Languages
 
-O Arestrix Studio é uma aplicação 100% poliglota. Todos os títulos, menus da Ribbon, botões, modais, tooltips e mensagens são carregados dinamicamente através de catálogos de tradução JSON.
+Arestrix Studio is a fully multilingual application. Every title, Ribbon menu, button, modal, tooltip, and message is loaded dynamically from JSON translation catalogs.
 
-A biblioteca [`i18next`](https://github.com/i18next/i18next) é gerenciada diretamente como um **submódulo Git** em `third_party/i18next`, permitindo verificação e atualização automática sem dependência de pacotes externos no `node_modules`.
+The [`i18next`](https://github.com/i18next/i18next) library is managed directly as a **Git submodule** in `third_party/i18next`, which allows it to be verified and updated automatically without depending on external packages in `node_modules`.
 
-Idiomas nativos de fábrica:
-- **Português do Brasil (`pt-BR`)** (Padrão)
+Languages shipped out of the box:
+- **Português do Brasil (`pt-BR`)** (Default)
 - **English - United States (`en-US`)**
 
 ---
 
-### 🛠️ Passo a Passo para Instalar e Adicionar um Novo Idioma
+### 🛠️ Step by Step: Installing and Adding a New Language
 
-Para adicionar um novo idioma (por exemplo, Espanhol `es-ES`, Francês `fr-FR` ou Alemão `de-DE`), siga as etapas abaixo:
+To add a new language (for example, Spanish `es-ES`, French `fr-FR`, or German `de-DE`), follow the steps below:
 
-#### 1. Criar o Arquivo de Dicionário JSON
-Duplique um dos dicionários existentes em `src/i18n/locales/` com o código BCP-47 correspondente:
+#### 1. Create the JSON Dictionary File
+Duplicate one of the existing dictionaries in `src/i18n/locales/` using the corresponding BCP-47 code:
 ```bash
-# Exemplo para Espanhol (Espanha / Internacional):
+# Example for Spanish (Spain / International):
 cp src/i18n/locales/en-US.json src/i18n/locales/es-ES.json
 ```
-Edite o novo arquivo `src/i18n/locales/es-ES.json` e traduza os valores das chaves mantendo a mesma estrutura hierárquica (chaves idênticas às de `pt-BR.json` e `en-US.json`).
+Edit the new `src/i18n/locales/es-ES.json` file and translate the values, keeping the same hierarchical structure (keys identical to those in `pt-BR.json` and `en-US.json`).
 
-#### 2. Registrar o Novo Idioma em `src/i18n/types.ts`
-Adicione o novo código à união de tipos `SupportedLocale` e declare seus metadados na lista `SUPPORTED_LOCALES`:
+#### 2. Register the New Language in `src/i18n/types.ts`
+Add the new code to the `SupportedLocale` type union and declare its metadata in the `SUPPORTED_LOCALES` list:
 
 ```typescript
 // src/i18n/types.ts
@@ -380,14 +384,14 @@ export const SUPPORTED_LOCALES: readonly ILocaleOption[] = [
 ];
 ```
 
-#### 3. Importar e Registrar o Catálogo em `src/i18n/index.ts`
-Importe o arquivo JSON e inclua-o no objeto `resources` da inicialização do `i18next`:
+#### 3. Import and Register the Catalog in `src/i18n/index.ts`
+Import the JSON file and include it in the `resources` object of the `i18next` initialization:
 
 ```typescript
 // src/i18n/index.ts
 import esES from './locales/es-ES.json';
 
-// No i18next.init:
+// In i18next.init:
 resources: {
   'pt-BR': { translation: ptBR },
   'en-US': { translation: enUS },
@@ -395,15 +399,15 @@ resources: {
 }
 ```
 
-Atualize também a validação de sanitização em `setLocale`:
+Also update the sanitization check in `setLocale`:
 ```typescript
 if (locale !== 'pt-BR' && locale !== 'en-US' && locale !== 'es-ES') {
   locale = 'pt-BR';
 }
 ```
 
-#### 4. Adicionar a Opção no Dropdown da Backstage View
-No arquivo `src/ui/ribbon/BackstageView.ts`, adicione a nova `<option>` dentro do elemento `<select id="backstage-language-select">`:
+#### 4. Add the Option to the Backstage View Dropdown
+In `src/ui/ribbon/BackstageView.ts`, add the new `<option>` inside the `<select id="backstage-language-select">` element:
 
 ```html
 <select id="backstage-language-select" class="backstage-language-dropdown">
@@ -413,33 +417,33 @@ No arquivo `src/ui/ribbon/BackstageView.ts`, adicione a nova `<option>` dentro d
 </select>
 ```
 
-#### 5. Executar os Testes Automatizados de Paridade
-O Arestrix possui testes unitários estritos no Vitest que verificam a consistência e paridade de todas as chaves entre idiomas:
+#### 5. Run the Automated Parity Tests
+Arestrix has strict Vitest unit tests that verify the consistency and parity of every key across languages:
 
 ```powershell
 npm test
 ```
-*Se alguma chave tiver sido esquecida ou nomeada incorretamente, o teste apontará a divergência imediatamente.*
+*If a key was forgotten or misnamed, the test will point out the mismatch immediately.*
 
-#### 6. Compilar e Sincronizar com o Binário C++ Desktop
-Execute a compilação de produção:
+#### 6. Build and Sync with the C++ Desktop Binary
+Run the production build:
 
 ```powershell
 npm run build
 ```
-*O script compilará os assets via Vite e sincronizará automaticamente a pasta `dist/` com `CppCore/dist/`, tornando o novo idioma disponível imediatamente no executável desktop `arestrix.exe`.*
+*The script compiles the assets with Vite and automatically syncs the `dist/` folder with `CppCore/dist/`, making the new language immediately available in the `arestrix.exe` desktop executable.*
 
 ---
 
-### 🔄 Gerenciamento do Submódulo `third_party/i18next`
+### 🔄 Managing the `third_party/i18next` Submodule
 
-Para auditar ou atualizar o código da biblioteca oficial do `i18next`:
+To audit or update the official `i18next` library code:
 
 ```powershell
-# 1. Verificar se o repositório remoto do i18next possui novas atualizações (sem alterar arquivos)
+# 1. Check whether the remote i18next repository has new updates (without changing files)
 npm run submodule:check
 
-# 2. Atualizar o submódulo para a versão mais recente da branch remota master
+# 2. Update the submodule to the latest version of the remote master branch
 npm run submodule:update
 ```
 
@@ -449,3 +453,16 @@ npm run submodule:update
 
 MIT License. Designed and developed with passion and AI collaboration.
 
+---
+
+## 🙏 Acknowledgements
+
+Arestrix stands on the shoulders of outstanding open-source work. Our sincere thanks to the authors and communities behind the projects vendored as Git submodules in [`third_party/`](third_party):
+
+| Project | Role in Arestrix | License |
+| :--- | :--- | :--- |
+| [**i18next**](https://github.com/i18next/i18next) | Internationalization framework behind every translated string in the Studio. | MIT |
+| [**Monaco Editor**](https://github.com/microsoft/monaco-editor) (Microsoft) | Code editor that powers the generated C++ code view. | MIT |
+| [**SkillSpector**](https://github.com/NVIDIA/SkillSpector) (NVIDIA) | Security scanner for AI agent skills. | Apache-2.0 |
+
+Each project remains the property of its respective authors and is distributed under its own license, available in its folder under `third_party/`.
