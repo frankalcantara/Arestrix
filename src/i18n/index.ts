@@ -88,6 +88,10 @@ export async function setLocale(locale: SupportedLocale): Promise<void> {
     locale = 'pt-BR';
   }
 
+  if (locale === getLocale()) {
+    return;
+  }
+
   await i18next.changeLanguage(locale);
 
   try {

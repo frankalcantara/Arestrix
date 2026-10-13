@@ -20,7 +20,8 @@ export class CanvasControls {
     parent.appendChild(this.container);
 
     this.render();
-    this.bindEvents();
+    this.bindDomEvents();
+    this.bindBusEvents();
   }
 
   private render(): void {
@@ -44,7 +45,7 @@ export class CanvasControls {
     `;
   }
 
-  private bindEvents(): void {
+  private bindDomEvents(): void {
     this.container.querySelector('#canvas-ctrl-fit')?.addEventListener('click', () => {
       this.viewport.zoomToFit();
     });
@@ -66,15 +67,17 @@ export class CanvasControls {
       const isVisible = this.viewport.toggleGrid();
       gridBtn.classList.toggle('active', isVisible);
     });
+  }
 
-    // Escuta evento do grafo para atualizar visibilidade se necessário
+  private bindBusEvents(): void {
     this.bus.on('graph:loaded', () => {
+      const gridBtn = this.container.querySelector('#canvas-ctrl-grid') as HTMLElement;
       gridBtn?.classList.add('active');
     });
 
     this.bus.on('locale:changed', () => {
       this.render();
-      this.bindEvents();
+      this.bindDomEvents();
     });
   }
 }

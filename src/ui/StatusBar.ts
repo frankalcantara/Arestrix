@@ -30,7 +30,8 @@ export class StatusBar {
     parent.appendChild(this.container);
 
     this.render();
-    this.bindEvents();
+    this.bindDomEvents();
+    this.bindBusEvents();
     this.updateStats();
   }
 
@@ -79,7 +80,7 @@ export class StatusBar {
     this.zoomLabelEl = this.container.querySelector('#sb-zoom-label') as HTMLElement;
   }
 
-  private bindEvents(): void {
+  private bindDomEvents(): void {
     // Zoom Slider e botões
     this.zoomSliderEl.addEventListener('input', () => {
       const zoomVal = parseInt(this.zoomSliderEl.value, 10) / 100;
@@ -115,10 +116,12 @@ export class StatusBar {
     this.container.querySelector('#sb-btn-lang')?.addEventListener('click', async () => {
       await toggleLocale();
     });
+  }
 
+  private bindBusEvents(): void {
     this.bus.on('locale:changed', () => {
       this.render();
-      this.bindEvents();
+      this.bindDomEvents();
       this.updateStats();
     });
 

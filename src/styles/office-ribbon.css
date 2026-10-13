@@ -921,61 +921,36 @@
   text-shadow: none !important;
 }
 
-/* Caixa de Configuração de Idioma em Destaque no Backstage */
-.backstage-language-box {
-  background-color: #ffffff !important;
-  border: 1.5px solid #0f6cbd !important;
-  border-radius: 12px !important;
-  padding: 22px 24px !important;
-  margin-bottom: 24px !important;
-  flex-shrink: 0 !important;
-  min-height: auto !important;
-  overflow: visible !important;
-  box-shadow: 0 2px 8px rgba(15, 108, 189, 0.08);
-}
-
-.backstage-language-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  min-height: 36px;
-}
-
-/* Cartões Interativos do Seletor de Idioma (Opções do Studio) */
-.lang-selector-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
+/* Dropdown do Seletor de Idioma no Backstage */
+.backstage-language-dropdown {
   background-color: #ffffff;
-  border: 1.5px solid #cbd5e1;
-  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
   cursor: pointer;
+  outline: none;
   transition: all 0.15s ease-in-out;
-  user-select: none;
-  text-align: left;
-  width: 100%;
-  box-sizing: border-box;
   text-shadow: none !important;
 }
 
-.lang-selector-card:hover {
-  background-color: #f8fafc;
+.backstage-language-dropdown:hover {
   border-color: #0f6cbd;
 }
 
-.lang-selector-card.active-lang {
-  background-color: #f0f7ff;
-  border: 2px solid #0f6cbd;
+.backstage-language-dropdown:focus {
+  border-color: #0f6cbd;
+  box-shadow: 0 0 0 2px rgba(15, 108, 189, 0.2);
 }
 
-.lang-selector-card.active-lang:hover {
-  background-color: #eaf3fd;
-}
-
-.lang-selector-card * {
-  text-shadow: none !important;
+.backstage-language-dropdown option {
+  background-color: #ffffff;
+  color: #0f172a;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 6px 10px;
 }
 
 

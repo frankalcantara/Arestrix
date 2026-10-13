@@ -477,6 +477,22 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
       expect(githubModalEventFired).toBe(true);
       expect(backstage.isOpen()).toBe(true);
     });
+
+    it('deve renderizar o dropdown select de idioma com opções pt-BR e en-US nas Opções do Backstage', async () => {
+      await ribbon.openBackstage('options');
+      const backstage = ribbon.getBackstageView();
+      expect(backstage.isOpen()).toBe(true);
+
+      const overlay = backstage.getOverlay();
+      const selectEl = overlay?.querySelector('#backstage-language-select') as any;
+      expect(selectEl).toBeDefined();
+      expect(selectEl?.tagName).toBe('SELECT');
+
+      const html = overlay?.innerHTML || '';
+      expect(html).toContain('BR Português (Brasil)');
+      expect(html).toContain('US English');
+    });
   });
 });
+
 

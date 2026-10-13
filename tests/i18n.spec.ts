@@ -110,4 +110,24 @@ describe('Arestrix Studio - Motor Poliglota i18n (i18next)', () => {
     expect(gitmodulesContent).toContain('submodule "third_party/i18next"');
     expect(gitmodulesContent).toContain('url = https://github.com/i18next/i18next');
   });
+
+  it('9. Não deve disparar eventos redundantes quando o mesmo idioma for solicitado novamente', async () => {
+    expect(getLocale()).toBe('pt-BR');
+    let callCount = 0;
+    const unsub = globalEventBus.on('locale:changed', () => {
+      callCount++;
+    });
+
+    await setLocale('pt-BR');
+    expect(callCount).toBe(0);
+
+    await setLocale('en-US');
+    expect(callCount).toBe(1);
+
+    await setLocale('en-US');
+    expect(callCount).toBe(1);
+
+    unsub();
+  });
 });
+

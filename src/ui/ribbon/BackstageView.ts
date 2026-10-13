@@ -6,7 +6,7 @@ import { hashProjectName } from '../../core/hash.ts';
 import { CodeModal } from '../CodeModal.ts';
 import { GlobalDefaultsModal } from '../GlobalDefaultsModal.ts';
 import { WorkspaceManager } from '../../core/workspace/WorkspaceManager.ts';
-import { t, getLocale, setLocale, toggleLocale } from '../../i18n/index.ts';
+import { t, getLocale, setLocale } from '../../i18n/index.ts';
 
 export class BackstageView {
   private overlay?: HTMLElement;
@@ -522,55 +522,18 @@ export class BackstageView {
           <p class="backstage-header-sub">${t('backstage.options.subtitle')}</p>
 
           <!-- 0. IDIOMA DO STUDIO (POLIGLOTA / I18N) -->
-          <div class="backstage-info-card backstage-language-box" style="margin-bottom: 24px; border: 1.5px solid #0f6cbd; background: #ffffff; flex-shrink: 0; min-height: auto; overflow: visible;">
-            <div class="backstage-language-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; min-height: 36px;">
+          <div class="backstage-info-card" style="margin-bottom: 24px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px 20px; box-sizing: border-box;">
+            <div style="display: flex; justify-content: space-between; align-items: center; min-height: 36px;">
               <div style="display: flex; align-items: center; gap: 10px; line-height: 1;">
-                <span style="font-size: 20px; line-height: 1; display: inline-flex; align-items: center; justify-content: center;">🌐</span>
-                <span style="font-size: 15px; font-weight: 700; color: #0f172a; line-height: 1; display: inline-flex; align-items: center;">${t('backstage.options.language_group')}</span>
+                <span style="font-size: 20px; line-height: 1; display: inline-flex; align-items: center;">🌐</span>
+                <span style="font-size: 14.5px; font-weight: 700; color: #0f172a; line-height: 1; display: inline-flex; align-items: center;">${t('backstage.options.language_group')}</span>
               </div>
-              <div style="display: flex; align-items: center; gap: 10px; line-height: 1;">
-                <span style="font-size: 12px; color: #64748b; font-weight: 600; line-height: 1; display: inline-flex; align-items: center;">${t('backstage.options.current_lang_label')}</span>
-                <button id="btn-backstage-toggle-lang" class="tool-btn btn-secondary" title="${t('backstage.options.toggle_lang_tip')}" style="display: inline-flex; align-items: center; justify-content: center; height: 28px; padding: 0 12px; border-radius: 14px; font-size: 11.5px; font-weight: 700; background: #e0f2fe; color: #0f6cbd; border: 1px solid #b9e1ff; line-height: 1; cursor: pointer; transition: all 0.15s ease;">
-                  ${currentLocale === 'pt-BR' ? '🇧🇷 Português (Brasil) ▾' : '🇺🇸 English (US) ▾'}
-                </button>
-              </div>
-            </div>
-            <p style="font-size: 13px; color: #475569; margin: 0 0 16px 0; line-height: 1.5;">${t('backstage.options.language_desc')}</p>
-
-            <!-- Seletor Visual de Idioma com Cartões Interativos -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
-              <!-- Cartão 1: Português (Brasil) -->
-              <div class="lang-selector-card ${currentLocale === 'pt-BR' ? 'active-lang' : ''}" data-lang="pt-BR" id="card-lang-pt" style="cursor: pointer;">
-                <div style="display: flex; align-items: center; gap: 14px;">
-                  <span style="font-size: 32px; line-height: 1; display: inline-flex; align-items: center; flex-shrink: 0;">🇧🇷</span>
-                  <div style="display: flex; flex-direction: column; gap: 2px;">
-                    <span style="font-size: 14.5px; font-weight: 700; color: #0f172a; line-height: 1.2;">Português (Brasil)</span>
-                    <span style="font-size: 12px; color: #64748b; line-height: 1.2;">${t('backstage.options.pt_subtitle')}</span>
-                  </div>
-                </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <input type="radio" name="backstage_language" value="pt-BR" ${currentLocale === 'pt-BR' ? 'checked' : ''} id="radio-lang-pt" style="cursor: pointer; width: 18px; height: 18px; accent-color: #0f6cbd; margin: 0;">
-                  <span style="display: inline-flex; align-items: center; justify-content: center; height: 28px; padding: 0 12px; border-radius: 6px; font-size: 11.5px; font-weight: 700; line-height: 1; background: ${currentLocale === 'pt-BR' ? '#0f6cbd' : '#f1f5f9'}; color: ${currentLocale === 'pt-BR' ? '#ffffff' : '#475569'}; border: 1px solid ${currentLocale === 'pt-BR' ? '#0f6cbd' : '#cbd5e1'};">
-                    ${currentLocale === 'pt-BR' ? t('backstage.options.active_badge') : t('backstage.options.select_badge')}
-                  </span>
-                </div>
-              </div>
-
-              <!-- Cartão 2: English (US) -->
-              <div class="lang-selector-card ${currentLocale === 'en-US' ? 'active-lang' : ''}" data-lang="en-US" id="card-lang-en" style="cursor: pointer;">
-                <div style="display: flex; align-items: center; gap: 14px;">
-                  <span style="font-size: 32px; line-height: 1; display: inline-flex; align-items: center; flex-shrink: 0;">🇺🇸</span>
-                  <div style="display: flex; flex-direction: column; gap: 2px;">
-                    <span style="font-size: 14.5px; font-weight: 700; color: #0f172a; line-height: 1.2;">English (US)</span>
-                    <span style="font-size: 12px; color: #64748b; line-height: 1.2;">${t('backstage.options.en_subtitle')}</span>
-                  </div>
-                </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <input type="radio" name="backstage_language" value="en-US" ${currentLocale === 'en-US' ? 'checked' : ''} id="radio-lang-en" style="cursor: pointer; width: 18px; height: 18px; accent-color: #0f6cbd; margin: 0;">
-                  <span style="display: inline-flex; align-items: center; justify-content: center; height: 28px; padding: 0 12px; border-radius: 6px; font-size: 11.5px; font-weight: 700; line-height: 1; background: ${currentLocale === 'en-US' ? '#0f6cbd' : '#f1f5f9'}; color: ${currentLocale === 'en-US' ? '#ffffff' : '#475569'}; border: 1px solid ${currentLocale === 'en-US' ? '#0f6cbd' : '#cbd5e1'};">
-                    ${currentLocale === 'en-US' ? t('backstage.options.active_badge') : t('backstage.options.select_badge')}
-                  </span>
-                </div>
+              <div style="display: flex; align-items: center; gap: 12px; line-height: 1;">
+                <span style="font-size: 12.5px; color: #64748b; font-weight: 600; line-height: 1; display: inline-flex; align-items: center;">${t('backstage.options.current_lang_label')}</span>
+                <select id="backstage-language-select" class="backstage-language-dropdown" style="min-width: 220px; height: 34px; padding: 4px 10px; font-size: 12.5px; font-weight: 600; color: #1e293b; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; outline: none;">
+                  <option value="pt-BR" ${currentLocale === 'pt-BR' ? 'selected' : ''}>BR Português (Brasil)</option>
+                  <option value="en-US" ${currentLocale === 'en-US' ? 'selected' : ''}>US English (United States)</option>
+                </select>
               </div>
             </div>
           </div>
@@ -758,28 +721,14 @@ export class BackstageView {
       });
     });
 
-    // Botão de Alternância Rápida de Idioma no Cabeçalho
-    this.overlay.querySelector('#btn-backstage-toggle-lang')?.addEventListener('click', async () => {
-      await toggleLocale();
-    });
-
-    // Seletor de Idioma nas Opções do Studio (Clique no Card ou no Radio)
-    this.overlay.querySelectorAll<HTMLElement>('.lang-selector-card').forEach(card => {
-      card.addEventListener('click', async (e) => {
-        if ((e.target as HTMLElement).tagName === 'INPUT') return;
-        const lang = card.dataset.lang as any;
-        if (lang && (lang === 'pt-BR' || lang === 'en-US')) {
-          await setLocale(lang);
-        }
-      });
-    });
-
-    this.overlay.querySelectorAll<HTMLInputElement>('input[name="backstage_language"]').forEach(radio => {
-      radio.addEventListener('change', async () => {
-        if (radio.checked) {
-          await setLocale(radio.value as any);
-        }
-      });
+    // Seletor de Idioma nas Opções do Studio (Dropdown Select)
+    const langSelect = this.overlay.querySelector('#backstage-language-select') as HTMLSelectElement;
+    langSelect?.addEventListener('change', async (e) => {
+      e.stopPropagation();
+      const val = langSelect.value as any;
+      if (val === 'pt-BR' || val === 'en-US') {
+        await setLocale(val);
+      }
     });
 
     // Controles da Tela "Salvar Como"
