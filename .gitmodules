@@ -4,3 +4,7 @@
 [submodule "third_party/monaco-editor"]
 	path = third_party/monaco-editor
 	url = https://github.com/microsoft/monaco-editor.git
+[submodule "third_party/i18next"]
+	path = third_party/i18next
+	url = https://github.com/i18next/i18next
+	branch = master

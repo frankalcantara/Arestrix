@@ -36,13 +36,15 @@ export interface INodeActionDef {
   color: string;
 }
 
+import { t } from '../i18n/index.ts';
+
 export const NODE_ACTIONS: readonly INodeActionDef[] = [
   {
     type: 'sandbox',
     iconName: 'shield-check',
     icon: ShieldCheck as unknown as LucideIconNode,
-    label: 'Sandbox & Isolamento',
-    description: 'Ambiente de execução, rede e limites do agente',
+    get label() { return t('actions.sandbox.label'); },
+    get description() { return t('actions.sandbox.description'); },
     event: 'node:open-sandbox-modal',
     color: '#0F766E'
   },
@@ -50,8 +52,8 @@ export const NODE_ACTIONS: readonly INodeActionDef[] = [
     type: 'model',
     iconName: 'brain-circuit',
     icon: BrainCircuit as unknown as LucideIconNode,
-    label: 'Modelo de IA, Skill & Prompt',
-    description: 'Provedor, modelo, arquivo de skill e template de prompt',
+    get label() { return t('actions.model.label'); },
+    get description() { return t('actions.model.description'); },
     event: 'node:open-model-modal',
     color: '#4F46E5'
   },
@@ -59,8 +61,8 @@ export const NODE_ACTIONS: readonly INodeActionDef[] = [
     type: 'tools',
     iconName: 'wrench',
     icon: Wrench as unknown as LucideIconNode,
-    label: 'Ferramentas & MCP',
-    description: 'Ferramentas permitidas e servidores MCP do agente',
+    get label() { return t('actions.tools.label'); },
+    get description() { return t('actions.tools.description'); },
     event: 'node:open-tools-modal',
     color: '#B45309'
   },
@@ -68,8 +70,8 @@ export const NODE_ACTIONS: readonly INodeActionDef[] = [
     type: 'memory',
     iconName: 'database',
     icon: Database as unknown as LucideIconNode,
-    label: 'Memória do Agente',
-    description: 'Memória efêmera ou persistente e domínios de conhecimento',
+    get label() { return t('actions.memory.label'); },
+    get description() { return t('actions.memory.description'); },
     event: 'node:open-memory-modal',
     color: '#0369A1'
   },
@@ -77,8 +79,8 @@ export const NODE_ACTIONS: readonly INodeActionDef[] = [
     type: 'skills',
     iconName: 'book-open-text',
     icon: BookOpenText as unknown as LucideIconNode,
-    label: 'Skills do Agente',
-    description: 'Habilidades vinculadas e editor de SKILL.md',
+    get label() { return t('actions.skills.label'); },
+    get description() { return t('actions.skills.description'); },
     event: 'node:open-skills-modal',
     color: '#7C3AED'
   }

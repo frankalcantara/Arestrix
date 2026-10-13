@@ -1,6 +1,7 @@
 import { Graph } from '../core/Graph.ts';
 import { Viewport } from '../view/Viewport.ts';
 import { EventBus } from '../core/EventBus.ts';
+import { t, getLocale, toggleLocale } from '../i18n/index.ts';
 
 /**
  * Arestrix Studio - Microsoft Office Status Bar
@@ -38,31 +39,35 @@ export class StatusBar {
   }
 
   private render(): void {
+    const isPt = getLocale() === 'pt-BR';
     this.container.innerHTML = `
       <div class="office-statusbar-left">
-        <span class="office-status-dot status-ready" id="sb-status-dot" title="Status do Sistema"></span>
-        <span class="office-status-text" id="sb-status-text">Pronto</span>
+        <span class="office-status-dot status-ready" id="sb-status-dot" title="${t('statusbar.system_status_tip')}"></span>
+        <span class="office-status-text" id="sb-status-text">${t('statusbar.ready')}</span>
         <span class="office-status-sep">|</span>
         <span class="office-status-stats" id="sb-stats-text">0 vértices, 0 conexões</span>
       </div>
 
       <div class="office-statusbar-center">
-        <span class="office-status-mode">C++20 MSVC Taskflow Orchestrator</span>
+        <span class="office-status-mode">${t('statusbar.mode')}</span>
       </div>
 
       <div class="office-statusbar-right">
-        <button id="sb-btn-grid" class="office-sb-btn" title="Alternar Grade (G)">
-          <span class="office-sb-icon">⊞</span> Grade
+        <button id="sb-btn-grid" class="office-sb-btn" title="${t('statusbar.grid_tip')}">
+          <span class="office-sb-icon">⊞</span> ${t('statusbar.grid')}
         </button>
-        <button id="sb-btn-fit" class="office-sb-btn" title="Ajustar ao Conteúdo (Ctrl+0)">
-          <span class="office-sb-icon">🎯</span> Ajustar
+        <button id="sb-btn-fit" class="office-sb-btn" title="${t('statusbar.fit_tip')}">
+          <span class="office-sb-icon">🎯</span> ${t('statusbar.fit')}
+        </button>
+        <button id="sb-btn-lang" class="office-sb-btn office-sb-lang" title="${t('statusbar.language_tip')}">
+          <span>🌐</span> ${isPt ? 'PT-BR' : 'EN-US'}
         </button>
 
         <div class="office-zoom-control">
-          <button id="sb-zoom-out" class="office-zoom-btn" title="Diminuir Zoom (Ctrl -)">−</button>
-          <input type="range" id="sb-zoom-slider" class="office-zoom-slider" min="20" max="350" value="100" title="Controle de Zoom do Office" />
-          <button id="sb-zoom-in" class="office-zoom-btn" title="Aumentar Zoom (Ctrl +)">+</button>
-          <span id="sb-zoom-label" class="office-zoom-label" title="Clique para redefinir para 100%">100%</span>
+          <button id="sb-zoom-out" class="office-zoom-btn" title="${t('statusbar.zoom_out_tip')}">−</button>
+          <input type="range" id="sb-zoom-slider" class="office-zoom-slider" min="20" max="350" value="100" title="${t('statusbar.zoom_slider_tip')}" />
+          <button id="sb-zoom-in" class="office-zoom-btn" title="${t('statusbar.zoom_in_tip')}">+</button>
+          <span id="sb-zoom-label" class="office-zoom-label" title="${t('statusbar.zoom_reset_tip')}">100%</span>
         </div>
       </div>
     `;
@@ -107,6 +112,16 @@ export class StatusBar {
       this.viewport.zoomToFit();
     });
 
+    this.container.querySelector('#sb-btn-lang')?.addEventListener('click', async () => {
+      await toggleLocale();
+    });
+
+    this.bus.on('locale:changed', () => {
+      this.render();
+      this.bindEvents();
+      this.updateStats();
+    });
+
     // Eventos da Câmera (sincronização bidirecional de zoom)
     this.bus.on('camera:zoom-changed', ({ zoom }: { zoom: number }) => {
       const pct = Math.round(zoom * 100);
@@ -125,26 +140,26 @@ export class StatusBar {
 
     // Eventos do Pipeline
     this.bus.on('pipeline:compiling', () => {
-      this.setStatus('Compilando MSVC C++20...', 'status-compiling');
+      this.setStatus(t('statusbar.compiling'), 'status-compiling');
     });
 
     this.bus.on('pipeline:running', () => {
-      this.setStatus('Executando Agentes Taskflow...', 'status-running');
+      this.setStatus(t('statusbar.running'), 'status-running');
     });
 
     this.bus.on('pipeline:success', (data: { elapsedMs: number }) => {
-      this.setStatus(`Execução Concluída (${data.elapsedMs}ms)`, 'status-ready');
+      this.setStatus(`${t('common.success')} (${data.elapsedMs}ms)`, 'status-ready');
     });
 
     this.bus.on('pipeline:error', () => {
-      this.setStatus('Falha na Compilação / Execução', 'status-error');
+      this.setStatus(t('statusbar.error'), 'status-error');
     });
   }
 
   private updateStats(): void {
     const nodeCount = this.graph.getAllNodes().length;
     const edgeCount = this.graph.getAllEdges().length;
-    this.statsTextEl.textContent = `${nodeCount} ${nodeCount === 1 ? 'vértice' : 'vértices'}, ${edgeCount} ${edgeCount === 1 ? 'conexão' : 'conexões'}`;
+    this.statsTextEl.textContent = t('statusbar.stats', { nodes: nodeCount, edges: edgeCount });
   }
 
   public setStatus(text: string, dotClass: 'status-ready' | 'status-compiling' | 'status-running' | 'status-error'): void {

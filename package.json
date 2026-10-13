@@ -9,7 +9,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "app:dev": "python CppCore/dev.py"
+    "app:dev": "python CppCore/dev.py",
+    "submodule:check": "node scripts/update-submodules.mjs --check",
+    "submodule:update": "node scripts/update-submodules.mjs --update"
   },
   "dependencies": {
     "lucide": "^0.453.0",

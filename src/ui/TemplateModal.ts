@@ -4,6 +4,17 @@ import { Graph } from '../core/Graph.ts';
 import { Viewport } from '../view/Viewport.ts';
 import { AddNodeCommand } from '../core/history/GraphCommands.ts';
 import { ModalWindowManager, IModalWindowController } from './modals/ModalWindowManager.ts';
+import { t, onLocaleChange } from '../i18n/index.ts';
+
+const CATEGORY_MAP: { id: string; labelKey: string }[] = [
+  { id: 'Todos', labelKey: 'template_modal.cat_all' },
+  { id: 'IA & Inferência', labelKey: 'template_modal.cat_ai' },
+  { id: 'Concorrência & Filas', labelKey: 'template_modal.cat_concurrency' },
+  { id: 'Armazenamento & Dados', labelKey: 'template_modal.cat_storage' },
+  { id: 'Visão & Processamento', labelKey: 'template_modal.cat_vision' },
+  { id: 'Síntese & Orquestração', labelKey: 'template_modal.cat_synthesis' },
+  { id: 'Plugins Customizados', labelKey: 'template_modal.cat_custom' }
+];
 
 export class TemplateModal {
   private overlay: HTMLElement;
@@ -23,6 +34,12 @@ export class TemplateModal {
     document.body.appendChild(this.overlay);
 
     this.render();
+
+    onLocaleChange(() => {
+      if (!this.overlay.classList.contains('hidden')) {
+        this.render();
+      }
+    });
   }
 
   public show(): void {
@@ -37,15 +54,14 @@ export class TemplateModal {
   }
 
   private render(): void {
-    const categories = ['Todos', 'IA & Inferência', 'Concorrência & Filas', 'Armazenamento & Dados', 'Visão & Processamento', 'Síntese & Orquestração', 'Plugins Customizados'];
     const allTemplates = this.registry.getAllTemplates();
     const filtered = this.activeCategory === 'Todos'
       ? allTemplates
-      : allTemplates.filter(t => t.category === this.activeCategory);
+      : allTemplates.filter(tpl => tpl.category === this.activeCategory);
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Biblioteca de Templates de Agentes & Plugins',
-      subtitle: 'Tarefas especializadas e componentes desacoplados para Taskflow C++20',
+      title: t('template_modal.title'),
+      subtitle: t('template_modal.subtitle'),
       icon: '🧩',
       closeBtnId: 'btn-close-template-modal'
     });
@@ -57,16 +73,16 @@ export class TemplateModal {
         <!-- Barra de Ações Rápidas -->
         <div class="template-action-bar">
           <div class="template-action-left">
-            <button id="btn-preset-pipeline" class="btn btn-preset-action" title="Cria um pipeline integrado com todos os 5 agentes conectados">
-              ⚡ Instanciar Arquitetura Completa de Agentes
+            <button id="btn-preset-pipeline" class="btn btn-preset-action" title="${t('template_modal.btn_preset_tip')}">
+              ${t('template_modal.btn_preset')}
             </button>
           </div>
           <div class="template-action-right">
-            <button id="btn-import-plugin" class="btn btn-secondary-pill" title="Importa um plugin de agente a partir de um arquivo JSON">
-              🔌 Importar Plugin (.json)
+            <button id="btn-import-plugin" class="btn btn-secondary-pill" title="${t('template_modal.btn_import_tip')}">
+              ${t('template_modal.btn_import')}
             </button>
-            <button id="btn-export-catalog" class="btn btn-secondary-pill" title="Exporta todos os templates registrados para JSON">
-              💾 Exportar Catálogo
+            <button id="btn-export-catalog" class="btn btn-secondary-pill" title="${t('template_modal.btn_export_tip')}">
+              ${t('template_modal.btn_export')}
             </button>
             <input type="file" id="plugin-file-input" accept=".json" style="display: none;" />
           </div>
@@ -74,13 +90,13 @@ export class TemplateModal {
 
         <!-- Filtros por Categoria -->
         <div class="template-category-tabs">
-          ${categories.map(cat => {
-            const count = cat === 'Todos' 
+          ${CATEGORY_MAP.map(catItem => {
+            const count = catItem.id === 'Todos' 
               ? allTemplates.length 
-              : allTemplates.filter(t => t.category === cat).length;
-            const activeClass = this.activeCategory === cat ? 'active' : '';
-            return `<button class="category-pill ${activeClass}" data-cat="${cat}">
-              ${cat} <span class="cat-count">(${count})</span>
+              : allTemplates.filter(tpl => tpl.category === catItem.id).length;
+            const activeClass = this.activeCategory === catItem.id ? 'active' : '';
+            return `<button class="category-pill ${activeClass}" data-cat="${catItem.id}">
+              ${t(catItem.labelKey)} <span class="cat-count">(${count})</span>
             </button>`;
           }).join('')}
         </div>
@@ -91,8 +107,8 @@ export class TemplateModal {
             ${filtered.length === 0 ? `
               <div class="templates-empty">
                 <div class="empty-icon">🔍</div>
-                <div class="empty-title">Nenhum template nesta categoria</div>
-                <div class="empty-desc">Use o botão "Importar Plugin" acima para adicionar novos agentes dinamicamente.</div>
+                <div class="empty-title">${t('template_modal.empty_title')}</div>
+                <div class="empty-desc">${t('template_modal.empty_desc')}</div>
               </div>
             ` : filtered.map(tpl => this.renderTemplateCard(tpl)).join('')}
           </div>
@@ -100,9 +116,9 @@ export class TemplateModal {
 
         <div class="modal-footer">
           <div class="footer-info">
-            💡 Os vértices instanciados herdam portas de dados, lambdas C++20 otimizados e suporte a histórico <strong>Desfazer (Ctrl+Z)</strong>.
+            ${t('template_modal.footer_hint')}
           </div>
-          <button id="btn-close-modal-bottom" class="btn btn-secondary">Fechar</button>
+          <button id="btn-close-modal-bottom" class="btn btn-secondary">${t('code_modal.btn_close')}</button>
         </div>
       </div>
     `;
@@ -124,7 +140,7 @@ export class TemplateModal {
     const paramKeys = Object.keys(tpl.parameters);
     const paramSummary = paramKeys.length > 0 
       ? paramKeys.slice(0, 3).join(', ') + (paramKeys.length > 3 ? '...' : '')
-      : 'Nenhum';
+      : t('template_modal.none');
 
     return `
       <div class="template-card" data-template-id="${tpl.id}">
@@ -134,7 +150,7 @@ export class TemplateModal {
             <div class="template-name">${this.escapeHtml(tpl.name)}</div>
             <div class="template-badges">
               <span class="inspector-badge badge-${tpl.taskType}">${tpl.taskType.toUpperCase()}</span>
-              ${tpl.isCustomPlugin ? '<span class="plugin-custom-badge">PLUGIN DINÂMICO</span>' : ''}
+              ${tpl.isCustomPlugin ? `<span class="plugin-custom-badge">${t('template_modal.dynamic_plugin_badge')}</span>` : ''}
             </div>
           </div>
         </div>
@@ -143,16 +159,16 @@ export class TemplateModal {
 
         <div class="template-meta-row">
           <div class="meta-item">
-            <span class="meta-label">Entradas:</span>
-            <span class="meta-value">${tpl.inputs.length} porta(s)</span>
+            <span class="meta-label">${t('template_modal.meta_inputs')}</span>
+            <span class="meta-value">${t('template_modal.ports_count', { count: tpl.inputs.length })}</span>
           </div>
           <div class="meta-item">
-            <span class="meta-label">Saídas:</span>
-            <span class="meta-value">${tpl.outputs.length} porta(s)</span>
+            <span class="meta-label">${t('template_modal.meta_outputs')}</span>
+            <span class="meta-value">${t('template_modal.ports_count', { count: tpl.outputs.length })}</span>
           </div>
           <div class="meta-item">
-            <span class="meta-label">Parâmetros:</span>
-            <span class="meta-value" title="${paramSummary}">${paramKeys.length} config(s)</span>
+            <span class="meta-label">${t('template_modal.meta_params')}</span>
+            <span class="meta-value" title="${paramSummary}">${t('template_modal.configs_count', { count: paramKeys.length })}</span>
           </div>
         </div>
 
@@ -162,15 +178,16 @@ export class TemplateModal {
 
         <div class="template-card-footer">
           <button class="btn-toggle-code" data-preview-id="preview-${tpl.id}">
-            👁️ Ver C++20
+            ${t('template_modal.view_cpp')}
           </button>
           <button class="btn btn-primary btn-insert-node" data-insert-id="${tpl.id}">
-            ➕ Inserir no Grafo
+            ${t('template_modal.btn_insert')}
           </button>
         </div>
       </div>
     `;
   }
+
 
   private getDefaultParams(tpl: IAgentTemplate): Record<string, any> {
     const res: Record<string, any> = {};
@@ -219,7 +236,7 @@ export class TemplateModal {
           if (previewEl) {
             previewEl.classList.toggle('hidden');
             const isHidden = previewEl.classList.contains('hidden');
-            (e.currentTarget as HTMLElement).textContent = isHidden ? '👁️ Ver C++20' : '✕ Ocultar C++20';
+            (e.currentTarget as HTMLElement).textContent = isHidden ? t('template_modal.view_cpp') : t('template_modal.hide_cpp');
           }
         }
       });

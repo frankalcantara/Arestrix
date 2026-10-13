@@ -1,6 +1,7 @@
 import { Graph } from '../core/Graph.ts';
 import { ProjectManager } from '../core/ProjectManager.ts';
 import { ModalWindowManager, IModalWindowController } from './modals/ModalWindowManager.ts';
+import { t } from '../i18n/index.ts';
 
 type MonacoType = typeof import('monaco-editor');
 type IStandaloneCodeEditor = import('monaco-editor').editor.IStandaloneCodeEditor;
@@ -404,8 +405,8 @@ export class CodeModal {
     const isDark = this.theme === 'vs-dark';
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Exportador Taskflow C++20',
-      subtitle: `Editor Monaco Integrado (Microsoft) | Compilador: ${meta.compilerConfig.compiler.toUpperCase()} (MSVC C++20 Taskflow)`,
+      title: t('code_modal.title'),
+      subtitle: `${t('code_modal.subtitle')} | Compilador: ${meta.compilerConfig.compiler.toUpperCase()} (${t('code_modal.badge')})`,
       icon: '⚡',
       closeBtnId: 'btn-close-code-modal'
     });
@@ -433,7 +434,7 @@ export class CodeModal {
 
           <div style="display: flex; align-items: center; gap: 8px;">
             <button id="btn-toggle-editor-theme" class="tool-btn btn-secondary" style="height: 30px; padding: 0 12px; font-size: 11.5px; font-weight: 600;">
-              ${isDark ? '☀️ Tema Claro' : '🌙 Tema Escuro'}
+              ${isDark ? t('code_modal.theme_light') : t('code_modal.theme_dark')}
             </button>
           </div>
         </div>
@@ -448,7 +449,7 @@ export class CodeModal {
         <!-- Barra de Rodapé com Ações e Informações -->
         <div class="modal-footer">
           <div class="footer-info" style="display: flex; align-items: center; gap: 14px;">
-            <span>Arquivo: <strong id="code-file-name">${filename}</strong></span>
+            <span>${t('common.file')}: <strong id="code-file-name">${filename}</strong></span>
             <span style="opacity: 0.4;">|</span>
             <span>Linguagem: <strong id="code-file-language">${this.getLanguageForTab(this.currentTab).toUpperCase()}</strong></span>
             <span style="opacity: 0.4;">|</span>
@@ -457,16 +458,16 @@ export class CodeModal {
 
           <div class="footer-actions" style="display: flex; align-items: center; gap: 8px;">
             <button id="btn-open-vscode" class="tool-btn btn-secondary" style="height: 32px; padding: 0 14px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
-              <span>💻</span> Abrir no VS Code
+              ${t('code_modal.btn_vscode')}
             </button>
             <button id="btn-download-code-file" class="tool-btn btn-secondary" style="height: 32px; padding: 0 14px; font-size: 12px; font-weight: 600;">
-              💾 Baixar Arquivo
+              ${t('code_modal.btn_download')}
             </button>
             <button id="btn-copy-code" class="tool-btn btn-secondary" style="height: 32px; padding: 0 14px; font-size: 12px; font-weight: 600;">
-              📋 Copiar Código
+              ${t('code_modal.btn_copy')}
             </button>
             <button id="btn-generate-disk" class="tool-btn btn-action" style="height: 32px; padding: 0 16px; font-size: 12px; font-weight: 700; background: #0f6cbd; color: #ffffff;">
-              🚀 Gerar
+              ${t('code_modal.btn_generate')}
             </button>
           </div>
         </div>

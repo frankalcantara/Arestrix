@@ -1,5 +1,6 @@
 import { Graph } from './Graph.ts';
 import { IValidationResult, IValidationError } from './types.ts';
+import { t } from '../i18n/index.ts';
 
 export class GraphValidator {
   static validate(graph: Graph): IValidationResult {
@@ -14,7 +15,7 @@ export class GraphValidator {
         errors.push({
           type: 'orphan',
           severity: 'warning',
-          message: `Nó isolado "${node.label}" (${node.id}) não possui conexões.`,
+          message: t('validator.orphan', { label: node.label, id: node.id }),
           nodeIds: [node.id]
         });
       }
@@ -30,7 +31,7 @@ export class GraphValidator {
           errors.push({
             type: 'missing_branch',
             severity: 'warning',
-            message: `Nó de condição "${condNode.label}" tem o ramo "${port.name}" desconectado.`,
+            message: t('validator.missing_branch', { label: condNode.label, name: port.name }),
             nodeIds: [condNode.id]
           });
         }
@@ -53,7 +54,7 @@ export class GraphValidator {
         errors.push({
           type: 'cycle',
           severity: 'error',
-          message: `Ciclo estático proibido detectado: ${cycleLabels}. Tarefas estáticas não podem formar dependência cíclica sem um nó de condição.`,
+          message: t('validator.cycle', { cycle: cycleLabels }),
           nodeIds: cycle
         });
       }

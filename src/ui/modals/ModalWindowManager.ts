@@ -10,6 +10,8 @@
  * 6. Total conformidade com as regras globais de design: Zero sombras/glows em fontes (text-shadow: none)
  */
 
+import { t } from '../../i18n/index.ts';
+
 export interface IModalWindowOptions {
   dialog: HTMLElement;
   header?: HTMLElement | null;
@@ -492,8 +494,8 @@ export class ModalWindowManager {
           </div>
         </div>
         <div class="window-controls">
-          <button type="button" class="window-control-btn window-btn-maximize" title="Maximizar (Duplo clique na barra)">🗖</button>
-          <button type="button" class="modal-close-btn window-control-btn window-btn-close" id="${closeId}" title="Fechar (Esc)">&times;</button>
+          <button type="button" class="window-control-btn window-btn-maximize" title="${t('window.maximize_tip')}">🗖</button>
+          <button type="button" class="modal-close-btn window-control-btn window-btn-close" id="${closeId}" title="${t('window.close_tip')}">&times;</button>
         </div>
       </div>
     `;

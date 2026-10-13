@@ -3,6 +3,7 @@ import { INodeData } from '../core/types.ts';
 import { EventBus } from '../core/EventBus.ts';
 import { RemoveNodeCommand, UpdateNodeCommand } from '../core/history/GraphCommands.ts';
 import { AgentTemplateRegistry } from '../core/templates/AgentTemplateRegistry.ts';
+import { t } from '../i18n/index.ts';
 
 /**
  * Arestrix Studio - Microsoft Office Task Pane (Painel de Tarefas / Formatar Agente)
@@ -97,6 +98,16 @@ export class Inspector {
     this.bus.on('edge:added', onGraphChange);
     this.bus.on('edge:removed', onGraphChange);
     this.bus.on('graph:loaded', onGraphChange);
+
+    this.bus.on('locale:changed', () => {
+      if (this.currentNodeId) {
+        const node = this.graph.getNode(this.currentNodeId);
+        if (node) this.renderNode(node);
+        else this.renderEmpty();
+      } else {
+        this.renderEmpty();
+      }
+    });
   }
 
   /**
@@ -315,16 +326,16 @@ export class Inspector {
       <div class="office-task-pane-header">
         <div class="office-task-pane-title-group">
           <span class="office-tp-icon">📐</span>
-          <span class="office-tp-title">Propriedades do Diagrama</span>
+          <span class="office-tp-title">${t('inspector.title_diagram')}</span>
         </div>
         <div class="office-task-pane-actions">
-          <button class="office-tp-btn-icon" id="btn-toggle-float" title="${this.isFloating ? 'Ancorar à Direita (Dock)' : 'Destacar Janela Flutuante (Float)'}">
+          <button class="office-tp-btn-icon" id="btn-toggle-float" title="${this.isFloating ? 'Ancorar à Direita (Dock)' : t('inspector.controls.toggle_float_tip')}">
             ${this.isFloating ? '📌' : '🗖'}
           </button>
-          <button class="office-tp-btn-icon" id="btn-toggle-collapse" title="Recolher Painel">
+          <button class="office-tp-btn-icon" id="btn-toggle-collapse" title="${t('inspector.controls.toggle_collapse_tip')}">
             ${this.isCollapsed ? '◀' : '▶'}
           </button>
-          <button class="office-tp-close-btn" id="btn-deselect-node" title="Recolher">&times;</button>
+          <button class="office-tp-close-btn" id="btn-deselect-node" title="${t('common.close')}">&times;</button>
         </div>
       </div>
 
@@ -394,25 +405,25 @@ export class Inspector {
       <div class="office-task-pane-header">
         <div class="office-task-pane-title-group">
           <span class="office-tp-icon">⚙️</span>
-          <span class="office-tp-title">Propriedade do Vértice</span>
+          <span class="office-tp-title">${t('inspector.title_node')}</span>
         </div>
         <div class="office-task-pane-actions">
-          <button class="office-tp-btn-icon" id="btn-toggle-float" title="${this.isFloating ? 'Ancorar à Direita (Dock)' : 'Destacar Janela Flutuante (Float)'}">
+          <button class="office-tp-btn-icon" id="btn-toggle-float" title="${this.isFloating ? 'Ancorar à Direita (Dock)' : t('inspector.controls.toggle_float_tip')}">
             ${this.isFloating ? '📌' : '🗖'}
           </button>
-          <button class="office-tp-btn-icon" id="btn-toggle-collapse" title="Recolher Painel">
+          <button class="office-tp-btn-icon" id="btn-toggle-collapse" title="${t('inspector.controls.toggle_collapse_tip')}">
             ${this.isCollapsed ? '◀' : '▶'}
           </button>
-          <button class="office-tp-close-btn" id="btn-deselect-node" title="Fechar Painel">&times;</button>
+          <button class="office-tp-close-btn" id="btn-deselect-node" title="${t('common.close')}">&times;</button>
         </div>
       </div>
 
       <!-- Abas de Navegação do Task Pane Office -->
       <div class="office-task-pane-tabs">
-        <button class="office-tp-tab ${this.activeTab === 'general' ? 'active' : ''}" data-tab="general">Geral</button>
-        <button class="office-tp-tab ${this.activeTab === 'lambda' ? 'active' : ''}" data-tab="lambda">C++20</button>
-        <button class="office-tp-tab ${this.activeTab === 'agent' ? 'active' : ''}" data-tab="agent">Governança & IA</button>
-        <button class="office-tp-tab ${this.activeTab === 'ports' ? 'active' : ''}" data-tab="ports">Conexões</button>
+        <button class="office-tp-tab ${this.activeTab === 'general' ? 'active' : ''}" data-tab="general">${t('inspector.tabs.general')}</button>
+        <button class="office-tp-tab ${this.activeTab === 'lambda' ? 'active' : ''}" data-tab="lambda">${t('inspector.tabs.lambda')}</button>
+        <button class="office-tp-tab ${this.activeTab === 'agent' ? 'active' : ''}" data-tab="agent">${t('inspector.tabs.agent')}</button>
+        <button class="office-tp-tab ${this.activeTab === 'ports' ? 'active' : ''}" data-tab="ports">${t('inspector.tabs.ports')}</button>
       </div>
 
       <div class="office-task-pane-body">

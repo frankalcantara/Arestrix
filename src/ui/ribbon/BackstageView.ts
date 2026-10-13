@@ -6,6 +6,7 @@ import { hashProjectName } from '../../core/hash.ts';
 import { CodeModal } from '../CodeModal.ts';
 import { GlobalDefaultsModal } from '../GlobalDefaultsModal.ts';
 import { WorkspaceManager } from '../../core/workspace/WorkspaceManager.ts';
+import { t, getLocale, setLocale } from '../../i18n/index.ts';
 
 export class BackstageView {
   private overlay?: HTMLElement;
@@ -47,6 +48,11 @@ export class BackstageView {
         }
       });
       globalEventBus.on('project:recents-updated', () => {
+        if (this.isOpen()) {
+          this.render();
+        }
+      });
+      globalEventBus.on('locale:changed', () => {
         if (this.isOpen()) {
           this.render();
         }
@@ -126,35 +132,35 @@ export class BackstageView {
             </div>
           </div>
 
-          <button class="backstage-back-btn" id="btn-backstage-close" title="Voltar ao Grafo (Esc)">
+          <button class="backstage-back-btn" id="btn-backstage-close" title="${t('backstage.sidebar.return')} (Esc)">
             <span class="backstage-back-icon">←</span>
-            <span>Voltar ao Grafo</span>
+            <span>${t('backstage.sidebar.return')}</span>
           </button>
 
           <ul class="backstage-nav-list">
             <li class="backstage-nav-item ${this.activeSection === 'info' ? 'active' : ''}" data-section="info">
-              <span>ℹ️</span> Informações
+              <span>ℹ️</span> ${t('backstage.sidebar.info')}
             </li>
             <li class="backstage-nav-item ${this.activeSection === 'new' ? 'active' : ''}" data-section="new">
-              <span>📄</span> Novo Projeto
+              <span>📄</span> ${t('backstage.sidebar.new')}
             </li>
             <li class="backstage-nav-item ${this.activeSection === 'open' ? 'active' : ''}" data-section="open">
-              <span>📂</span> Abrir Recente
+              <span>📂</span> ${t('backstage.sidebar.open')}
             </li>
             <li class="backstage-nav-item" id="btn-backstage-save">
-              <span>💾</span> Salvar Projeto
+              <span>💾</span> ${t('common.save')} ${t('common.file')}
             </li>
             <li class="backstage-nav-item ${this.activeSection === 'saveas' ? 'active' : ''}" data-section="saveas">
-              <span>📥</span> Salvar Como
+              <span>📥</span> ${t('backstage.sidebar.saveas')}
             </li>
             <li class="backstage-nav-item ${this.activeSection === 'export' ? 'active' : ''}" data-section="export">
-              <span>📤</span> Exportar
+              <span>📤</span> ${t('backstage.sidebar.export')}
             </li>
             <li class="backstage-nav-item" id="btn-backstage-github-repos">
-              <span>🌐</span> Repositórios GitHub
+              <span>🌐</span> ${t('github_repos.title')}
             </li>
             <li class="backstage-nav-item ${this.activeSection === 'options' ? 'active' : ''}" data-section="options">
-              <span>⚙️</span> Opções do Studio
+              <span>⚙️</span> ${t('backstage.sidebar.options')}
             </li>
           </ul>
         </div>
@@ -509,10 +515,30 @@ export class BackstageView {
         const dirs = wm.getWorkspaceDirectories();
         const approvedSkills = wm.getApprovedSkills();
         const approvedMcps = wm.getApprovedMcps();
+        const currentLocale = getLocale();
 
         return `
-          <h2 class="backstage-header-title">Opções do Studio & Governança do Workspace</h2>
-          <p class="backstage-header-sub">Configure o ambiente do workspace, sincronize recursos na máquina do usuário e gerencie a execução de agentes, grafos e projetos.</p>
+          <h2 class="backstage-header-title">${t('backstage.options.title')}</h2>
+          <p class="backstage-header-sub">${t('backstage.options.subtitle')}</p>
+
+          <!-- 0. IDIOMA DO STUDIO (POLIGLOTA / I18N) -->
+          <div class="backstage-info-card" style="margin-bottom: 24px; border-left: 4px solid #0f6cbd; background: #ffffff;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: #0f172a;">🌐 ${t('backstage.options.language_group')}</h4>
+              <span class="badge-inherited" style="font-size: 11px; font-weight: 700; color: #0f6cbd; background: #e0f2fe; padding: 2px 8px; border-radius: 4px;">${currentLocale === 'pt-BR' ? 'Português (Brasil)' : 'English (US)'}</span>
+            </div>
+            <p style="font-size: 12.5px; color: #475569; margin-bottom: 14px;">${t('backstage.options.language_desc')}</p>
+            <div style="display: flex; gap: 24px; align-items: center;">
+              <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13.5px; cursor: pointer; color: #1e293b;">
+                <input type="radio" name="backstage_language" value="pt-BR" ${currentLocale === 'pt-BR' ? 'checked' : ''} id="radio-lang-pt">
+                <span>${t('backstage.options.lang_pt_br')}</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13.5px; cursor: pointer; color: #1e293b;">
+                <input type="radio" name="backstage_language" value="en-US" ${currentLocale === 'en-US' ? 'checked' : ''} id="radio-lang-en">
+                <span>${t('backstage.options.lang_en_us')}</span>
+              </label>
+            </div>
+          </div>
 
           <!-- 1. IDENTIFICAÇÃO E PASTAS FÍSICAS DO WORKSPACE NA MÁQUINA DO USUÁRIO -->
           <div class="backstage-cards-grid" style="margin-bottom: 24px;">
@@ -693,6 +719,15 @@ export class BackstageView {
             }
           } catch (_) {}
           this.render();
+        }
+      });
+    });
+
+    // Seletor de Idioma nas Opções do Studio
+    this.overlay.querySelectorAll<HTMLInputElement>('input[name="backstage_language"]').forEach(radio => {
+      radio.addEventListener('change', async () => {
+        if (radio.checked) {
+          await setLocale(radio.value as any);
         }
       });
     });

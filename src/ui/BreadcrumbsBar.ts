@@ -1,6 +1,7 @@
 import { Graph } from '../core/Graph.ts';
 import { EventBus } from '../core/EventBus.ts';
 import { IBreadcrumbItem } from '../core/types.ts';
+import { t } from '../i18n/index.ts';
 
 export class BreadcrumbsBar {
   private container: HTMLElement;
@@ -45,8 +46,8 @@ export class BreadcrumbsBar {
 
     if (!isAtRoot) {
       html += `
-        <button id="btn-navigate-up" class="btn-navigate-up" title="Voltar ao nível pai (Esc)">
-          <span>⬅ Subir Nível (Esc)</span>
+        <button id="btn-navigate-up" class="btn-navigate-up" title="${t('breadcrumbs.up_level_tip')}">
+          <span>⬅ ${t('breadcrumbs.up_level')}</span>
         </button>
       `;
     }
@@ -75,6 +76,9 @@ export class BreadcrumbsBar {
       this.render();
     });
     this.bus.on('graph:cleared', () => {
+      this.render();
+    });
+    this.bus.on('locale:changed', () => {
       this.render();
     });
   }

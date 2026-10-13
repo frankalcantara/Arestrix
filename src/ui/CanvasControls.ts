@@ -1,5 +1,6 @@
 import { Viewport } from '../view/Viewport.ts';
 import { EventBus } from '../core/EventBus.ts';
+import { t } from '../i18n/index.ts';
 
 /**
  * Arestrix Studio - Canvas Controls (HUD)
@@ -24,20 +25,20 @@ export class CanvasControls {
 
   private render(): void {
     this.container.innerHTML = `
-      <button id="canvas-ctrl-fit" class="canvas-hud-btn" title="Ajustar ao Conteúdo (Ctrl+0)">
+      <button id="canvas-ctrl-fit" class="canvas-hud-btn" title="${t('canvas_controls.fit_tip')}">
         <span>🎯</span>
       </button>
-      <button id="canvas-ctrl-zoom-in" class="canvas-hud-btn" title="Aumentar Zoom (Ctrl +)">
+      <button id="canvas-ctrl-zoom-in" class="canvas-hud-btn" title="${t('canvas_controls.zoom_in_tip')}">
         <span>➕</span>
       </button>
-      <button id="canvas-ctrl-zoom-out" class="canvas-hud-btn" title="Diminuir Zoom (Ctrl -)">
+      <button id="canvas-ctrl-zoom-out" class="canvas-hud-btn" title="${t('canvas_controls.zoom_out_tip')}">
         <span>➖</span>
       </button>
-      <button id="canvas-ctrl-reset" class="canvas-hud-btn" title="Redefinir Zoom para 100%">
+      <button id="canvas-ctrl-reset" class="canvas-hud-btn" title="${t('canvas_controls.reset_tip')}">
         <span>1:1</span>
       </button>
       <div class="canvas-hud-sep"></div>
-      <button id="canvas-ctrl-grid" class="canvas-hud-btn active" title="Alternar Grade">
+      <button id="canvas-ctrl-grid" class="canvas-hud-btn active" title="${t('canvas_controls.grid_tip')}">
         <span>⊞</span>
       </button>
     `;
@@ -69,6 +70,11 @@ export class CanvasControls {
     // Escuta evento do grafo para atualizar visibilidade se necessário
     this.bus.on('graph:loaded', () => {
       gridBtn?.classList.add('active');
+    });
+
+    this.bus.on('locale:changed', () => {
+      this.render();
+      this.bindEvents();
     });
   }
 }

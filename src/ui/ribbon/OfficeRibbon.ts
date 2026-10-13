@@ -23,6 +23,7 @@ import { ImportClaudeModal } from '../modals/ImportClaudeModal.ts';
 import { ImportOpenAiModal } from '../modals/ImportOpenAiModal.ts';
 import { ImportHermesModal } from '../modals/ImportHermesModal.ts';
 import { ImportExcelModal } from '../modals/ImportExcelModal.ts';
+import { t, getLocale, toggleLocale } from '../../i18n/index.ts';
 
 export class OfficeRibbon {
   private container: HTMLElement;
@@ -135,32 +136,35 @@ export class OfficeRibbon {
           <!-- Acesso Rápido -->
           <div class="office-qat-buttons">
             <!-- Switch de Salvamento Automático (Estilo Microsoft Office) -->
-            <div class="office-autosave-group" title="Salvamento Automático: Salva automaticamente todo o projeto, grafo e configurações a cada modificação">
+            <div class="office-autosave-group" title="${t('ribbon.titlebar.autosave_tip')}">
               <label class="office-autosave-switch" for="qat-toggle-autosave">
                 <input type="checkbox" id="qat-toggle-autosave" ${this.isAutoSaveEnabled ? 'checked' : ''}>
                 <span class="office-autosave-slider"></span>
               </label>
-              <span class="office-autosave-label" id="qat-autosave-label">Salvamento Automático</span>
-              <span class="office-autosave-badge" id="qat-autosave-badge" title="Todas as alterações foram salvas">✓</span>
+              <span class="office-autosave-label" id="qat-autosave-label">${t('ribbon.titlebar.autosave')}</span>
+              <span class="office-autosave-badge" id="qat-autosave-badge" title="${t('ribbon.titlebar.autosave_saved_badge')}">✓</span>
             </div>
 
-            <button id="qat-btn-save" class="office-qat-btn" title="Salvar Agora (Ctrl+S)">💾</button>
-            <button id="qat-btn-undo" class="office-qat-btn" title="Desfazer (Ctrl+Z)" disabled>↶</button>
-            <button id="qat-btn-redo" class="office-qat-btn" title="Refazer (Ctrl+Y)" disabled>↷</button>
-            <button id="qat-btn-run" class="office-qat-btn" style="color: #0f6cbd;" title="Compilar & Executar (F5)">▶</button>
+            <button id="qat-btn-save" class="office-qat-btn" title="${t('ribbon.titlebar.save_now')}">💾</button>
+            <button id="qat-btn-undo" class="office-qat-btn" title="${t('ribbon.titlebar.undo')}" disabled>↶</button>
+            <button id="qat-btn-redo" class="office-qat-btn" title="${t('ribbon.titlebar.redo')}" disabled>↷</button>
+            <button id="qat-btn-run" class="office-qat-btn" style="color: #0f6cbd;" title="${t('ribbon.titlebar.run')}">▶</button>
           </div>
         </div>
 
         <div class="office-titlebar-center">
-          <button id="qat-btn-project" class="office-project-indicator" title="Gerenciador de Projetos no Workspace">
+          <button id="qat-btn-project" class="office-project-indicator" title="${t('ribbon.buttons.project_manager_tip')}">
             📁 <span id="office-active-project-name">${this.escapeHtml(projectName)}</span>
           </button>
         </div>
 
         <div class="office-titlebar-right">
-          <div class="office-tellme-box" title="Pesquisar comandos e ações no Arestrix">
+          <button id="qat-btn-lang" class="office-qat-lang-btn" title="${t('ribbon.titlebar.language')}" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: #F4F2EE; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px; margin-right: 6px;">
+            <span>🌐</span> <span>${getLocale() === 'pt-BR' ? 'PT' : 'EN'}</span>
+          </button>
+          <div class="office-tellme-box" title="${t('common.search')}">
             <span style="font-size: 13px; margin-right: 4px; color: #64748b;">💡</span>
-            <input type="text" id="office-tellme-input" placeholder="O que você deseja fazer?">
+            <input type="text" id="office-tellme-input" placeholder="${t('common.search')}...">
           </div>
         </div>
       </div>
@@ -168,31 +172,31 @@ export class OfficeRibbon {
       <!-- 2. BARRA DE ABAS DA FAIXA DE OPCOES -->
       <div class="office-tabs-bar">
         <nav class="office-tabs-nav">
-          <button class="office-tab-btn file-tab" id="tab-btn-file" title="Menu Arquivo (Backstage View)">
-            Arquivo
+          <button class="office-tab-btn file-tab" id="tab-btn-file" title="${t('ribbon.tabs.file')} (Backstage View)">
+            ${t('ribbon.tabs.file')}
           </button>
           <button class="office-tab-btn ${this.activeTab === 'home' ? 'active' : ''}" data-tab="home">
-            Página Inicial
+            ${t('ribbon.tabs.home')}
           </button>
           <button class="office-tab-btn ${this.activeTab === 'insert' ? 'active' : ''}" data-tab="insert">
-            Inserir
+            ${t('ribbon.tabs.insert')}
           </button>
           <button class="office-tab-btn ${this.activeTab === 'agents' ? 'active' : ''}" data-tab="agents">
-            Agentes & Tools
+            ${t('ribbon.tabs.agents')}
           </button>
           <button class="office-tab-btn ${this.activeTab === 'connectors' ? 'active' : ''}" data-tab="connectors">
-            Conectores & Importação
+            ${t('ribbon.tabs.connectors')}
           </button>
           <button class="office-tab-btn ${this.activeTab === 'data' ? 'active' : ''}" data-tab="data">
-            Dados & Memória
+            ${t('ribbon.tabs.data')}
           </button>
           <button class="office-tab-btn ${this.activeTab === 'run' ? 'active' : ''}" data-tab="run">
-            Execução & Lote
+            ${t('ribbon.tabs.run')}
           </button>
         </nav>
 
         <div class="office-tabs-actions">
-          <button class="office-ribbon-collapse-btn" id="btn-toggle-ribbon" title="Minimizar a Faixa de Opções (Ctrl+F1)">
+          <button class="office-ribbon-collapse-btn" id="btn-toggle-ribbon" title="${t('ribbon.buttons.collapse_ribbon_tip')}">
             ${this.isCollapsed ? 'ᐯ' : 'ᐱ'}
           </button>
         </div>
@@ -556,6 +560,10 @@ export class OfficeRibbon {
       }
     });
 
+    this.container.querySelector('#qat-btn-lang')?.addEventListener('click', async () => {
+      await toggleLocale();
+    });
+
     this.container.querySelector('#qat-btn-save')?.addEventListener('click', async () => {
       await this.saveNow();
     });
@@ -725,6 +733,11 @@ export class OfficeRibbon {
     globalEventBus.on('graph:defaults-updated', onModification);
     globalEventBus.on('project:updated', onModification);
     globalEventBus.on('history:changed', onModification);
+
+    // Re-renderização no evento de alteração de idioma
+    globalEventBus.on('locale:changed', () => {
+      this.render();
+    });
   }
 
   public getAutoSaveEnabled(): boolean {

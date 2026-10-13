@@ -1,4 +1,5 @@
 import { globalEventBus } from '../core/EventBus.ts';
+import { t } from '../i18n/index.ts';
 
 export class ConsolePanel {
   private container: HTMLElement;
@@ -23,40 +24,40 @@ export class ConsolePanel {
   private render(): void {
     this.container.innerHTML = `
       <!-- Splitter de Redimensionamento do Painel Inferior -->
-      <div class="office-console-splitter" id="console-splitter" title="Arraste para redimensionar o painel inferior">
+      <div class="office-console-splitter" id="console-splitter" title="${t('console.splitter_tip')}">
         <div class="splitter-grip"></div>
       </div>
 
       <div class="console-header office-console-header">
         <div class="office-console-tabs-group">
           <button class="office-console-tab-btn active" id="tab-console-build" data-tab="build">
-            <span class="tab-icon">⚡</span> Terminal MSVC C++20
+            <span class="tab-icon">⚡</span> ${t('console.tab_terminal')}
           </button>
           <button class="office-console-tab-btn" id="tab-console-telemetry" data-tab="telemetry">
-            <span class="tab-icon">📡</span> Telemetria em Tempo Real
+            <span class="tab-icon">📡</span> ${t('console.tab_telemetry')}
           </button>
-          <span class="console-status-badge status-idle" id="console-status">● OCIOSO</span>
+          <span class="console-status-badge status-idle" id="console-status">${t('console.status_idle')}</span>
         </div>
 
         <div class="console-actions office-console-actions">
-          <button id="btn-copy-console" class="btn-console-office" title="Copiar logs para a Área de Transferência">
-            📋 Copiar
+          <button id="btn-copy-console" class="btn-console-office" title="${t('console.copy_tip')}">
+            📋 ${t('console.copy')}
           </button>
-          <button id="btn-clear-console" class="btn-console-office" title="Limpar Console">
-            🗑️ Limpar
+          <button id="btn-clear-console" class="btn-console-office" title="${t('console.clear_tip')}">
+            🗑️ ${t('console.clear')}
           </button>
-          <button id="btn-toggle-console" class="btn-console-office" title="Recolher / Expandir Painel">
-            _ Min/Max
+          <button id="btn-toggle-console" class="btn-console-office" title="${t('console.toggle_tip')}">
+            _ ${t('console.minmax')}
           </button>
         </div>
       </div>
 
       <div class="console-views-wrapper">
         <div class="console-body office-console-body active" id="console-body">
-          <div class="console-line line-info">[Arestrix] Sistema pronto. Clique em "▶ Build & Run" ou pressione F5 para compilar com MSVC e executar os agentes.</div>
+          <div class="console-line line-info">${t('console.ready_line')}</div>
         </div>
         <div class="console-body office-console-body" id="console-telemetry-body" style="display: none;">
-          <div class="console-line line-muted">[Telemetria] Aguardando inicialização de agentes concorrentes...</div>
+          <div class="console-line line-muted">${t('console.telemetry_waiting')}</div>
         </div>
       </div>
     `;
@@ -187,6 +188,21 @@ export class ConsolePanel {
     globalEventBus.on('agent:telemetry', (ev: any) => {
       this.handleAgentTelemetry(ev);
     });
+
+    globalEventBus.on('locale:changed', () => {
+      this.updateLabels();
+    });
+  }
+
+  private updateLabels(): void {
+    const tabBuild = this.container.querySelector('#tab-console-build');
+    if (tabBuild) tabBuild.innerHTML = `<span class="tab-icon">⚡</span> ${t('console.tab_terminal')}`;
+    const tabTelem = this.container.querySelector('#tab-console-telemetry');
+    if (tabTelem) tabTelem.innerHTML = `<span class="tab-icon">📡</span> ${t('console.tab_telemetry')}`;
+    const copyBtn = this.container.querySelector('#btn-copy-console');
+    if (copyBtn) copyBtn.innerHTML = `📋 ${t('console.copy')}`;
+    const clearBtn = this.container.querySelector('#btn-clear-console');
+    if (clearBtn) clearBtn.innerHTML = `🗑️ ${t('console.clear')}`;
   }
 
   private handleAgentTelemetry(ev: any): void {
