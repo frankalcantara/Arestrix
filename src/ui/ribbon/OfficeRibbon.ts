@@ -23,7 +23,8 @@ import { ImportClaudeModal } from '../modals/ImportClaudeModal.ts';
 import { ImportOpenAiModal } from '../modals/ImportOpenAiModal.ts';
 import { ImportHermesModal } from '../modals/ImportHermesModal.ts';
 import { ImportExcelModal } from '../modals/ImportExcelModal.ts';
-import { t, getLocale, toggleLocale } from '../../i18n/index.ts';
+import { t } from '../../i18n/index.ts';
+import { ProjectSearchBox, reindexProjectSearch } from '../ProjectSearchBox.ts';
 
 export class OfficeRibbon {
   private container: HTMLElement;
@@ -159,12 +160,9 @@ export class OfficeRibbon {
         </div>
 
         <div class="office-titlebar-right">
-          <button id="qat-btn-lang" class="office-qat-lang-btn" title="${t('ribbon.titlebar.language')}" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: #F4F2EE; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px; margin-right: 6px;">
-            <span>🌐</span> <span>${getLocale() === 'pt-BR' ? 'PT' : 'EN'}</span>
-          </button>
-          <div class="office-tellme-box" title="${t('common.search')}">
+          <div class="office-tellme-box" title="${t('search.tooltip', 'Buscar vértices, skills e pipelines do projeto (Ctrl+K)')}">
             <span style="font-size: 13px; margin-right: 4px; color: #64748b;">💡</span>
-            <input type="text" id="office-tellme-input" placeholder="${t('common.search')}...">
+            <input type="text" id="office-tellme-input">
           </div>
         </div>
       </div>
@@ -560,10 +558,6 @@ export class OfficeRibbon {
       }
     });
 
-    this.container.querySelector('#qat-btn-lang')?.addEventListener('click', async () => {
-      await toggleLocale();
-    });
-
     this.container.querySelector('#qat-btn-save')?.addEventListener('click', async () => {
       await this.saveNow();
     });
@@ -573,34 +567,21 @@ export class OfficeRibbon {
     this.container.querySelector('#qat-btn-run')?.addEventListener('click', () => this.executePipeline());
     this.container.querySelector('#qat-btn-project')?.addEventListener('click', () => this.projectManagerModal.show());
 
-    // 5. Pesquisa Rápida (Tell Me)
-    const tellMeInput = this.container.querySelector('#office-tellme-input') as HTMLInputElement;
-    tellMeInput?.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        const val = tellMeInput.value.toLowerCase().trim();
-        if (val.includes('pi')) {
-          this.importPiModal.show();
-        } else if (val.includes('excel')) {
-          this.importExcelModal.show();
-        } else if (val.includes('run') || val.includes('executar') || val.includes('compilar')) {
-          this.executePipeline();
-        } else if (val.includes('projeto') || val.includes('workspace')) {
-          this.projectManagerModal.show();
-        } else if (val.includes('mcp')) {
-          this.mcpServersModal.show();
-        } else if (val.includes('memoria') || val.includes('memória')) {
-          this.projectMemoryModal.show();
-        } else if (val.includes('lote') || val.includes('batch')) {
-          this.batchPipelineModal.open();
-        } else if (val.includes('github') || val.includes('repo') || val.includes('repositório') || val.includes('skill')) {
-          globalEventBus.emit('modal:open-github-repos');
-        } else {
-          if (typeof alert !== 'undefined') alert(t('ribbon.alerts.cmd_found', { cmd: tellMeInput.value }));
-          this.switchTab('connectors');
-        }
-        tellMeInput.value = '';
-      }
-    });
+    // 5. Busca no projeto (ranking no backend C++) + comandos rápidos
+    const tellMeInput = this.container.querySelector('#office-tellme-input') as HTMLInputElement | null;
+    const tellMeBox = this.container.querySelector('.office-tellme-box') as HTMLElement | null;
+    if (tellMeInput && tellMeBox && typeof tellMeInput.setAttribute === 'function') {
+      new ProjectSearchBox(tellMeBox, tellMeInput, this.graph, this.viewport, globalEventBus, [
+        { id: 'pi', label: t('search.cmd_import_pi', 'Importar projeto Pi'), keywords: ['pi'], run: () => this.importPiModal.show() },
+        { id: 'excel', label: t('search.cmd_import_excel', 'Importar Excel'), keywords: ['excel'], run: () => this.importExcelModal.show() },
+        { id: 'run', label: t('search.cmd_run', 'Compilar e executar'), keywords: ['run', 'executar', 'compilar'], run: () => this.executePipeline() },
+        { id: 'project', label: t('search.cmd_project', 'Gerenciador de projetos'), keywords: ['projeto', 'workspace'], run: () => this.projectManagerModal.show() },
+        { id: 'mcp', label: t('search.cmd_mcp', 'Servidores MCP'), keywords: ['mcp'], run: () => this.mcpServersModal.show() },
+        { id: 'memory', label: t('search.cmd_memory', 'Memória do projeto'), keywords: ['memoria', 'memória', 'memory'], run: () => this.projectMemoryModal.show() },
+        { id: 'batch', label: t('search.cmd_batch', 'Lote e Retomada'), keywords: ['lote', 'batch'], run: () => this.batchPipelineModal.open() },
+        { id: 'github', label: t('search.cmd_github', 'Repositórios GitHub (catálogo de skills)'), keywords: ['github', 'repo', 'repositório', 'skill'], run: () => globalEventBus.emit('modal:open-github-repos') }
+      ]);
+    }
 
     // 6. Botões do Painel Home
     this.container.querySelector('#ribbon-btn-undo')?.addEventListener('click', () => this.graph.undo());
@@ -796,6 +777,7 @@ export class OfficeRibbon {
 
       // 2. Salva o projeto e pipeline via ProjectManager
       await this.projectManager.saveProject(this.graph);
+      void reindexProjectSearch();
 
       // 3. Salva também o grafo avulso e estado no localStorage
       const graphJson = this.graph.getRootSchema();

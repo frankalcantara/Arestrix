@@ -14,7 +14,12 @@
 #include "cli/Cli.hpp"
 #include "platform/Process.hpp"
 #include "rt/Tools.hpp"
+#include "search/ProjectSearch.hpp"
+#include "search/SynonymAgent.hpp"
 #include <atomic>
+#include <algorithm>
+#include <chrono>
+#include <mutex>
 #include <optional>
 #include <iostream>
 #include <string>
@@ -541,6 +546,112 @@ void ui_load_pipeline(webui::window::event* e) {
 }
 
 // Wrapper de comunicação JS -> C++ (Obter Projeto Ativo)
+// ---------------------------------------------------------------------------------------------
+// Busca no projeto aberto (todos os pipelines, subfluxos e skills do workspace)
+// ---------------------------------------------------------------------------------------------
+taskforge::search::ProjectSearchIndex& projectSearchIndex() {
+    static taskforge::search::ProjectSearchIndex idx;
+    return idx;
+}
+
+taskforge::Json searchStatsJson(const taskforge::search::IndexStats& st) {
+    taskforge::Json j;
+    j["rebuilt"] = st.rebuilt;
+    j["filesTotal"] = static_cast<int64_t>(st.filesTotal);
+    j["filesReindexed"] = static_cast<int64_t>(st.filesReindexed);
+    j["documents"] = static_cast<int64_t>(st.documents);
+    j["projectHash"] = st.projectHash;
+    return j;
+}
+
+// Reindexa o que mudou (hash por arquivo e do projeto). `force` ignora o intervalo minimo.
+taskforge::search::IndexStats refreshProjectSearch(bool force) {
+    using Clock = std::chrono::steady_clock;
+    static std::mutex mtx;
+    static Clock::time_point last{};
+    static taskforge::search::IndexStats lastStats;
+    static std::string lastRoot;
+
+    auto& pm = taskforge::project::ProjectManager::getInstance();
+    std::string root = pm.getActiveProjectRoot();
+    if (root.empty()) root = std::filesystem::current_path().string();
+
+    std::lock_guard<std::mutex> lock(mtx);
+    auto now = Clock::now();
+    if (!force && root == lastRoot && now - last < std::chrono::seconds(2)) return lastStats;
+
+    std::vector<taskforge::search::PipelineSource> sources;
+    for (const auto& p : pm.getCurrentProject().pipelines) sources.push_back({p.id, p.name, p.file});
+    lastStats = projectSearchIndex().refresh(root, sources);
+    lastRoot = root;
+    last = now;
+    return lastStats;
+}
+
+// JS -> C++: {"q": "...", "limit": 20}  =>  {"results": [...], "stats": {...}}
+void ui_search_project(webui::window::event* e) {
+    taskforge::Json out;
+    out["results"] = taskforge::Json::array();
+    try {
+        auto req = taskforge::jsonutil::parse(e->get_string());
+        std::string q = req.value("q", std::string());
+        size_t limit = static_cast<size_t>(std::clamp(req.value("limit", 20), 1, 100));
+        auto st = refreshProjectSearch(req.value("force", false));
+        out["stats"] = searchStatsJson(st);
+        for (const auto& h : projectSearchIndex().query(q, limit)) {
+            taskforge::Json r;
+            r["kind"] = h.kind;
+            r["title"] = h.title;
+            r["subtitle"] = h.subtitle;
+            r["snippet"] = h.snippet;
+            r["file"] = h.file;
+            r["pipelineId"] = h.pipelineId;
+            r["nodeId"] = h.nodeId;
+            r["nodeType"] = h.nodeType;
+            taskforge::Json path = taskforge::Json::array();
+            for (const auto& id : h.nodePath) path.push_back(id);
+            r["nodePath"] = path;
+            r["score"] = h.score;
+            out["results"].push_back(r);
+        }
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_search_project: " << ex.what() << "\n";
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+// JS -> C++: {"locale": "es-ES", "force": false}. Gera o dicionario de sinonimos do idioma com o modelo
+// padrao do Studio (variaveis de ambiente do usuario). Pode demorar: a UI deve chamar sem aguardar.
+void ui_search_ensure_synonyms(webui::window::event* e) {
+    taskforge::Json out;
+    try {
+        auto req = taskforge::jsonutil::parse(e->get_string());
+        auto r = taskforge::search::ensureSynonymsFor(req.value("locale", std::string()), req.value("force", false));
+        out["status"] = r.status;
+        out["locale"] = r.locale;
+        out["model"] = r.model;
+        out["groups"] = static_cast<int64_t>(r.groups);
+        out["error"] = r.error;
+    } catch (const std::exception& ex) {
+        out["status"] = "failed";
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+// JS -> C++: chamado depois de salvar ou carregar um projeto; devolve as estatisticas da indexacao.
+void ui_search_reindex(webui::window::event* e) {
+    taskforge::Json out;
+    try {
+        out["stats"] = searchStatsJson(refreshProjectSearch(true));
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_search_reindex: " << ex.what() << "\n";
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
 void ui_get_current_project(webui::window::event* e) {
     auto proj = taskforge::project::ProjectManager::getInstance().getCurrentProject();
     taskforge::Json j = proj;
@@ -1048,6 +1159,9 @@ int main(int argc, char** argv) {
     win.bind("save_pipeline", ui_save_pipeline);
     win.bind("load_pipeline", ui_load_pipeline);
     win.bind("get_current_project", ui_get_current_project);
+    win.bind("search_project", ui_search_project);
+    win.bind("search_reindex", ui_search_reindex);
+    win.bind("search_ensure_synonyms", ui_search_ensure_synonyms);
     win.bind("list_recent_projects", ui_list_recent_projects);
     win.bind("scan_pi_project", ui_scan_pi_project);
     win.bind("get_known_pi_projects", ui_get_known_pi_projects);

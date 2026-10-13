@@ -75,6 +75,22 @@ Windows, ou `~/.config/arestrix/env` no Linux) e nunca as passa por um shell.
 
 Qualquer endpoint pode ser substituído com `<PROVEDOR>_BASE_URL`.
 
+### Modelo padrão do Studio
+
+Além do modelo de cada vértice, o Studio tem o seu próprio **modelo padrão** para pequenas tarefas dele, como
+escrever o dicionário de sinônimos da busca de um idioma. Ele fica **só na sua máquina**, em variáveis de
+ambiente do usuário, e nunca é gravado em um projeto:
+
+| Variável | Significado |
+| :--- | :--- |
+| `ARESTRIX_DEFAULT_PROVIDER` | `deepseek`, `openai`, `anthropic`, `google`, `groq`, `jev` ou `local`. |
+| `ARESTRIX_DEFAULT_MODEL` | Nome do modelo. Opcional nos provedores hospedados (cada um tem um padrão); **obrigatória** em `jev` e `local`. |
+
+Se `ARESTRIX_DEFAULT_PROVIDER` não existir, o Studio usa o primeiro provedor que tiver chave de API nesta máquina
+(DeepSeek, OpenAI, Anthropic, Google, Groq, nessa ordem). As chaves e os endpoints são as mesmas variáveis
+listadas acima; um modelo local (Ollama, llama.cpp, vLLM) precisa de `ARESTRIX_DEFAULT_PROVIDER=local`,
+`ARESTRIX_DEFAULT_MODEL=<nome>` e `LOCAL_LLM_BASE_URL`.
+
 ### Teste o tutorial sem gastar dinheiro
 
 ```bash

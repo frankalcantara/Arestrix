@@ -47,5 +47,26 @@ private:
 void runAgent(const std::string& nodeId, const std::string& label, const std::string& specJson,
               const std::string& runKey = "");
 
+// Chamada unica a um modelo (sem ferramentas): provider e chaves seguem as mesmas regras dos agentes
+// (variaveis de ambiente do usuario). Nunca lanca excecao; veja `ok` e `error`.
+struct CompletionRequest {
+    std::string provider;
+    std::string model;
+    std::string system;
+    std::string user;
+    int maxTokens = 4096;
+    int maxAttempts = 2;
+    bool hasTemperature = false;
+    double temperature = 0.0;
+};
+
+struct CompletionResult {
+    bool ok = false;
+    std::string text;
+    std::string error;
+};
+
+CompletionResult completeText(const CompletionRequest& req);
+
 } // namespace rt
 } // namespace taskforge

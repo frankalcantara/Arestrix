@@ -15,6 +15,9 @@
 #include "core/Graph.hpp"
 #include "platform/Process.hpp"
 #include "rt/Tools.hpp"
+#include "search/ProjectSearch.hpp"
+#include "search/SynonymAgent.hpp"
+#include "search/Synonyms.hpp"
 #include "sandbox/DockerSandboxDriver.hpp"
 #include "sandbox/SandboxManager.hpp"
 #include "util/Json.hpp"
@@ -445,6 +448,198 @@ TEST(mcp_stdio_roundtrip) {
     sseNoServer.url = "http://127.0.0.1:1/mcp";   // porta fechada: deve FALHAR, nunca fingir sucesso
     auto bad = client.callTool(sseNoServer, "x", {}, 3000);
     CHECK(bad.isError && !bad.success);
+}
+
+
+// ---------------------------------------------------------------------------
+// Busca no projeto
+// ---------------------------------------------------------------------------
+static void writeFile(const fs::path& p, const std::string& content) {
+    fs::create_directories(p.parent_path());
+    std::ofstream f(p, std::ios::binary | std::ios::trunc);
+    f << content;
+}
+
+static const char* kSearchPipeline = R"({
+  "version": "1", "metadata": {"graphName": "Principal", "description": "Pipeline de teste"},
+  "nodes": [
+    {"id": "n_fila", "label": "Fila Buffer", "type": "static", "parameters": {"capacidade": 128},
+     "customLambdaBody": "// consome itens da fila"},
+    {"id": "n_llm", "label": "Decis\u00e3o do LLM", "type": "condition", "customLambdaBody": "return 0;"},
+    {"id": "n_visao", "label": "Vis\u00e3o Paralela", "type": "subflow",
+     "childGraph": {"nodes": [
+        {"id": "n_filtro", "label": "Filtro de Imagem", "type": "static", "customLambdaBody": "aplica o kernel gaussiano"}
+     ], "edges": []}},
+    {"id": "n_agente", "label": "Agente Revisor", "type": "agent",
+     "agentSettings": {"model": {"provider": "deepseek", "promptTemplate": "Valide o SVG gerado e corrija os erros de tipografia"}}}
+  ], "edges": []})";
+
+TEST(search_tokenize_folds_accents_and_splits_identifiers) {
+    using namespace taskforge::search;
+    CHECK(foldText("Decisão") == "decisao");
+    CHECK(foldText("Ç" "AÇÃO") == "cacao");
+    auto t = tokenize("validarSvg snake_case");
+    CHECK(t.size() == 4);
+    CHECK(t[0] == "validar" && t[1] == "svg" && t[2] == "snake" && t[3] == "case");
+    // plurais e acentos convergem para o mesmo termo
+    CHECK(tokenize("Opera\xC3\xA7\xC3\xB5""es")[0] == tokenize("operacao")[0]);
+    CHECK(tokenize("itens")[0] == tokenize("item")[0]);
+    CHECK(tokenize("o a de the of").empty()); // stopwords
+}
+
+TEST(search_finds_nodes_subflows_and_agent_prompts) {
+    using namespace taskforge::search;
+    auto root = makeTempDir("search");
+    writeFile(root / "pipelines" / "main.json", kSearchPipeline);
+    ProjectSearchIndex idx;
+    auto st = idx.refresh(root.string(), {{"main", "Pipeline Principal", "pipelines/main.json"}});
+    CHECK(st.rebuilt && st.filesTotal == 1 && st.filesReindexed == 1);
+    CHECK(st.documents == 6); // pipeline + 4 vertices + 1 vertice do subfluxo
+
+    auto hits = idx.query("fila");
+    CHECK(!hits.empty() && hits[0].nodeId == "n_fila");
+
+    // sem acento acha com acento; sinonimo (decisao ~ condicao)
+    hits = idx.query("decisao llm");
+    CHECK(!hits.empty() && hits[0].nodeId == "n_llm");
+    hits = idx.query("condicao");
+    CHECK(!hits.empty() && hits[0].nodeId == "n_llm");
+
+    // vertice dentro de subfluxo traz o caminho
+    hits = idx.query("filtro imagem");
+    CHECK(!hits.empty() && hits[0].nodeId == "n_filtro");
+    CHECK(hits[0].nodePath.size() == 1 && hits[0].nodePath[0] == "n_visao");
+    CHECK(hits[0].subtitle.find("Vis") != std::string::npos);
+
+    // texto do prompt do agente, com snippet mostrando a linha que casou
+    hits = idx.query("tipografia svg");
+    CHECK(!hits.empty() && hits[0].nodeId == "n_agente");
+    CHECK(hits[0].snippet.find("tipografia") != std::string::npos);
+
+    // prefixo (digitando) e erro de digitacao
+    hits = idx.query("agen");
+    CHECK(!hits.empty() && hits[0].nodeId == "n_agente");
+    hits = idx.query("revizor");
+    CHECK(!hits.empty() && hits[0].nodeId == "n_agente");
+
+    CHECK(idx.query("zzzqqq").empty());
+    fs::remove_all(root);
+}
+
+TEST(search_indexes_skills_of_the_workspace) {
+    using namespace taskforge::search;
+    auto root = makeTempDir("search-skill");
+    writeFile(root / ".workspace" / "skills" / "svg-validator" / "SKILL.md",
+              "---\nname: svg-validator\ndescription: Valida a tipografia de arquivos SVG\n---\n# Passos\nConfira as fontes.\n");
+    ProjectSearchIndex idx;
+    idx.refresh(root.string(), {});
+    auto hits = idx.query("validar tipografia");
+    CHECK(!hits.empty() && hits[0].kind == "skill" && hits[0].title == "svg-validator");
+    fs::remove_all(root);
+}
+
+TEST(search_reindexes_only_when_the_project_hash_changes) {
+    using namespace taskforge::search;
+    auto root = makeTempDir("search-hash");
+    writeFile(root / "pipelines" / "main.json", kSearchPipeline);
+    writeFile(root / "pipelines" / "segundo.json",
+              R"({"nodes":[{"id":"x1","label":"Exportador PDF","type":"static"}],"edges":[]})");
+    std::vector<PipelineSource> src = {{"main", "Principal", "pipelines/main.json"}};
+
+    ProjectSearchIndex idx;
+    auto a = idx.refresh(root.string(), src);
+    CHECK(a.rebuilt && a.filesTotal == 2 && a.filesReindexed == 2);
+    // todos os pipelines da pasta entram, mesmo fora do manifesto
+    CHECK(!idx.query("exportador").empty());
+
+    auto b = idx.refresh(root.string(), src);
+    CHECK(!b.rebuilt && b.filesReindexed == 0 && b.projectHash == a.projectHash);
+
+    // muda so um arquivo: so ele e reindexado e o hash do projeto muda
+    writeFile(root / "pipelines" / "segundo.json",
+              R"({"nodes":[{"id":"x1","label":"Gerador Relatorio","type":"static"}],"edges":[]})");
+    auto c = idx.refresh(root.string(), src);
+    CHECK(c.rebuilt && c.filesReindexed == 1 && c.projectHash != a.projectHash);
+    CHECK(idx.query("exportador").empty());
+    CHECK(!idx.query("relatorio").empty());
+
+    // outra instancia (reinicio do aplicativo) reaproveita o cache em disco
+    ProjectSearchIndex fresh;
+    auto d = fresh.refresh(root.string(), src);
+    CHECK(d.filesReindexed == 0 && d.projectHash == c.projectHash);
+    CHECK(!fresh.query("relatorio").empty());
+
+    // arquivo removido sai do indice
+    fs::remove(root / "pipelines" / "segundo.json");
+    auto e = idx.refresh(root.string(), src);
+    CHECK(e.rebuilt && e.filesTotal == 1);
+    CHECK(idx.query("relatorio").empty());
+    fs::remove_all(root);
+}
+
+TEST(search_synonym_response_is_validated) {
+    using namespace taskforge::search;
+    const std::string reply =
+        "Claro! Aqui esta:\n```json\n{\"groups\": [[\"queue\", \"cola\", \"Fila\", \"duas palavras\", 7],"
+        " [\"solo\"], \"x\", [\"database\", \"base-de-dados\", \"banco\", \"<script>\"]]}\n```";
+    auto g = parseSynonymResponse(reply);
+    CHECK(g.size() == 2);                    // o grupo de uma palavra e o item nao-lista caem
+    CHECK(g[0].size() == 3 && g[0][0] == "queue" && g[0][2] == "fila");   // frase, numero: descartados; caixa baixa
+    CHECK(g[1].size() == 2 && g[1][1] == "banco");   // "base-de-dados" (varias palavras) e "<script>" caem
+    CHECK(parseSynonymResponse("sem json nenhum").empty());
+    CHECK(parseSynonymResponse("{\"groups\": 5}").empty());
+}
+
+TEST(search_installed_synonyms_expand_queries) {
+    using namespace taskforge::search;
+    auto dir = makeTempDir("synonyms");
+    setSynonymDirForTesting(dir.string());
+    CHECK(!hasSynonymFile("es-ES"));
+
+    auto root = makeTempDir("search-syn");
+    writeFile(root / "pipelines" / "main.json",
+              R"({"nodes":[{"id":"a","label":"Cola de mensajes","type":"static"}],"edges":[]})");
+    ProjectSearchIndex idx;
+    idx.refresh(root.string(), {{"main", "Principal", "pipelines/main.json"}});
+    CHECK(idx.query("queue").empty());      // sem dicionario, "queue" nao chega a "cola"
+
+    std::string err;
+    CHECK(writeSynonymFile("es-ES", "teste/modelo", {{"queue", "cola", "buffer"}, {"error", "fallo"}}, &err));
+    CHECK(hasSynonymFile("es-ES"));
+    auto hits = idx.query("queue");         // o dicionario do idioma instalado liga ingles e espanhol
+    CHECK(!hits.empty() && hits[0].nodeId == "a");
+    CHECK(!writeSynonymFile("../fora", "m", {{"a", "b"}}, &err));   // idioma invalido nao grava fora da pasta
+
+    setSynonymDirForTesting("");
+    fs::remove_all(dir);
+    fs::remove_all(root);
+}
+
+TEST(search_studio_default_model_comes_from_the_environment) {
+    using namespace taskforge::search;
+    auto setv = [](const char* k, const char* v) {
+#ifdef _WIN32
+        _putenv_s(k, v);
+#else
+        if (*v) setenv(k, v, 1); else unsetenv(k);
+#endif
+    };
+    const char* vars[] = {"ARESTRIX_DEFAULT_PROVIDER", "ARESTRIX_DEFAULT_MODEL", "DEEPSEEK_API_KEY", "OPENAI_API_KEY",
+                          "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY", "LOCAL_LLM_BASE_URL"};
+    std::vector<std::pair<std::string, std::string>> saved;
+    for (auto v : vars) { const char* c = std::getenv(v); saved.push_back({v, c ? c : ""}); setv(v, ""); }
+
+    CHECK(!studioDefaultModel().has_value());                        // nada configurado
+    setv("OPENAI_API_KEY", "x");
+    auto m = studioDefaultModel();
+    CHECK(m && m->provider == "openai" && !m->model.empty());       // primeiro provedor com chave
+    setv("ARESTRIX_DEFAULT_PROVIDER", "local");
+    CHECK(!studioDefaultModel().has_value());                        // local exige o nome do modelo
+    setv("ARESTRIX_DEFAULT_MODEL", "llama3");
+    m = studioDefaultModel();
+    CHECK(m && m->provider == "local" && m->model == "llama3");      // escolha explicita do usuario
+
+    for (auto& [k, v] : saved) setv(k.c_str(), v.c_str());
 }
 
 int main() {

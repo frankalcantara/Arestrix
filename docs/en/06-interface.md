@@ -17,7 +17,30 @@ The Studio follows the Microsoft Office layout, because most people already know
 | **Run** | Build & Run, the Taskflow engine, and the Batch & Resume orchestrator. |
 
 Other conveniences: the **Quick Access Toolbar** (Save, Undo, Redo, Run), an autosave switch, the
-*Tell me what you want to do* search box, and `Ctrl+F1` to collapse the ribbon.
+project search box (below), and `Ctrl+F1` to collapse the ribbon.
+
+### Project search
+
+The box at the top right searches the **open project**: every vertex (including those inside subflows and
+modules), the skills of the workspace and the pipelines. Press `Ctrl+K` to focus it.
+
+- Results are grouped as *Vertices*, *Skills*, *Pipelines* and *Commands*; `↑` `↓` choose, `Enter` opens, `Esc` closes.
+- A vertex result selects the vertex, enters the subflows that contain it and centers the canvas on it.
+  A skill result opens it read-only in the skill editor.
+- It matches the label, the type, the C++ body, parameters, agent prompt and skill text, ignoring
+  accents and plurals, tolerating typos and partial words, and knowing a few Portuguese/English synonyms
+  (for example *decisão* finds a condition vertex, *banco* finds SQLite).
+- The ranking is computed by the C++ backend with no AI model and no network. Autosave (about half a second
+  after each edit) re-indexes only the files whose content hash changed; if the project hash is unchanged,
+  nothing is redone. The index is cached in `.arestrix/search-index.json` inside the project.
+- **Synonyms per language.** Portuguese and English ship built in. When you select any other language, the
+  Studio asks its **default model** to write the synonym dictionary for that language in the background
+  (see [Getting started](02-getting-started.md#studio-default-model)). The result is stored on your machine in
+  `%APPDATA%\Arestrix\synonyms\<locale>.json` (or `~/.config/arestrix/synonyms/`), not in the project.
+  Without a configured model nothing is generated and the search still works without that language's synonyms.
+- Limitation: only the pipeline open on the canvas (`pipelines/main.json`) can be navigated. Results from
+  other pipelines of the project are listed but cannot be opened yet.
+- Semantic (embedding) search is planned as a later layer.
 
 ### Keyboard shortcuts
 
@@ -30,6 +53,7 @@ Other conveniences: the **Quick Access Toolbar** (Save, Undo, Redo, Run), an aut
 | `Ctrl+C`, `Ctrl+X`, `Ctrl+V`, `Ctrl+D` | Copy, cut, paste, duplicate the selected vertex |
 | `Del` / `Backspace` | Delete the selected vertex or edge |
 | `Esc` | Leave a subflow |
+| `Ctrl+K` | Focus the project search |
 | `Ctrl+F1` | Collapse or expand the ribbon |
 
 ## Backstage

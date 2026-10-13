@@ -51,6 +51,7 @@ refazer funcionam para tudo, inclusive colar, duplicar e apagar.
 | `mcp/` | Cliente do Model Context Protocol e registro de servidores. |
 | `memory/` | Memória Blackboard e de lições semânticas. |
 | `project/` | Projetos e workspaces (`arestrix.project.json`). |
+| `search/` | Busca no projeto: ranking lexical (BM25 + trigramas de caracteres) sobre todos os pipelines, subfluxos e skills, com índice por hash de conteúdo. |
 | `pi/` | Scanner para importar projetos de agentes Pi. |
 | `cli/` | `arestrix-cli`, o executor sem interface. |
 | `util/` | Camada JSON própria sobre o **simdjson**. |

@@ -345,6 +345,15 @@ export class Viewport {
     this.interactionManager.selectNode(id);
   }
 
+  /** Seleciona o vértice e centraliza a câmera nele (usado pela busca no projeto). */
+  public focusNode(id: string): boolean {
+    const node = this.graph.getNode(id);
+    if (!node) return false;
+    this.cameraController.centerOn(node.position.x, node.position.y);
+    this.selectNode(id);
+    return true;
+  }
+
   public getCameraController(): CameraController {
     return this.cameraController;
   }

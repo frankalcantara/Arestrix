@@ -67,6 +67,7 @@ struct AgentSpec {
     int maxTokens = 8192;
     int maxTurns = 30;
     int maxRuns = 10;
+    int httpAttempts = 6;   // tentativas por chamada HTTP (chamadas unicas usam menos)
     std::string skillPath;
     std::string promptTemplate;
     std::vector<std::string> tools;
@@ -219,13 +220,13 @@ struct Usage {
 };
 
 // Chamada HTTP com retentativas: 429/5xx/529 respeitam Retry-After ou backoff exponencial.
-HttpResponse postWithRetry(const std::string& nodeId, const HttpRequest& req) {
+HttpResponse postWithRetry(const std::string& nodeId, const HttpRequest& req, int maxAttempts = 6) {
     HttpResponse resp;
-    for (int attempt = 1; attempt <= 6; ++attempt) {
+    for (int attempt = 1; attempt <= maxAttempts; ++attempt) {
         resp = httpSend(req);
         bool retryable = resp.status == 0 || resp.status == 429 || resp.status == 500 ||
                          resp.status == 502 || resp.status == 503 || resp.status == 504 || resp.status == 529;
-        if (!retryable || attempt == 6) break;
+        if (!retryable || attempt == maxAttempts) break;
 
         int wait = std::min(60, 2 << attempt);   // 4, 8, 16, 32, 60
         auto ra = resp.headers.find("retry-after");
@@ -285,14 +286,14 @@ public:
         if (!apiKey_.empty()) req.headers["Authorization"] = "Bearer " + apiKey_;
         req.body = body.dump();
 
-        HttpResponse resp = postWithRetry(spec_.nodeId, req);
+        HttpResponse resp = postWithRetry(spec_.nodeId, req, spec_.httpAttempts);
         if (resp.status == 400 && resp.body.find("reasoning_content") != std::string::npos && !strippedReasoning_) {
             // Alguns servidores recusam reasoning_content no historico: reenvia sem ele.
             strippedReasoning_ = true;
             for (auto& m : messages_) if (m.is_object()) m.erase("reasoning_content");
             body["messages"] = messages_;
             req.body = body.dump();
-            resp = postWithRetry(spec_.nodeId, req);
+            resp = postWithRetry(spec_.nodeId, req, spec_.httpAttempts);
         }
         if (resp.status != 200) throw std::runtime_error("Falha na API (" + spec_.provider + "): " + errorDetail(resp));
 
@@ -369,7 +370,7 @@ public:
         req.headers["anthropic-version"] = "2023-06-01";
         req.body = body.dump();
 
-        HttpResponse resp = postWithRetry(spec_.nodeId, req);
+        HttpResponse resp = postWithRetry(spec_.nodeId, req, spec_.httpAttempts);
         if (resp.status != 200) throw std::runtime_error("Falha na API (anthropic): " + errorDetail(resp));
 
         json j = jsonutil::parse(resp.body);
@@ -531,6 +532,51 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
 
     std::cout << "[Agent " << label << "] concluido (tokens: entrada=" << backend->usage.inTokens
               << ", saida=" << backend->usage.outTokens << ")\n";
+}
+
+// ---------------------------------------------------------------------------
+// Chamada unica ao modelo (sem ferramentas, sem sandbox): usada pelo Studio para tarefas curtas,
+// como gerar o dicionario de sinonimos de um idioma.
+// ---------------------------------------------------------------------------
+CompletionResult completeText(const CompletionRequest& req) {
+    CompletionResult out;
+    try {
+        if (req.model.empty()) { out.error = "modelo nao configurado"; return out; }
+        ProviderInfo info = resolveProvider(req.provider);
+        if (info.baseUrl.empty()) {
+            out.error = "defina a variavel " + upper(req.provider) + "_BASE_URL";
+            return out;
+        }
+        std::string apiKey = envOr(info.keyEnv, "");
+        if (apiKey.empty() && info.keyRequired) {
+            out.error = "chave de API ausente: defina " + info.keyEnv;
+            return out;
+        }
+
+        AgentSpec spec;
+        spec.nodeId = "studio:complete";
+        spec.label = "studio";
+        spec.provider = req.provider;
+        spec.model = req.model;
+        spec.maxTokens = req.maxTokens;
+        spec.httpAttempts = std::max(1, req.maxAttempts);
+        if (req.hasTemperature) { spec.hasTemperature = true; spec.temperature = req.temperature; }
+
+        std::unique_ptr<ChatBackend> backend;
+        if (info.protocol == "anthropic") {
+            backend = std::make_unique<AnthropicBackend>(spec, info, apiKey, req.system, req.user, std::vector<ToolDef>{});
+        } else {
+            backend = std::make_unique<OpenAiBackend>(spec, info, apiKey, req.system, req.user, std::vector<ToolDef>{});
+        }
+        Turn t = backend->complete();
+        out.text = t.text;
+        out.ok = !out.text.empty();
+        if (!out.ok) out.error = "resposta vazia do modelo";
+    } catch (const std::exception& ex) {
+        out.ok = false;
+        out.error = ex.what();
+    }
+    return out;
 }
 
 } // namespace rt

@@ -75,6 +75,22 @@ or `~/.config/arestrix/env` on Linux) and never passes them through a shell.
 
 Any endpoint can be overridden with `<PROVIDER>_BASE_URL`.
 
+### Studio default model
+
+Besides the per-vertex model, the Studio has its own **default model** for small tasks of its own, such as
+writing the search-synonym dictionary of a language. It lives **only on your machine**, in user environment
+variables, and is never written to a project:
+
+| Variable | Meaning |
+| :--- | :--- |
+| `ARESTRIX_DEFAULT_PROVIDER` | `deepseek`, `openai`, `anthropic`, `google`, `groq`, `jev` or `local`. |
+| `ARESTRIX_DEFAULT_MODEL` | Model name. Optional for the hosted providers (each has a default); **required** for `jev` and `local`. |
+
+If `ARESTRIX_DEFAULT_PROVIDER` is not set, the Studio uses the first provider that has an API key on this
+machine (DeepSeek, OpenAI, Anthropic, Google, Groq, in that order). The keys and endpoints are the same
+variables listed above, so a local model (Ollama, llama.cpp, vLLM) needs `ARESTRIX_DEFAULT_PROVIDER=local`,
+`ARESTRIX_DEFAULT_MODEL=<name>` and `LOCAL_LLM_BASE_URL`.
+
 ### Try the tutorial without spending money
 
 ```bash

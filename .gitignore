@@ -32,3 +32,6 @@ taskforge-recent-projects.json
 /build/
 /runtime/
 Output/
+
+# Cache da busca no projeto
+.arestrix/

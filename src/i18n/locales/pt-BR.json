@@ -692,6 +692,27 @@
     "reset_tip": "Redefinir Zoom para 100%",
     "grid_tip": "Alternar Grade"
   },
+  "search": {
+    "placeholder": "Buscar no projeto...",
+    "tooltip": "Buscar vértices, skills e pipelines do projeto (Ctrl+K)",
+    "needs_native": "A busca no projeto requer o aplicativo nativo.",
+    "failed": "Falha ao buscar no projeto.",
+    "empty": "Nenhum resultado no projeto.",
+    "other_pipeline": "Este resultado está em outro pipeline do projeto ({{file}}), que ainda não pode ser aberto no canvas.",
+    "not_found": "Vértice não encontrado no grafo aberto. Salve o projeto e tente de novo.",
+    "group_nodes": "Vértices",
+    "group_skills": "Skills",
+    "group_pipelines": "Pipelines",
+    "group_commands": "Comandos",
+    "cmd_import_pi": "Importar projeto Pi",
+    "cmd_import_excel": "Importar Excel",
+    "cmd_run": "Compilar e executar",
+    "cmd_project": "Gerenciador de projetos",
+    "cmd_mcp": "Servidores MCP",
+    "cmd_memory": "Memória do projeto",
+    "cmd_batch": "Lote e Retomada",
+    "cmd_github": "Repositórios GitHub (catálogo de skills)"
+  },
   "context_menu": {
     "copy_suffix": "(cópia)",
     "duplicate": "Duplicar",

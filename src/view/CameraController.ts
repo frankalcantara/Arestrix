@@ -135,6 +135,14 @@ export class CameraController {
     globalEventBus.emit('camera:zoom-changed', { zoom: this.camera.zoom });
   }
 
+  /** Centraliza a câmera num ponto do mundo, mantendo ao menos um zoom legível. */
+  centerOn(x: number, y: number, minZoom: number = 0.7): void {
+    this.camera.position.set(x, y, this.camera.position.z);
+    if (this.camera.zoom < minZoom) this.camera.zoom = minZoom;
+    this.camera.updateProjectionMatrix();
+    globalEventBus.emit('camera:zoom-changed', { zoom: this.camera.zoom });
+  }
+
   reset(): void {
     this.camera.position.set(0, 0, 1000);
     this.camera.zoom = 1;

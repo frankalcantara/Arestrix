@@ -692,6 +692,27 @@
     "reset_tip": "Reset Zoom to 100%",
     "grid_tip": "Toggle Grid"
   },
+  "search": {
+    "placeholder": "Search the project...",
+    "tooltip": "Search vertices, skills and pipelines of the project (Ctrl+K)",
+    "needs_native": "Project search requires the native application.",
+    "failed": "Project search failed.",
+    "empty": "No results in the project.",
+    "other_pipeline": "This result is in another pipeline of the project ({{file}}), which cannot be opened on the canvas yet.",
+    "not_found": "Vertex not found in the open graph. Save the project and try again.",
+    "group_nodes": "Vertices",
+    "group_skills": "Skills",
+    "group_pipelines": "Pipelines",
+    "group_commands": "Commands",
+    "cmd_import_pi": "Import Pi project",
+    "cmd_import_excel": "Import Excel",
+    "cmd_run": "Build and run",
+    "cmd_project": "Project manager",
+    "cmd_mcp": "MCP servers",
+    "cmd_memory": "Project memory",
+    "cmd_batch": "Batch & Resume",
+    "cmd_github": "GitHub repositories (skill catalog)"
+  },
   "context_menu": {
     "copy_suffix": "(copy)",
     "duplicate": "Duplicate",

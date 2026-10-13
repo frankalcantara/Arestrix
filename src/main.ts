@@ -19,6 +19,8 @@ import { GitHubReposModal } from './ui/modals/GitHubReposModal.ts';
 import { ProjectManager } from './core/ProjectManager.ts';
 import { StatusBar } from './ui/StatusBar.ts';
 import { CanvasControls } from './ui/CanvasControls.ts';
+import { ensureSearchSynonyms } from './ui/ProjectSearchBox.ts';
+import { getLocale, onLocaleChange } from './i18n/index.ts';
 import { NodeContextMenu } from './ui/NodeContextMenu.ts';
 import { PipelineRunner } from './core/PipelineRunner.ts';
 
@@ -84,6 +86,10 @@ function bootstrap() {
   const nodeSkillsModal = new NodeSkillsModal(graph, globalEventBus);
   const skillEditorModal = new SkillEditorModal(graph);
   const gitHubReposModal = new GitHubReposModal(globalEventBus);
+
+  // Dicionario de sinonimos da busca: gerado em segundo plano para cada idioma sem dicionario
+  void ensureSearchSynonyms(getLocale());
+  onLocaleChange(locale => { void ensureSearchSynonyms(locale); });
 
   // Menu de contexto (botao direito) dos vertices
   new NodeContextMenu(graph, globalEventBus);

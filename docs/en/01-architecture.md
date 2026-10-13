@@ -51,6 +51,7 @@ redo work for everything, including paste, duplicate and delete.
 | `mcp/` | Model Context Protocol client and server registry. |
 | `memory/` | Blackboard and semantic-lessons memory. |
 | `project/` | Projects and workspaces (`arestrix.project.json`). |
+| `search/` | Project search: lexical ranking (BM25 + character trigrams) over every pipeline, subflow and skill, with a content-hash index. |
 | `pi/` | Scanner for importing existing Pi agent projects. |
 | `cli/` | `arestrix-cli`, the headless runner. |
 | `util/` | Own JSON layer on top of **simdjson**. |
