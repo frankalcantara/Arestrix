@@ -29,6 +29,7 @@ export class GlobalDefaultsModal {
     this.overlay.classList.remove('hidden');
     this.windowController?.bringToFront();
     this.updateKeyIndicator();
+    void this.loadStudioModel();
   }
 
   public hide(): void {
@@ -160,6 +161,52 @@ export class GlobalDefaultsModal {
                 <textarea id="def-prompt" class="form-textarea" rows="3" placeholder="Digite as diretrizes de prompt para este agente...">${this.escapeHtml(defaults.model.promptTemplate || '')}</textarea>
                 <div class="form-hint">${t('global_defaults.prompt_hint')}</div>
               </div>
+            </div>
+
+            <!-- Modelo padrão do próprio Studio (escopo Studio): fica só nesta máquina, em variáveis de ambiente -->
+            <div class="settings-section-card" style="margin-top: 16px;" id="card-studio-model">
+              <div class="section-card-header">
+                <span class="section-card-icon">🏢</span>
+                <div class="section-card-titles">
+                  <h3 class="section-card-title">${t('global_defaults.studio_model_title')} <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">${t('global_defaults.badge_studio_scope')}</span></h3>
+                  <p class="section-card-desc">${t('global_defaults.studio_model_desc')}</p>
+                </div>
+              </div>
+
+              <div class="form-row-grid">
+                <div class="form-group">
+                  <label class="form-label" for="studio-provider">${t('global_defaults.provider_label')}</label>
+                  <select id="studio-provider" class="form-select">
+                    <option value="auto">${t('global_defaults.studio_provider_auto')}</option>
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="google">Google (Gemini)</option>
+                    <option value="groq">Groq</option>
+                    <option value="jev">Jev / Engine Visual Local</option>
+                    <option value="local">Local (Ollama / vLLM)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="studio-model">${t('global_defaults.model_name_label')}</label>
+                  <input type="text" id="studio-model" class="form-input" placeholder="${t('global_defaults.studio_model_placeholder')}" />
+                </div>
+              </div>
+
+              <div class="form-group" id="studio-base-url-group" style="display: none; margin-top: 10px;">
+                <label class="form-label" for="studio-base-url" id="studio-base-url-label"></label>
+                <input type="text" id="studio-base-url" class="form-input" style="font-family: monospace;" />
+              </div>
+
+              <div class="form-hint" style="margin-top: 8px;">${t('global_defaults.studio_model_hint')}</div>
+
+              <div style="display: flex; align-items: center; gap: 12px; margin-top: 12px;">
+                <button type="button" class="btn btn-primary" id="btn-save-studio-model" style="font-size: 12px; font-weight: 600; height: 32px; padding: 0 14px;">
+                  ${t('global_defaults.studio_btn_save')}
+                </button>
+                <span id="studio-model-status" style="font-size: 12px; color: #616161;"></span>
+              </div>
+              <div id="studio-model-feedback" style="display: none; margin-top: 8px; font-size: 11.5px; padding: 6px 10px; border-radius: 4px;"></div>
             </div>
           </div>
 
@@ -375,6 +422,7 @@ export class GlobalDefaultsModal {
 
     this.bindDialogEvents();
     this.updateKeyIndicator();
+    void this.loadStudioModel();
   }
 
   private bindEvents(): void {
@@ -463,6 +511,21 @@ export class GlobalDefaultsModal {
       });
     });
 
+    // Modelo padrão do Studio (escopo Studio)
+    this.overlay.querySelector('#studio-provider')?.addEventListener('change', () => {
+      this.syncStudioBaseUrlField();
+      const sel = this.overlay.querySelector('#studio-provider') as HTMLSelectElement;
+      const baseVar = this.studioBaseUrlVar(sel.value);
+      if (baseVar) {
+        EnvironmentManager.getInstance().getEnvVar(baseVar).then(v => {
+          (this.overlay.querySelector('#studio-base-url') as HTMLInputElement).value = v || '';
+        });
+      }
+    });
+    this.overlay.querySelector('#btn-save-studio-model')?.addEventListener('click', () => {
+      void this.saveStudioModel();
+    });
+
     // Salvar/Implantar chave no Windows
     this.overlay.querySelector('#btn-submit-deploy-key')?.addEventListener('click', () => {
       this.deployApiKey();
@@ -481,6 +544,106 @@ export class GlobalDefaultsModal {
       this.saveValues();
       this.hide();
     });
+  }
+
+  // --- Modelo padrão do Studio (variáveis de ambiente do usuário; nunca gravado no projeto) ---
+
+  private static readonly STUDIO_PROVIDER_VAR = 'ARESTRIX_DEFAULT_PROVIDER';
+  private static readonly STUDIO_MODEL_VAR = 'ARESTRIX_DEFAULT_MODEL';
+
+  private studioBaseUrlVar(provider: string): string | null {
+    if (provider === 'local') return 'LOCAL_LLM_BASE_URL';
+    if (provider === 'jev') return 'JEV_BASE_URL';
+    return null;
+  }
+
+  private syncStudioBaseUrlField(): void {
+    const provider = (this.overlay.querySelector('#studio-provider') as HTMLSelectElement)?.value || 'auto';
+    const group = this.overlay.querySelector('#studio-base-url-group') as HTMLElement;
+    const label = this.overlay.querySelector('#studio-base-url-label') as HTMLElement;
+    const varName = this.studioBaseUrlVar(provider);
+    if (group) group.style.display = varName ? 'block' : 'none';
+    if (label && varName) label.textContent = t('global_defaults.studio_base_url_label', { key: varName });
+  }
+
+  private async loadStudioModel(): Promise<void> {
+    const providerSel = this.overlay.querySelector('#studio-provider') as HTMLSelectElement | null;
+    const modelInput = this.overlay.querySelector('#studio-model') as HTMLInputElement | null;
+    if (!providerSel || !modelInput) return;
+    const env = EnvironmentManager.getInstance();
+    const provider = (await env.getEnvVar(GlobalDefaultsModal.STUDIO_PROVIDER_VAR)) || 'auto';
+    const model = (await env.getEnvVar(GlobalDefaultsModal.STUDIO_MODEL_VAR)) || '';
+    providerSel.value = Array.from(providerSel.options).some(o => o.value === provider) ? provider : 'auto';
+    modelInput.value = model === 'auto' ? '' : model;
+    const baseVar = this.studioBaseUrlVar(providerSel.value);
+    if (baseVar) {
+      const url = (await env.getEnvVar(baseVar)) || '';
+      (this.overlay.querySelector('#studio-base-url') as HTMLInputElement).value = url;
+    }
+    this.syncStudioBaseUrlField();
+    await this.refreshStudioModelStatus();
+  }
+
+  /** Mostra qual modelo o Studio usaria agora, com as mesmas regras do backend. */
+  private async refreshStudioModelStatus(): Promise<void> {
+    const status = this.overlay.querySelector('#studio-model-status') as HTMLElement | null;
+    if (!status) return;
+    const env = EnvironmentManager.getInstance();
+    let provider = (await env.getEnvVar(GlobalDefaultsModal.STUDIO_PROVIDER_VAR)) || 'auto';
+    let model = (await env.getEnvVar(GlobalDefaultsModal.STUDIO_MODEL_VAR)) || 'auto';
+    const defaults: Record<string, string> = {
+      deepseek: 'deepseek-flash', openai: 'gpt-4o-mini', anthropic: 'claude-haiku-5-5', google: 'gemini-2.5-flash', groq: 'llama-3.3-70b-versatile'
+    };
+    if (provider === 'auto') {
+      provider = '';
+      for (const p of ['deepseek', 'openai', 'anthropic', 'google', 'groq']) {
+        if (await env.hasEnvVar(this.getEnvKeyForProvider(p))) { provider = p; break; }
+      }
+    }
+    if (model === 'auto') model = provider ? (defaults[provider] || '') : '';
+    if (provider && model) {
+      status.textContent = t('global_defaults.studio_status_in_use', { model: `${provider}/${model}` });
+      status.style.color = '#0e700e';
+    } else {
+      status.textContent = t('global_defaults.studio_status_none');
+      status.style.color = '#a80000';
+    }
+  }
+
+  private async saveStudioModel(): Promise<void> {
+    const provider = (this.overlay.querySelector('#studio-provider') as HTMLSelectElement)?.value || 'auto';
+    const model = (this.overlay.querySelector('#studio-model') as HTMLInputElement)?.value.trim() || 'auto';
+    const baseVar = this.studioBaseUrlVar(provider);
+    const baseUrl = (this.overlay.querySelector('#studio-base-url') as HTMLInputElement)?.value.trim() || '';
+    const feedback = this.overlay.querySelector('#studio-model-feedback') as HTMLElement;
+
+    const show = (ok: boolean, text: string) => {
+      if (!feedback) return;
+      feedback.style.display = 'block';
+      feedback.style.background = ok ? '#dff6dd' : '#fde7e9';
+      feedback.style.color = ok ? '#0e700e' : '#a80000';
+      feedback.textContent = text;
+    };
+
+    if ((provider === 'local' || provider === 'jev') && model === 'auto') {
+      show(false, t('global_defaults.studio_err_model_required'));
+      return;
+    }
+    if (baseVar && !baseUrl && provider === 'jev') {
+      show(false, t('global_defaults.studio_err_url_required', { key: baseVar }));
+      return;
+    }
+
+    const env = EnvironmentManager.getInstance();
+    const results = [
+      await env.setEnvVar(GlobalDefaultsModal.STUDIO_PROVIDER_VAR, provider),
+      await env.setEnvVar(GlobalDefaultsModal.STUDIO_MODEL_VAR, model)
+    ];
+    if (baseVar && baseUrl) results.push(await env.setEnvVar(baseVar, baseUrl));
+
+    if (results.every(Boolean)) show(true, t('global_defaults.studio_saved'));
+    else show(false, t('global_defaults.studio_saved_session'));
+    await this.refreshStudioModelStatus();
   }
 
   private getEnvKeyForProvider(provider: string): string {

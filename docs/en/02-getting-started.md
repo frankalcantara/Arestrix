@@ -86,7 +86,11 @@ variables, and is never written to a project:
 | `ARESTRIX_DEFAULT_PROVIDER` | `deepseek`, `openai`, `anthropic`, `google`, `groq`, `jev` or `local`. |
 | `ARESTRIX_DEFAULT_MODEL` | Model name. Optional for the hosted providers (each has a default); **required** for `jev` and `local`. |
 
-If `ARESTRIX_DEFAULT_PROVIDER` is not set, the Studio uses the first provider that has an API key on this
+You do not need to set these by hand: **Global Defaults → Provider & Model → Studio default model** (Studio scope)
+saves them for you, shows which model is in use, and also asks for the server address of `local` and `jev`.
+Choosing *Automatic* stores the value `auto`, which means "not set".
+
+If `ARESTRIX_DEFAULT_PROVIDER` is not set (or is `auto`), the Studio uses the first provider that has an API key on this
 machine (DeepSeek, OpenAI, Anthropic, Google, Groq, in that order). The keys and endpoints are the same
 variables listed above, so a local model (Ollama, llama.cpp, vLLM) needs `ARESTRIX_DEFAULT_PROVIDER=local`,
 `ARESTRIX_DEFAULT_MODEL=<name>` and `LOCAL_LLM_BASE_URL`.

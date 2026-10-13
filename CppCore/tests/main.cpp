@@ -639,6 +639,11 @@ TEST(search_studio_default_model_comes_from_the_environment) {
     m = studioDefaultModel();
     CHECK(m && m->provider == "local" && m->model == "llama3");      // escolha explicita do usuario
 
+    setv("ARESTRIX_DEFAULT_PROVIDER", "auto");                       // "auto" = nao definido
+    setv("ARESTRIX_DEFAULT_MODEL", "auto");
+    m = studioDefaultModel();
+    CHECK(m && m->provider == "openai" && m->model != "auto");
+
     for (auto& [k, v] : saved) setv(k.c_str(), v.c_str());
 }
 

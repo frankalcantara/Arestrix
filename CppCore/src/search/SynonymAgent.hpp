@@ -6,6 +6,7 @@
 //   ARESTRIX_DEFAULT_PROVIDER   deepseek | openai | anthropic | google | groq | jev | local
 //   ARESTRIX_DEFAULT_MODEL      nome do modelo (opcional para os provedores com modelo padrao)
 // As chaves seguem as variaveis de sempre (DEEPSEEK_API_KEY, OPENAI_API_KEY, ... LOCAL_LLM_BASE_URL).
+// O valor "auto" (gravado pela tela de Padroes Globais) equivale a nao definir.
 // Se ARESTRIX_DEFAULT_PROVIDER nao existir, usa o primeiro provedor que tiver chave configurada.
 
 #include <optional>

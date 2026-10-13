@@ -35,6 +35,9 @@ std::set<std::string> g_busy;
 std::optional<StudioModel> studioDefaultModel() {
     std::string provider = env("ARESTRIX_DEFAULT_PROVIDER");
     std::string model = env("ARESTRIX_DEFAULT_MODEL");
+    // A tela de Padroes Globais nao consegue gravar variavel vazia: "auto" significa "nao definido".
+    if (provider == "auto") provider.clear();
+    if (model == "auto") model.clear();
 
     if (provider.empty()) {
         // primeiro provedor com chave configurada nesta maquina

@@ -86,7 +86,11 @@ ambiente do usuário, e nunca é gravado em um projeto:
 | `ARESTRIX_DEFAULT_PROVIDER` | `deepseek`, `openai`, `anthropic`, `google`, `groq`, `jev` ou `local`. |
 | `ARESTRIX_DEFAULT_MODEL` | Nome do modelo. Opcional nos provedores hospedados (cada um tem um padrão); **obrigatória** em `jev` e `local`. |
 
-Se `ARESTRIX_DEFAULT_PROVIDER` não existir, o Studio usa o primeiro provedor que tiver chave de API nesta máquina
+Você não precisa definir isso à mão: **Padrões Globais → Provedor & Modelo → Modelo padrão do Studio** (escopo Studio)
+grava as variáveis, mostra qual modelo está em uso e pede também o endereço do servidor de `local` e `jev`.
+Escolher *Automático* grava o valor `auto`, que significa "não definido".
+
+Se `ARESTRIX_DEFAULT_PROVIDER` não existir (ou for `auto`), o Studio usa o primeiro provedor que tiver chave de API nesta máquina
 (DeepSeek, OpenAI, Anthropic, Google, Groq, nessa ordem). As chaves e os endpoints são as mesmas variáveis
 listadas acima; um modelo local (Ollama, llama.cpp, vLLM) precisa de `ARESTRIX_DEFAULT_PROVIDER=local`,
 `ARESTRIX_DEFAULT_MODEL=<nome>` e `LOCAL_LLM_BASE_URL`.
