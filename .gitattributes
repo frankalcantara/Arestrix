@@ -1,0 +1,3 @@
+# Scripts de shell precisam de fim de linha LF, mesmo em clones no Windows com autocrlf.
+.githooks/* text eol=lf
+*.sh text eol=lf
