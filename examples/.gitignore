@@ -1,0 +1,25 @@
+# Artefatos gerados ao executar ou abrir os exemplos. NUNCA versione estes arquivos:
+# eles podem conter respostas de modelos, dados de clientes e caminhos da sua maquina.
+**/workspace/
+**/output/
+**/storage/
+**/.arestrix/
+**/.cache/
+**/*.sqlite
+**/*.sqlite3
+**/*.db
+
+# Segredos: as chaves vivem so em variaveis de ambiente do usuario. Estes nomes nunca entram no Git.
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/credentials*
+**/secrets*
+**/*.local.json
+
+# Binarios gerados pela compilacao do pipeline
+**/*.exe
+**/*.obj
+**/*.o
+**/build/

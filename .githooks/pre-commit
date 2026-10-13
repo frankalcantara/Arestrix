@@ -1,0 +1,9 @@
+#!/bin/sh
+# Arestrix - impede que segredos e dados pessoais entrem num commit.
+# Ativar (uma vez por clone):  npm run hooks:install
+# Contornar so em ultimo caso e conscientemente:  git commit --no-verify
+node scripts/check-secrets.mjs --staged || {
+  echo ""
+  echo "Commit bloqueado pelo verificador de segredos (scripts/check-secrets.mjs)."
+  exit 1
+}

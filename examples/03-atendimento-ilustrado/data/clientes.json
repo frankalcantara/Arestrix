@@ -1,0 +1,28 @@
+{
+  "clientes": [
+    {
+      "email": "ana.souza@example.com",
+      "nome": "Ana Souza",
+      "plano": "Profissional",
+      "cliente_desde": "2023-04-10",
+      "chamados_abertos": 1,
+      "observacao": "Conta empresarial com 12 usuarios."
+    },
+    {
+      "email": "bruno.lima@example.com",
+      "nome": "Bruno Lima",
+      "plano": "Basico",
+      "cliente_desde": "2025-01-22",
+      "chamados_abertos": 0,
+      "observacao": ""
+    },
+    {
+      "email": "carla.dias@example.com",
+      "nome": "Carla Dias",
+      "plano": "Basico",
+      "cliente_desde": "2025-08-03",
+      "chamados_abertos": 0,
+      "observacao": "Primeiro contato com o suporte."
+    }
+  ]
+}

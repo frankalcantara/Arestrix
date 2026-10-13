@@ -56,9 +56,27 @@ repositório também inclui o scanner **SkillSpector** da NVIDIA em `third_party
 
 ## Servidores MCP
 
-O Arestrix é um cliente MCP sobre stdio e SSE. Os servidores são registrados por workspace
-(`arestrix-mcp-servers.json`), aparecem na interface como *Servidores MCP do Workspace* e são atribuídos aos
-vértices na ação **Ferramentas**. As configurações MCP pré-aprovadas são provisionadas em `.workspace/mcps`.
+O Arestrix é um cliente MCP sobre stdio e SSE. Há duas coisas distintas:
+
+- **O cadastro do Studio** (`arestrix-mcp-servers.json`, tela *Servidores MCP do Workspace*): para registrar e testar servidores.
+- **Ferramentas dos agentes em tempo de execução:** um agente pode chamar as ferramentas dos servidores MCP **configurados no
+  projeto**, em `.workspace/mcps/*.json` (um objeto `McpServerConfig`, ou uma lista, por arquivo). O agente lista os servidores que
+  pode usar nas configurações de code mode (`codeMode.mcpServers` e, opcionalmente, `codeMode.allowedMcpTools` para restringir
+  as ferramentas). Cada ferramenta vira `mcp__<servidor>__<ferramenta>` para o modelo. Se um servidor não existir, estiver
+  desabilitado, inacessível ou citar uma variável não definida, o agente **falha com um erro claro** em vez de rodar sem a ferramenta.
+
+```json
+{ "id": "clientes", "transport": "stdio", "command": "${ARESTRIX_PYTHON:-python}", "args": ["mcp/server.py"],
+  "env": { "API_TOKEN": "${CRM_TOKEN}" }, "isEnabled": true }
+```
+
+**Segredos nunca vão neste arquivo.** `command`, `args`, `url` e todo valor de `env` aceitam `${NOME}` (o valor de uma variável de
+ambiente do seu usuário, resolvido quando o pipeline executa) e `${NOME:-padrão}`. O verificador de segredos recusa um valor
+literal em `env`. Servidores stdio rodam como processos comuns do seu usuário, **fora** do sandbox do agente: só configure
+servidores em que você confia.
+
+Limitação: o modal **Ferramentas** de um vértice ainda não lista os seus servidores (mostra uma lista de exemplo fixa); declare
+`mcpServers` no JSON do projeto, como fazem os [exemplos](../../examples/README.pt-BR.md).
 
 ## Importando trabalho existente
 

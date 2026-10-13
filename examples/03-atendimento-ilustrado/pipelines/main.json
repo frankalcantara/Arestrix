@@ -1,0 +1,897 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "projectId": "exemplo-atendimento-ilustrado",
+    "graphName": "Atendimento_Ilustrado",
+    "description": "Triagem de suporte (exemplo 2) com resposta ilustrada por um agente de SVG (exemplo 1)",
+    "targetStandard": "C++20",
+    "compilerConfig": {
+      "compiler": "msvc",
+      "cppStandard": "C++20",
+      "buildSystem": "cmake",
+      "taskflowIncludePath": "third_party/taskflow",
+      "outputBinaryName": "exemplo_atendimento_ilustrado",
+      "enableOpenMP": false,
+      "enableCuda": false,
+      "extraFlags": []
+    },
+    "version": "1.0.0",
+    "globalDefaults": {
+      "model": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "skillPath": "",
+        "promptTemplate": ""
+      },
+      "sandbox": {
+        "isolationLevel": "host_direct",
+        "network": "egress_llm_only",
+        "maxMemoryMB": 512,
+        "timeoutSeconds": 180,
+        "readOnlyMounts": [],
+        "readWriteMounts": []
+      },
+      "codeMode": {
+        "allowedTools": [
+          "read",
+          "validate_svg",
+          "write"
+        ],
+        "customScripts": []
+      },
+      "memory": {
+        "enabled": false,
+        "persistent": false,
+        "readBlackboard": false,
+        "writeBlackboard": false,
+        "semanticLessons": false,
+        "recordLessons": false,
+        "allowedKeys": [],
+        "domains": []
+      }
+    }
+  },
+  "nodes": [
+    {
+      "id": "atd_receber",
+      "label": "Receber_Chamado",
+      "type": "static",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "atd_receber_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "atd_receber_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "namespace fs = std::filesystem;\nfs::create_directories(\"workspace\");\nif (!fs::exists(\"workspace/ticket.txt\")) {\n    const char* pick = std::getenv(\"ARESTRIX_EXAMPLE_TICKET\");\n    std::string name = (pick && *pick) ? pick : \"chamado_normal.txt\";\n    if (name.find(\"..\") != std::string::npos || name.find('/') != std::string::npos || name.find('\\\\') != std::string::npos)\n        throw std::runtime_error(\"ARESTRIX_EXAMPLE_TICKET deve ser so o nome de um arquivo de samples/\");\n    fs::copy_file(\"samples/\" + name, \"workspace/ticket.txt\", fs::copy_options::overwrite_existing);\n}\nstd::cout << \"[Receber] chamado em workspace/ticket.txt\\n\";",
+      "requiredHeaders": [
+        "<filesystem>",
+        "<cstdlib>",
+        "<stdexcept>"
+      ]
+    },
+    {
+      "id": "atd_leitor",
+      "label": "Agente_Leitor_de_Chamados",
+      "type": "agent",
+      "position": {
+        "x": 450,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "atd_leitor_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "atd_leitor_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/leitor.md"
+        },
+        "inheritCodeMode": false,
+        "inheritMemory": true,
+        "codeMode": {
+          "allowedTools": [
+            "read",
+            "write"
+          ],
+          "customScripts": [],
+          "mcpServers": [
+            "clientes"
+          ],
+          "allowedMcpTools": [
+            "lookup_customer"
+          ]
+        }
+      }
+    },
+    {
+      "id": "atd_triagem",
+      "label": "Triagem_de_Urgencia",
+      "type": "switch",
+      "position": {
+        "x": 900,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "atd_triagem_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "atd_triagem_out_0",
+          "name": "urgente",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 0
+        },
+        {
+          "id": "atd_triagem_out_1",
+          "name": "normal",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 1
+        },
+        {
+          "id": "atd_triagem_out_2",
+          "name": "duvida",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 2
+        },
+        {
+          "id": "atd_triagem_out_default",
+          "name": "revisao_humana",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 3
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": true,
+        "inheritCodeMode": true,
+        "inheritMemory": true
+      },
+      "switchSettings": {
+        "mode": "model",
+        "source": {
+          "kind": "previous"
+        },
+        "instruction": "Classifique o chamado do cliente. Escolha 'urgente' para servico fora do ar, perda de dinheiro, cobranca indevida ou risco legal; 'duvida' para perguntas simples sobre como usar o produto; 'normal' para os demais pedidos. Se nao for possivel decidir, escolha 'revisao_humana'.",
+        "rules": {}
+      }
+    },
+    {
+      "id": "atd_escalonador",
+      "label": "Agente_Escalonador",
+      "type": "agent",
+      "position": {
+        "x": 1350,
+        "y": -430,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "atd_escalonador_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "atd_escalonador_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/escalonador.md"
+        },
+        "inheritCodeMode": false,
+        "inheritMemory": true,
+        "codeMode": {
+          "allowedTools": [
+            "read",
+            "write"
+          ],
+          "customScripts": [],
+          "mcpServers": [
+            "clientes"
+          ],
+          "allowedMcpTools": [
+            "registrar_escalonamento"
+          ]
+        }
+      }
+    },
+    {
+      "id": "atd_entrega_urgente",
+      "label": "Entrega_Urgente",
+      "type": "static",
+      "position": {
+        "x": 1800,
+        "y": -430,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "atd_entrega_urgente_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "atd_entrega_urgente_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "std::cout << \"[Entrega] resposta pronta em workspace/resposta.md (caminho: urgente)\\n\";"
+    },
+    {
+      "id": "atd_redator",
+      "label": "Agente_Redator",
+      "type": "agent",
+      "position": {
+        "x": 1350,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "atd_redator_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "atd_redator_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/redator.md"
+        },
+        "inheritCodeMode": false,
+        "inheritMemory": true,
+        "codeMode": {
+          "allowedTools": [
+            "read",
+            "write"
+          ],
+          "customScripts": []
+        }
+      }
+    },
+    {
+      "id": "atd_revisor",
+      "label": "Agente_Revisor",
+      "type": "agent",
+      "position": {
+        "x": 1800,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "atd_revisor_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "atd_revisor_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/revisor.md"
+        },
+        "inheritCodeMode": false,
+        "inheritMemory": true,
+        "codeMode": {
+          "allowedTools": [
+            "read",
+            "write"
+          ],
+          "customScripts": []
+        }
+      }
+    },
+    {
+      "id": "atd_qualidade",
+      "label": "Controle_de_Qualidade",
+      "type": "switch",
+      "position": {
+        "x": 2250,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "atd_qualidade_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "atd_qualidade_out_0",
+          "name": "ajustar",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 0
+        },
+        {
+          "id": "atd_qualidade_out_1",
+          "name": "aprovado",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 1
+        },
+        {
+          "id": "atd_qualidade_out_default",
+          "name": "revisao_humana",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 2
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": true,
+        "inheritCodeMode": true,
+        "inheritMemory": true
+      },
+      "switchSettings": {
+        "mode": "rules",
+        "source": {
+          "kind": "file",
+          "path": "workspace/revisao.txt"
+        },
+        "instruction": "",
+        "rules": {
+          "atd_qualidade_out_0": "AJUSTAR, reprovado, corrigir",
+          "atd_qualidade_out_1": "APROVADO"
+        }
+      }
+    },
+    {
+      "id": "atd_entrega_normal",
+      "label": "Entrega_Normal",
+      "type": "static",
+      "position": {
+        "x": 2700,
+        "y": -90,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "atd_entrega_normal_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "atd_entrega_normal_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "std::cout << \"[Entrega] resposta pronta em workspace/resposta.md (caminho: normal)\\n\";"
+    },
+    {
+      "id": "atd_faq",
+      "label": "Agente_FAQ",
+      "type": "agent",
+      "position": {
+        "x": 1350,
+        "y": 430,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "atd_faq_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "atd_faq_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/faq.md"
+        },
+        "inheritCodeMode": false,
+        "inheritMemory": true,
+        "codeMode": {
+          "allowedTools": [
+            "read",
+            "write"
+          ],
+          "customScripts": []
+        }
+      }
+    },
+    {
+      "id": "atd_humano",
+      "label": "Revisao_Humana",
+      "type": "static",
+      "position": {
+        "x": 2700,
+        "y": 330,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "atd_humano_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "atd_humano_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "std::cout << \"[Humano] caso encaminhado para revisao humana. Leia workspace/ticket.txt e workspace/resumo.md.\\n\";"
+    },
+    {
+      "id": "svg_gerador",
+      "label": "Agente_Gerador_DeepSeek",
+      "type": "agent",
+      "position": {
+        "x": 1800,
+        "y": 430
+      },
+      "inputs": [
+        {
+          "id": "svg_gerador_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "svg_gerador_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/gerador.md",
+          "promptTemplate": "Crie um SVG animado curto em workspace/scene.svg que explique visualmente, em 3 passos, a resposta escrita em workspace/resposta.md (leia-a primeiro). Esta e a execucao numero {{iteration}}; se existir um parecer do auditor em workspace/audit_decision.txt, corrija o que ele apontou."
+        },
+        "inheritCodeMode": true,
+        "inheritMemory": true
+      }
+    },
+    {
+      "id": "svg_linter",
+      "label": "Linter_Tipografia_Estatico",
+      "type": "static",
+      "position": {
+        "x": 2100,
+        "y": 330
+      },
+      "inputs": [
+        {
+          "id": "svg_linter_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "svg_linter_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "// Thread A: Linter Tipográfico e de Estrutura DOM (C++20)\nstd::cout << \"[Thread A] Iniciando auditoria tipográfica no SVG...\\n\";\n\nstd::ifstream file(\"workspace/scene.svg\");\nif (!file.is_open()) {\n    std::cerr << \"[Thread A - ERRO] Arquivo workspace/scene.svg não encontrado!\\n\";\n    return;\n}\n\nstd::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());\nfile.close();\n\nbool violation = false;\n// Verificação de conformidade de regras de projeto\nif (content.find(\"feGaussianBlur\") != std::string::npos ||\n    content.find(\"feDropShadow\") != std::string::npos ||\n    content.find(\"text-shadow\") != std::string::npos) {\n    std::cout << \"[Thread A - VIOLAÇÃO] Detectado filtro de sombra ou blur! Proibido em elementos de texto.\\n\";\n    violation = true;\n}\n\n// Grava relatório da Thread A no quadro compartilhado (blackboard)\nstd::ofstream report(\"workspace/report_thread_a.txt\");\nreport << (violation ? \"FAIL: VIOLACAO_TIPOGRAFIA_DETECTADA\" : \"PASS: TIPOGRAFIA_LIMPA\");\nreport.close();\n\nstd::cout << \"[Thread A] Auditoria concluída.\\n\";"
+    },
+    {
+      "id": "svg_smil",
+      "label": "Auditor_Timeline_SMIL",
+      "type": "static",
+      "position": {
+        "x": 2100,
+        "y": 530
+      },
+      "inputs": [
+        {
+          "id": "svg_smil_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "svg_smil_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "// Thread B: Auditor Temporal e Animações SMIL (C++20)\nstd::cout << \"[Thread B] Iniciando auditoria de timelines e encadeamentos SMIL...\\n\";\n\nstd::ifstream file(\"workspace/scene.svg\");\nstd::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());\nfile.close();\n\nbool timing_ok = true;\n\n// Checagem de congelamento de estado final\nif (content.find(\"<animate\") != std::string::npos && content.find(\"fill=\\\"freeze\\\"\") == std::string::npos) {\n    std::cout << \"[Thread B - ALERTA] Animação detectada sem retenção de estado (fill=\\\"freeze\\\").\\n\";\n    timing_ok = false;\n}\n\n// Checagem de escala sem pivô central\nif (content.find(\"type=\\\"scale\\\"\") != std::string::npos && content.find(\"transform-origin\") == std::string::npos) {\n    std::cout << \"[Thread B - ALERTA] animateTransform scale sem pivô explícito detectado.\\n\";\n    timing_ok = false;\n}\n\nstd::ofstream report(\"workspace/report_thread_b.txt\");\nreport << (timing_ok ? \"PASS: TIMELINE_SMIL_CONSISTENTE\" : \"WARN: TIMELINE_INSTAVEL\");\nreport.close();\n\nstd::cout << \"[Thread B] Análise de timeline concluída.\\n\";"
+    },
+    {
+      "id": "svg_join",
+      "label": "Consolidador_Diagnostico",
+      "type": "static",
+      "position": {
+        "x": 2400,
+        "y": 430
+      },
+      "inputs": [
+        {
+          "id": "svg_join_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "svg_join_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "std::cout << \"[Join] diagnosticos consolidados\\n\";"
+    },
+    {
+      "id": "svg_jev",
+      "label": "Agente_Auditor_JEV",
+      "type": "agent",
+      "position": {
+        "x": 2700,
+        "y": 430
+      },
+      "inputs": [
+        {
+          "id": "svg_jev_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "svg_jev_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/jev.md"
+        },
+        "inheritCodeMode": true,
+        "inheritMemory": true
+      }
+    },
+    {
+      "id": "svg_decisor",
+      "label": "Decisor_Qualidade",
+      "type": "condition",
+      "position": {
+        "x": 3000,
+        "y": 430
+      },
+      "inputs": [
+        {
+          "id": "svg_decisor_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "svg_decisor_out_0",
+          "name": "branch 0",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 0
+        },
+        {
+          "id": "svg_decisor_out_1",
+          "name": "branch 1",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 1
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "// Leitura da decisão emitida pelo JEV\nstd::ifstream decisionFile(\"workspace/audit_decision.txt\");\nstd::string status;\nif (decisionFile.is_open()) {\n    std::getline(decisionFile, status);\n    decisionFile.close();\n}\n\nif (status.find(\"STATUS: APROVADO\") != std::string::npos) {\n    std::cout << \">>> [Decisor] JEV APROVOU o SVG! Conduzindo para entrega final.\\n\";\n    return 0; // Ramo 0: Sucesso\n} else {\n    std::cout << \">>> [Decisor] JEV REPROVOU. Ativando laço de auto-correção para o DeepSeek Flash.\\n\";\n    return 1; // Ramo 1: Re-planejamento\n}"
+    },
+    {
+      "id": "svg_entrega",
+      "label": "Entrega_SVG_Final",
+      "type": "static",
+      "position": {
+        "x": 3300,
+        "y": 350
+      },
+      "inputs": [
+        {
+          "id": "svg_entrega_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "svg_entrega_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "std::cout << \"[Entrega] resposta em workspace/resposta.md e explicacao animada em workspace/scene.svg (caminho: duvida)\\n\";"
+    }
+  ],
+  "edges": [
+    {
+      "id": "atd_edge_receber_0_to_leitor",
+      "sourceNodeId": "atd_receber",
+      "sourcePortId": "atd_receber_out_0",
+      "targetNodeId": "atd_leitor",
+      "targetPortId": "atd_leitor_in_0"
+    },
+    {
+      "id": "atd_edge_leitor_0_to_triagem",
+      "sourceNodeId": "atd_leitor",
+      "sourcePortId": "atd_leitor_out_0",
+      "targetNodeId": "atd_triagem",
+      "targetPortId": "atd_triagem_in_0"
+    },
+    {
+      "id": "atd_edge_triagem_0_to_escalonador",
+      "sourceNodeId": "atd_triagem",
+      "sourcePortId": "atd_triagem_out_0",
+      "targetNodeId": "atd_escalonador",
+      "targetPortId": "atd_escalonador_in_0"
+    },
+    {
+      "id": "atd_edge_escalonador_0_to_entrega_urgente",
+      "sourceNodeId": "atd_escalonador",
+      "sourcePortId": "atd_escalonador_out_0",
+      "targetNodeId": "atd_entrega_urgente",
+      "targetPortId": "atd_entrega_urgente_in_0"
+    },
+    {
+      "id": "atd_edge_triagem_1_to_redator",
+      "sourceNodeId": "atd_triagem",
+      "sourcePortId": "atd_triagem_out_1",
+      "targetNodeId": "atd_redator",
+      "targetPortId": "atd_redator_in_0"
+    },
+    {
+      "id": "atd_edge_redator_0_to_revisor",
+      "sourceNodeId": "atd_redator",
+      "sourcePortId": "atd_redator_out_0",
+      "targetNodeId": "atd_revisor",
+      "targetPortId": "atd_revisor_in_0"
+    },
+    {
+      "id": "atd_edge_revisor_0_to_qualidade",
+      "sourceNodeId": "atd_revisor",
+      "sourcePortId": "atd_revisor_out_0",
+      "targetNodeId": "atd_qualidade",
+      "targetPortId": "atd_qualidade_in_0"
+    },
+    {
+      "id": "atd_edge_qualidade_0_to_redator",
+      "sourceNodeId": "atd_qualidade",
+      "sourcePortId": "atd_qualidade_out_0",
+      "targetNodeId": "atd_redator",
+      "targetPortId": "atd_redator_in_0",
+      "isFeedbackLoop": true
+    },
+    {
+      "id": "atd_edge_qualidade_1_to_entrega_normal",
+      "sourceNodeId": "atd_qualidade",
+      "sourcePortId": "atd_qualidade_out_1",
+      "targetNodeId": "atd_entrega_normal",
+      "targetPortId": "atd_entrega_normal_in_0"
+    },
+    {
+      "id": "atd_edge_triagem_2_to_faq",
+      "sourceNodeId": "atd_triagem",
+      "sourcePortId": "atd_triagem_out_2",
+      "targetNodeId": "atd_faq",
+      "targetPortId": "atd_faq_in_0"
+    },
+    {
+      "id": "atd_edge_triagem_default_to_humano",
+      "sourceNodeId": "atd_triagem",
+      "sourcePortId": "atd_triagem_out_default",
+      "targetNodeId": "atd_humano",
+      "targetPortId": "atd_humano_in_0"
+    },
+    {
+      "id": "atd_edge_qualidade_default_to_humano",
+      "sourceNodeId": "atd_qualidade",
+      "sourcePortId": "atd_qualidade_out_default",
+      "targetNodeId": "atd_humano",
+      "targetPortId": "atd_humano_in_0"
+    },
+    {
+      "id": "svg_edge_gerador_gerador_out_0_to_linter_linter_in_0",
+      "sourceNodeId": "svg_gerador",
+      "sourcePortId": "svg_gerador_out_0",
+      "targetNodeId": "svg_linter",
+      "targetPortId": "svg_linter_in_0"
+    },
+    {
+      "id": "svg_edge_gerador_gerador_out_0_to_smil_smil_in_0",
+      "sourceNodeId": "svg_gerador",
+      "sourcePortId": "svg_gerador_out_0",
+      "targetNodeId": "svg_smil",
+      "targetPortId": "svg_smil_in_0"
+    },
+    {
+      "id": "svg_edge_linter_linter_out_0_to_join_join_in_0",
+      "sourceNodeId": "svg_linter",
+      "sourcePortId": "svg_linter_out_0",
+      "targetNodeId": "svg_join",
+      "targetPortId": "svg_join_in_0"
+    },
+    {
+      "id": "svg_edge_smil_smil_out_0_to_join_join_in_0",
+      "sourceNodeId": "svg_smil",
+      "sourcePortId": "svg_smil_out_0",
+      "targetNodeId": "svg_join",
+      "targetPortId": "svg_join_in_0"
+    },
+    {
+      "id": "svg_edge_join_join_out_0_to_jev_jev_in_0",
+      "sourceNodeId": "svg_join",
+      "sourcePortId": "svg_join_out_0",
+      "targetNodeId": "svg_jev",
+      "targetPortId": "svg_jev_in_0"
+    },
+    {
+      "id": "svg_edge_jev_jev_out_0_to_decisor_decisor_in_0",
+      "sourceNodeId": "svg_jev",
+      "sourcePortId": "svg_jev_out_0",
+      "targetNodeId": "svg_decisor",
+      "targetPortId": "svg_decisor_in_0"
+    },
+    {
+      "id": "svg_edge_decisor_decisor_out_0_to_entrega_entrega_in_0",
+      "sourceNodeId": "svg_decisor",
+      "sourcePortId": "svg_decisor_out_0",
+      "targetNodeId": "svg_entrega",
+      "targetPortId": "svg_entrega_in_0"
+    },
+    {
+      "id": "svg_edge_decisor_decisor_out_1_to_gerador_gerador_in_0",
+      "sourceNodeId": "svg_decisor",
+      "sourcePortId": "svg_decisor_out_1",
+      "targetNodeId": "svg_gerador",
+      "targetPortId": "svg_gerador_in_0",
+      "isFeedbackLoop": true
+    },
+    {
+      "id": "edge_atd_faq_0_to_svg_gerador",
+      "sourceNodeId": "atd_faq",
+      "sourcePortId": "atd_faq_out_0",
+      "targetNodeId": "svg_gerador",
+      "targetPortId": "svg_gerador_in_0"
+    }
+  ]
+}

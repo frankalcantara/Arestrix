@@ -1,0 +1,12 @@
+{
+  "id": "clientes",
+  "name": "Cadastro de clientes (demo)",
+  "transport": "stdio",
+  "command": "${ARESTRIX_PYTHON:-python}",
+  "args": [
+    "mcp/clientes_server.py"
+  ],
+  "env": {},
+  "url": "",
+  "isEnabled": true
+}

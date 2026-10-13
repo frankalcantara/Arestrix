@@ -14,6 +14,17 @@
 | `docs/` | Esta documentação, em `en/` e `pt-BR/`. |
 | `TUTORIAL_AGENTE_SVG_ARESTRIX.md` | Um exemplo completo passo a passo. |
 
+## Exemplos e segredos
+
+Os três projetos de [`examples/`](../../examples/README.pt-BR.md) são gerados por `python scripts/build_examples.py` (nunca edite o
+`pipelines/main.json` deles à mão) e testados com `python scripts/e2e_examples.py` (um LLM falso roteirizado; sem chaves, sem custo).
+
+**Nenhum segredo pode chegar ao Git.** O `scripts/check-secrets.mjs` (`npm run check:secrets`) sinaliza formatos de chave de API,
+valores literais em campos `api_key`/`token`/`password`, caminhos de usuário, e-mails pessoais, arquivos de credencial e artefatos
+gerados em `examples/`. Rode `npm run hooks:install` uma vez por clone para torná-lo um **gancho de pré-commit**; o `npm test`
+também falha com qualquer achado em `examples/`. Os segredos vivem só em variáveis de ambiente do usuário; os arquivos de projeto
+guardam no máximo o *nome* de uma variável ou uma referência `${NOME}`.
+
 ## Testes
 
 ```bash

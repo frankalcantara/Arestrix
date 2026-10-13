@@ -1,0 +1,70 @@
+# Exemplos do Arestrix
+
+[English](README.md) · [Índice da documentação](../README.pt-BR.md#documentação)
+
+Três projetos prontos para executar, do simples ao complexo. Cada um é uma pasta de projeto Arestrix comum: abra no Studio,
+escolha seu modelo, grave sua chave de API e pressione **F5**.
+
+| # | Projeto | O que mostra | Precisa de |
+| :--- | :--- | :--- | :--- |
+| 1 | [`01-svg-agente`](01-svg-agente) | O tutorial: dois agentes, verificações em paralelo (fork/join) e um laço de autocorreção decidido em C++. | Um modelo. |
+| 2 | [`02-triagem-de-suporte`](02-triagem-de-suporte) | Triagem de chamados: agentes, **vértices de decisão** (um modelo de IA escolhe o caminho; regras por palavras fecham um laço de qualidade) e um servidor **MCP**. | Um modelo, Python. |
+| 3 | [`03-atendimento-ilustrado`](03-atendimento-ilustrado) | Um "projeto de projetos": o exemplo 2 seguido, no ramo de dúvidas, pelo exemplo 1 (a resposta ganha um SVG animado). | Um modelo, Python. |
+
+O exemplo 3 é **gerado** a partir do 1 e do 2 (`python scripts/build_examples.py`), então os três nunca ficam fora de
+sincronia. Os vértices ainda não executam um grafo aninhado, por isso a composição é achatada em um único pipeline.
+
+## Executar um exemplo
+
+```bash
+python scripts/copy_example.py 02-triagem-de-suporte C:/meus-projetos/triagem     # copie para FORA do repositório
+```
+
+1. No Studio: **Arquivo → Abrir** e escolha essa pasta.
+2. **Padrões Globais → Provedor & Modelo**: escolha seu provedor e modelo. Os exemplos usam DeepSeek por padrão, mas qualquer
+   provedor serve, porque todos os agentes herdam o modelo do projeto. Grave sua chave de API na mesma tela: ela vai para
+   **as variáveis de ambiente do seu usuário**, nunca para o projeto.
+3. Pressione **F5**.
+
+Sem o Studio: `arestrix-cli run pipelines/main.json --root <a pasta copiada>`.
+
+Os exemplos 2 e 3 leem um chamado de suporte. Escolha um de `samples/` com a variável de ambiente `ARESTRIX_EXAMPLE_TICKET`
+(`chamado_urgente.txt`, `chamado_normal.txt` ou `chamado_duvida.txt`), ou coloque seu próprio texto em `workspace/ticket.txt`.
+
+Use **seus próprios agentes**: cada vértice de agente aponta para um arquivo `skills/*.md` (as instruções dele). Edite-os,
+acrescente vértices, troque o modelo por vértice (botão **Modelo**) ou substitua o servidor MCP de demonstração em
+`.workspace/mcps/` pelo seu servidor real.
+
+## Teste sem gastar nada
+
+```bash
+python scripts/e2e_examples.py
+```
+
+Executa cada exemplo contra um servidor de LLM falso e roteirizado, só com chaves de teste: sem rede e sem custo. Confere os
+caminhos percorridos, as chamadas MCP, os laços, que nenhuma chave real é usada nem impressa, e que os exemplos não contêm segredos.
+
+## Segredos: como ficam fora do Git
+
+Os exemplos **nunca contêm uma chave**. As regras e o que as faz valer:
+
+- **As chaves de API vivem só nas variáveis de ambiente do seu usuário** (`DEEPSEEK_API_KEY`, `OPENAI_API_KEY`...). Os arquivos
+  do projeto só podem citar o nome de uma variável (`DEEPSEEK_API_KEY`) ou referenciá-la como `${NOME}`. A configuração de um
+  servidor MCP segue a mesma regra no seu `env`.
+- **Copie um exemplo antes de usá-lo** (`scripts/copy_example.py`). Abri-lo dentro do repositório faz o Studio gravar saídas
+  dos agentes e caminhos da sua máquina em pastas versionadas.
+- O `examples/.gitignore` mantém fora do Git os artefatos gerados (`workspace/`, `output/`, `storage/`, `.arestrix/`),
+  arquivos `.env`, chaves e bancos de dados.
+- O `scripts/check-secrets.mjs` procura formatos de chave (OpenAI/DeepSeek/Anthropic, Google, GitHub, AWS, chaves privadas,
+  JWT...), valores literais em campos `api_key`/`token`/`password`, caminhos de usuário, e-mails pessoais e arquivos proibidos,
+  e confere que os manifestos usam `rootPath: "."` e `environment` vazio. Ele nunca imprime um segredo por inteiro.
+- Um **gancho de pré-commit** o executa em tudo o que você adicionar ao commit. Ative uma vez por clone: `npm run hooks:install`.
+- O `npm test` falha se qualquer arquivo em `examples/` for sinalizado.
+
+Se você chegar a digitar uma chave real em um arquivo, **revogue-a no provedor**; apagar o arquivo não basta depois de um commit.
+
+## Confiança
+
+Um projeto pode executar código na sua máquina: lambdas C++ personalizadas e comandos de servidores MCP. As ferramentas dos
+próprios agentes ficam confinadas à pasta do projeto, mas os servidores MCP rodam como processos comuns do seu usuário.
+Abra projetos apenas de fontes em que você confia.

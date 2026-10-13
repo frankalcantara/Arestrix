@@ -56,9 +56,26 @@ NVIDIA's **SkillSpector** scanner in `third_party/`.
 
 ## MCP servers
 
-Arestrix is an MCP client over stdio and SSE. Servers are registered per workspace
-(`arestrix-mcp-servers.json`), shown in the interface as *Workspace MCP servers*, and assigned to vertices
-in the **Tools** action. Pre-approved MCP configurations are provisioned in `.workspace/mcps`.
+Arestrix is an MCP client over stdio and SSE. There are two separate things:
+
+- **The Studio registry** (`arestrix-mcp-servers.json`, *Workspace MCP servers* screen): to register and test servers.
+- **Tools for agents at run time:** an agent can call the tools of the MCP servers **configured in the project**, in
+  `.workspace/mcps/*.json` (one `McpServerConfig` object, or a list, per file). The agent lists the servers it may use in its
+  code-mode settings (`codeMode.mcpServers`, and optionally `codeMode.allowedMcpTools` to restrict which tools). Each tool
+  becomes `mcp__<server>__<tool>` for the model. If a server is missing, disabled, unreachable or references an unset
+  variable, the agent **fails with a clear error** instead of running without the tool.
+
+```json
+{ "id": "clientes", "transport": "stdio", "command": "${ARESTRIX_PYTHON:-python}", "args": ["mcp/server.py"],
+  "env": { "API_TOKEN": "${CRM_TOKEN}" }, "isEnabled": true }
+```
+
+**Secrets never go in this file.** `command`, `args`, `url` and every `env` value accept `${NAME}` (the value of an environment
+variable of your user, resolved when the pipeline runs) and `${NAME:-default}`. The secret scanner rejects a literal value in `env`.
+Stdio servers run as normal processes of your user, **outside** the agent sandbox: only configure servers you trust.
+
+Limitation: the **Tools** modal of a vertex does not list your servers yet (it shows a fixed example list); declare
+`mcpServers` in the project's JSON, as the [examples](../../examples/README.md) do.
 
 ## Importing existing work
 

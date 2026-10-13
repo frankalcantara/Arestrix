@@ -21,7 +21,8 @@ arestrix-cli run graph.json --root <projeto>   # gera, compila e executa
 Um vértice de agente executa um **laço real de uso de ferramentas** contra o provedor configurado:
 
 - A **skill** (`SKILL.md`) é o prompt de sistema; o template de prompt do vértice é a tarefa.
-- O modelo pode chamar ferramentas: `read`, `write`, `edit`, `bash`, `validate_svg`. Todas ficam
+- O modelo pode chamar ferramentas: `read`, `write`, `edit`, `bash`, `validate_svg`, mais as ferramentas dos servidores MCP que o agente
+  declarar (veja [Servidores MCP](05-workspaces-memoria-skills-mcp.md#servidores-mcp)). As nativas ficam
   confinadas à pasta do projeto.
 - O laço continua até o modelo parar de chamar ferramentas. Skills podem acrescentar ferramentas e servidores MCP.
 

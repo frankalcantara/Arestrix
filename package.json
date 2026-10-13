@@ -11,7 +11,9 @@
     "test": "vitest run",
     "app:dev": "python CppCore/dev.py",
     "submodule:check": "node scripts/update-submodules.mjs --check",
-    "submodule:update": "node scripts/update-submodules.mjs --update"
+    "submodule:update": "node scripts/update-submodules.mjs --update",
+    "check:secrets": "node scripts/check-secrets.mjs",
+    "hooks:install": "node scripts/install-hooks.mjs"
   },
   "dependencies": {
     "lucide": "^0.453.0",

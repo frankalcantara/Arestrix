@@ -14,6 +14,7 @@
 #include <thread>
 
 #include "rt/Http.hpp"
+#include "rt/McpTools.hpp"
 #include "rt/Tools.hpp"
 #include "sandbox/AgentTelemetryEmitter.hpp"
 #include "util/Json.hpp"
@@ -71,6 +72,8 @@ struct AgentSpec {
     std::string skillPath;
     std::string promptTemplate;
     std::vector<std::string> tools;
+    std::vector<std::string> mcpServers;   // ids em .workspace/mcps
+    std::vector<std::string> mcpAllowed;   // nomes de ferramentas MCP permitidas (vazio = todas do servidor)
     sandbox::SandboxPolicy sandbox;
 };
 
@@ -103,6 +106,13 @@ AgentSpec parseSpec(const json& j, const std::string& nodeId, const std::string&
     s.promptTemplate = j.value("promptTemplate", "");
     if (j.contains("tools") && j["tools"].is_array()) {
         for (const auto& t : j["tools"]) if (t.is_string()) s.tools.push_back(t.get<std::string>());
+    }
+    if (j.contains("mcp") && j["mcp"].is_object()) {
+        for (const char* key : {"servers", "allowedTools"}) {
+            if (!j["mcp"].contains(key) || !j["mcp"][key].is_array()) continue;
+            auto& dst = std::string(key) == "servers" ? s.mcpServers : s.mcpAllowed;
+            for (const auto& v : j["mcp"][key]) if (v.is_string()) dst.push_back(v.get<std::string>());
+        }
     }
     if (j.contains("sandbox") && j["sandbox"].is_object()) {
         const auto& sb = j["sandbox"];
@@ -475,6 +485,16 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
     userPrompt = replaceAll(userPrompt, "{{label}}", label);
 
     std::vector<ToolDef> tools = toolDefinitions(spec.tools);
+    // Ferramentas MCP (servidores de .workspace/mcps): so as dos servidores que o agente declarou.
+    std::unique_ptr<McpToolbox> mcpTools;
+    if (!spec.mcpServers.empty()) {
+        try {
+            mcpTools = std::make_unique<McpToolbox>(root, spec.mcpServers, spec.mcpAllowed);
+        } catch (const std::exception& ex) {
+            throw std::runtime_error("Agente '" + label + "': " + ex.what());
+        }
+        for (const auto& d : mcpTools->definitions()) tools.push_back(d);
+    }
 
     std::unique_ptr<ChatBackend> backend;
     if (info.protocol == "anthropic") {
@@ -509,7 +529,8 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
         std::vector<std::pair<ToolCall, ToolResult>> results;
         for (auto& call : t.calls) {
             AgentTelemetryEmitter::emitToolStart(nodeId, call.name, summarizeArgs(call.args));
-            ToolResult res = executeTool(tctx, call.name, call.args);
+            ToolResult res = (mcpTools && mcpTools->owns(call.name)) ? mcpTools->call(call.name, call.args)
+                                                                       : executeTool(tctx, call.name, call.args);
             AgentTelemetryEmitter::emitToolEnd(nodeId, call.name, !res.isError);
             if (res.isError) {
                 AgentTelemetryEmitter::emitEvent(nodeId, "log", json{{"logLine", "[" + call.name + "] " + res.content.substr(0, 300)}});

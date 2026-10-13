@@ -1,0 +1,58 @@
+{
+  "projectId": "exemplo-svg-agente",
+  "name": "Exemplo 1 - Agente de SVG",
+  "description": "Agente que cria e audita SVGs animados (tutorial do Arestrix)",
+  "version": "1.0.0",
+  "createdAt": "2026-10-13T00:00:00Z",
+  "updatedAt": "2026-10-13T00:00:00Z",
+  "rootPath": ".",
+  "database": {
+    "type": "sqlite",
+    "filePath": "storage/database.sqlite",
+    "url": ""
+  },
+  "environment": {},
+  "globalDefaults": {
+    "model": {
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "skillPath": "",
+      "promptTemplate": ""
+    },
+    "sandbox": {
+      "isolationLevel": "host_direct",
+      "network": "egress_llm_only",
+      "maxMemoryMB": 512,
+      "timeoutSeconds": 180,
+      "readOnlyMounts": [],
+      "readWriteMounts": []
+    },
+    "codeMode": {
+      "allowedTools": [
+        "write",
+        "read",
+        "validate_svg"
+      ],
+      "customScripts": []
+    },
+    "memory": {
+      "enabled": false,
+      "persistent": false,
+      "readBlackboard": false,
+      "writeBlackboard": false,
+      "semanticLessons": false,
+      "recordLessons": false,
+      "allowedKeys": [],
+      "domains": []
+    }
+  },
+  "pipelines": [
+    {
+      "id": "main",
+      "name": "Pipeline Principal",
+      "file": "pipelines/main.json",
+      "isPrimary": true,
+      "description": "Agente que cria e audita SVGs animados (tutorial do Arestrix)"
+    }
+  ]
+}

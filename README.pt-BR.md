@@ -56,6 +56,7 @@ Você precisa de Git, Node.js 18+, Python 3.10+, CMake 3.20+ e um compilador C++
 | [Tour pela interface](docs/pt-BR/06-interface.md) | Ribbon, Backstage, canvas, inspetor, modais, atalhos. |
 | [Desenvolvimento](docs/pt-BR/07-desenvolvimento.md) | Testes, adicionar um idioma, política de terceiros, convenções. |
 | [Marca](docs/pt-BR/08-marca.md) | Ícone, cores, tipografia. |
+| [Exemplos](examples/README.pt-BR.md) | Três projetos prontos, do tutorial a uma triagem de suporte multiagente com MCP, e como os segredos ficam fora do Git. |
 
 Um exemplo completo passo a passo: [`TUTORIAL_AGENTE_SVG_ARESTRIX.md`](TUTORIAL_AGENTE_SVG_ARESTRIX.md).
 

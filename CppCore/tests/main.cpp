@@ -15,6 +15,7 @@
 #include "core/Graph.hpp"
 #include "platform/Process.hpp"
 #include "rt/Decision.hpp"
+#include "rt/McpTools.hpp"
 #include "rt/Runtime.hpp"
 #include "rt/Tools.hpp"
 #include "search/ProjectSearch.hpp"
@@ -790,6 +791,79 @@ TEST(generator_switch_without_code_calls_the_runtime_decision) {
     auto callPos = src2.find("decideCase(\"cond\"");
     auto callEnd = src2.find(");", callPos);
     CHECK(callPos != std::string::npos && src2.substr(callPos, callEnd - callPos).find("\"provider\"") == std::string::npos);   // regras nao usam modelo
+}
+
+// ---------------------------------------------------------------------------
+// MCP para agentes (ferramentas de servidores de .workspace/mcps)
+// ---------------------------------------------------------------------------
+static void setTestEnv(const char* k, const char* v) {
+#ifdef _WIN32
+    _putenv_s(k, v);
+#else
+    if (*v) setenv(k, v, 1); else unsetenv(k);
+#endif
+}
+
+TEST(mcp_toolbox_expands_env_references_and_names_tools) {
+    using taskforge::rt::McpToolbox;
+    setTestEnv("ARX_TEST_REF", "valor-ok");
+    CHECK(McpToolbox::expandEnv("a-${ARX_TEST_REF}-b") == "a-valor-ok-b");
+    CHECK(McpToolbox::expandEnv("sem referencia $ e ${ invalido") == "sem referencia $ e ${ invalido");
+    setTestEnv("ARX_TEST_UNSET2", "");
+    CHECK(McpToolbox::expandEnv("${ARX_TEST_UNSET2:-python}") == "python");           // padrao quando ausente
+    CHECK(McpToolbox::expandEnv("${ARX_TEST_REF:-python}") == "valor-ok");            // a variavel vence o padrao
+    setTestEnv("ARX_TEST_REF", "");
+    bool threw = false;
+    try { McpToolbox::expandEnv("${ARX_TEST_REF}"); } catch (const std::exception& e) {
+        threw = std::string(e.what()).find("ARX_TEST_REF") != std::string::npos;   // o erro diz QUAL variavel falta
+    }
+    CHECK(threw);
+
+    CHECK(McpToolbox::agentToolName("clientes", "lookup_customer") == "mcp__clientes__lookup_customer");
+    CHECK(McpToolbox::agentToolName("meu servidor", "a.b") == "mcp__meu_servidor__a_b");
+    std::string longName = McpToolbox::agentToolName(std::string(40, 's'), std::string(60, 't'));
+    CHECK(longName.size() <= 64 && longName.rfind("mcp__", 0) == 0);
+    CHECK(longName != McpToolbox::agentToolName(std::string(40, 's'), std::string(59, 't') + "u"));   // truncar nao pode colidir
+}
+
+TEST(mcp_toolbox_loads_project_servers_and_runs_tools) {
+    using taskforge::rt::McpToolbox;
+    const char* py = taskforge::platform::commandExists("python") ? "python" : (taskforge::platform::commandExists("python3") ? "python3" : nullptr);
+    if (!py) { std::cout << "  (python ausente: teste ignorado)" << std::endl; return; }
+
+    auto root = makeTempDir("mcptools");
+    fs::path script = fs::absolute(fs::path("CppCore") / "tests" / "e2e" / "fake_mcp_server.py");
+    setTestEnv("ARX_TEST_MCP_SCRIPT", script.string().c_str());
+    // a configuracao do projeto referencia a variavel; o caminho real nunca fica no arquivo
+    writeFile(root / ".workspace" / "mcps" / "eco.json",
+              std::string("{\"id\":\"eco\",\"name\":\"Eco\",\"transport\":\"stdio\",\"command\":\"") + py +
+              "\",\"args\":[\"${ARX_TEST_MCP_SCRIPT}\"],\"env\":{},\"isEnabled\":true}");
+    writeFile(root / ".workspace" / "mcps" / "off.json", R"({"id":"off","command":"python","isEnabled":false})");
+    writeFile(root / ".workspace" / "mcps" / "falta.json",
+              R"({"id":"falta","command":"python","args":["${ARX_TEST_DEFINITELY_UNSET}"]})");
+
+    McpToolbox box(root, {"eco"}, {});
+    CHECK(box.definitions().size() == 1);
+    CHECK(box.definitions()[0].name == "mcp__eco__echo");
+    CHECK(box.owns("mcp__eco__echo") && !box.owns("read"));
+    CHECK(box.definitions()[0].parameters["type"] == "object");
+    auto res = box.call("mcp__eco__echo", json{{"text", "ola"}});
+    CHECK(!res.isError && res.content == "eco: ola");
+    CHECK(box.call("mcp__eco__nao_existe", json::object()).isError);
+
+    McpToolbox filtered(root, {"eco"}, {"outra_ferramenta"});               // lista de permitidas sem a ferramenta
+    CHECK(filtered.definitions().empty());
+
+    auto fails = [&](const char* id) {
+        try { McpToolbox b(root, {id}, {}); } catch (const std::exception&) { return true; }
+        return false;
+    };
+    CHECK(fails("off"));            // desabilitado
+    CHECK(fails("falta"));          // variavel de ambiente ausente
+    CHECK(fails("inexistente"));    // servidor que o projeto nao tem
+    CHECK(fails("../fuga"));        // identificador invalido
+
+    fs::remove_all(root);
 }
 
 int main() {

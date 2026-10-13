@@ -254,6 +254,12 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
     if (codeMode.contains("allowedTools") && codeMode["allowedTools"].is_array()) tools = codeMode["allowedTools"];
     spec["tools"] = tools;
 
+    // Ferramentas MCP: servidores (ids em .workspace/mcps) e, opcionalmente, quais ferramentas deles sao permitidas.
+    json mcpSpec = json::object();
+    mcpSpec["servers"] = codeMode.contains("mcpServers") && codeMode["mcpServers"].is_array() ? codeMode["mcpServers"] : json::array();
+    mcpSpec["allowedTools"] = codeMode.contains("allowedMcpTools") && codeMode["allowedMcpTools"].is_array() ? codeMode["allowedMcpTools"] : json::array();
+    if (!mcpSpec["servers"].empty()) spec["mcp"] = mcpSpec;
+
     json sb = json::object();
     sb["isolationLevel"] = sandbox.value("isolationLevel", "container");
     sb["network"] = sandbox.value("network", "egress_llm_only");

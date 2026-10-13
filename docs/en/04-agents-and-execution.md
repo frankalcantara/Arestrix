@@ -22,7 +22,8 @@ arestrix-cli run graph.json --root <project>   # generate, compile and run
 An agent vertex runs a real **tool-use loop** against its configured provider:
 
 - The **skill** (`SKILL.md`) is the system prompt; the vertex prompt template is the task.
-- The model can call tools: `read`, `write`, `edit`, `bash`, `validate_svg`. All of them are confined
+- The model can call tools: `read`, `write`, `edit`, `bash`, `validate_svg`, plus the tools of the MCP servers the agent declares
+  (see [MCP servers](05-workspaces-memory-skills-mcp.md#mcp-servers)). The built-in ones are confined
   to the project folder.
 - The loop continues until the model stops calling tools. Skills can add more tools and MCP servers.
 

@@ -1,0 +1,651 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "projectId": "exemplo-triagem-suporte",
+    "graphName": "Triagem_de_Suporte",
+    "description": "Triagem de chamados com agentes, decisao por IA e por palavras, e um servidor MCP",
+    "targetStandard": "C++20",
+    "compilerConfig": {
+      "compiler": "msvc",
+      "cppStandard": "C++20",
+      "buildSystem": "cmake",
+      "taskflowIncludePath": "third_party/taskflow",
+      "outputBinaryName": "exemplo_triagem_suporte",
+      "enableOpenMP": false,
+      "enableCuda": false,
+      "extraFlags": []
+    },
+    "version": "1.0.0",
+    "globalDefaults": {
+      "model": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "skillPath": "",
+        "promptTemplate": ""
+      },
+      "sandbox": {
+        "isolationLevel": "host_direct",
+        "network": "egress_llm_only",
+        "maxMemoryMB": 512,
+        "timeoutSeconds": 180,
+        "readOnlyMounts": [],
+        "readWriteMounts": []
+      },
+      "codeMode": {
+        "allowedTools": [
+          "read",
+          "write"
+        ],
+        "customScripts": []
+      },
+      "memory": {
+        "enabled": false,
+        "persistent": false,
+        "readBlackboard": false,
+        "writeBlackboard": false,
+        "semanticLessons": false,
+        "recordLessons": false,
+        "allowedKeys": [],
+        "domains": []
+      }
+    }
+  },
+  "nodes": [
+    {
+      "id": "receber",
+      "label": "Receber_Chamado",
+      "type": "static",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "receber_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "receber_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "namespace fs = std::filesystem;\nfs::create_directories(\"workspace\");\nif (!fs::exists(\"workspace/ticket.txt\")) {\n    const char* pick = std::getenv(\"ARESTRIX_EXAMPLE_TICKET\");\n    std::string name = (pick && *pick) ? pick : \"chamado_normal.txt\";\n    if (name.find(\"..\") != std::string::npos || name.find('/') != std::string::npos || name.find('\\\\') != std::string::npos)\n        throw std::runtime_error(\"ARESTRIX_EXAMPLE_TICKET deve ser so o nome de um arquivo de samples/\");\n    fs::copy_file(\"samples/\" + name, \"workspace/ticket.txt\", fs::copy_options::overwrite_existing);\n}\nstd::cout << \"[Receber] chamado em workspace/ticket.txt\\n\";",
+      "requiredHeaders": [
+        "<filesystem>",
+        "<cstdlib>",
+        "<stdexcept>"
+      ]
+    },
+    {
+      "id": "leitor",
+      "label": "Agente_Leitor_de_Chamados",
+      "type": "agent",
+      "position": {
+        "x": 450,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "leitor_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "leitor_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/leitor.md"
+        },
+        "inheritCodeMode": false,
+        "inheritMemory": true,
+        "codeMode": {
+          "allowedTools": [
+            "read",
+            "write"
+          ],
+          "customScripts": [],
+          "mcpServers": [
+            "clientes"
+          ],
+          "allowedMcpTools": [
+            "lookup_customer"
+          ]
+        }
+      }
+    },
+    {
+      "id": "triagem",
+      "label": "Triagem_de_Urgencia",
+      "type": "switch",
+      "position": {
+        "x": 900,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "triagem_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "triagem_out_0",
+          "name": "urgente",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 0
+        },
+        {
+          "id": "triagem_out_1",
+          "name": "normal",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 1
+        },
+        {
+          "id": "triagem_out_2",
+          "name": "duvida",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 2
+        },
+        {
+          "id": "triagem_out_default",
+          "name": "revisao_humana",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 3
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": true,
+        "inheritCodeMode": true,
+        "inheritMemory": true
+      },
+      "switchSettings": {
+        "mode": "model",
+        "source": {
+          "kind": "previous"
+        },
+        "instruction": "Classifique o chamado do cliente. Escolha 'urgente' para servico fora do ar, perda de dinheiro, cobranca indevida ou risco legal; 'duvida' para perguntas simples sobre como usar o produto; 'normal' para os demais pedidos. Se nao for possivel decidir, escolha 'revisao_humana'.",
+        "rules": {}
+      }
+    },
+    {
+      "id": "escalonador",
+      "label": "Agente_Escalonador",
+      "type": "agent",
+      "position": {
+        "x": 1350,
+        "y": -430,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "escalonador_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "escalonador_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/escalonador.md"
+        },
+        "inheritCodeMode": false,
+        "inheritMemory": true,
+        "codeMode": {
+          "allowedTools": [
+            "read",
+            "write"
+          ],
+          "customScripts": [],
+          "mcpServers": [
+            "clientes"
+          ],
+          "allowedMcpTools": [
+            "registrar_escalonamento"
+          ]
+        }
+      }
+    },
+    {
+      "id": "entrega_urgente",
+      "label": "Entrega_Urgente",
+      "type": "static",
+      "position": {
+        "x": 1800,
+        "y": -430,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "entrega_urgente_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "entrega_urgente_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "std::cout << \"[Entrega] resposta pronta em workspace/resposta.md (caminho: urgente)\\n\";"
+    },
+    {
+      "id": "redator",
+      "label": "Agente_Redator",
+      "type": "agent",
+      "position": {
+        "x": 1350,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "redator_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "redator_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/redator.md"
+        },
+        "inheritCodeMode": false,
+        "inheritMemory": true,
+        "codeMode": {
+          "allowedTools": [
+            "read",
+            "write"
+          ],
+          "customScripts": []
+        }
+      }
+    },
+    {
+      "id": "revisor",
+      "label": "Agente_Revisor",
+      "type": "agent",
+      "position": {
+        "x": 1800,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "revisor_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "revisor_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/revisor.md"
+        },
+        "inheritCodeMode": false,
+        "inheritMemory": true,
+        "codeMode": {
+          "allowedTools": [
+            "read",
+            "write"
+          ],
+          "customScripts": []
+        }
+      }
+    },
+    {
+      "id": "qualidade",
+      "label": "Controle_de_Qualidade",
+      "type": "switch",
+      "position": {
+        "x": 2250,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "qualidade_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "qualidade_out_0",
+          "name": "ajustar",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 0
+        },
+        {
+          "id": "qualidade_out_1",
+          "name": "aprovado",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 1
+        },
+        {
+          "id": "qualidade_out_default",
+          "name": "revisao_humana",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 2
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": true,
+        "inheritCodeMode": true,
+        "inheritMemory": true
+      },
+      "switchSettings": {
+        "mode": "rules",
+        "source": {
+          "kind": "file",
+          "path": "workspace/revisao.txt"
+        },
+        "instruction": "",
+        "rules": {
+          "qualidade_out_0": "AJUSTAR, reprovado, corrigir",
+          "qualidade_out_1": "APROVADO"
+        }
+      }
+    },
+    {
+      "id": "entrega_normal",
+      "label": "Entrega_Normal",
+      "type": "static",
+      "position": {
+        "x": 2700,
+        "y": -90,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "entrega_normal_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "entrega_normal_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "std::cout << \"[Entrega] resposta pronta em workspace/resposta.md (caminho: normal)\\n\";"
+    },
+    {
+      "id": "faq",
+      "label": "Agente_FAQ",
+      "type": "agent",
+      "position": {
+        "x": 1350,
+        "y": 430,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "faq_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "faq_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/faq.md"
+        },
+        "inheritCodeMode": false,
+        "inheritMemory": true,
+        "codeMode": {
+          "allowedTools": [
+            "read",
+            "write"
+          ],
+          "customScripts": []
+        }
+      }
+    },
+    {
+      "id": "entrega_faq",
+      "label": "Entrega_FAQ",
+      "type": "static",
+      "position": {
+        "x": 1800,
+        "y": 430,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "entrega_faq_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "entrega_faq_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "std::cout << \"[Entrega] resposta pronta em workspace/resposta.md (caminho: duvida)\\n\";"
+    },
+    {
+      "id": "humano",
+      "label": "Revisao_Humana",
+      "type": "static",
+      "position": {
+        "x": 2700,
+        "y": 330,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "humano_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "humano_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "std::cout << \"[Humano] caso encaminhado para revisao humana. Leia workspace/ticket.txt e workspace/resumo.md.\\n\";"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_receber_0_to_leitor",
+      "sourceNodeId": "receber",
+      "sourcePortId": "receber_out_0",
+      "targetNodeId": "leitor",
+      "targetPortId": "leitor_in_0"
+    },
+    {
+      "id": "edge_leitor_0_to_triagem",
+      "sourceNodeId": "leitor",
+      "sourcePortId": "leitor_out_0",
+      "targetNodeId": "triagem",
+      "targetPortId": "triagem_in_0"
+    },
+    {
+      "id": "edge_triagem_0_to_escalonador",
+      "sourceNodeId": "triagem",
+      "sourcePortId": "triagem_out_0",
+      "targetNodeId": "escalonador",
+      "targetPortId": "escalonador_in_0"
+    },
+    {
+      "id": "edge_escalonador_0_to_entrega_urgente",
+      "sourceNodeId": "escalonador",
+      "sourcePortId": "escalonador_out_0",
+      "targetNodeId": "entrega_urgente",
+      "targetPortId": "entrega_urgente_in_0"
+    },
+    {
+      "id": "edge_triagem_1_to_redator",
+      "sourceNodeId": "triagem",
+      "sourcePortId": "triagem_out_1",
+      "targetNodeId": "redator",
+      "targetPortId": "redator_in_0"
+    },
+    {
+      "id": "edge_redator_0_to_revisor",
+      "sourceNodeId": "redator",
+      "sourcePortId": "redator_out_0",
+      "targetNodeId": "revisor",
+      "targetPortId": "revisor_in_0"
+    },
+    {
+      "id": "edge_revisor_0_to_qualidade",
+      "sourceNodeId": "revisor",
+      "sourcePortId": "revisor_out_0",
+      "targetNodeId": "qualidade",
+      "targetPortId": "qualidade_in_0"
+    },
+    {
+      "id": "edge_qualidade_0_to_redator",
+      "sourceNodeId": "qualidade",
+      "sourcePortId": "qualidade_out_0",
+      "targetNodeId": "redator",
+      "targetPortId": "redator_in_0",
+      "isFeedbackLoop": true
+    },
+    {
+      "id": "edge_qualidade_1_to_entrega_normal",
+      "sourceNodeId": "qualidade",
+      "sourcePortId": "qualidade_out_1",
+      "targetNodeId": "entrega_normal",
+      "targetPortId": "entrega_normal_in_0"
+    },
+    {
+      "id": "edge_triagem_2_to_faq",
+      "sourceNodeId": "triagem",
+      "sourcePortId": "triagem_out_2",
+      "targetNodeId": "faq",
+      "targetPortId": "faq_in_0"
+    },
+    {
+      "id": "edge_faq_0_to_entrega_faq",
+      "sourceNodeId": "faq",
+      "sourcePortId": "faq_out_0",
+      "targetNodeId": "entrega_faq",
+      "targetPortId": "entrega_faq_in_0"
+    },
+    {
+      "id": "edge_triagem_default_to_humano",
+      "sourceNodeId": "triagem",
+      "sourcePortId": "triagem_out_default",
+      "targetNodeId": "humano",
+      "targetPortId": "humano_in_0"
+    },
+    {
+      "id": "edge_qualidade_default_to_humano",
+      "sourceNodeId": "qualidade",
+      "sourcePortId": "qualidade_out_default",
+      "targetNodeId": "humano",
+      "targetPortId": "humano_in_0"
+    }
+  ]
+}

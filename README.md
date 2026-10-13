@@ -56,6 +56,7 @@ You need Git, Node.js 18+, Python 3.10+, CMake 3.20+ and a C++20 compiler. Detai
 | [Interface tour](docs/en/06-interface.md) | Ribbon, Backstage, canvas, inspector, modals, shortcuts. |
 | [Development](docs/en/07-development.md) | Tests, adding a language, third-party policy, conventions. |
 | [Brand](docs/en/08-brand.md) | Icon, colors, typography. |
+| [Examples](examples/README.md) | Three ready-to-run projects, from the tutorial to a multi-agent support triage with MCP, and how secrets stay out of Git. |
 
 A complete worked example: [`TUTORIAL_AGENTE_SVG_ARESTRIX.md`](TUTORIAL_AGENTE_SVG_ARESTRIX.md) (in Portuguese).
 

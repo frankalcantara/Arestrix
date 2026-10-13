@@ -1,0 +1,56 @@
+#pragma once
+
+// Ferramentas MCP (Model Context Protocol) para os agentes.
+//
+// Um agente declara no spec `"mcp": {"servers": ["id"...], "allowedTools": ["nome"...]}`. Os servidores sao
+// lidos de <workspace>/.workspace/mcps/*.json (um objeto ou uma lista de McpServerConfig); as ferramentas de
+// cada servidor viram ferramentas do agente com o nome  mcp__<servidor>__<ferramenta>.
+//
+// Segredos: o arquivo de configuracao NUNCA guarda valores secretos. `command`, `args`, `url` e os valores de
+// `env` aceitam referencias ${NOME_DA_VARIAVEL}, resolvidas das variaveis de ambiente do usuario na hora da
+// execucao. Variavel ausente = erro explicito (o agente nao roda sem a ferramenta, em vez de seguir as cegas).
+//
+// Servidores stdio rodam como processos do host (nao ficam dentro do sandbox do agente): so configure
+// servidores em que voce confia.
+
+#include <filesystem>
+#include <map>
+#include <string>
+#include <vector>
+
+#include "mcp/McpTypes.hpp"
+#include "rt/Tools.hpp"
+
+namespace taskforge {
+namespace rt {
+
+class McpToolbox {
+public:
+    // Carrega os servidores e descobre as ferramentas. Lanca std::runtime_error se um servidor nao existir,
+    // estiver desabilitado, referenciar variavel ausente ou nao responder.
+    McpToolbox(const std::filesystem::path& workspaceRoot, const std::vector<std::string>& serverIds,
+               const std::vector<std::string>& allowedTools);
+
+    const std::vector<ToolDef>& definitions() const { return defs_; }
+    bool owns(const std::string& toolName) const { return bindings_.count(toolName) > 0; }
+    ToolResult call(const std::string& toolName, const taskforge::Json& args) const;
+
+    // --- expostos para teste ---
+    // Troca ${NOME} pelo valor da variavel de ambiente; ${NOME:-padrao} usa o padrao se ela nao existir.
+    // Sem padrao e sem variavel, lanca std::runtime_error (o erro diz qual variavel falta).
+    static std::string expandEnv(const std::string& text);
+    // mcp__<servidor>__<ferramenta>, so [A-Za-z0-9_-], no maximo 64 caracteres.
+    static std::string agentToolName(const std::string& server, const std::string& tool);
+    static mcp::McpServerConfig loadServerConfig(const std::filesystem::path& workspaceRoot, const std::string& id);
+
+private:
+    struct Binding {
+        mcp::McpServerConfig config;
+        std::string tool;
+    };
+    std::vector<ToolDef> defs_;
+    std::map<std::string, Binding> bindings_;
+};
+
+} // namespace rt
+} // namespace taskforge
