@@ -798,7 +798,7 @@ export class OfficeRibbon {
       await this.projectManager.saveProject(this.graph);
 
       // 3. Salva também o grafo avulso e estado no localStorage
-      const graphJson = this.graph.toJSON();
+      const graphJson = this.graph.getRootSchema();
       const graphStr = JSON.stringify(graphJson, null, 2);
       if (typeof localStorage !== 'undefined') {
         try {

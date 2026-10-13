@@ -57,3 +57,25 @@ describe('Subflows Hierarquicos e Navegacao Aninhada', () => {
     expect(subflowSchemaNode?.childGraph?.nodes.some(n => n.label === 'Subagente_Especializado')).toBe(true);
   });
 });
+
+describe('Gravacao do pipeline dentro de um subfluxo', () => {
+  it('savePipeline grava o grafo raiz e nao apenas o subgrafo aberto', async () => {
+    const { ProjectManager } = await import('../src/core/ProjectManager.ts');
+    const { EventBus } = await import('../src/core/EventBus.ts');
+    const bus = new EventBus();
+    const graph = new Graph(bus);
+    graph.createNode('raiz_a', 'Vertice Raiz', 'static', 0, 0);
+    const sf = graph.createNode('sf_1', 'Cluster', 'subflow', 200, 0);
+    graph.diveIntoSubflow(sf.id);
+    expect(graph.isAtRoot()).toBe(false);
+
+    const pm = ProjectManager.getInstance(bus);
+    await pm.savePipeline(graph);
+    const stored = JSON.parse((pm as any).pipelineStorage.get(pm.getCurrentProject().projectId));
+    const ids = stored.nodes.map((n: any) => n.id);
+    expect(ids).toContain('raiz_a');
+    expect(ids).toContain('sf_1');
+    const cluster = stored.nodes.find((n: any) => n.id === 'sf_1');
+    expect(cluster.childGraph.nodes.length).toBeGreaterThan(0);
+  });
+});

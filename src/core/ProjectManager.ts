@@ -456,7 +456,9 @@ export class ProjectManager {
 
   public async savePipeline(graph: Graph): Promise<boolean> {
     try {
-      const schema = graph.toJSON();
+      // Sempre grava o grafo raiz com os subgrafos integrados: dentro de um subfluxo, toJSON() devolveria
+      // so o grafo filho e o autosave sobrescreveria o pipeline principal.
+      const schema = graph.getRootSchema();
       const jsonStr = JSON.stringify(schema, null, 2);
       this.pipelineStorage.set(this.currentProject.projectId, jsonStr);
       if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
@@ -557,7 +559,7 @@ export class ProjectManager {
   public exportArestrixBundle(graph: Graph): IArestrixBundle {
     const manifest = this.getCurrentProject();
     const pipelines: Record<string, any> = {
-      main: graph.toJSON()
+      main: graph.getRootSchema()
     };
 
     // Inclui pipelines em cache se houver outros
