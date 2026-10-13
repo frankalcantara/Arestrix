@@ -327,6 +327,125 @@ To protect users against untrusted tool execution, Arestrix includes an automate
 
 ---
 
+## 🌐 Internacionalização & Como Adicionar Novos Idiomas (i18n) / Internationalization
+
+O Arestrix Studio é uma aplicação 100% poliglota. Todos os títulos, menus da Ribbon, botões, modais, tooltips e mensagens são carregados dinamicamente através de catálogos de tradução JSON.
+
+A biblioteca [`i18next`](https://github.com/i18next/i18next) é gerenciada diretamente como um **submódulo Git** em `third_party/i18next`, permitindo verificação e atualização automática sem dependência de pacotes externos no `node_modules`.
+
+Idiomas nativos de fábrica:
+- **Português do Brasil (`pt-BR`)** (Padrão)
+- **English - United States (`en-US`)**
+
+---
+
+### 🛠️ Passo a Passo para Instalar e Adicionar um Novo Idioma
+
+Para adicionar um novo idioma (por exemplo, Espanhol `es-ES`, Francês `fr-FR` ou Alemão `de-DE`), siga as etapas abaixo:
+
+#### 1. Criar o Arquivo de Dicionário JSON
+Duplique um dos dicionários existentes em `src/i18n/locales/` com o código BCP-47 correspondente:
+```bash
+# Exemplo para Espanhol (Espanha / Internacional):
+cp src/i18n/locales/en-US.json src/i18n/locales/es-ES.json
+```
+Edite o novo arquivo `src/i18n/locales/es-ES.json` e traduza os valores das chaves mantendo a mesma estrutura hierárquica (chaves idênticas às de `pt-BR.json` e `en-US.json`).
+
+#### 2. Registrar o Novo Idioma em `src/i18n/types.ts`
+Adicione o novo código à união de tipos `SupportedLocale` e declare seus metadados na lista `SUPPORTED_LOCALES`:
+
+```typescript
+// src/i18n/types.ts
+export type SupportedLocale = 'pt-BR' | 'en-US' | 'es-ES';
+
+export const SUPPORTED_LOCALES: readonly ILocaleOption[] = [
+  {
+    code: 'pt-BR',
+    name: 'Português (Brasil)',
+    nativeName: 'Português do Brasil',
+    flag: '🇧🇷'
+  },
+  {
+    code: 'en-US',
+    name: 'English (US)',
+    nativeName: 'US English',
+    flag: '🇺🇸'
+  },
+  {
+    code: 'es-ES',
+    name: 'Español (España)',
+    nativeName: 'Español',
+    flag: '🇪🇸'
+  }
+];
+```
+
+#### 3. Importar e Registrar o Catálogo em `src/i18n/index.ts`
+Importe o arquivo JSON e inclua-o no objeto `resources` da inicialização do `i18next`:
+
+```typescript
+// src/i18n/index.ts
+import esES from './locales/es-ES.json';
+
+// No i18next.init:
+resources: {
+  'pt-BR': { translation: ptBR },
+  'en-US': { translation: enUS },
+  'es-ES': { translation: esES }
+}
+```
+
+Atualize também a validação de sanitização em `setLocale`:
+```typescript
+if (locale !== 'pt-BR' && locale !== 'en-US' && locale !== 'es-ES') {
+  locale = 'pt-BR';
+}
+```
+
+#### 4. Adicionar a Opção no Dropdown da Backstage View
+No arquivo `src/ui/ribbon/BackstageView.ts`, adicione a nova `<option>` dentro do elemento `<select id="backstage-language-select">`:
+
+```html
+<select id="backstage-language-select" class="backstage-language-dropdown">
+  <option value="pt-BR" ${currentLocale === 'pt-BR' ? 'selected' : ''}>BR Português (Brasil)</option>
+  <option value="en-US" ${currentLocale === 'en-US' ? 'selected' : ''}>US English (United States)</option>
+  <option value="es-ES" ${currentLocale === 'es-ES' ? 'selected' : ''}>ES Español (España)</option>
+</select>
+```
+
+#### 5. Executar os Testes Automatizados de Paridade
+O Arestrix possui testes unitários estritos no Vitest que verificam a consistência e paridade de todas as chaves entre idiomas:
+
+```powershell
+npm test
+```
+*Se alguma chave tiver sido esquecida ou nomeada incorretamente, o teste apontará a divergência imediatamente.*
+
+#### 6. Compilar e Sincronizar com o Binário C++ Desktop
+Execute a compilação de produção:
+
+```powershell
+npm run build
+```
+*O script compilará os assets via Vite e sincronizará automaticamente a pasta `dist/` com `CppCore/dist/`, tornando o novo idioma disponível imediatamente no executável desktop `arestrix.exe`.*
+
+---
+
+### 🔄 Gerenciamento do Submódulo `third_party/i18next`
+
+Para auditar ou atualizar o código da biblioteca oficial do `i18next`:
+
+```powershell
+# 1. Verificar se o repositório remoto do i18next possui novas atualizações (sem alterar arquivos)
+npm run submodule:check
+
+# 2. Atualizar o submódulo para a versão mais recente da branch remota master
+npm run submodule:update
+```
+
+---
+
 ## 📜 License
 
 MIT License. Designed and developed with passion and AI collaboration.
+
