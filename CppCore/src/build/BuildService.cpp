@@ -1,0 +1,300 @@
+#include "build/BuildService.hpp"
+
+#include <chrono>
+#include <cstring>
+#include <fstream>
+#include <sstream>
+
+#include "compiler/TaskflowGenerator.hpp"
+#include "platform/Process.hpp"
+#include "util/Json.hpp"
+
+namespace taskforge {
+namespace build {
+
+namespace fs = std::filesystem;
+
+namespace {
+
+const char* kTelemetryPrefix = "[NF_TELEMETRY:AGENT] ";
+
+uint64_t fnv1a(const std::string& s) {
+    uint64_t h = 1469598103934665603ull;
+    for (unsigned char c : s) { h ^= c; h *= 1099511628211ull; }
+    return h;
+}
+
+bool writeIfChanged(const fs::path& p, const std::string& content) {
+    std::error_code ec;
+    if (fs::exists(p, ec)) {
+        std::ifstream in(p, std::ios::binary);
+        std::string cur((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        if (cur == content) return false;
+    }
+    fs::create_directories(p.parent_path(), ec);
+    std::ofstream out(p, std::ios::binary | std::ios::trunc);
+    out << content;
+    return true;
+}
+
+#ifdef _WIN32
+std::string exeName(const std::string& base) { return base + ".exe"; }
+#else
+std::string exeName(const std::string& base) { return base; }
+#endif
+
+} // namespace
+
+// ---------------------------------------------------------------------------
+Toolchain detectToolchain() {
+    Toolchain tc;
+#ifdef _WIN32
+    const char* roots[] = {"ProgramFiles(x86)", "ProgramFiles"};
+    for (const char* envName : roots) {
+        std::string base = platform::getEnv(envName);
+        if (base.empty()) continue;
+        fs::path vswhere = fs::path(base) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe";
+        std::error_code ec;
+        if (!fs::exists(vswhere, ec)) continue;
+        platform::ProcessSpec spec;
+        spec.argv = {vswhere.string(), "-latest", "-products", "*", "-requires",
+                     "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath"};
+        auto r = platform::run(spec, 15000);
+        std::string vs = r.output;
+        while (!vs.empty() && (vs.back() == '\n' || vs.back() == '\r' || vs.back() == ' ')) vs.pop_back();
+        if (vs.empty()) continue;
+        fs::path vcvars = fs::path(vs) / "VC" / "Auxiliary" / "Build" / "vcvars64.bat";
+        if (fs::exists(vcvars, ec)) {
+            tc.kind = Toolchain::Kind::Msvc;
+            tc.vcvars = vcvars.string();
+            tc.description = "MSVC (" + vs + ")";
+            return tc;
+        }
+    }
+    if (platform::commandExists("cl")) {
+        tc.kind = Toolchain::Kind::Msvc;
+        tc.description = "MSVC (cl.exe ja no PATH)";
+        return tc;
+    }
+#else
+    if (platform::commandExists("g++")) {
+        tc.kind = Toolchain::Kind::Gcc;
+        tc.compiler = "g++";
+        tc.description = "GCC (g++)";
+    } else if (platform::commandExists("clang++")) {
+        tc.kind = Toolchain::Kind::Clang;
+        tc.compiler = "clang++";
+        tc.description = "Clang (clang++)";
+    }
+#endif
+    return tc;
+}
+
+RuntimeLayout locateRuntime() {
+    RuntimeLayout rt;
+    std::vector<fs::path> candidates;
+    std::string envHome = platform::getEnv("ARESTRIX_HOME");
+    if (!envHome.empty()) candidates.emplace_back(envHome);
+
+    std::vector<fs::path> starts;
+    fs::path exe = platform::executablePath();
+    if (!exe.empty()) starts.push_back(exe.parent_path());
+    std::error_code ec;
+    starts.push_back(fs::current_path(ec));
+    for (auto s : starts) {
+        for (int i = 0; i < 5 && !s.empty(); ++i) {
+            candidates.push_back(s);
+            s = s.parent_path();
+        }
+    }
+
+    for (const auto& c : candidates) {
+        if (fs::exists(c / "third_party" / "taskflow" / "taskflow" / "taskflow.hpp", ec) &&
+            fs::exists(c / "CppCore" / "src" / "rt" / "Runtime.hpp", ec)) {
+            rt.home = c;
+            break;
+        }
+    }
+    if (rt.home.empty()) {
+        rt.error = "Instalacao do Arestrix nao encontrada (defina ARESTRIX_HOME). Execute 'git submodule update --init' "
+                   "para obter third_party/taskflow e third_party/simdjson.";
+        return rt;
+    }
+
+    rt.taskflowInclude = rt.home / "third_party" / "taskflow";
+    rt.srcInclude = rt.home / "CppCore" / "src";
+    rt.simdjsonInclude = rt.home / "third_party" / "simdjson" / "singleheader";
+#ifdef _WIN32
+    rt.coreLib = rt.home / "runtime" / "lib" / "arestrix_core.lib";
+#else
+    rt.coreLib = rt.home / "runtime" / "lib" / "libarestrix_core.a";
+#endif
+    if (!fs::exists(rt.coreLib, ec)) {
+        rt.error = "Biblioteca do runtime nao encontrada: " + rt.coreLib.string() +
+                   ". Compile o Arestrix (cmake --build) para gerar arestrix_core.";
+        return rt;
+    }
+    rt.ok = true;
+    return rt;
+}
+
+// ---------------------------------------------------------------------------
+BuildResult buildAndRun(const core::Graph& graph,
+                        const fs::path& projectRoot,
+                        const BuildEvents& ev,
+                        const std::atomic<bool>* cancel) {
+    using Clock = std::chrono::steady_clock;
+    auto t0 = Clock::now();
+    BuildResult result;
+
+    auto log = [&](const std::string& line, bool isErr = false) { if (ev.onLog) ev.onLog(line, isErr); };
+    auto phase = [&](const std::string& p, const std::string& m) { if (ev.onPhase) ev.onPhase(p, m); };
+    auto finish = [&](bool ok, const std::string& stage, const std::string& error) {
+        result.success = ok;
+        result.stage = stage;
+        result.error = error;
+        result.elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - t0).count();
+        if (ev.onFinished) ev.onFinished(ok, result.exitCode, result.elapsedMs, error);
+        return result;
+    };
+
+    std::error_code ec;
+    if (projectRoot.empty() || !fs::is_directory(projectRoot, ec)) {
+        return finish(false, "generate", "Diretorio do projeto invalido: " + projectRoot.string());
+    }
+    if (graph.getNodes().empty()) {
+        return finish(false, "generate", "O grafo esta vazio.");
+    }
+
+    // 1. Ambiente: compilador + runtime
+    Toolchain tc = detectToolchain();
+    if (tc.kind == Toolchain::Kind::None) {
+#ifdef _WIN32
+        return finish(false, "toolchain", "Compilador C++20 nao encontrado. Instale o Visual Studio (ou Build Tools) com a carga 'Desenvolvimento para Desktop com C++'.");
+#else
+        return finish(false, "toolchain", "Compilador C++20 nao encontrado. Instale g++ (>= 11) ou clang++.");
+#endif
+    }
+    RuntimeLayout rt = locateRuntime();
+    if (!rt.ok) return finish(false, "toolchain", rt.error);
+
+    // 2. Gera o codigo
+    phase("compiling", "Gerando C++ Taskflow a partir do grafo (" + tc.description + ")...");
+    fs::path buildDir = projectRoot / ".arestrix" / "build";
+    fs::create_directories(buildDir, ec);
+    fs::create_directories(projectRoot / "workspace", ec);
+
+    std::string source = compiler::TaskflowGenerator::generateSource(graph);
+    for (const auto& [rel, content] : compiler::TaskflowGenerator::collectSkillAssets(graph)) {
+        writeIfChanged(projectRoot / rel, content);
+    }
+    writeIfChanged(buildDir / "main.cpp", source);
+
+    fs::path exePath = buildDir / exeName("pipeline_app");
+    fs::path hashFile = buildDir / "main.hash";
+    std::string hash = std::to_string(fnv1a(source)) + "|" + rt.coreLib.string() + "|" +
+                       std::to_string(fs::exists(rt.coreLib, ec) ? fs::last_write_time(rt.coreLib, ec).time_since_epoch().count() : 0);
+    bool upToDate = false;
+    if (fs::exists(exePath, ec) && fs::exists(hashFile, ec)) {
+        std::ifstream in(hashFile);
+        std::string prev((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        upToDate = (prev == hash);
+    }
+
+    // 3. Compila
+    if (upToDate) {
+        log("[BUILD] Codigo inalterado: reaproveitando o executavel compilado.");
+    } else {
+        fs::remove(hashFile, ec);
+        phase("compiling", "Compilando com " + tc.description + " (C++20, Taskflow)...");
+        platform::ProcessSpec spec;
+        spec.workingDir = buildDir;
+
+        if (tc.kind == Toolchain::Kind::Msvc) {
+            std::ostringstream cmd;
+            cmd << "chcp 65001 >nul && set VSLANG=1033 && ";
+            if (!tc.vcvars.empty()) cmd << "call \"" << tc.vcvars << "\" >nul && ";
+            cmd << "cl /nologo /std:c++20 /EHsc /O2 /MD /utf-8 /permissive- /Zc:__cplusplus /W3 "
+                << "/I\"" << rt.taskflowInclude.string() << "\" /I\"" << rt.srcInclude.string() << "\" "
+                << "/I\"" << rt.simdjsonInclude.string() << "\" "
+                << "main.cpp /Fe:\"" << exePath.filename().string() << "\" "
+                << "/link /nologo \"" << rt.coreLib.string() << "\" winhttp.lib advapi32.lib ole32.lib shell32.lib user32.lib";
+            spec.shellCommand = cmd.str();
+        } else {
+            spec.argv = {tc.compiler, "-std=c++20", "-O2", "-pthread",
+                         "-I" + rt.taskflowInclude.string(), "-I" + rt.srcInclude.string(),
+                         "-I" + rt.simdjsonInclude.string(),
+                         "main.cpp", rt.coreLib.string(), "-o", exePath.filename().string()};
+        }
+
+        auto cr = platform::run(spec, 15 * 60 * 1000, [&](const std::string& line) {
+            if (!line.empty()) log("[BUILD] " + line, line.find("error") != std::string::npos);
+        }, cancel);
+        if (cr.cancelled) return finish(false, "compile", "Compilacao cancelada.");
+        if (!cr.error.empty()) return finish(false, "compile", cr.error);
+        if (cr.exitCode != 0 || !fs::exists(exePath, ec)) {
+            result.exitCode = cr.exitCode;
+            return finish(false, "compile", "A compilacao falhou (codigo " + std::to_string(cr.exitCode) + "). Veja os erros acima.");
+        }
+        std::ofstream(hashFile, std::ios::trunc) << hash;
+        log("[BUILD] Compilacao concluida em " + std::to_string((int)cr.seconds) + " s.");
+    }
+
+    // 4. Executa
+    phase("running", "Executando o pipeline...");
+    platform::ProcessSpec runSpec;
+    runSpec.argv = {exePath.string()};
+    runSpec.workingDir = projectRoot;
+    auto rr = platform::run(runSpec, 0, [&](const std::string& line) {
+        if (line.rfind(kTelemetryPrefix, 0) == 0) {
+            if (ev.onTelemetry) ev.onTelemetry(line.substr(std::strlen(kTelemetryPrefix)));
+        } else if (!line.empty()) {
+            log(line, false);
+        }
+    }, cancel);
+    result.exitCode = rr.exitCode;
+    if (rr.cancelled) return finish(false, "run", "Execucao cancelada pelo usuario.");
+    if (!rr.error.empty()) return finish(false, "run", rr.error);
+    if (rr.exitCode != 0) return finish(false, "run", "O pipeline terminou com erro (codigo " + std::to_string(rr.exitCode) + ").");
+    return finish(true, "", "");
+}
+
+// ---------------------------------------------------------------------------
+BuildService& BuildService::instance() {
+    static BuildService svc;
+    return svc;
+}
+
+BuildService::~BuildService() {
+    cancel_ = true;
+    if (worker_.joinable()) worker_.join();
+}
+
+bool BuildService::start(const core::Graph& graph, const fs::path& projectRoot, BuildEvents events) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (running_.load()) return false;
+    if (worker_.joinable()) worker_.join();
+    cancel_ = false;
+    running_ = true;
+    worker_ = std::thread([this, graph, projectRoot, events]() {
+        try {
+            buildAndRun(graph, projectRoot, events, &cancel_);
+        } catch (const std::exception& ex) {
+            if (events.onFinished) events.onFinished(false, -1, 0, std::string("Erro interno: ") + ex.what());
+        }
+        running_ = false;
+    });
+    return true;
+}
+
+void BuildService::stop() {
+    cancel_ = true;
+}
+
+void BuildService::join() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (worker_.joinable()) worker_.join();
+}
+
+} // namespace build
+} // namespace taskforge
