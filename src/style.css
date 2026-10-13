@@ -2774,3 +2774,100 @@ body, html {
 }
 
 
+
+/* --- Menu de contexto dos vértices --- */
+.node-context-menu {
+  position: fixed;
+  z-index: 5000;
+  min-width: 230px;
+  padding: 4px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.22);
+  font-family: 'Segoe UI', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 12.5px;
+  text-shadow: none;
+}
+
+.node-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #1e293b;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.node-context-menu-item:hover:not(:disabled),
+.node-context-menu-item:focus-visible {
+  background: #e2e8f0;
+  outline: none;
+}
+
+.node-context-menu-item:disabled {
+  color: #94a3b8;
+  cursor: default;
+}
+
+.node-context-menu-item.danger { color: #b91c1c; }
+.node-context-menu-item.danger:hover:not(:disabled) { background: #fee2e2; }
+
+.node-context-menu-dot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.node-context-menu-label { flex: 1; }
+
+.node-context-menu-shortcut {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.node-context-menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: #e2e8f0;
+}
+
+/* --- Visualizador somente leitura do C++20 de um template --- */
+.template-code-viewer { z-index: 4500; }
+
+.template-code-viewer-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(760px, 92vw);
+  max-height: 80vh;
+}
+
+.template-code-viewer-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.template-code-viewer-header span { color: #64748b; font-size: 12px; }
+
+.template-code-viewer-body {
+  flex: 1;
+  margin: 0;
+  padding: 14px 16px;
+  overflow: auto;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.45;
+  user-select: text;
+}

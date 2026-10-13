@@ -1,6 +1,20 @@
-import { IAgentTemplate, ISerializedTemplatePlugin } from './AgentTemplateTypes.ts';
+import { IAgentTemplate, ISerializedTemplatePlugin, ITemplateParameterDef } from './AgentTemplateTypes.ts';
 import { BUILTIN_TEMPLATES } from './BuiltinTemplates.ts';
 import { INodeData, IPort } from '../types.ts';
+
+export type SaveNodeAsTemplateResult =
+  | { status: 'created'; template: IAgentTemplate }
+  | { status: 'duplicate'; existing: IAgentTemplate }
+  | { status: 'unsupported'; reason: string };
+
+function portSignature(ports: Array<{ name: string; type: string }>): string {
+  // Compara nome, tipo e ordem; instantiateNode não preserva dataType nas saídas
+  return JSON.stringify(ports.map(p => [p.name, p.type]));
+}
+
+function paramSignature(params: Record<string, unknown>): string {
+  return JSON.stringify(Object.keys(params).sort());
+}
 
 const STORAGE_KEY = 'arestrix_custom_agent_plugins';
 const LEGACY_STORAGE_KEY = 'taskforge_custom_agent_plugins';
@@ -144,6 +158,83 @@ export class AgentTemplateRegistry {
     }
 
     return nodeData;
+  }
+
+  /**
+   * Procura no catálogo um template equivalente ao vértice: mesmo tipo, mesmas portas,
+   * mesmos parâmetros e o mesmo corpo C++ que o template geraria para o vértice.
+   */
+  public findEquivalentTemplate(node: INodeData): IAgentTemplate | undefined {
+    const inSig = portSignature(node.inputs);
+    const outSig = portSignature(node.outputs);
+    const pSig = paramSignature(node.parameters);
+    for (const tpl of this.templates.values()) {
+      if (tpl.taskType !== node.type) continue;
+      if (portSignature(tpl.inputs) !== inSig || portSignature(tpl.outputs) !== outSig) continue;
+      if (paramSignature(tpl.parameters) !== pSig) continue;
+      try {
+        if (tpl.generateLambdaBody({ ...node.parameters }, node.label) === (node.customLambdaBody ?? '')) {
+          return tpl;
+        }
+      } catch {
+        // template incapaz de gerar corpo com estes parâmetros: não é equivalente
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Salva um vértice do grafo como template em "Plugins Customizados".
+   * Não inclui se já existir template equivalente no catálogo.
+   */
+  public saveNodeAsTemplate(node: INodeData): SaveNodeAsTemplateResult {
+    if (node.childGraph && node.childGraph.nodes?.length) {
+      return { status: 'unsupported', reason: 'Vértices com subgrafo interno ainda não podem virar template.' };
+    }
+    const existing = this.findEquivalentTemplate(node);
+    if (existing) return { status: 'duplicate', existing };
+
+    const lambda = node.customLambdaBody ?? '';
+    const bodyTemplate = node.label ? lambda.split(node.label).join('${label}') : lambda;
+
+    const parameters: Record<string, ITemplateParameterDef> = {};
+    Object.entries(node.parameters).forEach(([k, v]) => {
+      parameters[k] = {
+        label: k,
+        type: typeof v === 'number' ? 'number' : typeof v === 'boolean' ? 'boolean' : 'string',
+        defaultValue: v,
+        description: ''
+      };
+    });
+
+    let id: string;
+    do {
+      id = `custom_${node.type}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+    } while (this.templates.has(id));
+
+    const template: IAgentTemplate = {
+      id,
+      name: node.label,
+      category: 'Plugins Customizados',
+      icon: '🧩',
+      taskType: node.type,
+      description: `Template salvo a partir do vértice "${node.label}"`,
+      inputs: node.inputs.map(p => ({ name: p.name, type: p.type as 'flow' | 'data', dataType: p.dataType })),
+      outputs: node.outputs.map(p => ({
+        name: p.name,
+        type: p.type as 'flow' | 'data',
+        dataType: p.dataType,
+        conditionBranchIndex: p.conditionBranchIndex
+      })),
+      parameters,
+      requiredHeaders: node.requiredHeaders,
+      isCustomPlugin: true,
+      author: 'Usuário Arestrix',
+      version: '1.0.0',
+      generateLambdaBody: (_params, label) => bodyTemplate.split('${label}').join(label)
+    };
+    this.registerTemplate(template);
+    return { status: 'created', template };
   }
 
   /**

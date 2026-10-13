@@ -10,6 +10,9 @@
     "cancel": "Cancelar",
     "save": "Salvar",
     "close": "Fechar",
+    "save_template": "Salvar como template",
+    "template_saved": "Template \"{{name}}\" salvo em Plugins Customizados.",
+    "template_duplicate": "Já existe no catálogo um template equivalente: \"{{name}}\". Nada foi incluído.",
     "delete": "Excluir",
     "edit": "Editar",
     "apply": "Aplicar",
@@ -689,6 +692,17 @@
     "reset_tip": "Redefinir Zoom para 100%",
     "grid_tip": "Alternar Grade"
   },
+  "context_menu": {
+    "copy_suffix": "(cópia)",
+    "duplicate": "Duplicar",
+    "copy": "Copiar",
+    "cut": "Recortar",
+    "paste": "Colar",
+    "enter_subflow": "Entrar no subfluxo",
+    "disconnect": "Remover todas as conexões",
+    "disconnect_history": "Desconectar Vértice",
+    "delete": "Apagar"
+  },
   "actions": {
     "sandbox": {
       "label": "Sandbox & Isolamento",
@@ -739,7 +753,7 @@
     "footer_utf8": "UTF-8"
   },
   "template_modal": {
-    "title": "Biblioteca de Templates de Agentes & Plugins",
+    "title": "Biblioteca de Vértices",
     "subtitle": "Tarefas especializadas e componentes desacoplados para Taskflow C++20",
     "btn_preset": "⚡ Instanciar Arquitetura Completa de Agentes",
     "btn_preset_tip": "Cria um pipeline integrado com todos os 5 agentes conectados",
@@ -764,6 +778,8 @@
     "ports_count": "{{count}} porta(s)",
     "configs_count": "{{count}} config(s)",
     "none": "Nenhum",
+    "btn_copy_code": "Copiar",
+    "msg_copied": "Copiado!",
     "view_cpp": "👁️ Ver C++20",
     "hide_cpp": "✕ Ocultar C++20",
     "footer_hint": "💡 Os vértices instanciados herdam portas de dados, lambdas C++20 otimizados e suporte a histórico <strong>Desfazer (Ctrl+Z)</strong>."

@@ -144,6 +144,14 @@ export class SvgNodeView {
     this.bodyRect.addEventListener('pointerdown', onNodePointerDown);
     this.headerPath.addEventListener('pointerdown', onNodePointerDown);
 
+    // Menu de contexto (botão direito) do vértice
+    this.group.addEventListener('contextmenu', (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.tooltip.hide();
+      this.bus.emit('node:context-menu', { nodeId: this.nodeData.id, clientX: e.clientX, clientY: e.clientY });
+    });
+
     // 4. Tipografia do Header: Contraste Garantido WCAG 2.1
     this.buildHeaderTypography(typeTheme, headerHex);
 

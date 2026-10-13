@@ -10,6 +10,9 @@
     "cancel": "Cancel",
     "save": "Save",
     "close": "Close",
+    "save_template": "Save as template",
+    "template_saved": "Template \"{{name}}\" saved to Custom Plugins.",
+    "template_duplicate": "An equivalent template already exists in the catalog: \"{{name}}\". Nothing was added.",
     "delete": "Delete",
     "edit": "Edit",
     "apply": "Apply",
@@ -689,6 +692,17 @@
     "reset_tip": "Reset Zoom to 100%",
     "grid_tip": "Toggle Grid"
   },
+  "context_menu": {
+    "copy_suffix": "(copy)",
+    "duplicate": "Duplicate",
+    "copy": "Copy",
+    "cut": "Cut",
+    "paste": "Paste",
+    "enter_subflow": "Enter subflow",
+    "disconnect": "Remove all connections",
+    "disconnect_history": "Disconnect Node",
+    "delete": "Delete"
+  },
   "actions": {
     "sandbox": {
       "label": "Sandbox & Isolation",
@@ -739,7 +753,7 @@
     "footer_utf8": "UTF-8"
   },
   "template_modal": {
-    "title": "Agent Templates & Plugins Library",
+    "title": "Node Library",
     "subtitle": "Specialized tasks and decoupled components for C++20 Taskflow",
     "btn_preset": "⚡ Instantiate Full Agent Architecture",
     "btn_preset_tip": "Creates an integrated pipeline with all 5 connected agents",
@@ -764,6 +778,8 @@
     "ports_count": "{{count}} port(s)",
     "configs_count": "{{count}} config(s)",
     "none": "None",
+    "btn_copy_code": "Copy",
+    "msg_copied": "Copied!",
     "view_cpp": "👁️ View C++20",
     "hide_cpp": "✕ Hide C++20",
     "footer_hint": "💡 Instantiated vertices inherit data ports, optimized C++20 lambdas and <strong>Undo (Ctrl+Z)</strong> history support."

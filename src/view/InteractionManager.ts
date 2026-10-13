@@ -116,6 +116,11 @@ export class InteractionManager {
     });
 
     // Ponte de Eventos da Camada Vetorial SVG
+    globalEventBus.on('node:context-menu', ({ nodeId }: { nodeId: string }) => {
+      this.clearHover();
+      this.selectNode(nodeId);
+    });
+
     globalEventBus.on('node:start-drag', ({ nodeId, clientX, clientY }: any) => this.startDragNode(nodeId, clientX, clientY));
     globalEventBus.on('node:start-connecting', ({ nodeId, portId, clientX, clientY }: any) => this.startConnectingPort(nodeId, portId, clientX, clientY));
     globalEventBus.on('node:complete-connecting', ({ nodeId, portId }: any) => this.completeConnectingPort(nodeId, portId));

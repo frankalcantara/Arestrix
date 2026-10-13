@@ -156,3 +156,16 @@ describe('Fase 4: Catalogo de Templates de Agentes & Sistema de Plugins Dinamico
     });
   });
 });
+
+describe('Salvar vértice como template', () => {
+  it('inclui uma vez e rejeita vértice equivalente', async () => {
+    const { AgentTemplateRegistry } = await import('../src/core/templates/AgentTemplateRegistry.ts');
+    const reg = new AgentTemplateRegistry();
+    const node = reg.instantiateNode('cuda_kernel_agent', 'MeuKernel', 0, 0);
+    expect(reg.saveNodeAsTemplate(node).status).toBe('duplicate');
+
+    const custom = { ...node, label: 'Meu', customLambdaBody: '// custom\nstd::cout << "Meu";' };
+    expect(reg.saveNodeAsTemplate(custom).status).toBe('created');
+    expect(reg.saveNodeAsTemplate({ ...custom, id: 'outro' }).status).toBe('duplicate');
+  });
+});

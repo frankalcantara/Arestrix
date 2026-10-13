@@ -19,6 +19,7 @@ import { GitHubReposModal } from './ui/modals/GitHubReposModal.ts';
 import { ProjectManager } from './core/ProjectManager.ts';
 import { StatusBar } from './ui/StatusBar.ts';
 import { CanvasControls } from './ui/CanvasControls.ts';
+import { NodeContextMenu } from './ui/NodeContextMenu.ts';
 import { PipelineRunner } from './core/PipelineRunner.ts';
 
 function bootstrap() {
@@ -83,6 +84,9 @@ function bootstrap() {
   const nodeSkillsModal = new NodeSkillsModal(graph, globalEventBus);
   const skillEditorModal = new SkillEditorModal(graph);
   const gitHubReposModal = new GitHubReposModal(globalEventBus);
+
+  // Menu de contexto (botao direito) dos vertices
+  new NodeContextMenu(graph, globalEventBus);
 
   // Escuta eventos dos botoes de acao rapida nos nós e no inspetor
   globalEventBus.on('node:open-sandbox-modal', (nodeId: string) => nodeSandboxModal.open(nodeId));

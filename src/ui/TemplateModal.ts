@@ -172,12 +172,8 @@ export class TemplateModal {
           </div>
         </div>
 
-        <div class="template-code-preview hidden" id="preview-${tpl.id}">
-          <pre class="code-font">${this.escapeHtml(tpl.generateLambdaBody(this.getDefaultParams(tpl), tpl.name))}</pre>
-        </div>
-
         <div class="template-card-footer">
-          <button class="btn-toggle-code" data-preview-id="preview-${tpl.id}">
+          <button class="btn-toggle-code" data-code-id="${tpl.id}">
             ${t('template_modal.view_cpp')}
           </button>
           <button class="btn btn-primary btn-insert-node" data-insert-id="${tpl.id}">
@@ -188,6 +184,48 @@ export class TemplateModal {
     `;
   }
 
+
+  private showCodePreview(tpl: IAgentTemplate): void {
+    let code: string;
+    try {
+      code = tpl.generateLambdaBody(this.getDefaultParams(tpl), tpl.name);
+    } catch (err: any) {
+      code = `// ${err?.message ?? err}`;
+    }
+
+    const layer = document.createElement('div');
+    layer.className = 'modal-overlay template-code-viewer';
+    layer.innerHTML = `
+      <div class="modal-dialog template-code-viewer-dialog">
+        <div class="template-code-viewer-header">
+          <strong>${this.escapeHtml(tpl.name)}</strong>
+          <span>C++20</span>
+        </div>
+        <pre class="code-font template-code-viewer-body">${this.escapeHtml(code)}</pre>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-act="copy">${t('template_modal.btn_copy_code', 'Copiar')}</button>
+          <button class="btn btn-primary" data-act="close">${t('code_modal.btn_close')}</button>
+        </div>
+      </div>
+    `;
+    const close = () => { layer.remove(); document.removeEventListener('keydown', onKey, true); };
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') { ev.stopPropagation(); close(); }
+    };
+    document.addEventListener('keydown', onKey, true);
+    layer.addEventListener('click', (ev) => { if (ev.target === layer) close(); });
+    layer.querySelector('[data-act="close"]')?.addEventListener('click', close);
+    layer.querySelector('[data-act="copy"]')?.addEventListener('click', async (ev) => {
+      const btn = ev.currentTarget as HTMLElement;
+      try {
+        await navigator.clipboard.writeText(code);
+        btn.textContent = t('template_modal.msg_copied', 'Copiado!');
+      } catch {
+        // sem permissão de área de transferência: o texto continua selecionável
+      }
+    });
+    document.body.appendChild(layer);
+  }
 
   private getDefaultParams(tpl: IAgentTemplate): Record<string, any> {
     const res: Record<string, any> = {};
@@ -227,18 +265,12 @@ export class TemplateModal {
       });
     });
 
-    // Toggle Preview de Código
+    // Ver o C++20 do template em janela somente leitura
     this.overlay.querySelectorAll('.btn-toggle-code').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const targetId = (e.currentTarget as HTMLElement).getAttribute('data-preview-id');
-        if (targetId) {
-          const previewEl = this.overlay.querySelector(`#${targetId}`);
-          if (previewEl) {
-            previewEl.classList.toggle('hidden');
-            const isHidden = previewEl.classList.contains('hidden');
-            (e.currentTarget as HTMLElement).textContent = isHidden ? t('template_modal.view_cpp') : t('template_modal.hide_cpp');
-          }
-        }
+        const tplId = (e.currentTarget as HTMLElement).getAttribute('data-code-id');
+        const tpl = tplId ? this.registry.getTemplate(tplId) : undefined;
+        if (tpl) this.showCodePreview(tpl);
       });
     });
 
