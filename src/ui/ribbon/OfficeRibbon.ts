@@ -111,7 +111,7 @@ export class OfficeRibbon {
   }
 
   private render(): void {
-    const projectName = this.graph.getMetadata().graphName || 'Workspace Padrão';
+    const projectName = this.graph.getMetadata().graphName || t('ribbon.titlebar.default_workspace');
 
     this.container.innerHTML = `
       <!-- 1. BARRA DE TITULO / QUICK ACCESS TOOLBAR (QAT) -->
@@ -220,82 +220,82 @@ export class OfficeRibbon {
           <div class="office-ribbon-group-tools">
             <div class="ribbon-col-stack">
               <button class="ribbon-btn-small" id="ribbon-btn-undo" disabled>
-                <span class="ribbon-sm-icon">↶</span> Desfazer
+                <span class="ribbon-sm-icon">↶</span> ${t('ribbon.panes.undo')}
               </button>
               <button class="ribbon-btn-small" id="ribbon-btn-redo" disabled>
-                <span class="ribbon-sm-icon">↷</span> Refazer
+                <span class="ribbon-sm-icon">↷</span> ${t('ribbon.panes.redo')}
               </button>
             </div>
             <div class="ribbon-col-stack">
               <button class="ribbon-btn-small" id="ribbon-btn-zoom-fit">
-                <span class="ribbon-sm-icon">🎯</span> Ajustar Vista
+                <span class="ribbon-sm-icon">🎯</span> ${t('ribbon.panes.zoom_fit')}
               </button>
               <button class="ribbon-btn-small" id="ribbon-btn-clear" style="color: #ef4444;">
-                <span class="ribbon-sm-icon">🗑️</span> Limpar Grafo
+                <span class="ribbon-sm-icon">🗑️</span> ${t('ribbon.panes.clear_graph')}
               </button>
             </div>
           </div>
-          <div class="office-ribbon-group-title">Edição & Visão</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.edit_view')}</div>
         </div>
 
         <!-- Grupo Criação Rápida -->
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
-            <button class="ribbon-btn-large" id="ribbon-btn-quick-agent" title="Adicionar Agente Code Mode">
+            <button class="ribbon-btn-large" id="ribbon-btn-quick-agent" title="${t('ribbon.panes.quick_agent_tip')}">
               <span class="ribbon-btn-icon">🤖</span>
-              <span class="ribbon-btn-label">+ Agente IA</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.quick_agent')}</span>
             </button>
-            <button class="ribbon-btn-large" id="ribbon-btn-quick-task" title="Adicionar Tarefa C++ Estática">
+            <button class="ribbon-btn-large" id="ribbon-btn-quick-task" title="${t('ribbon.panes.quick_task_tip')}">
               <span class="ribbon-btn-icon">⚡</span>
-              <span class="ribbon-btn-label">+ Tarefa</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.quick_task')}</span>
             </button>
             <div class="ribbon-col-stack">
-              <select id="ribbon-select-add-node" class="ribbon-select" title="Adicionar vértice específico">
-                <option value="" disabled selected>+ Mais Vértices...</option>
-                <option value="static">Estático (Task)</option>
-                <option value="condition">Condição (Branch)</option>
-                <option value="subflow">Subflow (Aninhado)</option>
-                <option value="module">Módulo</option>
-                <option value="critical">Crítico (Mutex)</option>
-                <option value="agent">Agente (Code Mode)</option>
-                <option value="cuda">CUDA (Kernel GPU)</option>
+              <select id="ribbon-select-add-node" class="ribbon-select" title="${t('ribbon.buttons.static_node_tip')}">
+                <option value="" disabled selected>${t('ribbon.panes.more_vertices')}</option>
+                <option value="static">${t('ribbon.nodes.static')}</option>
+                <option value="condition">${t('ribbon.nodes.condition')}</option>
+                <option value="subflow">${t('ribbon.nodes.subflow')}</option>
+                <option value="module">${t('ribbon.nodes.module')}</option>
+                <option value="critical">${t('ribbon.nodes.critical')}</option>
+                <option value="agent">${t('ribbon.nodes.agent')}</option>
+                <option value="cuda">${t('ribbon.nodes.cuda')}</option>
               </select>
               <button class="ribbon-btn-small" id="ribbon-btn-quick-templates">
-                <span class="ribbon-sm-icon">🧩</span> Catálogo
+                <span class="ribbon-sm-icon">🧩</span> ${t('ribbon.panes.catalog')}
               </button>
             </div>
           </div>
-          <div class="office-ribbon-group-title">Vértices do Grafo</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.graph_vertices')}</div>
         </div>
 
         <!-- Grupo Execução Primária -->
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
-            <button class="ribbon-btn-large primary-action" id="ribbon-btn-run" title="Compila e executa com MSVC C++20 (F5)">
+            <button class="ribbon-btn-large primary-action" id="ribbon-btn-run" title="${t('ribbon.panes.build_run_tip')}">
               <span class="ribbon-btn-icon">▶</span>
-              <span class="ribbon-btn-label">Build & Run<br>(F5)</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.build_run')}</span>
             </button>
-            <button class="ribbon-btn-large" id="ribbon-btn-validate" title="Valida estrutura e ciclos do grafo">
+            <button class="ribbon-btn-large" id="ribbon-btn-validate" title="${t('ribbon.panes.validate_dag_tip')}">
               <span class="ribbon-btn-icon">🔍</span>
-              <span class="ribbon-btn-label">Validar<br>DAG</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.validate_dag')}</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Execução</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.execution')}</div>
         </div>
 
         <!-- Grupo Governança & Workspace -->
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
-            <button class="ribbon-btn-large" id="ribbon-btn-pipeline-defaults" title="Padrões globais de modelo, sandbox e tools">
+            <button class="ribbon-btn-large" id="ribbon-btn-pipeline-defaults" title="${t('ribbon.panes.global_defaults_tip')}">
               <span class="ribbon-btn-icon">⚙️</span>
-              <span class="ribbon-btn-label">Padrões<br>Globais</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.global_defaults')}</span>
             </button>
-            <button class="ribbon-btn-large" id="ribbon-btn-project-hub" title="Gerenciador de Workspaces (Fase 14)">
+            <button class="ribbon-btn-large" id="ribbon-btn-project-hub" title="${t('ribbon.panes.project_hub_tip')}">
               <span class="ribbon-btn-icon">📁</span>
-              <span class="ribbon-btn-label">Hub de<br>Projetos</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.project_hub')}</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Governança</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.governance')}</div>
         </div>
       </div>
 
@@ -305,50 +305,50 @@ export class OfficeRibbon {
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" data-add="static">
               <span class="ribbon-btn-icon">⏹️</span>
-              <span class="ribbon-btn-label">Tarefa<br>Estática</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.static_task')}</span>
             </button>
             <button class="ribbon-btn-large" data-add="condition">
               <span class="ribbon-btn-icon">🔀</span>
-              <span class="ribbon-btn-label">Condição<br>(Branch)</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.condition_branch')}</span>
             </button>
             <button class="ribbon-btn-large" data-add="subflow">
               <span class="ribbon-btn-icon">🔄</span>
-              <span class="ribbon-btn-label">Subflow<br>Aninhado</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.subflow_nested')}</span>
             </button>
             <button class="ribbon-btn-large" data-add="module">
               <span class="ribbon-btn-icon">📦</span>
-              <span class="ribbon-btn-label">Módulo<br>Encapsulado</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.module_encapsulated')}</span>
             </button>
             <button class="ribbon-btn-large" data-add="critical">
               <span class="ribbon-btn-icon">🔒</span>
-              <span class="ribbon-btn-label">Seção<br>Crítica</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.critical_section')}</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Fluxo & Concorrência</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.flow_concurrency')}</div>
         </div>
 
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" data-add="cuda" style="border-color: #14b8a6;">
               <span class="ribbon-btn-icon">⚡</span>
-              <span class="ribbon-btn-label">Kernel CUDA<br>(GPU)</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.cuda_kernel')}</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Aceleração GPU</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.gpu_accel')}</div>
         </div>
 
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" data-add="agent">
               <span class="ribbon-btn-icon">🤖</span>
-              <span class="ribbon-btn-label">Agente Code<br>Mode</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.agent_code_mode')}</span>
             </button>
             <button class="ribbon-btn-large" id="ribbon-btn-insert-templates">
               <span class="ribbon-btn-icon">🧩</span>
-              <span class="ribbon-btn-label">Modelos de<br>Agentes</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.agent_templates')}</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Agentes Cognitivos</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.cognitive_agents')}</div>
         </div>
       </div>
 
@@ -358,38 +358,38 @@ export class OfficeRibbon {
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-tools-defaults">
               <span class="ribbon-btn-icon">🛡️</span>
-              <span class="ribbon-btn-label">Sandboxes &<br>Isolamento</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.sandboxes_iso')}</span>
             </button>
             <button class="ribbon-btn-large" id="ribbon-btn-tools-code">
               <span class="ribbon-btn-icon">🔧</span>
-              <span class="ribbon-btn-label">Ferramentas<br>Code Mode</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.tools_code_mode')}</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Segurança (Workspace)</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.sec_workspace')}</div>
         </div>
 
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-mcp-mgr">
               <span class="ribbon-btn-icon">🔌</span>
-              <span class="ribbon-btn-label">Servidores<br>MCP</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.servers_mcp')}</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Servidores (Workspace)</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.servers_workspace')}</div>
         </div>
 
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-open-templates-tab">
               <span class="ribbon-btn-icon">📚</span>
-              <span class="ribbon-btn-label">Biblioteca de<br>Templates</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.template_library')}</span>
             </button>
-            <button class="ribbon-btn-large" id="ribbon-btn-github-repos" title="Gerenciar repositórios open source globais do GitHub para o catálogo de Skills">
+            <button class="ribbon-btn-large" id="ribbon-btn-github-repos" title="${t('ribbon.panes.github_repos_tip')}">
               <span class="ribbon-btn-icon">🌐</span>
-              <span class="ribbon-btn-label">Repositórios<br>GitHub</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.github_repos')}</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Catálogo Global (Studio)</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.global_cat_studio')}</div>
         </div>
       </div>
 
@@ -399,43 +399,43 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <!-- PI.AI DESTACADO COMO PRIORIDADE DE TESTES DO USUARIO -->
-            <button class="ribbon-btn-large highlight-pi" id="ribbon-btn-import-pi" title="Importar conversas, raciocínio e persona do Pi (Inflection AI) - Prioridade 1 para testes!">
-              <span class="ribbon-pill-tag">TESTES</span>
+            <button class="ribbon-btn-large highlight-pi" id="ribbon-btn-import-pi" title="${t('ribbon.panes.import_pi_tip')}">
+              <span class="ribbon-pill-tag">${t('ribbon.panes.pill_tests')}</span>
               <span class="ribbon-btn-icon" style="color: #0d9488; font-weight: 800;">π</span>
-              <span class="ribbon-btn-label" style="font-weight: 800; color: #0f766e;">Importar do<br>Pi (Pi.ai)</span>
+              <span class="ribbon-btn-label" style="font-weight: 800; color: #0f766e;">${t('ribbon.panes.import_pi_btn')}</span>
             </button>
 
             <!-- CLAUDE -->
-            <button class="ribbon-btn-large" id="ribbon-btn-import-claude" title="Importar do Anthropic Claude (Sonnet / Opus)">
+            <button class="ribbon-btn-large" id="ribbon-btn-import-claude" title="${t('ribbon.panes.import_claude_tip')}">
               <span class="ribbon-btn-icon" style="color: #8b5cf6;">⚡</span>
-              <span class="ribbon-btn-label">Importar do<br>Claude</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.import_claude_btn')}</span>
             </button>
 
             <!-- OPENAI -->
-            <button class="ribbon-btn-large" id="ribbon-btn-import-openai" title="Importar do OpenAI (ChatGPT / Assistants API)">
+            <button class="ribbon-btn-large" id="ribbon-btn-import-openai" title="${t('ribbon.panes.import_openai_tip')}">
               <span class="ribbon-btn-icon" style="color: #10a37f;">🟢</span>
-              <span class="ribbon-btn-label">Importar da<br>OpenAI</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.import_openai_btn')}</span>
             </button>
 
             <!-- HERMES -->
-            <button class="ribbon-btn-large" id="ribbon-btn-import-hermes" title="Importar do Nous Research Hermes">
+            <button class="ribbon-btn-large" id="ribbon-btn-import-hermes" title="${t('ribbon.panes.import_hermes_tip')}">
               <span class="ribbon-btn-icon" style="color: #ec4899;">🔮</span>
-              <span class="ribbon-btn-label">Importar do<br>Hermes</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.import_hermes_btn')}</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Assistentes & LLMs</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.assistants_llms')}</div>
         </div>
 
         <!-- Grupo Dados Corporativos & Excel -->
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
-            <button class="ribbon-btn-large" id="ribbon-btn-import-excel" title="Converter planilhas complexas em Bancos de Dados e Redes de Agentes (Fase 20)">
-              <span class="ribbon-pill-tag tag-blue">MODERNO</span>
+            <button class="ribbon-btn-large" id="ribbon-btn-import-excel" title="${t('ribbon.panes.import_excel_tip')}">
+              <span class="ribbon-pill-tag tag-blue">${t('ribbon.panes.pill_modern')}</span>
               <span class="ribbon-btn-icon" style="color: #16a34a;">📊</span>
-              <span class="ribbon-btn-label" style="font-weight: 800; color: #15803d;">Importar do<br>Excel (.xlsx)</span>
+              <span class="ribbon-btn-label" style="font-weight: 800; color: #15803d;">${t('ribbon.panes.import_excel_btn')}</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Dados & Planilhas</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.data_spreadsheets')}</div>
         </div>
 
         <!-- Grupo Protocolo MCP -->
@@ -443,10 +443,10 @@ export class OfficeRibbon {
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-mcp-conn">
               <span class="ribbon-btn-icon">🔌</span>
-              <span class="ribbon-btn-label">Conectores<br>MCP</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.mcp_connectors')}</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Protocolo Aberto</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.open_protocol')}</div>
         </div>
       </div>
 
@@ -456,28 +456,28 @@ export class OfficeRibbon {
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-memory-hub">
               <span class="ribbon-btn-icon">💾</span>
-              <span class="ribbon-btn-label">Painel de<br>Memória</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.memory_hub')}</span>
             </button>
             <div class="ribbon-col-stack">
               <button class="ribbon-btn-small" id="ribbon-btn-mem-blackboard">
-                <span class="ribbon-sm-icon">📋</span> Blackboard
+                <span class="ribbon-sm-icon">📋</span> ${t('ribbon.panes.blackboard')}
               </button>
               <button class="ribbon-btn-small" id="ribbon-btn-mem-lessons">
-                <span class="ribbon-sm-icon">🧠</span> Lições Aprendidas
+                <span class="ribbon-sm-icon">🧠</span> ${t('ribbon.panes.lessons_learned')}
               </button>
             </div>
           </div>
-          <div class="office-ribbon-group-title">Memória do Projeto</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.proj_memory_grp')}</div>
         </div>
 
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-sqlite-db">
               <span class="ribbon-btn-icon">🗄️</span>
-              <span class="ribbon-btn-label">Banco SQLite<br>(Workspace)</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.sqlite_db')}</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Armazenamento do Workspace</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.workspace_storage')}</div>
         </div>
       </div>
 
@@ -487,38 +487,38 @@ export class OfficeRibbon {
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large primary-action" id="ribbon-btn-run-tab">
               <span class="ribbon-btn-icon">▶</span>
-              <span class="ribbon-btn-label">Compilar &<br>Rodar (F5)</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.compile_run')}</span>
             </button>
             <button class="ribbon-btn-large" id="ribbon-btn-batch-modal">
               <span class="ribbon-btn-icon">📦</span>
-              <span class="ribbon-btn-label">Lote & Resume<br>Engine</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.batch_resume')}</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Motor Taskflow C++20</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.taskflow_engine')}</div>
         </div>
 
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-export-code-tab">
               <span class="ribbon-btn-icon">⚙️</span>
-              <span class="ribbon-btn-label">Exportar<br>Código C++</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.export_code')}</span>
             </button>
             <button class="ribbon-btn-large" id="ribbon-btn-export-svg-tab">
               <span class="ribbon-btn-icon">🖼️</span>
-              <span class="ribbon-btn-label">Exportar<br>SVG (Graphviz)</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.export_svg')}</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Exportação</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.export_grp')}</div>
         </div>
 
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-load-demo-tab">
               <span class="ribbon-btn-icon">💡</span>
-              <span class="ribbon-btn-label">Carregar Demo<br>Concorrente</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.load_demo')}</span>
             </button>
           </div>
-          <div class="office-ribbon-group-title">Exemplos</div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.examples_grp')}</div>
         </div>
       </div>
     `;
@@ -595,7 +595,7 @@ export class OfficeRibbon {
         } else if (val.includes('github') || val.includes('repo') || val.includes('repositório') || val.includes('skill')) {
           globalEventBus.emit('modal:open-github-repos');
         } else {
-          if (typeof alert !== 'undefined') alert(`Comando "${tellMeInput.value}" localizado! Abrindo opções correspondentes.`);
+          if (typeof alert !== 'undefined') alert(t('ribbon.alerts.cmd_found', { cmd: tellMeInput.value }));
           this.switchTab('connectors');
         }
         tellMeInput.value = '';
@@ -607,7 +607,7 @@ export class OfficeRibbon {
     this.container.querySelector('#ribbon-btn-redo')?.addEventListener('click', () => this.graph.redo());
     this.container.querySelector('#ribbon-btn-zoom-fit')?.addEventListener('click', () => this.viewport.zoomToFit());
     this.container.querySelector('#ribbon-btn-clear')?.addEventListener('click', () => {
-      if (confirm('Deseja realmente limpar todo o fluxo de vértices?')) {
+      if (confirm(t('ribbon.alerts.clear_confirm'))) {
         this.graph.clear();
       }
     });
@@ -832,26 +832,26 @@ export class OfficeRibbon {
     if (!this.isAutoSaveEnabled) {
       badge.textContent = '○';
       badge.className = 'office-autosave-badge disabled';
-      badge.title = 'Salvamento automático desativado';
-      label.textContent = 'Salvamento Automático';
+      badge.title = t('ribbon.titlebar.autosave_disabled_badge');
+      label.textContent = t('ribbon.titlebar.autosave');
       return;
     }
 
     if (state === 'saving') {
       badge.textContent = '⏳';
       badge.className = 'office-autosave-badge saving';
-      badge.title = 'Salvando alterações...';
-      label.textContent = 'Salvando...';
+      badge.title = t('ribbon.titlebar.autosave_saving_badge');
+      label.textContent = t('ribbon.titlebar.autosave_saving_label');
     } else if (state === 'saved') {
       badge.textContent = '✓';
       badge.className = 'office-autosave-badge saved';
-      badge.title = 'Todas as alterações foram salvas';
-      label.textContent = 'Salvamento Automático';
+      badge.title = t('ribbon.titlebar.autosave_saved_badge');
+      label.textContent = t('ribbon.titlebar.autosave');
     } else if (state === 'error') {
       badge.textContent = '⚠️';
       badge.className = 'office-autosave-badge error';
-      badge.title = 'Erro ao salvar alterações';
-      label.textContent = 'Falha ao salvar';
+      badge.title = t('ribbon.titlebar.autosave_error_badge');
+      label.textContent = t('ribbon.titlebar.autosave_error_label');
     }
   }
 
@@ -862,10 +862,10 @@ export class OfficeRibbon {
   public validateGraph(): void {
     const res = GraphValidator.validate(this.graph);
     if (res.isValid) {
-      if (typeof alert !== 'undefined') alert('✅ Grafo 100% Válido!\nTodas as dependências e sentinelas de condição do Taskflow estão corretas.');
+      if (typeof alert !== 'undefined') alert(t('ribbon.alerts.graph_valid'));
     } else {
       const msg = res.errors.map(err => `[${err.severity.toUpperCase()}] ${err.message}`).join('\n\n');
-      if (typeof alert !== 'undefined') alert(`⚠️ Relatório de Validação:\n\n${msg}`);
+      if (typeof alert !== 'undefined') alert(t('ribbon.alerts.validation_report', { msg }));
     }
   }
 

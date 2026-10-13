@@ -1,6 +1,7 @@
 import { Graph } from '../../core/Graph.ts';
 import { IBatchPipelineConfig, IPipelineCheckpointState, INodeData } from '../../core/types.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
+import { t } from '../../i18n/index.ts';
 
 declare global {
   interface Window {
@@ -99,8 +100,8 @@ export class BatchPipelineModal {
     });
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Orquestrador em Lote & Resume Engine',
-      subtitle: `📦 Projeto: <strong>${this.escapeHtml(this.graph.getProjectId())}</strong> | Execução em lote e auto-recuperação no 🛠️ Workspace`,
+      title: t('batch_pipeline.title'),
+      subtitle: t('batch_pipeline.subtitle', { projectId: this.escapeHtml(this.graph.getProjectId()) }),
       icon: '📦',
       closeBtnId: 'btn-close-batch-modal'
     });
@@ -114,36 +115,36 @@ export class BatchPipelineModal {
             <div class="section-card-header">
               <span class="section-card-icon">📋</span>
               <div class="section-card-titles">
-                <h3 class="section-card-title">Parâmetros do Lote de Execução</h3>
-                <p class="section-card-desc">Lista de identificadores a serem processados através deste grafo</p>
+                <h3 class="section-card-title">${t('batch_pipeline.params_title')}</h3>
+                <p class="section-card-desc">${t('batch_pipeline.params_desc')}</p>
               </div>
             </div>
 
             <div class="form-row-grid">
               <div class="form-group full-width">
-                <label class="form-label" for="batch-items-input">Itens do Lote (um por linha ou separados por vírgula):</label>
+                <label class="form-label" for="batch-items-input">${t('batch_pipeline.items_label')}</label>
                 <textarea id="batch-items-input" class="form-textarea" rows="3" placeholder="ART-001&#10;ART-002&#10;ART-003">${itemsText}</textarea>
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="batch-concurrency">Concorrência Máxima de Artigos</label>
+                <label class="form-label" for="batch-concurrency">${t('batch_pipeline.concurrency_label')}</label>
                 <input id="batch-concurrency" type="number" min="1" max="16" value="${this.config.maxConcurrency}" class="form-input" />
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="batch-cooldown">Cooldown entre Etapas (ms)</label>
+                <label class="form-label" for="batch-cooldown">${t('batch_pipeline.cooldown_label')}</label>
                 <input id="batch-cooldown" type="number" min="0" step="500" value="${this.config.cooldownMs}" class="form-input" />
               </div>
 
               <div class="form-group full-width">
-                <label class="form-label" for="batch-state-file">Arquivo de Checkpoint (Persistência / Resume):</label>
+                <label class="form-label" for="batch-state-file">${t('batch_pipeline.state_file_label')}</label>
                 <input id="batch-state-file" type="text" value="${this.config.stateFilePath}" class="form-input" />
               </div>
 
               <div class="form-group full-width">
                 <label class="clean-checkbox-label">
                   <input type="checkbox" id="batch-auto-resume" ${this.config.autoResume ? 'checked' : ''} />
-                  <span><strong>Auto-Resume Ativado:</strong> Pula etapas com artefatos válidos já gerados e recupera progresso após interrupções</span>
+                  <span>${t('batch_pipeline.auto_resume_label')}</span>
                 </label>
               </div>
             </div>
@@ -154,13 +155,13 @@ export class BatchPipelineModal {
             <div class="section-card-header">
               <span class="section-card-icon">⛓️</span>
               <div class="section-card-titles">
-                <h3 class="section-card-title">Encadeamento Serial (Gargalo de Concorrência)</h3>
-                <p class="section-card-desc">Etapas pesadas que devem executar estritamente 1 por vez entre os artigos</p>
+                <h3 class="section-card-title">${t('batch_pipeline.serial_title')}</h3>
+                <p class="section-card-desc">${t('batch_pipeline.serial_desc')}</p>
               </div>
             </div>
 
             <div class="tools-checkbox-grid">
-              ${agentNodes.length === 0 ? '<div class="empty-hint">Nenhum vértice de Agente encontrado no grafo atual.</div>' : ''}
+              ${agentNodes.length === 0 ? `<div class="empty-hint">${t('batch_pipeline.no_agent_nodes')}</div>` : ''}
               ${agentNodes.map(node => {
                 const checked = serializedSet.has(node.id) ? 'checked' : '';
                 return `
@@ -181,8 +182,8 @@ export class BatchPipelineModal {
             <div class="section-card-header">
               <span class="section-card-icon">📊</span>
               <div class="section-card-titles">
-                <h3 class="section-card-title">Matriz de Estado do Checkpoint</h3>
-                <p class="section-card-desc">Última atualização: ${new Date(this.checkpointState.lastUpdated || Date.now()).toLocaleTimeString()}</p>
+                <h3 class="section-card-title">${t('batch_pipeline.matrix_title')}</h3>
+                <p class="section-card-desc">${t('batch_pipeline.matrix_desc', { time: new Date(this.checkpointState.lastUpdated || Date.now()).toLocaleTimeString() })}</p>
               </div>
             </div>
 
@@ -190,13 +191,13 @@ export class BatchPipelineModal {
               <table class="batch-status-table">
                 <thead>
                   <tr>
-                    <th>Item ID</th>
+                    <th>${t('batch_pipeline.th_item_id')}</th>
                     ${agentNodes.map(n => `<th>${this.escapeHtml(n.label)}</th>`).join('')}
-                    <th>Ações</th>
+                    <th>${t('batch_pipeline.th_actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${this.config.items.length === 0 ? '<tr><td colspan="10" class="empty-hint">Nenhum item configurado no lote.</td></tr>' : ''}
+                  ${this.config.items.length === 0 ? `<tr><td colspan="10" class="empty-hint">${t('batch_pipeline.empty_items')}</td></tr>` : ''}
                   ${this.config.items.map(itemId => {
                     const itemData = this.checkpointState.items?.[itemId];
                     return `
@@ -206,22 +207,22 @@ export class BatchPipelineModal {
                           const stageInfo = itemData?.stages?.[n.id];
                           const status = stageInfo?.status || 'pendente';
                           let badgeClass = 'pill-pending';
-                          let badgeText = '⚪ Pendente';
+                          let badgeText = t('batch_pipeline.status_pending');
 
                           if (status === 'concluido') {
                             if (stageInfo?.recoveredFromArtifact) {
                               badgeClass = 'pill-cached';
-                              badgeText = '♻ Cache';
+                              badgeText = t('batch_pipeline.status_cached');
                             } else {
                               badgeClass = 'pill-completed';
-                              badgeText = '✔ OK';
+                              badgeText = t('batch_pipeline.status_ok');
                             }
                           } else if (status === 'executando') {
                             badgeClass = 'pill-running';
-                            badgeText = '⏳ Rodando';
+                            badgeText = t('batch_pipeline.status_running');
                           } else if (status === 'erro') {
                             badgeClass = 'pill-error';
-                            badgeText = '✖ Erro';
+                            badgeText = t('batch_pipeline.status_error');
                           }
 
                           return `
@@ -231,7 +232,7 @@ export class BatchPipelineModal {
                           `;
                         }).join('')}
                         <td class="batch-actions-cell">
-                          <button class="batch-item-reset-btn" data-item-id="${itemId}" title="Limpar estado deste item">🧹</button>
+                          <button class="batch-item-reset-btn" data-item-id="${itemId}" title="${t('batch_pipeline.btn_reset_item_tip')}">🧹</button>
                         </td>
                       </tr>
                     `;
@@ -244,12 +245,12 @@ export class BatchPipelineModal {
 
         <div class="modal-footer">
           <div class="footer-left-group">
-            <button id="btn-batch-refresh" class="btn-clean-secondary">🔄 Atualizar Checkpoint</button>
-            <button id="btn-batch-clear-all" class="btn-clean-danger">🧹 Limpar Todo Checkpoint</button>
+            <button id="btn-batch-refresh" class="btn-clean-secondary">${t('batch_pipeline.btn_refresh')}</button>
+            <button id="btn-batch-clear-all" class="btn-clean-danger">${t('batch_pipeline.btn_clear_all')}</button>
           </div>
           <div class="footer-right-group">
-            <button id="btn-batch-close" class="btn-clean-secondary">Fechar</button>
-            <button id="btn-batch-save-run" class="btn-clean-primary">▶ Iniciar / Retomar Execução em Lote</button>
+            <button id="btn-batch-close" class="btn-clean-secondary">${t('batch_pipeline.btn_close')}</button>
+            <button id="btn-batch-save-run" class="btn-clean-primary">${t('batch_pipeline.btn_save_run')}</button>
           </div>
         </div>
       </div>
@@ -290,7 +291,7 @@ export class BatchPipelineModal {
 
     const btnClearAll = this.overlay.querySelector('#btn-batch-clear-all');
     btnClearAll?.addEventListener('click', async () => {
-      if (confirm('Tem certeza que deseja limpar todo o histórico de checkpoint? Todas as etapas serão re-executadas do zero.')) {
+      if (confirm(t('batch_pipeline.confirm_clear_all'))) {
         await this.resetCheckpoint('', '');
       }
     });

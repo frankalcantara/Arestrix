@@ -3,6 +3,7 @@ import { Viewport } from '../../view/Viewport.ts';
 import { AddNodeCommand } from '../../core/history/GraphCommands.ts';
 import { INodeAgentSettings } from '../../core/types.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
+import { t } from '../../i18n/index.ts';
 
 /**
  * Arestrix Studio - Diálogo de Importação do Hermes (Nous Research)
@@ -50,8 +51,8 @@ export class ImportHermesModal {
     if (!this.modal) return;
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Importar Agente Hermes',
-      subtitle: 'Configure diretrizes de raciocínio local (Scratchpad / Function Calling) para o 📦 Projeto Ativo.',
+      title: t('import_modals.hermes_title'),
+      subtitle: t('import_modals.hermes_subtitle'),
       icon: '🏛️',
       closeBtnId: 'btn-close-hermes-modal'
     });
@@ -65,32 +66,32 @@ export class ImportHermesModal {
           <div class="office-group" style="margin-bottom: 0;">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
               <div>
-                <label class="office-label" for="hermes-agent-name">Nome do agente:</label>
+                <label class="office-label" for="hermes-agent-name">${t('import_modals.label_agent_name')}</label>
                 <input type="text" id="hermes-agent-name" class="office-input" value="Agente_Hermes_Local">
               </div>
               <div>
-                <label class="office-label" for="hermes-model-select">Modelo Hermes:</label>
+                <label class="office-label" for="hermes-model-select">${t('import_modals.hermes_model_label')}</label>
                 <select id="hermes-model-select" class="office-select">
-                  <option value="hermes-3-llama-3.1-70b">Hermes 3 (Llama 3.1 70B)</option>
-                  <option value="hermes-3-llama-3.1-8b">Hermes 3 (Llama 3.1 8B)</option>
-                  <option value="openhermes-2.5-mistral-7b">OpenHermes 2.5 (Mistral 7B)</option>
+                  <option value="hermes-3-llama-3.1-70b">${t('import_modals.opt_hermes_3_70b')}</option>
+                  <option value="hermes-3-llama-3.1-8b">${t('import_modals.opt_hermes_3_8b')}</option>
+                  <option value="openhermes-2.5-mistral-7b">${t('import_modals.opt_openhermes_25_7b')}</option>
                 </select>
               </div>
             </div>
 
             <div>
-              <label class="office-label" for="hermes-prompt-input">Instruções do sistema (Scratchpad & Funções):</label>
-              <textarea id="hermes-prompt-input" class="office-textarea" rows="8" placeholder="Cole o system prompt com tags <scratchpad> ou dataset de instrução aqui..."></textarea>
+              <label class="office-label" for="hermes-prompt-input">${t('import_modals.hermes_prompt_label')}</label>
+              <textarea id="hermes-prompt-input" class="office-textarea" rows="8" placeholder="${t('import_modals.hermes_prompt_placeholder')}"></textarea>
             </div>
           </div>
         </div>
 
         <!-- Rodapé Estilo Office -->
         <div class="modal-footer">
-          <span class="footer-info">Pronto para criar o vértice.</span>
+          <span class="footer-info">${t('import_modals.ready_create_vertex')}</span>
           <div class="footer-actions">
-            <button id="btn-cancel-hermes" class="tool-btn btn-secondary">Cancelar</button>
-            <button id="btn-inject-hermes-agent" class="tool-btn btn-action">Importar</button>
+            <button id="btn-cancel-hermes" class="tool-btn btn-secondary">${t('import_modals.btn_cancel')}</button>
+            <button id="btn-inject-hermes-agent" class="tool-btn btn-action">${t('import_modals.btn_import')}</button>
           </div>
         </div>
       </div>

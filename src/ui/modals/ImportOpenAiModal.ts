@@ -3,6 +3,7 @@ import { Viewport } from '../../view/Viewport.ts';
 import { AddNodeCommand } from '../../core/history/GraphCommands.ts';
 import { INodeAgentSettings } from '../../core/types.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
+import { t } from '../../i18n/index.ts';
 
 /**
  * Arestrix Studio - Diálogo de Importação da OpenAI (ChatGPT / Assistants)
@@ -50,8 +51,8 @@ export class ImportOpenAiModal {
     if (!this.modal) return;
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Importar Agente OpenAI',
-      subtitle: 'Configure as instruções e o modelo OpenAI (ChatGPT / Assistants) para o 📦 Projeto Ativo.',
+      title: t('import_modals.openai_title'),
+      subtitle: t('import_modals.openai_subtitle'),
       icon: '🤖',
       closeBtnId: 'btn-close-openai-modal'
     });
@@ -65,32 +66,32 @@ export class ImportOpenAiModal {
           <div class="office-group" style="margin-bottom: 0;">
             <div style="grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; display: grid;">
               <div>
-                <label class="office-label" for="openai-agent-name">Nome do agente:</label>
+                <label class="office-label" for="openai-agent-name">${t('import_modals.label_agent_name')}</label>
                 <input type="text" id="openai-agent-name" class="office-input" value="Agente_GPT4o">
               </div>
               <div>
-                <label class="office-label" for="openai-model-select">Modelo OpenAI:</label>
+                <label class="office-label" for="openai-model-select">${t('import_modals.openai_model_label')}</label>
                 <select id="openai-model-select" class="office-select">
-                  <option value="gpt-4o">GPT-4o</option>
-                  <option value="o1-preview">o1 (Raciocínio Avançado)</option>
-                  <option value="gpt-4o-mini">GPT-4o Mini</option>
+                  <option value="gpt-4o">${t('import_modals.opt_gpt_4o')}</option>
+                  <option value="o1-preview">${t('import_modals.opt_o1_preview')}</option>
+                  <option value="gpt-4o-mini">${t('import_modals.opt_gpt_4o_mini')}</option>
                 </select>
               </div>
             </div>
 
             <div>
-              <label class="office-label" for="openai-prompt-input">Instruções do sistema (System Prompt / Contexto):</label>
-              <textarea id="openai-prompt-input" class="office-textarea" rows="8" placeholder="Cole as instruções ou o histórico exportado da OpenAI aqui..."></textarea>
+              <label class="office-label" for="openai-prompt-input">${t('import_modals.openai_prompt_label')}</label>
+              <textarea id="openai-prompt-input" class="office-textarea" rows="8" placeholder="${t('import_modals.openai_prompt_placeholder')}"></textarea>
             </div>
           </div>
         </div>
 
         <!-- Rodapé Estilo Office -->
         <div class="modal-footer">
-          <span class="footer-info">Pronto para criar o vértice.</span>
+          <span class="footer-info">${t('import_modals.ready_create_vertex')}</span>
           <div class="footer-actions">
-            <button id="btn-cancel-openai" class="tool-btn btn-secondary">Cancelar</button>
-            <button id="btn-inject-openai-agent" class="tool-btn btn-action">Importar</button>
+            <button id="btn-cancel-openai" class="tool-btn btn-secondary">${t('import_modals.btn_cancel')}</button>
+            <button id="btn-inject-openai-agent" class="tool-btn btn-action">${t('import_modals.btn_import')}</button>
           </div>
         </div>
       </div>

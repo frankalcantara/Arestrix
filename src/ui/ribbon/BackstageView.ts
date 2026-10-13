@@ -148,7 +148,7 @@ export class BackstageView {
               <span>📂</span> ${t('backstage.sidebar.open')}
             </li>
             <li class="backstage-nav-item" id="btn-backstage-save">
-              <span>💾</span> ${t('common.save')} ${t('common.file')}
+              <span>💾</span> ${t('backstage.sidebar.save_file')}
             </li>
             <li class="backstage-nav-item ${this.activeSection === 'saveas' ? 'active' : ''}" data-section="saveas">
               <span>📥</span> ${t('backstage.sidebar.saveas')}
@@ -179,7 +179,7 @@ export class BackstageView {
     if (!recentList || recentList.length === 0) {
       return `
         <div style="padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; color: #64748b; font-size: 13px;">
-          Nenhum projeto recente registrado no histórico.
+          ${t('backstage.recent.empty')}
         </div>
       `;
     }
@@ -188,10 +188,10 @@ export class BackstageView {
       <table class="backstage-mru-table" style="width: 100%; border-collapse: collapse;">
         <thead>
           <tr>
-            <th style="text-align: left; padding: 10px 14px;">Nome do Projeto</th>
-            <th style="text-align: left; padding: 10px 14px;">Localização (Diretório)</th>
-            <th style="text-align: left; padding: 10px 14px;">Último Acesso</th>
-            <th style="text-align: right; padding: 10px 14px;">Ação</th>
+            <th style="text-align: left; padding: 10px 14px;">${t('backstage.recent.col_name')}</th>
+            <th style="text-align: left; padding: 10px 14px;">${t('backstage.recent.col_path')}</th>
+            <th style="text-align: left; padding: 10px 14px;">${t('backstage.recent.col_last_access')}</th>
+            <th style="text-align: right; padding: 10px 14px;">${t('backstage.recent.col_action')}</th>
           </tr>
         </thead>
         <tbody>
@@ -204,14 +204,14 @@ export class BackstageView {
                 <code style="color: #475569; font-size: 11.5px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">${this.escapeHtml(item.rootPath)}</code>
               </td>
               <td style="padding: 10px 14px; font-size: 12px; color: #64748b;">
-                ${item.lastOpened ? new Date(item.lastOpened).toLocaleString() : 'Recentemente'}
+                ${item.lastOpened ? new Date(item.lastOpened).toLocaleString() : t('backstage.recent.recently')}
               </td>
               <td style="text-align: right; padding: 10px 14px;">
                 <select class="recent-project-action-select backstage-project-action-select" data-id="${item.projectId}" data-path="${this.escapeHtml(item.rootPath)}" data-name="${this.escapeHtml(item.name)}">
-                  <option value="" disabled selected>Opções ▾</option>
-                  <option value="open">📂 Abrir Projeto</option>
-                  <option value="manage">⚙️ Gerenciar</option>
-                  <option value="delete">🗑️ Apagar Projeto...</option>
+                  <option value="" disabled selected>${t('backstage.recent.options')}</option>
+                  <option value="open">📂 ${t('backstage.recent.open')}</option>
+                  <option value="manage">⚙️ ${t('backstage.recent.manage')}</option>
+                  <option value="delete">🗑️ ${t('backstage.recent.delete')}</option>
                 </select>
               </td>
             </tr>
@@ -225,127 +225,127 @@ export class BackstageView {
     switch (this.activeSection) {
       case 'info':
         return `
-          <h2 class="backstage-header-title">Informações do Projeto</h2>
-          <p class="backstage-header-sub">Gerencie o manifesto do projeto e a infraestrutura do workspace no Arestrix Studio.</p>
+          <h2 class="backstage-header-title">${t('backstage.info.title')}</h2>
+          <p class="backstage-header-sub">${t('backstage.info.subtitle')}</p>
 
           <div class="backstage-cards-grid">
             <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h4 style="margin: 0; min-width: 0;">📁 Identificação do Projeto</h4>
-                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">📦 Escopo do Projeto</span>
+                <h4 style="margin: 0; min-width: 0;">📁 ${t('backstage.info.card_ident')}</h4>
+                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">📦 ${t('backstage.info.scope_proj')}</span>
               </div>
-              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>Nome:</strong> ${this.escapeHtml(proj.name)}</p>
+              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>${t('backstage.info.name_label')}</strong> ${this.escapeHtml(proj.name)}</p>
               <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;">
-                <strong>ID:</strong>
+                <strong>${t('backstage.info.id_label')}</strong>
                 <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.projectId)}</code>
               </p>
-              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>Versão:</strong> ${this.escapeHtml(proj.version)}</p>
-              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>Descrição:</strong> ${this.escapeHtml(proj.description || 'Sem descrição')}</p>
+              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>${t('backstage.info.version_label')}</strong> ${this.escapeHtml(proj.version)}</p>
+              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>${t('backstage.info.desc_label')}</strong> ${this.escapeHtml(proj.description || t('backstage.info.no_desc'))}</p>
             </div>
 
             <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h4 style="margin: 0; min-width: 0;">🛠️ Diretório & Armazenamento</h4>
-                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">🛠️ Escopo do Workspace</span>
+                <h4 style="margin: 0; min-width: 0;">🛠️ ${t('backstage.info.card_storage')}</h4>
+                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">🛠️ ${t('backstage.info.scope_workspace')}</span>
               </div>
-              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>Tipo de Persistência:</strong> ${proj.database?.type || 'SQLite (Padrão)'}</p>
+              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>${t('backstage.info.persist_type')}</strong> ${proj.database?.type || t('backstage.info.sqlite_default')}</p>
               <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;">
-                <strong>Arquivo DB:</strong>
+                <strong>${t('backstage.info.db_file')}</strong>
                 <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.database?.filePath || 'storage/database.sqlite')}</code>
               </p>
               <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;">
-                <strong>Diretório Físico:</strong>
+                <strong>${t('backstage.info.phys_dir')}</strong>
                 <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.rootPath)}</code>
               </p>
               <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;">
-                <strong>Pasta de Saída (Output):</strong>
+                <strong>${t('backstage.info.output_dir')}</strong>
                 <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.outputDir || 'Output')}</code>
               </p>
             </div>
 
             <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h4 style="margin: 0; min-width: 0;">⚡ Grafo & Pipelines</h4>
-                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">📦 Escopo do Projeto</span>
+                <h4 style="margin: 0; min-width: 0;">⚡ ${t('backstage.info.card_graph')}</h4>
+                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">📦 ${t('backstage.info.scope_proj')}</span>
               </div>
-              <p style="margin-bottom: 8px;"><strong>Vértices Ativos:</strong> ${this.graph.getAllNodes().length}</p>
-              <p style="margin-bottom: 8px;"><strong>Arestas / Links:</strong> ${this.graph.getAllEdges().length}</p>
-              <p style="margin-bottom: 8px;"><strong>Pipelines Cadastrados:</strong> ${proj.pipelines ? proj.pipelines.length : 0}</p>
+              <p style="margin-bottom: 8px;"><strong>${t('backstage.info.active_nodes')}</strong> ${this.graph.getAllNodes().length}</p>
+              <p style="margin-bottom: 8px;"><strong>${t('backstage.info.edges_links')}</strong> ${this.graph.getAllEdges().length}</p>
+              <p style="margin-bottom: 8px;"><strong>${t('backstage.info.registered_pipelines')}</strong> ${proj.pipelines ? proj.pipelines.length : 0}</p>
             </div>
           </div>
 
           <div style="margin-top: 14px;">
-            <h4 style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 8px;">Ações Rápidas de Manutenção</h4>
+            <h4 style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 8px;">${t('backstage.info.quick_maintenance')}</h4>
             <div style="display: flex; gap: 10px;">
-              <button class="tool-btn btn-secondary" id="btn-quick-sync-db" style="font-weight: 700;">🔄 Sincronizar Banco</button>
-              <button class="tool-btn btn-secondary" id="btn-quick-clean-cache" style="font-weight: 700;">🧹 Limpar Cache do Resume</button>
+              <button class="tool-btn btn-secondary" id="btn-quick-sync-db" style="font-weight: 700;">🔄 ${t('backstage.info.btn_sync_db')}</button>
+              <button class="tool-btn btn-secondary" id="btn-quick-clean-cache" style="font-weight: 700;">🧹 ${t('backstage.info.btn_clean_cache')}</button>
             </div>
           </div>
 
           <!-- LISTA DE PROJETOS RECENTES (ESTILO OFFICE) -->
           <div style="margin-top: 26px;">
-            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📂 Projetos Recentes</h3>
-            <p class="backstage-header-sub" style="margin-bottom: 12px;">Selecione um projeto acessado recentemente para carregar instantaneamente.</p>
+            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📂 ${t('backstage.info.recents_title')}</h3>
+            <p class="backstage-header-sub" style="margin-bottom: 12px;">${t('backstage.info.recents_subtitle')}</p>
             ${this.renderRecentProjectsTable(recentList)}
           </div>
         `;
 
       case 'new':
         return `
-          <h2 class="backstage-header-title">Criar Novo Projeto</h2>
-          <p class="backstage-header-sub">Configure um novo projeto isolado com estrutura de diretórios e pipelines no workspace.</p>
+          <h2 class="backstage-header-title">${t('backstage.new.title')}</h2>
+          <p class="backstage-header-sub">${t('backstage.new.subtitle')}</p>
 
           <div style="max-width: 650px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-bottom: 28px;">
             <div style="margin-bottom: 16px;">
-              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Nome do Projeto:</label>
-              <input type="text" id="backstage-new-name" placeholder="Ex: Auditoria de Agentes 2026" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">${t('backstage.new.project_name_label')}</label>
+              <input type="text" id="backstage-new-name" placeholder="${t('backstage.new.project_name_placeholder')}" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
             </div>
 
             <div style="margin-bottom: 16px;">
-              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Diretório Físico do Workspace (Armazenamento Físico 🛠️):</label>
-              <input type="text" id="backstage-new-path" placeholder="./projects/[Nome do Projeto]" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
-              <span style="font-size: 11px; color: #64748b; margin-top: 4px; display: block;">Se deixado em branco, a pasta física adotará o nome do projeto em <code>./projects/</code>.</span>
+              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">${t('backstage.new.dir_storage_label')}</label>
+              <input type="text" id="backstage-new-path" placeholder="${t('backstage.new.dir_placeholder')}" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+              <span style="font-size: 11px; color: #64748b; margin-top: 4px; display: block;">${t('backstage.new.dir_hint')}</span>
             </div>
 
             <div style="margin-bottom: 20px;">
-              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Descrição do Propósito:</label>
-              <textarea id="backstage-new-desc" rows="3" placeholder="Objetivo e escopo deste projeto..." style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; box-sizing: border-box;"></textarea>
+              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">${t('backstage.new.desc_label')}</label>
+              <textarea id="backstage-new-desc" rows="3" placeholder="${t('backstage.new.desc_placeholder')}" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; box-sizing: border-box;"></textarea>
             </div>
 
             <div style="display: flex; gap: 12px;">
               <button class="tool-btn btn-action" id="btn-backstage-create-submit" style="background: #0f6cbd; color: #fff; font-weight: 700; padding: 10px 22px; height: 38px; font-size: 13px;">
-                🚀 Criar e Abrir Projeto
+                🚀 ${t('backstage.new.btn_create_submit')}
               </button>
             </div>
           </div>
 
           <!-- LISTA DE PROJETOS RECENTES (REPETIDA NA TELA NOVO PROJETO) -->
           <div>
-            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📂 Projetos Recentes</h3>
-            <p class="backstage-header-sub" style="margin-bottom: 12px;">Ou continue trabalhando em um dos projetos acessados recentemente:</p>
+            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📂 ${t('backstage.new.recents_title')}</h3>
+            <p class="backstage-header-sub" style="margin-bottom: 12px;">${t('backstage.new.recents_subtitle')}</p>
             ${this.renderRecentProjectsTable(recentList)}
           </div>
         `;
 
       case 'open':
         return `
-          <h2 class="backstage-header-title">Abrir Recente</h2>
-          <p class="backstage-header-sub">Acesse pipelines do projeto atual ou abra outros projetos salvos no histórico.</p>
+          <h2 class="backstage-header-title">${t('backstage.open.recent_open_title')}</h2>
+          <p class="backstage-header-sub">${t('backstage.open.recent_open_subtitle')}</p>
 
           <!-- 1. LISTA DE GRAFOS RECENTES DO PROJETO ATIVO -->
           <div style="margin-bottom: 28px;">
-            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📊 Grafos Recentes do Workspace Ativo <span style="font-size: 11px; font-weight: normal; color: #0f6cbd;">(📦 Pipelines do Projeto)</span></h3>
-            <p class="backstage-header-sub" style="margin-bottom: 12px;">Pipelines disponíveis no projeto atual (<strong>${this.escapeHtml(proj.name)}</strong>):</p>
+            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📊 ${t('backstage.open.graph_recent_title')} <span style="font-size: 11px; font-weight: normal; color: #0f6cbd;">${t('backstage.open.graph_recent_badge')}</span></h3>
+            <p class="backstage-header-sub" style="margin-bottom: 12px;">${t('backstage.open.graph_available_in', { name: this.escapeHtml(proj.name) })}</p>
 
             ${(proj.pipelines && proj.pipelines.length > 0) ? `
               <table class="backstage-mru-table" style="width: 100%; border-collapse: collapse;">
                 <thead>
                   <tr>
-                    <th style="text-align: left; padding: 10px 14px;">Nome do Grafo</th>
-                    <th style="text-align: left; padding: 10px 14px;">Arquivo</th>
-                    <th style="text-align: left; padding: 10px 14px;">Tipo</th>
-                    <th style="text-align: left; padding: 10px 14px;">Descrição</th>
-                    <th style="text-align: right; padding: 10px 14px;">Ação</th>
+                    <th style="text-align: left; padding: 10px 14px;">${t('backstage.open.th_graph_name')}</th>
+                    <th style="text-align: left; padding: 10px 14px;">${t('backstage.open.th_file')}</th>
+                    <th style="text-align: left; padding: 10px 14px;">${t('backstage.open.th_type')}</th>
+                    <th style="text-align: left; padding: 10px 14px;">${t('backstage.open.th_desc')}</th>
+                    <th style="text-align: right; padding: 10px 14px;">${t('backstage.open.th_action')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -358,14 +358,14 @@ export class BackstageView {
                         <code style="color: #475569; font-size: 11.5px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">${this.escapeHtml(p.file)}</code>
                       </td>
                       <td style="padding: 10px 14px;">
-                        ${p.isPrimary ? '<span class="badge-inherited" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700;">PRINCIPAL</span>' : '<span style="color: #64748b; font-size: 11px;">Subgrafo</span>'}
+                        ${p.isPrimary ? `<span class="badge-inherited" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700;">${t('backstage.open.badge_primary')}</span>` : `<span style="color: #64748b; font-size: 11px;">${t('backstage.open.badge_subflow')}</span>`}
                       </td>
                       <td style="padding: 10px 14px; font-size: 12px; color: #64748b;">
                         ${this.escapeHtml(p.description || 'Pipeline de execução')}
                       </td>
                       <td style="text-align: right; padding: 10px 14px;">
                         <button class="tool-btn btn-secondary btn-pipeline-load" data-file="${this.escapeHtml(p.file)}" style="padding: 6px 14px; font-size: 12px; font-weight: 700; white-space: nowrap; height: 32px; display: inline-flex; align-items: center;">
-                          Carregar no Canvas
+                          ${t('backstage.open.btn_load_canvas')}
                         </button>
                       </td>
                     </tr>
@@ -374,29 +374,29 @@ export class BackstageView {
               </table>
             ` : `
               <div style="padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; color: #64748b; font-size: 13px;">
-                Nenhum grafo cadastrado no projeto atual.
+                ${t('backstage.open.empty_graphs')}
               </div>
             `}
           </div>
 
           <!-- 2. LISTA DE PROJETOS RECENTES (DEPOIS DA LISTA DE GRAFOS) -->
           <div>
-            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📂 Projetos Recentes</h3>
-            <p class="backstage-header-sub" style="margin-bottom: 12px;">Selecione um projeto acessado anteriormente para carregar:</p>
+            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📂 ${t('backstage.open.recents_title')}</h3>
+            <p class="backstage-header-sub" style="margin-bottom: 12px;">${t('backstage.open.recents_subtitle')}</p>
             ${this.renderRecentProjectsTable(recentList)}
           </div>
         `;
 
       case 'saveas':
         return `
-          <h2 class="backstage-header-title">Salvar Como</h2>
-          <p class="backstage-header-sub">Navegue pelas pastas e unidades de disco do sistema para salvar o pacote comprimido do projeto (<code>.arestrix</code>) ou manifesto JSON.</p>
+          <h2 class="backstage-header-title">${t('backstage.sidebar.saveas')}</h2>
+          <p class="backstage-header-sub">${t('backstage.saveas.saveas_desc')}</p>
 
           <!-- BARRA DE DISCOS & LOCALIZAÇÃO RÁPIDA -->
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 22px; margin-bottom: 22px;">
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Unidades de Disco:</span>
+                <span style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">${t('backstage.saveas.drives')}</span>
                 <div class="saveas-drives-list" style="display: flex; gap: 8px; flex-wrap: wrap;">
                   ${this.saveAsDrives.map(drive => {
                     const cleanDrive = drive.replace(/\\/g, '/');
@@ -411,21 +411,21 @@ export class BackstageView {
               </div>
 
               <button class="tool-btn btn-secondary" id="btn-saveas-browse-native" style="font-weight: 700; padding: 6px 16px; font-size: 12px; height: 32px; display: inline-flex; align-items: center; gap: 6px;">
-                <span>📂</span> Procurar Pasta no Windows...
+                <span>📂</span> ${t('backstage.saveas.btn_browse_windows')}
               </button>
             </div>
 
             <!-- BARRA DE NAVEGAÇÃO DE DIRETÓRIO (BREADCRUMB & SUBIR NÍVEL) -->
             <div style="display: flex; align-items: center; gap: 10px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 12px;">
-              <button class="tool-btn btn-secondary" id="btn-saveas-up-dir" title="Subir um nível na árvore de pastas" style="padding: 4px 10px; font-size: 12px; font-weight: 700; height: 28px;">
-                📁 ⬆ Subir
+              <button class="tool-btn btn-secondary" id="btn-saveas-up-dir" title="${t('backstage.saveas.up_tip')}" style="padding: 4px 10px; font-size: 12px; font-weight: 700; height: 28px;">
+                📁 ⬆ ${t('backstage.saveas.btn_up')}
               </button>
-              <button class="tool-btn btn-secondary" id="btn-saveas-refresh-dir" title="Atualizar listagem" style="padding: 4px 10px; font-size: 12px; font-weight: 700; height: 28px;">
-                🔄 Atualizar
+              <button class="tool-btn btn-secondary" id="btn-saveas-refresh-dir" title="${t('backstage.saveas.refresh_tip')}" style="padding: 4px 10px; font-size: 12px; font-weight: 700; height: 28px;">
+                🔄 ${t('backstage.saveas.btn_refresh')}
               </button>
 
               <div style="flex: 1; display: flex; align-items: center; gap: 4px; overflow-x: auto; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #334155; padding: 2px 4px;">
-                <span style="color: #64748b; font-weight: 700;">Local:</span>
+                <span style="color: #64748b; font-weight: 700;">${t('backstage.saveas.location_prefix')}</span>
                 <span style="font-weight: 600; color: #0f172a;" id="saveas-current-path-display">${this.escapeHtml(this.saveAsCurrentPath)}</span>
               </div>
             </div>
@@ -434,8 +434,8 @@ export class BackstageView {
           <!-- ÁREA DE SUBPASTAS PARA NAVEGAÇÃO INTERATIVA -->
           <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 22px; margin-bottom: 22px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-              <h4 style="font-size: 13px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">Subpastas no Diretório Atual (Clique para abrir)</h4>
-              <span style="font-size: 11.5px; color: #64748b;">${this.saveAsSubdirectories.length} subpastas</span>
+              <h4 style="font-size: 13px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">${t('backstage.saveas.subfolders_in_dir')}</h4>
+              <span style="font-size: 11.5px; color: #64748b;">${t('backstage.saveas.subfolders_count', { count: this.saveAsSubdirectories.length })}</span>
             </div>
 
             <div class="saveas-folders-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; max-height: 240px; overflow-y: auto; padding: 4px;">
@@ -446,7 +446,7 @@ export class BackstageView {
                 </div>
               `).join('') : `
                 <div style="grid-column: 1 / -1; padding: 24px; text-align: center; color: #64748b; font-size: 12.5px; background: #f8fafc; border-radius: 8px;">
-                  Nenhuma subpasta encontrada no diretório atual. Você pode salvar diretamente aqui.
+                  ${t('backstage.saveas.empty_subfolders')}
                 </div>
               `}
             </div>
@@ -454,31 +454,31 @@ export class BackstageView {
 
           <!-- PAINEL DE SALVAMENTO (ESTILO DIÁLOGO OFFICE SAVE AS) -->
           <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 20px 24px;">
-            <h4 style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 14px;">Propriedades do Pacote a Salvar</h4>
+            <h4 style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 14px;">${t('backstage.saveas.pkg_props_title')}</h4>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
               <div>
-                <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Nome do Arquivo / Projeto:</label>
-                <input type="text" id="saveas-input-filename" value="${this.escapeHtml(this.saveAsFileName)}" placeholder="Ex: meu_projeto" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 600; color: #0f172a; box-sizing: border-box;" />
+                <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">${t('backstage.saveas.filename_field')}</label>
+                <input type="text" id="saveas-input-filename" value="${this.escapeHtml(this.saveAsFileName)}" placeholder="${t('backstage.saveas.filename_placeholder')}" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 600; color: #0f172a; box-sizing: border-box;" />
               </div>
 
               <div>
-                <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">Tipo de Arquivo:</label>
+                <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">${t('backstage.saveas.filetype_field')}</label>
                 <select id="saveas-select-format" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 600; color: #0f172a; box-sizing: border-box; background: #ffffff;">
-                  <option value="arestrix" ${this.saveAsFormat === 'arestrix' ? 'selected' : ''}>Pacote Arestrix Comprimido (*.arestrix)</option>
-                  <option value="json" ${this.saveAsFormat === 'json' ? 'selected' : ''}>Manifesto do Projeto JSON (*.json)</option>
+                  <option value="arestrix" ${this.saveAsFormat === 'arestrix' ? 'selected' : ''}>${t('backstage.saveas.format_arestrix')}</option>
+                  <option value="json" ${this.saveAsFormat === 'json' ? 'selected' : ''}>${t('backstage.saveas.format_json')}</option>
                 </select>
               </div>
             </div>
 
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
               <div style="font-size: 12px; color: #475569;">
-                <span>Destino final:</span>
+                <span>${t('backstage.saveas.final_dest')}</span>
                 <code id="saveas-path-preview" style="background: #e2e8f0; padding: 3px 8px; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #0f172a;">${this.escapeHtml(this.saveAsCurrentPath)}/${this.escapeHtml(this.saveAsFileName)}.${this.saveAsFormat}</code>
               </div>
 
               <button class="tool-btn btn-action" id="btn-saveas-submit" style="background: #0f6cbd; color: #ffffff; font-weight: 700; padding: 10px 26px; height: 38px; font-size: 13px; display: inline-flex; align-items: center; gap: 8px;">
-                <span>💾</span> Salvar Pacote Arestrix
+                <span>💾</span> ${t('backstage.saveas.btn_save_package')}
               </button>
             </div>
           </div>
@@ -486,26 +486,26 @@ export class BackstageView {
 
       case 'export':
         return `
-          <h2 class="backstage-header-title">Exportação</h2>
-          <p class="backstage-header-sub">Exporte código nativo Taskflow C++20, scripts de compilação ou diagramas visuais do pipeline.</p>
+          <h2 class="backstage-header-title">${t('backstage.export.title')}</h2>
+          <p class="backstage-header-sub">${t('backstage.export.export_sub')}</p>
 
           <div class="backstage-cards-grid">
             <div class="backstage-info-card">
-              <h4>💻 Código Fonte C++20</h4>
-              <p>Gere e visualize o arquivo <code>main.cpp</code> completo com tarefas Taskflow e lambdas dos vértices.</p>
-              <button class="tool-btn btn-action" id="btn-backstage-open-codemodal" style="background: #0f6cbd; color: white; font-weight: 700;">Ver Código C++</button>
+              <h4>💻 ${t('backstage.export.cpp_title')}</h4>
+              <p>${t('backstage.export.cpp_desc')}</p>
+              <button class="tool-btn btn-action" id="btn-backstage-open-codemodal" style="background: #0f6cbd; color: white; font-weight: 700;">${t('backstage.export.btn_see_cpp')}</button>
             </div>
 
             <div class="backstage-info-card">
-              <h4>🛠️ CMakeLists.txt & Makefile</h4>
-              <p>Exporte scripts para compilação multiplataforma no Visual Studio ou Make.</p>
-              <button class="tool-btn btn-secondary" id="btn-backstage-export-cmake" style="font-weight: 700;">Gerar CMake</button>
+              <h4>🛠️ ${t('backstage.export.cmake_title')}</h4>
+              <p>${t('backstage.export.cmake_desc')}</p>
+              <button class="tool-btn btn-secondary" id="btn-backstage-export-cmake" style="font-weight: 700;">${t('backstage.export.btn_gen_cmake')}</button>
             </div>
 
             <div class="backstage-info-card">
-              <h4>🖼️ Arquitetura Visual (SVG)</h4>
-              <p>Gere diagrama vetorial escalável de alta resolução da arquitetura do grafo.</p>
-              <button class="tool-btn btn-secondary" id="btn-backstage-export-svg" style="font-weight: 700;">Exportar SVG</button>
+              <h4>🖼️ ${t('backstage.export.svg_title')}</h4>
+              <p>${t('backstage.export.svg_desc')}</p>
+              <button class="tool-btn btn-secondary" id="btn-backstage-export-svg" style="font-weight: 700;">${t('backstage.export.btn_export_svg')}</button>
             </div>
           </div>
         `;
@@ -542,31 +542,31 @@ export class BackstageView {
           <div class="backstage-cards-grid" style="margin-bottom: 24px;">
             <div class="backstage-info-card">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <h4 style="margin: 0;">📁 Pastas Físicas do Workspace</h4>
-                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">🛠️ Escopo do Workspace</span>
+                <h4 style="margin: 0;">📁 ${t('backstage.options.folders_title')}</h4>
+                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">🛠️ ${t('backstage.options.scope_workspace_badge')}</span>
               </div>
-              <p><strong>Raiz do Workspace:</strong> <code>${this.escapeHtml(dirs.root)}</code></p>
-              <p><strong>Habilidades Instaladas:</strong> <code>${this.escapeHtml(dirs.skills)}</code></p>
-              <p><strong>Servidores MCP:</strong> <code>${this.escapeHtml(dirs.mcps)}</code></p>
-              <p><strong>Agentes de Governança:</strong> <code>${this.escapeHtml(dirs.agents)}</code></p>
+              <p><strong>${t('backstage.options.root_path_label')}</strong> <code>${this.escapeHtml(dirs.root)}</code></p>
+              <p><strong>${t('backstage.options.skills_path_label')}</strong> <code>${this.escapeHtml(dirs.skills)}</code></p>
+              <p><strong>${t('backstage.options.mcps_path_label')}</strong> <code>${this.escapeHtml(dirs.mcps)}</code></p>
+              <p><strong>${t('backstage.options.agents_path_label')}</strong> <code>${this.escapeHtml(dirs.agents)}</code></p>
               <div style="margin-top: 14px;">
                 <button class="tool-btn btn-action" id="btn-sync-workspace-disk" style="background: #0f6cbd; color: #ffffff; font-weight: 700; padding: 8px 16px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
-                  <span>📥</span> Instalar / Sincronizar Recursos na Máquina
+                  <span>📥</span> ${t('backstage.options.btn_sync_disk')}
                 </button>
               </div>
             </div>
 
             <div class="backstage-info-card">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <h4 style="margin: 0;">🛡️ Governança Global da Aplicação</h4>
-                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">🏢 Escopo Global do Studio</span>
+                <h4 style="margin: 0;">🛡️ ${t('backstage.options.gov_title')}</h4>
+                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">🏢 ${t('backstage.options.scope_global_badge')}</span>
               </div>
-              <p><strong>Auditoria Automática de Skills:</strong> <span class="badge-inherited" style="font-weight: 700;">ATIVADA</span></p>
-              <p><strong>Tipografia & Design:</strong> <span style="color: #0f766e; font-weight: 700;">Zero Sombras/Glows em Fontes</span></p>
-              <p><strong>Modo de Isolamento:</strong> Sandbox C++20 Seguro</p>
+              <p><strong>${t('backstage.options.audit_auto_label')}</strong> <span class="badge-inherited" style="font-weight: 700;">${t('backstage.options.audit_active')}</span></p>
+              <p><strong>${t('backstage.options.typo_design_label')}</strong> <span style="color: #0f766e; font-weight: 700;">${t('backstage.options.typo_design_val')}</span></p>
+              <p><strong>${t('backstage.options.iso_mode_label')}</strong> ${t('backstage.options.iso_mode_val')}</p>
               <div style="margin-top: 14px;">
                 <button class="tool-btn btn-secondary" id="btn-open-global-defaults-modal" style="font-weight: 700; padding: 8px 16px; font-size: 12px;">
-                  ⚙️ Preferências Avançadas de Sistema...
+                  ⚙️ ${t('backstage.options.btn_adv_pref')}
                 </button>
               </div>
             </div>
@@ -574,52 +574,52 @@ export class BackstageView {
 
           <!-- 2. MOTORES DE EXECUÇÃO DO WORKSPACE (AGENTES, GRAFOS, PROJETOS ATRELADOS A EVENTOS) -->
           <div style="margin-bottom: 28px;">
-            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">⚡ Execução Integrada no Workspace</h3>
-            <p class="backstage-header-sub" style="margin-bottom: 14px;">Execute agentes de governança, linters estruturais de grafos ou pipelines de projetos atrelados aos eventos do sistema.</p>
+            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">⚡ ${t('backstage.options.integrated_exec_title')}</h3>
+            <p class="backstage-header-sub" style="margin-bottom: 14px;">${t('backstage.options.integrated_exec_sub')}</p>
 
             <div class="backstage-cards-grid">
               <div class="backstage-info-card" style="display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <h4 style="margin: 0;">🤖 Agente Auditor</h4>
-                    <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">🛠️ Escopo do Workspace</span>
+                    <h4 style="margin: 0;">🤖 ${t('backstage.options.auditor_title')}</h4>
+                    <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">🛠️ ${t('backstage.options.scope_workspace_badge')}</span>
                   </div>
                   <p style="font-size: 12px; color: #475569; margin-bottom: 8px;">
-                    Audita em tempo real todas as habilidades dos agentes ativos, verifica violações de segurança e conformidade estrita de tipografia vetorial.
+                    ${t('backstage.options.auditor_desc')}
                   </p>
                 </div>
                 <button class="tool-btn btn-action" id="btn-run-workspace-auditor" style="background: #107c41; color: #ffffff; font-weight: 700; padding: 8px 14px; font-size: 12px; margin-top: 10px;">
-                  ▶ Executar Auditoria do Workspace
+                  ▶ ${t('backstage.options.btn_run_auditor')}
                 </button>
               </div>
 
               <div class="backstage-info-card" style="display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <h4 style="margin: 0;">📊 Linter & Validador</h4>
-                    <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">📦 Escopo do Projeto</span>
+                    <h4 style="margin: 0;">📊 ${t('backstage.options.linter_title')}</h4>
+                    <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">📦 ${t('backstage.info.scope_project')}</span>
                   </div>
                   <p style="font-size: 12px; color: #475569; margin-bottom: 8px;">
-                    Executa análise topológica, detecta ciclos de nós órfãos e valida compatibilidade de tipos de dados nos fluxos do grafo atual.
+                    ${t('backstage.options.linter_desc')}
                   </p>
                 </div>
                 <button class="tool-btn btn-secondary" id="btn-run-workspace-linter" style="font-weight: 700; padding: 8px 14px; font-size: 12px; margin-top: 10px;">
-                  ▶ Validar Grafo Ativo
+                  ▶ ${t('backstage.options.btn_run_linter')}
                 </button>
               </div>
 
               <div class="backstage-info-card" style="display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <h4 style="margin: 0;">🚀 Pipeline do Projeto</h4>
-                    <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">📦 Escopo do Projeto</span>
+                    <h4 style="margin: 0;">🚀 ${t('backstage.options.proj_pipeline_title')}</h4>
+                    <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">📦 ${t('backstage.info.scope_project')}</span>
                   </div>
                   <p style="font-size: 12px; color: #475569; margin-bottom: 8px;">
-                    Dispara a execução do projeto no ambiente do workspace, inicializando persistência SQLite e telemetria de tarefas.
+                    ${t('backstage.options.proj_pipeline_desc')}
                   </p>
                 </div>
                 <button class="tool-btn btn-action" id="btn-run-workspace-project" style="background: #0f6cbd; color: #ffffff; font-weight: 700; padding: 8px 14px; font-size: 12px; margin-top: 10px;">
-                  ▶ Executar Pipeline do Projeto
+                  ▶ ${t('backstage.options.btn_run_proj_pipeline')}
                 </button>
               </div>
             </div>
@@ -629,21 +629,21 @@ export class BackstageView {
 
           <!-- 3. CATÁLOGO DE RECURSOS PRÉ-APROVADOS NO WORKSPACE -->
           <div style="margin-bottom: 28px;">
-            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">🛡️ Catálogo de Habilidades e MCPs Pré-Aprovados <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">🛠️ Escopo do Workspace</span></h3>
-            <p class="backstage-header-sub" style="margin-bottom: 14px;">Recursos homologados e certificados para uso imediato em agentes e nós do sistema.</p>
+            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">🛡️ ${t('backstage.options.preapproved_cat_title')} <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">🛠️ ${t('backstage.options.scope_workspace_badge')}</span></h3>
+            <p class="backstage-header-sub" style="margin-bottom: 14px;">${t('backstage.options.preapproved_cat_sub')}</p>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
               <!-- Habilidades Pré-aprovadas -->
               <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
                 <h4 style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #0f172a;">
-                  📜 Habilidades Pré-Aprovadas (${approvedSkills.length})
+                  📜 ${t('backstage.options.skills_count_heading', { count: approvedSkills.length })}
                 </h4>
                 <div style="max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
                   ${approvedSkills.map(s => `
                     <div style="padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
                       <div style="display: flex; justify-content: space-between; align-items: center;">
                         <strong style="font-size: 12px; color: #0f6cbd;">${this.escapeHtml(s.name)}</strong>
-                        <span style="font-size: 10px; background: #e8f5e9; color: #1e7e34; padding: 1px 6px; border-radius: 3px; font-weight: 700;">HOMOLOGADA</span>
+                        <span style="font-size: 10px; background: #e8f5e9; color: #1e7e34; padding: 1px 6px; border-radius: 3px; font-weight: 700;">${t('backstage.options.skill_approved_tag')}</span>
                       </div>
                       <div style="font-size: 11px; color: #64748b; margin-top: 2px;">${this.escapeHtml(s.description)}</div>
                     </div>
@@ -654,7 +654,7 @@ export class BackstageView {
               <!-- MCPs Pré-aprovados -->
               <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
                 <h4 style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #0f172a;">
-                  🔌 Servidores MCP Pré-Aprovados (${approvedMcps.length})
+                  🔌 ${t('backstage.options.mcps_count_heading', { count: approvedMcps.length })}
                 </h4>
                 <div style="max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
                   ${approvedMcps.map(m => `
@@ -817,7 +817,7 @@ export class BackstageView {
       this.overlay.querySelector('#btn-saveas-submit')?.addEventListener('click', async () => {
         const fileName = (this.saveAsFileName || 'projeto').trim();
         if (!fileName) {
-          if (typeof alert !== 'undefined') alert('Por favor, informe o nome do arquivo.');
+          if (typeof alert !== 'undefined') alert(t('backstage.alerts.enter_filename'));
           return;
         }
 
@@ -825,16 +825,16 @@ export class BackstageView {
           const res = await this.projectManager.saveProjectAsArestrix(this.saveAsCurrentPath, fileName, this.graph);
           if (res && res.success) {
             if (typeof alert !== 'undefined') {
-              alert(`💾 Pacote Arestrix salvo com sucesso!\n\nArquivo: ${res.filePath}\nO projeto completo, opções e grafos foram comprimidos no pacote .arestrix.`);
+              alert(t('backstage.alerts.pkg_saved', { path: res.filePath }));
             }
             this.render();
           } else {
-            if (typeof alert !== 'undefined') alert('❌ Ocorreu um erro ao salvar o pacote Arestrix.');
+            if (typeof alert !== 'undefined') alert(t('backstage.alerts.pkg_error'));
           }
         } else {
           const ok = await this.projectManager.saveProject(this.graph);
           if (ok) {
-            if (typeof alert !== 'undefined') alert(`💾 Projeto e grafos salvos com sucesso em formato JSON!`);
+            if (typeof alert !== 'undefined') alert(t('backstage.alerts.json_saved'));
             this.render();
           }
         }
@@ -846,7 +846,7 @@ export class BackstageView {
     // Salvar Workspace
     this.overlay.querySelector('#btn-backstage-save')?.addEventListener('click', async () => {
       await this.projectManager.saveProject(this.graph);
-      if (typeof alert !== 'undefined') alert('💾 Workspace e pipelines salvos com sucesso!');
+      if (typeof alert !== 'undefined') alert(t('backstage.alerts.workspace_saved'));
       this.close();
     });
 
@@ -859,11 +859,11 @@ export class BackstageView {
         out.style.display = 'block';
         out.innerHTML = `
           <div style="padding: 12px 16px; background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 6px; font-size: 12px; color: #1e7e34;">
-            <strong>✅ Sincronização Concluída com Sucesso!</strong><br>
-            Recursos pré-aprovados foram instalados e atualizados nas pastas físicas da sua máquina:<br>
-            • <code>${wm.getWorkspaceDirectories().skills}</code> (${wm.getApprovedSkills().length} habilidades e arquivos SKILL.md)<br>
-            • <code>${wm.getWorkspaceDirectories().mcps}</code> (${wm.getApprovedMcps().length} servidores MCP)<br>
-            • <code>${wm.getWorkspaceDirectories().agents}</code> (agentes de governança)
+            <strong>✅ ${t('backstage.alerts.sync_success_title')}</strong><br>
+            ${t('backstage.alerts.sync_success_desc')}<br>
+            • <code>${wm.getWorkspaceDirectories().skills}</code> (${wm.getApprovedSkills().length} ${t('backstage.options.skills_path_label').replace(':', '')})<br>
+            • <code>${wm.getWorkspaceDirectories().mcps}</code> (${wm.getApprovedMcps().length} ${t('backstage.options.mcps_path_label').replace(':', '')})<br>
+            • <code>${wm.getWorkspaceDirectories().agents}</code> (${t('backstage.options.agents_path_label').replace(':', '')})
           </div>
         `;
       }
@@ -879,7 +879,7 @@ export class BackstageView {
           <div style="padding: 12px 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; font-size: 12px; color: #166534;">
             <strong>🛡️ ${res.summary}</strong><br>
             Status: <strong>${res.status.toUpperCase()}</strong> | Timestamp: ${new Date(res.timestamp).toLocaleTimeString()}<br>
-            Todas as habilidades ativas e pré-aprovadas foram auditadas sem riscos ou violações.
+            ${t('backstage.alerts.auditor_ok_desc')}
           </div>
         `;
       }
@@ -894,8 +894,8 @@ export class BackstageView {
         out.innerHTML = `
           <div style="padding: 12px 16px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 12px; color: #1e40af;">
             <strong>📊 ${res.summary}</strong><br>
-            Nós verificados: ${res.details?.nodeCount} | Arestas: ${res.details?.edgeCount}<br>
-            Nenhum erro de linting ou desconexão detectado no grafo.
+            ${t('backstage.alerts.linter_nodes_edges', { nodes: res.details?.nodeCount, edges: res.details?.edgeCount })}<br>
+            ${t('backstage.alerts.linter_no_errors')}
           </div>
         `;
       }
@@ -911,7 +911,7 @@ export class BackstageView {
         out.innerHTML = `
           <div style="padding: 12px 16px; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 6px; font-size: 12px; color: #6b21a8;">
             <strong>🚀 ${res.summary}</strong><br>
-            Pipeline inicializado no workspace com persistência e telemetria ativas.
+            ${t('backstage.alerts.pipeline_init_desc')}
           </div>
         `;
       }
@@ -954,7 +954,7 @@ export class BackstageView {
         ]
       }, this.graph);
 
-      if (typeof alert !== 'undefined') alert(`✅ Projeto "${pName}" criado e ativo!`);
+      if (typeof alert !== 'undefined') alert(t('backstage.alerts.project_created', { name: pName }));
       this.close();
     });
 
@@ -973,7 +973,7 @@ export class BackstageView {
         if (action === 'open') {
           if (pTarget) {
             await this.projectManager.loadProject(pTarget, this.graph);
-            if (typeof alert !== 'undefined') alert(`✅ Projeto "${pName}" carregado com sucesso!`);
+            if (typeof alert !== 'undefined') alert(t('backstage.alerts.project_loaded', { name: pName }));
             this.close();
           }
         } else if (action === 'manage') {
@@ -987,12 +987,12 @@ export class BackstageView {
           globalEventBus.emit('modal:open-project-manager', 'settings');
         } else if (action === 'delete') {
           const confirmed = typeof confirm !== 'undefined'
-            ? confirm(`Tem certeza que deseja apagar o projeto inteiro "${pName}" e todos os seus arquivos do disco?\n\nEsta operação é permanente e não poderá ser desfeita.`)
+            ? confirm(t('backstage.alerts.delete_confirm', { name: pName }))
             : true;
 
           if (confirmed) {
             await this.projectManager.deleteProject(pId || pPath, true, this.graph);
-            if (typeof alert !== 'undefined') alert(`🗑️ Projeto "${pName}" apagado com sucesso.`);
+            if (typeof alert !== 'undefined') alert(t('backstage.alerts.project_deleted', { name: pName }));
             this.render();
           }
         }
@@ -1003,7 +1003,7 @@ export class BackstageView {
     this.overlay.querySelectorAll<HTMLButtonElement>('.btn-pipeline-load').forEach(btn => {
       btn.addEventListener('click', async () => {
         await this.projectManager.loadPipeline(this.graph);
-        if (typeof alert !== 'undefined') alert('✅ Grafo carregado no canvas!');
+        if (typeof alert !== 'undefined') alert(t('backstage.alerts.canvas_graph_loaded'));
         this.close();
       });
     });
@@ -1022,11 +1022,11 @@ export class BackstageView {
     });
 
     this.overlay.querySelector('#btn-quick-sync-db')?.addEventListener('click', () => {
-      if (typeof alert !== 'undefined') alert('🗄️ Banco de dados SQLite sincronizado com a estrutura do projeto!');
+      if (typeof alert !== 'undefined') alert(t('backstage.alerts.db_synced'));
     });
 
     this.overlay.querySelector('#btn-quick-clean-cache')?.addEventListener('click', () => {
-      if (typeof alert !== 'undefined') alert('🧹 Cache de checkpoints do Resume Engine limpo com sucesso.');
+      if (typeof alert !== 'undefined') alert(t('backstage.alerts.cache_cleared'));
     });
   }
 

@@ -118,7 +118,7 @@ export class ModalWindowManager {
     if (isResizable && !resizeHandle && typeof document !== 'undefined' && document.createElement) {
       resizeHandle = document.createElement('div');
       resizeHandle.className = 'window-resize-handle';
-      resizeHandle.title = 'Arrastar para redimensionar';
+      resizeHandle.title = t('window.resize_tip');
       resizeHandle.innerHTML = `
         <svg viewBox="0 0 10 10" width="10" height="10" style="display:block; fill:#8a8886;">
           <circle cx="8" cy="8" r="1"></circle>
@@ -372,7 +372,7 @@ export class ModalWindowManager {
 
       if (maximizeBtn) {
         maximizeBtn.innerHTML = '🗗';
-        maximizeBtn.title = 'Restaurar Tamanho Normal';
+        maximizeBtn.title = t('window.restore_tip');
       }
 
       if (options.onMaximize) {
@@ -397,7 +397,7 @@ export class ModalWindowManager {
 
       if (maximizeBtn) {
         maximizeBtn.innerHTML = '🗖';
-        maximizeBtn.title = 'Maximizar (Duplo clique na barra)';
+        maximizeBtn.title = t('window.maximize_tip');
       }
 
       if (options.onMaximize) {

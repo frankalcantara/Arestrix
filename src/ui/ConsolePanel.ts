@@ -151,7 +151,7 @@ export class ConsolePanel {
         const copyBtn = this.container.querySelector('#btn-copy-console') as HTMLButtonElement;
         if (copyBtn) {
           const original = copyBtn.innerHTML;
-          copyBtn.innerHTML = '✔ Copiado!';
+          copyBtn.innerHTML = t('console.copied');
           setTimeout(() => { copyBtn.innerHTML = original; }, 1500);
         }
       });
@@ -160,27 +160,27 @@ export class ConsolePanel {
 
   private bindEvents(): void {
     globalEventBus.on('pipeline:compiling', (msg: string) => {
-      this.setStatus('● COMPILANDO MSVC...', 'status-compiling');
+      this.setStatus(t('console.status_compiling_msvc'), 'status-compiling');
       this.addLine(`[BUILD] ${msg}`, 'line-warning');
       this.ensureVisible();
     });
 
     globalEventBus.on('pipeline:running', (msg: string) => {
-      this.setStatus('● EXECUTANDO...', 'status-running');
+      this.setStatus(t('console.status_executing'), 'status-running');
       this.addLine(`[RUN] ${msg}`, 'line-info');
     });
 
     globalEventBus.on('pipeline:success', (data: { stdout: string; elapsedMs: number }) => {
-      this.setStatus(`● SUCESSO (${data.elapsedMs}ms)`, 'status-success');
+      this.setStatus(t('console.status_success', { ms: data.elapsedMs }), 'status-success');
       this.addLine(`----------------------------------------------------------------------`, 'line-muted');
       this.addLine(data.stdout, 'line-output');
       this.addLine(`----------------------------------------------------------------------`, 'line-muted');
-      this.addLine(`[OK] Execução concluída com sucesso em ${data.elapsedMs} ms.`, 'line-success');
+      this.addLine(t('console.exec_success', { ms: data.elapsedMs }), 'line-success');
     });
 
     globalEventBus.on('pipeline:error', (data: { stage: string; error: string }) => {
-      this.setStatus('● FALHA', 'status-error');
-      this.addLine(`[ERRO NO ESTÁGIO: ${data.stage.toUpperCase()}]`, 'line-error');
+      this.setStatus(t('console.status_failure'), 'status-error');
+      this.addLine(`[${t('console.stage_error')}: ${data.stage.toUpperCase()}]`, 'line-error');
       this.addLine(data.error, 'line-error');
     });
 
@@ -286,7 +286,7 @@ export class ConsolePanel {
     } else {
       this.telemetryEl.innerHTML = '';
     }
-    this.setStatus('● OCIOSO', 'status-idle');
+    this.setStatus(t('console.status_idle'), 'status-idle');
   }
 
   toggleCollapse(): void {

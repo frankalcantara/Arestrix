@@ -46,7 +46,7 @@ export class StatusBar {
         <span class="office-status-dot status-ready" id="sb-status-dot" title="${t('statusbar.system_status_tip')}"></span>
         <span class="office-status-text" id="sb-status-text">${t('statusbar.ready')}</span>
         <span class="office-status-sep">|</span>
-        <span class="office-status-stats" id="sb-stats-text">0 vértices, 0 conexões</span>
+        <span class="office-status-stats" id="sb-stats-text">${t('statusbar.stats', { nodes: 0, edges: 0 })}</span>
       </div>
 
       <div class="office-statusbar-center">

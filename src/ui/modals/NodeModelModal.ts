@@ -3,6 +3,7 @@ import { INodeData, IModelConfig, LLMProvider } from '../../core/types.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 import { SkillEditorModal } from './SkillEditorModal.ts';
+import { t } from '../../i18n/index.ts';
 
 export class NodeModelModal {
   private overlay: HTMLElement;
@@ -51,8 +52,8 @@ export class NodeModelModal {
         };
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Modelo de IA & Prompt (Agente do Projeto)',
-      subtitle: `📦 Vértice do Projeto: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id}) | Credenciais no 🏢 Studio`,
+      title: t('node_modals.model_title'),
+      subtitle: t('node_modals.model_subtitle', { label: this.escapeHtml(node.label), id: node.id }),
       icon: '🧠',
       closeBtnId: 'btn-close-model-modal'
     });
@@ -66,19 +67,19 @@ export class NodeModelModal {
             <label class="inheritance-checkbox-label">
               <input type="checkbox" id="chk-inherit-model" ${isInherited ? 'checked' : ''} />
               <div class="inheritance-label-text">
-                <span class="inheritance-title">Herdar Padrões Globais de IA</span>
-                <span class="inheritance-desc">Usa o modelo configurado na Toolbar (${this.getProviderLabel(globalDefaults.model.provider)} / ${globalDefaults.model.model})</span>
+                <span class="inheritance-title">${t('node_modals.inherit_model_title')}</span>
+                <span class="inheritance-desc">${t('node_modals.inherit_model_desc', { provider: this.getProviderLabel(globalDefaults.model.provider), model: globalDefaults.model.model })}</span>
               </div>
             </label>
             <div class="inheritance-status-badge ${isInherited ? 'badge-inherited' : 'badge-overridden'}">
-              ${isInherited ? 'HERDADO DO PIPELINE' : 'CUSTOMIZADO PARA ESTE VÉRTICE'}
+              ${isInherited ? t('node_modals.badge_inherited') : t('node_modals.badge_overridden')}
             </div>
           </div>
 
           <div class="settings-form-wrapper ${isInherited ? 'form-disabled-opacity' : ''}" id="model-form-wrapper">
             <div class="form-row-grid">
               <div class="form-group">
-                <label class="form-label" for="node-model-provider">Provedor de IA</label>
+                <label class="form-label" for="node-model-provider">${t('node_modals.provider_label')}</label>
                 <select id="node-model-provider" class="form-select" ${isInherited ? 'disabled' : ''}>
                   <option value="deepseek" ${effectiveModel.provider === 'deepseek' ? 'selected' : ''}>DeepSeek</option>
                   <option value="anthropic" ${effectiveModel.provider === 'anthropic' ? 'selected' : ''}>Anthropic (Claude)</option>
@@ -90,37 +91,37 @@ export class NodeModelModal {
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="node-model-name">Identificador do Modelo</label>
+                <label class="form-label" for="node-model-name">${t('node_modals.model_id_label')}</label>
                 <input type="text" id="node-model-name" class="form-input" value="${this.escapeHtml(effectiveModel.model)}" placeholder="ex: claude-opus-5.5, deepseek-v4-pro" ${isInherited ? 'disabled' : ''} />
               </div>
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="node-skill-path">Arquivo de Skill (.md)</label>
+              <label class="form-label" for="node-skill-path">${t('node_modals.skill_path_label')}</label>
               <div style="display: flex; gap: 8px; align-items: center;">
                 <input type="text" id="node-skill-path" class="form-input" style="flex: 1;" value="${this.escapeHtml(effectiveModel.skillPath || '')}" placeholder=".agents/default/SKILL.md" ${isInherited ? 'disabled' : ''} />
-                <button type="button" class="btn btn-secondary-pill" id="btn-edit-skill-modal" title="Abrir editor de Markdown para este skill" style="white-space: nowrap; padding: 6px 12px; font-size: 12px;">✎ Editar Skill</button>
-                <button type="button" class="btn btn-secondary-pill" id="btn-new-skill-modal" title="Criar um novo arquivo de skill a partir do template padrão" style="white-space: nowrap; padding: 6px 12px; font-size: 12px;">＋ Novo Skill</button>
+                <button type="button" class="btn btn-secondary-pill" id="btn-edit-skill-modal" title="${t('node_modals.btn_edit_skill_title')}" style="white-space: nowrap; padding: 6px 12px; font-size: 12px;">${t('node_modals.btn_edit_skill')}</button>
+                <button type="button" class="btn btn-secondary-pill" id="btn-new-skill-modal" title="${t('node_modals.btn_new_skill_title')}" style="white-space: nowrap; padding: 6px 12px; font-size: 12px;">${t('node_modals.btn_new_skill')}</button>
               </div>
-              <div class="form-hint">Caminho relativo para as diretrizes e instruções de especialização do agente.</div>
+              <div class="form-hint">${t('node_modals.skill_path_hint')}</div>
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="node-prompt-template">Template de Prompt da Tarefa</label>
+              <label class="form-label" for="node-prompt-template">${t('node_modals.prompt_template_label')}</label>
               <textarea id="node-prompt-template" class="form-textarea" rows="4" ${isInherited ? 'disabled' : ''}>${this.escapeHtml(effectiveModel.promptTemplate || '')}</textarea>
-              <div class="form-hint">Variáveis interpoladas: <code>\${id}</code>, <code>\${arquivoArtigo}</code>, <code>\${arquivoPlanSvg}</code>.</div>
+              <div class="form-hint">${t('node_modals.prompt_vars_hint')}</div>
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="node-temperature">Temperatura de Amostragem (0.0 a 1.0)</label>
+              <label class="form-label" for="node-temperature">${t('node_modals.temperature_label')}</label>
               <input type="number" id="node-temperature" class="form-input" min="0" max="1" step="0.05" value="${effectiveModel.temperature ?? 0.7}" ${isInherited ? 'disabled' : ''} />
             </div>
           </div>
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary-pill" id="btn-cancel-model-modal">Cancelar</button>
-          <button class="btn btn-primary" id="btn-save-model-modal">Salvar Configuração</button>
+          <button class="btn btn-secondary-pill" id="btn-cancel-model-modal">${t('global_defaults.btn_cancel')}</button>
+          <button class="btn btn-primary" id="btn-save-model-modal">${t('node_modals.btn_save_agent_settings')}</button>
         </div>
       </div>
     `;
@@ -251,7 +252,7 @@ export class NodeModelModal {
       node.id,
       { agentSettings: node.agentSettings },
       { agentSettings: updatedSettings },
-      `Alterar modelo de IA de "${node.label}"`
+      t('node_modals.cmd_change_model', { label: node.label })
     );
     this.graph.commandManager.execute(cmd);
   }

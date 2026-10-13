@@ -2,6 +2,7 @@ import { Graph } from '../../core/Graph.ts';
 import { INodeData, INodeMemoryConfig, DEFAULT_NODE_MEMORY_CONFIG } from '../../core/types.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
+import { t } from '../../i18n/index.ts';
 
 export class NodeMemoryModal {
   private overlay: HTMLElement;
@@ -52,21 +53,21 @@ export class NodeMemoryModal {
     const isEnabled = !!effectiveMemory.enabled;
     const isPersistent = !!effectiveMemory.persistent;
 
-    let statusBadgeText = 'MEMÓRIA DESATIVADA (ISOLAMENTO TOTAL)';
+    let statusBadgeText = t('node_modals.status_memory_disabled');
     let statusBadgeClass = 'badge-memory-disabled';
     if (isEnabled) {
       if (isPersistent) {
-        statusBadgeText = 'MEMÓRIA ATIVA (PERSISTENTE ENTRE SESSÕES)';
+        statusBadgeText = t('node_modals.status_memory_persistent');
         statusBadgeClass = 'badge-memory-persistent';
       } else {
-        statusBadgeText = 'MEMÓRIA ATIVA (EFÊMERA / SESSÃO)';
+        statusBadgeText = t('node_modals.status_memory_ephemeral');
         statusBadgeClass = 'badge-memory-ephemeral';
       }
     }
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Memória do Agente (Blackboard & Lições)',
-      subtitle: `📦 Escopo do Projeto: Vértice <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id}) | Projeto: <strong>${this.escapeHtml(projectId)}</strong>`,
+      title: t('node_modals.memory_title'),
+      subtitle: t('node_modals.memory_subtitle', { label: this.escapeHtml(node.label), id: node.id, projectId: this.escapeHtml(projectId) }),
       icon: '💾',
       closeBtnId: 'btn-close-memory-modal'
     });
@@ -80,12 +81,12 @@ export class NodeMemoryModal {
             <label class="inheritance-checkbox-label">
               <input type="checkbox" id="chk-inherit-memory" ${isInherited ? 'checked' : ''} />
               <div class="inheritance-label-text">
-                <span class="inheritance-title">Herdar Padrões Globais de Memória</span>
-                <span class="inheritance-desc">Usa a política de memória configurada para o pipeline (Padrão: Desativada)</span>
+                <span class="inheritance-title">${t('node_modals.inherit_memory_title')}</span>
+                <span class="inheritance-desc">${t('node_modals.inherit_memory_desc')}</span>
               </div>
             </label>
             <div class="inheritance-status-badge ${isInherited ? 'badge-inherited' : 'badge-overridden'}">
-              ${isInherited ? 'HERDADO DO PIPELINE' : 'CUSTOMIZADO PARA ESTE VÉRTICE'}
+              ${isInherited ? t('node_modals.badge_inherited') : t('node_modals.badge_overridden')}
             </div>
           </div>
 
@@ -97,9 +98,9 @@ export class NodeMemoryModal {
               <span class="memory-status-desc">
                 ${isEnabled
                   ? (isPersistent
-                      ? 'Estado gravado em disco com retenção contínua entre sessões para este projeto.'
-                      : 'Memória operando em RAM exclusivamente nesta sessão. Descartada ao reiniciar a sessão.')
-                  : 'Este agente operará 100% isolado, sem acesso ao Blackboard e sem consulta de lições prévias.'}
+                      ? t('node_modals.desc_memory_persistent')
+                      : t('node_modals.desc_memory_ephemeral'))
+                  : t('node_modals.desc_memory_disabled')}
               </span>
             </div>
           </div>
@@ -110,15 +111,15 @@ export class NodeMemoryModal {
               <div class="section-card-header">
                 <span class="section-card-icon">⚡</span>
                 <div class="section-card-titles">
-                  <h3 class="section-card-title">Habilitação de Memória (Opt-in)</h3>
-                  <p class="section-card-desc">A memória não é padrão e nem obrigatória. Selecione se este agente terá acesso.</p>
+                  <h3 class="section-card-title">${t('node_modals.memory_opt_in_title')}</h3>
+                  <p class="section-card-desc">${t('node_modals.memory_opt_in_desc')}</p>
                 </div>
               </div>
 
               <div class="memory-enable-toggle-row">
                 <label class="memory-toggle-label">
                   <input type="checkbox" id="node-memory-enabled" ${isEnabled ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
-                  <span class="memory-toggle-text">Habilitar Acesso à Memória para este Agente</span>
+                  <span class="memory-toggle-text">${t('node_modals.toggle_enable_memory')}</span>
                 </label>
               </div>
             </div>
@@ -128,27 +129,27 @@ export class NodeMemoryModal {
               <div class="section-card-header">
                 <span class="section-card-icon">🗄️</span>
                 <div class="section-card-titles">
-                  <h3 class="section-card-title">Regime de Persistência & Projeto</h3>
-                  <p class="section-card-desc">Defina se a memória persiste entre sessões e o escopo de isolamento do projeto</p>
+                  <h3 class="section-card-title">${t('node_modals.memory_persistence_section_title')}</h3>
+                  <p class="section-card-desc">${t('node_modals.memory_persistence_section_desc')}</p>
                 </div>
               </div>
 
               <div class="form-group">
-                <label class="form-label">Modo de Retenção</label>
+                <label class="form-label">${t('node_modals.memory_retention_mode_label')}</label>
                 <div class="memory-persistence-options">
                   <label class="persistence-radio-card ${!isPersistent ? 'selected' : ''}">
                     <input type="radio" name="node-memory-persistence" value="ephemeral" ${!isPersistent ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
                     <div class="persistence-card-content">
-                      <span class="persistence-card-title">⚪ Efêmera (Apenas nesta Sessão / RAM)</span>
-                      <span class="persistence-card-desc">A memória de trabalho e reflexões ficam na memória temporária e são descartadas ao reiniciar a sessão.</span>
+                      <span class="persistence-card-title">${t('node_modals.opt_ephemeral_title')}</span>
+                      <span class="persistence-card-desc">${t('node_modals.opt_ephemeral_desc')}</span>
                     </div>
                   </label>
 
                   <label class="persistence-radio-card ${isPersistent ? 'selected' : ''}">
                     <input type="radio" name="node-memory-persistence" value="persistent" ${isPersistent ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
                     <div class="persistence-card-content">
-                      <span class="persistence-card-title">🟣 Persistente Entre Sessões (Disco)</span>
-                      <span class="persistence-card-desc">Gravação atômica em disco vinculada ao projeto. O histórico de lições e dados é mantido entre sessões.</span>
+                      <span class="persistence-card-title">${t('node_modals.opt_persistent_title')}</span>
+                      <span class="persistence-card-desc">${t('node_modals.opt_persistent_desc')}</span>
                     </div>
                   </label>
                 </div>
@@ -175,32 +176,32 @@ export class NodeMemoryModal {
                 <label class="memory-perm-item">
                   <input type="checkbox" id="mem-perm-read-bb" ${effectiveMemory.readBlackboard ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
                   <div>
-                    <span class="perm-item-title">Leitura do Blackboard (Memória de Trabalho)</span>
-                    <span class="perm-item-desc">Acessa decisões e dados compartilhados gerados por agentes anteriores</span>
+                    <span class="perm-item-title">${t('node_modals.perm_read_bb_title')}</span>
+                    <span class="perm-item-desc">${t('node_modals.perm_read_bb_desc')}</span>
                   </div>
                 </label>
 
                 <label class="memory-perm-item">
                   <input type="checkbox" id="mem-perm-write-bb" ${effectiveMemory.writeBlackboard ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
                   <div>
-                    <span class="perm-item-title">Escrita no Blackboard (Publicar Deltas)</span>
-                    <span class="perm-item-desc">Disponibiliza saídas estruturadas para agentes subsequentes</span>
+                    <span class="perm-item-title">${t('node_modals.perm_write_bb_title')}</span>
+                    <span class="perm-item-desc">${t('node_modals.perm_write_bb_desc')}</span>
                   </div>
                 </label>
 
                 <label class="memory-perm-item">
                   <input type="checkbox" id="mem-perm-read-lessons" ${effectiveMemory.semanticLessons ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
                   <div>
-                    <span class="perm-item-title">Consultar Lições Aprendidas (Semântica)</span>
-                    <span class="perm-item-desc">Injeta regras profiláticas preventivas no prompt de sistema</span>
+                    <span class="perm-item-title">${t('node_modals.perm_read_lessons_title')}</span>
+                    <span class="perm-item-desc">${t('node_modals.perm_read_lessons_desc')}</span>
                   </div>
                 </label>
 
                 <label class="memory-perm-item">
                   <input type="checkbox" id="mem-perm-write-lessons" ${effectiveMemory.recordLessons ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
                   <div>
-                    <span class="perm-item-title">Registrar Novas Lições (Auditoria & Falhas)</span>
-                    <span class="perm-item-desc">Indexa regras preventivas derivadas de erros e auditorias</span>
+                    <span class="perm-item-title">${t('node_modals.perm_write_lessons_title')}</span>
+                    <span class="perm-item-desc">${t('node_modals.perm_write_lessons_desc')}</span>
                   </div>
                 </label>
               </div>
@@ -221,8 +222,8 @@ export class NodeMemoryModal {
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary" id="btn-cancel-memory-modal">Fechar</button>
-          <button class="btn btn-primary" id="btn-save-memory-modal">Salvar Configurações</button>
+          <button class="btn btn-secondary" id="btn-cancel-memory-modal">${t('global_defaults.btn_cancel')}</button>
+          <button class="btn btn-primary" id="btn-save-memory-modal">${t('node_modals.btn_save_agent_settings')}</button>
         </div>
       </div>
     `;
@@ -320,7 +321,7 @@ export class NodeMemoryModal {
       node.id,
       { agentSettings: node.agentSettings },
       { agentSettings: updatedSettings },
-      `Atualizar Configuração de Memória de "${node.label}"`
+      t('node_modals.cmd_change_memory', { label: node.label })
     );
 
     this.graph.commandManager.execute(cmd);

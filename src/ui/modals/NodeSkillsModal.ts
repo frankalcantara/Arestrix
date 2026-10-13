@@ -6,6 +6,7 @@ import { GitHubSkillsRegistry } from '../../core/skills/GitHubSkillsRegistry.ts'
 import { EventBus } from '../../core/EventBus.ts';
 import { WorkspaceManager } from '../../core/workspace/WorkspaceManager.ts';
 import { WorkspaceSkillAuditorAgent } from '../../core/workspace/WorkspaceSkillAuditorAgent.ts';
+import { t } from '../../i18n/index.ts';
 
 /**
  * Arestrix Studio - Diálogo de Habilidades & Skills do Agente (Padrão Microsoft Office)
@@ -37,7 +38,7 @@ export class NodeSkillsModal extends BaseModal {
   constructor(graph: Graph, bus?: EventBus) {
     super({
       id: 'node-skills-modal',
-      title: 'Habilidades & Skills do Agente (SKILL.md)',
+      title: t('node_skills.title', 'Habilidades & Skills do Agente (SKILL.md)'),
       icon: '📜',
       minWidth: 800,
       minHeight: 580,
@@ -65,7 +66,7 @@ export class NodeSkillsModal extends BaseModal {
 
       this.activeNodeId = nodeId;
       this.ensureNodeHasSkill(node);
-      this.config.subtitle = `📦 Vértice do Projeto: <strong style="color: #0f6cbd;">${this.escapeHtml(node.label)}</strong> (ID: <code>${node.id}</code>) | Catálogo do 🛠️ Workspace`;
+      this.config.subtitle = t('node_skills.subtitle', '📦 Vértice do Projeto: <strong style="color: #0f6cbd;">{{label}}</strong> (ID: <code>{{id}}</code>) | Catálogo do 🛠️ Workspace', { label: this.escapeHtml(node.label), id: node.id });
     }
 
     this.activeTab = initialTab;
@@ -118,9 +119,9 @@ export class NodeSkillsModal extends BaseModal {
   }
 
   protected renderBody(): string {
-    if (!this.activeNodeId) return '<div style="padding: 20px;">Nenhum vértice ativo selecionado.</div>';
+    if (!this.activeNodeId) return `<div style="padding: 20px;">${t('node_skills.no_active_vertex', 'Nenhum vértice ativo selecionado.')}</div>`;
     const node = this.graph.getNode(this.activeNodeId);
-    if (!node) return '<div style="padding: 20px;">Vértice não encontrado.</div>';
+    if (!node) return `<div style="padding: 20px;">${t('node_skills.vertex_not_found', 'Vértice não encontrado.')}</div>`;
 
     const currentSkill = this.getActiveSkill(node);
     const skillsList = node.agentSettings?.skills || [];
@@ -142,13 +143,13 @@ export class NodeSkillsModal extends BaseModal {
       <!-- Abas de Navegação Particionadas por Escopo -->
       <div class="office-modal-tab-bar">
         <button class="office-modal-tab-btn ${this.activeTab === 'workspace' ? 'active' : ''}" data-tab="workspace">
-          🛡️ Habilidades Pré-Aprovadas do Workspace
+          ${t('node_skills.tab_workspace', '🛡️ Habilidades Pré-Aprovadas do Workspace')}
         </button>
         <button class="office-modal-tab-btn ${this.activeTab === 'editor' ? 'active' : ''}" data-tab="editor">
-          📝 [Projeto] Habilidade do Agente & Editor
+          ${t('node_skills.tab_editor', '📝 [Projeto] Habilidade do Agente & Editor')}
         </button>
         <button class="office-modal-tab-btn ${this.activeTab === 'github' ? 'active' : ''}" data-tab="github">
-          🌐 [Studio] Importar do Catálogo (GitHub Open Source)
+          ${t('node_skills.tab_github', '🌐 [Studio] Importar do Catálogo (GitHub Open Source)')}
         </button>
       </div>
 
@@ -165,29 +166,27 @@ export class NodeSkillsModal extends BaseModal {
             <div style="display: flex; align-items: flex-start; gap: 10px;">
               <span style="font-size: 20px; line-height: 1;">🛡️</span>
               <div style="font-size: 12px; color: #166534; line-height: 1.45;">
-                <strong>Habilidades Pré-Aprovadas do Workspace:</strong> Catálogo oficial homologado com governança estrita e certificação de conformidade.
-                Todas as habilidades cumprem integralmente as diretrizes do Arestrix (incluindo política de <strong>Zero Sombras em Tipografia Vetorial SVG</strong> e integridade de artefatos).
-                Instaladas nativamente em <code>.workspace/skills</code> na sua máquina.
+                <strong>${t('node_skills.callout_ws_title', 'Habilidades Pré-Aprovadas do Workspace:')}</strong> ${t('node_skills.callout_ws_desc', 'Catálogo oficial homologado com governança estrita e certificação de conformidade. Todas as habilidades cumprem integralmente as diretrizes do Arestrix (incluindo política de <strong>Zero Sombras em Tipografia Vetorial SVG</strong> e integridade de artefatos). Instaladas nativamente em <code>.workspace/skills</code> na sua máquina.')}
               </div>
             </div>
             <div style="font-size: 11px; font-weight: 700; color: #15803d; background: #dcfce7; padding: 4px 8px; border-radius: 4px; border: 1px solid #86efac; white-space: nowrap;">
-              ${approvedSkills.length} Homologadas
+              ${t('node_skills.badge_approved_count', '{{count}} Homologadas', { count: approvedSkills.length })}
             </div>
           </div>
 
           <div style="display: flex; gap: 10px; margin-bottom: 12px; align-items: center;">
             <div style="flex: 1; position: relative;">
-              <input type="text" id="input-search-workspace-skills" class="form-input" placeholder="Buscar habilidades pré-aprovadas por nome, ferramenta ou palavra-chave..." value="${this.escapeHtml(this.workspaceSearchQuery)}" />
+              <input type="text" id="input-search-workspace-skills" class="form-input" placeholder="${t('node_skills.placeholder_search_ws', 'Buscar habilidades pré-aprovadas por nome, ferramenta ou palavra-chave...')}" value="${this.escapeHtml(this.workspaceSearchQuery)}" />
             </div>
             <select id="select-workspace-category-filter" class="form-select" style="max-width: 220px;">
-              <option value="todas" ${this.workspaceCategoryFilter === 'todas' ? 'selected' : ''}>Todas as Categorias</option>
-              <option value="Redação & Conteúdo" ${this.workspaceCategoryFilter === 'Redação & Conteúdo' ? 'selected' : ''}>Redação & Conteúdo</option>
-              <option value="Matemática & Ciência" ${this.workspaceCategoryFilter === 'Matemática & Ciência' ? 'selected' : ''}>Matemática & Ciência</option>
-              <option value="Design & Visual" ${this.workspaceCategoryFilter === 'Design & Visual' ? 'selected' : ''}>Design & Visual (SVG)</option>
-              <option value="Engenharia de Software" ${this.workspaceCategoryFilter === 'Engenharia de Software' ? 'selected' : ''}>Engenharia C++20</option>
-              <option value="Dados & Armazenamento" ${this.workspaceCategoryFilter === 'Dados & Armazenamento' ? 'selected' : ''}>Dados & SQL</option>
-              <option value="Engenharia de Prompt" ${this.workspaceCategoryFilter === 'Engenharia de Prompt' ? 'selected' : ''}>Prompt XML</option>
-              <option value="Governança & Auditoria" ${this.workspaceCategoryFilter === 'Governança & Auditoria' ? 'selected' : ''}>Governança & Auditoria</option>
+              <option value="todas" ${this.workspaceCategoryFilter === 'todas' ? 'selected' : ''}>${t('node_skills.cat_all', 'Todas as Categorias')}</option>
+              <option value="Redação & Conteúdo" ${this.workspaceCategoryFilter === 'Redação & Conteúdo' ? 'selected' : ''}>${t('node_skills.cat_writing', 'Redação & Conteúdo')}</option>
+              <option value="Matemática & Ciência" ${this.workspaceCategoryFilter === 'Matemática & Ciência' ? 'selected' : ''}>${t('node_skills.cat_math', 'Matemática & Ciência')}</option>
+              <option value="Design & Visual" ${this.workspaceCategoryFilter === 'Design & Visual' ? 'selected' : ''}>${t('node_skills.cat_design', 'Design & Visual (SVG)')}</option>
+              <option value="Engenharia de Software" ${this.workspaceCategoryFilter === 'Engenharia de Software' ? 'selected' : ''}>${t('node_skills.cat_software', 'Engenharia C++20')}</option>
+              <option value="Dados & Armazenamento" ${this.workspaceCategoryFilter === 'Dados & Armazenamento' ? 'selected' : ''}>${t('node_skills.cat_data', 'Dados & SQL')}</option>
+              <option value="Engenharia de Prompt" ${this.workspaceCategoryFilter === 'Engenharia de Prompt' ? 'selected' : ''}>${t('node_skills.cat_prompt', 'Prompt XML')}</option>
+              <option value="Governança & Auditoria" ${this.workspaceCategoryFilter === 'Governança & Auditoria' ? 'selected' : ''}>${t('node_skills.cat_governance', 'Governança & Auditoria')}</option>
             </select>
           </div>
 
@@ -195,7 +194,7 @@ export class NodeSkillsModal extends BaseModal {
           <div class="workspace-skills-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; margin-bottom: 20px;">
             ${approvedSkills.length === 0 ? `
               <div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: #64748b; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 4px; font-size: 13px;">
-                Nenhuma habilidade pré-aprovada corresponde aos filtros atuais.
+                ${t('node_skills.empty_ws_search', 'Nenhuma habilidade pré-aprovada corresponde aos filtros atuais.')}
               </div>
             ` : approvedSkills.map(item => `
               <div class="workspace-skill-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px; display: flex; flex-direction: column; justify-content: space-between; transition: all 0.15s ease;">
@@ -203,7 +202,7 @@ export class NodeSkillsModal extends BaseModal {
                   <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
                     <span style="font-size: 14px; font-weight: 700; color: #0f6cbd;">${this.escapeHtml(item.name)}</span>
                     <span style="background: #e8f5e9; color: #1e7e34; border: 1px solid #c8e6c9; border-radius: 3px; font-size: 10px; font-weight: 700; padding: 2px 6px; white-space: nowrap;">
-                      🛡️ PRÉ-APROVADA
+                      ${t('node_skills.badge_pre_approved', '🛡️ PRÉ-APROVADA')}
                     </span>
                   </div>
 
@@ -221,13 +220,13 @@ export class NodeSkillsModal extends BaseModal {
                   </div>
 
                   <div style="font-size: 11px; color: #0f766e; background: #f0fdf4; padding: 4px 8px; border-radius: 4px; margin-bottom: 12px; border: 1px solid #dcfce7;">
-                    ✓ Zero Sombras em Textos &bull; Risco de Auditoria: 0/100
+                    ${t('node_skills.compliance_note', '✓ Zero Sombras em Textos &bull; Risco de Auditoria: 0/100')}
                   </div>
                 </div>
 
                 <div style="display: flex; justify-content: flex-end; border-top: 1px solid #f1f5f9; padding-top: 10px;">
                   <button class="btn btn-primary btn-sm btn-import-workspace-skill" data-skill-id="${item.id}" style="font-weight: 700;">
-                    📥 Importar para este Agente
+                    ${t('node_skills.btn_import_to_agent', '📥 Importar para este Agente')}
                   </button>
                 </div>
               </div>
@@ -237,8 +236,8 @@ export class NodeSkillsModal extends BaseModal {
           <!-- Painel Informativo de MCPs Pré-aprovados -->
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 16px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <strong style="font-size: 12px; color: #334155;">🔌 Servidores MCP Pré-Aprovados do Workspace (${approvedMcps.length})</strong>
-              <span style="font-size: 11px; color: #64748b;">Instalados em <code>.workspace/mcps</code></span>
+              <strong style="font-size: 12px; color: #334155;">${t('node_skills.panel_mcps_title', '🔌 Servidores MCP Pré-Aprovados do Workspace ({{count}})', { count: approvedMcps.length })}</strong>
+              <span style="font-size: 11px; color: #64748b;">${t('node_skills.panel_mcps_desc', 'Instalados em <code>.workspace/mcps</code>')}</span>
             </div>
             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px;">
               ${approvedMcps.map(m => `
@@ -258,20 +257,20 @@ export class NodeSkillsModal extends BaseModal {
             <div style="display: flex; align-items: center; gap: 10px;">
               <span style="font-size: 18px;">${currentAudit.status === 'approved' ? '🛡️' : '⚠️'}</span>
               <div style="font-size: 12px; line-height: 1.4; ${currentAudit.status === 'approved' ? 'color: #166534;' : 'color: #92400e;'}">
-                <strong>Auditoria do Workspace: ${currentAudit.status === 'approved' ? 'APROVADA E HOMOLOGADA' : 'ALERTA DE CONFORMIDADE'}</strong> (Pontuação de Risco: ${currentAudit.riskScore}/100)<br>
+                <strong>${t('node_skills.audit_title', 'Auditoria do Workspace:')} ${currentAudit.status === 'approved' ? t('node_skills.audit_approved', 'APROVADA E HOMOLOGADA') : t('node_skills.audit_alert', 'ALERTA DE CONFORMIDADE')}</strong> (${t('node_skills.audit_risk_score', 'Pontuação de Risco: {{score}}/100', { score: currentAudit.riskScore })})<br>
                 <span style="font-size: 11px; ${currentAudit.status === 'approved' ? 'color: #15803d;' : 'color: #b45309;'}">
-                  ${currentAudit.warnings.length > 0 ? currentAudit.warnings.join(' &bull; ') : '✓ Habilidade cumpre a regra de Zero Sombras em Fontes e lista de ferramentas autorizadas.'}
+                  ${currentAudit.warnings.length > 0 ? currentAudit.warnings.join(' &bull; ') : t('node_skills.audit_ok_text', '✓ Habilidade cumpre a regra de Zero Sombras em Fontes e lista de ferramentas autorizadas.')}
                 </span>
               </div>
             </div>
             <span style="font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; white-space: nowrap; ${currentAudit.status === 'approved' ? 'background: #dcfce7; color: #15803d; border: 1px solid #86efac;' : 'background: #fef3c7; color: #b45309; border: 1px solid #fcd34d;'}">
-              ${currentAudit.status === 'approved' ? 'AUDITADA: OK' : 'REQUER ATENÇÃO'}
+              ${currentAudit.status === 'approved' ? t('node_skills.badge_audit_ok', 'AUDITADA: OK') : t('node_skills.badge_requires_attention', 'REQUER ATENÇÃO')}
             </span>
           </div>
 
           <div class="office-section-card" style="margin-bottom: 14px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-              <label class="form-label" style="margin: 0; font-weight: 700;">Habilidade em Foco:</label>
+              <label class="form-label" style="margin: 0; font-weight: 700;">${t('node_skills.label_focus_skill', 'Habilidade em Foco:')}</label>
               <div style="display: flex; gap: 8px;">
                 <select id="select-active-skill" class="form-select" style="min-width: 240px;">
                   ${skillsList.map(s => `
@@ -280,30 +279,30 @@ export class NodeSkillsModal extends BaseModal {
                     </option>
                   `).join('')}
                 </select>
-                <button id="btn-create-new-skill" class="btn btn-secondary" title="Criar nova habilidade em branco para este agente">
-                  + Nova
+                <button id="btn-create-new-skill" class="btn btn-secondary" title="${t('node_skills.tip_create_skill', 'Criar nova habilidade em branco para este agente')}">
+                  ${t('node_skills.btn_create_skill', '+ Nova')}
                 </button>
               </div>
             </div>
 
             <div class="form-row-grid" style="grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 12px;">
               <div class="form-group" style="margin: 0;">
-                <label class="form-label" for="skill-name-input">Nome da Habilidade</label>
+                <label class="form-label" for="skill-name-input">${t('node_skills.label_skill_name', 'Nome da Habilidade')}</label>
                 <input type="text" id="skill-name-input" class="form-input" value="${this.escapeHtml(currentSkill.name)}" />
               </div>
               <div class="form-group" style="margin: 0;">
-                <label class="form-label" for="skill-license-input">Licença de Uso</label>
+                <label class="form-label" for="skill-license-input">${t('node_skills.label_skill_license', 'Licença de Uso')}</label>
                 <input type="text" id="skill-license-input" class="form-input" value="${this.escapeHtml(currentSkill.license || 'MIT')}" />
               </div>
             </div>
 
             <div class="form-group" style="margin-bottom: 12px;">
-              <label class="form-label" for="skill-desc-input">Descrição Operacional</label>
+              <label class="form-label" for="skill-desc-input">${t('node_skills.label_skill_desc', 'Descrição Operacional')}</label>
               <input type="text" id="skill-desc-input" class="form-input" value="${this.escapeHtml(currentSkill.description)}" />
             </div>
 
             <div class="form-group" style="margin-bottom: 12px;">
-              <label class="form-label">Ferramentas Autorizadas para esta Habilidade</label>
+              <label class="form-label">${t('node_skills.label_authorized_tools', 'Ferramentas Autorizadas para esta Habilidade')}</label>
               <div class="tools-checkbox-row" style="display: flex; flex-wrap: wrap; gap: 12px; padding: 8px 12px; background: #faf9f8; border: 1px solid #edebe9; border-radius: 4px;">
                 ${['write', 'edit', 'read', 'bash', 'validate_svg', 'codemode'].map(tool => `
                   <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
@@ -316,28 +315,28 @@ export class NodeSkillsModal extends BaseModal {
 
             <div class="form-group" style="margin-bottom: 14px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                <label class="form-label" for="skill-prompt-input" style="margin: 0;">Prompt Operacional & Regras do Agente (System Prompt)</label>
-                <span style="font-size: 11px; color: #64748b;">Injetado diretamente na sessão LLM do agente</span>
+                <label class="form-label" for="skill-prompt-input" style="margin: 0;">${t('node_skills.label_system_prompt', 'Prompt Operacional & Regras do Agente (System Prompt)')}</label>
+                <span style="font-size: 11px; color: #64748b;">${t('node_skills.prompt_injection_hint', 'Injetado diretamente na sessão LLM do agente')}</span>
               </div>
-              <textarea id="skill-prompt-input" class="form-textarea code-font" rows="4" placeholder="Instruções de sistema, tom de voz, restrições e regras...">${this.escapeHtml(currentSkill.systemPrompt || '')}</textarea>
+              <textarea id="skill-prompt-input" class="form-textarea code-font" rows="4" placeholder="${t('node_skills.placeholder_system_prompt', 'Instruções de sistema, tom de voz, restrições e regras...')}">${this.escapeHtml(currentSkill.systemPrompt || '')}</textarea>
             </div>
 
             <!-- Editor Markdown com Abas [Editar] / [Visualizar] -->
             <div class="form-group" style="margin-bottom: 0;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <label class="form-label" style="margin: 0; font-weight: 700;">Conteúdo Integral do SKILL.md (Markdown)</label>
+                <label class="form-label" style="margin: 0; font-weight: 700;">${t('node_skills.label_markdown_content', 'Conteúdo Integral do SKILL.md (Markdown)')}</label>
                 <div class="office-subtab-group" style="display: flex; gap: 4px;">
                   <button class="office-subtab-btn ${this.markdownViewMode === 'edit' ? 'active' : ''}" id="btn-mode-md-edit">
-                    ✏️ Editar Markdown
+                    ${t('node_skills.btn_edit_markdown', '✏️ Editar Markdown')}
                   </button>
                   <button class="office-subtab-btn ${this.markdownViewMode === 'preview' ? 'active' : ''}" id="btn-mode-md-preview">
-                    👁️ Visualizar Prévia
+                    ${t('node_skills.btn_preview_markdown', '👁️ Visualizar Prévia')}
                   </button>
                 </div>
               </div>
 
               ${this.markdownViewMode === 'edit' ? `
-                <textarea id="skill-markdown-input" class="form-textarea code-font" rows="12" style="font-size: 12px; line-height: 1.5;" placeholder="# Nome da Skill\n\nInstruções detalhadas em Markdown...">${this.escapeHtml(currentSkill.markdownContent || '')}</textarea>
+                <textarea id="skill-markdown-input" class="form-textarea code-font" rows="12" style="font-size: 12px; line-height: 1.5;" placeholder="${t('node_skills.placeholder_markdown', '# Nome da Skill\n\nInstruções detalhadas em Markdown...')}">${this.escapeHtml(currentSkill.markdownContent || '')}</textarea>
               ` : `
                 <div class="office-markdown-preview" style="min-height: 250px; max-height: 380px; overflow-y: auto; padding: 14px 18px; background: #ffffff; border: 1px solid #d1d5db; border-radius: 4px;">
                   ${this.renderMarkdownToHtml(currentSkill.markdownContent || '')}
@@ -348,10 +347,10 @@ export class NodeSkillsModal extends BaseModal {
 
           <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px;">
             <button class="btn btn-secondary" id="btn-delete-current-skill" ${skillsList.length <= 1 ? 'disabled' : ''}>
-              Excluir Habilidade
+              ${t('node_skills.btn_delete_skill', 'Excluir Habilidade')}
             </button>
             <button class="btn btn-primary" id="btn-save-skill-changes" style="min-width: 140px;">
-              Salvar Alterações
+              ${t('node_skills.btn_save_changes', 'Salvar Alterações')}
             </button>
           </div>
         </div>
@@ -362,27 +361,26 @@ export class NodeSkillsModal extends BaseModal {
             <div style="display: flex; align-items: flex-start; gap: 10px;">
               <span style="font-size: 18px; line-height: 1;">ℹ️</span>
               <div style="font-size: 12px; color: #242424; line-height: 1.4;">
-                <strong>Catálogo Curado de Skills Open Source:</strong> Escolha quais habilidades importar para este agente.
-                As opções disponíveis são fornecidas pelos <strong>${activeReposCount} repositórios globais</strong> ativos do sistema.
+                <strong>${t('node_skills.callout_gh_title', 'Catálogo Curado de Skills Open Source:')}</strong> ${t('node_skills.callout_gh_desc', 'Escolha quais habilidades importar para este agente. As opções disponíveis são fornecidas pelos <strong>{{count}} repositórios globais</strong> ativos do sistema.', { count: activeReposCount })}
               </div>
             </div>
             <button class="btn btn-secondary btn-sm" id="btn-open-global-repos-from-node" style="white-space: nowrap; font-weight: 600; font-size: 11px;">
-              ⚙️ Configurar Projetos GitHub...
+              ${t('node_skills.btn_configure_repos', '⚙️ Configurar Projetos GitHub...')}
             </button>
           </div>
 
           <div style="display: flex; gap: 10px; margin-bottom: 12px; align-items: center;">
             <div style="flex: 1; position: relative;">
-              <input type="text" id="input-search-github-skills" class="form-input" placeholder="Buscar habilidades por nome, descrição ou ferramenta..." value="${this.escapeHtml(this.searchQuery)}" />
+              <input type="text" id="input-search-github-skills" class="form-input" placeholder="${t('node_skills.placeholder_search_gh', 'Buscar habilidades por nome, descrição ou ferramenta...')}" value="${this.escapeHtml(this.searchQuery)}" />
             </div>
             <select id="select-category-filter" class="form-select" style="max-width: 200px;">
-              <option value="todas" ${this.selectedCategory === 'todas' ? 'selected' : ''}>Todas as Categorias</option>
-              <option value="Redação & Conteúdo" ${this.selectedCategory === 'Redação & Conteúdo' ? 'selected' : ''}>Redação & Conteúdo</option>
-              <option value="Matemática & Ciência" ${this.selectedCategory === 'Matemática & Ciência' ? 'selected' : ''}>Matemática & Ciência</option>
-              <option value="Design & Visual" ${this.selectedCategory === 'Design & Visual' ? 'selected' : ''}>Design & Visual (SVG)</option>
-              <option value="Engenharia de Software" ${this.selectedCategory === 'Engenharia de Software' ? 'selected' : ''}>Engenharia C++20</option>
-              <option value="Dados & Armazenamento" ${this.selectedCategory === 'Dados & Armazenamento' ? 'selected' : ''}>Dados & SQL</option>
-              <option value="Engenharia de Prompt" ${this.selectedCategory === 'Engenharia de Prompt' ? 'selected' : ''}>Prompt XML</option>
+              <option value="todas" ${this.selectedCategory === 'todas' ? 'selected' : ''}>${t('node_skills.cat_all', 'Todas as Categorias')}</option>
+              <option value="Redação & Conteúdo" ${this.selectedCategory === 'Redação & Conteúdo' ? 'selected' : ''}>${t('node_skills.cat_writing', 'Redação & Conteúdo')}</option>
+              <option value="Matemática & Ciência" ${this.selectedCategory === 'Matemática & Ciência' ? 'selected' : ''}>${t('node_skills.cat_math', 'Matemática & Ciência')}</option>
+              <option value="Design & Visual" ${this.selectedCategory === 'Design & Visual' ? 'selected' : ''}>${t('node_skills.cat_design', 'Design & Visual (SVG)')}</option>
+              <option value="Engenharia de Software" ${this.selectedCategory === 'Engenharia de Software' ? 'selected' : ''}>${t('node_skills.cat_software', 'Engenharia C++20')}</option>
+              <option value="Dados & Armazenamento" ${this.selectedCategory === 'Dados & Armazenamento' ? 'selected' : ''}>${t('node_skills.cat_data', 'Dados & SQL')}</option>
+              <option value="Engenharia de Prompt" ${this.selectedCategory === 'Engenharia de Prompt' ? 'selected' : ''}>${t('node_skills.cat_prompt', 'Prompt XML')}</option>
             </select>
           </div>
 
@@ -390,9 +388,9 @@ export class NodeSkillsModal extends BaseModal {
           <div class="github-skills-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px;">
             ${githubSkills.length === 0 ? `
               <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: #64748b; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 4px;">
-                <p style="margin: 0 0 10px 0; font-size: 13px;">Nenhuma habilidade encontrada para o termo pesquisado ou não há repositórios ativos.</p>
+                <p style="margin: 0 0 10px 0; font-size: 13px;">${t('node_skills.empty_gh_search', 'Nenhuma habilidade encontrada para o termo pesquisado ou não há repositórios ativos.')}</p>
                 <button class="btn btn-secondary btn-sm" id="btn-empty-open-global-repos" style="font-weight: 600;">
-                  ⚙️ Abrir Configuração Global de Repositórios GitHub
+                  ${t('node_skills.btn_empty_open_repos', '⚙️ Abrir Configuração Global de Repositórios GitHub')}
                 </button>
               </div>
             ` : githubSkills.map(item => `
@@ -421,11 +419,11 @@ export class NodeSkillsModal extends BaseModal {
                 <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f3f4f6; padding-top: 8px;">
                   ${item.githubUrl ? `
                     <a href="${item.githubUrl}" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: #0f6cbd; text-decoration: none;">
-                      Ver no GitHub ↗
+                      ${t('node_skills.view_on_github', 'Ver no GitHub ↗')}
                     </a>
                   ` : '<span></span>'}
                   <button class="btn btn-secondary btn-sm btn-import-github-skill" data-skill-id="${item.id}" style="font-weight: 600;">
-                    📥 Importar para este Agente
+                    ${t('node_skills.btn_import_to_agent', '📥 Importar para este Agente')}
                   </button>
                 </div>
               </div>
@@ -446,10 +444,10 @@ export class NodeSkillsModal extends BaseModal {
     return `
       <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: #faf9f8; border-top: 1px solid #edebe9;">
         <div style="font-size: 12px; color: #64748b;">
-          Total de Habilidades deste Agente: <strong>${skillsList.length}</strong> | Repositórios Globais Ativos: <strong>${activeReposCount}</strong>
+          ${t('node_skills.footer_total_skills', 'Total de Habilidades deste Agente: <strong>{{skillsCount}}</strong> | Repositórios Globais Ativos: <strong>{{reposCount}}</strong>', { skillsCount: skillsList.length, reposCount: activeReposCount })}
         </div>
         <button class="btn btn-secondary" id="btn-footer-close-skills" style="min-width: 90px;">
-          Fechar
+          ${t('node_skills.btn_close', 'Fechar')}
         </button>
       </div>
     `;
@@ -530,7 +528,7 @@ export class NodeSkillsModal extends BaseModal {
         this.bus?.emit('skill:import-requested', { skill: nodeSkill, nodeId: node.id, isCurated: true });
 
         this.graph.updateNode(node.id, { agentSettings: node.agentSettings });
-        this.notificationMessage = `🛡️ Habilidade "${nodeSkill.name}" importada com sucesso e certificada pelo Workspace Auditor! (Risco: ${verdict.riskScore}/100)`;
+        this.notificationMessage = t('node_skills.msg_imported_ws', '🛡️ Habilidade "{{name}}" importada com sucesso e certificada pelo Workspace Auditor! (Risco: {{risk}}/100)', { name: nodeSkill.name, risk: verdict.riskScore });
         this.notificationType = 'success';
         this.activeTab = 'editor';
         this.render();
@@ -580,7 +578,7 @@ export class NodeSkillsModal extends BaseModal {
       node.agentSettings.activeSkillId = newSkill.id;
 
       this.graph.updateNode(node.id, { agentSettings: node.agentSettings });
-      this.notificationMessage = `Nova habilidade criada com sucesso.`;
+      this.notificationMessage = t('node_skills.msg_created_success', 'Nova habilidade criada com sucesso.');
       this.notificationType = 'success';
       this.render();
     });
@@ -619,11 +617,11 @@ export class NodeSkillsModal extends BaseModal {
         node.id,
         { agentSettings: node.agentSettings },
         { agentSettings: updatedSettings },
-        `Atualizar habilidade ${currentSkill.name}`
+        t('node_skills.cmd_update_skill', 'Atualizar habilidade {{name}}', { name: currentSkill.name })
       );
       this.graph.commandManager.execute(cmd);
 
-      this.notificationMessage = `Habilidade "${currentSkill.name}" e SKILL.md salvos com sucesso!`;
+      this.notificationMessage = t('node_skills.msg_saved_success', 'Habilidade "{{name}}" e SKILL.md salvos com sucesso!', { name: currentSkill.name });
       this.notificationType = 'success';
       this.render();
     });
@@ -631,11 +629,11 @@ export class NodeSkillsModal extends BaseModal {
     // Excluir Habilidade
     this.dialog.querySelector('#btn-delete-current-skill')?.addEventListener('click', () => {
       if (!node.agentSettings?.skills || node.agentSettings.skills.length <= 1) return;
-      if (confirm(`Deseja excluir a habilidade "${currentSkill.name}" deste agente?`)) {
+      if (confirm(t('node_skills.confirm_delete', 'Deseja excluir a habilidade "{{name}}" deste agente?', { name: currentSkill.name }))) {
         node.agentSettings.skills = node.agentSettings.skills.filter(s => s.id !== currentSkill.id);
         node.agentSettings.activeSkillId = node.agentSettings.skills[0].id;
         this.graph.updateNode(node.id, { agentSettings: node.agentSettings });
-        this.notificationMessage = `Habilidade removida.`;
+        this.notificationMessage = t('node_skills.msg_removed_success', 'Habilidade removida.');
         this.notificationType = 'info';
         this.render();
       }
@@ -687,7 +685,7 @@ export class NodeSkillsModal extends BaseModal {
         }
 
         this.graph.updateNode(node.id, { agentSettings: node.agentSettings });
-        this.notificationMessage = `Habilidade "${nodeSkill.name}" importada com sucesso do repositório open source!`;
+        this.notificationMessage = t('node_skills.msg_imported_gh', 'Habilidade "{{name}}" importada com sucesso do repositório open source!', { name: nodeSkill.name });
         this.notificationType = 'success';
         this.activeTab = 'editor';
         this.render();
@@ -700,7 +698,7 @@ export class NodeSkillsModal extends BaseModal {
    * e estrito respeito à proibição de sombras/glows em texto.
    */
   private renderMarkdownToHtml(markdown: string): string {
-    if (!markdown) return '<p style="color: #64748b;">Nenhum conteúdo markdown disponível.</p>';
+    if (!markdown) return `<p style="color: #64748b;">${t('node_skills.empty_markdown', 'Nenhum conteúdo markdown disponível.')}</p>`;
 
     // Escapa HTML básico
     let html = markdown

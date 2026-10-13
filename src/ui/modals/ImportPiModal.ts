@@ -9,6 +9,7 @@ import type { IImportAIValidationResult } from '../../core/ai/DefaultIntelligenc
 import { EnvGuidanceModal } from './EnvGuidanceModal.ts';
 import { EnvironmentManager } from '../../core/env/EnvironmentManager.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
+import { t } from '../../i18n/index.ts';
 
 declare const process: any;
 
@@ -135,8 +136,8 @@ export class ImportPiModal {
 
     try {
       const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-        title: 'Importar Projeto Pi',
-        subtitle: 'Importe projetos e agentes do ecossistema Pi para o 📦 Projeto Ativo no 🛠️ Workspace.',
+        title: t('import_modals.pi_title'),
+        subtitle: t('import_modals.pi_subtitle'),
         icon: '🥧',
         closeBtnId: 'btn-close-pi-modal'
       });
@@ -148,10 +149,10 @@ export class ImportPiModal {
           <!-- Abas Estilo Office Pivot -->
           <div class="modal-tabs">
             <button class="tab-btn ${this.activeTab === 'project' ? 'active' : ''}" id="pi-tab-project">
-              Projeto Completo
+              ${t('import_modals.tab_full_project')}
             </button>
             <button class="tab-btn ${this.activeTab === 'chat' ? 'active' : ''}" id="pi-tab-chat">
-              Diálogo do Pi
+              ${t('import_modals.tab_pi_chat')}
             </button>
           </div>
 
@@ -163,19 +164,19 @@ export class ImportPiModal {
           <!-- Rodapé Estilo Office -->
           <div class="modal-footer">
             <span class="footer-info" id="pi-status-msg">
-              ${this.isScanning ? 'Analisando projeto...' : (this.activeTab === 'project' 
-                ? (this.currentScanResult?.isValid ? 'Projeto analisado e pronto para importação.' : 'Selecione uma pasta de projeto válida.') 
-                : 'Pronto para criar o vértice de diálogo.')}
+              ${this.isScanning ? t('import_modals.status_analyzing') : (this.activeTab === 'project' 
+                ? (this.currentScanResult?.isValid ? t('import_modals.status_ready_project') : t('import_modals.status_select_folder')) 
+                : t('import_modals.status_ready_chat'))}
             </span>
             <div class="footer-actions">
-              <button id="btn-cancel-pi" class="tool-btn btn-secondary">Cancelar</button>
+              <button id="btn-cancel-pi" class="tool-btn btn-secondary">${t('import_modals.btn_cancel')}</button>
               ${this.activeTab === 'project' ? `
                 <button id="btn-import-project-now" class="tool-btn btn-action" ${(!this.currentScanResult || !this.currentScanResult.isValid || this.isScanning) ? 'disabled' : ''}>
-                  Importar
+                  ${t('import_modals.btn_import')}
                 </button>
               ` : `
                 <button id="btn-inject-pi-agent" class="tool-btn btn-action">
-                  Importar
+                  ${t('import_modals.btn_import')}
                 </button>
               `}
             </div>
@@ -215,11 +216,11 @@ export class ImportPiModal {
     return `
       <!-- 1. Localização do Projeto -->
       <div class="office-group" style="margin-bottom: 0;">
-        <label class="office-label" for="pi-dir-input">Pasta do projeto:</label>
+        <label class="office-label" for="pi-dir-input">${t('import_modals.label_project_folder')}</label>
         <div style="display: flex; gap: 8px; align-items: center;">
           <input type="text" id="pi-dir-input" class="office-input" value="${this.escapeHtml(currentPath)}" placeholder="C:/Caminho/Do/Projeto" style="flex: 1;">
-          <button id="btn-browse-folder" class="tool-btn btn-secondary" style="white-space: nowrap; font-size: 12px; height: 32px; padding: 4px 14px;" title="Navegar no Windows Explorer">
-            Procurar...
+          <button id="btn-browse-folder" class="tool-btn btn-secondary" style="white-space: nowrap; font-size: 12px; height: 32px; padding: 4px 14px;" title="${t('import_modals.btn_browse_tip')}">
+            ${t('import_modals.btn_browse')}
           </button>
           <input type="file" id="pi-folder-picker" webkitdirectory directory style="display: none;">
         </div>
@@ -241,17 +242,17 @@ export class ImportPiModal {
           <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; color: #242424;">
             <tbody>
               <tr style="border-bottom: 1px solid #f3f2f1;">
-                <td style="padding: 6px 4px; color: #616161; width: 180px; font-weight: 600;">Habilidades / Agentes:</td>
-                <td style="padding: 6px 4px;">${skillsCount} habilidade(s) localizada(s) em .agents/</td>
+                <td style="padding: 6px 4px; color: #616161; width: 180px; font-weight: 600;">${t('import_modals.row_skills_agents')}</td>
+                <td style="padding: 6px 4px;">${t('import_modals.skills_count_desc', { count: skillsCount })}</td>
               </tr>
               <tr style="border-bottom: 1px solid #f3f2f1;">
-                <td style="padding: 6px 4px; color: #616161; font-weight: 600;">Ferramentas e MCP:</td>
-                <td style="padding: 6px 4px;">${mcpCount} ferramenta(s) configurada(s)</td>
+                <td style="padding: 6px 4px; color: #616161; font-weight: 600;">${t('import_modals.row_tools_mcp')}</td>
+                <td style="padding: 6px 4px;">${t('import_modals.tools_count_desc', { count: mcpCount })}</td>
               </tr>
               <tr style="border-bottom: 1px solid #f3f2f1;">
-                <td style="padding: 6px 4px; color: #616161; font-weight: 600;">Etapas do Pipeline:</td>
+                <td style="padding: 6px 4px; color: #616161; font-weight: 600;">${t('import_modals.row_pipeline_stages')}</td>
                 <td style="padding: 6px 4px;">
-                  <span style="font-weight: 600;">${stagesCount} etapa(s) sequencial(is)</span>
+                  <span style="font-weight: 600;">${t('import_modals.stages_count_desc', { count: stagesCount })}</span>
                   ${stagesList.length > 0 ? `
                     <div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px;">
                       ${stagesList.map(st => `
@@ -264,8 +265,8 @@ export class ImportPiModal {
                 </td>
               </tr>
               <tr>
-                <td style="padding: 6px 4px; color: #616161; font-weight: 600;">Itens de Trabalho:</td>
-                <td style="padding: 6px 4px;">${workItemsCount} item(ns) de lote</td>
+                <td style="padding: 6px 4px; color: #616161; font-weight: 600;">${t('import_modals.row_work_items')}</td>
+                <td style="padding: 6px 4px;">${t('import_modals.items_count_desc', { count: workItemsCount })}</td>
               </tr>
             </tbody>
           </table>
@@ -276,44 +277,44 @@ export class ImportPiModal {
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
             <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: #242424; cursor: pointer;">
               <input type="checkbox" id="chk-validate-ai" ${this.shouldValidateWithAI ? 'checked' : ''} style="cursor: pointer;">
-              Auditar e validar topologia com o modelo de inteligência padrão (DeepSeek)
+              ${t('import_modals.chk_validate_ai')}
             </label>
             ${!ai && !this.isValidatingAI ? `
               <button id="btn-run-ai-check" class="tool-btn btn-secondary" style="font-size: 11px; height: 26px; padding: 2px 10px;">
-                Validar Agora
+                ${t('import_modals.btn_validate_now')}
               </button>
             ` : ''}
           </div>
 
           ${this.isValidatingAI ? `
             <div style="font-size: 12px; color: #616161; padding: 6px 0;">
-              Consultando modelo padrão para auditar etapas e dependências...
+              ${t('import_modals.ai_consulting')}
             </div>
           ` : ai ? `
             <div style="background: #ffffff; border: 1px solid #d1d1d1; border-radius: 2px; padding: 8px 10px; margin-top: 6px; font-size: 12px;">
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <strong style="color: #0f6cbd;">Confiabilidade da topologia: ${ai.confidenceScore}%</strong>
+                <strong style="color: #0f6cbd;">${t('import_modals.ai_confidence', { score: ai.confidenceScore })}</strong>
                 ${ai.missingEnvKey ? `
                   <a href="#" id="link-env-guidance" style="color: #0f6cbd; text-decoration: underline; font-size: 11px;">
-                    Configurar ${ai.missingEnvKey}...
+                    ${t('import_modals.ai_configure_key', { key: ai.missingEnvKey })}
                   </a>
                 ` : `
-                  <span style="color: #107c41; font-weight: 600; font-size: 11px;">Validado com sucesso</span>
+                  <span style="color: #107c41; font-weight: 600; font-size: 11px;">${t('import_modals.ai_validated_success')}</span>
                 `}
               </div>
               <p style="margin: 0; color: #323130; line-height: 1.4;">
-                ${this.escapeHtml(ai.summary || 'Topologia auditada e compatível com Taskflow C++20.')}
+                ${this.escapeHtml(ai.summary || t('import_modals.ai_default_summary'))}
               </p>
             </div>
           ` : `
             <div style="font-size: 11.5px; color: #616161;">
-              A validação verifica a correspondência entre os scripts do projeto e os vértices do Arestrix.
+              ${t('import_modals.ai_explanation')}
             </div>
           `}
         </div>
       ` : `
         <div style="padding: 32px 16px; text-align: center; color: #616161; background: #faf9f8; border: 1px solid #edebe9; border-radius: 4px;">
-          ${this.isScanning ? 'Analisando pasta selecionada...' : 'Insira o caminho da pasta do projeto e clique em "Procurar..." para analisar.'}
+          ${this.isScanning ? t('import_modals.scanning_folder') : t('import_modals.empty_folder_prompt')}
         </div>
       `}
     `;
@@ -322,30 +323,30 @@ export class ImportPiModal {
   private renderChatTab(): string {
     return `
       <div class="office-group" style="margin-bottom: 0;">
-        <label class="office-label" for="pi-agent-name">Nome do agente:</label>
+        <label class="office-label" for="pi-agent-name">${t('import_modals.label_agent_name')}</label>
         <input type="text" id="pi-agent-name" class="office-input" value="Agente_Pi_Mentor" style="margin-bottom: 12px;">
 
-        <label class="office-label" for="pi-agent-style">Estilo cognitivo:</label>
+        <label class="office-label" for="pi-agent-style">${t('import_modals.label_cognitive_style')}</label>
         <select id="pi-agent-style" class="office-select" style="margin-bottom: 12px;">
-          <option value="empathetic_dialogue">Diálogo Empático e Socrático</option>
-          <option value="rigorous_analytical">Analítico e Rigoroso</option>
-          <option value="creative_synthesizer">Sintetizador e Criativo</option>
+          <option value="empathetic_dialogue">${t('import_modals.style_empathetic')}</option>
+          <option value="rigorous_analytical">${t('import_modals.style_rigorous')}</option>
+          <option value="creative_synthesizer">${t('import_modals.style_creative')}</option>
         </select>
 
-        <label class="office-label" for="pi-conversation-input">Histórico do diálogo (opcional):</label>
-        <textarea id="pi-conversation-input" class="office-textarea" rows="6" placeholder="Cole o histórico da conversa aqui para gerar o contexto inicial..."></textarea>
+        <label class="office-label" for="pi-conversation-input">${t('import_modals.label_conversation_history')}</label>
+        <textarea id="pi-conversation-input" class="office-textarea" rows="6" placeholder="${t('import_modals.placeholder_conversation')}"></textarea>
       </div>
 
       <div class="office-group" style="margin-bottom: 0;">
-        <label class="office-label">Opções de persistência:</label>
+        <label class="office-label">${t('import_modals.label_persistence_options')}</label>
         <div style="display: flex; gap: 16px; margin-top: 6px;">
           <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #323130; cursor: pointer;">
             <input type="checkbox" id="pi-memory-enable" checked style="cursor: pointer;">
-            Habilitar memória heterogênea
+            ${t('import_modals.chk_heterogeneous_memory')}
           </label>
           <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #323130; cursor: pointer;">
             <input type="checkbox" id="pi-memory-persist" checked style="cursor: pointer;">
-            Persistir em disco
+            ${t('import_modals.chk_persist_disk')}
           </label>
         </div>
       </div>

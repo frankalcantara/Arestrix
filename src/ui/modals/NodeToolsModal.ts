@@ -2,6 +2,7 @@ import { Graph } from '../../core/Graph.ts';
 import { INodeData, ICodeModeConfig, CodeModeTool } from '../../core/types.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
+import { t } from '../../i18n/index.ts';
 
 export class NodeToolsModal {
   private overlay: HTMLElement;
@@ -51,8 +52,8 @@ export class NodeToolsModal {
     const allowedMcp = effectiveTools.allowedMcpTools || [];
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Ferramentas Code Mode & Conectores MCP',
-      subtitle: `📦 Vértice do Projeto: <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id}) | 🛠️ Servidores MCP do Workspace`,
+      title: t('node_modals.tools_title'),
+      subtitle: t('node_modals.tools_subtitle', { label: this.escapeHtml(node.label), id: node.id }),
       icon: '🔧',
       closeBtnId: 'btn-close-tools-modal'
     });
@@ -66,12 +67,12 @@ export class NodeToolsModal {
             <label class="inheritance-checkbox-label">
               <input type="checkbox" id="chk-inherit-tools" ${isInherited ? 'checked' : ''} />
               <div class="inheritance-label-text">
-                <span class="inheritance-title">Herdar Padrões Globais de Ferramentas</span>
-                <span class="inheritance-desc">Usa o conjunto de ferramentas procedurais configurado na Toolbar (${(globalDefaults.codeMode.allowedTools || []).join(', ')})</span>
+                <span class="inheritance-title">${t('node_modals.inherit_tools_title')}</span>
+                <span class="inheritance-desc">${t('node_modals.inherit_tools_desc', { tools: (globalDefaults.codeMode.allowedTools || []).join(', ') })}</span>
               </div>
             </label>
             <div class="inheritance-status-badge ${isInherited ? 'badge-inherited' : 'badge-overridden'}">
-              ${isInherited ? 'HERDADO DO PIPELINE' : 'CUSTOMIZADO PARA ESTE VÉRTICE'}
+              ${isInherited ? t('node_modals.badge_inherited') : t('node_modals.badge_overridden')}
             </div>
           </div>
 
@@ -80,39 +81,39 @@ export class NodeToolsModal {
               <label class="tool-checkbox-pill ${allowed.includes('write') ? 'checked' : ''}">
                 <input type="checkbox" class="node-tool-check" value="write" ${allowed.includes('write') ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
                 <span class="tool-pill-name">tools.write</span>
-                <span class="tool-pill-desc">Permite salvar novos arquivos</span>
+                <span class="tool-pill-desc">${t('node_modals.tool_desc_write')}</span>
               </label>
 
               <label class="tool-checkbox-pill ${allowed.includes('edit') ? 'checked' : ''}">
                 <input type="checkbox" class="node-tool-check" value="edit" ${allowed.includes('edit') ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
                 <span class="tool-pill-name">tools.edit</span>
-                <span class="tool-pill-desc">Modificações cirúrgicas em arquivos</span>
+                <span class="tool-pill-desc">${t('node_modals.tool_desc_edit')}</span>
               </label>
 
               <label class="tool-checkbox-pill ${allowed.includes('read') ? 'checked' : ''}">
                 <input type="checkbox" class="node-tool-check" value="read" ${allowed.includes('read') ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
                 <span class="tool-pill-name">tools.read</span>
-                <span class="tool-pill-desc">Leitura do conteúdo de arquivos</span>
+                <span class="tool-pill-desc">${t('node_modals.tool_desc_read')}</span>
               </label>
 
               <label class="tool-checkbox-pill ${allowed.includes('bash') ? 'checked' : ''}">
                 <input type="checkbox" class="node-tool-check" value="bash" ${allowed.includes('bash') ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
                 <span class="tool-pill-name">tools.bash</span>
-                <span class="tool-pill-desc">Execução de comandos bash / shell</span>
+                <span class="tool-pill-desc">${t('node_modals.tool_desc_bash')}</span>
               </label>
 
               <label class="tool-checkbox-pill ${allowed.includes('validate_svg') ? 'checked' : ''}">
                 <input type="checkbox" class="node-tool-check" value="validate_svg" ${allowed.includes('validate_svg') ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
                 <span class="tool-pill-name">tools.validate_svg</span>
-                <span class="tool-pill-desc">Validador de sintaxe e renderização</span>
+                <span class="tool-pill-desc">${t('node_modals.tool_desc_validate_svg')}</span>
               </label>
             </div>
 
             <!-- Ferramentas MCP (Model Context Protocol) -->
             <div style="margin-top: 18px; border-top: 1px solid var(--border-color); padding-top: 14px;">
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                <label class="form-label" style="margin: 0; font-weight: 700;">🔌 Ferramentas MCP (Model Context Protocol)</label>
-                <span style="font-size: 11px; color: var(--text-secondary);">Conectores remotos/locais</span>
+                <label class="form-label" style="margin: 0; font-weight: 700;">${t('node_modals.mcp_section_title')}</label>
+                <span style="font-size: 11px; color: var(--text-secondary);">${t('node_modals.mcp_section_sub')}</span>
               </div>
               <div class="tools-checkbox-grid">
                 ${this.renderMcpToolsList(allowedMcp, isInherited)}
@@ -120,9 +121,9 @@ export class NodeToolsModal {
             </div>
 
             <div class="form-group" style="margin-top: 16px;">
-              <label class="form-label" for="node-custom-scripts">Scripts Utilitários Autorizados</label>
+              <label class="form-label" for="node-custom-scripts">${t('node_modals.custom_scripts_label')}</label>
               <input type="text" id="node-custom-scripts" class="form-input" value="${this.escapeHtml((effectiveTools.customScripts || []).join(', '))}" placeholder="python scripts/audit_exercises.py" ${isInherited ? 'disabled' : ''} />
-              <div class="form-hint">Scripts Python/Node que o agente pode disparar via terminal com timeout supervisionado.</div>
+              <div class="form-hint">${t('node_modals.custom_scripts_hint')}</div>
             </div>
           </div>
 
@@ -131,32 +132,32 @@ export class NodeToolsModal {
             <div class="section-card-header">
               <span class="section-card-icon">🛡️</span>
               <div class="section-card-titles">
-                <h3 class="section-card-title">Validação de Artefato & Resume Engine</h3>
-                <p class="section-card-desc">Critérios para considerar esta etapa concluída e permitir auto-recuperação</p>
+                <h3 class="section-card-title">${t('node_modals.artifact_section_title')}</h3>
+                <p class="section-card-desc">${t('node_modals.artifact_section_desc')}</p>
               </div>
             </div>
 
             <div class="form-row-grid">
               <div class="form-group full-width">
-                <label class="form-label" for="node-artifact-pattern">Padrão de Caminho do Artefato</label>
+                <label class="form-label" for="node-artifact-pattern">${t('node_modals.artifact_pattern_label')}</label>
                 <input type="text" id="node-artifact-pattern" class="form-input" value="${this.escapeHtml((settings.validationRules && settings.validationRules[0]?.targetPathPattern) || '')}" placeholder="output/{itemId}.md" />
-                <div class="form-hint">Suporta interpolação com <code>{itemId}</code> ou <code>{id}</code>.</div>
+                <div class="form-hint">${t('node_modals.artifact_pattern_hint')}</div>
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="node-artifact-min-size">Tamanho Mínimo (Bytes)</label>
+                <label class="form-label" for="node-artifact-min-size">${t('node_modals.artifact_min_size_label')}</label>
                 <input type="number" id="node-artifact-min-size" class="form-input" value="${(settings.validationRules && settings.validationRules[0]?.minSizeBytes) || 0}" min="0" step="100" />
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="node-artifact-regex">Regex de Conteúdo (Opcional)</label>
+                <label class="form-label" for="node-artifact-regex">${t('node_modals.artifact_regex_label')}</label>
                 <input type="text" id="node-artifact-regex" class="form-input" value="${this.escapeHtml((settings.validationRules && settings.validationRules[0]?.contentPattern) || '')}" placeholder="^---[\\s\\S]+---" />
               </div>
 
               <div class="form-group full-width">
                 <label class="clean-checkbox-label">
                   <input type="checkbox" id="chk-node-serial-batch" ${settings.isSerialAcrossBatch ? 'checked' : ''} />
-                  <span><strong>Execução Serial no Lote:</strong> Gargalo de concorrência — processa apenas 1 artigo por vez nesta etapa.</span>
+                  <span><strong>${t('node_modals.serial_batch_label')}</strong> ${t('node_modals.serial_batch_desc')}</span>
                 </label>
               </div>
             </div>
@@ -164,8 +165,8 @@ export class NodeToolsModal {
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary-pill" id="btn-cancel-tools-modal">Cancelar</button>
-          <button class="btn btn-primary" id="btn-save-tools-modal">Salvar Configuração</button>
+          <button class="btn btn-secondary-pill" id="btn-cancel-tools-modal">${t('global_defaults.btn_cancel')}</button>
+          <button class="btn btn-primary" id="btn-save-tools-modal">${t('node_modals.btn_save_agent_settings')}</button>
         </div>
       </div>
     `;
@@ -301,7 +302,7 @@ export class NodeToolsModal {
       node.id,
       { agentSettings: node.agentSettings },
       { agentSettings: updatedSettings },
-      `Alterar ferramentas e validação de "${node.label}"`
+      t('node_modals.cmd_change_tools', { label: node.label })
     );
     this.graph.commandManager.execute(cmd);
   }

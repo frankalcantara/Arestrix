@@ -62,12 +62,36 @@ if (typeof document !== 'undefined' && document.documentElement) {
 
 /**
  * Traduz uma chave utilizando o i18next.
- * Suporta chaves aninhadas (ex: 'ribbon.buttons.save_now') e interpolação ({ name: 'X' }).
+ * Suporta chaves aninhadas (ex: 'ribbon.buttons.save_now'), interpolação ({ name: 'X' })
+ * e valores de fallback opcionais.
  */
-export function t(key: string, options?: Record<string, any>): string {
-  const result = i18next.t(key, options);
-  if (result === undefined || result === null) {
-    return key;
+export function t(
+  key: string,
+  optionsOrDefault?: Record<string, any> | string,
+  extraOptionOrDefault?: Record<string, any> | string
+): string {
+  let options: Record<string, any> | undefined;
+  let defaultValue: string | undefined;
+
+  if (typeof optionsOrDefault === 'string') {
+    defaultValue = optionsOrDefault;
+    if (typeof extraOptionOrDefault === 'object' && extraOptionOrDefault !== null) {
+      options = extraOptionOrDefault;
+    }
+  } else if (typeof optionsOrDefault === 'object' && optionsOrDefault !== null) {
+    options = optionsOrDefault;
+    if (typeof extraOptionOrDefault === 'string') {
+      defaultValue = extraOptionOrDefault;
+    }
+  }
+
+  const finalOpts = defaultValue
+    ? { defaultValue, ...(options || {}) }
+    : options;
+
+  const result = i18next.t(key, finalOpts);
+  if (result === undefined || result === null || result === key) {
+    return defaultValue ?? key;
   }
   return result;
 }

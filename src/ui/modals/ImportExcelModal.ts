@@ -3,6 +3,7 @@ import { Viewport } from '../../view/Viewport.ts';
 import { ProjectManager } from '../../core/ProjectManager.ts';
 import { globalEventBus } from '../../core/EventBus.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
+import { t } from '../../i18n/index.ts';
 
 /**
  * Arestrix Studio - Diálogo de Importação do Excel (Modernização de Planilhas)
@@ -52,8 +53,8 @@ export class ImportExcelModal {
     if (!this.modal) return;
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Importar Planilha do Excel',
-      subtitle: 'Converta planilhas (.xlsx) em persistência no 🛠️ Workspace e agentes no 📦 Projeto.',
+      title: t('import_modals.excel_title'),
+      subtitle: t('import_modals.excel_subtitle'),
       icon: '📊',
       closeBtnId: 'btn-close-excel-modal'
     });
@@ -68,19 +69,19 @@ export class ImportExcelModal {
           <div class="office-group" style="margin-bottom: 0;">
             <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 8px;">
               <div>
-                <label class="office-label" for="excel-file-path">Arquivo da planilha:</label>
+                <label class="office-label" for="excel-file-path">${t('import_modals.excel_file_label')}</label>
                 <div style="display: flex; gap: 6px;">
                   <input type="text" id="excel-file-path" class="office-input" value="data/Planilha_Operacional.xlsx" style="flex: 1;">
                   <button id="btn-load-sample-excel" class="tool-btn btn-secondary" style="font-size: 12px; height: 32px; padding: 4px 12px; white-space: nowrap;">
-                    Exemplo
+                    ${t('import_modals.excel_btn_sample')}
                   </button>
                 </div>
               </div>
               <div>
-                <label class="office-label" for="excel-db-target">Banco de dados destino:</label>
+                <label class="office-label" for="excel-db-target">${t('import_modals.excel_db_target_label')}</label>
                 <select id="excel-db-target" class="office-select">
-                  <option value="sqlite">SQLite WAL (local)</option>
-                  <option value="postgres">PostgreSQL Relacional</option>
+                  <option value="sqlite">${t('import_modals.db_sqlite_wal')}</option>
+                  <option value="postgres">${t('import_modals.db_postgres')}</option>
                 </select>
               </div>
             </div>
@@ -88,39 +89,39 @@ export class ImportExcelModal {
 
           <!-- Abas / Tabelas Inferidas -->
           <div class="office-group" style="margin-bottom: 0;">
-            <span class="office-group-title">Tabelas e regras inferidas a partir das abas da planilha:</span>
+            <span class="office-group-title">${t('import_modals.excel_tables_title')}</span>
             <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12.5px;">
               <div style="background: #ffffff; padding: 6px 10px; border: 1px solid #d1d1d1; border-radius: 2px;">
-                <strong>Aba "Transacoes"</strong> &mdash; Mapeada para tabela relacional <code>transacoes</code> (14 colunas)
+                ${t('import_modals.excel_tab_transacoes')}
               </div>
               <div style="background: #ffffff; padding: 6px 10px; border: 1px solid #d1d1d1; border-radius: 2px;">
-                <strong>Aba "Clientes"</strong> &mdash; Mapeada para tabela relacional <code>clientes</code> (8 colunas)
+                ${t('import_modals.excel_tab_clientes')}
               </div>
               <div style="background: #ffffff; padding: 6px 10px; border: 1px solid #d1d1d1; border-radius: 2px;">
-                <strong>Aba "Regras_Calculo"</strong> &mdash; Mapeada para o agente de regras de negócio
+                ${t('import_modals.excel_tab_regras')}
               </div>
             </div>
           </div>
 
           <!-- Rede de Agentes a Serem Criados -->
           <div class="office-group" style="margin-bottom: 0;">
-            <span class="office-group-title">Agentes gerados no grafo:</span>
+            <span class="office-group-title">${t('import_modals.excel_agents_title')}</span>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
               <div style="background: #ffffff; border: 1px solid #d1d1d1; border-radius: 2px; padding: 8px;">
-                <strong>1. Ingestão e Limpeza</strong>
-                <p style="margin: 2px 0 0 0; color: #616161;">Validação e carga no banco de dados.</p>
+                <strong>${t('import_modals.excel_agent1_title')}</strong>
+                <p style="margin: 2px 0 0 0; color: #616161;">${t('import_modals.excel_agent1_desc')}</p>
               </div>
               <div style="background: #ffffff; border: 1px solid #d1d1d1; border-radius: 2px; padding: 8px;">
-                <strong>2. Regras e Cálculos</strong>
-                <p style="margin: 2px 0 0 0; color: #616161;">Execução de cálculos em C++20.</p>
+                <strong>${t('import_modals.excel_agent2_title')}</strong>
+                <p style="margin: 2px 0 0 0; color: #616161;">${t('import_modals.excel_agent2_desc')}</p>
               </div>
               <div style="background: #ffffff; border: 1px solid #d1d1d1; border-radius: 2px; padding: 8px;">
-                <strong>3. Auditoria de Integridade</strong>
-                <p style="margin: 2px 0 0 0; color: #616161;">Validação de consistência e regras fiscais.</p>
+                <strong>${t('import_modals.excel_agent3_title')}</strong>
+                <p style="margin: 2px 0 0 0; color: #616161;">${t('import_modals.excel_agent3_desc')}</p>
               </div>
               <div style="background: #ffffff; border: 1px solid #d1d1d1; border-radius: 2px; padding: 8px;">
-                <strong>4. Relatórios e Exportação</strong>
-                <p style="margin: 2px 0 0 0; color: #616161;">Geração de artefatos e resumos analíticos.</p>
+                <strong>${t('import_modals.excel_agent4_title')}</strong>
+                <p style="margin: 2px 0 0 0; color: #616161;">${t('import_modals.excel_agent4_desc')}</p>
               </div>
             </div>
           </div>
@@ -128,10 +129,10 @@ export class ImportExcelModal {
 
         <!-- Rodapé Estilo Office -->
         <div class="modal-footer">
-          <span class="footer-info">Pronto para sintetizar o banco e o grafo de agentes.</span>
+          <span class="footer-info">${t('import_modals.excel_footer_info')}</span>
           <div class="footer-actions">
-            <button id="btn-cancel-excel" class="tool-btn btn-secondary">Cancelar</button>
-            <button id="btn-synthesize-excel" class="tool-btn btn-action">Importar</button>
+            <button id="btn-cancel-excel" class="tool-btn btn-secondary">${t('import_modals.btn_cancel')}</button>
+            <button id="btn-synthesize-excel" class="tool-btn btn-action">${t('import_modals.btn_import')}</button>
           </div>
         </div>
       </div>

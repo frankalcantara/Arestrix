@@ -3,6 +3,7 @@ import { Viewport } from '../../view/Viewport.ts';
 import { AddNodeCommand } from '../../core/history/GraphCommands.ts';
 import { INodeAgentSettings } from '../../core/types.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
+import { t } from '../../i18n/index.ts';
 
 /**
  * Arestrix Studio - Diálogo de Importação do Claude (Anthropic)
@@ -50,8 +51,8 @@ export class ImportClaudeModal {
     if (!this.modal) return;
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Importar Agente Claude',
-      subtitle: 'Configure as instruções e o modelo Anthropic Claude para ingestão no 📦 Projeto Ativo.',
+      title: t('import_modals.claude_title'),
+      subtitle: t('import_modals.claude_subtitle'),
       icon: '🧠',
       closeBtnId: 'btn-close-claude-modal'
     });
@@ -65,32 +66,32 @@ export class ImportClaudeModal {
           <div class="office-group" style="margin-bottom: 0;">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
               <div>
-                <label class="office-label" for="claude-agent-name">Nome do agente:</label>
+                <label class="office-label" for="claude-agent-name">${t('import_modals.label_agent_name')}</label>
                 <input type="text" id="claude-agent-name" class="office-input" value="Agente_Claude_Sonnet">
               </div>
               <div>
-                <label class="office-label" for="claude-model-select">Modelo Anthropic:</label>
+                <label class="office-label" for="claude-model-select">${t('import_modals.claude_model_label')}</label>
                 <select id="claude-model-select" class="office-select">
-                  <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
-                  <option value="claude-3-opus">Claude 3 Opus</option>
-                  <option value="claude-3-5-haiku">Claude 3.5 Haiku</option>
+                  <option value="claude-3-5-sonnet">${t('import_modals.opt_claude_35_sonnet')}</option>
+                  <option value="claude-3-opus">${t('import_modals.opt_claude_3_opus')}</option>
+                  <option value="claude-3-5-haiku">${t('import_modals.opt_claude_35_haiku')}</option>
                 </select>
               </div>
             </div>
 
             <div>
-              <label class="office-label" for="claude-prompt-input">Instruções do sistema (System Prompt / Tags XML):</label>
-              <textarea id="claude-prompt-input" class="office-textarea" rows="8" placeholder="Cole as instruções estruturadas ou contexto do Claude aqui..."></textarea>
+              <label class="office-label" for="claude-prompt-input">${t('import_modals.claude_prompt_label')}</label>
+              <textarea id="claude-prompt-input" class="office-textarea" rows="8" placeholder="${t('import_modals.claude_prompt_placeholder')}"></textarea>
             </div>
           </div>
         </div>
 
         <!-- Rodapé Estilo Office -->
         <div class="modal-footer">
-          <span class="footer-info">Pronto para criar o vértice.</span>
+          <span class="footer-info">${t('import_modals.ready_create_vertex')}</span>
           <div class="footer-actions">
-            <button id="btn-cancel-claude" class="tool-btn btn-secondary">Cancelar</button>
-            <button id="btn-inject-claude-agent" class="tool-btn btn-action">Importar</button>
+            <button id="btn-cancel-claude" class="tool-btn btn-secondary">${t('import_modals.btn_cancel')}</button>
+            <button id="btn-inject-claude-agent" class="tool-btn btn-action">${t('import_modals.btn_import')}</button>
           </div>
         </div>
       </div>

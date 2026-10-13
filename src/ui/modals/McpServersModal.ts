@@ -1,6 +1,7 @@
 import { Graph } from '../../core/Graph.ts';
 import { IMcpServerConfig, IMcpCallResult } from '../../core/types.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
+import { t } from '../../i18n/index.ts';
 
 export class McpServersModal {
   private overlay: HTMLElement;
@@ -76,8 +77,8 @@ export class McpServersModal {
 
   private render(): void {
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Conectores & Servidores MCP (Model Context Protocol)',
-      subtitle: `🛠️ Workspace: <strong>Servidores Homologados</strong> | 📦 Projeto: <strong>${this.escapeHtml(this.graph.getProjectId())}</strong>`,
+      title: t('mcp_servers.title'),
+      subtitle: t('mcp_servers.subtitle_html', { projectId: this.escapeHtml(this.graph.getProjectId()) }),
       icon: '🔌',
       closeBtnId: 'btn-close-mcp-modal'
     });
@@ -91,7 +92,7 @@ export class McpServersModal {
           <div class="office-info-callout" style="margin-bottom: 14px; background: #f0f7ff; border: 1px solid #c7e0f4; border-radius: 4px; padding: 10px 14px; display: flex; align-items: center; gap: 10px;">
             <span style="font-size: 16px;">🛠️</span>
             <div style="font-size: 12px; color: #242424; line-height: 1.4;">
-              <strong>Escopo do Workspace:</strong> Os servidores MCP são instalados na infraestrutura do diretório físico (<code>.workspace/mcps</code>) e suas ferramentas ficam disponíveis para uso nos nós do projeto ativo.
+              ${t('mcp_servers.callout_scope')}
             </div>
           </div>
 
@@ -99,18 +100,18 @@ export class McpServersModal {
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
             <div style="display: flex; gap: 8px; align-items: center;">
               <span style="font-size: 11px; font-weight: 600; color: #0f6cbd; background: #eef6fc; padding: 2px 8px; border-radius: 2px; border: 1px solid #c7e0f4;">
-                ${this.servers.length} SERVIDORES DO WORKSPACE
+                ${t('mcp_servers.servers_count_badge', { count: this.servers.length })}
               </span>
               <span style="font-size: 11px; font-weight: 600; color: #107c41; background: #f1fbf4; padding: 2px 8px; border-radius: 2px; border: 1px solid #c3edd3;">
-                ${this.getTotalToolsCount()} FERRAMENTAS DISPONÍVEIS
+                ${t('mcp_servers.tools_count_badge', { count: this.getTotalToolsCount() })}
               </span>
             </div>
             <div style="display: flex; gap: 8px;">
               <button id="btn-mcp-refresh" class="tool-btn btn-secondary">
-                Atualizar
+                ${t('mcp_servers.btn_refresh')}
               </button>
               <button id="btn-mcp-add-new" class="tool-btn btn-action">
-                + Novo Servidor
+                ${t('mcp_servers.btn_add_new')}
               </button>
             </div>
           </div>
@@ -119,71 +120,71 @@ export class McpServersModal {
           <div id="mcp-form-container" class="settings-section-card hidden" style="margin-bottom: 20px; border: 1px solid var(--border-color);">
             <div class="section-card-header">
               <div class="section-card-titles">
-                <h3 class="section-card-title" id="mcp-form-title">Registrar Novo Servidor MCP</h3>
-                <p class="section-card-desc">Configure o transporte stdio ou SSE</p>
+                <h3 class="section-card-title" id="mcp-form-title">${t('mcp_servers.form_title')}</h3>
+                <p class="section-card-desc">${t('mcp_servers.form_desc')}</p>
               </div>
             </div>
 
             <!-- Presets rápidos -->
             <div style="margin: 12px 0;">
-              <label class="form-label">Modelos Pré-definidos:</label>
+              <label class="form-label">${t('mcp_servers.presets_label')}</label>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="filesystem">Filesystem Local</button>
-                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="fetch">Web Fetch</button>
-                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="sqlite">SQLite Database</button>
-                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="github">GitHub (npx)</button>
+                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="filesystem">${t('mcp_servers.preset_filesystem')}</button>
+                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="fetch">${t('mcp_servers.preset_fetch')}</button>
+                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="sqlite">${t('mcp_servers.preset_sqlite')}</button>
+                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="github">${t('mcp_servers.preset_github')}</button>
               </div>
             </div>
 
             <div class="form-row-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
               <div class="form-group">
-                <label class="form-label" for="mcp-input-id">ID do Servidor (slug único)</label>
+                <label class="form-label" for="mcp-input-id">${t('mcp_servers.input_id_label')}</label>
                 <input type="text" id="mcp-input-id" class="form-input" placeholder="ex: local-filesystem" />
               </div>
               <div class="form-group">
-                <label class="form-label" for="mcp-input-name">Nome Amigável</label>
+                <label class="form-label" for="mcp-input-name">${t('mcp_servers.input_name_label')}</label>
                 <input type="text" id="mcp-input-name" class="form-input" placeholder="ex: Filesystem Explorer" />
               </div>
             </div>
 
             <div class="form-group" style="margin-top: 12px;">
-              <label class="form-label">Transporte:</label>
+              <label class="form-label">${t('mcp_servers.transport_label')}</label>
               <div style="display: flex; gap: 16px;">
                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
                   <input type="radio" name="mcp-transport" value="stdio" checked />
-                  <strong>stdio (Processo Local)</strong>
+                  <strong>${t('mcp_servers.transport_stdio')}</strong>
                 </label>
                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
                   <input type="radio" name="mcp-transport" value="sse" />
-                  <strong>SSE (HTTP / Server-Sent Events)</strong>
+                  <strong>${t('mcp_servers.transport_sse')}</strong>
                 </label>
               </div>
             </div>
 
             <div id="mcp-stdio-fields" style="margin-top: 12px;">
               <div class="form-group">
-                <label class="form-label" for="mcp-input-command">Comando Executável</label>
+                <label class="form-label" for="mcp-input-command">${t('mcp_servers.command_label')}</label>
                 <input type="text" id="mcp-input-command" class="form-input" placeholder="ex: npx, uvx, python, mock" />
               </div>
               <div class="form-group" style="margin-top: 8px;">
-                <label class="form-label" for="mcp-input-args">Argumentos (separados por espaço)</label>
+                <label class="form-label" for="mcp-input-args">${t('mcp_servers.args_label')}</label>
                 <input type="text" id="mcp-input-args" class="form-input" placeholder="ex: -y @modelcontextprotocol/server-filesystem C:\\Projetos" />
               </div>
             </div>
 
             <div id="mcp-sse-fields" class="hidden" style="margin-top: 12px;">
               <div class="form-group">
-                <label class="form-label" for="mcp-input-url">URL do Endpoint SSE</label>
+                <label class="form-label" for="mcp-input-url">${t('mcp_servers.url_label')}</label>
                 <input type="text" id="mcp-input-url" class="form-input" placeholder="ex: http://localhost:8000/sse" />
               </div>
             </div>
 
             <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
               <button id="btn-cancel-mcp-form" class="btn-action-pill" style="background: var(--surface-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
-                Cancelar
+                ${t('mcp_servers.btn_cancel')}
               </button>
               <button id="btn-save-mcp-server" class="btn-action-pill" style="background: var(--gradient-blue); color: #fff;">
-                💾 Salvar Conector
+                ${t('mcp_servers.btn_save_connector')}
               </button>
             </div>
           </div>
@@ -198,20 +199,20 @@ export class McpServersModal {
             <div class="section-card-header">
               <span class="section-card-icon">⚡</span>
               <div class="section-card-titles">
-                <h3 class="section-card-title">Playground de Execução Rápida MCP</h3>
-                <p class="section-card-desc">Invoque uma ferramenta remota diretamente para validar parâmetros e respostas</p>
+                <h3 class="section-card-title">${t('mcp_servers.playground_title')}</h3>
+                <p class="section-card-desc">${t('mcp_servers.playground_desc')}</p>
               </div>
             </div>
 
             <div class="form-row-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
               <div class="form-group">
-                <label class="form-label" for="playground-select-server">Servidor Alvo</label>
+                <label class="form-label" for="playground-select-server">${t('mcp_servers.playground_server_label')}</label>
                 <select id="playground-select-server" class="form-input">
                   ${this.servers.map(s => `<option value="${s.id}">${this.escapeHtml(s.name)} (${s.id})</option>`).join('')}
                 </select>
               </div>
               <div class="form-group">
-                <label class="form-label" for="playground-select-tool">Ferramenta</label>
+                <label class="form-label" for="playground-select-tool">${t('mcp_servers.playground_tool_label')}</label>
                 <select id="playground-select-tool" class="form-input">
                   ${this.getToolsOptionsForSelectedServer()}
                 </select>
@@ -219,18 +220,18 @@ export class McpServersModal {
             </div>
 
             <div class="form-group" style="margin-top: 12px;">
-              <label class="form-label" for="playground-args">Argumentos JSON</label>
+              <label class="form-label" for="playground-args">${t('mcp_servers.playground_args_label')}</label>
               <textarea id="playground-args" class="form-input" style="height: 60px; font-family: monospace; font-size: 12px;" placeholder='{"path": "package.json"}'></textarea>
             </div>
 
             <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
               <button id="btn-run-mcp-playground" class="btn-action-pill" style="background: var(--gradient-blue); color: white;">
-                ▶ Invocar Ferramenta MCP
+                ${t('mcp_servers.btn_invoke_tool')}
               </button>
             </div>
 
             <div id="playground-result-container" class="hidden" style="margin-top: 12px; background: rgba(0,0,0,0.15); border-radius: 8px; padding: 12px; font-family: monospace; font-size: 12px; max-height: 140px; overflow-y: auto;">
-              <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">Resposta:</div>
+              <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">${t('mcp_servers.response_label')}</div>
               <div id="playground-result-output" style="white-space: pre-wrap; word-break: break-all; color: var(--text-secondary);"></div>
             </div>
           </div>
@@ -263,7 +264,7 @@ export class McpServersModal {
     if (this.servers.length === 0) {
       return `
         <div style="padding: 24px; text-align: center; color: var(--text-secondary); background: var(--surface-bg); border-radius: 8px;">
-          Nenhum servidor MCP configurado no momento. Clique em "+ Novo Servidor" ou utilize um dos presets para começar.
+          ${t('mcp_servers.empty_list')}
         </div>
       `;
     }
@@ -282,7 +283,7 @@ export class McpServersModal {
               <div style="display: flex; align-items: center; gap: 8px;">
                 <strong style="font-size: 15px; color: var(--text-primary); font-weight: 700;">${this.escapeHtml(s.name)}</strong>
                 <span class="inheritance-status-badge ${s.isEnabled ? 'badge-inherited' : 'badge-overridden'}" style="font-weight: 700; font-size: 11px;">
-                  ${s.isEnabled ? '🟢 ATIVO' : '⚪ DESABILITADO'}
+                  ${s.isEnabled ? t('mcp_servers.status_active') : t('mcp_servers.status_disabled')}
                 </span>
                 <span class="inheritance-status-badge badge-memory-persistent" style="font-weight: 700; font-size: 11px;">
                   ${s.transport.toUpperCase()}
@@ -294,10 +295,10 @@ export class McpServersModal {
             </div>
 
             <div style="display: flex; gap: 6px;">
-              <button class="btn-test-server tool-btn btn-action" data-id="${s.id}" title="Testa a inicialização e atualiza lista de ferramentas">
-                🔍 Testar & Descobrir
+              <button class="btn-test-server tool-btn btn-action" data-id="${s.id}" title="${t('mcp_servers.btn_test_discover')}">
+                ${t('mcp_servers.btn_test_discover')}
               </button>
-              <button class="btn-delete-server tool-btn btn-danger-pill" data-id="${s.id}" title="Remover servidor">
+              <button class="btn-delete-server tool-btn btn-danger-pill" data-id="${s.id}" title="${t('mcp_servers.btn_delete_title')}">
                 🗑️
               </button>
             </div>
@@ -307,12 +308,12 @@ export class McpServersModal {
           <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06);">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
               <span style="font-size: 12px; font-weight: 700; color: var(--text-primary);">
-                Ferramentas Disponíveis (${tools.length}):
+                ${t('mcp_servers.available_tools', { count: tools.length })}
               </span>
             </div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
               ${tools.length === 0 
-                ? `<span style="font-size: 12px; color: var(--text-secondary); font-style: italic;">Nenhuma ferramenta em cache. Clique em "Testar & Descobrir" para sincronizar.</span>`
+                ? `<span style="font-size: 12px; color: var(--text-secondary); font-style: italic;">${t('mcp_servers.no_tools_cached')}</span>`
                 : tools.map(t => `
                   <span class="tool-checkbox-pill checked" style="cursor: default; padding: 4px 10px; font-size: 11px;" title="${this.escapeHtml(t.description)}">
                     <strong style="color: var(--accent-color); font-weight: 700;">${this.escapeHtml(t.name)}</strong>
@@ -328,11 +329,11 @@ export class McpServersModal {
 
   private getToolsOptionsForSelectedServer(): string {
     const selId = this.selectedServerId || (this.servers[0] ? this.servers[0].id : null);
-    if (!selId) return '<option value="">Nenhum servidor</option>';
+    if (!selId) return `<option value="">${t('mcp_servers.opt_no_server')}</option>`;
 
     const s = this.servers.find(srv => srv.id === selId);
     if (!s || !s.cachedTools || s.cachedTools.length === 0) {
-      return '<option value="">Nenhuma ferramenta disponível</option>';
+      return `<option value="">${t('mcp_servers.opt_no_tools')}</option>`;
     }
 
     return s.cachedTools.map(t => `<option value="${t.name}">${this.escapeHtml(t.name)} - ${this.escapeHtml(t.description.substring(0, 40))}...</option>`).join('');
@@ -475,7 +476,7 @@ export class McpServersModal {
     const url = (this.overlay.querySelector('#mcp-input-url') as HTMLInputElement)?.value.trim() || '';
 
     if (!id || !name) {
-      alert('Por favor, informe ID e Nome para o servidor MCP.');
+      alert(t('mcp_servers.alert_fill_id_name'));
       return;
     }
 
@@ -517,23 +518,23 @@ export class McpServersModal {
         if (resRaw) {
           const res = JSON.parse(resRaw);
           if (res.success) {
-            alert(`Conexão com servidor "${id}" estabelecida com sucesso!\nFerramentas descobertas: ${res.count}`);
+            alert(t('mcp_servers.alert_test_success', { id, count: res.count }));
           } else {
-            alert(`Falha no teste com servidor "${id}":\n${res.error || 'Erro desconhecido'}`);
+            alert(t('mcp_servers.alert_test_fail', { id, error: res.error || t('mcp_servers.unknown_error') }));
           }
         }
       } else {
-        alert(`Servidor "${id}" testado com sucesso (modo simulado).`);
+        alert(t('mcp_servers.alert_test_simulated', { id }));
       }
     } catch (e) {
-      alert('Erro durante teste do servidor: ' + e);
+      alert(t('mcp_servers.alert_test_error', { error: String(e) }));
     }
 
     await this.refreshServers();
   }
 
   private async handleDeleteServer(id: string): Promise<void> {
-    if (!confirm(`Deseja realmente remover o conector MCP "${id}"?`)) return;
+    if (!confirm(t('mcp_servers.confirm_remove', { id }))) return;
 
     try {
       if ((window as any).webui && (window as any).webui.call) {
@@ -558,7 +559,7 @@ export class McpServersModal {
     const serverId = selServer?.value;
     const toolName = selTool?.value;
     if (!serverId || !toolName) {
-      alert('Selecione um servidor e uma ferramenta para executar.');
+      alert(t('mcp_servers.alert_select_server_tool'));
       return;
     }
 
@@ -567,12 +568,12 @@ export class McpServersModal {
       const txt = argsInput.value.trim();
       if (txt) parsedArgs = JSON.parse(txt);
     } catch (e) {
-      alert('Erro de sintaxe no JSON de argumentos.');
+      alert(t('mcp_servers.alert_json_syntax'));
       return;
     }
 
     resBox.classList.remove('hidden');
-    resOut.textContent = 'Executando chamada MCP...';
+    resOut.textContent = t('mcp_servers.executing_call');
 
     try {
       if ((window as any).webui && (window as any).webui.call) {
@@ -585,7 +586,7 @@ export class McpServersModal {
             : `[SUCESSO] ${resp.content} (Duração: ${resp.durationSeconds?.toFixed(3)}s)`;
         }
       } else {
-        resOut.textContent = `[SIMULAÇÃO OK] Ferramenta ${toolName} executada no servidor ${serverId}. Args: ${JSON.stringify(parsedArgs)}`;
+        resOut.textContent = t('mcp_servers.sim_message', { tool: toolName, server: serverId, args: JSON.stringify(parsedArgs) });
       }
     } catch (e) {
       resOut.textContent = `[EXCEÇÃO] ${e}`;

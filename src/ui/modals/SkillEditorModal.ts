@@ -1,6 +1,7 @@
 import { BaseModal } from './BaseModal.ts';
 import { globalEventBus } from '../../core/EventBus.ts';
 import { Graph } from '../../core/Graph.ts';
+import { t } from '../../i18n/index.ts';
 
 /**
  * Arestrix - Editor de Skill em Markdown (Fase 15.2)
@@ -64,8 +65,8 @@ export class SkillEditorModal extends BaseModal {
     super({
       id: 'skill-editor-modal',
       dialogClass: 'skill-editor-modal-dialog',
-      title: 'Editor de Skill (SKILL.md)',
-      subtitle: 'Diretrizes e Instruções em Markdown',
+      title: t('skill_editor.title', 'Editor de Skill (SKILL.md)'),
+      subtitle: t('skill_editor.subtitle', 'Diretrizes e Instruções em Markdown'),
       icon: '📖',
       minWidth: 780,
       minHeight: 520,
@@ -101,7 +102,7 @@ export class SkillEditorModal extends BaseModal {
     this.saveCallback = options.onSave;
 
     const subtitleText = options.nodeLabel
-      ? `Vértice: ${options.nodeLabel} · ${this.currentPath}`
+      ? t('skill_editor.vertex_prefix', 'Vértice: {{label}} · {{path}}', { label: options.nodeLabel, path: this.currentPath })
       : this.currentPath;
 
     this.config.subtitle = subtitleText;
@@ -153,7 +154,7 @@ export class SkillEditorModal extends BaseModal {
         <!-- Barra de ferramentas superior -->
         <div class="skill-toolbar">
           <div class="skill-toolbar-group">
-            <label class="form-label" style="margin: 0; font-size: 12px; white-space: nowrap;">Caminho:</label>
+            <label class="form-label" style="margin: 0; font-size: 12px; white-space: nowrap;">${t('skill_editor.label_path', 'Caminho:')}</label>
             <input type="text" id="skill-file-path-input" class="form-input form-input-sm" style="width: 280px;" value="${this.escapeHtml(this.currentPath)}" ${this.isReadOnly ? 'disabled' : ''} />
           </div>
 
@@ -161,36 +162,36 @@ export class SkillEditorModal extends BaseModal {
 
           <!-- Botões de formatação rápida -->
           <div class="skill-format-buttons ${this.isReadOnly ? 'disabled-group' : ''}">
-            <button type="button" class="skill-tool-btn" data-action="bold" title="Negrito (**texto**)"><strong>B</strong></button>
-            <button type="button" class="skill-tool-btn" data-action="italic" title="Itálico (*texto*)"><em>I</em></button>
-            <button type="button" class="skill-tool-btn" data-action="h1" title="Título H1 (# Título)">H1</button>
-            <button type="button" class="skill-tool-btn" data-action="h2" title="Título H2 (## Título)">H2</button>
-            <button type="button" class="skill-tool-btn" data-action="ul" title="Lista não ordenada">• Lista</button>
-            <button type="button" class="skill-tool-btn" data-action="ol" title="Lista numerada">1. Lista</button>
-            <button type="button" class="skill-tool-btn" data-action="code" title="Bloco de código (\`\`\`)">&lt;/&gt;</button>
-            <button type="button" class="skill-tool-btn" data-action="template" title="Inserir Template Canônico">📋 Template</button>
+            <button type="button" class="skill-tool-btn" data-action="bold" title="${t('skill_editor.btn_bold', 'Negrito (**texto**)')}"><strong>B</strong></button>
+            <button type="button" class="skill-tool-btn" data-action="italic" title="${t('skill_editor.btn_italic', 'Itálico (*texto*)')}"><em>I</em></button>
+            <button type="button" class="skill-tool-btn" data-action="h1" title="${t('skill_editor.btn_h1', 'Título H1 (# Título)')}">H1</button>
+            <button type="button" class="skill-tool-btn" data-action="h2" title="${t('skill_editor.btn_h2', 'Título H2 (## Título)')}">H2</button>
+            <button type="button" class="skill-tool-btn" data-action="ul" title="${t('skill_editor.btn_ul', 'Lista não ordenada')}">• Lista</button>
+            <button type="button" class="skill-tool-btn" data-action="ol" title="${t('skill_editor.btn_ol', 'Lista numerada')}">1. Lista</button>
+            <button type="button" class="skill-tool-btn" data-action="code" title="${t('skill_editor.btn_code', 'Bloco de código (```)')}">&lt;/&gt;</button>
+            <button type="button" class="skill-tool-btn" data-action="template" title="${t('skill_editor.btn_template', 'Inserir Template Canônico')}">📋 Template</button>
           </div>
 
           <div class="skill-toolbar-spacer"></div>
 
           <!-- Seletor de Modo de Visualização -->
           <div class="skill-view-toggle">
-            <button type="button" class="skill-toggle-btn ${this.viewMode === 'split' ? 'active' : ''}" data-mode="split">Dividido</button>
-            <button type="button" class="skill-toggle-btn ${this.viewMode === 'editor' ? 'active' : ''}" data-mode="editor">Editor</button>
-            <button type="button" class="skill-toggle-btn ${this.viewMode === 'preview' ? 'active' : ''}" data-mode="preview">Prévia</button>
+            <button type="button" class="skill-toggle-btn ${this.viewMode === 'split' ? 'active' : ''}" data-mode="split">${t('skill_editor.mode_split', 'Dividido')}</button>
+            <button type="button" class="skill-toggle-btn ${this.viewMode === 'editor' ? 'active' : ''}" data-mode="editor">${t('skill_editor.mode_editor', 'Editor')}</button>
+            <button type="button" class="skill-toggle-btn ${this.viewMode === 'preview' ? 'active' : ''}" data-mode="preview">${t('skill_editor.mode_preview', 'Prévia')}</button>
           </div>
         </div>
 
         <!-- Banner de Frontmatter Status -->
         <div id="skill-frontmatter-status" class="skill-status-banner">
           <span class="status-indicator"></span>
-          <span class="status-text">Verificando frontmatter...</span>
+          <span class="status-text">${t('skill_editor.status_checking', 'Verificando frontmatter...')}</span>
         </div>
 
         <!-- Área de Edição e Visualização Dividida -->
         <div class="skill-panes-wrapper mode-${this.viewMode}">
           <div class="skill-pane skill-editor-pane">
-            <textarea id="skill-editor-textarea" class="skill-textarea" spellcheck="false" placeholder="Digite as diretrizes e instruções do Skill em Markdown..." ${this.isReadOnly ? 'readonly' : ''}>${this.escapeHtml(this.currentContent)}</textarea>
+            <textarea id="skill-editor-textarea" class="skill-textarea" spellcheck="false" placeholder="${t('skill_editor.placeholder_editor', 'Digite as diretrizes e instruções do Skill em Markdown...')}" ${this.isReadOnly ? 'readonly' : ''}>${this.escapeHtml(this.currentContent)}</textarea>
           </div>
           <div class="skill-pane skill-preview-pane">
             <div id="skill-preview-content" class="skill-preview-render"></div>
@@ -204,11 +205,11 @@ export class SkillEditorModal extends BaseModal {
     return `
       <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
         <div id="skill-save-feedback" class="skill-save-feedback">
-          ${this.isReadOnly ? '<span style="color:#d97706; font-size:12px; font-weight:600;">⚠️ Modo somente leitura (Herdado dos padrões globais)</span>' : ''}
+          ${this.isReadOnly ? `<span style="color:#d97706; font-size:12px; font-weight:600;">${t('skill_editor.readonly_warning', '⚠️ Modo somente leitura (Herdado dos padrões globais)')}</span>` : ''}
         </div>
         <div style="display: flex; gap: 8px;">
-          <button type="button" class="btn btn-secondary-pill" id="btn-cancel-skill-editor">Fechar</button>
-          ${!this.isReadOnly ? '<button type="button" class="btn btn-primary" id="btn-save-skill-editor">Salvar Skill (Ctrl+S)</button>' : ''}
+          <button type="button" class="btn btn-secondary-pill" id="btn-cancel-skill-editor">${t('skill_editor.btn_close', 'Fechar')}</button>
+          ${!this.isReadOnly ? `<button type="button" class="btn btn-primary" id="btn-save-skill-editor">${t('skill_editor.btn_save', 'Salvar Skill (Ctrl+S)')}</button>` : ''}
         </div>
       </div>
     `;
@@ -365,19 +366,19 @@ export class SkillEditorModal extends BaseModal {
       banner.className = 'skill-status-banner status-success';
       banner.innerHTML = `
         <span class="status-indicator">✔</span>
-        <span class="status-text">Frontmatter válido: <strong>${this.escapeHtml(fm.name)}</strong>${fm.description ? ` — ${this.escapeHtml(fm.description)}` : ''}</span>
+        <span class="status-text">${t('skill_editor.status_valid', 'Frontmatter válido: <strong>{{name}}</strong>', { name: this.escapeHtml(fm.name) })}${fm.description ? ` — ${this.escapeHtml(fm.description)}` : ''}</span>
       `;
     } else if (fm.hasFrontmatter) {
       banner.className = 'skill-status-banner status-warning';
       banner.innerHTML = `
         <span class="status-indicator">⚠️</span>
-        <span class="status-text">Frontmatter incompleto: certifique-se de incluir os campos <code>name</code> e <code>description</code>.</span>
+        <span class="status-text">${t('skill_editor.status_incomplete', 'Frontmatter incompleto: certifique-se de incluir os campos <code>name</code> e <code>description</code>.')}</span>
       `;
     } else {
       banner.className = 'skill-status-banner status-info';
       banner.innerHTML = `
         <span class="status-indicator">ℹ️</span>
-        <span class="status-text">Nenhum bloco de metadados detectado. Use o botão <strong>📋 Template</strong> para inserir o frontmatter padrão.</span>
+        <span class="status-text">${t('skill_editor.status_missing', 'Nenhum bloco de metadados detectado. Use o botão <strong>📋 Template</strong> para inserir o frontmatter padrão.')}</span>
       `;
     }
   }
@@ -385,7 +386,7 @@ export class SkillEditorModal extends BaseModal {
   private updateDirtyIndicator(): void {
     const titleEl = this.dialog.querySelector('.modal-title');
     if (titleEl) {
-      const baseTitle = 'Editor de Skill (SKILL.md)';
+      const baseTitle = t('skill_editor.title', 'Editor de Skill (SKILL.md)');
       titleEl.textContent = this.isDirty ? `${baseTitle} ●` : baseTitle;
     }
   }
@@ -403,7 +404,7 @@ export class SkillEditorModal extends BaseModal {
 
     if (!this.currentPath) {
       if (typeof alert !== 'undefined') {
-        alert('Informe um caminho válido para o arquivo de skill (.md).');
+        alert(t('skill_editor.alert_invalid_path', 'Informe um caminho válido para o arquivo de skill (.md).'));
       }
       return;
     }
@@ -415,7 +416,7 @@ export class SkillEditorModal extends BaseModal {
 
     const feedback = this.dialog.querySelector('#skill-save-feedback');
     if (feedback) {
-      feedback.innerHTML = '<span style="color:#0f6cbd; font-size:12px;">Gravando arquivo...</span>';
+      feedback.innerHTML = `<span style="color:#0f6cbd; font-size:12px;">${t('skill_editor.saving_file', 'Gravando arquivo...')}</span>`;
     }
 
     let saveSuccess = false;
@@ -476,7 +477,7 @@ export class SkillEditorModal extends BaseModal {
       this.updateDirtyIndicator();
 
       if (feedback) {
-        feedback.innerHTML = '<span style="color:#107c41; font-weight:600; font-size:12px;">✔ Salvo com sucesso!</span>';
+        feedback.innerHTML = `<span style="color:#107c41; font-weight:600; font-size:12px;">${t('skill_editor.saved_success', '✔ Salvo com sucesso!')}</span>`;
       }
 
       // Sincroniza configurações no nó do grafo se nodeId fornecido
@@ -515,7 +516,7 @@ export class SkillEditorModal extends BaseModal {
       this.hide();
     } else {
       if (feedback) {
-        feedback.innerHTML = '<span style="color:#c43e1c; font-size:12px;">Erro ao salvar arquivo. Verifique permissões.</span>';
+        feedback.innerHTML = `<span style="color:#c43e1c; font-size:12px;">${t('skill_editor.save_error', 'Erro ao salvar arquivo. Verifique permissões.')}</span>`;
       }
     }
   }
@@ -529,7 +530,7 @@ export class SkillEditorModal extends BaseModal {
 
   private confirmClose(): void {
     if (this.isDirty) {
-      const confirmLeave = confirm('Existem alterações não salvas no arquivo de skill. Deseja fechar e descartar as alterações?');
+      const confirmLeave = confirm(t('skill_editor.confirm_discard', 'Existem alterações não salvas no arquivo de skill. Deseja fechar e descartar as alterações?'));
       if (!confirmLeave) return;
     }
     this.hide();
@@ -567,7 +568,7 @@ export function extractFrontmatter(markdown: string): { valid: boolean; hasFront
  * blocos de código, inline code, negrito, itálico, links e tabelas.
  */
 export function renderMarkdown(md: string): string {
-  if (!md) return '<p style="color:#94a3b8; font-style:italic;">Sem conteúdo.</p>';
+  if (!md) return `<p style="color:#94a3b8; font-style:italic;">${t('skill_editor.empty_preview', 'Sem conteúdo.')}</p>`;
 
   // Remove frontmatter para a pré-visualização não poluir a leitura
   const cleanMd = md.replace(/^---\s*[\r\n]+[\s\S]*?[\r\n]+---\s*[\r\n]*/, '');

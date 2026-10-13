@@ -394,7 +394,7 @@ export class CodeModal {
   private updateLineCounter(code: string): void {
     const counter = this.modalOverlay.querySelector?.('#code-line-counter');
     if (counter) {
-      counter.textContent = `${code.split('\n').length} linhas (${code.length} bytes)`;
+      counter.textContent = t('common.lines_bytes', { lines: code.split('\n').length, bytes: code.length });
     }
   }
 
@@ -451,9 +451,9 @@ export class CodeModal {
           <div class="footer-info" style="display: flex; align-items: center; gap: 14px;">
             <span>${t('common.file')}: <strong id="code-file-name">${filename}</strong></span>
             <span style="opacity: 0.4;">|</span>
-            <span>Linguagem: <strong id="code-file-language">${this.getLanguageForTab(this.currentTab).toUpperCase()}</strong></span>
+            <span>${t('common.language')}: <strong id="code-file-language">${this.getLanguageForTab(this.currentTab).toUpperCase()}</strong></span>
             <span style="opacity: 0.4;">|</span>
-            <span id="code-line-counter" style="color: #64748b;">${activeCode.split('\n').length} linhas (${activeCode.length} bytes)</span>
+            <span id="code-line-counter" style="color: #64748b;">${t('common.lines_bytes', { lines: activeCode.split('\n').length, bytes: activeCode.length })}</span>
           </div>
 
           <div class="footer-actions" style="display: flex; align-items: center; gap: 8px;">

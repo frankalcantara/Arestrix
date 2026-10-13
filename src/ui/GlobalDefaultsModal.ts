@@ -4,6 +4,7 @@ import { IGlobalPipelineDefaults, LLMProvider, SandboxIsolationLevel, SandboxNet
 import { ModalWindowManager, IModalWindowController } from './modals/ModalWindowManager.ts';
 import { EnvironmentManager } from '../core/env/EnvironmentManager.ts';
 import { EnvGuidanceModal } from './modals/EnvGuidanceModal.ts';
+import { t } from '../i18n/index.ts';
 
 export type GlobalDefaultsTab = 'model' | 'sandbox' | 'tools' | 'memory';
 
@@ -38,8 +39,8 @@ export class GlobalDefaultsModal {
     const defaults = this.graph.getGlobalDefaults();
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Padrões Globais do Pipeline de Agentes',
-      subtitle: 'Configure os padrões particionados por escopo: 🏢 Studio (Credenciais Globais), 🛠️ Workspace (Sandbox & VM) e 📦 Projeto (Modelos, Ferramentas e Memória)',
+      title: t('global_defaults.title'),
+      subtitle: t('global_defaults.subtitle'),
       icon: '⚙️',
       closeBtnId: 'btn-close-defaults-modal'
     });
@@ -51,16 +52,16 @@ export class GlobalDefaultsModal {
         <!-- Abas do Modal / Modal Tabs com Escopos Claros -->
         <div class="modal-tabs">
           <button type="button" class="tab-btn ${this.activeTab === 'model' ? 'active' : ''}" data-tab="model">
-            🧠 [Projeto] Provedor & Modelo
+            ${t('global_defaults.tab_model')}
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'sandbox' ? 'active' : ''}" data-tab="sandbox">
-            🛡️ [Workspace] VM & Sandbox
+            ${t('global_defaults.tab_sandbox')}
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'tools' ? 'active' : ''}" data-tab="tools">
-            💻 [Projeto] Ferramentas
+            ${t('global_defaults.tab_tools')}
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'memory' ? 'active' : ''}" data-tab="memory">
-            💾 [Projeto] Memória
+            ${t('global_defaults.tab_memory')}
           </button>
         </div>
 
@@ -71,14 +72,14 @@ export class GlobalDefaultsModal {
               <div class="section-card-header">
                 <span class="section-card-icon">🧠</span>
                 <div class="section-card-titles">
-                  <h3 class="section-card-title">Provedor de IA & Modelo Padrão <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">📦 Escopo do Projeto</span></h3>
-                  <p class="section-card-desc">Modelo base atribuído a novos vértices ou vértices com herança ativada</p>
+                  <h3 class="section-card-title">${t('global_defaults.model_section_title')} <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">${t('global_defaults.badge_project_scope')}</span></h3>
+                  <p class="section-card-desc">${t('global_defaults.model_section_desc')}</p>
                 </div>
               </div>
 
               <div class="form-row-grid">
                 <div class="form-group">
-                  <label class="form-label" for="def-provider">Provedor Principal</label>
+                  <label class="form-label" for="def-provider">${t('global_defaults.provider_label')}</label>
                   <select id="def-provider" class="form-select">
                     <option value="deepseek" ${defaults.model.provider === 'deepseek' ? 'selected' : ''}>DeepSeek (v4-pro / Flash)</option>
                     <option value="anthropic" ${defaults.model.provider === 'anthropic' ? 'selected' : ''}>Anthropic (Claude Opus 5.5 / Sonnet)</option>
@@ -90,7 +91,7 @@ export class GlobalDefaultsModal {
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label" for="def-model">Nome do Modelo</label>
+                  <label class="form-label" for="def-model">${t('global_defaults.model_name_label')}</label>
                   <input type="text" id="def-model" class="form-input" value="${this.escapeHtml(defaults.model.model)}" placeholder="ex: deepseek-flash, claude-opus-5.5" />
                 </div>
               </div>
@@ -100,20 +101,20 @@ export class GlobalDefaultsModal {
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px;">
                   <div>
                     <div style="font-weight: 700; font-size: 13px; color: #242424; display: flex; align-items: center; gap: 8px;">
-                      <span>🔑 Credenciais & Conexão de API</span>
-                      <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">🏢 Escopo Global do Studio</span>
-                      <span id="api-key-indicator" style="font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; background: #f3f2f1; color: #616161;">Verificando...</span>
+                      <span>${t('global_defaults.credentials_title')}</span>
+                      <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">${t('global_defaults.badge_studio_scope')}</span>
+                      <span id="api-key-indicator" style="font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; background: #f3f2f1; color: #616161;">${t('global_defaults.key_checking')}</span>
                     </div>
                     <p style="margin: 4px 0 0 0; font-size: 12px; color: #616161; line-height: 1.4;">
-                      As credenciais de API são globais da aplicação (Studio), protegidas e lidas diretamente das variáveis de ambiente do sistema operacional (Windows).
+                      ${t('global_defaults.credentials_desc')}
                     </p>
                   </div>
                   <div style="display: flex; gap: 8px; flex-shrink: 0;">
                     <button type="button" class="btn btn-secondary-pill" id="btn-test-agent-api" style="font-size: 12px; font-weight: 600; height: 32px; padding: 0 14px; white-space: nowrap;">
-                      ⚡ Testar API do Agente
+                      ${t('global_defaults.btn_test_api')}
                     </button>
                     <button type="button" class="btn btn-primary" id="btn-toggle-deploy-key" style="font-size: 12px; font-weight: 600; height: 32px; padding: 0 14px; white-space: nowrap;">
-                      🔑 Implantar Nova Chave...
+                      ${t('global_defaults.btn_deploy_key')}
                     </button>
                   </div>
                 </div>
@@ -124,9 +125,9 @@ export class GlobalDefaultsModal {
                 <!-- Painel de Implantação de Chave no Ambiente -->
                 <div id="panel-deploy-key" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid #edebe9;">
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="font-weight: 600; font-size: 12px; color: #242424;">Implantar Chave Permanente no Sistema Operacional (Windows <code>setx</code>):</span>
+                    <span style="font-weight: 600; font-size: 12px; color: #242424;">${t('global_defaults.deploy_panel_title')}</span>
                     <button type="button" class="btn btn-secondary-pill" id="btn-open-env-guidance" style="font-size: 11px; padding: 2px 8px; height: 26px;">
-                      📖 Instruções Manuais...
+                      ${t('global_defaults.btn_guidance')}
                     </button>
                   </div>
                   <div style="display: flex; gap: 8px; margin-bottom: 6px;">
@@ -137,7 +138,7 @@ export class GlobalDefaultsModal {
                       <input type="password" id="deploy-key-value" class="form-input" style="height: 32px; font-size: 12px; font-family: monospace;" placeholder="Cole o token (sk-...)" />
                     </div>
                     <button type="button" class="btn btn-primary" id="btn-submit-deploy-key" style="height: 32px; font-size: 12px; padding: 0 14px; white-space: nowrap;">
-                      Gravar no Windows
+                      ${t('global_defaults.btn_save_key')}
                     </button>
                   </div>
                   <div id="deploy-save-feedback" style="display: none; font-size: 11.5px; padding: 6px 10px; border-radius: 4px;"></div>
@@ -146,18 +147,18 @@ export class GlobalDefaultsModal {
 
               <div class="form-group" style="margin-top: 14px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                  <label class="form-label" for="def-skill" style="margin: 0;">Arquivo de Skill / Instruções Padrão</label>
+                  <label class="form-label" for="def-skill" style="margin: 0;">${t('global_defaults.skill_label')}</label>
                   <button type="button" class="btn btn-secondary btn-sm" id="btn-defaults-open-github-repos" style="font-size: 11px; padding: 2px 8px; font-weight: 600;">
-                    🌐 Repositórios GitHub...
+                    ${t('global_defaults.btn_github_repos')}
                   </button>
                 </div>
                 <input type="text" id="def-skill" class="form-input" value="${this.escapeHtml(defaults.model.skillPath || '')}" placeholder=".agents/default/SKILL.md" />
               </div>
 
               <div class="form-group" style="margin-top: 14px;">
-                <label class="form-label" for="def-prompt">Template de Prompt Padrão</label>
+                <label class="form-label" for="def-prompt">${t('global_defaults.prompt_label')}</label>
                 <textarea id="def-prompt" class="form-textarea" rows="3" placeholder="Digite as diretrizes de prompt para este agente...">${this.escapeHtml(defaults.model.promptTemplate || '')}</textarea>
-                <div class="form-hint">Dica: use <code>\${id}</code> para interpolação dinâmica do identificador do item/artigo.</div>
+                <div class="form-hint">${t('global_defaults.prompt_hint')}</div>
               </div>
             </div>
           </div>
@@ -168,54 +169,54 @@ export class GlobalDefaultsModal {
               <div class="section-card-header">
                 <span class="section-card-icon">🛡️</span>
                 <div class="section-card-titles">
-                  <h3 class="section-card-title">Máquina Virtual & Política de Sandbox <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">🛠️ Escopo do Workspace</span></h3>
-                  <p class="section-card-desc">Ambiente de isolamento e fronteira de segurança física dos agentes no diretório do workspace</p>
+                  <h3 class="section-card-title">${t('global_defaults.sandbox_section_title')} <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">${t('global_defaults.badge_workspace_scope')}</span></h3>
+                  <p class="section-card-desc">${t('global_defaults.sandbox_section_desc')}</p>
                 </div>
               </div>
 
               <div class="form-row-grid">
                 <div class="form-group">
-                  <label class="form-label" for="def-isolation">Nível de Isolamento</label>
+                  <label class="form-label" for="def-isolation">${t('global_defaults.isolation_label')}</label>
                   <select id="def-isolation" class="form-select">
-                    <option value="container" ${defaults.sandbox.isolationLevel === 'container' ? 'selected' : ''}>Container Docker/Podman (Recomendado)</option>
-                    <option value="microvm" ${defaults.sandbox.isolationLevel === 'microvm' ? 'selected' : ''}>MicroVM Isolada (Firecracker / WSL2)</option>
-                    <option value="host_direct" ${defaults.sandbox.isolationLevel === 'host_direct' ? 'selected' : ''}>Host Direto (Fora da VM / Sem Isolamento)</option>
+                    <option value="container" ${defaults.sandbox.isolationLevel === 'container' ? 'selected' : ''}>${t('global_defaults.isolation_container')}</option>
+                    <option value="microvm" ${defaults.sandbox.isolationLevel === 'microvm' ? 'selected' : ''}>${t('global_defaults.isolation_microvm')}</option>
+                    <option value="host_direct" ${defaults.sandbox.isolationLevel === 'host_direct' ? 'selected' : ''}>${t('global_defaults.isolation_host_direct')}</option>
                   </select>
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label" for="def-network">Política de Rede</label>
+                  <label class="form-label" for="def-network">${t('global_defaults.network_label')}</label>
                   <select id="def-network" class="form-select">
-                    <option value="egress_llm_only" ${defaults.sandbox.network === 'egress_llm_only' ? 'selected' : ''}>Egress Apenas para API LLM (Seguro)</option>
-                    <option value="offline" ${defaults.sandbox.network === 'offline' ? 'selected' : ''}>Totalmente Offline (Bloqueio Total)</option>
-                    <option value="full" ${defaults.sandbox.network === 'full' ? 'selected' : ''}>Internet Livre (Acesso Irrestrito)</option>
+                    <option value="egress_llm_only" ${defaults.sandbox.network === 'egress_llm_only' ? 'selected' : ''}>${t('global_defaults.network_egress_llm_only')}</option>
+                    <option value="offline" ${defaults.sandbox.network === 'offline' ? 'selected' : ''}>${t('global_defaults.network_offline')}</option>
+                    <option value="full" ${defaults.sandbox.network === 'full' ? 'selected' : ''}>${t('global_defaults.network_full')}</option>
                   </select>
                 </div>
               </div>
 
               <div class="form-row-grid">
                 <div class="form-group">
-                  <label class="form-label" for="def-memory">Limite de RAM (MB)</label>
+                  <label class="form-label" for="def-memory">${t('global_defaults.memory_limit_label')}</label>
                   <input type="number" id="def-memory" class="form-input" value="${defaults.sandbox.maxMemoryMB}" min="64" step="64" />
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label" for="def-timeout">Timeout de Execução (segundos)</label>
+                  <label class="form-label" for="def-timeout">${t('global_defaults.timeout_label')}</label>
                   <input type="number" id="def-timeout" class="form-input" value="${defaults.sandbox.timeoutSeconds}" min="10" step="10" />
                 </div>
               </div>
 
               <div class="form-row-grid">
                 <div class="form-group">
-                  <label class="form-label" for="def-ro-mounts">Montagens Somente-Leitura (RO)</label>
+                  <label class="form-label" for="def-ro-mounts">${t('global_defaults.ro_mounts_label')}</label>
                   <input type="text" id="def-ro-mounts" class="form-input" value="${this.escapeHtml(defaults.sandbox.readOnlyMounts.join(', '))}" placeholder=".agents/, shared/" />
-                  <div class="form-hint">Separado por vírgulas. Agente não pode modificar.</div>
+                  <div class="form-hint">${t('global_defaults.ro_mounts_hint')}</div>
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label" for="def-rw-mounts">Pastas de Escrita Permitida (RW)</label>
+                  <label class="form-label" for="def-rw-mounts">${t('global_defaults.rw_mounts_label')}</label>
                   <input type="text" id="def-rw-mounts" class="form-input" value="${this.escapeHtml(defaults.sandbox.readWriteMounts.join(', '))}" placeholder="output/, dist/" />
-                  <div class="form-hint">Separado por vírgulas. Acesso exclusivo de escrita no workspace.</div>
+                  <div class="form-hint">${t('global_defaults.rw_mounts_hint')}</div>
                 </div>
               </div>
             </div>
@@ -227,8 +228,8 @@ export class GlobalDefaultsModal {
               <div class="section-card-header">
                 <span class="section-card-icon">🔧</span>
                 <div class="section-card-titles">
-                  <h3 class="section-card-title">Ferramentas Code Mode Habilitadas <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">📦 Escopo do Projeto</span></h3>
-                  <p class="section-card-desc">Operações procedurais que o agente pode invocar dentro da sua VM</p>
+                  <h3 class="section-card-title">${t('global_defaults.tools_section_title')} <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">${t('global_defaults.badge_project_scope')}</span></h3>
+                  <p class="section-card-desc">${t('global_defaults.tools_section_desc')}</p>
                 </div>
               </div>
 
@@ -236,43 +237,43 @@ export class GlobalDefaultsModal {
                 <label class="tool-checkbox-pill ${defaults.codeMode.allowedTools.includes('write') ? 'checked' : ''}">
                   <input type="checkbox" class="def-tool-check" value="write" ${defaults.codeMode.allowedTools.includes('write') ? 'checked' : ''} />
                   <span class="tool-pill-name">tools.write</span>
-                  <span class="tool-pill-desc">Criação de arquivos</span>
+                  <span class="tool-pill-desc">${t('global_defaults.tool_desc_write')}</span>
                 </label>
 
                 <label class="tool-checkbox-pill ${defaults.codeMode.allowedTools.includes('edit') ? 'checked' : ''}">
                   <input type="checkbox" class="def-tool-check" value="edit" ${defaults.codeMode.allowedTools.includes('edit') ? 'checked' : ''} />
                   <span class="tool-pill-name">tools.edit</span>
-                  <span class="tool-pill-desc">Edição cirúrgica</span>
+                  <span class="tool-pill-desc">${t('global_defaults.tool_desc_edit')}</span>
                 </label>
 
                 <label class="tool-checkbox-pill ${defaults.codeMode.allowedTools.includes('read') ? 'checked' : ''}">
                   <input type="checkbox" class="def-tool-check" value="read" ${defaults.codeMode.allowedTools.includes('read') ? 'checked' : ''} />
                   <span class="tool-pill-name">tools.read</span>
-                  <span class="tool-pill-desc">Leitura de arquivos</span>
+                  <span class="tool-pill-desc">${t('global_defaults.tool_desc_read')}</span>
                 </label>
 
                 <label class="tool-checkbox-pill ${defaults.codeMode.allowedTools.includes('bash') ? 'checked' : ''}">
                   <input type="checkbox" class="def-tool-check" value="bash" ${defaults.codeMode.allowedTools.includes('bash') ? 'checked' : ''} />
                   <span class="tool-pill-name">tools.bash</span>
-                  <span class="tool-pill-desc">Comandos de terminal</span>
+                  <span class="tool-pill-desc">${t('global_defaults.tool_desc_bash')}</span>
                 </label>
 
                 <label class="tool-checkbox-pill ${defaults.codeMode.allowedTools.includes('validate_svg') ? 'checked' : ''}">
                   <input type="checkbox" class="def-tool-check" value="validate_svg" ${defaults.codeMode.allowedTools.includes('validate_svg') ? 'checked' : ''} />
                   <span class="tool-pill-name">tools.validate_svg</span>
-                  <span class="tool-pill-desc">Validação Jev / Script</span>
+                  <span class="tool-pill-desc">${t('global_defaults.tool_desc_validate_svg')}</span>
                 </label>
               </div>
 
               <div class="form-group" style="margin-top: 14px;">
-                <label class="form-label" for="def-custom-scripts">Scripts Utilitários Permitidos</label>
+                <label class="form-label" for="def-custom-scripts">${t('global_defaults.custom_scripts_label')}</label>
                 <input type="text" id="def-custom-scripts" class="form-input" value="${this.escapeHtml(defaults.codeMode.customScripts.join(', '))}" placeholder="python scripts/helper.py, npm run check" />
               </div>
 
               <div class="form-group" style="margin-top: 14px;">
-                <label class="form-label" for="def-mcp-tools">Ferramentas MCP Autorizadas por Padrão <span style="font-size: 10px; color: #0f6cbd;">🛠️ Servidores do Workspace</span></label>
+                <label class="form-label" for="def-mcp-tools">${t('global_defaults.mcp_tools_label')} <span style="font-size: 10px; color: #0f6cbd;">${t('global_defaults.mcp_tools_servers_badge')}</span></label>
                 <input type="text" id="def-mcp-tools" class="form-input" value="${this.escapeHtml((defaults.codeMode.allowedMcpTools || []).join(', '))}" placeholder="read_file, write_file, fetch_url" />
-                <div class="form-hint">Nomes de ferramentas dos servidores MCP instalados no Workspace herdadas por padrão nos agentes do projeto.</div>
+                <div class="form-hint">${t('global_defaults.mcp_tools_hint')}</div>
               </div>
             </div>
           </div>
@@ -283,34 +284,34 @@ export class GlobalDefaultsModal {
               <div class="section-card-header">
                 <span class="section-card-icon">💾</span>
                 <div class="section-card-titles">
-                  <h3 class="section-card-title">Memória Heterogênea do Pipeline <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">📦 Escopo do Projeto</span></h3>
-                  <p class="section-card-desc">Blackboard e Lições cognitivas com isolamento estrito pelo ID do projeto. Memória NÃO é padrão e nem obrigatória (Opt-in).</p>
+                  <h3 class="section-card-title">${t('global_defaults.memory_section_title')} <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">${t('global_defaults.badge_project_scope')}</span></h3>
+                  <p class="section-card-desc">${t('global_defaults.memory_section_desc')}</p>
                 </div>
               </div>
 
               <div class="memory-enable-toggle-row">
                 <label class="memory-toggle-label">
                   <input type="checkbox" id="def-memory-enabled" ${defaults.memory?.enabled ? 'checked' : ''} />
-                  <span class="memory-toggle-text">Habilitar Memória Global por Padrão (Opt-in)</span>
+                  <span class="memory-toggle-text">${t('global_defaults.memory_toggle_label')}</span>
                 </label>
               </div>
 
               <div class="form-group" style="margin-top: 10px;">
-                <label class="form-label">Regime Padrão de Persistência</label>
+                <label class="form-label">${t('global_defaults.memory_regime_label')}</label>
                 <div class="memory-persistence-options">
                   <label class="persistence-radio-card ${!defaults.memory?.persistent ? 'selected' : ''}">
                     <input type="radio" name="def-memory-persistence" value="ephemeral" ${!defaults.memory?.persistent ? 'checked' : ''} />
                     <div class="persistence-card-content">
-                      <span class="persistence-card-title">⚪ Efêmera (Sessão / RAM)</span>
-                      <span class="persistence-card-desc">Memória em cache volátil. Descartada ao encerrar/reiniciar a sessão.</span>
+                      <span class="persistence-card-title">${t('global_defaults.memory_ephemeral_title')}</span>
+                      <span class="persistence-card-desc">${t('global_defaults.memory_ephemeral_desc')}</span>
                     </div>
                   </label>
 
                   <label class="persistence-radio-card ${defaults.memory?.persistent ? 'selected' : ''}">
                     <input type="radio" name="def-memory-persistence" value="persistent" ${defaults.memory?.persistent ? 'checked' : ''} />
                     <div class="persistence-card-content">
-                      <span class="persistence-card-title">🟣 Persistente Entre Sessões</span>
-                      <span class="persistence-card-desc">Gravação atômica em disco para retenção de lições e dados históricos.</span>
+                      <span class="persistence-card-title">${t('global_defaults.memory_persistent_title')}</span>
+                      <span class="persistence-card-desc">${t('global_defaults.memory_persistent_desc')}</span>
                     </div>
                   </label>
                 </div>
@@ -320,32 +321,32 @@ export class GlobalDefaultsModal {
                 <label class="memory-perm-item">
                   <input type="checkbox" id="def-mem-read-bb" ${defaults.memory?.readBlackboard ? 'checked' : ''} />
                   <div>
-                    <span class="perm-item-title">Leitura do Blackboard</span>
-                    <span class="perm-item-desc">Memória de trabalho intra-pipeline</span>
+                    <span class="perm-item-title">${t('global_defaults.perm_read_bb_title')}</span>
+                    <span class="perm-item-desc">${t('global_defaults.perm_read_bb_desc')}</span>
                   </div>
                 </label>
 
                 <label class="memory-perm-item">
                   <input type="checkbox" id="def-mem-write-bb" ${defaults.memory?.writeBlackboard ? 'checked' : ''} />
                   <div>
-                    <span class="perm-item-title">Escrita no Blackboard</span>
-                    <span class="perm-item-desc">Publicação de deltas estruturados</span>
+                    <span class="perm-item-title">${t('global_defaults.perm_write_bb_title')}</span>
+                    <span class="perm-item-desc">${t('global_defaults.perm_write_bb_desc')}</span>
                   </div>
                 </label>
 
                 <label class="memory-perm-item">
                   <input type="checkbox" id="def-mem-read-lessons" ${defaults.memory?.semanticLessons ? 'checked' : ''} />
                   <div>
-                    <span class="perm-item-title">Consultar Lições Aprendidas</span>
-                    <span class="perm-item-desc">Injeção preventiva no system prompt</span>
+                    <span class="perm-item-title">${t('global_defaults.perm_read_lessons_title')}</span>
+                    <span class="perm-item-desc">${t('global_defaults.perm_read_lessons_desc')}</span>
                   </div>
                 </label>
 
                 <label class="memory-perm-item">
                   <input type="checkbox" id="def-mem-write-lessons" ${defaults.memory?.recordLessons ? 'checked' : ''} />
                   <div>
-                    <span class="perm-item-title">Registrar Novas Lições</span>
-                    <span class="perm-item-desc">Indexação de auditorias e erros</span>
+                    <span class="perm-item-title">${t('global_defaults.perm_write_lessons_title')}</span>
+                    <span class="perm-item-desc">${t('global_defaults.perm_write_lessons_desc')}</span>
                   </div>
                 </label>
               </div>
@@ -354,10 +355,10 @@ export class GlobalDefaultsModal {
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary-pill" id="btn-reset-defaults">Restaurar Fábrica</button>
+          <button class="btn btn-secondary-pill" id="btn-reset-defaults">${t('global_defaults.btn_reset')}</button>
           <div style="flex: 1;"></div>
-          <button class="btn btn-secondary-pill" id="btn-cancel-defaults">Cancelar</button>
-          <button class="btn btn-primary" id="btn-save-defaults">Salvar Padrões Globais</button>
+          <button class="btn btn-secondary-pill" id="btn-cancel-defaults">${t('global_defaults.btn_cancel')}</button>
+          <button class="btn btn-primary" id="btn-save-defaults">${t('global_defaults.btn_save')}</button>
         </div>
       </div>
     `;
@@ -469,7 +470,7 @@ export class GlobalDefaultsModal {
 
     // Restaurar Fábrica
     this.overlay.querySelector('#btn-reset-defaults')?.addEventListener('click', () => {
-      if (confirm('Deseja restaurar todas as configurações globais de fábrica?')) {
+      if (confirm(t('global_defaults.confirm_reset_factory'))) {
         this.graph.updateGlobalDefaults(DEFAULT_PIPELINE_DEFAULTS);
         this.render();
       }
@@ -501,7 +502,7 @@ export class GlobalDefaultsModal {
 
     if (provider === 'jev') {
       if (indicator) {
-        indicator.textContent = 'Engine Visual Local Integrada';
+        indicator.textContent = t('global_defaults.indicator_jev');
         indicator.style.background = '#e1dfdd';
         indicator.style.color = '#242424';
       }
@@ -511,7 +512,7 @@ export class GlobalDefaultsModal {
 
     if (provider === 'local') {
       if (indicator) {
-        indicator.textContent = 'Servidor Local (Ollama/vLLM)';
+        indicator.textContent = t('global_defaults.indicator_local');
         indicator.style.background = '#e1dfdd';
         indicator.style.color = '#242424';
       }
@@ -530,11 +531,11 @@ export class GlobalDefaultsModal {
     if (indicator) {
       if (keyVal && keyVal.length > 0) {
         const masked = keyVal.length > 8 ? `${keyVal.slice(0, 3)}...${keyVal.slice(-3)}` : '••••';
-        indicator.textContent = `Configurada (${keyName}: ${masked})`;
+        indicator.textContent = t('global_defaults.indicator_configured', { key: keyName, masked });
         indicator.style.background = '#dff6dd';
         indicator.style.color = '#0e700e';
       } else {
-        indicator.textContent = `Ausente (${keyName})`;
+        indicator.textContent = t('global_defaults.indicator_missing', { key: keyName });
         indicator.style.background = '#fde7e9';
         indicator.style.color = '#a80000';
       }
@@ -551,13 +552,13 @@ export class GlobalDefaultsModal {
     statusDiv.style.background = '#f3f2f1';
     statusDiv.style.color = '#242424';
     statusDiv.style.border = '1px solid #d2d0ce';
-    statusDiv.textContent = '⏳ Testando conexão com a API do agente...';
+    statusDiv.textContent = t('global_defaults.test_loading');
 
     if (provider === 'jev') {
       statusDiv.style.background = '#dff6dd';
       statusDiv.style.color = '#0e700e';
       statusDiv.style.border = '1px solid #107c41';
-      statusDiv.textContent = '✅ Engine Visual Jev pronta para validação em runtime.';
+      statusDiv.textContent = t('global_defaults.test_jev_ok');
       return;
     }
 
@@ -571,14 +572,14 @@ export class GlobalDefaultsModal {
           statusDiv.style.background = '#dff6dd';
           statusDiv.style.color = '#0e700e';
           statusDiv.style.border = '1px solid #107c41';
-          statusDiv.textContent = '✅ Servidor Ollama local detectado e respondendo normalmente.';
+          statusDiv.textContent = t('global_defaults.test_local_ok');
           return;
         }
       } catch {}
       statusDiv.style.background = '#fff4ce';
       statusDiv.style.color = '#797673';
       statusDiv.style.border = '1px solid #fce100';
-      statusDiv.textContent = 'ℹ️ Provedor local configurado. Certifique-se de iniciar o Ollama/vLLM antes da execução.';
+      statusDiv.textContent = t('global_defaults.test_local_hint');
       return;
     }
 
@@ -590,7 +591,7 @@ export class GlobalDefaultsModal {
       statusDiv.style.background = '#fde7e9';
       statusDiv.style.color = '#a80000';
       statusDiv.style.border = '1px solid #d13438';
-      statusDiv.innerHTML = `⚠️ Variável <strong>${keyName}</strong> não configurada no ambiente. Clique em <strong>"Implantar Nova Chave..."</strong> para registrá-la.`;
+      statusDiv.innerHTML = t('global_defaults.test_missing_key', { key: keyName });
       const panel = this.overlay.querySelector('#panel-deploy-key') as HTMLElement;
       if (panel) panel.style.display = 'block';
       return;
@@ -612,13 +613,13 @@ export class GlobalDefaultsModal {
           statusDiv.style.background = '#dff6dd';
           statusDiv.style.color = '#0e700e';
           statusDiv.style.border = '1px solid #107c41';
-          statusDiv.textContent = `✅ Conexão com DeepSeek API bem-sucedida! Chave ${keyName} (${masked}) autenticada.`;
+          statusDiv.textContent = t('global_defaults.test_deepseek_ok', { key: keyName, masked });
           return;
         } else if (resp.status === 401 || resp.status === 403) {
           statusDiv.style.background = '#fde7e9';
           statusDiv.style.color = '#a80000';
           statusDiv.style.border = '1px solid #d13438';
-          statusDiv.textContent = `❌ Falha de autenticação (HTTP ${resp.status}): Chave ${keyName} recusada pela DeepSeek.`;
+          statusDiv.textContent = t('global_defaults.test_deepseek_fail', { status: String(resp.status), key: keyName });
           return;
         }
       } catch {}
@@ -636,13 +637,13 @@ export class GlobalDefaultsModal {
           statusDiv.style.background = '#dff6dd';
           statusDiv.style.color = '#0e700e';
           statusDiv.style.border = '1px solid #107c41';
-          statusDiv.textContent = `✅ Conexão com OpenAI API bem-sucedida! Chave ${keyName} (${masked}) autenticada.`;
+          statusDiv.textContent = t('global_defaults.test_openai_ok', { key: keyName, masked });
           return;
         } else if (resp.status === 401 || resp.status === 403) {
           statusDiv.style.background = '#fde7e9';
           statusDiv.style.color = '#a80000';
           statusDiv.style.border = '1px solid #d13438';
-          statusDiv.textContent = `❌ Falha de autenticação (HTTP ${resp.status}): Chave ${keyName} recusada pela OpenAI.`;
+          statusDiv.textContent = t('global_defaults.test_openai_fail', { status: String(resp.status), key: keyName });
           return;
         }
       } catch {}
@@ -651,7 +652,7 @@ export class GlobalDefaultsModal {
     statusDiv.style.background = '#dff6dd';
     statusDiv.style.color = '#0e700e';
     statusDiv.style.border = '1px solid #107c41';
-    statusDiv.textContent = `✅ Chave ${keyName} (${masked}) configurada e ativa no ambiente do sistema operacional.`;
+    statusDiv.textContent = t('global_defaults.test_os_ok', { key: keyName, masked });
   }
 
   private async deployApiKey(): Promise<void> {
@@ -667,7 +668,7 @@ export class GlobalDefaultsModal {
         feedback.style.display = 'block';
         feedback.style.background = '#fde7e9';
         feedback.style.color = '#a80000';
-        feedback.textContent = 'Por favor, informe o nome da variável e o valor da chave.';
+        feedback.textContent = t('global_defaults.deploy_missing_inputs');
       }
       return;
     }
@@ -676,7 +677,7 @@ export class GlobalDefaultsModal {
       feedback.style.display = 'block';
       feedback.style.background = '#f3f2f1';
       feedback.style.color = '#242424';
-      feedback.textContent = 'Gravando variável no ambiente do sistema operacional...';
+      feedback.textContent = t('global_defaults.deploy_saving');
     }
 
     const envManager = EnvironmentManager.getInstance();
@@ -686,13 +687,13 @@ export class GlobalDefaultsModal {
       if (success) {
         feedback.style.background = '#dff6dd';
         feedback.style.color = '#0e700e';
-        feedback.textContent = `✅ Chave ${keyName} gravada com sucesso no ambiente do Windows!`;
+        feedback.textContent = t('global_defaults.deploy_saved_windows', { key: keyName });
         keyValInput.value = '';
         this.updateKeyIndicator();
       } else {
         feedback.style.background = '#fff4ce';
         feedback.style.color = '#797673';
-        feedback.textContent = `Variável salva na sessão atual. Para gravação permanente no SO, utilize o Guia Manual.`;
+        feedback.textContent = t('global_defaults.deploy_saved_session');
         this.updateKeyIndicator();
       }
     }

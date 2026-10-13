@@ -1,5 +1,6 @@
 import { Graph } from '../../core/Graph.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
+import { t } from '../../i18n/index.ts';
 
 export class ProjectMemoryModal {
   private overlay: HTMLElement;
@@ -34,8 +35,8 @@ export class ProjectMemoryModal {
     const isGloballyEnabled = !!defaults.memory?.enabled;
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Central de Memória do Projeto (Blackboard & Lições)',
-      subtitle: `📦 Escopo do Projeto: <strong>${this.escapeHtml(projectId)}</strong> | Grafo: ${this.escapeHtml(this.graph.getMetadata().graphName)} (Isolamento por ID)`,
+      title: t('project_memory.title'),
+      subtitle: t('project_memory.subtitle', { projectId: this.escapeHtml(projectId), graphName: this.escapeHtml(this.graph.getMetadata().graphName) }),
       icon: '💾',
       closeBtnId: 'btn-close-project-mem'
     });
@@ -51,16 +52,16 @@ export class ProjectMemoryModal {
               <div class="section-card-header">
                 <span class="section-card-icon">🧠</span>
                 <div class="section-card-titles">
-                  <h3 class="section-card-title">Regime de Persistência</h3>
-                  <p class="section-card-desc">Política ativa para o projeto atual</p>
+                  <h3 class="section-card-title">${t('project_memory.persistence_regime')}</h3>
+                  <p class="section-card-desc">${t('project_memory.persistence_desc')}</p>
                 </div>
               </div>
               <div style="margin-top: 8px;">
                 <span class="inheritance-status-badge ${isGloballyPersistent ? 'badge-memory-persistent' : 'badge-memory-ephemeral'}">
-                  ${isGloballyPersistent ? '🟣 PERSISTENTE ENTRE SESSÕES (DISCO)' : '⚪ EFÊMERA (SESSÃO ATUAL / RAM)'}
+                  ${isGloballyPersistent ? t('project_memory.badge_persistent') : t('project_memory.badge_ephemeral')}
                 </span>
                 <div class="form-hint" style="margin-top: 8px;">
-                  Padrão do Pipeline: <strong>${isGloballyEnabled ? 'Ativa' : 'Desativada (Opt-in seletivo por agente)'}</strong>.
+                  ${t('project_memory.pipeline_default_hint', { status: isGloballyEnabled ? t('project_memory.status_active') : t('project_memory.status_optin') })}
                 </div>
               </div>
             </div>
@@ -69,14 +70,14 @@ export class ProjectMemoryModal {
               <div class="section-card-header">
                 <span class="section-card-icon">⚡</span>
                 <div class="section-card-titles">
-                  <h3 class="section-card-title">Ações de Manutenção</h3>
-                  <p class="section-card-desc">Controle do ciclo de vida da memória</p>
+                  <h3 class="section-card-title">${t('project_memory.maintenance_title')}</h3>
+                  <p class="section-card-desc">${t('project_memory.maintenance_desc')}</p>
                 </div>
               </div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
-                <button class="btn btn-secondary-pill" id="btn-refresh-memory">🔄 Atualizar</button>
-                <button class="btn btn-secondary-pill" id="btn-clear-session-mem" title="Limpa apenas dados voláteis da sessão atual">🧹 Limpar Sessão</button>
-                <button class="btn btn-danger-pill" id="btn-clear-all-mem" title="Apaga toda a memória e lições deste projeto">🗑️ Reset Total</button>
+                <button class="btn btn-secondary-pill" id="btn-refresh-memory">${t('project_memory.btn_refresh')}</button>
+                <button class="btn btn-secondary-pill" id="btn-clear-session-mem" title="${t('project_memory.btn_clear_session_tip')}">${t('project_memory.btn_clear_session')}</button>
+                <button class="btn btn-danger-pill" id="btn-clear-all-mem" title="${t('project_memory.btn_clear_all_tip')}">${t('project_memory.btn_clear_all')}</button>
               </div>
             </div>
           </div>
@@ -86,12 +87,12 @@ export class ProjectMemoryModal {
             <div class="section-card-header">
               <span class="section-card-icon">📋</span>
               <div class="section-card-titles">
-                <h3 class="section-card-title">Blackboard C++20 (Memória de Trabalho Compartilhada)</h3>
-                <p class="section-card-desc">Deltas e decisões compartilhadas indexadas por itemId</p>
+                <h3 class="section-card-title">${t('project_memory.bb_title')}</h3>
+                <p class="section-card-desc">${t('project_memory.bb_desc')}</p>
               </div>
             </div>
             <div id="blackboard-viewer" class="code-editor-header" style="background:#0f172a; color:#f8fafc; font-family:monospace; padding:12px; border-radius:8px; max-height:220px; overflow-y:auto; font-size:11px; white-space:pre-wrap;">
-Carregando estado do Blackboard...
+${t('project_memory.bb_loading')}
             </div>
           </div>
 
@@ -100,40 +101,40 @@ Carregando estado do Blackboard...
             <div class="section-card-header">
               <span class="section-card-icon">📚</span>
               <div class="section-card-titles">
-                <h3 class="section-card-title">Memória Semântica (Lições Aprendidas & Regras Profiláticas)</h3>
-                <p class="section-card-desc">Regras derivadas de erros de auditoria para injeção automática em prompts</p>
+                <h3 class="section-card-title">${t('project_memory.lessons_title')}</h3>
+                <p class="section-card-desc">${t('project_memory.lessons_desc')}</p>
               </div>
             </div>
             <div id="lessons-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto;">
-              <div style="color: #64748b; font-size: 11px;">Carregando lições aprendidas...</div>
+              <div style="color: #64748b; font-size: 11px;">${t('project_memory.lessons_loading')}</div>
             </div>
 
             <!-- Adicionar Lição de Teste -->
             <div style="margin-top: 14px; border-top: 1px solid #f1f5f9; padding-top: 12px;">
               <details>
-                <summary style="cursor: pointer; font-size: 11px; font-weight: 700; color: #4338ca;">+ Adicionar Regra / Lição Profilática Manualmente</summary>
+                <summary style="cursor: pointer; font-size: 11px; font-weight: 700; color: #4338ca;">${t('project_memory.manual_lesson_summary')}</summary>
                 <div class="form-row-grid" style="margin-top: 8px;">
                   <div class="form-group">
-                    <label class="form-label" for="manual-lesson-domain">Domínio</label>
+                    <label class="form-label" for="manual-lesson-domain">${t('project_memory.manual_domain_label')}</label>
                     <input type="text" id="manual-lesson-domain" class="form-input" placeholder="ex: svg_typography, validation" />
                   </div>
                   <div class="form-group">
-                    <label class="form-label" for="manual-lesson-trigger">Erro Disparador</label>
+                    <label class="form-label" for="manual-lesson-trigger">${t('project_memory.manual_trigger_label')}</label>
                     <input type="text" id="manual-lesson-trigger" class="form-input" placeholder="ex: text-shadow detectado no SVG" />
                   </div>
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="manual-lesson-rule">Regra Profilática Formulada</label>
+                  <label class="form-label" for="manual-lesson-rule">${t('project_memory.manual_rule_label')}</label>
                   <input type="text" id="manual-lesson-rule" class="form-input" placeholder="ex: Proibido usar text-shadow ou feDropShadow em fontes SVG; usar peso 800 e pílulas sólidas" />
                 </div>
-                <button class="btn btn-primary" id="btn-add-manual-lesson" style="margin-top: 8px; padding: 6px 14px; font-size: 11px;">Salvar Lição no Projeto</button>
+                <button class="btn btn-primary" id="btn-add-manual-lesson" style="margin-top: 8px; padding: 6px 14px; font-size: 11px;">${t('project_memory.btn_save_lesson')}</button>
               </details>
             </div>
           </div>
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary-pill" id="btn-close-project-mem-footer">Fechar</button>
+          <button class="btn btn-secondary-pill" id="btn-close-project-mem-footer">${t('project_memory.btn_close')}</button>
         </div>
       </div>
     `;
@@ -157,14 +158,14 @@ Carregando estado do Blackboard...
     this.overlay.querySelector('#btn-refresh-memory')?.addEventListener('click', () => this.refreshMemoryData());
 
     this.overlay.querySelector('#btn-clear-session-mem')?.addEventListener('click', async () => {
-      if (confirm('Deseja limpar os dados da sessão atual em RAM? Se o projeto for efêmero, os dados serão descartados.')) {
+      if (confirm(t('project_memory.confirm_clear_session'))) {
         await this.clearMemory(true);
         this.refreshMemoryData();
       }
     });
 
     this.overlay.querySelector('#btn-clear-all-mem')?.addEventListener('click', async () => {
-      if (confirm('Atenção: Deseja apagar permanentemente toda a memória e lições deste projeto?')) {
+      if (confirm(t('project_memory.confirm_clear_all', { projectId: this.graph.getProjectId() }))) {
         await this.clearMemory(false);
         this.refreshMemoryData();
       }
@@ -209,7 +210,7 @@ Carregando estado do Blackboard...
           const bbObj = data.blackboard || {};
           const keysCount = Object.keys(bbObj).length;
           if (keysCount === 0) {
-            bbViewer.textContent = 'Nenhum dado registrado no Blackboard para este projeto ainda.\n(Os agentes com permissão "writeBlackboard" publicarão suas saídas durante a execução).';
+            bbViewer.textContent = t('project_memory.bb_empty');
           } else {
             bbViewer.textContent = JSON.stringify(bbObj, null, 2);
           }
@@ -219,7 +220,7 @@ Carregando estado do Blackboard...
         if (lessonsList) {
           const lessons = data.semantic?.lessons || [];
           if (lessons.length === 0) {
-            lessonsList.innerHTML = `<div style="color: #64748b; font-size: 11px; padding: 10px; background: #f8fafc; border-radius: 8px;">Nenhuma lição aprendida registrada para este projeto. O motor indexará regras automaticamente ao detectar falhas ou validações.</div>`;
+            lessonsList.innerHTML = `<div style="color: #64748b; font-size: 11px; padding: 10px; background: #f8fafc; border-radius: 8px;">${t('project_memory.lessons_empty')}</div>`;
           } else {
             lessonsList.innerHTML = lessons.map((l: any, idx: number) => `
               <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; display: flex; flex-direction: column; gap: 4px;">

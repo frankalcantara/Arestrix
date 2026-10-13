@@ -2,6 +2,7 @@ import { Graph } from '../../core/Graph.ts';
 import { INodeData, ISandboxPolicy, SandboxIsolationLevel, SandboxNetworkPolicy } from '../../core/types.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
+import { t } from '../../i18n/index.ts';
 
 export class NodeSandboxModal {
   private overlay: HTMLElement;
@@ -48,8 +49,8 @@ export class NodeSandboxModal {
         };
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: 'Sandbox & Isolamento de VM (Infraestrutura do Workspace)',
-      subtitle: `🛠️ Escopo do Workspace: Fronteira de isolamento para o vértice <strong>${this.escapeHtml(node.label)}</strong> (ID: ${node.id})`,
+      title: t('node_modals.sandbox_title'),
+      subtitle: t('node_modals.sandbox_subtitle', { label: this.escapeHtml(node.label), id: node.id }),
       icon: '🛡️',
       closeBtnId: 'btn-close-sandbox-modal'
     });
@@ -63,65 +64,65 @@ export class NodeSandboxModal {
             <label class="inheritance-checkbox-label">
               <input type="checkbox" id="chk-inherit-sandbox" ${isInherited ? 'checked' : ''} />
               <div class="inheritance-label-text">
-                <span class="inheritance-title">Herdar Padrões Globais do Pipeline</span>
-                <span class="inheritance-desc">Usa o ambiente configurado na Toolbar (${this.getIsolationLabel(globalDefaults.sandbox.isolationLevel)}, ${globalDefaults.sandbox.maxMemoryMB} MB RAM)</span>
+                <span class="inheritance-title">${t('node_modals.inherit_sandbox_title')}</span>
+                <span class="inheritance-desc">${t('node_modals.inherit_sandbox_desc', { isolation: this.getIsolationLabel(globalDefaults.sandbox.isolationLevel), memory: globalDefaults.sandbox.maxMemoryMB })}</span>
               </div>
             </label>
             <div class="inheritance-status-badge ${isInherited ? 'badge-inherited' : 'badge-overridden'}">
-              ${isInherited ? 'HERDADO DO PIPELINE' : 'CUSTOMIZADO PARA ESTE VÉRTICE'}
+              ${isInherited ? t('node_modals.badge_inherited') : t('node_modals.badge_overridden')}
             </div>
           </div>
 
           <div class="settings-form-wrapper ${isInherited ? 'form-disabled-opacity' : ''}" id="sandbox-form-wrapper">
             <div class="form-row-grid">
               <div class="form-group">
-                <label class="form-label" for="node-sandbox-isolation">Nível de Isolamento</label>
+                <label class="form-label" for="node-sandbox-isolation">${t('node_modals.isolation_label')}</label>
                 <select id="node-sandbox-isolation" class="form-select" ${isInherited ? 'disabled' : ''}>
-                  <option value="container" ${effectiveSandbox.isolationLevel === 'container' ? 'selected' : ''}>Container Docker/Podman</option>
-                  <option value="microvm" ${effectiveSandbox.isolationLevel === 'microvm' ? 'selected' : ''}>MicroVM Isolada (Firecracker / WSL2)</option>
-                  <option value="host_direct" ${effectiveSandbox.isolationLevel === 'host_direct' ? 'selected' : ''}>Host Direto (Fora da VM / Sem Isolamento)</option>
+                  <option value="container" ${effectiveSandbox.isolationLevel === 'container' ? 'selected' : ''}>${t('node_modals.isolation_container')}</option>
+                  <option value="microvm" ${effectiveSandbox.isolationLevel === 'microvm' ? 'selected' : ''}>${t('node_modals.isolation_microvm')}</option>
+                  <option value="host_direct" ${effectiveSandbox.isolationLevel === 'host_direct' ? 'selected' : ''}>${t('node_modals.isolation_host_direct')}</option>
                 </select>
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="node-sandbox-network">Política de Rede</label>
+                <label class="form-label" for="node-sandbox-network">${t('node_modals.network_label')}</label>
                 <select id="node-sandbox-network" class="form-select" ${isInherited ? 'disabled' : ''}>
-                  <option value="egress_llm_only" ${effectiveSandbox.network === 'egress_llm_only' ? 'selected' : ''}>Egress Apenas para API LLM</option>
-                  <option value="offline" ${effectiveSandbox.network === 'offline' ? 'selected' : ''}>Totalmente Offline (Bloqueada)</option>
-                  <option value="full" ${effectiveSandbox.network === 'full' ? 'selected' : ''}>Internet Livre (Acesso Irrestrito)</option>
+                  <option value="egress_llm_only" ${effectiveSandbox.network === 'egress_llm_only' ? 'selected' : ''}>${t('node_modals.network_egress_llm')}</option>
+                  <option value="offline" ${effectiveSandbox.network === 'offline' ? 'selected' : ''}>${t('node_modals.network_offline')}</option>
+                  <option value="full" ${effectiveSandbox.network === 'full' ? 'selected' : ''}>${t('node_modals.network_full')}</option>
                 </select>
               </div>
             </div>
 
             <div class="form-row-grid">
               <div class="form-group">
-                <label class="form-label" for="node-sandbox-memory">Limite de RAM (MB)</label>
+                <label class="form-label" for="node-sandbox-memory">${t('node_modals.memory_limit_label')}</label>
                 <input type="number" id="node-sandbox-memory" class="form-input" value="${effectiveSandbox.maxMemoryMB}" min="64" step="64" ${isInherited ? 'disabled' : ''} />
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="node-sandbox-timeout">Timeout (segundos)</label>
+                <label class="form-label" for="node-sandbox-timeout">${t('node_modals.timeout_label')}</label>
                 <input type="number" id="node-sandbox-timeout" class="form-input" value="${effectiveSandbox.timeoutSeconds}" min="10" step="10" ${isInherited ? 'disabled' : ''} />
               </div>
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="node-sandbox-ro">Montagens Somente-Leitura (RO)</label>
+              <label class="form-label" for="node-sandbox-ro">${t('node_modals.ro_mounts_label')}</label>
               <input type="text" id="node-sandbox-ro" class="form-input" value="${this.escapeHtml((effectiveSandbox.readOnlyMounts || []).join(', '))}" placeholder=".agents/, shared/" ${isInherited ? 'disabled' : ''} />
-              <div class="form-hint">Caminhos montados com flag de proteção contra escrita.</div>
+              <div class="form-hint">${t('node_modals.ro_mounts_desc')}</div>
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="node-sandbox-rw">Pastas de Escrita Permitida (RW)</label>
+              <label class="form-label" for="node-sandbox-rw">${t('node_modals.rw_mounts_label')}</label>
               <input type="text" id="node-sandbox-rw" class="form-input" value="${this.escapeHtml((effectiveSandbox.readWriteMounts || []).join(', '))}" placeholder="output/, assets/" ${isInherited ? 'disabled' : ''} />
-              <div class="form-hint">Apenas estas pastas podem ser modificadas pelas ferramentas do agente.</div>
+              <div class="form-hint">${t('node_modals.rw_mounts_desc')}</div>
             </div>
           </div>
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary-pill" id="btn-cancel-sandbox-modal">Cancelar</button>
-          <button class="btn btn-primary" id="btn-save-sandbox-modal">Salvar Configuração</button>
+          <button class="btn btn-secondary-pill" id="btn-cancel-sandbox-modal">${t('global_defaults.btn_cancel')}</button>
+          <button class="btn btn-primary" id="btn-save-sandbox-modal">${t('node_modals.btn_save_agent_settings')}</button>
         </div>
       </div>
     `;
@@ -212,7 +213,7 @@ export class NodeSandboxModal {
       node.id,
       { agentSettings: node.agentSettings },
       { agentSettings: updatedSettings },
-      `Alterar política de sandbox de "${node.label}"`
+      t('node_modals.cmd_change_sandbox', { label: node.label })
     );
     this.graph.commandManager.execute(cmd);
   }

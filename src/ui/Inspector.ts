@@ -32,7 +32,7 @@ export class Inspector {
     // 1. Splitter físico permanente entre o Canvas e o Painel de Tarefas
     this.splitterEl = document.createElement('div');
     this.splitterEl.className = 'office-task-pane-splitter';
-    this.splitterEl.title = 'Arraste para redimensionar a largura do painel (ou clique duas vezes para alternar)';
+    this.splitterEl.title = t('inspector.controls.splitter_tip');
     this.splitterEl.innerHTML = `<div class="splitter-grip-v"></div>`;
     parent.appendChild(this.splitterEl);
 
@@ -46,10 +46,10 @@ export class Inspector {
     this.toggleStripEl = document.createElement('div');
     this.toggleStripEl.className = 'office-task-pane-toggle-strip';
     this.toggleStripEl.style.display = 'none';
-    this.toggleStripEl.title = 'Expandir Painel de Propriedades (Ctrl+P)';
+    this.toggleStripEl.title = t('inspector.controls.toggle_strip_tip');
     this.toggleStripEl.innerHTML = `
       <span class="strip-icon">⚙️</span>
-      <span class="strip-text">Propriedades</span>
+      <span class="strip-text">${t('inspector.controls.toggle_strip_label')}</span>
     `;
     this.toggleStripEl.addEventListener('click', () => this.toggleCollapse(false));
     parent.appendChild(this.toggleStripEl);
@@ -342,44 +342,44 @@ export class Inspector {
       <div class="office-task-pane-body">
         <div class="office-tp-section">
           <div class="office-tp-section-header">
-            <span>Informações do Grafo (📦 Projeto)</span>
+            <span>${t('inspector.empty_state.graph_info_header')}</span>
           </div>
           <div class="form-group">
-            <label class="form-label">Nome do Grafo</label>
+            <label class="form-label">${t('inspector.empty_state.graph_name_label')}</label>
             <input type="text" class="form-input form-input-readonly" value="${this.escapeHtml(meta.graphName || 'Arestrix Pipeline')}" readonly />
           </div>
           <div class="form-group">
-            <label class="form-label">Descrição</label>
+            <label class="form-label">${t('inspector.empty_state.graph_desc_label')}</label>
             <textarea class="form-textarea form-input-readonly" rows="2" readonly>${this.escapeHtml(meta.description || 'Pipeline Concorrente com Taskflow C++20')}</textarea>
           </div>
         </div>
 
         <div class="office-tp-section">
           <div class="office-tp-section-header">
-            <span>Estatísticas do Grafo (📦 Projeto)</span>
+            <span>${t('inspector.empty_state.graph_stats_header')}</span>
           </div>
           <div class="office-stats-grid">
             <div class="office-stat-card">
               <span class="stat-number">${nodeCount}</span>
-              <span class="stat-label">Vértices / Agentes</span>
+              <span class="stat-label">${t('inspector.empty_state.stat_vertices')}</span>
             </div>
             <div class="office-stat-card">
               <span class="stat-number">${edgeCount}</span>
-              <span class="stat-label">Conexões</span>
+              <span class="stat-label">${t('inspector.empty_state.stat_connections')}</span>
             </div>
           </div>
         </div>
 
         <div class="office-tp-section">
           <div class="office-tp-section-header">
-            <span>Ambiente Físico (🛠️ Workspace)</span>
+            <span>${t('inspector.empty_state.physical_env_header')}</span>
           </div>
           <div class="form-group">
-            <label class="form-label">Compilador & Runtime</label>
+            <label class="form-label">${t('inspector.empty_state.compiler_runtime_label')}</label>
             <input type="text" class="form-input form-input-readonly" value="MSVC C++20 Taskflow (/std:c++20 /O2)" readonly />
           </div>
           <div class="form-group">
-            <label class="form-label">Banco SQLite</label>
+            <label class="form-label">${t('inspector.empty_state.sqlite_label')}</label>
             <input type="text" class="form-input form-input-readonly" value="storage/database.sqlite" readonly />
           </div>
         </div>
@@ -387,7 +387,7 @@ export class Inspector {
         <div class="office-hint-callout">
           <div class="hint-icon">💡</div>
           <div class="hint-text">
-            <strong>Dica:</strong> Clique em qualquer vértice no canvas para inspecionar parâmetros, código lambda C++20, governança de IA e isolamento em Sandbox.
+            ${t('inspector.empty_state.hint_tip')}
           </div>
         </div>
       </div>
@@ -435,26 +435,26 @@ export class Inspector {
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="node-label">Rótulo / Nome do Vértice</label>
+            <label class="form-label" for="node-label">${t('inspector.node_view.label_name')}</label>
             <input type="text" id="node-label" class="form-input" value="${this.escapeHtml(node.label)}" />
           </div>
 
           <div class="form-group">
-            <label class="form-label">Identificador Único (ID)</label>
+            <label class="form-label">${t('inspector.node_view.unique_id')}</label>
             <input type="text" class="form-input form-input-readonly" value="${node.id}" readonly />
           </div>
 
           <div class="form-group">
-            <label class="form-label">Tipo de Tarefa Taskflow</label>
+            <label class="form-label">${t('inspector.node_view.taskflow_type')}</label>
             <select id="node-type-select" class="form-select">
-              <option value="static" ${node.type === 'static' ? 'selected' : ''}>Static Task (Deterministico)</option>
-              <option value="condition" ${node.type === 'condition' ? 'selected' : ''}>Condition Task (Decisão / Branch)</option>
-              <option value="subflow" ${node.type === 'subflow' ? 'selected' : ''}>Subflow Task (Dinamico)</option>
-              <option value="module" ${node.type === 'module' ? 'selected' : ''}>Module Task (Hierarquico)</option>
-              <option value="critical" ${node.type === 'critical' ? 'selected' : ''}>Critical Section (Mutex Concorrente)</option>
-              <option value="cuda" ${node.type === 'cuda' ? 'selected' : ''}>CUDA Kernel (GPU Acelerado)</option>
-              <option value="fork" ${node.type === 'fork' ? 'selected' : ''}>Fork Task (Despachante Concorrente)</option>
-              <option value="join" ${node.type === 'join' ? 'selected' : ''}>Join Task (Barreira de Sincronização)</option>
+              <option value="static" ${node.type === 'static' ? 'selected' : ''}>Static Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Deterministico' : 'Deterministic'})</option>
+              <option value="condition" ${node.type === 'condition' ? 'selected' : ''}>Condition Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Decisão / Branch' : 'Decision / Branch'})</option>
+              <option value="subflow" ${node.type === 'subflow' ? 'selected' : ''}>Subflow Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Dinamico' : 'Dynamic'})</option>
+              <option value="module" ${node.type === 'module' ? 'selected' : ''}>Module Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Hierarquico' : 'Hierarchical'})</option>
+              <option value="critical" ${node.type === 'critical' ? 'selected' : ''}>Critical Section (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Mutex Concorrente' : 'Concurrent Mutex'})</option>
+              <option value="cuda" ${node.type === 'cuda' ? 'selected' : ''}>CUDA Kernel (${t('inspector.node_view.label_name').includes('Rótulo') ? 'GPU Acelerado' : 'GPU Accelerated'})</option>
+              <option value="fork" ${node.type === 'fork' ? 'selected' : ''}>Fork Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Despachante Concorrente' : 'Concurrent Dispatcher'})</option>
+              <option value="join" ${node.type === 'join' ? 'selected' : ''}>Join Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Barreira de Sincronização' : 'Synchronization Barrier'})</option>
               <option value="agent" ${node.type === 'agent' ? 'selected' : ''}>Agent (Code Mode IA)</option>
             </select>
           </div>
@@ -470,7 +470,7 @@ export class Inspector {
           ${(node.type === 'subflow' || node.type === 'module') ? `
             <div class="form-group">
               <button id="btn-dive-subflow" class="btn btn-dive-action">
-                📂 Abrir Subgrafo Filho (Duplo-clique)
+                ${t('inspector.node_view.open_subflow')}
               </button>
             </div>
           ` : ''}
@@ -479,17 +479,17 @@ export class Inspector {
           ${this.renderParametersSection(node, tpl)}
 
           <div class="form-actions" style="margin-top: 16px;">
-            <button id="btn-delete-node" class="btn btn-danger">Excluir Vértice do Grafo</button>
+            <button id="btn-delete-node" class="btn btn-danger">${t('inspector.node_view.delete_node')}</button>
           </div>
         </div>
 
         <!-- ABA 2: C++20 LAMBDA -->
         <div class="office-tp-tab-content ${this.activeTab === 'lambda' ? 'active' : ''}" id="tp-content-lambda">
           <div class="office-tp-section-header">
-            <span>Corpo do Lambda C++20 Concorrente</span>
+            <span>${t('inspector.node_view.lambda_header')}</span>
             ${tpl ? `
-              <button id="btn-sync-lambda" class="btn-sync-action" title="Recompõe o código lambda com os parâmetros atuais">
-                🔄 Sincronizar
+              <button id="btn-sync-lambda" class="btn-sync-action" title="${t('inspector.node_view.sync_lambda_tip')}">
+                ${t('inspector.node_view.sync_lambda')}
               </button>
             ` : ''}
           </div>
@@ -501,53 +501,53 @@ export class Inspector {
           <div class="code-editor-footer">
             <span>});</span>
           </div>
-          <div class="office-field-hint">Código executado nativamente pelo Taskflow dentro da thread pool MSVC.</div>
+          <div class="office-field-hint">${t('inspector.node_view.lambda_hint')}</div>
         </div>
 
         <!-- ABA 3: GOVERNANÇA & IA -->
         <div class="office-tp-tab-content ${this.activeTab === 'agent' ? 'agent active' : ''}" id="tp-content-agent">
           <div class="office-tp-section-header">
-            <span>Configurações Avançadas do Agente</span>
+            <span>${t('inspector.node_view.agent_settings_title')}</span>
           </div>
 
           <div class="agent-command-grid">
             <button class="agent-command-card" id="btn-open-node-sandbox">
               <span class="cmd-icon">🛡️</span>
               <div class="cmd-details">
-                <span class="cmd-name">Sandbox & Isolamento <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">🛠️ Workspace</span></span>
-                <span class="cmd-desc">Nível de isolamento, limites de RAM e pastas no host</span>
+                <span class="cmd-name">${t('inspector.node_view.card_sandbox_title')} <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">🛠️ Workspace</span></span>
+                <span class="cmd-desc">${t('inspector.node_view.card_sandbox_desc')}</span>
               </div>
             </button>
 
             <button class="agent-command-card" id="btn-open-node-model">
               <span class="cmd-icon">🧠</span>
               <div class="cmd-details">
-                <span class="cmd-name">Modelo de IA & Prompt <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">📦 Projeto</span></span>
-                <span class="cmd-desc">Provedor LLM, temperatura e diretrizes de prompt</span>
+                <span class="cmd-name">${t('inspector.node_view.card_model_title')} <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">📦 Projeto</span></span>
+                <span class="cmd-desc">${t('inspector.node_view.card_model_desc')}</span>
               </div>
             </button>
 
             <button class="agent-command-card" id="btn-open-node-tools">
               <span class="cmd-icon">🔧</span>
               <div class="cmd-details">
-                <span class="cmd-name">Ferramentas & MCP <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">🛠️ / 📦</span></span>
-                <span class="cmd-desc">Tools code mode do projeto e servidores MCP do workspace</span>
+                <span class="cmd-name">${t('inspector.node_view.card_tools_title')} <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">🛠️ / 📦</span></span>
+                <span class="cmd-desc">${t('inspector.node_view.card_tools_desc')}</span>
               </div>
             </button>
 
             <button class="agent-command-card" id="btn-open-node-memory">
               <span class="cmd-icon">💾</span>
               <div class="cmd-details">
-                <span class="cmd-name">Memória & Blackboard <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">📦 Projeto</span></span>
-                <span class="cmd-desc">Memória cognitiva isolada por ID de projeto</span>
+                <span class="cmd-name">${t('inspector.node_view.card_memory_title')} <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">📦 Projeto</span></span>
+                <span class="cmd-desc">${t('inspector.node_view.card_memory_desc')}</span>
               </div>
             </button>
 
             <button class="agent-command-card" id="btn-open-node-skills">
               <span class="cmd-icon">📜</span>
               <div class="cmd-details">
-                <span class="cmd-name">Habilidades & Skills <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">🛠️ / 📦</span></span>
-                <span class="cmd-desc">Editor SKILL.md e habilidades homologadas no workspace</span>
+                <span class="cmd-name">${t('inspector.node_view.card_skills_title')} <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">🛠️ / 📦</span></span>
+                <span class="cmd-desc">${t('inspector.node_view.card_skills_desc')}</span>
               </div>
             </button>
           </div>
@@ -556,17 +556,17 @@ export class Inspector {
         <!-- ABA 4: PORTAS E CONEXÕES -->
         <div class="office-tp-tab-content ${this.activeTab === 'ports' ? 'active' : ''}" id="tp-content-ports">
           <div class="office-tp-section-header">
-            <span>Mapeamento de Fluxo de Execução</span>
+            <span>${t('inspector.node_view.ports_header')}</span>
           </div>
           <div class="port-list">
             <div class="port-sublist">
-              <span class="port-sublist-title">Portas de Entrada (${node.inputs.length})</span>
-              ${node.inputs.length === 0 ? '<span class="empty-ports-hint">Nenhuma entrada (Vértice Raiz / Produtor)</span>' : ''}
+              <span class="port-sublist-title">${t('inspector.node_view.in_ports_title', { count: node.inputs.length })}</span>
+              ${node.inputs.length === 0 ? `<span class="empty-ports-hint">${t('inspector.node_view.in_ports_empty')}</span>` : ''}
               ${node.inputs.map(p => `<span class="port-tag in-tag">📥 ${p.name}</span>`).join('')}
             </div>
             <div class="port-sublist" style="margin-top: 12px;">
-              <span class="port-sublist-title">Portas de Saída (${node.outputs.length})</span>
-              ${node.outputs.length === 0 ? '<span class="empty-ports-hint">Nenhuma saída (Vértice Folha / Consumidor)</span>' : ''}
+              <span class="port-sublist-title">${t('inspector.node_view.out_ports_title', { count: node.outputs.length })}</span>
+              ${node.outputs.length === 0 ? `<span class="empty-ports-hint">${t('inspector.node_view.out_ports_empty')}</span>` : ''}
               ${node.outputs.map(p => `<span class="port-tag out-tag">📤 ${p.name}</span>`).join('')}
             </div>
           </div>
@@ -708,7 +708,7 @@ export class Inspector {
     // Delete
     const deleteBtn = this.container.querySelector('#btn-delete-node');
     deleteBtn?.addEventListener('click', () => {
-      if (confirm(`Deseja realmente excluir o vértice "${node.label}"?`)) {
+      if (confirm(t('inspector.node_view.delete_confirm', { label: node.label }))) {
         const cmd = new RemoveNodeCommand(this.graph, node.id);
         this.graph.commandManager.execute(cmd);
       }
@@ -773,7 +773,7 @@ export class Inspector {
     return `
       <div class="office-tp-section" style="margin-top: 14px;">
         <div class="office-tp-section-header">
-          <span>⚙️ Parâmetros da Tarefa</span>
+          <span>${t('inspector.node_view.task_params')}</span>
         </div>
         <div class="params-container">
           ${rowsHtml}
@@ -831,25 +831,25 @@ export class Inspector {
   private getTaskTypeExplanation(type: string): string {
     switch (type) {
       case 'static':
-        return 'Tarefa estática determinística do Taskflow (tf::Task). Executa rotinas procedurais em C++20 com garantias sequenciais ou concorrentes baseadas em grafo de dependências.';
+        return t('inspector.explanations.static');
       case 'condition':
-        return 'Tarefa de decisão e ramificação condicional (tf::Task retornando int). Avalia predicados em tempo de execução para direcionar o fluxo de controle para a ramificação correspondente.';
+        return t('inspector.explanations.condition');
       case 'subflow':
-        return 'Tarefa dinâmica de decomposição hierárquica (tf::Subflow). Instancia e expande novos grafos de tarefas filhas em tempo de execução dentro do thread pool MSVC, permitindo paralelismo recursivo.';
+        return t('inspector.explanations.subflow');
       case 'module':
-        return 'Módulo hierárquico independente e reutilizável (tf::Task via tf.composed_of). Encapsula outro grafo completo em um único vértice estruturado, promovendo composição modular.';
+        return t('inspector.explanations.module');
       case 'critical':
-        return 'Seção crítica de exclusão mútua (tf::CriticalSection). Sincroniza o acesso a recursos compartilhados e evita condições de corrida entre tarefas concorrentes no fluxo de trabalho.';
+        return t('inspector.explanations.critical');
       case 'cuda':
-        return 'Tarefa acelerada por GPU (tf::cudaGraph / cudaGraphExec). Despacha fluxos de processamento massivamente paralelos diretamente para a arquitetura de vídeo sob C++20.';
+        return t('inspector.explanations.cuda');
       case 'fork':
-        return 'Despachante concorrente (tf::Task). Dispara paralelamente ramos múltiplos de execução simultânea no pipeline (como geração de conteúdo e compilação de diagramas).';
+        return t('inspector.explanations.fork');
       case 'join':
-        return 'Barreira de sincronização e consolidação (tf::Task). Aguarda a conclusão rigorosa de todas as ramificações concorrentes antes de prosseguir com as etapas subsequentes.';
+        return t('inspector.explanations.join');
       case 'agent':
-        return 'Vértice de Agente de IA com governança e sandbox. Opera com modelos de linguagem (Code Mode), ferramentas MCP e permissões de isolamento em contêiner ou microVM.';
+        return t('inspector.explanations.agent');
       default:
-        return 'Tarefa de execução do grafo Taskflow C++20.';
+        return t('inspector.explanations.default');
     }
   }
 

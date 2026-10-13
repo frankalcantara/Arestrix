@@ -1,5 +1,6 @@
 import { EnvironmentManager, IEnvKeyGuidance } from '../../core/env/EnvironmentManager.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
+import { t } from '../../i18n/index.ts';
 
 /**
  * Arestrix Studio - Diálogo de Orientação e Gravação de Variáveis de Ambiente
@@ -58,8 +59,8 @@ export class EnvGuidanceModal {
     const g = this.currentGuidance;
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: `Variável de Ambiente: ${g.keyName}`,
-      subtitle: 'Política de Segurança e Proteção de Chaves de API do Arestrix',
+      title: t('env_guidance.title', { key: g.keyName }),
+      subtitle: t('env_guidance.subtitle'),
       icon: '🛡️',
       closeBtnId: 'btn-close-env-modal'
     });
@@ -73,23 +74,23 @@ export class EnvGuidanceModal {
           <!-- Aviso de Segurança -->
           <div class="office-group" style="background: #ffffff; border-left: 3px solid #0f6cbd; margin-bottom: 0;">
             <strong style="display: block; font-size: 12.5px; color: #242424; margin-bottom: 4px;">
-              Armazenamento Seguro de Segredos
+              ${t('env_guidance.security_title')}
             </strong>
             <p style="margin: 0; font-size: 12px; color: #616161; line-height: 1.45;">
-              O Arestrix nunca armazena chaves de API em arquivos locais, bancos de dados ou código-fonte. Todas as credenciais são lidas exclusivamente das variáveis de ambiente do seu sistema operacional.
+              ${t('env_guidance.security_desc')}
             </p>
           </div>
 
           <!-- Opção 1: Gravar Automaticamente pelo Arestrix no Windows -->
           <div class="office-group" style="margin-bottom: 0;">
-            <span class="office-group-title">Opção 1: Gravar automaticamente no seu perfil do Windows</span>
+            <span class="office-group-title">${t('env_guidance.option1_title')}</span>
             <p style="margin: 0 0 8px 0; font-size: 12px; color: #616161;">
-              Registra a variável de ambiente permanentemente no escopo do seu usuário através do comando <code>setx</code>:
+              ${t('env_guidance.option1_desc')}
             </p>
             <div style="display: flex; gap: 8px;">
-              <input type="password" id="input-env-key-val" class="office-input" placeholder="Cole o valor da chave ${g.keyName}..." style="flex: 1;" />
+              <input type="password" id="input-env-key-val" class="office-input" placeholder="${t('env_guidance.placeholder_key', { key: g.keyName })}" style="flex: 1;" />
               <button id="btn-save-env-auto" class="tool-btn btn-action" style="white-space: nowrap; font-size: 12px; height: 32px; padding: 4px 14px;">
-                Gravar no Windows
+                ${t('env_guidance.btn_save_windows')}
               </button>
             </div>
             <div id="env-save-status" style="margin-top: 6px; font-size: 11.5px; display: none;"></div>
@@ -97,14 +98,14 @@ export class EnvGuidanceModal {
 
           <!-- Opção 2: Gravar Manualmente -->
           <div class="office-group" style="margin-bottom: 0;">
-            <span class="office-group-title">Opção 2: Gravação manual</span>
+            <span class="office-group-title">${t('env_guidance.option2_title')}</span>
             <div style="display: flex; flex-direction: column; gap: 8px;">
               <!-- Bloco PowerShell -->
               <div style="background: #ffffff; border: 1px solid #d1d1d1; border-radius: 2px; padding: 8px 10px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                  <strong style="font-size: 11.5px; color: #323130;">PowerShell:</strong>
+                  <strong style="font-size: 11.5px; color: #323130;">${t('env_guidance.label_powershell')}</strong>
                   <button class="btn-copy-code tool-btn btn-secondary" data-code="${this.escapeHtml(g.powershellCmd)}" style="font-size: 11px; height: 24px; padding: 2px 8px;">
-                    Copiar
+                    ${t('env_guidance.btn_copy')}
                   </button>
                 </div>
                 <code style="display: block; background: #f3f2f1; color: #242424; padding: 6px 8px; border-radius: 2px; font-size: 11px; font-family: Consolas, monospace; overflow-x: auto;">
@@ -114,7 +115,7 @@ export class EnvGuidanceModal {
 
               <!-- Bloco Interface Gráfica -->
               <div style="background: #ffffff; border: 1px solid #d1d1d1; border-radius: 2px; padding: 8px 10px; font-size: 11.5px; color: #616161;">
-                <strong style="display: block; color: #323130; margin-bottom: 4px;">Interface do Windows (Painel de Controle):</strong>
+                <strong style="display: block; color: #323130; margin-bottom: 4px;">${t('env_guidance.label_gui')}</strong>
                 <ol style="margin: 0; padding-left: 18px; line-height: 1.45;">
                   ${g.guiInstructions.map(step => `<li>${step}</li>`).join('')}
                 </ol>
@@ -125,10 +126,10 @@ export class EnvGuidanceModal {
 
         <!-- Rodapé Estilo Office -->
         <div class="modal-footer">
-          <span class="footer-info">Após gravar, verifique para prosseguir.</span>
+          <span class="footer-info">${t('env_guidance.footer_info')}</span>
           <div class="footer-actions">
-            <button id="btn-env-cancel" class="tool-btn btn-secondary">Fechar</button>
-            <button id="btn-env-recheck" class="tool-btn btn-action">Verificar Novamente</button>
+            <button id="btn-env-cancel" class="tool-btn btn-secondary">${t('env_guidance.btn_close')}</button>
+            <button id="btn-env-recheck" class="tool-btn btn-action">${t('env_guidance.btn_recheck')}</button>
           </div>
         </div>
       </div>
@@ -164,25 +165,25 @@ export class EnvGuidanceModal {
       if (!val) {
         statusEl.style.display = 'block';
         statusEl.style.color = '#a4262c';
-        statusEl.innerText = 'Insira o valor da chave antes de gravar.';
+        statusEl.innerText = t('env_guidance.msg_fill_val');
         return;
       }
 
       statusEl.style.display = 'block';
       statusEl.style.color = '#616161';
-      statusEl.innerText = 'Gravando no registro do Windows...';
+      statusEl.innerText = t('env_guidance.msg_saving');
 
       const ok = await this.envManager.setEnvVar(g.keyName, val);
       if (ok) {
         statusEl.style.color = '#107c41';
-        statusEl.innerText = `Variável ${g.keyName} gravada com sucesso.`;
+        statusEl.innerText = t('env_guidance.msg_saved_success', { key: g.keyName });
         setTimeout(() => {
           this.hide();
           if (this.onSavedCallback) this.onSavedCallback();
         }, 1000);
       } else {
         statusEl.style.color = '#a4262c';
-        statusEl.innerText = 'Não foi possível gravar automaticamente. Utilize o comando manual do PowerShell abaixo.';
+        statusEl.innerText = t('env_guidance.msg_save_fail');
       }
     });
 
@@ -193,7 +194,7 @@ export class EnvGuidanceModal {
         if (code && typeof navigator !== 'undefined' && navigator.clipboard) {
           navigator.clipboard.writeText(code);
           const orig = (e.currentTarget as HTMLElement).innerText;
-          (e.currentTarget as HTMLElement).innerText = 'Copiado!';
+          (e.currentTarget as HTMLElement).innerText = t('env_guidance.btn_copied');
           setTimeout(() => {
             (e.currentTarget as HTMLElement).innerText = orig;
           }, 1500);
@@ -212,7 +213,7 @@ export class EnvGuidanceModal {
         if (statusEl) {
           statusEl.style.display = 'block';
           statusEl.style.color = '#a4262c';
-          statusEl.innerText = `A variável ${g.keyName} ainda não foi detectada no ambiente.`;
+          statusEl.innerText = t('env_guidance.msg_not_detected', { key: g.keyName });
         }
       }
     });
