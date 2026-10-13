@@ -1,14 +1,16 @@
-# Arestrix ⚡
+# Arestrix
 
 <p align="center">
-  <a href="README.md">🇺🇸 English</a> &nbsp;|&nbsp; <b>🇧🇷 Português</b>
+  <a href="README.md">English</a> &nbsp;|&nbsp; <b>Português</b>
 </p>
 
-**Arestrix** é um orquestrador visual de grafos de nós e IDE de alto desempenho e de nova geração, construído com **Three.js (WebGL)**, **TypeScript** e um **backend nativo em C++ (WebUI)**, para modelar, visualizar e executar pipelines concorrentes e heterogêneos de agentes, movidos pelo **Taskflow em C++20**.
+Eu estou fazendo este projeto porque gosto de coisas gráficas e simples de usar. O meu problema é que qualquer contador, advogado ou enfermeiro possa criar seu próprio enxame de agentes, de forma simples e direta, pagando apenas o custo da API que escolher, durante o trabalho que realizar, e que seja rápido, muito rápido.
+
+**Arestrix** é um orquestrador visual de grafos de nós e IDE, construído com **Three.js (WebGL)**, **TypeScript** e um **backend nativo em C++ (WebUI)**, para modelar, visualizar e executar pipelines concorrentes e heterogêneos de agentes, movidos pelo **Taskflow em C++20**.
 
 ---
 
-## 💡 O que é o Arestrix?
+## O que é o Arestrix?
 
 Aplicações concorrentes modernas, de pipelines autônomos multiagente a motores de computação e processamento de dados de alta vazão, exigem paralelismo de tarefas de granularidade fina, decomposição dinâmica em subflows, desvios condicionais estocásticos e isolamento rigoroso de execução.
 
@@ -41,7 +43,7 @@ O Arestrix segue uma arquitetura desacoplada em três camadas:
 
 ---
 
-## 🤖 Agentes Autônomos e Orquestração em Code Mode
+## Agentes Autônomos e Orquestração em Code Mode
 
 O Arestrix oferece suporte de primeira classe a agentes autônomos de IA baseados no paradigma **Code Mode**, permitindo que cada nó do DAG atue como um worker isolado com permissões de granularidade fina:
 
@@ -53,31 +55,31 @@ Cada nó de agente pode ser configurado para executar em seu próprio ambiente s
 
 ### 2. Roteamento de Modelos Multiprovedor e Modais por Nó
 Modais flutuantes de configuração, diretamente sobre cada nó do canvas, permitem ajustar os parâmetros de execução:
-- **Configuração de Modelo e Skill (🧠)**: Roteie tarefas entre diversos provedores (Anthropic Claude Opus/Sonnet, DeepSeek v4-pro/Flash, Google Gemini, motor visual Jev ou modelos locais), personalize templates de prompt e vincule arquivos de skill `SKILL.md` especializados.
-- **Ferramentas Granulares de Code Mode (🔧)**: Restrinja as permissões a ferramentas específicas (`write`, `edit`, `read`, `bash`, `validate_svg`) e a scripts de validação autorizados.
-- **Padrões Globais do Pipeline (⚙️)**: Configure, pela barra de ferramentas, padrões válidos para todo o workspace, com herança em cascata opcional em cada nó (`[x] Herdar Padrão Global`).
+- **Configuração de Modelo e Skill**: Roteie tarefas entre diversos provedores (Anthropic Claude Opus/Sonnet, DeepSeek v4-pro/Flash, Google Gemini, motor visual Jev ou modelos locais), personalize templates de prompt e vincule arquivos de skill `SKILL.md` especializados.
+- **Ferramentas Granulares de Code Mode**: Restrinja as permissões a ferramentas específicas (`write`, `edit`, `read`, `bash`, `validate_svg`) e a scripts de validação autorizados.
+- **Padrões Globais do Pipeline**: Configure, pela barra de ferramentas, padrões válidos para todo o workspace, com herança em cascata opcional em cada nó (`[x] Herdar Padrão Global`).
 
 ### 3. Telemetria em Streaming em Tempo Real
 A integração nativa de streaming em C++ (`AgentTelemetryEmitter`) entrega retorno ao vivo dos agentes ativos:
 - **Acúmulo de Raciocínio (`thinking_delta`)**: Contador de tokens/bytes em tempo real e pré-visualização do processo interno de raciocínio do agente.
 - **Monitoramento da Execução de Ferramentas**: Notificação instantânea das invocações de ferramentas (`tool_start` / `tool_end`), com argumentos e status de sucesso.
 - **Tratamento Automático de Rate Limit**: Detecção por regex de esgotamento de cota HTTP 429 (`RESOURCE_EXHAUSTED`, `Rate limit reached`), com contadores regressivos para as novas tentativas agendadas.
-- **Badges ao Vivo no Canvas**: Os nós refletem visualmente o status da execução (`🧠 thinking`, `🔧 tool call`, `⏳ 429 retry`, `✔ completed`).
+- **Badges ao Vivo no Canvas**: Os nós refletem visualmente o status da execução (`thinking`, `tool call`, `429 retry`, `completed`).
 
 ### 4. Pipelines em Lote e Motor de Retomada Tolerante a Falhas
 Para pipelines complexos de vários estágios que processam grandes coleções de itens (por exemplo, artigos ou lotes de dados):
 - **Persistência Atômica de Checkpoints (`PipelineResumeEngine`)**: Registra os estados de execução por item e por estágio em `pipeline-state.json`, com troca atômica de arquivos.
 - **Validação Física de Artefatos e Autorrecuperação**: Verifica os artefatos no sistema de arquivos (existência do arquivo, tamanho mínimo em bytes e verificação de conteúdo por regex, como frontmatter YAML) ou os códigos de saída nos logs. Estágios com saídas válidas são marcados automaticamente como concluídos (`recoveredFromArtifact: true`), evitando chamadas redundantes de API.
 - **Encadeamento Serializado de Gargalos**: Defina estágios pesados (por exemplo, redação) para rodar sequencialmente entre os itens e respeitar os limites do provedor, enquanto os estágios seguintes (geração de diagramas, frontmatter, animação) rodam concorrentemente.
-- **Modal do Orquestrador de Lotes (📦)**: Interface dedicada na barra de ferramentas para definir os itens do lote, configurar a concorrência, alternar estágios serializados e acompanhar o progresso ao vivo na matriz de checkpoints.
+- **Modal do Orquestrador de Lotes**: Interface dedicada na barra de ferramentas para definir os itens do lote, configurar a concorrência, alternar estágios serializados e acompanhar o progresso ao vivo na matriz de checkpoints.
 
 ---
 
-## 🚀 Como Executar o Arestrix
+## Como Executar o Arestrix
 
 O projeto é unificado sob um backend C++ rápido que usa **WebUI**, oferecendo uma experiência nativa de desktop no Windows e aproveitando o canvas WebGL do Three.js.
 
-### 📦 Pré-requisitos e Configuração da Toolchain
+### Pré-requisitos e Configuração da Toolchain
 
 Garanta que os seguintes pré-requisitos e pacotes estejam instalados no seu ambiente Windows:
 
@@ -112,7 +114,7 @@ Garanta que os seguintes pré-requisitos e pacotes estejam instalados no seu amb
 
 ---
 
-### 🔧 Primeira Instalação
+### Primeira Instalação
 
 Clone o repositório e instale as dependências do frontend:
 
@@ -122,7 +124,7 @@ npm install
 
 ---
 
-### 🏃 Modos de Execução
+### Modos de Execução
 
 #### Modo 1: Aplicação Desktop Standalone Completa (C++ Nativo + WebUI) — *Recomendado*
 
@@ -142,7 +144,7 @@ python dev.py
 4. **Compilação do C++**: Compila todos os fontes do motor em `arestrix.exe` (e o sincroniza tanto em `CppCore/` quanto na raiz do projeto).
 5. **Abertura do Studio Desktop**: Inicia o `arestrix.exe`, abrindo a janela desktop standalone do Arestrix Studio com bindings RPC bidirecionais.
 
-💡 **Início Rápido Instantâneo (Quando Já Compilado):**  
+**Início Rápido Instantâneo (Quando Já Compilado):**  
 Se `arestrix.exe` e `dist/index.html` já estiverem compilados, você pode iniciar o aplicativo diretamente da raiz do projeto ou de `CppCore`:
 ```powershell
 # Da raiz do projeto:
@@ -212,7 +214,7 @@ npm run build
 
 ---
 
-## 🧩 Mapeamento de Nós para o Taskflow
+## Mapeamento de Nós para o Taskflow
 
 O Arestrix mapeia os nós visuais do grafo diretamente para primitivas nativas do **Taskflow**:
 
@@ -227,34 +229,34 @@ O Arestrix mapeia os nós visuais do grafo diretamente para primitivas nativas d
 
 ---
 
-## 🏛️ Arquitetura Moderna: Office Ribbon, Workspaces e Ingestão
+## Arquitetura Moderna: Office Ribbon, Workspaces e Ingestão
 
 O Arestrix inclui uma experiência de desktop de nível corporativo e recursos de ingestão de modelos:
 
-1. **Padrão de Interface Ribbon do Microsoft Office (Fase Concluída ✅)**:
+1. **Padrão de Interface Ribbon do Microsoft Office (Fase Concluída)**:
    - Barra Ribbon moderna com abas funcionais (*Arquivo / Backstage*, *Página Inicial*, *Inserir*, *Agentes & Tools*, *Conectores & Importação*, *Dados & Memória*, *Execução & Lote*).
    - Grupos de ferramentas em blocos com rótulos inferiores, Barra de Ferramentas de Acesso Rápido (Salvar, Desfazer, Refazer, Executar F5) e badges limpos em neomorfismo suave, respeitando estritamente a regra de zero text-shadow.
-   - Caixa de busca rápida / Diga-me (*"💡 O que você deseja fazer?"*) e atalho para recolher a Ribbon automaticamente (`Ctrl+F1`).
+   - Caixa de busca rápida / Diga-me (*"O que você deseja fazer?"*) e atalho para recolher a Ribbon automaticamente (`Ctrl+F1`).
 
-2. **Governança de Projetos e Encapsulamento de Workspace (Fase Concluída ✅)**:
+2. **Governança de Projetos e Encapsulamento de Workspace (Fase Concluída)**:
    - Entidades de Projeto de primeira classe, com gerenciamento nativo no backend C++20 (`arestrix.project.json`).
    - Isolamento rigoroso de namespaces de memória (Blackboard / Lições Semânticas), sandboxes, diretórios de trabalho e pipelines por workspace.
    - Gerenciamento MRU de projetos recentes e Hub Gerenciador de Projetos com 3 abas.
 
-### 🏛️ Arquitetura Tripartite e Separação de Escopos na Interface: Studio vs. Workspace vs. Projeto
+### Arquitetura Tripartite e Separação de Escopos na Interface: Studio vs. Workspace vs. Projeto
 
 O Arestrix impõe rigorosamente uma **separação tripartite de responsabilidades**, tanto no backend arquitetural quanto na interface do usuário. Isso garante modularidade limpa, isolamento multi-tenant e governança de segurança corporativa, além de impedir a contaminação cruzada acidental de credenciais, memória cognitiva e fronteiras do sistema de arquivos.
 
 ```
 +-----------------------------------------------------------------------------------+
-| 🏢 STUDIO (Aplicação Desktop e Motor Global)                                      |
+| STUDIO (Aplicação Desktop e Motor Global)                                         |
 | • Canvas WebGL 2.5D e Câmera     • Gerador de Código Taskflow C++20 e MSVC        |
 | • Credenciais Globais de LLM     • Repositórios Open Source Autorizados do GitHub |
 +-----------------------------------------------------------------------------------+
                                           |
                                           v
 +-----------------------------------------------------------------------------------+
-| 🛠️ WORKSPACE (Ambiente Físico do Host e Infraestrutura de Armazenamento Local)     |
+| WORKSPACE (Ambiente Físico do Host e Infraestrutura de Armazenamento Local)       |
 | • Raiz de Arquivos (.workspace/) • Armazenamento SQLite (database.sqlite)         |
 | • Sandboxes Docker / MicroVM     • Servidores MCP e Skills Pré-aprovados          |
 | • WorkspaceSkillAuditorAgent     • Limites de Execução e Montagens de Diretórios  |
@@ -262,16 +264,16 @@ O Arestrix impõe rigorosamente uma **separação tripartite de responsabilidade
                                           |
                                           v
 +-----------------------------------------------------------------------------------+
-| 📦 PROJETO (Propósito Lógico de Negócio e Pipelines DAG Concorrentes)             |
+| PROJETO (Propósito Lógico de Negócio e Pipelines DAG Concorrentes)                |
 | • arestrix.project.json          • Grafos de Pipeline DAG (pipelines/main.json)   |
 | • Prompts e Sobrescritas de Nós  • Variáveis .env Locais do Projeto               |
 | • Memória Blackboard com Escopo  • Lições Semânticas Isoladas por projectId       |
 +-----------------------------------------------------------------------------------+
 ```
 
-#### 📊 Matriz Comparativa: Os Três Ambientes Operacionais
+#### Matriz Comparativa: Os Três Ambientes Operacionais
 
-| Dimensão | 🏢 Studio (Aplicativo Desktop / Global) | 🛠️ Workspace (Infraestrutura Física) | 📦 Projeto (Unidade Lógica de Negócio) |
+| Dimensão | Studio (Aplicativo Desktop / Global) | Workspace (Infraestrutura Física) | Projeto (Unidade Lógica de Negócio) |
 | :--- | :--- | :--- | :--- |
 | **Conceito Central** | O host da aplicação desktop, o motor de renderização e a toolchain universal de compilação. | A sandbox física do sistema de arquivos, o contêiner de isolamento do sistema operacional e o runtime de armazenamento local. | A solução de negócio com propósito definido, a identidade do fluxo de trabalho e o grafo de execução DAG concorrente. |
 | **Manifesto / Arquivos Principais** | `arestrix.exe`, configuração global e layouts de janela. | Diretório físico (`rootPath`) contendo `.workspace/`, `storage/` e `output/`. | `arestrix.project.json` (`projectId`, `name`, `version`, `description`) e `pipelines/main.json`. |
@@ -283,36 +285,36 @@ O Arestrix impõe rigorosamente uma **separação tripartite de responsabilidade
 
 ---
 
-#### 🖥️ Segregação da Interface entre Telas e Modais
+#### Segregação da Interface entre Telas e Modais
 
 Para que o usuário sempre saiba qual escopo está configurando, cada tela, grupo da ribbon, painel do inspetor e modal do Arestrix traz badges de escopo explícitos e seções separadas:
 
 1. **Barra Office Ribbon (`OfficeRibbon.ts`)**:
-   - **Aba Dados & Memória**: Particionada explicitamente em **📦 Memória do Projeto** (Blackboard e Lições Semânticas com escopo) e **🛠️ Armazenamento do Workspace** (arquivo do banco SQLite e diretório físico do workspace).
-   - **Aba Tools**: Destaca os **🛠️ MCP Servers** como ferramentas de infraestrutura do workspace disponíveis para os nós do projeto.
+   - **Aba Dados & Memória**: Particionada explicitamente em **Memória do Projeto** (Blackboard e Lições Semânticas com escopo) e **Armazenamento do Workspace** (arquivo do banco SQLite e diretório físico do workspace).
+   - **Aba Tools**: Destaca os **MCP Servers** como ferramentas de infraestrutura do workspace disponíveis para os nós do projeto.
 
 2. **Backstage View (`BackstageView.ts`)**:
-   - **Seção Informações (`info`)**: Renderiza dois cartões distintos: *📦 Informações do Projeto Ativo* (detalhes do manifesto, versão e pipelines registrados) e *🛠️ Infraestrutura do Workspace Físico* (caminho físico, localização do banco de dados e status do auditor do workspace).
-   - **Seção Abrir (`open`)**: Exibe *📊 Grafos Recentes do Workspace Ativo `(📦 Pipelines do Projeto)`*, seguido de *📂 Projetos Recentes*.
-   - **Seção Opções (`options`)**: Rotulada formalmente como *🏢 Opções Globais do Studio & 🛠️ Governança do Workspace*, dá acesso aos padrões do Studio e à auditoria de segurança do workspace.
+   - **Seção Informações (`info`)**: Renderiza dois cartões distintos: *Informações do Projeto Ativo* (detalhes do manifesto, versão e pipelines registrados) e *Infraestrutura do Workspace Físico* (caminho físico, localização do banco de dados e status do auditor do workspace).
+   - **Seção Abrir (`open`)**: Exibe *Grafos Recentes do Workspace Ativo `(Pipelines do Projeto)`*, seguido de *Projetos Recentes*.
+   - **Seção Opções (`options`)**: Rotulada formalmente como *Opções Globais do Studio & Governança do Workspace*, dá acesso aos padrões do Studio e à auditoria de segurança do workspace.
 
 3. **Painel Inspetor de Nós (`Inspector.ts`)**:
-   - **Estado Vazio**: Exibe cartões de visão geral separados para o *📦 Grafo do Projeto Ativo* e o *🛠️ Ambiente do Workspace*.
+   - **Estado Vazio**: Exibe cartões de visão geral separados para o *Grafo do Projeto Ativo* e o *Ambiente do Workspace*.
    - **Barra de Ações do Nó**: Cada botão de ação de modal é marcado com o seu escopo operacional:
-     - `[📦 Projeto]`: Configuração de Modelo (`NodeModelModal`), Memória Cognitiva (`NodeMemoryModal`) e Permissões de Ferramentas (`NodeToolsModal`).
-     - `[🛠️ Workspace]`: Isolamento de Sandbox e Limites do Host (`NodeSandboxModal`).
-     - `[🛠️ / 📦]`: Skills do Nó (`NodeSkillsModal`, que vincula os nós de agente do projeto a skills verificados do workspace).
+     - `[Projeto]`: Configuração de Modelo (`NodeModelModal`), Memória Cognitiva (`NodeMemoryModal`) e Permissões de Ferramentas (`NodeToolsModal`).
+     - `[Workspace]`: Isolamento de Sandbox e Limites do Host (`NodeSandboxModal`).
+     - `[Workspace / Projeto]`: Skills do Nó (`NodeSkillsModal`, que vincula os nós de agente do projeto a skills verificados do workspace).
 
 4. **Diálogos e Modais Dedicados**:
-   - **Padrões Globais (`GlobalDefaultsModal.ts`)**: Estruturado em badges de escopo distintos: `🏢 Studio` para as chaves universais de API de LLM e os padrões, `🛠️ Workspace` para o isolamento de contêineres de sandbox e as ferramentas aprovadas, e `📦 Projeto` para os modelos padrão dos nós e a retenção de memória.
-   - **Gerenciador de Projetos (`ProjectManagerModal.ts`)**: Separa claramente os metadados lógicos do projeto (`arestrix.project.json`) do diretório físico (`Diretório Raiz do Workspace 🛠️`). As variáveis de ambiente locais do projeto (`.env`) ficam estritamente separadas das chaves globais do Studio.
-   - **Repositórios do GitHub (`GitHubReposModal.ts`)**: Identificado como `🏢 Catálogo Global do Studio`, gerencia os repositórios open source autorizados em toda a aplicação.
-   - **Servidores MCP (`McpServersModal.ts`)**: Identificado como `🛠️ Servidores MCP do Workspace`, fornece os daemons físicos de ferramentas para o ambiente de host atual.
-   - **Modais de Memória Cognitiva (`ProjectMemoryModal.ts` e `NodeMemoryModal.ts`)**: Rotulados como `📦 Escopo do Projeto`, garantem que as consultas de memória e os pares chave-valor do blackboard permaneçam isolados no `projectId` ativo.
+   - **Padrões Globais (`GlobalDefaultsModal.ts`)**: Estruturado em badges de escopo distintos: `Studio` para as chaves universais de API de LLM e os padrões, `Workspace` para o isolamento de contêineres de sandbox e as ferramentas aprovadas, e `Projeto` para os modelos padrão dos nós e a retenção de memória.
+   - **Gerenciador de Projetos (`ProjectManagerModal.ts`)**: Separa claramente os metadados lógicos do projeto (`arestrix.project.json`) do diretório físico (`Diretório Raiz do Workspace`). As variáveis de ambiente locais do projeto (`.env`) ficam estritamente separadas das chaves globais do Studio.
+   - **Repositórios do GitHub (`GitHubReposModal.ts`)**: Identificado como `Catálogo Global do Studio`, gerencia os repositórios open source autorizados em toda a aplicação.
+   - **Servidores MCP (`McpServersModal.ts`)**: Identificado como `Servidores MCP do Workspace`, fornece os daemons físicos de ferramentas para o ambiente de host atual.
+   - **Modais de Memória Cognitiva (`ProjectMemoryModal.ts` e `NodeMemoryModal.ts`)**: Rotulados como `Escopo do Projeto`, garantem que as consultas de memória e os pares chave-valor do blackboard permaneçam isolados no `projectId` ativo.
 
 ---
 
-#### 🛡️ Governança de Segurança de Skills e MCP do Workspace
+#### Governança de Segurança de Skills e MCP do Workspace
 
 Para proteger os usuários contra a execução de ferramentas não confiáveis, o Arestrix inclui um fluxo de governança automatizado:
 1. **Repositórios Pré-aprovados do Workspace**: Skills e configurações de MCP aprovados são provisionados em `.workspace/skills` e `.workspace/mcps` na inicialização do workspace.
@@ -320,7 +322,7 @@ Para proteger os usuários contra a execução de ferramentas não confiáveis, 
 
 
 3. **Motor de Ingestão de Assistentes de IA Externos e Planilhas (Fases 15 a 20)**:
-   - **Ingestão de Projetos Reais e da CLI do Pi Agent (Fase Concluída ✅ 🎯)**:
+   - **Ingestão de Projetos Reais e da CLI do Pi Agent (Fase Concluída)**:
      - Importação em um clique de projetos locais do Pi CLI, com varredura dinâmica de qualquer repositório.
      - Scanner nativo em C++ e TS que inspeciona `.pi/settings.json`, as habilidades em `.agents/*/SKILL.md`, o `plano.md` e os checkpoints em `pipeline-state.json`.
      - Síntese visual imediata de um pipeline Taskflow C++20: agentes autônomos, ferramentas MCP e validação física de artefatos.
@@ -331,7 +333,7 @@ Para proteger os usuários contra a execução de ferramentas não confiáveis, 
 
 ---
 
-## 🌐 Internacionalização (i18n) e Como Adicionar Novos Idiomas
+## Internacionalização (i18n) e Como Adicionar Novos Idiomas
 
 O Arestrix Studio é uma aplicação 100% poliglota. Todos os títulos, menus da Ribbon, botões, modais, tooltips e mensagens são carregados dinamicamente a partir de catálogos de tradução em JSON.
 
@@ -343,7 +345,7 @@ Idiomas nativos de fábrica:
 
 ---
 
-### 🛠️ Passo a Passo para Instalar e Adicionar um Novo Idioma
+### Passo a Passo para Instalar e Adicionar um Novo Idioma
 
 Para adicionar um novo idioma (por exemplo, Espanhol `es-ES`, Francês `fr-FR` ou Alemão `de-DE`), siga as etapas abaixo:
 
@@ -435,7 +437,7 @@ npm run build
 
 ---
 
-### 🔄 Gerenciamento do Submódulo `third_party/i18next`
+### Gerenciamento do Submódulo `third_party/i18next`
 
 Para auditar ou atualizar o código da biblioteca oficial do `i18next`:
 
@@ -449,13 +451,13 @@ npm run submodule:update
 
 ---
 
-## 📜 Licença
+## Licença
 
 Licença MIT. Projetado e desenvolvido com paixão e colaboração de IA.
 
 ---
 
-## 🙏 Agradecimentos
+## Agradecimentos
 
 O Arestrix se apoia em trabalhos open source excepcionais. Nosso sincero agradecimento aos autores e às comunidades dos projetos incluídos como submódulos Git em [`third_party/`](third_party):
 

@@ -1,14 +1,16 @@
-# Arestrix ⚡
+# Arestrix
 
 <p align="center">
-  <b>🇺🇸 English</b> &nbsp;|&nbsp; <a href="README.pt-BR.md">🇧🇷 Português</a>
+  <b>English</b> &nbsp;|&nbsp; <a href="README.pt-BR.md">Português</a>
 </p>
 
-**Arestrix** is a high-performance, next-generation visual node graph orchestrator and IDE built with **Three.js (WebGL)**, **TypeScript**, and a native **C++ Backend (WebUI)** for modeling, visualizing, and executing concurrent, heterogeneous agent pipelines powered by **Taskflow in C++20**.
+I am building this project because I like things that are graphical and simple to use. The problem I want to solve is that any accountant, lawyer, or nurse should be able to create their own swarm of agents, simply and directly, paying only the cost of the API they choose, for the duration of the work they do, and it has to be fast, very fast.
+
+**Arestrix** is a visual node graph orchestrator and IDE built with **Three.js (WebGL)**, **TypeScript**, and a native **C++ Backend (WebUI)** for modeling, visualizing, and executing concurrent, heterogeneous agent pipelines powered by **Taskflow in C++20**.
 
 ---
 
-## 💡 What is Arestrix?
+## What is Arestrix?
 
 Modern concurrent applications—ranging from autonomous multi-agent pipelines to high-throughput data processing and compute engines—demand fine-grained task parallelism, dynamic subflow decomposition, stochastic conditional branching, and strict execution isolation.
 
@@ -41,7 +43,7 @@ Arestrix follows a decoupled three-tier architecture:
 
 ---
 
-## 🤖 Autonomous Agents & Code Mode Orchestration
+## Autonomous Agents & Code Mode Orchestration
 
 Arestrix features first-class support for autonomous AI agents based on the **Code Mode** paradigm, allowing each node in the DAG to act as an isolated worker with fine-grained permissions:
 
@@ -53,31 +55,31 @@ Each agent node can be configured to execute within its own secure environment:
 
 ### 2. Multi-Provider Model Routing & Per-Node Modals
 Floating configuration modals directly on each canvas node allow tailoring execution parameters:
-- **Model & Skill Configuration (🧠)**: Route tasks across diverse providers (Anthropic Claude Opus/Sonnet, DeepSeek v4-pro/Flash, Google Gemini, Jev visual engine, or local models), customize prompt templates, and bind specialized `SKILL.md` skill files.
-- **Granular Code Mode Tools (🔧)**: Restrict permissions to specific tools (`write`, `edit`, `read`, `bash`, `validate_svg`) and authorized validation scripts.
-- **Global Pipeline Defaults (⚙️)**: Configure workspace-wide defaults from the toolbar with optional cascade inheritance on every node (`[x] Herdar Padrão Global`).
+- **Model & Skill Configuration**: Route tasks across diverse providers (Anthropic Claude Opus/Sonnet, DeepSeek v4-pro/Flash, Google Gemini, Jev visual engine, or local models), customize prompt templates, and bind specialized `SKILL.md` skill files.
+- **Granular Code Mode Tools**: Restrict permissions to specific tools (`write`, `edit`, `read`, `bash`, `validate_svg`) and authorized validation scripts.
+- **Global Pipeline Defaults**: Configure workspace-wide defaults from the toolbar with optional cascade inheritance on every node (`[x] Herdar Padrão Global`).
 
 ### 3. Real-Time Streaming Telemetry
 Native C++ streaming integration (`AgentTelemetryEmitter`) delivers live feedback from active agents:
 - **Reasoning Accumulation (`thinking_delta`)**: Real-time token/byte counter and preview inspecting the agent's internal thought process.
 - **Tool Execution Monitoring**: Instant notification on tool invocations (`tool_start` / `tool_end`) with arguments and success status.
 - **Automated Rate-Limit Handling**: Regex-based detection of HTTP 429 quota exhaustion (`RESOURCE_EXHAUSTED`, `Rate limit reached`) with countdown timers for scheduled retries.
-- **Live Canvas Badges**: Nodes visually reflect execution status (`🧠 thinking`, `🔧 tool call`, `⏳ 429 retry`, `✔ completed`).
+- **Live Canvas Badges**: Nodes visually reflect execution status (`thinking`, `tool call`, `429 retry`, `completed`).
 
 ### 4. Batch Pipelines & Fault-Tolerant Resume Engine
 For complex multi-stage pipelines processing large collections of items (e.g. articles, data batches):
 - **Atomic Checkpoint Persistence (`PipelineResumeEngine`)**: Tracks execution states per item and per stage in `pipeline-state.json` with atomic file swapping.
 - **Physical Artifact Validation & Auto-Recovery**: Checks filesystem artifacts (file existence, minimum byte size, and regex content verification such as YAML frontmatter) or log exit codes. Stages with valid outputs are automatically marked as completed (`recoveredFromArtifact: true`), skipping redundant API calls.
 - **Serialized Bottleneck Chaining**: Define heavy stages (e.g. redaction) to run sequentially across items to stay within provider limits, while downstream stages (diagram generation, frontmatter, animation) run concurrently.
-- **Batch Orchestrator Modal (📦)**: Dedicated interface on the toolbar to set batch items, configure concurrency, toggle serialized stages, and monitor live progress across the checkpoint matrix.
+- **Batch Orchestrator Modal**: Dedicated interface on the toolbar to set batch items, configure concurrency, toggle serialized stages, and monitor live progress across the checkpoint matrix.
 
 ---
 
-## 🚀 How to Run Arestrix
+## How to Run Arestrix
 
 The project is unified under a fast C++ backend using **WebUI**, giving you a native Windows Desktop experience while leveraging the Three.js WebGL canvas.
 
-### 📦 Prerequisites & Toolchain Setup
+### Prerequisites & Toolchain Setup
 
 Ensure the following prerequisites and packages are installed on your Windows environment:
 
@@ -112,7 +114,7 @@ Ensure the following prerequisites and packages are installed on your Windows en
 
 ---
 
-### 🔧 First-Time Installation
+### First-Time Installation
 
 Clone the repository and install the frontend dependencies:
 
@@ -122,7 +124,7 @@ npm install
 
 ---
 
-### 🏃 Execution Modes
+### Execution Modes
 
 #### Mode 1: Full Standalone Desktop Application (Native C++ + WebUI) — *Recommended*
 
@@ -142,7 +144,7 @@ python dev.py
 4. **C++ Compilation**: Compiles all engine sources into `arestrix.exe` (and synchronizes it both in `CppCore/` and at the project root).
 5. **Desktop Studio Launch**: Starts `arestrix.exe`, opening the standalone Arestrix Studio desktop window with bidirectional RPC bindings.
 
-💡 **Instant Quick Launch (When Already Built):**  
+**Instant Quick Launch (When Already Built):**  
 If `arestrix.exe` and `dist/index.html` are already compiled, you can launch the app directly from either the project root or `CppCore`:
 ```powershell
 # From the project root:
@@ -212,7 +214,7 @@ npm run build
 
 ---
 
-## 🧩 Taskflow Node Mapping
+## Taskflow Node Mapping
 
 Arestrix maps visual graph nodes directly to native **Taskflow** primitives:
 
@@ -227,34 +229,34 @@ Arestrix maps visual graph nodes directly to native **Taskflow** primitives:
 
 ---
 
-## 🏛️ Modern Architecture: Office Ribbon, Workspaces & Ingestion
+## Modern Architecture: Office Ribbon, Workspaces & Ingestion
 
 Arestrix includes enterprise-grade desktop UX and model ingestion capabilities:
 
-1. **Microsoft Office Ribbon UI Standard (Phase Complete ✅)**:
+1. **Microsoft Office Ribbon UI Standard (Phase Complete)**:
    - Modern Ribbon bar with functional tabs (*Arquivo / Backstage*, *Página Inicial*, *Inserir*, *Agentes & Tools*, *Conectores & Importação*, *Dados & Memória*, *Execução & Lote*).
    - Chunked tool groups with bottom labels, Quick Access Toolbar (Save, Undo, Redo, Run F5), and clean soft-neomorphic badges strictly respecting the zero text-shadow rule.
-   - Quick search / Tell-Me box (*"💡 O que você deseja fazer?"*) and Ribbon auto-collapse shortcut (`Ctrl+F1`).
+   - Quick search / Tell-Me box (*"O que você deseja fazer?"*) and Ribbon auto-collapse shortcut (`Ctrl+F1`).
 
-2. **Project Governance & Workspace Encapsulation (Phase Complete ✅)**:
+2. **Project Governance & Workspace Encapsulation (Phase Complete)**:
    - First-class Project entities with native C++20 backend management (`arestrix.project.json`).
    - Strict isolation of memory namespaces (Blackboard / Semantic Lessons), sandboxes, working directories, and pipelines per workspace.
    - Recent projects MRU management and 3-tab Project Manager Hub.
 
-### 🏛️ Tripartite Architecture & UI Scope Separation: Studio vs. Workspace vs. Project
+### Tripartite Architecture & UI Scope Separation: Studio vs. Workspace vs. Project
 
 Arestrix strictly enforces a **tripartite separation of concerns** across both its architectural backend and its user interface. This guarantees clean modularity, multi-tenant isolation, enterprise security governance, and prevents accidental cross-contamination of credentials, cognitive memory, and filesystem boundaries.
 
 ```
 +-----------------------------------------------------------------------------------+
-| 🏢 STUDIO (Desktop Application & Global Engine)                                  |
+| STUDIO (Desktop Application & Global Engine)                                      |
 | • WebGL 2.5D Canvas & Camera     • C++20 Taskflow Code Generator & MSVC Compiler  |
 | • Global LLM API Credentials     • Authorized GitHub Open-Source Repositories     |
 +-----------------------------------------------------------------------------------+
                                           |
                                           v
 +-----------------------------------------------------------------------------------+
-| 🛠️ WORKSPACE (Physical Host Environment & Local Storage Infrastructure)            |
+| WORKSPACE (Physical Host Environment & Local Storage Infrastructure)              |
 | • Filesystem Root (.workspace/)  • Relational SQLite Storage (database.sqlite)    |
 | • Docker / MicroVM Sandboxes     • Pre-approved MCP Servers & Workspace Skills    |
 | • WorkspaceSkillAuditorAgent     • Local Execution Limits & Directory Mounts      |
@@ -262,16 +264,16 @@ Arestrix strictly enforces a **tripartite separation of concerns** across both i
                                           |
                                           v
 +-----------------------------------------------------------------------------------+
-| 📦 PROJECT (Logical Business Purpose & Concurrent DAG Pipelines)                  |
+| PROJECT (Logical Business Purpose & Concurrent DAG Pipelines)                     |
 | • arestrix.project.json          • DAG Pipeline Graphs (pipelines/main.json)      |
 | • Agent Node Prompts & Overrides • Local Project .env Variables                   |
 | • Scoped Blackboard Memory       • Isolated Semantic Lessons by projectId         |
 +-----------------------------------------------------------------------------------+
 ```
 
-#### 📊 Comparative Matrix: The Three Operational Environments
+#### Comparative Matrix: The Three Operational Environments
 
-| Dimension | 🏢 Studio (Desktop App / Global) | 🛠️ Workspace (Physical Infrastructure) | 📦 Project (Logical Business Unit) |
+| Dimension | Studio (Desktop App / Global) | Workspace (Physical Infrastructure) | Project (Logical Business Unit) |
 | :--- | :--- | :--- | :--- |
 | **Core Concept** | The desktop application host, rendering engine, and universal compiler toolchain. | The physical filesystem sandbox, OS isolation container, and local storage runtime. | The purposeful business solution, workflow identity, and concurrent DAG execution graph. |
 | **Manifest / Core Files** | `arestrix.exe`, global configuration, and window layouts. | Physical directory (`rootPath`) containing `.workspace/`, `storage/`, and `output/`. | `arestrix.project.json` (`projectId`, `name`, `version`, `description`) and `pipelines/main.json`. |
@@ -283,36 +285,36 @@ Arestrix strictly enforces a **tripartite separation of concerns** across both i
 
 ---
 
-#### 🖥️ UI Segregation Across Screens and Modals
+#### UI Segregation Across Screens and Modals
 
 To ensure users always know which scope they are configuring, every screen, ribbon group, inspector panel, and modal in Arestrix features explicit scope badges and separated sections:
 
 1. **Office Ribbon Bar (`OfficeRibbon.ts`)**:
-   - **Data & Memory Tab**: Explicitly partitioned into **📦 Memória do Projeto** (scoped Blackboard and Semantic Lessons) and **🛠️ Armazenamento do Workspace** (SQLite database file and physical workspace directory).
-   - **Tools Tab**: Highlights **🛠️ MCP Servers** as workspace infrastructure tools available to project nodes.
+   - **Data & Memory Tab**: Explicitly partitioned into **Memória do Projeto** (scoped Blackboard and Semantic Lessons) and **Armazenamento do Workspace** (SQLite database file and physical workspace directory).
+   - **Tools Tab**: Highlights **MCP Servers** as workspace infrastructure tools available to project nodes.
 
 2. **Backstage View (`BackstageView.ts`)**:
-   - **Info Section (`info`)**: Renders two distinct cards: *📦 Informações do Projeto Ativo* (manifest details, version, and registered pipelines) and *🛠️ Infraestrutura do Workspace Físico* (physical path, database location, and workspace auditor status).
-   - **Open Section (`open`)**: Displays *📊 Grafos Recentes do Workspace Ativo `(📦 Pipelines do Projeto)`* followed by *📂 Projetos Recentes*.
-   - **Options Section (`options`)**: Formally labeled as *🏢 Opções Globais do Studio & 🛠️ Governança do Workspace*, providing access to Studio defaults and workspace security auditing.
+   - **Info Section (`info`)**: Renders two distinct cards: *Informações do Projeto Ativo* (manifest details, version, and registered pipelines) and *Infraestrutura do Workspace Físico* (physical path, database location, and workspace auditor status).
+   - **Open Section (`open`)**: Displays *Grafos Recentes do Workspace Ativo `(Pipelines do Projeto)`* followed by *Projetos Recentes*.
+   - **Options Section (`options`)**: Formally labeled as *Opções Globais do Studio & Governança do Workspace*, providing access to Studio defaults and workspace security auditing.
 
 3. **Node Inspector Panel (`Inspector.ts`)**:
-   - **Empty State**: Displays separate overview cards for the *📦 Grafo do Projeto Ativo* and the *🛠️ Ambiente do Workspace*.
+   - **Empty State**: Displays separate overview cards for the *Grafo do Projeto Ativo* and the *Ambiente do Workspace*.
    - **Node Action Bar**: Every modal action button is tagged with its operational scope:
-     - `[📦 Projeto]`: Model Configuration (`NodeModelModal`), Cognitive Memory (`NodeMemoryModal`), and Tool Permissions (`NodeToolsModal`).
-     - `[🛠️ Workspace]`: Sandbox Isolation & Host Limits (`NodeSandboxModal`).
-     - `[🛠️ / 📦]`: Node Skills (`NodeSkillsModal` — binds project agent nodes to verified workspace skills).
+     - `[Projeto]`: Model Configuration (`NodeModelModal`), Cognitive Memory (`NodeMemoryModal`), and Tool Permissions (`NodeToolsModal`).
+     - `[Workspace]`: Sandbox Isolation & Host Limits (`NodeSandboxModal`).
+     - `[Workspace / Projeto]`: Node Skills (`NodeSkillsModal` — binds project agent nodes to verified workspace skills).
 
 4. **Dedicated Dialogs & Modals**:
-   - **Global Defaults (`GlobalDefaultsModal.ts`)**: Structured into distinct scope badges: `🏢 Studio` for universal LLM API keys and defaults, `🛠️ Workspace` for sandbox container isolation and approved tools, and `📦 Projeto` for default node models and memory retention.
-   - **Project Manager (`ProjectManagerModal.ts`)**: Clearly separates the logical project metadata (`arestrix.project.json`) from the physical directory (`Diretório Raiz do Workspace 🛠️`). Local project environment variables (`.env`) are strictly separated from Studio global keys.
-   - **GitHub Repositories (`GitHubReposModal.ts`)**: Identified as `🏢 Catálogo Global do Studio`, managing authorized open-source repositories across the entire application.
-   - **MCP Servers (`McpServersModal.ts`)**: Identified as `🛠️ Servidores MCP do Workspace`, providing physical tool daemons for the current host environment.
-   - **Cognitive Memory Modals (`ProjectMemoryModal.ts` & `NodeMemoryModal.ts`)**: Labeled as `📦 Escopo do Projeto`, guaranteeing that memory queries and blackboard key-values remain isolated to the active `projectId`.
+   - **Global Defaults (`GlobalDefaultsModal.ts`)**: Structured into distinct scope badges: `Studio` for universal LLM API keys and defaults, `Workspace` for sandbox container isolation and approved tools, and `Projeto` for default node models and memory retention.
+   - **Project Manager (`ProjectManagerModal.ts`)**: Clearly separates the logical project metadata (`arestrix.project.json`) from the physical directory (`Diretório Raiz do Workspace`). Local project environment variables (`.env`) are strictly separated from Studio global keys.
+   - **GitHub Repositories (`GitHubReposModal.ts`)**: Identified as `Catálogo Global do Studio`, managing authorized open-source repositories across the entire application.
+   - **MCP Servers (`McpServersModal.ts`)**: Identified as `Servidores MCP do Workspace`, providing physical tool daemons for the current host environment.
+   - **Cognitive Memory Modals (`ProjectMemoryModal.ts` & `NodeMemoryModal.ts`)**: Labeled as `Escopo do Projeto`, guaranteeing that memory queries and blackboard key-values remain isolated to the active `projectId`.
 
 ---
 
-#### 🛡️ Workspace Skill & MCP Security Governance
+#### Workspace Skill & MCP Security Governance
 
 To protect users against untrusted tool execution, Arestrix includes an automated governance workflow:
 1. **Pre-Approved Workspace Repositories**: Approved skills and MCP configurations are provisioned inside `.workspace/skills` and `.workspace/mcps` upon workspace initialization.
@@ -320,7 +322,7 @@ To protect users against untrusted tool execution, Arestrix includes an automate
 
 
 3. **External AI Assistant & Spreadsheet Ingestion Engine (Phases 15 to 20)**:
-   - **Pi Agent Real Project & CLI Ingestion (Phase Complete ✅ 🎯)**:
+   - **Pi Agent Real Project & CLI Ingestion (Phase Complete)**:
      - One-click import of local Pi CLI projects, with dynamic scanning of any repository.
      - Native C++ and TS scanner that inspects `.pi/settings.json`, skills in `.agents/*/SKILL.md`, `plano.md`, and checkpoints in `pipeline-state.json`.
      - Immediate visual synthesis of a C++20 Taskflow pipeline: autonomous agents, MCP tools, and physical artifact validation.
@@ -331,7 +333,7 @@ To protect users against untrusted tool execution, Arestrix includes an automate
 
 ---
 
-## 🌐 Internationalization (i18n) & How to Add New Languages
+## Internationalization (i18n) & How to Add New Languages
 
 Arestrix Studio is a fully multilingual application. Every title, Ribbon menu, button, modal, tooltip, and message is loaded dynamically from JSON translation catalogs.
 
@@ -343,7 +345,7 @@ Languages shipped out of the box:
 
 ---
 
-### 🛠️ Step by Step: Installing and Adding a New Language
+### Step by Step: Installing and Adding a New Language
 
 To add a new language (for example, Spanish `es-ES`, French `fr-FR`, or German `de-DE`), follow the steps below:
 
@@ -435,7 +437,7 @@ npm run build
 
 ---
 
-### 🔄 Managing the `third_party/i18next` Submodule
+### Managing the `third_party/i18next` Submodule
 
 To audit or update the official `i18next` library code:
 
@@ -449,13 +451,13 @@ npm run submodule:update
 
 ---
 
-## 📜 License
+## License
 
 MIT License. Designed and developed with passion and AI collaboration.
 
 ---
 
-## 🙏 Acknowledgements
+## Acknowledgements
 
 Arestrix stands on the shoulders of outstanding open-source work. Our sincere thanks to the authors and communities behind the projects vendored as Git submodules in [`third_party/`](third_party):
 
