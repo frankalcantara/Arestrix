@@ -170,11 +170,17 @@ export class ConsolePanel {
       this.addLine(`[RUN] ${msg}`, 'line-info');
     });
 
+    globalEventBus.on('pipeline:log', (data: { line: string; isError?: boolean }) => {
+      this.addLine(data.line, data.isError ? 'line-error' : 'line-output');
+    });
+
     globalEventBus.on('pipeline:success', (data: { stdout: string; elapsedMs: number }) => {
       this.setStatus(t('console.status_success', { ms: data.elapsedMs }), 'status-success');
-      this.addLine(`----------------------------------------------------------------------`, 'line-muted');
-      this.addLine(data.stdout, 'line-output');
-      this.addLine(`----------------------------------------------------------------------`, 'line-muted');
+      if (data.stdout) {
+        this.addLine(`----------------------------------------------------------------------`, 'line-muted');
+        this.addLine(data.stdout, 'line-output');
+        this.addLine(`----------------------------------------------------------------------`, 'line-muted');
+      }
       this.addLine(t('console.exec_success', { ms: data.elapsedMs }), 'line-success');
     });
 

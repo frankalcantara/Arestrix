@@ -85,7 +85,7 @@ export class CodeModal {
       // @ts-ignore
       if (typeof webui !== 'undefined' && typeof webui.call === 'function') {
         // @ts-ignore
-        const response = await webui.call('get_cpp_preview', '');
+        const response = await webui.call('get_cpp_preview', JSON.stringify(this.graph.toJSON()));
         if (response && response.trim()) {
           this.codeCache = JSON.parse(response);
         }
@@ -683,7 +683,7 @@ export class CodeModal {
         // @ts-ignore
         if (typeof webui !== 'undefined' && typeof webui.call === 'function') {
           // @ts-ignore
-          const ok = await webui.call('generate_cpp_code', JSON.stringify({ outputDir }));
+          const ok = await webui.call('generate_cpp_code', JSON.stringify({ outputDir, schema: this.graph.toJSON() }));
           if (ok) {
             alert(`✅ Arquivos gerados com sucesso na pasta '${outputDir}'!`);
           } else {

@@ -6,7 +6,7 @@
 #include <shared_mutex>
 #include <filesystem>
 #include <fstream>
-#include <nlohmann/json.hpp>
+#include "util/JsonValue.hpp"
 
 namespace taskforge {
 namespace memory {
@@ -20,12 +20,12 @@ public:
     bool isPersistent(const std::string& projectId) const;
 
     // Métodos com escopo explícito por projeto
-    void set(const std::string& projectId, const std::string& itemId, const std::string& key, const nlohmann::json& value);
-    nlohmann::json get(const std::string& projectId, const std::string& itemId, const std::string& key) const;
+    void set(const std::string& projectId, const std::string& itemId, const std::string& key, const taskforge::Json& value);
+    taskforge::Json get(const std::string& projectId, const std::string& itemId, const std::string& key) const;
     bool has(const std::string& projectId, const std::string& itemId, const std::string& key) const;
-    nlohmann::json exportSnapshot(const std::string& projectId, const std::string& itemId, const std::vector<std::string>& allowedKeys = {}) const;
+    taskforge::Json exportSnapshot(const std::string& projectId, const std::string& itemId, const std::vector<std::string>& allowedKeys = {}) const;
     bool writeSnapshotToFile(const std::string& projectId, const std::string& itemId, const std::vector<std::string>& allowedKeys, const std::string& targetPath) const;
-    void ingestDelta(const std::string& projectId, const std::string& itemId, const nlohmann::json& deltaJson);
+    void ingestDelta(const std::string& projectId, const std::string& itemId, const taskforge::Json& deltaJson);
     void clearItem(const std::string& projectId, const std::string& itemId);
     void clearProject(const std::string& projectId);
     
@@ -37,22 +37,22 @@ public:
     bool loadFromDisk(const std::string& projectId, const std::string& customPath = "");
 
     // Sobrecargas de compatibilidade (escopo default)
-    void set(const std::string& itemId, const std::string& key, const nlohmann::json& value) {
+    void set(const std::string& itemId, const std::string& key, const taskforge::Json& value) {
         set("default", itemId, key, value);
     }
-    nlohmann::json get(const std::string& itemId, const std::string& key) const {
+    taskforge::Json get(const std::string& itemId, const std::string& key) const {
         return get("default", itemId, key);
     }
     bool has(const std::string& itemId, const std::string& key) const {
         return has("default", itemId, key);
     }
-    nlohmann::json exportSnapshot(const std::string& itemId, const std::vector<std::string>& allowedKeys = {}) const {
+    taskforge::Json exportSnapshot(const std::string& itemId, const std::vector<std::string>& allowedKeys = {}) const {
         return exportSnapshot("default", itemId, allowedKeys);
     }
     bool writeSnapshotToFile(const std::string& itemId, const std::vector<std::string>& allowedKeys, const std::string& targetPath) const {
         return writeSnapshotToFile("default", itemId, allowedKeys, targetPath);
     }
-    void ingestDelta(const std::string& itemId, const nlohmann::json& deltaJson) {
+    void ingestDelta(const std::string& itemId, const taskforge::Json& deltaJson) {
         ingestDelta("default", itemId, deltaJson);
     }
     void clearItem(const std::string& itemId) {
@@ -63,7 +63,7 @@ public:
     void clearAll();
 
     // Retorna todo o estado do blackboard em JSON (para telemetria e UI)
-    nlohmann::json toJson(const std::string& projectId = "") const;
+    taskforge::Json toJson(const std::string& projectId = "") const;
 
 private:
     AgentBlackboard() = default;
@@ -75,7 +75,7 @@ private:
 
     mutable std::shared_mutex mutex_;
     // projectId -> (itemId -> (key -> json value))
-    std::unordered_map<std::string, std::unordered_map<std::string, std::unordered_map<std::string, nlohmann::json>>> storage_;
+    std::unordered_map<std::string, std::unordered_map<std::string, std::unordered_map<std::string, taskforge::Json>>> storage_;
     // projectId -> persistent flag (default: false, memória efêmera / não obrigatória)
     std::unordered_map<std::string, bool> persistenceMap_;
 };

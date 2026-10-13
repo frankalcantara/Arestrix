@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <filesystem>
 #include <fstream>
-#include <nlohmann/json.hpp>
+#include "util/JsonValue.hpp"
 
 namespace taskforge {
 namespace memory {
@@ -87,10 +87,10 @@ public:
     }
 
     // Exporta estado completo em JSON
-    nlohmann::json toJson(const std::string& projectId = "") const;
+    taskforge::Json toJson(const std::string& projectId = "") const;
 
     // Importa estado a partir de JSON
-    void fromJson(const nlohmann::json& j, const std::string& projectId = "default");
+    void fromJson(const taskforge::Json& j, const std::string& projectId = "default");
 
 private:
     SemanticMemoryEngine();

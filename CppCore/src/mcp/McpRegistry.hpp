@@ -21,10 +21,10 @@ public:
     std::vector<McpServerConfig> listServers() const;
 
     // Descoberta e execução
-    nlohmann::json testServer(const std::string& id);
+    taskforge::Json testServer(const std::string& id);
     McpCallResult callTool(const std::string& serverId,
                            const std::string& toolName,
-                           const nlohmann::json& args);
+                           const taskforge::Json& args);
 
     std::vector<McpTool> getAllTools() const;
     std::vector<McpTool> getToolsForServer(const std::string& serverId) const;

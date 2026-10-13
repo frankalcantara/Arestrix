@@ -1,91 +1,117 @@
 #include "DockerSandboxDriver.hpp"
-#include <sstream>
-#include <iostream>
+#include "platform/Process.hpp"
+
+#include <filesystem>
 
 namespace taskforge {
 namespace sandbox {
 
-DockerSandboxDriver::DockerSandboxDriver(const std::string& image)
-    : defaultImage(image) {}
+namespace fs = std::filesystem;
 
-bool DockerSandboxDriver::isAvailable() const {
-    ExecutionParams checkParams;
-    checkParams.command = "docker";
-    checkParams.args = {"--version"};
-    checkParams.policy.timeoutSeconds = 5;
-
-    HostProcessDriver checker;
-    auto res = checker.execute(checkParams);
-    return res.exitCode == 0;
+DockerSandboxDriver::DockerSandboxDriver(const std::string& image) {
+    defaultImage = image;
+    if (defaultImage.empty()) defaultImage = platform::getEnv("ARESTRIX_SANDBOX_IMAGE");
+    if (defaultImage.empty()) defaultImage = "debian:stable-slim";
 }
 
-std::string DockerSandboxDriver::buildDockerCommand(const ExecutionParams& params) const {
-    std::ostringstream ss;
-    ss << "docker run --rm";
+bool DockerSandboxDriver::isAvailable() const {
+    std::lock_guard<std::mutex> lock(probeMutex);
+    auto now = std::chrono::steady_clock::now();
+    if (lastProbe.time_since_epoch().count() != 0 && now - lastProbe < std::chrono::seconds(30)) {
+        return lastProbeResult;
+    }
+    bool ok = false;
+    if (platform::commandExists("docker")) {
+        platform::ProcessSpec spec;
+        spec.argv = {"docker", "version", "--format", "{{.Server.Version}}"};
+        auto r = platform::run(spec, 8000);
+        ok = r.ok();                    // exit != 0 quando o daemon nao responde
+    }
+    lastProbe = now;
+    lastProbeResult = ok;
+    return ok;
+}
 
-    // 1. Limite de Memória RAM
+std::vector<std::string> DockerSandboxDriver::buildDockerArgs(const ExecutionParams& params) const {
+    std::vector<std::string> a = {"docker", "run", "--rm", "--init",
+                                  "--cap-drop=ALL", "--security-opt=no-new-privileges",
+                                  "--pids-limit=256", "--read-only", "--tmpfs", "/tmp"};
+
     if (params.policy.maxMemoryMB > 0) {
-        ss << " --memory=" << params.policy.maxMemoryMB << "m";
+        a.push_back("--memory=" + std::to_string(params.policy.maxMemoryMB) + "m");
     }
 
-    // 2. Política de Rede
-    switch (params.policy.network) {
-        case NetworkAccess::Offline:
-            ss << " --network=none";
-            break;
-        case NetworkAccess::EgressLlmOnly:
-            // Em produção com firewall; em container local usamos rede restrita
-            ss << " --security-opt=no-new-privileges";
-            break;
-        case NetworkAccess::Full:
-            break;
+    // O agente conversa com o LLM a partir do processo hospedeiro, nunca de dentro do
+    // container. Portanto "egress_llm_only" tambem nao precisa de rede no container;
+    // so "full" libera rede.
+    if (params.policy.network != NetworkAccess::Full) {
+        a.push_back("--network=none");
     }
 
-    // 3. Montagens Somente-Leitura (RO)
-    for (const auto& ro : params.policy.readOnlyMounts) {
-        if (!ro.empty()) {
-            ss << " -v \"" << ro << ":/workspace/" << ro << ":ro\"";
-        }
-    }
+    std::error_code ec;
+    fs::path base = params.workingDir.empty() ? fs::current_path() : fs::path(params.workingDir);
+    base = fs::weakly_canonical(base, ec);
 
-    // 4. Montagens de Escrita Permitida (RW)
-    for (const auto& rw : params.policy.readWriteMounts) {
-        if (!rw.empty()) {
-            ss << " -v \"" << rw << ":/workspace/" << rw << ":rw\"";
-        }
-    }
+    auto mount = [&](const std::string& rel, const char* mode) {
+        if (rel.empty()) return;
+        fs::path host = fs::weakly_canonical(base / rel, ec);
+        // Nunca monta nada fora do workspace.
+        auto rb = host.lexically_relative(base);
+        if (rb.empty() || *rb.begin() == "..") return;
+        a.push_back("-v");
+        a.push_back(host.string() + ":/workspace/" + rb.generic_string() + ":" + mode);
+    };
 
-    // 5. Variáveis de Ambiente
+    if (params.policy.readOnlyMounts.empty() && params.policy.readWriteMounts.empty()) {
+        a.push_back("-v");
+        a.push_back(base.string() + ":/workspace:rw");
+    } else {
+        for (const auto& ro : params.policy.readOnlyMounts) mount(ro, "ro");
+        for (const auto& rw : params.policy.readWriteMounts) mount(rw, "rw");
+    }
+    a.push_back("-w");
+    a.push_back("/workspace");
+
     for (const auto& env : params.envVars) {
-        ss << " -e " << env.first << "=\"" << env.second << "\"";
+        a.push_back("-e");
+        a.push_back(env.first + "=" + env.second);
     }
 
-    // 6. Imagem e Comando Interno do Agente
-    ss << " " << defaultImage << " " << params.command;
-    for (const auto& arg : params.args) {
-        ss << " \"" << arg << "\"";
+    a.push_back(defaultImage);
+    if (params.useShell) {
+        a.push_back("sh");
+        a.push_back("-c");
+        a.push_back(params.command);
+    } else {
+        a.push_back(params.command);
+        for (const auto& arg : params.args) a.push_back(arg);
     }
-
-    return ss.str();
+    return a;
 }
 
 ExecutionResult DockerSandboxDriver::execute(const ExecutionParams& params) {
-    // Se o Docker não estiver instalado ou em execução, retorna erro informativo
     if (!isAvailable()) {
-        ExecutionResult fallbackRes;
-        fallbackRes.exitCode = -1;
-        fallbackRes.errorMessage = "Docker não está disponível ou não foi encontrado no PATH do sistema.";
-        return fallbackRes;
+        ExecutionResult res;
+        res.exitCode = -1;
+        res.errorMessage = "Docker nao esta disponivel (CLI ausente ou daemon parado).";
+        return res;
     }
 
-    std::string fullDockerCmd = buildDockerCommand(params);
+    platform::ProcessSpec spec;
+    spec.argv = buildDockerArgs(params);
+    spec.workingDir = params.workingDir;
 
-    ExecutionParams sysParams;
-    sysParams.command = fullDockerCmd;
-    sysParams.workingDir = params.workingDir;
-    sysParams.policy = params.policy;
+    int timeoutMs = params.policy.timeoutSeconds > 0 ? params.policy.timeoutSeconds * 1000 : 0;
+    auto r = platform::run(spec, timeoutMs, params.onLine);
 
-    return processExecutor.execute(sysParams);
+    ExecutionResult res;
+    res.exitCode = r.exitCode;
+    res.stdoutOutput = r.output;
+    res.timedOut = r.timedOut;
+    res.durationSeconds = r.seconds;
+    res.errorMessage = r.error;
+    if (r.timedOut) res.errorMessage = "Container interrompido por timeout";
+    return res;
 }
 
 } // namespace sandbox

@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 #include <filesystem>
-#include "nlohmann/json.hpp"
+#include "util/JsonValue.hpp"
 
 namespace taskforge {
 namespace pi {
@@ -44,7 +44,7 @@ class PiProjectScanner {
 public:
     static PiProjectScanResult scan(const std::string& directoryPath);
     static std::vector<std::string> getKnownPiProjects();
-    static nlohmann::json toJson(const PiProjectScanResult& result);
+    static taskforge::Json toJson(const PiProjectScanResult& result);
 };
 
 } // namespace pi

@@ -37,7 +37,7 @@ O Arestrix segue uma arquitetura desacoplada em três camadas:
 
 3. **Ponte de Compilador e Toolchain Nativa (Backend `CppCore/`)**:
    - Uma aplicação C++ nativa e leve, empacotada com **WebUI**, que serve estaticamente o frontend gerado pelo Vite.
-   - Suporte de primeira classe ao **MSVC (`cl.exe`)** no Windows como compilador C++20 padrão.
+   - Suporte de primeira classe ao **MSVC (`cl.exe`)** no Windows e ao **g++ / clang++** no Linux como compiladores C++20.
    - Drivers de execução integrados para processos do host, contêineres Docker e MicroVMs.
    - Emissor de telemetria em streaming thread-safe e motor de persistência de checkpoints.
 
@@ -81,44 +81,35 @@ O projeto é unificado sob um backend C++ rápido que usa **WebUI**, oferecendo 
 
 ### Pré-requisitos e Configuração da Toolchain
 
-Garanta que os seguintes pré-requisitos e pacotes estejam instalados no seu ambiente Windows:
+O Arestrix Studio roda no **Windows e no Linux**. Os programas gerados a partir de um grafo têm como alvo o **Windows** (os aplicativos departamentais são uma fase posterior).
 
-1. **Node.js (v18.0+) e npm**:
-   - Baixe em [nodejs.org](https://nodejs.org/) ou instale pelo Gerenciador de Pacotes do Windows:
-     ```powershell
-     winget install OpenJS.NodeJS.LTS
-     ```
-   - Instala os pacotes do frontend: Three.js, Vite, TypeScript, Vitest e `vite-plugin-singlefile`.
+1. **Git, com submódulos** — Taskflow 4.1.0, simdjson 5.0.4, WebUI 2.4.2, i18next, Monaco e SkillSpector ficam em [`third_party/`](third_party):
+   ```bash
+   git clone --recurse-submodules <url-do-repositorio>
+   # ou, em um clone existente:
+   git submodule update --init
+   ```
 
-2. **Python 3 (v3.10+)**:
-   - Baixe em [python.org](https://www.python.org/) ou instale pelo winget:
-     ```powershell
-     winget install Python.Python.3.12
-     ```
-   - Executa o script de build automatizado (`CppCore/dev.py`), que usa apenas utilitários da biblioteca padrão.
+2. **Node.js (v18+) e npm** (frontend: Three.js, Vite, TypeScript, Vitest):
+   ```powershell
+   winget install OpenJS.NodeJS.LTS
+   ```
 
-3. **Visual Studio 2022 (Community ou Build Tools) com MSVC C++20**:
-   - Instale o Visual Studio Community ou o Visual Studio Build Tools:
-     ```powershell
-     winget install Microsoft.VisualStudio.2022.Community
-     ```
-   - **Carga de Trabalho Obrigatória**: Selecione **"Desenvolvimento para Desktop com C++"** (*Desktop development with C++*).
-   - **Componentes Principais**: MSVC v143 (ferramentas de build C++20 x64/x86, `/std:c++20`), SDK do Windows 10/11 e `nmake.exe`.
+3. **Python 3 (v3.10+)** — executa o script de build (`CppCore/dev.py`) e o teste ponta a ponta.
 
-4. **Complementos Opcionais**:
-   - **Docker Desktop / Podman**: Caso pretenda isolar as tarefas dos agentes em sandboxes de contêiner (Fases 9/11).
-   - **Graphviz (`dot`)**: Caso queira exportar diagramas de arquitetura em SVG independentes:
-     ```powershell
-     winget install Graphviz.Graphviz
-     ```
+4. **Compilador C++20 e CMake (>= 3.20)**:
+   - **Windows**: Visual Studio 2022 ou mais novo (Community ou Build Tools) com a carga **"Desenvolvimento para Desktop com C++"**. O CMake e o Ninja que acompanham o Visual Studio são detectados automaticamente.
+   - **Linux**: `g++` >= 11 (ou `clang++`), `cmake`, opcionalmente `ninja`, e `curl` (usado pelo runtime dos agentes para HTTPS).
+
+5. **Opcionais**: Docker (sandbox de contêiner para o `bash` dos agentes), WSL2 (driver MicroVM), Graphviz.
 
 ---
 
 ### Primeira Instalação
 
-Clone o repositório e instale as dependências do frontend:
-
 ```powershell
+git clone --recurse-submodules <url-do-repositorio>
+cd NodeForge
 npm install
 ```
 
@@ -128,33 +119,52 @@ npm install
 
 #### Modo 1: Aplicação Desktop Standalone Completa (C++ Nativo + WebUI) — *Recomendado*
 
-Este modo compila o backend nativo em C++ (`arestrix.exe`), abre uma janela desktop dedicada e dá acesso completo à compilação nativa com MSVC, às sandboxes, à telemetria em streaming e aos transportes de servidores MCP.
-
-Para compilar tudo automaticamente e iniciar:
-
 ```powershell
-cd CppCore
-python dev.py
+python CppCore/dev.py              # compila tudo e abre o Studio
+python CppCore/dev.py --no-run     # apenas compila
+python CppCore/dev.py --test       # compila + testes unitários de C++ (ctest)
 ```
 
-**O que o `python dev.py` executa automaticamente por baixo dos panos:**
-1. **Compilação do Frontend**: Roda `npm run build` na pasta raiz, compilando TypeScript, Three.js e CSS em um único `dist/index.html` empacotado (via `vite-plugin-singlefile`).
-2. **Biblioteca Estática do WebUI**: Verifica e extrai a `webui-2-static.lib` pré-compilada em `vendor/webui`, caso esteja ausente.
-3. **Autodetecção do Ambiente MSVC**: Usa o `vswhere.exe` para localizar o Visual Studio automaticamente, ativa a toolchain de 64 bits `vcvars64.bat` e invoca `nmake -f Makefile`.
-4. **Compilação do C++**: Compila todos os fontes do motor em `arestrix.exe` (e o sincroniza tanto em `CppCore/` quanto na raiz do projeto).
-5. **Abertura do Studio Desktop**: Inicia o `arestrix.exe`, abrindo a janela desktop standalone do Arestrix Studio com bindings RPC bidirecionais.
+O `dev.py` inicializa os submódulos, compila o frontend (`npm run build`, um único `dist/index.html`) e o backend C++ com **CMake** (WebUI e CivetWeb são compilados a partir de `third_party/webui`; nenhum binário é baixado). O build produz:
 
-**Início Rápido Instantâneo (Quando Já Compilado):**  
-Se `arestrix.exe` e `dist/index.html` já estiverem compilados, você pode iniciar o aplicativo diretamente da raiz do projeto ou de `CppCore`:
+| Saída | O que é |
+| :--- | :--- |
+| `arestrix(.exe)` | O Studio (janela WebUI + motor). |
+| `arestrix-cli(.exe)` | Executor sem interface: `arestrix-cli run grafo.json --root <projeto>` / `arestrix-cli gen grafo.json`. |
+| `runtime/lib/arestrix_core.lib` (`libarestrix_core.a`) | O runtime ao qual todo programa gerado a partir de um grafo é linkado (agentes, sandbox, ferramentas, MCP, simdjson). |
+
+#### Compilar e Executar (F5): como um grafo é executado
+
+1. O grafo é validado e enviado ao backend C++.
+2. O backend gera um `main.cpp` **C++20 / Taskflow** (os nós de agente chamam o runtime), compila com MSVC (Windows) ou g++/clang++ (Linux) contra a `arestrix_core` e **executa dentro da pasta do projeto**. Grafos inalterados reaproveitam o binário já compilado.
+3. Logs e telemetria dos agentes (`thinking`, `tool_start/tool_end`, `429 retry`, status dos nós) chegam em tempo real ao console e aos badges do canvas. `Shift+F5` interrompe a execução.
+
+Os **nós de agente** executam um laço real de tool-use contra o provedor configurado. As skills (`SKILL.md`) são o prompt de sistema; as ferramentas são `read`, `write`, `edit`, `bash` e `validate_svg`, todas confinadas à pasta do projeto.
+
+| Provedor | Variável da chave de API | Endpoint (sobrescreva com `<PROVEDOR>_BASE_URL`) |
+| :--- | :--- | :--- |
+| `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com` |
+| `openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1` |
+| `anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com` (Messages API) |
+| `google` | `GEMINI_API_KEY` | Endpoint compatível com OpenAI do Gemini |
+| `jev` | `JEV_API_KEY` (opcional) | **`JEV_BASE_URL` é obrigatória** — qualquer servidor compatível com OpenAI |
+| `local` | `LOCAL_LLM_API_KEY` (opcional) | `LOCAL_LLM_BASE_URL`, padrão `http://localhost:11434/v1` (Ollama, llama.cpp, vLLM...) |
+
+As chaves são gravadas como variáveis de ambiente do usuário (Registro do Windows / `~/.config/arestrix/env` no Linux) — nunca passam por um shell.
+
+**Propriedades de segurança** (todas cobertas por testes):
+- Um nível de sandbox indisponível **falha de forma fechada**; nunca cai silenciosamente para o host, a menos que `allowFallbackToHost` seja ativado.
+- `host_direct` executa o comando em um Job Object / grupo de processos com timeout e limite de memória e **remove as variáveis `*_API_KEY`, `*_TOKEN`, `*_SECRET`** do ambiente do filho. Isso *não* é uma fronteira de segurança. `container` (Docker) adiciona `--cap-drop=ALL`, `--read-only`, sem rede e montagens apenas do workspace. `microvm` (WSL2) compartilha o sistema de arquivos do host e recusa políticas `offline`, que não consegue garantir.
+- As ferramentas de arquivo e os endpoints de arquivo expostos à interface rejeitam caminhos fora do projeto (`..`, absolutos, symlinks, streams NTFS).
+- Um laço de feedback não gasta dinheiro sem limite: cada nó de agente é limitado a 10 execuções (`ARESTRIX_MAX_AGENT_RUNS`).
+
+**Executar o tutorial sem interface** (`TUTORIAL_AGENTE_SVG_ARESTRIX.md`), contra um servidor LLM falso com roteiro:
 ```powershell
-# Da raiz do projeto:
-.\arestrix.exe
-
-# Ou de CppCore:
-cd CppCore
-.\arestrix.exe
+python scripts/e2e_tutorial.py
 ```
-*(Ou simplesmente dê um duplo clique em `arestrix.exe` no Windows Explorer).*
+Ele monta o grafo do tutorial, gera e compila o programa Taskflow, executa o fork/join, a retentativa de 429 e o laço de autocorreção, e confere o SVG final.
+
+**Início rápido (já compilado):** execute `./arestrix` (ou dê duplo clique em `arestrix.exe`).
 
 ---
 
@@ -182,7 +192,7 @@ cd c:\Projetos\NodeForge
 npm test
 ```
 
-**Resumo da Cobertura de Testes (164/164 testes passando em 26 suítes):**
+**Resumo da Cobertura de Testes (192/192 testes de frontend em 29 suítes; 92 verificações de C++ via `ctest`; mais a execução ponta a ponta do tutorial com `python scripts/e2e_tutorial.py`):**
 - `tests/graph-validation.spec.ts`: Ordenação topológica, verificação de ciclos por DFS, laços de realimentação, desvios condicionais.
 - `tests/history-undo-redo.spec.ts`: Pilha de desfazer/refazer do Command Pattern (`Ctrl+Z` / `Ctrl+Y`) e mutações de parâmetros.
 - `tests/subflow-hierarchy.spec.ts`: Navegação em profundidade por subflows aninhados, isolamento do grafo pai e navegação por breadcrumbs.
@@ -463,8 +473,20 @@ O Arestrix se apoia em trabalhos open source excepcionais. Nosso sincero agradec
 
 | Projeto | Papel no Arestrix | Licença |
 | :--- | :--- | :--- |
+| [**WebUI**](https://github.com/webui-dev/webui) (Hassan Draga) e o servidor [**CivetWeb**](https://github.com/civetweb/civetweb) que ele embute | A janela nativa leve que hospeda a interface do Studio e a ponte RPC entre a UI web e o backend C++, sem Electron. Compilado a partir de `third_party/webui` (v2.4.2). | MIT |
+| [**Inter**](https://github.com/rsms/inter) (The Inter Project Authors) | Tipografia usada pelo renderizador de texto do canvas. Arquivos e licença em `third_party/fonts/inter`. | OFL-1.1 |
+| [**Taskflow**](https://github.com/taskflow/taskflow) (Dr. Tsung-Wei Huang e colaboradores) | O motor C++20 de programação paralela e heterogênea de tarefas que executa todo grafo: nós estáticos, de condição, subflows, módulos e agentes viram tarefas Taskflow. Servido a partir de `third_party/taskflow` (v4.1.0). | MIT |
+| [**simdjson**](https://github.com/simdjson/simdjson) (Daniel Lemire, Geoff Langdale e colaboradores) | Faz o parse de todo documento JSON que o motor lê — grafos, projetos, respostas de LLMs, mensagens MCP — a gigabytes por segundo. Servido a partir de `third_party/simdjson` (v5.0.4). | Apache-2.0 / MIT |
 | [**i18next**](https://github.com/i18next/i18next) | Framework de internacionalização por trás de cada texto traduzido do Studio. | MIT |
 | [**Monaco Editor**](https://github.com/microsoft/monaco-editor) (Microsoft) | Editor de código que alimenta a visualização do código C++ gerado. | MIT |
 | [**SkillSpector**](https://github.com/NVIDIA/SkillSpector) (NVIDIA) | Scanner de segurança para skills de agentes de IA. | Apache-2.0 |
 
 Cada projeto permanece propriedade de seus respectivos autores e é distribuído sob a sua própria licença, disponível na respectiva pasta em `third_party/`.
+
+### Política de código externo
+
+Todo código externo fica em [`third_party/`](third_party) (submódulos Git, ou arquivos versionados com a respectiva licença) — não existe pasta `vendor/` — e toda licença precisa ser compatível com a licença MIT do Taskflow: somente licenças permissivas (MIT, BSD, ISC, Apache-2.0, ...). A única exceção documentada é a fonte Inter, sob a SIL OFL 1.1, que permite embutir a fonte em software de qualquer licença. As dependências JavaScript são declaradas no `package.json` e verificadas contra a mesma lista. A política é verificada por:
+
+```powershell
+python scripts/check_third_party_licenses.py
+```

@@ -1,4 +1,5 @@
 #include "webui.hpp"
+#include "util/Json.hpp"
 #include "core/Graph.hpp"
 #include "compiler/TaskflowGenerator.hpp"
 #include "sandbox/SandboxManager.hpp"
@@ -9,123 +10,156 @@
 #include "mcp/McpRegistry.hpp"
 #include "project/ProjectManager.hpp"
 #include "pi/PiProjectScanner.hpp"
+#include "build/BuildService.hpp"
+#include "cli/Cli.hpp"
+#include "platform/Process.hpp"
+#include "rt/Tools.hpp"
+#include <atomic>
+#include <optional>
 #include <iostream>
 #include <string>
 #include <fstream>
 #include <sstream>
 #include <filesystem>
 #include <vector>
-#ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#include <shlobj.h>
-#include <shellapi.h>
-#endif
+
+
+// ---------------------------------------------------------------------------
+// Helpers de seguranca / projeto
+// ---------------------------------------------------------------------------
+namespace {
+
+// Raizes onde o frontend pode ler/gravar arquivos: o projeto ativo e a raiz do Arestrix (cwd).
+std::vector<std::filesystem::path> allowedRoots() {
+    std::vector<std::filesystem::path> roots;
+    std::error_code ec;
+    std::string active = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+    if (!active.empty()) roots.emplace_back(active);
+    roots.push_back(std::filesystem::current_path(ec));
+    return roots;
+}
+
+// Resolve `requested` (relativo a cada raiz, ou absoluto) e so aceita se ficar DENTRO de uma raiz.
+std::optional<std::filesystem::path> confineToAllowedRoots(const std::string& requested) {
+    if (requested.empty()) return std::nullopt;
+    for (const auto& root : allowedRoots()) {
+        auto p = taskforge::rt::resolveInWorkspace(root, requested);
+        if (p) return p;
+    }
+    return std::nullopt;
+}
+
+bool isValidEnvName(const std::string& s) {
+    if (s.empty() || s.size() > 128) return false;
+    for (char c : s) {
+        if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_')) return false;
+    }
+    return true;
+}
+
+// Aceita o JSON do grafo (graph.toJSON()) ou {"schema": {...}}.
+bool loadGraphFromPayload(const std::string& payload, taskforge::core::Graph& graph) {
+    if (payload.empty() || payload.front() != '{') return false;
+    auto j = taskforge::jsonutil::parse(payload);
+    if (j.contains("schema") && j["schema"].is_object()) {
+        graph.fromJson(j["schema"]);
+        return true;
+    }
+    if (j.contains("nodes")) {
+        graph.fromJson(j);
+        return true;
+    }
+    return false;
+}
+
+webui::window* gWindow = nullptr;
+
+void pushToUi(const std::string& jsFunction, const taskforge::Json& payload) {
+    if (!gWindow) return;
+    gWindow->run("if (window." + jsFunction + ") { window." + jsFunction + "(" + payload.dump() + "); }");
+}
+
+} // namespace
 
 // Instância global do nosso grafo central em C++
 taskforge::core::Graph globalGraph;
 
-// Wrapper JS -> C++ (Preview Code)
+// Wrapper JS -> C++ (Preview do codigo gerado). Payload: JSON do grafo (graph.toJSON()); vazio = grafo C++ interno.
 void ui_get_cpp_preview(webui::window::event* e) {
-    nlohmann::json result;
-    result["cpp"] = taskforge::compiler::TaskflowGenerator::generateSource(globalGraph);
-    result["cmake"] = taskforge::compiler::TaskflowGenerator::generateCMakeLists(globalGraph);
-    result["make"] = taskforge::compiler::TaskflowGenerator::generateMakefile(globalGraph);
-    auto msvc = taskforge::compiler::TaskflowGenerator::generateMsvcBuildScript(globalGraph);
-    result["msvc_ps1"] = msvc.ps1;
-    
-    e->return_string(result.dump());
+    try {
+        taskforge::core::Graph graph;
+        if (!loadGraphFromPayload(e->get_string(), graph)) graph = globalGraph;
+
+        taskforge::Json result;
+        result["cpp"] = taskforge::compiler::TaskflowGenerator::generateSource(graph);
+        result["cmake"] = taskforge::compiler::TaskflowGenerator::generateCMakeLists(graph);
+        result["make"] = taskforge::compiler::TaskflowGenerator::generateMakefile(graph);
+        auto msvc = taskforge::compiler::TaskflowGenerator::generateMsvcBuildScript(graph);
+        result["msvc_ps1"] = msvc.ps1;
+        e->return_string(result.dump());
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_get_cpp_preview: " << ex.what() << "\n";
+        e->return_string("");
+    }
 }
 
-// Wrapper de comunicação JS -> C++ (Gerar Código C++)
+// Wrapper JS -> C++ (Exportar codigo C++ para uma pasta)
+// Payload: {"outputDir": "...", "schema": <graph.toJSON()>}. Sem schema usa o grafo C++ interno.
 void ui_generate_cpp_code(webui::window::event* e) {
     try {
-        std::cout << "[C++] Gerando codigo C++ Taskflow a partir do grafo atual...\n";
-        std::string cppCode = taskforge::compiler::TaskflowGenerator::generateSource(globalGraph);
-        std::string cmakeCode = taskforge::compiler::TaskflowGenerator::generateCMakeLists(globalGraph);
-        auto msvcScripts = taskforge::compiler::TaskflowGenerator::generateMsvcBuildScript(globalGraph);
-        
         std::string outputDirName = "Output";
+        taskforge::core::Graph graph;
+        bool haveGraph = false;
+
         std::string rawArg = e->get_string();
-        if (!rawArg.empty()) {
-            try {
-                if (rawArg.front() == '{') {
-                    auto j = nlohmann::json::parse(rawArg);
-                    if (j.contains("outputDir") && !j["outputDir"].get<std::string>().empty()) {
-                        outputDirName = j["outputDir"].get<std::string>();
-                    }
-                } else {
-                    outputDirName = rawArg;
-                }
-            } catch (...) {}
+        if (!rawArg.empty() && rawArg.front() == '{') {
+            auto j = taskforge::jsonutil::parse(rawArg);
+            if (j.contains("outputDir") && j["outputDir"].is_string() && !j["outputDir"].get<std::string>().empty()) {
+                outputDirName = j["outputDir"].get<std::string>();
+            }
+            if (j.contains("schema") && j["schema"].is_object()) {
+                graph.fromJson(j["schema"]);
+                haveGraph = true;
+            }
+        } else if (!rawArg.empty()) {
+            outputDirName = rawArg;
+        }
+        if (!haveGraph) graph = globalGraph;
+
+        auto target = confineToAllowedRoots(outputDirName);
+        if (!target) {
+            std::cerr << "[C++ Erro] Pasta de saida fora das areas permitidas: " << outputDirName << "\n";
+            e->return_bool(false);
+            return;
         }
 
-        std::filesystem::path rootPath = std::filesystem::current_path() / outputDirName;
-        std::filesystem::create_directories(rootPath);
-        
-        std::ofstream fileCpp(rootPath / "main.cpp");
-        fileCpp << cppCode;
-        fileCpp.close();
-
-        std::ofstream fileCmake(rootPath / "CMakeLists.txt");
-        fileCmake << cmakeCode;
-        fileCmake.close();
-
-        std::ofstream fileMake(rootPath / "Makefile");
-        fileMake << taskforge::compiler::TaskflowGenerator::generateMakefile(globalGraph);
-        fileMake.close();
-
-        std::ofstream filePs1(rootPath / "build_msvc.ps1");
-        filePs1 << msvcScripts.ps1;
-        filePs1.close();
-
-        std::ofstream fileBat(rootPath / "build.bat");
-        fileBat << msvcScripts.bat;
-        fileBat.close();
-        
-        std::cout << "[C++] Arquivos gerados com sucesso na pasta: " << rootPath.string() << "\n";
+        std::cout << "[C++] Exportando codigo C++ Taskflow para " << target->string() << "\n";
+        std::filesystem::create_directories(*target);
+        auto writeFile = [&](const char* name, const std::string& content) {
+            std::ofstream f(*target / name, std::ios::binary | std::ios::trunc);
+            f << content;
+        };
+        writeFile("main.cpp", taskforge::compiler::TaskflowGenerator::generateSource(graph));
+        writeFile("CMakeLists.txt", taskforge::compiler::TaskflowGenerator::generateCMakeLists(graph));
+        writeFile("Makefile", taskforge::compiler::TaskflowGenerator::generateMakefile(graph));
+        auto msvcScripts = taskforge::compiler::TaskflowGenerator::generateMsvcBuildScript(graph);
+        writeFile("build_msvc.ps1", msvcScripts.ps1);
+        writeFile("build.bat", msvcScripts.bat);
         e->return_bool(true);
-    } catch(const std::exception& ex) {
+    } catch (const std::exception& ex) {
         std::cerr << "[C++ Erro] Falha ao gerar codigo: " << ex.what() << "\n";
         e->return_bool(false);
     }
 }
 
-// Wrapper de comunicação JS -> C++ (Abrir no VS Code)
+// Wrapper JS -> C++ (Abrir no VS Code)
 void ui_open_in_vscode(webui::window::event* e) {
     try {
         std::string target = e->get_string();
-        if (target.empty()) {
-            target = "Output";
-        }
-        std::filesystem::path fullPath = std::filesystem::absolute(target);
-        std::cout << "[C++] Abrindo no VS Code: " << fullPath.string() << "\n";
-
-#ifdef _WIN32
-        std::string cmd = "code \"" + fullPath.string() + "\"";
-        STARTUPINFOA si = { sizeof(si) };
-        PROCESS_INFORMATION pi;
-        std::vector<char> cmdVec(cmd.begin(), cmd.end());
-        cmdVec.push_back('\0');
-        BOOL success = CreateProcessA(NULL, cmdVec.data(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
-        if (success) {
-            CloseHandle(pi.hProcess);
-            CloseHandle(pi.hThread);
-            e->return_bool(true);
-            return;
-        }
-        HINSTANCE res = ShellExecuteA(NULL, "open", "code", ("\"" + fullPath.string() + "\"").c_str(), NULL, SW_SHOWNORMAL);
-        e->return_bool((INT_PTR)res > 32);
-#else
-        std::string cmd = "code \"" + fullPath.string() + "\" &";
-        int res = system(cmd.c_str());
-        e->return_bool(res == 0);
-#endif
+        if (target.empty()) target = "Output";
+        auto p = confineToAllowedRoots(target);
+        if (!p) { e->return_bool(false); return; }
+        e->return_bool(taskforge::platform::openInVsCode(*p));
     } catch (...) {
         e->return_bool(false);
     }
@@ -135,7 +169,7 @@ void ui_open_in_vscode(webui::window::event* e) {
 void ui_add_node(webui::window::event* e) {
     std::string jsonStr = e->get_string();
     try {
-        auto nodeData = nlohmann::json::parse(jsonStr).get<taskforge::core::NodeData>();
+        auto nodeData = taskforge::jsonutil::parse(jsonStr).get<taskforge::core::NodeData>();
         bool success = globalGraph.addNode(nodeData);
         e->return_bool(success);
     } catch(const std::exception& ex) {
@@ -148,7 +182,7 @@ void ui_add_node(webui::window::event* e) {
 void ui_add_edge(webui::window::event* e) {
     std::string jsonStr = e->get_string();
     try {
-        auto edgeData = nlohmann::json::parse(jsonStr).get<taskforge::core::EdgeData>();
+        auto edgeData = taskforge::jsonutil::parse(jsonStr).get<taskforge::core::EdgeData>();
         bool success = globalGraph.addEdge(edgeData);
         e->return_bool(success);
     } catch(const std::exception& ex) {
@@ -179,29 +213,32 @@ void ui_clear_graph(webui::window::event* e) {
 
 // Wrapper de comunicação JS -> C++ (Pegar estado do grafo)
 void ui_get_graph_state(webui::window::event* e) {
-    nlohmann::json state = globalGraph.toJson();
+    taskforge::Json state = globalGraph.toJson();
     e->return_string(state.dump());
 }
 
-// Wrapper de comunicação JS -> C++ (Status dos Drivers de Sandbox)
+// Wrapper JS -> C++ (Status dos drivers de sandbox e do toolchain)
 void ui_get_sandbox_status(webui::window::event* e) {
-    nlohmann::json status;
+    using taskforge::sandbox::IsolationType;
     auto& mgr = taskforge::sandbox::SandboxManager::instance();
-    auto docker = mgr.getDriver(taskforge::sandbox::IsolationType::Container);
-    auto microvm = mgr.getDriver(taskforge::sandbox::IsolationType::MicroVM);
-    auto host = mgr.getDriver(taskforge::sandbox::IsolationType::HostDirect);
+    taskforge::Json status;
+    status["docker"] = mgr.isAvailable(IsolationType::Container);
+    status["microvm"] = mgr.isAvailable(IsolationType::MicroVM);
+    status["host"] = true;
 
-    status["docker"] = docker->isAvailable();
-    status["microvm"] = microvm->isAvailable();
-    status["host"] = host->isAvailable();
-
+    auto tc = taskforge::build::detectToolchain();
+    status["compiler"] = tc.kind != taskforge::build::Toolchain::Kind::None;
+    status["compilerName"] = tc.description;
+    auto rt = taskforge::build::locateRuntime();
+    status["runtime"] = rt.ok;
+    status["runtimeError"] = rt.error;
     e->return_string(status.dump());
 }
 
 // Wrapper de comunicação JS -> C++ (Obter Checkpoint do Resume Engine)
 void ui_get_pipeline_checkpoint(webui::window::event* e) {
     auto& engine = taskforge::sandbox::PipelineResumeEngine::getInstance();
-    nlohmann::json st = engine.getStateJson();
+    taskforge::Json st = engine.getStateJson();
     e->return_string(st.dump());
 }
 
@@ -212,7 +249,7 @@ void ui_reset_pipeline_checkpoint(webui::window::event* e) {
     std::string stageId = "";
     try {
         if (!payload.empty() && payload[0] == '{') {
-            auto j = nlohmann::json::parse(payload);
+            auto j = taskforge::jsonutil::parse(payload);
             itemId = j.value("itemId", "");
             stageId = j.value("stageId", "");
         }
@@ -228,7 +265,7 @@ void ui_get_memory_status(webui::window::event* e) {
     std::string projectId = "default";
     try {
         if (!payload.empty() && payload[0] == '{') {
-            auto j = nlohmann::json::parse(payload);
+            auto j = taskforge::jsonutil::parse(payload);
             projectId = j.value("projectId", "default");
         } else if (!payload.empty()) {
             projectId = payload;
@@ -238,7 +275,7 @@ void ui_get_memory_status(webui::window::event* e) {
     auto& bb = taskforge::memory::AgentBlackboard::getInstance();
     auto& sem = taskforge::memory::SemanticMemoryEngine::getInstance();
 
-    nlohmann::json res;
+    taskforge::Json res;
     res["projectId"] = projectId;
     res["blackboard"] = bb.toJson(projectId);
     res["semantic"] = sem.toJson(projectId);
@@ -255,7 +292,7 @@ void ui_set_memory_persistence(webui::window::event* e) {
     bool persistent = false;
     try {
         if (!payload.empty() && payload[0] == '{') {
-            auto j = nlohmann::json::parse(payload);
+            auto j = taskforge::jsonutil::parse(payload);
             projectId = j.value("projectId", "default");
             persistent = j.value("persistent", false);
         }
@@ -276,7 +313,7 @@ void ui_clear_memory(webui::window::event* e) {
     bool sessionOnly = false;
     try {
         if (!payload.empty() && payload[0] == '{') {
-            auto j = nlohmann::json::parse(payload);
+            auto j = taskforge::jsonutil::parse(payload);
             projectId = j.value("projectId", "default");
             sessionOnly = j.value("sessionOnly", false);
         } else if (!payload.empty()) {
@@ -304,7 +341,7 @@ void ui_record_semantic_lesson(webui::window::event* e) {
     std::string id = "";
     try {
         if (!payload.empty() && payload[0] == '{') {
-            auto j = nlohmann::json::parse(payload);
+            auto j = taskforge::jsonutil::parse(payload);
             std::string projectId = j.value("projectId", "default");
             std::string domain = j.value("domain", "geral");
             std::string triggerError = j.value("triggerError", "");
@@ -323,7 +360,7 @@ void ui_record_semantic_lesson(webui::window::event* e) {
 // Wrapper de comunicação JS -> C++ (Listar Servidores MCP)
 void ui_get_mcp_servers(webui::window::event* e) {
     auto servers = taskforge::mcp::McpRegistry::getInstance().listServers();
-    nlohmann::json j = servers;
+    taskforge::Json j = servers;
     e->return_string(j.dump());
 }
 
@@ -331,7 +368,7 @@ void ui_get_mcp_servers(webui::window::event* e) {
 void ui_save_mcp_server(webui::window::event* e) {
     std::string jsonStr = e->get_string();
     try {
-        auto cfg = nlohmann::json::parse(jsonStr).get<taskforge::mcp::McpServerConfig>();
+        auto cfg = taskforge::jsonutil::parse(jsonStr).get<taskforge::mcp::McpServerConfig>();
         bool ok = taskforge::mcp::McpRegistry::getInstance().registerServer(cfg);
         e->return_bool(ok);
     } catch (const std::exception& ex) {
@@ -358,16 +395,16 @@ void ui_test_mcp_server(webui::window::event* e) {
 void ui_call_mcp_tool(webui::window::event* e) {
     std::string jsonStr = e->get_string();
     try {
-        auto j = nlohmann::json::parse(jsonStr);
+        auto j = taskforge::jsonutil::parse(jsonStr);
         std::string serverId = j.value("serverId", "");
         std::string toolName = j.value("toolName", "");
-        nlohmann::json args = j.value("arguments", nlohmann::json::object());
+        taskforge::Json args = j.value("arguments", taskforge::Json::object());
 
         auto result = taskforge::mcp::McpRegistry::getInstance().callTool(serverId, toolName, args);
-        nlohmann::json resJson = result;
+        taskforge::Json resJson = result;
         e->return_string(resJson.dump());
     } catch (const std::exception& ex) {
-        nlohmann::json err = {
+        taskforge::Json err = {
             {"success", false},
             {"isError", true},
             {"errorMessage", std::string("Excecao na chamada MCP: ") + ex.what()}
@@ -380,7 +417,7 @@ void ui_call_mcp_tool(webui::window::event* e) {
 void ui_create_project(webui::window::event* e) {
     std::string jsonStr = e->get_string();
     try {
-        auto manifest = nlohmann::json::parse(jsonStr).get<taskforge::project::ProjectManifest>();
+        auto manifest = taskforge::jsonutil::parse(jsonStr).get<taskforge::project::ProjectManifest>();
         bool ok = taskforge::project::ProjectManager::getInstance().createProject(manifest);
         e->return_bool(ok);
     } catch (const std::exception& ex) {
@@ -400,7 +437,7 @@ void ui_load_project(webui::window::event* e) {
 void ui_save_project(webui::window::event* e) {
     std::string jsonStr = e->get_string();
     try {
-        auto manifest = nlohmann::json::parse(jsonStr).get<taskforge::project::ProjectManifest>();
+        auto manifest = taskforge::jsonutil::parse(jsonStr).get<taskforge::project::ProjectManifest>();
         bool ok = taskforge::project::ProjectManager::getInstance().saveProject(manifest);
         e->return_bool(ok);
     } catch (const std::exception& ex) {
@@ -417,7 +454,7 @@ void ui_delete_project(webui::window::event* e) {
     bool deleteFiles = true;
     try {
         if (!payload.empty() && payload[0] == '{') {
-            auto j = nlohmann::json::parse(payload);
+            auto j = taskforge::jsonutil::parse(payload);
             projectId = j.value("projectId", "");
             rootPath = j.value("rootPath", "");
             deleteFiles = j.value("deleteFiles", true);
@@ -437,7 +474,8 @@ void ui_delete_project(webui::window::event* e) {
     if (deleteFiles && !rootPath.empty()) {
         std::error_code ec;
         std::filesystem::path p(rootPath);
-        if (std::filesystem::exists(p, ec) && std::filesystem::is_directory(p, ec)) {
+        if (std::filesystem::exists(p, ec) && std::filesystem::is_directory(p, ec) &&
+            std::filesystem::exists(p / "arestrix.project.json", ec)) {
             std::filesystem::path norm = std::filesystem::weakly_canonical(p, ec);
             std::filesystem::path rootP = norm.root_path();
             std::filesystem::path currentP = std::filesystem::current_path(ec);
@@ -505,14 +543,14 @@ void ui_load_pipeline(webui::window::event* e) {
 // Wrapper de comunicação JS -> C++ (Obter Projeto Ativo)
 void ui_get_current_project(webui::window::event* e) {
     auto proj = taskforge::project::ProjectManager::getInstance().getCurrentProject();
-    nlohmann::json j = proj;
+    taskforge::Json j = proj;
     e->return_string(j.dump());
 }
 
 // Wrapper de comunicação JS -> C++ (Listar Projetos Recentes)
 void ui_list_recent_projects(webui::window::event* e) {
     auto list = taskforge::project::ProjectManager::getInstance().listRecentProjects();
-    nlohmann::json j = list;
+    taskforge::Json j = list;
     e->return_string(j.dump());
 }
 
@@ -535,7 +573,7 @@ void ui_get_known_pi_projects(webui::window::event* e) {
     try {
         std::cout << "[C++] Obtendo lista de projetos Pi conhecidos no disco..." << std::endl;
         auto list = taskforge::pi::PiProjectScanner::getKnownPiProjects();
-        nlohmann::json j = list;
+        taskforge::Json j = list;
         std::string dump = j.dump();
         e->return_string(dump);
     } catch (const std::exception& ex) {
@@ -544,39 +582,24 @@ void ui_get_known_pi_projects(webui::window::event* e) {
     }
 }
 
-// Wrapper JS -> C++ (Obter Variável de Ambiente do SO)
+// Wrapper JS -> C++ (Obter variavel de ambiente: somente nomes no formato NOME_EM_MAIUSCULAS)
 void ui_get_env_var(webui::window::event* e) {
     std::string key = e->get_string();
-    const char* val = std::getenv(key.c_str());
-    if (val && std::string(val).length() > 0) {
-        e->return_string(std::string(val));
-    } else {
-        e->return_string("");
-    }
+    if (!isValidEnvName(key)) { e->return_string(""); return; }
+    e->return_string(taskforge::platform::getEnv(key));
 }
 
-// Wrapper JS -> C++ (Gravar Variável de Ambiente do Usuário no SO)
+// Wrapper JS -> C++ (Gravar variavel de ambiente do usuario). Sem shell: Registro (Windows) / ~/.config (Linux).
 void ui_set_env_var(webui::window::event* e) {
     try {
-        std::string jsonStr = e->get_string();
-        auto j = nlohmann::json::parse(jsonStr);
+        auto j = taskforge::jsonutil::parse(e->get_string());
         std::string key = j.value("key", "");
         std::string val = j.value("value", "");
-        if (!key.empty() && !val.empty()) {
-#ifdef _WIN32
-            std::string cmd = "setx " + key + " \"" + val + "\" >nul 2>&1";
-            int ret = std::system(cmd.c_str());
-            _putenv_s(key.c_str(), val.c_str());
-            e->return_bool(ret == 0);
-            return;
-#else
-            setenv(key.c_str(), val.c_str(), 1);
-            e->return_bool(true);
-            return;
-#endif
-        }
-    } catch (...) {}
-    e->return_bool(false);
+        if (!isValidEnvName(key)) { e->return_bool(false); return; }
+        e->return_bool(taskforge::platform::setUserEnv(key, val));
+    } catch (...) {
+        e->return_bool(false);
+    }
 }
 
 // Wrapper JS -> C++ (Retorna o diretório de execução atual onde o Arestrix foi aberto)
@@ -586,51 +609,9 @@ void ui_get_current_working_dir(webui::window::event* e) {
     e->return_string(cwd.string());
 }
 
-// Wrapper JS -> C++ (Selecionar Pasta Nativa do Windows via IFileOpenDialog)
+// Wrapper JS -> C++ (Selecionar pasta com o dialogo nativo)
 void ui_pick_folder(webui::window::event* e) {
-    std::string selectedPath = "";
-#ifdef _WIN32
-    HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-    IFileOpenDialog *pFileOpen = nullptr;
-    hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_ALL, IID_IFileOpenDialog, reinterpret_cast<void**>(&pFileOpen));
-    if (SUCCEEDED(hr) && pFileOpen) {
-        FILEOPENDIALOGOPTIONS opt;
-        if (SUCCEEDED(pFileOpen->GetOptions(&opt))) {
-            pFileOpen->SetOptions(opt | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
-        }
-        pFileOpen->SetTitle(L"Selecione a Pasta do Projeto");
-        HWND hwndOwner = GetForegroundWindow();
-        if (!hwndOwner) {
-            hwndOwner = GetActiveWindow();
-        }
-        if (hwndOwner) {
-            SetForegroundWindow(hwndOwner);
-            BringWindowToTop(hwndOwner);
-        }
-        hr = pFileOpen->Show(hwndOwner);
-        if (SUCCEEDED(hr)) {
-            IShellItem *pItem = nullptr;
-            hr = pFileOpen->GetResult(&pItem);
-            if (SUCCEEDED(hr) && pItem) {
-                PWSTR pszFilePath = nullptr;
-                hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath);
-                if (SUCCEEDED(hr) && pszFilePath) {
-                    int size_needed = WideCharToMultiByte(CP_UTF8, 0, pszFilePath, -1, NULL, 0, NULL, NULL);
-                    if (size_needed > 1) {
-                        std::string str(size_needed - 1, 0);
-                        WideCharToMultiByte(CP_UTF8, 0, pszFilePath, -1, &str[0], size_needed, NULL, NULL);
-                        selectedPath = str;
-                    }
-                    CoTaskMemFree(pszFilePath);
-                }
-                pItem->Release();
-            }
-        }
-        pFileOpen->Release();
-    }
-    CoUninitialize();
-#endif
-    e->return_string(selectedPath);
+    e->return_string(taskforge::platform::pickFolderDialog("Selecione a Pasta do Projeto"));
 }
 
 // Helper Base64 para C++
@@ -675,24 +656,9 @@ static std::string base64_encode_bytes(const std::vector<unsigned char>& data) {
 }
 } // namespace
 
-// Wrapper JS -> C++ (Listar Unidades de Disco Lógicas no Sistema)
+// Wrapper JS -> C++ (Listar unidades / raizes do sistema)
 void ui_list_drives(webui::window::event* e) {
-    nlohmann::json drives = nlohmann::json::array();
-#ifdef _WIN32
-    char buffer[512] = {0};
-    DWORD len = GetLogicalDriveStringsA(sizeof(buffer) - 1, buffer);
-    if (len > 0 && len < sizeof(buffer)) {
-        char* p = buffer;
-        while (*p) {
-            std::string driveStr(p);
-            drives.push_back(driveStr);
-            p += driveStr.length() + 1;
-        }
-    }
-#endif
-    if (drives.empty()) {
-        drives.push_back("C:\\");
-    }
+    taskforge::Json drives = taskforge::platform::listRoots();
     e->return_string(drives.dump());
 }
 
@@ -702,7 +668,7 @@ void ui_list_subdirectories(webui::window::event* e) {
         std::string dirPath = e->get_string();
         if (dirPath.empty()) dirPath = "C:/Projetos";
         std::filesystem::path p(dirPath);
-        nlohmann::json j = nlohmann::json::array();
+        taskforge::Json j = taskforge::Json::array();
         if (std::filesystem::exists(p) && std::filesystem::is_directory(p)) {
             std::vector<std::pair<std::string, std::string>> dirs;
             for (const auto& entry : std::filesystem::directory_iterator(p, std::filesystem::directory_options::skip_permission_denied)) {
@@ -726,45 +692,33 @@ void ui_list_subdirectories(webui::window::event* e) {
     }
 }
 
-// Wrapper JS -> C++ (Salvar Pacote de Projeto Arestrix Comprimido / Binário ou JSON)
+// Wrapper JS -> C++ (Salvar pacote .arestrix em Base64 ou texto). Somente extensoes .arestrix / .json.
 void ui_save_arestrix_file(webui::window::event* e) {
     try {
-        std::string jsonStr = e->get_string();
-        auto j = nlohmann::json::parse(jsonStr);
+        auto j = taskforge::jsonutil::parse(e->get_string());
         std::string targetPath = j.value("targetPath", "");
         std::string content = j.value("content", "");
         bool isBase64 = j.value("isBase64", false);
 
-        if (targetPath.empty()) {
+        std::filesystem::path p(targetPath);
+        std::string ext = p.extension().string();
+        if (targetPath.empty() || (ext != ".arestrix" && ext != ".json")) {
+            std::cerr << "[C++ Erro] save_arestrix_file: extensao nao permitida: " << targetPath << "\n";
             e->return_bool(false);
             return;
         }
+        if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
-        std::filesystem::path p(targetPath);
-        if (p.has_parent_path()) {
-            std::filesystem::create_directories(p.parent_path());
-        }
-
+        std::ofstream out(p, std::ios::binary | std::ios::trunc);
+        if (!out.is_open()) { e->return_bool(false); return; }
         if (isBase64) {
             auto bytes = base64_decode_bytes(content);
-            std::ofstream out(p, std::ios::binary);
-            if (!out.is_open()) {
-                e->return_bool(false);
-                return;
-            }
             out.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-            out.close();
         } else {
-            std::ofstream out(p, std::ios::binary);
-            if (!out.is_open()) {
-                e->return_bool(false);
-                return;
-            }
             out.write(content.data(), content.size());
-            out.close();
         }
-
-        std::cout << "[C++] Pacote Arestrix gravado com sucesso: " << targetPath << "\n";
+        out.close();
+        std::cout << "[C++] Pacote Arestrix gravado: " << targetPath << "\n";
         e->return_bool(true);
     } catch (const std::exception& ex) {
         std::cerr << "[C++ Erro] ui_save_arestrix_file: " << ex.what() << "\n";
@@ -772,39 +726,37 @@ void ui_save_arestrix_file(webui::window::event* e) {
     }
 }
 
-// Wrapper JS -> C++ (Carregar Pacote de Projeto Arestrix Comprimido / Binário)
+// Wrapper JS -> C++ (Carregar pacote .arestrix). Somente extensoes .arestrix / .json.
 void ui_load_arestrix_file(webui::window::event* e) {
     try {
         std::string payload = e->get_string();
         std::string filePath = payload;
         if (!payload.empty() && payload[0] == '{') {
-            auto j = nlohmann::json::parse(payload);
-            filePath = j.value("filePath", "");
+            filePath = taskforge::jsonutil::parse(payload).value("filePath", "");
         }
 
         std::filesystem::path p(filePath);
+        std::string ext = p.extension().string();
+        if (ext != ".arestrix" && ext != ".json") {
+            e->return_string("{\"success\":false,\"error\":\"Extensao nao permitida\"}");
+            return;
+        }
         if (!std::filesystem::exists(p) || !std::filesystem::is_regular_file(p)) {
             e->return_string("{\"success\":false,\"error\":\"Arquivo nao encontrado\"}");
             return;
         }
-
         std::ifstream in(p, std::ios::binary);
         if (!in.is_open()) {
             e->return_string("{\"success\":false,\"error\":\"Falha ao abrir arquivo\"}");
             return;
         }
-
         std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        in.close();
-
-        std::string b64 = base64_encode_bytes(bytes);
-        nlohmann::json resp;
+        taskforge::Json resp;
         resp["success"] = true;
-        resp["base64"] = b64;
+        resp["base64"] = base64_encode_bytes(bytes);
         resp["isBase64"] = true;
         resp["size"] = bytes.size();
         resp["filePath"] = p.string();
-
         e->return_string(resp.dump());
     } catch (const std::exception& ex) {
         std::cerr << "[C++ Erro] ui_load_arestrix_file: " << ex.what() << "\n";
@@ -822,7 +774,7 @@ void ui_ensure_workspace_directories(webui::window::event* e) {
         std::string agents = ".workspace/agents";
 
         if (!payload.empty() && payload[0] == '{') {
-            auto j = nlohmann::json::parse(payload);
+            auto j = taskforge::jsonutil::parse(payload);
             root = j.value("root", root);
             skills = j.value("skills", skills);
             mcps = j.value("mcps", mcps);
@@ -842,37 +794,25 @@ void ui_ensure_workspace_directories(webui::window::event* e) {
     }
 }
 
-// Wrapper JS -> C++ (Gravar Asset / Arquivo do Workspace no Disco)
+// Wrapper JS -> C++ (Gravar asset do workspace). Confinado ao projeto ativo / raiz do Arestrix.
 void ui_write_workspace_asset(webui::window::event* e) {
     try {
         std::string payload = e->get_string();
-        if (payload.empty()) {
-            e->return_bool(false);
-            return;
-        }
-        auto j = nlohmann::json::parse(payload);
+        if (payload.empty()) { e->return_bool(false); return; }
+        auto j = taskforge::jsonutil::parse(payload);
         std::string filePath = j.value("filePath", "");
         std::string content = j.value("content", "");
 
-        if (filePath.empty()) {
+        auto p = confineToAllowedRoots(filePath);
+        if (!p) {
+            std::cerr << "[C++ Erro] write_workspace_asset: caminho fora das areas permitidas: " << filePath << "\n";
             e->return_bool(false);
             return;
         }
-
-        std::filesystem::path p(filePath);
-        if (p.has_parent_path()) {
-            std::filesystem::create_directories(p.parent_path());
-        }
-
-        std::ofstream out(p, std::ios::out | std::ios::trunc);
-        if (!out.is_open()) {
-            e->return_bool(false);
-            return;
-        }
+        std::filesystem::create_directories(p->parent_path());
+        std::ofstream out(*p, std::ios::binary | std::ios::trunc);
+        if (!out.is_open()) { e->return_bool(false); return; }
         out << content;
-        out.close();
-
-        std::cout << "[C++] Workspace asset gravado: " << filePath << "\n";
         e->return_bool(true);
     } catch (const std::exception& ex) {
         std::cerr << "[C++ Erro] ui_write_workspace_asset: " << ex.what() << "\n";
@@ -880,80 +820,104 @@ void ui_write_workspace_asset(webui::window::event* e) {
     }
 }
 
-// Wrapper JS -> C++ (Gravar Arquivo de Skill SKILL.md no Disco)
+// Wrapper JS -> C++ (Gravar SKILL.md). Confinado ao projeto ativo; somente .md; escrita atomica.
 void ui_write_skill_file(webui::window::event* e) {
     try {
         std::string payload = e->get_string();
-        if (payload.empty()) {
-            e->return_string("{\"ok\":false,\"error\":\"Payload vazio\"}");
-            return;
-        }
-        auto j = nlohmann::json::parse(payload);
+        if (payload.empty()) { e->return_string("{\"ok\":false,\"error\":\"Payload vazio\"}"); return; }
+        auto j = taskforge::jsonutil::parse(payload);
         std::string filePath = j.value("path", j.value("filePath", ""));
         std::string content = j.value("content", "");
 
-        if (filePath.empty()) {
-            e->return_string("{\"ok\":false,\"error\":\"Caminho vazio\"}");
+        auto p = confineToAllowedRoots(filePath);
+        if (!p || p->extension() != ".md") {
+            e->return_string("{\"ok\":false,\"error\":\"Caminho invalido: a skill deve ser um .md dentro do projeto\"}");
             return;
         }
-
-        std::filesystem::path p(filePath);
-        if (p.has_parent_path()) {
-            std::filesystem::create_directories(p.parent_path());
+        std::filesystem::create_directories(p->parent_path());
+        std::filesystem::path tmp = *p;
+        tmp += ".tmp";
+        {
+            std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+            if (!out.is_open()) { e->return_string("{\"ok\":false,\"error\":\"Falha ao abrir arquivo para escrita\"}"); return; }
+            out << content;
         }
-
-        std::ofstream out(p, std::ios::out | std::ios::trunc);
-        if (!out.is_open()) {
-            e->return_string("{\"ok\":false,\"error\":\"Falha ao abrir arquivo para escrita\"}");
-            return;
-        }
-        out << content;
-        out.close();
-
-        std::cout << "[C++] Skill gravado no disco: " << filePath << "\n";
+        std::filesystem::rename(tmp, *p);
         e->return_string("{\"ok\":true}");
     } catch (const std::exception& ex) {
-        std::cerr << "[C++ Erro] ui_write_skill_file: " << ex.what() << "\n";
-        nlohmann::json err;
+        taskforge::Json err;
         err["ok"] = false;
         err["error"] = ex.what();
         e->return_string(err.dump());
     }
 }
 
-// Wrapper JS -> C++ (Ler Arquivo de Skill SKILL.md do Disco)
+// Wrapper JS -> C++ (Ler SKILL.md). Confinado ao projeto ativo; somente .md.
 void ui_read_skill_file(webui::window::event* e) {
     try {
         std::string filePath = e->get_string();
-        if (filePath.empty()) {
-            e->return_string("{\"ok\":false,\"error\":\"Caminho vazio\"}");
+        auto p = confineToAllowedRoots(filePath);
+        if (!p || p->extension() != ".md") {
+            e->return_string("{\"ok\":false,\"error\":\"Caminho invalido: a skill deve ser um .md dentro do projeto\"}");
             return;
         }
-        std::filesystem::path p(filePath);
-        if (!std::filesystem::exists(p) || !std::filesystem::is_regular_file(p)) {
+        if (!std::filesystem::is_regular_file(*p)) {
             e->return_string("{\"ok\":false,\"error\":\"Arquivo nao encontrado\"}");
             return;
         }
-
-        std::ifstream in(p, std::ios::in);
-        if (!in.is_open()) {
-            e->return_string("{\"ok\":false,\"error\":\"Falha ao abrir arquivo para leitura\"}");
-            return;
-        }
-        std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        in.close();
-
-        nlohmann::json resp;
+        taskforge::Json resp;
         resp["ok"] = true;
-        resp["content"] = content;
+        resp["content"] = taskforge::jsonutil::readFile(*p);
         e->return_string(resp.dump());
     } catch (const std::exception& ex) {
-        std::cerr << "[C++ Erro] ui_read_skill_file: " << ex.what() << "\n";
-        nlohmann::json err;
+        taskforge::Json err;
         err["ok"] = false;
         err["error"] = ex.what();
         e->return_string(err.dump());
     }
+}
+
+
+// Wrapper JS -> C++ (Compilar e executar o grafo). Payload: graph.toJSON().
+// O progresso chega assincronamente em window.onArestrixPipelineEvent / window.onArestrixTelemetry.
+void ui_run_pipeline(webui::window::event* e) {
+    try {
+        taskforge::core::Graph graph;
+        if (!loadGraphFromPayload(e->get_string(), graph)) {
+            e->return_string("{\"ok\":false,\"error\":\"Grafo invalido ou vazio\"}");
+            return;
+        }
+        std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+        if (root.empty()) root = std::filesystem::current_path().string();
+
+        taskforge::build::BuildEvents ev;
+        ev.onPhase = [](const std::string& phase, const std::string& message) {
+            pushToUi("onArestrixPipelineEvent", {{"type", "phase"}, {"phase", phase}, {"message", message}});
+        };
+        ev.onLog = [](const std::string& line, bool isError) {
+            pushToUi("onArestrixPipelineEvent", {{"type", "log"}, {"line", line}, {"isError", isError}});
+        };
+        ev.onTelemetry = [](const std::string& jsonLine) {
+            auto parsed = taskforge::jsonutil::tryParse(jsonLine);
+            if (parsed) pushToUi("onArestrixTelemetry", *parsed);
+        };
+        ev.onFinished = [](bool success, int exitCode, long long elapsedMs, const std::string& error) {
+            pushToUi("onArestrixPipelineEvent", {{"type", "finished"}, {"success", success}, {"exitCode", exitCode},
+                                                  {"elapsedMs", elapsedMs}, {"error", error}});
+        };
+
+        bool started = taskforge::build::BuildService::instance().start(graph, root, ev);
+        e->return_string(started ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"Ja existe uma execucao em andamento\"}");
+    } catch (const std::exception& ex) {
+        taskforge::Json err = {{"ok", false}, {"error", ex.what()}};
+        e->return_string(err.dump());
+    }
+}
+
+// Wrapper JS -> C++ (Interromper a execucao em andamento)
+void ui_stop_pipeline(webui::window::event* e) {
+    taskforge::build::BuildService::instance().stop();
+    e->return_bool(true);
 }
 
 void exit_app(webui::window::event* e) {
@@ -976,14 +940,12 @@ std::filesystem::path findProjectRoot() {
     }
 
     // 2. Diretório onde o executável reside e seu diretório pai
-#ifdef _WIN32
-    wchar_t exeBuffer[MAX_PATH];
-    if (GetModuleFileNameW(NULL, exeBuffer, MAX_PATH) > 0) {
-        std::filesystem::path exeDir = std::filesystem::path(exeBuffer).parent_path();
+    std::filesystem::path exePath = taskforge::platform::executablePath();
+    if (!exePath.empty()) {
+        std::filesystem::path exeDir = exePath.parent_path();
         candidates.push_back(exeDir);
         candidates.push_back(exeDir.parent_path());
     }
-#endif
 
     // Se qualquer candidato for a subpasta 'CppCore', prioriza seu diretório pai
     for (auto& candidate : candidates) {
@@ -1038,7 +1000,11 @@ std::filesystem::path findProjectRoot() {
 
 } // namespace
 
-int main() {
+
+int main(int argc, char** argv) {
+    if (argc >= 2 && (std::string(argv[1]) == "run" || std::string(argv[1]) == "gen")) {
+        return taskforge::cli::runCli(argc, argv);
+    }
     std::cout << "[C++] Inicializando Arestrix Engine (C++)..." << std::endl;
 
     std::filesystem::path projectRoot = findProjectRoot();
@@ -1052,6 +1018,7 @@ int main() {
     }
 
     webui::window win;
+    gWindow = &win;
 
     // Registra as funções que o TypeScript poderá chamar
     win.bind("add_node", ui_add_node);
@@ -1097,6 +1064,8 @@ int main() {
     win.bind("write_skill_file", ui_write_skill_file);
     win.bind("read_skill_file", ui_read_skill_file);
     win.bind("open_in_vscode", ui_open_in_vscode);
+    win.bind("run_pipeline", ui_run_pipeline);
+    win.bind("stop_pipeline", ui_stop_pipeline);
     win.bind("exit_app", exit_app);
 
     // Registra o Emitter de Telemetria de Agentes em Tempo Real (Fase 10)

@@ -1,4 +1,5 @@
 #include "ProjectManager.hpp"
+#include "util/Json.hpp"
 #include "../memory/AgentBlackboard.hpp"
 #include "../memory/SemanticMemoryEngine.hpp"
 #include <fstream>
@@ -48,8 +49,7 @@ void ProjectManager::ensureDefaultProject() {
             try {
                 std::ifstream f(localManifest);
                 if (f.is_open()) {
-                    nlohmann::json j;
-                    f >> j;
+                    taskforge::Json j = taskforge::jsonutil::parseStream(f);
                     ProjectManifest manifest = j.get<ProjectManifest>();
                     if (!manifest.projectId.empty() && manifest.projectId != "default-workspace") {
                         manifest.rootPath = std::filesystem::current_path().string();
@@ -116,7 +116,7 @@ bool ProjectManager::createProject(ProjectManifest manifest) {
         // Cria o arquivo inicial de pipeline vazio se nao existir
         std::filesystem::path mainFile = root / "pipelines" / "main.json";
         if (!std::filesystem::exists(mainFile)) {
-            nlohmann::json emptyPipeline = {
+            taskforge::Json emptyPipeline = {
                 {"version", "1.0.0"},
                 {"metadata", {
                     {"graphName", manifest.name},
@@ -124,8 +124,8 @@ bool ProjectManager::createProject(ProjectManifest manifest) {
                     {"description", manifest.description},
                     {"targetStandard", "C++20"}
                 }},
-                {"nodes", nlohmann::json::array()},
-                {"edges", nlohmann::json::array()}
+                {"nodes", taskforge::Json::array()},
+                {"edges", taskforge::Json::array()}
             };
             std::ofstream f(mainFile);
             if (f.is_open()) f << emptyPipeline.dump(2);
@@ -136,7 +136,7 @@ bool ProjectManager::createProject(ProjectManifest manifest) {
     std::filesystem::path manifestPath = root / "arestrix.project.json";
     std::ofstream mf(manifestPath);
     if (!mf.is_open()) return false;
-    nlohmann::json j = manifest;
+    taskforge::Json j = manifest;
     mf << j.dump(2);
     mf.close();
 
@@ -190,8 +190,7 @@ bool ProjectManager::loadProject(const std::string& pathOrDir) {
     if (!f.is_open()) return false;
 
     try {
-        nlohmann::json j;
-        f >> j;
+        taskforge::Json j = taskforge::jsonutil::parseStream(f);
         ProjectManifest manifest = j.get<ProjectManifest>();
         manifest.rootPath = manifestPath.parent_path().string();
         manifest.updatedAt = getCurrentIsoTime();
@@ -225,7 +224,7 @@ bool ProjectManager::saveProject(const ProjectManifest& manifest) {
 
     std::ofstream mf(manifestPath);
     if (!mf.is_open()) return false;
-    nlohmann::json j = currentProject_;
+    taskforge::Json j = currentProject_;
     mf << j.dump(2);
     mf.close();
 
@@ -295,8 +294,7 @@ void ProjectManager::loadRecentProjectsFromDisk() {
     }
 
     try {
-        nlohmann::json j;
-        f >> j;
+        taskforge::Json j = taskforge::jsonutil::parseStream(f);
         if (j.is_array()) {
             recentProjects_ = j.get<std::vector<RecentProjectItem>>();
         }
@@ -305,7 +303,7 @@ void ProjectManager::loadRecentProjectsFromDisk() {
 
 void ProjectManager::saveRecentProjectsToDisk() const {
     try {
-        nlohmann::json j = recentProjects_;
+        taskforge::Json j = recentProjects_;
         std::ofstream f(recentProjectsFilePath_);
         if (f.is_open()) {
             f << j.dump(2);

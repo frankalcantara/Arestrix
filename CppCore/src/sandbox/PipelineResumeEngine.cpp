@@ -1,4 +1,5 @@
 #include "PipelineResumeEngine.hpp"
+#include "util/Json.hpp"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -126,9 +127,9 @@ bool PipelineResumeEngine::isStageCompleted(
         std::string resolved = resolvePattern(rule.targetPathPattern, itemId);
         if (validateArtifact(resolved, rule.minSizeBytes, rule.contentPattern)) {
             // Artefato existe e é válido: auto-recupera o estado
-            if (!m_state.contains("items")) m_state["items"] = nlohmann::json::object();
-            if (!m_state["items"].contains(itemId)) m_state["items"][itemId] = {{"stages", nlohmann::json::object()}};
-            if (!m_state["items"][itemId].contains("stages")) m_state["items"][itemId]["stages"] = nlohmann::json::object();
+            if (!m_state.contains("items")) m_state["items"] = taskforge::Json::object();
+            if (!m_state["items"].contains(itemId)) m_state["items"][itemId] = {{"stages", taskforge::Json::object()}};
+            if (!m_state["items"][itemId].contains("stages")) m_state["items"][itemId]["stages"] = taskforge::Json::object();
 
             m_state["items"][itemId]["stages"][stageId] = {
                 {"status", "concluido"},
@@ -152,9 +153,9 @@ bool PipelineResumeEngine::isStageCompleted(
                 buffer << lf.rdbuf();
                 std::string logContent = buffer.str();
                 if (logContent.find("EXIT CODE: 0") != std::string::npos) {
-                    if (!m_state.contains("items")) m_state["items"] = nlohmann::json::object();
-                    if (!m_state["items"].contains(itemId)) m_state["items"][itemId] = {{"stages", nlohmann::json::object()}};
-                    if (!m_state["items"][itemId].contains("stages")) m_state["items"][itemId]["stages"] = nlohmann::json::object();
+                    if (!m_state.contains("items")) m_state["items"] = taskforge::Json::object();
+                    if (!m_state["items"].contains(itemId)) m_state["items"][itemId] = {{"stages", taskforge::Json::object()}};
+                    if (!m_state["items"][itemId].contains("stages")) m_state["items"][itemId]["stages"] = taskforge::Json::object();
 
                     m_state["items"][itemId]["stages"][stageId] = {
                         {"status", "concluido"},
@@ -175,12 +176,12 @@ bool PipelineResumeEngine::isStageCompleted(
 
 void PipelineResumeEngine::markStageStarted(const std::string& itemId, const std::string& stageId) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    if (!m_state.contains("items")) m_state["items"] = nlohmann::json::object();
+    if (!m_state.contains("items")) m_state["items"] = taskforge::Json::object();
     if (!m_state["items"].contains(itemId)) {
         m_state["items"][itemId] = {
             {"itemId", itemId},
             {"status", "em_progresso"},
-            {"stages", nlohmann::json::object()}
+            {"stages", taskforge::Json::object()}
         };
     } else {
         m_state["items"][itemId]["status"] = "em_progresso";
@@ -201,12 +202,12 @@ void PipelineResumeEngine::markStageSuccess(
     const std::string& logPath
 ) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    if (!m_state.contains("items")) m_state["items"] = nlohmann::json::object();
+    if (!m_state.contains("items")) m_state["items"] = taskforge::Json::object();
     if (!m_state["items"].contains(itemId)) {
         m_state["items"][itemId] = {
             {"itemId", itemId},
             {"status", "em_progresso"},
-            {"stages", nlohmann::json::object()}
+            {"stages", taskforge::Json::object()}
         };
     }
 
@@ -228,12 +229,12 @@ void PipelineResumeEngine::markStageFailed(
     const std::string& logPath
 ) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    if (!m_state.contains("items")) m_state["items"] = nlohmann::json::object();
+    if (!m_state.contains("items")) m_state["items"] = taskforge::Json::object();
     if (!m_state["items"].contains(itemId)) {
         m_state["items"][itemId] = {
             {"itemId", itemId},
             {"status", "erro"},
-            {"stages", nlohmann::json::object()}
+            {"stages", taskforge::Json::object()}
         };
     } else {
         m_state["items"][itemId]["status"] = "erro";
@@ -255,7 +256,7 @@ void PipelineResumeEngine::resetCheckpoint(const std::string& itemId, const std:
         m_state = {
             {"pipelineId", "arestrix-batch"},
             {"lastUpdated", currentTimestamp()},
-            {"items", nlohmann::json::object()}
+            {"items", taskforge::Json::object()}
         };
     } else if (stageId.empty()) {
         if (m_state.contains("items") && m_state["items"].contains(itemId)) {
@@ -273,7 +274,7 @@ void PipelineResumeEngine::resetCheckpoint(const std::string& itemId, const std:
     saveToDisk();
 }
 
-nlohmann::json PipelineResumeEngine::getStateJson() {
+taskforge::Json PipelineResumeEngine::getStateJson() {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_state;
 }
@@ -284,7 +285,7 @@ void PipelineResumeEngine::loadFromDisk() {
         try {
             std::ifstream file(m_stateFilePath);
             if (file.is_open()) {
-                m_state = nlohmann::json::parse(file);
+                m_state = taskforge::jsonutil::parseStream(file);
                 return;
             }
         } catch (...) {
@@ -295,7 +296,7 @@ void PipelineResumeEngine::loadFromDisk() {
     m_state = {
         {"pipelineId", "arestrix-batch"},
         {"lastUpdated", currentTimestamp()},
-        {"items", nlohmann::json::object()}
+        {"items", taskforge::Json::object()}
     };
 }
 

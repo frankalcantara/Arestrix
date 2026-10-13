@@ -29,3 +29,6 @@ projects/
 arestrix-recent-projects.json
 taskforge-recent-projects.json
 
+build/
+runtime/
+Output/

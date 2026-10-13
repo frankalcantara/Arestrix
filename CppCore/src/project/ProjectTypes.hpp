@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <nlohmann/json.hpp>
+#include "util/JsonValue.hpp"
 
 namespace taskforge {
 namespace project {
@@ -16,8 +16,8 @@ struct ProjectPipelineRef {
     std::string description;
 };
 
-inline void to_json(nlohmann::json& j, const ProjectPipelineRef& p) {
-    j = nlohmann::json{
+inline void to_json(taskforge::Json& j, const ProjectPipelineRef& p) {
+    j = taskforge::Json{
         {"id", p.id},
         {"name", p.name},
         {"file", p.file},
@@ -26,7 +26,7 @@ inline void to_json(nlohmann::json& j, const ProjectPipelineRef& p) {
     };
 }
 
-inline void from_json(const nlohmann::json& j, ProjectPipelineRef& p) {
+inline void from_json(const taskforge::Json& j, ProjectPipelineRef& p) {
     p.id = j.value("id", "");
     p.name = j.value("name", "");
     p.file = j.value("file", "");
@@ -40,15 +40,15 @@ struct ProjectDatabaseConfig {
     std::string url;
 };
 
-inline void to_json(nlohmann::json& j, const ProjectDatabaseConfig& d) {
-    j = nlohmann::json{
+inline void to_json(taskforge::Json& j, const ProjectDatabaseConfig& d) {
+    j = taskforge::Json{
         {"type", d.type},
         {"filePath", d.filePath},
         {"url", d.url}
     };
 }
 
-inline void from_json(const nlohmann::json& j, ProjectDatabaseConfig& d) {
+inline void from_json(const taskforge::Json& j, ProjectDatabaseConfig& d) {
     d.type = j.value("type", "sqlite");
     d.filePath = j.value("filePath", "storage/database.sqlite");
     d.url = j.value("url", "");
@@ -63,13 +63,13 @@ struct ProjectManifest {
     std::string updatedAt;
     std::string rootPath;
     std::vector<ProjectPipelineRef> pipelines;
-    nlohmann::json globalDefaults = nlohmann::json::object();
+    taskforge::Json globalDefaults = taskforge::Json::object();
     ProjectDatabaseConfig database;
     std::map<std::string, std::string> environment;
 };
 
-inline void to_json(nlohmann::json& j, const ProjectManifest& m) {
-    j = nlohmann::json{
+inline void to_json(taskforge::Json& j, const ProjectManifest& m) {
+    j = taskforge::Json{
         {"projectId", m.projectId},
         {"name", m.name},
         {"version", m.version},
@@ -84,7 +84,7 @@ inline void to_json(nlohmann::json& j, const ProjectManifest& m) {
     };
 }
 
-inline void from_json(const nlohmann::json& j, ProjectManifest& m) {
+inline void from_json(const taskforge::Json& j, ProjectManifest& m) {
     m.projectId = j.value("projectId", "");
     m.name = j.value("name", "");
     m.version = j.value("version", "1.0.0");
@@ -114,8 +114,8 @@ struct RecentProjectItem {
     std::string lastOpened;
 };
 
-inline void to_json(nlohmann::json& j, const RecentProjectItem& r) {
-    j = nlohmann::json{
+inline void to_json(taskforge::Json& j, const RecentProjectItem& r) {
+    j = taskforge::Json{
         {"projectId", r.projectId},
         {"name", r.name},
         {"rootPath", r.rootPath},
@@ -124,7 +124,7 @@ inline void to_json(nlohmann::json& j, const RecentProjectItem& r) {
     };
 }
 
-inline void from_json(const nlohmann::json& j, RecentProjectItem& r) {
+inline void from_json(const taskforge::Json& j, RecentProjectItem& r) {
     r.projectId = j.value("projectId", "");
     r.name = j.value("name", "");
     r.rootPath = j.value("rootPath", "");

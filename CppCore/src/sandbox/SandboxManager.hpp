@@ -5,7 +5,6 @@
 #include "MicroVMSandboxDriver.hpp"
 #include "HostProcessDriver.hpp"
 #include <memory>
-#include <iostream>
 
 namespace taskforge {
 namespace sandbox {
@@ -21,8 +20,14 @@ private:
 public:
     static SandboxManager& instance();
 
+    // Devolve o driver do tipo pedido, ou nullptr se ele nao estiver disponivel.
+    // Nao ha fallback silencioso para outro nivel de isolamento.
     ISandboxDriver* getDriver(IsolationType type);
 
+    bool isAvailable(IsolationType type);
+
+    // Executa respeitando policy.isolation. Se o driver pedido nao estiver disponivel,
+    // falha com mensagem clara, a menos que policy.allowFallbackToHost seja true.
     ExecutionResult execute(const ExecutionParams& params);
 };
 

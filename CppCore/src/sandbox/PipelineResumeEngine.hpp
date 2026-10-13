@@ -8,7 +8,7 @@
 #include <fstream>
 #include <regex>
 #include <chrono>
-#include <nlohmann/json.hpp>
+#include "util/JsonValue.hpp"
 
 namespace taskforge {
 namespace sandbox {
@@ -76,7 +76,7 @@ public:
     void resetCheckpoint(const std::string& itemId = "", const std::string& stageId = "");
 
     // Obtém snapshot JSON completo do checkpoint
-    nlohmann::json getStateJson();
+    taskforge::Json getStateJson();
 
     // Carrega do disco
     void loadFromDisk();
@@ -89,7 +89,7 @@ public:
 
 private:
     std::string m_stateFilePath;
-    nlohmann::json m_state;
+    taskforge::Json m_state;
     mutable std::mutex m_mutex;
 
     std::string currentTimestamp() const;

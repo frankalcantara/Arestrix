@@ -885,7 +885,11 @@ export class OfficeRibbon {
       }
 
       // F5 ou Ctrl+Enter dispara o build e run automático
-      if (e.key === 'F5' || (e.ctrlKey && e.key === 'Enter')) {
+      if (e.key === 'F5' && e.shiftKey) {
+        // Shift+F5 interrompe a execução em andamento (convenção do Visual Studio)
+        e.preventDefault();
+        PipelineRunner.stop();
+      } else if (e.key === 'F5' || (e.ctrlKey && e.key === 'Enter')) {
         e.preventDefault();
         this.executePipeline();
       }

@@ -1,18 +1,52 @@
 #include "TaskflowGenerator.hpp"
 #include <algorithm>
+#include <cctype>
+#include <functional>
+#include <set>
 #include <sstream>
 
 namespace taskforge {
 namespace compiler {
 
+using json = taskforge::Json;
+
+// ---------------------------------------------------------------------------
+// Utilitarios
+// ---------------------------------------------------------------------------
 std::string TaskflowGenerator::sanitizeIdentifier(const std::string& id) {
     std::string sanitized = id;
     for (char& c : sanitized) {
-        if (!isalnum(c)) {
+        if (!std::isalnum(static_cast<unsigned char>(c))) {
             c = '_';
         }
     }
     return sanitized;
+}
+
+std::string TaskflowGenerator::cppString(const std::string& text) {
+    static const char* hex = "0123456789abcdef";
+    std::string out = "\"";
+    for (unsigned char c : text) {
+        switch (c) {
+            case '\\': out += "\\\\"; break;
+            case '"':  out += "\\\""; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            case '?':  out += "\\?"; break;   // evita trigraphs
+            default:
+                if (c < 0x20) {
+                    out += "\\x";
+                    out += hex[c >> 4];
+                    out += hex[c & 0xF];
+                    out += "\"\"";   // encerra a sequencia hexadecimal
+                } else {
+                    out += static_cast<char>(c);
+                }
+        }
+    }
+    out += "\"";
+    return out;
 }
 
 std::string TaskflowGenerator::indent(const std::string& text, int spaces) {
@@ -22,6 +56,7 @@ std::string TaskflowGenerator::indent(const std::string& text, int spaces) {
     std::string result;
     bool first = true;
     while (std::getline(ss, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
         if (!first) result += "\n";
         result += pad + line;
         first = false;
@@ -29,46 +64,256 @@ std::string TaskflowGenerator::indent(const std::string& text, int spaces) {
     return result;
 }
 
+namespace {
+
+// Texto seguro para comentarios de uma linha (sem quebras de linha).
+std::string commentSafe(std::string s) {
+    for (char& c : s) {
+        if (c == '\n' || c == '\r') c = ' ';
+    }
+    return s;
+}
+
+// Literal de string bruta dividido em pedacos (limite de ~16 KB por literal no MSVC).
+std::string rawLiteral(const std::string& text) {
+    std::string delim = "ARX";
+    while (text.find(")" + delim + "\"") != std::string::npos) delim += "X";
+    const size_t chunk = 6000;
+    std::string out;
+    for (size_t pos = 0; pos < text.size() || pos == 0; pos += chunk) {
+        if (pos) out += "\n      ";
+        out += "R\"" + delim + "(" + text.substr(pos, chunk) + ")" + delim + "\"";
+        if (text.empty()) break;
+    }
+    return out;
+}
+
+std::vector<std::string> sortedNodeIds(const core::Graph& graph) {
+    std::vector<std::string> ids;
+    for (const auto& p : graph.getNodes()) ids.push_back(p.first);
+    std::sort(ids.begin(), ids.end());
+    return ids;
+}
+
+std::vector<const core::EdgeData*> sortedEdges(const core::Graph& graph) {
+    std::vector<const core::EdgeData*> edges;
+    for (const auto& p : graph.getEdges()) edges.push_back(&p.second);
+    std::sort(edges.begin(), edges.end(), [](const core::EdgeData* a, const core::EdgeData* b) { return a->id < b->id; });
+    return edges;
+}
+
+// Nome de variavel unico por no (ids diferentes podem sanitizar para o mesmo texto).
+std::map<std::string, std::string> buildVarNames(const std::vector<std::string>& ids) {
+    std::map<std::string, std::string> names;
+    std::set<std::string> used;
+    for (const auto& id : ids) {
+        std::string base = "task_" + TaskflowGenerator::sanitizeIdentifier(id);
+        std::string name = base;
+        int n = 2;
+        while (!used.insert(name).second) name = base + "_" + std::to_string(n++);
+        names[id] = name;
+    }
+    return names;
+}
+
+// Arestas de retorno: marcadas pela UI ou que fecham um ciclo (DFS). Somente arestas
+// que saem de nos de condicao podem formar lacos validos em Taskflow.
+std::set<std::string> computeLoopEdges(const core::Graph& graph, const std::vector<std::string>& ids) {
+    std::set<std::string> loops;
+    const auto edges = sortedEdges(graph);
+    std::map<std::string, std::vector<const core::EdgeData*>> out;
+    std::map<std::string, int> incoming;
+    for (const auto* e : edges) {
+        if (e->isFeedbackLoop) { loops.insert(e->id); continue; }
+        out[e->sourceNodeId].push_back(e);
+        incoming[e->targetNodeId]++;
+    }
+
+    // Passo 1: arestas que saem de uma condicao e voltam para um no que alcanca essa mesma
+    // condicao sao lacos validos de Taskflow (independe de qual no e a raiz do grafo).
+    auto reaches = [&](const std::string& from, const std::string& to, const std::string& skipEdge) {
+        std::set<std::string> seen{from};
+        std::vector<std::string> stack{from};
+        while (!stack.empty()) {
+            std::string u = stack.back();
+            stack.pop_back();
+            if (u == to) return true;
+            for (const auto* e : edges) {
+                if (e->sourceNodeId != u || e->id == skipEdge || loops.count(e->id)) continue;
+                if (seen.insert(e->targetNodeId).second) stack.push_back(e->targetNodeId);
+            }
+        }
+        return false;
+    };
+    for (const auto& id : ids) {
+        const auto& node = graph.getNodes().at(id);
+        if (node.type != core::TaskflowNodeType::Condition) continue;
+        for (const auto* e : edges) {
+            if (e->sourceNodeId != id || loops.count(e->id)) continue;
+            if (reaches(e->targetNodeId, id, e->id)) loops.insert(e->id);
+        }
+    }
+    out.clear();
+    incoming.clear();
+    for (const auto* e : edges) {
+        if (loops.count(e->id)) continue;
+        out[e->sourceNodeId].push_back(e);
+        incoming[e->targetNodeId]++;
+    }
+
+    // Passo 2: qualquer ciclo restante (invalido) e quebrado por DFS para nao travar a execucao.
+    std::map<std::string, int> color;   // 0 branco, 1 cinza, 2 preto
+    std::function<void(const std::string&)> dfs = [&](const std::string& u) {
+        color[u] = 1;
+        for (const auto* e : out[u]) {
+            int c = color[e->targetNodeId];
+            if (c == 1) loops.insert(e->id);          // aresta de retorno
+            else if (c == 0) dfs(e->targetNodeId);
+        }
+        color[u] = 2;
+    };
+    for (const auto& id : ids) if (incoming[id] == 0 && color[id] == 0) dfs(id);
+    for (const auto& id : ids) if (color[id] == 0) dfs(id);
+    return loops;
+}
+
+const char* kStandardIncludes =
+    "#include <taskflow/taskflow.hpp>\n"
+    "#include <algorithm>\n"
+    "#include <chrono>\n"
+    "#include <cstdlib>\n"
+    "#include <filesystem>\n"
+    "#include <fstream>\n"
+    "#include <iostream>\n"
+    "#include <memory>\n"
+    "#include <mutex>\n"
+    "#include <queue>\n"
+    "#include <random>\n"
+    "#include <regex>\n"
+    "#include <sstream>\n"
+    "#include <string>\n"
+    "#include <syncstream>\n"
+    "#include <unordered_map>\n"
+    "#include <vector>\n";
+
+const json& objectOrEmpty(const json& j, const char* key) {
+    static const json empty = json::object();
+    if (j.is_object() && j.contains(key) && j[key].is_object()) return j[key];
+    return empty;
+}
+
+// Secao efetiva: padrao global; se o no nao herda, sobrepoe com os campos do no.
+json effectiveSection(const json& globalDefaults, const json& nodeSettings, const char* inheritKey, const char* section) {
+    json eff = objectOrEmpty(globalDefaults, section);
+    if (nodeSettings.is_object()) {
+        bool inherit = true;
+        if (nodeSettings.contains(inheritKey) && nodeSettings[inheritKey].is_boolean()) inherit = nodeSettings[inheritKey].get<bool>();
+        if (!inherit && nodeSettings.contains(section) && nodeSettings[section].is_object()) {
+            for (auto it = nodeSettings[section].begin(); it != nodeSettings[section].end(); ++it) eff[it.key()] = it.value();
+        }
+    }
+    return eff;
+}
+
+std::string skillAssetPath(const std::string& nodeId) {
+    return ".arestrix/skills/" + TaskflowGenerator::sanitizeIdentifier(nodeId) + ".md";
+}
+
+} // namespace
+
+// ---------------------------------------------------------------------------
+// Agentes
+// ---------------------------------------------------------------------------
+json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::NodeData& node) {
+    const json& defaults = graph.getMetadata().globalDefaults;
+    const json& settings = node.agentSettings;
+
+    json model = effectiveSection(defaults, settings, "inheritModel", "model");
+    json sandbox = effectiveSection(defaults, settings, "inheritSandbox", "sandbox");
+    json codeMode = effectiveSection(defaults, settings, "inheritCodeMode", "codeMode");
+
+    json spec = json::object();
+    spec["provider"] = model.value("provider", "deepseek");
+    spec["model"] = model.value("model", "");
+    if (model.contains("temperature") && model["temperature"].is_number()) spec["temperature"] = model["temperature"];
+    spec["promptTemplate"] = model.value("promptTemplate", "");
+
+    std::string skillPath = model.value("skillPath", "");
+    if (skillPath.empty()) {
+        auto assets = collectSkillAssets(graph);
+        if (assets.count(skillAssetPath(node.id))) skillPath = skillAssetPath(node.id);
+    }
+    spec["skillPath"] = skillPath;
+
+    json tools = json::array();
+    if (codeMode.contains("allowedTools") && codeMode["allowedTools"].is_array()) tools = codeMode["allowedTools"];
+    spec["tools"] = tools;
+
+    json sb = json::object();
+    sb["isolationLevel"] = sandbox.value("isolationLevel", "container");
+    sb["network"] = sandbox.value("network", "egress_llm_only");
+    sb["maxMemoryMB"] = sandbox.value("maxMemoryMB", 512);
+    sb["timeoutSeconds"] = sandbox.value("timeoutSeconds", 300);
+    sb["readOnlyMounts"] = sandbox.contains("readOnlyMounts") ? sandbox["readOnlyMounts"] : json::array();
+    sb["readWriteMounts"] = sandbox.contains("readWriteMounts") ? sandbox["readWriteMounts"] : json::array();
+    sb["allowFallbackToHost"] = sandbox.value("allowFallbackToHost", false);
+    spec["sandbox"] = sb;
+    return spec;
+}
+
+std::map<std::string, std::string> TaskflowGenerator::collectSkillAssets(const core::Graph& graph) {
+    std::map<std::string, std::string> assets;
+    for (const auto& p : graph.getNodes()) {
+        const auto& node = p.second;
+        if (node.type != core::TaskflowNodeType::Agent) continue;
+        const json& s = node.agentSettings;
+        if (!s.is_object() || !s.contains("skills") || !s["skills"].is_array()) continue;
+        std::string activeId = s.value("activeSkillId", "");
+        for (const auto& skill : s["skills"]) {
+            if (!skill.is_object()) continue;
+            if (!activeId.empty() && skill.value("id", "") != activeId) continue;
+            std::string md = skill.value("markdownContent", "");
+            if (md.empty()) md = skill.value("systemPrompt", "");
+            if (!md.empty()) {
+                assets[skillAssetPath(node.id)] = md;
+                break;
+            }
+        }
+    }
+    return assets;
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline simples
+// ---------------------------------------------------------------------------
 std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
-    auto meta = graph.getMetadata();
+    const auto& meta = graph.getMetadata();
     const auto& nodes = graph.getNodes();
-    const auto& edges = graph.getEdges();
+    const auto ids = sortedNodeIds(graph);
+    const auto names = buildVarNames(ids);
+    const auto loopEdges = computeLoopEdges(graph, ids);
+    const auto edges = sortedEdges(graph);
 
     bool hasCritical = false;
     bool hasCuda = false;
     for (const auto& pair : nodes) {
-        if (pair.second.type == core::TaskflowNodeType::Critical) {
-            hasCritical = true;
-        }
-        if (pair.second.type == core::TaskflowNodeType::Cuda) {
-            hasCuda = true;
-        }
+        if (pair.second.type == core::TaskflowNodeType::Critical) hasCritical = true;
+        if (pair.second.type == core::TaskflowNodeType::Cuda) hasCuda = true;
     }
 
     std::string code = "// ============================================================================\n";
-    code += "// Gerado automaticamente por Arestrix (C++ Engine) - Visual Taskflow IDE\n";
-    code += "// Pipeline: " + meta.graphName + "\n";
-    code += "// Descricao: " + meta.description + "\n";
-    code += "// Padrao C++: " + meta.targetStandard + " | Compilador: " + meta.compilerConfig.compiler + "\n";
+    code += "// Gerado automaticamente por Arestrix - Visual Taskflow IDE\n";
+    code += "// Pipeline: " + commentSafe(meta.graphName) + "\n";
+    code += "// Descricao: " + commentSafe(meta.description) + "\n";
+    code += "// Padrao C++: " + commentSafe(meta.targetStandard) + "\n";
     code += "// ============================================================================\n\n";
 
-    code += "#include <taskflow/taskflow.hpp>\n";
-    if (hasCuda) {
-        code += "#include <taskflow/cuda/cudaflow.hpp>\n";
-    }
-    code += "#include <iostream>\n";
-    code += "#include <vector>\n";
-    code += "#include <string>\n";
-    code += "#include <chrono>\n";
-    code += "#include <memory>\n";
-    code += "#include <random>\n";
-    code += "#include <queue>\n";
-    code += "#include <mutex>\n";
-    code += "#include <unordered_map>\n";
-    code += "#include <syncstream>\n\n";
+    code += kStandardIncludes;
+    if (hasCuda) code += "#include <taskflow/cuda/cudaflow.hpp>\n";
+    code += "#include \"rt/Runtime.hpp\"\n\n";
 
     code += "struct AgentContext {\n";
-    code += "  std::string pipeline_name = \"" + meta.graphName + "\";\n";
+    code += "  std::string pipeline_name = " + cppString(meta.graphName) + ";\n";
     code += "  uint64_t tick_count = 0;\n";
     code += "  bool abort_requested = false;\n\n";
     code += "  std::queue<std::string> task_queue;\n";
@@ -80,162 +325,171 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
     code += "};\n\n";
 
     code += "int main(int argc, char* argv[]) {\n";
-    code += "  std::osyncstream(std::cout) << \">>> Iniciando pipeline Taskflow: " + meta.graphName + "...\\n\";\n\n";
+    code += "  (void)argc; (void)argv;\n";
+    code += "  taskforge::rt::init();\n";
+    code += "  try {\n";
+    code += "  std::osyncstream(std::cout) << \">>> Iniciando pipeline Taskflow: \" << " + cppString(meta.graphName) + " << \"...\\n\";\n\n";
     code += "  AgentContext ctx;\n";
     code += "  tf::Executor executor;\n";
-    code += "  tf::Taskflow tf(\"" + meta.graphName + "\");\n\n";
+    code += "  tf::Taskflow taskflow(" + cppString(meta.graphName) + ");\n\n";
+    if (hasCritical) code += "  tf::Semaphore critical_sec(1);\n\n";
 
-    if (hasCritical) {
-        code += "  tf::Semaphore critical_sec(1);\n\n";
-    }
-
-    code += "  auto task_bootstrap = tf.emplace([&ctx]() {\n";
+    code += "  auto task_bootstrap = taskflow.emplace([&ctx]() {\n";
     code += "    std::osyncstream(std::cout) << \">>> [Pipeline \" << ctx.pipeline_name << \"] Ambiente ativado.\\n\";\n";
     code += "  }).name(\"Pipeline_Bootstrap\");\n\n";
 
-    // Create Tasks
-    for (const auto& pair : nodes) {
-        const auto& node = pair.second;
-        std::string sId = sanitizeIdentifier(node.id);
+    // --- Tarefas ---------------------------------------------------------------------------
+    for (const auto& id : ids) {
+        const auto& node = nodes.at(id);
+        const std::string& var = names.at(id);
         std::string label = node.label.empty() ? node.id : node.label;
-        
+        std::string scope = "    taskforge::rt::NodeScope arx_scope(" + cppString(node.id) + ", " + cppString(label) + ");\n";
+
+        std::string body;
+        std::string lambdaHead = "[&ctx]()";
         if (node.type == core::TaskflowNodeType::Condition) {
-            code += "  auto task_" + sId + " = tf.emplace([&ctx]() -> int {\n";
-            std::string body = node.customLambdaBody.empty() ? "return 0;" : node.customLambdaBody;
-            code += indent(body, 4) + "\n";
-            code += "  }).name(\"" + label + "\");\n\n";
+            lambdaHead = "[&ctx]() -> int";
+            body = node.customLambdaBody.empty() ? "return 0;" : node.customLambdaBody;
         } else if (node.type == core::TaskflowNodeType::Cuda) {
-            code += "  auto task_" + sId + " = tf.emplace([&ctx]() {\n";
-            std::string defaultCudaBody = 
-                "// Taskflow 4.1+ Native CUDA Graph (tf::cudaGraph / tf::cudaGraphExec)\n"
-                "tf::cudaGraph cg;\n"
-                "// Construcao do grafo CUDA nativo (kernels, memcpys)\n"
-                "tf::cudaGraphExec exec(cg);\n"
-                "tf::cudaStream stream;\n"
-                "stream.run(exec);\n"
-                "stream.synchronize();\n"
-                "std::osyncstream(std::cout) << \"[CUDA: " + label + "] Grafo GPU executado com sucesso.\\n\";";
-            std::string body = node.customLambdaBody.empty() ? defaultCudaBody : node.customLambdaBody;
-            code += indent(body, 4) + "\n";
-            code += "  }).name(\"" + label + "\");\n\n";
-        } else if (node.type == core::TaskflowNodeType::Subflow || node.type == core::TaskflowNodeType::Module) {
-            code += "  auto task_" + sId + " = tf.emplace([&ctx](tf::Subflow& sf) {\n";
-            std::string body = node.customLambdaBody.empty() ? "// subflow hierarquico;" : node.customLambdaBody;
-            code += indent(body, 4) + "\n";
-            code += "  }).name(\"" + label + "\");\n\n";
-        } else if (node.type == core::TaskflowNodeType::Agent) {
-            code += "  auto task_" + sId + " = tf.emplace([&ctx]() {\n";
-            std::string body = node.customLambdaBody.empty() 
-                ? "std::cout << \"[Agent: " + label + "] Executando no sandbox isolado (Code Mode)...\\n\";" 
+            body = node.customLambdaBody.empty()
+                ? "// Taskflow 4.1+ Native CUDA Graph (tf::cudaGraph / tf::cudaGraphExec)\n"
+                  "tf::cudaGraph cg;\n"
+                  "tf::cudaGraphExec exec(cg);\n"
+                  "tf::cudaStream stream;\n"
+                  "stream.run(exec);\n"
+                  "stream.synchronize();\n"
+                  "std::osyncstream(std::cout) << \"[CUDA] Grafo GPU executado.\\n\";"
                 : node.customLambdaBody;
-            code += indent(body, 4) + "\n";
-            code += "  }).name(\"" + label + "\");\n\n";
+        } else if (node.type == core::TaskflowNodeType::Subflow || node.type == core::TaskflowNodeType::Module) {
+            lambdaHead = "[&ctx](tf::Subflow& sf)";
+            body = node.customLambdaBody.empty() ? "(void)sf; // subflow hierarquico" : node.customLambdaBody;
+        } else if (node.type == core::TaskflowNodeType::Agent && node.customLambdaBody.empty()) {
+            body = "taskforge::rt::runAgent(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +
+                   rawLiteral(buildAgentSpec(graph, node).dump()) + ");";
         } else {
-            code += "  auto task_" + sId + " = tf.emplace([&ctx]() {\n";
-            std::string body = node.customLambdaBody.empty() ? "std::cout << \"Executando " + label + "\\n\";" : node.customLambdaBody;
-            code += indent(body, 4) + "\n";
-            code += "  }).name(\"" + label + "\");\n\n";
+            body = node.customLambdaBody.empty()
+                ? "std::cout << \"Executando \" << " + cppString(label) + " << \"\\n\";"
+                : node.customLambdaBody;
         }
+
+        code += "  auto " + var + " = taskflow.emplace(" + lambdaHead + " {\n";
+        code += scope;
+        code += indent(body, 4) + "\n";
+        code += "  }).name(" + cppString(label) + ");\n";
+        if (node.type == core::TaskflowNodeType::Critical) {
+            code += "  " + var + ".acquire(critical_sec);\n  " + var + ".release(critical_sec);\n";
+        }
+        code += "\n";
     }
 
-    // Dependencies
+    // --- Dependencias ----------------------------------------------------------------------
     code += "  // Dependencias e Precedencias\n";
-    
-    // Find entry nodes
-    std::vector<std::string> entryNodes;
-    for (const auto& pair : nodes) {
-        bool hasIncoming = false;
-        for (const auto& epair : edges) {
-            if (epair.second.targetNodeId == pair.first && !epair.second.isFeedbackLoop) {
-                hasIncoming = true;
-                break;
-            }
-        }
-        if (!hasIncoming) {
-            entryNodes.push_back(pair.first);
-        }
+    std::map<std::string, int> strongIncoming;
+    for (const auto* e : edges) {
+        if (!loopEdges.count(e->id)) strongIncoming[e->targetNodeId]++;
     }
-    
-    if (!entryNodes.empty()) {
+    std::vector<std::string> entries;
+    for (const auto& id : ids) if (strongIncoming[id] == 0) entries.push_back(names.at(id));
+    if (!entries.empty()) {
         std::string targets;
-        for (size_t i = 0; i < entryNodes.size(); ++i) {
-            if (i > 0) targets += ", ";
-            targets += "task_" + sanitizeIdentifier(entryNodes[i]);
-        }
-        code += "  task_bootstrap.precede(" + targets + ");\n\n";
+        for (size_t i = 0; i < entries.size(); ++i) targets += (i ? ", " : "") + entries[i];
+        code += "  task_bootstrap.precede(" + targets + ");\n";
     }
+    code += "\n";
 
-    for (const auto& pair : nodes) {
-        const auto& node = pair.second;
-        std::string sId = sanitizeIdentifier(node.id);
-        
-        std::vector<core::EdgeData> outEdges;
-        for (const auto& epair : edges) {
-            if (epair.second.sourceNodeId == node.id) {
-                outEdges.push_back(epair.second);
-            }
-        }
-        
+    int noopCounter = 0;
+    for (const auto& id : ids) {
+        const auto& node = nodes.at(id);
+        const std::string& var = names.at(id);
+
+        std::vector<const core::EdgeData*> outEdges;
+        for (const auto* e : edges) if (e->sourceNodeId == id) outEdges.push_back(e);
         if (outEdges.empty()) continue;
 
         if (node.type == core::TaskflowNodeType::Condition) {
-            // Sort by branch index
-            std::sort(outEdges.begin(), outEdges.end(), [&](const core::EdgeData& a, const core::EdgeData& b) {
-                int idxA = 0, idxB = 0;
-                for(const auto& p : node.outputs) if(p.id == a.sourcePortId) idxA = p.conditionBranchIndex;
-                for(const auto& p : node.outputs) if(p.id == b.sourcePortId) idxB = p.conditionBranchIndex;
-                return idxA < idxB;
-            });
-            
-            std::string targets;
-            for (size_t i = 0; i < outEdges.size(); ++i) {
-                if (i > 0) targets += ", ";
-                targets += "task_" + sanitizeIdentifier(outEdges[i].targetNodeId);
+            // O indice retornado pela condicao e a posicao do sucessor em precede():
+            // monta o vetor por indice de ramo, preenchendo lacunas com tarefas vazias.
+            std::map<int, std::vector<std::string>> byBranch;
+            int nextAuto = 0;
+            int maxIdx = -1;
+            for (const auto* e : outEdges) {
+                int idx = -1;
+                for (const auto& port : node.outputs) if (port.id == e->sourcePortId) idx = port.conditionBranchIndex;
+                if (idx < 0) idx = nextAuto;
+                nextAuto = std::max(nextAuto, idx + 1);
+                byBranch[idx].push_back(names.at(e->targetNodeId));
+                maxIdx = std::max(maxIdx, idx);
             }
-            code += "  task_" + sId + ".precede(" + targets + ");\n";
+            std::vector<std::string> slots;
+            for (int i = 0; i <= maxIdx; ++i) {
+                auto it = byBranch.find(i);
+                if (it == byBranch.end()) {
+                    std::string noop = "branch_noop_" + std::to_string(noopCounter++);
+                    code += "  auto " + noop + " = taskflow.emplace([]() {}).name(\"_ramo_vazio\");\n";
+                    slots.push_back(noop);
+                } else if (it->second.size() == 1) {
+                    slots.push_back(it->second[0]);
+                } else {
+                    std::string fan = "branch_fan_" + std::to_string(noopCounter++);
+                    code += "  auto " + fan + " = taskflow.emplace([]() {}).name(\"_ramo_multiplo\");\n";
+                    for (const auto& t : it->second) code += "  " + fan + ".precede(" + t + ");\n";
+                    slots.push_back(fan);
+                }
+            }
+            std::string targets;
+            for (size_t i = 0; i < slots.size(); ++i) targets += (i ? ", " : "") + slots[i];
+            code += "  " + var + ".precede(" + targets + ");\n";
         } else {
-            for (const auto& edge : outEdges) {
-                std::string targetId = sanitizeIdentifier(edge.targetNodeId);
-                code += "  task_" + sId + ".precede(task_" + targetId + ");\n";
+            for (const auto* e : outEdges) {
+                if (loopEdges.count(e->id)) {
+                    code += "  // Aresta de retorno ignorada (" + commentSafe(id) + " -> " + commentSafe(e->targetNodeId) +
+                            "): lacos em Taskflow exigem um no de condicao.\n";
+                    continue;
+                }
+                code += "  " + var + ".precede(" + names.at(e->targetNodeId) + ");\n";
             }
         }
     }
 
     code += "\n  std::osyncstream(std::cout) << \">>> Disparando execucao no pool de threads...\\n\";\n";
     code += "  auto start = std::chrono::high_resolution_clock::now();\n\n";
-    code += "  executor.run(tf).wait();\n\n";
+    code += "  executor.run(taskflow).get();\n\n";
     code += "  auto end = std::chrono::high_resolution_clock::now();\n";
     code += "  auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();\n";
-    code += "  std::cout << \">>> Pipeline concluido com sucesso em \" << elapsed_ms << \" ms.\\n\";\n\n";
+    code += "  std::cout << \">>> Pipeline concluido com sucesso em \" << elapsed_ms << \" ms.\\n\";\n";
+    code += "  } catch (const std::exception& ex) {\n";
+    code += "    std::cerr << \">>> [ERRO] Pipeline interrompido: \" << ex.what() << std::endl;\n";
+    code += "    return 1;\n";
+    code += "  }\n";
     code += "  return 0;\n";
     code += "}\n";
 
     return code;
 }
 
+// ---------------------------------------------------------------------------
+// Pipeline em lote (Resume Engine)
+// ---------------------------------------------------------------------------
 std::string TaskflowGenerator::generateBatchSource(
-    const core::Graph& graph, 
-    const std::vector<std::string>& batchItems, 
-    const std::vector<std::string>& serializedStages, 
+    const core::Graph& graph,
+    const std::vector<std::string>& batchItems,
+    const std::vector<std::string>& serializedStages,
     const std::string& stateFilePath
 ) {
-    auto meta = graph.getMetadata();
+    const auto& meta = graph.getMetadata();
     const auto& nodes = graph.getNodes();
-    const auto& edges = graph.getEdges();
+    const auto ids = sortedNodeIds(graph);
+    const auto loopEdges = computeLoopEdges(graph, ids);
+    const auto edges = sortedEdges(graph);
 
     std::string code = "// ============================================================================\n";
-    code += "// Gerado por Arestrix (C++ Batch DAG & Resume Engine)\n";
-    code += "// Pipeline: " + meta.graphName + " (Lote de " + std::to_string(batchItems.size()) + " itens)\n";
-    code += "// Arquivo de Checkpoint: " + stateFilePath + "\n";
+    code += "// Gerado por Arestrix (Batch DAG & Resume Engine)\n";
+    code += "// Pipeline: " + commentSafe(meta.graphName) + " (Lote de " + std::to_string(batchItems.size()) + " itens)\n";
+    code += "// Arquivo de Checkpoint: " + commentSafe(stateFilePath) + "\n";
     code += "// ============================================================================\n\n";
 
-    code += "#include <taskflow/taskflow.hpp>\n";
-    code += "#include <iostream>\n";
-    code += "#include <vector>\n";
-    code += "#include <string>\n";
-    code += "#include <chrono>\n";
-    code += "#include <mutex>\n";
-    code += "#include <filesystem>\n";
+    code += kStandardIncludes;
+    code += "#include \"rt/Runtime.hpp\"\n";
     code += "#include \"sandbox/PipelineResumeEngine.hpp\"\n";
     code += "#include \"sandbox/AgentTelemetryEmitter.hpp\"\n";
     code += "#include \"memory/AgentBlackboard.hpp\"\n";
@@ -244,38 +498,46 @@ std::string TaskflowGenerator::generateBatchSource(
 
     std::string projId = meta.projectId.empty() ? "default" : meta.projectId;
 
+    code += "static std::string arx_subst(std::string s, const std::string& item) {\n";
+    code += "  const std::string key = \"{{itemId}}\";\n";
+    code += "  size_t p = 0;\n";
+    code += "  while ((p = s.find(key, p)) != std::string::npos) { s.replace(p, key.size(), item); p += item.size(); }\n";
+    code += "  return s;\n";
+    code += "}\n\n";
+
     code += "int main() {\n";
+    code += "  taskforge::rt::init();\n";
+    code += "  try {\n";
     code += "  std::cout << \">>> Inicializando Pipeline em Lote Arestrix...\\n\";\n";
     code += "  tf::Executor executor;\n";
-    code += "  tf::Taskflow tf(\"BatchMultiAgentPipeline\");\n\n";
+    code += "  tf::Taskflow taskflow(\"BatchMultiAgentPipeline\");\n\n";
     code += "  auto& resumeEngine = taskforge::sandbox::PipelineResumeEngine::getInstance();\n";
-    code += "  resumeEngine.setStateFilePath(\"" + stateFilePath + "\");\n\n";
-    code += "  const std::string projectId = \"" + projId + "\";\n";
+    code += "  resumeEngine.setStateFilePath(" + cppString(stateFilePath) + ");\n\n";
+    code += "  const std::string projectId = " + cppString(projId) + ";\n";
     code += "  auto& blackboard = taskforge::memory::AgentBlackboard::getInstance();\n";
     code += "  auto& semanticMemory = taskforge::memory::SemanticMemoryEngine::getInstance();\n\n";
 
-    // Instancia tarefas por item e por nó
+    auto itemVar = [&](size_t idx, const std::string& nodeId) {
+        return "task_i" + std::to_string(idx) + "_" + sanitizeIdentifier(nodeId);
+    };
+
     for (size_t itemIdx = 0; itemIdx < batchItems.size(); ++itemIdx) {
         const std::string& itemId = batchItems[itemIdx];
-        std::string sItemId = sanitizeIdentifier(itemId);
+        code += "  // --- Tarefas para o Item: " + commentSafe(itemId) + " ---\n";
+        for (const auto& id : ids) {
+            const auto& node = nodes.at(id);
+            std::string label = node.label.empty() ? node.id : node.label;
+            std::string taskVar = itemVar(itemIdx, node.id);
 
-        code += "  // --- Tarefas para o Item: " + itemId + " ---\n";
-        for (const auto& pair : nodes) {
-            const auto& node = pair.second;
-            std::string sNodeId = sanitizeIdentifier(node.id);
-            std::string taskVar = "task_" + sItemId + "_" + sNodeId;
-            std::string taskName = itemId + " :: " + node.label;
+            code += "  auto " + taskVar + " = taskflow.emplace([&resumeEngine, &blackboard, &semanticMemory, &projectId, itemId = std::string(" +
+                    cppString(itemId) + ")]() {\n";
 
-            code += "  auto " + taskVar + " = tf.emplace([&resumeEngine, &blackboard, &semanticMemory, itemId = std::string(\"" + itemId + "\")]() {\n";
             std::string ruleTargetPattern = "aulas/{itemId}.md";
             int ruleMinBytes = 200;
-            std::string ruleContentPattern = "";
+            std::string ruleContentPattern;
             bool ruleCheckExitCode = true;
-
-            if (node.agentSettings.is_object() && 
-                node.agentSettings.contains("validationRules") && 
-                node.agentSettings["validationRules"].is_array() && 
-                !node.agentSettings["validationRules"].empty()) {
+            if (node.agentSettings.is_object() && node.agentSettings.contains("validationRules") &&
+                node.agentSettings["validationRules"].is_array() && !node.agentSettings["validationRules"].empty()) {
                 const auto& vr = node.agentSettings["validationRules"][0];
                 ruleTargetPattern = vr.value("targetPathPattern", "aulas/{itemId}.md");
                 ruleMinBytes = vr.value("minSizeBytes", 200);
@@ -283,30 +545,24 @@ std::string TaskflowGenerator::generateBatchSource(
                 ruleCheckExitCode = vr.value("checkLogExitCode", true);
             }
 
+            code += "    taskforge::rt::NodeScope arx_scope(" + cppString(node.id) + ", " + cppString(label) + ");\n";
             code += "    taskforge::sandbox::ArtifactValidationRule rule;\n";
-            code += "    rule.targetPathPattern = \"" + ruleTargetPattern + "\";\n";
+            code += "    rule.targetPathPattern = " + cppString(ruleTargetPattern) + ";\n";
             code += "    rule.minSizeBytes = " + std::to_string(ruleMinBytes) + ";\n";
-            if (!ruleContentPattern.empty()) {
-                code += "    rule.contentPattern = \"" + ruleContentPattern + "\";\n";
-            }
+            if (!ruleContentPattern.empty()) code += "    rule.contentPattern = " + cppString(ruleContentPattern) + ";\n";
             code += "    rule.checkLogExitCode = " + std::string(ruleCheckExitCode ? "true" : "false") + ";\n\n";
-            code += "    if (resumeEngine.isStageCompleted(itemId, \"" + node.id + "\", rule)) {\n";
-            code += "      std::cout << \"[CHECKPOINT:RESUME] \" << itemId << \" :: " + node.label + " ja concluido. Reaproveitando artefato.\\n\";\n";
-            code += "      taskforge::sandbox::AgentTelemetryEmitter::emitStatus(\"" + node.id + "\", \"settled\", \"Recuperado do Checkpoint\");\n";
+            code += "    if (resumeEngine.isStageCompleted(itemId, " + cppString(node.id) + ", rule)) {\n";
+            code += "      std::cout << \"[CHECKPOINT:RESUME] \" << itemId << \" :: \" << " + cppString(label) + " << \" ja concluido. Reaproveitando artefato.\\n\";\n";
             code += "      return;\n";
-            code += "    }\n\n";
-            code += "    resumeEngine.markStageStarted(itemId, \"" + node.id + "\");\n";
-            code += "    taskforge::sandbox::AgentTelemetryEmitter::emitStatus(\"" + node.id + "\", \"running\", \"Executando item \" + itemId);\n";
-            code += "    std::cout << \"[EXECUTANDO] \" << itemId << \" :: " + node.label + "\\n\";\n";
+            code += "    }\n";
+            code += "    resumeEngine.markStageStarted(itemId, " + cppString(node.id) + ");\n";
+            code += "    std::cout << \"[EXECUTANDO] \" << itemId << \" :: \" << " + cppString(label) + " << \"\\n\";\n";
 
-            // Injeção de Memória Heterogênea (se ativada pelo usuário para este agente)
-            bool memEnabled = false;
-            bool memReadBb = false;
-            bool memWriteBb = false;
-            bool memSemLessons = false;
+            // Memoria heterogenea (opt-in por agente)
+            bool memEnabled = false, memReadBb = false, memWriteBb = false, memSemLessons = false;
             if (node.agentSettings.is_object()) {
                 bool inherit = node.agentSettings.value("inheritMemory", true);
-                nlohmann::json m = nlohmann::json::object();
+                json m = json::object();
                 if (!inherit && node.agentSettings.contains("memory") && node.agentSettings["memory"].is_object()) {
                     m = node.agentSettings["memory"];
                 } else if (meta.globalDefaults.is_object() && meta.globalDefaults.contains("memory")) {
@@ -317,194 +573,159 @@ std::string TaskflowGenerator::generateBatchSource(
                 memWriteBb = m.value("writeBlackboard", false);
                 memSemLessons = m.value("semanticLessons", false);
             }
-
-            if (memEnabled) {
-                if (memSemLessons) {
-                    code += "    auto semCtx = semanticMemory.formatPromptContext(projectId);\n";
-                    code += "    if (!semCtx.empty()) { std::cout << \"[MEMÓRIA:SEMÂNTICA] Injetando contexto no prompt para \" << itemId << \"\\n\"; }\n";
-                }
-                if (memReadBb) {
-                    code += "    auto bbSnap = blackboard.exportSnapshot(projectId, itemId);\n";
-                    code += "    if (!bbSnap.empty()) { std::cout << \"[MEMÓRIA:BLACKBOARD] Snapshot carregado para \" << itemId << \"\\n\"; }\n";
-                }
+            if (memEnabled && memSemLessons) {
+                code += "    auto semCtx = semanticMemory.formatPromptContext(projectId);\n";
+                code += "    if (!semCtx.empty()) { std::cout << \"[MEMORIA:SEMANTICA] Contexto injetado para \" << itemId << \"\\n\"; }\n";
             }
-            
-            if (node.agentSettings.contains("codeMode") && node.agentSettings["codeMode"].contains("allowedMcpTools")) {
-                auto mcpTools = node.agentSettings["codeMode"]["allowedMcpTools"].get<std::vector<std::string>>();
-                if (!mcpTools.empty()) {
-                    code += "    // MCP: Ferramentas externas conectadas\n";
-                    code += "    auto& mcpRegistry = taskforge::mcp::McpRegistry::getInstance();\n";
-                    code += "    (void)mcpRegistry;\n";
-                }
+            if (memEnabled && memReadBb) {
+                code += "    auto bbSnap = blackboard.exportSnapshot(projectId, itemId);\n";
+                code += "    if (!bbSnap.empty()) { std::cout << \"[MEMORIA:BLACKBOARD] Snapshot carregado para \" << itemId << \"\\n\"; }\n";
             }
 
-            // Lambda customizada ou despacho específico (Pi CLI / Static Publish / MicroVM)
             if (!node.customLambdaBody.empty()) {
                 code += indent(node.customLambdaBody, 4) + "\n";
             } else if (node.type == core::TaskflowNodeType::Agent) {
-                std::string skillPath = "";
-                std::string modelName = "deepseek-v4-pro";
-                std::string provider = "deepseek";
-                std::string promptTpl = "";
-                if (node.agentSettings.is_object() && node.agentSettings.contains("model") && node.agentSettings["model"].is_object()) {
-                    skillPath = node.agentSettings["model"].value("skillPath", "");
-                    modelName = node.agentSettings["model"].value("model", "deepseek-v4-pro");
-                    provider = node.agentSettings["model"].value("provider", "deepseek");
-                    promptTpl = node.agentSettings["model"].value("promptTemplate", "");
-                }
-                if (!skillPath.empty() || !promptTpl.empty()) {
-                    code += "    // Invocacao do Pi CLI com Skill e Prompt parametrizados pelo lote\n";
-                    code += "    std::string piCmd = \"pi --no-session --approve --mode text --provider " + provider + " --model " + modelName;
-                    if (!skillPath.empty()) {
-                        code += " --skill " + skillPath;
-                    }
-                    code += " --print \\\"" + promptTpl + "\\\"\";\n";
-                    code += "    std::cout << \"[PI:CLI] \" << piCmd << \"\\n\";\n";
-                } else {
-                    code += "    // Execucao no Sandbox isolado (Code Mode)...\\n";
-                }
-            } else if (node.type == core::TaskflowNodeType::Static && 
-                       node.parameters.find("action") != node.parameters.end() && 
-                       node.parameters.at("action").is_string() && 
+                json spec = buildAgentSpec(graph, node);
+                code += "    taskforge::rt::runAgent(" + cppString(node.id) + ", " + cppString(label) + ",\n      arx_subst(" +
+                        rawLiteral(spec.dump()) + ", itemId), " + cppString(node.id) + " + \"#\" + itemId);\n";
+            } else if (node.type == core::TaskflowNodeType::Static &&
+                       node.parameters.find("action") != node.parameters.end() &&
+                       node.parameters.at("action").is_string() &&
                        node.parameters.at("action").get<std::string>() == "publish_jekyll_post") {
                 std::string destDir = "../matematica/_posts/matematica";
                 auto itDest = node.parameters.find("destinationDir");
-                if (itDest != node.parameters.end() && itDest->second.is_string()) {
-                    destDir = itDest->second.get<std::string>();
-                }
-                code += "    // Publicacao do post no blog Jekyll destino\n";
-                code += "    std::cout << \"[PUBLICAR] Artigo \" << itemId << \" enviado para " + destDir + "\\n\";\n";
+                if (itDest != node.parameters.end() && itDest->second.is_string()) destDir = itDest->second.get<std::string>();
                 code += "    std::error_code ec;\n";
-                code += "    std::filesystem::create_directories(\"" + destDir + "\", ec);\n";
+                code += "    std::filesystem::create_directories(" + cppString(destDir) + ", ec);\n";
                 code += "    std::string srcFile = \"aulas/\" + itemId + \".md\";\n";
-                code += "    std::string dstFile = \"" + destDir + "/\" + itemId + \".md\";\n";
+                code += "    std::string dstFile = " + cppString(destDir + "/") + " + itemId + \".md\";\n";
                 code += "    if (std::filesystem::exists(srcFile)) {\n";
                 code += "      std::filesystem::copy_file(srcFile, dstFile, std::filesystem::copy_options::overwrite_existing, ec);\n";
                 code += "    }\n";
-            } else {
-                code += "    // Execucao estatica padrao\\n";
+                code += "    std::cout << \"[PUBLICAR] Artigo \" << itemId << \" enviado para \" << " + cppString(destDir) + " << \"\\n\";\n";
             }
 
             if (memEnabled && memWriteBb) {
-                code += "    blackboard.set(projectId, itemId, \"last_stage\", \"" + node.id + "\");\n";
+                code += "    blackboard.set(projectId, itemId, \"last_stage\", " + cppString(node.id) + ");\n";
             }
-
-            code += "    resumeEngine.markStageSuccess(itemId, \"" + node.id + "\", rule.targetPathPattern);\n";
-            code += "    taskforge::sandbox::AgentTelemetryEmitter::emitStatus(\"" + node.id + "\", \"settled\", \"Concluido com sucesso\");\n";
-            code += "  }).name(\"" + taskName + "\");\n\n";
+            code += "    resumeEngine.markStageSuccess(itemId, " + cppString(node.id) + ", rule.targetPathPattern);\n";
+            code += "  }).name(" + cppString(itemId + " :: " + label) + ");\n\n";
         }
 
-        // Dependências internas do item
-        code += "  // Dependencias internas do Item: " + itemId + "\n";
-        for (const auto& pair : nodes) {
-            const auto& node = pair.second;
-            std::string sFrom = "task_" + sItemId + "_" + sanitizeIdentifier(node.id);
-
-            for (const auto& epair : edges) {
-                if (epair.second.sourceNodeId == node.id && !epair.second.isFeedbackLoop) {
-                    std::string sTo = "task_" + sItemId + "_" + sanitizeIdentifier(epair.second.targetNodeId);
-                    code += "  " + sFrom + ".precede(" + sTo + ");\n";
-                }
-            }
+        code += "  // Dependencias internas do Item: " + commentSafe(itemId) + "\n";
+        for (const auto* e : edges) {
+            if (loopEdges.count(e->id)) continue;
+            code += "  " + itemVar(itemIdx, e->sourceNodeId) + ".precede(" + itemVar(itemIdx, e->targetNodeId) + ");\n";
         }
         code += "\n";
     }
 
-    // Encadeamento serial de etapas pesadas (serializedStages) entre itens adjacentes
     if (!serializedStages.empty() && batchItems.size() > 1) {
-        code += "  // --- Encadeamento Serial Entre Itens (Limite de Concorrencia de Etapas Pesadas) ---\n";
+        code += "  // --- Encadeamento serial entre itens (etapas pesadas) ---\n";
         for (const auto& stageId : serializedStages) {
-            std::string sStage = sanitizeIdentifier(stageId);
-            for (size_t i = 0; i < batchItems.size() - 1; ++i) {
-                std::string sItemCurr = sanitizeIdentifier(batchItems[i]);
-                std::string sItemNext = sanitizeIdentifier(batchItems[i + 1]);
-                code += "  task_" + sItemCurr + "_" + sStage + ".precede(task_" + sItemNext + "_" + sStage + ");\n";
+            if (!nodes.count(stageId)) continue;
+            for (size_t i = 0; i + 1 < batchItems.size(); ++i) {
+                code += "  " + itemVar(i, stageId) + ".precede(" + itemVar(i + 1, stageId) + ");\n";
             }
         }
         code += "\n";
     }
 
     code += "  auto start = std::chrono::high_resolution_clock::now();\n";
-    code += "  executor.run(tf).wait();\n";
+    code += "  executor.run(taskflow).get();\n";
     code += "  auto end = std::chrono::high_resolution_clock::now();\n";
     code += "  auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();\n";
-    code += "  std::cout << \">>> Lote de \" << " + std::to_string(batchItems.size()) + " << \" artigos finalizado com sucesso em \" << elapsed_ms << \" ms.\\n\";\n\n";
-    code += "  // --- Persistencia & Gestao de Memoria Heterogenea ao Final da Sessao ---\n";
+    code += "  std::cout << \">>> Lote de " + std::to_string(batchItems.size()) + " itens finalizado em \" << elapsed_ms << \" ms.\\n\";\n\n";
     code += "  blackboard.saveToDisk(projectId);\n";
     code += "  semanticMemory.saveToDisk(projectId);\n";
     code += "  blackboard.clearSession(projectId);\n";
-    code += "  semanticMemory.clearSession(projectId);\n\n";
+    code += "  semanticMemory.clearSession(projectId);\n";
+    code += "  } catch (const std::exception& ex) {\n";
+    code += "    std::cerr << \">>> [ERRO] Lote interrompido: \" << ex.what() << std::endl;\n";
+    code += "    return 1;\n";
+    code += "  }\n";
     code += "  return 0;\n";
     code += "}\n";
-
     return code;
 }
 
+// ---------------------------------------------------------------------------
+// Exportacao (CMake / Makefile / scripts MSVC)
+// ---------------------------------------------------------------------------
 std::string TaskflowGenerator::generateCMakeLists(const core::Graph& graph) {
-    auto meta = graph.getMetadata();
+    const auto& meta = graph.getMetadata();
     std::string binName = meta.compilerConfig.outputBinaryName.empty() ? "pipeline_app" : meta.compilerConfig.outputBinaryName;
-    std::string incPath = meta.compilerConfig.taskflowIncludePath.empty() ? "include" : meta.compilerConfig.taskflowIncludePath;
+    std::string proj = sanitizeIdentifier(meta.graphName.empty() ? "pipeline" : meta.graphName);
 
     return "cmake_minimum_required(VERSION 3.20)\n"
-           "project(" + meta.graphName + " CXX)\n\n"
+           "project(" + proj + " CXX)\n\n"
            "set(CMAKE_CXX_STANDARD 20)\n"
            "set(CMAKE_CXX_STANDARD_REQUIRED ON)\n"
            "set(CMAKE_CXX_EXTENSIONS OFF)\n\n"
-           "if(MSVC)\n"
-           "  add_compile_options(/std:c++20 /EHsc /W4 /O2 /permissive-)\n"
-           "else()\n"
-           "  add_compile_options(-std=c++20 -Wall -Wextra -O3 -pthread)\n"
+           "# Raiz de uma instalacao do Arestrix (contem third_party/, CppCore/src e runtime/lib).\n"
+           "set(ARESTRIX_HOME \"$ENV{ARESTRIX_HOME}\" CACHE PATH \"Raiz do Arestrix\")\n"
+           "if(NOT ARESTRIX_HOME)\n"
+           "  message(FATAL_ERROR \"Defina ARESTRIX_HOME (cmake -DARESTRIX_HOME=...)\")\n"
            "endif()\n\n"
-           "include_directories(" + incPath + ")\n"
+           "if(MSVC)\n"
+           "  add_compile_options(/EHsc /W4 /O2 /permissive- /utf-8)\n"
+           "else()\n"
+           "  add_compile_options(-Wall -Wextra -O3 -pthread)\n"
+           "endif()\n\n"
+           "find_library(ARESTRIX_CORE arestrix_core PATHS \"${ARESTRIX_HOME}/runtime/lib\" NO_DEFAULT_PATH REQUIRED)\n"
            "add_executable(" + binName + " main.cpp)\n"
+           "target_include_directories(" + binName + " PRIVATE\n"
+           "  \"${ARESTRIX_HOME}/third_party/taskflow\"\n"
+           "  \"${ARESTRIX_HOME}/CppCore/src\"\n"
+           "  \"${ARESTRIX_HOME}/third_party/simdjson/singleheader\")\n"
            "find_package(Threads REQUIRED)\n"
-           "target_link_libraries(" + binName + " PRIVATE Threads::Threads)\n";
+           "target_link_libraries(" + binName + " PRIVATE ${ARESTRIX_CORE} Threads::Threads)\n"
+           "if(WIN32)\n"
+           "  target_link_libraries(" + binName + " PRIVATE winhttp advapi32 ole32 shell32 user32)\n"
+           "endif()\n";
 }
 
 std::string TaskflowGenerator::generateMakefile(const core::Graph& graph) {
-    auto meta = graph.getMetadata();
+    const auto& meta = graph.getMetadata();
     std::string binName = meta.compilerConfig.outputBinaryName.empty() ? "pipeline_app" : meta.compilerConfig.outputBinaryName;
-    std::string incPath = meta.compilerConfig.taskflowIncludePath.empty() ? "include" : meta.compilerConfig.taskflowIncludePath;
 
-    return "# Makefile para " + meta.graphName + " (C++20)\n"
+    return "# Makefile para " + commentSafe(meta.graphName) + " (C++20)\n"
+           "# Use: make ARESTRIX_HOME=/caminho/do/arestrix\n"
+           "ARESTRIX_HOME ?= $(shell echo $$ARESTRIX_HOME)\n"
            "CXX = g++\n"
-           "CXXFLAGS = -std=c++20 -O3 -Wall -pthread -I" + incPath + "\n"
+           "CXXFLAGS = -std=c++20 -O3 -Wall -pthread \\\n"
+           "  -I$(ARESTRIX_HOME)/third_party/taskflow -I$(ARESTRIX_HOME)/CppCore/src \\\n"
+           "  -I$(ARESTRIX_HOME)/third_party/simdjson/singleheader\n"
            "TARGET = " + binName + "\n\n"
            "all: $(TARGET)\n\n"
            "$(TARGET): main.cpp\n"
-           "\t$(CXX) $(CXXFLAGS) main.cpp -o $(TARGET)\n\n"
+           "\t$(CXX) $(CXXFLAGS) main.cpp $(ARESTRIX_HOME)/runtime/lib/libarestrix_core.a -o $(TARGET)\n\n"
            "clean:\n"
            "\trm -f $(TARGET) $(TARGET).exe\n";
 }
 
 TaskflowGenerator::MsvcScripts TaskflowGenerator::generateMsvcBuildScript(const core::Graph& graph) {
-    auto meta = graph.getMetadata();
+    const auto& meta = graph.getMetadata();
     std::string binName = meta.compilerConfig.outputBinaryName.empty() ? "pipeline_app" : meta.compilerConfig.outputBinaryName;
-    std::string incPath = meta.compilerConfig.taskflowIncludePath.empty() ? "include" : meta.compilerConfig.taskflowIncludePath;
-    
-    std::string extraFlags = "";
-    for (const auto& flag : meta.compilerConfig.extraFlags) {
-        extraFlags += flag + " ";
-    }
+
+    const std::string flags =
+        "/nologo /std:c++20 /EHsc /O2 /MD /utf-8 /permissive- /Zc:__cplusplus "
+        "/I\"%ARESTRIX_HOME%\\third_party\\taskflow\" /I\"%ARESTRIX_HOME%\\CppCore\\src\" "
+        "/I\"%ARESTRIX_HOME%\\third_party\\simdjson\\singleheader\" "
+        "main.cpp /Fe:\"" + binName + ".exe\" "
+        "/link \"%ARESTRIX_HOME%\\runtime\\lib\\arestrix_core.lib\" winhttp.lib advapi32.lib ole32.lib shell32.lib user32.lib";
 
     MsvcScripts scripts;
-    scripts.ps1 = "# Build Script PowerShell para MSVC (cl.exe)\n"
-                  "Write-Host \">>> Compilando " + meta.graphName + " com MSVC (C++20)...\" -ForegroundColor Cyan\n"
-                  "cl.exe /std:c++20 /EHsc /O2 /W4 /I\"" + incPath + "\" " + extraFlags + " main.cpp /Fe:\"" + binName + ".exe\"\n"
-                  "if ($LASTEXITCODE -eq 0) {\n"
-                  "    Write-Host \">>> Compilacao com sucesso\" -ForegroundColor Green\n"
-                  "} else {\n"
-                  "    Write-Host \">>> Erro na compilacao\" -ForegroundColor Red\n"
-                  "}\n";
-
-    scripts.bat = "@echo off\n"
-                  "echo >>> Compilando " + meta.graphName + " com MSVC (C++20)...\n"
-                  "cl.exe /std:c++20 /EHsc /O2 /W4 /I\"" + incPath + "\" " + extraFlags + " main.cpp /Fe:\"" + binName + ".exe\"\n"
-                  "if %errorlevel% equ 0 (\n"
-                  "    echo >>> Compilacao com sucesso!\n"
-                  ") else (\n"
-                  "    echo >>> Erro na compilacao!\n"
-                  ")\n";
+    scripts.bat = "@echo off\r\n"
+                  "if \"%ARESTRIX_HOME%\"==\"\" (echo Defina ARESTRIX_HOME & exit /b 1)\r\n"
+                  "echo >>> Compilando " + commentSafe(meta.graphName) + " com MSVC (C++20)...\r\n"
+                  "cl.exe " + flags + "\r\n"
+                  "if %errorlevel% equ 0 (echo >>> Compilacao concluida) else (echo >>> Erro na compilacao & exit /b 1)\r\n";
+    scripts.ps1 = "# Execute em um 'Developer PowerShell for VS' (cl.exe no PATH).\n"
+                  "if (-not $env:ARESTRIX_HOME) { Write-Error 'Defina ARESTRIX_HOME'; exit 1 }\n"
+                  "Write-Host '>>> Compilando " + commentSafe(meta.graphName) + " com MSVC (C++20)...' -ForegroundColor Cyan\n"
+                  "cmd /c \"build.bat\"\n"
+                  "exit $LASTEXITCODE\n";
     return scripts;
 }
 

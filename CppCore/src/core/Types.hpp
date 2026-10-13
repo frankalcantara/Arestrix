@@ -4,9 +4,9 @@
 #include <vector>
 #include <map>
 #include <variant>
-#include <nlohmann/json.hpp>
+#include "util/JsonValue.hpp"
 
-using json = nlohmann::json;
+using json = taskforge::Json;
 
 namespace taskforge {
 namespace core {
@@ -92,12 +92,12 @@ struct GraphMetadata {
 } // namespace core
 } // namespace taskforge
 
-// MACROS de serialização automática nlohmann
+// Serialização de enums (ARX_JSON_ENUM, util/JsonValue.hpp)
 namespace taskforge {
 namespace core {
 
 // Serialização de Enums
-NLOHMANN_JSON_SERIALIZE_ENUM(TaskflowNodeType, {
+ARX_JSON_ENUM(TaskflowNodeType, {
     {TaskflowNodeType::Static, "static"},
     {TaskflowNodeType::Condition, "condition"},
     {TaskflowNodeType::Subflow, "subflow"},
@@ -109,12 +109,12 @@ NLOHMANN_JSON_SERIALIZE_ENUM(TaskflowNodeType, {
     {TaskflowNodeType::Join, "join"}
 })
 
-NLOHMANN_JSON_SERIALIZE_ENUM(PortDirection, {
+ARX_JSON_ENUM(PortDirection, {
     {PortDirection::Input, "input"},
     {PortDirection::Output, "output"}
 })
 
-NLOHMANN_JSON_SERIALIZE_ENUM(PortType, {
+ARX_JSON_ENUM(PortType, {
     {PortType::Flow, "flow"},
     {PortType::Data, "data"}
 })
@@ -193,7 +193,29 @@ inline void from_json(const json& j, EdgeData& e) {
     e.isFeedbackLoop = j.value("isFeedbackLoop", false);
 }
 
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(CompilerConfig, compiler, cppStandard, buildSystem, taskflowIncludePath, outputBinaryName, enableOpenMP, enableCuda, extraFlags)
+inline void to_json(json& j, const CompilerConfig& c) {
+    j = json{
+        {"compiler", c.compiler},
+        {"cppStandard", c.cppStandard},
+        {"buildSystem", c.buildSystem},
+        {"taskflowIncludePath", c.taskflowIncludePath},
+        {"outputBinaryName", c.outputBinaryName},
+        {"enableOpenMP", c.enableOpenMP},
+        {"enableCuda", c.enableCuda},
+        {"extraFlags", c.extraFlags}
+    };
+}
+// Campos ausentes assumem o padrao (o frontend antigo nem sempre os enviava).
+inline void from_json(const json& j, CompilerConfig& c) {
+    c.compiler = j.value("compiler", "msvc");
+    c.cppStandard = j.value("cppStandard", "C++20");
+    c.buildSystem = j.value("buildSystem", "cmake");
+    c.taskflowIncludePath = j.value("taskflowIncludePath", "third_party/taskflow");
+    c.outputBinaryName = j.value("outputBinaryName", "pipeline_app");
+    c.enableOpenMP = j.value("enableOpenMP", false);
+    c.enableCuda = j.value("enableCuda", false);
+    c.extraFlags = j.value("extraFlags", std::vector<std::string>{});
+}
 
 inline void to_json(json& j, const GraphMetadata& m) {
     j = json{

@@ -18,29 +18,31 @@ SandboxManager& SandboxManager::instance() {
 ISandboxDriver* SandboxManager::getDriver(IsolationType type) {
     switch (type) {
         case IsolationType::Container:
-            if (dockerDriver->isAvailable()) {
-                return dockerDriver.get();
-            }
-            std::cout << "[SandboxManager] Aviso: Docker solicitado mas não detectado. Usando HostProcessDriver com isolamento de diretório.\n";
-            return hostDriver.get();
-
+            return dockerDriver->isAvailable() ? static_cast<ISandboxDriver*>(dockerDriver.get()) : nullptr;
         case IsolationType::MicroVM:
-            if (microvmDriver->isAvailable()) {
-                return microvmDriver.get();
-            }
-            std::cout << "[SandboxManager] Aviso: MicroVM solicitada mas não disponível. Usando HostProcessDriver.\n";
-            return hostDriver.get();
-
+            return microvmDriver->isAvailable() ? static_cast<ISandboxDriver*>(microvmDriver.get()) : nullptr;
         case IsolationType::HostDirect:
         default:
             return hostDriver.get();
     }
 }
 
+bool SandboxManager::isAvailable(IsolationType type) {
+    return getDriver(type) != nullptr;
+}
+
 ExecutionResult SandboxManager::execute(const ExecutionParams& params) {
     ISandboxDriver* driver = getDriver(params.policy.isolation);
-    std::cout << "[SandboxManager] Disparando agente '" << params.agentId 
-              << "' via driver: " << driver->getName() << "\n";
+    if (!driver) {
+        if (!params.policy.allowFallbackToHost) {
+            ExecutionResult res;
+            res.exitCode = -1;
+            res.errorMessage = "O isolamento solicitado nao esta disponivel e o fallback para o host nao foi autorizado.";
+            return res;
+        }
+        std::cerr << "[SandboxManager] Aviso: isolamento indisponivel; executando no host (autorizado).\n";
+        driver = hostDriver.get();
+    }
     return driver->execute(params);
 }
 

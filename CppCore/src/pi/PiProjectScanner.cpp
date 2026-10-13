@@ -1,4 +1,5 @@
 #include "PiProjectScanner.hpp"
+#include "util/Json.hpp"
 #include <fstream>
 #include <sstream>
 #include <iostream>
@@ -26,7 +27,7 @@ PiProjectScanResult PiProjectScanner::scan(const std::string& directoryPath) {
     if (std::filesystem::exists(settingsPath)) {
         try {
             std::ifstream f(settingsPath);
-            nlohmann::json j = nlohmann::json::parse(f);
+            taskforge::Json j = taskforge::jsonutil::parseStream(f);
             if (j.contains("defaultProvider")) res.defaultProvider = j["defaultProvider"].get<std::string>();
             if (j.contains("defaultModel")) res.defaultModel = j["defaultModel"].get<std::string>();
         } catch (...) {
@@ -82,7 +83,7 @@ PiProjectScanResult PiProjectScanner::scan(const std::string& directoryPath) {
     if (std::filesystem::exists(statePath)) {
         try {
             std::ifstream f(statePath);
-            nlohmann::json jState = nlohmann::json::parse(f);
+            taskforge::Json jState = taskforge::jsonutil::parseStream(f);
             for (auto it = jState.begin(); it != jState.end(); ++it) {
                 if (it.value().is_object() && it.value().value("status", "") == "concluido") {
                     res.completedArticlesCount++;
@@ -179,8 +180,8 @@ std::vector<std::string> PiProjectScanner::getKnownPiProjects() {
     return valid;
 }
 
-nlohmann::json PiProjectScanner::toJson(const PiProjectScanResult& res) {
-    nlohmann::json j;
+taskforge::Json PiProjectScanner::toJson(const PiProjectScanResult& res) {
+    taskforge::Json j;
     j["isValid"] = res.isValid;
     j["rootPath"] = res.rootPath;
     j["projectName"] = res.projectName;
@@ -192,7 +193,7 @@ nlohmann::json PiProjectScanner::toJson(const PiProjectScanResult& res) {
     j["totalArticlesCount"] = res.articles.size();
     j["stateFilePath"] = res.stateFilePath;
 
-    j["skills"] = nlohmann::json::array();
+    j["skills"] = taskforge::Json::array();
     for (const auto& s : res.skills) {
         j["skills"].push_back({
             {"id", s.id},
@@ -202,7 +203,7 @@ nlohmann::json PiProjectScanner::toJson(const PiProjectScanResult& res) {
         });
     }
 
-    j["stages"] = nlohmann::json::array();
+    j["stages"] = taskforge::Json::array();
     for (const auto& st : res.stages) {
         j["stages"].push_back({
             {"id", st.id},
@@ -217,8 +218,8 @@ nlohmann::json PiProjectScanner::toJson(const PiProjectScanResult& res) {
 
     j["articles"] = res.articles;
     j["workItems"] = res.articles;
-    j["defaultTools"] = nlohmann::json::array();
-    j["mcpTools"] = nlohmann::json::array();
+    j["defaultTools"] = taskforge::Json::array();
+    j["mcpTools"] = taskforge::Json::array();
     return j;
 }
 

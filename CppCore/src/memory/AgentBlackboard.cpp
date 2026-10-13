@@ -1,3 +1,6 @@
+#include "util/Json.hpp"
+#include <mutex>
+#include <shared_mutex>
 #include "AgentBlackboard.hpp"
 #include <iostream>
 
@@ -39,12 +42,12 @@ std::string AgentBlackboard::getDefaultStoragePath(const std::string& projectId)
     return "arestrix-blackboard-" + safeName + ".json";
 }
 
-void AgentBlackboard::set(const std::string& projectId, const std::string& itemId, const std::string& key, const nlohmann::json& value) {
+void AgentBlackboard::set(const std::string& projectId, const std::string& itemId, const std::string& key, const taskforge::Json& value) {
     std::unique_lock<std::shared_mutex> lock(mutex_);
     storage_[projectId][itemId][key] = value;
 }
 
-nlohmann::json AgentBlackboard::get(const std::string& projectId, const std::string& itemId, const std::string& key) const {
+taskforge::Json AgentBlackboard::get(const std::string& projectId, const std::string& itemId, const std::string& key) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     auto itProj = storage_.find(projectId);
     if (itProj != storage_.end()) {
@@ -71,13 +74,13 @@ bool AgentBlackboard::has(const std::string& projectId, const std::string& itemI
     return false;
 }
 
-nlohmann::json AgentBlackboard::exportSnapshot(
+taskforge::Json AgentBlackboard::exportSnapshot(
     const std::string& projectId,
     const std::string& itemId,
     const std::vector<std::string>& allowedKeys
 ) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
-    nlohmann::json snapshot = nlohmann::json::object();
+    taskforge::Json snapshot = taskforge::Json::object();
 
     auto itProj = storage_.find(projectId);
     if (itProj == storage_.end()) {
@@ -114,7 +117,7 @@ bool AgentBlackboard::writeSnapshotToFile(
     const std::string& targetPath
 ) const {
     try {
-        nlohmann::json snap = exportSnapshot(projectId, itemId, allowedKeys);
+        taskforge::Json snap = exportSnapshot(projectId, itemId, allowedKeys);
         std::filesystem::path path(targetPath);
         if (path.has_parent_path()) {
             std::filesystem::create_directories(path.parent_path());
@@ -133,7 +136,7 @@ bool AgentBlackboard::writeSnapshotToFile(
     }
 }
 
-void AgentBlackboard::ingestDelta(const std::string& projectId, const std::string& itemId, const nlohmann::json& deltaJson) {
+void AgentBlackboard::ingestDelta(const std::string& projectId, const std::string& itemId, const taskforge::Json& deltaJson) {
     if (!deltaJson.is_object()) {
         return;
     }
@@ -193,9 +196,9 @@ bool AgentBlackboard::saveToDisk(const std::string& projectId, const std::string
             return false;
         }
 
-        nlohmann::json root = nlohmann::json::object();
+        taskforge::Json root = taskforge::Json::object();
         for (const auto& itemPair : itProj->second) {
-            nlohmann::json itemObj = nlohmann::json::object();
+            taskforge::Json itemObj = taskforge::Json::object();
             for (const auto& kvPair : itemPair.second) {
                 itemObj[kvPair.first] = kvPair.second;
             }
@@ -234,8 +237,7 @@ bool AgentBlackboard::loadFromDisk(const std::string& projectId, const std::stri
             return false;
         }
 
-        nlohmann::json root;
-        in >> root;
+        taskforge::Json root = taskforge::jsonutil::parseStream(in);
         in.close();
 
         if (!root.is_object()) {
@@ -257,15 +259,15 @@ bool AgentBlackboard::loadFromDisk(const std::string& projectId, const std::stri
     }
 }
 
-nlohmann::json AgentBlackboard::toJson(const std::string& projectId) const {
+taskforge::Json AgentBlackboard::toJson(const std::string& projectId) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
-    nlohmann::json result = nlohmann::json::object();
+    taskforge::Json result = taskforge::Json::object();
 
     if (!projectId.empty()) {
         auto itProj = storage_.find(projectId);
         if (itProj != storage_.end()) {
             for (const auto& itemPair : itProj->second) {
-                nlohmann::json itemObj = nlohmann::json::object();
+                taskforge::Json itemObj = taskforge::Json::object();
                 for (const auto& kvPair : itemPair.second) {
                     itemObj[kvPair.first] = kvPair.second;
                 }
@@ -277,9 +279,9 @@ nlohmann::json AgentBlackboard::toJson(const std::string& projectId) const {
 
     // Todos os projetos
     for (const auto& projPair : storage_) {
-        nlohmann::json projObj = nlohmann::json::object();
+        taskforge::Json projObj = taskforge::Json::object();
         for (const auto& itemPair : projPair.second) {
-            nlohmann::json itemObj = nlohmann::json::object();
+            taskforge::Json itemObj = taskforge::Json::object();
             for (const auto& kvPair : itemPair.second) {
                 itemObj[kvPair.first] = kvPair.second;
             }

@@ -1,4 +1,5 @@
 #include "SemanticMemoryEngine.hpp"
+#include "util/Json.hpp"
 #include <iostream>
 #include <sstream>
 #include <chrono>
@@ -83,11 +84,11 @@ std::string SemanticMemoryEngine::recordLesson(
             std::string tmpPath = path + ".tmp";
             std::ofstream out(tmpPath);
             if (out.is_open()) {
-                nlohmann::json root = nlohmann::json::object();
-                nlohmann::json arr = nlohmann::json::array();
+                taskforge::Json root = taskforge::Json::object();
+                taskforge::Json arr = taskforge::Json::array();
                 for (const auto& l : lessons_) {
                     if (l.projectId == proj) {
-                        nlohmann::json item;
+                        taskforge::Json item;
                         item["id"] = l.id;
                         item["projectId"] = l.projectId;
                         item["domain"] = l.domain;
@@ -215,11 +216,11 @@ bool SemanticMemoryEngine::saveToDisk(const std::string& projectId) {
             return false;
         }
 
-        nlohmann::json root = nlohmann::json::object();
-        nlohmann::json arr = nlohmann::json::array();
+        taskforge::Json root = taskforge::Json::object();
+        taskforge::Json arr = taskforge::Json::array();
         for (const auto& l : lessons_) {
             if (l.projectId == proj) {
-                nlohmann::json item;
+                taskforge::Json item;
                 item["id"] = l.id;
                 item["projectId"] = l.projectId;
                 item["domain"] = l.domain;
@@ -263,8 +264,7 @@ bool SemanticMemoryEngine::loadFromDisk(const std::string& projectId) {
             return false;
         }
 
-        nlohmann::json j;
-        in >> j;
+        taskforge::Json j = taskforge::jsonutil::parseStream(in);
         in.close();
 
         fromJson(j, proj);
@@ -274,14 +274,14 @@ bool SemanticMemoryEngine::loadFromDisk(const std::string& projectId) {
     }
 }
 
-nlohmann::json SemanticMemoryEngine::toJson(const std::string& projectId) const {
+taskforge::Json SemanticMemoryEngine::toJson(const std::string& projectId) const {
     std::lock_guard<std::mutex> lock(mutex_);
-    nlohmann::json root = nlohmann::json::object();
-    nlohmann::json arr = nlohmann::json::array();
+    taskforge::Json root = taskforge::Json::object();
+    taskforge::Json arr = taskforge::Json::array();
 
     for (const auto& l : lessons_) {
         if (projectId.empty() || l.projectId == projectId) {
-            nlohmann::json item;
+            taskforge::Json item;
             item["id"] = l.id;
             item["projectId"] = l.projectId;
             item["domain"] = l.domain;
@@ -297,7 +297,7 @@ nlohmann::json SemanticMemoryEngine::toJson(const std::string& projectId) const 
     return root;
 }
 
-void SemanticMemoryEngine::fromJson(const nlohmann::json& j, const std::string& projectId) {
+void SemanticMemoryEngine::fromJson(const taskforge::Json& j, const std::string& projectId) {
     std::lock_guard<std::mutex> lock(mutex_);
     std::string proj = projectId.empty() ? "default" : projectId;
 

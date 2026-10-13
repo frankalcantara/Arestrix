@@ -19,6 +19,7 @@ import { GitHubReposModal } from './ui/modals/GitHubReposModal.ts';
 import { ProjectManager } from './core/ProjectManager.ts';
 import { StatusBar } from './ui/StatusBar.ts';
 import { CanvasControls } from './ui/CanvasControls.ts';
+import { PipelineRunner } from './core/PipelineRunner.ts';
 
 function bootstrap() {
   const appContainer = document.querySelector<HTMLDivElement>('#app');
@@ -36,7 +37,7 @@ function bootstrap() {
       compiler: 'msvc',
       cppStandard: 'C++20',
       buildSystem: 'cmake',
-      taskflowIncludePath: 'include',
+      taskflowIncludePath: 'third_party/taskflow',
       outputBinaryName: 'agent_pipeline',
       enableOpenMP: false,
       enableCuda: false,
@@ -160,6 +161,10 @@ function bootstrap() {
   window.onArestrixTelemetry = onTelemetryHandler;
   // @ts-ignore
   window.onTaskForgeTelemetry = onTelemetryHandler;
+
+  // 10. Ponte de eventos de compilação/execução do pipeline (backend C++ -> Console/StatusBar)
+  // @ts-ignore
+  window.onArestrixPipelineEvent = (ev: any) => PipelineRunner.handleBackendEvent(ev);
 }
 
 // Inicializa no carregamento do DOM

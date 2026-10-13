@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { Text } from 'troika-three-text';
-import font500Url from '../../assets/fonts/inter-latin-500-normal.woff?url';
-import font600Url from '../../assets/fonts/inter-latin-600-normal.woff?url';
-import font700Url from '../../assets/fonts/inter-latin-700-normal.woff?url';
+import font500Url from '../../../third_party/fonts/inter/inter-latin-500-normal.woff?url';
+import font600Url from '../../../third_party/fonts/inter/inter-latin-600-normal.woff?url';
+import font700Url from '../../../third_party/fonts/inter/inter-latin-700-normal.woff?url';
 
 // Compatibilidade com ambientes sem self nativo (ex.: runner Node/Vitest)
 if (typeof self === 'undefined' && typeof globalThis !== 'undefined') {
@@ -16,7 +16,7 @@ if (typeof self === 'undefined' && typeof globalThis !== 'undefined') {
  * renderizado via Signed Distance Fields (troika-three-text):
  * - Nítido em qualquer nível de zoom (sem borrão de magnificação nem mipmap esmaecido)
  * - Sem distorção de proporção (glifos medidos e posicionados em unidades de mundo)
- * - Fonte Inter embarcada localmente (OFL, src/assets/fonts) — sem dependência de CDN
+ * - Fonte Inter embarcada localmente (OFL, third_party/fonts/inter) — sem dependência de CDN
  *
  * REGRA GLOBAL: nenhum outline/blur/stroke é aplicado ao texto (zero sombras/glows).
  * Destaque somente por cor, peso tipográfico ou opacidade.

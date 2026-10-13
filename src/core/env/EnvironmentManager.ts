@@ -98,7 +98,7 @@ export class EnvironmentManager {
       g.__ARESTRIX_RUNTIME_ENV__[keyName] = cleanValue;
     } catch {}
 
-    // 1. Tenta gravar via C++ WebUI (executa setx de usuário no Windows)
+    // 1. Tenta gravar via C++ WebUI (Registro do usuário no Windows / ~/.config/arestrix no Linux, sem shell)
     try {
       if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
         const payload = JSON.stringify({ key: keyName, value: cleanValue });
@@ -109,19 +109,6 @@ export class EnvironmentManager {
       }
     } catch (e) {
       console.warn('[EnvironmentManager] Falha ao gravar variável no SO via WebUI:', e);
-    }
-
-    // 2. Se rodando em Node.js com child_process disponível
-    try {
-      if (typeof process !== 'undefined' && process.platform === 'win32') {
-        // @ts-ignore
-        const { execSync } = await import('child_process');
-        execSync(`setx ${keyName} "${cleanValue}"`, { stdio: 'ignore' });
-        process.env[keyName] = cleanValue;
-        return true;
-      }
-    } catch {
-      // Fallback
     }
 
     return false;

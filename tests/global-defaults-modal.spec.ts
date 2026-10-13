@@ -144,14 +144,25 @@ describe('GlobalDefaultsModal - Abas, Teste de API e Limpeza de Textos Fixos', (
       const testKeyName = 'TEST_LLM_KEY_' + Date.now();
       const testKeyValue = 'sk-test-secret-12345';
 
-      const success = await envManager.setEnvVar(testKeyName, testKeyValue);
-      expect(success).toBe(true);
+      // Backend C++ simulado: a persistencia real (Registro / ~/.config) e responsabilidade do `set_env_var` nativo.
+      const calls: Array<{ fn: string; arg: string }> = [];
+      (globalThis as any).window = {
+        webui: { call: async (fn: string, arg: string) => { calls.push({ fn, arg }); return fn === 'set_env_var'; } }
+      };
+      try {
+        const success = await envManager.setEnvVar(testKeyName, testKeyValue);
+        expect(success).toBe(true);
+        expect(calls[0].fn).toBe('set_env_var');
+        expect(JSON.parse(calls[0].arg)).toEqual({ key: testKeyName, value: testKeyValue });
 
-      const retrieved = await envManager.getEnvVar(testKeyName);
-      expect(retrieved).toBe(testKeyValue);
+        const retrieved = await envManager.getEnvVar(testKeyName);
+        expect(retrieved).toBe(testKeyValue);
 
-      const hasKey = await envManager.hasEnvVar(testKeyName);
-      expect(hasKey).toBe(true);
+        const hasKey = await envManager.hasEnvVar(testKeyName);
+        expect(hasKey).toBe(true);
+      } finally {
+        delete (globalThis as any).window;
+      }
     });
 
     it('deve mapear corretamente os provedores para suas variáveis de ambiente padrão', () => {

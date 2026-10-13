@@ -1,0 +1,324 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "projectId": "svg-agent",
+    "graphName": "SVG_Agent_Pipeline",
+    "description": "Agente Auditor e Criador de SVGs Animados",
+    "targetStandard": "C++20",
+    "compilerConfig": {
+      "compiler": "msvc",
+      "cppStandard": "C++20",
+      "buildSystem": "cmake",
+      "taskflowIncludePath": "third_party/taskflow",
+      "outputBinaryName": "svg_agent",
+      "enableOpenMP": false,
+      "enableCuda": false,
+      "extraFlags": []
+    },
+    "version": "1.0.0",
+    "globalDefaults": {
+      "sandbox": {
+        "isolationLevel": "host_direct",
+        "network": "egress_llm_only",
+        "maxMemoryMB": 512,
+        "timeoutSeconds": 120,
+        "readOnlyMounts": [],
+        "readWriteMounts": []
+      },
+      "model": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "skillPath": "",
+        "promptTemplate": ""
+      },
+      "codeMode": {
+        "allowedTools": [
+          "write",
+          "read",
+          "validate_svg"
+        ],
+        "customScripts": []
+      }
+    }
+  },
+  "nodes": [
+    {
+      "id": "gerador",
+      "label": "Agente_Gerador_DeepSeek",
+      "type": "agent",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "inputs": [
+        {
+          "id": "gerador_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "gerador_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "skillPath": "skills/gerador.md"
+        },
+        "inheritCodeMode": true,
+        "inheritMemory": true
+      }
+    },
+    {
+      "id": "linter",
+      "label": "Linter_Tipografia_Estatico",
+      "type": "static",
+      "position": {
+        "x": 300,
+        "y": -100
+      },
+      "inputs": [
+        {
+          "id": "linter_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "linter_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "// Thread A: Linter Tipográfico e de Estrutura DOM (C++20)\nstd::cout << \"[Thread A] Iniciando auditoria tipográfica no SVG...\\n\";\n\nstd::ifstream file(\"workspace/scene.svg\");\nif (!file.is_open()) {\n    std::cerr << \"[Thread A - ERRO] Arquivo workspace/scene.svg não encontrado!\\n\";\n    return;\n}\n\nstd::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());\nfile.close();\n\nbool violation = false;\n// Verificação de conformidade de regras de projeto\nif (content.find(\"feGaussianBlur\") != std::string::npos ||\n    content.find(\"feDropShadow\") != std::string::npos ||\n    content.find(\"text-shadow\") != std::string::npos) {\n    std::cout << \"[Thread A - VIOLAÇÃO] Detectado filtro de sombra ou blur! Proibido em elementos de texto.\\n\";\n    violation = true;\n}\n\n// Grava relatório da Thread A no quadro compartilhado (blackboard)\nstd::ofstream report(\"workspace/report_thread_a.txt\");\nreport << (violation ? \"FAIL: VIOLACAO_TIPOGRAFIA_DETECTADA\" : \"PASS: TIPOGRAFIA_LIMPA\");\nreport.close();\n\nstd::cout << \"[Thread A] Auditoria concluída.\\n\";"
+    },
+    {
+      "id": "smil",
+      "label": "Auditor_Timeline_SMIL",
+      "type": "static",
+      "position": {
+        "x": 300,
+        "y": 100
+      },
+      "inputs": [
+        {
+          "id": "smil_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "smil_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "// Thread B: Auditor Temporal e Animações SMIL (C++20)\nstd::cout << \"[Thread B] Iniciando auditoria de timelines e encadeamentos SMIL...\\n\";\n\nstd::ifstream file(\"workspace/scene.svg\");\nstd::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());\nfile.close();\n\nbool timing_ok = true;\n\n// Checagem de congelamento de estado final\nif (content.find(\"<animate\") != std::string::npos && content.find(\"fill=\\\"freeze\\\"\") == std::string::npos) {\n    std::cout << \"[Thread B - ALERTA] Animação detectada sem retenção de estado (fill=\\\"freeze\\\").\\n\";\n    timing_ok = false;\n}\n\n// Checagem de escala sem pivô central\nif (content.find(\"type=\\\"scale\\\"\") != std::string::npos && content.find(\"transform-origin\") == std::string::npos) {\n    std::cout << \"[Thread B - ALERTA] animateTransform scale sem pivô explícito detectado.\\n\";\n    timing_ok = false;\n}\n\nstd::ofstream report(\"workspace/report_thread_b.txt\");\nreport << (timing_ok ? \"PASS: TIMELINE_SMIL_CONSISTENTE\" : \"WARN: TIMELINE_INSTAVEL\");\nreport.close();\n\nstd::cout << \"[Thread B] Análise de timeline concluída.\\n\";"
+    },
+    {
+      "id": "join",
+      "label": "Consolidador_Diagnostico",
+      "type": "static",
+      "position": {
+        "x": 600,
+        "y": 0
+      },
+      "inputs": [
+        {
+          "id": "join_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "join_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "std::cout << \"[Join] diagnosticos consolidados\\n\";"
+    },
+    {
+      "id": "jev",
+      "label": "Agente_Auditor_JEV",
+      "type": "agent",
+      "position": {
+        "x": 900,
+        "y": 0
+      },
+      "inputs": [
+        {
+          "id": "jev_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "jev_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "provider": "jev",
+          "model": "jev-visual-evaluator",
+          "skillPath": "skills/jev.md"
+        },
+        "inheritCodeMode": true,
+        "inheritMemory": true
+      }
+    },
+    {
+      "id": "decisor",
+      "label": "Decisor_Qualidade",
+      "type": "condition",
+      "position": {
+        "x": 1200,
+        "y": 0
+      },
+      "inputs": [
+        {
+          "id": "decisor_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "decisor_out_0",
+          "name": "branch 0",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 0
+        },
+        {
+          "id": "decisor_out_1",
+          "name": "branch 1",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 1
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "// Leitura da decisão emitida pelo JEV\nstd::ifstream decisionFile(\"workspace/audit_decision.txt\");\nstd::string status;\nif (decisionFile.is_open()) {\n    std::getline(decisionFile, status);\n    decisionFile.close();\n}\n\nif (status.find(\"STATUS: APROVADO\") != std::string::npos) {\n    std::cout << \">>> [Decisor] JEV APROVOU o SVG! Conduzindo para entrega final.\\n\";\n    return 0; // Ramo 0: Sucesso\n} else {\n    std::cout << \">>> [Decisor] JEV REPROVOU. Ativando laço de auto-correção para o DeepSeek Flash.\\n\";\n    return 1; // Ramo 1: Re-planejamento\n}"
+    },
+    {
+      "id": "entrega",
+      "label": "Entrega_SVG_Final",
+      "type": "static",
+      "position": {
+        "x": 1500,
+        "y": -80
+      },
+      "inputs": [
+        {
+          "id": "entrega_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "entrega_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "std::cout << \"[Entrega] SVG aprovado e exportado com sucesso!\\n\";"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_gerador_gerador_out_0_to_linter_linter_in_0",
+      "sourceNodeId": "gerador",
+      "sourcePortId": "gerador_out_0",
+      "targetNodeId": "linter",
+      "targetPortId": "linter_in_0"
+    },
+    {
+      "id": "edge_gerador_gerador_out_0_to_smil_smil_in_0",
+      "sourceNodeId": "gerador",
+      "sourcePortId": "gerador_out_0",
+      "targetNodeId": "smil",
+      "targetPortId": "smil_in_0"
+    },
+    {
+      "id": "edge_linter_linter_out_0_to_join_join_in_0",
+      "sourceNodeId": "linter",
+      "sourcePortId": "linter_out_0",
+      "targetNodeId": "join",
+      "targetPortId": "join_in_0"
+    },
+    {
+      "id": "edge_smil_smil_out_0_to_join_join_in_0",
+      "sourceNodeId": "smil",
+      "sourcePortId": "smil_out_0",
+      "targetNodeId": "join",
+      "targetPortId": "join_in_0"
+    },
+    {
+      "id": "edge_join_join_out_0_to_jev_jev_in_0",
+      "sourceNodeId": "join",
+      "sourcePortId": "join_out_0",
+      "targetNodeId": "jev",
+      "targetPortId": "jev_in_0"
+    },
+    {
+      "id": "edge_jev_jev_out_0_to_decisor_decisor_in_0",
+      "sourceNodeId": "jev",
+      "sourcePortId": "jev_out_0",
+      "targetNodeId": "decisor",
+      "targetPortId": "decisor_in_0"
+    },
+    {
+      "id": "edge_decisor_decisor_out_0_to_entrega_entrega_in_0",
+      "sourceNodeId": "decisor",
+      "sourcePortId": "decisor_out_0",
+      "targetNodeId": "entrega",
+      "targetPortId": "entrega_in_0"
+    },
+    {
+      "id": "edge_decisor_decisor_out_1_to_gerador_gerador_in_0",
+      "sourceNodeId": "decisor",
+      "sourcePortId": "decisor_out_1",
+      "targetNodeId": "gerador",
+      "targetPortId": "gerador_in_0",
+      "isFeedbackLoop": true
+    }
+  ]
+}

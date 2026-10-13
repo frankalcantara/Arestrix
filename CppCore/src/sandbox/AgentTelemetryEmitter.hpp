@@ -1,12 +1,13 @@
 #pragma once
 
 #include <string>
+#include "util/Json.hpp"
 #include <functional>
 #include <chrono>
 #include <mutex>
 #include <iostream>
 #include <regex>
-#include <nlohmann/json.hpp>
+#include "util/JsonValue.hpp"
 
 namespace taskforge {
 namespace sandbox {
@@ -32,12 +33,12 @@ public:
         getCallback() = cb;
     }
 
-    static void emitEvent(const std::string& nodeId, const std::string& eventType, const nlohmann::json& payload) {
+    static void emitEvent(const std::string& nodeId, const std::string& eventType, const taskforge::Json& payload) {
         auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()
         ).count();
 
-        nlohmann::json msg;
+        taskforge::Json msg;
         msg["type"] = "agent:telemetry";
         msg["event"] = {
             {"nodeId", nodeId},
@@ -50,7 +51,7 @@ public:
 
         // Log sincronizado no terminal e notifica a UI via callback
         std::lock_guard<std::mutex> lock(getMutex());
-        std::cout << "[NF_TELEMETRY:AGENT] " << jsonStr << "\n";
+        std::cout << "[NF_TELEMETRY:AGENT] " << jsonStr << std::endl;
         auto& cb = getCallback();
         if (cb) {
             cb(jsonStr);
@@ -58,7 +59,7 @@ public:
     }
 
     static void emitThinking(const std::string& nodeId, size_t totalChars, const std::string& preview) {
-        nlohmann::json payload;
+        taskforge::Json payload;
         payload["thinkingChars"] = totalChars;
         payload["thinkingPreview"] = preview;
         payload["status"] = "thinking";
@@ -66,7 +67,7 @@ public:
     }
 
     static void emitToolStart(const std::string& nodeId, const std::string& toolName, const std::string& argsSummary) {
-        nlohmann::json payload;
+        taskforge::Json payload;
         payload["toolName"] = toolName;
         payload["toolArgs"] = argsSummary;
         payload["status"] = "tool_call";
@@ -74,7 +75,7 @@ public:
     }
 
     static void emitToolEnd(const std::string& nodeId, const std::string& toolName, bool success) {
-        nlohmann::json payload;
+        taskforge::Json payload;
         payload["toolName"] = toolName;
         payload["toolSuccess"] = success;
         payload["status"] = "running";
@@ -82,7 +83,7 @@ public:
     }
 
     static void emitRateLimit(const std::string& nodeId, int retrySeconds, const std::string& detail = "") {
-        nlohmann::json payload;
+        taskforge::Json payload;
         payload["retrySeconds"] = retrySeconds;
         payload["detail"] = detail.empty() ? "Limite de quota da API temporariamente atingido." : detail;
         payload["status"] = "running";
@@ -90,7 +91,7 @@ public:
     }
 
     static void emitStatus(const std::string& nodeId, const std::string& status, const std::string& detail = "") {
-        nlohmann::json payload;
+        taskforge::Json payload;
         payload["status"] = status;
         payload["detail"] = detail;
         emitEvent(nodeId, "status", payload);
@@ -103,11 +104,11 @@ public:
         // 1. Tenta parse como JSON estruturado (ex: Pi / codemode stream)
         try {
             if (rawLine.front() == '{' && rawLine.back() == '}') {
-                auto j = nlohmann::json::parse(rawLine);
+                auto j = taskforge::jsonutil::parse(rawLine);
                 std::string type = j.value("type", "");
 
                 if (type == "message_update") {
-                    auto e = j.value("assistantMessageEvent", nlohmann::json::object());
+                    auto e = j.value("assistantMessageEvent", taskforge::Json::object());
                     if (e.value("type", "") == "thinking_delta") {
                         std::string delta = e.value("delta", "");
                         emitThinking(nodeId, delta.length(), delta);
@@ -115,7 +116,7 @@ public:
                     }
                 } else if (type == "tool_execution_start") {
                     std::string tool = j.value("toolName", "");
-                    std::string args = j.value("args", nlohmann::json::object()).dump();
+                    std::string args = j.value("args", taskforge::Json::object()).dump();
                     emitToolStart(nodeId, tool, args);
                     return;
                 } else if (type == "tool_execution_end") {
@@ -145,7 +146,7 @@ public:
         }
 
         // 3. Emite como log padrão
-        nlohmann::json payload;
+        taskforge::Json payload;
         payload["logLine"] = rawLine;
         emitEvent(nodeId, "log", payload);
     }

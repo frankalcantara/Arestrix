@@ -1,4 +1,5 @@
 #include "McpRegistry.hpp"
+#include "util/Json.hpp"
 #include <fstream>
 #include <iostream>
 
@@ -20,7 +21,7 @@ McpRegistry::McpRegistry() {
 void McpRegistry::initializeDefaults() {
     McpServerConfig fs;
     fs.id = "mock-filesystem";
-    fs.name = "Filesystem Explorer (MCP)";
+    fs.name = "Filesystem Explorer (MCP simulado)";
     fs.transport = McpTransportType::Stdio;
     fs.command = "mock";
     fs.args = {"--dir", "."};
@@ -30,7 +31,7 @@ void McpRegistry::initializeDefaults() {
 
     McpServerConfig fetch;
     fetch.id = "mock-fetch";
-    fetch.name = "Web & Fetch Gateway (MCP)";
+    fetch.name = "Web & Fetch Gateway (MCP simulado)";
     fetch.transport = McpTransportType::Stdio;
     fetch.command = "mock";
     fetch.args = {"--timeout", "10"};
@@ -76,7 +77,7 @@ std::vector<McpServerConfig> McpRegistry::listServers() const {
     return list;
 }
 
-nlohmann::json McpRegistry::testServer(const std::string& id) {
+taskforge::Json McpRegistry::testServer(const std::string& id) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = servers_.find(id);
     if (it == servers_.end()) {
@@ -107,7 +108,7 @@ nlohmann::json McpRegistry::testServer(const std::string& id) {
 
 McpCallResult McpRegistry::callTool(const std::string& serverId,
                                     const std::string& toolName,
-                                    const nlohmann::json& args) {
+                                    const taskforge::Json& args) {
     McpServerConfig cfg;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -154,8 +155,7 @@ bool McpRegistry::loadFromDisk(const std::string& path) {
     }
 
     try {
-        nlohmann::json j;
-        file >> j;
+        taskforge::Json j = taskforge::jsonutil::parseStream(file);
         if (j.is_array()) {
             std::lock_guard<std::mutex> lock(mutex_);
             servers_.clear();
@@ -173,7 +173,7 @@ bool McpRegistry::loadFromDisk(const std::string& path) {
 
 bool McpRegistry::saveToDisk(const std::string& path) const {
     try {
-        nlohmann::json j = nlohmann::json::array();
+        taskforge::Json j = taskforge::Json::array();
         for (const auto& pair : servers_) {
             j.push_back(pair.second);
         }

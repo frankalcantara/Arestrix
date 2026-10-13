@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <nlohmann/json.hpp>
+#include "util/JsonValue.hpp"
 
 namespace taskforge {
 namespace mcp {
@@ -13,7 +13,7 @@ enum class McpTransportType {
     Sse
 };
 
-NLOHMANN_JSON_SERIALIZE_ENUM(McpTransportType, {
+ARX_JSON_ENUM(McpTransportType, {
     {McpTransportType::Stdio, "stdio"},
     {McpTransportType::Sse, "sse"}
 })
@@ -21,12 +21,12 @@ NLOHMANN_JSON_SERIALIZE_ENUM(McpTransportType, {
 struct McpTool {
     std::string name;
     std::string description;
-    nlohmann::json inputSchema = nlohmann::json::object();
+    taskforge::Json inputSchema = taskforge::Json::object();
     std::string serverId;
 };
 
-inline void to_json(nlohmann::json& j, const McpTool& t) {
-    j = nlohmann::json{
+inline void to_json(taskforge::Json& j, const McpTool& t) {
+    j = taskforge::Json{
         {"name", t.name},
         {"description", t.description},
         {"inputSchema", t.inputSchema},
@@ -34,10 +34,10 @@ inline void to_json(nlohmann::json& j, const McpTool& t) {
     };
 }
 
-inline void from_json(const nlohmann::json& j, McpTool& t) {
+inline void from_json(const taskforge::Json& j, McpTool& t) {
     t.name = j.value("name", "");
     t.description = j.value("description", "");
-    t.inputSchema = j.value("inputSchema", nlohmann::json::object());
+    t.inputSchema = j.value("inputSchema", taskforge::Json::object());
     t.serverId = j.value("serverId", "");
 }
 
@@ -53,8 +53,8 @@ struct McpServerConfig {
     std::vector<McpTool> cachedTools;
 };
 
-inline void to_json(nlohmann::json& j, const McpServerConfig& s) {
-    j = nlohmann::json{
+inline void to_json(taskforge::Json& j, const McpServerConfig& s) {
+    j = taskforge::Json{
         {"id", s.id},
         {"name", s.name},
         {"transport", s.transport},
@@ -67,7 +67,7 @@ inline void to_json(nlohmann::json& j, const McpServerConfig& s) {
     };
 }
 
-inline void from_json(const nlohmann::json& j, McpServerConfig& s) {
+inline void from_json(const taskforge::Json& j, McpServerConfig& s) {
     s.id = j.value("id", "");
     s.name = j.value("name", "");
     s.transport = j.value("transport", McpTransportType::Stdio);
@@ -87,8 +87,8 @@ struct McpCallResult {
     double durationSeconds = 0.0;
 };
 
-inline void to_json(nlohmann::json& j, const McpCallResult& r) {
-    j = nlohmann::json{
+inline void to_json(taskforge::Json& j, const McpCallResult& r) {
+    j = taskforge::Json{
         {"success", r.success},
         {"content", r.content},
         {"isError", r.isError},
@@ -97,7 +97,7 @@ inline void to_json(nlohmann::json& j, const McpCallResult& r) {
     };
 }
 
-inline void from_json(const nlohmann::json& j, McpCallResult& r) {
+inline void from_json(const taskforge::Json& j, McpCallResult& r) {
     r.success = j.value("success", false);
     r.content = j.value("content", "");
     r.isError = j.value("isError", false);

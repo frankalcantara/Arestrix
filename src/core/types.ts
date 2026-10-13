@@ -370,7 +370,7 @@ export const DEFAULT_COMPILER_CONFIG: ICompilerConfig = {
   compiler: 'msvc',
   cppStandard: 'C++20',
   buildSystem: 'cmake',
-  taskflowIncludePath: 'include',
+  taskflowIncludePath: 'third_party/taskflow',
   outputBinaryName: 'pipeline_app',
   enableOpenMP: false,
   enableCuda: false,
