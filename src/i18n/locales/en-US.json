@@ -264,6 +264,8 @@
       "select_badge": "Select",
       "pt_subtitle": "pt-BR • Arestrix Default",
       "en_subtitle": "en-US • US English",
+      "current_lang_label": "Current Language:",
+      "toggle_lang_tip": "Switch Language Instantly (pt-BR / en-US)",
       "compiler_group": "Compiler & C++ Toolchain",
       "default_compiler": "Default Compiler:",
       "cpp_standard": "Default C++ Standard:",

@@ -264,6 +264,8 @@
       "select_badge": "Selecionar",
       "pt_subtitle": "pt-BR • Padrão Arestrix",
       "en_subtitle": "en-US • US English",
+      "current_lang_label": "Idioma Atual:",
+      "toggle_lang_tip": "Alternar Idioma Instantaneamente (pt-BR / en-US)",
       "compiler_group": "Compilador & Ferramentas C++",
       "default_compiler": "Compilador Padrão:",
       "cpp_standard": "Padrão C++ Padrão:",
