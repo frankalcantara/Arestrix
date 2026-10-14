@@ -5,6 +5,7 @@ import { ModalWindowManager, IModalWindowController } from './modals/ModalWindow
 import { EnvironmentManager } from '../core/env/EnvironmentManager.ts';
 import { EnvGuidanceModal } from './modals/EnvGuidanceModal.ts';
 import { t } from '../i18n/index.ts';
+import { McpToolPicker } from './McpToolPicker.ts';
 
 export type GlobalDefaultsTab = 'model' | 'sandbox' | 'tools' | 'memory';
 
@@ -13,6 +14,7 @@ export class GlobalDefaultsModal {
   private graph: Graph;
   private windowController?: IModalWindowController;
   private activeTab: GlobalDefaultsTab = 'model';
+  private mcpPicker?: McpToolPicker;
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -318,10 +320,31 @@ export class GlobalDefaultsModal {
               </div>
 
               <div class="form-group" style="margin-top: 14px;">
-                <label class="form-label" for="def-mcp-tools">${t('global_defaults.mcp_tools_label')} <span style="font-size: 10px; color: #0f6cbd;">${t('global_defaults.mcp_tools_servers_badge')}</span></label>
-                <input type="text" id="def-mcp-tools" class="form-input" value="${this.escapeHtml((defaults.codeMode.allowedMcpTools || []).join(', '))}" placeholder="read_file, write_file, fetch_url" />
-                <div class="form-hint">${t('global_defaults.mcp_tools_hint')}</div>
+                <label class="form-label">${t('global_defaults.mcp_tools_label')}</label>
+                <div class="form-hint" style="margin-bottom: 8px;">${t('global_defaults.mcp_picker_hint')}</div>
+                <div id="def-mcp-picker"></div>
               </div>
+            </div>
+
+            <!-- Acesso à internet das ferramentas nativas (escopo do projeto) -->
+            <div class="settings-section-card" style="margin-top: 16px;" id="card-http-policy">
+              <div class="section-card-header">
+                <span class="section-card-icon">🌐</span>
+                <div class="section-card-titles">
+                  <h3 class="section-card-title">${t('global_defaults.http_title')} <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">${t('global_defaults.badge_project_scope')}</span></h3>
+                  <p class="section-card-desc">${t('global_defaults.http_desc')}</p>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="http-hosts">${t('global_defaults.http_hosts_label')}</label>
+                <textarea id="http-hosts" class="form-textarea" rows="4" style="font-family: monospace;" placeholder="api.exemplo.com&#10;*.exemplo.org"></textarea>
+                <div class="form-hint">${t('global_defaults.http_hosts_hint')}</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; margin-top: 12px;">
+                <button type="button" class="btn btn-primary" id="btn-save-http-policy" style="font-size: 12px; font-weight: 600; height: 32px; padding: 0 14px;">${t('global_defaults.http_btn_save')}</button>
+                <span id="http-policy-status" style="font-size: 12px; color: #616161;"></span>
+              </div>
+              <div id="http-policy-feedback" style="display: none; margin-top: 8px; font-size: 11.5px; padding: 6px 10px; border-radius: 4px;"></div>
             </div>
           </div>
 
@@ -423,6 +446,68 @@ export class GlobalDefaultsModal {
     this.bindDialogEvents();
     this.updateKeyIndicator();
     void this.loadStudioModel();
+    this.mountToolsExtras(defaults.codeMode.mcpServers || [], defaults.codeMode.allowedMcpTools || []);
+  }
+
+  private mountToolsExtras(servers: string[], tools: string[]): void {
+    const root = this.overlay.querySelector('#def-mcp-picker') as HTMLElement | null;
+    if (root) {
+      this.mcpPicker = new McpToolPicker(root);
+      void this.mcpPicker.load({ servers, tools }, false);
+    }
+    void this.loadHttpPolicy();
+  }
+
+  private backend(): any | null {
+    const w = typeof window !== 'undefined' ? (window as any) : null;
+    return w && w.webui && typeof w.webui.call === 'function' ? w.webui : null;
+  }
+
+  private async loadHttpPolicy(): Promise<void> {
+    const area = this.overlay.querySelector('#http-hosts') as HTMLTextAreaElement | null;
+    if (!area) return;
+    const b = this.backend();
+    if (!b) { area.disabled = true; return; }
+    try {
+      const res = JSON.parse((await b.call('get_http_policy')) || '{}');
+      area.value = ((res.hosts || []) as string[]).join('\n');
+    } catch { /* sem backend: campo vazio */ }
+    this.refreshHttpPolicyStatus();
+  }
+
+  private refreshHttpPolicyStatus(): void {
+    const area = this.overlay.querySelector('#http-hosts') as HTMLTextAreaElement | null;
+    const status = this.overlay.querySelector('#http-policy-status') as HTMLElement | null;
+    if (!area || !status) return;
+    const count = area.value.split('\n').map(s => s.trim()).filter(Boolean).length;
+    status.textContent = count === 0 ? t('global_defaults.http_status_none') : t('global_defaults.http_status_count', { count });
+    status.style.color = count === 0 ? '#616161' : '#0e700e';
+  }
+
+  private async saveHttpPolicy(): Promise<void> {
+    const area = this.overlay.querySelector('#http-hosts') as HTMLTextAreaElement | null;
+    const feedback = this.overlay.querySelector('#http-policy-feedback') as HTMLElement | null;
+    if (!area || !feedback) return;
+    const show = (ok: boolean, text: string) => {
+      feedback.style.display = 'block';
+      feedback.style.background = ok ? '#dff6dd' : '#fde7e9';
+      feedback.style.color = ok ? '#0e700e' : '#a80000';
+      feedback.textContent = text;
+    };
+    const b = this.backend();
+    if (!b) { show(false, t('mcp_picker.needs_native')); return; }
+    const hosts = area.value.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+    try {
+      const res = JSON.parse((await b.call('set_http_policy', JSON.stringify({ hosts }))) || '{}');
+      if (res.ok) {
+        show(true, t('global_defaults.http_saved'));
+        await this.loadHttpPolicy();
+      } else {
+        show(false, String(res.error || t('mcp_picker.load_failed')));
+      }
+    } catch {
+      show(false, t('mcp_picker.load_failed'));
+    }
   }
 
   private bindEvents(): void {
@@ -525,6 +610,10 @@ export class GlobalDefaultsModal {
     this.overlay.querySelector('#btn-save-studio-model')?.addEventListener('click', () => {
       void this.saveStudioModel();
     });
+    this.overlay.querySelector('#btn-save-http-policy')?.addEventListener('click', () => {
+      void this.saveHttpPolicy();
+    });
+    this.overlay.querySelector('#http-hosts')?.addEventListener('input', () => this.refreshHttpPolicyStatus());
 
     // Salvar/Implantar chave no Windows
     this.overlay.querySelector('#btn-submit-deploy-key')?.addEventListener('click', () => {
@@ -887,8 +976,7 @@ export class GlobalDefaultsModal {
     const scriptsRaw = (this.overlay.querySelector('#def-custom-scripts') as HTMLInputElement)?.value || '';
     const customScripts = scriptsRaw.split(',').map(s => s.trim()).filter(Boolean);
 
-    const mcpRaw = (this.overlay.querySelector('#def-mcp-tools') as HTMLInputElement)?.value || '';
-    const allowedMcpTools = mcpRaw.split(',').map(s => s.trim()).filter(Boolean);
+    const mcp = this.mcpPicker?.getValue() ?? { servers: [], tools: [] };
 
     const memEnabled = (this.overlay.querySelector('#def-memory-enabled') as HTMLInputElement)?.checked || false;
     const memPersistent = (this.overlay.querySelector('input[name="def-memory-persistence"]:checked') as HTMLInputElement)?.value === 'persistent';
@@ -915,7 +1003,8 @@ export class GlobalDefaultsModal {
       codeMode: {
         allowedTools,
         customScripts,
-        allowedMcpTools
+        mcpServers: mcp.servers,
+        allowedMcpTools: mcp.tools
       },
       memory: {
         enabled: memEnabled,

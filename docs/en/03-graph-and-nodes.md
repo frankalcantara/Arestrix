@@ -37,6 +37,8 @@ JSON and say where the **input** comes from (the previous vertex, a project file
   MCP vertex can feed a decision or an agent directly. You can also save it to a project file.
 - If the server is missing or unreachable, a referenced field is absent, or the tool reports an error, the pipeline **stops with a
   clear message**.
+- Servers marked ⚡ are **native Arestrix tools** (files, HTTP, data, memory, time, Git, SQLite): they need no installation and run inside the
+  program. See [Native tools](05-workspaces-memory-skills-mcp.md#native-tools-no-install-no-process).
 - It runs on the **native C++ MCP client** with a **persistent session** per server (see [MCP servers](05-workspaces-memory-skills-mcp.md#mcp-servers)).
 
 ### Switch

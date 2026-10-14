@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "mcp/McpTypes.hpp"
+#include "native/NativeTools.hpp"
 #include "rt/Tools.hpp"
 
 namespace taskforge {
@@ -41,6 +42,8 @@ public:
     static std::string expandEnv(const std::string& text);
     // mcp__<servidor>__<ferramenta>, so [A-Za-z0-9_-], no maximo 64 caracteres.
     static std::string agentToolName(const std::string& server, const std::string& tool);
+    // Regra da lista de ferramentas permitidas: vazia = todas; entradas "ferramenta", "servidor/ferramenta" ou "servidor/*".
+    static bool isToolAllowed(const std::vector<std::string>& allowed, const std::string& serverId, const std::string& toolName);
     static mcp::McpServerConfig loadServerConfig(const std::filesystem::path& workspaceRoot, const std::string& id);
     // Servidores configurados no projeto (.workspace/mcps): [{id, name, transport, isEnabled}]. So metadados: nunca
     // devolve comando, argumentos nem variaveis de ambiente.
@@ -50,7 +53,9 @@ private:
     struct Binding {
         mcp::McpServerConfig config;
         std::string tool;
+        const native::Server* nativeServer = nullptr;   // ferramenta nativa: chamada em processo, sem JSON-RPC
     };
+    std::filesystem::path root_;
     std::vector<ToolDef> defs_;
     std::map<std::string, Binding> bindings_;
 };

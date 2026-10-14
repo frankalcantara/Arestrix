@@ -617,7 +617,7 @@
     },
     "mcp": {
       "title": "Ferramenta MCP",
-      "hint": "Os servidores vêm de .workspace/mcps do projeto. Um servidor só roda se estiver configurado lá.",
+      "hint": "Os servidores com ⚡ são nativos do Arestrix: já vêm prontos, sem instalação e sem processo externo. Os demais vêm de .workspace/mcps do projeto.",
       "server_label": "Servidor MCP",
       "choose": "— escolha —",
       "refresh_tip": "Recarregar a lista de servidores e ferramentas",
@@ -640,6 +640,7 @@
       "arguments": "argumentos",
       "no_servers": "Nenhum servidor configurado neste projeto (.workspace/mcps).",
       "failed": "Falha ao consultar o servidor MCP.",
+      "native_tag": "nativo, instantâneo",
       "disabled": "desabilitado"
     },
     "explanations": {
@@ -867,6 +868,20 @@
     "hide_cpp": "✕ Ocultar C++20",
     "footer_hint": "💡 Os vértices instanciados herdam portas de dados, lambdas C++20 otimizados e suporte a histórico <strong>Desfazer (Ctrl+Z)</strong>."
   },
+  "mcp_picker": {
+    "native_tag": "nativo, sem instalação",
+    "disabled": "desativado",
+    "pick_tools": "Escolher ferramentas",
+    "hide_tools": "Recolher",
+    "count": "{{count}} de {{total}} ferramentas",
+    "loading": "Carregando as ferramentas...",
+    "no_servers": "Nenhum servidor disponível neste projeto.",
+    "needs_native": "Disponível apenas no aplicativo do Arestrix (não no navegador).",
+    "load_failed": "Não foi possível consultar os servidores.",
+    "external_hint": "Este servidor é externo: ele será iniciado para listar as ferramentas.",
+    "risk_moderate": "· grava",
+    "risk_high": "· alto risco"
+  },
   "global_defaults": {
     "title": "Padrões Globais do Pipeline de Agentes",
     "subtitle": "Configure os padrões particionados por escopo: 🏢 Studio (Credenciais Globais), 🛠️ Workspace (Sandbox & VM) e 📦 Projeto (Modelos, Ferramentas e Memória)",
@@ -937,6 +952,15 @@
     "tool_desc_validate_svg": "Validação Jev / Script",
     "custom_scripts_label": "Scripts Utilitários Permitidos",
     "mcp_tools_label": "Ferramentas MCP Autorizadas por Padrão",
+    "mcp_picker_hint": "Marque os servidores que os agentes podem usar. Os marcados com ⚡ são do próprio Arestrix e não precisam de instalação. Sem escolher ferramentas, vale todas as do servidor.",
+    "http_title": "Acesso à internet das ferramentas nativas",
+    "http_desc": "As ferramentas nativas de HTTP só falam com os sites que você autorizar aqui. Sem nenhum site na lista, nada sai do computador.",
+    "http_hosts_label": "Sites autorizados (um por linha)",
+    "http_hosts_hint": "Escreva só o nome do site, como api.exemplo.com. Use *.exemplo.org para liberar todos os subdomínios. Sempre HTTPS; endereços locais e privados são recusados.",
+    "http_btn_save": "Salvar sites autorizados",
+    "http_saved": "Lista de sites gravada em .workspace/native/http.json.",
+    "http_status_none": "Nenhum site autorizado: o acesso à internet está fechado.",
+    "http_status_count": "{{count}} site(s) autorizado(s).",
     "mcp_tools_servers_badge": "🛠️ Servidores do Workspace",
     "mcp_tools_hint": "Nomes de ferramentas dos servidores MCP instalados no Workspace herdadas por padrão nos agentes do projeto.",
     "memory_section_title": "Memória Heterogênea do Pipeline",

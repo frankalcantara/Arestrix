@@ -48,6 +48,7 @@ redo work for everything, including paste, duplicate and delete.
 | `build/` | `BuildService`: compiles the generated program with MSVC, g++ or clang++ and runs it. |
 | `rt/` | The **runtime** every generated program links to: HTTPS clients, the agent tool-use loop, the switch decision (AI model or keywords), confined file tools. |
 | `sandbox/` | Isolation drivers (host process, Docker, MicroVM), telemetry emitter, resume engine. |
+| `native/` | The native tool servers (files, HTTP, data, memory, time, Git, SQLite): C++ that runs inside the program, with project confinement. |
 | `mcp/` | Native Model Context Protocol client with persistent sessions (stdio and HTTP) and the server registry. |
 | `memory/` | Blackboard and semantic-lessons memory. |
 | `project/` | Projects and workspaces (`arestrix.project.json`). |

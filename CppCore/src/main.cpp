@@ -15,6 +15,7 @@
 #include "platform/Process.hpp"
 #include "rt/Tools.hpp"
 #include "mcp/McpClient.hpp"
+#include "native/NativeTools.hpp"
 #include "rt/McpTools.hpp"
 #include "search/ProjectSearch.hpp"
 #include "search/SynonymAgent.hpp"
@@ -647,7 +648,22 @@ void ui_list_project_mcp_tools(webui::window::event* e) {
         auto& pm = taskforge::project::ProjectManager::getInstance();
         std::string root = pm.getActiveProjectRoot();
         if (root.empty()) root = std::filesystem::current_path().string();
-        auto cfg = taskforge::rt::McpToolbox::loadServerConfig(root, req.value("server", std::string()));
+        const std::string serverId = req.value("server", std::string());
+        if (taskforge::native::isNativeServer(serverId)) {
+            const auto* ns = taskforge::native::findServer(serverId);
+            if (!ns) throw std::runtime_error("servidor nativo desconhecido: " + serverId);
+            for (const auto& t : ns->tools) {
+                taskforge::Json item;
+                item["name"] = t.name;
+                item["description"] = t.description;
+                item["inputSchema"] = t.inputSchema;
+                item["risk"] = t.risk;
+                out["tools"].push_back(item);
+            }
+            e->return_string(out.dump());
+            return;
+        }
+        auto cfg = taskforge::rt::McpToolbox::loadServerConfig(root, serverId);
         taskforge::mcp::McpClient client;
         auto tools = client.listTools(cfg, 20000);
         if (tools.empty()) {
@@ -661,6 +677,43 @@ void ui_list_project_mcp_tools(webui::window::event* e) {
             out["tools"].push_back(item);
         }
     } catch (const std::exception& ex) {
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+// JS -> C++: hosts que as ferramentas nativas de HTTP podem acessar neste projeto (.workspace/native/http.json).
+void ui_get_http_policy(webui::window::event* e) {
+    taskforge::Json out;
+    out["hosts"] = taskforge::Json::array();
+    try {
+        auto& pm = taskforge::project::ProjectManager::getInstance();
+        std::string root = pm.getActiveProjectRoot();
+        if (root.empty()) root = std::filesystem::current_path().string();
+        for (const auto& h : taskforge::native::http::readPolicy(root)) out["hosts"].push_back(h);
+    } catch (const std::exception& ex) {
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+// JS -> C++: {"hosts": ["api.exemplo.com", "*.exemplo.org"]}. Valida e grava; so a tela do Studio chama isto.
+void ui_set_http_policy(webui::window::event* e) {
+    taskforge::Json out;
+    try {
+        auto req = taskforge::jsonutil::parse(e->get_string());
+        std::vector<std::string> hosts;
+        const auto& list = req["hosts"];
+        for (size_t i = 0; i < list.size(); ++i)
+            if (list[i].is_string()) hosts.push_back(list[i].str());
+        auto& pm = taskforge::project::ProjectManager::getInstance();
+        std::string root = pm.getActiveProjectRoot();
+        if (root.empty()) root = std::filesystem::current_path().string();
+        std::string error;
+        out["ok"] = taskforge::native::http::writePolicy(root, hosts, error);
+        if (!error.empty()) out["error"] = error;
+    } catch (const std::exception& ex) {
+        out["ok"] = false;
         out["error"] = std::string(ex.what());
     }
     e->return_string(out.dump());
@@ -1208,6 +1261,8 @@ int main(int argc, char** argv) {
     win.bind("search_reindex", ui_search_reindex);
     win.bind("list_project_mcp_servers", ui_list_project_mcp_servers);
     win.bind("list_project_mcp_tools", ui_list_project_mcp_tools);
+    win.bind("get_http_policy", ui_get_http_policy);
+    win.bind("set_http_policy", ui_set_http_policy);
     win.bind("search_ensure_synonyms", ui_search_ensure_synonyms);
     win.bind("list_recent_projects", ui_list_recent_projects);
     win.bind("scan_pi_project", ui_scan_pi_project);

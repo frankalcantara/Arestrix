@@ -44,7 +44,9 @@ describe('projetos de exemplo (examples/)', () => {
           if (node.type === 'mcp') {
             expect(node.mcpSettings.server, `${node.id}: servidor`).not.toBe('');
             expect(node.mcpSettings.tool, `${node.id}: ferramenta`).not.toBe('');
-            expect(existsSync(join(EXAMPLES, name, '.workspace', 'mcps', `${node.mcpSettings.server}.json`)), `${node.id}: servidor ${node.mcpSettings.server}`).toBe(true);
+            if (!node.mcpSettings.server.startsWith('arestrix.')) {   // servidores nativos nao tem configuracao
+              expect(existsSync(join(EXAMPLES, name, '.workspace', 'mcps', `${node.mcpSettings.server}.json`)), `${node.id}: servidor ${node.mcpSettings.server}`).toBe(true);
+            }
           }
           for (const server of node.agentSettings?.codeMode?.mcpServers ?? []) {
             const cfg = join(EXAMPLES, name, '.workspace', 'mcps', `${server}.json`);

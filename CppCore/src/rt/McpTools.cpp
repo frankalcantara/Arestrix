@@ -93,6 +93,8 @@ std::string McpToolbox::agentToolName(const std::string& server, const std::stri
 
 mcp::McpServerConfig McpToolbox::loadServerConfig(const fs::path& root, const std::string& id) {
     if (!validId(id)) throw std::runtime_error("identificador de servidor MCP invalido: " + id);
+    if (native::isNativeServer(id))
+        throw std::runtime_error("'" + id + "' e um servidor nativo do Arestrix (nao tem configuracao em .workspace/mcps; o prefixo 'arestrix.' e reservado)");
     fs::path dir = root / ".workspace" / "mcps";
     std::error_code ec;
     if (!fs::is_directory(dir, ec)) {
@@ -129,6 +131,18 @@ mcp::McpServerConfig McpToolbox::loadServerConfig(const fs::path& root, const st
 
 taskforge::Json McpToolbox::listProjectServers(const fs::path& root) {
     Json out = Json::array();
+    // servidores nativos (em processo): sempre disponiveis, nao exigem configuracao nem instalacao
+    for (const auto& ns : native::servers()) {
+        Json item;
+        item["id"] = ns.id;
+        item["name"] = ns.name;
+        item["transport"] = "native";
+        item["isEnabled"] = true;
+        item["isNative"] = true;
+        item["description"] = ns.description;
+        item["category"] = ns.category;
+        out.push_back(item);
+    }
     fs::path dir = root / ".workspace" / "mcps";
     std::error_code ec;
     if (!fs::is_directory(dir, ec)) return out;
@@ -159,10 +173,38 @@ taskforge::Json McpToolbox::listProjectServers(const fs::path& root) {
     return out;
 }
 
+bool McpToolbox::isToolAllowed(const std::vector<std::string>& allowed, const std::string& serverId, const std::string& toolName) {
+    if (allowed.empty()) return true;   // lista vazia = todas as ferramentas dos servidores declarados
+    for (const auto& entry : allowed) {
+        if (entry == toolName || entry == serverId + "/" + toolName || entry == serverId + "/*") return true;
+    }
+    return false;
+}
+
 McpToolbox::McpToolbox(const fs::path& root, const std::vector<std::string>& serverIds,
-                       const std::vector<std::string>& allowedTools) {
+                       const std::vector<std::string>& allowedTools)
+    : root_(root) {
     mcp::McpClient client;
     for (const auto& id : serverIds) {
+        if (native::isNativeServer(id)) {
+            const native::Server* ns = native::findServer(id);
+            if (!ns) throw std::runtime_error("servidor nativo desconhecido: " + id);
+            for (const auto& t : ns->tools) {
+                if (!isToolAllowed(allowedTools, id, t.name)) continue;
+                std::string name = agentToolName(id, t.name);
+                if (bindings_.count(name)) continue;
+                ToolDef def;
+                def.name = name;
+                def.description = "[Arestrix " + ns->name + "] " + t.description;
+                def.parameters = t.inputSchema;
+                defs_.push_back(std::move(def));
+                Binding b;
+                b.tool = t.name;
+                b.nativeServer = ns;
+                bindings_[name] = std::move(b);
+            }
+            continue;
+        }
         mcp::McpServerConfig cfg = loadServerConfig(root, id);
         std::vector<mcp::McpTool> tools = client.listTools(cfg, kListTimeoutMs);
         if (tools.empty()) {
@@ -170,8 +212,7 @@ McpToolbox::McpToolbox(const fs::path& root, const std::vector<std::string>& ser
                                      "(confira o comando em .workspace/mcps e execute-o manualmente)");
         }
         for (const auto& t : tools) {
-            if (!allowedTools.empty() && std::find(allowedTools.begin(), allowedTools.end(), t.name) == allowedTools.end())
-                continue;
+            if (!isToolAllowed(allowedTools, id, t.name)) continue;
             std::string name = agentToolName(id, t.name);
             if (bindings_.count(name)) continue;
             ToolDef def;
@@ -189,6 +230,7 @@ McpToolbox::McpToolbox(const fs::path& root, const std::vector<std::string>& ser
 ToolResult McpToolbox::call(const std::string& toolName, const Json& args) const {
     auto it = bindings_.find(toolName);
     if (it == bindings_.end()) return {"ferramenta MCP desconhecida: " + toolName, true};
+    if (it->second.nativeServer) return native::call(it->second.nativeServer->id, it->second.tool, args, native::Context{root_});
     mcp::McpClient client;
     mcp::McpCallResult r = client.callTool(it->second.config, it->second.tool, args.is_object() ? args : Json::object(),
                                            kCallTimeoutMs);

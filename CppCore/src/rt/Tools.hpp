@@ -31,6 +31,11 @@ struct ToolResult {
 std::optional<std::filesystem::path> resolveInWorkspace(const std::filesystem::path& root,
                                                         const std::string& relative);
 
+// Caminhos que um agente NUNCA pode gravar: pipelines e configuracao (gravar ali injetaria codigo C++ ou servidores
+// MCP que rodariam na proxima execucao), o repositorio Git e as pastas internas do Arestrix. Leitura continua permitida
+// (exceto .git). `resolved` deve ser o resultado de resolveInWorkspace.
+bool isProtectedPath(const std::filesystem::path& root, const std::filesystem::path& resolved);
+
 // Definicoes (schemas) das ferramentas autorizadas.
 std::vector<ToolDef> toolDefinitions(const std::vector<std::string>& allowed);
 

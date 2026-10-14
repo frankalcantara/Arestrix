@@ -183,16 +183,6 @@ if (!fs::exists("workspace/ticket.txt")) {
         throw std::runtime_error("ARESTRIX_EXAMPLE_TICKET deve ser so o nome de um arquivo de samples/");
     fs::copy_file("samples/" + name, "workspace/ticket.txt", fs::copy_options::overwrite_existing);
 }
-{
-    std::ifstream in("workspace/ticket.txt");
-    std::stringstream ss;
-    ss << in.rdbuf();
-    const std::string text = ss.str();
-    std::smatch m;
-    std::regex email_re(R"([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})");
-    const std::string email = std::regex_search(text, m, email_re) ? m.str() : std::string();
-    std::ofstream("workspace/cliente.json") << "{\\"email\\":\\"" << email << "\\"}";
-}
 std::cout << "[Receber] chamado em workspace/ticket.txt\\n";"""
 
 
@@ -204,9 +194,14 @@ def support_nodes():
     """Vertices e arestas do fluxo de triagem. Usado pelo exemplo 2 e, depois, pelo 3."""
     clientes = ["clientes"]
     nodes = [
-        static("receber", "Receber_Chamado", 0, 0, RECEBER_BODY, headers=["<filesystem>", "<cstdlib>", "<stdexcept>", "<fstream>", "<sstream>", "<regex>"]),
+        static("receber", "Receber_Chamado", 0, 0, RECEBER_BODY, headers=["<filesystem>", "<cstdlib>", "<stdexcept>"]),
+        # ferramenta NATIVA do Arestrix (sem servidor, sem processo): acha o e-mail do cliente no texto do chamado
+        mcp("extrair_email", "Extrair_Email", 450, 0, "arestrix.dados", "regex_extract",
+            {"text": "{{input}}", "pattern": "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"},
+            {"kind": "file", "path": "workspace/ticket.txt"}),
+        # servidor MCP externo do projeto (.workspace/mcps): consulta o cadastro com o e-mail do vertice anterior
         mcp("consultar_cliente", "Consultar_Cliente", 450, 0, "clientes", "lookup_customer",
-            {"email": "{{input.email}}"}, {"kind": "file", "path": "workspace/cliente.json"}, "workspace/cliente_dados.json"),
+            {"email": "{{input.0}}"}, {"kind": "previous"}, "workspace/cliente_dados.json"),
         agent("leitor", "Agente_Leitor_de_Chamados", 900, 0, "skills/leitor.md", tools=["read", "write"]),
         switch("triagem", "Triagem_de_Urgencia", 1350, 0, ["urgente", "normal", "duvida"], "revisao_humana",
                mode="model", source={"kind": "previous"},
@@ -231,8 +226,11 @@ def support_nodes():
         static("humano", "Revisao_Humana", 3150, 330,
                'std::cout << "[Humano] caso encaminhado para revisao humana. Leia workspace/ticket.txt e workspace/resumo.md.\\n";'),
     ]
+    for n in nodes:                       # abre espaco para o vertice Extrair_Email (uma coluna de 450 px)
+        if n["id"] not in ("receber", "extrair_email"):
+            n["position"]["x"] += 450
     edges = [
-        edge("receber", 0, "consultar_cliente"), edge("consultar_cliente", 0, "leitor"), edge("leitor", 0, "triagem"),
+        edge("receber", 0, "extrair_email"), edge("extrair_email", 0, "consultar_cliente"), edge("consultar_cliente", 0, "leitor"), edge("leitor", 0, "triagem"),
         edge("triagem", 0, "escalonador"), edge("escalonador", 0, "entrega_urgente"),
         edge("triagem", 1, "redator"), edge("redator", 0, "revisor"), edge("revisor", 0, "qualidade"),
         edge("qualidade", 0, "redator", feedback=True), edge("qualidade", 1, "entrega_normal"),
@@ -526,7 +524,7 @@ def build_03(ex1_graph, ex2_nodes, ex2_edges):
     a_nodes = [n for n in a_nodes if n["id"] not in drop]
     a_edges = [e for e in a_edges if e["targetNodeId"] not in drop and e["sourceNodeId"] not in drop]
 
-    s_nodes, s_edges = prefixed(ex1_graph["nodes"], ex1_graph["edges"], "svg_", dx=2250, dy=430)
+    s_nodes, s_edges = prefixed(ex1_graph["nodes"], ex1_graph["edges"], "svg_", dx=2700, dy=430)
     for n in s_nodes:
         if n["id"] == "svg_gerador":
             n["agentSettings"]["model"]["promptTemplate"] = (

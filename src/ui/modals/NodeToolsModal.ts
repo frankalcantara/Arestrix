@@ -3,11 +3,13 @@ import { INodeData, ICodeModeConfig, CodeModeTool } from '../../core/types.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 import { t } from '../../i18n/index.ts';
+import { McpToolPicker } from '../McpToolPicker.ts';
 
 export class NodeToolsModal {
   private overlay: HTMLElement;
   private graph: Graph;
   private windowController?: IModalWindowController;
+  private mcpPicker?: McpToolPicker;
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -49,7 +51,6 @@ export class NodeToolsModal {
         };
 
     const allowed = effectiveTools.allowedTools || [];
-    const allowedMcp = effectiveTools.allowedMcpTools || [];
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
       title: t('node_modals.tools_title'),
@@ -115,9 +116,7 @@ export class NodeToolsModal {
                 <label class="form-label" style="margin: 0; font-weight: 700;">${t('node_modals.mcp_section_title')}</label>
                 <span style="font-size: 11px; color: var(--text-secondary);">${t('node_modals.mcp_section_sub')}</span>
               </div>
-              <div class="tools-checkbox-grid">
-                ${this.renderMcpToolsList(allowedMcp, isInherited)}
-              </div>
+              <div id="node-mcp-picker"></div>
             </div>
 
             <div class="form-group" style="margin-top: 16px;">
@@ -179,6 +178,12 @@ export class NodeToolsModal {
       });
     }
 
+    const pickerRoot = this.overlay.querySelector('#node-mcp-picker') as HTMLElement | null;
+    if (pickerRoot) {
+      this.mcpPicker = new McpToolPicker(pickerRoot);
+      void this.mcpPicker.load({ servers: effectiveTools.mcpServers || [], tools: effectiveTools.allowedMcpTools || [] }, isInherited);
+    }
+
     this.bindDialogEvents(node);
   }
 
@@ -202,6 +207,8 @@ export class NodeToolsModal {
         input.disabled = isInherited;
       });
 
+      this.mcpPicker?.setDisabled(isInherited);
+
       if (isInherited) {
         formWrapper.classList.add('form-disabled-opacity');
       } else {
@@ -209,7 +216,7 @@ export class NodeToolsModal {
       }
     });
 
-    this.overlay.querySelectorAll('.node-tool-check, .node-mcp-tool-check').forEach(chk => {
+    this.overlay.querySelectorAll('.node-tool-check').forEach(chk => {
       chk.addEventListener('change', (e) => {
         const input = e.target as HTMLInputElement;
         const pill = input.closest('.tool-checkbox-pill');
@@ -224,26 +231,6 @@ export class NodeToolsModal {
       this.saveNodeTools(node, inheritCheck.checked);
       this.hide();
     });
-  }
-
-  private renderMcpToolsList(allowedMcp: string[], isInherited: boolean): string {
-    const knownMcpTools = [
-      { name: 'read_file', desc: 'Lê arquivos locais via MCP', server: 'filesystem' },
-      { name: 'write_file', desc: 'Grava arquivos locais via MCP', server: 'filesystem' },
-      { name: 'list_directory', desc: 'Lista diretórios via MCP', server: 'filesystem' },
-      { name: 'fetch_url', desc: 'Requisição HTTP remota via MCP', server: 'fetch' }
-    ];
-
-    return knownMcpTools.map(t => {
-      const isChecked = allowedMcp.includes(t.name);
-      return `
-        <label class="tool-checkbox-pill ${isChecked ? 'checked' : ''}">
-          <input type="checkbox" class="node-mcp-tool-check" value="${t.name}" ${isChecked ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
-          <span class="tool-pill-name">mcp.${this.escapeHtml(t.name)}</span>
-          <span class="tool-pill-desc">${this.escapeHtml(t.desc)} (${this.escapeHtml(t.server)})</span>
-        </label>
-      `;
-    }).join('');
   }
 
   private saveNodeTools(node: INodeData, inherit: boolean): void {
@@ -261,10 +248,7 @@ export class NodeToolsModal {
         allowedTools.push(chk.value as CodeModeTool);
       });
 
-      const allowedMcpTools: string[] = [];
-      this.overlay.querySelectorAll<HTMLInputElement>('.node-mcp-tool-check:checked').forEach(chk => {
-        allowedMcpTools.push(chk.value);
-      });
+      const mcp = this.mcpPicker?.getValue() ?? { servers: [], tools: [] };
 
       const scriptsRaw = (this.overlay.querySelector('#node-custom-scripts') as HTMLInputElement)?.value || '';
       const customScripts = scriptsRaw.split(',').map(s => s.trim()).filter(Boolean);
@@ -272,7 +256,8 @@ export class NodeToolsModal {
       newToolsData = {
         allowedTools,
         customScripts,
-        allowedMcpTools
+        mcpServers: mcp.servers,
+        allowedMcpTools: mcp.tools
       };
     }
 

@@ -7,6 +7,7 @@
 #include <stdexcept>
 
 #include "mcp/McpClient.hpp"
+#include "native/NativeTools.hpp"
 #include "rt/McpTools.hpp"
 #include "rt/NodeInput.hpp"
 #include "rt/Runtime.hpp"
@@ -121,11 +122,14 @@ void callMcpTool(const std::string& nodeId, const std::string& label, const std:
         throw std::runtime_error("Vertice MCP '" + label + "': escolha o servidor e a ferramenta (aba Geral do vertice).");
     }
 
+    const bool isNative = native::isNativeServer(server);
     mcp::McpServerConfig cfg;
-    try {
-        cfg = McpToolbox::loadServerConfig(workspaceRoot(), server);
-    } catch (const std::exception& ex) {
-        throw std::runtime_error("Vertice MCP '" + label + "': " + ex.what());
+    if (!isNative) {
+        try {
+            cfg = McpToolbox::loadServerConfig(workspaceRoot(), server);
+        } catch (const std::exception& ex) {
+            throw std::runtime_error("Vertice MCP '" + label + "': " + ex.what());
+        }
     }
 
     const std::string input = gatherNodeInput(spec["source"], label);
@@ -136,8 +140,18 @@ void callMcpTool(const std::string& nodeId, const std::string& label, const std:
         throw std::runtime_error("Vertice MCP '" + label + "': " + ex.what());
     }
 
-    mcp::McpClient client;
-    mcp::McpCallResult r = client.callTool(cfg, tool, args, kCallTimeoutMs);
+    mcp::McpCallResult r;
+    if (isNative) {
+        // ferramenta nativa: uma chamada de funcao, sem processo nem JSON-RPC
+        rt::ToolResult nr = native::call(server, tool, args, native::Context{workspaceRoot()});
+        r.success = !nr.isError;
+        r.isError = nr.isError;
+        r.content = nr.content;
+        r.errorMessage = nr.isError ? nr.content : std::string();
+    } else {
+        mcp::McpClient client;
+        r = client.callTool(cfg, tool, args, kCallTimeoutMs);
+    }
     if (r.isError || !r.success) {
         std::string msg = r.errorMessage.empty() ? r.content : r.errorMessage;
         throw std::runtime_error("Vertice MCP '" + label + "': a ferramenta " + server + "." + tool + " falhou: " +

@@ -54,6 +54,45 @@ When a skill is imported, the **Workspace Skill Auditor** inspects its front mat
 script dependencies and sandbox safety before it can be used in a pipeline. The repository also vendors
 NVIDIA's **SkillSpector** scanner in `third_party/`.
 
+## Native tools (no install, no process)
+
+Arestrix ships its own tool servers, written in C++ and executed **inside the program**: no Node, no Python, no child process, no
+third-party code. They appear in the MCP vertex and in agents exactly like any MCP server (marked ⚡ in the list), but a call is a
+function call.
+
+| Server | Tools | Notes |
+| :--- | :--- | :--- |
+| `arestrix.arquivos` | `read_file`, `write_file`, `list_directory`, `file_info`, `make_directory`, `search_text` | Confined to the project. Text only, 1 MB to read, 2 MB to write. |
+| `arestrix.http` | `http_get`, `http_post_json` | **Only hosts the project authorizes** (below). HTTPS only. |
+| `arestrix.dados` | `json_query`, `csv_to_json`, `json_to_csv`, `regex_extract`, `base64_encode`, `base64_decode` | Pure data transformation. Regex patterns that could hang the program are refused. |
+| `arestrix.memoria` | `memory_set`, `memory_get`, `memory_list`, `memory_delete` | Small text values kept in `.arestrix/memory.json` (1000 keys, 64 KB each). |
+| `arestrix.tempo` | `now`, `add_duration`, `diff` | ISO 8601, leap years, time zones. |
+| `arestrix.git` | `git_status`, `git_log`, `git_diff`, `git_show_file` | **Read-only.** Needs Git installed. |
+| `arestrix.sqlite` | `list_tables`, `describe_table`, `sql_query`, `sql_execute` | An embedded SQLite database in a project file (default `data/arestrix.db`). See below. |
+
+**Safety rules, the same for all of them**
+- Everything stays inside the project folder. `.git` cannot be read. **Pipelines, project configuration, `.workspace`, `.arestrix` and `.githooks`
+  can never be written** by these tools, nor by the agents' own `write` and `edit` tools: writing there would inject C++ code or MCP
+  servers that run on the next execution.
+- **HTTP never decides by itself where data goes.** List the allowed sites in the Studio (**Global Defaults → Tools → Internet access**,
+  one per line, like `api.example.com` or `*.example.org`), which saves them to `.workspace/native/http.json`; without any site nothing
+  is sent, and the error message tells you what to do. Wildcards need a full domain (`*.com` is refused).
+  Local and private addresses are refused even if listed, redirects are **not** followed (each destination must be authorized), and
+  credentials only travel through `bearer_env`, the **name** of an environment variable, never the value.
+- Every result is limited to 64 KB, and a tool error stops the pipeline with a clear message.
+
+**SQLite database.** `arestrix.sqlite` embeds SQLite (public domain, `third_party/sqlite`), with no server and no installation. Each call opens
+the file, runs **one** command and closes it. The file must be inside the project and end in `.db`, `.sqlite` or `.sqlite3`, and never in
+`.git` or in the protected folders. Values go through `params` (`?` in the command), never concatenated into the text. `sql_query` opens the file
+**read-only** and only runs `SELECT`; `sql_execute` alters data and schema. The engine refuses `ATTACH`, `PRAGMA`, virtual tables, triggers,
+transactions and extension loading, a command is interrupted after 5 seconds, and the database is limited to 200 MB.
+
+**Choosing the tools of an agent.** In the **Tools** window of an agent (and in Global Defaults) every server, native or not, appears with a
+box, and "Choose tools" lets you switch its tools on and off one by one. Nothing is stored except server and tool names.
+
+**Speed.** On the development machine a native call took about 4 microseconds; an external MCP server, with a persistent session,
+about 56 microseconds for a trivial tool, and opening a process per call took roughly 190 milliseconds.
+
 ## MCP servers
 
 Arestrix is an MCP client over stdio and SSE. There are two separate things:
@@ -79,8 +118,8 @@ into the graph) or as **tools of an agent** (the model decides when to call them
 
 **Performance.** The generated program talks to MCP servers with the **native C++ client** (no Node or Python in the middle on the
 Arestrix side). Each server has **one persistent session** (one process and one handshake for the whole run), shared safely by
-all threads: calls to the same server are serialized, different servers run in parallel. On a test server, 15 calls took 0.48 s
-with the persistent session against 3.75 s opening a process per call (7.8x). A session is reopened if the server dies or its
+all threads: calls to the same server are serialized, different servers run in parallel. On a test server, 15 calls took 0.19 s
+with the persistent session against 2.8 s opening a process per call (15x). A session is reopened if the server dies or its
 configuration changes, and a call that failed is **never** retried automatically (it may already have had effect). Sessions are
 closed when the program exits.
 

@@ -2,7 +2,10 @@
 
 #include <algorithm>
 #include <chrono>
+#include <atomic>
+#include <condition_variable>
 #include <cstring>
+#include <mutex>
 #include <thread>
 
 #ifdef _WIN32
@@ -97,11 +100,43 @@ public:
     HANDLE hJob = nullptr;
     HANDLE hOutRead = nullptr;
     HANDLE hInWrite = nullptr;
-    bool eof = false;
+
+    // Um pipe anonimo do Windows nao pode ser aguardado com tempo limite. Em vez de consultar o pipe em ciclos com pausas, uma
+    // thread leitora fica BLOQUEADA em ReadFile (o sistema a acorda quando ha dados) e entrega os bytes por uma variavel de
+    // condicao; read() espera nela. Nenhuma pausa e nenhuma consulta repetida em lugar algum.
+    std::thread reader;
+    std::mutex mu;
+    std::condition_variable cv;
+    std::string pending;
+    bool readerDone = false;
+
+    void startReader() {
+        reader = std::thread([this] {
+            char buf[8192];
+            while (true) {
+                DWORD got = 0;
+                if (!ReadFile(hOutRead, buf, sizeof(buf), &got, nullptr) || got == 0) break;
+                {
+                    std::lock_guard<std::mutex> lk(mu);
+                    pending.append(buf, got);
+                }
+                cv.notify_all();
+            }
+            {
+                std::lock_guard<std::mutex> lk(mu);
+                readerDone = true;
+            }
+            cv.notify_all();
+        });
+    }
 
     ~WinProcess() override {
         kill();
         closeStdin();
+        if (reader.joinable()) {
+            CancelIoEx(hOutRead, nullptr);   // solta a leitura bloqueada mesmo que um neto ainda segure o pipe
+            reader.join();
+        }
         if (hOutRead) CloseHandle(hOutRead);
         if (hThread) CloseHandle(hThread);
         if (hProcess) CloseHandle(hProcess);
@@ -124,28 +159,14 @@ public:
     }
 
     ReadStatus read(std::string& out, int timeoutMs) override {
-        if (eof) return ReadStatus::Eof;
-        auto deadline = Clock::now() + std::chrono::milliseconds(std::max(0, timeoutMs));
-        char buf[8192];
-        while (true) {
-            DWORD avail = 0;
-            if (!PeekNamedPipe(hOutRead, nullptr, 0, nullptr, &avail, nullptr)) {
-                eof = true;           // pipe quebrado: todos os escritores fecharam
-                return ReadStatus::Eof;
-            }
-            if (avail > 0) {
-                DWORD got = 0;
-                DWORD toRead = std::min<DWORD>(avail, sizeof(buf));
-                if (ReadFile(hOutRead, buf, toRead, &got, nullptr) && got > 0) {
-                    out.append(buf, got);
-                    return ReadStatus::Data;
-                }
-                eof = true;
-                return ReadStatus::Eof;
-            }
-            if (Clock::now() >= deadline) return ReadStatus::Timeout;
-            std::this_thread::sleep_for(std::chrono::milliseconds(4));
+        std::unique_lock<std::mutex> lk(mu);
+        cv.wait_for(lk, std::chrono::milliseconds(std::max(0, timeoutMs)), [&] { return !pending.empty() || readerDone; });
+        if (!pending.empty()) {
+            out.append(pending);
+            pending.clear();
+            return ReadStatus::Data;
         }
+        return readerDone ? ReadStatus::Eof : ReadStatus::Timeout;
     }
 
     bool wait(int timeoutMs, int& exitCode) override {
@@ -282,6 +303,7 @@ std::unique_ptr<Process> Process::start(const ProcessSpec& spec, std::string& er
     proc->hThread = pi.hThread;
     proc->hOutRead = outR;
     proc->hInWrite = inW;
+    proc->startReader();
     return proc;
 }
 
@@ -391,21 +413,33 @@ public:
     int outFd = -1;
     int inFd = -1;
     bool eof = false;
+
+    // O fim do processo e aguardado por uma thread bloqueada em waitpid (sem consulta periodica); wait() espera na condicao.
+    std::thread waiter;
+    std::mutex mu;
+    std::condition_variable cv;
     bool reaped = false;
     int status = 0;
+
+    void startWaiter() {
+        waiter = std::thread([this] {
+            int st = 0;
+            pid_t r;
+            do { r = ::waitpid(pid, &st, 0); } while (r < 0 && errno == EINTR);
+            {
+                std::lock_guard<std::mutex> lk(mu);
+                reaped = true;
+                status = (r == pid) ? st : 0;
+            }
+            cv.notify_all();
+        });
+    }
 
     ~PosixProcess() override {
         kill();
         closeStdin();
         if (outFd >= 0) ::close(outFd);
-        reap(true);
-    }
-
-    void reap(bool block) {
-        if (reaped || pid <= 0) return;
-        int st = 0;
-        pid_t r = ::waitpid(pid, &st, block ? 0 : WNOHANG);
-        if (r == pid) { reaped = true; status = st; }
+        if (waiter.joinable()) waiter.join();
     }
 
     bool writeStdin(const std::string& data) override {
@@ -444,25 +478,22 @@ public:
     }
 
     bool wait(int timeoutMs, int& exitCode) override {
-        auto deadline = Clock::now() + std::chrono::milliseconds(std::max(0, timeoutMs));
-        while (true) {
-            reap(false);
-            if (reaped) {
-                exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : (WIFSIGNALED(status) ? 128 + WTERMSIG(status) : 1);
-                return true;
-            }
-            if (timeoutMs >= 0 && Clock::now() >= deadline) return false;
-            std::this_thread::sleep_for(std::chrono::milliseconds(4));
-        }
+        std::unique_lock<std::mutex> lk(mu);
+        if (timeoutMs < 0) cv.wait(lk, [&] { return reaped; });
+        else if (!cv.wait_for(lk, std::chrono::milliseconds(timeoutMs), [&] { return reaped; })) return false;
+        exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : (WIFSIGNALED(status) ? 128 + WTERMSIG(status) : 1);
+        return true;
     }
 
     bool running() override {
-        reap(false);
+        std::lock_guard<std::mutex> lk(mu);
         return !reaped;
     }
 
     void kill() override {
-        if (pid > 0 && !reaped) ::killpg(pid, SIGKILL);
+        bool done;
+        { std::lock_guard<std::mutex> lk(mu); done = reaped; }
+        if (pid > 0 && !done) ::killpg(pid, SIGKILL);
     }
 };
 
@@ -544,6 +575,7 @@ std::unique_ptr<Process> Process::start(const ProcessSpec& spec, std::string& er
     proc->pid = pid;
     proc->outFd = outPipe[0];
     proc->inFd = inPipe[1];
+    proc->startWaiter();
     return proc;
 }
 

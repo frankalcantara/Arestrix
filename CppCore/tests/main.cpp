@@ -1,6 +1,7 @@
 // Testes do nucleo C++ do Arestrix (sem framework externo).
 // Executar: ctest --test-dir build  (ou ./build/arestrix_tests)
 
+#include <algorithm>
 #include <atomic>
 #include <ctime>
 #include <filesystem>
@@ -19,6 +20,7 @@
 #include "rt/Decision.hpp"
 #include "rt/McpTools.hpp"
 #include "rt/McpVertex.hpp"
+#include "native/NativeTools.hpp"
 #include "rt/Runtime.hpp"
 #include "rt/Tools.hpp"
 #include "search/ProjectSearch.hpp"
@@ -1057,6 +1059,393 @@ TEST(generator_mcp_vertex_calls_the_native_client) {
     CHECK(src.find("\"from\":[\"gen\"]") != std::string::npos);                        // o vertice anterior alimenta a entrada
     CHECK(src.find("\"file\":\"workspace/cliente.json\"") != std::string::npos);
     CHECK(src.find("task_gen.precede(task_a)") != std::string::npos);                  // continua sendo uma tarefa Taskflow normal
+}
+
+// ---------------------------------------------------------------------------
+// Ferramentas nativas (servidores em C++ dentro do processo)
+// ---------------------------------------------------------------------------
+static taskforge::rt::ToolResult nativeCall(const fs::path& root, const std::string& server, const std::string& tool, const json& args) {
+    return taskforge::native::call("arestrix." + server, tool, args, taskforge::native::Context{root});
+}
+
+TEST(native_registry_lists_the_servers_and_validates_calls) {
+    namespace nat = taskforge::native;
+    std::vector<std::string> ids;
+    for (const auto& sv : nat::servers()) {
+        ids.push_back(sv.id);
+        CHECK(!sv.tools.empty() && sv.id.rfind("arestrix.", 0) == 0);
+        for (const auto& t : sv.tools) CHECK(t.inputSchema["type"] == "object" && !t.description.empty() && (t.risk == "safe" || t.risk == "moderate" || t.risk == "high"));
+    }
+    for (const char* want : {"arquivos", "http", "dados", "memoria", "tempo", "git", "sqlite"})
+        CHECK(std::find(ids.begin(), ids.end(), std::string("arestrix.") + want) != ids.end());
+    auto root = makeTempDir("native-reg");
+    CHECK(nativeCall(root, "arquivos", "read_file", json::object()).isError);             // argumento obrigatorio ausente
+    CHECK(nativeCall(root, "arquivos", "nao_existe", json::object()).isError);
+    CHECK(nat::call("arestrix.inexistente", "x", json::object(), nat::Context{root}).isError);
+    fs::remove_all(root);
+}
+
+TEST(native_files_are_confined_and_protect_code_paths) {
+    auto root = makeTempDir("native-files");
+    CHECK(!nativeCall(root, "arquivos", "write_file", {{"path", "notas/a.txt"}, {"content", "ola\nmundo ARESTRIX"}}).isError);
+    CHECK(nativeCall(root, "arquivos", "read_file", {{"path", "notas/a.txt"}}).content == "ola\nmundo ARESTRIX");
+    CHECK(!nativeCall(root, "arquivos", "write_file", {{"path", "notas/a.txt"}, {"content", "!"}, {"append", true}}).isError);
+    CHECK(nativeCall(root, "arquivos", "read_file", {{"path", "notas/a.txt"}}).content == "ola\nmundo ARESTRIX!");
+
+    // fuga do projeto
+    CHECK(nativeCall(root, "arquivos", "read_file", {{"path", "../fora.txt"}}).isError);
+    CHECK(nativeCall(root, "arquivos", "write_file", {{"path", "../fora.txt"}, {"content", "x"}}).isError);
+    CHECK(nativeCall(root, "arquivos", "read_file", {{"path", (fs::temp_directory_path() / "qualquer.txt").string()}}).isError);
+
+    // .git ilegivel; pipelines, configuracao e pastas internas nao sao gravaveis (gravar ali injetaria codigo)
+    writeFile(root / ".git" / "config", "[remote]\nurl = https://usuario:segredo@exemplo.com/r.git\n");
+    CHECK(nativeCall(root, "arquivos", "read_file", {{"path", ".git/config"}}).isError);
+    for (const char* path : {"pipelines/main.json", "arestrix.project.json", ".workspace/mcps/x.json", ".git/hooks/pre-commit",
+                             ".arestrix/memory.json", ".githooks/pre-commit", "arestrix-mcp-servers.json", "PIPELINES/outro.json"}) {
+        auto r = nativeCall(root, "arquivos", "write_file", {{"path", path}, {"content", "x"}});
+        CHECK(r.isError);
+        CHECK(!fs::exists(root / path));
+    }
+    CHECK(nativeCall(root, "arquivos", "make_directory", {{"path", "pipelines/novo"}}).isError);
+    CHECK(!nativeCall(root, "arquivos", "make_directory", {{"path", "dados/2026"}}).isError && fs::is_directory(root / "dados" / "2026"));
+
+    // listar, informar e buscar
+    CHECK(nativeCall(root, "arquivos", "list_directory", {{"path", "notas"}}).content.find("a.txt") != std::string::npos);
+    CHECK(nativeCall(root, "arquivos", "list_directory", {{"recursive", true}}).content.find(".git") == std::string::npos);
+    CHECK(nativeCall(root, "arquivos", "file_info", {{"path", "notas/a.txt"}}).content.find("\"type\":\"file\"") != std::string::npos);
+    CHECK(nativeCall(root, "arquivos", "file_info", {{"path", "nada.txt"}}).content.find("\"exists\":false") != std::string::npos);
+    auto found = nativeCall(root, "arquivos", "search_text", {{"query", "arestrix"}});      // sem diferenciar maiusculas
+    CHECK(found.content.find("notas/a.txt:2:") != std::string::npos);
+    CHECK(nativeCall(root, "arquivos", "search_text", {{"query", "segredo"}}).content == "(nenhum resultado)");   // nao entra em .git
+    CHECK(nativeCall(root, "arquivos", "search_text", {{"query", "a"}}).isError);                                 // consulta curta demais
+
+    // binarios e arquivos grandes
+    { std::ofstream(root / "bin.dat", std::ios::binary) << std::string("abc\0def", 7); }
+    CHECK(nativeCall(root, "arquivos", "read_file", {{"path", "bin.dat"}}).isError);
+    CHECK(nativeCall(root, "arquivos", "write_file", {{"path", "grande.txt"}, {"content", std::string(2 * 1024 * 1024 + 1, 'x')}}).isError);
+
+    // as ferramentas write/edit dos AGENTES tambem protegem os caminhos que levam a execucao de codigo
+    taskforge::rt::ToolContext tctx;
+    tctx.workspaceRoot = root;
+    tctx.allowed = {"read", "write", "edit"};
+    CHECK(taskforge::rt::executeTool(tctx, "write", {{"path", "pipelines/main.json"}, {"content", "x"}}).isError);
+    CHECK(taskforge::rt::executeTool(tctx, "write", {{"path", "arestrix.project.json"}, {"content", "x"}}).isError);
+    CHECK(!taskforge::rt::executeTool(tctx, "write", {{"path", "workspace/ok.txt"}, {"content", "x"}}).isError);
+    writeFile(root / "pipelines" / "p.json", "abc");
+    CHECK(taskforge::rt::executeTool(tctx, "edit", {{"path", "pipelines/p.json"}, {"old_text", "abc"}, {"new_text", "xyz"}}).isError);
+    CHECK(taskforge::jsonutil::readFile(root / "pipelines" / "p.json") == "abc");
+    fs::remove_all(root);
+}
+
+TEST(native_http_requires_project_authorization_and_blocks_internal_targets) {
+    namespace nat = taskforge::native;
+    auto root = makeTempDir("native-http");
+    // sem politica: nada sai, e a mensagem ensina o que fazer
+    std::string refusal = nat::http::checkUrl(root, "https://api.exemplo.com/v1");
+    CHECK(refusal.find("api.exemplo.com") != std::string::npos && refusal.find("http.json") != std::string::npos);
+
+    writeFile(root / ".workspace" / "native" / "http.json", R"({"allowedHosts":["api.exemplo.com","*.exemplo.org","*","10.0.0.5","localhost"]})");
+    CHECK(nat::http::checkUrl(root, "https://api.exemplo.com/v1?q=1").empty());
+    CHECK(nat::http::checkUrl(root, "HTTPS://API.EXEMPLO.COM:443/x").empty());
+    CHECK(nat::http::checkUrl(root, "https://sub.exemplo.org/x").empty());                    // curinga *.dominio
+    CHECK(!nat::http::checkUrl(root, "https://exemplo.org/x").empty());                       // o proprio dominio nao e subdominio
+    CHECK(!nat::http::checkUrl(root, "https://outro.com/x").empty());                         // "*" sozinho e ignorado
+    CHECK(!nat::http::checkUrl(root, "http://api.exemplo.com/v1").empty());                   // so HTTPS
+    CHECK(!nat::http::checkUrl(root, "https://api.exemplo.com:8443/v1").empty());             // so a porta 443
+    CHECK(!nat::http::checkUrl(root, std::string("https://usuario") + ":" + "ficticia" + "@api.exemplo.com/").empty());   // credenciais na URL (texto de teste, montado em partes)
+    CHECK(!nat::http::checkUrl(root, "https://api.exemplo.com.atacante.com/").empty());       // nao basta "conter" o host
+    CHECK(!nat::http::checkUrl(root, "https://api.exemplo.com/a b").empty());
+
+    // destinos locais e privados sao recusados MESMO se alguem os colocar na lista (SSRF)
+    for (const char* u : {"https://10.0.0.5/x", "https://localhost/x", "https://127.0.0.1/x", "https://192.168.1.10/x",
+                          "https://172.20.0.1/x", "https://169.254.169.254/latest/meta-data", "https://2130706433/x",
+                          "https://[::1]/x", "https://servidor.local/x", "https://db.internal/x"}) {
+        CHECK(!nat::http::checkUrl(root, u).empty());
+    }
+
+    // validacoes que acontecem antes de qualquer rede
+    auto call = [&](const json& args) { return nat::call("arestrix.http", "http_get", args, nat::Context{root}); };
+    CHECK(call({{"url", "https://api.exemplo.com/"}, {"headers", {{"Authorization", "Bearer abc"}}}}).content.find("bearer_env") != std::string::npos);
+    CHECK(call({{"url", "https://api.exemplo.com/"}, {"headers", {{"Cookie", "a=b"}}}}).isError);
+    CHECK(call({{"url", "https://api.exemplo.com/"}, {"headers", {{"X-Teste", "a\r\nHost: evil"}}}}).isError);
+    CHECK(call({{"url", "https://api.exemplo.com/"}, {"bearer_env", "meu token"}}).isError);       // nao e um nome de variavel
+    CHECK(call({{"url", "https://api.exemplo.com/"}, {"bearer_env", "ARX_TEST_TOKEN_NAO_DEFINIDO"}}).content.find("nao esta definida") != std::string::npos);
+    fs::remove_all(root);
+}
+
+TEST(native_http_policy_is_validated_when_saved_and_tool_filter_accepts_qualified_names) {
+    namespace nat = taskforge::native;
+    auto root = makeTempDir("native-policy");
+    std::string err;
+    CHECK(nat::http::readPolicy(root).empty());
+    CHECK(nat::http::writePolicy(root, {"API.Exemplo.com", " *.exemplo.org ", "api.exemplo.com", ""}, err) && err.empty());
+    auto hosts = nat::http::readPolicy(root);
+    CHECK(hosts.size() == 2 && hosts[0] == "api.exemplo.com" && hosts[1] == "*.exemplo.org");
+    CHECK(nat::http::checkUrl(root, "https://api.exemplo.com/x").empty() && nat::http::checkUrl(root, "https://v1.exemplo.org/x").empty());
+    CHECK(!nat::http::checkUrl(root, "https://outro.com/x").empty());
+    for (const char* bad : {"https://a.com", "a.com/caminho", "a.com:443", "localhost", "192.168.0.1", "10.0.0.1", "2130706433", "*.com", "*", "*.*", "a..com", ".a.com", "a b.com", "a_b.com"}) {
+        CHECK(!nat::http::writePolicy(root, {bad}, err) && !err.empty());
+        err.clear();
+    }
+    CHECK(nat::http::readPolicy(root).size() == 2);                                    // as recusas nao alteraram o arquivo
+    CHECK(nat::http::writePolicy(root, {}, err) && nat::http::readPolicy(root).empty());   // esvaziar fecha o acesso
+    CHECK(!nat::http::checkUrl(root, "https://api.exemplo.com/x").empty());
+    fs::remove_all(root);
+
+    using TB = taskforge::rt::McpToolbox;
+    CHECK(TB::isToolAllowed({}, "arestrix.dados", "json_query"));                        // vazia = todas
+    CHECK(TB::isToolAllowed({"json_query"}, "arestrix.dados", "json_query"));            // nome simples (formato antigo)
+    CHECK(!TB::isToolAllowed({"json_query"}, "arestrix.dados", "regex_extract"));
+    CHECK(TB::isToolAllowed({"arestrix.dados/regex_extract"}, "arestrix.dados", "regex_extract"));
+    CHECK(!TB::isToolAllowed({"arestrix.dados/regex_extract"}, "clientes", "regex_extract"));   // outro servidor, mesmo nome
+    CHECK(TB::isToolAllowed({"clientes/*"}, "clientes", "qualquer"));
+    CHECK(!TB::isToolAllowed({"clientes/*"}, "arestrix.dados", "json_query"));
+}
+
+TEST(native_data_tools_transform_json_csv_regex_and_base64) {
+    auto root = makeTempDir("native-data");
+    auto q = [&](const json& j, const std::string& path) { return nativeCall(root, "dados", "json_query", {{"json", j}, {"path", path}}); };
+    json doc = {{"cliente", {{"nome", "Ana"}, {"enderecos", json::array({{{"cidade", "Recife"}}, {{"cidade", "Olinda"}}})}}}, {"n", 3}};
+    CHECK(q(doc, "cliente.nome").content == "Ana");
+    CHECK(q(doc, "cliente.enderecos[1].cidade").content == "Olinda");
+    CHECK(q(doc, "cliente.enderecos.0.cidade").content == "Recife");
+    CHECK(q(doc, "n").content == "3");
+    CHECK(q(doc, "cliente.telefone").isError);
+    CHECK(q(json(R"({"a":{"b":2}})"), "a.b").content == "2");                      // aceita o JSON como texto
+
+    auto csv = nativeCall(root, "dados", "csv_to_json", {{"csv", "nome,obs\r\nAna,\"disse \"\"oi\"\", depois\nsaiu\"\nBruno,\r\n"}});
+    json rows = taskforge::jsonutil::parse(csv.content);
+    CHECK(rows.size() == 2 && rows[0]["nome"] == "Ana" && rows[0]["obs"] == "disse \"oi\", depois\nsaiu" && rows[1]["obs"] == "");
+    auto back = nativeCall(root, "dados", "json_to_csv", {{"json", rows}});
+    json again = taskforge::jsonutil::parse(nativeCall(root, "dados", "csv_to_json", {{"csv", back.content}}).content);
+    CHECK(again == rows);                                                           // ida e volta preserva aspas, virgulas e quebras de linha
+    CHECK(taskforge::jsonutil::parse(nativeCall(root, "dados", "csv_to_json", {{"csv", "a;b\n1;2"}, {"delimiter", ";"}}).content)[0]["b"] == "2");
+
+    auto rx = [&](const json& args) { return nativeCall(root, "dados", "regex_extract", args); };
+    CHECK(rx({{"text", "pedido 123 e 456"}, {"pattern", "\\d+"}}).content == "[\"123\"]");
+    CHECK(rx({{"text", "pedido 123 e 456"}, {"pattern", "\\d+"}, {"all", true}}).content == "[\"123\",\"456\"]");
+    CHECK(rx({{"text", "id=42;"}, {"pattern", "id=(\\d+)"}, {"group", 1}}).content == "[\"42\"]");
+    CHECK(rx({{"text", "x"}, {"pattern", "(["}}).isError);                          // regex invalida: erro claro
+    CHECK(rx({{"text", std::string(40, 'a') + "!"}, {"pattern", "(a+)+$"}}).isError);   // backtracking catastrofico: recusado
+    CHECK(rx({{"text", "x"}, {"pattern", "(.*)*"}}).isError);
+    CHECK(rx({{"text", "abc"}, {"pattern", "a"}, {"group", 5}}).isError);
+
+    for (const std::string text : {std::string(""), std::string("a"), std::string("ab"), std::string("abc"), std::string("Ol\xC3\xA1, mundo!")}) {
+        auto enc = nativeCall(root, "dados", "base64_encode", {{"text", text}});
+        CHECK(nativeCall(root, "dados", "base64_decode", {{"data", enc.content}}).content == text);
+    }
+    CHECK(nativeCall(root, "dados", "base64_encode", {{"text", "Man"}}).content == "TWFu");
+    CHECK(nativeCall(root, "dados", "base64_decode", {{"data", "@@@"}}).isError);
+    fs::remove_all(root);
+}
+
+TEST(native_memory_and_time) {
+    auto root = makeTempDir("native-mem");
+    CHECK(!nativeCall(root, "memoria", "memory_set", {{"key", "cliente:ana"}, {"value", "plano ouro"}}).isError);
+    CHECK(nativeCall(root, "memoria", "memory_get", {{"key", "cliente:ana"}}).content == "plano ouro");
+    CHECK(nativeCall(root, "memoria", "memory_get", {{"key", "nao_existe"}}).isError);
+    nativeCall(root, "memoria", "memory_set", {{"key", "cliente:bruno"}, {"value", "basico"}});
+    nativeCall(root, "memoria", "memory_set", {{"key", "outro"}, {"value", "x"}});
+    CHECK(nativeCall(root, "memoria", "memory_list", {{"prefix", "cliente:"}}).content == "[\"cliente:ana\",\"cliente:bruno\"]");
+    CHECK(fs::exists(root / ".arestrix" / "memory.json"));                       // persiste no projeto
+    CHECK(!nativeCall(root, "memoria", "memory_delete", {{"key", "outro"}}).isError);
+    CHECK(nativeCall(root, "memoria", "memory_delete", {{"key", "outro"}}).isError);
+    CHECK(nativeCall(root, "memoria", "memory_set", {{"key", "chave invalida!"}, {"value", "x"}}).isError);
+    CHECK(nativeCall(root, "memoria", "memory_set", {{"key", "grande"}, {"value", std::string(70 * 1024, 'x')}}).isError);
+
+    auto add = [&](const std::string& iso, const json& d) {
+        json args = d;
+        args["iso"] = iso;
+        return taskforge::jsonutil::parse(nativeCall(root, "tempo", "add_duration", args).content)["iso"].str();
+    };
+    CHECK(add("2024-02-28T10:00:00Z", {{"days", 1}}) == "2024-02-29T10:00:00Z");              // ano bissexto
+    CHECK(add("2024-02-28T10:00:00Z", {{"days", 2}}) == "2024-03-01T10:00:00Z");
+    CHECK(add("2025-02-28", {{"days", 1}}) == "2025-03-01T00:00:00Z");                        // so data
+    CHECK(add("2026-12-31T23:30:00-03:00", {{"minutes", 45}}) == "2027-01-01T00:15:00-03:00");   // mantem o fuso
+    CHECK(add("2026-10-13T09:00:00Z", {{"hours", -10}}) == "2026-10-12T23:00:00Z");
+    CHECK(nativeCall(root, "tempo", "add_duration", {{"iso", "ontem"}}).isError);
+    json d = taskforge::jsonutil::parse(nativeCall(root, "tempo", "diff", {{"from", "2026-10-13T00:00:00Z"}, {"to", "2026-10-15T12:00:00Z"}}).content);
+    CHECK(d["seconds"] == 216000 && d["days"].get<double>() == 2.5);
+    CHECK(nativeCall(root, "tempo", "add_duration", {{"iso", "2026-10-13"}}).content.find("\"weekday\":\"terca\"") != std::string::npos);
+    json now = taskforge::jsonutil::parse(nativeCall(root, "tempo", "now", json::object()).content);
+    CHECK(now["iso"].str().size() == 20 && now["iso"].str().back() == 'Z' && now["epoch"].get<int64_t>() > 1700000000);
+    json local = taskforge::jsonutil::parse(nativeCall(root, "tempo", "now", {{"timezone", "local"}}).content);
+    CHECK(local["epoch"].get<int64_t>() > 1700000000);
+    fs::remove_all(root);
+}
+
+TEST(native_git_is_read_only_and_rejects_option_injection) {
+    if (!taskforge::platform::commandExists("git")) { std::cout << "  (git ausente: teste ignorado)" << std::endl; return; }
+    auto root = makeTempDir("native-git");
+    auto git = [&](std::vector<std::string> args) {
+        taskforge::platform::ProcessSpec spec;
+        spec.argv = {"git", "-C", root.string(), "-c", "user.email=t@example.com", "-c", "user.name=Teste", "-c", "commit.gpgsign=false"};
+        for (auto& a : args) spec.argv.push_back(a);
+        return taskforge::platform::run(spec, 20000).ok();
+    };
+    CHECK(git({"init", "-q"}));
+    writeFile(root / "a.txt", "primeira versao\n");
+    CHECK(git({"add", "."}) && git({"commit", "-q", "-m", "inicio"}));
+    writeFile(root / "a.txt", "segunda versao\n");
+
+    CHECK(nativeCall(root, "git", "git_status", json::object()).content.find("a.txt") != std::string::npos);
+    CHECK(nativeCall(root, "git", "git_log", {{"max_count", 5}}).content.find("inicio") != std::string::npos);
+    CHECK(nativeCall(root, "git", "git_diff", {{"path", "a.txt"}}).content.find("+segunda versao") != std::string::npos);
+    CHECK(nativeCall(root, "git", "git_show_file", {{"rev", "HEAD"}, {"path", "a.txt"}}).content == "primeira versao\n");
+
+    // injecao de opcao, caminhos invalidos e .git
+    CHECK(nativeCall(root, "git", "git_show_file", {{"rev", "--output=pwned.txt"}, {"path", "a.txt"}}).isError);
+    CHECK(nativeCall(root, "git", "git_show_file", {{"rev", "-p"}, {"path", "a.txt"}}).isError);
+    CHECK(nativeCall(root, "git", "git_show_file", {{"rev", "HEAD"}, {"path", "../fora.txt"}}).isError);
+    CHECK(nativeCall(root, "git", "git_show_file", {{"rev", "HEAD"}, {"path", ".git/config"}}).isError);
+    CHECK(nativeCall(root, "git", "git_log", {{"path", "../fora"}}).isError);
+    CHECK(!fs::exists(root / "pwned.txt"));
+    fs::remove_all(root);
+}
+
+TEST(native_sqlite_works_and_is_locked_down) {
+    auto root = makeTempDir("native-sql");
+    auto exec = [&](const std::string& sql, const json& params = json::array(), const std::string& db = "") {
+        json a = {{"sql", sql}, {"params", params}};
+        if (!db.empty()) a["database"] = db;
+        return nativeCall(root, "sqlite", "sql_execute", a);
+    };
+    auto query = [&](const std::string& sql, const json& params = json::array(), const std::string& db = "") {
+        json a = {{"sql", sql}, {"params", params}};
+        if (!db.empty()) a["database"] = db;
+        return nativeCall(root, "sqlite", "sql_query", a);
+    };
+    CHECK(query("SELECT 1").isError);                                       // banco ainda nao existe: consulta nao o cria
+    CHECK(!fs::exists(root / "data" / "arestrix.db"));
+    CHECK(!exec("CREATE TABLE clientes (id INTEGER PRIMARY KEY, nome TEXT NOT NULL, email TEXT, saldo REAL)").isError);
+    CHECK(fs::exists(root / "data" / "arestrix.db"));
+    auto ins = exec("INSERT INTO clientes (nome, email, saldo) VALUES (?, ?, ?)", {"Ana", "ana@exemplo.com", 10.5});
+    CHECK(!ins.isError && taskforge::jsonutil::parse(ins.content)["changes"] == 1 && taskforge::jsonutil::parse(ins.content)["last_insert_rowid"] == 1);
+    exec("INSERT INTO clientes (nome, email) VALUES (?, ?)", {"Bruno", nullptr});
+    json q = taskforge::jsonutil::parse(query("SELECT id, nome, email, saldo FROM clientes WHERE nome = ?", {"Ana"}).content);
+    CHECK(q["row_count"] == 1 && q["rows"][0]["email"] == "ana@exemplo.com" && q["rows"][0]["saldo"].get<double>() == 10.5 && q["rows"][0]["id"] == 1);
+    json all = taskforge::jsonutil::parse(query("SELECT nome, email FROM clientes ORDER BY id").content);
+    CHECK(all["row_count"] == 2 && all["rows"][1]["email"].is_null());
+    CHECK(taskforge::jsonutil::parse(nativeCall(root, "sqlite", "sql_query", {{"sql", "SELECT * FROM clientes"}, {"max_rows", 1}}).content)["truncated"] == true);
+    CHECK(nativeCall(root, "sqlite", "list_tables", json::object()).content.find("\"clientes\"") != std::string::npos);
+    CHECK(nativeCall(root, "sqlite", "describe_table", {{"table", "clientes"}}).content.find("\"nome\"") != std::string::npos);
+    CHECK(nativeCall(root, "sqlite", "describe_table", {{"table", "nao_existe"}}).isError);
+
+    // injecao: o texto vai como parametro, nunca vira SQL
+    exec("INSERT INTO clientes (nome) VALUES (?)", {"x'); DROP TABLE clientes; --"});
+    CHECK(taskforge::jsonutil::parse(query("SELECT COUNT(*) AS n FROM clientes").content)["rows"][0]["n"] == 3);
+
+    // regras de uso
+    CHECK(query("INSERT INTO clientes (nome) VALUES ('a')").isError);                 // consulta nao escreve
+    CHECK(query("DELETE FROM clientes").isError);
+    CHECK(query("SELECT 1; DROP TABLE clientes").isError);                             // um comando por chamada
+    CHECK(exec("SELECT 1; SELECT 2").isError);
+    CHECK(query("SELECT * FROM clientes WHERE id = ?", json::array()).isError);        // numero de parametros confere
+    CHECK(query("SELECT * FROM nao_existe").isError);
+    CHECK(exec("").isError);
+
+    // o que o autorizador recusa: sair do arquivo, mudar configuracao, gatilhos, transacoes
+    CHECK(exec("ATTACH DATABASE 'outro.db' AS o").isError);
+    CHECK(exec("ATTACH DATABASE '../fora.db' AS o").isError);
+    CHECK(exec("PRAGMA writable_schema = ON").isError);
+    CHECK(exec("PRAGMA journal_mode = OFF").isError);
+    CHECK(query("PRAGMA table_info(clientes)").isError);
+    CHECK(exec("CREATE VIRTUAL TABLE v USING fts5(a)").isError);
+    CHECK(exec("CREATE TRIGGER t AFTER INSERT ON clientes BEGIN DELETE FROM clientes; END").isError);
+    CHECK(exec("BEGIN").isError);
+    CHECK(exec("CREATE TEMP TABLE t (a)").isError);
+    CHECK(query("SELECT load_extension('x')").isError);
+    CHECK(!fs::exists(root / "outro.db") && !fs::exists(root.parent_path() / "fora.db"));
+    CHECK(query("SELECT \"clientes\" FROM clientes").isError);                          // aspas duplas nao viram texto (DQS=0)
+
+    // o arquivo: so dentro do projeto, so extensoes de banco, nunca em lugares protegidos
+    CHECK(exec("CREATE TABLE t (a)", json::array(), "../fora.db").isError);
+    CHECK(exec("CREATE TABLE t (a)", json::array(), "dados.txt").isError);
+    CHECK(exec("CREATE TABLE t (a)", json::array(), "pipelines/x.db").isError);
+    CHECK(exec("CREATE TABLE t (a)", json::array(), ".git/x.db").isError);
+    CHECK(exec("CREATE TABLE t (a)", json::array(), ".workspace/x.db").isError);
+    CHECK(!exec("CREATE TABLE t (a)", json::array(), "dados/outro.sqlite").isError);   // outro banco no projeto: permitido
+    CHECK(fs::exists(root / "dados" / "outro.sqlite"));
+
+    // limite de tempo: uma consulta que nunca termina e interrompida
+    auto t0 = std::chrono::steady_clock::now();
+    auto slow = query("WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c) SELECT count(*) FROM c");
+    double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    CHECK(slow.isError && secs < 8.0);
+    fs::remove_all(root);
+}
+
+TEST(native_servers_work_as_mcp_vertices_and_agent_tools_without_any_process) {
+    namespace nat = taskforge::native;
+    using namespace taskforge::rt;
+    taskforge::mcp::McpClient::shutdownSessions();
+    auto root = makeTempDir("native-wire");
+    fs::path oldCwd = fs::current_path();
+    fs::current_path(root);
+
+    // vertice MCP chamando uma ferramenta nativa, com a entrada vinda de um arquivo
+    writeFile(root / "entrada.json", R"({"cliente":{"nome":"Ana"}})");
+    callMcpTool("n1", "Nome", R"({"server":"arestrix.dados","tool":"json_query",
+        "arguments":{"json":"{{input}}","path":"cliente.nome"},"source":{"kind":"file","path":"entrada.json"},"output":{}})");
+    CHECK(taskforge::jsonutil::readFile(root / ".arestrix" / "out" / "n1.txt") == "Ana");
+    CHECK(taskforge::mcp::McpClient::activeSessions() == 0);                 // nenhum processo foi aberto
+
+    // erro de ferramenta nativa interrompe o pipeline
+    bool threw = false;
+    try { callMcpTool("n2", "Falha", R"({"server":"arestrix.arquivos","tool":"read_file","arguments":{"path":"../fora"},"source":{"kind":"none"}})"); }
+    catch (const std::exception& ex) { threw = std::string(ex.what()).find("falhou") != std::string::npos; }
+    CHECK(threw);
+
+    // caixa de ferramentas dos agentes: os nomes seguem mcp__<servidor>__<ferramenta>
+    McpToolbox box(root, {"arestrix.tempo", "arestrix.dados"}, {"now", "base64_encode"});
+    CHECK(box.definitions().size() == 2);
+    CHECK(box.owns("mcp__arestrix_tempo__now") && box.owns("mcp__arestrix_dados__base64_encode") && !box.owns("mcp__arestrix_dados__json_query"));
+    CHECK(box.call("mcp__arestrix_dados__base64_encode", {{"text", "Man"}}).content == "TWFu");
+    McpToolbox all(root, {"arestrix.arquivos"}, {});
+    CHECK(all.definitions().size() == nat::findServer("arestrix.arquivos")->tools.size());
+    CHECK(all.definitions()[0].description.find("[Arestrix") == 0);
+    CHECK(taskforge::mcp::McpClient::activeSessions() == 0);
+
+    // a lista que a interface mostra: nativos primeiro, e o prefixo e reservado
+    json listed = McpToolbox::listProjectServers(root);
+    CHECK(listed.size() >= 6 && listed[0]["isNative"] == true && listed[0]["transport"] == "native");
+    bool reserved = false;
+    try { McpToolbox::loadServerConfig(root, "arestrix.arquivos"); } catch (const std::exception&) { reserved = true; }
+    CHECK(reserved);
+    bool unknown = false;
+    try { McpToolbox bad(root, {"arestrix.nao_existe"}, {}); } catch (const std::exception&) { unknown = true; }
+    CHECK(unknown);
+
+    fs::current_path(oldCwd);
+    fs::remove_all(root);
+}
+
+TEST(native_calls_are_orders_of_magnitude_faster_than_mcp_over_a_process) {
+    using taskforge::mcp::McpClient;
+    namespace nat = taskforge::native;
+    auto root = makeTempDir("native-bench");
+    const int nativeCalls = 3000;
+    json args = {{"json", R"({"a":{"b":[1,2,3]}})"}, {"path", "a.b[2]"}};
+    auto t0 = std::chrono::steady_clock::now();
+    for (int i = 0; i < nativeCalls; ++i) nat::call("arestrix.dados", "json_query", args, nat::Context{root});
+    double nativeUs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() / nativeCalls * 1e6;
+    std::cout << "  ferramenta nativa: " << nativeUs << " us por chamada" << std::endl;
+    CHECK(nativeUs < 500);
+
+    if (taskforge::platform::commandExists("python") || taskforge::platform::commandExists("python3")) {
+        McpClient::shutdownSessions();
+        auto cfg = countingServer(root / "starts.log");
+        McpClient client;
+        client.callTool(cfg, "echo", {{"text", "x"}}, 20000);                       // abre a sessao fora da medicao
+        const int mcpCalls = 100;
+        t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < mcpCalls; ++i) client.callTool(cfg, "echo", {{"text", "x"}}, 20000);
+        double mcpUs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() / mcpCalls * 1e6;
+        McpClient::shutdownSessions();
+        std::cout << "  MCP externo (sessao persistente): " << mcpUs << " us por chamada (" << mcpUs / nativeUs << "x mais lento)" << std::endl;
+        CHECK(nativeUs * 10 < mcpUs);
+    }
+    fs::remove_all(root);
 }
 
 int main() {

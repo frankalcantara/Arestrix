@@ -54,6 +54,45 @@ Quando uma skill é importada, o **Auditor de Skills do Workspace** inspeciona s
 solicitadas, as dependências de script e a segurança de sandbox antes que ela possa ser usada em um pipeline. O
 repositório também inclui o scanner **SkillSpector** da NVIDIA em `third_party/`.
 
+## Ferramentas nativas (sem instalação, sem processo)
+
+O Arestrix traz seus próprios servidores de ferramentas, escritos em C++ e executados **dentro do programa**: sem Node, sem Python,
+sem processo filho e sem código de terceiros. Elas aparecem no vértice MCP e nos agentes exatamente como qualquer servidor MCP
+(marcadas com ⚡ na lista), mas uma chamada é uma chamada de função.
+
+| Servidor | Ferramentas | Observações |
+| :--- | :--- | :--- |
+| `arestrix.arquivos` | `read_file`, `write_file`, `list_directory`, `file_info`, `make_directory`, `search_text` | Confinado ao projeto. Só texto, 1 MB para ler, 2 MB para gravar. |
+| `arestrix.http` | `http_get`, `http_post_json` | **Só hosts que o projeto autorizar** (abaixo). Somente HTTPS. |
+| `arestrix.dados` | `json_query`, `csv_to_json`, `json_to_csv`, `regex_extract`, `base64_encode`, `base64_decode` | Transformação pura de dados. Padrões de regex que poderiam travar o programa são recusados. |
+| `arestrix.memoria` | `memory_set`, `memory_get`, `memory_list`, `memory_delete` | Pequenos textos em `.arestrix/memory.json` (1000 chaves, 64 KB cada). |
+| `arestrix.tempo` | `now`, `add_duration`, `diff` | ISO 8601, anos bissextos, fusos. |
+| `arestrix.git` | `git_status`, `git_log`, `git_diff`, `git_show_file` | **Somente leitura.** Exige o Git instalado. |
+| `arestrix.sqlite` | `list_tables`, `describe_table`, `sql_query`, `sql_execute` | Banco SQLite embutido, em um arquivo do projeto (padrão `data/arestrix.db`). Veja abaixo. |
+
+**Regras de segurança, as mesmas para todos**
+- Tudo fica dentro da pasta do projeto. A pasta `.git` não pode ser lida. **Pipelines, configuração do projeto, `.workspace`, `.arestrix` e
+  `.githooks` nunca podem ser gravados** por estas ferramentas, nem pelas ferramentas `write` e `edit` dos próprios agentes: gravar ali
+  injetaria código C++ ou servidores MCP que rodariam na próxima execução.
+- **O HTTP nunca decide sozinho para onde os dados vão.** Liste os sites permitidos no Studio (**Padrões Globais → Ferramentas → Acesso à
+  internet**, um por linha, como `api.exemplo.com` ou `*.exemplo.org`), que os grava em `.workspace/native/http.json`; sem nenhum site nada é
+  enviado, e a mensagem de erro diz o que fazer. Curingas exigem um domínio completo (`*.com` é recusado).
+  Endereços locais e privados são recusados mesmo se listados, redirecionamentos **não** são seguidos (cada destino precisa ser
+  autorizado) e as credenciais só viajam por `bearer_env`, o **nome** de uma variável de ambiente, nunca o valor.
+- Todo resultado é limitado a 64 KB, e um erro de ferramenta interrompe o pipeline com uma mensagem clara.
+
+**Banco de dados SQLite.** O `arestrix.sqlite` embute o SQLite (domínio público, `third_party/sqlite`), sem servidor e sem instalação. Cada
+chamada abre o arquivo, executa **um** comando e o fecha. O arquivo precisa estar dentro do projeto e terminar em `.db`, `.sqlite` ou
+`.sqlite3`, nunca em `.git` nem nas pastas protegidas. Os valores vão em `params` (`?` no comando), nunca concatenados no texto. O `sql_query`
+abre o arquivo **somente para leitura** e só executa `SELECT`; o `sql_execute` altera dados e esquema. O motor recusa `ATTACH`, `PRAGMA`,
+tabelas virtuais, gatilhos, transações e carga de extensões, um comando é interrompido após 5 segundos e o banco é limitado a 200 MB.
+
+**Escolher as ferramentas de um agente.** Na janela **Ferramentas** de um agente (e nos Padrões Globais) todo servidor, nativo ou não, aparece com
+uma caixa, e "Escolher ferramentas" liga e desliga cada ferramenta. Só os nomes do servidor e das ferramentas são gravados.
+
+**Velocidade.** Na máquina de desenvolvimento, uma chamada nativa levou cerca de 4 microssegundos; um servidor MCP externo, com sessão
+persistente, cerca de 56 microssegundos para uma ferramenta trivial, e abrir um processo por chamada levou cerca de 190 milissegundos.
+
 ## Servidores MCP
 
 O Arestrix é um cliente MCP sobre stdio e SSE. Há duas coisas distintas:
@@ -81,7 +120,7 @@ que você liga no grafo) ou como **ferramentas de um agente** (o modelo decide q
 **Desempenho.** O programa gerado conversa com os servidores MCP pelo **cliente nativo em C++** (sem Node nem Python no meio, do
 lado do Arestrix). Cada servidor tem **uma sessão persistente** (um processo e um handshake para a execução inteira), compartilhada
 com segurança por todas as threads: chamadas ao mesmo servidor são serializadas, servidores diferentes rodam em paralelo. Num
-servidor de teste, 15 chamadas levaram 0,48 s com a sessão persistente contra 3,75 s abrindo um processo por chamada (7,8x). A sessão é
+servidor de teste, 15 chamadas levaram 0,19 s com a sessão persistente contra 2,8 s abrindo um processo por chamada (15x). A sessão é
 reaberta se o servidor morrer ou a configuração mudar, e uma chamada que falhou **nunca** é repetida automaticamente (ela pode já ter
 tido efeito). As sessões são encerradas quando o programa termina.
 

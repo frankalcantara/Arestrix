@@ -104,7 +104,8 @@ def support_checks(out, project, events, path, label):
     check(routes and "revisao_humana" in routes[0]["options"], f"{label}: a opcao default foi oferecida ao modelo")
     check((project / "workspace" / "resposta.md").exists(), f"{label}: workspace/resposta.md criado")
     chats = [e for e in events if e["event"] == "chat"]
-    check("[MCP Consultar_Cliente] clientes.lookup_customer ok" in out, f"{label}: o vertice MCP consultou o cadastro de clientes")
+    check("[MCP Extrair_Email] arestrix.dados.regex_extract ok" in out, f"{label}: a ferramenta NATIVA extraiu o e-mail do chamado (sem processo externo)")
+    check("[MCP Consultar_Cliente] clientes.lookup_customer ok" in out, f"{label}: o vertice MCP consultou o cadastro de clientes com esse e-mail")
     cadastro = project / ".arestrix" / "out" / "consultar_cliente.txt"
     check(cadastro.exists() and '"plano"' in cadastro.read_text(encoding="utf-8"), f"{label}: o resultado do MCP ficou disponivel para o proximo vertice")
     check(any(e["reply"] == "tool_call:read" for e in chats), f"{label}: o agente leu os dados que o vertice MCP gravou")

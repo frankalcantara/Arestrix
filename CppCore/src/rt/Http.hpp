@@ -24,6 +24,7 @@ struct HttpRequest {
     std::map<std::string, std::string> headers;
     std::string body;
     int timeoutSeconds = 600;
+    bool noRedirects = false;   // true: devolve o 3xx em vez de seguir (as ferramentas nativas validam cada destino)
 };
 
 HttpResponse httpSend(const HttpRequest& req);

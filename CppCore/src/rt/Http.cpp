@@ -100,6 +100,10 @@ HttpResponse httpSend(const HttpRequest& req) {
                                          WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
                                          secure ? WINHTTP_FLAG_SECURE : 0));
     if (!request.h) { resp.error = "WinHttpOpenRequest falhou"; return resp; }
+    if (req.noRedirects) {
+        DWORD policy = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
+        WinHttpSetOption(request.h, WINHTTP_OPTION_REDIRECT_POLICY, &policy, sizeof(policy));
+    }
 
     std::wstring headerBlock;
     for (const auto& kv : req.headers) {

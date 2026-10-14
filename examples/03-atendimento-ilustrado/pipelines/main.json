@@ -78,22 +78,60 @@
         }
       ],
       "parameters": {},
-      "customLambdaBody": "namespace fs = std::filesystem;\nfs::create_directories(\"workspace\");\nif (!fs::exists(\"workspace/ticket.txt\")) {\n    const char* pick = std::getenv(\"ARESTRIX_EXAMPLE_TICKET\");\n    std::string name = (pick && *pick) ? pick : \"chamado_normal.txt\";\n    if (name.find(\"..\") != std::string::npos || name.find('/') != std::string::npos || name.find('\\\\') != std::string::npos)\n        throw std::runtime_error(\"ARESTRIX_EXAMPLE_TICKET deve ser so o nome de um arquivo de samples/\");\n    fs::copy_file(\"samples/\" + name, \"workspace/ticket.txt\", fs::copy_options::overwrite_existing);\n}\n{\n    std::ifstream in(\"workspace/ticket.txt\");\n    std::stringstream ss;\n    ss << in.rdbuf();\n    const std::string text = ss.str();\n    std::smatch m;\n    std::regex email_re(R\"([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})\");\n    const std::string email = std::regex_search(text, m, email_re) ? m.str() : std::string();\n    std::ofstream(\"workspace/cliente.json\") << \"{\\\"email\\\":\\\"\" << email << \"\\\"}\";\n}\nstd::cout << \"[Receber] chamado em workspace/ticket.txt\\n\";",
+      "customLambdaBody": "namespace fs = std::filesystem;\nfs::create_directories(\"workspace\");\nif (!fs::exists(\"workspace/ticket.txt\")) {\n    const char* pick = std::getenv(\"ARESTRIX_EXAMPLE_TICKET\");\n    std::string name = (pick && *pick) ? pick : \"chamado_normal.txt\";\n    if (name.find(\"..\") != std::string::npos || name.find('/') != std::string::npos || name.find('\\\\') != std::string::npos)\n        throw std::runtime_error(\"ARESTRIX_EXAMPLE_TICKET deve ser so o nome de um arquivo de samples/\");\n    fs::copy_file(\"samples/\" + name, \"workspace/ticket.txt\", fs::copy_options::overwrite_existing);\n}\nstd::cout << \"[Receber] chamado em workspace/ticket.txt\\n\";",
       "requiredHeaders": [
         "<filesystem>",
         "<cstdlib>",
-        "<stdexcept>",
-        "<fstream>",
-        "<sstream>",
-        "<regex>"
+        "<stdexcept>"
       ]
+    },
+    {
+      "id": "atd_extrair_email",
+      "label": "Extrair_Email",
+      "type": "mcp",
+      "position": {
+        "x": 450,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "atd_extrair_email_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "atd_extrair_email_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "mcpSettings": {
+        "server": "arestrix.dados",
+        "tool": "regex_extract",
+        "arguments": {
+          "text": "{{input}}",
+          "pattern": "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
+        },
+        "source": {
+          "kind": "file",
+          "path": "workspace/ticket.txt"
+        },
+        "output": {}
+      }
     },
     {
       "id": "atd_consultar_cliente",
       "label": "Consultar_Cliente",
       "type": "mcp",
       "position": {
-        "x": 450,
+        "x": 900,
         "y": 0,
         "z": 0
       },
@@ -119,11 +157,10 @@
         "server": "clientes",
         "tool": "lookup_customer",
         "arguments": {
-          "email": "{{input.email}}"
+          "email": "{{input.0}}"
         },
         "source": {
-          "kind": "file",
-          "path": "workspace/cliente.json"
+          "kind": "previous"
         },
         "output": {
           "file": "workspace/cliente_dados.json"
@@ -135,7 +172,7 @@
       "label": "Agente_Leitor_de_Chamados",
       "type": "agent",
       "position": {
-        "x": 900,
+        "x": 1350,
         "y": 0,
         "z": 0
       },
@@ -179,7 +216,7 @@
       "label": "Triagem_de_Urgencia",
       "type": "switch",
       "position": {
-        "x": 1350,
+        "x": 1800,
         "y": 0,
         "z": 0
       },
@@ -243,7 +280,7 @@
       "label": "Agente_Escalonador",
       "type": "agent",
       "position": {
-        "x": 1800,
+        "x": 2250,
         "y": -430,
         "z": 0
       },
@@ -293,7 +330,7 @@
       "label": "Entrega_Urgente",
       "type": "static",
       "position": {
-        "x": 2250,
+        "x": 2700,
         "y": -430,
         "z": 0
       },
@@ -321,7 +358,7 @@
       "label": "Agente_Redator",
       "type": "agent",
       "position": {
-        "x": 1800,
+        "x": 2250,
         "y": 0,
         "z": 0
       },
@@ -365,7 +402,7 @@
       "label": "Agente_Revisor",
       "type": "agent",
       "position": {
-        "x": 2250,
+        "x": 2700,
         "y": 0,
         "z": 0
       },
@@ -409,7 +446,7 @@
       "label": "Controle_de_Qualidade",
       "type": "switch",
       "position": {
-        "x": 2700,
+        "x": 3150,
         "y": 0,
         "z": 0
       },
@@ -470,7 +507,7 @@
       "label": "Entrega_Normal",
       "type": "static",
       "position": {
-        "x": 3150,
+        "x": 3600,
         "y": -90,
         "z": 0
       },
@@ -498,7 +535,7 @@
       "label": "Agente_FAQ",
       "type": "agent",
       "position": {
-        "x": 1800,
+        "x": 2250,
         "y": 430,
         "z": 0
       },
@@ -542,7 +579,7 @@
       "label": "Revisao_Humana",
       "type": "static",
       "position": {
-        "x": 3150,
+        "x": 3600,
         "y": 330,
         "z": 0
       },
@@ -570,7 +607,7 @@
       "label": "Agente_Gerador_DeepSeek",
       "type": "agent",
       "position": {
-        "x": 2250,
+        "x": 2700,
         "y": 430
       },
       "inputs": [
@@ -607,7 +644,7 @@
       "label": "Linter_Tipografia_Estatico",
       "type": "static",
       "position": {
-        "x": 2550,
+        "x": 3000,
         "y": 330
       },
       "inputs": [
@@ -634,7 +671,7 @@
       "label": "Auditor_Timeline_SMIL",
       "type": "static",
       "position": {
-        "x": 2550,
+        "x": 3000,
         "y": 530
       },
       "inputs": [
@@ -661,7 +698,7 @@
       "label": "Consolidador_Diagnostico",
       "type": "static",
       "position": {
-        "x": 2850,
+        "x": 3300,
         "y": 430
       },
       "inputs": [
@@ -688,7 +725,7 @@
       "label": "Agente_Auditor_JEV",
       "type": "agent",
       "position": {
-        "x": 3150,
+        "x": 3600,
         "y": 430
       },
       "inputs": [
@@ -724,7 +761,7 @@
       "label": "Decisor_Qualidade",
       "type": "condition",
       "position": {
-        "x": 3450,
+        "x": 3900,
         "y": 430
       },
       "inputs": [
@@ -759,7 +796,7 @@
       "label": "Entrega_SVG_Final",
       "type": "static",
       "position": {
-        "x": 3750,
+        "x": 4200,
         "y": 350
       },
       "inputs": [
@@ -784,9 +821,16 @@
   ],
   "edges": [
     {
-      "id": "atd_edge_receber_0_to_consultar_cliente",
+      "id": "atd_edge_receber_0_to_extrair_email",
       "sourceNodeId": "atd_receber",
       "sourcePortId": "atd_receber_out_0",
+      "targetNodeId": "atd_extrair_email",
+      "targetPortId": "atd_extrair_email_in_0"
+    },
+    {
+      "id": "atd_edge_extrair_email_0_to_consultar_cliente",
+      "sourceNodeId": "atd_extrair_email",
+      "sourcePortId": "atd_extrair_email_out_0",
       "targetNodeId": "atd_consultar_cliente",
       "targetPortId": "atd_consultar_cliente_in_0"
     },

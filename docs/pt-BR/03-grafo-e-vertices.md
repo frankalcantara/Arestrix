@@ -37,6 +37,8 @@ escreve os **argumentos** em JSON e diz de onde vem a **entrada** (o vértice an
   um vértice MCP alimenta uma decisão ou um agente diretamente. Você também pode gravá-lo em um arquivo do projeto.
 - Se o servidor não existir ou não responder, um campo referenciado faltar, ou a ferramenta devolver erro, o pipeline **para com uma
   mensagem clara**.
+- Os servidores marcados com ⚡ são **ferramentas nativas do Arestrix** (arquivos, HTTP, dados, memória, tempo, Git, SQLite): não exigem
+  instalação e rodam dentro do programa. Veja [Ferramentas nativas](05-workspaces-memoria-skills-mcp.md#ferramentas-nativas-sem-instalação-sem-processo).
 - Roda no **cliente MCP nativo em C++**, com uma **sessão persistente** por servidor (veja [Servidores MCP](05-workspaces-memoria-skills-mcp.md#servidores-mcp)).
 
 ### Switch

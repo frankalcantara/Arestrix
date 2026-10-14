@@ -6,7 +6,7 @@ Um chamado de suporte é lido, classificado e respondido. Nada aqui é código q
 escolhidos por um modelo de IA (e por palavras), e um cadastro de clientes é acessado por um servidor MCP.
 
 ```
-Receber ─► Consultar cliente (vértice MCP) ─► Leitor (agente) ─► Triagem (switch, IA decide) ─┬─ urgente ─► Escalonador (agente + MCP) ─► Entrega
+Receber ─► Extrair e-mail (ferramenta nativa) ─► Consultar cliente (vértice MCP) ─► Leitor (agente) ─► Triagem (switch, IA decide) ─┬─ urgente ─► Escalonador (agente + MCP) ─► Entrega
                                                                  ├─ normal ──► Redator ─► Revisor ─► Qualidade (switch, palavras) ─┬─ aprovado ─► Entrega
                                                                  │                ▲                                                ├─ ajustar ─┘ (laço)
                                                                  │                └────────────────────────────────────────────────┘
@@ -16,7 +16,8 @@ Receber ─► Consultar cliente (vértice MCP) ─► Leitor (agente) ─► Tr
 
 | Vértice | O que mostra |
 | :--- | :--- |
-| Consultar_Cliente | Um **vértice MCP**: uma chamada direta e determinística a `lookup_customer` (sem IA), usando o e-mail que o *Receber_Chamado* extraiu. O resultado vai para `workspace/cliente_dados.json`. |
+| Extrair_Email | Um **vértice MCP usando uma ferramenta nativa do Arestrix** (`arestrix.dados.regex_extract`): acha o e-mail do cliente no chamado. Sem servidor, sem instalação, sem processo: é uma chamada de função dentro do programa. |
+| Consultar_Cliente | Um **vértice MCP** em um **servidor externo**: uma chamada direta e determinística a `lookup_customer` (sem IA), usando o e-mail achado pelo vértice anterior (`{{input.0}}`). O resultado vai para `workspace/cliente_dados.json`. |
 | Agente_Leitor | Um agente que lê o chamado e os dados do cliente e escreve o resumo. A resposta final dele alimenta a triagem. |
 | Triagem_de_Urgencia | Um **switch no modo "modelo de IA decide"**: o modelo lê a resposta do leitor e escolhe `urgente`, `normal`, `duvida` ou o default. |
 | Agente_Escalonador | Um agente que recebe um servidor MCP como **ferramentas** e decide chamar `registrar_escalonamento` (grava `output/escalonamentos.jsonl`). As duas formas de usar MCP, lado a lado. |

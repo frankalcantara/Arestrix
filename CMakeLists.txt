@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Arestrix LANGUAGES CXX)
+project(Arestrix LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -48,12 +48,30 @@ add_library(arestrix_core STATIC
   ${SRC}/rt/McpTools.cpp
   ${SRC}/rt/NodeInput.cpp
   ${SRC}/rt/McpVertex.cpp
+  ${SRC}/native/NativeTools.cpp
+  ${SRC}/native/NativeFiles.cpp
+  ${SRC}/native/NativeHttp.cpp
+  ${SRC}/native/NativeData.cpp
+  ${SRC}/native/NativeMisc.cpp
+  ${SRC}/native/NativeSqlite.cpp
+  ${TP}/sqlite/sqlite3.c
   ${TP}/simdjson/singleheader/simdjson.cpp)
 
 target_include_directories(arestrix_core PUBLIC
   ${SRC}
+  ${TP}/sqlite
   ${TP}/simdjson/singleheader
   ${TP}/taskflow)
+
+# SQLite (dominio publico), compilado dentro de arestrix_core: sem carga de extensoes, sem aspas duplas como texto,
+# chaves estrangeiras ligadas por padrao. Os executaveis gerados linkam so arestrix_core, entao ele precisa vir junto.
+set_source_files_properties(${TP}/sqlite/sqlite3.c PROPERTIES
+  COMPILE_DEFINITIONS "SQLITE_OMIT_LOAD_EXTENSION;SQLITE_DQS=0;SQLITE_THREADSAFE=1;SQLITE_DEFAULT_FOREIGN_KEYS=1;SQLITE_OMIT_DEPRECATED;SQLITE_OMIT_SHARED_CACHE;SQLITE_USE_URI=0;SQLITE_DEFAULT_MEMSTATUS=0")
+if(MSVC)
+  set_source_files_properties(${TP}/sqlite/sqlite3.c PROPERTIES COMPILE_OPTIONS "/w")
+else()
+  set_source_files_properties(${TP}/sqlite/sqlite3.c PROPERTIES COMPILE_OPTIONS "-w")
+endif()
 
 find_package(Threads REQUIRED)
 target_link_libraries(arestrix_core PUBLIC Threads::Threads)
@@ -62,10 +80,10 @@ if(WIN32)
 endif()
 
 if(MSVC)
-  target_compile_options(arestrix_core PRIVATE /W3 /utf-8 /permissive- /Zc:__cplusplus /EHsc)
+  target_compile_options(arestrix_core PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W3 /utf-8 /permissive- /Zc:__cplusplus /EHsc>)
   target_compile_definitions(arestrix_core PUBLIC _CRT_SECURE_NO_WARNINGS)
 else()
-  target_compile_options(arestrix_core PRIVATE -Wall -Wextra -Wno-unused-parameter)
+  target_compile_options(arestrix_core PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Wno-unused-parameter>)
 endif()
 
 # Os executaveis gerados procuram a biblioteca em <raiz>/runtime/lib.
@@ -100,7 +118,6 @@ if(ARESTRIX_BUILD_STUDIO)
   if(NOT EXISTS "${WEBUI_DIR}/src/webui.c")
     message(FATAL_ERROR "Submodulo ausente: third_party/webui. Execute: git submodule update --init third_party/webui")
   endif()
-  enable_language(C)
   add_library(webui STATIC ${WEBUI_DIR}/src/webui.c ${WEBUI_DIR}/src/civetweb/civetweb.c)
   target_include_directories(webui PUBLIC ${WEBUI_DIR}/include)
   target_include_directories(webui PRIVATE ${WEBUI_DIR}/src/civetweb)

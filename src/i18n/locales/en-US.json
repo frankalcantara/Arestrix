@@ -617,7 +617,7 @@
     },
     "mcp": {
       "title": "MCP tool",
-      "hint": "Servers come from the project .workspace/mcps. A server only runs if it is configured there.",
+      "hint": "Servers marked ⚡ are Arestrix native: ready to use, no installation and no external process. The others come from the project .workspace/mcps.",
       "server_label": "MCP server",
       "choose": "— choose —",
       "refresh_tip": "Reload the list of servers and tools",
@@ -640,6 +640,7 @@
       "arguments": "arguments",
       "no_servers": "No server configured in this project (.workspace/mcps).",
       "failed": "Failed to query the MCP server.",
+      "native_tag": "native, instant",
       "disabled": "disabled"
     },
     "explanations": {
@@ -867,6 +868,20 @@
     "hide_cpp": "✕ Hide C++20",
     "footer_hint": "💡 Instantiated vertices inherit data ports, optimized C++20 lambdas and <strong>Undo (Ctrl+Z)</strong> history support."
   },
+  "mcp_picker": {
+    "native_tag": "native, no install",
+    "disabled": "disabled",
+    "pick_tools": "Choose tools",
+    "hide_tools": "Collapse",
+    "count": "{{count}} of {{total}} tools",
+    "loading": "Loading the tools...",
+    "no_servers": "No server available in this project.",
+    "needs_native": "Available only in the Arestrix app (not in the browser).",
+    "load_failed": "Could not query the servers.",
+    "external_hint": "This is an external server: it will be started to list its tools.",
+    "risk_moderate": "· writes",
+    "risk_high": "· high risk"
+  },
   "global_defaults": {
     "title": "Agent Pipeline Global Defaults",
     "subtitle": "Configure scoped defaults: 🏢 Studio (Global Credentials), 🛠️ Workspace (Sandbox & VM), and 📦 Project (Models, Tools, and Memory)",
@@ -937,6 +952,15 @@
     "tool_desc_validate_svg": "Jev / Script validation",
     "custom_scripts_label": "Allowed Utility Scripts",
     "mcp_tools_label": "Authorized MCP Tools by Default",
+    "mcp_picker_hint": "Tick the servers agents may use. Those marked ⚡ are part of Arestrix and need no installation. If you pick no tools, all of the server's tools apply.",
+    "http_title": "Internet access of the native tools",
+    "http_desc": "The native HTTP tools only talk to the sites you authorize here. With no site on the list, nothing leaves the computer.",
+    "http_hosts_label": "Authorized sites (one per line)",
+    "http_hosts_hint": "Write only the site name, like api.example.com. Use *.example.org to allow every subdomain. Always HTTPS; local and private addresses are refused.",
+    "http_btn_save": "Save authorized sites",
+    "http_saved": "Site list saved to .workspace/native/http.json.",
+    "http_status_none": "No site authorized: internet access is closed.",
+    "http_status_count": "{{count}} site(s) authorized.",
     "mcp_tools_servers_badge": "🛠️ Workspace Servers",
     "mcp_tools_hint": "Tool names from Workspace-installed MCP servers inherited by default across project agents.",
     "memory_section_title": "Pipeline Heterogeneous Memory",

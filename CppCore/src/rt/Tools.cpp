@@ -65,6 +65,26 @@ std::optional<fs::path> resolveInWorkspace(const fs::path& root, const std::stri
     return canon;
 }
 
+bool isProtectedPath(const fs::path& root, const fs::path& resolved) {
+    std::error_code ec;
+    fs::path canonRoot = fs::weakly_canonical(root, ec);
+    if (ec) return true;
+    fs::path rel = resolved.lexically_relative(canonRoot);
+    if (rel.empty() || rel.begin() == rel.end()) return true;
+    auto lower = [](std::string s) {
+        for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return s;
+    };
+    const std::string first = lower(rel.begin()->generic_string());
+    static const char* kProtectedDirs[] = {".git", ".workspace", ".githooks", ".arestrix", "pipelines"};
+    for (const char* d : kProtectedDirs)
+        if (first == d) return true;
+    if (std::next(rel.begin()) == rel.end()) {   // arquivo na raiz do projeto
+        if (first == "arestrix.project.json" || first == "taskforge.project.json" || first == "arestrix-mcp-servers.json") return true;
+    }
+    return false;
+}
+
 std::vector<ToolDef> toolDefinitions(const std::vector<std::string>& allowed) {
     std::vector<ToolDef> all;
     all.push_back({"read", "Le um arquivo de texto do workspace e devolve o conteudo.",
@@ -265,6 +285,7 @@ ToolResult executeTool(const ToolContext& ctx, const std::string& name, const js
         if (name == "write") {
             auto p = resolveInWorkspace(ctx.workspaceRoot, stringArg(args, "path"));
             if (!p) return err("Caminho fora do workspace ou invalido.");
+            if (isProtectedPath(ctx.workspaceRoot, *p)) return err("Caminho protegido (pipelines, configuracao e .git nao podem ser gravados por agentes): " + stringArg(args, "path"));
             if (!args.contains("content") || !args["content"].is_string()) return err("Parametro 'content' ausente.");
             std::string content = args["content"].get<std::string>();
             std::error_code ec;
@@ -279,6 +300,7 @@ ToolResult executeTool(const ToolContext& ctx, const std::string& name, const js
         if (name == "edit") {
             auto p = resolveInWorkspace(ctx.workspaceRoot, stringArg(args, "path"));
             if (!p) return err("Caminho fora do workspace ou invalido.");
+            if (isProtectedPath(ctx.workspaceRoot, *p)) return err("Caminho protegido (pipelines, configuracao e .git nao podem ser editados por agentes): " + stringArg(args, "path"));
             std::error_code ec;
             if (!fs::is_regular_file(*p, ec)) return err("Arquivo nao encontrado.");
             std::string oldText = stringArg(args, "old_text");

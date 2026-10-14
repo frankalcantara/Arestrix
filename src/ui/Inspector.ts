@@ -991,11 +991,15 @@ export class Inspector {
       if (!b) { setStatus(t('inspector.mcp.needs_native')); return; }
       try {
         const res = JSON.parse((await b.call('list_project_mcp_servers')) || '{}');
-        const servers: Array<{ id: string; name: string; isEnabled: boolean }> = res.servers || [];
+        const servers: Array<{ id: string; name: string; isEnabled: boolean; isNative?: boolean }> = res.servers || [];
         const current = this.mcpSettingsOf(this.graph.getNode(node.id) ?? node).server;
-        fillOptions(serverSel, servers.map(sv => ({ value: sv.id, label: `${sv.name || sv.id} (${sv.id})${sv.isEnabled ? '' : ' — ' + t('inspector.mcp.disabled')}` })), current);
-        if (servers.length === 0) setStatus(t('inspector.mcp.no_servers'));
-        else if (current) await loadTools(current, this.mcpSettingsOf(this.graph.getNode(node.id) ?? node).tool);
+        fillOptions(serverSel, servers.map(sv => ({
+          value: sv.id,
+          label: sv.isNative
+            ? `⚡ ${sv.name} — ${t('inspector.mcp.native_tag')}`
+            : `${sv.name || sv.id} (${sv.id})${sv.isEnabled ? '' : ' — ' + t('inspector.mcp.disabled')}`
+        })), current);
+        if (current) await loadTools(current, this.mcpSettingsOf(this.graph.getNode(node.id) ?? node).tool);
       } catch {
         setStatus(t('inspector.mcp.failed'));
       }

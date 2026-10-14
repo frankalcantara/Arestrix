@@ -22,7 +22,7 @@ Um vértice de agente executa um **laço real de uso de ferramentas** contra o p
 
 - A **skill** (`SKILL.md`) é o prompt de sistema; o template de prompt do vértice é a tarefa.
 - O modelo pode chamar ferramentas: `read`, `write`, `edit`, `bash`, `validate_svg`, mais as ferramentas dos servidores MCP que o agente
-  declarar (veja [Servidores MCP](05-workspaces-memoria-skills-mcp.md#servidores-mcp)). As nativas ficam
+  declarar (inclusive as [ferramentas nativas do Arestrix](05-workspaces-memoria-skills-mcp.md#ferramentas-nativas-sem-instalação-sem-processo)) (veja [Servidores MCP](05-workspaces-memoria-skills-mcp.md#servidores-mcp)). As nativas ficam
   confinadas à pasta do projeto.
 - O laço continua até o modelo parar de chamar ferramentas. Skills podem acrescentar ferramentas e servidores MCP.
 
