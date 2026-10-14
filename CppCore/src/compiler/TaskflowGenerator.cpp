@@ -803,7 +803,7 @@ TaskflowGenerator::MsvcScripts TaskflowGenerator::generateMsvcBuildScript(const 
         "/I\"%ARESTRIX_HOME%\\third_party\\taskflow\" /I\"%ARESTRIX_HOME%\\CppCore\\src\" "
         "/I\"%ARESTRIX_HOME%\\third_party\\simdjson\\singleheader\" "
         "main.cpp /Fe:\"" + binName + ".exe\" "
-        "/link \"%ARESTRIX_HOME%\\runtime\\lib\\arestrix_core.lib\" winhttp.lib advapi32.lib ole32.lib shell32.lib user32.lib";
+        "/link \"%ARESTRIX_HOME%\\runtime\\lib\\arestrix_core.lib\" winhttp.lib ws2_32.lib advapi32.lib ole32.lib shell32.lib user32.lib";
 
     MsvcScripts scripts;
     scripts.bat = "@echo off\r\n"

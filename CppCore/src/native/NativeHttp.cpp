@@ -4,6 +4,8 @@
 // Sem esse arquivo (ou com a lista vazia) nenhuma requisicao e feita: um agente nunca decide sozinho para onde os dados
 // do projeto saem. Somente HTTPS (porta 443); enderecos locais e privados sao recusados; redirecionamentos NAO sao
 // seguidos (cada destino precisaria ser autorizado de novo); credenciais so por variavel de ambiente (bearer_env).
+// Contra DNS rebinding (rt/NetGuard.hpp): o nome e resolvido antes de conectar e recusado se algum endereco for interno; a
+// conexao e fixada no endereco validado (curl) ou o endereco realmente conectado e conferido antes do corpo (WinHTTP).
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
@@ -121,6 +123,7 @@ ToolResult send(const Json& a, const Context& ctx, const std::string& method) {
     req.url = url;
     req.timeoutSeconds = 30;
     req.noRedirects = true;
+    req.requirePublicPeer = true;   // DNS rebinding: resolve antes, recusa enderecos internos e confere a conexao
     req.headers["Accept"] = "application/json, text/plain, text/html;q=0.8, */*;q=0.5";
     req.headers["User-Agent"] = "Arestrix/1.0";
 
@@ -179,8 +182,8 @@ std::string checkUrl(const fs::path& root, const std::string& url) {
     if (isPrivateHost(u.host)) return "Enderecos locais e privados nao sao permitidos: " + u.host;
     auto hosts = allowedHosts(root);
     if (hosts.empty()) {
-        return "Nenhum host autorizado neste projeto. Para permitir requisicoes, crie .workspace/native/http.json com "
-               "{\"allowedHosts\": [\"" + u.host + "\"]}.";
+        return "Nenhum host autorizado neste projeto. Autorize '" + u.host + "' em Padroes Globais > Ferramentas > Acesso a internet "
+               "(ou crie .workspace/native/http.json com {\"allowedHosts\": [\"" + u.host + "\"]}).";
     }
     for (const auto& pattern : hosts)
         if (hostMatches(u.host, pattern)) return "";

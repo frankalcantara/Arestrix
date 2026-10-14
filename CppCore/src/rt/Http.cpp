@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cctype>
 
+#include "rt/NetGuard.hpp"
+
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -11,6 +13,8 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <winhttp.h>
 #pragma comment(lib, "winhttp.lib")
 #else
@@ -61,10 +65,34 @@ struct HInternet {
     HInternet& operator=(const HInternet&) = delete;
 };
 
+// Ha proxy configurado no sistema? Com proxy, quem resolve o nome e quem conecta ao destino e o proxy, e o endereco
+// "conectado" que o WinHTTP informa e o do proprio proxy (muitas vezes interno): nesse caso so a verificacao previa vale.
+bool systemProxyMayBeUsed() {
+    WINHTTP_CURRENT_USER_IE_PROXY_CONFIG cfg{};
+    if (!WinHttpGetIEProxyConfigForCurrentUser(&cfg)) return false;
+    const bool used = cfg.fAutoDetect || cfg.lpszAutoConfigUrl || cfg.lpszProxy;
+    if (cfg.lpszAutoConfigUrl) GlobalFree(cfg.lpszAutoConfigUrl);
+    if (cfg.lpszProxy) GlobalFree(cfg.lpszProxy);
+    if (cfg.lpszProxyBypass) GlobalFree(cfg.lpszProxyBypass);
+    return used;
+}
+
+std::string textOf(const SOCKADDR_STORAGE& ss) {
+    char text[INET6_ADDRSTRLEN] = {0};
+    if (ss.ss_family == AF_INET) inet_ntop(AF_INET, &reinterpret_cast<const SOCKADDR_IN*>(&ss)->sin_addr, text, sizeof text);
+    else if (ss.ss_family == AF_INET6) inet_ntop(AF_INET6, &reinterpret_cast<const SOCKADDR_IN6*>(&ss)->sin6_addr, text, sizeof text);
+    return text;
+}
+
 } // namespace
 
 HttpResponse httpSend(const HttpRequest& req) {
     HttpResponse resp;
+
+    if (req.requirePublicPeer) {
+        std::string refusal = net::checkHostIsPublic(net::hostOfUrl(req.url));
+        if (!refusal.empty()) { resp.error = "Requisicao recusada: " + refusal + "."; return resp; }
+    }
 
     std::wstring wurl = widen(req.url);
     URL_COMPONENTS uc{};
@@ -110,11 +138,49 @@ HttpResponse httpSend(const HttpRequest& req) {
         headerBlock += widen(kv.first) + L": " + widen(kv.second) + L"\r\n";
     }
 
-    BOOL sent = WinHttpSendRequest(request.h,
-                                   headerBlock.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : headerBlock.c_str(),
-                                   (DWORD)-1L,
-                                   req.body.empty() ? WINHTTP_NO_REQUEST_DATA : (LPVOID)req.body.data(),
-                                   (DWORD)req.body.size(), (DWORD)req.body.size(), 0);
+    BOOL sent;
+    if (req.requirePublicPeer) {
+        // Envia so os cabecalhos, confere o endereco REALMENTE conectado e so entao envia o corpo.
+        sent = WinHttpSendRequest(request.h,
+                                  headerBlock.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : headerBlock.c_str(), (DWORD)-1L,
+                                  WINHTTP_NO_REQUEST_DATA, 0, (DWORD)req.body.size(), 0);
+        if (!sent) {
+            resp.error = "Falha de transporte (erro WinHTTP " + std::to_string(GetLastError()) + ")";
+            return resp;
+        }
+        WINHTTP_CONNECTION_INFO info{};
+        info.cbSize = sizeof(info);
+        DWORD infoSize = sizeof(info);
+        if (WinHttpQueryOption(request.h, WINHTTP_OPTION_CONNECTION_INFO, &info, &infoSize)) {
+            resp.peer = textOf(info.RemoteAddress);
+            if (!resp.peer.empty() && !net::isPublicAddress(resp.peer) && !systemProxyMayBeUsed()) {
+                resp.error = "Requisicao recusada: a conexao foi feita com o endereco interno " + resp.peer +
+                             " (o nome do host pode ter sido redirecionado no DNS).";
+                return resp;
+            }
+        } else if (!systemProxyMayBeUsed()) {
+            resp.error = "Requisicao recusada: nao foi possivel conferir o endereco conectado.";
+            return resp;
+        }
+        if (!req.body.empty()) {
+            size_t off = 0;
+            while (off < req.body.size()) {
+                DWORD wrote = 0;
+                DWORD chunk = (DWORD)std::min<size_t>(req.body.size() - off, 1u << 20);
+                if (!WinHttpWriteData(request.h, req.body.data() + off, chunk, &wrote) || wrote == 0) {
+                    resp.error = "Falha de transporte ao enviar o corpo (erro WinHTTP " + std::to_string(GetLastError()) + ")";
+                    return resp;
+                }
+                off += wrote;
+            }
+        }
+    } else {
+        sent = WinHttpSendRequest(request.h,
+                                  headerBlock.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : headerBlock.c_str(),
+                                  (DWORD)-1L,
+                                  req.body.empty() ? WINHTTP_NO_REQUEST_DATA : (LPVOID)req.body.data(),
+                                  (DWORD)req.body.size(), (DWORD)req.body.size(), 0);
+    }
     if (!sent || !WinHttpReceiveResponse(request.h, nullptr)) {
         resp.error = "Falha de transporte (erro WinHTTP " + std::to_string(GetLastError()) + ")";
         return resp;
@@ -196,6 +262,11 @@ std::string slurp(const std::string& path) {
 
 HttpResponse httpSend(const HttpRequest& req) {
     HttpResponse resp;
+    std::vector<std::string> pinned;
+    if (req.requirePublicPeer) {
+        std::string refusal = net::checkHostIsPublic(net::hostOfUrl(req.url), &pinned);
+        if (!refusal.empty()) { resp.error = "Requisicao recusada: " + refusal + "."; return resp; }
+    }
     if (!platform::commandExists("curl")) {
         resp.error = "O comando 'curl' nao foi encontrado no PATH.";
         return resp;
@@ -216,6 +287,13 @@ HttpResponse httpSend(const HttpRequest& req) {
     cfg += "request = " + cfgQuote(req.method) + "\n";
     for (const auto& kv : req.headers) cfg += "header = " + cfgQuote(kv.first + ": " + kv.second) + "\n";
     if (!req.body.empty()) cfg += "data-binary = " + cfgQuote("@" + bodyFile) + "\n";
+    if (req.requirePublicPeer && !pinned.empty()) {
+        // fixa a conexao no endereco que acabou de ser validado (o curl nao consulta o DNS de novo)
+        const std::string host = net::hostOfUrl(req.url);
+        std::string list;
+        for (const auto& ip : pinned) list += (list.empty() ? "" : ",") + (ip.find(':') != std::string::npos ? "[" + ip + "]" : ip);
+        cfg += "resolve = " + cfgQuote(host + ":443:" + list) + "\n";
+    }
     cfg += "silent\nshow-error\n";
     cfg += "max-time = " + std::to_string(std::max(5, req.timeoutSeconds)) + "\n";
     cfg += "output = " + cfgQuote(outFile) + "\n";

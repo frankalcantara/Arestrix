@@ -79,6 +79,16 @@ sem processo filho e sem código de terceiros. Elas aparecem no vértice MCP e n
   enviado, e a mensagem de erro diz o que fazer. Curingas exigem um domínio completo (`*.com` é recusado).
   Endereços locais e privados são recusados mesmo se listados, redirecionamentos **não** são seguidos (cada destino precisa ser
   autorizado) e as credenciais só viajam por `bearer_env`, o **nome** de uma variável de ambiente, nunca o valor.
+- **Um nome pode mentir, por isso o endereço também é conferido (DNS rebinding).** Um nome autorizado como `api.exemplo.com` poderia ser
+  apontado depois, por quem controla o DNS dele, para `127.0.0.1`, para uma máquina da sua rede ou para o endereço de metadados de uma
+  nuvem. Antes de conectar, o Arestrix resolve o nome e recusa a requisição se **qualquer** endereço devolvido não for público (loopback,
+  privado, link-local, CGNAT, multicast, reservado, documentação e as formas IPv6 que embutem um IPv4, como `::ffff:10.0.0.1`, NAT64 e
+  6to4). Devolver vários endereços, um deles interno, também é recusado. No Linux e no macOS a conexão é então **fixada** no endereço
+  validado (`curl --resolve`), de modo que o nome não pode mudar entre a conferência e a conexão. No Windows o sistema não permite fixar,
+  então o endereço **realmente conectado** é conferido antes de qualquer byte do corpo da requisição ser enviado. O HTTPS já dificulta o
+  ataque (a máquina interna precisaria de um certificado válido para aquele nome); esta camada fecha a brecha mesmo assim. Limite: se o
+  sistema usa um **proxy** (Windows), o endereço conectado é o do proxy, então vale só a conferência anterior à conexão, e o proxy é
+  responsável pelo resto.
 - Todo resultado é limitado a 64 KB, e um erro de ferramenta interrompe o pipeline com uma mensagem clara.
 
 **Banco de dados SQLite.** O `arestrix.sqlite` embute o SQLite (domínio público, `third_party/sqlite`), sem servidor e sem instalação. Cada
@@ -124,8 +134,8 @@ servidor de teste, 15 chamadas levaram 0,19 s com a sessão persistente contra 2
 reaberta se o servidor morrer ou a configuração mudar, e uma chamada que falhou **nunca** é repetida automaticamente (ela pode já ter
 tido efeito). As sessões são encerradas quando o programa termina.
 
-Limitação: o modal **Ferramentas** de um vértice de *agente* ainda não lista os seus servidores (mostra uma lista de exemplo fixa); declare
-`mcpServers` no JSON do projeto, como fazem os [exemplos](../../examples/README.pt-BR.md).
+A janela **Ferramentas** de um vértice de *agente* lista os servidores do projeto (os nativos primeiro) e as suas ferramentas, como descrito
+acima, então não é mais preciso editar `mcpServers` no JSON (os [exemplos](../../examples/README.pt-BR.md) ainda o declaram no arquivo, o que continua funcionando).
 
 ## Importando trabalho existente
 

@@ -22,7 +22,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 TP = ROOT / "third_party"
 
 # SPDX permitidos (compativeis com MIT). OFL-1.1 so para fontes (ver FONT_ONLY).
-ALLOWED = {"MIT", "ISC", "BSD-2-Clause", "BSD-3-Clause", "Apache-2.0", "Zlib", "BSL-1.0", "0BSD", "Unlicense", "CC0-1.0"}
+ALLOWED = {"MIT", "ISC", "BSD-2-Clause", "BSD-3-Clause", "Apache-2.0", "Zlib", "BSL-1.0", "0BSD", "Unlicense", "CC0-1.0", "blessing"}   # blessing = dominio publico do SQLite
 FONT_ONLY = {"OFL-1.1"}
 
 # Componente -> (SPDX declarado, arquivo de licenca, trecho esperado no texto da licenca)
@@ -34,6 +34,7 @@ COMPONENTS = {
     "monaco-editor": ("MIT",        "LICENSE.txt", "MIT License"),
     "SkillSpector":  ("Apache-2.0", "LICENSE",     "Apache License"),
     "fonts/inter":   ("OFL-1.1",    "OFL-Inter.txt", "SIL Open Font License"),
+    "sqlite":        ("blessing",   "LICENSE.md",  "May you do good and not evil"),   # dominio publico
 }
 
 errors = []

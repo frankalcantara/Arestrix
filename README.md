@@ -73,6 +73,7 @@ Arestrix stands on the shoulders of outstanding open-source work. Our sincere th
 | [**WebUI**](https://github.com/webui-dev/webui) (Hassan Draga) and the [**CivetWeb**](https://github.com/civetweb/civetweb) server it embeds | The lightweight native window that hosts the Studio interface and the RPC bridge between the web UI and the C++ backend, without Electron. | MIT |
 | [**Taskflow**](https://github.com/taskflow/taskflow) (Dr. Tsung-Wei Huang and contributors) | The C++20 parallel and heterogeneous task-programming engine that runs every graph. | MIT |
 | [**simdjson**](https://github.com/simdjson/simdjson) (Daniel Lemire, Geoff Langdale and contributors) | Parses every JSON document the engine reads, at gigabytes per second. | Apache-2.0 / MIT |
+| [**SQLite**](https://sqlite.org) (D. Richard Hipp and contributors) | The embedded database behind the native `arestrix.sqlite` tools. | Public domain |
 | [**i18next**](https://github.com/i18next/i18next) | Internationalization behind every translated string. | MIT |
 | [**Monaco Editor**](https://github.com/microsoft/monaco-editor) (Microsoft) | The code editor that shows the generated C++. | MIT |
 | [**SkillSpector**](https://github.com/NVIDIA/SkillSpector) (NVIDIA) | Security scanner for AI agent skills. | Apache-2.0 |

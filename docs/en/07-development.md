@@ -54,8 +54,8 @@ Every user-visible string goes through `t('key', 'fallback')`, never hard-coded.
 ## Third-party code policy
 
 All external code is in `third_party/` and must be compatible with Taskflow's **MIT** license:
-permissive licenses only (MIT, BSD, ISC, Apache-2.0). The single documented exception is the Inter font
-(SIL OFL 1.1), which allows embedding. JavaScript dependencies are declared in `package.json` and checked
+permissive licenses only (MIT, BSD, ISC, Apache-2.0) and public domain (SQLite, SPDX `blessing`). The single documented exception is the
+Inter font (SIL OFL 1.1), which allows embedding. JavaScript dependencies are declared in `package.json` and checked
 against the same list.
 
 ```bash

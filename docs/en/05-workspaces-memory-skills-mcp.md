@@ -79,6 +79,15 @@ function call.
   is sent, and the error message tells you what to do. Wildcards need a full domain (`*.com` is refused).
   Local and private addresses are refused even if listed, redirects are **not** followed (each destination must be authorized), and
   credentials only travel through `bearer_env`, the **name** of an environment variable, never the value.
+- **A name can lie, so the address is checked too (DNS rebinding).** An authorized name such as `api.example.com` could later be pointed by
+  whoever controls its DNS at `127.0.0.1`, at a machine on your network or at a cloud metadata address. Before connecting, Arestrix resolves
+  the name and refuses the request if **any** returned address is not public (loopback, private, link-local, CGNAT, multicast, reserved,
+  documentation, and the IPv6 forms that embed an IPv4 address such as `::ffff:10.0.0.1`, NAT64 and 6to4). Returning several addresses, one
+  of them internal, is refused too. On Linux and macOS the connection is then **pinned** to the validated address (`curl --resolve`), so
+  the name cannot change between the check and the connection. On Windows the system does not allow pinning, so the address that was
+  **actually connected** is checked before any byte of the request body is sent. HTTPS already makes an attack hard (the internal machine
+  would need a valid certificate for that name); this layer closes the gap anyway. Limit: if the system uses a **proxy** (Windows) the
+  connected address is the proxy's, so only the check before connecting applies, and the proxy is responsible for the rest.
 - Every result is limited to 64 KB, and a tool error stops the pipeline with a clear message.
 
 **SQLite database.** `arestrix.sqlite` embeds SQLite (public domain, `third_party/sqlite`), with no server and no installation. Each call opens
@@ -123,8 +132,8 @@ with the persistent session against 2.8 s opening a process per call (15x). A se
 configuration changes, and a call that failed is **never** retried automatically (it may already have had effect). Sessions are
 closed when the program exits.
 
-Limitation: the **Tools** modal of an *agent* vertex does not list your servers yet (it shows a fixed example list); declare
-`mcpServers` in the project's JSON, as the [examples](../../examples/README.md) do.
+The **Tools** window of an *agent* vertex lists the project's servers (the native ones first) and their tools, as described above, so you no
+longer need to edit `mcpServers` in the JSON (the [examples](../../examples/README.md) still declare them in the file, which keeps working).
 
 ## Importing existing work
 

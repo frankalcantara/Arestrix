@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -18,6 +19,8 @@
 #include "core/Graph.hpp"
 #include "platform/Process.hpp"
 #include "rt/Decision.hpp"
+#include "rt/Http.hpp"
+#include "rt/NetGuard.hpp"
 #include "rt/McpTools.hpp"
 #include "rt/McpVertex.hpp"
 #include "native/NativeTools.hpp"
@@ -1200,6 +1203,80 @@ TEST(native_http_policy_is_validated_when_saved_and_tool_filter_accepts_qualifie
     CHECK(!TB::isToolAllowed({"arestrix.dados/regex_extract"}, "clientes", "regex_extract"));   // outro servidor, mesmo nome
     CHECK(TB::isToolAllowed({"clientes/*"}, "clientes", "qualquer"));
     CHECK(!TB::isToolAllowed({"clientes/*"}, "arestrix.dados", "json_query"));
+}
+
+TEST(net_guard_classifies_addresses_and_blocks_dns_rebinding) {
+    namespace net = taskforge::rt::net;
+    for (const char* ip : {"8.8.8.8", "1.1.1.1", "93.184.216.34", "172.32.0.1", "172.15.255.255", "100.63.0.1", "2606:4700:4700::1111", "2001:4860:4860::8888",
+                           "::ffff:8.8.8.8", "64:ff9b::808:808", "2002:808:808::1"})
+        CHECK(net::isPublicAddress(ip));
+    for (const char* ip : {"127.0.0.1", "127.255.255.254", "0.0.0.0", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1", "169.254.169.254",
+                           "100.64.0.1", "100.127.255.255", "224.0.0.1", "255.255.255.255", "240.0.0.1", "192.0.2.1", "198.51.100.7", "203.0.113.9",
+                           "198.18.0.1", "::", "::1", "fe80::1", "fc00::1", "fd12:3456::1", "ff02::1", "2001:db8::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1",
+                           "::ffff:169.254.169.254", "64:ff9b::7f00:1", "64:ff9b::a00:1", "2002:7f00:1::1", "2002:a9fe:a9fe::1", "2001::1", "100::1", "::127.0.0.1",
+                           "nao e um ip", "", "999.1.1.1", "1.2.3"})
+        CHECK(!net::isPublicAddress(ip));
+
+    CHECK(net::hostOfUrl("https://API.Exemplo.com/x?y=1") == "api.exemplo.com");
+    CHECK(net::hostOfUrl(std::string("https://u") + ":" + "x" + "@api.exemplo.com:443/x") == "api.exemplo.com");
+    CHECK(net::hostOfUrl("https://[::1]:443/") == "::1");
+
+    // resolvedor falso: sem rede e sem depender de DNS real
+    std::map<std::string, net::Resolution> table;
+    table["bom.exemplo.com"].addresses = {"93.184.216.34", "2606:4700:4700::1111"};
+    table["interno.exemplo.com"].addresses = {"10.0.0.7"};
+    table["misto.exemplo.com"].addresses = {"93.184.216.34", "127.0.0.1"};           // um publico e um interno: recusa
+    table["mapeado.exemplo.com"].addresses = {"::ffff:192.168.0.1"};
+    table["metadados.exemplo.com"].addresses = {"169.254.169.254"};
+    table["vazio.exemplo.com"].error = "o nome 'vazio.exemplo.com' nao foi resolvido";
+    net::setResolverForTest([&](const std::string& h) { auto it = table.find(h); return it == table.end() ? net::Resolution{{}, "sem registro"} : it->second; });
+
+    std::vector<std::string> addrs;
+    CHECK(net::checkHostIsPublic("bom.exemplo.com", &addrs).empty() && addrs.size() == 2);
+    for (const char* h : {"interno.exemplo.com", "misto.exemplo.com", "mapeado.exemplo.com", "metadados.exemplo.com", "vazio.exemplo.com", "desconhecido.exemplo.com"})
+        CHECK(!net::checkHostIsPublic(h).empty());
+    CHECK(net::checkHostIsPublic("misto.exemplo.com").find("127.0.0.1") != std::string::npos);
+    CHECK(net::checkHostIsPublic("8.8.8.8").empty() && !net::checkHostIsPublic("10.0.0.1").empty());   // literal: sem consulta de DNS
+
+    // ponta a ponta nas ferramentas nativas: o host esta AUTORIZADO, mas o DNS aponta para dentro
+    auto root = makeTempDir("native-dns");
+    std::string err;
+    CHECK(taskforge::native::http::writePolicy(root, {"interno.exemplo.com", "misto.exemplo.com", "metadados.exemplo.com"}, err));
+    for (const char* h : {"interno.exemplo.com", "misto.exemplo.com", "metadados.exemplo.com"}) {
+        auto r = nativeCall(root, "http", "http_get", {{"url", std::string("https://") + h + "/"}});
+        CHECK(r.isError && r.content.find("recusad") != std::string::npos);
+        auto p = nativeCall(root, "http", "http_post_json", {{"url", std::string("https://") + h + "/"}, {"json", json{{"a", 1}}}});
+        CHECK(p.isError && p.content.find("recusad") != std::string::npos);
+    }
+    net::setResolverForTest(nullptr);
+    fs::remove_all(root);
+
+    // o resolvedor do sistema tambem recusa o que e local (funciona sem internet)
+    CHECK(!net::checkHostIsPublic("localhost").empty());
+}
+
+TEST(native_http_reaches_a_real_public_host_when_online) {
+    namespace net = taskforge::rt::net;
+    net::setResolverForTest(nullptr);
+    std::string e;
+    if (!net::checkHostIsPublic("example.com").empty()) { std::cout << "  (sem internet ou DNS: teste ignorado)" << std::endl; return; }
+    auto root = makeTempDir("native-online");
+    CHECK(taskforge::native::http::writePolicy(root, {"example.com"}, e));
+    auto r = nativeCall(root, "http", "http_get", {{"url", "https://example.com/"}});
+    if (r.isError && r.content.find("transporte") != std::string::npos) { std::cout << "  (sem conexao: teste ignorado)" << std::endl; fs::remove_all(root); return; }
+    CHECK(!r.isError && r.content.find("Example Domain") != std::string::npos);   // a verificacao do endereco conectado nao atrapalha o uso normal
+    taskforge::rt::HttpRequest req;
+    req.method = "GET";
+    req.url = "https://example.com/";
+    req.requirePublicPeer = true;
+    req.noRedirects = true;
+    auto resp = taskforge::rt::httpSend(req);
+#ifdef _WIN32
+    CHECK(resp.status == 200 && !resp.peer.empty() && net::isPublicAddress(resp.peer));    // o Windows informa o endereco conectado
+#else
+    CHECK(resp.status == 200);
+#endif
+    fs::remove_all(root);
 }
 
 TEST(native_data_tools_transform_json_csv_regex_and_base64) {

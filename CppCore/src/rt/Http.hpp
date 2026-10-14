@@ -16,6 +16,7 @@ struct HttpResponse {
     std::string body;
     std::map<std::string, std::string> headers;   // chaves em minusculas
     std::string error;                    // descricao da falha de transporte
+    std::string peer;                     // endereco IP realmente conectado, quando o sistema informa (Windows)
 };
 
 struct HttpRequest {
@@ -25,6 +26,10 @@ struct HttpRequest {
     std::string body;
     int timeoutSeconds = 600;
     bool noRedirects = false;   // true: devolve o 3xx em vez de seguir (as ferramentas nativas validam cada destino)
+    // true: o nome do host e resolvido ANTES de conectar e a requisicao e recusada se algum endereco for interno ou reservado
+    // (protecao contra DNS rebinding, veja rt/NetGuard.hpp). Linux/macOS fixam a conexao no endereco validado; no Windows o
+    // endereco realmente conectado e conferido antes de o corpo ser enviado.
+    bool requirePublicPeer = false;
 };
 
 HttpResponse httpSend(const HttpRequest& req);

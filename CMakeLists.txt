@@ -42,6 +42,7 @@ add_library(arestrix_core STATIC
   ${SRC}/mcp/McpClient.cpp
   ${SRC}/mcp/McpRegistry.cpp
   ${SRC}/rt/Http.cpp
+  ${SRC}/rt/NetGuard.cpp
   ${SRC}/rt/Tools.cpp
   ${SRC}/rt/Agent.cpp
   ${SRC}/rt/Decision.cpp
@@ -76,7 +77,7 @@ endif()
 find_package(Threads REQUIRED)
 target_link_libraries(arestrix_core PUBLIC Threads::Threads)
 if(WIN32)
-  target_link_libraries(arestrix_core PUBLIC winhttp advapi32 ole32 shell32 user32)
+  target_link_libraries(arestrix_core PUBLIC winhttp ws2_32 advapi32 ole32 shell32 user32)
 endif()
 
 if(MSVC)
