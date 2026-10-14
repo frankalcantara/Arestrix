@@ -87,7 +87,7 @@ def decide(body):
         email = (re.search(r"[\w.+-]+@[\w.-]+", ticket) or [""])[0]
         subject = (re.search(r"Assunto:\s*(.+)", ticket) or [0, "(sem assunto)"])[1].strip()
         if step == 1:
-            return tool_call("c2", "mcp__clientes__lookup_customer", {"email": email})
+            return tool_call("c2", "read", {"path": "workspace/cliente_dados.json"})   # gravado pelo vertice MCP
         customer = json.loads(tool_msgs[1]["content"]) if tool_msgs[1]["content"].startswith("{") else {}
         who = f'{customer.get("nome", "cliente desconhecido")} (plano {customer.get("plano", "?")})'
         compact = " ".join(ticket.split())[:400]

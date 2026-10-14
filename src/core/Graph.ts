@@ -9,7 +9,7 @@ import {
   DEFAULT_NODE_MEMORY_CONFIG,
   TaskflowNodeType,
   IPort,
-  IBreadcrumbItem, defaultSwitchSettings } from './types.ts';
+  IBreadcrumbItem, defaultSwitchSettings, defaultMcpSettings } from './types.ts';
 import { globalEventBus, EventBus } from './EventBus.ts';
 import { CommandManager } from './history/CommandManager.ts';
 
@@ -185,7 +185,8 @@ export class Graph {
         inheritCodeMode: true,
         inheritMemory: true
       } : undefined,
-      switchSettings: type === 'switch' ? defaultSwitchSettings('model') : undefined
+      switchSettings: type === 'switch' ? defaultSwitchSettings('model') : undefined,
+      mcpSettings: type === 'mcp' ? defaultMcpSettings() : undefined
     };
   }
 
@@ -203,6 +204,8 @@ export class Graph {
 
   private getDefaultLambdaBody(type: TaskflowNodeType, label: string): string {
     switch (type) {
+      case 'mcp':
+        return '';   // sem código: o gerador chama o cliente MCP nativo com as configurações do vértice
       case 'switch':
         return `// Switch ${label}: devolva o índice do caso (0, 1, 2...).\n// O último caso é o "default": qualquer valor fora do intervalo vai para ele.\nreturn 0;`;
       case 'condition':

@@ -75,7 +75,17 @@ ambiente do seu usuário, resolvido quando o pipeline executa) e `${NOME:-padrã
 literal em `env`. Servidores stdio rodam como processos comuns do seu usuário, **fora** do sandbox do agente: só configure
 servidores em que você confia.
 
-Limitação: o modal **Ferramentas** de um vértice ainda não lista os seus servidores (mostra uma lista de exemplo fixa); declare
+**Duas formas de usar um servidor num pipeline:** um [**vértice MCP**](03-grafo-e-vertices.md#vértice-mcp) (uma chamada determinística
+que você liga no grafo) ou como **ferramentas de um agente** (o modelo decide quando chamar).
+
+**Desempenho.** O programa gerado conversa com os servidores MCP pelo **cliente nativo em C++** (sem Node nem Python no meio, do
+lado do Arestrix). Cada servidor tem **uma sessão persistente** (um processo e um handshake para a execução inteira), compartilhada
+com segurança por todas as threads: chamadas ao mesmo servidor são serializadas, servidores diferentes rodam em paralelo. Num
+servidor de teste, 15 chamadas levaram 0,48 s com a sessão persistente contra 3,75 s abrindo um processo por chamada (7,8x). A sessão é
+reaberta se o servidor morrer ou a configuração mudar, e uma chamada que falhou **nunca** é repetida automaticamente (ela pode já ter
+tido efeito). As sessões são encerradas quando o programa termina.
+
+Limitação: o modal **Ferramentas** de um vértice de *agente* ainda não lista os seus servidores (mostra uma lista de exemplo fixa); declare
 `mcpServers` no JSON do projeto, como fazem os [exemplos](../../examples/README.pt-BR.md).
 
 ## Importando trabalho existente

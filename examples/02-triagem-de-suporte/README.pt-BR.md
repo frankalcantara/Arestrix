@@ -6,7 +6,7 @@ Um chamado de suporte é lido, classificado e respondido. Nada aqui é código q
 escolhidos por um modelo de IA (e por palavras), e um cadastro de clientes é acessado por um servidor MCP.
 
 ```
-Receber ─► Leitor (agente + MCP) ─► Triagem (switch, IA decide) ─┬─ urgente ─► Escalonador (agente + MCP) ─► Entrega
+Receber ─► Consultar cliente (vértice MCP) ─► Leitor (agente) ─► Triagem (switch, IA decide) ─┬─ urgente ─► Escalonador (agente + MCP) ─► Entrega
                                                                  ├─ normal ──► Redator ─► Revisor ─► Qualidade (switch, palavras) ─┬─ aprovado ─► Entrega
                                                                  │                ▲                                                ├─ ajustar ─┘ (laço)
                                                                  │                └────────────────────────────────────────────────┘
@@ -16,9 +16,10 @@ Receber ─► Leitor (agente + MCP) ─► Triagem (switch, IA decide) ─┬�
 
 | Vértice | O que mostra |
 | :--- | :--- |
-| Agente_Leitor | Um agente chamando uma **ferramenta MCP** (`lookup_customer`). A resposta final dele alimenta a triagem. |
+| Consultar_Cliente | Um **vértice MCP**: uma chamada direta e determinística a `lookup_customer` (sem IA), usando o e-mail que o *Receber_Chamado* extraiu. O resultado vai para `workspace/cliente_dados.json`. |
+| Agente_Leitor | Um agente que lê o chamado e os dados do cliente e escreve o resumo. A resposta final dele alimenta a triagem. |
 | Triagem_de_Urgencia | Um **switch no modo "modelo de IA decide"**: o modelo lê a resposta do leitor e escolhe `urgente`, `normal`, `duvida` ou o default. |
-| Agente_Escalonador | Um agente chamando outra ferramenta MCP (`registrar_escalonamento`, que grava `output/escalonamentos.jsonl`). |
+| Agente_Escalonador | Um agente que recebe um servidor MCP como **ferramentas** e decide chamar `registrar_escalonamento` (grava `output/escalonamentos.jsonl`). As duas formas de usar MCP, lado a lado. |
 | Redator → Revisor → Controle_de_Qualidade | Um **laço de feedback**: o revisor grava `STATUS: AJUSTAR` ou `APROVADO`; um **switch no modo "palavras"** (sem IA) devolve ao redator até a aprovação. |
 | Agente_FAQ | Um agente que responde a partir de `base/faq.md`. |
 | Revisao_Humana | O default do switch: quando nada serve, uma pessoa assume. |

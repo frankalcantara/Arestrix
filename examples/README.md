@@ -8,7 +8,7 @@ choose your model, set your API key, press **F5**.
 | # | Project | What it shows | Needs |
 | :--- | :--- | :--- | :--- |
 | 1 | [`01-svg-agente`](01-svg-agente) | The tutorial: two agents, parallel checks (fork/join), and a self-correction loop decided in C++. | A model. |
-| 2 | [`02-triagem-de-suporte`](02-triagem-de-suporte) | Support-ticket triage: agents, **decision vertices** (an AI model picks the path; keyword rules close a quality loop) and an **MCP** server. | A model, Python. |
+| 2 | [`02-triagem-de-suporte`](02-triagem-de-suporte) | Support-ticket triage: agents, **decision vertices** (an AI model picks the path; keyword rules close a quality loop) and an **MCP** (an MCP vertex and an agent using MCP tools). | A model, Python. |
 | 3 | [`03-atendimento-ilustrado`](03-atendimento-ilustrado) | A "project of projects": example 2 followed, on the FAQ branch, by example 1 (the answer gets an animated SVG). | A model, Python. |
 
 Example 3 is **generated** from 1 and 2 (`python scripts/build_examples.py`), so the three never drift apart.

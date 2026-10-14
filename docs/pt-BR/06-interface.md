@@ -10,7 +10,7 @@ O Studio segue o layout do Microsoft Office, porque a maioria das pessoas já o 
 | :--- | :--- |
 | **Arquivo** | Abre a visão **Backstage** (abaixo). |
 | **Página Inicial** | Edição e exibição, *Vértices do Grafo* (**+ Tarefa**, seletor de tipo, **Catálogo**), execução e governança. |
-| **Inserir** | Fluxo e concorrência (condições, switch, subfluxos, fork/join, seções críticas), aceleração por GPU, agentes cognitivos. |
+| **Inserir** | Fluxo e concorrência (condições, switch, ferramenta MCP, subfluxos, fork/join, seções críticas), aceleração por GPU, agentes cognitivos. |
 | **Agentes** | Segurança e skills do workspace, servidores MCP, o catálogo global de skills do GitHub. |
 | **Conectores** | Importar projetos Pi, Claude, OpenAI, Hermes, Excel. |
 | **Dados** | *Memória do projeto* e *Armazenamento do workspace*, mantidos visivelmente separados. |

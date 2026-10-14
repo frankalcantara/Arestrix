@@ -74,7 +74,17 @@ Arestrix is an MCP client over stdio and SSE. There are two separate things:
 variable of your user, resolved when the pipeline runs) and `${NAME:-default}`. The secret scanner rejects a literal value in `env`.
 Stdio servers run as normal processes of your user, **outside** the agent sandbox: only configure servers you trust.
 
-Limitation: the **Tools** modal of a vertex does not list your servers yet (it shows a fixed example list); declare
+**Two ways to use a server in a pipeline:** an [**MCP vertex**](03-graph-and-nodes.md#mcp-vertex) (a deterministic call you wire
+into the graph) or as **tools of an agent** (the model decides when to call them).
+
+**Performance.** The generated program talks to MCP servers with the **native C++ client** (no Node or Python in the middle on the
+Arestrix side). Each server has **one persistent session** (one process and one handshake for the whole run), shared safely by
+all threads: calls to the same server are serialized, different servers run in parallel. On a test server, 15 calls took 0.48 s
+with the persistent session against 3.75 s opening a process per call (7.8x). A session is reopened if the server dies or its
+configuration changes, and a call that failed is **never** retried automatically (it may already have had effect). Sessions are
+closed when the program exits.
+
+Limitation: the **Tools** modal of an *agent* vertex does not list your servers yet (it shows a fixed example list); declare
 `mcpServers` in the project's JSON, as the [examples](../../examples/README.md) do.
 
 ## Importing existing work

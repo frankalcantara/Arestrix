@@ -1,5 +1,5 @@
 import { Graph } from '../core/Graph.ts';
-import { INodeData, IPort, ISwitchSettings, SwitchMode, defaultSwitchSettings } from '../core/types.ts';
+import { INodeData, IPort, ISwitchSettings, SwitchMode, defaultSwitchSettings, IMcpVertexSettings, defaultMcpSettings } from '../core/types.ts';
 import { EventBus } from '../core/EventBus.ts';
 import { RemoveNodeCommand, RemoveEdgeCommand, UpdateNodeCommand, CompoundCommand } from '../core/history/GraphCommands.ts';
 import { AgentTemplateRegistry } from '../core/templates/AgentTemplateRegistry.ts';
@@ -448,6 +448,7 @@ export class Inspector {
             <label class="form-label">${t('inspector.node_view.taskflow_type')}</label>
             <select id="node-type-select" class="form-select">
               <option value="static" ${node.type === 'static' ? 'selected' : ''}>Static Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Deterministico' : 'Deterministic'})</option>
+              <option value="mcp" ${node.type === 'mcp' ? 'selected' : ''}>MCP (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Ferramenta externa' : 'External tool'})</option>
               <option value="switch" ${node.type === 'switch' ? 'selected' : ''}>Switch (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Seleção multivia' : 'Multiway selection'})</option>
               <option value="condition" ${node.type === 'condition' ? 'selected' : ''}>Condition Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Decisão / Branch' : 'Decision / Branch'})</option>
               <option value="subflow" ${node.type === 'subflow' ? 'selected' : ''}>Subflow Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Dinamico' : 'Dynamic'})</option>
@@ -477,9 +478,10 @@ export class Inspector {
           ` : ''}
 
           ${node.type === 'switch' ? this.renderSwitchSection(node) : ''}
+          ${node.type === 'mcp' ? this.renderMcpSection(node) : ''}
 
           <!-- Seção de Parâmetros do Template / Agente -->
-          ${node.type === 'switch' ? '' : this.renderParametersSection(node, tpl)}
+          ${(node.type === 'switch' || node.type === 'mcp') ? '' : this.renderParametersSection(node, tpl)}
 
           <div class="form-actions" style="margin-top: 16px;">
             <button id="btn-delete-node" class="btn btn-danger">${t('inspector.node_view.delete_node')}</button>
@@ -642,6 +644,10 @@ export class Inspector {
         const current = this.graph.getNode(node.id) ?? node;
         const oldProps: Partial<INodeData> = { type: oldType };
         const newProps: Partial<INodeData> = { type: newType };
+        if ((newType === 'mcp') !== (oldType === 'mcp')) {
+          oldProps.mcpSettings = current.mcpSettings ? JSON.parse(JSON.stringify(current.mcpSettings)) : undefined;
+          newProps.mcpSettings = newType === 'mcp' ? defaultMcpSettings() : undefined;
+        }
         if (crossesSwitch) {
           oldProps.outputs = JSON.parse(JSON.stringify(current.outputs));
           newProps.outputs = newType === 'switch'
@@ -697,6 +703,7 @@ export class Inspector {
       this.bindSwitchCases(node);
       this.bindSwitchSettings(node);
     }
+    if (node.type === 'mcp') this.bindMcpSettings(node);
 
     // Sincronizar Lambda
     this.container.querySelector('#btn-sync-lambda')?.addEventListener('click', () => {
@@ -860,6 +867,186 @@ export class Inspector {
         inputEl.addEventListener('blur', handleChange);
       }
     });
+  }
+
+  // --- Vértice MCP: servidor, ferramenta e argumentos ---------------------------------------------
+
+  private backend(): any | null {
+    const w = typeof window !== 'undefined' ? (window as any) : null;
+    return w && w.webui && typeof w.webui.call === 'function' ? w.webui : null;
+  }
+
+  private mcpSettingsOf(node: INodeData): IMcpVertexSettings {
+    return node.mcpSettings ?? defaultMcpSettings();
+  }
+
+  private renderMcpSection(node: INodeData): string {
+    const s = this.mcpSettingsOf(node);
+    const opt = (value: string, label: string, sel: boolean) => `<option value="${this.escapeHtml(value)}" ${sel ? 'selected' : ''}>${this.escapeHtml(label)}</option>`;
+    return `
+      <div class="settings-section-card" style="margin-top: 12px; padding: 12px; border: 1px solid #edebe9; border-radius: 6px;">
+        <div style="font-weight: 700; font-size: 13px; margin-bottom: 8px;">${t('inspector.mcp.title')}</div>
+        <div class="office-field-hint" style="margin-bottom: 8px;">${t('inspector.mcp.hint')}</div>
+
+        <div class="form-group">
+          <label class="form-label" for="mcp-server">${t('inspector.mcp.server_label')}</label>
+          <div style="display: flex; gap: 6px;">
+            <select id="mcp-server" class="form-select" style="flex: 1;">${opt(s.server, s.server || t('inspector.mcp.choose'), true)}</select>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-mcp-refresh" title="${t('inspector.mcp.refresh_tip')}">↻</button>
+          </div>
+          <div class="office-field-hint" id="mcp-status"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="mcp-tool">${t('inspector.mcp.tool_label')}</label>
+          <select id="mcp-tool" class="form-select">${opt(s.tool, s.tool || t('inspector.mcp.choose'), true)}</select>
+          <div class="office-field-hint" id="mcp-tool-hint"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="mcp-args">${t('inspector.mcp.args_label')}</label>
+          <textarea id="mcp-args" class="form-textarea code-font" rows="4" spellcheck="false">${this.escapeHtml(JSON.stringify(s.arguments, null, 2))}</textarea>
+          <div class="office-field-hint" id="mcp-args-error" style="color: #a80000;"></div>
+          <div class="office-field-hint">${t('inspector.mcp.args_hint')}</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="mcp-source-kind">${t('inspector.mcp.source_label')}</label>
+          <select id="mcp-source-kind" class="form-select">
+            ${opt('previous', t('inspector.mcp.source_previous'), s.source.kind === 'previous')}
+            ${opt('file', t('inspector.mcp.source_file'), s.source.kind === 'file')}
+            ${opt('none', t('inspector.mcp.source_none'), s.source.kind === 'none')}
+          </select>
+          ${s.source.kind === 'file' ? `<input type="text" id="mcp-source-path" class="form-input" style="margin-top: 6px; font-family: monospace;" value="${this.escapeHtml(s.source.path ?? '')}" placeholder="${t('inspector.mcp.path_placeholder')}" />` : ''}
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="mcp-output-file">${t('inspector.mcp.output_label')}</label>
+          <input type="text" id="mcp-output-file" class="form-input" style="font-family: monospace;" value="${this.escapeHtml(s.output.file ?? '')}" placeholder="${t('inspector.mcp.output_placeholder')}" />
+          <div class="office-field-hint">${t('inspector.mcp.output_hint', { id: this.escapeHtml(node.id) })}</div>
+        </div>
+      </div>`;
+  }
+
+  private updateMcpSettings(node: INodeData, mutate: (s: IMcpVertexSettings) => void, description: string, rerender = false): void {
+    const current = this.graph.getNode(node.id);
+    if (!current) return;
+    const old = current.mcpSettings ? JSON.parse(JSON.stringify(current.mcpSettings)) as IMcpVertexSettings : undefined;
+    const next: IMcpVertexSettings = old ? JSON.parse(JSON.stringify(old)) : defaultMcpSettings();
+    mutate(next);
+    this.graph.commandManager.execute(new UpdateNodeCommand(this.graph, node.id, { mcpSettings: old }, { mcpSettings: next }, description));
+    if (rerender) {
+      const fresh = this.graph.getNode(node.id);
+      if (fresh) this.renderNode(fresh);
+    }
+  }
+
+  private bindMcpSettings(node: INodeData): void {
+    const q = <T extends Element>(sel: string) => this.container.querySelector(sel) as T | null;
+    const serverSel = q<HTMLSelectElement>('#mcp-server');
+    const toolSel = q<HTMLSelectElement>('#mcp-tool');
+    if (!serverSel || typeof serverSel.addEventListener !== 'function') return;   // ambientes sem DOM completo (testes)
+
+    const setStatus = (msg: string) => { const el = q<HTMLElement>('#mcp-status'); if (el) el.textContent = msg; };
+    const fillOptions = (select: HTMLSelectElement, items: Array<{ value: string; label: string }>, current: string) => {
+      select.innerHTML = '';
+      const all = items.some(i => i.value === current) || !current ? items : [{ value: current, label: current }, ...items];
+      for (const it of [{ value: '', label: t('inspector.mcp.choose') }, ...all]) {
+        const o = document.createElement('option');
+        o.value = it.value;
+        o.textContent = it.label;
+        if (it.value === current) o.selected = true;
+        select.appendChild(o);
+      }
+    };
+
+    const loadTools = async (server: string, keepTool: string) => {
+      if (!server || !toolSel) return;
+      const b = this.backend();
+      if (!b) { setStatus(t('inspector.mcp.needs_native')); return; }
+      setStatus(t('inspector.mcp.loading_tools'));
+      try {
+        const res = JSON.parse((await b.call('list_project_mcp_tools', JSON.stringify({ server }))) || '{}');
+        const tools: Array<{ name: string; description: string; inputSchema?: any }> = res.tools || [];
+        fillOptions(toolSel, tools.map(x => ({ value: x.name, label: x.name })), keepTool);
+        setStatus(res.error ? String(res.error) : t('inspector.mcp.tools_found', { count: tools.length }));
+        const hint = (name: string) => {
+          const tool = tools.find(x => x.name === name);
+          const el = q<HTMLElement>('#mcp-tool-hint');
+          if (!el) return;
+          const props = tool?.inputSchema?.properties ? Object.keys(tool.inputSchema.properties) : [];
+          const required: string[] = tool?.inputSchema?.required ?? [];
+          el.textContent = tool ? `${tool.description || ''} ${props.length ? '— ' + t('inspector.mcp.arguments') + ': ' + props.map(p => p + (required.includes(p) ? '*' : '')).join(', ') : ''}`.trim() : '';
+        };
+        hint(toolSel.value);
+        (toolSel as any).__hint = hint;
+        (toolSel as any).__tools = tools;
+      } catch {
+        setStatus(t('inspector.mcp.failed'));
+      }
+    };
+
+    const loadServers = async () => {
+      const b = this.backend();
+      if (!b) { setStatus(t('inspector.mcp.needs_native')); return; }
+      try {
+        const res = JSON.parse((await b.call('list_project_mcp_servers')) || '{}');
+        const servers: Array<{ id: string; name: string; isEnabled: boolean }> = res.servers || [];
+        const current = this.mcpSettingsOf(this.graph.getNode(node.id) ?? node).server;
+        fillOptions(serverSel, servers.map(sv => ({ value: sv.id, label: `${sv.name || sv.id} (${sv.id})${sv.isEnabled ? '' : ' — ' + t('inspector.mcp.disabled')}` })), current);
+        if (servers.length === 0) setStatus(t('inspector.mcp.no_servers'));
+        else if (current) await loadTools(current, this.mcpSettingsOf(this.graph.getNode(node.id) ?? node).tool);
+      } catch {
+        setStatus(t('inspector.mcp.failed'));
+      }
+    };
+
+    serverSel.addEventListener('change', () => {
+      const server = serverSel.value;
+      this.updateMcpSettings(node, s => { s.server = server; s.tool = ''; }, 'Escolher o servidor MCP');
+      if (toolSel) fillOptions(toolSel, [], '');
+      void loadTools(server, '');
+    });
+    toolSel?.addEventListener('change', () => {
+      const tool = toolSel.value;
+      this.updateMcpSettings(node, s => {
+        s.tool = tool;
+        // esqueleto dos argumentos a partir do esquema da ferramenta, se ainda estiverem vazios
+        const tools = (toolSel as any).__tools as Array<{ name: string; inputSchema?: any }> | undefined;
+        const props = tools?.find(x => x.name === tool)?.inputSchema?.properties;
+        if (props && Object.keys(s.arguments).length === 0) {
+          for (const k of Object.keys(props)) s.arguments[k] = '';
+        }
+      }, 'Escolher a ferramenta MCP', true);
+    });
+    q<HTMLElement>('#btn-mcp-refresh')?.addEventListener('click', () => { void loadServers(); });
+
+    q<HTMLTextAreaElement>('#mcp-args')?.addEventListener('change', (e) => {
+      const el = e.currentTarget as HTMLTextAreaElement;
+      const err = q<HTMLElement>('#mcp-args-error');
+      try {
+        const parsed = JSON.parse(el.value.trim() || '{}');
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(t('inspector.mcp.args_not_object'));
+        if (err) err.textContent = '';
+        this.updateMcpSettings(node, s => { s.arguments = parsed; }, 'Alterar os argumentos MCP');
+      } catch (ex: any) {
+        if (err) err.textContent = t('inspector.mcp.args_invalid', { message: String(ex?.message ?? ex) });
+      }
+    });
+    q<HTMLSelectElement>('#mcp-source-kind')?.addEventListener('change', (e) => {
+      const kind = (e.currentTarget as HTMLSelectElement).value as 'previous' | 'file' | 'none';
+      this.updateMcpSettings(node, s => { s.source = { kind, path: s.source.path }; }, 'Alterar a origem da entrada MCP', true);
+    });
+    q<HTMLInputElement>('#mcp-source-path')?.addEventListener('change', (e) => {
+      const path = (e.currentTarget as HTMLInputElement).value.trim();
+      this.updateMcpSettings(node, s => { s.source = { kind: 'file', path }; }, 'Alterar o arquivo de entrada MCP');
+    });
+    q<HTMLInputElement>('#mcp-output-file')?.addEventListener('change', (e) => {
+      const file = (e.currentTarget as HTMLInputElement).value.trim();
+      this.updateMcpSettings(node, s => { s.output = file ? { file } : {}; }, 'Alterar o arquivo de saída MCP');
+    });
+
+    void loadServers();
   }
 
   // --- Switch: como escolher o caminho (sem código) -------------------------------------------
@@ -1065,6 +1252,8 @@ export class Inspector {
         return t('inspector.explanations.condition');
       case 'switch':
         return t('inspector.explanations.switch');
+      case 'mcp':
+        return t('inspector.explanations.mcp');
       case 'subflow':
         return t('inspector.explanations.subflow');
       case 'module':

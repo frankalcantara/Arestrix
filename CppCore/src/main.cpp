@@ -14,6 +14,8 @@
 #include "cli/Cli.hpp"
 #include "platform/Process.hpp"
 #include "rt/Tools.hpp"
+#include "mcp/McpClient.hpp"
+#include "rt/McpTools.hpp"
 #include "search/ProjectSearch.hpp"
 #include "search/SynonymAgent.hpp"
 #include <atomic>
@@ -621,6 +623,49 @@ void ui_search_project(webui::window::event* e) {
     e->return_string(out.dump());
 }
 
+// JS -> C++: servidores MCP configurados no projeto aberto (.workspace/mcps), so metadados.
+void ui_list_project_mcp_servers(webui::window::event* e) {
+    taskforge::Json out;
+    try {
+        auto& pm = taskforge::project::ProjectManager::getInstance();
+        std::string root = pm.getActiveProjectRoot();
+        if (root.empty()) root = std::filesystem::current_path().string();
+        out["servers"] = taskforge::rt::McpToolbox::listProjectServers(root);
+    } catch (const std::exception& ex) {
+        out["servers"] = taskforge::Json::array();
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+// JS -> C++: {"server": "id"} => ferramentas que o servidor oferece (abre a sessao MCP persistente do servidor).
+void ui_list_project_mcp_tools(webui::window::event* e) {
+    taskforge::Json out;
+    out["tools"] = taskforge::Json::array();
+    try {
+        auto req = taskforge::jsonutil::parse(e->get_string());
+        auto& pm = taskforge::project::ProjectManager::getInstance();
+        std::string root = pm.getActiveProjectRoot();
+        if (root.empty()) root = std::filesystem::current_path().string();
+        auto cfg = taskforge::rt::McpToolbox::loadServerConfig(root, req.value("server", std::string()));
+        taskforge::mcp::McpClient client;
+        auto tools = client.listTools(cfg, 20000);
+        if (tools.empty()) {
+            out["error"] = std::string("O servidor nao respondeu ou nao oferece ferramentas. Confira o comando em .workspace/mcps.");
+        }
+        for (const auto& t : tools) {
+            taskforge::Json item;
+            item["name"] = t.name;
+            item["description"] = t.description;
+            item["inputSchema"] = t.inputSchema;
+            out["tools"].push_back(item);
+        }
+    } catch (const std::exception& ex) {
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
 // JS -> C++: {"locale": "es-ES", "force": false}. Gera o dicionario de sinonimos do idioma com o modelo
 // padrao do Studio (variaveis de ambiente do usuario). Pode demorar: a UI deve chamar sem aguardar.
 void ui_search_ensure_synonyms(webui::window::event* e) {
@@ -1161,6 +1206,8 @@ int main(int argc, char** argv) {
     win.bind("get_current_project", ui_get_current_project);
     win.bind("search_project", ui_search_project);
     win.bind("search_reindex", ui_search_reindex);
+    win.bind("list_project_mcp_servers", ui_list_project_mcp_servers);
+    win.bind("list_project_mcp_tools", ui_list_project_mcp_tools);
     win.bind("search_ensure_synonyms", ui_search_ensure_synonyms);
     win.bind("list_recent_projects", ui_list_recent_projects);
     win.bind("scan_pi_project", ui_scan_pi_project);
@@ -1213,5 +1260,6 @@ int main(int argc, char** argv) {
     }
 
     webui::wait();
+    taskforge::mcp::McpClient::shutdownSessions();   // encerra os servidores MCP que ficaram abertos
     return 0;
 }

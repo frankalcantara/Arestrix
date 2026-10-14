@@ -420,6 +420,26 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
                    "int arx_case = arx_select();\n" +
                    "if (arx_case < 0 || arx_case >= arx_cases) arx_case = arx_cases - 1;   // default\n" +
                    "return arx_case;";
+        } else if (node.type == core::TaskflowNodeType::Mcp && node.customLambdaBody.empty()) {
+            // Vertice MCP: uma chamada de ferramenta pelo cliente MCP nativo (sessao persistente), sem codigo do usuario.
+            const json& ms = node.mcpSettings;
+            json spec = json::object();
+            spec["server"] = ms.is_object() ? ms.value("server", std::string()) : std::string();
+            spec["tool"] = ms.is_object() ? ms.value("tool", std::string()) : std::string();
+            spec["arguments"] = (ms.is_object() && ms["arguments"].is_object()) ? ms["arguments"] : json::object();
+            json source = json::object();
+            const json& srcCfg = ms["source"];
+            source["kind"] = srcCfg.is_object() ? srcCfg.value("kind", std::string("none")) : std::string("none");
+            source["path"] = srcCfg.is_object() ? srcCfg.value("path", std::string()) : std::string();
+            json from = json::array();
+            for (const auto* e : edges) if (e->targetNodeId == id) from.push_back(e->sourceNodeId);
+            source["from"] = from;
+            spec["source"] = source;
+            json output = json::object();
+            output["file"] = (ms.is_object() && ms["output"].is_object()) ? ms["output"].value("file", std::string()) : std::string();
+            spec["output"] = output;
+            body = "taskforge::rt::callMcpTool(" + cppString(node.id) + ", " + cppString(label) + ",\n    " +
+                   rawLiteral(spec.dump()) + ");";
         } else if (node.type == core::TaskflowNodeType::Cuda) {
             body = node.customLambdaBody.empty()
                 ? "// Taskflow 4.1+ Native CUDA Graph (tf::cudaGraph / tf::cudaGraphExec)\n"

@@ -73,5 +73,9 @@ CompletionResult completeText(const CompletionRequest& req);
 // caso e o modelo. Devolve o indice do caso; lanca std::runtime_error se faltar entrada ou modelo.
 int decideCase(const std::string& nodeId, const std::string& label, const std::string& specJson);
 
+// Vertice MCP: chama uma ferramenta de um servidor MCP do projeto (sessao persistente) e grava o resultado em
+// .arestrix/out/<nodeId>.txt. Lanca std::runtime_error se o servidor, a entrada ou a ferramenta falharem.
+void callMcpTool(const std::string& nodeId, const std::string& label, const std::string& specJson);
+
 } // namespace rt
 } // namespace taskforge

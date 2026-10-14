@@ -21,7 +21,8 @@ enum class TaskflowNodeType {
     Agent,
     Fork,
     Join,
-    Switch
+    Switch,
+    Mcp
 };
 
 enum class PortDirection { Input, Output };
@@ -58,6 +59,7 @@ struct NodeData {
     std::string templateId;
     std::vector<std::string> requiredHeaders;
     json agentSettings;
+    json mcpSettings;      // vertice mcp: servidor, ferramenta, argumentos, origem da entrada e arquivo de saida
     json switchSettings;   // vertice switch: modo de decisao (code | rules | model), origem do texto, palavras
 };
 
@@ -109,7 +111,8 @@ ARX_JSON_ENUM(TaskflowNodeType, {
     {TaskflowNodeType::Agent, "agent"},
     {TaskflowNodeType::Fork, "fork"},
     {TaskflowNodeType::Join, "join"},
-    {TaskflowNodeType::Switch, "switch"}
+    {TaskflowNodeType::Switch, "switch"},
+    {TaskflowNodeType::Mcp, "mcp"}
 })
 
 ARX_JSON_ENUM(PortDirection, {
@@ -157,7 +160,8 @@ inline void to_json(json& j, const NodeData& n) {
         {"templateId", n.templateId},
         {"requiredHeaders", n.requiredHeaders},
         {"agentSettings", n.agentSettings},
-        {"switchSettings", n.switchSettings}
+        {"switchSettings", n.switchSettings},
+        {"mcpSettings", n.mcpSettings}
     };
 }
 inline void from_json(const json& j, NodeData& n) {
@@ -176,6 +180,7 @@ inline void from_json(const json& j, NodeData& n) {
     if(j.contains("requiredHeaders")) j.at("requiredHeaders").get_to(n.requiredHeaders);
     if(j.contains("agentSettings")) j.at("agentSettings").get_to(n.agentSettings);
     if(j.contains("switchSettings")) j.at("switchSettings").get_to(n.switchSettings);
+    if(j.contains("mcpSettings")) j.at("mcpSettings").get_to(n.mcpSettings);
 }
 
 // Serialização manual de EdgeData para campos opcionais

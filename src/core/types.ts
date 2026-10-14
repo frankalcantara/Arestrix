@@ -8,7 +8,8 @@ export type TaskflowNodeType =
   | 'agent'       // Agente Autônomo Code Mode em Sandbox/VM Isolada
   | 'fork'        // tf::Task - Despachante Concorrente / Disparo Paralelo
   | 'join'        // tf::Task - Barreira de Sincronização / Consolidação Concorrente
-  | 'switch';     // tf::Task (retorna int) - Seleção multivia: um caso por porta de saída; o último é o 'default'
+  | 'switch'      // tf::Task (retorna int) - Seleção multivia: um caso por porta de saída; o último é o 'default'
+  | 'mcp';        // tf::Task - Chama UMA ferramenta de um servidor MCP do projeto (cliente C++ nativo, sessão persistente)
 
 export type PortDirection = 'input' | 'output';
 export type PortType = 'flow' | 'data';
@@ -274,6 +275,22 @@ export function defaultSwitchSettings(mode: SwitchMode = 'model'): ISwitchSettin
   return { mode, source: { kind: 'previous' }, rules: {}, instruction: '' };
 }
 
+/** Vértice MCP: uma chamada de ferramenta, sem modelo de IA. Os argumentos aceitam {{input}} e {{input.campo}}. */
+export interface IMcpVertexSettings {
+  /** id de um servidor configurado em .workspace/mcps do projeto */
+  server: string;
+  tool: string;
+  arguments: Record<string, unknown>;
+  /** De onde vem o texto que alimenta {{input}}: saída do vértice anterior, um arquivo do projeto ou nada. */
+  source: { kind: 'previous' | 'file' | 'none'; path?: string };
+  /** Além de .arestrix/out/<id>.txt (lido pelos vértices seguintes), grava o resultado neste arquivo do projeto. */
+  output: { file?: string };
+}
+
+export function defaultMcpSettings(): IMcpVertexSettings {
+  return { server: '', tool: '', arguments: {}, source: { kind: 'previous' }, output: {} };
+}
+
 export interface INodeData {
   id: string;
   label: string;
@@ -289,6 +306,7 @@ export interface INodeData {
   requiredHeaders?: string[]; // Headers C++20 adicionais requeridos por este agente
   agentSettings?: INodeAgentSettings;
   switchSettings?: ISwitchSettings; // só para vértices do tipo 'switch'
+  mcpSettings?: IMcpVertexSettings; // só para vértices do tipo 'mcp'
 }
 
 export interface IBreadcrumbItem {

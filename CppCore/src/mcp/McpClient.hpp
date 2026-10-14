@@ -1,6 +1,7 @@
 #pragma once
 
 #include "McpTypes.hpp"
+#include <cstddef>
 #include <string>
 #include <vector>
 #include "util/JsonValue.hpp"
@@ -21,6 +22,11 @@ public:
                            const std::string& toolName,
                            const taskforge::Json& arguments,
                            int timeoutMs = 15000);
+
+    // Encerra todas as sessoes persistentes (processos filhos incluidos). Chamado ao sair e nos testes.
+    static void shutdownSessions();
+    // Quantidade de sessoes abertas e vivas (testes e diagnostico).
+    static size_t activeSessions();
 
 private:
     std::vector<McpTool> listToolsStdio(const McpServerConfig& config, int timeoutMs);

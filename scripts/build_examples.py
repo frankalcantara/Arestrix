@@ -89,6 +89,14 @@ def switch(nid, label, x, y, cases, default, mode, source, rules=None, instructi
     return n
 
 
+def mcp(nid, label, x, y, server, tool, arguments, source, output_file=""):
+    """Vertice MCP: chama UMA ferramenta de um servidor do projeto, sem modelo de IA."""
+    n = base(nid, label, "mcp", x, y, [port(f"{nid}_out_0", "out", "output")], "")
+    n["mcpSettings"] = {"server": server, "tool": tool, "arguments": arguments, "source": source,
+                        "output": {"file": output_file} if output_file else {}}
+    return n
+
+
 def condition(nid, label, x, y, body):
     outs = [port(f"{nid}_out_0", "branch 0", "output", branch=0), port(f"{nid}_out_1", "branch 1", "output", branch=1)]
     return base(nid, label, "condition", x, y, outs, body)
@@ -175,6 +183,16 @@ if (!fs::exists("workspace/ticket.txt")) {
         throw std::runtime_error("ARESTRIX_EXAMPLE_TICKET deve ser so o nome de um arquivo de samples/");
     fs::copy_file("samples/" + name, "workspace/ticket.txt", fs::copy_options::overwrite_existing);
 }
+{
+    std::ifstream in("workspace/ticket.txt");
+    std::stringstream ss;
+    ss << in.rdbuf();
+    const std::string text = ss.str();
+    std::smatch m;
+    std::regex email_re(R"([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})");
+    const std::string email = std::regex_search(text, m, email_re) ? m.str() : std::string();
+    std::ofstream("workspace/cliente.json") << "{\\"email\\":\\"" << email << "\\"}";
+}
 std::cout << "[Receber] chamado em workspace/ticket.txt\\n";"""
 
 
@@ -186,34 +204,35 @@ def support_nodes():
     """Vertices e arestas do fluxo de triagem. Usado pelo exemplo 2 e, depois, pelo 3."""
     clientes = ["clientes"]
     nodes = [
-        static("receber", "Receber_Chamado", 0, 0, RECEBER_BODY, headers=["<filesystem>", "<cstdlib>", "<stdexcept>"]),
-        agent("leitor", "Agente_Leitor_de_Chamados", 450, 0, "skills/leitor.md", tools=["read", "write"],
-              mcp=clientes, mcp_tools=["lookup_customer"]),
-        switch("triagem", "Triagem_de_Urgencia", 900, 0, ["urgente", "normal", "duvida"], "revisao_humana",
+        static("receber", "Receber_Chamado", 0, 0, RECEBER_BODY, headers=["<filesystem>", "<cstdlib>", "<stdexcept>", "<fstream>", "<sstream>", "<regex>"]),
+        mcp("consultar_cliente", "Consultar_Cliente", 450, 0, "clientes", "lookup_customer",
+            {"email": "{{input.email}}"}, {"kind": "file", "path": "workspace/cliente.json"}, "workspace/cliente_dados.json"),
+        agent("leitor", "Agente_Leitor_de_Chamados", 900, 0, "skills/leitor.md", tools=["read", "write"]),
+        switch("triagem", "Triagem_de_Urgencia", 1350, 0, ["urgente", "normal", "duvida"], "revisao_humana",
                mode="model", source={"kind": "previous"},
                instruction=("Classifique o chamado do cliente. Escolha 'urgente' para servico fora do ar, perda de dinheiro, "
                             "cobranca indevida ou risco legal; 'duvida' para perguntas simples sobre como usar o produto; "
                             "'normal' para os demais pedidos. Se nao for possivel decidir, escolha 'revisao_humana'.")),
         # --- urgente
-        agent("escalonador", "Agente_Escalonador", 1350, -430, "skills/escalonador.md", tools=["read", "write"],
+        agent("escalonador", "Agente_Escalonador", 1800, -430, "skills/escalonador.md", tools=["read", "write"],
               mcp=clientes, mcp_tools=["registrar_escalonamento"]),
-        entrega("entrega_urgente", "Entrega_Urgente", 1800, -430, "urgente"),
+        entrega("entrega_urgente", "Entrega_Urgente", 2250, -430, "urgente"),
         # --- normal: redige, revisa e, se preciso, refaz (laco)
-        agent("redator", "Agente_Redator", 1350, 0, "skills/redator.md", tools=["read", "write"]),
-        agent("revisor", "Agente_Revisor", 1800, 0, "skills/revisor.md", tools=["read", "write"]),
-        switch("qualidade", "Controle_de_Qualidade", 2250, 0, ["ajustar", "aprovado"], "revisao_humana",
+        agent("redator", "Agente_Redator", 1800, 0, "skills/redator.md", tools=["read", "write"]),
+        agent("revisor", "Agente_Revisor", 2250, 0, "skills/revisor.md", tools=["read", "write"]),
+        switch("qualidade", "Controle_de_Qualidade", 2700, 0, ["ajustar", "aprovado"], "revisao_humana",
                mode="rules", source={"kind": "file", "path": "workspace/revisao.txt"},
                rules=["AJUSTAR, reprovado, corrigir", "APROVADO"]),
-        entrega("entrega_normal", "Entrega_Normal", 2700, -90, "normal"),
+        entrega("entrega_normal", "Entrega_Normal", 3150, -90, "normal"),
         # --- duvida
-        agent("faq", "Agente_FAQ", 1350, 430, "skills/faq.md", tools=["read", "write"]),
-        entrega("entrega_faq", "Entrega_FAQ", 1800, 430, "duvida"),
+        agent("faq", "Agente_FAQ", 1800, 430, "skills/faq.md", tools=["read", "write"]),
+        entrega("entrega_faq", "Entrega_FAQ", 2250, 430, "duvida"),
         # --- ninguem decidiu: pessoa
-        static("humano", "Revisao_Humana", 2700, 330,
+        static("humano", "Revisao_Humana", 3150, 330,
                'std::cout << "[Humano] caso encaminhado para revisao humana. Leia workspace/ticket.txt e workspace/resumo.md.\\n";'),
     ]
     edges = [
-        edge("receber", 0, "leitor"), edge("leitor", 0, "triagem"),
+        edge("receber", 0, "consultar_cliente"), edge("consultar_cliente", 0, "leitor"), edge("leitor", 0, "triagem"),
         edge("triagem", 0, "escalonador"), edge("escalonador", 0, "entrega_urgente"),
         edge("triagem", 1, "redator"), edge("redator", 0, "revisor"), edge("revisor", 0, "qualidade"),
         edge("qualidade", 0, "redator", feedback=True), edge("qualidade", 1, "entrega_normal"),
@@ -235,7 +254,7 @@ description: Le o chamado, consulta o cadastro do cliente e resume o caso
 Voce le chamados de suporte e prepara um resumo para o proximo passo.
 
 1. Leia `workspace/ticket.txt` com a ferramenta `read`.
-2. Encontre o e-mail do cliente no chamado e consulte o cadastro com a ferramenta `mcp__clientes__lookup_customer`.
+2. Leia `workspace/cliente_dados.json`: o cadastro do cliente, consultado antes por um vertice MCP (nome, plano, chamados abertos).
 3. Grave `workspace/resumo.md` com: assunto, nome e plano do cliente, quantos chamados ele tem abertos e o pedido principal.
 4. Responda com um resumo de ate 4 linhas (assunto, cliente e plano, tom do cliente, pedido principal). Seja objetivo:
    esta resposta sera lida por um classificador que decide o caminho do chamado.
@@ -507,7 +526,7 @@ def build_03(ex1_graph, ex2_nodes, ex2_edges):
     a_nodes = [n for n in a_nodes if n["id"] not in drop]
     a_edges = [e for e in a_edges if e["targetNodeId"] not in drop and e["sourceNodeId"] not in drop]
 
-    s_nodes, s_edges = prefixed(ex1_graph["nodes"], ex1_graph["edges"], "svg_", dx=1800, dy=430)
+    s_nodes, s_edges = prefixed(ex1_graph["nodes"], ex1_graph["edges"], "svg_", dx=2250, dy=430)
     for n in s_nodes:
         if n["id"] == "svg_gerador":
             n["agentSettings"]["model"]["promptTemplate"] = (
@@ -539,13 +558,19 @@ def build_03(ex1_graph, ex2_nodes, ex2_edges):
 
 
 def main():
+    # Os README sao escritos a mao: sobrevivem a regeneracao (o resto de cada pasta e recriado do zero).
+    kept = {}
     if OUT.exists():
         for child in OUT.iterdir():
             if child.is_dir() and child.name[:2].isdigit():
+                kept[child.name] = {f.name: f.read_text(encoding="utf-8") for f in child.glob("README*.md")}
                 shutil.rmtree(child)
     ex1 = build_01()
     ex2_nodes, ex2_edges = build_02()
     build_03(ex1, ex2_nodes, ex2_edges)
+    for name, files in kept.items():
+        for fname, text in files.items():
+            (OUT / name / fname).write_text(text, encoding="utf-8")
     print("Exemplos gerados em", OUT)
 
 

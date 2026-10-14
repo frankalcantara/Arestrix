@@ -46,6 +46,8 @@ add_library(arestrix_core STATIC
   ${SRC}/rt/Agent.cpp
   ${SRC}/rt/Decision.cpp
   ${SRC}/rt/McpTools.cpp
+  ${SRC}/rt/NodeInput.cpp
+  ${SRC}/rt/McpVertex.cpp
   ${TP}/simdjson/singleheader/simdjson.cpp)
 
 target_include_directories(arestrix_core PUBLIC

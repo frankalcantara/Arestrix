@@ -8,7 +8,7 @@ escolha seu modelo, grave sua chave de API e pressione **F5**.
 | # | Projeto | O que mostra | Precisa de |
 | :--- | :--- | :--- | :--- |
 | 1 | [`01-svg-agente`](01-svg-agente) | O tutorial: dois agentes, verificações em paralelo (fork/join) e um laço de autocorreção decidido em C++. | Um modelo. |
-| 2 | [`02-triagem-de-suporte`](02-triagem-de-suporte) | Triagem de chamados: agentes, **vértices de decisão** (um modelo de IA escolhe o caminho; regras por palavras fecham um laço de qualidade) e um servidor **MCP**. | Um modelo, Python. |
+| 2 | [`02-triagem-de-suporte`](02-triagem-de-suporte) | Triagem de chamados: agentes, **vértices de decisão** (um modelo de IA escolhe o caminho; regras por palavras fecham um laço de qualidade) e um **MCP** (um vértice MCP e um agente usando ferramentas MCP). | Um modelo, Python. |
 | 3 | [`03-atendimento-ilustrado`](03-atendimento-ilustrado) | Um "projeto de projetos": o exemplo 2 seguido, no ramo de dúvidas, pelo exemplo 1 (a resposta ganha um SVG animado). | Um modelo, Python. |
 
 O exemplo 3 é **gerado** a partir do 1 e do 2 (`python scripts/build_examples.py`), então os três nunca ficam fora de

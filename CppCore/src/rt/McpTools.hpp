@@ -42,6 +42,9 @@ public:
     // mcp__<servidor>__<ferramenta>, so [A-Za-z0-9_-], no maximo 64 caracteres.
     static std::string agentToolName(const std::string& server, const std::string& tool);
     static mcp::McpServerConfig loadServerConfig(const std::filesystem::path& workspaceRoot, const std::string& id);
+    // Servidores configurados no projeto (.workspace/mcps): [{id, name, transport, isEnabled}]. So metadados: nunca
+    // devolve comando, argumentos nem variaveis de ambiente.
+    static taskforge::Json listProjectServers(const std::filesystem::path& workspaceRoot);
 
 private:
     struct Binding {

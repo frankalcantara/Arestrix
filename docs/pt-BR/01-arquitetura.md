@@ -48,7 +48,7 @@ refazer funcionam para tudo, inclusive colar, duplicar e apagar.
 | `build/` | `BuildService`: compila o programa gerado com MSVC, g++ ou clang++ e o executa. |
 | `rt/` | O **runtime** ao qual todo programa gerado se liga: clientes HTTPS, o laço de uso de ferramentas dos agentes, a decisão do switch (modelo de IA ou palavras), ferramentas de arquivo confinadas. |
 | `sandbox/` | Drivers de isolamento (processo do host, Docker, MicroVM), emissor de telemetria, motor de retomada. |
-| `mcp/` | Cliente do Model Context Protocol e registro de servidores. |
+| `mcp/` | Cliente nativo do Model Context Protocol com sessões persistentes (stdio e HTTP) e o registro de servidores. |
 | `memory/` | Memória Blackboard e de lições semânticas. |
 | `project/` | Projetos e workspaces (`arestrix.project.json`). |
 | `search/` | Busca no projeto: ranking lexical (BM25 + trigramas de caracteres) sobre todos os pipelines, subfluxos e skills, com índice por hash de conteúdo. |

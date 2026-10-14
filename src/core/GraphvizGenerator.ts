@@ -64,6 +64,7 @@ export class GraphvizGenerator {
       case 'static': color = '#3b82f6'; break;
       case 'condition': color = '#ff7828'; break;
       case 'switch': color = '#b45309'; break;
+      case 'mcp': color = '#0e7490'; break;
       case 'subflow': color = '#8b5cf6'; break;
       case 'module': color = '#10b981'; break;
       case 'critical': color = '#06b6d4'; break;

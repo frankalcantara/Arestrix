@@ -253,6 +253,7 @@ export class OfficeRibbon {
                 <option value="static">${t('ribbon.nodes.static')}</option>
                 <option value="condition">${t('ribbon.nodes.condition')}</option>
                 <option value="switch">${t('ribbon.nodes.switch')}</option>
+                <option value="mcp">${t('ribbon.nodes.mcp')}</option>
                 <option value="subflow">${t('ribbon.nodes.subflow')}</option>
                 <option value="module">${t('ribbon.nodes.module')}</option>
                 <option value="critical">${t('ribbon.nodes.critical')}</option>
@@ -313,6 +314,10 @@ export class OfficeRibbon {
             <button class="ribbon-btn-large" data-add="switch">
               <span class="ribbon-btn-icon">🎛️</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.switch_cases')}</span>
+            </button>
+            <button class="ribbon-btn-large" data-add="mcp">
+              <span class="ribbon-btn-icon">🔌</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.mcp_tool')}</span>
             </button>
             <button class="ribbon-btn-large" data-add="subflow">
               <span class="ribbon-btn-icon">🔄</span>
@@ -908,7 +913,8 @@ export class OfficeRibbon {
       agent: `Agente_CodeMode_${existingCount + 1}`,
       fork: `Fork_Dispatcher_${existingCount + 1}`,
       join: `Join_Barrier_${existingCount + 1}`,
-      switch: `Switch_${existingCount + 1}`
+      switch: `Switch_${existingCount + 1}`,
+      mcp: `MCP_${existingCount + 1}`
     };
 
     const node = this.graph.buildNode(id, labelMap[type], type, x, y);

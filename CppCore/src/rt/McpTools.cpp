@@ -127,6 +127,38 @@ mcp::McpServerConfig McpToolbox::loadServerConfig(const fs::path& root, const st
     throw std::runtime_error("servidor MCP '" + id + "' nao encontrado em .workspace/mcps");
 }
 
+taskforge::Json McpToolbox::listProjectServers(const fs::path& root) {
+    Json out = Json::array();
+    fs::path dir = root / ".workspace" / "mcps";
+    std::error_code ec;
+    if (!fs::is_directory(dir, ec)) return out;
+    std::vector<fs::path> files;
+    for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec))
+        if (it->is_regular_file(ec) && it->path().extension() == ".json") files.push_back(it->path());
+    std::sort(files.begin(), files.end());
+    for (const auto& f : files) {
+        auto parsed = jsonutil::tryParse(jsonutil::readFile(f));
+        if (!parsed) continue;
+        std::vector<Json> candidates;
+        if (parsed->is_array()) {
+            for (size_t i = 0; i < parsed->size(); ++i) candidates.push_back((*parsed)[i]);
+        } else {
+            candidates.push_back(*parsed);
+        }
+        for (const auto& c : candidates) {
+            std::string id = c.is_object() ? c.value("id", std::string()) : std::string();
+            if (!validId(id)) continue;
+            Json item;
+            item["id"] = id;
+            item["name"] = c.value("name", id);
+            item["transport"] = c.value("transport", std::string("stdio"));
+            item["isEnabled"] = c.value("isEnabled", true);
+            out.push_back(item);
+        }
+    }
+    return out;
+}
+
 McpToolbox::McpToolbox(const fs::path& root, const std::vector<std::string>& serverIds,
                        const std::vector<std::string>& allowedTools) {
     mcp::McpClient client;

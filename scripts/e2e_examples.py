@@ -104,7 +104,10 @@ def support_checks(out, project, events, path, label):
     check(routes and "revisao_humana" in routes[0]["options"], f"{label}: a opcao default foi oferecida ao modelo")
     check((project / "workspace" / "resposta.md").exists(), f"{label}: workspace/resposta.md criado")
     chats = [e for e in events if e["event"] == "chat"]
-    check(any("mcp__clientes__lookup_customer" in e["tools"] for e in chats), f"{label}: a ferramenta MCP foi oferecida ao agente")
+    check("[MCP Consultar_Cliente] clientes.lookup_customer ok" in out, f"{label}: o vertice MCP consultou o cadastro de clientes")
+    cadastro = project / ".arestrix" / "out" / "consultar_cliente.txt"
+    check(cadastro.exists() and '"plano"' in cadastro.read_text(encoding="utf-8"), f"{label}: o resultado do MCP ficou disponivel para o proximo vertice")
+    check(any(e["reply"] == "tool_call:read" for e in chats), f"{label}: o agente leu os dados que o vertice MCP gravou")
     check(not any(e["event"] == "401" for e in events), f"{label}: nenhuma chamada sem chave valida")
     no_secret_leak(out, label)
 
@@ -117,6 +120,9 @@ def scenario_02_urgente():
         support_checks(out, project, events, "urgente", "urgente")
         log = project / "output" / "escalonamentos.jsonl"
         check(log.exists() and "ESC-0001" in log.read_text(encoding="utf-8"), "o servidor MCP registrou o escalonamento ESC-0001")
+        chats = [e for e in events if e["event"] == "chat"]
+        check(any("mcp__clientes__registrar_escalonamento" in e["tools"] for e in chats), "o agente recebeu a ferramenta MCP como tool (alem do vertice MCP)")
+        check(not any("mcp__clientes__lookup_customer" in e["tools"] for e in chats), "o agente leitor NAO recebe a ferramenta de consulta (isso e do vertice MCP)")
         check("ESC-0001" in (project / "workspace" / "resposta.md").read_text(encoding="utf-8"), "a resposta cita o protocolo devolvido pelo MCP")
         check("ana.souza@example.com" in log.read_text(encoding="utf-8"), "o e-mail do cliente chegou ao MCP")
     finally:

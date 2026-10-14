@@ -6,7 +6,7 @@ A support ticket is read, classified and answered. Nothing here is code you must
 (and by keywords), and a customer database is reached through an MCP server.
 
 ```
-Receive ─► Reader (agent + MCP) ─► Triage (switch, AI decides) ─┬─ urgente ─► Escalator (agent + MCP) ─► Delivery
+Receive ─► Consult customer (MCP vertex) ─► Reader (agent) ─► Triage (switch, AI decides) ─┬─ urgente ─► Escalator (agent + MCP) ─► Delivery
                                                                ├─ normal ──► Writer ─► Reviewer ─► Quality (switch, keywords) ─┬─ aprovado ─► Delivery
                                                                │                ▲                                              ├─ ajustar ─┘ (loop)
                                                                │                └──────────────────────────────────────────────┘
@@ -16,9 +16,10 @@ Receive ─► Reader (agent + MCP) ─► Triage (switch, AI decides) ─┬─
 
 | Vertex | What it shows |
 | :--- | :--- |
-| Agente_Leitor | An agent calling an **MCP tool** (`lookup_customer`). Its final answer feeds the triage. |
+| Consultar_Cliente | An **MCP vertex**: a direct, deterministic call to `lookup_customer` (no AI), using the e-mail that *Receber_Chamado* extracted. The result goes to `workspace/cliente_dados.json`. |
+| Agente_Leitor | An agent that reads the ticket and the customer data and writes the summary. Its final answer feeds the triage. |
 | Triagem_de_Urgencia | A **switch in "AI model decides" mode**: the model reads the reader's answer and picks `urgente`, `normal`, `duvida` or the default. |
-| Agente_Escalonador | An agent calling another MCP tool (`registrar_escalonamento`, which writes `output/escalonamentos.jsonl`). |
+| Agente_Escalonador | An agent that gets an MCP server as **tools** and decides to call `registrar_escalonamento` (it writes `output/escalonamentos.jsonl`). The two ways to use MCP, side by side. |
 | Redator → Revisor → Controle_de_Qualidade | A **feedback loop**: the reviewer writes `STATUS: AJUSTAR` or `APROVADO`; a **switch in "keywords" mode** (no AI) sends the writer back until approved. |
 | Agente_FAQ | An agent answering from `base/faq.md`. |
 | Revisao_Humana | The switch default: when nothing fits, a person takes over. |

@@ -8,6 +8,8 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <thread>
+#include <chrono>
 #include <vector>
 
 #include "compiler/TaskflowGenerator.hpp"
@@ -16,6 +18,7 @@
 #include "platform/Process.hpp"
 #include "rt/Decision.hpp"
 #include "rt/McpTools.hpp"
+#include "rt/McpVertex.hpp"
 #include "rt/Runtime.hpp"
 #include "rt/Tools.hpp"
 #include "search/ProjectSearch.hpp"
@@ -864,6 +867,196 @@ TEST(mcp_toolbox_loads_project_servers_and_runs_tools) {
     CHECK(fails("../fuga"));        // identificador invalido
 
     fs::remove_all(root);
+}
+
+// ---------------------------------------------------------------------------
+// Sessoes MCP persistentes (um processo por servidor, nao um por chamada)
+// ---------------------------------------------------------------------------
+static taskforge::mcp::McpServerConfig countingServer(const fs::path& countFile) {
+    taskforge::mcp::McpServerConfig cfg;
+    cfg.id = "counting";
+    cfg.transport = taskforge::mcp::McpTransportType::Stdio;
+    cfg.command = taskforge::platform::commandExists("python") ? "python" : "python3";
+    cfg.args = {fs::absolute(fs::path("CppCore") / "tests" / "e2e" / "counting_mcp_server.py").string()};
+    cfg.env["ARX_MCP_COUNT_FILE"] = countFile.string();
+    return cfg;
+}
+
+static int countStarts(const fs::path& f) {
+    std::ifstream in(f);
+    std::string line;
+    int n = 0;
+    while (std::getline(in, line)) if (line.rfind("start", 0) == 0) ++n;
+    return n;
+}
+
+TEST(mcp_sessions_are_persistent_and_recover) {
+    using taskforge::mcp::McpClient;
+    if (!taskforge::platform::commandExists("python") && !taskforge::platform::commandExists("python3")) {
+        std::cout << "  (python ausente: teste ignorado)" << std::endl;
+        return;
+    }
+    McpClient::shutdownSessions();
+    auto root = makeTempDir("mcp-pool");
+    auto cfg = countingServer(root / "starts.log");
+    McpClient client;
+
+    // varias chamadas, UM processo
+    auto first = client.callTool(cfg, "pid", {}, 20000);
+    CHECK(first.success && !first.isError);
+    for (int i = 0; i < 5; ++i) CHECK(client.callTool(cfg, "pid", {}, 20000).content == first.content);
+    CHECK(client.listTools(cfg, 20000).size() == 3);
+    CHECK(countStarts(root / "starts.log") == 1);
+    CHECK(McpClient::activeSessions() == 1);
+    CHECK(client.callTool(cfg, "echo", {{"text", "oi"}}, 20000).content == "eco: oi");
+
+    // threads em paralelo no mesmo servidor: serializadas, sem abrir outro processo
+    std::atomic<int> ok{0};
+    std::vector<std::thread> threads;
+    for (int t = 0; t < 8; ++t)
+        threads.emplace_back([&] {
+            taskforge::mcp::McpClient c;
+            for (int i = 0; i < 5; ++i)
+                if (c.callTool(cfg, "echo", {{"text", "x"}}, 20000).content == "eco: x") ++ok;
+        });
+    for (auto& th : threads) th.join();
+    CHECK(ok == 40);
+    CHECK(countStarts(root / "starts.log") == 1);
+
+    // o servidor morre no meio de uma chamada: a chamada falha (nunca e repetida) e a proxima abre uma sessao nova
+    auto died = client.callTool(cfg, "die", {}, 20000);
+    CHECK(died.isError);
+    auto after = client.callTool(cfg, "pid", {}, 20000);
+    CHECK(after.success && !after.isError && after.content != first.content);
+    CHECK(countStarts(root / "starts.log") == 2);
+
+    // mudar a configuracao recria a sessao; encerrar tudo fecha os processos
+    auto changed = cfg;
+    changed.env["EXTRA"] = "1";
+    auto third = client.callTool(changed, "pid", {}, 20000);
+    CHECK(third.success && third.content != after.content);
+    McpClient::shutdownSessions();
+    CHECK(McpClient::activeSessions() == 0);
+
+    fs::remove_all(root);
+}
+
+TEST(mcp_persistent_sessions_are_much_faster_than_one_process_per_call) {
+    using taskforge::mcp::McpClient;
+    if (!taskforge::platform::commandExists("python") && !taskforge::platform::commandExists("python3")) return;
+    McpClient::shutdownSessions();
+    auto root = makeTempDir("mcp-bench");
+    auto cfg = countingServer(root / "starts.log");
+    McpClient client;
+    const int calls = 15;
+
+    auto t0 = std::chrono::steady_clock::now();
+    for (int i = 0; i < calls; ++i) {            // antes: um processo e um handshake por chamada
+        client.callTool(cfg, "echo", {{"text", "x"}}, 20000);
+        McpClient::shutdownSessions();
+    }
+    double perCall = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+
+    t0 = std::chrono::steady_clock::now();
+    for (int i = 0; i < calls; ++i) client.callTool(cfg, "echo", {{"text", "x"}}, 20000);   // agora: sessao reaproveitada
+    double persistent = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    McpClient::shutdownSessions();
+
+    std::cout << "  " << calls << " chamadas: processo por chamada = " << perCall << " s, sessao persistente = " << persistent
+              << " s (" << (persistent > 0 ? perCall / persistent : 0) << "x mais rapido)" << std::endl;
+    CHECK(persistent * 3 < perCall);
+    fs::remove_all(root);
+}
+
+// ---------------------------------------------------------------------------
+// Vertice MCP (chamada direta de uma ferramenta, sem modelo de IA)
+// ---------------------------------------------------------------------------
+TEST(mcp_vertex_renders_arguments_from_the_input) {
+    using namespace taskforge::rt;
+    json args = {{"nome", "Oi {{input.cliente.nome}}!"}, {"id", "{{input.cliente.id}}"}, {"todo", "{{input}}"},
+                 {"lista", json::array({"{{input.ativo}}", "fixo"})}, {"n", 7}};
+    const std::string input = R"({"cliente":{"nome":"Ana","id":42},"ativo":true})";
+    json out = renderMcpArguments(args, input);
+    CHECK(out["nome"] == "Oi Ana!");
+    CHECK(out["id"].is_number() && out["id"] == 42);              // referencia pura preserva o tipo
+    CHECK(out["todo"] == input);
+    CHECK(out["lista"][0].is_boolean() && out["lista"][0] == true && out["lista"][1] == "fixo");
+    CHECK(out["n"] == 7);
+
+    bool threw = false;
+    try { renderMcpArguments(json{{"x", "{{input.nao_existe}}"}}, input); } catch (const std::exception&) { threw = true; }
+    CHECK(threw);                                                  // campo ausente: erro claro, nunca valor vazio
+    threw = false;
+    try { renderMcpArguments(json{{"x", "{{input.a}}"}}, "texto solto"); } catch (const std::exception&) { threw = true; }
+    CHECK(threw);                                                  // entrada nao JSON
+    CHECK(renderMcpArguments(json{{"x", "{{input}}"}}, "texto solto")["x"] == "texto solto");
+}
+
+TEST(mcp_vertex_calls_a_tool_and_hands_the_result_to_the_next_vertex) {
+    using namespace taskforge::rt;
+    const char* py = taskforge::platform::commandExists("python") ? "python" : (taskforge::platform::commandExists("python3") ? "python3" : nullptr);
+    if (!py) { std::cout << "  (python ausente: teste ignorado)" << std::endl; return; }
+    taskforge::mcp::McpClient::shutdownSessions();
+
+    auto root = makeTempDir("mcpvertex");
+    fs::path oldCwd = fs::current_path();
+    fs::path script = fs::absolute(fs::path("CppCore") / "tests" / "e2e" / "counting_mcp_server.py");
+    setTestEnv("ARX_TEST_VERTEX_SCRIPT", script.string().c_str());
+    fs::current_path(root);                                         // o workspace do runtime e o diretorio atual
+
+    writeFile(root / ".workspace" / "mcps" / "eco.json",
+              std::string("{\"id\":\"eco\",\"transport\":\"stdio\",\"command\":\"") + py +
+              "\",\"args\":[\"${ARX_TEST_VERTEX_SCRIPT}\"],\"isEnabled\":true}");
+    writeFile(root / "entrada.json", R"({"nome":"Ana","n":3})");
+
+    // a entrada vem de um arquivo do projeto; o resultado vai para .arestrix/out e para um arquivo escolhido
+    callMcpTool("v1", "Consultar", R"({"server":"eco","tool":"echo","arguments":{"text":"ola {{input.nome}}"},
+        "source":{"kind":"file","path":"entrada.json"},"output":{"file":"saida/resultado.txt"}})");
+    CHECK(taskforge::jsonutil::readFile(root / ".arestrix" / "out" / "v1.txt") == "eco: ola Ana");
+    CHECK(taskforge::jsonutil::readFile(root / "saida" / "resultado.txt") == "eco: ola Ana");
+
+    // o vertice seguinte (por exemplo um switch) enxerga o resultado como "saida do vertice anterior"
+    callMcpTool("v2", "Repetir", R"({"server":"eco","tool":"echo","arguments":{"text":"[{{input}}]"},
+        "source":{"kind":"previous","from":["v1"]},"output":{}})");
+    CHECK(taskforge::jsonutil::readFile(root / ".arestrix" / "out" / "v2.txt") == "eco: [eco: ola Ana]");
+
+    auto fails = [&](const std::string& spec) {
+        try { callMcpTool("vx", "Falha", spec); } catch (const std::exception&) { return true; }
+        return false;
+    };
+    CHECK(fails(R"({"server":"","tool":"echo"})"));                                          // sem servidor
+    CHECK(fails(R"({"server":"nao_existe","tool":"echo","source":{"kind":"none"}})"));      // servidor ausente no projeto
+    CHECK(fails(R"({"server":"eco","tool":"echo","arguments":{"t":"{{input.x}}"},"source":{"kind":"none"}})"));   // campo ausente
+    CHECK(fails(R"({"server":"eco","tool":"echo","source":{"kind":"previous","from":["nunca_rodou"]}})"));       // sem saida anterior
+    CHECK(fails(R"({"server":"eco","tool":"echo","source":{"kind":"none"},"output":{"file":"../fora.txt"}})"));  // fuga do projeto
+    CHECK(fails(R"({"server":"eco","tool":"die","source":{"kind":"none"}})"));                                   // ferramenta falha: pipeline para
+
+    taskforge::mcp::McpClient::shutdownSessions();
+    fs::current_path(oldCwd);
+    fs::remove_all(root);
+}
+
+TEST(generator_mcp_vertex_calls_the_native_client) {
+    auto base = tutorialGraph();
+    json schema = base.toJson();
+    json& nodes = schema["nodes"];
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        if (nodes[i]["id"] != "a") continue;
+        nodes[i]["type"] = "mcp";
+        nodes[i]["customLambdaBody"] = "";
+        nodes[i]["mcpSettings"] = json{{"server", "clientes"}, {"tool", "lookup_customer"},
+                                       {"arguments", {{"email", "{{input.email}}"}}},
+                                       {"source", {{"kind", "previous"}}}, {"output", {{"file", "workspace/cliente.json"}}}};
+    }
+    taskforge::core::Graph g;
+    g.fromJson(schema);
+    std::string src = taskforge::compiler::TaskflowGenerator::generateSource(g);
+    CHECK(src.find("taskforge::rt::callMcpTool(\"a\"") != std::string::npos);
+    CHECK(src.find("\"server\":\"clientes\"") != std::string::npos);
+    CHECK(src.find("\"tool\":\"lookup_customer\"") != std::string::npos);
+    CHECK(src.find("\"from\":[\"gen\"]") != std::string::npos);                        // o vertice anterior alimenta a entrada
+    CHECK(src.find("\"file\":\"workspace/cliente.json\"") != std::string::npos);
+    CHECK(src.find("task_gen.precede(task_a)") != std::string::npos);                  // continua sendo uma tarefa Taskflow normal
 }
 
 int main() {

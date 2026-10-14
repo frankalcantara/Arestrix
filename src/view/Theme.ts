@@ -64,6 +64,12 @@ export const THEME = {
       textColor: getContrastTextColor(0xc43e1c),
       label: 'CONDITION TASK'
     },
+    mcp: {
+      color: 0x0e7490,        // Ciano profundo (integração externa)
+      badgeBg: 0x0b5568,      // Ciano 700
+      textColor: getContrastTextColor(0x0e7490),
+      label: 'MCP TOOL'
+    },
     switch: {
       color: 0x986f0b,        // Ouro Fluent (seleção multivia)
       badgeBg: 0x75540a,      // Ouro 700

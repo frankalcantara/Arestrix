@@ -13,6 +13,7 @@ Each type maps to a Taskflow primitive when the program is generated.
 | **Static** | Blue | `taskflow.emplace(...)` | Deterministic work. |
 | **Condition** | Orange | A task that returns an `int` | Decisions, convergence checks, feedback loops. Its output ports are numbered branches. |
 | **Switch** | Gold | A task that returns an `int` (the case index) | Choosing one of several paths: one output port per case, plus a `default`. |
+| **MCP** | Cyan | A task that calls the native MCP client | Calling ONE tool of an MCP server (a CRM, a database, a search) with no AI in between. |
 | **Subflow** | Purple | A task that receives `tf::Subflow&` | Decomposing work into a child graph at run time. |
 | **Module** | Green | A reusable composed graph | Packaging a sub-pipeline for reuse. |
 | **Critical** | Teal | `tf::CriticalSection` | Mutually exclusive access to a shared resource. |
@@ -23,6 +24,20 @@ Each type maps to a Taskflow primitive when the program is generated.
 
 Double-click a **subflow** or **module** vertex to open its child graph. `Esc` goes back up; the
 breadcrumb bar above the canvas shows where you are.
+
+### MCP vertex
+
+An **MCP** vertex calls **one tool** of an MCP server configured in the project (`.workspace/mcps/`), with no AI model in between:
+you pick the **server** and the **tool** from lists (the Studio asks the server which tools it offers), write the **arguments** as
+JSON and say where the **input** comes from (the previous vertex, a project file, or nothing).
+
+- Arguments accept `{{input}}` (the input text) and `{{input.field}}` (a field, when the input is JSON). A string made only of a
+  reference keeps the value's type: `{"id": "{{input.id}}"}` sends a number if the field is a number.
+- The result is kept in `.arestrix/out/<id>.txt`, which is exactly where **switches and agents read "the previous vertex"**, so an
+  MCP vertex can feed a decision or an agent directly. You can also save it to a project file.
+- If the server is missing or unreachable, a referenced field is absent, or the tool reports an error, the pipeline **stops with a
+  clear message**.
+- It runs on the **native C++ MCP client** with a **persistent session** per server (see [MCP servers](05-workspaces-memory-skills-mcp.md#mcp-servers)).
 
 ### Switch
 

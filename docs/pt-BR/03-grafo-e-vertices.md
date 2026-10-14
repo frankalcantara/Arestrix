@@ -13,6 +13,7 @@ Cada tipo corresponde a uma primitiva do Taskflow quando o programa é gerado.
 | **Estático** | Azul | `taskflow.emplace(...)` | Trabalho determinístico. |
 | **Condição** | Laranja | Tarefa que retorna um `int` | Decisões, verificação de convergência, laços de feedback. Suas portas de saída são ramos numerados. |
 | **Switch** | Ouro | Tarefa que retorna um `int` (o índice do caso) | Escolher um entre vários caminhos: uma porta de saída por caso, mais um `default`. |
+| **MCP** | Ciano | Tarefa que chama o cliente MCP nativo | Chamar UMA ferramenta de um servidor MCP (um CRM, um banco, uma busca) sem IA no meio. |
 | **Subfluxo** | Roxo | Tarefa que recebe `tf::Subflow&` | Decompor o trabalho em um grafo filho em tempo de execução. |
 | **Módulo** | Verde | Grafo composto reutilizável | Empacotar um subpipeline para reuso. |
 | **Crítico** | Azul-petróleo | `tf::CriticalSection` | Acesso mutuamente exclusivo a um recurso compartilhado. |
@@ -23,6 +24,20 @@ Cada tipo corresponde a uma primitiva do Taskflow quando o programa é gerado.
 
 Dê duplo clique em um vértice **subfluxo** ou **módulo** para abrir o grafo filho. `Esc` volta um nível; a
 barra de navegação acima do canvas mostra onde você está.
+
+### Vértice MCP
+
+Um vértice **MCP** chama **uma ferramenta** de um servidor MCP configurado no projeto (`.workspace/mcps/`), sem modelo de IA no
+meio: você escolhe o **servidor** e a **ferramenta** em listas (o Studio pergunta ao servidor quais ferramentas ele oferece),
+escreve os **argumentos** em JSON e diz de onde vem a **entrada** (o vértice anterior, um arquivo do projeto ou nada).
+
+- Os argumentos aceitam `{{input}}` (o texto de entrada) e `{{input.campo}}` (um campo, quando a entrada for JSON). Uma string que é
+  só uma referência preserva o tipo do valor: `{"id": "{{input.id}}"}` envia um número se o campo for número.
+- O resultado fica em `.arestrix/out/<id>.txt`, que é justamente onde **os switches e os agentes leem "o vértice anterior"**; assim
+  um vértice MCP alimenta uma decisão ou um agente diretamente. Você também pode gravá-lo em um arquivo do projeto.
+- Se o servidor não existir ou não responder, um campo referenciado faltar, ou a ferramenta devolver erro, o pipeline **para com uma
+  mensagem clara**.
+- Roda no **cliente MCP nativo em C++**, com uma **sessão persistente** por servidor (veja [Servidores MCP](05-workspaces-memoria-skills-mcp.md#servidores-mcp)).
 
 ### Switch
 
