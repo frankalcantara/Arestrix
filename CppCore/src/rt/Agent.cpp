@@ -15,6 +15,7 @@
 
 #include "rt/Http.hpp"
 #include "rt/McpTools.hpp"
+#include "rt/RuntimeLang.hpp"
 #include "rt/Tools.hpp"
 #include "sandbox/AgentTelemetryEmitter.hpp"
 #include "util/Json.hpp"
@@ -466,30 +467,45 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
         skillText = stripFrontmatter(jsonutil::readFile(*p));
     }
 
+    // Idioma do agente: definido pela propria constituicao dele (skill + prompt). O scaffolding do
+    // runtime que o agente enxerga (contexto de sistema, prompt padrao, descricoes de ferramentas e
+    // erros devolvidos a ele) segue esse idioma.
+    RuntimeLang lang = detectRuntimeLang(std::vector<std::string>{skillText, spec.promptTemplate});
+
     std::ostringstream sys;
     if (!skillText.empty()) sys << skillText << "\n\n";
-    sys << "---\n"
-        << "Contexto de execucao (Arestrix): voce e o no \"" << label << "\" de um pipeline de agentes. "
-        << "O diretorio de trabalho e a raiz do workspace; use SEMPRE caminhos relativos. "
-        << "Voce so pode agir pelas ferramentas fornecidas. Quando terminar, responda com um resumo curto "
-        << "do que foi feito, sem chamar mais ferramentas.\n";
+    sys << langPick(lang,
+                    "---\nContexto de execucao (Arestrix): voce e o no \"",
+                    "---\nExecution context (Arestrix): you are the node \"")
+        << label
+        << langPick(lang,
+                    "\" de um pipeline de agentes. O diretorio de trabalho e a raiz do workspace; use SEMPRE caminhos "
+                    "relativos. Voce so pode agir pelas ferramentas fornecidas. Quando terminar, responda com um resumo "
+                    "curto do que foi feito, sem chamar mais ferramentas.\n",
+                    "\" of an agent pipeline. The working directory is the workspace root; ALWAYS use relative paths. "
+                    "You can only act through the tools provided. When you finish, reply with a short summary of what "
+                    "was done, without calling more tools.\n");
 
     std::string userPrompt = spec.promptTemplate;
     if (userPrompt.empty()) {
-        userPrompt = "Execute a tarefa descrita nas suas instrucoes (skill). Esta e a execucao numero {{iteration}} deste no. "
-                     "Se houver relatorios, diagnosticos ou decisoes anteriores no workspace (por exemplo arquivos de auditoria), "
-                     "leia-os com a ferramenta read e corrija o que foi apontado antes de concluir.";
+        userPrompt = langPick(lang,
+            "Execute a tarefa descrita nas suas instrucoes (skill). Esta e a execucao numero {{iteration}} deste no. "
+            "Se houver relatorios, diagnosticos ou decisoes anteriores no workspace (por exemplo arquivos de auditoria), "
+            "leia-os com a ferramenta read e corrija o que foi apontado antes de concluir.",
+            "Carry out the task described in your instructions (skill). This is execution number {{iteration}} of this node. "
+            "If there are earlier reports, diagnostics or decisions in the workspace (for example audit files), read them "
+            "with the read tool and fix what was pointed out before concluding.");
     }
     userPrompt = replaceAll(userPrompt, "{{iteration}}", std::to_string(iteration));
     userPrompt = replaceAll(userPrompt, "{{nodeId}}", nodeId);
     userPrompt = replaceAll(userPrompt, "{{label}}", label);
 
-    std::vector<ToolDef> tools = toolDefinitions(spec.tools);
+    std::vector<ToolDef> tools = toolDefinitions(spec.tools, lang);
     // Ferramentas MCP (servidores de .workspace/mcps): so as dos servidores que o agente declarou.
     std::unique_ptr<McpToolbox> mcpTools;
     if (!spec.mcpServers.empty()) {
         try {
-            mcpTools = std::make_unique<McpToolbox>(root, spec.mcpServers, spec.mcpAllowed);
+            mcpTools = std::make_unique<McpToolbox>(root, spec.mcpServers, spec.mcpAllowed, lang);
         } catch (const std::exception& ex) {
             throw std::runtime_error("Agente '" + label + "': " + ex.what());
         }
@@ -508,6 +524,7 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
     tctx.sandbox = spec.sandbox;
     tctx.agentId = nodeId;
     tctx.allowed = spec.tools;
+    tctx.lang = lang;
 
     std::cout << "[Agent " << label << "] iniciando (execucao " << iteration << ", " << spec.provider << "/" << spec.model << ")\n";
 

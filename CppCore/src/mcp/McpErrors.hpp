@@ -50,6 +50,12 @@ const char* mcpErrorCodeName(McpErrorCode code);
 // Mensagem humana padrao (pt, ASCII) para o codigo; o detalhe dinamico e anexado quando o codigo o admite.
 std::string mcpErrorDefaultMessage(McpErrorCode code, const std::string& detail);
 
+// Versao em ingles das mensagens padrao (para agentes em runtime cujo idioma detectado e ingles).
+std::string mcpErrorDefaultMessageEn(McpErrorCode code, const std::string& detail);
+
+// Converte o nome que trafega no JSON de volta para o enum (desconhecido = McpErrorCode::Unknown).
+McpErrorCode mcpErrorCodeFromName(const std::string& name);
+
 // Erro com codigo estavel. `detail` e a parte dinamica curta (id do servidor, host, nome de variavel,
 // argumento recusado...); what() devolve a mensagem humana completa.
 class McpError : public std::runtime_error {

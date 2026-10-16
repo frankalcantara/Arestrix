@@ -45,6 +45,7 @@ add_library(arestrix_core STATIC
   ${SRC}/mcp/McpRegistry.cpp
   ${SRC}/rt/Http.cpp
   ${SRC}/rt/NetGuard.cpp
+  ${SRC}/rt/RuntimeLang.cpp
   ${SRC}/rt/Tools.cpp
   ${SRC}/rt/Agent.cpp
   ${SRC}/rt/Decision.cpp

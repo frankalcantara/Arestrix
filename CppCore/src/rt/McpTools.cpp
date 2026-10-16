@@ -185,12 +185,16 @@ bool McpToolbox::isToolAllowed(const std::vector<std::string>& allowed, const st
 }
 
 McpToolbox::McpToolbox(const fs::path& root, const std::vector<std::string>& serverIds,
-                       const std::vector<std::string>& allowedTools)
-    : root_(root) {
+                       const std::vector<std::string>& allowedTools, RuntimeLang lang)
+    : root_(root), lang_(lang) {
     mcp::McpClient client;
     for (const auto& id : serverIds) {
         if (native::isNativeServer(id)) {
-            const native::Server* ns = native::findServer(id);
+            // Catalogo no idioma do agente: descricoes e schemas ja vêm localizados.
+            const native::Server* ns = nullptr;
+            for (const auto& s : native::serversForLang(lang)) {
+                if (s.id == id) { ns = &s; break; }
+            }
             if (!ns) throw std::runtime_error("servidor nativo desconhecido: " + id);
             for (const auto& t : ns->tools) {
                 if (!isToolAllowed(allowedTools, id, t.name)) continue;
@@ -231,14 +235,24 @@ McpToolbox::McpToolbox(const fs::path& root, const std::vector<std::string>& ser
 
 ToolResult McpToolbox::call(const std::string& toolName, const Json& args) const {
     auto it = bindings_.find(toolName);
-    if (it == bindings_.end()) return {"ferramenta MCP desconhecida: " + toolName, true};
-    if (it->second.nativeServer) return native::call(it->second.nativeServer->id, it->second.tool, args, native::Context{root_});
+    if (it == bindings_.end())
+        return {langPick(lang_, "ferramenta MCP desconhecida: ", "unknown MCP tool: ") + toolName, true};
+    if (it->second.nativeServer)
+        return native::call(it->second.nativeServer->id, it->second.tool, args, native::Context{root_, lang_});
     mcp::McpClient client;
     mcp::McpCallResult r = client.callTool(it->second.config, it->second.tool, args.is_object() ? args : Json::object(),
                                            kCallTimeoutMs);
     if (r.isError || !r.success) {
         std::string msg = r.errorMessage.empty() ? r.content : r.errorMessage;
-        return {truncated(msg.empty() ? "falha ao executar a ferramenta MCP" : msg), true};
+        // Para agentes em ingles, o fallback padrao (pt) dos codigos estaveis ganha a versao em ingles.
+        if (lang_ == RuntimeLang::En && !r.errorCode.empty()) {
+            mcp::McpErrorCode code = mcp::mcpErrorCodeFromName(r.errorCode);
+            if (code != mcp::McpErrorCode::Unknown) {
+                msg = mcp::mcpErrorDefaultMessageEn(code, r.errorDetail);
+            }
+        }
+        std::string prefix = langPick(lang_, "falha ao executar a ferramenta MCP", "failed to execute the MCP tool");
+        return {truncated(msg.empty() ? prefix : (prefix + ": " + msg)), true};
     }
     return {truncated(r.content), false};
 }

@@ -310,6 +310,50 @@ TEST(host_driver_scrubs_secrets) {
 // ---------------------------------------------------------------------------
 // SVG
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Idioma do agente em runtime: skill + prompt definem o idioma do scaffolding
+// ---------------------------------------------------------------------------
+TEST(runtime_lang_detection_and_bilingual_tools) {
+    using namespace taskforge::rt;
+
+    // Detector: sinais fortes de cada lingua; vazio, sem sinais ou empate = Pt (padrao do projeto).
+    CHECK(detectRuntimeLang("") == RuntimeLang::Pt);
+    CHECK(detectRuntimeLang("Voce deve ler o arquivo e corrigir a tarefa conforme as instrucoes desta skill.") == RuntimeLang::Pt);
+    CHECK(detectRuntimeLang("You must read the file and fix the task according to the instructions of this skill.") == RuntimeLang::En);
+    CHECK(detectRuntimeLang(std::vector<std::string>{}) == RuntimeLang::Pt);
+    CHECK(detectRuntimeLang(std::vector<std::string>{"", "You should read the file and write the output."}) == RuntimeLang::En);
+    CHECK(detectRuntimeLang(std::vector<std::string>{"deve ler o arquivo", "the file and"}) == RuntimeLang::Pt);   // empate: Pt
+
+    // Ferramentas built-in: descricoes no idioma do agente.
+    auto ptTools = toolDefinitions({"read", "bash"}, RuntimeLang::Pt);
+    CHECK(ptTools.size() == 2 && ptTools[0].description.rfind("Le um arquivo", 0) == 0);
+    auto enTools = toolDefinitions({"read", "bash"}, RuntimeLang::En);
+    CHECK(enTools.size() == 2 && enTools[0].description.rfind("Reads a text file", 0) == 0);
+
+    // validate_svg: mensagens no idioma pedido.
+    CHECK(!validateSvg("<svg><rect/></svg>", RuntimeLang::Pt).empty());
+    CHECK(!validateSvg("<svg><rect/></svg>", RuntimeLang::En).empty());
+
+    // Catalogo nativo por idioma (descricoes e esquemas localizados).
+    const std::string httpId = std::string(taskforge::native::kIdPrefix) + "http";
+    const auto* ptHttp = taskforge::native::findServer(httpId);
+    CHECK(ptHttp && ptHttp->description.find("autorizou") != std::string::npos);
+    bool enDesc = false;
+    for (const auto& s : taskforge::native::serversForLang(RuntimeLang::En))
+        if (s.id == httpId) enDesc = s.description.find("authorized") != std::string::npos;
+    CHECK(enDesc);
+
+    // Ferramenta nativa com contexto em ingles devolve o erro em ingles.
+    taskforge::native::Context enCtx;
+    enCtx.workspaceRoot = fs::current_path();
+    enCtx.lang = RuntimeLang::En;
+    auto r = taskforge::native::call(httpId, "http_get", json{{"url", "http://x"}}, enCtx);
+    CHECK(r.isError && r.content.find("https") != std::string::npos);
+    auto rf = taskforge::native::call(std::string(taskforge::native::kIdPrefix) + "arquivos", "read_file",
+                                      json{{"path", "nao-existe-x.txt"}}, enCtx);
+    CHECK(rf.isError && rf.content.find("File not found") != std::string::npos);
+}
+
 TEST(svg_validator) {
     using taskforge::rt::validateSvg;
     CHECK(validateSvg(R"(<svg viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg"><rect id="a" width="5" height="5"><animate id="x" begin="0s" dur="1s" fill="freeze"/></rect><text>ok</text></svg>)").empty());
@@ -1078,6 +1122,13 @@ TEST(mcp_vertex_calls_a_tool_and_hands_the_result_to_the_next_vertex) {
     CHECK(fails(R"({"server":"eco","tool":"echo","source":{"kind":"previous","from":["nunca_rodou"]}})"));       // sem saida anterior
     CHECK(fails(R"({"server":"eco","tool":"echo","source":{"kind":"none"},"output":{"file":"../fora.txt"}})"));  // fuga do projeto
     CHECK(fails(R"({"server":"eco","tool":"die","source":{"kind":"none"}})"));                                   // ferramenta falha: pipeline para
+
+    // Idioma do agente: toolbox em ingles devolve o erro da ferramenta em ingles (fallback en do codigo estavel).
+    taskforge::rt::McpToolbox enBox(root, {"eco"}, {}, taskforge::rt::RuntimeLang::En);
+    auto died = enBox.call("mcp__eco__die", json::object());
+    CHECK(died.isError);
+    CHECK(died.content.find("failed to execute the MCP tool") != std::string::npos);
+    CHECK(died.content.find("closed before answering") != std::string::npos);
 
     taskforge::mcp::McpClient::shutdownSessions();
     fs::current_path(oldCwd);

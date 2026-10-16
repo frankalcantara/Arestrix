@@ -26,6 +26,12 @@ Um vértice de agente executa um **laço real de uso de ferramentas** contra o p
   confinadas à pasta do projeto.
 - O laço continua até o modelo parar de chamar ferramentas. Skills podem acrescentar ferramentas e servidores MCP.
 
+**Idioma do agente.** Em tempo de execução o agente é configurado no idioma da sua própria constituição: a skill e o template
+de prompt (os textos que o definem). O runtime detecta o idioma e emite tudo o que o agente enxerga — o bloco de contexto do
+sistema, o prompt padrão, as descrições e esquemas das ferramentas nativas e internas, e as mensagens de erro devolvidas a ele
+— nesse idioma (português ou inglês; português é o padrão quando os textos não dão sinal claro). Descrições de ferramentas MCP
+externas são dados de terceiros e passam como vieram. Logs de console e telemetria ficam no idioma da interface.
+
 Os provedores estão em [Primeiros passos](02-primeiros-passos.md#chaves-de-api-e-provedores).
 
 ### As cinco ações rápidas

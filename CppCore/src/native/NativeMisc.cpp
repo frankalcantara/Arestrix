@@ -140,11 +140,13 @@ std::string formatIso(int64_t epoch, int offsetMinutes) {
     return out + buf;
 }
 
-const char* weekday(int64_t epoch, int offsetMinutes) {
-    static const char* names[] = {"quinta", "sexta", "sabado", "domingo", "segunda", "terca", "quarta"};   // 1970-01-01 foi quinta
+std::string weekday(int64_t epoch, int offsetMinutes, rt::RuntimeLang lang) {
+    static const char* pt[] = {"quinta", "sexta", "sabado", "domingo", "segunda", "terca", "quarta"};   // 1970-01-01 foi quinta
+    static const char* en[] = {"Thursday", "Friday", "Saturday", "Sunday", "Monday", "Tuesday", "Wednesday"};
     int64_t local = epoch + offsetMinutes * 60;
     int64_t days = local >= 0 ? local / 86400 : -((-local + 86399) / 86400);
-    return names[((days % 7) + 7) % 7];
+    const size_t idx = ((days % 7) + 7) % 7;
+    return rt::langPick(lang, pt[idx], en[idx]);
 }
 
 int localOffsetMinutes(std::time_t t) {
@@ -169,7 +171,8 @@ bool safeRev(const std::string& r) {
 }
 
 ToolResult runGit(const Context& ctx, std::vector<std::string> args) {
-    if (!platform::commandExists("git")) return fail("O Git nao foi encontrado no PATH desta maquina.");
+    if (!platform::commandExists("git"))
+        return fail(rt::langPick(ctx.lang, "O Git nao foi encontrado no PATH desta maquina.", "Git was not found in the PATH of this machine."));
     platform::ProcessSpec spec;
     spec.argv = {"git", "-C", ctx.workspaceRoot.string(), "-c", "core.fsmonitor=false", "-c", "core.pager=cat",
                  "-c", "protocol.ext.allow=never", "--no-pager"};
@@ -179,43 +182,59 @@ ToolResult runGit(const Context& ctx, std::vector<std::string> args) {
     spec.env["GIT_OPTIONAL_LOCKS"] = "0";
     spec.scrubSecrets = true;
     platform::RunResult r = platform::run(spec, 20000, {}, nullptr, 256 * 1024);
-    if (!r.error.empty()) return fail("Falha ao executar o Git: " + r.error);
-    if (r.timedOut) return fail("O Git demorou demais.");
-    if (r.exitCode != 0) return fail("O Git recusou o pedido: " + r.output.substr(0, 400));
+    if (!r.error.empty()) return fail(rt::langPick(ctx.lang, "Falha ao executar o Git: ", "Failed to run Git: ") + r.error);
+    if (r.timedOut) return fail(rt::langPick(ctx.lang, "O Git demorou demais.", "Git took too long."));
+    if (r.exitCode != 0) return fail(rt::langPick(ctx.lang, "O Git recusou o pedido: ", "Git refused the request: ") + r.output.substr(0, 400));
     return ok(r.output.empty() ? std::string("(sem saida)") : r.output);
 }
 
 } // namespace
 
-Server makeMemoryServer() {
+Server makeMemoryServer(rt::RuntimeLang lang) {
     Server s;
     s.id = std::string(kIdPrefix) + "memoria";
     s.name = "Memoria do projeto";
     s.description = "Guarda e consulta pequenos valores de texto entre vertices e entre execucoes (.arestrix/memory.json).";
+    s.descriptionEn = "Stores and reads small text values across vertices and across runs (.arestrix/memory.json).";
     s.category = "Memoria";
-    s.tools.push_back({"memory_set", "Guarda um valor de texto (ate 64 KB) sob uma chave (letras, numeros, _ . : -).",
-                       schema({{"key", "string", "Chave"}, {"value", "string", "Valor"}}, {"key", "value"}), "moderate",
+    s.tools.push_back({"memory_set",
+                       "Guarda um valor de texto (ate 64 KB) sob uma chave (letras, numeros, _ . : -).",
+                       "Stores a text value (up to 64 KB) under a key (letters, digits, _ . : -).",
+                       schema({{"key", "string", "Chave", "Key"}, {"value", "string", "Valor", "Value"}}, {"key", "value"}, lang), "moderate",
                        [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string key = str(a, "key");
-                           if (!validKey(key)) return fail("Chave invalida: use ate 128 caracteres entre letras, numeros e _ . : -");
-                           if (!a["value"].is_string()) return fail("'value' deve ser texto.");
-                           if (a["value"].str().size() > kMaxValueBytes) return fail("Valor grande demais (limite de 64 KB).");
+                           if (!validKey(key))
+                               return fail(rt::langPick(ctx.lang,
+                                                        "Chave invalida: use ate 128 caracteres entre letras, numeros e _ . : -",
+                                                        "Invalid key: use up to 128 characters among letters, digits and _ . : -"));
+                           if (!a["value"].is_string())
+                               return fail(rt::langPick(ctx.lang, "'value' deve ser texto.", "'value' must be text."));
+                           if (a["value"].str().size() > kMaxValueBytes)
+                               return fail(rt::langPick(ctx.lang, "Valor grande demais (limite de 64 KB).", "Value too large (64 KB limit)."));
                            std::lock_guard<std::mutex> lock(g_memoryMutex);
                            Json data = loadMemory(ctx);
-                           if (!data.contains(key) && data.size() >= kMaxKeys) return fail("Memoria cheia (limite de 1000 chaves).");
+                           if (!data.contains(key) && data.size() >= kMaxKeys)
+                               return fail(rt::langPick(ctx.lang, "Memoria cheia (limite de 1000 chaves).", "Memory full (1000 keys limit)."));
                            data[key] = a["value"].str();
-                           return saveMemory(ctx, data) ? ok("OK: " + key) : fail("Nao foi possivel gravar a memoria.");
+                           return saveMemory(ctx, data) ? ok("OK: " + key)
+                                                        : fail(rt::langPick(ctx.lang, "Nao foi possivel gravar a memoria.", "Could not write the memory."));
                        }});
-    s.tools.push_back({"memory_get", "Le o valor guardado sob uma chave.", schema({{"key", "string", "Chave"}}, {"key"}), "safe",
+    s.tools.push_back({"memory_get",
+                       "Le o valor guardado sob uma chave.",
+                       "Reads the value stored under a key.",
+                       schema({{"key", "string", "Chave", "Key"}}, {"key"}, lang), "safe",
                        [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string key = str(a, "key");
                            std::lock_guard<std::mutex> lock(g_memoryMutex);
                            Json data = loadMemory(ctx);
-                           if (!data.contains(key)) return fail("Chave nao encontrada: " + key);
+                           if (!data.contains(key))
+                               return fail(rt::langPick(ctx.lang, "Chave nao encontrada: ", "Key not found: ") + key);
                            return ok(data[key].str());
                        }});
-    s.tools.push_back({"memory_list", "Lista as chaves guardadas (opcionalmente com um prefixo).",
-                       schema({{"prefix", "string", "So as chaves que comecam assim"}}, {}), "safe",
+    s.tools.push_back({"memory_list",
+                       "Lista as chaves guardadas (opcionalmente com um prefixo).",
+                       "Lists the stored keys (optionally with a prefix).",
+                       schema({{"prefix", "string", "So as chaves que comecam assim", "Only keys starting with this"}}, {}, lang), "safe",
                        [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string prefix = str(a, "prefix");
                            std::lock_guard<std::mutex> lock(g_memoryMutex);
@@ -225,53 +244,72 @@ Server makeMemoryServer() {
                                if (it.key().rfind(prefix, 0) == 0) keys.push_back(it.key());
                            return ok(keys.dump());
                        }});
-    s.tools.push_back({"memory_delete", "Apaga uma chave.", schema({{"key", "string", "Chave"}}, {"key"}), "moderate",
+    s.tools.push_back({"memory_delete",
+                       "Apaga uma chave.",
+                       "Deletes a key.",
+                       schema({{"key", "string", "Chave", "Key"}}, {"key"}, lang), "moderate",
                        [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string key = str(a, "key");
                            std::lock_guard<std::mutex> lock(g_memoryMutex);
                            Json data = loadMemory(ctx);
-                           if (!data.erase(key)) return fail("Chave nao encontrada: " + key);
-                           return saveMemory(ctx, data) ? ok("OK: " + key + " apagada") : fail("Nao foi possivel gravar a memoria.");
+                           if (!data.erase(key))
+                               return fail(rt::langPick(ctx.lang, "Chave nao encontrada: ", "Key not found: ") + key);
+                           return saveMemory(ctx, data)
+                                      ? ok("OK: " + key + rt::langPick(ctx.lang, " apagada", " deleted"))
+                                      : fail(rt::langPick(ctx.lang, "Nao foi possivel gravar a memoria.", "Could not write the memory."));
                        }});
     return s;
 }
 
-Server makeTimeServer() {
+Server makeTimeServer(rt::RuntimeLang lang) {
     Server s;
     s.id = std::string(kIdPrefix) + "tempo";
     s.name = "Data e hora";
     s.description = "Data e hora atuais, somar duracoes e calcular diferencas (ISO 8601).";
+    s.descriptionEn = "Current date and time, add durations and compute differences (ISO 8601).";
     s.category = "Utilidades";
-    s.tools.push_back({"now", "Devolve a data e hora atuais (ISO 8601), o dia da semana e o fuso.",
-                       schema({{"timezone", "string", "\"utc\" (padrao) ou \"local\""}}, {}), "safe",
-                       [](const Json& a, const Context&) -> ToolResult {
+    s.tools.push_back({"now",
+                       "Devolve a data e hora atuais (ISO 8601), o dia da semana e o fuso.",
+                       "Returns the current date and time (ISO 8601), the weekday and the timezone.",
+                       schema({{"timezone", "string", "\"utc\" (padrao) ou \"local\"", "\"utc\" (default) or \"local\""}}, {}, lang), "safe",
+                       [](const Json& a, const Context& ctx) -> ToolResult {
                            std::time_t t = std::time(nullptr);
                            int off = str(a, "timezone", "utc") == "local" ? localOffsetMinutes(t) : 0;
                            Json out;
                            out["iso"] = formatIso(t, off);
                            out["epoch"] = static_cast<int64_t>(t);
-                           out["weekday"] = weekday(t, off);
+                           out["weekday"] = weekday(t, off, ctx.lang);
                            out["utcOffsetMinutes"] = off;
                            return ok(out.dump());
                        }});
-    s.tools.push_back({"add_duration", "Soma (ou subtrai, com valores negativos) dias, horas, minutos e segundos a uma data ISO 8601.",
-                       schema({{"iso", "string", "Data/hora, ex.: 2026-10-13T09:30:00-03:00"}, {"days", "number", "Dias"}, {"hours", "number", "Horas"},
-                               {"minutes", "number", "Minutos"}, {"seconds", "number", "Segundos"}}, {"iso"}), "safe",
-                       [](const Json& a, const Context&) -> ToolResult {
+    s.tools.push_back({"add_duration",
+                       "Soma (ou subtrai, com valores negativos) dias, horas, minutos e segundos a uma data ISO 8601.",
+                       "Adds (or subtracts, with negative values) days, hours, minutes and seconds to an ISO 8601 date.",
+                       schema({{"iso", "string", "Data/hora, ex.: 2026-10-13T09:30:00-03:00", "Date/time, e.g.: 2026-10-13T09:30:00-03:00"},
+                               {"days", "number", "Dias", "Days"}, {"hours", "number", "Horas", "Hours"},
+                               {"minutes", "number", "Minutos", "Minutes"}, {"seconds", "number", "Segundos", "Seconds"}}, {"iso"}, lang), "safe",
+                       [](const Json& a, const Context& ctx) -> ToolResult {
                            Instant in;
-                           if (!parseIso(str(a, "iso"), in)) return fail("Data invalida; use o formato 2026-10-13T09:30:00Z ou 2026-10-13.");
+                           if (!parseIso(str(a, "iso"), in))
+                               return fail(rt::langPick(ctx.lang,
+                                                        "Data invalida; use o formato 2026-10-13T09:30:00Z ou 2026-10-13.",
+                                                        "Invalid date; use the format 2026-10-13T09:30:00Z or 2026-10-13."));
                            int64_t delta = static_cast<int64_t>(num(a, "days") * 86400 + num(a, "hours") * 3600 + num(a, "minutes") * 60 + num(a, "seconds"));
                            int64_t result = in.epoch + delta;
                            Json out;
                            out["iso"] = formatIso(result, in.offsetMinutes);
-                           out["weekday"] = weekday(result, in.offsetMinutes);
+                           out["weekday"] = weekday(result, in.offsetMinutes, ctx.lang);
                            return ok(out.dump());
                        }});
-    s.tools.push_back({"diff", "Calcula a diferenca entre duas datas ISO 8601 (to - from).",
-                       schema({{"from", "string", "Data inicial"}, {"to", "string", "Data final"}}, {"from", "to"}), "safe",
-                       [](const Json& a, const Context&) -> ToolResult {
+    s.tools.push_back({"diff",
+                       "Calcula a diferenca entre duas datas ISO 8601 (to - from).",
+                       "Computes the difference between two ISO 8601 dates (to - from).",
+                       schema({{"from", "string", "Data inicial", "Start date"}, {"to", "string", "Data final", "End date"}}, {"from", "to"}, lang), "safe",
+                       [](const Json& a, const Context& ctx) -> ToolResult {
                            Instant x, y;
-                           if (!parseIso(str(a, "from"), x) || !parseIso(str(a, "to"), y)) return fail("Data invalida; use o formato 2026-10-13T09:30:00Z.");
+                           if (!parseIso(str(a, "from"), x) || !parseIso(str(a, "to"), y))
+                               return fail(rt::langPick(ctx.lang, "Data invalida; use o formato 2026-10-13T09:30:00Z.",
+                                                        "Invalid date; use the format 2026-10-13T09:30:00Z."));
                            int64_t secs = y.epoch - x.epoch;
                            Json out;
                            out["seconds"] = secs;
@@ -283,51 +321,65 @@ Server makeTimeServer() {
     return s;
 }
 
-Server makeGitServer() {
+Server makeGitServer(rt::RuntimeLang lang) {
     Server s;
     s.id = std::string(kIdPrefix) + "git";
     s.name = "Git (somente leitura)";
     s.description = "Consulta o repositorio Git do projeto: estado, historico, diferencas e arquivos de uma revisao. Nunca altera nada.";
+    s.descriptionEn = "Queries the project Git repository: status, history, diffs and files of a revision. Never changes anything.";
     s.category = "Desenvolvimento";
-    s.tools.push_back({"git_status", "Mostra o estado do repositorio (branch e arquivos alterados).", schema({}, {}), "safe",
+    s.tools.push_back({"git_status",
+                       "Mostra o estado do repositorio (branch e arquivos alterados).",
+                       "Shows the repository status (branch and changed files).",
+                       schema({}, {}, lang), "safe",
                        [](const Json&, const Context& ctx) { return runGit(ctx, {"status", "--porcelain=v1", "-b"}); }});
-    s.tools.push_back({"git_log", "Lista os ultimos commits (hash curto, data, autor e titulo).",
-                       schema({{"max_count", "number", "Quantidade (padrao 20, limite 100)"}, {"path", "string", "So commits que tocaram este caminho"}}, {}),
+    s.tools.push_back({"git_log",
+                       "Lista os ultimos commits (hash curto, data, autor e titulo).",
+                       "Lists the latest commits (short hash, date, author and title).",
+                       schema({{"max_count", "number", "Quantidade (padrao 20, limite 100)", "Count (default 20, limit 100)"},
+                               {"path", "string", "So commits que tocaram este caminho", "Only commits that touched this path"}}, {}, lang),
                        "safe", [](const Json& a, const Context& ctx) -> ToolResult {
                            int n = static_cast<int>(std::clamp(num(a, "max_count", 20), 1.0, 100.0));
                            std::vector<std::string> args = {"log", "-n", std::to_string(n), "--no-color", "--date=short", "--format=%h %ad %an: %s"};
                            std::string path = str(a, "path");
                            if (!path.empty()) {
                                auto p = rt::resolveInWorkspace(ctx.workspaceRoot, path);
-                               if (!p) return fail("Caminho fora do projeto ou invalido.");
+                               if (!p) return fail(rt::langPick(ctx.lang, "Caminho fora do projeto ou invalido.", "Path outside the project or invalid."));
                                args.push_back("--");
                                args.push_back(p->lexically_relative(fs::weakly_canonical(ctx.workspaceRoot)).generic_string());
                            }
                            return runGit(ctx, args);
                        }});
-    s.tools.push_back({"git_diff", "Mostra as diferencas ainda nao commitadas (ou as preparadas, com staged=true).",
-                       schema({{"path", "string", "So este caminho"}, {"staged", "boolean", "true para as alteracoes preparadas (staged)"}}, {}), "safe",
+    s.tools.push_back({"git_diff",
+                       "Mostra as diferencas ainda nao commitadas (ou as preparadas, com staged=true).",
+                       "Shows the not-yet-committed diffs (or the staged ones, with staged=true).",
+                       schema({{"path", "string", "So este caminho", "Only this path"},
+                               {"staged", "boolean", "true para as alteracoes preparadas (staged)", "true for the staged changes"}}, {}, lang), "safe",
                        [](const Json& a, const Context& ctx) -> ToolResult {
                            std::vector<std::string> args = {"diff", "--no-color", "--no-ext-diff", "--no-textconv"};
                            if (a.contains("staged") && a["staged"].is_boolean() && a["staged"].get<bool>()) args.push_back("--cached");
                            std::string path = str(a, "path");
                            if (!path.empty()) {
                                auto p = rt::resolveInWorkspace(ctx.workspaceRoot, path);
-                               if (!p) return fail("Caminho fora do projeto ou invalido.");
+                               if (!p) return fail(rt::langPick(ctx.lang, "Caminho fora do projeto ou invalido.", "Path outside the project or invalid."));
                                args.push_back("--");
                                args.push_back(p->lexically_relative(fs::weakly_canonical(ctx.workspaceRoot)).generic_string());
                            }
                            return runGit(ctx, args);
                        }});
-    s.tools.push_back({"git_show_file", "Mostra o conteudo de um arquivo em uma revisao (commit, branch ou tag).",
-                       schema({{"rev", "string", "Revisao, ex.: HEAD, main, abc1234"}, {"path", "string", "Caminho do arquivo no repositorio"}}, {"rev", "path"}),
+    s.tools.push_back({"git_show_file",
+                       "Mostra o conteudo de um arquivo em uma revisao (commit, branch ou tag).",
+                       "Shows the content of a file at a revision (commit, branch or tag).",
+                       schema({{"rev", "string", "Revisao, ex.: HEAD, main, abc1234", "Revision, e.g.: HEAD, main, abc1234"},
+                               {"path", "string", "Caminho do arquivo no repositorio", "Path of the file in the repository"}}, {"rev", "path"}, lang),
                        "safe", [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string rev = str(a, "rev");
-                           if (!safeRev(rev)) return fail("Revisao invalida.");
+                           if (!safeRev(rev)) return fail(rt::langPick(ctx.lang, "Revisao invalida.", "Invalid revision."));
                            auto p = rt::resolveInWorkspace(ctx.workspaceRoot, str(a, "path"));
-                           if (!p) return fail("Caminho fora do projeto ou invalido.");
+                           if (!p) return fail(rt::langPick(ctx.lang, "Caminho fora do projeto ou invalido.", "Path outside the project or invalid."));
                            std::string rel = p->lexically_relative(fs::weakly_canonical(ctx.workspaceRoot)).generic_string();
-                           if (rel.rfind(".git/", 0) == 0 || rel == ".git") return fail("A pasta .git nao e acessivel.");
+                           if (rel.rfind(".git/", 0) == 0 || rel == ".git")
+                               return fail(rt::langPick(ctx.lang, "A pasta .git nao e acessivel.", "The .git folder is not accessible."));
                            return runGit(ctx, {"show", "--no-textconv", rev + ":" + rel});
                        }});
     return s;

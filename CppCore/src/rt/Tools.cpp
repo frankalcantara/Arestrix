@@ -22,10 +22,10 @@ namespace {
 constexpr size_t kMaxToolOutput = 32 * 1024;
 constexpr size_t kMaxReadBytes = 512 * 1024;
 
-std::string clip(std::string s, size_t limit = kMaxToolOutput) {
+std::string clip(std::string s, RuntimeLang lang, size_t limit = kMaxToolOutput) {
     if (s.size() > limit) {
         s.resize(limit);
-        s += "\n[... saida truncada ...]";
+        s += langPick(lang, "\n[... saida truncada ...]", "\n[... output truncated ...]");
     }
     return s;
 }
@@ -85,30 +85,45 @@ bool isProtectedPath(const fs::path& root, const fs::path& resolved) {
     return false;
 }
 
-std::vector<ToolDef> toolDefinitions(const std::vector<std::string>& allowed) {
+std::vector<ToolDef> toolDefinitions(const std::vector<std::string>& allowed, RuntimeLang lang) {
     std::vector<ToolDef> all;
-    all.push_back({"read", "Le um arquivo de texto do workspace e devolve o conteudo.",
+    all.push_back({"read",
+                   langPick(lang,
+                            "Le um arquivo de texto do workspace e devolve o conteudo.",
+                            "Reads a text file from the workspace and returns its content."),
                    json{{"type", "object"},
-                        {"properties", {{"path", {{"type", "string"}, {"description", "Caminho relativo ao workspace"}}}}},
+                        {"properties", {{"path", {{"type", "string"}, {"description", langPick(lang, "Caminho relativo ao workspace", "Path relative to the workspace")}}}}},
                         {"required", {"path"}}}});
-    all.push_back({"write", "Cria ou sobrescreve um arquivo do workspace com o conteudo informado (cria as pastas necessarias).",
+    all.push_back({"write",
+                   langPick(lang,
+                            "Cria ou sobrescreve um arquivo do workspace com o conteudo informado (cria as pastas necessarias).",
+                            "Creates or overwrites a workspace file with the given content (creates parent folders)."),
                    json{{"type", "object"},
-                        {"properties", {{"path", {{"type", "string"}, {"description", "Caminho relativo ao workspace"}}},
-                                        {"content", {{"type", "string"}, {"description", "Conteudo completo do arquivo"}}}}},
+                        {"properties", {{"path", {{"type", "string"}, {"description", langPick(lang, "Caminho relativo ao workspace", "Path relative to the workspace")}}},
+                                        {"content", {{"type", "string"}, {"description", langPick(lang, "Conteudo completo do arquivo", "Full file content")}}}}},
                         {"required", {"path", "content"}}}});
-    all.push_back({"edit", "Substitui UMA ocorrencia exata de old_text por new_text em um arquivo existente.",
+    all.push_back({"edit",
+                   langPick(lang,
+                            "Substitui UMA ocorrencia exata de old_text por new_text em um arquivo existente.",
+                            "Replaces ONE exact occurrence of old_text with new_text in an existing file."),
                    json{{"type", "object"},
                         {"properties", {{"path", {{"type", "string"}}},
-                                        {"old_text", {{"type", "string"}, {"description", "Trecho exato a substituir (deve ser unico)"}}},
+                                        {"old_text", {{"type", "string"}, {"description", langPick(lang, "Trecho exato a substituir (deve ser unico)", "Exact text to replace (must be unique)")}}},
                                         {"new_text", {{"type", "string"}}}}},
                         {"required", {"path", "old_text", "new_text"}}}});
-    all.push_back({"bash", "Executa um comando de shell no workspace (sujeito a politica de sandbox) e devolve a saida combinada.",
+    all.push_back({"bash",
+                   langPick(lang,
+                            "Executa um comando de shell no workspace (sujeito a politica de sandbox) e devolve a saida combinada.",
+                            "Runs a shell command in the workspace (subject to the sandbox policy) and returns the combined output."),
                    json{{"type", "object"},
                         {"properties", {{"command", {{"type", "string"}}}}},
                         {"required", {"command"}}}});
-    all.push_back({"validate_svg", "Valida um arquivo SVG (XML, viewBox, ids, referencias SMIL e regra tipografica) e lista os problemas.",
+    all.push_back({"validate_svg",
+                   langPick(lang,
+                            "Valida um arquivo SVG (XML, viewBox, ids, referencias SMIL e regra tipografica) e lista os problemas.",
+                            "Validates an SVG file (XML, viewBox, ids, SMIL references and typography rule) and lists the problems."),
                    json{{"type", "object"},
-                        {"properties", {{"path", {{"type", "string"}, {"description", "Caminho do .svg"}}}}},
+                        {"properties", {{"path", {{"type", "string"}, {"description", langPick(lang, "Caminho do .svg", "Path of the .svg")}}}}},
                         {"required", {"path"}}}});
 
     std::vector<ToolDef> out;
@@ -121,10 +136,12 @@ std::vector<ToolDef> toolDefinitions(const std::vector<std::string>& allowed) {
 // ---------------------------------------------------------------------------
 // Validador de SVG (analisador XML minimo, suficiente para detectar erros estruturais)
 // ---------------------------------------------------------------------------
-std::vector<std::string> validateSvg(const std::string& svg) {
+std::vector<std::string> validateSvg(const std::string& svg, RuntimeLang lang) {
+    auto T = [&](const char* pt, const char* en) { return langPick(lang, pt, en); };
+
     std::vector<std::string> issues;
     if (svg.find_first_not_of(" \t\r\n") == std::string::npos) {
-        issues.push_back("XML: arquivo vazio");
+        issues.push_back(T("XML: arquivo vazio", "XML: empty file"));
         return issues;
     }
 
@@ -149,22 +166,22 @@ std::vector<std::string> validateSvg(const std::string& svg) {
         i = lt;
         if (svg.compare(i, 4, "<!--") == 0) {
             size_t e = svg.find("-->", i + 4);
-            if (e == std::string::npos) { issues.push_back("XML: comentario nao fechado (linha " + std::to_string(lineOf(i)) + ")"); return issues; }
+            if (e == std::string::npos) { issues.push_back(T("XML: comentario nao fechado (linha ", "XML: unclosed comment (line ") + std::to_string(lineOf(i)) + ")"); return issues; }
             i = e + 3; continue;
         }
         if (svg.compare(i, 9, "<![CDATA[") == 0) {
             size_t e = svg.find("]]>", i + 9);
-            if (e == std::string::npos) { issues.push_back("XML: CDATA nao fechado (linha " + std::to_string(lineOf(i)) + ")"); return issues; }
+            if (e == std::string::npos) { issues.push_back(T("XML: CDATA nao fechado (linha ", "XML: unclosed CDATA (line ") + std::to_string(lineOf(i)) + ")"); return issues; }
             i = e + 3; continue;
         }
         if (svg.compare(i, 2, "<?") == 0) {
             size_t e = svg.find("?>", i + 2);
-            if (e == std::string::npos) { issues.push_back("XML: instrucao de processamento nao fechada"); return issues; }
+            if (e == std::string::npos) { issues.push_back(T("XML: instrucao de processamento nao fechada", "XML: unclosed processing instruction")); return issues; }
             i = e + 2; continue;
         }
         if (svg.compare(i, 2, "<!") == 0) {   // DOCTYPE
             size_t e = svg.find('>', i + 2);
-            if (e == std::string::npos) { issues.push_back("XML: declaracao nao fechada"); return issues; }
+            if (e == std::string::npos) { issues.push_back(T("XML: declaracao nao fechada", "XML: unclosed declaration")); return issues; }
             i = e + 1; continue;
         }
 
@@ -177,7 +194,7 @@ std::vector<std::string> validateSvg(const std::string& svg) {
             else if (c == '"' || c == '\'') quote = c;
             else if (c == '>') break;
         }
-        if (j >= n) { issues.push_back("XML: tag nao fechada (linha " + std::to_string(lineOf(i)) + ")"); return issues; }
+        if (j >= n) { issues.push_back(T("XML: tag nao fechada (linha ", "XML: unclosed tag (line ") + std::to_string(lineOf(i)) + ")"); return issues; }
         std::string tag = svg.substr(i + 1, j - i - 1);
         size_t tagPos = i;
         i = j + 1;
@@ -186,7 +203,9 @@ std::vector<std::string> validateSvg(const std::string& svg) {
             std::string name = tag.substr(1);
             while (!name.empty() && isspace((unsigned char)name.back())) name.pop_back();
             if (stack.empty() || stack.back().name != name) {
-                issues.push_back("XML: </" + name + "> sem abertura correspondente (linha " + std::to_string(lineOf(tagPos)) + ")");
+                issues.push_back("XML: </" + name + "> " +
+                                 T("sem abertura correspondente (linha ", "without a matching opening tag (line ") +
+                                 std::to_string(lineOf(tagPos)) + ")");
                 return issues;
             }
             stack.pop_back();
@@ -203,7 +222,7 @@ std::vector<std::string> validateSvg(const std::string& svg) {
 
         if (stack.empty()) {
             if (!rootName.empty()) {
-                issues.push_back("XML: mais de um elemento raiz (linha " + std::to_string(lineOf(tagPos)) + ")");
+                issues.push_back(T("XML: mais de um elemento raiz (linha ", "XML: more than one root element (line ") + std::to_string(lineOf(tagPos)) + ")");
                 return issues;
             }
             rootName = name;
@@ -218,11 +237,11 @@ std::vector<std::string> validateSvg(const std::string& svg) {
             if (key == "id") ids.push_back(val);
             if (key == "begin" || key == "end") timingRefs.emplace_back(key, val);
             if (name == "text" || name == "tspan") {
-                if (key == "filter") textDecorations.push_back("filter em <" + name + ">");
+                if (key == "filter") textDecorations.push_back(T("filter em <", "filter on <") + name + ">");
                 if (key == "style" && (val.find("text-shadow") != std::string::npos ||
                                        val.find("drop-shadow") != std::string::npos ||
                                        val.find("filter") != std::string::npos)) {
-                    textDecorations.push_back("style com sombra/filtro em <" + name + ">");
+                    textDecorations.push_back(T("style com sombra/filtro em <", "style with shadow/filter on <") + name + ">");
                 }
             }
         }
@@ -230,36 +249,38 @@ std::vector<std::string> validateSvg(const std::string& svg) {
         else if (stack.empty()) rootClosed = true;
     }
 
-    if (!stack.empty()) issues.push_back("XML: <" + stack.back().name + "> nao foi fechada");
-    if (rootName.empty()) { issues.push_back("XML: nenhum elemento encontrado"); return issues; }
-    if (rootName != "svg") issues.push_back("Raiz deve ser <svg>, encontrado <" + rootName + ">");
+    if (!stack.empty()) issues.push_back("XML: <" + stack.back().name + "> " + T("nao foi fechada", "was not closed"));
+    if (rootName.empty()) { issues.push_back(T("XML: nenhum elemento encontrado", "XML: no element found")); return issues; }
+    if (rootName != "svg") issues.push_back(T("Raiz deve ser <svg>, encontrado <", "Root must be <svg>, found <") + rootName + ">");
     (void)rootClosed;
 
     if (rootAttrs.find("viewBox") == std::string::npos &&
         !(rootAttrs.find("width") != std::string::npos && rootAttrs.find("height") != std::string::npos)) {
-        issues.push_back("SVG: faltam viewBox (ou width+height) no elemento raiz");
+        issues.push_back(T("SVG: faltam viewBox (ou width+height) no elemento raiz", "SVG: missing viewBox (or width+height) on the root element"));
     }
 
     std::set<std::string> seen, dup;
     for (auto& id : ids) if (!seen.insert(id).second) dup.insert(id);
-    for (auto& d : dup) issues.push_back("SVG: id duplicado \"" + d + "\"");
+    for (auto& d : dup) issues.push_back(T("SVG: id duplicado \"", "SVG: duplicate id \"") + d + "\"");
 
     // begin="idAnterior.end + 0.2s" / "a.begin; b.end"
     static const std::regex refRe(R"(([A-Za-z_][-A-Za-z0-9_:]*)\.(begin|end|repeat\([0-9]+\)|click|mouseover))");
     for (auto& [key, val] : timingRefs) {
         for (std::sregex_iterator it(val.begin(), val.end(), refRe), end; it != end; ++it) {
             std::string ref = (*it)[1];
-            if (!seen.count(ref)) issues.push_back("SMIL: " + key + "=\"" + val + "\" referencia id inexistente \"" + ref + "\"");
+            if (!seen.count(ref)) issues.push_back("SMIL: " + key + "=\"" + val + "\" " + T("referencia id inexistente \"", "references nonexistent id \"") + ref + "\"");
         }
     }
 
     // Regra tipografica: nada de sombra/glow em texto.
     if (hasText) {
-        for (auto& d : textDecorations) issues.push_back("TIPOGRAFIA: " + d);
+        const std::string typo = T("TIPOGRAFIA: ", "TYPOGRAPHY: ");
+        for (auto& d : textDecorations) issues.push_back(typo + d);
         static const std::regex cssRe(R"(text-shadow\s*:)");
-        if (std::regex_search(svg, cssRe)) issues.push_back("TIPOGRAFIA: text-shadow encontrado");
+        if (std::regex_search(svg, cssRe)) issues.push_back(T("TIPOGRAFIA: text-shadow encontrado", "TYPOGRAPHY: text-shadow found"));
         if (svg.find("feDropShadow") != std::string::npos || svg.find("feGaussianBlur") != std::string::npos) {
-            issues.push_back("TIPOGRAFIA: filtros feDropShadow/feGaussianBlur presentes (proibidos em texto)");
+            issues.push_back(T("TIPOGRAFIA: filtros feDropShadow/feGaussianBlur presentes (proibidos em texto)",
+                               "TYPOGRAPHY: feDropShadow/feGaussianBlur filters present (forbidden in text)"));
         }
     }
     return issues;
@@ -269,69 +290,77 @@ std::vector<std::string> validateSvg(const std::string& svg) {
 // Execucao
 // ---------------------------------------------------------------------------
 ToolResult executeTool(const ToolContext& ctx, const std::string& name, const json& args) {
-    if (!isAllowed(ctx, name)) return err("Ferramenta nao autorizada para este agente: " + name);
+    const RuntimeLang lang = ctx.lang;
+    auto T = [&](const char* pt, const char* en) { return langPick(lang, pt, en); };
+
+    if (!isAllowed(ctx, name)) return err(T("Ferramenta nao autorizada para este agente: ", "Tool not authorized for this agent: ") + name);
 
     try {
         if (name == "read") {
             auto p = resolveInWorkspace(ctx.workspaceRoot, stringArg(args, "path"));
-            if (!p) return err("Caminho fora do workspace ou invalido.");
+            if (!p) return err(T("Caminho fora do workspace ou invalido.", "Path outside the workspace or invalid."));
             std::error_code ec;
-            if (!fs::is_regular_file(*p, ec)) return err("Arquivo nao encontrado: " + stringArg(args, "path"));
+            if (!fs::is_regular_file(*p, ec)) return err(T("Arquivo nao encontrado: ", "File not found: ") + stringArg(args, "path"));
             auto size = fs::file_size(*p, ec);
-            if (size > kMaxReadBytes) return err("Arquivo grande demais para leitura direta (" + std::to_string(size) + " bytes).");
-            return ToolResult{clip(jsonutil::readFile(*p)), false};
+            if (size > kMaxReadBytes) return err(T("Arquivo grande demais para leitura direta (", "File too large for direct reading (") + std::to_string(size) + " bytes).");
+            return ToolResult{clip(jsonutil::readFile(*p), lang), false};
         }
 
         if (name == "write") {
             auto p = resolveInWorkspace(ctx.workspaceRoot, stringArg(args, "path"));
-            if (!p) return err("Caminho fora do workspace ou invalido.");
-            if (isProtectedPath(ctx.workspaceRoot, *p)) return err("Caminho protegido (pipelines, configuracao e .git nao podem ser gravados por agentes): " + stringArg(args, "path"));
-            if (!args.contains("content") || !args["content"].is_string()) return err("Parametro 'content' ausente.");
+            if (!p) return err(T("Caminho fora do workspace ou invalido.", "Path outside the workspace or invalid."));
+            if (isProtectedPath(ctx.workspaceRoot, *p))
+                return err(T("Caminho protegido (pipelines, configuracao e .git nao podem ser gravados por agentes): ",
+                             "Protected path (pipelines, configuration and .git cannot be written by agents): ") + stringArg(args, "path"));
+            if (!args.contains("content") || !args["content"].is_string()) return err(T("Parametro 'content' ausente.", "Missing parameter 'content'."));
             std::string content = args["content"].get<std::string>();
             std::error_code ec;
             fs::create_directories(p->parent_path(), ec);
             std::ofstream out(*p, std::ios::binary | std::ios::trunc);
-            if (!out.is_open()) return err("Nao foi possivel gravar o arquivo.");
+            if (!out.is_open()) return err(T("Nao foi possivel gravar o arquivo.", "Could not write the file."));
             out << content;
             out.close();
-            return ToolResult{"OK: " + std::to_string(content.size()) + " bytes gravados em " + stringArg(args, "path"), false};
+            return ToolResult{"OK: " + std::to_string(content.size()) + T(" bytes gravados em ", " bytes written to ") + stringArg(args, "path"), false};
         }
 
         if (name == "edit") {
             auto p = resolveInWorkspace(ctx.workspaceRoot, stringArg(args, "path"));
-            if (!p) return err("Caminho fora do workspace ou invalido.");
-            if (isProtectedPath(ctx.workspaceRoot, *p)) return err("Caminho protegido (pipelines, configuracao e .git nao podem ser editados por agentes): " + stringArg(args, "path"));
+            if (!p) return err(T("Caminho fora do workspace ou invalido.", "Path outside the workspace or invalid."));
+            if (isProtectedPath(ctx.workspaceRoot, *p))
+                return err(T("Caminho protegido (pipelines, configuracao e .git nao podem ser editados por agentes): ",
+                             "Protected path (pipelines, configuration and .git cannot be edited by agents): ") + stringArg(args, "path"));
             std::error_code ec;
-            if (!fs::is_regular_file(*p, ec)) return err("Arquivo nao encontrado.");
+            if (!fs::is_regular_file(*p, ec)) return err(T("Arquivo nao encontrado.", "File not found."));
             std::string oldText = stringArg(args, "old_text");
             std::string newText = stringArg(args, "new_text");
-            if (oldText.empty()) return err("old_text nao pode ser vazio.");
+            if (oldText.empty()) return err(T("old_text nao pode ser vazio.", "old_text cannot be empty."));
             std::string content = jsonutil::readFile(*p);
             size_t first = content.find(oldText);
-            if (first == std::string::npos) return err("old_text nao encontrado no arquivo.");
-            if (content.find(oldText, first + 1) != std::string::npos) return err("old_text aparece mais de uma vez; forneca um trecho unico.");
+            if (first == std::string::npos) return err(T("old_text nao encontrado no arquivo.", "old_text not found in the file."));
+            if (content.find(oldText, first + 1) != std::string::npos)
+                return err(T("old_text aparece mais de uma vez; forneca um trecho unico.", "old_text appears more than once; provide a unique snippet."));
             content.replace(first, oldText.size(), newText);
             std::ofstream out(*p, std::ios::binary | std::ios::trunc);
             out << content;
-            return ToolResult{"OK: edicao aplicada.", false};
+            return ToolResult{T("OK: edicao aplicada.", "OK: edit applied."), false};
         }
 
         if (name == "validate_svg") {
             auto p = resolveInWorkspace(ctx.workspaceRoot, stringArg(args, "path"));
-            if (!p) return err("Caminho fora do workspace ou invalido.");
+            if (!p) return err(T("Caminho fora do workspace ou invalido.", "Path outside the workspace or invalid."));
             std::error_code ec;
-            if (!fs::is_regular_file(*p, ec)) return err("Arquivo nao encontrado: " + stringArg(args, "path"));
-            auto issues = validateSvg(jsonutil::readFile(*p));
-            if (issues.empty()) return ToolResult{"SVG valido: nenhum problema encontrado.", false};
+            if (!fs::is_regular_file(*p, ec)) return err(T("Arquivo nao encontrado: ", "File not found: ") + stringArg(args, "path"));
+            auto issues = validateSvg(jsonutil::readFile(*p), lang);
+            if (issues.empty()) return ToolResult{T("SVG valido: nenhum problema encontrado.", "Valid SVG: no problems found."), false};
             std::ostringstream ss;
-            ss << issues.size() << " problema(s) encontrado(s):\n";
+            ss << issues.size() << T(" problema(s) encontrado(s):\n", " problem(s) found:\n");
             for (auto& s : issues) ss << "- " << s << "\n";
             return ToolResult{ss.str(), false};
         }
 
         if (name == "bash") {
             std::string cmd = stringArg(args, "command");
-            if (cmd.empty()) return err("Parametro 'command' ausente.");
+            if (cmd.empty()) return err(T("Parametro 'command' ausente.", "Missing parameter 'command'."));
             sandbox::ExecutionParams params;
             params.agentId = ctx.agentId;
             params.command = cmd;
@@ -340,15 +369,15 @@ ToolResult executeTool(const ToolContext& ctx, const std::string& name, const js
             params.policy = ctx.sandbox;
             auto res = sandbox::SandboxManager::instance().execute(params);
             std::ostringstream ss;
-            ss << clip(res.stdoutOutput);
-            if (!res.errorMessage.empty()) ss << "\n[erro] " << res.errorMessage;
+            ss << clip(res.stdoutOutput, lang);
+            if (!res.errorMessage.empty()) ss << "\n" << T("[erro] ", "[error] ") << res.errorMessage;
             ss << "\n[exit code: " << res.exitCode << "]";
             return ToolResult{ss.str(), !res.isSuccess()};
         }
     } catch (const std::exception& e) {
-        return err(std::string("Falha ao executar a ferramenta: ") + e.what());
+        return err(std::string(T("Falha ao executar a ferramenta: ", "Failed to execute the tool: ")) + e.what());
     }
-    return err("Ferramenta desconhecida: " + name);
+    return err(T("Ferramenta desconhecida: ", "Unknown tool: ") + name);
 }
 
 } // namespace rt

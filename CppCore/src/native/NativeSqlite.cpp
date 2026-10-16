@@ -50,16 +50,27 @@ std::string lower(std::string s) {
 fs::path resolveDb(const Context& ctx, const Json& a, std::string& error) {
     const std::string rel = str(a, "database", kDefaultDb);
     auto p = rt::resolveInWorkspace(ctx.workspaceRoot, rel);
-    if (!p) { error = "Caminho do banco fora do projeto ou invalido: " + rel; return {}; }
+    if (!p) {
+        error = rt::langPick(ctx.lang, "Caminho do banco fora do projeto ou invalido: ", "Database path outside the project or invalid: ") + rel;
+        return {};
+    }
     const std::string ext = lower(p->extension().string());
     if (ext != ".db" && ext != ".sqlite" && ext != ".sqlite3") {
-        error = "O banco deve ter a extensao .db, .sqlite ou .sqlite3: " + rel;
+        error = rt::langPick(ctx.lang, "O banco deve ter a extensao .db, .sqlite ou .sqlite3: ",
+                             "The database must have the .db, .sqlite or .sqlite3 extension: ") + rel;
         return {};
     }
     std::error_code ec;
     fs::path relative = fs::relative(*p, ctx.workspaceRoot, ec);
-    if (!ec && !relative.empty() && relative.begin()->string() == ".git") { error = "A pasta .git nao e acessivel."; return {}; }
-    if (rt::isProtectedPath(ctx.workspaceRoot, *p)) { error = "Caminho protegido (pipelines, configuracao e .git): " + rel; return {}; }
+    if (!ec && !relative.empty() && relative.begin()->string() == ".git") {
+        error = rt::langPick(ctx.lang, "A pasta .git nao e acessivel.", "The .git folder is not accessible.");
+        return {};
+    }
+    if (rt::isProtectedPath(ctx.workspaceRoot, *p)) {
+        error = rt::langPick(ctx.lang, "Caminho protegido (pipelines, configuracao e .git): ",
+                             "Protected path (pipelines, configuration and .git): ") + rel;
+        return {};
+    }
     return *p;
 }
 
@@ -113,11 +124,15 @@ bool openDb(Db& db, const fs::path& path, Mode mode, std::string& error) {
         fs::create_directories(path.parent_path(), ec);
     } else {
         std::error_code ec;
-        if (!fs::is_regular_file(path, ec)) { error = "O banco ainda nao existe: " + path.filename().string(); return false; }
+        if (!fs::is_regular_file(path, ec)) {
+            error = rt::langPick(rt::RuntimeLang::Pt, "O banco ainda nao existe: ", "The database does not exist yet: ") + path.filename().string();
+            return false;
+        }
     }
     const int flags = (mode == Mode::Write ? SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE : SQLITE_OPEN_READONLY) | SQLITE_OPEN_FULLMUTEX;
     if (sqlite3_open_v2(path.string().c_str(), &db.h, flags, nullptr) != SQLITE_OK) {
-        error = "Nao foi possivel abrir o banco: " + (db.h ? lastError(db.h) : std::string("sem memoria"));
+        error = rt::langPick(rt::RuntimeLang::Pt, "Nao foi possivel abrir o banco: ", "Could not open the database: ") +
+                (db.h ? lastError(db.h) : std::string("sem memoria"));
         return false;
     }
     sqlite3_busy_timeout(db.h, 0);
@@ -133,12 +148,17 @@ bool openDb(Db& db, const fs::path& path, Mode mode, std::string& error) {
     return true;
 }
 
-bool bindParams(sqlite3_stmt* st, const Json& params, std::string& error) {
+bool bindParams(const Context& ctx, sqlite3_stmt* st, const Json& params, std::string& error) {
     if (params.is_null()) return true;
-    if (!params.is_array()) { error = "'params' deve ser uma lista de valores."; return false; }
+    if (!params.is_array()) {
+        error = rt::langPick(ctx.lang, "'params' deve ser uma lista de valores.", "'params' must be a list of values.");
+        return false;
+    }
     const int expected = sqlite3_bind_parameter_count(st);
     if ((int)params.size() != expected) {
-        error = "O comando tem " + std::to_string(expected) + " parametro(s) (?), mas 'params' trouxe " + std::to_string(params.size()) + ".";
+        error = rt::langPick(ctx.lang, "O comando tem ", "The command has ") + std::to_string(expected) +
+                rt::langPick(ctx.lang, " parametro(s) (?), mas 'params' trouxe ", " parameter(s) (?), but 'params' brought ") +
+                std::to_string(params.size()) + ".";
         return false;
     }
     for (size_t i = 0; i < params.size(); ++i) {
@@ -153,7 +173,10 @@ bool bindParams(sqlite3_stmt* st, const Json& params, std::string& error) {
             const std::string text = v.is_string() ? v.str() : v.dump();
             rc = sqlite3_bind_text(st, idx, text.data(), (int)text.size(), SQLITE_TRANSIENT);
         }
-        if (rc != SQLITE_OK) { error = "Parametro invalido na posicao " + std::to_string(idx); return false; }
+        if (rc != SQLITE_OK) {
+            error = rt::langPick(ctx.lang, "Parametro invalido na posicao ", "Invalid parameter at position ") + std::to_string(idx);
+            return false;
+        }
     }
     return true;
 }
@@ -170,20 +193,23 @@ Json columnValue(sqlite3_stmt* st, int i) {
 
 // Prepara exatamente UM comando (varios comandos numa chamada sao recusados) com o autorizador do modo.
 sqlite3_stmt* prepareOne(Db& db, const std::string& sql, Mode& mode, std::string& error) {
-    if (sql.empty()) { error = "'sql' esta vazio."; return nullptr; }
-    if (sql.size() > kMaxSqlBytes) { error = "Comando grande demais (limite de 100 KB)."; return nullptr; }
+    if (sql.empty()) { error = rt::langPick(rt::RuntimeLang::Pt, "'sql' esta vazio.", "'sql' is empty."); return nullptr; }
+    if (sql.size() > kMaxSqlBytes) {
+        error = rt::langPick(rt::RuntimeLang::Pt, "Comando grande demais (limite de 100 KB).", "Command too large (100 KB limit).");
+        return nullptr;
+    }
     sqlite3_set_authorizer(db.h, authorize, &mode);
     sqlite3_stmt* st = nullptr;
     const char* tail = nullptr;
     if (sqlite3_prepare_v2(db.h, sql.c_str(), (int)sql.size(), &st, &tail) != SQLITE_OK) {
-        error = "SQL invalido ou nao permitido: " + lastError(db.h);
+        error = rt::langPick(rt::RuntimeLang::Pt, "SQL invalido ou nao permitido: ", "Invalid or not allowed SQL: ") + lastError(db.h);
         return nullptr;
     }
-    if (!st) { error = "O comando esta vazio (so comentarios?)."; return nullptr; }
+    if (!st) { error = rt::langPick(rt::RuntimeLang::Pt, "O comando esta vazio (so comentarios?).", "The command is empty (only comments?)."); return nullptr; }
     for (const char* p = tail; p && *p; ++p) {
         if (!std::isspace((unsigned char)*p) && *p != ';') {
             sqlite3_finalize(st);
-            error = "Envie um comando SQL por chamada.";
+            error = rt::langPick(rt::RuntimeLang::Pt, "Envie um comando SQL por chamada.", "Send one SQL command per call.");
             return nullptr;
         }
     }
@@ -204,8 +230,10 @@ ToolResult runQuery(const Json& a, const Context& ctx) {
     sqlite3_stmt* st = prepareOne(db, str(a, "sql"), mode, e);
     if (!st) return fail(e);
     struct Fin { sqlite3_stmt* s; ~Fin() { sqlite3_finalize(s); } } fin{st};
-    if (!sqlite3_stmt_readonly(st)) return fail("sql_query so executa consultas (SELECT). Para alterar dados use sql_execute.");
-    if (!bindParams(st, a["params"], e)) return fail(e);
+    if (!sqlite3_stmt_readonly(st))
+        return fail(rt::langPick(ctx.lang, "sql_query so executa consultas (SELECT). Para alterar dados use sql_execute.",
+                                 "sql_query only runs queries (SELECT). To change data use sql_execute."));
+    if (!bindParams(ctx, st, a["params"], e)) return fail(e);
 
     const int ncol = sqlite3_column_count(st);
     Json rows = Json::array();
@@ -217,7 +245,8 @@ ToolResult runQuery(const Json& a, const Context& ctx) {
         for (int i = 0; i < ncol; ++i) row[sqlite3_column_name(st, i) ? sqlite3_column_name(st, i) : "?"] = columnValue(st, i);
         rows.push_back(row);
     }
-    if (!truncated && rc != SQLITE_DONE) return fail("Erro ao consultar: " + lastError(db.h));
+    if (!truncated && rc != SQLITE_DONE)
+        return fail(rt::langPick(ctx.lang, "Erro ao consultar: ", "Error while querying: ") + lastError(db.h));
     Json out = Json::object();
     out["row_count"] = (int64_t)rows.size();
     out["truncated"] = truncated;
@@ -237,11 +266,11 @@ ToolResult runExecute(const Json& a, const Context& ctx) {
     sqlite3_stmt* st = prepareOne(db, str(a, "sql"), mode, e);
     if (!st) return fail(e);
     struct Fin { sqlite3_stmt* s; ~Fin() { sqlite3_finalize(s); } } fin{st};
-    if (!bindParams(st, a["params"], e)) return fail(e);
+    if (!bindParams(ctx, st, a["params"], e)) return fail(e);
 
     int rc;
     while ((rc = sqlite3_step(st)) == SQLITE_ROW) {}   // um INSERT ... RETURNING devolveria linhas; aqui so interessa concluir
-    if (rc != SQLITE_DONE) return fail("Erro ao executar: " + lastError(db.h));
+    if (rc != SQLITE_DONE) return fail(rt::langPick(ctx.lang, "Erro ao executar: ", "Error while executing: ") + lastError(db.h));
     Json out = Json::object();
     out["changes"] = (int64_t)sqlite3_changes64(db.h);
     out["last_insert_rowid"] = (int64_t)sqlite3_last_insert_rowid(db.h);
@@ -267,30 +296,39 @@ ToolResult runInternal(const Json& a, const Context& ctx, const char* sql, const
         for (int i = 0; i < n; ++i) row[sqlite3_column_name(st, i)] = columnValue(st, i);
         rows.push_back(row);
     }
-    if (listColumns && rows.size() == 0) return fail("Tabela nao encontrada: " + bindText);
+    if (listColumns && rows.size() == 0)
+        return fail(rt::langPick(ctx.lang, "Tabela nao encontrada: ", "Table not found: ") + bindText);
     return ok(rows.dump());
 }
 
 } // namespace
 
-Server makeSqliteServer() {
+Server makeSqliteServer(rt::RuntimeLang lang) {
     Server s;
     s.id = std::string(kIdPrefix) + "sqlite";
     s.name = "Banco de dados SQLite";
     s.description = "Banco de dados local embutido: tabelas, consultas e gravacoes em um arquivo do projeto. Sem servidor e sem instalacao.";
+    s.descriptionEn = "Embedded local database: tables, queries and writes in a project file. No server and no installation.";
     s.category = "Dados";
 
-    const Prop db{"database", "string", "Arquivo do banco dentro do projeto (.db, .sqlite ou .sqlite3). Padrao: data/arestrix.db"};
+    const Prop db{"database", "string",
+                  "Arquivo do banco dentro do projeto (.db, .sqlite ou .sqlite3). Padrao: data/arestrix.db",
+                  "Database file inside the project (.db, .sqlite or .sqlite3). Default: data/arestrix.db"};
 
-    s.tools.push_back({"list_tables", "Lista as tabelas e views do banco.", schema({db}, {}), "safe",
+    s.tools.push_back({"list_tables",
+                       "Lista as tabelas e views do banco.",
+                       "Lists the tables and views of the database.",
+                       schema({db}, {}, lang), "safe",
                        [](const Json& a, const Context& ctx) -> ToolResult {
                            return runInternal(a, ctx,
                                               "SELECT name, type FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' ORDER BY name",
                                               "", false);
                        }});
 
-    s.tools.push_back({"describe_table", "Mostra as colunas de uma tabela (nome, tipo, obrigatoria, chave primaria).",
-                       schema({db, {"table", "string", "Nome da tabela"}}, {"table"}), "safe",
+    s.tools.push_back({"describe_table",
+                       "Mostra as colunas de uma tabela (nome, tipo, obrigatoria, chave primaria).",
+                       "Shows the columns of a table (name, type, required, primary key).",
+                       schema({db, {"table", "string", "Nome da tabela", "Table name"}}, {"table"}, lang), "safe",
                        [](const Json& a, const Context& ctx) -> ToolResult {
                            return runInternal(a, ctx,
                                               "SELECT name, type, \"notnull\" AS required, dflt_value AS default_value, pk AS primary_key FROM pragma_table_info(?1)",
@@ -299,16 +337,22 @@ Server makeSqliteServer() {
 
     s.tools.push_back({"sql_query",
                        "Executa uma consulta SELECT (somente leitura) e devolve as linhas. Use ? no comando e passe os valores em 'params'.",
-                       schema({db, {"sql", "string", "Comando SELECT. Exemplo: SELECT * FROM clientes WHERE email = ?"},
-                               {"params", "array", "Valores para os ? do comando, na ordem"},
-                               {"max_rows", "integer", "Maximo de linhas devolvidas (padrao 100, maximo 1000)"}}, {"sql"}),
+                       "Runs a SELECT query (read-only) and returns the rows. Use ? in the command and pass the values in 'params'.",
+                       schema({db, {"sql", "string", "Comando SELECT. Exemplo: SELECT * FROM clientes WHERE email = ?",
+                                    "SELECT command. Example: SELECT * FROM clients WHERE email = ?"},
+                               {"params", "array", "Valores para os ? do comando, na ordem", "Values for the ? in the command, in order"},
+                               {"max_rows", "integer", "Maximo de linhas devolvidas (padrao 100, maximo 1000)",
+                                "Maximum rows returned (default 100, maximum 1000)"}}, {"sql"}, lang),
                        "safe", runQuery});
 
     s.tools.push_back({"sql_execute",
                        "Altera o banco: CREATE TABLE, INSERT, UPDATE, DELETE, DROP... (um comando por chamada; cria o arquivo se nao existir). "
                        "Use ? no comando e passe os valores em 'params'.",
-                       schema({db, {"sql", "string", "Comando SQL. Exemplo: INSERT INTO clientes (nome, email) VALUES (?, ?)"},
-                               {"params", "array", "Valores para os ? do comando, na ordem"}}, {"sql"}),
+                       "Changes the database: CREATE TABLE, INSERT, UPDATE, DELETE, DROP... (one command per call; creates the file if missing). "
+                       "Use ? in the command and pass the values in 'params'.",
+                       schema({db, {"sql", "string", "Comando SQL. Exemplo: INSERT INTO clientes (nome, email) VALUES (?, ?)",
+                                    "SQL command. Example: INSERT INTO clients (name, email) VALUES (?, ?)"},
+                               {"params", "array", "Valores para os ? do comando, na ordem", "Values for the ? in the command, in order"}}, {"sql"}, lang),
                        "moderate", runExecute});
     return s;
 }

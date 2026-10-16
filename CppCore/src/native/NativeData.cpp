@@ -40,10 +40,13 @@ std::vector<std::string> splitPath(const std::string& path) {
     return out;
 }
 
-Json parseJsonArg(const Json& v, std::string& error) {
+Json parseJsonArg(const Context& ctx, const Json& v, std::string& error) {
     if (v.is_string()) {
         auto parsed = jsonutil::tryParse(v.str());
-        if (!parsed) { error = "O argumento nao e um JSON valido."; return Json(); }
+        if (!parsed) {
+            error = rt::langPick(ctx.lang, "O argumento nao e um JSON valido.", "The argument is not valid JSON.");
+            return Json();
+        }
         return *parsed;
     }
     return v;
@@ -149,19 +152,22 @@ bool b64decode(const std::string& in, std::string& out) {
 
 } // namespace
 
-Server makeDataServer() {
+Server makeDataServer(rt::RuntimeLang lang) {
     Server s;
     s.id = std::string(kIdPrefix) + "dados";
     s.name = "Transformacao de dados";
     s.description = "Consultar JSON, converter CSV, extrair texto com expressoes regulares e codificar em base64.";
+    s.descriptionEn = "Query JSON, convert CSV, extract text with regular expressions and encode in base64.";
     s.category = "Dados";
 
-    s.tools.push_back({"json_query", "Le um campo de um JSON por caminho (ex.: cliente.enderecos[0].cidade) e devolve o valor.",
-                       schema({{"json", "object", "O JSON (objeto, lista ou texto JSON)"},
-                               {"path", "string", "Caminho do campo; vazio devolve o JSON inteiro"}}, {"json"}),
-                       "safe", [](const Json& a, const Context&) -> ToolResult {
+    s.tools.push_back({"json_query",
+                       "Le um campo de um JSON por caminho (ex.: cliente.enderecos[0].cidade) e devolve o valor.",
+                       "Reads a JSON field by path (e.g. cliente.enderecos[0].cidade) and returns the value.",
+                       schema({{"json", "object", "O JSON (objeto, lista ou texto JSON)", "The JSON (object, list or JSON text)"},
+                               {"path", "string", "Caminho do campo; vazio devolve o JSON inteiro", "Field path; empty returns the whole JSON"}}, {"json"}, lang),
+                       "safe", [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string e;
-                           Json cur = parseJsonArg(a["json"], e);
+                           Json cur = parseJsonArg(ctx, a["json"], e);
                            if (!e.empty()) return fail(e);
                            for (const auto& key : splitPath(str(a, "path"))) {
                                if (cur.is_object() && cur.contains(key)) {
@@ -172,23 +178,28 @@ Server makeDataServer() {
                                    Json next = cur[static_cast<size_t>(std::stoul(key))];
                                    cur = next;
                                } else {
-                                   return fail("Campo nao encontrado: " + key);
+                                   return fail(rt::langPick(ctx.lang, "Campo nao encontrado: ", "Field not found: ") + key);
                                }
                            }
                            return ok(cur.is_string() ? cur.str() : cur.dump());
                        }});
 
-    s.tools.push_back({"csv_to_json", "Converte texto CSV em uma lista JSON (uma linha vira um objeto, usando a primeira linha como nomes das colunas).",
-                       schema({{"csv", "string", "Texto CSV"}, {"delimiter", "string", "Separador (padrao: virgula)"},
-                               {"header", "boolean", "false se a primeira linha ja e dado (padrao: true)"}}, {"csv"}),
-                       "safe", [](const Json& a, const Context&) -> ToolResult {
+    s.tools.push_back({"csv_to_json",
+                       "Converte texto CSV em uma lista JSON (uma linha vira um objeto, usando a primeira linha como nomes das colunas).",
+                       "Converts CSV text into a JSON list (each line becomes an object, using the first line as column names).",
+                       schema({{"csv", "string", "Texto CSV", "CSV text"},
+                               {"delimiter", "string", "Separador (padrao: virgula)", "Delimiter (default: comma)"},
+                               {"header", "boolean", "false se a primeira linha ja e dado (padrao: true)", "false if the first line is already data (default: true)"}}, {"csv"}, lang),
+                       "safe", [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string csv = str(a, "csv");
-                           if (csv.size() > kMaxInput) return fail("CSV grande demais (limite de 256 KB).");
+                           if (csv.size() > kMaxInput)
+                               return fail(rt::langPick(ctx.lang, "CSV grande demais (limite de 256 KB).", "CSV too large (256 KB limit)."));
                            std::string d = str(a, "delimiter", ",");
                            char delim = d == "\\t" || d == "tab" ? '\t' : (d.empty() ? ',' : d[0]);
                            bool header = !(a.contains("header") && a["header"].is_boolean() && !a["header"].get<bool>());
                            auto rows = parseCsv(csv, delim);
-                           if (rows.size() > kMaxRows + 1) return fail("CSV com linhas demais (limite de 5000).");
+                           if (rows.size() > kMaxRows + 1)
+                               return fail(rt::langPick(ctx.lang, "CSV com linhas demais (limite de 5000).", "CSV with too many lines (5000 limit)."));
                            Json out = Json::array();
                            if (rows.empty()) return ok("[]");
                            std::vector<std::string> names;
@@ -208,14 +219,19 @@ Server makeDataServer() {
                            return ok(out.dump());
                        }});
 
-    s.tools.push_back({"json_to_csv", "Converte uma lista de objetos JSON em texto CSV (colunas em ordem alfabetica).",
-                       schema({{"json", "object", "Lista de objetos (ou texto JSON)"}, {"delimiter", "string", "Separador (padrao: virgula)"}}, {"json"}),
-                       "safe", [](const Json& a, const Context&) -> ToolResult {
+    s.tools.push_back({"json_to_csv",
+                       "Converte uma lista de objetos JSON em texto CSV (colunas em ordem alfabetica).",
+                       "Converts a list of JSON objects into CSV text (columns in alphabetical order).",
+                       schema({{"json", "object", "Lista de objetos (ou texto JSON)", "List of objects (or JSON text)"},
+                               {"delimiter", "string", "Separador (padrao: virgula)", "Delimiter (default: comma)"}}, {"json"}, lang),
+                       "safe", [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string e;
-                           Json data = parseJsonArg(a["json"], e);
+                           Json data = parseJsonArg(ctx, a["json"], e);
                            if (!e.empty()) return fail(e);
-                           if (!data.is_array()) return fail("Era esperada uma lista de objetos.");
-                           if (data.size() > kMaxRows) return fail("Lista grande demais (limite de 5000 linhas).");
+                           if (!data.is_array())
+                               return fail(rt::langPick(ctx.lang, "Era esperada uma lista de objetos.", "A list of objects was expected."));
+                           if (data.size() > kMaxRows)
+                               return fail(rt::langPick(ctx.lang, "Lista grande demais (limite de 5000 linhas).", "List too large (5000 lines limit)."));
                            std::string d = str(a, "delimiter", ",");
                            char delim = d.empty() ? ',' : d[0];
                            std::vector<std::string> cols;
@@ -241,20 +257,31 @@ Server makeDataServer() {
                            return ok(out.str());
                        }});
 
-    s.tools.push_back({"regex_extract", "Extrai trechos de um texto com uma expressao regular (sintaxe ECMAScript). Devolve uma lista JSON.",
-                       schema({{"text", "string", "Texto (ate 32 KB)"}, {"pattern", "string", "Expressao regular (ate 200 caracteres)"},
-                               {"group", "number", "Grupo a devolver (padrao: 0, o trecho inteiro)"},
-                               {"all", "boolean", "true para todas as ocorrencias (padrao: so a primeira)"}}, {"text", "pattern"}),
-                       "safe", [](const Json& a, const Context&) -> ToolResult {
+    s.tools.push_back({"regex_extract",
+                       "Extrai trechos de um texto com uma expressao regular (sintaxe ECMAScript). Devolve uma lista JSON.",
+                       "Extracts snippets from a text with a regular expression (ECMAScript syntax). Returns a JSON list.",
+                       schema({{"text", "string", "Texto (ate 32 KB)", "Text (up to 32 KB)"},
+                               {"pattern", "string", "Expressao regular (ate 200 caracteres)", "Regular expression (up to 200 characters)"},
+                               {"group", "number", "Grupo a devolver (padrao: 0, o trecho inteiro)", "Group to return (default: 0, the whole match)"},
+                               {"all", "boolean", "true para todas as ocorrencias (padrao: so a primeira)", "true for all occurrences (default: first only)"}}, {"text", "pattern"}, lang),
+                       "safe", [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string text = str(a, "text"), pattern = str(a, "pattern");
-                           if (text.size() > kMaxRegexInput) return fail("Texto grande demais para a regex (limite de 32 KB).");
-                           if (pattern.empty() || pattern.size() > 200) return fail("O padrao deve ter de 1 a 200 caracteres.");
-                           if (dangerousPattern(pattern)) return fail("Padrao recusado: quantificadores aninhados podem travar a execucao. Simplifique a expressao.");
+                           if (text.size() > kMaxRegexInput)
+                               return fail(rt::langPick(ctx.lang, "Texto grande demais para a regex (limite de 32 KB).",
+                                                        "Text too large for the regex (32 KB limit)."));
+                           if (pattern.empty() || pattern.size() > 200)
+                               return fail(rt::langPick(ctx.lang, "O padrao deve ter de 1 a 200 caracteres.",
+                                                        "The pattern must be 1 to 200 characters."));
+                           if (dangerousPattern(pattern))
+                               return fail(rt::langPick(ctx.lang,
+                                                        "Padrao recusado: quantificadores aninhados podem travar a execucao. Simplifique a expressao.",
+                                                        "Pattern refused: nested quantifiers can hang the execution. Simplify the expression."));
                            int group = a.contains("group") && a["group"].is_number() ? a["group"].get<int>() : 0;
                            bool all = a.contains("all") && a["all"].is_boolean() && a["all"].get<bool>();
                            try {
                                std::regex re(pattern, std::regex::ECMAScript);
-                               if (group < 0 || static_cast<size_t>(group) > re.mark_count()) return fail("Grupo inexistente neste padrao.");
+                               if (group < 0 || static_cast<size_t>(group) > re.mark_count())
+                                   return fail(rt::langPick(ctx.lang, "Grupo inexistente neste padrao.", "Nonexistent group in this pattern."));
                                Json out = Json::array();
                                for (std::sregex_iterator it(text.begin(), text.end(), re), end; it != end && out.size() < 200; ++it) {
                                    out.push_back((*it)[group].str());
@@ -262,22 +289,32 @@ Server makeDataServer() {
                                }
                                return ok(out.dump());
                            } catch (const std::regex_error& ex) {
-                               return fail(std::string("Expressao regular invalida: ") + ex.what());
+                               return fail(rt::langPick(ctx.lang, "Expressao regular invalida: ", "Invalid regular expression: ") + ex.what());
                            }
                        }});
 
-    s.tools.push_back({"base64_encode", "Codifica um texto em base64.", schema({{"text", "string", "Texto"}}, {"text"}), "safe",
-                       [](const Json& a, const Context&) -> ToolResult {
+    s.tools.push_back({"base64_encode",
+                       "Codifica um texto em base64.",
+                       "Encodes text in base64.",
+                       schema({{"text", "string", "Texto", "Text"}}, {"text"}, lang), "safe",
+                       [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string t = str(a, "text");
-                           if (t.size() > kMaxInput) return fail("Texto grande demais.");
+                           if (t.size() > kMaxInput)
+                               return fail(rt::langPick(ctx.lang, "Texto grande demais.", "Text too large."));
                            return ok(b64encode(t));
                        }});
 
-    s.tools.push_back({"base64_decode", "Decodifica base64 para texto.", schema({{"data", "string", "Texto em base64"}}, {"data"}), "safe",
-                       [](const Json& a, const Context&) -> ToolResult {
+    s.tools.push_back({"base64_decode",
+                       "Decodifica base64 para texto.",
+                       "Decodes base64 into text.",
+                       schema({{"data", "string", "Texto em base64", "Base64 text"}}, {"data"}, lang), "safe",
+                       [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string out;
-                           if (!b64decode(str(a, "data"), out)) return fail("Base64 invalido.");
-                           if (out.find('\0') != std::string::npos) return fail("O conteudo decodificado e binario; so texto e devolvido.");
+                           if (!b64decode(str(a, "data"), out))
+                               return fail(rt::langPick(ctx.lang, "Base64 invalido.", "Invalid base64."));
+                           if (out.find('\0') != std::string::npos)
+                               return fail(rt::langPick(ctx.lang, "O conteudo decodificado e binario; so texto e devolvido.",
+                                                        "The decoded content is binary; only text is returned."));
                            return ok(out);
                        }});
     return s;

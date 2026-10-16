@@ -40,27 +40,46 @@ struct Url {
 };
 
 // So aceita https://host[:443]/caminho, sem usuario@, sem IPv6 literal.
-Url parseUrl(const std::string& url) {
+Url parseUrl(const std::string& url, rt::RuntimeLang lang) {
     Url u;
-    if (url.size() > 2048) { u.error = "URL longa demais."; return u; }
+    if (url.size() > 2048) { u.error = rt::langPick(lang, "URL longa demais.", "URL too long."); return u; }
     for (unsigned char c : url)
-        if (c < 0x21 || c == 0x7f) { u.error = "A URL contem caracteres invalidos (espacos ou controle)."; return u; }
-    if (lower(url).rfind("https://", 0) != 0) { u.error = "So URLs https:// sao permitidas."; return u; }
+        if (c < 0x21 || c == 0x7f) {
+            u.error = rt::langPick(lang, "A URL contem caracteres invalidos (espacos ou controle).",
+                                   "The URL contains invalid characters (spaces or control).");
+            return u;
+        }
+    if (lower(url).rfind("https://", 0) != 0) {
+        u.error = rt::langPick(lang, "So URLs https:// sao permitidas.", "Only https:// URLs are allowed.");
+        return u;
+    }
     std::string rest = url.substr(8);
     size_t end = rest.find_first_of("/?#");
     std::string authority = end == std::string::npos ? rest : rest.substr(0, end);
-    if (authority.find('@') != std::string::npos) { u.error = "URLs com usuario@ nao sao permitidas."; return u; }
-    if (!authority.empty() && authority.front() == '[') { u.error = "Enderecos IPv6 literais nao sao permitidos."; return u; }
+    if (authority.find('@') != std::string::npos) {
+        u.error = rt::langPick(lang, "URLs com usuario@ nao sao permitidas.", "URLs with user@ are not allowed.");
+        return u;
+    }
+    if (!authority.empty() && authority.front() == '[') {
+        u.error = rt::langPick(lang, "Enderecos IPv6 literais nao sao permitidos.", "Literal IPv6 addresses are not allowed.");
+        return u;
+    }
     std::string host = authority;
     size_t colon = authority.rfind(':');
     if (colon != std::string::npos) {
         host = authority.substr(0, colon);
-        if (authority.substr(colon + 1) != "443") { u.error = "So a porta 443 e permitida."; return u; }
+        if (authority.substr(colon + 1) != "443") {
+            u.error = rt::langPick(lang, "So a porta 443 e permitida.", "Only port 443 is allowed.");
+            return u;
+        }
     }
     host = lower(host);
-    if (host.empty() || host.size() > 253) { u.error = "Host invalido."; return u; }
+    if (host.empty() || host.size() > 253) { u.error = rt::langPick(lang, "Host invalido.", "Invalid host."); return u; }
     for (char c : host)
-        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '.')) { u.error = "Host invalido: " + host; return u; }
+        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '.')) {
+            u.error = rt::langPick(lang, "Host invalido: ", "Invalid host: ") + host;
+            return u;
+        }
     u.host = host;
     return u;
 }
@@ -115,7 +134,7 @@ bool validEnvName(const std::string& n) {
 
 ToolResult send(const Json& a, const Context& ctx, const std::string& method) {
     std::string url = a["url"].is_string() ? a["url"].str() : std::string();
-    std::string refusal = http::checkUrl(ctx.workspaceRoot, url);
+    std::string refusal = http::checkUrl(ctx.workspaceRoot, url, ctx.lang);
     if (!refusal.empty()) return fail(refusal);
 
     rt::HttpRequest req;
@@ -133,29 +152,38 @@ ToolResult send(const Json& a, const Context& ctx, const std::string& method) {
             std::string k = it.key();
             std::string kl = lower(k);
             if (kl == "authorization" || kl == "cookie" || kl == "host" || kl.rfind("proxy-", 0) == 0 || kl == "content-length")
-                return fail("O cabecalho '" + k + "' nao pode ser definido aqui (use bearer_env para credenciais).");
+                return fail(rt::langPick(ctx.lang,
+                                         "O cabecalho '" + k + "' nao pode ser definido aqui (use bearer_env para credenciais).",
+                                         "The header '" + k + "' cannot be set here (use bearer_env for credentials)."));
             if (!std::all_of(k.begin(), k.end(), [](unsigned char c) { return std::isalnum(c) || c == '-'; }))
-                return fail("Nome de cabecalho invalido: " + k);
-            if (!(*it).is_string() || (*it).str().find_first_of("\r\n") != std::string::npos) return fail("Valor de cabecalho invalido: " + k);
+                return fail(rt::langPick(ctx.lang, "Nome de cabecalho invalido: ", "Invalid header name: ") + k);
+            if (!(*it).is_string() || (*it).str().find_first_of("\r\n") != std::string::npos)
+                return fail(rt::langPick(ctx.lang, "Valor de cabecalho invalido: ", "Invalid header value: ") + k);
             req.headers[k] = (*it).str();
         }
     }
     if (a["bearer_env"].is_string()) {
         const std::string name = a["bearer_env"].str();
-        if (!validEnvName(name)) return fail("bearer_env deve ser o NOME de uma variavel de ambiente (ex.: MINHA_API_TOKEN).");
+        if (!validEnvName(name))
+            return fail(rt::langPick(ctx.lang,
+                                     "bearer_env deve ser o NOME de uma variavel de ambiente (ex.: MINHA_API_TOKEN).",
+                                     "bearer_env must be the NAME of an environment variable (e.g. MY_API_TOKEN)."));
         const char* v = std::getenv(name.c_str());
-        if (!v || !*v) return fail("A variavel de ambiente " + name + " nao esta definida nesta maquina.");
+        if (!v || !*v)
+            return fail(rt::langPick(ctx.lang, "A variavel de ambiente ", "The environment variable ") + name +
+                        rt::langPick(ctx.lang, " nao esta definida nesta maquina.", " is not defined on this machine."));
         req.headers["Authorization"] = std::string("Bearer ") + v;
     }
     if (method == "POST") {
         const Json& body = a["json"];
         req.body = body.is_string() ? body.str() : body.dump();
         req.headers["Content-Type"] = "application/json";
-        if (req.body.size() > kMaxBodyBytes) return fail("Corpo da requisicao grande demais.");
+        if (req.body.size() > kMaxBodyBytes)
+            return fail(rt::langPick(ctx.lang, "Corpo da requisicao grande demais.", "Request body too large."));
     }
 
     rt::HttpResponse resp = rt::httpSend(req);
-    if (resp.status == 0) return fail("Falha de transporte: " + resp.error);
+    if (resp.status == 0) return fail(rt::langPick(ctx.lang, "Falha de transporte: ", "Transport failure: ") + resp.error);
 
     std::ostringstream out;
     out << "HTTP " << resp.status << "\n";
@@ -163,11 +191,15 @@ ToolResult send(const Json& a, const Context& ctx, const std::string& method) {
     if (ct != resp.headers.end()) out << "content-type: " << ct->second << "\n";
     if (resp.status >= 300 && resp.status < 400) {
         auto loc = resp.headers.find("location");
-        out << "Redirecionamento nao seguido" << (loc != resp.headers.end() ? " (para " + loc->second + ")" : std::string())
-            << ". Autorize o novo host em .workspace/native/http.json e chame de novo.\n";
+        out << rt::langPick(ctx.lang, "Redirecionamento nao seguido", "Redirect not followed")
+            << (loc != resp.headers.end() ? rt::langPick(ctx.lang, " (para ", " (to ") + loc->second + ")" : std::string())
+            << rt::langPick(ctx.lang,
+                            ". Autorize o novo host em .workspace/native/http.json e chame de novo.\n",
+                            ". Authorize the new host in .workspace/native/http.json and call again.\n");
     }
     std::string body = resp.body.size() > kMaxBodyBytes ? resp.body.substr(0, kMaxBodyBytes) : resp.body;
-    if (body.find('\0') != std::string::npos) return fail("A resposta parece binaria; so texto e devolvido.");
+    if (body.find('\0') != std::string::npos)
+        return fail(rt::langPick(ctx.lang, "A resposta parece binaria; so texto e devolvido.", "The response looks binary; only text is returned."));
     out << "\n" << body;
     return {out.str(), resp.status >= 400};
 }
@@ -176,18 +208,24 @@ ToolResult send(const Json& a, const Context& ctx, const std::string& method) {
 
 namespace http {
 
-std::string checkUrl(const fs::path& root, const std::string& url) {
-    Url u = parseUrl(url);
+std::string checkUrl(const fs::path& root, const std::string& url, rt::RuntimeLang lang) {
+    Url u = parseUrl(url, lang);
     if (!u.error.empty()) return u.error;
-    if (isPrivateHost(u.host)) return "Enderecos locais e privados nao sao permitidos: " + u.host;
+    if (isPrivateHost(u.host))
+        return rt::langPick(lang, "Enderecos locais e privados nao sao permitidos: ", "Local and private addresses are not allowed: ") + u.host;
     auto hosts = allowedHosts(root);
     if (hosts.empty()) {
-        return "Nenhum host autorizado neste projeto. Autorize '" + u.host + "' em Padroes Globais > Ferramentas > Acesso a internet "
-               "(ou crie .workspace/native/http.json com {\"allowedHosts\": [\"" + u.host + "\"]}).";
+        return rt::langPick(lang,
+                            "Nenhum host autorizado neste projeto. Autorize '" + u.host + "' em Padroes Globais > Ferramentas > Acesso a internet "
+                            "(ou crie .workspace/native/http.json com {\"allowedHosts\": [\"" + u.host + "\"]}).",
+                            "No host authorized in this project. Authorize '" + u.host + "' in Global Defaults > Tools > Internet access "
+                            "(or create .workspace/native/http.json with {\"allowedHosts\": [\"" + u.host + "\"]}).");
     }
     for (const auto& pattern : hosts)
         if (hostMatches(u.host, pattern)) return "";
-    return "O host '" + u.host + "' nao esta autorizado neste projeto (.workspace/native/http.json).";
+    return rt::langPick(lang,
+                        "O host '" + u.host + "' nao esta autorizado neste projeto (.workspace/native/http.json).",
+                        "The host '" + u.host + "' is not authorized in this project (.workspace/native/http.json).");
 }
 
 std::vector<std::string> readPolicy(const fs::path& root) { return allowedHosts(root); }
@@ -240,23 +278,30 @@ bool writePolicy(const fs::path& root, const std::vector<std::string>& requested
 
 } // namespace http
 
-Server makeHttpServer() {
+Server makeHttpServer(rt::RuntimeLang lang) {
     Server s;
     s.id = std::string(kIdPrefix) + "http";
     s.name = "Requisicoes HTTPS";
     s.description = "Consulta APIs e paginas na internet, somente em hosts que o projeto autorizou (.workspace/native/http.json).";
+    s.descriptionEn = "Queries APIs and pages on the internet, only on hosts the project authorized (.workspace/native/http.json).";
     s.category = "Rede";
 
-    s.tools.push_back({"http_get", "Faz uma requisicao GET HTTPS a um host autorizado e devolve o status e o texto da resposta.",
-                       schema({{"url", "string", "URL https:// completa"},
-                               {"headers", "object", "Cabecalhos extras (nao use para credenciais)"},
-                               {"bearer_env", "string", "NOME da variavel de ambiente com o token (ex.: MINHA_API_TOKEN)"}}, {"url"}),
+    s.tools.push_back({"http_get",
+                       "Faz uma requisicao GET HTTPS a um host autorizado e devolve o status e o texto da resposta.",
+                       "Makes an HTTPS GET request to an authorized host and returns the status and the response text.",
+                       schema({{"url", "string", "URL https:// completa", "Full https:// URL"},
+                               {"headers", "object", "Cabecalhos extras (nao use para credenciais)", "Extra headers (do not use for credentials)"},
+                               {"bearer_env", "string", "NOME da variavel de ambiente com o token (ex.: MINHA_API_TOKEN)",
+                                "NAME of the environment variable with the token (e.g. MY_API_TOKEN)"}}, {"url"}, lang),
                        "moderate", [](const Json& a, const Context& ctx) { return send(a, ctx, "GET"); }});
 
-    s.tools.push_back({"http_post_json", "Faz uma requisicao POST HTTPS com corpo JSON a um host autorizado.",
-                       schema({{"url", "string", "URL https:// completa"}, {"json", "object", "Corpo JSON (objeto, ou texto JSON)"},
-                               {"headers", "object", "Cabecalhos extras (nao use para credenciais)"},
-                               {"bearer_env", "string", "NOME da variavel de ambiente com o token"}}, {"url", "json"}),
+    s.tools.push_back({"http_post_json",
+                       "Faz uma requisicao POST HTTPS com corpo JSON a um host autorizado.",
+                       "Makes an HTTPS POST request with a JSON body to an authorized host.",
+                       schema({{"url", "string", "URL https:// completa", "Full https:// URL"},
+                               {"json", "object", "Corpo JSON (objeto, ou texto JSON)", "JSON body (object, or JSON text)"},
+                               {"headers", "object", "Cabecalhos extras (nao use para credenciais)", "Extra headers (do not use for credentials)"},
+                               {"bearer_env", "string", "NOME da variavel de ambiente com o token", "NAME of the environment variable with the token"}}, {"url", "json"}, lang),
                        "high", [](const Json& a, const Context& ctx) { return send(a, ctx, "POST"); }});
     return s;
 }

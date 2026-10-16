@@ -2,6 +2,8 @@
 
 // Ferramentas "Code Mode" oferecidas aos agentes: read, write, edit, bash, validate_svg.
 // Todas operam confinadas ao diretorio de trabalho (workspace) do pipeline.
+// Descricoes e mensagens de erro sao bilíngues: o idioma vem do ToolContext/RuntimeLang
+// (detectado da skill e do prompt do agente).
 
 #include <filesystem>
 #include <optional>
@@ -10,6 +12,7 @@
 
 #include "util/JsonValue.hpp"
 
+#include "rt/RuntimeLang.hpp"
 #include "sandbox/ISandboxDriver.hpp"
 
 namespace taskforge {
@@ -36,19 +39,21 @@ std::optional<std::filesystem::path> resolveInWorkspace(const std::filesystem::p
 // (exceto .git). `resolved` deve ser o resultado de resolveInWorkspace.
 bool isProtectedPath(const std::filesystem::path& root, const std::filesystem::path& resolved);
 
-// Definicoes (schemas) das ferramentas autorizadas.
-std::vector<ToolDef> toolDefinitions(const std::vector<std::string>& allowed);
+// Definicoes (schemas) das ferramentas autorizadas, no idioma do agente.
+std::vector<ToolDef> toolDefinitions(const std::vector<std::string>& allowed,
+                                     RuntimeLang lang = RuntimeLang::Pt);
 
 // Valida SVG: boa formacao XML, raiz <svg>, viewBox/width+height, ids duplicados,
 // referencias de begin/end="id.evento" para ids inexistentes e regra tipografica
-// (sem sombra/glow em texto). Devolve a lista de problemas (vazia = ok).
-std::vector<std::string> validateSvg(const std::string& svg);
+// (sem sombra/glow em texto). Devolve a lista de problemas no idioma pedido (vazia = ok).
+std::vector<std::string> validateSvg(const std::string& svg, RuntimeLang lang = RuntimeLang::Pt);
 
 struct ToolContext {
     std::filesystem::path workspaceRoot;
     sandbox::SandboxPolicy sandbox;
     std::string agentId;
     std::vector<std::string> allowed;
+    RuntimeLang lang = RuntimeLang::Pt;   // idioma do agente (skill + prompt)
 };
 
 ToolResult executeTool(const ToolContext& ctx, const std::string& name, const taskforge::Json& args);

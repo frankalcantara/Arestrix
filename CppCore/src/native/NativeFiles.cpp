@@ -68,66 +68,93 @@ bool skipDir(const std::string& name) {
 // Resolve um caminho do projeto; devolve "" e preenche `error` se for invalido ou apontar para .git.
 fs::path resolveOrError(const Context& ctx, const std::string& rel, std::string& error, bool allowGit = false) {
     auto p = rt::resolveInWorkspace(ctx.workspaceRoot, rel.empty() ? "." : rel);
-    if (!p) { error = "Caminho fora do projeto ou invalido: " + rel; return {}; }
-    if (!allowGit && firstComponent(ctx.workspaceRoot, *p) == ".git") { error = "A pasta .git nao e acessivel."; return {}; }
+    if (!p) {
+        error = rt::langPick(ctx.lang, "Caminho fora do projeto ou invalido: ", "Path outside the project or invalid: ") + rel;
+        return {};
+    }
+    if (!allowGit && firstComponent(ctx.workspaceRoot, *p) == ".git") {
+        error = rt::langPick(ctx.lang, "A pasta .git nao e acessivel.", "The .git folder is not accessible.");
+        return {};
+    }
     return *p;
 }
 
 } // namespace
 
-Server makeFilesServer() {
+Server makeFilesServer(rt::RuntimeLang lang) {
     Server s;
     s.id = std::string(kIdPrefix) + "arquivos";
     s.name = "Arquivos do projeto";
     s.description = "Ler, gravar, listar e buscar texto nos arquivos do projeto. Tudo confinado a pasta do projeto.";
+    s.descriptionEn = "Read, write, list and search text in the project files. Everything is confined to the project folder.";
     s.category = "Arquivos";
 
-    s.tools.push_back({"read_file", "Le um arquivo de texto do projeto (ate 1 MB).",
-                       schema({{"path", "string", "Caminho relativo ao projeto"}}, {"path"}), "safe",
+    s.tools.push_back({"read_file",
+                       "Le um arquivo de texto do projeto (ate 1 MB).",
+                       "Reads a text file from the project (up to 1 MB).",
+                       schema({{"path", "string", "Caminho relativo ao projeto", "Path relative to the project"}}, {"path"}, lang), "safe",
                        [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string e;
                            fs::path p = resolveOrError(ctx, str(a, "path"), e);
                            if (p.empty()) return fail(e);
                            std::error_code ec;
-                           if (!fs::is_regular_file(p, ec)) return fail("Arquivo nao encontrado: " + str(a, "path"));
-                           if (fs::file_size(p, ec) > kMaxReadBytes) return fail("Arquivo grande demais (limite de 1 MB).");
+                           if (!fs::is_regular_file(p, ec))
+                               return fail(rt::langPick(ctx.lang, "Arquivo nao encontrado: ", "File not found: ") + str(a, "path"));
+                           if (fs::file_size(p, ec) > kMaxReadBytes)
+                               return fail(rt::langPick(ctx.lang, "Arquivo grande demais (limite de 1 MB).", "File too large (1 MB limit)."));
                            std::string text = jsonutil::readFile(p);
-                           if (looksBinary(text)) return fail("O arquivo parece binario; so texto pode ser lido.");
+                           if (looksBinary(text))
+                               return fail(rt::langPick(ctx.lang, "O arquivo parece binario; so texto pode ser lido.",
+                                                        "The file looks binary; only text can be read."));
                            return ok(text);
                        }});
 
     s.tools.push_back({"write_file",
                        "Cria ou sobrescreve um arquivo de texto do projeto (ou acrescenta ao final). Pipelines, configuracao e .git sao protegidos.",
-                       schema({{"path", "string", "Caminho relativo ao projeto"}, {"content", "string", "Conteudo"},
-                               {"append", "boolean", "true para acrescentar ao final em vez de sobrescrever"}}, {"path", "content"}),
+                       "Creates or overwrites a text file in the project (or appends at the end). Pipelines, configuration and .git are protected.",
+                       schema({{"path", "string", "Caminho relativo ao projeto", "Path relative to the project"},
+                               {"content", "string", "Conteudo", "Content"},
+                               {"append", "boolean", "true para acrescentar ao final em vez de sobrescrever", "true to append at the end instead of overwriting"}},
+                              {"path", "content"}, lang),
                        "moderate", [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string e;
                            fs::path p = resolveOrError(ctx, str(a, "path"), e);
                            if (p.empty()) return fail(e);
                            if (rt::isProtectedPath(ctx.workspaceRoot, p))
-                               return fail("Caminho protegido (pipelines, configuracao e .git nao podem ser gravados): " + str(a, "path"));
-                           if (!a["content"].is_string()) return fail("'content' deve ser texto.");
+                               return fail(rt::langPick(ctx.lang,
+                                                        "Caminho protegido (pipelines, configuracao e .git nao podem ser gravados): ",
+                                                        "Protected path (pipelines, configuration and .git cannot be written): ") + str(a, "path"));
+                           if (!a["content"].is_string())
+                               return fail(rt::langPick(ctx.lang, "'content' deve ser texto.", "'content' must be text."));
                            const std::string& content = a["content"].str();
-                           if (content.size() > kMaxWriteBytes) return fail("Conteudo grande demais (limite de 2 MB).");
+                           if (content.size() > kMaxWriteBytes)
+                               return fail(rt::langPick(ctx.lang, "Conteudo grande demais (limite de 2 MB).", "Content too large (2 MB limit)."));
                            std::error_code ec;
-                           if (fs::is_directory(p, ec)) return fail("O caminho e uma pasta.");
+                           if (fs::is_directory(p, ec))
+                               return fail(rt::langPick(ctx.lang, "O caminho e uma pasta.", "The path is a folder."));
                            fs::create_directories(p.parent_path(), ec);
                            std::ofstream out(p, std::ios::binary | (flag(a, "append") ? std::ios::app : std::ios::trunc));
-                           if (!out) return fail("Nao foi possivel gravar o arquivo.");
+                           if (!out) return fail(rt::langPick(ctx.lang, "Nao foi possivel gravar o arquivo.", "Could not write the file."));
                            out << content;
-                           return ok("OK: " + std::to_string(content.size()) + " bytes " + (flag(a, "append") ? "acrescentados a " : "gravados em ") +
+                           return ok("OK: " + std::to_string(content.size()) + " bytes " +
+                                     rt::langPick(ctx.lang,
+                                                  (flag(a, "append") ? "acrescentados a " : "gravados em "),
+                                                  (flag(a, "append") ? "appended to " : "written to ")) +
                                      relPath(ctx.workspaceRoot, p));
                        }});
 
-    s.tools.push_back({"list_directory", "Lista os arquivos e pastas de um diretorio do projeto (ate 500 itens).",
-                       schema({{"path", "string", "Pasta relativa ao projeto (padrao: a raiz)"},
-                               {"recursive", "boolean", "true para incluir subpastas"}}, {}),
+    s.tools.push_back({"list_directory",
+                       "Lista os arquivos e pastas de um diretorio do projeto (ate 500 itens).",
+                       "Lists the files and folders of a project directory (up to 500 items).",
+                       schema({{"path", "string", "Pasta relativa ao projeto (padrao: a raiz)", "Folder relative to the project (default: the root)"},
+                               {"recursive", "boolean", "true para incluir subpastas", "true to include subfolders"}}, {}, lang),
                        "safe", [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string e;
                            fs::path dir = resolveOrError(ctx, str(a, "path", "."), e);
                            if (dir.empty()) return fail(e);
                            std::error_code ec;
-                           if (!fs::is_directory(dir, ec)) return fail("Nao e uma pasta: " + str(a, "path", "."));
+                           if (!fs::is_directory(dir, ec))
+                               return fail(rt::langPick(ctx.lang, "Nao e uma pasta: ", "Not a folder: ") + str(a, "path", "."));
                            std::ostringstream out;
                            size_t n = 0;
                            bool truncated = false;
@@ -151,12 +178,15 @@ Server makeFilesServer() {
                                    emit(*it);
                                }
                            }
-                           if (truncated) out << "[... lista limitada a 500 itens ...]\n";
+                           if (truncated)
+                               out << rt::langPick(ctx.lang, "[... lista limitada a 500 itens ...]\n", "[... list limited to 500 items ...]\n");
                            return ok(n == 0 ? std::string("(vazio)") : out.str());
                        }});
 
-    s.tools.push_back({"file_info", "Informa tipo, tamanho e data de modificacao de um arquivo ou pasta do projeto.",
-                       schema({{"path", "string", "Caminho relativo ao projeto"}}, {"path"}), "safe",
+    s.tools.push_back({"file_info",
+                       "Informa tipo, tamanho e data de modificacao de um arquivo ou pasta do projeto.",
+                       "Reports the type, size and modification date of a project file or folder.",
+                       schema({{"path", "string", "Caminho relativo ao projeto", "Path relative to the project"}}, {"path"}, lang), "safe",
                        [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string e;
                            fs::path p = resolveOrError(ctx, str(a, "path"), e);
@@ -171,27 +201,33 @@ Server makeFilesServer() {
                            return ok(info.dump());
                        }});
 
-    s.tools.push_back({"make_directory", "Cria uma pasta (e as pastas intermediarias) no projeto.",
-                       schema({{"path", "string", "Pasta relativa ao projeto"}}, {"path"}), "moderate",
+    s.tools.push_back({"make_directory",
+                       "Cria uma pasta (e as pastas intermediarias) no projeto.",
+                       "Creates a folder (and its parents) in the project.",
+                       schema({{"path", "string", "Pasta relativa ao projeto", "Folder relative to the project"}}, {"path"}, lang), "moderate",
                        [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string e;
                            fs::path p = resolveOrError(ctx, str(a, "path"), e);
                            if (p.empty()) return fail(e);
-                           if (rt::isProtectedPath(ctx.workspaceRoot, p)) return fail("Caminho protegido: " + str(a, "path"));
+                           if (rt::isProtectedPath(ctx.workspaceRoot, p))
+                               return fail(rt::langPick(ctx.lang, "Caminho protegido: ", "Protected path: ") + str(a, "path"));
                            std::error_code ec;
                            fs::create_directories(p, ec);
-                           if (ec) return fail("Nao foi possivel criar a pasta: " + ec.message());
+                           if (ec) return fail(rt::langPick(ctx.lang, "Nao foi possivel criar a pasta: ", "Could not create the folder: ") + ec.message());
                            return ok("OK: " + relPath(ctx.workspaceRoot, p) + "/");
                        }});
 
     s.tools.push_back({"search_text",
                        "Procura um trecho de texto (sem diferenciar maiusculas) nos arquivos de texto do projeto e devolve arquivo:linha:texto (ate 100 resultados).",
-                       schema({{"query", "string", "Texto a procurar (minimo 2 caracteres)"},
-                               {"path", "string", "Pasta onde procurar (padrao: a raiz do projeto)"},
-                               {"max_results", "number", "Maximo de resultados (padrao 50, limite 100)"}}, {"query"}),
+                       "Searches for a text snippet (case-insensitive) in the project text files and returns file:line:text (up to 100 results).",
+                       schema({{"query", "string", "Texto a procurar (minimo 2 caracteres)", "Text to search for (at least 2 characters)"},
+                               {"path", "string", "Pasta onde procurar (padrao: a raiz do projeto)", "Folder to search in (default: the project root)"},
+                               {"max_results", "number", "Maximo de resultados (padrao 50, limite 100)", "Maximum results (default 50, limit 100)"}}, {"query"}, lang),
                        "safe", [](const Json& a, const Context& ctx) -> ToolResult {
                            std::string query = str(a, "query");
-                           if (query.size() < 2) return fail("'query' precisa de pelo menos 2 caracteres.");
+                           if (query.size() < 2)
+                               return fail(rt::langPick(ctx.lang, "'query' precisa de pelo menos 2 caracteres.",
+                                                        "'query' needs at least 2 characters."));
                            std::string e;
                            fs::path dir = resolveOrError(ctx, str(a, "path", "."), e);
                            if (dir.empty()) return fail(e);

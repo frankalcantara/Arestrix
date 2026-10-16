@@ -27,6 +27,13 @@ An agent vertex runs a real **tool-use loop** against its configured provider:
   to the project folder.
 - The loop continues until the model stops calling tools. Skills can add more tools and MCP servers.
 
+**Agent language.** At run time the agent is configured in the language of its own constitution: the skill and the prompt
+template (the texts that define it). The runtime detects the language and emits everything the agent sees — the system
+context block, the default prompt, the built-in and native tool descriptions and schemas, and the error messages returned
+to it — in that language (Portuguese or English; Portuguese is the default when the texts give no clear signal). External
+MCP tool descriptions are third-party data and pass through unchanged. Console logs and telemetry stay in the interface's
+language.
+
 Providers are listed in [Getting started](02-getting-started.md#api-keys-and-providers).
 
 ### The five quick actions

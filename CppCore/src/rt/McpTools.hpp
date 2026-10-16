@@ -12,6 +12,10 @@
 //
 // Servidores stdio rodam como processos do host (nao ficam dentro do sandbox do agente): so configure
 // servidores em que voce confia.
+//
+// Descricoes das ferramentas NATIVAS e as mensagens de erro devolvidas ao agente seguem o idioma do agente
+// (RuntimeLang, detectado da skill e do prompt). Descricoes de servidores MCP externos sao dados externos:
+// passam como vieram.
 
 #include <filesystem>
 #include <map>
@@ -20,6 +24,7 @@
 
 #include "mcp/McpTypes.hpp"
 #include "native/NativeTools.hpp"
+#include "rt/RuntimeLang.hpp"
 #include "rt/Tools.hpp"
 
 namespace taskforge {
@@ -30,7 +35,7 @@ public:
     // Carrega os servidores e descobre as ferramentas. Lanca std::runtime_error se um servidor nao existir,
     // estiver desabilitado, referenciar variavel ausente ou nao responder.
     McpToolbox(const std::filesystem::path& workspaceRoot, const std::vector<std::string>& serverIds,
-               const std::vector<std::string>& allowedTools);
+               const std::vector<std::string>& allowedTools, RuntimeLang lang = RuntimeLang::Pt);
 
     const std::vector<ToolDef>& definitions() const { return defs_; }
     bool owns(const std::string& toolName) const { return bindings_.count(toolName) > 0; }
@@ -56,6 +61,7 @@ private:
         const native::Server* nativeServer = nullptr;   // ferramenta nativa: chamada em processo, sem JSON-RPC
     };
     std::filesystem::path root_;
+    RuntimeLang lang_ = RuntimeLang::Pt;
     std::vector<ToolDef> defs_;
     std::map<std::string, Binding> bindings_;
 };
