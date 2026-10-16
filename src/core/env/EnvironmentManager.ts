@@ -21,6 +21,32 @@ export interface IEnvKeyGuidance {
   guiInstructions: string[];
 }
 
+/**
+ * Padrão aceito para valores de environment em manifestos e configs MCP: apenas referências a
+ * variáveis de ambiente (${NOME}, %NOME% ou $NOME). Valor literal (um segredo digitado) nunca é
+ * gravado em arquivo nem em localStorage — espelha a regra do scripts/check-secrets.mjs.
+ */
+const ENV_REF_RE = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$|^%[A-Za-z_][A-Za-z0-9_]*%$|^\$[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * Mantém apenas as entradas que são referências a variáveis de ambiente (ou vazias). Entradas com
+ * valor literal são descartadas para nunca persistirem segredos em disco ou localStorage.
+ */
+export function sanitizeEnvReferences(env: Record<string, string> | null | undefined): Record<string, string> {
+  if (!env || typeof env !== 'object') return {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (trimmed.length === 0 || ENV_REF_RE.test(trimmed)) {
+      out[key] = trimmed;
+    } else {
+      console.warn(`[EnvironmentManager] "${key}" descartada da persistencia: somente referencias de variaveis de ambiente (\${NOME}) sao gravadas.`);
+    }
+  }
+  return out;
+}
+
 export class EnvironmentManager {
   private static instance: EnvironmentManager;
 

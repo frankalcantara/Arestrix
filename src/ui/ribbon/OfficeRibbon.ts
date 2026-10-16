@@ -25,6 +25,7 @@ import { ImportHermesModal } from '../modals/ImportHermesModal.ts';
 import { ImportExcelModal } from '../modals/ImportExcelModal.ts';
 import { t } from '../../i18n/index.ts';
 import { ProjectSearchBox, reindexProjectSearch } from '../ProjectSearchBox.ts';
+import { sanitizeEnvReferences } from '../../core/env/EnvironmentManager.ts';
 
 export class OfficeRibbon {
   private container: HTMLElement;
@@ -797,7 +798,8 @@ export class OfficeRibbon {
           localStorage.setItem('arestrix_standalone_graph', graphStr);
           localStorage.setItem('arestrix_last_saved_graph', graphStr);
           localStorage.setItem('arestrix_global_defaults', JSON.stringify(globalDefaults, null, 2));
-          const env = this.projectManager.getCurrentProject().environment || {};
+          // So referencias ${NOME} sao persistidas: valores literais de segredos jamais chegam ao localStorage.
+          const env = sanitizeEnvReferences(this.projectManager.getCurrentProject().environment);
           localStorage.setItem('arestrix_environment_vars', JSON.stringify(env, null, 2));
         } catch (_) {}
       }

@@ -15,6 +15,7 @@ import {
   WORKSPACE_GOVERNANCE_AGENTS
 } from './ApprovedWorkspaceCatalog.ts';
 import { WorkspaceSkillAuditorAgent } from './WorkspaceSkillAuditorAgent.ts';
+import { sanitizeEnvReferences } from '../env/EnvironmentManager.ts';
 
 /**
  * Arestrix Studio - Gerenciador Central de Workspace e Governança
@@ -188,11 +189,14 @@ export class WorkspaceManager {
           }));
         }
 
-        // 2. Grava configurações de MCPs
+        // 2. Grava configurações de MCPs (env sanitizado: somente referencias ${NOME} chegam ao disco)
         for (const mcp of this.getApprovedMcps()) {
+          const safeMcp: any = mcp && (mcp as any).env
+            ? { ...mcp, env: sanitizeEnvReferences((mcp as any).env) }
+            : mcp;
           await glob.webui.call('write_workspace_asset', JSON.stringify({
             filePath: `${targetDirs.mcps}/${mcp.id}.json`,
-            content: JSON.stringify(mcp, null, 2)
+            content: JSON.stringify(safeMcp, null, 2)
           }));
         }
 
@@ -241,7 +245,11 @@ export class WorkspaceManager {
         };
         localStorage.setItem('arestrix_workspace_config', JSON.stringify(manifest));
         localStorage.setItem('arestrix_workspace_skills', JSON.stringify(Array.from(this.installedSkills.values())));
-        localStorage.setItem('arestrix_workspace_mcps', JSON.stringify(Array.from(this.installedMcps.values())));
+        // env de MCPs sanitizado: valores literais de segredos jamais persistem em localStorage.
+        const safeMcps = Array.from(this.installedMcps.values()).map((m: any) =>
+          m && m.env ? { ...m, env: sanitizeEnvReferences(m.env) } : m
+        );
+        localStorage.setItem('arestrix_workspace_mcps', JSON.stringify(safeMcps));
       } catch (_) {}
     }
   }
