@@ -63,8 +63,8 @@
       "label": "1. Fila_Buffer_ThreadSafe",
       "type": "static",
       "position": {
-        "x": 600,
-        "y": 110,
+        "x": 640,
+        "y": 240,
         "z": 0
       },
       "inputs": [
@@ -142,8 +142,8 @@
       "label": "3. LLM_Prompt_Decisor",
       "type": "condition",
       "position": {
-        "x": -10,
-        "y": 310,
+        "x": 0,
+        "y": 670,
         "z": 0
       },
       "inputs": [
@@ -197,7 +197,7 @@
       "label": "4. SQLite_Persistencia_ACID",
       "type": "critical",
       "position": {
-        "x": 610,
+        "x": 750,
         "y": 620,
         "z": 0
       },
@@ -238,8 +238,8 @@
       "label": "5. Modulo_Consenso_Final",
       "type": "module",
       "position": {
-        "x": 1040,
-        "y": 300,
+        "x": 1350,
+        "y": 280,
         "z": 0
       },
       "inputs": [
@@ -270,6 +270,34 @@
         "<string>",
         "<syncstream>"
       ]
+    },
+    {
+      "id": "node_1792180573332",
+      "label": "Agente_Worker_6",
+      "type": "static",
+      "position": {
+        "x": -510,
+        "y": 670,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "node_1792180573332_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "node_1792180573332_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "// Execução computacional determinística do agente: Agente_Worker_6\nstd::cout << \"Executando agente: Agente_Worker_6\\n\";"
     }
   ],
   "edges": [

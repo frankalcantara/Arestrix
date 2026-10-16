@@ -379,22 +379,8 @@ export class InteractionManager {
         const { nodeId: targetNodeId, portId: targetPortId, direction } = hit.userData;
 
         // Conectar apenas se o destino for porta de entrada e nó diferente (ou loopback suportado)
-        if (direction === 'input' && this.connectingSourceNodeId && this.connectingSourcePortId) {
-          try {
-            const edgeId = `edge_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
-            const edgeData = {
-              id: edgeId,
-              sourceNodeId: this.connectingSourceNodeId,
-              sourcePortId: this.connectingSourcePortId,
-              targetNodeId,
-              targetPortId,
-              type: 'flow' as const
-            };
-            const cmd = new AddEdgeCommand(this.graph, edgeData);
-            this.graph.commandManager.execute(cmd);
-          } catch (err) {
-            console.warn('Falha ao conectar nós:', err);
-          }
+        if (direction === 'input') {
+          this.connectToPort(targetNodeId, targetPortId);
         }
       }
 
@@ -559,20 +545,28 @@ export class InteractionManager {
 
   public completeConnectingPort(targetNodeId: string, targetPortId: string): void {
     if (!this.isConnecting || !this.connectingSourceNodeId || !this.connectingSourcePortId) return;
-    if (this.connectingSourceNodeId === targetNodeId) {
-      this.cancelConnecting();
-      return;
+    if (this.connectingSourceNodeId !== targetNodeId) {
+      this.connectToPort(targetNodeId, targetPortId);
     }
-    const edgeId = `edge_${Date.now()}`;
-    const cmd = new AddEdgeCommand(this.graph, {
-      id: edgeId,
-      sourceNodeId: this.connectingSourceNodeId,
-      sourcePortId: this.connectingSourcePortId,
-      targetNodeId,
-      targetPortId
-    });
-    this.graph.commandManager.record(cmd);
     this.cancelConnecting();
+  }
+
+  // execute() adiciona a aresta ao grafo e a registra para desfazer; record() so registraria,
+  // e a aresta nunca apareceria.
+  private connectToPort(targetNodeId: string, targetPortId: string): void {
+    if (!this.connectingSourceNodeId || !this.connectingSourcePortId) return;
+    try {
+      const cmd = new AddEdgeCommand(this.graph, {
+        id: `edge_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        sourceNodeId: this.connectingSourceNodeId,
+        sourcePortId: this.connectingSourcePortId,
+        targetNodeId,
+        targetPortId
+      });
+      this.graph.commandManager.execute(cmd);
+    } catch (err) {
+      console.warn('Falha ao conectar nós:', err);
+    }
   }
 
   public cancelConnecting(): void {
