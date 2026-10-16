@@ -154,5 +154,28 @@ export function onLocaleChange(callback: (locale: SupportedLocale) => void): () 
   };
 }
 
+/**
+ * Traduz um erro estruturado vindo do backend C++ (errorCode + error + errorDetail).
+ *
+ * - `errorCode` conhecido: usa a chave `mcp_errors.<codigo>` no idioma ativo.
+ * - Código ausente ou desconhecido: mostra o texto de fallback enviado pelo backend.
+ * - `detail` (id do servidor, host, variável...) é anexado entre parênteses quando existir.
+ *
+ * O contrato dos códigos vive em CppCore/src/mcp/McpErrors.hpp: novos códigos no backend
+ * não quebram este lado — caem no fallback.
+ */
+export function translateMcpError(
+  errorCode?: string | null,
+  error?: string | null,
+  detail?: string | null
+): string {
+  const fallback = error || '';
+  if (!errorCode || !errorCode.trim()) return fallback;
+  const key = `mcp_errors.${errorCode.trim()}`;
+  const translated = t(key, '');
+  if (!translated) return fallback;
+  return detail && detail.trim() ? `${translated} (${detail.trim()})` : translated;
+}
+
 export { i18next, SUPPORTED_LOCALES };
 export type { SupportedLocale };

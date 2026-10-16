@@ -1,7 +1,7 @@
 import { Graph } from '../../core/Graph.ts';
 import { IMcpServerConfig, IMcpCallResult } from '../../core/types.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
-import { t } from '../../i18n/index.ts';
+import { t, translateMcpError } from '../../i18n/index.ts';
 
 export class McpServersModal {
   private overlay: HTMLElement;
@@ -520,7 +520,8 @@ export class McpServersModal {
           if (res.success) {
             alert(t('mcp_servers.alert_test_success', { id, count: res.count }));
           } else {
-            alert(t('mcp_servers.alert_test_fail', { id, error: res.error || t('mcp_servers.unknown_error') }));
+            const msg = translateMcpError(res.errorCode, res.error || t('mcp_servers.unknown_error'), res.errorDetail);
+            alert(t('mcp_servers.alert_test_fail', { id, error: msg }));
           }
         }
       } else {
@@ -582,7 +583,7 @@ export class McpServersModal {
         if (respRaw) {
           const resp: IMcpCallResult = JSON.parse(respRaw);
           resOut.textContent = resp.isError 
-            ? `[ERRO] ${resp.errorMessage || 'Falha na execução'}` 
+            ? `[ERRO] ${translateMcpError(resp.errorCode, resp.errorMessage || 'Falha na execução', resp.errorDetail)}` 
             : `[SUCESSO] ${resp.content} (Duração: ${resp.durationSeconds?.toFixed(3)}s)`;
         }
       } else {

@@ -7,6 +7,7 @@
 #include <stdexcept>
 
 #include "mcp/McpClient.hpp"
+#include "mcp/McpErrors.hpp"
 #include "search/ProjectSearch.hpp"
 #include "util/Json.hpp"
 
@@ -69,7 +70,7 @@ std::string McpToolbox::expandEnv(const std::string& text) {
                     const char* v = std::getenv(name.c_str());
                     if (v && *v) out += v;
                     else if (hasFallback) out += fallback;
-                    else throw std::runtime_error("variavel de ambiente nao definida: " + name);
+                    else throw mcp::McpError(mcp::McpErrorCode::EnvVarUnset, name);
                     i = end + 1;
                     continue;
                 }
@@ -92,13 +93,13 @@ std::string McpToolbox::agentToolName(const std::string& server, const std::stri
 }
 
 mcp::McpServerConfig McpToolbox::loadServerConfig(const fs::path& root, const std::string& id) {
-    if (!validId(id)) throw std::runtime_error("identificador de servidor MCP invalido: " + id);
+    if (!validId(id)) throw mcp::McpError(mcp::McpErrorCode::InvalidServerId, id);
     if (native::isNativeServer(id))
-        throw std::runtime_error("'" + id + "' e um servidor nativo do Arestrix (nao tem configuracao em .workspace/mcps; o prefixo 'arestrix.' e reservado)");
+        throw mcp::McpError(mcp::McpErrorCode::NativeServerReserved, id);
     fs::path dir = root / ".workspace" / "mcps";
     std::error_code ec;
     if (!fs::is_directory(dir, ec)) {
-        throw std::runtime_error("servidor MCP '" + id + "' nao encontrado: a pasta .workspace/mcps nao existe neste projeto");
+        throw mcp::McpError(mcp::McpErrorCode::ServerNotFound, id);
     }
     std::vector<fs::path> files;
     for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec))
@@ -117,16 +118,18 @@ mcp::McpServerConfig McpToolbox::loadServerConfig(const fs::path& root, const st
         for (const auto& c : candidates) {
             if (!c.is_object() || c.value("id", std::string()) != id) continue;
             auto cfg = c.get<mcp::McpServerConfig>();
-            if (!cfg.isEnabled) throw std::runtime_error("servidor MCP '" + id + "' esta desabilitado (isEnabled=false)");
+            if (!cfg.isEnabled) throw mcp::McpError(mcp::McpErrorCode::ServerDisabled, id);
             try {
                 return expandedCopy(cfg);
+            } catch (const mcp::McpError& ex) {
+                // Mantem o codigo estavel e acrescenta o id do servidor ao detalhe dinamico.
+                throw mcp::McpError(ex.code(), "servidor '" + id + "' (" + ex.detail() + ")");
             } catch (const std::exception& ex) {
-                throw std::runtime_error("servidor MCP '" + id + "': " + ex.what() +
-                                         " (defina-a nas variaveis de ambiente do usuario; veja .workspace/mcps)");
+                throw mcp::McpError(mcp::McpErrorCode::Unknown, ex.what());
             }
         }
     }
-    throw std::runtime_error("servidor MCP '" + id + "' nao encontrado em .workspace/mcps");
+    throw mcp::McpError(mcp::McpErrorCode::ServerNotFound, id);
 }
 
 taskforge::Json McpToolbox::listProjectServers(const fs::path& root) {
@@ -208,8 +211,7 @@ McpToolbox::McpToolbox(const fs::path& root, const std::vector<std::string>& ser
         mcp::McpServerConfig cfg = loadServerConfig(root, id);
         std::vector<mcp::McpTool> tools = client.listTools(cfg, kListTimeoutMs);
         if (tools.empty()) {
-            throw std::runtime_error("servidor MCP '" + id + "' nao respondeu ou nao oferece ferramentas "
-                                     "(confira o comando em .workspace/mcps e execute-o manualmente)");
+            throw mcp::McpError(mcp::McpErrorCode::NoTools, id);
         }
         for (const auto& t : tools) {
             if (!isToolAllowed(allowedTools, id, t.name)) continue;

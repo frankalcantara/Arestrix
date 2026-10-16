@@ -84,6 +84,8 @@ struct McpCallResult {
     std::string content;
     bool isError = false;
     std::string errorMessage;
+    std::string errorCode;    // codigo estavel para o i18n do frontend (mcp/McpErrors.hpp)
+    std::string errorDetail;  // parte dinamica (id do servidor, host, variavel...)
     double durationSeconds = 0.0;
 };
 
@@ -93,6 +95,8 @@ inline void to_json(taskforge::Json& j, const McpCallResult& r) {
         {"content", r.content},
         {"isError", r.isError},
         {"errorMessage", r.errorMessage},
+        {"errorCode", r.errorCode},
+        {"errorDetail", r.errorDetail},
         {"durationSeconds", r.durationSeconds}
     };
 }
@@ -102,6 +106,8 @@ inline void from_json(const taskforge::Json& j, McpCallResult& r) {
     r.content = j.value("content", "");
     r.isError = j.value("isError", false);
     r.errorMessage = j.value("errorMessage", "");
+    r.errorCode = j.value("errorCode", "");
+    r.errorDetail = j.value("errorDetail", "");
     r.durationSeconds = j.value("durationSeconds", 0.0);
 }
 

@@ -3,7 +3,7 @@ import { INodeData, IPort, ISwitchSettings, SwitchMode, defaultSwitchSettings, I
 import { EventBus } from '../core/EventBus.ts';
 import { RemoveNodeCommand, RemoveEdgeCommand, UpdateNodeCommand, CompoundCommand } from '../core/history/GraphCommands.ts';
 import { AgentTemplateRegistry } from '../core/templates/AgentTemplateRegistry.ts';
-import { t } from '../i18n/index.ts';
+import { t, translateMcpError } from '../i18n/index.ts';
 
 /**
  * Arestrix Studio - Microsoft Office Task Pane (Painel de Tarefas / Formatar Agente)
@@ -969,7 +969,7 @@ export class Inspector {
         const res = JSON.parse((await b.call('list_project_mcp_tools', JSON.stringify({ server }))) || '{}');
         const tools: Array<{ name: string; description: string; inputSchema?: any }> = res.tools || [];
         fillOptions(toolSel, tools.map(x => ({ value: x.name, label: x.name })), keepTool);
-        setStatus(res.error ? String(res.error) : t('inspector.mcp.tools_found', { count: tools.length }));
+        setStatus(res.error ? translateMcpError(res.errorCode, res.error, res.errorDetail) : t('inspector.mcp.tools_found', { count: tools.length }));
         const hint = (name: string) => {
           const tool = tools.find(x => x.name === name);
           const el = q<HTMLElement>('#mcp-tool-hint');
@@ -992,6 +992,10 @@ export class Inspector {
       try {
         const res = JSON.parse((await b.call('list_project_mcp_servers')) || '{}');
         const servers: Array<{ id: string; name: string; isEnabled: boolean; isNative?: boolean }> = res.servers || [];
+        if (res.error) {
+          setStatus(translateMcpError(res.errorCode, res.error, res.errorDetail));
+          return;
+        }
         const current = this.mcpSettingsOf(this.graph.getNode(node.id) ?? node).server;
         fillOptions(serverSel, servers.map(sv => ({
           value: sv.id,

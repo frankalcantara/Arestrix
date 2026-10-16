@@ -98,6 +98,8 @@ export interface IMcpCallResult {
   content: string;
   isError: boolean;
   errorMessage?: string;
+  errorCode?: string;    // codigo estavel para o i18n (mcp_errors.<codigo>)
+  errorDetail?: string;  // parte dinamica (id do servidor, host, variavel...)
   durationSeconds?: number;
 }
 

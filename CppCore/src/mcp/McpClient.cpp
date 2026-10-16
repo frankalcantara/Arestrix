@@ -42,34 +42,39 @@ bool safeMcpShellArg(const std::string& a) {
 
 // Politica do transporte HTTP do MCP, espelhando a das ferramentas nativas (native/NativeHttp.cpp):
 // somente https:// na porta 443, sem usuario@, sem IPv6 literal, host resolvido e publico (DNS rebinding
-// recusado) e sem redirecionamentos. Devolve "" se a URL passar, ou o motivo da recusa.
-std::string validateMcpHttpUrl(const std::string& url) {
-    if (url.size() > 2048) return "URL do servidor MCP longa demais.";
+// recusado) e sem redirecionamentos. Devolve McpErrorInfo vazio se a URL passar.
+McpErrorInfo validateMcpHttpUrl(const std::string& url) {
+    McpErrorInfo info;
+    auto fail = [&](McpErrorCode code, std::string detail = "") {
+        info.set(code, std::move(detail));
+        return info;
+    };
+    if (url.size() > 2048) return fail(McpErrorCode::UrlTooLong);
     for (unsigned char c : url)
-        if (c < 0x21 || c == 0x7f) return "A URL do servidor MCP contem caracteres invalidos (espacos ou controle).";
+        if (c < 0x21 || c == 0x7f) return fail(McpErrorCode::UrlInvalidChars);
     std::string lowerUrl = url;
     for (char& c : lowerUrl) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    if (lowerUrl.rfind("https://", 0) != 0)
-        return "So URLs https:// sao permitidas no transporte HTTP do MCP (servidores locais devem usar o transporte stdio).";
+    if (lowerUrl.rfind("https://", 0) != 0) return fail(McpErrorCode::UrlNotHttps);
     std::string rest = url.substr(8);
     size_t end = rest.find_first_of("/?#");
     std::string authority = end == std::string::npos ? rest : rest.substr(0, end);
-    if (authority.find('@') != std::string::npos) return "URLs com usuario@ nao sao permitidas.";
-    if (!authority.empty() && authority.front() == '[') return "Enderecos IPv6 literais nao sao permitidos.";
+    if (authority.find('@') != std::string::npos) return fail(McpErrorCode::UrlUserInfo);
+    if (!authority.empty() && authority.front() == '[') return fail(McpErrorCode::UrlIpv6Literal);
     std::string host = authority;
     size_t colon = authority.rfind(':');
     if (colon != std::string::npos) {
         host = authority.substr(0, colon);
-        if (authority.substr(colon + 1) != "443") return "So a porta 443 e permitida na URL do servidor MCP.";
+        std::string port = authority.substr(colon + 1);
+        if (port != "443") return fail(McpErrorCode::UrlBadPort, port);
     }
     for (char& c : host) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    if (host.empty() || host.size() > 253) return "Host invalido na URL do servidor MCP.";
+    if (host.empty() || host.size() > 253) return fail(McpErrorCode::UrlInvalidHost);
     for (char c : host)
         if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '.'))
-            return "Host invalido na URL do servidor MCP.";
+            return fail(McpErrorCode::UrlInvalidHost, host);
     std::string reason = rt::net::checkHostIsPublic(host);
-    if (!reason.empty()) return "O host do servidor MCP nao e publico: " + reason;
-    return "";
+    if (!reason.empty()) return fail(McpErrorCode::UrlNonPublicHost, reason);
+    return info;
 }
 
 json initializeRequest(int id) {
@@ -126,8 +131,15 @@ McpCallResult parseCallResult(const json& result) {
 // ---------------------------------------------------------------------------
 class StdioSession {
 public:
-    bool start(const McpServerConfig& cfg, std::string& error) {
-        if (cfg.command.empty()) { error = "Comando do servidor MCP nao configurado."; return false; }
+    bool start(const McpServerConfig& cfg, std::string& error,
+               McpErrorCode* code = nullptr, std::string* detail = nullptr) {
+        auto fail = [&](McpErrorCode c, std::string d = "") {
+            error = mcpErrorDefaultMessage(c, d);
+            if (code) *code = c;
+            if (detail) *detail = std::move(d);
+            return false;
+        };
+        if (cfg.command.empty()) return fail(McpErrorCode::EmptyCommand);
         platform::ProcessSpec spec;
         spec.argv.push_back(cfg.command);
         for (const auto& a : cfg.args) spec.argv.push_back(a);
@@ -141,10 +153,7 @@ public:
         // comando e vem de arquivos do projeto: recusa metacaracteres em vez de tentar escapar.
         if (cfg.command == "npx" || cfg.command == "npm" || cfg.command == "uvx") {
             for (const auto& a : cfg.args) {
-                if (!safeMcpShellArg(a)) {
-                    error = "servidor MCP '" + cfg.id + "': argumento invalido (aspas e metacaracteres como & | < > ^ % ! nao sao permitidos nos args de npx/npm/uvx).";
-                    return false;
-                }
+                if (!safeMcpShellArg(a)) return fail(McpErrorCode::InvalidArg, a);
             }
             spec.shellCommand = cfg.command;
             for (const auto& a : cfg.args) spec.shellCommand += " \"" + a + "\"";
@@ -152,14 +161,25 @@ public:
         }
 #endif
         proc_ = platform::Process::start(spec, error);
+        if (!proc_) {
+            // `error` traz o motivo do sistema; registra o codigo e usa o texto como detalhe.
+            if (code) *code = McpErrorCode::SpawnFailed;
+            if (detail) *detail = error;
+        }
         return proc_ != nullptr;
     }
 
     bool send(const json& msg) { return proc_ && proc_->writeStdin(msg.dump() + "\n"); }
 
     // Aguarda a resposta com `id`; ignora notificacoes e linhas que nao sejam JSON.
-    bool request(int id, const json& msg, int timeoutMs, json& response, std::string& error) {
-        if (!send(msg)) { error = "Falha ao escrever no stdin do servidor MCP."; return false; }
+    bool request(int id, const json& msg, int timeoutMs, json& response, std::string& error,
+                 McpErrorCode* code = nullptr, std::string* detail = nullptr) {
+        auto fail = [&](McpErrorCode c) {
+            error = mcpErrorDefaultMessage(c, "");
+            if (code) *code = c;
+            return false;
+        };
+        if (!send(msg)) return fail(McpErrorCode::WriteFailed);
         auto deadline = Clock::now() + std::chrono::milliseconds(timeoutMs);
         while (Clock::now() < deadline) {
             size_t nl;
@@ -176,18 +196,29 @@ public:
             }
             auto st = proc_->read(buffer_, 100);
             if (st == platform::ReadStatus::Eof && buffer_.find('\n') == std::string::npos) {
-                error = "O servidor MCP encerrou antes de responder.";
-                return false;
+                return fail(McpErrorCode::ServerClosed);
             }
         }
-        error = "Timeout aguardando resposta do servidor MCP.";
-        return false;
+        return fail(McpErrorCode::Timeout);
     }
 
-    bool handshake(int timeoutMs, std::string& error) {
+    bool handshake(int timeoutMs, std::string& error,
+                   McpErrorCode* code = nullptr, std::string* detail = nullptr) {
         json resp;
-        if (!request(1, initializeRequest(1), timeoutMs, resp, error)) return false;
-        if (resp.contains("error")) { error = "initialize recusado: " + resp["error"].dump(); return false; }
+        McpErrorCode innerCode = McpErrorCode::None;
+        std::string innerDetail;
+        if (!request(1, initializeRequest(1), timeoutMs, resp, error, &innerCode, &innerDetail)) {
+            if (code) *code = innerCode;
+            if (detail) *detail = std::move(innerDetail);
+            return false;
+        }
+        if (resp.contains("error")) {
+            std::string d = resp["error"].dump();
+            error = mcpErrorDefaultMessage(McpErrorCode::HandshakeRefused, d);
+            if (code) *code = McpErrorCode::HandshakeRefused;
+            if (detail) *detail = std::move(d);
+            return false;
+        }
         send({{"jsonrpc", "2.0"}, {"method", "notifications/initialized"}});
         return true;
     }
@@ -208,7 +239,8 @@ class HttpSession {
 public:
     explicit HttpSession(std::string url) : url_(std::move(url)) {}
 
-    bool post(const json& msg, int timeoutMs, json* response, std::string& error) {
+    bool post(const json& msg, int timeoutMs, json* response, std::string& error,
+              McpErrorCode* code = nullptr, std::string* detail = nullptr) {
         rt::HttpRequest req;
         req.url = url_;
         req.timeoutSeconds = std::max(5, timeoutMs / 1000);
@@ -221,13 +253,21 @@ public:
         req.body = msg.dump();
 
         auto resp = rt::httpSend(req);
-        if (resp.status == 0) { error = "Falha de transporte: " + resp.error; return false; }
+        if (resp.status == 0) {
+            error = "Falha de transporte: " + resp.error;
+            if (code) *code = McpErrorCode::TransportFailed;
+            if (detail) *detail = resp.error;
+            return false;
+        }
         if (resp.status == 202 || (resp.status == 200 && resp.body.empty())) return !response;
         if (resp.status >= 400) {
             error = "HTTP " + std::to_string(resp.status) + ": " + resp.body.substr(0, 300);
-            if (resp.status == 404 || resp.status == 405) {
+            bool legacy = resp.status == 404 || resp.status == 405;
+            if (legacy) {
                 error += " (o endpoint nao parece falar MCP Streamable HTTP; servidores SSE legados nao sao suportados)";
             }
+            if (code) *code = legacy ? McpErrorCode::LegacySseUnsupported : McpErrorCode::InvalidResponse;
+            if (detail) *detail = "HTTP " + std::to_string(resp.status);
             return false;
         }
         auto sid = resp.headers.find("mcp-session-id");
@@ -239,7 +279,11 @@ public:
         bool sse = ct != resp.headers.end() && ct->second.find("text/event-stream") != std::string::npos;
         if (!sse) {
             auto parsed = jsonutil::tryParse(resp.body);
-            if (!parsed) { error = "Resposta invalida do servidor MCP."; return false; }
+            if (!parsed) {
+                error = mcpErrorDefaultMessage(McpErrorCode::InvalidResponse, "");
+                if (code) *code = McpErrorCode::InvalidResponse;
+                return false;
+            }
             *response = *parsed;
             return true;
         }
@@ -264,14 +308,28 @@ public:
             }
         }
         if (flush()) return true;
-        error = "A resposta SSE nao trouxe o resultado da chamada.";
+        error = mcpErrorDefaultMessage(McpErrorCode::SseNoResult, "");
+        if (code) *code = McpErrorCode::SseNoResult;
         return false;
     }
 
-    bool handshake(int timeoutMs, std::string& error) {
+    bool handshake(int timeoutMs, std::string& error,
+                   McpErrorCode* code = nullptr, std::string* detail = nullptr) {
         json resp;
-        if (!post(initializeRequest(1), timeoutMs, &resp, error)) return false;
-        if (resp.contains("error")) { error = "initialize recusado: " + resp["error"].dump(); return false; }
+        McpErrorCode innerCode = McpErrorCode::None;
+        std::string innerDetail;
+        if (!post(initializeRequest(1), timeoutMs, &resp, error, &innerCode, &innerDetail)) {
+            if (code) *code = innerCode;
+            if (detail) *detail = std::move(innerDetail);
+            return false;
+        }
+        if (resp.contains("error")) {
+            std::string d = resp["error"].dump();
+            error = mcpErrorDefaultMessage(McpErrorCode::HandshakeRefused, d);
+            if (code) *code = McpErrorCode::HandshakeRefused;
+            if (detail) *detail = std::move(d);
+            return false;
+        }
         initialized_ = true;
         std::string ignored;
         post({{"jsonrpc", "2.0"}, {"method", "notifications/initialized"}}, timeoutMs, nullptr, ignored);
@@ -322,10 +380,10 @@ McpCallResult McpClient::executeMockTool(const std::string& toolName, const json
 // ---------------------------------------------------------------------------
 // API publica
 // ---------------------------------------------------------------------------
-std::vector<McpTool> McpClient::listTools(const McpServerConfig& config, int timeoutMs) {
+std::vector<McpTool> McpClient::listTools(const McpServerConfig& config, int timeoutMs, McpErrorInfo* errorInfo) {
     if (isMockServer(config)) return getMockTools(config);
-    return config.transport == McpTransportType::Stdio ? listToolsStdio(config, timeoutMs)
-                                                       : listToolsSse(config, timeoutMs);
+    return config.transport == McpTransportType::Stdio ? listToolsStdio(config, timeoutMs, errorInfo)
+                                                       : listToolsSse(config, timeoutMs, errorInfo);
 }
 
 McpCallResult McpClient::callTool(const McpServerConfig& config, const std::string& toolName,
@@ -393,48 +451,66 @@ HttpEntry& httpEntry(const std::string& key) {
 }
 
 bool stdioRequest(const McpServerConfig& cfg, const std::string& method, const json& params, int timeoutMs, json& resp,
-                  std::string& error) {
+                  std::string& error, McpErrorInfo* info = nullptr) {
     StdioEntry& e = stdioEntry(cfg.id);
     std::lock_guard<std::mutex> lock(e.mutex);
     const std::string fp = fingerprintOf(cfg);
     if (e.session && (e.fingerprint != fp || !e.session->alive())) e.session.reset();   // morreu ou mudou: recria
     if (!e.session) {
         auto s = std::make_unique<StdioSession>();
-        if (!s->start(cfg, error) || !s->handshake(timeoutMs, error)) return false;
+        McpErrorCode code = McpErrorCode::None;
+        std::string detail;
+        if (!s->start(cfg, error, &code, &detail) || !s->handshake(timeoutMs, error, &code, &detail)) {
+            if (info) info->set(code, detail, error);
+            return false;
+        }
         e.session = std::move(s);
         e.fingerprint = fp;
         e.nextId = 2;
     }
     const int id = e.nextId++;
     json msg = {{"jsonrpc", "2.0"}, {"id", id}, {"method", method}, {"params", params}};
-    if (!e.session->request(id, msg, timeoutMs, resp, error)) {
+    McpErrorCode code = McpErrorCode::None;
+    std::string detail;
+    if (!e.session->request(id, msg, timeoutMs, resp, error, &code, &detail)) {
         e.session.reset();   // estado desconhecido: a proxima chamada abre outra sessao
+        if (info) info->set(code, detail, error);
         return false;
     }
     return true;
 }
 
 bool httpRequest(const McpServerConfig& cfg, const std::string& method, const json& params, int timeoutMs, json& resp,
-                 std::string& error) {
+                 std::string& error, McpErrorInfo* info = nullptr) {
     // A URL vem de arquivos do projeto: valida ANTES de qualquer conexao (https apenas, host publico, sem rebinding).
-    std::string urlError = validateMcpHttpUrl(cfg.url);
-    if (!urlError.empty()) { error = urlError; return false; }
+    McpErrorInfo urlInfo = validateMcpHttpUrl(cfg.url);
+    if (!urlInfo.empty()) {
+        error = urlInfo.message;
+        if (info) *info = urlInfo;
+        return false;
+    }
     HttpEntry& e = httpEntry(cfg.id);
     std::lock_guard<std::mutex> lock(e.mutex);
     const std::string fp = fingerprintOf(cfg);
     for (int attempt = 0; attempt < 2; ++attempt) {
         if (e.session && e.fingerprint != fp) e.session.reset();
+        McpErrorCode code = McpErrorCode::None;
+        std::string detail;
         if (!e.session) {
             auto s = std::make_unique<HttpSession>(cfg.url);
-            if (!s->handshake(timeoutMs, error)) return false;
+            if (!s->handshake(timeoutMs, error, &code, &detail)) {
+                if (info) info->set(code, detail, error);
+                return false;
+            }
             e.session = std::move(s);
             e.fingerprint = fp;
             e.nextId = 2;
         }
         const int id = e.nextId++;
         json msg = {{"jsonrpc", "2.0"}, {"id", id}, {"method", method}, {"params", params}};
-        if (e.session->post(msg, timeoutMs, &resp, error)) return true;
+        if (e.session->post(msg, timeoutMs, &resp, error, &code, &detail)) return true;
         e.session.reset();
+        if (info) info->set(code, detail, error);
         // Sessao expirada no servidor (HTTP 404): o pedido nao foi processado, entao e seguro tentar uma vez com sessao nova.
         if (attempt == 1 || error.find("HTTP 404") == std::string::npos) return false;
     }
@@ -465,19 +541,27 @@ size_t McpClient::activeSessions() {
 
 namespace {
 
-std::vector<McpTool> toolsFrom(bool ok, const json& resp, const std::string& error, const McpServerConfig& cfg) {
+std::vector<McpTool> toolsFrom(bool ok, const json& resp, const std::string& error, const McpServerConfig& cfg,
+                               const McpErrorInfo* info) {
     if (!ok) {
-        std::cerr << "[MCP] " << cfg.id << ": " << error << "\n";
+        std::cerr << "[MCP] " << cfg.id << ": " << (info && !info->message.empty() ? info->message : error) << "\n";
         return {};
     }
     return resp.contains("result") ? parseTools(resp["result"], cfg.id) : std::vector<McpTool>{};
 }
 
-McpCallResult callFrom(bool ok, const json& resp, const std::string& error, Clock::time_point t0) {
+McpCallResult callFrom(bool ok, const json& resp, const std::string& error, Clock::time_point t0,
+                       const McpErrorInfo* info) {
     McpCallResult out;
     if (!ok) {
         out.isError = true;
-        out.errorMessage = error;
+        if (info && !info->empty()) {
+            out.errorCode = info->codeName();
+            out.errorDetail = info->detail;
+            out.errorMessage = info->message.empty() ? error : info->message;
+        } else {
+            out.errorMessage = error;
+        }
     } else if (resp.contains("error")) {
         out.isError = true;
         out.errorMessage = resp["error"].dump();
@@ -490,11 +574,13 @@ McpCallResult callFrom(bool ok, const json& resp, const std::string& error, Cloc
 
 } // namespace
 
-std::vector<McpTool> McpClient::listToolsStdio(const McpServerConfig& config, int timeoutMs) {
+std::vector<McpTool> McpClient::listToolsStdio(const McpServerConfig& config, int timeoutMs, McpErrorInfo* errorInfo) {
     json resp;
     std::string err;
-    bool ok = stdioRequest(config, "tools/list", json::object(), timeoutMs, resp, err);
-    return toolsFrom(ok, resp, err, config);
+    McpErrorInfo info;
+    bool ok = stdioRequest(config, "tools/list", json::object(), timeoutMs, resp, err, &info);
+    if (errorInfo) *errorInfo = info;
+    return toolsFrom(ok, resp, err, config, &info);
 }
 
 McpCallResult McpClient::callToolStdio(const McpServerConfig& config, const std::string& toolName,
@@ -502,16 +588,25 @@ McpCallResult McpClient::callToolStdio(const McpServerConfig& config, const std:
     auto t0 = Clock::now();
     json resp;
     std::string err;
-    bool ok = stdioRequest(config, "tools/call", {{"name", toolName}, {"arguments", arguments}}, timeoutMs, resp, err);
-    return callFrom(ok, resp, err, t0);
+    McpErrorInfo info;
+    bool ok = stdioRequest(config, "tools/call", {{"name", toolName}, {"arguments", arguments}}, timeoutMs, resp, err, &info);
+    return callFrom(ok, resp, err, t0, &info);
 }
 
-std::vector<McpTool> McpClient::listToolsSse(const McpServerConfig& config, int timeoutMs) {
-    if (config.url.empty()) return {};
+std::vector<McpTool> McpClient::listToolsSse(const McpServerConfig& config, int timeoutMs, McpErrorInfo* errorInfo) {
     json resp;
     std::string err;
-    bool ok = httpRequest(config, "tools/list", json::object(), timeoutMs, resp, err);
-    return toolsFrom(ok, resp, err, config);
+    McpErrorInfo info;
+    bool ok;
+    if (config.url.empty()) {
+        info.set(McpErrorCode::UrlEmpty);
+        err = info.message;
+        ok = false;
+    } else {
+        ok = httpRequest(config, "tools/list", json::object(), timeoutMs, resp, err, &info);
+    }
+    if (errorInfo) *errorInfo = info;
+    return toolsFrom(ok, resp, err, config, &info);
 }
 
 McpCallResult McpClient::callToolSse(const McpServerConfig& config, const std::string& toolName,
@@ -520,13 +615,15 @@ McpCallResult McpClient::callToolSse(const McpServerConfig& config, const std::s
     if (config.url.empty()) {
         McpCallResult out;
         out.isError = true;
-        out.errorMessage = "URL do servidor MCP nao configurada.";
+        out.errorCode = mcpErrorCodeName(McpErrorCode::UrlEmpty);
+        out.errorMessage = mcpErrorDefaultMessage(McpErrorCode::UrlEmpty, "");
         return out;
     }
     json resp;
     std::string err;
-    bool ok = httpRequest(config, "tools/call", {{"name", toolName}, {"arguments", arguments}}, timeoutMs, resp, err);
-    return callFrom(ok, resp, err, t0);
+    McpErrorInfo info;
+    bool ok = httpRequest(config, "tools/call", {{"name", toolName}, {"arguments", arguments}}, timeoutMs, resp, err, &info);
+    return callFrom(ok, resp, err, t0, &info);
 }
 
 } // namespace mcp

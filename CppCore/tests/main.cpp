@@ -500,6 +500,7 @@ TEST(mcp_stdio_roundtrip) {
     evil.args = {"-y", "a\" & calc & \"b"};
     auto refused = client.callTool(evil, "x", {}, 2000);
     CHECK(refused.isError && !refused.success);
+    CHECK(refused.errorCode == "invalid_arg");   // codigo estavel para o i18n do frontend
 #endif
     // Transporte HTTP do MCP: http:// ou endereco interno e RECUSADO pela politica ANTES de conectar
     // (sempre falha, nunca finge sucesso; nenhuma conexao e tentada).
@@ -510,6 +511,7 @@ TEST(mcp_stdio_roundtrip) {
     auto bad = client.callTool(sseNoServer, "x", {}, 3000);
     CHECK(bad.isError && !bad.success);
     CHECK(bad.errorMessage.find("https") != std::string::npos);   // recusada pela politica, nao por falha de transporte
+    CHECK(bad.errorCode == "url_not_https");
     taskforge::mcp::McpServerConfig rebind;
     rebind.id = "rebind";
     rebind.transport = taskforge::mcp::McpTransportType::Sse;
@@ -517,6 +519,25 @@ TEST(mcp_stdio_roundtrip) {
     auto badPort = client.callTool(rebind, "x", {}, 3000);
     CHECK(badPort.isError && !badPort.success);
     CHECK(badPort.errorMessage.find("443") != std::string::npos);
+    CHECK(badPort.errorCode == "url_bad_port");
+
+    // listTools devolve o codigo estavel via McpErrorInfo; host interno e recusado (DNS rebinding).
+    taskforge::mcp::McpServerConfig internal;
+    internal.id = "internal";
+    internal.transport = taskforge::mcp::McpTransportType::Sse;
+    internal.url = "https://127.0.0.1:443/mcp";
+    taskforge::mcp::McpErrorInfo info;
+    CHECK(client.listTools(internal, 2000, &info).empty());
+    CHECK(!info.empty() && info.codeName() == std::string("url_non_public_host"));
+    CHECK(info.detail.find("127.0.0.1") != std::string::npos);
+
+    // URL vazia no transporte HTTP: codigo proprio.
+    taskforge::mcp::McpServerConfig noUrl;
+    noUrl.id = "sem-url";
+    noUrl.transport = taskforge::mcp::McpTransportType::Sse;
+    noUrl.url = "";
+    auto noUrlRes = client.callTool(noUrl, "x", {}, 1000);
+    CHECK(noUrlRes.isError && noUrlRes.errorCode == "url_empty");
 }
 
 

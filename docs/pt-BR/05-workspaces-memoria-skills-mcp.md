@@ -131,6 +131,11 @@ que resolve **somente** para endereços públicos (proteção contra DNS rebindi
 redirecionamentos, sem `usuario@` e sem IPv6 literal (servidores locais devem usar stdio); e os processos filhos do MCP **não**
 herdam as chaves de API do seu ambiente — recebem apenas as variáveis declaradas em `env`.
 
+**Erros traduzidos.** Toda falha de MCP que chega ao Studio carrega um `errorCode` estável (definido em
+`CppCore/src/mcp/McpErrors.hpp`), o texto de fallback e um `errorDetail` curto e dinâmico; a interface traduz o código
+(chaves `mcp_errors.*`) e só recorre ao texto do backend para códigos que não conhece — assim códigos novos nunca quebram
+interfaces antigas.
+
 **Duas formas de usar um servidor num pipeline:** um [**vértice MCP**](03-grafo-e-vertices.md#vértice-mcp) (uma chamada determinística
 que você liga no grafo) ou como **ferramentas de um agente** (o modelo decide quando chamar).
 

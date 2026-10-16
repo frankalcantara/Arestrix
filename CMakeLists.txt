@@ -41,6 +41,7 @@ add_library(arestrix_core STATIC
   ${SRC}/search/Synonyms.cpp
   ${SRC}/search/SynonymAgent.cpp
   ${SRC}/mcp/McpClient.cpp
+  ${SRC}/mcp/McpErrors.cpp
   ${SRC}/mcp/McpRegistry.cpp
   ${SRC}/rt/Http.cpp
   ${SRC}/rt/NetGuard.cpp

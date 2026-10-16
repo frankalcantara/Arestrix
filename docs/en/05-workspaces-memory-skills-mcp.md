@@ -129,6 +129,11 @@ resolves **only** to public addresses (DNS-rebinding protection, like the native
 literal IPv6 (use stdio for local servers); and MCP child processes do **not** inherit the API keys from your environment — they
 receive only the variables declared in `env`.
 
+**Translated errors.** Every MCP failure that reaches the Studio carries a stable `errorCode` (defined in
+`CppCore/src/mcp/McpErrors.hpp`) plus the fallback text and a short dynamic `errorDetail`; the interface translates the code
+(`mcp_errors.*` keys) and only falls back to the backend text for codes it does not know — so new codes never break older
+interfaces.
+
 **Two ways to use a server in a pipeline:** an [**MCP vertex**](03-graph-and-nodes.md#mcp-vertex) (a deterministic call you wire
 into the graph) or as **tools of an agent** (the model decides when to call them).
 

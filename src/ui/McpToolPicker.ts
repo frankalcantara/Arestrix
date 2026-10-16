@@ -1,4 +1,4 @@
-import { t } from '../i18n/index.ts';
+import { t, translateMcpError } from '../i18n/index.ts';
 
 /**
  * Seletor de servidores MCP e de suas ferramentas, usado nos Padroes Globais e no modal "Ferramentas" de cada agente.
@@ -55,7 +55,7 @@ export class McpToolPicker {
     try {
       const res = JSON.parse((await b.call('list_project_mcp_servers')) || '{}');
       this.servers = (res.servers || []) as ServerInfo[];
-      if (res.error) this.message = String(res.error);
+      if (res.error) this.message = translateMcpError(res.errorCode, res.error, res.errorDetail);
     } catch {
       this.servers = [];
       this.message = t('mcp_picker.load_failed');
@@ -132,7 +132,7 @@ export class McpToolPicker {
       const tools = (res.tools || []) as ToolInfo[];
       this.toolsOf.set(serverId, tools);
       this.ensureChecked(serverId);
-      if (res.error) this.message = String(res.error);
+      if (res.error) this.message = translateMcpError(res.errorCode, res.error, res.errorDetail);
     } catch {
       this.message = t('mcp_picker.load_failed');
     }

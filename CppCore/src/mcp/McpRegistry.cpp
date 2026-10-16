@@ -1,4 +1,5 @@
 #include "McpRegistry.hpp"
+#include "McpErrors.hpp"
 #include "util/Json.hpp"
 #include <fstream>
 #include <iostream>
@@ -83,12 +84,23 @@ taskforge::Json McpRegistry::testServer(const std::string& id) {
     if (it == servers_.end()) {
         return {
             {"success", false},
-            {"error", "Servidor MCP '" + id + "' nao encontrado no registro"}
+            {"errorCode", mcpErrorCodeName(McpErrorCode::ServerNotFound)},
+            {"errorDetail", id},
+            {"error", mcpErrorDefaultMessage(McpErrorCode::ServerNotFound, id)}
         };
     }
 
     try {
-        auto tools = client_.listTools(it->second);
+        McpErrorInfo info;
+        auto tools = client_.listTools(it->second, 20000, &info);
+        if (tools.empty() && !info.empty()) {
+            return {
+                {"success", false},
+                {"errorCode", info.codeName()},
+                {"errorDetail", info.detail},
+                {"error", info.message}
+            };
+        }
         it->second.cachedTools = tools;
         saveToDisk();
 
@@ -99,9 +111,12 @@ taskforge::Json McpRegistry::testServer(const std::string& id) {
             {"server", it->second}
         };
     } catch (const std::exception& ex) {
+        McpErrorInfo info = McpErrorInfo::fromException(ex);
         return {
             {"success", false},
-            {"error", std::string("Falha ao comunicar com o servidor: ") + ex.what()}
+            {"errorCode", info.codeName()},
+            {"errorDetail", info.detail},
+            {"error", info.message.empty() ? (std::string("Falha ao comunicar com o servidor: ") + ex.what()) : info.message}
         };
     }
 }
@@ -116,7 +131,9 @@ McpCallResult McpRegistry::callTool(const std::string& serverId,
         if (it == servers_.end()) {
             McpCallResult res;
             res.isError = true;
-            res.errorMessage = "Servidor MCP nao encontrado: " + serverId;
+            res.errorCode = mcpErrorCodeName(McpErrorCode::ServerNotFound);
+            res.errorDetail = serverId;
+            res.errorMessage = mcpErrorDefaultMessage(McpErrorCode::ServerNotFound, serverId);
             return res;
         }
         cfg = it->second;

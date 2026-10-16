@@ -413,10 +413,13 @@ void ui_call_mcp_tool(webui::window::event* e) {
         taskforge::Json resJson = result;
         e->return_string(resJson.dump());
     } catch (const std::exception& ex) {
+        taskforge::mcp::McpErrorInfo info = taskforge::mcp::McpErrorInfo::fromException(ex);
         taskforge::Json err = {
             {"success", false},
             {"isError", true},
-            {"errorMessage", std::string("Excecao na chamada MCP: ") + ex.what()}
+            {"errorCode", info.codeName()},
+            {"errorDetail", info.detail},
+            {"errorMessage", info.message.empty() ? (std::string("Excecao na chamada MCP: ") + ex.what()) : info.message}
         };
         e->return_string(err.dump());
     }
@@ -667,13 +670,18 @@ void ui_list_project_mcp_servers(webui::window::event* e) {
         if (root.empty()) root = std::filesystem::current_path().string();
         out["servers"] = taskforge::rt::McpToolbox::listProjectServers(root);
     } catch (const std::exception& ex) {
+        taskforge::mcp::McpErrorInfo info = taskforge::mcp::McpErrorInfo::fromException(ex);
         out["servers"] = taskforge::Json::array();
-        out["error"] = std::string(ex.what());
+        out["errorCode"] = info.codeName();
+        if (!info.detail.empty()) out["errorDetail"] = info.detail;
+        out["error"] = info.message.empty() ? std::string(ex.what()) : info.message;
     }
     e->return_string(out.dump());
 }
 
 // JS -> C++: {"server": "id"} => ferramentas que o servidor oferece (abre a sessao MCP persistente do servidor).
+// Em falha, devolve "errorCode" (estavel, para o i18n do frontend), "errorDetail" (parte dinamica) e
+// "error" (fallback humano em portugues).
 void ui_list_project_mcp_tools(webui::window::event* e) {
     taskforge::Json out;
     out["tools"] = taskforge::Json::array();
@@ -685,7 +693,7 @@ void ui_list_project_mcp_tools(webui::window::event* e) {
         const std::string serverId = req.value("server", std::string());
         if (taskforge::native::isNativeServer(serverId)) {
             const auto* ns = taskforge::native::findServer(serverId);
-            if (!ns) throw std::runtime_error("servidor nativo desconhecido: " + serverId);
+            if (!ns) throw taskforge::mcp::McpError(taskforge::mcp::McpErrorCode::ServerNotFound, serverId);
             for (const auto& t : ns->tools) {
                 taskforge::Json item;
                 item["name"] = t.name;
@@ -699,9 +707,15 @@ void ui_list_project_mcp_tools(webui::window::event* e) {
         }
         auto cfg = taskforge::rt::McpToolbox::loadServerConfig(root, serverId);
         taskforge::mcp::McpClient client;
-        auto tools = client.listTools(cfg, 20000);
+        taskforge::mcp::McpErrorInfo info;
+        auto tools = client.listTools(cfg, 20000, &info);
         if (tools.empty()) {
-            out["error"] = std::string("O servidor nao respondeu ou nao oferece ferramentas. Confira o comando em .workspace/mcps.");
+            if (info.empty()) {
+                info.set(taskforge::mcp::McpErrorCode::NoTools);
+            }
+            out["errorCode"] = info.codeName();
+            if (!info.detail.empty()) out["errorDetail"] = info.detail;
+            out["error"] = info.message;
         }
         for (const auto& t : tools) {
             taskforge::Json item;
@@ -711,7 +725,10 @@ void ui_list_project_mcp_tools(webui::window::event* e) {
             out["tools"].push_back(item);
         }
     } catch (const std::exception& ex) {
-        out["error"] = std::string(ex.what());
+        taskforge::mcp::McpErrorInfo info = taskforge::mcp::McpErrorInfo::fromException(ex);
+        out["errorCode"] = info.codeName();
+        if (!info.detail.empty()) out["errorDetail"] = info.detail;
+        out["error"] = info.message.empty() ? std::string(ex.what()) : info.message;
     }
     e->return_string(out.dump());
 }

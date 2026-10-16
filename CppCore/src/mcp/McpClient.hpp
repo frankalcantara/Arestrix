@@ -1,5 +1,6 @@
 #pragma once
 
+#include "McpErrors.hpp"
 #include "McpTypes.hpp"
 #include <cstddef>
 #include <string>
@@ -14,10 +15,13 @@ public:
     McpClient() = default;
     ~McpClient() = default;
 
-    // Handshake JSON-RPC 2.0 e listagem de ferramentas
-    std::vector<McpTool> listTools(const McpServerConfig& config, int timeoutMs = 7000);
+    // Handshake JSON-RPC 2.0 e listagem de ferramentas. Em falha, devolve vazio e preenche
+    // `errorInfo` (quando informado) com o codigo estavel para o i18n e o texto de fallback.
+    std::vector<McpTool> listTools(const McpServerConfig& config, int timeoutMs = 7000,
+                                   McpErrorInfo* errorInfo = nullptr);
 
-    // Execução remota de ferramenta com argumentos
+    // Execução remota de ferramenta com argumentos. O resultado carrega errorCode/errorDetail
+    // (McpCallResult) para o i18n do frontend.
     McpCallResult callTool(const McpServerConfig& config,
                            const std::string& toolName,
                            const taskforge::Json& arguments,
@@ -29,13 +33,13 @@ public:
     static size_t activeSessions();
 
 private:
-    std::vector<McpTool> listToolsStdio(const McpServerConfig& config, int timeoutMs);
+    std::vector<McpTool> listToolsStdio(const McpServerConfig& config, int timeoutMs, McpErrorInfo* errorInfo);
     McpCallResult callToolStdio(const McpServerConfig& config,
                                 const std::string& toolName,
                                 const taskforge::Json& arguments,
                                 int timeoutMs);
 
-    std::vector<McpTool> listToolsSse(const McpServerConfig& config, int timeoutMs);
+    std::vector<McpTool> listToolsSse(const McpServerConfig& config, int timeoutMs, McpErrorInfo* errorInfo);
     McpCallResult callToolSse(const McpServerConfig& config,
                               const std::string& toolName,
                               const taskforge::Json& arguments,

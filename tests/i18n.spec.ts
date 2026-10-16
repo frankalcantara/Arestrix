@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { t, getLocale, setLocale, toggleLocale, SUPPORTED_LOCALES } from '../src/i18n/index.ts';
+import { t, getLocale, setLocale, toggleLocale, SUPPORTED_LOCALES, translateMcpError } from '../src/i18n/index.ts';
 import ptBR from '../src/i18n/locales/pt-BR.json';
 import enUS from '../src/i18n/locales/en-US.json';
 import { globalEventBus } from '../src/core/EventBus.ts';
@@ -128,6 +128,30 @@ describe('Arestrix Studio - Motor Poliglota i18n (i18next)', () => {
     expect(callCount).toBe(1);
 
     unsub();
+  });
+
+  it('10. Deve traduzir erros MCP estruturados (errorCode + error + errorDetail)', async () => {
+    await setLocale('pt-BR');
+    const pt = translateMcpError('invalid_arg', 'Argumento invalido para o comando do servidor MCP.', 'a" & b');
+    expect(pt).toContain('aspas');
+    expect(pt).toContain('(a" & b)');
+
+    await setLocale('en-US');
+    expect(translateMcpError('url_not_https', 'So URLs https:// sao permitidas...', null)).toContain('https://');
+    expect(translateMcpError('url_bad_port', 'So a porta 443...', '8443')).toContain('443');
+    expect(translateMcpError('url_bad_port', 'So a porta 443...', '8443')).toContain('(8443)');
+
+    // Codigo desconhecido ou ausente: usa o texto de fallback enviado pelo backend.
+    expect(translateMcpError('codigo_futuro', 'Texto bruto do backend', 'x')).toBe('Texto bruto do backend');
+    expect(translateMcpError(null, 'Sem codigo')).toBe('Sem codigo');
+    expect(translateMcpError(undefined, undefined)).toBe('');
+  });
+
+  it('11. Deve manter paridade das chaves mcp_errors entre pt-BR e en-US', () => {
+    const ptKeys = Object.keys((ptBR as any).mcp_errors).sort();
+    const enKeys = Object.keys((enUS as any).mcp_errors).sort();
+    expect(ptKeys.length).toBeGreaterThan(20);
+    expect(enKeys).toEqual(ptKeys);
   });
 });
 
