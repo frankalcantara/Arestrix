@@ -1,0 +1,25 @@
+{
+  "id": "workspace-fetch",
+  "name": "Web & Fetch Gateway (Workspace MCP)",
+  "description": "Gateway HTTP seguro para consultas a APIs externas e documentação online.",
+  "category": "Rede & Integrações",
+  "transport": "stdio",
+  "command": "arestrix-mcp-fetch",
+  "args": [
+    "--timeout",
+    "15"
+  ],
+  "isPreApproved": true,
+  "tools": [
+    {
+      "name": "fetch_url",
+      "description": "Efetua requisição GET com sanitização e timeout",
+      "riskLevel": "safe"
+    },
+    {
+      "name": "inspect_headers",
+      "description": "Consulta cabeçalhos HTTP de um recurso externo",
+      "riskLevel": "safe"
+    }
+  ]
+}

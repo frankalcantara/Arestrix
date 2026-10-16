@@ -1,12 +1,48 @@
 import { Graph } from '../../core/Graph.ts';
 import { ProjectManager } from '../../core/ProjectManager.ts';
 import { globalEventBus } from '../../core/EventBus.ts';
-import { IProjectManifest, IRecentProjectItem } from '../../core/types.ts';
+import {
+  IProjectManifest,
+  IRecentProjectItem,
+  IOpenableEntry,
+  IOpenableListing,
+  IOpenOptions,
+  IOpenResult,
+  OpenableEntryKind
+} from '../../core/types.ts';
 import { hashProjectName } from '../../core/hash.ts';
+import { dirName, joinPath, pathCrumbs } from '../../core/paths.ts';
 import { CodeModal } from '../CodeModal.ts';
 import { GlobalDefaultsModal } from '../GlobalDefaultsModal.ts';
 import { WorkspaceManager } from '../../core/workspace/WorkspaceManager.ts';
 import { t, getLocale, setLocale } from '../../i18n/index.ts';
+
+type OpenPlace = 'recent' | 'computer';
+type OpenRecentTab = 'projects' | 'graphs';
+export type RecencyGroup = 'today' | 'yesterday' | 'last_week' | 'last_month' | 'older';
+
+const RECENCY_ORDER: RecencyGroup[] = ['today', 'yesterday', 'last_week', 'last_month', 'older'];
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const ENTRY_ICONS: Record<OpenableEntryKind, string> = {
+  folder: '📁',
+  project: '🗂️',
+  package: '📦',
+  manifest: '📋',
+  json: '📊'
+};
+
+// Grupo de data da lista de recentes, como no Abrir do Office.
+export function recencyGroup(iso: string | undefined, now: Date = new Date()): RecencyGroup {
+  const time = iso ? new Date(iso).getTime() : NaN;
+  if (Number.isNaN(time)) return 'older';
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  if (time >= startOfToday) return 'today';
+  if (time >= startOfToday - DAY_MS) return 'yesterday';
+  if (time >= startOfToday - 7 * DAY_MS) return 'last_week';
+  if (time >= startOfToday - 30 * DAY_MS) return 'last_month';
+  return 'older';
+}
 
 export class BackstageView {
   private overlay?: HTMLElement;
@@ -22,6 +58,13 @@ export class BackstageView {
   private saveAsSubdirectories: Array<{ name: string; path: string }> = [];
   private saveAsFileName: string = '';
   private saveAsFormat: 'arestrix' | 'json' = 'arestrix';
+
+  // Estado da Tela "Abrir" (Recentes / Este Computador / Procurar)
+  private openPlace: OpenPlace = 'recent';
+  private openRecentTab: OpenRecentTab = 'projects';
+  private openQuery: string = '';
+  private openListing: IOpenableListing | null = null;
+  private openDrives: string[] = [];
 
   constructor(graph: Graph, codeModal: CodeModal, globalDefaultsModal: GlobalDefaultsModal) {
     this.graph = graph;
@@ -76,13 +119,37 @@ export class BackstageView {
     }
   }
 
+  // Este Computador comeca na pasta que contem o projeto ativo, onde costumam estar os projetos irmaos.
+  private async loadComputerListing(): Promise<void> {
+    if (this.openDrives.length === 0) {
+      this.openDrives = await this.projectManager.listDrives();
+    }
+    if (this.openListing?.exists) {
+      this.openListing = await this.projectManager.listOpenableEntries(this.openListing.path);
+      return;
+    }
+    const root = this.projectManager.getCurrentProject().rootPath;
+    const start = root && root !== '.' ? dirName(root) : '';
+    let listing = await this.projectManager.listOpenableEntries(start);
+    if (listing.available && !listing.exists && start) {
+      listing = await this.projectManager.listOpenableEntries('');
+    }
+    this.openListing = listing;
+  }
+
+  private async prepareSection(): Promise<void> {
+    if (this.activeSection === 'saveas') {
+      await this.initSaveAsState();
+    } else if (this.activeSection === 'open' && this.openPlace === 'computer') {
+      await this.loadComputerListing();
+    }
+  }
+
   public async open(section: 'info' | 'new' | 'open' | 'saveas' | 'export' | 'options' = 'info'): Promise<void> {
     this.activeSection = section;
     try {
       await this.projectManager.init(true);
-      if (this.activeSection === 'saveas') {
-        await this.initSaveAsState();
-      }
+      await this.prepareSection();
     } catch (_) {}
     if (this.overlay) {
       this.render();
@@ -207,18 +274,225 @@ export class BackstageView {
                 ${item.lastOpened ? new Date(item.lastOpened).toLocaleString() : t('backstage.recent.recently')}
               </td>
               <td style="text-align: right; padding: 10px 14px;">
-                <select class="recent-project-action-select backstage-project-action-select" data-id="${item.projectId}" data-path="${this.escapeHtml(item.rootPath)}" data-name="${this.escapeHtml(item.name)}">
-                  <option value="" disabled selected>${t('backstage.recent.options')}</option>
-                  <option value="open">📂 ${t('backstage.recent.open')}</option>
-                  <option value="manage">⚙️ ${t('backstage.recent.manage')}</option>
-                  <option value="delete">🗑️ ${t('backstage.recent.delete')}</option>
-                </select>
+                ${this.renderRecentActionsSelect(item)}
               </td>
             </tr>
           `).join('')}
         </tbody>
       </table>
     `;
+  }
+
+  private renderRecentActionsSelect(item: IRecentProjectItem, extraClass = ''): string {
+    return `
+      <select class="recent-project-action-select backstage-project-action-select ${extraClass}" data-id="${this.escapeHtml(item.projectId)}" data-path="${this.escapeHtml(item.rootPath)}" data-name="${this.escapeHtml(item.name)}">
+        <option value="" disabled selected>${t('backstage.recent.options')}</option>
+        <option value="open">📂 ${t('backstage.recent.open')}</option>
+        <option value="manage">⚙️ ${t('backstage.recent.manage')}</option>
+        <option value="delete">🗑️ ${t('backstage.recent.delete')}</option>
+      </select>
+    `;
+  }
+
+  // --- Tela "Abrir" (inspirada no Abrir do Office): locais a esquerda, busca e lista a direita ---
+
+  private renderOpenSection(proj: IProjectManifest, recentList: IRecentProjectItem[]): string {
+    const isComputer = this.openPlace === 'computer';
+    return `
+      <h2 class="backstage-header-title">${t('backstage.open.title')}</h2>
+      <p class="backstage-header-sub">${t('backstage.open.subtitle')}</p>
+
+      <div class="backstage-open-layout">
+        <nav class="backstage-open-places">
+          ${this.renderOpenPlace('recent', '🕘', t('backstage.open.place_recent'))}
+          <div class="backstage-open-places-sep"></div>
+          ${this.renderOpenPlace('computer', '💻', t('backstage.open.place_computer'))}
+          <div class="backstage-open-places-sep"></div>
+          <button type="button" class="backstage-open-place" id="btn-open-browse" title="${t('backstage.open.place_browse_tip')}">
+            <span class="backstage-open-place-icon">📂</span><span>${t('backstage.open.place_browse')}</span>
+          </button>
+          <input type="file" id="backstage-open-file-input" accept=".arestrix,.json" style="display: none;" />
+        </nav>
+
+        <section class="backstage-open-content">
+          <label class="backstage-open-search">
+            <span aria-hidden="true">🔍</span>
+            <input type="search" id="backstage-open-search" value="${this.escapeHtml(this.openQuery)}" placeholder="${isComputer ? t('backstage.open.filter_folder_placeholder') : t('backstage.open.search_placeholder')}" />
+          </label>
+          ${isComputer ? this.renderOpenComputer() : this.renderOpenRecent(proj, recentList)}
+          <div class="backstage-open-empty" id="backstage-open-no-matches" style="display: none;">${t('backstage.open.no_matches')}</div>
+        </section>
+      </div>
+    `;
+  }
+
+  private renderOpenPlace(place: OpenPlace, icon: string, label: string): string {
+    return `
+      <button type="button" class="backstage-open-place ${this.openPlace === place ? 'active' : ''}" data-open-place="${place}">
+        <span class="backstage-open-place-icon">${icon}</span><span>${label}</span>
+      </button>
+    `;
+  }
+
+  private renderOpenListHeader(metaLabel: string): string {
+    return `
+      <div class="backstage-open-list-header">
+        <span>${t('backstage.open.col_name')}</span>
+        <span>${metaLabel}</span>
+      </div>
+    `;
+  }
+
+  private renderOpenRow(attrs: string, icon: string, name: string, detail: string, meta: string, trailing = ''): string {
+    return `
+      <div class="backstage-open-row" role="button" tabindex="0" ${attrs}>
+        <span class="backstage-open-row-icon">${icon}</span>
+        <span class="backstage-open-row-text">
+          <span class="backstage-open-row-name">${name}</span>
+          <span class="backstage-open-row-detail">${detail}</span>
+        </span>
+        <span class="backstage-open-row-meta">${meta}</span>
+        ${trailing}
+      </div>
+    `;
+  }
+
+  private renderOpenRecent(proj: IProjectManifest, recentList: IRecentProjectItem[]): string {
+    const tab = this.openRecentTab;
+    return `
+      <div class="backstage-open-tabs" role="tablist">
+        <button type="button" role="tab" class="backstage-open-tab ${tab === 'projects' ? 'active' : ''}" data-open-tab="projects" aria-selected="${tab === 'projects'}">${t('backstage.open.tab_projects')}</button>
+        <button type="button" role="tab" class="backstage-open-tab ${tab === 'graphs' ? 'active' : ''}" data-open-tab="graphs" aria-selected="${tab === 'graphs'}">${t('backstage.open.tab_graphs')}</button>
+      </div>
+      ${tab === 'projects' ? this.renderOpenRecentProjects(recentList) : this.renderOpenGraphs(proj)}
+    `;
+  }
+
+  private renderOpenRecentProjects(recentList: IRecentProjectItem[]): string {
+    if (!recentList || recentList.length === 0) {
+      return `<div class="backstage-open-empty">${t('backstage.recent.empty')}</div>`;
+    }
+    const now = new Date();
+    const groups = new Map<RecencyGroup, IRecentProjectItem[]>();
+    for (const item of recentList) {
+      const group = recencyGroup(item.lastOpened, now);
+      groups.set(group, [...(groups.get(group) || []), item]);
+    }
+    return `
+      ${this.renderOpenListHeader(t('backstage.open.col_last_opened'))}
+      <div class="backstage-open-list">
+        ${RECENCY_ORDER.filter(g => groups.has(g)).map(g => `
+          <div class="backstage-open-group">
+            <div class="backstage-open-group-title">${t(`backstage.open.group_${g}`)}</div>
+            ${groups.get(g)!.map(item => this.renderOpenRow(
+              `data-open-action="recent" data-id="${this.escapeHtml(item.projectId)}" data-path="${this.escapeHtml(item.rootPath)}" data-name="${this.escapeHtml(item.name)}" data-search="${this.escapeHtml(`${item.name} ${item.rootPath}`.toLowerCase())}"`,
+              ENTRY_ICONS.project,
+              this.escapeHtml(item.name),
+              this.escapeHtml(item.rootPath),
+              item.lastOpened ? this.formatDateTime(item.lastOpened) : t('backstage.recent.recently'),
+              this.renderRecentActionsSelect(item, 'backstage-open-row-actions')
+            )).join('')}
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  private renderOpenGraphs(proj: IProjectManifest): string {
+    const pipelines = proj.pipelines || [];
+    if (pipelines.length === 0) {
+      return `<div class="backstage-open-empty">${t('backstage.open.empty_graphs')}</div>`;
+    }
+    return `
+      ${this.renderOpenListHeader(t('backstage.open.col_type'))}
+      <div class="backstage-open-list">
+        <div class="backstage-open-group">
+          <div class="backstage-open-group-title">${t('backstage.open.graphs_group', { name: this.escapeHtml(proj.name) })}</div>
+          ${pipelines.map(p => this.renderOpenRow(
+            `data-open-action="pipeline" data-pipeline-file="${this.escapeHtml(p.file)}" data-search="${this.escapeHtml(`${p.name} ${p.file}`.toLowerCase())}"`,
+            ENTRY_ICONS.json,
+            this.escapeHtml(p.name),
+            this.escapeHtml(joinPath(proj.rootPath, p.file)),
+            p.isPrimary
+              ? `<span class="badge-inherited" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700;">${t('backstage.open.badge_primary')}</span>`
+              : t('backstage.open.badge_subflow')
+          )).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderOpenComputer(): string {
+    const listing = this.openListing;
+    if (!listing || !listing.available) {
+      return `<div class="backstage-open-empty">${t('backstage.open.desktop_only')}</div>`;
+    }
+
+    const drives = this.openDrives.map(drive => {
+      const clean = drive.replace(/\\/g, '/');
+      const active = listing.path.toUpperCase().startsWith(clean.replace(/\/$/, '').toUpperCase());
+      return `<button type="button" class="backstage-open-drive ${active ? 'active' : ''}" data-open-navigate="${this.escapeHtml(clean)}">💾 ${this.escapeHtml(drive)}</button>`;
+    }).join('');
+    const crumbs = pathCrumbs(listing.path).map((c, i) => `
+      ${i > 0 ? '<span class="backstage-open-crumb-sep">›</span>' : ''}
+      <button type="button" class="backstage-open-crumb" data-open-navigate="${this.escapeHtml(c.path)}">${this.escapeHtml(c.label)}</button>
+    `).join('');
+
+    let body: string;
+    if (!listing.exists) {
+      body = `<div class="backstage-open-empty">${t('backstage.open.folder_missing', { path: this.escapeHtml(listing.path) })}</div>`;
+    } else if (listing.entries.length === 0) {
+      body = `<div class="backstage-open-empty">${t('backstage.open.empty_folder')}</div>`;
+    } else {
+      body = `
+        ${this.renderOpenListHeader(t('backstage.open.col_modified'))}
+        <div class="backstage-open-list">
+          ${listing.entries.map(entry => this.renderDiskEntryRow(entry)).join('')}
+        </div>
+        ${listing.truncated ? `<div class="backstage-open-note">${t('backstage.open.truncated', { count: listing.entries.length })}</div>` : ''}
+      `;
+    }
+
+    return `
+      <div class="backstage-open-pathbar">
+        <div class="backstage-open-drives">
+          <span class="backstage-open-drives-label">${t('backstage.open.drives_label')}</span>
+          ${drives}
+        </div>
+        <div class="backstage-open-location">
+          <button type="button" class="backstage-open-nav-btn" id="btn-open-up" title="${t('backstage.open.up_tip')}" ${listing.parent ? '' : 'disabled'}>⬆ ${t('backstage.open.btn_up')}</button>
+          <button type="button" class="backstage-open-nav-btn" id="btn-open-refresh">🔄 ${t('backstage.open.btn_refresh')}</button>
+          <nav class="backstage-open-breadcrumb">${crumbs}</nav>
+        </div>
+      </div>
+      ${body}
+    `;
+  }
+
+  // Pasta comum navega; projeto, pacote, manifesto e JSON abrem. Pasta de projeto tem tambem o botao de entrar.
+  private renderDiskEntryRow(entry: IOpenableEntry): string {
+    const action = entry.kind === 'folder' ? 'navigate' : 'disk';
+    const enter = entry.kind === 'project'
+      ? `<button type="button" class="backstage-open-enter" data-open-navigate="${this.escapeHtml(entry.path)}" title="${t('backstage.open.enter_folder_tip')}">📁 ›</button>`
+      : '';
+    return this.renderOpenRow(
+      `data-open-action="${action}" data-path="${this.escapeHtml(entry.path)}" data-search="${this.escapeHtml(entry.name.toLowerCase())}"`,
+      ENTRY_ICONS[entry.kind] || ENTRY_ICONS.json,
+      this.escapeHtml(entry.name),
+      t(`backstage.open.kind_${entry.kind}`),
+      entry.modified ? this.formatDateTime(entry.modified) : '',
+      enter
+    );
+  }
+
+  private formatDateTime(value: string | number): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    try {
+      return date.toLocaleString(getLocale(), { dateStyle: 'short', timeStyle: 'short' });
+    } catch (_) {
+      return date.toLocaleString();
+    }
   }
 
   private renderSectionContent(proj: IProjectManifest, recentList: IRecentProjectItem[]): string {
@@ -328,64 +602,7 @@ export class BackstageView {
         `;
 
       case 'open':
-        return `
-          <h2 class="backstage-header-title">${t('backstage.open.recent_open_title')}</h2>
-          <p class="backstage-header-sub">${t('backstage.open.recent_open_subtitle')}</p>
-
-          <!-- 1. LISTA DE GRAFOS RECENTES DO PROJETO ATIVO -->
-          <div style="margin-bottom: 28px;">
-            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📊 ${t('backstage.open.graph_recent_title')} <span style="font-size: 11px; font-weight: normal; color: #0f6cbd;">${t('backstage.open.graph_recent_badge')}</span></h3>
-            <p class="backstage-header-sub" style="margin-bottom: 12px;">${t('backstage.open.graph_available_in', { name: this.escapeHtml(proj.name) })}</p>
-
-            ${(proj.pipelines && proj.pipelines.length > 0) ? `
-              <table class="backstage-mru-table" style="width: 100%; border-collapse: collapse;">
-                <thead>
-                  <tr>
-                    <th style="text-align: left; padding: 10px 14px;">${t('backstage.open.th_graph_name')}</th>
-                    <th style="text-align: left; padding: 10px 14px;">${t('backstage.open.th_file')}</th>
-                    <th style="text-align: left; padding: 10px 14px;">${t('backstage.open.th_type')}</th>
-                    <th style="text-align: left; padding: 10px 14px;">${t('backstage.open.th_desc')}</th>
-                    <th style="text-align: right; padding: 10px 14px;">${t('backstage.open.th_action')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${proj.pipelines.map(p => `
-                    <tr>
-                      <td style="padding: 10px 14px;">
-                        <strong style="color: #0f172a; font-size: 13px;">${this.escapeHtml(p.name)}</strong>
-                      </td>
-                      <td style="padding: 10px 14px;">
-                        <code style="color: #475569; font-size: 11.5px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">${this.escapeHtml(p.file)}</code>
-                      </td>
-                      <td style="padding: 10px 14px;">
-                        ${p.isPrimary ? `<span class="badge-inherited" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700;">${t('backstage.open.badge_primary')}</span>` : `<span style="color: #64748b; font-size: 11px;">${t('backstage.open.badge_subflow')}</span>`}
-                      </td>
-                      <td style="padding: 10px 14px; font-size: 12px; color: #64748b;">
-                        ${this.escapeHtml(p.description || 'Pipeline de execução')}
-                      </td>
-                      <td style="text-align: right; padding: 10px 14px;">
-                        <button class="tool-btn btn-secondary btn-pipeline-load" data-file="${this.escapeHtml(p.file)}" style="padding: 6px 14px; font-size: 12px; font-weight: 700; white-space: nowrap; height: 32px; display: inline-flex; align-items: center;">
-                          ${t('backstage.open.btn_load_canvas')}
-                        </button>
-                      </td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            ` : `
-              <div style="padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; color: #64748b; font-size: 13px;">
-                ${t('backstage.open.empty_graphs')}
-              </div>
-            `}
-          </div>
-
-          <!-- 2. LISTA DE PROJETOS RECENTES (DEPOIS DA LISTA DE GRAFOS) -->
-          <div>
-            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📂 ${t('backstage.open.recents_title')}</h3>
-            <p class="backstage-header-sub" style="margin-bottom: 12px;">${t('backstage.open.recents_subtitle')}</p>
-            ${this.renderRecentProjectsTable(recentList)}
-          </div>
-        `;
+        return this.renderOpenSection(proj, recentList);
 
       case 'saveas':
         return `
@@ -712,9 +929,7 @@ export class BackstageView {
           this.activeSection = sec;
           try {
             await this.projectManager.init(true);
-            if (this.activeSection === 'saveas') {
-              await this.initSaveAsState();
-            }
+            await this.prepareSection();
           } catch (_) {}
           this.render();
         }
@@ -971,11 +1186,7 @@ export class BackstageView {
         select.value = '';
 
         if (action === 'open') {
-          if (pTarget) {
-            await this.projectManager.loadProject(pTarget, this.graph);
-            if (typeof alert !== 'undefined') alert(t('backstage.alerts.project_loaded', { name: pName }));
-            this.close();
-          }
+          await this.openRecentProject(pTarget, pName);
         } else if (action === 'manage') {
           if (pTarget) {
             const cur = this.projectManager.getCurrentProject();
@@ -999,14 +1210,9 @@ export class BackstageView {
       });
     });
 
-    // Carregar grafo/pipeline recente do workspace
-    this.overlay.querySelectorAll<HTMLButtonElement>('.btn-pipeline-load').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        await this.projectManager.loadPipeline(this.graph);
-        if (typeof alert !== 'undefined') alert(t('backstage.alerts.canvas_graph_loaded'));
-        this.close();
-      });
-    });
+    if (this.activeSection === 'open') {
+      this.bindOpenSectionEvents();
+    }
 
     // Exportações (Abre diretamente sobre a BackstageView)
     this.overlay.querySelector('#btn-backstage-open-codemodal')?.addEventListener('click', () => {
@@ -1028,6 +1234,189 @@ export class BackstageView {
     this.overlay.querySelector('#btn-quick-clean-cache')?.addEventListener('click', () => {
       if (typeof alert !== 'undefined') alert(t('backstage.alerts.cache_cleared'));
     });
+  }
+
+  private bindOpenSectionEvents(): void {
+    const overlay = this.overlay;
+    if (!overlay) return;
+
+    overlay.querySelectorAll<HTMLElement>('[data-open-place]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const place: OpenPlace = btn.dataset.openPlace === 'computer' ? 'computer' : 'recent';
+        if (place === this.openPlace) return;
+        this.openPlace = place;
+        this.openQuery = '';
+        if (place === 'computer') {
+          await this.loadComputerListing();
+        }
+        this.render();
+      });
+    });
+
+    overlay.querySelectorAll<HTMLElement>('[data-open-tab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.openRecentTab = btn.dataset.openTab === 'graphs' ? 'graphs' : 'projects';
+        this.render();
+      });
+    });
+
+    const search = overlay.querySelector('#backstage-open-search') as HTMLInputElement | null;
+    search?.addEventListener('input', () => {
+      this.openQuery = search.value;
+      this.applyOpenFilter();
+    });
+    this.applyOpenFilter();
+
+    // Unidades, migalhas do caminho e o botao de entrar numa pasta de projeto
+    overlay.querySelectorAll<HTMLElement>('[data-open-navigate]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this.navigateComputer(btn.dataset.openNavigate || '');
+      });
+    });
+    overlay.querySelector('#btn-open-up')?.addEventListener('click', async () => {
+      if (this.openListing?.parent) await this.navigateComputer(this.openListing.parent);
+    });
+    overlay.querySelector('#btn-open-refresh')?.addEventListener('click', async () => {
+      await this.navigateComputer(this.openListing?.path || '');
+    });
+
+    overlay.querySelectorAll<HTMLElement>('.backstage-open-row').forEach(row => {
+      row.addEventListener('keydown', (e: KeyboardEvent) => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === row) {
+          e.preventDefault();
+          row.click();
+        }
+      });
+      row.addEventListener('click', async () => {
+        const path = row.dataset.path || '';
+        switch (row.dataset.openAction) {
+          case 'recent':
+            await this.openRecentProject(path || row.dataset.id || '', row.dataset.name || '');
+            break;
+          case 'pipeline':
+            await this.projectManager.loadPipeline(this.graph);
+            this.notify(t('backstage.alerts.canvas_graph_loaded'));
+            this.close();
+            break;
+          case 'navigate':
+            await this.navigateComputer(path);
+            break;
+          case 'disk':
+            await this.openPathFromDisk(path);
+            break;
+        }
+      });
+    });
+    // O seletor de acoes dentro da linha nao abre o projeto ao ser clicado.
+    overlay.querySelectorAll<HTMLElement>('.backstage-open-row select').forEach(select => {
+      select.addEventListener('click', e => e.stopPropagation());
+    });
+
+    overlay.querySelector('#btn-open-browse')?.addEventListener('click', () => this.browseForFile());
+    const fileInput = overlay.querySelector('#backstage-open-file-input') as HTMLInputElement | null;
+    fileInput?.addEventListener('change', async () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      fileInput.value = '';
+      const res = await this.projectManager.openFromBytes(bytes, file.name, this.graph, this.openOptions());
+      this.reportOpenResult(res, file.name);
+    });
+  }
+
+  // Filtra as linhas visiveis sem re-renderizar, para nao tirar o foco da caixa de busca.
+  private applyOpenFilter(): void {
+    const overlay = this.overlay;
+    if (!overlay) return;
+    const query = this.openQuery.trim().toLowerCase();
+    const rows = Array.from(overlay.querySelectorAll<HTMLElement>('.backstage-open-row'));
+    let visible = 0;
+    rows.forEach(row => {
+      const match = !query || (row.dataset.search || '').includes(query);
+      row.style.display = match ? '' : 'none';
+      if (match) visible++;
+    });
+    overlay.querySelectorAll<HTMLElement>('.backstage-open-group').forEach(group => {
+      const anyVisible = Array.from(group.querySelectorAll<HTMLElement>('.backstage-open-row')).some(r => r.style.display !== 'none');
+      group.style.display = anyVisible ? '' : 'none';
+    });
+    const noMatches = overlay.querySelector('#backstage-open-no-matches') as HTMLElement | null;
+    if (noMatches) {
+      noMatches.style.display = query && rows.length > 0 && visible === 0 ? '' : 'none';
+    }
+  }
+
+  private async navigateComputer(path: string): Promise<void> {
+    this.openQuery = '';
+    this.openListing = await this.projectManager.listOpenableEntries(path);
+    this.render();
+  }
+
+  private async browseForFile(): Promise<void> {
+    if (!this.projectManager.hasNativeBridge()) {
+      (this.overlay?.querySelector('#backstage-open-file-input') as HTMLInputElement | null)?.click();
+      return;
+    }
+    const picked = await this.projectManager.pickFile({
+      title: t('backstage.open.picker_title'),
+      filters: [
+        { name: `${t('backstage.open.filter_all')} (*.arestrix, *.json)`, pattern: '*.arestrix;*.json' },
+        { name: `${t('backstage.open.filter_package')} (*.arestrix)`, pattern: '*.arestrix' },
+        { name: `${t('backstage.open.filter_json')} (*.json)`, pattern: '*.json' }
+      ],
+      initialDir: this.openListing?.exists ? this.openListing.path : undefined
+    });
+    if (picked) {
+      await this.openPathFromDisk(picked);
+    }
+  }
+
+  private async openRecentProject(target: string, name: string): Promise<void> {
+    if (!target) return;
+    const ok = await this.projectManager.loadProject(target, this.graph);
+    if (!ok) {
+      this.notify(t('backstage.open.alert_open_fail', { path: target }));
+      return;
+    }
+    this.notify(t('backstage.alerts.project_loaded', { name: name || this.projectManager.getCurrentProject().name }));
+    this.close();
+  }
+
+  private async openPathFromDisk(path: string): Promise<void> {
+    const res = await this.projectManager.openFromDisk(path, this.graph, this.openOptions());
+    this.reportOpenResult(res, path);
+  }
+
+  private openOptions(): IOpenOptions {
+    return {
+      confirmLooseGraph: (fileName: string) => typeof confirm !== 'undefined' && confirm(t('backstage.open.confirm_graph_import', {
+        name: fileName,
+        project: this.projectManager.getCurrentProject().name
+      }))
+    };
+  }
+
+  private reportOpenResult(res: IOpenResult, path: string): void {
+    if (res.ok) {
+      if (res.kind === 'package') {
+        this.notify(t('backstage.open.alert_package_extracted', { path: res.path }));
+      } else if (res.kind === 'graph') {
+        this.notify(t('backstage.alerts.canvas_graph_loaded'));
+      } else {
+        this.notify(t('backstage.alerts.project_loaded', { name: this.projectManager.getCurrentProject().name }));
+      }
+      this.close();
+      return;
+    }
+    if (res.reason === 'cancelled') return;
+    this.notify(res.reason === 'unsupported'
+      ? t('backstage.open.alert_manifest_desktop_only')
+      : t('backstage.open.alert_open_fail', { path }));
+  }
+
+  private notify(message: string): void {
+    if (typeof alert !== 'undefined') alert(message);
   }
 
   private escapeHtml(str?: string): string {

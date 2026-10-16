@@ -1,0 +1,60 @@
+{
+  "createdAt": "2026-10-13T15:58:27.171Z",
+  "database": {
+    "filePath": "storage/database.sqlite",
+    "type": "sqlite",
+    "url": ""
+  },
+  "description": "Apenas para teste do tutorial",
+  "environment": {},
+  "globalDefaults": {
+    "codeMode": {
+      "allowedTools": [
+        "write",
+        "edit",
+        "read",
+        "bash",
+        "validate_svg"
+      ],
+      "customScripts": []
+    },
+    "memory": {
+      "allowedKeys": [],
+      "domains": [],
+      "enabled": false,
+      "persistent": false,
+      "readBlackboard": false,
+      "recordLessons": false,
+      "semanticLessons": false,
+      "writeBlackboard": false
+    },
+    "model": {
+      "model": "deepseek-flash",
+      "promptTemplate": "",
+      "provider": "deepseek",
+      "skillPath": ""
+    },
+    "sandbox": {
+      "isolationLevel": "container",
+      "maxMemoryMB": 512,
+      "network": "egress_llm_only",
+      "readOnlyMounts": [],
+      "readWriteMounts": [],
+      "timeoutSeconds": 300
+    }
+  },
+  "name": "testeTutorial",
+  "pipelines": [
+    {
+      "description": "",
+      "file": "pipelines/main.json",
+      "id": "main",
+      "isPrimary": true,
+      "name": "Pipeline Principal"
+    }
+  ],
+  "projectId": "5ffdb27f8a221d1701e5e46fe62ebc342dace51ffffc5244428cb9d8c5ff84f2",
+  "rootPath": "testeTutoria",
+  "updatedAt": "2026-10-16T14:48:37Z",
+  "version": "1.0.0"
+}

@@ -9,6 +9,7 @@
 #include "memory/SemanticMemoryEngine.hpp"
 #include "mcp/McpRegistry.hpp"
 #include "project/ProjectManager.hpp"
+#include "project/OpenableFiles.hpp"
 #include "pi/PiProjectScanner.hpp"
 #include "build/BuildService.hpp"
 #include "cli/Cli.hpp"
@@ -823,6 +824,36 @@ void ui_pick_folder(webui::window::event* e) {
     e->return_string(taskforge::platform::pickFolderDialog("Selecione a Pasta do Projeto"));
 }
 
+// Wrapper JS -> C++ (Selecionar arquivo com o dialogo nativo).
+// Payload: {"title", "filters": [{"name", "pattern": "*.a;*.b"}], "initialDir"}; textos ja traduzidos pela interface.
+void ui_pick_file(webui::window::event* e) {
+    try {
+        auto j = taskforge::jsonutil::parse(e->get_string());
+        std::vector<taskforge::platform::FileFilter> filters;
+        if (j.contains("filters") && j["filters"].is_array()) {
+            for (const auto& f : j["filters"]) {
+                filters.push_back({f.value("name", std::string()), f.value("pattern", std::string())});
+            }
+        }
+        e->return_string(taskforge::platform::pickFileDialog(j.value("title", std::string()), filters,
+                                                             j.value("initialDir", std::string())));
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_pick_file: " << ex.what() << "\n";
+        e->return_string("");
+    }
+}
+
+// Wrapper JS -> C++ (Tela Abrir: subpastas, projetos, pacotes .arestrix e grafos .json de uma pasta).
+// Payload: caminho em UTF-8 (vazio = diretorio atual).
+void ui_list_openable_entries(webui::window::event* e) {
+    try {
+        e->return_string(taskforge::project::listOpenableEntries(taskforge::project::pathFromUtf8(e->get_string())).dump());
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_list_openable_entries: " << ex.what() << "\n";
+        e->return_string("{\"path\":\"\",\"parent\":\"\",\"exists\":false,\"truncated\":false,\"entries\":[]}");
+    }
+}
+
 // Helper Base64 para C++
 namespace {
 static const std::string B64_CHARS = 
@@ -944,7 +975,7 @@ void ui_load_arestrix_file(webui::window::event* e) {
             filePath = taskforge::jsonutil::parse(payload).value("filePath", "");
         }
 
-        std::filesystem::path p(filePath);
+        std::filesystem::path p = taskforge::project::pathFromUtf8(filePath);
         std::string ext = p.extension().string();
         if (ext != ".arestrix" && ext != ".json") {
             e->return_string("{\"success\":false,\"error\":\"Extensao nao permitida\"}");
@@ -965,7 +996,7 @@ void ui_load_arestrix_file(webui::window::event* e) {
         resp["base64"] = base64_encode_bytes(bytes);
         resp["isBase64"] = true;
         resp["size"] = bytes.size();
-        resp["filePath"] = p.string();
+        resp["filePath"] = taskforge::project::pathToUtf8(p);
         e->return_string(resp.dump());
     } catch (const std::exception& ex) {
         std::cerr << "[C++ Erro] ui_load_arestrix_file: " << ex.what() << "\n";
@@ -1270,6 +1301,8 @@ int main(int argc, char** argv) {
     win.bind("get_env_var", ui_get_env_var);
     win.bind("set_env_var", ui_set_env_var);
     win.bind("pick_folder", ui_pick_folder);
+    win.bind("pick_file", ui_pick_file);
+    win.bind("list_openable_entries", ui_list_openable_entries);
     win.bind("get_current_working_dir", ui_get_current_working_dir);
     win.bind("list_drives", ui_list_drives);
     win.bind("list_subdirectories", ui_list_subdirectories);

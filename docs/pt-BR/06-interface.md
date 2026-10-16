@@ -59,8 +59,21 @@ subfluxos e módulos), as skills do workspace e os pipelines. Pressione `Ctrl+K`
 ## Backstage
 
 Aberta por **Arquivo**. Traz as informações do projeto (dois cartões: o projeto ativo e o workspace
-físico), a tela de abrir/recentes, o *Salvar Como* com navegação por pastas e unidades, e as **Opções**
+físico), a tela **Abrir**, o *Salvar Como* com navegação por pastas e unidades, e as **Opções**
 (padrões do Studio, governança do workspace e o seletor de **idioma**).
+
+A tela **Abrir** segue o Abrir do Office. À esquerda ficam os locais:
+
+- **Recentes**: busca e duas abas, **Projetos** (agrupados por Hoje, Ontem, Últimos 7 dias, Últimos 30
+  dias e Mais antigos) e **Grafos** (os pipelines do projeto atual).
+- **Este Computador**: navega pelas unidades e pastas. Mostra subpastas, pastas de projeto
+  (com `arestrix.project.json`), pacotes `.arestrix` e arquivos `.json`. Clicar numa pasta de projeto
+  abre o projeto; o botão ao lado entra na pasta sem abri-lo.
+- **Procurar**: abre o seletor de arquivos do sistema.
+
+Um pacote `.arestrix` é extraído numa pasta nova ao lado dele (`nome`, `nome (2)`, ...) e aberto como
+projeto. Um grafo `.json` dentro de `<projeto>/pipelines` abre o projeto inteiro; um grafo avulso só
+substitui o canvas do projeto atual depois de confirmação.
 
 ## Canvas
 

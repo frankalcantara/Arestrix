@@ -1,0 +1,72 @@
+CONTINUE AQUI (anotado em 2026-10-13)
+=====================================
+
+ONDE PARAMOS
+------------
+TUDO COMMITADO E ENVIADO (branch main no GitHub):
+  - 3fa5af6  ferramentas nativas + SQLite + telas (seletor de ferramentas, hosts HTTP) + leitura de pipes sem sleep
+  - 7b2dcde  protecao contra DNS rebinding nas ferramentas nativas de HTTP (+ docs en/pt-BR e licenca do SQLite)
+Pendente no working tree, NAO e desta frente e fica de fora dos commits: arestrix.project.json, pipelines/main.json
+(esvaziado por bug antigo do autosave; "git checkout pipelines/main.json" restaura), testeTutoria/.
+Este arquivo (continue-aqui.mcp) esta sem versionar, de proposito.
+
+Obs.: o gancho pre-commit (check-secrets) deu falso positivo duas vezes em URLs de teste com usuario:senha@; a solucao foi
+montar o texto em partes no teste. Se acontecer de novo, fazer o mesmo (nao enfraquecer o verificador).
+
+O QUE FOI FEITO NESTA ETAPA (DNS)
+---------------------------------
+- Novo CppCore/src/rt/NetGuard.{hpp,cpp}: isPublicAddress (v4/v6, inclui ::ffff:a.b.c.d, NAT64, 6to4, Teredo, metadados
+  169.254.169.254), resolveHost (getaddrinfo), hostOfUrl, checkHostIsPublic, setResolverForTest (resolvedor falso p/ testes).
+- rt/Http.hpp: HttpRequest.requirePublicPeer e HttpResponse.peer. NativeHttp liga requirePublicPeer = true.
+- Três camadas: (1) resolve antes e recusa se QUALQUER endereço for interno; (2) Linux/macOS: fixa a conexão no IP validado
+  (curl "resolve = host:443:IP"); (3) Windows: envia só os cabeçalhos, confere WINHTTP_OPTION_CONNECTION_INFO e só então
+  envia o corpo (WinHttpWriteData). Com proxy do sistema (Windows) vale só a camada 1.
+- CMake: NetGuard.cpp no arestrix_core, ws2_32 no link; TaskflowGenerator.cpp: ws2_32.lib na linha do cl.exe.
+- Testes novos: net_guard_classifies_addresses_and_blocks_dns_rebinding e native_http_reaches_a_real_public_host_when_online.
+- Docs (en + pt-BR): cap. 05 (parágrafo do DNS + limite do proxy; removida a "Limitação" antiga do modal de ferramentas),
+  cap. 01, cap. 07, tabelas de agradecimentos dos READMEs (SQLite). third_party/sqlite/LICENSE.md + verificador de licenças
+  aceita "blessing" (domínio público).
+- Resultado: 590/590 C++, 239 frontend, e2e dos exemplos OK, check-secrets limpo, licenças conformes.
+
+LIMITES / NÃO VERIFICADO (dizer ao Frank)
+-----------------------------------------
+- Caminho que RECUSA uma conexão que foi para endereço interno (Windows) não foi exercitado: falta um servidor TLS interno
+  com certificado válido para simular.
+- A fixação do IP com curl --resolve (Linux/macOS) e o formato IPv6 com colchetes NÃO foram testados (só Windows nesta máquina);
+  o código de espera de processos com waitpid em thread (POSIX) também só foi compilado no Windows (não testado em Linux/macOS).
+- Windows com proxy: o endereço conectado é o do proxy, então só vale a checagem anterior à conexão.
+- Os cabeçalhos (incluindo o token do bearer_env) já foram enviados quando o endereço conectado é conferido; o token só vai
+  para um host que o usuário autorizou.
+- Ainda não há teste com modelo real (só LLM falso). Servidores MCP externos stdio rodam fora do sandbox.
+- Único sleep_for que sobrou: recuo de nova tentativa após HTTP 429/5xx em rt/Agent.cpp (espera pedida pelo servidor, não polling).
+  Oferecer torná-la cancelável.
+
+PRÓXIMO PASSO: CATEGORIA 2 (BLENDER, depois CHROME)
+---------------------------------------------------
+Plano proposto (ainda NÃO iniciado, perguntar antes):
+- Pergunta ao Frank: usar o blender-mcp existente (Python + addon do Blender com socket TCP 9876) ou um protocolo próprio?
+- Ponte TCP em C++ para o addon do Blender, com sessão persistente como a do cliente MCP (uma sessão por servidor, recriada se
+  morrer, chamada que falhou nunca é repetida). Provavelmente só localhost (esse é um caso em que o alvo É local: não pode passar
+  pelo NetGuard/isPrivateHost das ferramentas de HTTP; precisa de política própria e explícita no projeto).
+- Chrome: CDP via WebSocket (civetweb talvez sirva como cliente; NÃO confirmado).
+- Depois: servidores remotos HTTP de fornecedores (GitHub/Figma/Atlassian/Context7), catálogos de repositórios Git para MCPs e
+  skills com fluxo de aprovação/verificação (scanner externo a escolher, ex.: MCP-Scan), instalador automático/simples de
+  Node e Python para servidores externos, skills pelo mesmo caminho de catálogo/aprovação.
+
+REGRAS DO FRANK (preservar)
+---------------------------
+- Resposta em português; docs em en + pt-BR; terminar com resumo claro, limitações honestas e pergunta sobre commit.
+- Segredos só em variáveis de ambiente; projeto só cita o NOME da variável. Modelo padrão do Studio só em variáveis de ambiente.
+- Statechart/máquina de estados: ADIADO de propósito, não propor.
+- Estúdio fácil para não programadores. Texto nunca com sombra/glow.
+- Sem sleep/polling onde der para evitar (usar espera bloqueante com variável de condição).
+- Só commitar/push quando pedir.
+
+DICAS DE AMBIENTE
+-----------------
+- Build C++: PowerShell -> & cmd.exe /c "<scratchpad>\build.bat" (vcvars+cmake+ninja); testes: build\arestrix_tests.exe.
+- e2e dos exemplos e builds de programas gerados: rodar pelo PowerShell (no Bash o vcvars falha com "\Windows foi inesperado").
+  Python: C:\Python311\python.exe. Frontend: npx vitest run / npx tsc --noEmit / npm run build.
+- Heredocs com caracteres especiais quebram no Bash tool: usar a ferramenta Write para scripts; arquivos do repo têm CRLF
+  (normalizar \r\n nas edições); no Python via Bash usar caminho Windows (r'C:\...'), não /c/....
+- O scratchpad da sessão pode não existir amanhã: recriar build.bat se preciso (vcvars64 + cmake -S . -B build -G Ninja + cmake --build build).

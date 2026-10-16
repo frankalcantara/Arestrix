@@ -36,6 +36,7 @@ add_library(arestrix_core STATIC
   ${SRC}/sandbox/PipelineResumeEngine.cpp
   ${SRC}/memory/AgentBlackboard.cpp
   ${SRC}/memory/SemanticMemoryEngine.cpp
+  ${SRC}/project/OpenableFiles.cpp
   ${SRC}/search/ProjectSearch.cpp
   ${SRC}/search/Synonyms.cpp
   ${SRC}/search/SynonymAgent.cpp

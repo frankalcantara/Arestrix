@@ -1,7 +1,37 @@
 import { EventBus, globalEventBus } from './EventBus.ts';
-import { IProjectManifest, IRecentProjectItem, IArestrixBundle } from './types.ts';
+import {
+  IProjectManifest,
+  IRecentProjectItem,
+  IArestrixBundle,
+  IGraphSchema,
+  IOpenableListing,
+  IFilePickFilter,
+  IOpenOptions,
+  IOpenResult
+} from './types.ts';
 import { Graph } from './Graph.ts';
 import { hashProjectName } from './hash.ts';
+import { baseName, dirName, joinPath, stripExtension } from './paths.ts';
+
+const PROJECT_MANIFEST_NAMES = ['arestrix.project.json', 'taskforge.project.json'];
+
+export type OpenedFileContent =
+  | { type: 'package'; bundle: IArestrixBundle }
+  | { type: 'manifest' }
+  | { type: 'graph'; schema: IGraphSchema }
+  | { type: 'unknown' };
+
+// Identifica pelo conteudo o que um arquivo escolhido na tela Abrir contem (pacote gzip ou JSON).
+export async function classifyOpenedFile(bytes: Uint8Array): Promise<OpenedFileContent> {
+  try {
+    const isGzip = bytes.length > 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+    const parsed = JSON.parse(isGzip ? await decompressGzip(bytes) : new TextDecoder().decode(bytes));
+    if (parsed && parsed.format === 'arestrix-package' && parsed.manifest) return { type: 'package', bundle: parsed };
+    if (parsed && typeof parsed.projectId === 'string' && Array.isArray(parsed.pipelines)) return { type: 'manifest' };
+    if (parsed && Array.isArray(parsed.nodes)) return { type: 'graph', schema: parsed };
+  } catch (_) {}
+  return { type: 'unknown' };
+}
 
 // Utilitários de Compressão e Base64 para Pacotes .arestrix
 export async function compressGzip(data: string | Uint8Array): Promise<Uint8Array> {
@@ -731,6 +761,157 @@ export class ProjectManager {
       }
     } catch (_) {}
     return [];
+  }
+
+  // --- Tela Abrir: navegar no disco e abrir projetos, pacotes e grafos ---
+
+  private webuiBridge(): any | null {
+    const webui = typeof window !== 'undefined' ? (window as any).webui : undefined;
+    return webui && typeof webui.call === 'function' ? webui : null;
+  }
+
+  public hasNativeBridge(): boolean {
+    return this.webuiBridge() !== null;
+  }
+
+  public async listOpenableEntries(dirPath: string): Promise<IOpenableListing> {
+    const listing: IOpenableListing = { path: dirPath, parent: '', exists: false, truncated: false, entries: [], available: false };
+    const webui = this.webuiBridge();
+    if (!webui) return listing;
+    listing.available = true;
+    try {
+      const raw = await webui.call('list_openable_entries', dirPath);
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (parsed && Array.isArray(parsed.entries)) {
+        return {
+          path: String(parsed.path || dirPath),
+          parent: String(parsed.parent || ''),
+          exists: Boolean(parsed.exists),
+          truncated: Boolean(parsed.truncated),
+          entries: parsed.entries,
+          available: true
+        };
+      }
+    } catch (_) {}
+    return listing;
+  }
+
+  // Seletor de arquivo nativo; vazio se cancelado ou fora do aplicativo desktop.
+  public async pickFile(request: { title: string; filters: IFilePickFilter[]; initialDir?: string }): Promise<string> {
+    const webui = this.webuiBridge();
+    if (!webui) return '';
+    try {
+      const picked = await webui.call('pick_file', JSON.stringify(request));
+      return typeof picked === 'string' ? picked.trim() : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  private async readDiskFile(filePath: string): Promise<Uint8Array | null> {
+    const webui = this.webuiBridge();
+    if (!webui) return null;
+    try {
+      const raw = await webui.call('load_arestrix_file', JSON.stringify({ filePath }));
+      const resp = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (resp && resp.success && typeof resp.base64 === 'string') {
+        return base64ToUint8Array(resp.base64);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /**
+   * Abre o que foi escolhido no disco: pasta de projeto, manifesto, pacote .arestrix ou grafo .json.
+   * Um grafo dentro de <projeto>/pipelines abre o projeto inteiro; um grafo avulso so substitui o
+   * canvas do projeto atual se `options.confirmLooseGraph` aceitar.
+   */
+  public async openFromDisk(path: string, graph: Graph, options: IOpenOptions = {}): Promise<IOpenResult> {
+    const name = baseName(path);
+    const lower = name.toLowerCase();
+    const isFile = lower.endsWith('.arestrix') || lower.endsWith('.json');
+    if (!isFile || PROJECT_MANIFEST_NAMES.includes(lower)) {
+      return this.openProjectAt(path, graph);
+    }
+
+    const bytes = await this.readDiskFile(path);
+    if (!bytes) return { ok: false, reason: 'invalid' };
+    const content = await classifyOpenedFile(bytes);
+    switch (content.type) {
+      case 'package':
+        return this.extractPackage(content.bundle, path, graph);
+      case 'manifest':
+        return this.openProjectAt(path, graph);
+      case 'graph': {
+        const folder = dirName(path);
+        if (baseName(folder).toLowerCase() === 'pipelines') {
+          const opened = await this.openProjectAt(dirName(folder), graph);
+          if (opened.ok) return opened;
+        }
+        return this.importLooseGraph(content.schema, name, graph, options);
+      }
+      default:
+        return { ok: false, reason: 'invalid' };
+    }
+  }
+
+  // Navegador sem backend C++ (input type=file): ha so os bytes, sem caminho no disco.
+  public async openFromBytes(bytes: Uint8Array, fileName: string, graph: Graph, options: IOpenOptions = {}): Promise<IOpenResult> {
+    const content = await classifyOpenedFile(bytes);
+    switch (content.type) {
+      case 'package':
+        return (await this.loadArestrixBundle(content.bundle, graph))
+          ? { ok: true, kind: 'project', path: fileName }
+          : { ok: false, reason: 'invalid' };
+      case 'manifest':
+        return { ok: false, reason: 'unsupported' };
+      case 'graph':
+        return this.importLooseGraph(content.schema, fileName, graph, options);
+      default:
+        return { ok: false, reason: 'invalid' };
+    }
+  }
+
+  private async openProjectAt(path: string, graph: Graph): Promise<IOpenResult> {
+    const ok = await this.loadProject(path, graph);
+    return ok ? { ok: true, kind: 'project', path: this.currentProject.rootPath } : { ok: false, reason: 'invalid' };
+  }
+
+  private importLooseGraph(schema: IGraphSchema, fileName: string, graph: Graph, options: IOpenOptions): IOpenResult {
+    if (!options.confirmLooseGraph || !options.confirmLooseGraph(fileName)) {
+      return { ok: false, reason: 'cancelled' };
+    }
+    graph.fromJSON(schema);
+    this.syncWithGraph(graph);
+    return { ok: true, kind: 'graph', path: fileName };
+  }
+
+  // O pacote vira um projeto numa pasta nova ao lado dele ("nome", "nome (2)", ...): os salvamentos
+  // seguintes precisam de uma pasta de projeto e nao podem sobrescrever outro projeto.
+  private async extractPackage(bundle: IArestrixBundle, packagePath: string, graph: Graph): Promise<IOpenResult> {
+    const parent = dirName(packagePath);
+    const base = stripExtension(baseName(packagePath)) || bundle.manifest.name || 'projeto';
+    const siblings = await this.listOpenableEntries(parent);
+    const taken = new Set(siblings.entries.map(e => e.name.toLowerCase()));
+    let folder = base;
+    for (let i = 2; taken.has(folder.toLowerCase()); i++) {
+      folder = `${base} (${i})`;
+    }
+    const rootPath = joinPath(parent, folder);
+
+    if (!(await this.createProject({ ...bundle.manifest, rootPath }))) {
+      return { ok: false, reason: 'invalid' };
+    }
+    const main = bundle.pipelines?.main;
+    if (main && Array.isArray(main.nodes)) {
+      graph.fromJSON(main);
+    } else {
+      graph.clear();
+    }
+    this.syncWithGraph(graph);
+    await this.savePipeline(graph);
+    this.bus.emit('project:loaded', this.currentProject);
+    return { ok: true, kind: 'package', path: rootPath };
   }
 
   // Auxiliar para reset em testes unitários

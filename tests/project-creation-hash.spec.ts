@@ -117,7 +117,7 @@ describe('Geração de ID Único com Hash e Ajuste do Formulário de Criação d
       expect(html).toContain('Opções ▾');
     });
 
-    it('deve exibir a lista de grafos recentes ANTES da lista de projetos recentes na tela Abrir Recente', () => {
+    it('deve exibir na tela Abrir os projetos recentes e, na aba Grafos, os grafos do projeto atual', () => {
       const backstage = new BackstageView(graph, {} as any, {} as any);
       (backstage as any).activeSection = 'open';
       const recents = [
@@ -129,19 +129,16 @@ describe('Geração de ID Único com Hash e Ajuste do Formulário de Criação d
           { id: 'main', name: 'Pipeline Principal', file: 'pipelines/main.json', isPrimary: true }
         ]
       };
-      const html = (backstage as any).renderSectionContent(currentProj, recents);
+      const projectsHtml = (backstage as any).renderSectionContent(currentProj, recents);
+      expect(projectsHtml).toContain('Proj Alpha');
+      expect(projectsHtml).toContain('recent-project-action-select');
+      expect(projectsHtml).toContain('data-open-tab="graphs"');
 
-      expect(html).toContain('Grafos Recentes do Workspace Ativo');
-      expect(html).toContain('Pipeline Principal');
-      expect(html).toContain('btn-pipeline-load');
-      expect(html).toContain('Projetos Recentes');
-      expect(html).toContain('Proj Alpha');
-      expect(html).toContain('recent-project-action-select');
-
-      const grafosIdx = html.indexOf('Grafos Recentes do Workspace Ativo');
-      const projetosIdx = html.indexOf('Projetos Recentes');
-      expect(grafosIdx).toBeGreaterThan(-1);
-      expect(projetosIdx).toBeGreaterThan(grafosIdx);
+      (backstage as any).openRecentTab = 'graphs';
+      const graphsHtml = (backstage as any).renderSectionContent(currentProj, recents);
+      expect(graphsHtml).toContain('Pipeline Principal');
+      expect(graphsHtml).toContain('data-open-action="pipeline"');
+      expect(graphsHtml).not.toContain('Proj Alpha');
     });
 
     it('deve carregar projetos recentes logo na primeira abertura de backstage.open()', async () => {

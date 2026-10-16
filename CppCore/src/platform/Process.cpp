@@ -356,16 +356,42 @@ bool setUserEnv(const std::string& name, const std::string& value) {
     return r == ERROR_SUCCESS;
 }
 
-std::string pickFolderDialog(const std::string& title) {
+namespace {
+
+// IFileOpenDialog em primeiro plano. `extraOptions` decide entre pasta (FOS_PICKFOLDERS) e arquivo.
+std::string runOpenDialog(FILEOPENDIALOGOPTIONS extraOptions,
+                          const std::string& title,
+                          const std::vector<FileFilter>& filters,
+                          const std::string& initialDir) {
     std::string selected;
     HRESULT hrInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     IFileOpenDialog* dlg = nullptr;
     HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_ALL, IID_IFileOpenDialog, reinterpret_cast<void**>(&dlg));
     if (SUCCEEDED(hr) && dlg) {
         FILEOPENDIALOGOPTIONS opt;
-        if (SUCCEEDED(dlg->GetOptions(&opt))) dlg->SetOptions(opt | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
+        if (SUCCEEDED(dlg->GetOptions(&opt))) dlg->SetOptions(opt | extraOptions | FOS_FORCEFILESYSTEM);
         std::wstring wt = widen(title);
         dlg->SetTitle(wt.c_str());
+
+        // COMDLG_FILTERSPEC so guarda ponteiros: as strings precisam viver ate o Show().
+        std::vector<std::wstring> names, patterns;
+        for (const auto& f : filters) {
+            names.push_back(widen(f.name));
+            patterns.push_back(widen(f.pattern));
+        }
+        std::vector<COMDLG_FILTERSPEC> specs;
+        for (size_t i = 0; i < names.size(); ++i) specs.push_back({names[i].c_str(), patterns[i].c_str()});
+        if (!specs.empty()) dlg->SetFileTypes(static_cast<UINT>(specs.size()), specs.data());
+
+        if (!initialDir.empty()) {
+            std::wstring wdir = widen(initialDir);
+            std::replace(wdir.begin(), wdir.end(), L'/', L'\\');
+            IShellItem* folder = nullptr;
+            if (SUCCEEDED(SHCreateItemFromParsingName(wdir.c_str(), nullptr, IID_PPV_ARGS(&folder))) && folder) {
+                dlg->SetFolder(folder);
+                folder->Release();
+            }
+        }
         HWND owner = GetForegroundWindow();
         if (!owner) owner = GetActiveWindow();
         if (SUCCEEDED(dlg->Show(owner))) {
@@ -383,6 +409,18 @@ std::string pickFolderDialog(const std::string& title) {
     }
     if (SUCCEEDED(hrInit)) CoUninitialize();
     return selected;
+}
+
+} // namespace
+
+std::string pickFolderDialog(const std::string& title) {
+    return runOpenDialog(FOS_PICKFOLDERS, title, {}, "");
+}
+
+std::string pickFileDialog(const std::string& title,
+                           const std::vector<FileFilter>& filters,
+                           const std::string& initialDir) {
+    return runOpenDialog(FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST, title, filters, initialDir);
 }
 
 std::vector<std::string> listRoots() {
@@ -652,6 +690,37 @@ std::string pickFolderDialog(const std::string& title) {
         s.argv = {"zenity", "--file-selection", "--directory", "--title=" + title};
     } else if (commandExists("kdialog")) {
         s.argv = {"kdialog", "--getexistingdirectory", ".", "--title", title};
+    } else {
+        return out;
+    }
+    auto r = run(s, 0);
+    if (r.exitCode == 0) out = r.output;
+    while (!out.empty() && (out.back() == '\n' || out.back() == '\r')) out.pop_back();
+    return out;
+}
+
+std::string pickFileDialog(const std::string& title,
+                           const std::vector<FileFilter>& filters,
+                           const std::string& initialDir) {
+    std::string out;
+    ProcessSpec s;
+    if (commandExists("zenity")) {
+        s.argv = {"zenity", "--file-selection", "--title=" + title};
+        if (!initialDir.empty()) s.argv.push_back("--filename=" + initialDir + "/");
+        for (const auto& f : filters) {
+            std::string globs = f.pattern;
+            std::replace(globs.begin(), globs.end(), ';', ' ');
+            s.argv.push_back("--file-filter=" + f.name + " | " + globs);
+        }
+    } else if (commandExists("kdialog")) {
+        std::string spec;
+        for (const auto& f : filters) {
+            std::string globs = f.pattern;
+            std::replace(globs.begin(), globs.end(), ';', ' ');
+            if (!spec.empty()) spec += "\n";
+            spec += globs + "|" + f.name;
+        }
+        s.argv = {"kdialog", "--getopenfilename", initialDir.empty() ? "." : initialDir, spec, "--title", title};
     } else {
         return out;
     }

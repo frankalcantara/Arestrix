@@ -1,0 +1,11 @@
+{
+  "workspaceRoot": "testeTutoria/.workspace",
+  "skillsDir": "testeTutoria/.workspace/skills",
+  "mcpsDir": "testeTutoria/.workspace/mcps",
+  "agentsDir": "testeTutoria/.workspace/agents",
+  "graphsDir": "testeTutoria/.workspace/graphs",
+  "autoVerifySkills": true,
+  "strictSecurityMode": true,
+  "installedAssetsVersion": "2.0.0",
+  "lastSyncTimestamp": "2026-10-16T14:48:37.840Z"
+}

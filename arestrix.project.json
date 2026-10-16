@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-10-12T02:02:53.519Z",
+  "createdAt": "2026-10-13T15:57:26Z",
   "database": {
     "filePath": "storage/database.sqlite",
     "type": "sqlite",
@@ -46,7 +46,7 @@
   "name": "Workspace Padrão",
   "pipelines": [
     {
-      "description": "Pipeline central do projeto",
+      "description": "",
       "file": "pipelines/main.json",
       "id": "main",
       "isPrimary": true,
@@ -54,7 +54,7 @@
     }
   ],
   "projectId": "default-workspace",
-  "rootPath": ".",
-  "updatedAt": "2026-10-12T02:03:52Z",
+  "rootPath": "C:\\Projetos\\Arestrix",
+  "updatedAt": "2026-10-13T15:57:27Z",
   "version": "1.0.0"
 }

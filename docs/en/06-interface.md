@@ -59,8 +59,21 @@ modules), the skills of the workspace and the pipelines. Press `Ctrl+K` to focus
 ## Backstage
 
 Opened by **File**. It has the project information (two cards: the active project and the physical
-workspace), the open/recent screen, *Save As* with folder and drive navigation, and the **Options**
+workspace), the **Open** screen, *Save As* with folder and drive navigation, and the **Options**
 (Studio defaults, workspace governance and the **language** selector).
+
+The **Open** screen follows Office's Open. The places are on the left:
+
+- **Recent**: a search box and two tabs, **Projects** (grouped by Today, Yesterday, Previous 7 days,
+  Previous 30 days and Older) and **Graphs** (the pipelines of the current project).
+- **This PC**: browses drives and folders. It shows subfolders, project folders (with
+  `arestrix.project.json`), `.arestrix` packages and `.json` files. Clicking a project folder opens the
+  project; the button next to it enters the folder without opening it.
+- **Browse**: opens the system file picker.
+
+An `.arestrix` package is extracted into a new folder next to it (`name`, `name (2)`, ...) and opened as a
+project. A `.json` graph inside `<project>/pipelines` opens the whole project; a loose graph replaces the
+current project's canvas only after confirmation.
 
 ## Canvas
 

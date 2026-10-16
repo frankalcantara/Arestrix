@@ -18,6 +18,7 @@
 #include "mcp/McpClient.hpp"
 #include "core/Graph.hpp"
 #include "platform/Process.hpp"
+#include "project/OpenableFiles.hpp"
 #include "rt/Decision.hpp"
 #include "rt/Http.hpp"
 #include "rt/NetGuard.hpp"
@@ -1522,6 +1523,59 @@ TEST(native_calls_are_orders_of_magnitude_faster_than_mcp_over_a_process) {
         std::cout << "  MCP externo (sessao persistente): " << mcpUs << " us por chamada (" << mcpUs / nativeUs << "x mais lento)" << std::endl;
         CHECK(nativeUs * 10 < mcpUs);
     }
+    fs::remove_all(root);
+}
+
+TEST(open_screen_lists_folders_projects_packages_and_graphs) {
+    namespace prj = taskforge::project;
+    auto root = makeTempDir("open-list");
+    fs::create_directories(root / "zeta-pasta");
+    fs::create_directories(root / "Alfa-projeto" / "pipelines");
+    { std::ofstream(root / "Alfa-projeto" / "arestrix.project.json") << "{}"; }
+    fs::create_directories(root / prj::pathFromUtf8("Programação"));
+    fs::create_directories(root / ".oculta");
+    { std::ofstream(root / "pacote.arestrix") << "x"; }
+    { std::ofstream(root / "grafo.json") << "{}"; }
+    { std::ofstream(root / "arestrix.project.json") << "{}"; }
+    { std::ofstream(root / "notas.txt") << "x"; }
+
+    auto listing = prj::listOpenableEntries(root);
+    CHECK(listing["exists"].get<bool>());
+    CHECK(!listing["truncated"].get<bool>());
+    CHECK(listing["path"].get<std::string>() == prj::pathToUtf8(root.lexically_normal()));
+    CHECK(listing["parent"].get<std::string>() == prj::pathToUtf8(root.lexically_normal().parent_path()));
+
+    // Pastas primeiro, depois arquivos; ocultos e extensoes desconhecidas ficam de fora.
+    std::vector<std::string> names, kinds;
+    std::string accentedPath;
+    for (const auto& e : listing["entries"]) {
+        names.push_back(e.value("name", std::string()));
+        kinds.push_back(e.value("kind", std::string()));
+        CHECK(e.value("modified", int64_t(0)) > 0);
+        if (e.value("name", std::string()) == "Programação") accentedPath = e.value("path", std::string());
+    }
+    CHECK((names == std::vector<std::string>{"Alfa-projeto", "Programação", "zeta-pasta",
+                                             "arestrix.project.json", "grafo.json", "pacote.arestrix"}));
+    CHECK((kinds == std::vector<std::string>{"project", "folder", "folder", "manifest", "json", "package"}));
+    CHECK(prj::isProjectDirectory(root / "Alfa-projeto"));
+    CHECK(!prj::isProjectDirectory(root / "zeta-pasta"));
+
+    // O caminho com acento volta da interface em UTF-8 e continua navegavel.
+    auto inner = prj::listOpenableEntries(prj::pathFromUtf8(accentedPath));
+    CHECK(inner["exists"].get<bool>());
+    CHECK(inner["entries"].size() == 0);
+
+    // Barra final, pasta inexistente, limite de itens e raiz da unidade.
+    auto withSlash = prj::listOpenableEntries(prj::pathFromUtf8(prj::pathToUtf8(root) + "/"));
+    CHECK(withSlash["path"].get<std::string>() == listing["path"].get<std::string>());
+    auto missing = prj::listOpenableEntries(root / "nao-existe");
+    CHECK(!missing["exists"].get<bool>());
+    CHECK(missing["entries"].size() == 0);
+    auto limited = prj::listOpenableEntries(root, 2);
+    CHECK(limited["truncated"].get<bool>());
+    CHECK(limited["entries"].size() == 2);
+    CHECK(prj::listOpenableEntries(root.root_path())["parent"].get<std::string>().empty());
+
     fs::remove_all(root);
 }
 

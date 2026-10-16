@@ -8,7 +8,7 @@
       "compiler": "msvc",
       "cppStandard": "C++20",
       "buildSystem": "cmake",
-      "taskflowIncludePath": "include",
+      "taskflowIncludePath": "third_party/taskflow",
       "outputBinaryName": "agent_pipeline",
       "enableOpenMP": false,
       "enableCuda": false,
@@ -57,93 +57,6 @@
     },
     "projectId": "default-workspace"
   },
-  "nodes": [
-    {
-      "id": "node_1791770578860",
-      "label": "Agente_Worker_1",
-      "type": "static",
-      "position": {
-        "x": -460,
-        "y": 110,
-        "z": 0
-      },
-      "inputs": [
-        {
-          "id": "node_1791770578860_in_0",
-          "name": "in",
-          "direction": "input",
-          "type": "flow"
-        }
-      ],
-      "outputs": [
-        {
-          "id": "node_1791770578860_out_0",
-          "name": "out",
-          "direction": "output",
-          "type": "flow"
-        }
-      ],
-      "parameters": {},
-      "customLambdaBody": "// Execução computacional determinística do agente: Agente_Worker_1\nstd::cout << \"Executando agente: Agente_Worker_1\\n\";",
-      "agentSettings": {
-        "inheritSandbox": false,
-        "inheritModel": false,
-        "inheritCodeMode": false,
-        "skills": [
-          {
-            "id": "skill-node_1791770578860",
-            "name": "Agente_Worker_1",
-            "description": "Habilidade operacional padrão para o agente Agente_Worker_1",
-            "markdownContent": "---\nname: \"Agente_Worker_1\"\ndescription: \"Execução especializada de tarefas\"\nlicense: \"MIT\"\ntools:\n  - write\n  - edit\n  - read\n---\n\n# Agente_Worker_1\n\nInstruções operacionais e diretrizes para execução do agente.\n\n## Diretrizes\n1. Atuação com máxima precisão e objetividade.\n2. Cumprimento estrito das regras de formatação e integridade dos artefatos.",
-            "systemPrompt": "Você é o agente responsável por \"Agente_Worker_1\". Execute suas tarefas com precisão técnica e rigor conceitual.",
-            "tools": [
-              "write",
-              "edit",
-              "read"
-            ],
-            "license": "MIT",
-            "updatedAt": "2026-10-12T02:03:51.542Z"
-          }
-        ],
-        "activeSkillId": "skill-node_1791770578860"
-      }
-    },
-    {
-      "id": "node_1791770584562",
-      "label": "Decisor_Stochastic_2",
-      "type": "condition",
-      "position": {
-        "x": -60,
-        "y": 90,
-        "z": 0
-      },
-      "inputs": [
-        {
-          "id": "node_1791770584562_in_0",
-          "name": "in",
-          "direction": "input",
-          "type": "flow"
-        }
-      ],
-      "outputs": [
-        {
-          "id": "node_1791770584562_out_0",
-          "name": "branch 0",
-          "direction": "output",
-          "type": "flow",
-          "conditionBranchIndex": 0
-        },
-        {
-          "id": "node_1791770584562_out_1",
-          "name": "branch 1",
-          "direction": "output",
-          "type": "flow",
-          "conditionBranchIndex": 1
-        }
-      ],
-      "parameters": {},
-      "customLambdaBody": "// Decisão de branch do agente Decisor_Stochastic_2\n// Retorna 0 para ramo 0, 1 para ramo 1\nreturn (rand() % 2);"
-    }
-  ],
+  "nodes": [],
   "edges": []
 }

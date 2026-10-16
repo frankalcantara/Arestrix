@@ -86,6 +86,17 @@ bool setUserEnv(const std::string& name, const std::string& value);
 // Seletor de pasta nativo; vazio se cancelado/indisponivel.
 std::string pickFolderDialog(const std::string& title);
 
+// Filtro do seletor de arquivo: nome exibido e padroes separados por ';' (ex: "*.arestrix;*.json").
+struct FileFilter {
+    std::string name;
+    std::string pattern;
+};
+
+// Seletor de arquivo nativo (abrir); vazio se cancelado/indisponivel. Caminhos em UTF-8.
+std::string pickFileDialog(const std::string& title,
+                           const std::vector<FileFilter>& filters,
+                           const std::string& initialDir = "");
+
 // Letras de unidade (Windows) ou raizes uteis (POSIX).
 std::vector<std::string> listRoots();
 

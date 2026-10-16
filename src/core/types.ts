@@ -372,6 +372,42 @@ export interface IRecentProjectItem {
   lastOpened: string;
 }
 
+// Itens de uma pasta na tela Abrir (list_openable_entries do backend C++).
+export type OpenableEntryKind = 'folder' | 'project' | 'package' | 'manifest' | 'json';
+
+export interface IOpenableEntry {
+  name: string;
+  path: string;
+  kind: OpenableEntryKind;
+  modified?: number; // epoch em ms
+}
+
+export interface IOpenableListing {
+  path: string;
+  parent: string; // vazio na raiz de uma unidade
+  exists: boolean;
+  truncated: boolean;
+  entries: IOpenableEntry[];
+  available: boolean; // false fora do aplicativo desktop (sem ponte WebUI)
+}
+
+export interface IFilePickFilter {
+  name: string;
+  pattern: string; // padroes separados por ';' (ex: "*.arestrix;*.json")
+}
+
+export interface IOpenOptions {
+  // Pergunta antes de um grafo avulso (fora de uma pasta de projeto) substituir o canvas do projeto atual.
+  confirmLooseGraph?: (fileName: string) => boolean;
+}
+
+export interface IOpenResult {
+  ok: boolean;
+  kind?: 'project' | 'package' | 'graph';
+  path?: string;
+  reason?: 'cancelled' | 'invalid' | 'unsupported';
+}
+
 export interface IArestrixBundle {
   format: 'arestrix-package';
   version: string;
