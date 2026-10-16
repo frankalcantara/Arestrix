@@ -1,27 +1,27 @@
 # Pendencias de seguranca das dependencias npm
 
-Estado em 2026-10-13: `npm audit` reporta 11 vulnerabilidades (2 low, 3 moderate, 4 high, 2 critical).
-`npm audit fix` (sem `--force`) nao corrige nada. Nao usar `--force`: ele troca vitest para v5,
-vite para v8, vite-plugin-singlefile para 0.9 e faz downgrade do monaco-editor para 0.56.
+Estado em 2026-10-16: `npm audit` reporta 3 vulnerabilidades (3 high), todas do MESMO advisory
+(`braces`, GHSA-vfj7-8cjw-p6xm, exaustao de pilha com padroes profundamente aninhados). O advisory
+esta aberto: NAO existe versao corrigida publicada (o `npm audit fix --force` sugeriria downgrade do
+`vite-plugin-singlefile` para 0.9.0, o que e pior e quebra o build single-file).
 
-Quase tudo e dev-time (vitest, tinypool, esbuild/vite dev server, braces/micromatch no build).
-O unico que entra no app distribuido e `dompurify` (via `monaco-editor`), cujo advisory trata
-da opcao `IN_PLACE` com hook `afterSanitize`.
+O `braces` entra somente pela cadeia de BUILD (vite-plugin-singlefile -> micromatch -> braces), que
+processa globs dos proprios arquivos do projeto em tempo de build. Nada disso vai para o app
+distribuido nem processa entrada nao confiavel em tempo de execucao.
 
-## Passo 2 - Atualizar vite e vitest (commit separado)
+## Historico e o que ja foi corrigido
 
-- [ ] `vite` 5 -> 6 ou superior (resolve esbuild/vite).
-- [ ] `vitest` 2 -> 3 ou superior (resolve tinypool, @vitest/mocker, vite-node).
-- [ ] Conferir compatibilidade do `vite-plugin-singlefile` com o novo vite
-      (resolve braces/micromatch se a versao nova trouxer micromatch corrigido).
-- [ ] Validar: `npm test` (192 testes) e `npm run build`, e abrir o app via `python CppCore/dev.py`.
-
-## Passo 3 - Atualizar o monaco-editor
-
-- [ ] Acompanhar uma versao do `monaco-editor` (>= 0.57) que use `dompurify` > 3.4.15.
-- [ ] Alternativa: `overrides` no package.json forcando `dompurify` corrigido, testando hovers/markdown no editor.
-- [ ] Revalidar o editor (hover, completions) e o build single-file.
+- [x] `vite` 5 -> 6.4.4 (resolve esbuild <= 0.24.2, moderate).
+- [x] `vitest` 2 -> 4.1.12 (resolve @vitest/mocker <= 4.1.10, moderate, e tinypool <= 2.1.1,
+      critical; RCE em worker options). Requer Node >= 20 para rodar os testes.
+- [x] `dompurify` 3.4.15 -> 3.4.17 via `overrides` no package.json (resolve os advisories de XSS do
+      DOMPurify; o monaco-editor 0.57.0 ainda fixa 3.4.15, que e a versao mais recente dele).
+- [x] `monaco-editor` ja estava na ultima versao (0.57.0); o override cobre a lacuna.
+- [x] Validado: `npx tsc --noEmit` limpo, 254 testes frontend passando e `npm run build` OK.
 
 ## Verificacao
 
-Rodar `npm audit` apos cada passo e atualizar este arquivo.
+- Rodar `npm audit` apos cada atualizacao e atualizar este arquivo.
+- Acompanhar um release do `braces` com correcao do GHSA-vfj7-8cjw-p6xm e, quando sair, subir
+  via override (`"braces": ">=x.y.z"`) ou via nova versao do micromatch/vite-plugin-singlefile.
+- Ao atualizar o monaco-editor no futuro, reavaliar se o override do dompurify ainda e necessario.

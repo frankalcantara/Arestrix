@@ -35,3 +35,6 @@ Output/
 
 # Cache da busca no projeto
 .arestrix/
+
+# Notas de sessao do agente (dados pessoais de ambiente: nunca versionar)
+continue-aqui.mcp
