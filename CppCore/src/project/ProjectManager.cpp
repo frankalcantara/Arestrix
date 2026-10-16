@@ -132,11 +132,15 @@ bool ProjectManager::createProject(ProjectManifest manifest) {
         }
     }
 
-    // Grava o manifesto arestrix.project.json
+    // Grava o manifesto arestrix.project.json. No disco, rootPath fica ".": o manifesto mora na propria raiz
+    // do projeto e nunca deve carregar caminho absoluto de maquina (portabilidade e privacidade). Em memoria,
+    // manifest.rootPath continua como veio (absoluto ou relativo) para todas as operacoes.
     std::filesystem::path manifestPath = root / "arestrix.project.json";
     std::ofstream mf(manifestPath);
     if (!mf.is_open()) return false;
-    taskforge::Json j = manifest;
+    ProjectManifest written = manifest;
+    written.rootPath = ".";
+    taskforge::Json j = written;
     mf << j.dump(2);
     mf.close();
 
@@ -224,7 +228,10 @@ bool ProjectManager::saveProject(const ProjectManifest& manifest) {
 
     std::ofstream mf(manifestPath);
     if (!mf.is_open()) return false;
-    taskforge::Json j = currentProject_;
+    // No disco, rootPath fica "." (relativo a propria pasta do manifesto); em memoria continua absoluto.
+    ProjectManifest written = currentProject_;
+    written.rootPath = ".";
+    taskforge::Json j = written;
     mf << j.dump(2);
     mf.close();
 

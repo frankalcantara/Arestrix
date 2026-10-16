@@ -46,6 +46,12 @@ describe('verificador de segredos', () => {
     expect(rules(abs, 'examples/p/arestrix.project.json').join()).toContain('rootPath');
     const lit = JSON.stringify({ rootPath: '.', environment: { MY_TOKEN: rnd(24) } });
     expect(rules(lit, 'examples/p/arestrix.project.json').join()).toContain('environment.MY_TOKEN');
+    // Fora de examples/: rootPath absoluto tambem e recusado; relativo ("." ou subpasta) passa.
+    expect(rules(JSON.stringify({ rootPath: 'C:' + '/Users/' + 'maria/p', environment: {} }), 'arestrix.project.json').join()).toContain('rootPath');
+    expect(rules(JSON.stringify({ rootPath: '.', environment: {} }), 'arestrix.project.json')).toEqual([]);
+    expect(rules(JSON.stringify({ rootPath: 'testeTutoria', environment: {} }), 'arestrix.project.json')).toEqual([]);
+    // E o environment literal e recusado em qualquer manifesto, nao so em examples/.
+    expect(rules(JSON.stringify({ rootPath: '.', environment: { MY_TOKEN: rnd(24) } }), 'arestrix.project.json').join()).toContain('environment.MY_TOKEN');
   });
 
   it('configuracao MCP: env so por referencia', () => {

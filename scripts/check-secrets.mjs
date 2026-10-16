@@ -111,11 +111,17 @@ export function scanText(text, file = '') {
   }
 
   // Manifesto de projeto: nada de caminho absoluto nem variaveis de ambiente com valor literal.
-  if (normalized.startsWith('examples/') && /(^|\/)arestrix\.project\.json$/.test(normalized)) {
+  if (/(^|\/)arestrix\.project\.json$/.test(normalized)) {
     try {
       const manifest = JSON.parse(text);
-      if (manifest.rootPath && manifest.rootPath !== '.') {
-        findings.push({ kind: 'portabilidade', rule: 'rootPath deve ser "." em projetos de exemplo', line: 1, sample: mask(manifest.rootPath) });
+      const isExample = normalized.startsWith('examples/');
+      const rp = typeof manifest.rootPath === 'string' ? manifest.rootPath : '';
+      if (isExample) {
+        if (rp && rp !== '.') {
+          findings.push({ kind: 'portabilidade', rule: 'rootPath deve ser "." em projetos de exemplo', line: 1, sample: mask(rp) });
+        }
+      } else if (rp && (/^[A-Za-z]:[\\/]/.test(rp) || rp.startsWith('/') || rp.startsWith('\\') || rp.startsWith('~'))) {
+        findings.push({ kind: 'portabilidade', rule: 'rootPath absoluto (use "." ou caminho relativo)', line: 1, sample: mask(rp) });
       }
       const env = manifest.environment ?? {};
       for (const [k, v] of Object.entries(env)) {
