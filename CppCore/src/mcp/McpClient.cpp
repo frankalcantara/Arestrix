@@ -1,5 +1,6 @@
 #include "McpClient.hpp"
 
+#include <cctype>
 #include <chrono>
 #include <iostream>
 #include <map>
@@ -9,6 +10,7 @@
 
 #include "platform/Process.hpp"
 #include "rt/Http.hpp"
+#include "rt/NetGuard.hpp"
 #include "util/Json.hpp"
 
 namespace taskforge {
@@ -20,6 +22,55 @@ using Clock = std::chrono::steady_clock;
 namespace {
 
 const char* kProtocolVersion = "2025-03-26";
+
+// ---------------------------------------------------------------------------
+// Validacao de entradas nao confiaveis. As configs MCP vivem em arquivos de
+// projeto (.workspace/mcps/*.json e arestrix-mcp-servers.json): dado que pode
+// ter sido escrito por terceiros e jamais deve ganhar controle do processo.
+// ---------------------------------------------------------------------------
+
+// Argumento aceitavel na linha de comando do cmd.exe (npx/npm/uvx sao scripts .cmd no Windows). cmd.exe
+// nao tem como escapar '"' dentro de aspas duplas e '%' expande variaveis mesmo dentro de aspas; em vez
+// de tentar um escaping sempre incompleto, RECUSA o argumento (falha fechada).
+bool safeMcpShellArg(const std::string& a) {
+    for (unsigned char c : a) {
+        if (c < 0x20 || c == 0x7f) return false;   // controle
+        if (c == '"' || c == '&' || c == '|' || c == '<' || c == '>' || c == '^' || c == '%' || c == '!') return false;
+    }
+    return true;
+}
+
+// Politica do transporte HTTP do MCP, espelhando a das ferramentas nativas (native/NativeHttp.cpp):
+// somente https:// na porta 443, sem usuario@, sem IPv6 literal, host resolvido e publico (DNS rebinding
+// recusado) e sem redirecionamentos. Devolve "" se a URL passar, ou o motivo da recusa.
+std::string validateMcpHttpUrl(const std::string& url) {
+    if (url.size() > 2048) return "URL do servidor MCP longa demais.";
+    for (unsigned char c : url)
+        if (c < 0x21 || c == 0x7f) return "A URL do servidor MCP contem caracteres invalidos (espacos ou controle).";
+    std::string lowerUrl = url;
+    for (char& c : lowerUrl) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (lowerUrl.rfind("https://", 0) != 0)
+        return "So URLs https:// sao permitidas no transporte HTTP do MCP (servidores locais devem usar o transporte stdio).";
+    std::string rest = url.substr(8);
+    size_t end = rest.find_first_of("/?#");
+    std::string authority = end == std::string::npos ? rest : rest.substr(0, end);
+    if (authority.find('@') != std::string::npos) return "URLs com usuario@ nao sao permitidas.";
+    if (!authority.empty() && authority.front() == '[') return "Enderecos IPv6 literais nao sao permitidos.";
+    std::string host = authority;
+    size_t colon = authority.rfind(':');
+    if (colon != std::string::npos) {
+        host = authority.substr(0, colon);
+        if (authority.substr(colon + 1) != "443") return "So a porta 443 e permitida na URL do servidor MCP.";
+    }
+    for (char& c : host) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (host.empty() || host.size() > 253) return "Host invalido na URL do servidor MCP.";
+    for (char c : host)
+        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '.'))
+            return "Host invalido na URL do servidor MCP.";
+    std::string reason = rt::net::checkHostIsPublic(host);
+    if (!reason.empty()) return "O host do servidor MCP nao e publico: " + reason;
+    return "";
+}
 
 json initializeRequest(int id) {
     return {{"jsonrpc", "2.0"},
@@ -82,9 +133,19 @@ public:
         for (const auto& a : cfg.args) spec.argv.push_back(a);
         spec.env = cfg.env;
         spec.captureStdin = true;
+        // O servidor e codigo de terceiros: nao herda as chaves de API do ambiente do usuario
+        // (so recebe o que o projeto declarou explicitamente em cfg.env).
+        spec.scrubSecrets = true;
 #ifdef _WIN32
-        // npx/uvx/etc. sao scripts .cmd no Windows: precisam do cmd.exe.
+        // npx/uvx/etc. sao scripts .cmd no Windows: precisam do cmd.exe. Os argumentos viram linha de
+        // comando e vem de arquivos do projeto: recusa metacaracteres em vez de tentar escapar.
         if (cfg.command == "npx" || cfg.command == "npm" || cfg.command == "uvx") {
+            for (const auto& a : cfg.args) {
+                if (!safeMcpShellArg(a)) {
+                    error = "servidor MCP '" + cfg.id + "': argumento invalido (aspas e metacaracteres como & | < > ^ % ! nao sao permitidos nos args de npx/npm/uvx).";
+                    return false;
+                }
+            }
             spec.shellCommand = cfg.command;
             for (const auto& a : cfg.args) spec.shellCommand += " \"" + a + "\"";
             spec.argv.clear();
@@ -151,6 +212,8 @@ public:
         rt::HttpRequest req;
         req.url = url_;
         req.timeoutSeconds = std::max(5, timeoutMs / 1000);
+        req.noRedirects = true;          // nenhum redirecionamento: cada destino precisaria ser validado de novo
+        req.requirePublicPeer = true;    // protecao contra DNS rebinding (rt/NetGuard.hpp)
         req.headers["Content-Type"] = "application/json";
         req.headers["Accept"] = "application/json, text/event-stream";
         if (!sessionId_.empty()) req.headers["Mcp-Session-Id"] = sessionId_;
@@ -353,6 +416,9 @@ bool stdioRequest(const McpServerConfig& cfg, const std::string& method, const j
 
 bool httpRequest(const McpServerConfig& cfg, const std::string& method, const json& params, int timeoutMs, json& resp,
                  std::string& error) {
+    // A URL vem de arquivos do projeto: valida ANTES de qualquer conexao (https apenas, host publico, sem rebinding).
+    std::string urlError = validateMcpHttpUrl(cfg.url);
+    if (!urlError.empty()) { error = urlError; return false; }
     HttpEntry& e = httpEntry(cfg.id);
     std::lock_guard<std::mutex> lock(e.mutex);
     const std::string fp = fingerprintOf(cfg);

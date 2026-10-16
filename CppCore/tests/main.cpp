@@ -490,12 +490,33 @@ TEST(mcp_stdio_roundtrip) {
     mock.id = "mock-x";
     mock.command = "mock";
     CHECK(client.callTool(mock, "read_file", {}, 1000).content.find("simulada") != std::string::npos);
+#ifdef _WIN32
+    // npx/npm/uvx viram cmd.exe no Windows. Argumentos com metacaracteres devem ser RECUSADOS sem spawn:
+    // configs MCP vivem em arquivos de projeto e nao podem injetar comandos.
+    taskforge::mcp::McpServerConfig evil;
+    evil.id = "evil";
+    evil.transport = taskforge::mcp::McpTransportType::Stdio;
+    evil.command = "npx";
+    evil.args = {"-y", "a\" & calc & \"b"};
+    auto refused = client.callTool(evil, "x", {}, 2000);
+    CHECK(refused.isError && !refused.success);
+#endif
+    // Transporte HTTP do MCP: http:// ou endereco interno e RECUSADO pela politica ANTES de conectar
+    // (sempre falha, nunca finge sucesso; nenhuma conexao e tentada).
     taskforge::mcp::McpServerConfig sseNoServer;
     sseNoServer.id = "remote";
     sseNoServer.transport = taskforge::mcp::McpTransportType::Sse;
-    sseNoServer.url = "http://127.0.0.1:1/mcp";   // porta fechada: deve FALHAR, nunca fingir sucesso
+    sseNoServer.url = "http://127.0.0.1:1/mcp";
     auto bad = client.callTool(sseNoServer, "x", {}, 3000);
     CHECK(bad.isError && !bad.success);
+    CHECK(bad.errorMessage.find("https") != std::string::npos);   // recusada pela politica, nao por falha de transporte
+    taskforge::mcp::McpServerConfig rebind;
+    rebind.id = "rebind";
+    rebind.transport = taskforge::mcp::McpTransportType::Sse;
+    rebind.url = "https://api.exemplo.com:8443/mcp";   // porta que nao e 443
+    auto badPort = client.callTool(rebind, "x", {}, 3000);
+    CHECK(badPort.isError && !badPort.success);
+    CHECK(badPort.errorMessage.find("443") != std::string::npos);
 }
 
 

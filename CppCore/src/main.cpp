@@ -473,6 +473,40 @@ void ui_delete_project(webui::window::event* e) {
     } catch (...) {}
 
     auto& pm = taskforge::project::ProjectManager::getInstance();
+
+    // O alvo precisa ser um projeto que o usuario realmente abriu nesta maquina: dentro das raizes
+    // permitidas do frontend (projeto ativo ou cwd do app) OU um item da lista de recentes. Impede
+    // que um frontend comprometido (ex.: XSS no webview) apague pastas arbitrarias do disco. A lista
+    // de recentes e consultada ANTES de o projeto ser removido dela (logo abaixo).
+    auto inside = [](const std::filesystem::path& child, const std::filesystem::path& parent) {
+        auto rel = child.lexically_relative(parent);
+        if (rel == ".") return true;
+        if (rel.empty() || rel.is_absolute()) return false;
+        return *rel.begin() != "..";
+    };
+    bool confined = false;
+    std::error_code recEc;
+    std::filesystem::path norm;
+    if (deleteFiles && !rootPath.empty()) {
+        std::filesystem::path p(rootPath);
+        std::error_code ec;
+        if (std::filesystem::exists(p, ec) && std::filesystem::is_directory(p, ec) &&
+            std::filesystem::exists(p / "arestrix.project.json", ec)) {
+            norm = std::filesystem::weakly_canonical(p, ec);
+            for (const auto& root : allowedRoots()) {
+                std::filesystem::path r = std::filesystem::weakly_canonical(root, recEc);
+                if (!recEc && inside(norm, r)) { confined = true; break; }
+            }
+            if (!confined) {
+                for (const auto& rec : pm.listRecentProjects()) {
+                    if (rec.rootPath.empty()) continue;
+                    std::filesystem::path r = std::filesystem::weakly_canonical(rec.rootPath, recEc);
+                    if (!recEc && r == norm) { confined = true; break; }
+                }
+            }
+        }
+    }
+
     if (!projectId.empty()) {
         pm.removeRecentProject(projectId);
     }
@@ -480,21 +514,20 @@ void ui_delete_project(webui::window::event* e) {
         pm.removeRecentProject(rootPath);
     }
 
-    if (deleteFiles && !rootPath.empty()) {
+    if (deleteFiles && !rootPath.empty() && !norm.empty()) {
         std::error_code ec;
-        std::filesystem::path p(rootPath);
-        if (std::filesystem::exists(p, ec) && std::filesystem::is_directory(p, ec) &&
-            std::filesystem::exists(p / "arestrix.project.json", ec)) {
-            std::filesystem::path norm = std::filesystem::weakly_canonical(p, ec);
-            std::filesystem::path rootP = norm.root_path();
-            std::filesystem::path currentP = std::filesystem::current_path(ec);
-            if (norm != rootP && norm != currentP && !norm.empty()) {
-                std::cout << "[ProjectManager] Apagando projeto e arquivos no disco: " << norm.string() << std::endl;
-                std::filesystem::remove_all(norm, ec);
-                if (ec) {
-                    std::cerr << "[ProjectManager Erro] Falha ao remover diretorio: " << ec.message() << std::endl;
-                }
+        std::filesystem::path rootP = norm.root_path();
+        std::filesystem::path currentP = std::filesystem::current_path(ec);
+        if (confined && norm != rootP && norm != currentP) {
+            std::cout << "[ProjectManager] Apagando projeto e arquivos no disco: " << norm.string() << std::endl;
+            std::filesystem::remove_all(norm, ec);
+            if (ec) {
+                std::cerr << "[ProjectManager Erro] Falha ao remover diretorio: " << ec.message() << std::endl;
             }
+        } else if (!confined) {
+            std::cerr << "[ProjectManager] Exclusao recusada: '" << norm.string()
+                      << "' nao e o projeto ativo, nao esta nas raizes permitidas nem na lista de projetos recentes."
+                      << std::endl;
         }
     }
 
@@ -1319,7 +1352,11 @@ int main(int argc, char** argv) {
 
     // Registra o Emitter de Telemetria de Agentes em Tempo Real (Fase 10)
     taskforge::sandbox::AgentTelemetryEmitter::setCallback([&win](const std::string& jsonMsg) {
-        std::string jsCode = "if (window.onArestrixTelemetry) { window.onArestrixTelemetry(" + jsonMsg + "); } else if (window.onTaskForgeTelemetry) { window.onTaskForgeTelemetry(" + jsonMsg + "); }";
+        // jsonMsg nasce do dump() do emissor, mas chega por um callback cru: reparseia e re-serializa para
+        // garantir que e JSON valido (e portanto seguro de embutir) antes de virar codigo JavaScript no webview.
+        auto parsed = taskforge::jsonutil::tryParse(jsonMsg);
+        std::string safe = parsed ? parsed->dump() : "null";
+        std::string jsCode = "if (window.onArestrixTelemetry) { window.onArestrixTelemetry(" + safe + "); } else if (window.onTaskForgeTelemetry) { window.onTaskForgeTelemetry(" + safe + "); }";
         win.run(jsCode);
     });
 

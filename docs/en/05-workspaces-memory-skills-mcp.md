@@ -122,6 +122,13 @@ Arestrix is an MCP client over stdio and SSE. There are two separate things:
 variable of your user, resolved when the pipeline runs) and `${NAME:-default}`. The secret scanner rejects a literal value in `env`.
 Stdio servers run as normal processes of your user, **outside** the agent sandbox: only configure servers you trust.
 
+**Hardened transport.** Because these files can be written by third parties (imported projects), the MCP client refuses dangerous
+input instead of trying to make it safe: on Windows, `npx`/`npm`/`uvx` arguments containing quotes or shell metacharacters
+(`& | < > ^ % !`) are rejected before any process starts; the HTTP transport accepts only `https://` on port 443, a host that
+resolves **only** to public addresses (DNS-rebinding protection, like the native HTTP tool), no redirects, no `user@` and no
+literal IPv6 (use stdio for local servers); and MCP child processes do **not** inherit the API keys from your environment — they
+receive only the variables declared in `env`.
+
 **Two ways to use a server in a pipeline:** an [**MCP vertex**](03-graph-and-nodes.md#mcp-vertex) (a deterministic call you wire
 into the graph) or as **tools of an agent** (the model decides when to call them).
 

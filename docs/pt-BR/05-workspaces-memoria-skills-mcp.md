@@ -124,6 +124,13 @@ ambiente do seu usuário, resolvido quando o pipeline executa) e `${NOME:-padrã
 literal em `env`. Servidores stdio rodam como processos comuns do seu usuário, **fora** do sandbox do agente: só configure
 servidores em que você confia.
 
+**Transporte endurecido.** Como esses arquivos podem ser escritos por terceiros (projetos importados), o cliente MCP recusa entradas
+perigosas em vez de tentar torná-las seguras: no Windows, argumentos de `npx`/`npm`/`uvx` com aspas ou metacaracteres de shell
+(`& | < > ^ % !`) são rejeitados antes de qualquer processo nascer; o transporte HTTP aceita apenas `https://` na porta 443, host
+que resolve **somente** para endereços públicos (proteção contra DNS rebinding, como a ferramenta nativa de HTTP), sem
+redirecionamentos, sem `usuario@` e sem IPv6 literal (servidores locais devem usar stdio); e os processos filhos do MCP **não**
+herdam as chaves de API do seu ambiente — recebem apenas as variáveis declaradas em `env`.
+
 **Duas formas de usar um servidor num pipeline:** um [**vértice MCP**](03-grafo-e-vertices.md#vértice-mcp) (uma chamada determinística
 que você liga no grafo) ou como **ferramentas de um agente** (o modelo decide quando chamar).
 
