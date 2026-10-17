@@ -191,9 +191,16 @@ Este é o componente que transforma a execução em um **Agente Autônomo com au
    * **Saída 0 (branch 0)**: Caminho do Sucesso / Aprovado.
    * **Saída 1 (branch 1)**: Caminho da Falha / Reprovado.
 
-#### Configurando o Sucesso (Entrega Final):
-1. Na aba **Inserir**, crie uma **Tarefa Estática** chamada `Entrega_SVG_Final`.
-2. Conecte o **branch 0** do `Decisor_Qualidade` na entrada desse nó de entrega.
+#### Configurando o Sucesso (Entrega Final / Nó Output):
+1. Na aba **Inserir**, clique no botão **Saída / Artefato** (`📁` / `output`) para criar um nó de entrega.
+2. Posicione o nó à direita do `Decisor_Qualidade` e renomeie-o para `Entrega_SVG_Final`.
+3. No painel lateral **Inspetor**, configure o bloco **Configuração de Saída / Artefato**:
+   * **Arquivo Origem (sourcePath)**: `workspace/scene.svg`
+   * **Arquivo Destino (destinationPath)**: `exports/scene.svg`
+   * **Tipo de Artefato**: `SVG Vector`
+   * **Nome de Exibição**: `Cena SVG Animada Final`
+   * **Abrir Prévia Automaticamente**: Marcado (ativo)
+4. Conecte o **branch 0** do `Decisor_Qualidade` na porta `in` do nó `Entrega_SVG_Final`.
 
 #### Configurando o Feedback Loop (Auto-Correção):
 1. Clique no **branch 1** (Reprovado) do `Decisor_Qualidade`.
@@ -202,13 +209,17 @@ Este é o componente que transforma a execução em um **Agente Autônomo com au
 
 ---
 
-### Passo 7: Validar e Compilar o Projeto
+### Passo 7: Validar, Compilar e Visualizar os Produtos
 
 1. Na Ribbon, aba **Página Inicial**, clique em **Validar DAG** (`🔍`).
    * O Arestrix analisará a topologia, garantindo que as portas estão devidamente conectadas e que o ciclo de feedback está governado por uma condição estocástica válida.
 2. Pressione a tecla **F5** ou clique no botão **Build & Run (F5)** (`▶`).
    * O backend C++ invocará o compilador MSVC C++20 (`cl.exe`), gerando o binário nativo com a biblioteca Taskflow.
-   * No painel de console inferior, você verá a telemetria em tempo real: o DeepSeek gerando o código, as duas threads rodando em núcleos separados e o JEV auditando a cena.
+   * No painel de console inferior, você verá a telemetria em tempo real: o DeepSeek gerando o código, as duas threads rodando em núcleos separados, o JEV auditando a cena e o nó `Entrega_SVG_Final` copiando o artefato de `workspace/scene.svg` para `exports/scene.svg`.
+3. **Inspecionando os Produtos na Aba Artefatos**:
+   * O Arestrix abrirá automaticamente a aba **Artefatos** (ao lado de Terminal e Telemetria) exibindo o `exports/scene.svg`.
+   * Você poderá interagir diretamente com a animação: aplicar zoom, pan, alternar entre a renderização visual e a inspeção do código XML, baixar o arquivo, copiar seu código ou clicar em **Abrir no Explorer**.
+   * Você também pode interagir com o assistente do chat local perguntando: *"Quais artefatos foram produzidos nesta execução?"* e ele usará a ferramenta `list_artifacts` para inspecionar e relatar os entregáveis.
 
 ---
 
@@ -435,8 +446,13 @@ int main() {
         return (s.find("STATUS: APROVADO") != std::string::npos) ? 0 : 1;
     }).name("Decisor_Qualidade");
 
-    // 7. Nó de Entrega Final
+    // 7. Nó de Saída / Entrega de Artefato (Output Node)
     tf::Task delivery = taskflow.emplace([]() {
+        std::cout << "[Entrega_SVG_Final] Copiando workspace/scene.svg para exports/scene.svg...\n";
+        std::filesystem::create_directories("exports");
+        std::filesystem::copy_file("workspace/scene.svg", "exports/scene.svg",
+                                   std::filesystem::copy_options::overwrite_existing);
+        std::cout << "[OUTPUT_DELIVERY] {\"sourcePath\":\"workspace/scene.svg\",\"destinationPath\":\"exports/scene.svg\",\"artifactType\":\"svg\",\"displayName\":\"Cena SVG Animada Final\",\"autoOpenPreview\":true}\n";
         std::cout << "[✔] SVG Animado Aprovado e Exportado com Sucesso!\n";
     }).name("Entrega_SVG_Final");
 

@@ -1,0 +1,35 @@
+{
+  "id": "workspace-filesystem",
+  "name": "Filesystem Explorer Seguro (Workspace MCP)",
+  "description": "Acesso seguro aos arquivos e diretórios contidos no escopo físico do workspace.",
+  "category": "Armazenamento & Arquivos",
+  "transport": "stdio",
+  "command": "arestrix-mcp-fs",
+  "args": [
+    "--scope",
+    "."
+  ],
+  "isPreApproved": true,
+  "tools": [
+    {
+      "name": "read_file",
+      "description": "Lê o conteúdo completo de um arquivo de texto no workspace",
+      "riskLevel": "safe"
+    },
+    {
+      "name": "write_file",
+      "description": "Escreve ou atualiza um arquivo no disco do workspace",
+      "riskLevel": "moderate"
+    },
+    {
+      "name": "list_directory",
+      "description": "Lista arquivos e subpastas de um caminho relativo",
+      "riskLevel": "safe"
+    },
+    {
+      "name": "file_exists",
+      "description": "Verifica a existência de um arquivo ou pasta",
+      "riskLevel": "safe"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import { Graph } from '../core/Graph.ts';
-import { INodeData, IPort, ISwitchSettings, SwitchMode, defaultSwitchSettings, IMcpVertexSettings, defaultMcpSettings } from '../core/types.ts';
+import { INodeData, IPort, ISwitchSettings, SwitchMode, defaultSwitchSettings, IMcpVertexSettings, defaultMcpSettings, IOutputSettings, defaultOutputSettings, OutputArtifactType } from '../core/types.ts';
 import { EventBus } from '../core/EventBus.ts';
 import { RemoveNodeCommand, RemoveEdgeCommand, UpdateNodeCommand, CompoundCommand } from '../core/history/GraphCommands.ts';
 import { AgentTemplateRegistry } from '../core/templates/AgentTemplateRegistry.ts';
@@ -505,6 +505,7 @@ export class Inspector {
               <option value="fork" ${node.type === 'fork' ? 'selected' : ''}>Fork Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Despachante Concorrente' : 'Concurrent Dispatcher'})</option>
               <option value="join" ${node.type === 'join' ? 'selected' : ''}>Join Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Barreira de Sincronização' : 'Synchronization Barrier'})</option>
               <option value="agent" ${node.type === 'agent' ? 'selected' : ''}>Agent (Code Mode IA)</option>
+              <option value="output" ${node.type === 'output' ? 'selected' : ''}>Output / Artifact (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Entrega e Saída' : 'Delivery & Output'})</option>
             </select>
           </div>
 
@@ -526,9 +527,10 @@ export class Inspector {
 
           ${node.type === 'switch' ? this.renderSwitchSection(node) : ''}
           ${node.type === 'mcp' ? this.renderMcpSection(node) : ''}
+          ${node.type === 'output' ? this.renderOutputSection(node) : ''}
 
           <!-- Seção de Parâmetros do Template / Agente -->
-          ${(node.type === 'switch' || node.type === 'mcp') ? '' : this.renderParametersSection(node, tpl)}
+          ${(node.type === 'switch' || node.type === 'mcp' || node.type === 'output') ? '' : this.renderParametersSection(node, tpl)}
 
           <div class="form-actions" style="margin-top: 16px;">
             <button id="btn-delete-node" class="btn btn-danger">${t('inspector.node_view.delete_node')}</button>
@@ -695,6 +697,13 @@ export class Inspector {
           oldProps.mcpSettings = current.mcpSettings ? JSON.parse(JSON.stringify(current.mcpSettings)) : undefined;
           newProps.mcpSettings = newType === 'mcp' ? defaultMcpSettings() : undefined;
         }
+        if ((newType === 'output') !== (oldType === 'output')) {
+          oldProps.outputSettings = current.outputSettings ? JSON.parse(JSON.stringify(current.outputSettings)) : undefined;
+          newProps.outputSettings = newType === 'output' ? defaultOutputSettings() : undefined;
+          if (newType === 'output') {
+            newProps.customLambdaBody = `// Coletor de Entrega / Artefato: ${node.label}\nstd::cout << "[OUTPUT: ${node.label}] Entregável registrado com sucesso!\\n";`;
+          }
+        }
         if (crossesSwitch) {
           oldProps.outputs = JSON.parse(JSON.stringify(current.outputs));
           newProps.outputs = newType === 'switch'
@@ -751,6 +760,7 @@ export class Inspector {
       this.bindSwitchSettings(node);
     }
     if (node.type === 'mcp') this.bindMcpSettings(node);
+    if (node.type === 'output') this.bindOutputSection(node);
 
     // Sincronizar Lambda
     this.container.querySelector('#btn-sync-lambda')?.addEventListener('click', () => {
@@ -1299,6 +1309,121 @@ export class Inspector {
     });
   }
 
+  // --- Output / Entregáveis do Pipeline ---------------------------------------
+
+  private outputSettingsOf(node: INodeData): IOutputSettings {
+    return node.outputSettings ?? defaultOutputSettings();
+  }
+
+  private renderOutputSection(node: INodeData): string {
+    const s = this.outputSettingsOf(node);
+    const opt = (val: string, label: string) => `<option value="${val}" ${s.artifactType === val ? 'selected' : ''}>${label}</option>`;
+
+    return `
+      <div class="settings-section-card" style="margin-top: 12px; padding: 12px; border: 1px solid #10b981; border-radius: 6px; background: #f0fdf4;">
+        <div style="font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #065f46; display: flex; align-items: center; gap: 6px;">
+          <span>📥</span> <span>${t('inspector.output.title', 'Entrega e Coletor de Artefato')}</span>
+        </div>
+        <div class="office-field-hint" style="margin-bottom: 10px; color: #047857;">
+          ${t('inspector.output.hint', 'Define onde o entregável produzido pelo pipeline se encontra e como será apresentado na aba Artefatos.')}
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="output-source-path">${t('inspector.output.source_path_label', 'Caminho de Origem (Workspace)')}</label>
+          <input type="text" id="output-source-path" class="form-input code-font" value="${this.escapeHtml(s.sourcePath)}" placeholder="ex: workspace/scene.svg ou workspace/dados.csv" />
+          <div class="office-field-hint">${t('inspector.output.source_path_hint', 'Arquivo relativo gerado pelos agentes ou tarefas anteriores')}</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="output-dest-path">${t('inspector.output.dest_path_label', 'Caminho de Destino / Exportação (Opcional)')}</label>
+          <input type="text" id="output-dest-path" class="form-input code-font" value="${this.escapeHtml(s.destinationPath ?? '')}" placeholder="ex: exports/scene.svg" />
+          <div class="office-field-hint">${t('inspector.output.dest_path_hint', 'Se informado, o artefato final será copiado para este caminho no término')}</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="output-artifact-type">${t('inspector.output.type_label', 'Tipo / Formato de Visualização')}</label>
+          <select id="output-artifact-type" class="form-select">
+            ${opt('auto', t('inspector.output.type_auto', 'Automático (Detectar por extensão)'))}
+            ${opt('svg', t('inspector.output.type_svg', 'Vetor SVG (Visualizador com Pan/Zoom)'))}
+            ${opt('sheet', t('inspector.output.type_sheet', 'Planilha / Grid Tabular (CSV, TSV, XLSX)'))}
+            ${opt('pdf', t('inspector.output.type_pdf', 'Documento PDF'))}
+            ${opt('markdown', t('inspector.output.type_markdown', 'Texto Formatado / Markdown (.md)'))}
+            ${opt('text', t('inspector.output.type_text', 'Texto Puro (.txt, .log)'))}
+            ${opt('json', t('inspector.output.type_json', 'Estrutura JSON (.json)'))}
+            ${opt('image', t('inspector.output.type_image', 'Imagem Raster (.png, .jpg, .webp)'))}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="output-display-name">${t('inspector.output.name_label', 'Rótulo do Entregável')}</label>
+          <input type="text" id="output-display-name" class="form-input" value="${this.escapeHtml(s.displayName ?? '')}" placeholder="ex: SVG Final da Cena" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="output-description">${t('inspector.output.desc_label', 'Descrição')}</label>
+          <textarea id="output-description" class="form-textarea" rows="2" placeholder="Breve resumo da finalidade deste entregável">${this.escapeHtml(s.description ?? '')}</textarea>
+        </div>
+
+        <div class="form-group" style="margin-top: 6px;">
+          <label style="display: flex; gap: 8px; align-items: center; font-size: 12px; cursor: pointer; color: #1e293b;">
+            <input type="checkbox" id="output-auto-open" ${s.autoOpenPreview !== false ? 'checked' : ''} />
+            <span>${t('inspector.output.auto_open_label', 'Abrir automaticamente na aba Artefatos ao concluir')}</span>
+          </label>
+        </div>
+
+        <div style="margin-top: 10px; display: flex; gap: 8px;">
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-view-artifact-now" style="flex: 1; border-color: #10b981; color: #047857;">
+            👁️ ${t('inspector.output.view_now', 'Ver no Painel de Artefatos')}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  private updateOutputSettings(node: INodeData, mutator: (s: IOutputSettings) => void, description: string): void {
+    const current = this.graph.getNode(node.id) ?? node;
+    const old = current.outputSettings ? JSON.parse(JSON.stringify(current.outputSettings)) as IOutputSettings : defaultOutputSettings();
+    const next: IOutputSettings = JSON.parse(JSON.stringify(old));
+    mutator(next);
+    this.graph.commandManager.execute(new UpdateNodeCommand(this.graph, node.id, { outputSettings: old }, { outputSettings: next }, description));
+  }
+
+  private bindOutputSection(node: INodeData): void {
+    const srcInput = this.container.querySelector('#output-source-path') as HTMLInputElement;
+    srcInput?.addEventListener('change', () => {
+      this.updateOutputSettings(node, s => { s.sourcePath = srcInput.value.trim(); }, 'Alterar caminho de origem do artefato');
+    });
+
+    const dstInput = this.container.querySelector('#output-dest-path') as HTMLInputElement;
+    dstInput?.addEventListener('change', () => {
+      this.updateOutputSettings(node, s => { s.destinationPath = dstInput.value.trim(); }, 'Alterar caminho de destino do artefato');
+    });
+
+    const typeSelect = this.container.querySelector('#output-artifact-type') as HTMLSelectElement;
+    typeSelect?.addEventListener('change', () => {
+      this.updateOutputSettings(node, s => { s.artifactType = typeSelect.value as OutputArtifactType; }, 'Alterar formato do artefato');
+    });
+
+    const nameInput = this.container.querySelector('#output-display-name') as HTMLInputElement;
+    nameInput?.addEventListener('change', () => {
+      this.updateOutputSettings(node, s => { s.displayName = nameInput.value.trim(); }, 'Alterar rótulo do entregável');
+    });
+
+    const descInput = this.container.querySelector('#output-description') as HTMLTextAreaElement;
+    descInput?.addEventListener('change', () => {
+      this.updateOutputSettings(node, s => { s.description = descInput.value.trim(); }, 'Alterar descrição do entregável');
+    });
+
+    const autoOpenChk = this.container.querySelector('#output-auto-open') as HTMLInputElement;
+    autoOpenChk?.addEventListener('change', () => {
+      this.updateOutputSettings(node, s => { s.autoOpenPreview = autoOpenChk.checked; }, 'Alterar abertura automática do artefato');
+    });
+
+    this.container.querySelector('#btn-view-artifact-now')?.addEventListener('click', () => {
+      this.bus.emit('console:open-artifacts', { nodeId: node.id });
+    });
+  }
+
   private getTaskTypeExplanation(type: string): string {
     switch (type) {
       case 'static':
@@ -1323,6 +1448,8 @@ export class Inspector {
         return t('inspector.explanations.join');
       case 'agent':
         return t('inspector.explanations.agent');
+      case 'output':
+        return t('inspector.explanations.output', 'Vértice coletor de saída e entrega de artefatos. Permite definir os arquivos gerados (SVGs, planilhas, relatórios Markdown, PDFs, JSONs) para inspeção visual interativa na aba Artefatos e cópia para diretórios finais.');
       default:
         return t('inspector.explanations.default');
     }

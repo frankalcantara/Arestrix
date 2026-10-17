@@ -288,5 +288,84 @@ describe('SvgNodeView - Vértices Vetoriais SVG e Contraste WCAG 2.1', () => {
       const expandedHeight = SvgNodeView.computeHeight(multiPortNode);
       expect(expandedHeight).toBeGreaterThan(standardHeight);
     });
+
+    it('deve exibir pílula de status ao vivo no canto superior esquerdo e animar anel perimetral sem text-shadow', () => {
+      const svgView = new SvgNodeView(sampleNode, testSvgRoot, tooltip, bus);
+      const ring = svgView.group.querySelector('.vertex-selection-ring') as any;
+
+      // Estado inicial Idle (sem pílula de status)
+      expect(svgView.group.querySelector('.vertex-exec-status-pill')).toBeNull();
+
+      // Estado Queued (Na Fila)
+      svgView.setExecutionState('queued');
+      let statusPill = svgView.group.querySelector('.vertex-exec-status-pill') as any;
+      let statusText = svgView.group.querySelector('.vertex-exec-status-text') as any;
+      expect(statusPill).not.toBeNull();
+      expect(statusText.style.textShadow).toBe('none');
+      expect(statusText.style.filter).toBe('none');
+      expect(statusText.textContent).toContain('Na fila');
+      expect(svgView.group.querySelector('.vertex-exec-spinner')).toBeNull();
+      expect(svgView.group.getAttribute('class')).toContain('state-queued');
+
+      // Estado Running (Executando com spinner e anel animado)
+      svgView.setExecutionState('running');
+      statusPill = svgView.group.querySelector('.vertex-exec-status-pill') as any;
+      statusText = svgView.group.querySelector('.vertex-exec-status-text') as any;
+      const spinner = svgView.group.querySelector('.vertex-exec-spinner') as any;
+      expect(statusPill).not.toBeNull();
+      expect(spinner).not.toBeNull();
+      expect(ring.getAttribute('class')).toContain('ring-animated');
+      expect(ring.getAttribute('stroke')).toBe('#10B981');
+
+      // Sub-atividade Thinking via telemetria (índigo #6366F1)
+      svgView.handleTelemetry({
+        nodeId: sampleNode.id,
+        type: 'thinking',
+        timestamp: Date.now(),
+        payload: { thinkingChars: 2048 }
+      });
+      statusText = svgView.group.querySelector('.vertex-exec-status-text') as any;
+      expect(ring.getAttribute('stroke')).toBe('#6366F1');
+      expect(statusText.textContent).toContain('Pensando');
+
+      // Sub-atividade Tool Call via telemetria (ciano/azul #0284C7)
+      svgView.handleTelemetry({
+        nodeId: sampleNode.id,
+        type: 'tool_start',
+        timestamp: Date.now(),
+        payload: { toolName: 'search_db' }
+      });
+      statusText = svgView.group.querySelector('.vertex-exec-status-text') as any;
+      expect(ring.getAttribute('stroke')).toBe('#0284C7');
+      expect(statusText.textContent).toContain('search_db');
+
+      // Conclusão via telemetria (settled -> completed)
+      svgView.handleTelemetry({
+        nodeId: sampleNode.id,
+        type: 'status',
+        timestamp: Date.now(),
+        payload: { status: 'settled' }
+      });
+      statusText = svgView.group.querySelector('.vertex-exec-status-text') as any;
+      expect(svgView.getExecutionState()).toBe('completed');
+      expect(ring.getAttribute('stroke')).toBe('#059669');
+      expect(ring.getAttribute('class')).not.toContain('ring-animated');
+      expect(svgView.group.querySelector('.vertex-exec-spinner')).toBeNull();
+      expect(statusText.textContent).toContain('✓ Concluído');
+
+      // Erro via telemetria (error -> #EF4444)
+      svgView.handleTelemetry({
+        nodeId: sampleNode.id,
+        type: 'status',
+        timestamp: Date.now(),
+        payload: { status: 'error', detail: 'Falha de execução' }
+      });
+      statusText = svgView.group.querySelector('.vertex-exec-status-text') as any;
+      expect(svgView.getExecutionState()).toBe('error');
+      expect(ring.getAttribute('stroke')).toBe('#EF4444');
+      expect(statusText.textContent).toContain('✖ Erro');
+
+      svgView.dispose();
+    });
   });
 });

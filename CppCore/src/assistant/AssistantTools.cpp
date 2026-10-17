@@ -109,6 +109,8 @@ Json nodeTypesCatalog(RuntimeLang lang) {
         {"critical", "Secao critica: acesso exclusivo a recurso compartilhado.", "Critical section: exclusive access to a shared resource."},
         {"cuda", "Tarefa com kernel CUDA na GPU.", "Task with a CUDA kernel on the GPU."},
         {"mcp", "Chama UMA ferramenta de um servidor MCP do projeto, sem IA.", "Calls ONE tool of a project MCP server, without AI."},
+        {"output", "Vertice coletor de saida e entrega de artefatos: define arquivos gerados (SVG, planilha, PDF, Markdown, texto, JSON) para visualizacao e exportacao.",
+                   "Output / Artifact deliverable collector: defines deliverable files (SVG, spreadsheet, PDF, Markdown, text, JSON) for preview and export."},
     };
     Json out = Json::array();
     for (const auto& t : types) out.push_back(Json{{"type", t.type}, {"description", langPick(lang, t.pt, t.en)}});
@@ -159,6 +161,15 @@ std::vector<AssistantToolDef> assistantTools(RuntimeLang lang) {
         L("Valida o grafo: arestas orfas, ciclos sem vertice de decisao, saidas sem destino, vertices isolados.",
           "Validates the graph: dangling edges, cycles without a decision vertex, outputs leading nowhere, isolated vertices."),
         object(Json::object()), ToolRisk::Read));
+    tools.push_back(tool("list_artifacts",
+        L("Lista os artefatos e arquivos entregaveis gerados pelo pipeline (registrados em vertices de saida ou presentes em exports/ e workspace/).",
+          "Lists the artifacts and deliverable files produced by the pipeline (registered in output vertices or present in exports/ and workspace/)."),
+        object(Json::object()), ToolRisk::Read));
+    tools.push_back(tool("get_artifact",
+        L("Le o conteudo (se texto, SVG, Markdown ou JSON) ou metadados de um artefato gerado pelo pipeline.",
+          "Reads the content (if text, SVG, Markdown, or JSON) or metadata of a pipeline artifact."),
+        object(Json{{"path", prop("string", L("Caminho do artefato ou id do vertice output.", "Artifact path or output vertex id."))}}, {"path"}),
+        ToolRisk::Read));
 
     // --- Editar o grafo (aparece no canvas e pode ser desfeito) ---
     tools.push_back(tool("add_node",
@@ -173,9 +184,9 @@ std::vector<AssistantToolDef> assistantTools(RuntimeLang lang) {
         ToolRisk::Edit));
     tools.push_back(tool("update_node",
         L("Altera um vertice. Campos aceitos: label, customLambdaBody, criticalSectionId (texto); parameters, agentSettings, "
-          "switchSettings, mcpSettings (objetos, mesclados no existente); requiredHeaders (lista).",
+          "switchSettings, mcpSettings, outputSettings (objetos, mesclados no existente); requiredHeaders (lista).",
           "Changes a vertex. Accepted fields: label, customLambdaBody, criticalSectionId (text); parameters, agentSettings, "
-          "switchSettings, mcpSettings (objects, merged into the existing one); requiredHeaders (list)."),
+          "switchSettings, mcpSettings, outputSettings (objects, merged into the existing one); requiredHeaders (list)."),
         object(Json{{"id", prop("string", L("Id do vertice.", "Vertex id."))},
                     {"patch", prop("object", L("Campos a alterar.", "Fields to change."))}},
                {"id", "patch"}),
@@ -329,6 +340,105 @@ ToolOutcome executeAssistantTool(GraphDocument& doc, AssistantHost& host, Runtim
         if (name == "validate_graph") {
             Json v = doc.validate(lang);
             return okOutcome(v, name, Json{{"errors", v.at("errors").size()}, {"warnings", v.at("warnings").size()}});
+        }
+        if (name == "list_artifacts") {
+            Json list = Json::array();
+            std::string root = host.currentProject().value("rootPath", std::string());
+            fs::path prjRoot = root.empty() ? fs::current_path() : fs::path(root);
+
+            // 1. Vértices output do grafo
+            for (const auto& n : doc.schema().at("nodes")) {
+                if (n.value("type", "") != "output") continue;
+                std::string nid = n.value("id", "");
+                std::string label = n.value("label", nid);
+                Json s = n.contains("outputSettings") && n.at("outputSettings").is_object() ? n.at("outputSettings") : Json::object();
+                std::string src = s.value("sourcePath", "");
+                std::string dst = s.value("destinationPath", "");
+                std::string atype = s.value("artifactType", "auto");
+                std::string dname = s.value("displayName", label);
+                if (dname.empty()) dname = label;
+
+                std::string chosenPath = !dst.empty() ? dst : src;
+                fs::path fullP = prjRoot / chosenPath;
+                std::error_code ec;
+                bool exists = fs::exists(fullP, ec);
+                size_t sizeBytes = exists ? (size_t)fs::file_size(fullP, ec) : 0;
+
+                list.push_back(Json{
+                    {"id", nid},
+                    {"nodeId", nid},
+                    {"name", dname},
+                    {"path", chosenPath},
+                    {"sourcePath", src},
+                    {"destinationPath", dst},
+                    {"type", atype},
+                    {"sizeBytes", sizeBytes},
+                    {"exists", exists}
+                });
+            }
+
+            // 2. Arquivos em exports/
+            std::error_code ec;
+            fs::path expDir = prjRoot / "exports";
+            if (fs::is_directory(expDir, ec)) {
+                for (const auto& entry : fs::directory_iterator(expDir, ec)) {
+                    if (!entry.is_regular_file(ec)) continue;
+                    std::string rel = "exports/" + entry.path().filename().string();
+                    bool already = false;
+                    for (const auto& item : list) {
+                        if (item.value("path", "") == rel) { already = true; break; }
+                    }
+                    if (!already) {
+                        list.push_back(Json{
+                            {"id", "export_" + entry.path().filename().string()},
+                            {"name", entry.path().filename().string()},
+                            {"path", rel},
+                            {"type", "auto"},
+                            {"sizeBytes", (size_t)entry.file_size(ec)},
+                            {"exists", true}
+                        });
+                    }
+                }
+            }
+
+            return okOutcome(Json{{"artifacts", list}}, name, Json{{"count", list.size()}});
+        }
+        if (name == "get_artifact") {
+            std::string req = argStr(args, "path");
+            std::string root = host.currentProject().value("rootPath", std::string());
+            fs::path prjRoot = root.empty() ? fs::current_path() : fs::path(root);
+
+            std::string filePath = req;
+            auto n = doc.node(req);
+            if (n && n->value("type", "") == "output" && n->contains("outputSettings")) {
+                const auto& s = n->at("outputSettings");
+                std::string dst = s.value("destinationPath", "");
+                std::string src = s.value("sourcePath", "");
+                filePath = !dst.empty() ? dst : src;
+            }
+
+            fs::path fullP = prjRoot / filePath;
+            std::error_code ec;
+            if (!fs::exists(fullP, ec) || !fs::is_regular_file(fullP, ec)) {
+                return fail(langPick(lang, "Artefato nao encontrado no disco: '", "Artifact not found on disk: '") + filePath + "'.", name);
+            }
+
+            size_t size = fs::file_size(fullP, ec);
+            std::string ext = fullP.extension().string();
+            bool isText = (ext == ".svg" || ext == ".txt" || ext == ".md" || ext == ".json" ||
+                           ext == ".csv" || ext == ".tsv" || ext == ".xml" || ext == ".html");
+
+            std::string content;
+            if (isText && size < 1024 * 1024) {
+                content = jsonutil::readFile(fullP);
+            }
+
+            return okOutcome(Json{
+                {"path", filePath},
+                {"sizeBytes", size},
+                {"isText", isText},
+                {"content", content}
+            }, name, Json{{"path", filePath}});
         }
 
         if (name == "add_node") {

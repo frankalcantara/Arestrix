@@ -79,6 +79,7 @@
       "undo": "Desfazer (Ctrl+Z)",
       "redo": "Refazer (Ctrl+Y)",
       "run": "Compilar & Executar (F5)",
+      "stop": "Parar Execução (Shift+F5)",
       "language": "Idioma da Interface",
       "default_workspace": "Workspace Padrão",
       "autosave_disabled_badge": "Salvamento automático desativado",
@@ -195,6 +196,8 @@
       "redo": "Refazer",
       "zoom_fit": "Ajustar Vista",
       "clear_graph": "Limpar Grafo",
+      "auto_layout": "Auto-Organizar<br>Layout",
+      "auto_layout_tip": "Distribuir vértices automaticamente em camadas 2D Sugiyama sem sobreposições",
       "graph_vertices": "Vértices do Grafo",
       "quick_agent": "+ Agente IA",
       "quick_agent_tip": "Adicionar Agente Code Mode",
@@ -205,6 +208,8 @@
       "execution": "Execução",
       "build_run": "Build & Run<br>(F5)",
       "build_run_tip": "Compila e executa com MSVC C++20 (F5)",
+      "stop_run": "Parar<br>(Shift+F5)",
+      "stop_run_tip": "Interrompe a execução do pipeline em andamento (Shift+F5)",
       "validate_dag": "Validar<br>DAG",
       "validate_dag_tip": "Valida estrutura e ciclos do grafo",
       "governance": "Governança",
@@ -806,6 +811,9 @@
     "up_level_tip": "Voltar ao nível pai (Esc)"
   },
   "canvas_controls": {
+    "auto_layout_tip": "Auto-Organizar Layout (Distribuir Vértices em 2D)",
+    "follow_exec_tip": "Seguir Execução no Grafo (Auto-Focus no Vértice Ativo)",
+    "clear_exec_tip": "Limpar Estado Visual de Execução no Grafo",
     "fit_tip": "Ajustar ao Conteúdo (Ctrl+0)",
     "zoom_in_tip": "Aumentar Zoom (Ctrl +)",
     "zoom_out_tip": "Diminuir Zoom (Ctrl -)",
@@ -831,6 +839,7 @@
     "cmd_mcp": "Servidores MCP",
     "cmd_memory": "Memória do projeto",
     "cmd_batch": "Lote e Retomada",
+    "cmd_auto_layout": "Auto-Organizar Layout",
     "cmd_github": "Repositórios GitHub (catálogo de skills)"
   },
   "context_menu": {

@@ -243,7 +243,7 @@
     {
       "id": "entrega",
       "label": "Entrega_SVG_Final",
-      "type": "static",
+      "type": "output",
       "position": {
         "x": 1500,
         "y": -80
@@ -254,6 +254,13 @@
           "name": "in",
           "direction": "input",
           "type": "flow"
+        },
+        {
+          "id": "entrega_in_data",
+          "name": "data_in",
+          "direction": "input",
+          "type": "data",
+          "dataType": "std::string"
         }
       ],
       "outputs": [
@@ -265,7 +272,15 @@
         }
       ],
       "parameters": {},
-      "customLambdaBody": "std::cout << \"[Entrega] SVG aprovado e exportado com sucesso!\\n\";"
+      "customLambdaBody": "std::cout << \"[OUTPUT: Entrega_SVG_Final] Exportando SVG auditado...\\n\";\nstd::error_code ec;\nstd::filesystem::create_directories(\"exports\", ec);\nstd::filesystem::copy_file(\"workspace/scene.svg\", \"exports/scene.svg\", std::filesystem::copy_options::overwrite_existing, ec);\nstd::cout << \"[OUTPUT_DELIVERY] {\\\"nodeId\\\": \\\"entrega\\\", \\\"label\\\": \\\"Cena SVG Final\\\", \\\"source\\\": \\\"workspace/scene.svg\\\", \\\"destination\\\": \\\"exports/scene.svg\\\", \\\"type\\\": \\\"svg\\\"}\\n\";",
+      "outputSettings": {
+        "sourcePath": "workspace/scene.svg",
+        "destinationPath": "exports/scene.svg",
+        "artifactType": "svg",
+        "displayName": "Cena SVG Final",
+        "autoOpenPreview": true,
+        "description": "Vetor SVG animado e auditado gerado pelo pipeline de agentes"
+      }
     }
   ],
   "edges": [

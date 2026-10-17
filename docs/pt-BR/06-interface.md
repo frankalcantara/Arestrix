@@ -136,10 +136,18 @@ Os modais são janelas flutuantes: arrastáveis pela barra de título, redimensi
 | Gerenciador de projetos | Metadados do projeto, caminho do workspace, `.env` do projeto |
 | Lote e Retomada | Executar |
 
-## Console
+## Console e Painel de Artefatos
 
-Uma gaveta acoplada na base mostra a saída da compilação e o log de execução ao vivo. A barra de status
-abaixo dela mostra o estado do grafo e do projeto.
+Uma gaveta acoplada na base da tela (redimensionável por splitter e minimizável) centraliza a observabilidade e os produtos da execução em três abas:
+
+1. **Terminal MSVC C++20:** Registra a geração do código-fonte, a compilação nativa pelo compilador e os logs brutos da execução da engine Taskflow.
+2. **Telemetria em Tempo Real:** Monitora as etapas cognitivas dos agentes (início e término de raciocínio *thinking*, invocação de ferramentas, parâmetros e retries de *rate limit* 429).
+3. **Artefatos (Entregáveis):** Painel multiformato dedicado à inspeção e entrega dos arquivos produzidos pelo pipeline:
+   - **Vetor SVG:** Renderização vetorial nativa e interativa com pan/zoom e alternância instantânea entre a cena gráfica e o código-fonte XML/SVG limpo.
+   - **Planilhas e Dados Tabulares (CSV/TSV):** Grid interativo com busca instantânea por termos em células e visualização de dados brutos.
+   - **Documentos Técnicos e Markdown:** Leitor com realce de blocos de código e botão de cópia rápida.
+   - **PDFs e JSONs:** Visualização limpa e botão para abertura direta no aplicativo padrão do sistema operacional.
+   - **Ações Rápidas de Entrega:** Botão **"No Explorer"** para abrir a pasta `exports/` no Windows Explorer, **"Copiar"** e **"Baixar"** para exportação local direta.
 
 ## Idioma
 

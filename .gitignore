@@ -28,6 +28,7 @@ testeCriavideo/
 projects/
 arestrix-recent-projects.json
 taskforge-recent-projects.json
+*.arestrix
 
 /build/
 /runtime/

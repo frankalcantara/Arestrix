@@ -178,6 +178,146 @@ void ui_open_in_vscode(webui::window::event* e) {
     }
 }
 
+// Wrapper JS -> C++ (Abrir pasta de saidas/artefatos no Windows Explorer)
+void ui_open_output_folder(webui::window::event* e) {
+    try {
+        std::string req = e->get_string();
+        std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+        if (root.empty()) root = std::filesystem::current_path().string();
+        std::filesystem::path dir = req.empty() ? (std::filesystem::path(root) / "exports") : std::filesystem::path(root) / req;
+        std::error_code ec;
+        if (!std::filesystem::exists(dir, ec)) {
+            // Se exports nao existe, tenta abrir o proprio root do projeto
+            if (!std::filesystem::create_directories(dir, ec)) {
+                dir = std::filesystem::path(root);
+            }
+        }
+        e->return_bool(taskforge::platform::openFolderInExplorer(dir));
+    } catch (...) {
+        e->return_bool(false);
+    }
+}
+
+// Wrapper JS -> C++ (Listar artefatos produzidos no projeto ativo)
+void ui_list_artifacts(webui::window::event* e) {
+    try {
+        std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+        if (root.empty()) root = std::filesystem::current_path().string();
+        std::filesystem::path prjRoot(root);
+
+        taskforge::Json list = taskforge::Json::array();
+        std::error_code ec;
+
+        // Escaneia exports/
+        std::filesystem::path expDir = prjRoot / "exports";
+        if (std::filesystem::is_directory(expDir, ec)) {
+            for (const auto& entry : std::filesystem::directory_iterator(expDir, ec)) {
+                if (!entry.is_regular_file(ec)) continue;
+                auto filename = entry.path().filename().string();
+                auto ext = entry.path().extension().string();
+                std::string type = "auto";
+                if (ext == ".svg") type = "svg";
+                else if (ext == ".csv" || ext == ".tsv" || ext == ".xlsx") type = "sheet";
+                else if (ext == ".pdf") type = "pdf";
+                else if (ext == ".md") type = "markdown";
+                else if (ext == ".json") type = "json";
+                else if (ext == ".txt" || ext == ".log") type = "text";
+                else if (ext == ".png" || ext == ".jpg" || ext == ".webp") type = "image";
+
+                list.push_back(taskforge::Json{
+                    {"id", "exp_" + filename},
+                    {"name", filename},
+                    {"path", (expDir / filename).string()},
+                    {"relativePath", "exports/" + filename},
+                    {"type", type},
+                    {"sizeBytes", (size_t)entry.file_size(ec)}
+                });
+            }
+        }
+
+        // Escaneia workspace/ para SVGs e relatórios conhecidos
+        std::filesystem::path wsDir = prjRoot / "workspace";
+        if (std::filesystem::is_directory(wsDir, ec)) {
+            for (const auto& entry : std::filesystem::directory_iterator(wsDir, ec)) {
+                if (!entry.is_regular_file(ec)) continue;
+                auto filename = entry.path().filename().string();
+                auto ext = entry.path().extension().string();
+                if (ext != ".svg" && ext != ".csv" && ext != ".tsv" && ext != ".pdf" && ext != ".md" && ext != ".json" && ext != ".txt") continue;
+
+                std::string type = "auto";
+                if (ext == ".svg") type = "svg";
+                else if (ext == ".csv" || ext == ".tsv") type = "sheet";
+                else if (ext == ".pdf") type = "pdf";
+                else if (ext == ".md") type = "markdown";
+                else if (ext == ".json") type = "json";
+                else if (ext == ".txt") type = "text";
+
+                // Se já estiver em exports, ignora duplicata de nome idêntico
+                bool dup = false;
+                for (const auto& existing : list) {
+                    if (existing.value("name", "") == filename) { dup = true; break; }
+                }
+                if (!dup) {
+                    list.push_back(taskforge::Json{
+                        {"id", "ws_" + filename},
+                        {"name", filename},
+                        {"path", (wsDir / filename).string()},
+                        {"relativePath", "workspace/" + filename},
+                        {"type", type},
+                        {"sizeBytes", (size_t)entry.file_size(ec)}
+                    });
+                }
+            }
+        }
+
+        taskforge::Json res;
+        res["ok"] = true;
+        res["artifacts"] = list;
+        e->return_string(res.dump());
+    } catch (const std::exception& ex) {
+        taskforge::Json err;
+        err["ok"] = false;
+        err["error"] = ex.what();
+        e->return_string(err.dump());
+    }
+}
+
+// Wrapper JS -> C++ (Obter conteudo do artefato)
+void ui_get_artifact(webui::window::event* e) {
+    try {
+        std::string req = e->get_string();
+        auto p = confineToAllowedRoots(req);
+        if (!p || !std::filesystem::is_regular_file(*p)) {
+            taskforge::Json err;
+            err["ok"] = false;
+            err["error"] = "Arquivo de artefato nao encontrado";
+            e->return_string(err.dump());
+            return;
+        }
+
+        std::error_code ec;
+        size_t size = std::filesystem::file_size(*p, ec);
+        std::string ext = p->extension().string();
+        bool isText = (ext == ".svg" || ext == ".txt" || ext == ".md" || ext == ".json" ||
+                       ext == ".csv" || ext == ".tsv" || ext == ".xml" || ext == ".html");
+
+        taskforge::Json res;
+        res["ok"] = true;
+        res["path"] = p->string();
+        res["sizeBytes"] = size;
+        res["isText"] = isText;
+        if (isText && size < 2 * 1024 * 1024) {
+            res["content"] = taskforge::jsonutil::readFile(*p);
+        }
+        e->return_string(res.dump());
+    } catch (const std::exception& ex) {
+        taskforge::Json err;
+        err["ok"] = false;
+        err["error"] = ex.what();
+        e->return_string(err.dump());
+    }
+}
+
 // Wrapper de comunicação JS -> C++ (Adicionar Nó)
 void ui_add_node(webui::window::event* e) {
     std::string jsonStr = e->get_string();
@@ -1596,6 +1736,9 @@ int main(int argc, char** argv) {
     win.bind("write_skill_file", ui_write_skill_file);
     win.bind("read_skill_file", ui_read_skill_file);
     win.bind("open_in_vscode", ui_open_in_vscode);
+    win.bind("open_output_folder", ui_open_output_folder);
+    win.bind("list_artifacts", ui_list_artifacts);
+    win.bind("get_artifact", ui_get_artifact);
     win.bind("run_pipeline", ui_run_pipeline);
     win.bind("stop_pipeline", ui_stop_pipeline);
     win.bind("assistant_status", ui_assistant_status);

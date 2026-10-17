@@ -492,6 +492,36 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
       expect(html).toContain('BR Português (Brasil)');
       expect(html).toContain('US English');
     });
+
+    it('deve transformar o botão Build & Run em botão vermelho Stop ao rodar, e voltar a Build & Run ao finalizar', async () => {
+      const { globalEventBus } = await import('../src/core/EventBus.ts');
+      const container = ribbon.getContainer();
+
+      const btnRun = container.querySelector('#ribbon-btn-run') as any;
+      const btnQat = container.querySelector('#qat-btn-run') as any;
+
+      expect(ribbon.isRunning()).toBe(false);
+      expect(btnRun.classList.contains('is-running-stop')).toBe(false);
+      expect(btnRun.querySelector('.ribbon-btn-icon')?.textContent).toBe('▶');
+
+      // 1. Inicia execução
+      globalEventBus.emit('pipeline:running', 'Executando pipeline...');
+      expect(ribbon.isRunning()).toBe(true);
+      expect(btnRun.classList.contains('is-running-stop')).toBe(true);
+      expect(btnRun.querySelector('.ribbon-btn-icon')?.textContent).toBe('⏹');
+      expect(btnRun.querySelector('.ribbon-btn-label')?.textContent).toContain('Parar');
+      expect(btnQat.classList.contains('is-running-stop')).toBe(true);
+      expect(btnQat.textContent).toBe('⏹');
+
+      // 2. Finaliza ou interrompe execução
+      globalEventBus.emit('pipeline:stopped');
+      expect(ribbon.isRunning()).toBe(false);
+      expect(btnRun.classList.contains('is-running-stop')).toBe(false);
+      expect(btnRun.querySelector('.ribbon-btn-icon')?.textContent).toBe('▶');
+      expect(btnRun.querySelector('.ribbon-btn-label')?.textContent).toContain('Build & Run');
+      expect(btnQat.classList.contains('is-running-stop')).toBe(false);
+      expect(btnQat.textContent).toBe('▶');
+    });
   });
 });
 

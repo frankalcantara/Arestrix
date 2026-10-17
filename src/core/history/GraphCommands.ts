@@ -1,6 +1,6 @@
 import { ICommand } from './ICommand.ts';
 import { Graph } from '../Graph.ts';
-import { INodeData, IEdgeData } from '../types.ts';
+import { INodeData, IEdgeData, IEdgeControlPoints } from '../types.ts';
 
 /**
  * Comando para adicionar um novo nó ao grafo.
@@ -207,3 +207,124 @@ export class CompoundCommand implements ICommand {
     }
   }
 }
+
+/**
+ * Comando para atualizar propriedades de uma aresta (ex.: alças de curva de Bézier estilo Inkscape).
+ */
+export class UpdateEdgeCommand implements ICommand {
+  readonly description: string;
+  private graph: Graph;
+  private edgeId: string;
+  private oldControlPoints: IEdgeControlPoints | undefined;
+  private newControlPoints: IEdgeControlPoints | undefined;
+
+  constructor(
+    graph: Graph,
+    edgeId: string,
+    oldControlPoints: IEdgeControlPoints | undefined,
+    newControlPoints: IEdgeControlPoints | undefined,
+    description?: string
+  ) {
+    this.graph = graph;
+    this.edgeId = edgeId;
+    this.oldControlPoints = oldControlPoints
+      ? {
+          cp1Offset: { ...oldControlPoints.cp1Offset },
+          cp2Offset: { ...oldControlPoints.cp2Offset }
+        }
+      : undefined;
+    this.newControlPoints = newControlPoints
+      ? {
+          cp1Offset: { ...newControlPoints.cp1Offset },
+          cp2Offset: { ...newControlPoints.cp2Offset }
+        }
+      : undefined;
+    this.description = description || `Ajustar Curva Bézier (${edgeId})`;
+  }
+
+  execute(): void {
+    this.graph.updateEdge(this.edgeId, {
+      controlPoints: this.newControlPoints
+        ? {
+            cp1Offset: { ...this.newControlPoints.cp1Offset },
+            cp2Offset: { ...this.newControlPoints.cp2Offset }
+          }
+        : undefined
+    });
+  }
+
+  undo(): void {
+    this.graph.updateEdge(this.edgeId, {
+      controlPoints: this.oldControlPoints
+        ? {
+            cp1Offset: { ...this.oldControlPoints.cp1Offset },
+            cp2Offset: { ...this.oldControlPoints.cp2Offset }
+          }
+        : undefined
+    });
+  }
+}
+
+/**
+ * Comando atômico para organizar/distribuir automaticamente todos os vértices do grafo (Auto-Layout).
+ */
+export class AutoLayoutCommand implements ICommand {
+  readonly description: string = 'Auto-Organizar Layout do Grafo';
+  private graph: Graph;
+  private oldPositions: Map<string, { x: number; y: number }>;
+  private newPositions: Map<string, { x: number; y: number }>;
+  private oldEdgeControls: Map<string, IEdgeControlPoints | undefined>;
+
+  constructor(
+    graph: Graph,
+    oldPositions: Map<string, { x: number; y: number }>,
+    newPositions: Map<string, { x: number; y: number }>,
+    oldEdgeControls?: Map<string, IEdgeControlPoints | undefined>
+  ) {
+    this.graph = graph;
+    this.oldPositions = new Map();
+    oldPositions.forEach((pos, id) => this.oldPositions.set(id, { ...pos }));
+    this.newPositions = new Map();
+    newPositions.forEach((pos, id) => this.newPositions.set(id, { ...pos }));
+    this.oldEdgeControls = new Map();
+    if (oldEdgeControls) {
+      oldEdgeControls.forEach((cp, id) => {
+        this.oldEdgeControls.set(
+          id,
+          cp
+            ? {
+                cp1Offset: { ...cp.cp1Offset },
+                cp2Offset: { ...cp.cp2Offset }
+              }
+            : undefined
+        );
+      });
+    }
+  }
+
+  execute(): void {
+    for (const [id, pos] of this.newPositions.entries()) {
+      this.graph.updateNodePosition(id, pos.x, pos.y);
+    }
+    for (const edgeId of this.oldEdgeControls.keys()) {
+      this.graph.updateEdge(edgeId, { controlPoints: undefined });
+    }
+  }
+
+  undo(): void {
+    for (const [id, pos] of this.oldPositions.entries()) {
+      this.graph.updateNodePosition(id, pos.x, pos.y);
+    }
+    for (const [edgeId, cp] of this.oldEdgeControls.entries()) {
+      this.graph.updateEdge(edgeId, {
+        controlPoints: cp
+          ? {
+              cp1Offset: { ...cp.cp1Offset },
+              cp2Offset: { ...cp.cp2Offset }
+            }
+          : undefined
+      });
+    }
+  }
+}
+

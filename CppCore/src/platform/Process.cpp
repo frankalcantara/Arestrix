@@ -439,6 +439,11 @@ bool openInVsCode(const std::filesystem::path& path) {
     return (INT_PTR)r > 32;
 }
 
+bool openFolderInExplorer(const std::filesystem::path& path) {
+    HINSTANCE r = ShellExecuteW(nullptr, L"open", path.wstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    return (INT_PTR)r > 32;
+}
+
 // ============================================================================
 // POSIX
 // ============================================================================
@@ -739,6 +744,14 @@ std::vector<std::string> listRoots() {
 bool openInVsCode(const std::filesystem::path& path) {
     ProcessSpec s;
     s.argv = {"code", path.string()};
+    std::string err;
+    auto p = Process::start(s, err);
+    return p != nullptr;
+}
+
+bool openFolderInExplorer(const std::filesystem::path& path) {
+    ProcessSpec s;
+    s.argv = {"xdg-open", path.string()};
     std::string err;
     auto p = Process::start(s, err);
     return p != nullptr;

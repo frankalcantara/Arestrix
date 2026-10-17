@@ -93,6 +93,19 @@ per item and per stage in `pipeline-state.json`, written atomically.
   later stages run concurrently.
 - The **Run** tab has the batch orchestrator: items, concurrency, serialized stages, and a live checkpoint matrix.
 
+## Deliverables and Output Nodes (Artifacts)
+
+Any pipeline designed to generate deliverable products (vector graphics, reports, spreadsheets, models, or datasets) can declare one or more **`output` (Output / Artifact)** nodes.
+
+- **Source and Destination Configuration:** The vertex specifies a `sourcePath` (e.g., `workspace/scene.svg` or `workspace/report.md`) produced by preceding agents, and optionally a `destinationPath` (e.g., `exports/scene.svg`). At execution completion, the deliverable is atomically copied to the final destination folder.
+- **Built-in Multi-Format Support:**
+  - **SVG:** Interactive vector viewer with zoom controls (+, -, 100%, fit to screen), source code inspection, and crisp typography rendering (no blur/drop-shadow on text).
+  - **Spreadsheets (CSV, TSV, XLSX):** Tabular data grid with instant cell search and raw data toggling.
+  - **Text / Markdown:** Formatted viewer for technical documents and reports with syntax highlighting and one-click copy.
+  - **PDF and JSON:** Structured view with clean indentation and direct system viewer launch.
+- **Artifacts Tab in the Bottom Drawer:** Positioned alongside the *Terminal* and *Telemetry* tabs, the *Artifacts* tab displays the real-time count of generated deliverables, lets users inspect visual graphics or code, copy content, and open the `exports/` folder in Windows Explorer with one click.
+- **Local Chat Assistant Operation:** The Studio's native chat assistant integrates with the artifact lifecycle through the `list_artifacts` and `get_artifact` tools, allowing the assistant to examine generated deliverables and provide analytical feedback directly to the user.
+
 ## Related
 
 - [Workspaces, memory, skills and MCP](05-workspaces-memory-skills-mcp.md)

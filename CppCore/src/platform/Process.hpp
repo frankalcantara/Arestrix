@@ -103,5 +103,8 @@ std::vector<std::string> listRoots();
 // Abre `path` no VS Code (best effort).
 bool openInVsCode(const std::filesystem::path& path);
 
+// Abre `path` no gerenciador de arquivos do sistema (Explorer no Windows, xdg-open no Linux).
+bool openFolderInExplorer(const std::filesystem::path& path);
+
 } // namespace platform
 } // namespace taskforge

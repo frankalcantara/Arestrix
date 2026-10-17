@@ -4,6 +4,9 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { IEdgeData } from '../core/types.ts';
 import { THEME } from './Theme.ts';
+import { computeEdgeBezier, IBezierCurvePoints, IObstacleBox } from './BezierEdgeRouter.ts';
+
+export type EdgeExecutionState = 'idle' | 'queued' | 'active' | 'completed' | 'error';
 
 export class ConnectionView {
   public edgeData: IEdgeData;
@@ -11,6 +14,8 @@ export class ConnectionView {
   private geometry: LineGeometry;
   private material: LineMaterial;
   public isSelected: boolean = false;
+  public executionState: EdgeExecutionState = 'idle';
+  public currentBezier: IBezierCurvePoints | null = null;
 
   constructor(edgeData: IEdgeData, screenWidth: number, screenHeight: number) {
     this.edgeData = edgeData;
@@ -38,29 +43,18 @@ export class ConnectionView {
   }
 
   /**
-   * Atualiza os pontos da curva Bézier cúbica entre as duas portas.
+   * Atualiza os pontos da curva Bézier cúbica entre as duas portas,
+   * respeitando alças editadas (estilo Inkscape) e desvio automático de obstáculos.
    */
-  updateCurve(startWorld: THREE.Vector3, endWorld: THREE.Vector3): void {
-    const dx = endWorld.x - startWorld.x;
-    const dy = endWorld.y - startWorld.y;
+  updateCurve(
+    startWorld: THREE.Vector3,
+    endWorld: THREE.Vector3,
+    obstacles: IObstacleBox[] = []
+  ): IBezierCurvePoints {
+    const bezier = computeEdgeBezier(startWorld, endWorld, this.edgeData, obstacles);
+    this.currentBezier = bezier;
 
-    let cp1: THREE.Vector3;
-    let cp2: THREE.Vector3;
-
-    if (this.edgeData.isFeedbackLoop || dx < 40) {
-      // Loopback ou conexao invertida: cria uma alca superior/inferior suave
-      const curvature = Math.max(Math.abs(dy) * 0.6, 120);
-      const verticalOffset = dy >= 0 ? curvature : -curvature;
-      cp1 = new THREE.Vector3(startWorld.x + 80, startWorld.y + verticalOffset, 0);
-      cp2 = new THREE.Vector3(endWorld.x - 80, endWorld.y + verticalOffset, 0);
-    } else {
-      // Conexao fluida padrao da esquerda para a direita
-      const controlDist = Math.max(dx * 0.45, 60);
-      cp1 = new THREE.Vector3(startWorld.x + controlDist, startWorld.y, 0);
-      cp2 = new THREE.Vector3(endWorld.x - controlDist, endWorld.y, 0);
-    }
-
-    const curve = new THREE.CubicBezierCurve3(startWorld, cp1, cp2, endWorld);
+    const curve = new THREE.CubicBezierCurve3(bezier.start, bezier.cp1, bezier.cp2, bezier.end);
     const points = curve.getPoints(36);
     const positions: number[] = [];
 
@@ -70,6 +64,7 @@ export class ConnectionView {
 
     this.geometry.setPositions(positions);
     this.line.computeLineDistances();
+    return bezier;
   }
 
   setResolution(width: number, height: number): void {
@@ -78,12 +73,36 @@ export class ConnectionView {
 
   setSelected(selected: boolean): void {
     this.isSelected = selected;
-    this.material.color.setHex(
-      selected 
-        ? THEME.edge.selectedColor 
-        : (this.edgeData.isFeedbackLoop ? THEME.edge.feedbackColor : THEME.edge.defaultColor)
-    );
-    this.material.linewidth = selected ? THEME.edge.lineWidth + 2 : THEME.edge.lineWidth;
+    this.refreshAppearance();
+  }
+
+  setExecutionState(state: EdgeExecutionState): void {
+    this.executionState = state;
+    this.refreshAppearance();
+  }
+
+  private refreshAppearance(): void {
+    if (this.isSelected) {
+      this.material.color.setHex(THEME.edge.selectedColor);
+      this.material.linewidth = THEME.edge.lineWidth + 2;
+      return;
+    }
+
+    if (this.executionState === 'active') {
+      this.material.color.setHex(0x10b981);
+      this.material.linewidth = THEME.edge.lineWidth + 1.5;
+    } else if (this.executionState === 'completed') {
+      this.material.color.setHex(0x059669);
+      this.material.linewidth = THEME.edge.lineWidth + 0.5;
+    } else if (this.executionState === 'error') {
+      this.material.color.setHex(0xef4444);
+      this.material.linewidth = THEME.edge.lineWidth + 1;
+    } else {
+      this.material.color.setHex(
+        this.edgeData.isFeedbackLoop ? THEME.edge.feedbackColor : THEME.edge.defaultColor
+      );
+      this.material.linewidth = THEME.edge.lineWidth;
+    }
   }
 
   dispose(): void {

@@ -3,6 +3,7 @@ import { CameraController } from './CameraController.ts';
 import { NodeView } from './NodeView.ts';
 import { ConnectionView } from './ConnectionView.ts';
 import { Graph } from '../core/Graph.ts';
+import { IEdgeControlPoints } from '../core/types.ts';
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
@@ -12,10 +13,27 @@ import {
   MoveNodeCommand, 
   AddEdgeCommand, 
   RemoveNodeCommand, 
-  RemoveEdgeCommand 
+  RemoveEdgeCommand,
+  UpdateEdgeCommand
 } from '../core/history/GraphCommands.ts';
 import { getNodeAction, NodeActionType } from './NodeActions.ts';
 import { CanvasTooltip } from '../ui/CanvasTooltip.ts';
+import {
+  computeControlOffsetsFromCurveDrag,
+  findClosestBezierParameter,
+  IBezierCurvePoints,
+  IObstacleBox
+} from './BezierEdgeRouter.ts';
+
+interface IBezierDragState {
+  edgeId: string;
+  mode: 'cp1' | 'cp2' | 'mid' | 'curve';
+  t: number;
+  initialCurve: IBezierCurvePoints;
+  initialControlPoints: IEdgeControlPoints | undefined;
+  startWorld: { x: number; y: number };
+  hasMoved: boolean;
+}
 
 export class InteractionManager {
   private camera: THREE.OrthographicCamera;
@@ -36,6 +54,7 @@ export class InteractionManager {
   private dragOffset: THREE.Vector3 = new THREE.Vector3();
   private selectedNodeId: string | null = null;
   private selectedEdgeId: string | null = null;
+  private bezierDragState: IBezierDragState | null = null;
 
   // Estado de Criacao de Conexao (Rubber-band)
   private isConnecting: boolean = false;
@@ -110,6 +129,12 @@ export class InteractionManager {
       }
     });
 
+    globalEventBus.on('edge:removed', (edge: { id: string }) => {
+      if (this.selectedEdgeId === edge.id) {
+        this.selectEdge(null);
+      }
+    });
+
     globalEventBus.on('graph:cleared', () => {
       this.selectNode(null);
       this.selectEdge(null);
@@ -124,6 +149,17 @@ export class InteractionManager {
     globalEventBus.on('node:start-drag', ({ nodeId, clientX, clientY }: any) => this.startDragNode(nodeId, clientX, clientY));
     globalEventBus.on('node:start-connecting', ({ nodeId, portId, clientX, clientY }: any) => this.startConnectingPort(nodeId, portId, clientX, clientY));
     globalEventBus.on('node:complete-connecting', ({ nodeId, portId }: any) => this.completeConnectingPort(nodeId, portId));
+
+    // Eventos de Edição de Curva de Bézier Estilo Inkscape
+    globalEventBus.on('edge:start-curve-drag', ({ edgeId, clientX, clientY }: any) =>
+      this.startEdgeCurveDrag(edgeId, clientX, clientY)
+    );
+    globalEventBus.on('edge:start-handle-drag', ({ edgeId, handle, clientX, clientY }: any) =>
+      this.startEdgeHandleDrag(edgeId, handle, clientX, clientY)
+    );
+    globalEventBus.on('edge:reset-control-points', ({ edgeId }: { edgeId: string }) =>
+      this.resetEdgeControlPoints(edgeId)
+    );
   }
 
   private updatePointer(e: PointerEvent): void {
@@ -238,6 +274,50 @@ export class InteractionManager {
     this.updatePointer(e);
     const worldCursor = this.cameraController.screenToWorld(e.clientX, e.clientY);
 
+    // 0. Drag de Alça / Curva de Bézier Estilo Inkscape
+    if (this.bezierDragState) {
+      const dist = Math.hypot(
+        worldCursor.x - this.bezierDragState.startWorld.x,
+        worldCursor.y - this.bezierDragState.startWorld.y
+      );
+      if (!this.bezierDragState.hasMoved && dist < 2) {
+        return;
+      }
+      this.bezierDragState.hasMoved = true;
+
+      const { edgeId, mode, t, initialCurve } = this.bezierDragState;
+      let newControls: IEdgeControlPoints;
+
+      if (mode === 'cp1') {
+        newControls = {
+          cp1Offset: {
+            x: Math.round(worldCursor.x - initialCurve.start.x),
+            y: Math.round(worldCursor.y - initialCurve.start.y)
+          },
+          cp2Offset: {
+            x: Math.round(initialCurve.cp2.x - initialCurve.end.x),
+            y: Math.round(initialCurve.cp2.y - initialCurve.end.y)
+          }
+        };
+      } else if (mode === 'cp2') {
+        newControls = {
+          cp1Offset: {
+            x: Math.round(initialCurve.cp1.x - initialCurve.start.x),
+            y: Math.round(initialCurve.cp1.y - initialCurve.start.y)
+          },
+          cp2Offset: {
+            x: Math.round(worldCursor.x - initialCurve.end.x),
+            y: Math.round(worldCursor.y - initialCurve.end.y)
+          }
+        };
+      } else {
+        newControls = computeControlOffsetsFromCurveDrag(initialCurve, t, worldCursor);
+      }
+
+      this.graph.updateEdge(edgeId, { controlPoints: newControls });
+      return;
+    }
+
     // A. Drag do Nó
     if (this.draggedNodeView) {
       const newX = worldCursor.x + this.dragOffset.x;
@@ -344,6 +424,23 @@ export class InteractionManager {
       }
     }
 
+    if (this.bezierDragState) {
+      const { edgeId, initialControlPoints, hasMoved } = this.bezierDragState;
+      this.bezierDragState = null;
+      if (hasMoved) {
+        const currentEdge = this.graph.getEdge(edgeId);
+        if (currentEdge) {
+          const cmd = new UpdateEdgeCommand(
+            this.graph,
+            edgeId,
+            initialControlPoints,
+            currentEdge.controlPoints
+          );
+          this.graph.commandManager.record(cmd);
+        }
+      }
+    }
+
     if (this.draggedNodeView) {
       const finalX = this.draggedNodeView.nodeData.position.x;
       const finalY = this.draggedNodeView.nodeData.position.y;
@@ -407,6 +504,18 @@ export class InteractionManager {
   }
 
   private updateConnectedEdges(nodeId: string): void {
+    const obstacles: IObstacleBox[] = [];
+    this.nodeViews.forEach(nv => {
+      const size = nv.getBoundingSize();
+      obstacles.push({
+        id: nv.nodeData.id,
+        x: nv.nodeData.position.x,
+        y: nv.nodeData.position.y,
+        width: size.width,
+        height: size.height
+      });
+    });
+
     this.connectionViews.forEach(cv => {
       if (cv.edgeData.sourceNodeId === nodeId || cv.edgeData.targetNodeId === nodeId) {
         const srcNv = this.nodeViews.get(cv.edgeData.sourceNodeId);
@@ -415,13 +524,17 @@ export class InteractionManager {
         if (srcNv && tgtNv) {
           const start = srcNv.getPortWorldPosition(cv.edgeData.sourcePortId);
           const end = tgtNv.getPortWorldPosition(cv.edgeData.targetPortId);
-          cv.updateCurve(start, end);
+          cv.updateCurve(start, end, obstacles);
         }
       }
     });
   }
 
   selectNode(nodeId: string | null): void {
+    if (nodeId && this.selectedEdgeId) {
+      this.selectEdge(null);
+    }
+
     if (this.selectedNodeId && this.selectedNodeId !== nodeId) {
       this.nodeViews.get(this.selectedNodeId)?.setSelected(false);
     }
@@ -438,6 +551,10 @@ export class InteractionManager {
   }
 
   selectEdge(edgeId: string | null): void {
+    if (edgeId && this.selectedNodeId) {
+      this.selectNode(null);
+    }
+
     if (this.selectedEdgeId && this.selectedEdgeId !== edgeId) {
       this.connectionViews.get(this.selectedEdgeId)?.setSelected(false);
     }
@@ -447,6 +564,12 @@ export class InteractionManager {
     if (edgeId) {
       this.connectionViews.get(edgeId)?.setSelected(true);
     }
+
+    globalEventBus.emit('edge:selected', edgeId);
+  }
+
+  public getSelectedEdgeId(): string | null {
+    return this.selectedEdgeId;
   }
 
   private onKeyDown(e: KeyboardEvent): void {
@@ -574,6 +697,89 @@ export class InteractionManager {
     this.connectingSourceNodeId = null;
     this.connectingSourcePortId = null;
     if (this.rubberBandLine) this.rubberBandLine.visible = false;
+  }
+
+  public startEdgeCurveDrag(edgeId: string, clientX: number, clientY: number): void {
+    const conn = this.connectionViews.get(edgeId);
+    const edge = this.graph.getEdge(edgeId);
+    if (!conn || !edge || !conn.currentBezier) return;
+
+    this.clearHover();
+    this.selectEdge(edgeId);
+
+    const worldCursor = this.cameraController.screenToWorld(clientX, clientY);
+    const t = findClosestBezierParameter(conn.currentBezier, worldCursor);
+
+    this.bezierDragState = {
+      edgeId,
+      mode: 'curve',
+      t,
+      initialCurve: {
+        start: conn.currentBezier.start.clone(),
+        cp1: conn.currentBezier.cp1.clone(),
+        cp2: conn.currentBezier.cp2.clone(),
+        end: conn.currentBezier.end.clone(),
+        midPoint: conn.currentBezier.midPoint.clone()
+      },
+      initialControlPoints: edge.controlPoints
+        ? {
+            cp1Offset: { ...edge.controlPoints.cp1Offset },
+            cp2Offset: { ...edge.controlPoints.cp2Offset }
+          }
+        : undefined,
+      startWorld: { x: worldCursor.x, y: worldCursor.y },
+      hasMoved: false
+    };
+  }
+
+  public startEdgeHandleDrag(
+    edgeId: string,
+    handle: 'cp1' | 'cp2' | 'mid',
+    clientX: number,
+    clientY: number
+  ): void {
+    const conn = this.connectionViews.get(edgeId);
+    const edge = this.graph.getEdge(edgeId);
+    if (!conn || !edge || !conn.currentBezier) return;
+
+    this.clearHover();
+    this.selectEdge(edgeId);
+
+    const worldCursor = this.cameraController.screenToWorld(clientX, clientY);
+    this.bezierDragState = {
+      edgeId,
+      mode: handle,
+      t: 0.5,
+      initialCurve: {
+        start: conn.currentBezier.start.clone(),
+        cp1: conn.currentBezier.cp1.clone(),
+        cp2: conn.currentBezier.cp2.clone(),
+        end: conn.currentBezier.end.clone(),
+        midPoint: conn.currentBezier.midPoint.clone()
+      },
+      initialControlPoints: edge.controlPoints
+        ? {
+            cp1Offset: { ...edge.controlPoints.cp1Offset },
+            cp2Offset: { ...edge.controlPoints.cp2Offset }
+          }
+        : undefined,
+      startWorld: { x: worldCursor.x, y: worldCursor.y },
+      hasMoved: false
+    };
+  }
+
+  public resetEdgeControlPoints(edgeId: string): void {
+    const edge = this.graph.getEdge(edgeId);
+    if (!edge || !edge.controlPoints) return;
+
+    const cmd = new UpdateEdgeCommand(
+      this.graph,
+      edgeId,
+      edge.controlPoints,
+      undefined,
+      `Restaurar Curva Automática (${edgeId})`
+    );
+    this.graph.commandManager.execute(cmd);
   }
 
   setResolution(w: number, h: number): void {

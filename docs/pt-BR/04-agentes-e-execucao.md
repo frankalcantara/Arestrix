@@ -91,6 +91,19 @@ checkpoint por item e por etapa em `pipeline-state.json`, gravado de forma atôm
   enquanto as etapas seguintes rodam concorrentemente.
 - A aba **Executar** tem o orquestrador de lotes: itens, concorrência, etapas serializadas e uma matriz de checkpoints ao vivo.
 
+## Entrega de Artefatos e Vértice de Saída (Output)
+
+Todo pipeline voltado a produzir entregáveis (gráficos vetoriais, relatórios, planilhas, modelos ou datasets) pode declarar um ou mais vértices do tipo **`output` (Saída / Artefato)**.
+
+- **Configuração de Origem e Destino:** O vértice define `sourcePath` (ex.: `workspace/scene.svg` ou `workspace/relatorio.md`) gerado pelos agentes anteriores e opcionalmente um `destinationPath` (ex.: `exports/scene.svg`). No término da execução, o arquivo é copiado de forma atômica para a pasta final de entrega.
+- **Suporte Multi-Formato Integrado:**
+  - **SVG:** Visualizador vetorial interativo com controles de zoom (+, -, 100%, ajuste à tela), inspeção de código-fonte e garantia de nitidez (zero sombras/filtros em fontes).
+  - **Planilhas (CSV, TSV, XLSX):** Grid de dados tabular interativo com busca instantânea por células e visualização dos dados brutos.
+  - **Texto / Markdown:** Leitor formatado de documentos técnicos e relatórios com realce de sintaxe e cópia em um clique.
+  - **PDF e JSON:** Visualização estruturada com indentação limpa e botão para abertura direta no leitor nativo do sistema operacional.
+- **Aba Artefatos no Painel Inferior:** Ao lado do *Terminal* e da *Telemetria*, a aba *Artefatos* exibe a contagem de entregáveis em tempo real e permite alternar entre visualização gráfica e código, copiar o conteúdo ou abrir a pasta `exports/` no Windows Explorer com um clique.
+- **Operação via Assistente Local (Chat):** O assistente de chat nativo do Studio é integrado ao ciclo de vida de artefatos pelas ferramentas `list_artifacts` e `get_artifact`, sendo capaz de inspecionar a saída produzida e reportar conclusões ao usuário.
+
 ## Relacionados
 
 - [Workspaces, memória, skills e MCP](05-workspaces-memoria-skills-mcp.md)

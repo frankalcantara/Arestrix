@@ -9,9 +9,12 @@ import {
   DEFAULT_NODE_MEMORY_CONFIG,
   TaskflowNodeType,
   IPort,
-  IBreadcrumbItem, defaultSwitchSettings, defaultMcpSettings } from './types.ts';
+  IEdgeControlPoints,
+  IBreadcrumbItem, defaultSwitchSettings, defaultMcpSettings, defaultOutputSettings } from './types.ts';
 import { globalEventBus, EventBus } from './EventBus.ts';
 import { CommandManager } from './history/CommandManager.ts';
+import { GraphLayout, IGraphLayoutOptions } from './GraphLayout.ts';
+import { AutoLayoutCommand } from './history/GraphCommands.ts';
 
 interface INavigationFrame {
   schema: IGraphSchema;
@@ -164,6 +167,11 @@ export class Graph {
         { id: `${id}_out_0`, name: 'out', direction: 'output', type: 'flow' },
         { id: `${id}_out_data`, name: 'artifact_out', direction: 'output', type: 'data', dataType: 'std::string' }
       ];
+    } else if (type === 'output') {
+      inputs.push({ id: `${id}_in_data`, name: 'data_in', direction: 'input', type: 'data', dataType: 'std::string' });
+      outputs = [
+        { id: `${id}_out_0`, name: 'out', direction: 'output', type: 'flow' }
+      ];
     } else {
       outputs = [
         { id: `${id}_out_0`, name: 'out', direction: 'output', type: 'flow' }
@@ -186,7 +194,8 @@ export class Graph {
         inheritMemory: true
       } : undefined,
       switchSettings: type === 'switch' ? defaultSwitchSettings('model') : undefined,
-      mcpSettings: type === 'mcp' ? defaultMcpSettings() : undefined
+      mcpSettings: type === 'mcp' ? defaultMcpSettings() : undefined,
+      outputSettings: type === 'output' ? defaultOutputSettings() : undefined
     };
   }
 
@@ -220,6 +229,8 @@ export class Graph {
         return `// Kernel CUDA acelerado na GPU: ${label}\nstd::cout << "[CUDA: ${label}] Executando kernel na GPU...\\n";`;
       case 'agent':
         return `// Agente Autônomo Code Mode: ${label}\n// Invocação em sandbox/VM isolada com streaming de eventos\nstd::cout << "[Agent: ${label}] Disparando no sandbox isolado...\\n";`;
+      case 'output':
+        return `// Coletor de Entrega / Artefato: ${label}\n// Em runtime, este vértice registra e disponibiliza o artefato produzido na aba Artefatos e na pasta de saída.\nstd::cout << "[OUTPUT: ${label}] Entregável registrado com sucesso!\\n";`;
       case 'static':
       default:
         return `// Execução computacional determinística do agente: ${label}\nstd::cout << "Executando agente: ${label}\\n";`;
@@ -346,6 +357,20 @@ export class Graph {
     this.bus.emit('graph:changed');
   }
 
+  updateEdge(id: string, partial: Partial<IEdgeData>): void {
+    const existing = this.edges.get(id);
+    if (!existing) return;
+
+    const updated: IEdgeData = { ...existing, ...partial };
+    if ('controlPoints' in partial && partial.controlPoints === undefined) {
+      delete updated.controlPoints;
+    }
+
+    this.edges.set(id, updated);
+    this.bus.emit('edge:updated', updated);
+    this.bus.emit('graph:changed');
+  }
+
   getEdge(id: string): IEdgeData | undefined {
     return this.edges.get(id);
   }
@@ -358,6 +383,51 @@ export class Graph {
     return this.getAllEdges().filter(
       e => e.sourceNodeId === nodeId || e.targetNodeId === nodeId
     );
+  }
+
+  // --- Organização Automática de Vértices (Auto-Layout Sugiyama 2D) ---
+
+  autoLayout(
+    recordHistory: boolean = true,
+    options?: IGraphLayoutOptions
+  ): Map<string, { x: number; y: number }> {
+    const allNodes = this.getAllNodes();
+    const allEdges = this.getAllEdges();
+    if (allNodes.length === 0) return new Map();
+
+    const newPositions = GraphLayout.computePositions(allNodes, allEdges, options);
+
+    if (recordHistory) {
+      const oldPositions = new Map<string, { x: number; y: number }>();
+      allNodes.forEach(n => oldPositions.set(n.id, { x: n.position.x, y: n.position.y }));
+
+      const oldEdgeControls = new Map<string, IEdgeControlPoints | undefined>();
+      allEdges.forEach(e => {
+        if (e.controlPoints) {
+          oldEdgeControls.set(e.id, {
+            cp1Offset: { ...e.controlPoints.cp1Offset },
+            cp2Offset: { ...e.controlPoints.cp2Offset }
+          });
+        }
+      });
+
+      this.commandManager.execute(
+        new AutoLayoutCommand(this, oldPositions, newPositions, oldEdgeControls)
+      );
+    } else {
+      for (const [id, pos] of newPositions.entries()) {
+        this.updateNodePosition(id, pos.x, pos.y);
+      }
+      for (const edge of allEdges) {
+        if (edge.controlPoints) {
+          this.updateEdge(edge.id, { controlPoints: undefined });
+        }
+      }
+    }
+
+    this.bus.emit('graph:layout-applied', newPositions);
+    this.bus.emit('graph:changed');
+    return newPositions;
   }
 
   // --- Checagem de Feedback Loop ---
@@ -403,19 +473,38 @@ export class Graph {
     };
   }
 
-  fromJSON(schema: IGraphSchema): void {
+  fromJSON(schema: IGraphSchema, options?: { autoLayoutIfNeeded?: boolean }): void {
     this.clear();
     this.metadata = { ...schema.metadata };
 
     schema.nodes.forEach(node => {
-      this.nodes.set(node.id, { ...node });
+      this.nodes.set(node.id, {
+        ...node,
+        position: { ...node.position }
+      });
     });
 
     schema.edges.forEach(edge => {
       this.edges.set(edge.id, { ...edge });
     });
 
-    this.bus.emit('graph:loaded', schema);
+    const shouldCheckAutoLayout = options?.autoLayoutIfNeeded !== false;
+    if (shouldCheckAutoLayout) {
+      const loadedNodes = this.getAllNodes();
+      const loadedEdges = this.getAllEdges();
+      if (GraphLayout.needsAutoLayout(loadedNodes, loadedEdges)) {
+        const distributed = GraphLayout.computePositions(loadedNodes, loadedEdges);
+        for (const [id, pos] of distributed.entries()) {
+          const n = this.nodes.get(id);
+          if (n) {
+            n.position.x = pos.x;
+            n.position.y = pos.y;
+          }
+        }
+      }
+    }
+
+    this.bus.emit('graph:loaded', this.toJSON());
     this.bus.emit('graph:changed');
   }
 

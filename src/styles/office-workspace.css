@@ -182,9 +182,35 @@ body, html {
 
 .arestrix-svg-vertex .vertex-header-label,
 .arestrix-svg-vertex .vertex-title-line,
-.arestrix-svg-vertex .vertex-port-label {
+.arestrix-svg-vertex .vertex-port-label,
+.arestrix-svg-vertex .vertex-exec-status-text {
   text-shadow: none !important;
   filter: none !important;
+}
+
+.arestrix-svg-vertex {
+  transition: opacity 0.2s ease;
+}
+
+.arestrix-svg-vertex.state-queued,
+.arestrix-svg-vertex.state-completed {
+  opacity: 0.45;
+}
+
+.arestrix-svg-vertex.state-idle,
+.arestrix-svg-vertex.state-running,
+.arestrix-svg-vertex.state-error {
+  opacity: 1;
+}
+
+.arestrix-svg-vertex .vertex-selection-ring.ring-animated {
+  animation: arestrix-ring-march 0.75s linear infinite;
+}
+
+.arestrix-svg-vertex .vertex-exec-spinner {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: arestrix-spinner-rotate 0.85s linear infinite;
 }
 
 .arestrix-svg-action-btn {
@@ -196,16 +222,96 @@ body, html {
   fill: #EEF2FF !important;
 }
 
-.arestrix-svg-edge {
+.arestrix-svg-edge-group {
   pointer-events: stroke;
-  cursor: pointer;
-  stroke-linecap: round;
-  transition: stroke 0.15s ease, stroke-width 0.15s ease;
 }
 
-.arestrix-svg-edge:hover {
-  stroke: #0F6CBD !important;
+.arestrix-svg-edge-hit {
+  pointer-events: stroke;
+  cursor: grab;
+}
+
+.arestrix-svg-edge-hit:active {
+  cursor: grabbing;
+}
+
+.arestrix-svg-edge {
+  pointer-events: none;
+  stroke-linecap: round;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease, stroke-opacity 0.15s ease;
+}
+
+.arestrix-svg-edge-flow {
+  pointer-events: none;
+  stroke-linecap: round;
+}
+
+.arestrix-svg-edge-flow.flow-active {
+  animation: arestrix-edge-flow 0.55s linear infinite;
+}
+
+.arestrix-svg-edge-packet {
+  pointer-events: none;
+}
+
+.arestrix-svg-edge-badge {
+  pointer-events: none;
+}
+
+.arestrix-svg-edge-badge text,
+.arestrix-svg-edge-badge-text {
+  user-select: none;
+  -webkit-user-select: none;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+@keyframes arestrix-ring-march {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+@keyframes arestrix-spinner-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes arestrix-edge-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -22;
+  }
+}
+
+.arestrix-svg-edge-group:hover .arestrix-svg-edge,
+.arestrix-svg-edge-group.selected .arestrix-svg-edge {
+  stroke: #2563EB !important;
   stroke-width: 4px !important;
+}
+
+.arestrix-bezier-handle {
+  pointer-events: all;
+  transition: fill 0.12s ease, stroke 0.12s ease;
+}
+
+.arestrix-bezier-handle-cp1:hover,
+.arestrix-bezier-handle-cp2:hover {
+  fill: #DBEAFE !important;
+  stroke: #1D4ED8 !important;
+}
+
+.arestrix-bezier-handle-mid:hover {
+  fill: #1D4ED8 !important;
 }
 
 /* --- Mini-Barra Flutuante de Controles do Canvas (Canvas HUD) --- */
@@ -1428,4 +1534,421 @@ body, html {
 /* Provedor sem chamada de ferramentas no seletor do modelo padrao */
 .assistant-unsupported-option {
   color: #991b1b;
+}
+
+/* ============================================================================
+   Aba e Painel de Artefatos / Entregáveis do Console (Bottom Drawer)
+   ============================================================================ */
+
+.office-artifact-badge-count {
+  background-color: #059669;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  margin-left: 4px;
+  line-height: 1.2;
+}
+
+.office-artifacts-body {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.office-artifacts-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 30px;
+  text-align: center;
+}
+
+.office-artifacts-empty-state .empty-state-icon {
+  font-size: 36px;
+  margin-bottom: 8px;
+}
+
+.office-artifacts-empty-state .empty-state-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+
+.office-artifacts-empty-state .empty-state-desc {
+  font-size: 12px;
+  color: #64748b;
+  max-width: 420px;
+  line-height: 1.5;
+}
+
+.office-artifacts-layout {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.office-artifacts-sidebar {
+  width: 220px;
+  border-right: 1px solid #e2e8f0;
+  background-color: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.office-artifacts-sidebar-header {
+  height: 32px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.btn-icon-subtle {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.btn-icon-subtle:hover {
+  background-color: #e2e8f0;
+}
+
+.office-artifacts-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.office-artifact-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: all 0.12s ease;
+}
+
+.office-artifact-nav-item:hover {
+  background-color: #f1f5f9;
+}
+
+.office-artifact-nav-item.active {
+  background-color: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.office-artifact-nav-item .artifact-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.office-artifact-nav-item .artifact-meta {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.office-artifact-nav-item .artifact-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.office-artifact-nav-item .artifact-sub {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.office-artifact-viewer-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: #ffffff;
+}
+
+.office-artifact-toolbar {
+  height: 36px;
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.office-artifact-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.artifact-current-icon {
+  font-size: 16px;
+}
+
+.artifact-current-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.artifact-current-path {
+  font-size: 11px;
+  font-family: 'Consolas', monospace;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
+}
+
+.artifact-size-pill {
+  font-size: 10px;
+  font-weight: 600;
+  color: #047857;
+  background-color: #d1fae5;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.office-artifact-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.office-view-mode-toggle {
+  display: inline-flex;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-right: 4px;
+}
+
+.office-mode-btn {
+  background-color: #ffffff;
+  border: none;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.office-mode-btn.active {
+  background-color: #0f6cbd;
+  color: #ffffff;
+}
+
+.office-zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 4px;
+}
+
+.zoom-level-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  padding: 0 4px;
+  min-width: 38px;
+  text-align: center;
+}
+
+.office-artifact-stage {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+  background-color: #ffffff;
+}
+
+.office-svg-viewport {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 20px;
+  background: radial-gradient(#e2e8f0 1px, transparent 1px);
+  background-size: 16px 16px;
+  background-color: #fafafa;
+}
+
+.office-svg-scaler {
+  display: inline-flex;
+  max-width: 100%;
+  max-height: 100%;
+  transition: transform 0.12s ease;
+}
+
+.office-svg-scaler svg {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  border-radius: 4px;
+  background-color: #ffffff;
+}
+
+.office-raw-code-view {
+  margin: 0;
+  padding: 12px;
+  font-family: 'Consolas', 'Cascadia Code', monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  background-color: #ffffff;
+  color: #0f172a;
+  overflow: auto;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.office-sheet-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.office-sheet-toolbar {
+  height: 32px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.office-sheet-search {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  width: 180px;
+}
+
+.sheet-count-label {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.office-sheet-scroll {
+  flex: 1;
+  overflow: auto;
+}
+
+.office-sheet-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+}
+
+.office-sheet-table th {
+  position: sticky;
+  top: 0;
+  background-color: #f1f5f9;
+  border-bottom: 2px solid #cbd5e1;
+  border-right: 1px solid #e2e8f0;
+  padding: 6px 10px;
+  font-weight: 700;
+  color: #1e293b;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.office-sheet-table td {
+  border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+  padding: 5px 10px;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.office-sheet-table tr:hover td {
+  background-color: #f8fafc;
+}
+
+.office-pdf-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background-color: #f8fafc;
+}
+
+.office-pdf-card {
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.office-text-document-view {
+  height: 100%;
+  overflow: auto;
+  padding: 14px 20px;
+  background-color: #ffffff;
+}
+
+.office-markdown-view {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #1e293b;
+  white-space: pre-wrap;
+}
+
+.artifact-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #64748b;
+  font-size: 12px;
+  gap: 8px;
 }

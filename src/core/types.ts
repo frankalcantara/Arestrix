@@ -9,7 +9,8 @@ export type TaskflowNodeType =
   | 'fork'        // tf::Task - Despachante Concorrente / Disparo Paralelo
   | 'join'        // tf::Task - Barreira de Sincronização / Consolidação Concorrente
   | 'switch'      // tf::Task (retorna int) - Seleção multivia: um caso por porta de saída; o último é o 'default'
-  | 'mcp';        // tf::Task - Chama UMA ferramenta de um servidor MCP do projeto (cliente C++ nativo, sessão persistente)
+  | 'mcp'         // tf::Task - Chama UMA ferramenta de um servidor MCP do projeto (cliente C++ nativo, sessão persistente)
+  | 'output';     // Vértice de Entrega / Coletor de Artefatos (SVG, planilha, PDF, Markdown, texto, JSON...)
 
 export type PortDirection = 'input' | 'output';
 export type PortType = 'flow' | 'data';
@@ -293,6 +294,43 @@ export function defaultMcpSettings(): IMcpVertexSettings {
   return { server: '', tool: '', arguments: {}, source: { kind: 'previous' }, output: {} };
 }
 
+/** Tipo de formato do artefato produzido para renderização no visualizador integrado. */
+export type OutputArtifactType = 'auto' | 'svg' | 'sheet' | 'pdf' | 'markdown' | 'text' | 'json' | 'image' | 'binary';
+
+/** Vértice de Entrega / Saída: define onde salvar e registrar os entregáveis gerados pelo pipeline. */
+export interface IOutputSettings {
+  sourcePath: string;               // ex: 'workspace/scene.svg'
+  destinationPath?: string;          // ex: 'exports/scene.svg'
+  artifactType: OutputArtifactType;  // Tipo/formato do artefato para visualização rica
+  displayName?: string;             // Nome amigável exibido no painel de Artefatos
+  autoOpenPreview?: boolean;        // Se deve abrir automaticamente a visualização ao concluir
+  description?: string;             // Descrição do entregável
+}
+
+export function defaultOutputSettings(): IOutputSettings {
+  return {
+    sourcePath: '',
+    destinationPath: '',
+    artifactType: 'auto',
+    displayName: '',
+    autoOpenPreview: true,
+    description: ''
+  };
+}
+
+export interface IArtifactItem {
+  id: string;
+  nodeId?: string;
+  name: string;
+  path: string;
+  relativePath: string;
+  type: OutputArtifactType;
+  sizeBytes?: number;
+  modifiedAt?: string;
+  content?: string;
+  description?: string;
+}
+
 export interface INodeData {
   id: string;
   label: string;
@@ -309,11 +347,22 @@ export interface INodeData {
   agentSettings?: INodeAgentSettings;
   switchSettings?: ISwitchSettings; // só para vértices do tipo 'switch'
   mcpSettings?: IMcpVertexSettings; // só para vértices do tipo 'mcp'
+  outputSettings?: IOutputSettings; // só para vértices do tipo 'output'
 }
 
 export interface IBreadcrumbItem {
   nodeId?: string;
   title: string;
+}
+
+/**
+ * Offsets relativos em coordenadas de mundo (Three.js: +X direita, +Y cima)
+ * para as alças de controle de curva de Bézier cúbica estilo Inkscape.
+ * cp1Offset é relativo ao ponto inicial (porta de saída) e cp2Offset ao ponto final (porta de entrada).
+ */
+export interface IEdgeControlPoints {
+  cp1Offset: { x: number; y: number };
+  cp2Offset: { x: number; y: number };
 }
 
 export interface IEdgeData {
@@ -323,6 +372,7 @@ export interface IEdgeData {
   targetNodeId: string;
   targetPortId: string;
   isFeedbackLoop?: boolean; // True quando for um retorno condicional
+  controlPoints?: IEdgeControlPoints; // Alças Bézier customizadas pelo usuário (estilo Inkscape)
 }
 
 export interface IGraphMetadata {

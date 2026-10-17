@@ -2,6 +2,30 @@ import { Graph } from './Graph';
 import { INodeData } from './types';
 
 export class GraphvizGenerator {
+  private static graphvizPromise: Promise<any> | null = null;
+
+  public static async getGraphvizInstance(): Promise<any> {
+    if (!this.graphvizPromise) {
+      this.graphvizPromise = (async () => {
+        const mod = await import('@hpcc-js/wasm');
+        return mod.Graphviz.load();
+      })();
+    }
+    return this.graphvizPromise;
+  }
+
+  /** Renderiza uma string DOT diretamente para SVG usando Graphviz WASM offline. */
+  public static async renderDotToSvg(dotString: string): Promise<string> {
+    const gv = await this.getGraphvizInstance();
+    return gv.dot(dotString);
+  }
+
+  /** Gera a especificação DOT do grafo e a renderiza para SVG. */
+  public static async renderSvg(graph: Graph): Promise<string> {
+    const dot = this.generateDot(graph);
+    return this.renderDotToSvg(dot);
+  }
+
   public static generateDot(graph: Graph): string {
     const meta = graph.getMetadata();
     const nodes = graph.getAllNodes();
@@ -70,9 +94,10 @@ export class GraphvizGenerator {
       case 'critical': color = '#06b6d4'; break;
       case 'cuda': color = '#14b8a6'; break;
       case 'agent': color = '#6366f1'; break;
+      case 'output': color = '#059669'; break;
     }
 
-    // Para subflows, podemos indicar no ródulo
+    // Para subflows, podemos indicar no rótulo
     let extra = '';
     if (node.type === 'subflow' || node.type === 'module') {
       extra = '\\n(Subgraph)';
@@ -80,6 +105,8 @@ export class GraphvizGenerator {
       extra = '\\n(GPU Kernel)';
     } else if (node.type === 'agent') {
       extra = '\\n(Code Mode Agent)';
+    } else if (node.type === 'output') {
+      extra = '\\n(Output / Artifact)';
     }
 
     return `  "${node.id}" [label="${label}${extra}", fillcolor="${color}", fontcolor="${fontColor}", color="${color}"];\n`;

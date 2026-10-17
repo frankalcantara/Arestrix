@@ -15,7 +15,6 @@ import { BatchPipelineModal } from '../modals/BatchPipelineModal.ts';
 import { ProjectMemoryModal } from '../modals/ProjectMemoryModal.ts';
 import { McpServersModal } from '../modals/McpServersModal.ts';
 import { ProjectManagerModal } from '../modals/ProjectManagerModal.ts';
-import { GraphvizGenerator } from '../../core/GraphvizGenerator.ts';
 
 import { BackstageView } from './BackstageView.ts';
 import { ImportPiModal } from '../modals/ImportPiModal.ts';
@@ -23,6 +22,7 @@ import { ImportClaudeModal } from '../modals/ImportClaudeModal.ts';
 import { ImportOpenAiModal } from '../modals/ImportOpenAiModal.ts';
 import { ImportHermesModal } from '../modals/ImportHermesModal.ts';
 import { ImportExcelModal } from '../modals/ImportExcelModal.ts';
+import { GraphvizExportModal } from '../modals/GraphvizExportModal.ts';
 import { t } from '../../i18n/index.ts';
 import { ProjectSearchBox, reindexProjectSearch } from '../ProjectSearchBox.ts';
 import { sanitizeEnvReferences } from '../../core/env/EnvironmentManager.ts';
@@ -38,6 +38,7 @@ export class OfficeRibbon {
   private projectMemoryModal: ProjectMemoryModal;
   private mcpServersModal: McpServersModal;
   private projectManagerModal: ProjectManagerModal;
+  private graphvizExportModal: GraphvizExportModal;
 
   // Backstage View & Modais de Importação
   private backstageView: BackstageView;
@@ -49,6 +50,7 @@ export class OfficeRibbon {
 
   private activeTab: 'home' | 'insert' | 'agents' | 'connectors' | 'data' | 'run' = 'home';
   private isCollapsed: boolean = false;
+  private isPipelineRunning: boolean = false;
 
   // AutoSave (Salvamento Automático)
   private projectManager: ProjectManager;
@@ -93,6 +95,7 @@ export class OfficeRibbon {
     this.importOpenAiModal = new ImportOpenAiModal(this.graph, this.viewport);
     this.importHermesModal = new ImportHermesModal(this.graph, this.viewport);
     this.importExcelModal = new ImportExcelModal(this.graph, this.viewport);
+    this.graphvizExportModal = new GraphvizExportModal(this.graph);
 
     if (typeof document !== 'undefined') {
       this.container = document.createElement('header');
@@ -150,7 +153,7 @@ export class OfficeRibbon {
             <button id="qat-btn-save" class="office-qat-btn" title="${t('ribbon.titlebar.save_now')}">💾</button>
             <button id="qat-btn-undo" class="office-qat-btn" title="${t('ribbon.titlebar.undo')}" disabled>↶</button>
             <button id="qat-btn-redo" class="office-qat-btn" title="${t('ribbon.titlebar.redo')}" disabled>↷</button>
-            <button id="qat-btn-run" class="office-qat-btn" style="color: #0f6cbd;" title="${t('ribbon.titlebar.run')}">▶</button>
+            <button id="qat-btn-run" class="office-qat-btn ${this.isPipelineRunning ? 'is-running-stop' : ''}" style="${this.isPipelineRunning ? 'color: #dc2626 !important; font-weight: 800;' : 'color: #0f6cbd;'}" title="${this.isPipelineRunning ? t('ribbon.titlebar.stop') : t('ribbon.titlebar.run')}">${this.isPipelineRunning ? '⏹' : '▶'}</button>
           </div>
         </div>
 
@@ -233,6 +236,10 @@ export class OfficeRibbon {
                 <span class="ribbon-sm-icon">🗑️</span> ${t('ribbon.panes.clear_graph')}
               </button>
             </div>
+            <button class="ribbon-btn-large" id="ribbon-btn-auto-layout" title="${t('ribbon.panes.auto_layout_tip')}">
+              <span class="ribbon-btn-icon">✨</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.auto_layout')}</span>
+            </button>
           </div>
           <div class="office-ribbon-group-title">${t('ribbon.panes.edit_view')}</div>
         </div>
@@ -272,9 +279,9 @@ export class OfficeRibbon {
         <!-- Grupo Execução Primária -->
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
-            <button class="ribbon-btn-large primary-action" id="ribbon-btn-run" title="${t('ribbon.panes.build_run_tip')}">
-              <span class="ribbon-btn-icon">▶</span>
-              <span class="ribbon-btn-label">${t('ribbon.panes.build_run')}</span>
+            <button class="ribbon-btn-large primary-action ${this.isPipelineRunning ? 'is-running-stop' : ''}" id="ribbon-btn-run" title="${this.isPipelineRunning ? t('ribbon.panes.stop_run_tip') : t('ribbon.panes.build_run_tip')}">
+              <span class="ribbon-btn-icon">${this.isPipelineRunning ? '⏹' : '▶'}</span>
+              <span class="ribbon-btn-label">${this.isPipelineRunning ? t('ribbon.panes.stop_run') : t('ribbon.panes.build_run')}</span>
             </button>
             <button class="ribbon-btn-large" id="ribbon-btn-validate" title="${t('ribbon.panes.validate_dag_tip')}">
               <span class="ribbon-btn-icon">🔍</span>
@@ -331,6 +338,10 @@ export class OfficeRibbon {
             <button class="ribbon-btn-large" data-add="critical">
               <span class="ribbon-btn-icon">🔒</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.critical_section')}</span>
+            </button>
+            <button class="ribbon-btn-large" data-add="output" style="border-color: #059669;" title="Vértice coletor de saída e entrega de artefatos">
+              <span class="ribbon-btn-icon">📥</span>
+              <span class="ribbon-btn-label">Saída / Artefato</span>
             </button>
           </div>
           <div class="office-ribbon-group-title">${t('ribbon.panes.flow_concurrency')}</div>
@@ -494,9 +505,9 @@ export class OfficeRibbon {
       <div class="office-ribbon-pane ${this.activeTab === 'run' ? 'active' : ''}" data-pane="run">
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
-            <button class="ribbon-btn-large primary-action" id="ribbon-btn-run-tab">
-              <span class="ribbon-btn-icon">▶</span>
-              <span class="ribbon-btn-label">${t('ribbon.panes.compile_run')}</span>
+            <button class="ribbon-btn-large primary-action ${this.isPipelineRunning ? 'is-running-stop' : ''}" id="ribbon-btn-run-tab" title="${this.isPipelineRunning ? t('ribbon.panes.stop_run_tip') : t('ribbon.panes.build_run_tip')}">
+              <span class="ribbon-btn-icon">${this.isPipelineRunning ? '⏹' : '▶'}</span>
+              <span class="ribbon-btn-label">${this.isPipelineRunning ? t('ribbon.panes.stop_run') : t('ribbon.panes.compile_run')}</span>
             </button>
             <button class="ribbon-btn-large" id="ribbon-btn-batch-modal">
               <span class="ribbon-btn-icon">📦</span>
@@ -515,6 +526,10 @@ export class OfficeRibbon {
             <button class="ribbon-btn-large" id="ribbon-btn-export-svg-tab">
               <span class="ribbon-btn-icon">🖼️</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.export_svg')}</span>
+            </button>
+            <button class="ribbon-btn-large" id="ribbon-btn-open-artifacts-tab" title="Abrir painel de artefatos gerados pelo pipeline (SVGs, planilhas, PDFs, etc.)">
+              <span class="ribbon-btn-icon" style="color: #059669;">📂</span>
+              <span class="ribbon-btn-label">Ver Artefatos</span>
             </button>
           </div>
           <div class="office-ribbon-group-title">${t('ribbon.panes.export_grp')}</div>
@@ -575,7 +590,7 @@ export class OfficeRibbon {
 
     this.container.querySelector('#qat-btn-undo')?.addEventListener('click', () => this.graph.undo());
     this.container.querySelector('#qat-btn-redo')?.addEventListener('click', () => this.graph.redo());
-    this.container.querySelector('#qat-btn-run')?.addEventListener('click', () => this.executePipeline());
+    this.container.querySelector('#qat-btn-run')?.addEventListener('click', () => this.toggleExecuteOrStop());
     this.container.querySelector('#qat-btn-project')?.addEventListener('click', () => this.projectManagerModal.show());
 
     // 5. Busca no projeto (ranking no backend C++) + comandos rápidos
@@ -585,11 +600,12 @@ export class OfficeRibbon {
       new ProjectSearchBox(tellMeBox, tellMeInput, this.graph, this.viewport, globalEventBus, [
         { id: 'pi', label: t('search.cmd_import_pi', 'Importar projeto Pi'), keywords: ['pi'], run: () => this.importPiModal.show() },
         { id: 'excel', label: t('search.cmd_import_excel', 'Importar Excel'), keywords: ['excel'], run: () => this.importExcelModal.show() },
-        { id: 'run', label: t('search.cmd_run', 'Compilar e executar'), keywords: ['run', 'executar', 'compilar'], run: () => this.executePipeline() },
+        { id: 'run', label: t('search.cmd_run', 'Compilar e executar'), keywords: ['run', 'executar', 'compilar'], run: () => this.toggleExecuteOrStop() },
         { id: 'project', label: t('search.cmd_project', 'Gerenciador de projetos'), keywords: ['projeto', 'workspace'], run: () => this.projectManagerModal.show() },
         { id: 'mcp', label: t('search.cmd_mcp', 'Servidores MCP'), keywords: ['mcp'], run: () => this.mcpServersModal.show() },
         { id: 'memory', label: t('search.cmd_memory', 'Memória do projeto'), keywords: ['memoria', 'memória', 'memory'], run: () => this.projectMemoryModal.show() },
         { id: 'batch', label: t('search.cmd_batch', 'Lote e Retomada'), keywords: ['lote', 'batch'], run: () => this.batchPipelineModal.open() },
+        { id: 'layout', label: t('search.cmd_auto_layout', 'Auto-Organizar Layout'), keywords: ['layout', 'organizar', 'distribuir', 'alinhar'], run: () => this.graph.autoLayout(true) },
         { id: 'github', label: t('search.cmd_github', 'Repositórios GitHub (catálogo de skills)'), keywords: ['github', 'repo', 'repositório', 'skill'], run: () => globalEventBus.emit('modal:open-github-repos') }
       ]);
     }
@@ -598,6 +614,7 @@ export class OfficeRibbon {
     this.container.querySelector('#ribbon-btn-undo')?.addEventListener('click', () => this.graph.undo());
     this.container.querySelector('#ribbon-btn-redo')?.addEventListener('click', () => this.graph.redo());
     this.container.querySelector('#ribbon-btn-zoom-fit')?.addEventListener('click', () => this.viewport.zoomToFit());
+    this.container.querySelector('#ribbon-btn-auto-layout')?.addEventListener('click', () => this.graph.autoLayout(true));
     this.container.querySelector('#ribbon-btn-clear')?.addEventListener('click', () => {
       if (confirm(t('ribbon.alerts.clear_confirm'))) {
         this.graph.clear();
@@ -616,7 +633,7 @@ export class OfficeRibbon {
       }
     });
 
-    this.container.querySelector('#ribbon-btn-run')?.addEventListener('click', () => this.executePipeline());
+    this.container.querySelector('#ribbon-btn-run')?.addEventListener('click', () => this.toggleExecuteOrStop());
     this.container.querySelector('#ribbon-btn-validate')?.addEventListener('click', () => this.validateGraph());
     this.container.querySelector('#ribbon-btn-pipeline-defaults')?.addEventListener('click', () => this.globalDefaultsModal.show());
     this.container.querySelector('#ribbon-btn-project-hub')?.addEventListener('click', () => this.projectManagerModal.show());
@@ -654,10 +671,11 @@ export class OfficeRibbon {
     });
 
     // 11. Botões da Aba Execução & Lote
-    this.container.querySelector('#ribbon-btn-run-tab')?.addEventListener('click', () => this.executePipeline());
+    this.container.querySelector('#ribbon-btn-run-tab')?.addEventListener('click', () => this.toggleExecuteOrStop());
     this.container.querySelector('#ribbon-btn-batch-modal')?.addEventListener('click', () => this.batchPipelineModal.open());
     this.container.querySelector('#ribbon-btn-export-code-tab')?.addEventListener('click', () => this.codeModal.show());
     this.container.querySelector('#ribbon-btn-export-svg-tab')?.addEventListener('click', () => this.exportGraphvizSVG());
+    this.container.querySelector('#ribbon-btn-open-artifacts-tab')?.addEventListener('click', () => globalEventBus.emit('console:open-artifacts'));
     this.container.querySelector('#ribbon-btn-load-demo-tab')?.addEventListener('click', () => this.loadDemoComplexSystem());
   }
 
@@ -730,6 +748,13 @@ export class OfficeRibbon {
     globalEventBus.on('locale:changed', () => {
       this.render();
     });
+
+    // Estado de Execução (Build & Run <-> Stop)
+    globalEventBus.on('pipeline:compiling', () => this.setExecutionRunning(true));
+    globalEventBus.on('pipeline:running', () => this.setExecutionRunning(true));
+    globalEventBus.on('pipeline:success', () => this.setExecutionRunning(false));
+    globalEventBus.on('pipeline:error', () => this.setExecutionRunning(false));
+    globalEventBus.on('pipeline:stopped', () => this.setExecutionRunning(false));
   }
 
   public getAutoSaveEnabled(): boolean {
@@ -849,8 +874,82 @@ export class OfficeRibbon {
     }
   }
 
+  public isRunning(): boolean {
+    return this.isPipelineRunning;
+  }
+
+  public setExecutionRunning(running: boolean): void {
+    this.isPipelineRunning = running;
+
+    const rRun = this.container.querySelector('#ribbon-btn-run') as HTMLButtonElement | null;
+    const rRunTab = this.container.querySelector('#ribbon-btn-run-tab') as HTMLButtonElement | null;
+    const qatRun = this.container.querySelector('#qat-btn-run') as HTMLButtonElement | null;
+
+    if (running) {
+      if (rRun) {
+        rRun.classList.add('is-running-stop');
+        const icon = rRun.querySelector('.ribbon-btn-icon');
+        const label = rRun.querySelector('.ribbon-btn-label');
+        if (icon) icon.textContent = '⏹';
+        if (label) label.innerHTML = t('ribbon.panes.stop_run');
+        rRun.title = t('ribbon.panes.stop_run_tip');
+      }
+      if (rRunTab) {
+        rRunTab.classList.add('is-running-stop');
+        const icon = rRunTab.querySelector('.ribbon-btn-icon');
+        const label = rRunTab.querySelector('.ribbon-btn-label');
+        if (icon) icon.textContent = '⏹';
+        if (label) label.innerHTML = t('ribbon.panes.stop_run');
+        rRunTab.title = t('ribbon.panes.stop_run_tip');
+      }
+      if (qatRun) {
+        qatRun.classList.add('is-running-stop');
+        qatRun.textContent = '⏹';
+        qatRun.title = t('ribbon.titlebar.stop');
+      }
+    } else {
+      if (rRun) {
+        rRun.classList.remove('is-running-stop');
+        const icon = rRun.querySelector('.ribbon-btn-icon');
+        const label = rRun.querySelector('.ribbon-btn-label');
+        if (icon) icon.textContent = '▶';
+        if (label) label.innerHTML = t('ribbon.panes.build_run');
+        rRun.title = t('ribbon.panes.build_run_tip');
+      }
+      if (rRunTab) {
+        rRunTab.classList.remove('is-running-stop');
+        const icon = rRunTab.querySelector('.ribbon-btn-icon');
+        const label = rRunTab.querySelector('.ribbon-btn-label');
+        if (icon) icon.textContent = '▶';
+        if (label) label.innerHTML = t('ribbon.panes.compile_run');
+        rRunTab.title = t('ribbon.panes.build_run_tip');
+      }
+      if (qatRun) {
+        qatRun.classList.remove('is-running-stop');
+        qatRun.textContent = '▶';
+        qatRun.title = t('ribbon.titlebar.run');
+      }
+    }
+  }
+
+  public toggleExecuteOrStop(): void {
+    if (this.isPipelineRunning) {
+      this.stopPipeline();
+    } else {
+      this.executePipeline();
+    }
+  }
+
   public executePipeline(): void {
+    if (this.isPipelineRunning) {
+      this.stopPipeline();
+      return;
+    }
     PipelineRunner.run(this.graph);
+  }
+
+  public stopPipeline(): void {
+    PipelineRunner.stop();
   }
 
   public validateGraph(): void {
@@ -878,14 +977,13 @@ export class OfficeRibbon {
         this.saveNow();
       }
 
-      // F5 ou Ctrl+Enter dispara o build e run automático
+      // Shift+F5 interrompe; F5 ou Ctrl+Enter alterna entre rodar e parar
       if (e.key === 'F5' && e.shiftKey) {
-        // Shift+F5 interrompe a execução em andamento (convenção do Visual Studio)
         e.preventDefault();
-        PipelineRunner.stop();
+        this.stopPipeline();
       } else if (e.key === 'F5' || (e.ctrlKey && e.key === 'Enter')) {
         e.preventDefault();
-        this.executePipeline();
+        this.toggleExecuteOrStop();
       }
 
       // Ctrl+F1 minimiza/expande a Ribbon (padrão oficial do Microsoft Office!)
@@ -916,7 +1014,8 @@ export class OfficeRibbon {
       fork: `Fork_Dispatcher_${existingCount + 1}`,
       join: `Join_Barrier_${existingCount + 1}`,
       switch: `Switch_${existingCount + 1}`,
-      mcp: `MCP_${existingCount + 1}`
+      mcp: `MCP_${existingCount + 1}`,
+      output: `Entrega_Artefato_${existingCount + 1}`
     };
 
     const node = this.graph.buildNode(id, labelMap[type], type, x, y);
@@ -948,65 +1047,20 @@ export class OfficeRibbon {
     // Subflow -> Modulo final
     this.graph.createEdge(n4.id, n4.outputs[0].id, n5.id, n5.inputs[0].id);
 
+    this.graph.autoLayout(false);
+
     setTimeout(() => {
       this.viewport.zoomToFit();
     }, 100);
   }
 
-  public exportGraphvizSVG(): void {
-    const dotString = GraphvizGenerator.generateDot(this.graph);
-
-    const html = '<!DOCTYPE html>\n' +
-'<html>\n' +
-'<head>\n' +
-'  <meta charset="utf-8">\n' +
-'  <title>Arestrix Graphviz Export</title>\n' +
-'  <style>\n' +
-'    body { margin: 0; padding: 0; background: #f6f8fc; font-family: Inter, sans-serif; display: flex; flex-direction: column; height: 100vh; }\n' +
-'    header { background: #ffffff; padding: 16px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }\n' +
-'    h1 { margin: 0; font-size: 18px; color: #0f172a; font-weight: 800; }\n' +
-'    .btn { background: #0f6cbd; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; }\n' +
-'    .btn:hover { background: #115ea3; }\n' +
-'    #graph-container { flex: 1; overflow: auto; padding: 24px; display: flex; justify-content: center; align-items: center; }\n' +
-'    svg { max-width: 100%; max-height: 100%; }\n' +
-'  </style>\n' +
-'</head>\n' +
-'<body>\n' +
-'  <header>\n' +
-'    <h1>Arestrix Studio - Arquitetura de Grafo Concorrente (Taskflow C++20)</h1>\n' +
-'    <button class="btn" id="btn-download">Baixar SVG</button>\n' +
-'  </header>\n' +
-'  <div id="graph-container">Carregando renderizador Graphviz (WASM)...</div>\n' +
-'  \n' +
-'  <script src="https://d3js.org/d3.v7.min.js"></script>\n' +
-'  <script src="https://unpkg.com/@hpcc-js/wasm@2.13.0/dist/index.min.js"></script>\n' +
-'  <script src="https://unpkg.com/d3-graphviz@5.4.0/build/d3-graphviz.js"></script>\n' +
-'  \n' +
-'  <script>\n' +
-'    const dotSrc = `' + dotString.replace(/`/g, '\\`') + '`;\n' +
-'    \n' +
-'    d3.select("#graph-container")\n' +
-'      .graphviz()\n' +
-'      .renderDot(dotSrc)\n' +
-'      .on("end", function() {\n' +
-'        document.getElementById("btn-download").addEventListener("click", () => {\n' +
-'          const svgData = document.querySelector("#graph-container svg").outerHTML;\n' +
-'          const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });\n' +
-'          const url = URL.createObjectURL(blob);\n' +
-'          const a = document.createElement("a");\n' +
-'          a.href = url;\n' +
-'          a.download = "arestrix_architecture.svg";\n' +
-'          a.click();\n' +
-'          URL.revokeObjectURL(url);\n' +
-'        });\n' +
-'      });\n' +
-'  </script>\n' +
-'</body>\n' +
-'</html>';
-
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
+  public async exportGraphvizSVG(openNewTab: boolean = false): Promise<void> {
+    if (openNewTab) {
+      await this.graphvizExportModal.refreshRender();
+      this.graphvizExportModal.openStandaloneTab();
+    } else {
+      await this.graphvizExportModal.show();
+    }
   }
 
   public getBackstageView(): BackstageView {

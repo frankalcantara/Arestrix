@@ -179,6 +179,8 @@ export class ImportExcelModal {
     this.graph.createEdge(n3.id, n3.outputs[0].id, n4.id, n4.inputs[0].id);
     this.graph.createEdge(n3.id, n3.outputs[1].id, n1.id, n1.inputs[0].id);
 
+    this.graph.autoLayout(false);
+
     this.projectManager.updateProjectMetadata({
       database: {
         type: 'sqlite',

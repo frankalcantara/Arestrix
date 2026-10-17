@@ -117,6 +117,12 @@ export const THEME = {
       badgeBg: 0x44206a,      // Púrpura 700
       textColor: getContrastTextColor(0x5c2d91),
       label: 'JOIN / BARRIER'
+    },
+    output: {
+      color: 0x047857,        // Esmeralda 700 Fluent / Entrega e Artefatos
+      badgeBg: 0x065f46,      // Esmeralda 800
+      textColor: getContrastTextColor(0x047857),
+      label: 'OUTPUT / ARTIFACT'
     }
   } as Record<TaskflowNodeType, { color: number; badgeBg: number; textColor: string; label: string }>,
 

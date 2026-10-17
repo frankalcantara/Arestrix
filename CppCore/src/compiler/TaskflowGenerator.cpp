@@ -456,6 +456,34 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
         } else if (node.type == core::TaskflowNodeType::Agent && node.customLambdaBody.empty()) {
             body = "taskforge::rt::runAgent(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +
                    rawLiteral(buildAgentSpec(graph, node).dump()) + ");";
+        } else if (node.type == core::TaskflowNodeType::Output) {
+            std::string src = "";
+            std::string dst = "";
+            std::string atype = "auto";
+            if (node.outputSettings.is_object()) {
+                src = node.outputSettings.value("sourcePath", "");
+                dst = node.outputSettings.value("destinationPath", "");
+                atype = node.outputSettings.value("artifactType", "auto");
+            }
+            if (node.customLambdaBody.empty()) {
+                body = "std::cout << \"[OUTPUT: " + label + "] Registrando entregavel...\\n\";\n"
+                       "try {\n"
+                       "    std::string sPath = " + cppString(src) + ";\n"
+                       "    std::string dPath = " + cppString(dst) + ";\n"
+                       "    if (!dPath.empty() && !sPath.empty() && std::filesystem::exists(sPath)) {\n"
+                       "        std::filesystem::create_directories(std::filesystem::path(dPath).parent_path());\n"
+                       "        std::filesystem::copy_file(sPath, dPath, std::filesystem::copy_options::overwrite_existing);\n"
+                       "    }\n"
+                       "} catch (const std::exception& e) {\n"
+                       "    std::cerr << \"[OUTPUT Erro] \" << e.what() << \"\\n\";\n"
+                       "}\n"
+                       "std::cout << \"[OUTPUT_DELIVERY] {\\\"nodeId\\\": \\\"" + node.id + "\\\", \\\"label\\\": \\\"" + label + "\\\", \\\"source\\\": \\\"" + src + "\\\", \\\"destination\\\": \\\"" + dst + "\\\", \\\"type\\\": \\\"" + atype + "\\\"}\\n\";";
+            } else {
+                body = node.customLambdaBody;
+                if (body.find("[OUTPUT_DELIVERY]") == std::string::npos) {
+                    body += "\nstd::cout << \"[OUTPUT_DELIVERY] {\\\"nodeId\\\": \\\"" + node.id + "\\\", \\\"label\\\": \\\"" + label + "\\\", \\\"source\\\": \\\"" + src + "\\\", \\\"destination\\\": \\\"" + dst + "\\\", \\\"type\\\": \\\"" + atype + "\\\"}\\n\";";
+                }
+            }
         } else {
             body = node.customLambdaBody.empty()
                 ? "std::cout << \"Executando \" << " + cppString(label) + " << \"\\n\";"

@@ -31,6 +31,9 @@ const TELEMETRY_ICONS: Record<string, { name: string; icon: LucideIconNode }> = 
   status: { name: 'timer', icon: Timer as unknown as LucideIconNode }
 };
 
+export type NodeExecutionState = 'idle' | 'queued' | 'running' | 'completed' | 'error';
+export type NodeActivityKind = 'running' | 'thinking' | 'tool_call' | 'rate_limit';
+
 export class SvgNodeView {
   public nodeData: INodeData;
   public group: SVGGElement;
@@ -38,7 +41,12 @@ export class SvgNodeView {
 
   private width: number;
   private height: number;
-  private executionState: 'idle' | 'running' | 'completed' = 'idle';
+  private executionState: NodeExecutionState = 'idle';
+  private activityKind: NodeActivityKind = 'running';
+  private activityDetail: string = '';
+  private execStartTimeMs: number | null = null;
+  private execDurationMs: number | null = null;
+  private execTimerInterval: ReturnType<typeof setInterval> | null = null;
   private detailVisible: boolean = true;
 
   private selectionRing!: SVGRectElement;
@@ -51,6 +59,8 @@ export class SvgNodeView {
   private portElements: Map<string, { group: SVGGElement; circle: SVGCircleElement; label: SVGTextElement; hitbox: SVGCircleElement }> = new Map();
   private actionBarGroup: SVGGElement | null = null;
   private actionHoverBgs: Map<NodeActionType, SVGCircleElement> = new Map();
+  private execStatusGroup: SVGGElement | null = null;
+  private execStatusLabel: SVGTextElement | null = null;
   private telemetryGroup: SVGGElement | null = null;
   private telemetryHandler?: (ev: any) => void;
 
@@ -66,7 +76,7 @@ export class SvgNodeView {
     this.height = SvgNodeView.computeHeight(nodeData);
 
     this.group = document.createElementNS(SVG_NS, 'g');
-    this.group.setAttribute('class', 'arestrix-svg-vertex');
+    this.group.setAttribute('class', 'arestrix-svg-vertex state-idle');
     this.group.setAttribute('data-node-id', nodeData.id);
     this.updatePosition(nodeData.position.x, nodeData.position.y);
 
@@ -504,23 +514,326 @@ export class SvgNodeView {
     this.refreshOutline();
   }
 
-  public setExecutionState(state: 'idle' | 'running' | 'completed'): void {
+  public getExecutionState(): NodeExecutionState {
+    return this.executionState;
+  }
+
+  public getActivityKind(): NodeActivityKind {
+    return this.activityKind;
+  }
+
+  public setExecutionState(state: NodeExecutionState, detail?: string): void {
+    const prevState = this.executionState;
     this.executionState = state;
+
+    if (state === 'idle') {
+      this.stopExecTimer();
+      this.activityKind = 'running';
+      this.activityDetail = '';
+      this.execStartTimeMs = null;
+      this.execDurationMs = null;
+      this.clearExecStatusPill();
+      this.clearTelemetryBadge();
+    } else if (state === 'queued') {
+      this.stopExecTimer();
+      this.activityKind = 'running';
+      this.activityDetail = detail || '';
+      this.execStartTimeMs = null;
+      this.execDurationMs = null;
+      this.renderExecStatusPill();
+    } else if (state === 'running') {
+      if (prevState !== 'running' || this.execStartTimeMs === null) {
+        this.execStartTimeMs = Date.now();
+        this.execDurationMs = null;
+      }
+      if (detail !== undefined) {
+        this.activityDetail = detail;
+      }
+      this.renderExecStatusPill();
+      this.startExecTimer();
+    } else if (state === 'completed') {
+      this.stopExecTimer();
+      if (this.execStartTimeMs !== null) {
+        this.execDurationMs = Math.max(1, Date.now() - this.execStartTimeMs);
+      }
+      this.activityKind = 'running';
+      this.activityDetail = detail || '';
+      this.renderExecStatusPill();
+    } else if (state === 'error') {
+      this.stopExecTimer();
+      if (this.execStartTimeMs !== null) {
+        this.execDurationMs = Math.max(1, Date.now() - this.execStartTimeMs);
+      }
+      if (detail !== undefined) {
+        this.activityDetail = detail;
+      }
+      this.renderExecStatusPill();
+    }
+
     this.refreshOutline();
   }
 
-  private refreshOutline(): void {
+  private startExecTimer(): void {
+    this.stopExecTimer();
+    this.execTimerInterval = setInterval(() => {
+      if (this.executionState !== 'running' || !this.execStatusLabel) {
+        this.stopExecTimer();
+        return;
+      }
+      this.execStatusLabel.textContent = this.formatRunningStatusText();
+      const dashOffset = -Math.round((Date.now() / 28) % 22);
+      this.selectionRing.setAttribute('stroke-dashoffset', String(dashOffset));
+    }, 80);
+  }
+
+  private stopExecTimer(): void {
+    if (this.execTimerInterval !== null) {
+      clearInterval(this.execTimerInterval);
+      this.execTimerInterval = null;
+    }
+  }
+
+  private formatDuration(ms: number | null): string {
+    if (ms === null || ms <= 0) return '';
+    if (ms < 1000) return `${Math.max(1, Math.round(ms))}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
+  }
+
+  public getElapsedMs(): number {
+    if (this.executionState === 'running' && this.execStartTimeMs !== null) {
+      return Math.max(0, Date.now() - this.execStartTimeMs);
+    }
+    return this.execDurationMs ?? 0;
+  }
+
+  public getActivityDetail(): string {
+    return this.activityDetail;
+  }
+
+  private formatRunningStatusText(): string {
+    const elapsed = this.execStartTimeMs ? Math.max(0, Date.now() - this.execStartTimeMs) : 0;
+    const secStr = `${(elapsed / 1000).toFixed(1)}s`;
+    if (this.activityKind === 'thinking') {
+      return `Pensando · ${secStr}`;
+    }
+    if (this.activityKind === 'tool_call') {
+      const shortTool = (this.activityDetail || 'tool').slice(0, 11);
+      return `${shortTool} · ${secStr}`;
+    }
+    if (this.activityKind === 'rate_limit') {
+      return `Retry 429 · ${secStr}`;
+    }
+    return `Ativo · ${secStr}`;
+  }
+
+  private clearExecStatusPill(): void {
+    if (this.execStatusGroup && this.execStatusGroup.parentNode) {
+      this.execStatusGroup.parentNode.removeChild(this.execStatusGroup);
+    }
+    this.execStatusGroup = null;
+    this.execStatusLabel = null;
+  }
+
+  private clearTelemetryBadge(): void {
+    if (this.telemetryGroup && this.telemetryGroup.parentNode) {
+      this.telemetryGroup.parentNode.removeChild(this.telemetryGroup);
+    }
+    this.telemetryGroup = null;
+  }
+
+  /**
+   * Renderiza a pílula vetorial de status de execução no canto superior esquerdo do vértice
+   * (alinhada ao lado da barra de ações rápida sem colisão).
+   */
+  private renderExecStatusPill(): void {
+    this.clearExecStatusPill();
+    if (this.executionState === 'idle') return;
+
+    const a = THEME.actionBar;
+    const pillH = a.buttonSize + a.padding * 2;
+    const pillW = 136;
+    const pillX = -this.width / 2;
+    const pillY = -this.height / 2 - a.offsetY - pillH;
+
+    let bg = '#F8FAFC';
+    let border = '#94A3B8';
+    let textCol = '#334155';
+    let labelText = '';
+
+    if (this.executionState === 'queued') {
+      bg = '#F1F5F9';
+      border = '#94A3B8';
+      textCol = '#475569';
+      labelText = 'Na fila';
+    } else if (this.executionState === 'running') {
+      if (this.activityKind === 'thinking') {
+        bg = '#EEF2FF';
+        border = '#6366F1';
+        textCol = '#4338CA';
+      } else if (this.activityKind === 'tool_call') {
+        bg = '#F0F9FF';
+        border = '#0284C7';
+        textCol = '#0369A1';
+      } else if (this.activityKind === 'rate_limit') {
+        bg = '#FFFBEB';
+        border = '#F59E0B';
+        textCol = '#B45309';
+      } else {
+        bg = '#ECFDF5';
+        border = '#10B981';
+        textCol = '#047857';
+      }
+      labelText = this.formatRunningStatusText();
+    } else if (this.executionState === 'completed') {
+      bg = '#ECFDF5';
+      border = '#059669';
+      textCol = '#047857';
+      const dur = this.formatDuration(this.execDurationMs);
+      labelText = dur ? `✓ Concluído · ${dur}` : '✓ Concluído';
+    } else if (this.executionState === 'error') {
+      bg = '#FEF2F2';
+      border = '#EF4444';
+      textCol = '#B91C1C';
+      const dur = this.formatDuration(this.execDurationMs);
+      labelText = dur ? `✖ Erro · ${dur}` : '✖ Erro';
+    }
+
+    const group = document.createElementNS(SVG_NS, 'g');
+    group.setAttribute('class', `vertex-exec-status-pill pill-${this.executionState}`);
+    group.setAttribute('data-exec-state', this.executionState);
+    group.setAttribute('transform', `translate(${pillX}, ${pillY})`);
+    if (!this.detailVisible) {
+      group.style.display = 'none';
+    }
+
+    const rect = document.createElementNS(SVG_NS, 'rect');
+    rect.setAttribute('width', String(pillW));
+    rect.setAttribute('height', String(pillH));
+    rect.setAttribute('rx', String(pillH / 2));
+    rect.setAttribute('ry', String(pillH / 2));
+    rect.setAttribute('fill', bg);
+    rect.setAttribute('stroke', border);
+    rect.setAttribute('stroke-width', '1.5');
+    group.appendChild(rect);
+
+    const indicatorCx = 14;
+    const indicatorCy = pillH / 2;
+
     if (this.executionState === 'running') {
-      this.selectionRing.setAttribute('stroke', '#10B981');
-      this.bodyRect.setAttribute('stroke', '#10B981');
+      const track = document.createElementNS(SVG_NS, 'circle');
+      track.setAttribute('cx', String(indicatorCx));
+      track.setAttribute('cy', String(indicatorCy));
+      track.setAttribute('r', '5.5');
+      track.setAttribute('fill', 'none');
+      track.setAttribute('stroke', border);
+      track.setAttribute('stroke-width', '2');
+      track.setAttribute('opacity', '0.3');
+      group.appendChild(track);
+
+      const spinner = document.createElementNS(SVG_NS, 'circle');
+      spinner.setAttribute('class', 'vertex-exec-spinner');
+      spinner.setAttribute('cx', String(indicatorCx));
+      spinner.setAttribute('cy', String(indicatorCy));
+      spinner.setAttribute('r', '5.5');
+      spinner.setAttribute('fill', 'none');
+      spinner.setAttribute('stroke', textCol);
+      spinner.setAttribute('stroke-width', '2.2');
+      spinner.setAttribute('stroke-dasharray', '16 18');
+      spinner.setAttribute('stroke-linecap', 'round');
+      group.appendChild(spinner);
+    } else {
+      const dot = document.createElementNS(SVG_NS, 'circle');
+      dot.setAttribute('cx', String(indicatorCx));
+      dot.setAttribute('cy', String(indicatorCy));
+      dot.setAttribute('r', '4.5');
+      if (this.executionState === 'queued') {
+        dot.setAttribute('fill', 'none');
+        dot.setAttribute('stroke', textCol);
+        dot.setAttribute('stroke-width', '1.75');
+        dot.setAttribute('stroke-dasharray', '3 2');
+      } else {
+        dot.setAttribute('fill', border);
+      }
+      group.appendChild(dot);
+    }
+
+    const label = document.createElementNS(SVG_NS, 'text');
+    label.setAttribute('class', 'vertex-exec-status-text');
+    label.setAttribute('x', '25');
+    label.setAttribute('y', String(indicatorCy));
+    label.setAttribute('dominant-baseline', 'central');
+    label.setAttribute('fill', textCol);
+    label.setAttribute('font-size', '11');
+    label.setAttribute('font-weight', '700');
+    label.style.textShadow = 'none';
+    label.style.filter = 'none';
+    label.style.fontFamily = THEME.typography.fontFamily;
+    label.textContent = labelText;
+    group.appendChild(label);
+
+    this.execStatusGroup = group;
+    this.execStatusLabel = label;
+    this.group.appendChild(group);
+  }
+
+  private refreshOutline(): void {
+    const classes = ['arestrix-svg-vertex', `state-${this.executionState}`];
+    if (this.executionState === 'running') {
+      classes.push(`activity-${this.activityKind}`);
+    }
+    if (this.isSelected) {
+      classes.push('selected');
+    }
+    this.group.setAttribute('class', classes.join(' '));
+
+    // Contraste de opacidade estrito: apenas o vértice em execução (ou em erro/idle) fica 100% opaco;
+    // vértices na fila ('queued') ou que já passaram a operação adiante ('completed') ficam translúcidos (0.45).
+    const vertexOpacity =
+      this.executionState === 'queued' || this.executionState === 'completed'
+        ? '0.45'
+        : '1';
+    this.group.style.opacity = vertexOpacity;
+    this.group.setAttribute('opacity', vertexOpacity);
+
+    if (this.executionState === 'running') {
+      let ringStroke = '#10B981';
+      if (this.activityKind === 'thinking') ringStroke = '#6366F1';
+      else if (this.activityKind === 'tool_call') ringStroke = '#0284C7';
+      else if (this.activityKind === 'rate_limit') ringStroke = '#F59E0B';
+
+      this.selectionRing.setAttribute('stroke', ringStroke);
+      this.selectionRing.setAttribute('stroke-dasharray', '14 8');
+      this.selectionRing.setAttribute('class', 'vertex-selection-ring ring-animated');
+      this.bodyRect.setAttribute('stroke', ringStroke);
+      this.bodyRect.removeAttribute('stroke-dasharray');
       this.selectionRing.style.display = 'block';
     } else if (this.executionState === 'completed') {
       this.selectionRing.setAttribute('stroke', '#059669');
+      this.selectionRing.removeAttribute('stroke-dasharray');
+      this.selectionRing.setAttribute('class', 'vertex-selection-ring');
       this.bodyRect.setAttribute('stroke', '#059669');
+      this.bodyRect.removeAttribute('stroke-dasharray');
       this.selectionRing.style.display = 'block';
+    } else if (this.executionState === 'error') {
+      this.selectionRing.setAttribute('stroke', '#EF4444');
+      this.selectionRing.removeAttribute('stroke-dasharray');
+      this.selectionRing.setAttribute('class', 'vertex-selection-ring');
+      this.bodyRect.setAttribute('stroke', '#EF4444');
+      this.bodyRect.removeAttribute('stroke-dasharray');
+      this.selectionRing.style.display = 'block';
+    } else if (this.executionState === 'queued') {
+      this.selectionRing.setAttribute('stroke', this.isSelected ? '#0F6CBD' : '#94A3B8');
+      this.selectionRing.setAttribute('stroke-dasharray', '6 6');
+      this.selectionRing.setAttribute('class', 'vertex-selection-ring');
+      this.bodyRect.setAttribute('stroke', this.isSelected ? '#0F6CBD' : '#94A3B8');
+      this.bodyRect.setAttribute('stroke-dasharray', '6 4');
+      this.selectionRing.style.display = this.isSelected ? 'block' : 'none';
     } else {
       this.selectionRing.setAttribute('stroke', '#0F6CBD');
+      this.selectionRing.removeAttribute('stroke-dasharray');
+      this.selectionRing.setAttribute('class', 'vertex-selection-ring');
       this.bodyRect.setAttribute('stroke', this.isSelected ? '#0F6CBD' : '#CBD5E1');
+      this.bodyRect.removeAttribute('stroke-dasharray');
       this.selectionRing.style.display = this.isSelected ? 'block' : 'none';
     }
   }
@@ -536,11 +849,14 @@ export class SvgNodeView {
     if (this.actionBarGroup) {
       this.actionBarGroup.style.display = visible ? 'block' : 'none';
     }
+    if (this.execStatusGroup) {
+      this.execStatusGroup.style.display = visible ? 'block' : 'none';
+    }
   }
 
   // --- Telemetria em Tempo Real ---
 
-  private handleTelemetry(ev: any): void {
+  public handleTelemetry(ev: any): void {
     const p = ev.payload || {};
     let text = '';
     let iconKey = 'status';
@@ -555,28 +871,109 @@ export class SvgNodeView {
       bg = '#EEF2FF';
       border = '#6366F1';
       textCol = '#4338CA';
+
+      this.activityKind = 'thinking';
+      this.activityDetail = `Pensando (${kb} KB)`;
+      this.setExecutionState('running', this.activityDetail);
     } else if (ev.type === 'tool_start') {
-      text = `Executando ${p.toolName || 'tool'}`;
+      const toolName = p.toolName || 'tool';
+      text = `Executando ${toolName}`;
       iconKey = 'tool_start';
       bg = '#F0F9FF';
       border = '#0284C7';
       textCol = '#0369A1';
+
+      this.activityKind = 'tool_call';
+      this.activityDetail = toolName;
+      this.setExecutionState('running', toolName);
     } else if (ev.type === 'tool_end') {
       const ok = p.toolSuccess !== false;
-      text = ok ? `${p.toolName || 'tool'} concluída` : `${p.toolName || 'tool'} falhou`;
+      const toolName = p.toolName || 'tool';
+      text = ok ? `${toolName} concluída` : `${toolName} falhou`;
       iconKey = ok ? 'tool_ok' : 'tool_fail';
       bg = ok ? '#ECFDF5' : '#FEF2F2';
       border = ok ? '#10B981' : '#EF4444';
       textCol = ok ? '#047857' : '#B91C1C';
+
+      this.activityKind = 'running';
+      this.activityDetail = '';
+      if (this.executionState === 'running') {
+        this.renderExecStatusPill();
+        this.refreshOutline();
+      } else {
+        this.setExecutionState('running');
+      }
     } else if (ev.type === 'rate_limit') {
       text = `Rate limit 429 (${p.retrySeconds || 15}s)`;
       iconKey = 'rate_limit';
       bg = '#FFFBEB';
       border = '#F59E0B';
       textCol = '#B45309';
-    } else if (ev.type === 'status') {
-      text = `${p.status || 'ativo'}`;
+
+      this.activityKind = 'rate_limit';
+      this.activityDetail = `429 (${p.retrySeconds || 15}s)`;
+      this.setExecutionState('running', this.activityDetail);
+    } else if (ev.type === 'log') {
+      const cleanLog = String(p.logLine || '').replace(/\s+/g, ' ').trim();
+      text = cleanLog ? cleanLog.slice(0, 32) : 'Gerando resposta...';
       iconKey = 'status';
+      bg = '#ECFDF5';
+      border = '#10B981';
+      textCol = '#047857';
+
+      this.activityKind = 'running';
+      this.activityDetail = 'Gerando resposta';
+      this.setExecutionState('running', this.activityDetail);
+    } else if (ev.type === 'status') {
+      const st = String(p.status || '').toLowerCase();
+      if (st === 'thinking') {
+        this.activityKind = 'thinking';
+        this.activityDetail = p.detail || 'Pensando';
+        this.setExecutionState('running', this.activityDetail);
+        text = p.detail ? `Pensando (${p.detail})` : 'Pensando...';
+        iconKey = 'thinking';
+        bg = '#EEF2FF';
+        border = '#6366F1';
+        textCol = '#4338CA';
+      } else if (st === 'tool_call') {
+        this.activityKind = 'tool_call';
+        this.activityDetail = p.detail || 'tool';
+        this.setExecutionState('running', this.activityDetail);
+        text = p.detail ? `Executando ${p.detail}` : 'Executando ferramenta...';
+        iconKey = 'tool_start';
+        bg = '#F0F9FF';
+        border = '#0284C7';
+        textCol = '#0369A1';
+      } else if (st === 'running' || st === 'started') {
+        this.activityKind = 'running';
+        this.activityDetail = p.detail || '';
+        this.setExecutionState('running', this.activityDetail);
+        text = p.detail ? `Executando: ${p.detail}` : 'Em execução...';
+        iconKey = 'status';
+        bg = '#ECFDF5';
+        border = '#10B981';
+        textCol = '#047857';
+      } else if (st === 'settled' || st === 'completed' || st === 'done') {
+        this.setExecutionState('completed', p.detail || '');
+        const dur = this.formatDuration(this.execDurationMs);
+        text = dur ? `Concluído em ${dur}` : 'Concluído com sucesso';
+        iconKey = 'tool_ok';
+        bg = '#ECFDF5';
+        border = '#059669';
+        textCol = '#047857';
+      } else if (st === 'error' || st === 'failed') {
+        this.setExecutionState('error', p.detail || '');
+        text = p.detail ? `${p.detail}` : 'Execução falhou';
+        iconKey = 'tool_fail';
+        bg = '#FEF2F2';
+        border = '#EF4444';
+        textCol = '#B91C1C';
+      } else {
+        this.activityKind = 'running';
+        this.setExecutionState('running', p.detail || '');
+        text = `${p.status || 'ativo'}`;
+        iconKey = 'status';
+      }
     } else {
       return;
     }
@@ -585,10 +982,7 @@ export class SvgNodeView {
   }
 
   private renderTelemetryBadge(text: string, iconKey: string, bg: string, border: string, textCol: string): void {
-    if (this.telemetryGroup) {
-      this.group.removeChild(this.telemetryGroup);
-      this.telemetryGroup = null;
-    }
+    this.clearTelemetryBadge();
 
     const badgeW = this.width - 24;
     const badgeH = 26;
@@ -627,6 +1021,7 @@ export class SvgNodeView {
     label.setAttribute('font-size', '12');
     label.setAttribute('font-weight', '600');
     label.style.textShadow = 'none';
+    label.style.filter = 'none';
     label.style.fontFamily = THEME.typography.fontFamily;
     label.textContent = text;
     group.appendChild(label);
@@ -636,6 +1031,7 @@ export class SvgNodeView {
   }
 
   public dispose(): void {
+    this.stopExecTimer();
     if (this.telemetryHandler) {
       this.bus.off(`agent:telemetry:${this.nodeData.id}`, this.telemetryHandler);
     }

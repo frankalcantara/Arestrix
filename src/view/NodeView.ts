@@ -7,7 +7,7 @@ import { createNodeLabel, updateNodeLabel, disposeNodeLabel, fitTextToLines } fr
 import { createIconMesh, disposeIconMesh, LucideIconNode } from './icons/VectorIcons.ts';
 import { NODE_ACTIONS, NODE_TYPE_ICONS, NodeActionType } from './NodeActions.ts';
 import { Brain, Wrench, CircleCheck, CircleX, TriangleAlert, Timer } from 'lucide';
-import { SvgNodeView } from './SvgNodeView.ts';
+import { SvgNodeView, NodeExecutionState } from './SvgNodeView.ts';
 import { CanvasTooltip } from '../ui/CanvasTooltip.ts';
 
 /**
@@ -45,7 +45,7 @@ export class NodeView {
 
   private width: number;
   private height: number;
-  private executionState: 'idle' | 'running' | 'completed' = 'idle';
+  private executionState: NodeExecutionState = 'idle';
   private detailVisible: boolean = true;
 
   private bodyMesh!: THREE.Mesh;
@@ -76,8 +76,8 @@ export class NodeView {
     const b = THEME.nodeBody;
     const t = THEME.typography;
     const ports = Math.max(nodeData.inputs.length, nodeData.outputs.length, 1);
-    const titleBlock = t.titleSize * 1.2 * b.titleMaxLines;
-    const content = b.headerHeight + b.titleGap + titleBlock + 8 + ports * b.portSpacing + b.portZoneBottomPadding;
+    const titleBlock = t.titleSize * 1.25 * b.titleMaxLines;
+    const content = b.headerHeight + b.titleGap + titleBlock + 12 + ports * b.portSpacing + b.portZoneBottomPadding;
     return Math.max(b.height, Math.ceil(content));
   }
 
@@ -223,8 +223,8 @@ export class NodeView {
 
   private portsTopY(): number {
     const b = THEME.nodeBody;
-    const titleBlock = THEME.typography.titleSize * 1.2 * b.titleMaxLines;
-    return this.height / 2 - b.headerHeight - b.titleGap - titleBlock - 8;
+    const titleBlock = THEME.typography.titleSize * 1.25 * b.titleMaxLines;
+    return this.height / 2 - b.headerHeight - b.titleGap - titleBlock - 12;
   }
 
   private createPorts(): void {
@@ -418,14 +418,20 @@ export class NodeView {
     return this.detailVisible;
   }
 
+  getBoundingSize(): { width: number; height: number } {
+    return { width: this.width, height: this.height };
+  }
+
   getPortWorldPosition(portId: string): THREE.Vector3 {
     const mesh = this.portMeshes.get(portId);
     if (!mesh) {
       return this.group.position.clone();
     }
-    const worldPos = new THREE.Vector3();
-    mesh.getWorldPosition(worldPos);
-    return worldPos;
+    return new THREE.Vector3(
+      this.group.position.x + mesh.position.x,
+      this.group.position.y + mesh.position.y,
+      0
+    );
   }
 
   setSelected(selected: boolean): void {
@@ -434,10 +440,14 @@ export class NodeView {
     this.svgNodeView?.setSelected(selected);
   }
 
-  setExecutionState(state: 'idle' | 'running' | 'completed'): void {
+  getExecutionState(): NodeExecutionState {
+    return this.svgNodeView ? this.svgNodeView.getExecutionState() : this.executionState;
+  }
+
+  setExecutionState(state: NodeExecutionState, detail?: string): void {
     this.executionState = state;
     this.refreshOutline();
-    this.svgNodeView?.setExecutionState(state);
+    this.svgNodeView?.setExecutionState(state, detail);
   }
 
   private refreshOutline(): void {
@@ -454,6 +464,16 @@ export class NodeView {
       borderMat.color.setHex(0x059669);
       this.selectionMesh.visible = true;
       this.group.position.z = 5;
+    } else if (this.executionState === 'error') {
+      selMat.color.setHex(0xef4444);
+      borderMat.color.setHex(0xef4444);
+      this.selectionMesh.visible = true;
+      this.group.position.z = 10;
+    } else if (this.executionState === 'queued') {
+      selMat.color.setHex(0x94a3b8);
+      borderMat.color.setHex(this.isSelected ? THEME.nodeBody.borderSelected : 0x94a3b8);
+      this.selectionMesh.visible = this.isSelected;
+      this.group.position.z = 0;
     } else {
       selMat.color.setHex(THEME.nodeBody.borderSelected);
       borderMat.color.setHex(this.isSelected ? THEME.nodeBody.borderSelected : THEME.nodeBody.borderColor);
@@ -481,7 +501,7 @@ export class NodeView {
 
   // --- Telemetria (badge vetorial abaixo do nó) ---
 
-  private handleTelemetry(ev: any): void {
+  public handleTelemetry(ev: any): void {
     const p = ev.payload || {};
     let text = '';
     let iconKey = 'status';
@@ -496,12 +516,16 @@ export class NodeView {
       bg = '#EEF2FF';
       border = '#6366F1';
       textCol = '#4338CA';
+      this.executionState = 'running';
+      this.refreshOutline();
     } else if (ev.type === 'tool_start') {
       text = `Executando ${p.toolName || 'tool'}`;
       iconKey = 'tool_start';
       bg = '#F0F9FF';
       border = '#0284C7';
       textCol = '#0369A1';
+      this.executionState = 'running';
+      this.refreshOutline();
     } else if (ev.type === 'tool_end') {
       const ok = p.toolSuccess !== false;
       text = ok ? `${p.toolName || 'tool'} concluída` : `${p.toolName || 'tool'} falhou`;
@@ -515,7 +539,23 @@ export class NodeView {
       bg = '#FFFBEB';
       border = '#F59E0B';
       textCol = '#B45309';
+      this.executionState = 'running';
+      this.refreshOutline();
+    } else if (ev.type === 'log') {
+      text = String(p.logLine || 'Gerando resposta...').replace(/\s+/g, ' ').trim().slice(0, 32);
+      iconKey = 'status';
+      this.executionState = 'running';
+      this.refreshOutline();
     } else if (ev.type === 'status') {
+      const st = String(p.status || '').toLowerCase();
+      if (st === 'running' || st === 'started' || st === 'thinking' || st === 'tool_call') {
+        this.executionState = 'running';
+      } else if (st === 'settled' || st === 'completed' || st === 'done') {
+        this.executionState = 'completed';
+      } else if (st === 'error' || st === 'failed') {
+        this.executionState = 'error';
+      }
+      this.refreshOutline();
       text = `${p.status || 'ativo'}`;
       iconKey = 'status';
     } else {

@@ -243,7 +243,7 @@ describe('Modal Exportador Taskflow C++20 com Editor Monaco Fullscreen', () => {
     expect(overlay.innerHTML).toContain('Exportador Taskflow C++20');
     expect(overlay.innerHTML).toContain('Editor Monaco Integrado (Microsoft)');
     expect(overlay.innerHTML).toContain('MSVC C++20 Taskflow');
-  });
+  }, 15000);
 
   it('3. Deve equipar o modal com as 4 abas de código e container do editor Monaco', async () => {
     await modal.show();

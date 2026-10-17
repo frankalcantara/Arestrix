@@ -136,10 +136,18 @@ Modals are floating windows: draggable by the title bar, resizable, and stackabl
 | Project manager | Project metadata, workspace path, project `.env` |
 | Batch & Resume | Run |
 
-## Console
+## Console and Artifacts Drawer
 
-A docked drawer at the bottom shows build output and the live execution log. The status bar below it
-shows the graph and project state.
+A docked drawer at the bottom of the screen (resizable with a splitter and collapsible) centralizes observability and pipeline deliverables across three tabs:
+
+1. **MSVC C++20 Terminal:** Displays generated C++20 source code, native compiler invocations, and raw execution logs from the Taskflow engine.
+2. **Real-Time Telemetry:** Monitors cognitive agent execution steps (thinking reasoning progress, tool calls, parameters, and 429 rate limit retries).
+3. **Artifacts (Deliverables):** Dedicated multi-format panel for inspecting and exporting pipeline deliverables:
+   - **Vector SVG:** Interactive native vector preview with pan/zoom controls and one-click toggle between graphic scene and clean XML/SVG source code.
+   - **Spreadsheets & Tabular Data (CSV/TSV):** Paginated data grid with instant cell search and raw data inspection.
+   - **Technical Documents & Markdown:** Formatted reader with code block syntax highlighting and one-click copy.
+   - **PDFs & JSONs:** Clean structured display with a button to launch the system's native viewer.
+   - **Quick Delivery Actions:** **"In Explorer"** button to open the `exports/` folder in Windows Explorer, **"Copy"**, and **"Download"** for direct local saving.
 
 ## Language
 

@@ -97,4 +97,48 @@ describe('Agent Telemetry & Real-Time Feedback', () => {
     expect(statusHistory[3]).toBe('tool_call');
     expect(statusHistory[5]).toBe('settled');
   });
+
+  it('should bridge C++ stdout telemetry markers via PipelineRunner.parseLogTelemetry into globalEventBus', async () => {
+    const { PipelineRunner } = await import('../src/core/PipelineRunner');
+    const { globalEventBus } = await import('../src/core/EventBus');
+
+    const agentEvents: IAgentTelemetryEvent[] = [];
+    const enterEvents: any[] = [];
+    const exitEvents: any[] = [];
+
+    const onAgent = (ev: IAgentTelemetryEvent) => agentEvents.push(ev);
+    const onEnter = (ev: any) => enterEvents.push(ev);
+    const onExit = (ev: any) => exitEvents.push(ev);
+
+    globalEventBus.on('agent:telemetry', onAgent);
+    globalEventBus.on('telemetry:task-enter', onEnter);
+    globalEventBus.on('telemetry:task-exit', onExit);
+
+    try {
+      PipelineRunner.parseLogTelemetry(
+        '[NF_TELEMETRY:AGENT] {"nodeId":"node_1","type":"status","timestamp":1700000,"payload":{"status":"running","detail":"Agente 1"}}'
+      );
+      PipelineRunner.parseLogTelemetry('[NF_TELEMETRY:ENTER] Task=task_node_2 Worker=1');
+      PipelineRunner.parseLogTelemetry('[NF_TELEMETRY:EXIT] Task=task_node_2 Worker=1');
+      PipelineRunner.parseLogTelemetry('[EXECUTANDO] item_01 :: Agente Analista');
+      PipelineRunner.parseLogTelemetry('[CHECKPOINT:RESUME] item_02 :: Agente Sintetizador');
+
+      expect(agentEvents.length).toBe(1);
+      expect(agentEvents[0].nodeId).toBe('node_1');
+      expect(agentEvents[0].payload.status).toBe('running');
+
+      expect(enterEvents).toEqual([
+        { taskId: 'task_node_2', worker: 1 },
+        { taskId: 'Agente Analista', itemId: 'item_01' }
+      ]);
+      expect(exitEvents).toEqual([
+        { taskId: 'task_node_2', worker: 1 },
+        { taskId: 'Agente Sintetizador', itemId: 'item_02', cached: true }
+      ]);
+    } finally {
+      globalEventBus.off('agent:telemetry', onAgent);
+      globalEventBus.off('telemetry:task-enter', onEnter);
+      globalEventBus.off('telemetry:task-exit', onExit);
+    }
+  });
 });

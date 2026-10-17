@@ -22,7 +22,8 @@ enum class TaskflowNodeType {
     Fork,
     Join,
     Switch,
-    Mcp
+    Mcp,
+    Output
 };
 
 enum class PortDirection { Input, Output };
@@ -61,6 +62,7 @@ struct NodeData {
     json agentSettings;
     json mcpSettings;      // vertice mcp: servidor, ferramenta, argumentos, origem da entrada e arquivo de saida
     json switchSettings;   // vertice switch: modo de decisao (code | rules | model), origem do texto, palavras
+    json outputSettings;   // vertice output: arquivos de entrega, origem/destino e formato
 };
 
 struct EdgeData {
@@ -112,7 +114,8 @@ ARX_JSON_ENUM(TaskflowNodeType, {
     {TaskflowNodeType::Fork, "fork"},
     {TaskflowNodeType::Join, "join"},
     {TaskflowNodeType::Switch, "switch"},
-    {TaskflowNodeType::Mcp, "mcp"}
+    {TaskflowNodeType::Mcp, "mcp"},
+    {TaskflowNodeType::Output, "output"}
 })
 
 ARX_JSON_ENUM(PortDirection, {
@@ -161,7 +164,8 @@ inline void to_json(json& j, const NodeData& n) {
         {"requiredHeaders", n.requiredHeaders},
         {"agentSettings", n.agentSettings},
         {"switchSettings", n.switchSettings},
-        {"mcpSettings", n.mcpSettings}
+        {"mcpSettings", n.mcpSettings},
+        {"outputSettings", n.outputSettings}
     };
 }
 inline void from_json(const json& j, NodeData& n) {
@@ -181,6 +185,7 @@ inline void from_json(const json& j, NodeData& n) {
     if(j.contains("agentSettings")) j.at("agentSettings").get_to(n.agentSettings);
     if(j.contains("switchSettings")) j.at("switchSettings").get_to(n.switchSettings);
     if(j.contains("mcpSettings")) j.at("mcpSettings").get_to(n.mcpSettings);
+    if(j.contains("outputSettings")) j.at("outputSettings").get_to(n.outputSettings);
 }
 
 // Serialização manual de EdgeData para campos opcionais

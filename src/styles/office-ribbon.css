@@ -475,6 +475,36 @@
   font-weight: 800;
 }
 
+/* Botão Parar Execução (Estado Rodando / Stop) - Vermelho com alto contraste */
+.ribbon-btn-large.is-running-stop {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid #ef4444 !important;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35) !important;
+}
+
+.ribbon-btn-large.is-running-stop:hover {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  filter: brightness(1.06);
+}
+
+.ribbon-btn-large.is-running-stop .ribbon-btn-icon {
+  color: #ffffff !important;
+  transform: scale(1.08);
+}
+
+.ribbon-btn-large.is-running-stop .ribbon-btn-label {
+  color: #ffffff !important;
+  font-weight: 800;
+}
+
+/* Botão Parar no QAT (Barra de Acesso Rápido) */
+.office-qat-btn.is-running-stop {
+  color: #dc2626 !important;
+  font-weight: 800 !important;
+  transform: scale(1.15);
+}
+
 /* Botão de Destaque Pi.ai (Fase 16 Prioritária) */
 .ribbon-btn-large.highlight-pi {
   background-color: #ffffff;

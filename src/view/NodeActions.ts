@@ -14,7 +14,8 @@ import {
   Split,
   Merge,
   ListTree,
-  Plug
+  Plug,
+  FolderDown
 } from 'lucide';
 import type { TaskflowNodeType } from '../core/types.ts';
 import type { LucideIconNode } from './icons/VectorIcons.ts';
@@ -106,5 +107,6 @@ export const NODE_TYPE_ICONS: Record<TaskflowNodeType, { name: string; icon: Luc
   fork: { name: 'split', icon: Split as unknown as LucideIconNode },
   join: { name: 'merge', icon: Merge as unknown as LucideIconNode },
   switch: { name: 'list-tree', icon: ListTree as unknown as LucideIconNode },
-  mcp: { name: 'plug', icon: Plug as unknown as LucideIconNode }
+  mcp: { name: 'plug', icon: Plug as unknown as LucideIconNode },
+  output: { name: 'folder-down', icon: FolderDown as unknown as LucideIconNode }
 } as Record<TaskflowNodeType, { name: string; icon: LucideIconNode }>;

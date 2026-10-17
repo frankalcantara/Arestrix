@@ -2,12 +2,17 @@ import * as THREE from 'three';
 import { CameraController } from './CameraController.ts';
 import { InfiniteGrid } from './InfiniteGrid.ts';
 import { NodeView } from './NodeView.ts';
-import { ConnectionView } from './ConnectionView.ts';
+import { ConnectionView, EdgeExecutionState } from './ConnectionView.ts';
 import { InteractionManager } from './InteractionManager.ts';
 import { Graph } from '../core/Graph.ts';
-import { INodeData, IEdgeData } from '../core/types.ts';
+import { INodeData, IEdgeData, IGraphSchema } from '../core/types.ts';
 import { EventBus } from '../core/EventBus.ts';
 import { THEME } from './Theme.ts';
+import { IBezierCurvePoints, IObstacleBox } from './BezierEdgeRouter.ts';
+
+function sanitizeId(id: string): string {
+  return id.replace(/[^a-zA-Z0-9]/g, '_');
+}
 
 export class Viewport {
   private container: HTMLElement;
@@ -28,12 +33,21 @@ export class Viewport {
   private frustumSize: number = 850;
   private resizeObserver!: ResizeObserver;
 
-  // Camada Vetorial SVG Nativa para Vértices e Conexões
+  // Camada Vetorial SVG Nativa para Vértices, Conexões e Alças Bézier (Inkscape-style)
   private svgLayer!: SVGSVGElement;
   private svgRoot!: SVGGElement;
   private svgEdgesLayer!: SVGGElement;
   private svgNodesLayer!: SVGGElement;
+  private svgEdgeHandlesLayer!: SVGGElement;
+  private svgEdgeGroups: Map<string, SVGGElement> = new Map();
   private svgEdgePaths: Map<string, SVGPathElement> = new Map();
+  private svgEdgeFlowPaths: Map<string, SVGPathElement> = new Map();
+  private svgEdgePackets: Map<string, SVGCircleElement> = new Map();
+  private svgEdgeBadges: Map<string, { group: SVGGElement; rect: SVGRectElement; dot: SVGCircleElement; text: SVGTextElement }> = new Map();
+  private svgEdgeHitPaths: Map<string, SVGPathElement> = new Map();
+  private selectedEdgeId: string | null = null;
+  private followExecution: boolean = false;
+  private edgeAnimPhase: number = 0;
 
   constructor(container: HTMLElement, graph: Graph, bus: EventBus) {
     this.container = container;
@@ -107,41 +121,260 @@ export class Viewport {
     this.bus.on('node:updated', (node: INodeData) => this.onNodeUpdated(node));
     this.bus.on('node:moved', ({ id, position }: { id: string; position: { x: number; y: number } }) => this.onNodeMoved(id, position));
     this.bus.on('edge:added', (edge: IEdgeData) => this.onEdgeAdded(edge));
+    this.bus.on('edge:updated', (edge: IEdgeData) => this.onEdgeUpdated(edge));
     this.bus.on('edge:removed', (edge: IEdgeData) => this.onEdgeRemoved(edge.id));
+    this.bus.on('edge:selected', (edgeId: string | null) => this.onEdgeSelected(edgeId));
+    this.bus.on('graph:layout-applied', () => {
+      this.refreshAllEdges();
+      this.zoomToFit();
+    });
     this.bus.on('graph:cleared', () => this.clearAllViews());
     this.bus.on('graph:loaded', () => this.syncFromGraph());
+    this.bus.on('pipeline:compiling', () => {
+      this.onTelemetryReset();
+      this.onPipelineRunning();
+    });
+    this.bus.on('pipeline:running', () => this.onPipelineRunning());
+    this.bus.on('pipeline:success', () => this.onPipelineFinished(true));
+    this.bus.on('pipeline:error', () => this.onPipelineFinished(false));
+    this.bus.on('agent:telemetry', (ev: any) => this.onAgentTelemetry(ev));
     this.bus.on('telemetry:task-enter', (data: { taskId: string; worker?: number }) => this.onTelemetryEnter(data));
-    this.bus.on('telemetry:task-exit', (data: { taskId: string; worker?: number }) => this.onTelemetryExit(data));
+    this.bus.on('telemetry:task-exit', (data: { taskId: string; worker?: number; failed?: boolean }) => this.onTelemetryExit(data));
     this.bus.on('telemetry:reset', () => this.onTelemetryReset());
     this.bus.on('camera:zoom-changed', ({ zoom }: { zoom: number }) => {
       this.nodeViews.forEach(nv => nv.setDetailLevel(zoom));
     });
   }
 
+  private onPipelineRunning(): void {
+    this.nodeViews.forEach(nv => {
+      if (nv.getExecutionState() === 'idle') {
+        nv.setExecutionState('queued');
+      }
+    });
+    this.connectionViews.forEach((conn, edgeId) => {
+      if (conn.executionState === 'idle') {
+        this.setEdgeExecutionState(edgeId, 'queued');
+      }
+    });
+  }
+
+  private onPipelineFinished(success: boolean): void {
+    this.nodeViews.forEach(nv => {
+      const st = nv.getExecutionState();
+      if (st === 'running') {
+        nv.setExecutionState(success ? 'completed' : 'error');
+      } else if (st === 'queued') {
+        nv.setExecutionState('idle');
+      }
+    });
+    this.connectionViews.forEach((conn, edgeId) => {
+      if (conn.executionState === 'active') {
+        this.setEdgeExecutionState(edgeId, success ? 'completed' : 'error');
+      } else if (conn.executionState === 'queued') {
+        this.setEdgeExecutionState(edgeId, 'idle');
+      }
+    });
+  }
+
+  /**
+   * Garante que apenas o vértice atualmente em foco permaneça opaco (opacity: 1),
+   * retornando qualquer vértice anteriormente ativo ao estado concluído/translúcido (opacity: 0.45)
+   * e sincronizando o fluxo animado das arestas conectadas.
+   */
+  private focusActiveNode(activeNodeId: string): void {
+    this.nodeViews.forEach(otherNv => {
+      if (otherNv.nodeData.id === activeNodeId) return;
+      const st = otherNv.getExecutionState();
+      if (st === 'running') {
+        otherNv.setExecutionState('completed');
+      } else if (st === 'idle') {
+        otherNv.setExecutionState('queued');
+      }
+    });
+
+    this.activateEdgesForActiveNode(activeNodeId);
+
+    const activeNv = this.nodeViews.get(activeNodeId);
+    if (activeNv && this.followExecution) {
+      this.cameraController.centerOn(activeNv.nodeData.position.x, activeNv.nodeData.position.y);
+    }
+  }
+
+  private onAgentTelemetry(ev: any): void {
+    if (!ev || !ev.nodeId) return;
+    const nv = this.findNodeView(ev.nodeId);
+    if (!nv) return;
+
+    // Propaga o evento para o SvgNodeView e NodeView (idempotente)
+    nv.handleTelemetry(ev);
+    nv.svgNodeView?.handleTelemetry(ev);
+
+    const p = ev.payload || {};
+    if (
+      ev.type === 'thinking' ||
+      ev.type === 'tool_start' ||
+      ev.type === 'tool_end' ||
+      ev.type === 'rate_limit' ||
+      ev.type === 'log'
+    ) {
+      this.focusActiveNode(nv.nodeData.id);
+    } else if (ev.type === 'status') {
+      const st = String(p.status || '').toLowerCase();
+      if (st === 'settled' || st === 'completed' || st === 'done') {
+        nv.setExecutionState('completed');
+        this.completeEdgesForNode(nv.nodeData.id);
+      } else if (st === 'error' || st === 'failed') {
+        nv.setExecutionState('error');
+        this.failEdgesForNode(nv.nodeData.id);
+      } else {
+        this.focusActiveNode(nv.nodeData.id);
+      }
+    }
+  }
+
   private onTelemetryEnter(data: { taskId: string; worker?: number }): void {
     const nv = this.findNodeView(data.taskId);
     if (nv) {
       nv.setExecutionState('running');
+      this.focusActiveNode(nv.nodeData.id);
     }
   }
 
-  private onTelemetryExit(data: { taskId: string; worker?: number }): void {
+  private onTelemetryExit(data: { taskId: string; worker?: number; failed?: boolean }): void {
     const nv = this.findNodeView(data.taskId);
     if (nv) {
-      nv.setExecutionState('completed');
+      if (data.failed) {
+        nv.setExecutionState('error');
+        this.failEdgesForNode(nv.nodeData.id);
+      } else {
+        nv.setExecutionState('completed');
+        this.completeEdgesForNode(nv.nodeData.id);
+      }
     }
+  }
+
+  private activateEdgesForActiveNode(nodeId: string): void {
+    // 1. Arestas que estavam ativas em nós anteriores (que já concluíram) passam para 'completed'
+    this.connectionViews.forEach(conn => {
+      const isIncoming = conn.edgeData.targetNodeId === nodeId;
+      const isOutgoing = conn.edgeData.sourceNodeId === nodeId;
+      if (!isIncoming && !isOutgoing && conn.executionState === 'active') {
+        this.setEdgeExecutionState(conn.edgeData.id, 'completed');
+      } else if (!isIncoming && !isOutgoing && conn.executionState === 'idle') {
+        this.setEdgeExecutionState(conn.edgeData.id, 'queued');
+      }
+    });
+
+    // 2. Arestas de entrada para o vértice ativo (vindo de predecessores concluídos ou fluxo direto)
+    const incoming: ConnectionView[] = [];
+    const outgoing: ConnectionView[] = [];
+    this.connectionViews.forEach(conn => {
+      if (conn.edgeData.targetNodeId === nodeId) incoming.push(conn);
+      if (conn.edgeData.sourceNodeId === nodeId) outgoing.push(conn);
+    });
+
+    let matchedIncoming = false;
+    incoming.forEach(conn => {
+      const srcState = this.nodeViews.get(conn.edgeData.sourceNodeId)?.getExecutionState();
+      if (srcState === 'completed' || srcState === 'running') {
+        this.setEdgeExecutionState(conn.edgeData.id, 'active');
+        matchedIncoming = true;
+      }
+    });
+    if (!matchedIncoming) {
+      incoming.forEach(conn => {
+        if (!conn.edgeData.isFeedbackLoop) {
+          this.setEdgeExecutionState(conn.edgeData.id, 'active');
+        }
+      });
+    }
+
+    // 3. Arestas de saída do vértice ativo: animam enquanto o vértice processa e transmite dados adiante
+    let matchedOutgoing = false;
+    outgoing.forEach(conn => {
+      if (!conn.edgeData.isFeedbackLoop) {
+        this.setEdgeExecutionState(conn.edgeData.id, 'active');
+        matchedOutgoing = true;
+      }
+    });
+    if (!matchedOutgoing) {
+      outgoing.forEach(conn => {
+        this.setEdgeExecutionState(conn.edgeData.id, 'active');
+      });
+    }
+  }
+
+  private completeEdgesForNode(nodeId: string): void {
+    this.connectionViews.forEach(conn => {
+      if (conn.edgeData.targetNodeId === nodeId || conn.edgeData.sourceNodeId === nodeId) {
+        if (conn.executionState === 'active') {
+          this.setEdgeExecutionState(conn.edgeData.id, 'completed');
+        }
+      }
+    });
+  }
+
+  private failEdgesForNode(nodeId: string): void {
+    this.connectionViews.forEach(conn => {
+      if ((conn.edgeData.targetNodeId === nodeId || conn.edgeData.sourceNodeId === nodeId) && conn.executionState === 'active') {
+        this.setEdgeExecutionState(conn.edgeData.id, 'error');
+      }
+    });
   }
 
   private findNodeView(key: string): NodeView | undefined {
+    if (!key) return undefined;
     let nv = this.nodeViews.get(key);
-    if (!nv) {
-      for (const view of this.nodeViews.values()) {
-        if (view.nodeData.label === key || view.nodeData.id === key) {
-          return view;
-        }
+    if (nv) return nv;
+
+    // Normaliza chaves de execução em lote (nodeId#itemId ou itemId :: label)
+    const strippedHash = key.includes('#') ? key.split('#')[0].trim() : key;
+    const strippedBatch = strippedHash.includes(' :: ')
+      ? strippedHash.split(' :: ').pop()!.trim()
+      : strippedHash;
+
+    nv = this.nodeViews.get(strippedBatch);
+    if (nv) return nv;
+
+    const cleanTarget = sanitizeId(strippedBatch);
+    for (const view of this.nodeViews.values()) {
+      const n = view.nodeData;
+      if (
+        n.id === strippedBatch ||
+        n.label === strippedBatch ||
+        n.label === key ||
+        sanitizeId(n.id) === cleanTarget ||
+        `task_${sanitizeId(n.id)}` === cleanTarget ||
+        sanitizeId(n.label) === cleanTarget
+      ) {
+        return view;
       }
     }
-    return nv;
+
+    // Se o evento veio de um vértice interno de um Subflow/Module, destaca o Subflow pai visível
+    const schemaContainsNode = (schema: IGraphSchema | undefined): boolean => {
+      if (!schema || !Array.isArray(schema.nodes)) return false;
+      for (const child of schema.nodes) {
+        if (
+          child.id === strippedBatch ||
+          child.label === strippedBatch ||
+          sanitizeId(child.id) === cleanTarget ||
+          schemaContainsNode(child.childGraph)
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    for (const view of this.nodeViews.values()) {
+      if (schemaContainsNode(view.nodeData.childGraph)) {
+        return view;
+      }
+    }
+
+    return undefined;
   }
 
   private initSvgOverlay(): void {
@@ -159,14 +392,34 @@ export class Viewport {
     this.svgNodesLayer = document.createElementNS(SVG_NS, 'g');
     this.svgNodesLayer.setAttribute('class', 'arestrix-svg-nodes');
 
+    this.svgEdgeHandlesLayer = document.createElementNS(SVG_NS, 'g');
+    this.svgEdgeHandlesLayer.setAttribute('class', 'arestrix-svg-edge-handles');
+
     this.svgRoot.appendChild(this.svgEdgesLayer);
     this.svgRoot.appendChild(this.svgNodesLayer);
+    this.svgRoot.appendChild(this.svgEdgeHandlesLayer);
     this.svgLayer.appendChild(this.svgRoot);
     this.container.appendChild(this.svgLayer);
   }
 
+  private getObstacleBoxes(): IObstacleBox[] {
+    const boxes: IObstacleBox[] = [];
+    this.nodeViews.forEach(nv => {
+      const size = nv.getBoundingSize();
+      boxes.push({
+        id: nv.nodeData.id,
+        x: nv.nodeData.position.x,
+        y: nv.nodeData.position.y,
+        width: size.width,
+        height: size.height
+      });
+    });
+    return boxes;
+  }
+
   private onTelemetryReset(): void {
     this.nodeViews.forEach(nv => nv.setExecutionState('idle'));
+    this.connectionViews.forEach((_conn, edgeId) => this.setEdgeExecutionState(edgeId, 'idle'));
   }
 
   private onNodeAdded(nodeData: INodeData): void {
@@ -176,6 +429,7 @@ export class Viewport {
     nodeView.setDetailLevel(this.cameraController.getZoom());
     this.scene.add(nodeView.group);
     this.nodeViews.set(nodeData.id, nodeView);
+    this.refreshAllEdges();
   }
 
   private onNodeRemoved(nodeId: string): void {
@@ -184,6 +438,7 @@ export class Viewport {
       this.scene.remove(nodeView.group);
       nodeView.dispose();
       this.nodeViews.delete(nodeId);
+      this.refreshAllEdges();
     }
   }
 
@@ -191,49 +446,431 @@ export class Viewport {
     const nodeView = this.nodeViews.get(id);
     if (nodeView) {
       nodeView.updatePosition(position.x, position.y);
-      this.updateConnectedEdgesForNode(id);
+      this.refreshAllEdges();
     }
   }
 
-  public updateConnectedEdgesForNode(nodeId: string): void {
-    const edges = this.graph.getEdgesForNode(nodeId);
-    edges.forEach(edge => {
-      const conn = this.connectionViews.get(edge.id);
-      const src = this.nodeViews.get(edge.sourceNodeId);
-      const tgt = this.nodeViews.get(edge.targetNodeId);
+  public updateConnectedEdgesForNode(_nodeId: string): void {
+    this.refreshAllEdges();
+  }
+
+  public refreshAllEdges(): void {
+    const obstacles = this.getObstacleBoxes();
+    this.connectionViews.forEach((conn, edgeId) => {
+      const latestEdge = this.graph.getEdge(edgeId);
+      if (latestEdge) {
+        conn.edgeData = latestEdge;
+      }
+      const src = this.nodeViews.get(conn.edgeData.sourceNodeId);
+      const tgt = this.nodeViews.get(conn.edgeData.targetNodeId);
       if (src && tgt) {
-        const start = src.getPortWorldPosition(edge.sourcePortId);
-        const end = tgt.getPortWorldPosition(edge.targetPortId);
-        if (conn) conn.updateCurve(start, end);
-        this.updateSvgEdgeCurve(edge.id, start, end, !!edge.isFeedbackLoop);
+        const start = src.getPortWorldPosition(conn.edgeData.sourcePortId);
+        const end = tgt.getPortWorldPosition(conn.edgeData.targetPortId);
+        const bezier = conn.updateCurve(start, end, obstacles);
+        this.updateSvgEdgeCurve(edgeId, bezier, conn.edgeData, conn.isSelected);
+        if (this.selectedEdgeId === edgeId) {
+          this.renderSelectedEdgeHandles(edgeId, bezier);
+        }
       }
     });
   }
 
-  private updateSvgEdgeCurve(edgeId: string, start: THREE.Vector3, end: THREE.Vector3, isFeedback: boolean): void {
+  private onEdgeUpdated(edgeData: IEdgeData): void {
+    const conn = this.connectionViews.get(edgeData.id);
+    if (!conn) return;
+    conn.edgeData = edgeData;
+    const obstacles = this.getObstacleBoxes();
+    const src = this.nodeViews.get(edgeData.sourceNodeId);
+    const tgt = this.nodeViews.get(edgeData.targetNodeId);
+    if (src && tgt) {
+      const start = src.getPortWorldPosition(edgeData.sourcePortId);
+      const end = tgt.getPortWorldPosition(edgeData.targetPortId);
+      const bezier = conn.updateCurve(start, end, obstacles);
+      this.updateSvgEdgeCurve(edgeData.id, bezier, edgeData, conn.isSelected);
+      if (this.selectedEdgeId === edgeData.id) {
+        this.renderSelectedEdgeHandles(edgeData.id, bezier);
+      }
+    }
+  }
+
+  private onEdgeSelected(edgeId: string | null): void {
+    this.selectedEdgeId = edgeId;
+    this.connectionViews.forEach((conn, id) => {
+      const isSel = id === edgeId;
+      if (conn.currentBezier) {
+        this.updateSvgEdgeCurve(id, conn.currentBezier, conn.edgeData, isSel);
+      }
+    });
+
+    if (!edgeId) {
+      this.clearEdgeHandles();
+      return;
+    }
+
+    const conn = this.connectionViews.get(edgeId);
+    if (conn && conn.currentBezier) {
+      this.renderSelectedEdgeHandles(edgeId, conn.currentBezier);
+    }
+  }
+
+  private clearEdgeHandles(): void {
+    if (!this.svgEdgeHandlesLayer) return;
+    while (this.svgEdgeHandlesLayer.firstChild) {
+      this.svgEdgeHandlesLayer.removeChild(this.svgEdgeHandlesLayer.firstChild);
+    }
+  }
+
+  /**
+   * Renderiza as alças de edição de curva de Bézier estilo Inkscape (tangentes cp1, cp2 e nó central mid).
+   */
+  private renderSelectedEdgeHandles(edgeId: string, bezier: IBezierCurvePoints): void {
+    if (!this.svgEdgeHandlesLayer || typeof document === 'undefined') return;
+    this.clearEdgeHandles();
+
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const group = document.createElementNS(SVG_NS, 'g');
+    group.setAttribute('class', 'arestrix-bezier-handles-group');
+    group.setAttribute('data-edge-id', edgeId);
+
+    const sx = bezier.start.x;
+    const sy = -bezier.start.y;
+    const cp1x = bezier.cp1.x;
+    const cp1y = -bezier.cp1.y;
+    const cp2x = bezier.cp2.x;
+    const cp2y = -bezier.cp2.y;
+    const ex = bezier.end.x;
+    const ey = -bezier.end.y;
+    const mx = bezier.midPoint.x;
+    const my = -bezier.midPoint.y;
+
+    // 1. Linhas de tangente tracejadas (start -> cp1 e end -> cp2)
+    const line1 = document.createElementNS(SVG_NS, 'line');
+    line1.setAttribute('class', 'arestrix-bezier-tangent');
+    line1.setAttribute('x1', `${sx}`);
+    line1.setAttribute('y1', `${sy}`);
+    line1.setAttribute('x2', `${cp1x}`);
+    line1.setAttribute('y2', `${cp1y}`);
+    line1.setAttribute('stroke', '#3B82F6');
+    line1.setAttribute('stroke-width', '1.75');
+    line1.setAttribute('stroke-dasharray', '5 4');
+    line1.style.pointerEvents = 'none';
+    group.appendChild(line1);
+
+    const line2 = document.createElementNS(SVG_NS, 'line');
+    line2.setAttribute('class', 'arestrix-bezier-tangent');
+    line2.setAttribute('x1', `${ex}`);
+    line2.setAttribute('y1', `${ey}`);
+    line2.setAttribute('x2', `${cp2x}`);
+    line2.setAttribute('y2', `${cp2y}`);
+    line2.setAttribute('stroke', '#3B82F6');
+    line2.setAttribute('stroke-width', '1.75');
+    line2.setAttribute('stroke-dasharray', '5 4');
+    line2.style.pointerEvents = 'none';
+    group.appendChild(line2);
+
+    const bindHandleEvents = (el: SVGElement, handleType: 'cp1' | 'cp2' | 'mid') => {
+      el.addEventListener('pointerdown', (e: PointerEvent) => {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        e.preventDefault();
+        this.bus.emit('edge:start-handle-drag', {
+          edgeId,
+          handle: handleType,
+          clientX: e.clientX,
+          clientY: e.clientY
+        });
+      });
+      el.addEventListener('dblclick', (e: MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        this.bus.emit('edge:reset-control-points', { edgeId });
+      });
+    };
+
+    // 2. Alça de Controle CP1 (círculo estilo Inkscape)
+    const cp1Handle = document.createElementNS(SVG_NS, 'circle');
+    cp1Handle.setAttribute('class', 'arestrix-bezier-handle arestrix-bezier-handle-cp1');
+    cp1Handle.setAttribute('data-handle', 'cp1');
+    cp1Handle.setAttribute('data-edge-id', edgeId);
+    cp1Handle.setAttribute('cx', `${cp1x}`);
+    cp1Handle.setAttribute('cy', `${cp1y}`);
+    cp1Handle.setAttribute('r', '7.5');
+    cp1Handle.setAttribute('fill', '#FFFFFF');
+    cp1Handle.setAttribute('stroke', '#2563EB');
+    cp1Handle.setAttribute('stroke-width', '2.5');
+    cp1Handle.style.pointerEvents = 'all';
+    cp1Handle.style.cursor = 'move';
+    bindHandleEvents(cp1Handle, 'cp1');
+    group.appendChild(cp1Handle);
+
+    // 3. Alça de Controle CP2 (círculo estilo Inkscape)
+    const cp2Handle = document.createElementNS(SVG_NS, 'circle');
+    cp2Handle.setAttribute('class', 'arestrix-bezier-handle arestrix-bezier-handle-cp2');
+    cp2Handle.setAttribute('data-handle', 'cp2');
+    cp2Handle.setAttribute('data-edge-id', edgeId);
+    cp2Handle.setAttribute('cx', `${cp2x}`);
+    cp2Handle.setAttribute('cy', `${cp2y}`);
+    cp2Handle.setAttribute('r', '7.5');
+    cp2Handle.setAttribute('fill', '#FFFFFF');
+    cp2Handle.setAttribute('stroke', '#2563EB');
+    cp2Handle.setAttribute('stroke-width', '2.5');
+    cp2Handle.style.pointerEvents = 'all';
+    cp2Handle.style.cursor = 'move';
+    bindHandleEvents(cp2Handle, 'cp2');
+    group.appendChild(cp2Handle);
+
+    // 4. Alça Central de Curva em t=0.5 (losango estilo Inkscape para puxar a curva diretamente)
+    const midHandle = document.createElementNS(SVG_NS, 'rect');
+    midHandle.setAttribute('class', 'arestrix-bezier-handle arestrix-bezier-handle-mid');
+    midHandle.setAttribute('data-handle', 'mid');
+    midHandle.setAttribute('data-edge-id', edgeId);
+    midHandle.setAttribute('x', '-5.5');
+    midHandle.setAttribute('y', '-5.5');
+    midHandle.setAttribute('width', '11');
+    midHandle.setAttribute('height', '11');
+    midHandle.setAttribute('rx', '2');
+    midHandle.setAttribute('transform', `translate(${mx}, ${my}) rotate(45)`);
+    midHandle.setAttribute('fill', '#2563EB');
+    midHandle.setAttribute('stroke', '#FFFFFF');
+    midHandle.setAttribute('stroke-width', '2');
+    midHandle.style.pointerEvents = 'all';
+    midHandle.style.cursor = 'grab';
+    bindHandleEvents(midHandle, 'mid');
+    group.appendChild(midHandle);
+
+    this.svgEdgeHandlesLayer.appendChild(group);
+  }
+
+  public setEdgeExecutionState(edgeId: string, state: EdgeExecutionState): void {
+    const conn = this.connectionViews.get(edgeId);
+    if (!conn) return;
+    conn.setExecutionState(state);
+    this.applySvgEdgeAppearance(edgeId, conn.edgeData, conn.isSelected, state);
+  }
+
+  public getEdgeExecutionState(edgeId: string): EdgeExecutionState {
+    return this.connectionViews.get(edgeId)?.executionState ?? 'idle';
+  }
+
+  public resetExecutionVisuals(): void {
+    this.onTelemetryReset();
+  }
+
+  public setFollowExecution(enabled: boolean): void {
+    this.followExecution = enabled;
+    this.bus.emit('canvas:follow-execution', this.followExecution);
+  }
+
+  public isFollowingExecution(): boolean {
+    return this.followExecution;
+  }
+
+  public toggleFollowExecution(): boolean {
+    this.followExecution = !this.followExecution;
+    this.bus.emit('canvas:follow-execution', this.followExecution);
+    return this.followExecution;
+  }
+
+  private getActiveEdgeAccentAndLabel(edgeData: IEdgeData): {
+    stroke: string;
+    fillBg: string;
+    textFill: string;
+    label: string;
+  } {
+    const tgtSvg = this.nodeViews.get(edgeData.targetNodeId)?.svgNodeView ?? null;
+    const srcSvg = this.nodeViews.get(edgeData.sourceNodeId)?.svgNodeView ?? null;
+    const activeNode =
+      tgtSvg?.getExecutionState() === 'running'
+        ? tgtSvg
+        : srcSvg?.getExecutionState() === 'running'
+          ? srcSvg
+          : tgtSvg || srcSvg;
+
+    const kind = activeNode?.getActivityKind() ?? 'running';
+    const detail = activeNode?.getActivityDetail() ?? '';
+    const elapsedSec = ((activeNode?.getElapsedMs() ?? 0) / 1000).toFixed(1);
+
+    if (kind === 'thinking') {
+      return {
+        stroke: '#6366F1',
+        fillBg: '#EEF2FF',
+        textFill: '#3730A3',
+        label: `Pensando · ${elapsedSec}s`
+      };
+    }
+    if (kind === 'tool_call') {
+      const shortTool = detail ? detail.slice(0, 10) : 'Tool';
+      return {
+        stroke: '#0284C7',
+        fillBg: '#E0F2FE',
+        textFill: '#075985',
+        label: `${shortTool} · ${elapsedSec}s`
+      };
+    }
+    if (kind === 'rate_limit') {
+      return {
+        stroke: '#F59E0B',
+        fillBg: '#FEF3C7',
+        textFill: '#92400E',
+        label: `Aguardando · ${elapsedSec}s`
+      };
+    }
+    return {
+      stroke: '#10B981',
+      fillBg: '#ECFDF5',
+      textFill: '#065F46',
+      label: `Em fluxo · ${elapsedSec}s`
+    };
+  }
+
+  private applySvgEdgeAppearance(
+    edgeId: string,
+    edgeData: IEdgeData,
+    isSelected: boolean,
+    execState: EdgeExecutionState
+  ): void {
+    const path = this.svgEdgePaths.get(edgeId);
+    const flowPath = this.svgEdgeFlowPaths.get(edgeId);
+    const packet = this.svgEdgePackets.get(edgeId);
+    const badge = this.svgEdgeBadges.get(edgeId);
+    const group = this.svgEdgeGroups.get(edgeId);
+    if (!path) return;
+
+    const isFeedback = !!edgeData.isFeedbackLoop;
+    const activeInfo = execState === 'active' ? this.getActiveEdgeAccentAndLabel(edgeData) : null;
+
+    if (isSelected) {
+      path.setAttribute('stroke', '#2563EB');
+      path.setAttribute('stroke-width', '4');
+      path.setAttribute('opacity', '1');
+    } else if (execState === 'active' && activeInfo) {
+      path.setAttribute('stroke', activeInfo.stroke);
+      path.setAttribute('stroke-width', '5');
+      path.setAttribute('opacity', '0.28');
+    } else if (execState === 'completed') {
+      path.setAttribute('stroke', '#10B981');
+      path.setAttribute('stroke-width', '3.5');
+      path.setAttribute('opacity', '0.85');
+    } else if (execState === 'error') {
+      path.setAttribute('stroke', '#EF4444');
+      path.setAttribute('stroke-width', '3.5');
+      path.setAttribute('opacity', '1');
+    } else if (execState === 'queued') {
+      path.setAttribute('stroke', '#94A3B8');
+      path.setAttribute('stroke-width', '2.5');
+      path.setAttribute('opacity', '0.45');
+    } else {
+      path.setAttribute('stroke', isFeedback ? '#D97706' : '#64748B');
+      path.setAttribute('stroke-width', '3');
+      path.setAttribute('opacity', '1');
+    }
+
+    if (flowPath) {
+      if (execState === 'active' && activeInfo) {
+        flowPath.style.display = 'block';
+        flowPath.setAttribute('class', 'arestrix-svg-edge-flow flow-active');
+        flowPath.setAttribute('stroke', activeInfo.stroke);
+        flowPath.setAttribute('stroke-width', '3.5');
+      } else {
+        flowPath.style.display = 'none';
+        flowPath.setAttribute('class', 'arestrix-svg-edge-flow');
+      }
+    }
+
+    if (packet) {
+      if (execState === 'active' && activeInfo) {
+        packet.style.display = 'block';
+        packet.setAttribute('fill', activeInfo.stroke);
+      } else {
+        packet.style.display = 'none';
+      }
+    }
+
+    if (badge) {
+      if (execState === 'active' && activeInfo) {
+        badge.group.style.display = 'block';
+        const w = Math.max(98, activeInfo.label.length * 6.2 + 24);
+        badge.rect.setAttribute('x', `${(-w / 2).toFixed(1)}`);
+        badge.rect.setAttribute('width', `${w.toFixed(1)}`);
+        badge.rect.setAttribute('fill', activeInfo.fillBg);
+        badge.rect.setAttribute('stroke', activeInfo.stroke);
+        badge.dot.setAttribute('cx', `${(-w / 2 + 11).toFixed(1)}`);
+        badge.dot.setAttribute('fill', activeInfo.stroke);
+        badge.text.setAttribute('x', '5');
+        badge.text.setAttribute('fill', activeInfo.textFill);
+        badge.text.textContent = activeInfo.label;
+      } else if (execState === 'completed') {
+        badge.group.style.display = 'block';
+        const w = 78;
+        badge.rect.setAttribute('x', `${-w / 2}`);
+        badge.rect.setAttribute('width', `${w}`);
+        badge.rect.setAttribute('fill', '#ECFDF5');
+        badge.rect.setAttribute('stroke', '#6EE7B7');
+        badge.dot.setAttribute('cx', `${-w / 2 + 11}`);
+        badge.dot.setAttribute('fill', '#10B981');
+        badge.text.setAttribute('x', '5');
+        badge.text.setAttribute('fill', '#047857');
+        badge.text.textContent = '✓ Fluxo OK';
+      } else if (execState === 'error') {
+        badge.group.style.display = 'block';
+        const w = 68;
+        badge.rect.setAttribute('x', `${-w / 2}`);
+        badge.rect.setAttribute('width', `${w}`);
+        badge.rect.setAttribute('fill', '#FEF2F2');
+        badge.rect.setAttribute('stroke', '#FCA5A5');
+        badge.dot.setAttribute('cx', `${-w / 2 + 11}`);
+        badge.dot.setAttribute('fill', '#EF4444');
+        badge.text.setAttribute('x', '5');
+        badge.text.setAttribute('fill', '#B91C1C');
+        badge.text.textContent = '✕ Falha';
+      } else {
+        badge.group.style.display = 'none';
+      }
+    }
+
+    if (group) {
+      const classes = ['arestrix-svg-edge-group', `edge-state-${execState}`];
+      if (isSelected) classes.push('selected');
+      if (edgeData.controlPoints) classes.push('custom-bezier');
+      group.setAttribute('class', classes.join(' '));
+    }
+  }
+
+  private updateSvgEdgeCurve(
+    edgeId: string,
+    bezier: IBezierCurvePoints,
+    edgeData: IEdgeData,
+    isSelected: boolean = false
+  ): void {
     const path = this.svgEdgePaths.get(edgeId);
     if (!path) return;
 
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    let cp1x: number, cp1y: number, cp2x: number, cp2y: number;
+    const d = `M ${bezier.start.x} ${-bezier.start.y} C ${bezier.cp1.x} ${-bezier.cp1.y}, ${bezier.cp2.x} ${-bezier.cp2.y}, ${bezier.end.x} ${-bezier.end.y}`;
+    path.setAttribute('d', d);
 
-    if (isFeedback || dx < 40) {
-      const curvature = Math.max(Math.abs(dy) * 0.6, 120);
-      const verticalOffset = dy >= 0 ? curvature : -curvature;
-      cp1x = start.x + 80;
-      cp1y = -(start.y + verticalOffset);
-      cp2x = end.x - 80;
-      cp2y = -(end.y + verticalOffset);
-    } else {
-      const controlDist = Math.max(dx * 0.45, 60);
-      cp1x = start.x + controlDist;
-      cp1y = -start.y;
-      cp2x = end.x - controlDist;
-      cp2y = -end.y;
+    const flowPath = this.svgEdgeFlowPaths.get(edgeId);
+    if (flowPath) {
+      flowPath.setAttribute('d', d);
     }
 
-    path.setAttribute('d', `M ${start.x} ${-start.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${end.x} ${-end.y}`);
+    const hitPath = this.svgEdgeHitPaths.get(edgeId);
+    if (hitPath) {
+      hitPath.setAttribute('d', d);
+    }
+
+    const badge = this.svgEdgeBadges.get(edgeId);
+    if (badge) {
+      badge.group.setAttribute('transform', `translate(${bezier.midPoint.x}, ${-bezier.midPoint.y})`);
+    }
+
+    const packet = this.svgEdgePackets.get(edgeId);
+    if (packet) {
+      packet.setAttribute('cx', `${bezier.midPoint.x}`);
+      packet.setAttribute('cy', `${-bezier.midPoint.y}`);
+    }
+
+    const execState = this.connectionViews.get(edgeId)?.executionState ?? 'idle';
+    this.applySvgEdgeAppearance(edgeId, edgeData, isSelected, execState);
   }
 
   private onNodeUpdated(nodeData: INodeData): void {
@@ -245,7 +882,7 @@ export class Viewport {
         this.onNodeRemoved(nodeData.id);
         this.onNodeAdded(nodeData);
         if (wasSelected) this.nodeViews.get(nodeData.id)?.setSelected(true);
-        this.updateConnectedEdgesForNode(nodeData.id);
+        this.refreshAllEdges();
       } else {
         nodeView.updateLabel(nodeData.label);
       }
@@ -260,36 +897,158 @@ export class Viewport {
       this.container.clientWidth,
       this.container.clientHeight
     );
+    if (this.svgEdgesLayer) {
+      connView.line.visible = false;
+    }
     this.scene.add(connView.line);
     this.connectionViews.set(edgeData.id, connView);
 
-    // Conecta aresta no SVG
+    // Conecta aresta no SVG com área de clique expandida e suporte a alças estilo Inkscape
     if (this.svgEdgesLayer && typeof document !== 'undefined') {
       const SVG_NS = 'http://www.w3.org/2000/svg';
+      const edgeGroup = document.createElementNS(SVG_NS, 'g');
+      edgeGroup.setAttribute('class', 'arestrix-svg-edge-group edge-state-idle');
+      edgeGroup.setAttribute('data-edge-id', edgeData.id);
+
+      const hitPath = document.createElementNS(SVG_NS, 'path');
+      hitPath.setAttribute('class', 'arestrix-svg-edge-hit');
+      hitPath.setAttribute('id', `svg-edge-hit-${edgeData.id}`);
+      hitPath.setAttribute('stroke', 'transparent');
+      hitPath.setAttribute('stroke-width', '18');
+      hitPath.setAttribute('fill', 'none');
+      hitPath.style.pointerEvents = 'stroke';
+      hitPath.style.cursor = 'grab';
+
+      hitPath.addEventListener('pointerdown', (e: PointerEvent) => {
+        if (e.button !== 0 || e.altKey) return;
+        e.stopPropagation();
+        e.preventDefault();
+        this.bus.emit('edge:start-curve-drag', {
+          edgeId: edgeData.id,
+          clientX: e.clientX,
+          clientY: e.clientY
+        });
+      });
+
+      hitPath.addEventListener('dblclick', (e: MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        this.bus.emit('edge:reset-control-points', { edgeId: edgeData.id });
+      });
+
       const path = document.createElementNS(SVG_NS, 'path');
       path.setAttribute('class', 'arestrix-svg-edge');
       path.setAttribute('id', `svg-edge-${edgeData.id}`);
       const isFeedback = !!edgeData.isFeedbackLoop;
       path.setAttribute('stroke', isFeedback ? '#D97706' : '#64748B');
       path.setAttribute('stroke-width', '3');
+      path.setAttribute('stroke-linecap', 'round');
       path.setAttribute('fill', 'none');
+      path.style.pointerEvents = 'none';
       if (isFeedback) path.setAttribute('stroke-dasharray', '8 4');
-      this.svgEdgesLayer.appendChild(path);
+
+      // Camada de pulso de fluxo animado ao longo da curva Bézier
+      const flowPath = document.createElementNS(SVG_NS, 'path');
+      flowPath.setAttribute('class', 'arestrix-svg-edge-flow');
+      flowPath.setAttribute('id', `svg-edge-flow-${edgeData.id}`);
+      flowPath.setAttribute('stroke', '#10B981');
+      flowPath.setAttribute('stroke-width', '3.5');
+      flowPath.setAttribute('stroke-linecap', 'round');
+      flowPath.setAttribute('stroke-dasharray', '10 12');
+      flowPath.setAttribute('fill', 'none');
+      flowPath.style.pointerEvents = 'none';
+      flowPath.style.display = 'none';
+
+      // Partícula (orb) vetorial que percorre a curva Bézier continuamente durante a execução
+      const packet = document.createElementNS(SVG_NS, 'circle');
+      packet.setAttribute('class', 'arestrix-svg-edge-packet');
+      packet.setAttribute('id', `svg-edge-packet-${edgeData.id}`);
+      packet.setAttribute('r', '5.5');
+      packet.setAttribute('fill', '#10B981');
+      packet.setAttribute('stroke', '#FFFFFF');
+      packet.setAttribute('stroke-width', '2');
+      packet.style.pointerEvents = 'none';
+      packet.style.display = 'none';
+
+      // Pílula de informação limpa no ponto médio da aresta (zero text-shadow / zero blur)
+      const badgeGroup = document.createElementNS(SVG_NS, 'g');
+      badgeGroup.setAttribute('class', 'arestrix-svg-edge-badge');
+      badgeGroup.setAttribute('id', `svg-edge-badge-${edgeData.id}`);
+      badgeGroup.style.pointerEvents = 'none';
+      badgeGroup.style.display = 'none';
+
+      const badgeRect = document.createElementNS(SVG_NS, 'rect');
+      badgeRect.setAttribute('class', 'arestrix-svg-edge-badge-bg');
+      badgeRect.setAttribute('x', '-52');
+      badgeRect.setAttribute('y', '-10');
+      badgeRect.setAttribute('width', '104');
+      badgeRect.setAttribute('height', '20');
+      badgeRect.setAttribute('rx', '10');
+      badgeRect.setAttribute('ry', '10');
+      badgeRect.setAttribute('fill', '#ECFDF5');
+      badgeRect.setAttribute('stroke', '#10B981');
+      badgeRect.setAttribute('stroke-width', '1.3');
+
+      const badgeDot = document.createElementNS(SVG_NS, 'circle');
+      badgeDot.setAttribute('class', 'arestrix-svg-edge-badge-dot');
+      badgeDot.setAttribute('cx', '-41');
+      badgeDot.setAttribute('cy', '0');
+      badgeDot.setAttribute('r', '3.5');
+      badgeDot.setAttribute('fill', '#10B981');
+
+      const badgeText = document.createElementNS(SVG_NS, 'text');
+      badgeText.setAttribute('class', 'arestrix-svg-edge-badge-text');
+      badgeText.setAttribute('x', '5');
+      badgeText.setAttribute('y', '3.5');
+      badgeText.setAttribute('text-anchor', 'middle');
+      badgeText.setAttribute('fill', '#065F46');
+      badgeText.setAttribute('font-family', 'Inter, system-ui, sans-serif');
+      badgeText.setAttribute('font-size', '9.5');
+      badgeText.setAttribute('font-weight', '700');
+      badgeText.textContent = 'Em fluxo · 0.0s';
+
+      badgeGroup.appendChild(badgeRect);
+      badgeGroup.appendChild(badgeDot);
+      badgeGroup.appendChild(badgeText);
+
+      edgeGroup.appendChild(hitPath);
+      edgeGroup.appendChild(path);
+      edgeGroup.appendChild(flowPath);
+      edgeGroup.appendChild(packet);
+      edgeGroup.appendChild(badgeGroup);
+      this.svgEdgesLayer.appendChild(edgeGroup);
+
+      this.svgEdgeGroups.set(edgeData.id, edgeGroup);
+      this.svgEdgeHitPaths.set(edgeData.id, hitPath);
       this.svgEdgePaths.set(edgeData.id, path);
+      this.svgEdgeFlowPaths.set(edgeData.id, flowPath);
+      this.svgEdgePackets.set(edgeData.id, packet);
+      this.svgEdgeBadges.set(edgeData.id, {
+        group: badgeGroup,
+        rect: badgeRect,
+        dot: badgeDot,
+        text: badgeText
+      });
     }
 
-    // Conectar aos pontos de mundo atuais dos nós
+    // Conectar aos pontos de mundo atuais dos nós com desvio de obstáculos
     const src = this.nodeViews.get(edgeData.sourceNodeId);
     const tgt = this.nodeViews.get(edgeData.targetNodeId);
     if (src && tgt) {
+      const obstacles = this.getObstacleBoxes();
       const start = src.getPortWorldPosition(edgeData.sourcePortId);
       const end = tgt.getPortWorldPosition(edgeData.targetPortId);
-      connView.updateCurve(start, end);
-      this.updateSvgEdgeCurve(edgeData.id, start, end, !!edgeData.isFeedbackLoop);
+      const bezier = connView.updateCurve(start, end, obstacles);
+      this.updateSvgEdgeCurve(edgeData.id, bezier, edgeData, connView.isSelected);
     }
   }
 
   private onEdgeRemoved(edgeId: string): void {
+    if (this.selectedEdgeId === edgeId) {
+      this.selectedEdgeId = null;
+      this.clearEdgeHandles();
+    }
+
     const connView = this.connectionViews.get(edgeId);
     if (connView) {
       this.scene.remove(connView.line);
@@ -297,24 +1056,37 @@ export class Viewport {
       this.connectionViews.delete(edgeId);
     }
 
-    const svgPath = this.svgEdgePaths.get(edgeId);
-    if (svgPath && svgPath.parentNode) {
-      svgPath.parentNode.removeChild(svgPath);
-      this.svgEdgePaths.delete(edgeId);
+    const edgeGroup = this.svgEdgeGroups.get(edgeId);
+    if (edgeGroup && edgeGroup.parentNode) {
+      edgeGroup.parentNode.removeChild(edgeGroup);
     }
+    this.svgEdgeGroups.delete(edgeId);
+    this.svgEdgeHitPaths.delete(edgeId);
+    this.svgEdgePaths.delete(edgeId);
+    this.svgEdgeFlowPaths.delete(edgeId);
+    this.svgEdgePackets.delete(edgeId);
+    this.svgEdgeBadges.delete(edgeId);
   }
 
   private clearAllViews(): void {
+    this.selectedEdgeId = null;
+    this.clearEdgeHandles();
+
     this.connectionViews.forEach(cv => {
       this.scene.remove(cv.line);
       cv.dispose();
     });
     this.connectionViews.clear();
 
-    this.svgEdgePaths.forEach(p => {
-      if (p.parentNode) p.parentNode.removeChild(p);
+    this.svgEdgeGroups.forEach(g => {
+      if (g.parentNode) g.parentNode.removeChild(g);
     });
+    this.svgEdgeGroups.clear();
+    this.svgEdgeHitPaths.clear();
     this.svgEdgePaths.clear();
+    this.svgEdgeFlowPaths.clear();
+    this.svgEdgePackets.clear();
+    this.svgEdgeBadges.clear();
 
     this.nodeViews.forEach(nv => {
       this.scene.remove(nv.group);
@@ -327,6 +1099,7 @@ export class Viewport {
     this.clearAllViews();
     this.graph.getAllNodes().forEach(n => this.onNodeAdded(n));
     this.graph.getAllEdges().forEach(e => this.onEdgeAdded(e));
+    this.refreshAllEdges();
   }
 
   public zoomToFit(): void {
@@ -345,8 +1118,16 @@ export class Viewport {
     this.cameraController.fitToBounds(bounds, 80);
   }
 
+  public autoLayout(): void {
+    this.graph.autoLayout(true);
+  }
+
   public selectNode(id: string | null): void {
     this.interactionManager.selectNode(id);
+  }
+
+  public selectEdge(id: string | null): void {
+    this.interactionManager.selectEdge(id);
   }
 
   /** Seleciona o vértice e centraliza a câmera nele (usado pela busca no projeto). */
@@ -392,6 +1173,42 @@ export class Viewport {
     this.interactionManager.setResolution(width, height);
   }
 
+  private animateActiveEdges(): void {
+    this.edgeAnimPhase = (this.edgeAnimPhase + 0.015) % 1;
+    const t = this.edgeAnimPhase;
+    const u = 1 - t;
+    const dashOffset = -((this.edgeAnimPhase * 88) % 22);
+
+    this.connectionViews.forEach((conn, edgeId) => {
+      if (conn.executionState !== 'active') return;
+
+      const flowPath = this.svgEdgeFlowPaths.get(edgeId);
+      if (flowPath) {
+        flowPath.setAttribute('stroke-dashoffset', dashOffset.toFixed(1));
+      }
+
+      const packet = this.svgEdgePackets.get(edgeId);
+      const bz = conn.currentBezier;
+      if (packet && bz) {
+        const bx =
+          u * u * u * bz.start.x +
+          3 * u * u * t * bz.cp1.x +
+          3 * u * t * t * bz.cp2.x +
+          t * t * t * bz.end.x;
+        const by =
+          u * u * u * bz.start.y +
+          3 * u * u * t * bz.cp1.y +
+          3 * u * t * t * bz.cp2.y +
+          t * t * t * bz.end.y;
+        packet.setAttribute('cx', bx.toFixed(1));
+        packet.setAttribute('cy', (-by).toFixed(1));
+      }
+
+      // Atualiza pílula de status/tempo em tempo real na aresta ativa
+      this.applySvgEdgeAppearance(edgeId, conn.edgeData, conn.isSelected, 'active');
+    });
+  }
+
   private animate(): void {
     if (!this.isRunning) return;
     requestAnimationFrame(() => this.animate());
@@ -401,6 +1218,9 @@ export class Viewport {
 
     // Atualiza shader do grid infinito
     this.grid.update(this.camera, width, height);
+
+    // Anima partículas e fluxo vetorial nas arestas ativas
+    this.animateActiveEdges();
 
     // Sincroniza matriz da camada SVG vetorial com a câmera Three.js (perfeita em qualquer zoom)
     if (this.svgRoot) {

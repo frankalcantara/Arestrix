@@ -1,0 +1,11 @@
+{
+  "workspaceRoot": "C:/Projetos/Arestrix/examples/01-svg-agente/.workspace",
+  "skillsDir": "C:/Projetos/Arestrix/examples/01-svg-agente/.workspace/skills",
+  "mcpsDir": "C:/Projetos/Arestrix/examples/01-svg-agente/.workspace/mcps",
+  "agentsDir": "C:/Projetos/Arestrix/examples/01-svg-agente/.workspace/agents",
+  "graphsDir": "C:/Projetos/Arestrix/examples/01-svg-agente/.workspace/graphs",
+  "autoVerifySkills": true,
+  "strictSecurityMode": true,
+  "installedAssetsVersion": "2.0.0",
+  "lastSyncTimestamp": "2026-10-17T21:45:41.241Z"
+}

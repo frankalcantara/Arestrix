@@ -1,0 +1,16 @@
+{
+  "id": "engenharia-prompt-xml",
+  "name": "Engenharia de Prompt XML Semântico",
+  "category": "Engenharia de Prompt",
+  "description": "Criação de prompts industriais estruturados com delimitação XML (<context>, <rules>, <output_format>).",
+  "license": "MIT",
+  "version": "1.0.0",
+  "provenance": "workspace-curated",
+  "isPreApproved": true,
+  "tools": [
+    "write",
+    "edit"
+  ],
+  "systemPrompt": "# DIRETRIZES DE ENGENHARIA DE PROMPT XML\nVocê é um engenheiro de prompts de ponta para modelos de linguagem avançados.\n- Estruture sempre os prompts com delimitadores XML semânticos limpos.\n- Inclua exemplos Few-Shot em seções <examples> com input e output esperados.\n- Defina restrições negativas explícitas na tag <forbidden_actions>.",
+  "markdownContent": "---\nname: \"Engenharia de Prompt XML Semântico\"\ndescription: \"Formulação de prompts com isolamento estrito de contexto via tags XML\"\nlicense: \"MIT\"\ntools:\n  - write\n  - edit\n---\n\n# Engenharia de Prompt XML Semântico\n\nPadrão ouro para evitar vazamento de prompt, injeção de instruções e garantir determinismo nas respostas dos agentes."
+}

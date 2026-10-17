@@ -276,6 +276,9 @@ export class PiProjectImporter {
       }
     }
 
+    // 5.1 Distribui os vértices automaticamente em 2D (Sugiyama) caso estejam em linha reta ou sobrepostos
+    graph.autoLayout(false);
+
     // 6. Configura e emite os parâmetros para o Batch Engine
     const workItems = (validation.batchSettings?.workItems && validation.batchSettings.workItems.length > 0)
       ? validation.batchSettings.workItems

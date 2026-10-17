@@ -63,8 +63,8 @@
       "label": "1. Percepcao_Ambiente",
       "type": "static",
       "position": {
-        "x": -480,
-        "y": 320,
+        "x": -810,
+        "y": 330,
         "z": 0
       },
       "inputs": [
@@ -91,8 +91,8 @@
       "label": "2. Atualizar_Estado_Global",
       "type": "critical",
       "position": {
-        "x": -40,
-        "y": 180,
+        "x": -320,
+        "y": 50,
         "z": 0
       },
       "inputs": [
@@ -119,8 +119,8 @@
       "label": "3. Avaliacao_Convergencia",
       "type": "condition",
       "position": {
-        "x": 370,
-        "y": -60,
+        "x": 90,
+        "y": 280,
         "z": 0
       },
       "inputs": [
@@ -155,7 +155,7 @@
       "label": "4. Decomposicao_Subflow",
       "type": "subflow",
       "position": {
-        "x": 480,
+        "x": 550,
         "y": 380,
         "z": 0
       },
@@ -183,8 +183,8 @@
       "label": "5. Modulo_Consolidacao",
       "type": "module",
       "position": {
-        "x": 850,
-        "y": 150,
+        "x": 1240,
+        "y": -50,
         "z": 0
       },
       "inputs": [

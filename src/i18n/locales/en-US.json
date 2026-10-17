@@ -79,6 +79,7 @@
       "undo": "Undo (Ctrl+Z)",
       "redo": "Redo (Ctrl+Y)",
       "run": "Build & Run (F5)",
+      "stop": "Stop Execution (Shift+F5)",
       "language": "Interface Language",
       "default_workspace": "Default Workspace",
       "autosave_disabled_badge": "AutoSave disabled",
@@ -195,6 +196,8 @@
       "redo": "Redo",
       "zoom_fit": "Zoom to Fit",
       "clear_graph": "Clear Graph",
+      "auto_layout": "Auto-Arrange<br>Layout",
+      "auto_layout_tip": "Automatically distribute vertices in 2D Sugiyama layers without overlaps",
       "graph_vertices": "Graph Vertices",
       "quick_agent": "+ AI Agent",
       "quick_agent_tip": "Add Code Mode Agent",
@@ -205,6 +208,8 @@
       "execution": "Execution",
       "build_run": "Build & Run<br>(F5)",
       "build_run_tip": "Builds and runs with MSVC C++20 (F5)",
+      "stop_run": "Stop<br>(Shift+F5)",
+      "stop_run_tip": "Stop currently running pipeline execution (Shift+F5)",
       "validate_dag": "Validate<br>DAG",
       "validate_dag_tip": "Validates graph structure and cycles",
       "governance": "Governance",
@@ -806,6 +811,9 @@
     "up_level_tip": "Return to parent level (Esc)"
   },
   "canvas_controls": {
+    "auto_layout_tip": "Auto-Arrange Layout (Distribute Vertices in 2D)",
+    "follow_exec_tip": "Follow Execution on Graph (Auto-Focus Active Vertex)",
+    "clear_exec_tip": "Clear Visual Execution State on Graph",
     "fit_tip": "Fit to Content (Ctrl+0)",
     "zoom_in_tip": "Zoom In (Ctrl +)",
     "zoom_out_tip": "Zoom Out (Ctrl -)",
@@ -831,6 +839,7 @@
     "cmd_mcp": "MCP servers",
     "cmd_memory": "Project memory",
     "cmd_batch": "Batch & Resume",
+    "cmd_auto_layout": "Auto-Arrange Layout",
     "cmd_github": "GitHub repositories (skill catalog)"
   },
   "context_menu": {

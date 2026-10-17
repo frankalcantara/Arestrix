@@ -18,7 +18,7 @@ using rt::langPick;
 
 const std::vector<std::string>& nodeTypes() {
     static const std::vector<std::string> types = {"static", "condition", "subflow", "module", "critical", "cuda",
-                                                   "agent", "fork", "join", "switch", "mcp"};
+                                                   "agent", "fork", "join", "switch", "mcp", "output"};
     return types;
 }
 
@@ -67,6 +67,11 @@ std::string defaultLambda(const std::string& type, const std::string& label) {
         return "// Agente Autônomo Code Mode: " + label + "\n// Invocação em sandbox/VM isolada com streaming de eventos\n"
                "std::cout << \"[Agent: " + label + "] Disparando no sandbox isolado...\\n\";";
     }
+    if (type == "output") {
+        return "// Coletor de Entrega / Artefato: " + label + "\n"
+               "// Em runtime, este vertice registra e disponibiliza o artefato produzido na aba Artefatos e na pasta de saida.\n"
+               "std::cout << \"[OUTPUT: " + label + "] Entregavel registrado com sucesso!\\n\";";
+    }
     return "// Execução computacional determinística do agente: " + label + "\nstd::cout << \"Executando agente: " + label + "\\n\";";
 }
 
@@ -98,6 +103,11 @@ Json buildNode(const std::string& id, const std::string& label, const std::strin
         Json artifact = port(id + "_out_data", "artifact_out", "output", "data");
         artifact["dataType"] = "std::string";
         outputs.push_back(artifact);
+    } else if (type == "output") {
+        Json dataIn = port(id + "_in_data", "data_in", "input", "data");
+        dataIn["dataType"] = "std::string";
+        inputs.push_back(dataIn);
+        outputs.push_back(port(id + "_out_0", "out", "output", "flow"));
     } else {
         outputs.push_back(port(id + "_out_0", "out", "output", "flow"));
     }
@@ -122,6 +132,11 @@ Json buildNode(const std::string& id, const std::string& label, const std::strin
     if (type == "mcp") {
         node["mcpSettings"] = Json{{"server", ""}, {"tool", ""}, {"arguments", Json::object()},
                                    {"source", Json{{"kind", "previous"}}}, {"output", Json::object()}};
+    }
+    if (type == "output") {
+        node["outputSettings"] = Json{{"sourcePath", ""}, {"destinationPath", ""},
+                                      {"artifactType", "auto"}, {"displayName", label},
+                                      {"autoOpenPreview", true}, {"description", ""}};
     }
     return node;
 }
@@ -282,7 +297,7 @@ EditResult GraphDocument::updateNode(const std::string& id, const Json& patch, R
         return r;
     }
     static const std::set<std::string> scalarFields = {"label", "customLambdaBody", "criticalSectionId"};
-    static const std::set<std::string> objectFields = {"parameters", "agentSettings", "switchSettings", "mcpSettings"};
+    static const std::set<std::string> objectFields = {"parameters", "agentSettings", "switchSettings", "mcpSettings", "outputSettings"};
     Json applied = Json::object();
     for (auto it = patch.begin(); it != patch.end(); ++it) {
         const std::string& key = it.key();
