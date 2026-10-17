@@ -1072,3 +1072,360 @@ body, html {
   background-color: #eff6ff;
   border-color: #93c5fd;
 }
+
+/* --- Abas de topo do painel lateral (Propriedades | Assistente) --- */
+.task-pane-tabs {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 4px 8px 0;
+  background-color: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.task-pane-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: #475569;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-shadow: none !important;
+}
+
+.task-pane-tab:hover {
+  color: #0f172a;
+}
+
+.task-pane-tab.active {
+  background-color: #ffffff;
+  border-color: #e2e8f0;
+  color: #0f6cbd;
+  font-weight: 700;
+  margin-bottom: -1px;
+}
+
+.task-pane-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Assistente --- */
+.assistant-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: #ffffff;
+}
+
+.assistant-panel * {
+  text-shadow: none !important;
+}
+
+.assistant-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.assistant-session-select {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background-color: #ffffff;
+  color: #0f172a;
+  font-size: 12px;
+}
+
+.assistant-icon-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background-color: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.assistant-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.assistant-banner {
+  margin: 8px 10px 0;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background-color: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.assistant-banner.warn {
+  background-color: #fffbeb;
+  border-color: #fcd34d;
+  color: #92400e;
+}
+
+.assistant-banner.unsupported {
+  background-color: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+  font-weight: 600;
+}
+
+.assistant-link-btn {
+  display: inline;
+  margin-left: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #0f6cbd;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.assistant-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.assistant-msg {
+  max-width: 92%;
+  padding: 8px 11px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.assistant-msg.user {
+  align-self: flex-end;
+  background-color: #0f6cbd;
+  color: #ffffff;
+}
+
+.assistant-msg.bot {
+  align-self: flex-start;
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+.assistant-msg.bot pre {
+  white-space: pre-wrap;
+  font-size: 11.5px;
+}
+
+.assistant-activity {
+  align-self: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 4px;
+  color: #475569;
+  font-size: 11.5px;
+}
+
+.assistant-activity-icon {
+  width: 14px;
+  text-align: center;
+  font-weight: 700;
+  color: #107c41;
+}
+
+.assistant-activity.error .assistant-activity-icon {
+  color: #b91c1c;
+}
+
+.assistant-activity.declined .assistant-activity-icon {
+  color: #64748b;
+}
+
+.assistant-activity-detail {
+  flex-basis: 100%;
+  padding-left: 20px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.assistant-error {
+  padding: 8px 10px;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  background-color: #fef2f2;
+  color: #991b1b;
+  font-size: 12px;
+}
+
+.assistant-confirm {
+  padding: 10px;
+  border: 1px solid #b9d4ef;
+  border-radius: 8px;
+  background-color: #e8f1fb;
+  color: #0f172a;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.assistant-confirm-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.assistant-confirm-answer {
+  margin-top: 6px;
+  color: #475569;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.assistant-thinking {
+  align-self: flex-start;
+  color: #64748b;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.assistant-empty {
+  margin: auto 0;
+  padding: 12px 6px;
+  text-align: center;
+}
+
+.assistant-empty-title {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.assistant-empty-hint {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+
+.assistant-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.assistant-chip {
+  padding: 7px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background-color: #ffffff;
+  color: #0f172a;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.assistant-chip:hover:not(:disabled) {
+  border-color: #0f6cbd;
+  color: #0f6cbd;
+}
+
+.assistant-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.assistant-composer {
+  flex-shrink: 0;
+  padding: 8px 10px 10px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.assistant-composer textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 56px;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: #0f172a;
+}
+
+.assistant-composer textarea:focus {
+  outline: none;
+  border-color: #0f6cbd;
+  box-shadow: 0 0 0 2px rgba(15, 108, 189, 0.2);
+}
+
+.assistant-composer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.assistant-model {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.assistant-btn {
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background-color: #ffffff;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.assistant-btn.primary {
+  background-color: #0f6cbd;
+  border-color: #0f6cbd;
+  color: #ffffff;
+}
+
+.assistant-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Provedor sem chamada de ferramentas no seletor do modelo padrao */
+.assistant-unsupported-option {
+  color: #991b1b;
+}

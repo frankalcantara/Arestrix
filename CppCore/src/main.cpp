@@ -10,6 +10,8 @@
 #include "mcp/McpRegistry.hpp"
 #include "project/ProjectManager.hpp"
 #include "project/OpenableFiles.hpp"
+#include "assistant/AssistantSession.hpp"
+#include "rt/ModelClient.hpp"
 #include "pi/PiProjectScanner.hpp"
 #include "build/BuildService.hpp"
 #include "cli/Cli.hpp"
@@ -21,6 +23,8 @@
 #include "search/ProjectSearch.hpp"
 #include "search/SynonymAgent.hpp"
 #include <atomic>
+#include <condition_variable>
+#include <thread>
 #include <algorithm>
 #include <chrono>
 #include <mutex>
@@ -1170,34 +1174,38 @@ void ui_read_skill_file(webui::window::event* e) {
 
 // Wrapper JS -> C++ (Compilar e executar o grafo). Payload: graph.toJSON().
 // O progresso chega assincronamente em window.onArestrixPipelineEvent / window.onArestrixTelemetry.
+// Compila e executa o grafo (JSON do grafo raiz) no projeto ativo; progresso vai para o console do Studio.
+// Devolve vazio se a execucao comecou, ou o motivo da recusa. Usado pela interface e pelo Assistente.
+std::string startPipelineRun(const std::string& payload) {
+    taskforge::core::Graph graph;
+    if (!loadGraphFromPayload(payload, graph)) return "Grafo invalido ou vazio";
+    std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+    if (root.empty()) root = std::filesystem::current_path().string();
+
+    taskforge::build::BuildEvents ev;
+    ev.onPhase = [](const std::string& phase, const std::string& message) {
+        pushToUi("onArestrixPipelineEvent", {{"type", "phase"}, {"phase", phase}, {"message", message}});
+    };
+    ev.onLog = [](const std::string& line, bool isError) {
+        pushToUi("onArestrixPipelineEvent", {{"type", "log"}, {"line", line}, {"isError", isError}});
+    };
+    ev.onTelemetry = [](const std::string& jsonLine) {
+        auto parsed = taskforge::jsonutil::tryParse(jsonLine);
+        if (parsed) pushToUi("onArestrixTelemetry", *parsed);
+    };
+    ev.onFinished = [](bool success, int exitCode, long long elapsedMs, const std::string& error) {
+        pushToUi("onArestrixPipelineEvent", {{"type", "finished"}, {"success", success}, {"exitCode", exitCode},
+                                              {"elapsedMs", elapsedMs}, {"error", error}});
+    };
+    if (!taskforge::build::BuildService::instance().start(graph, root, ev)) return "Ja existe uma execucao em andamento";
+    return "";
+}
+
 void ui_run_pipeline(webui::window::event* e) {
     try {
-        taskforge::core::Graph graph;
-        if (!loadGraphFromPayload(e->get_string(), graph)) {
-            e->return_string("{\"ok\":false,\"error\":\"Grafo invalido ou vazio\"}");
-            return;
-        }
-        std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
-        if (root.empty()) root = std::filesystem::current_path().string();
-
-        taskforge::build::BuildEvents ev;
-        ev.onPhase = [](const std::string& phase, const std::string& message) {
-            pushToUi("onArestrixPipelineEvent", {{"type", "phase"}, {"phase", phase}, {"message", message}});
-        };
-        ev.onLog = [](const std::string& line, bool isError) {
-            pushToUi("onArestrixPipelineEvent", {{"type", "log"}, {"line", line}, {"isError", isError}});
-        };
-        ev.onTelemetry = [](const std::string& jsonLine) {
-            auto parsed = taskforge::jsonutil::tryParse(jsonLine);
-            if (parsed) pushToUi("onArestrixTelemetry", *parsed);
-        };
-        ev.onFinished = [](bool success, int exitCode, long long elapsedMs, const std::string& error) {
-            pushToUi("onArestrixPipelineEvent", {{"type", "finished"}, {"success", success}, {"exitCode", exitCode},
-                                                  {"elapsedMs", elapsedMs}, {"error", error}});
-        };
-
-        bool started = taskforge::build::BuildService::instance().start(graph, root, ev);
-        e->return_string(started ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"Ja existe uma execucao em andamento\"}");
+        std::string error = startPipelineRun(e->get_string());
+        taskforge::Json out = error.empty() ? taskforge::Json{{"ok", true}} : taskforge::Json{{"ok", false}, {"error", error}};
+        e->return_string(out.dump());
     } catch (const std::exception& ex) {
         taskforge::Json err = {{"ok", false}, {"error", ex.what()}};
         e->return_string(err.dump());
@@ -1288,6 +1296,231 @@ std::filesystem::path findProjectRoot() {
     return cwd;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Assistente do Studio: o laco, as ferramentas e as sessoes rodam aqui; a interface so desenha.
+// ---------------------------------------------------------------------------------------------
+namespace fs = std::filesystem;
+using taskforge::assistant::AssistantHost;
+using taskforge::assistant::GraphDocument;
+using taskforge::assistant::SessionStore;
+
+taskforge::Json readMainGraph(const std::string& root, const taskforge::project::ProjectManifest& manifest) {
+    std::error_code ec;
+    fs::path file = fs::path(root) / "pipelines" / "main.json";
+    if (fs::is_regular_file(file, ec)) {
+        auto parsed = taskforge::jsonutil::tryParse(taskforge::jsonutil::readFile(file));
+        if (parsed && parsed->is_object()) return *parsed;
+    }
+    return GraphDocument::emptySchema(manifest.name, manifest.projectId);
+}
+
+class StudioAssistantHost : public AssistantHost {
+public:
+    taskforge::Json currentProject() override {
+        return taskforge::project::ProjectManager::getInstance().getCurrentProject();
+    }
+
+    taskforge::Json recentProjects() override {
+        taskforge::Json out = taskforge::Json::array();
+        for (const auto& r : taskforge::project::ProjectManager::getInstance().listRecentProjects()) {
+            out.push_back(taskforge::Json{{"name", r.name}, {"rootPath", r.rootPath}, {"lastOpened", r.lastOpened}});
+        }
+        return out;
+    }
+
+    std::optional<taskforge::Json> createProject(const std::string& name, const std::string& directory,
+                                                 const std::string& description, std::string& error) override {
+        std::string clean = name;
+        while (!clean.empty() && (clean.back() == ' ' || clean.back() == '.')) clean.pop_back();
+        if (clean.empty() || clean.find_first_of("<>:\"/\\|?*") != std::string::npos) {
+            error = "nome de projeto invalido";
+            return std::nullopt;
+        }
+        fs::path root = directory.empty() ? fs::current_path() / "projects" / clean : fs::path(directory);
+        std::error_code ec;
+        if (fs::exists(root / "arestrix.project.json", ec)) {
+            error = "ja existe um projeto em " + root.string() + " (use open_project)";
+            return std::nullopt;
+        }
+        taskforge::project::ProjectManifest manifest;
+        manifest.name = clean;
+        manifest.description = description;
+        manifest.rootPath = root.string();
+        auto& pm = taskforge::project::ProjectManager::getInstance();
+        if (!pm.createProject(manifest)) {
+            error = "nao foi possivel criar o projeto em " + root.string();
+            return std::nullopt;
+        }
+        auto current = pm.getCurrentProject();
+        return readMainGraph(current.rootPath, current);
+    }
+
+    std::optional<taskforge::Json> openProject(const std::string& path, std::string& error) override {
+        auto& pm = taskforge::project::ProjectManager::getInstance();
+        if (!pm.loadProject(path)) {
+            error = "nenhum projeto do Arestrix em " + path;
+            return std::nullopt;
+        }
+        auto current = pm.getCurrentProject();
+        return readMainGraph(current.rootPath, current);
+    }
+
+    bool savePipeline(const taskforge::Json& schema, std::string& error) override {
+        std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+        if (root.empty()) root = fs::current_path().string();
+        std::error_code ec;
+        fs::create_directories(fs::path(root) / "pipelines", ec);
+        std::ofstream f(fs::path(root) / "pipelines" / "main.json", std::ios::binary | std::ios::trunc);
+        if (!f.is_open()) {
+            error = "nao foi possivel gravar pipelines/main.json";
+            return false;
+        }
+        f << schema.dump();
+        return true;
+    }
+
+    bool runPipeline(const taskforge::Json& schema, std::string& error) override {
+        error = startPipelineRun(schema.dump());
+        return error.empty();
+    }
+
+    fs::path docsDirectory(taskforge::rt::RuntimeLang lang) override {
+        return findProjectRoot() / "docs" / (lang == taskforge::rt::RuntimeLang::En ? "en" : "pt-BR");
+    }
+};
+
+// Uma conversa por vez. A confirmacao bloqueia a thread do laco ate a interface responder.
+struct AssistantRuntime {
+    std::mutex mu;
+    std::condition_variable cv;
+    bool busy = false;
+    bool confirmPending = false;
+    std::optional<bool> confirmAnswer;
+    std::atomic<bool> cancel{false};
+};
+
+AssistantRuntime& assistantRuntime() {
+    static AssistantRuntime rt;
+    return rt;
+}
+
+fs::path assistantProjectRoot() {
+    std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+    return root.empty() ? fs::current_path() : fs::path(root);
+}
+
+void ui_assistant_status(webui::window::event* e) {
+    e->return_string(taskforge::assistant::assistantStatus().dump());
+}
+
+void ui_assistant_sessions(webui::window::event* e) {
+    e->return_string(SessionStore(assistantProjectRoot()).list().dump());
+}
+
+void ui_assistant_session_load(webui::window::event* e) {
+    auto session = SessionStore(assistantProjectRoot()).load(e->get_string());
+    if (!session) { e->return_string("{\"ok\":false}"); return; }
+    taskforge::Json out = {{"ok", true}, {"id", session->id}, {"title", session->title}, {"transcript", session->transcript}};
+    e->return_string(out.dump());
+}
+
+void ui_assistant_session_delete(webui::window::event* e) {
+    e->return_bool(SessionStore(assistantProjectRoot()).remove(e->get_string()));
+}
+
+// Payload: {"sessionId" (vazio = nova), "text", "locale", "graph" (grafo raiz do canvas)}.
+// Responde na hora com {ok, sessionId}; o restante chega por window.onArestrixAssistant.
+void ui_assistant_send(webui::window::event* e) {
+    try {
+        auto req = taskforge::jsonutil::parse(e->get_string());
+        std::string text = req.value("text", std::string());
+        if (text.empty()) { e->return_string("{\"ok\":false,\"error\":\"empty\"}"); return; }
+
+        auto& rt = assistantRuntime();
+        {
+            std::lock_guard<std::mutex> lock(rt.mu);
+            if (rt.busy) { e->return_string("{\"ok\":false,\"error\":\"busy\"}"); return; }
+            rt.busy = true;
+            rt.confirmPending = false;
+            rt.confirmAnswer.reset();
+            rt.cancel = false;
+        }
+
+        fs::path root = assistantProjectRoot();
+        SessionStore store(root);
+        std::string sessionId = req.value("sessionId", std::string());
+        auto loaded = sessionId.empty() ? std::nullopt : store.load(sessionId);
+        taskforge::assistant::Session session = loaded ? *loaded : SessionStore::create();
+        taskforge::Json graph = req.contains("graph") ? req.at("graph") : taskforge::Json();
+        std::string locale = req.value("locale", std::string("pt-BR"));
+
+        std::thread([session, root, text, graph, locale]() mutable {
+            auto& rt = assistantRuntime();
+            StudioAssistantHost host;
+            GraphDocument doc(graph);
+            taskforge::assistant::TurnIO io;
+            io.emit = [](const taskforge::Json& ev) { pushToUi("onArestrixAssistant", ev); };
+            io.cancelled = [&rt]() { return rt.cancel.load(); };
+            io.confirm = [&rt](const taskforge::Json& request) {
+                std::unique_lock<std::mutex> lock(rt.mu);
+                rt.confirmPending = true;
+                rt.confirmAnswer.reset();
+                taskforge::Json ev = request;
+                ev["type"] = "confirm";
+                lock.unlock();
+                pushToUi("onArestrixAssistant", ev);
+                lock.lock();
+                rt.cv.wait(lock, [&rt]() { return rt.confirmAnswer.has_value() || rt.cancel.load(); });
+                rt.confirmPending = false;
+                return rt.confirmAnswer.value_or(false);
+            };
+            taskforge::assistant::TurnOptions opts;
+            opts.locale = locale;
+            try {
+                taskforge::assistant::runTurn(session, SessionStore(root), text, doc, host,
+                                              taskforge::assistant::defaultModelChoice(),
+                                              [](const taskforge::rt::ChatRequest& r) { return taskforge::rt::chatOnce(r); },
+                                              io, opts);
+            } catch (const std::exception& ex) {
+                pushToUi("onArestrixAssistant", {{"type", "error"}, {"sessionId", session.id}, {"code", "internal"}, {"detail", ex.what()}});
+                pushToUi("onArestrixAssistant", {{"type", "done"}, {"sessionId", session.id}, {"ok", false}});
+            }
+            std::lock_guard<std::mutex> lock(rt.mu);
+            rt.busy = false;
+        }).detach();
+
+        taskforge::Json out = {{"ok", true}, {"sessionId", session.id}};
+        e->return_string(out.dump());
+    } catch (const std::exception& ex) {
+        {
+            std::lock_guard<std::mutex> lock(assistantRuntime().mu);
+            assistantRuntime().busy = false;
+        }
+        taskforge::Json err = {{"ok", false}, {"error", ex.what()}};
+        e->return_string(err.dump());
+    }
+}
+
+// Payload: true/false (o usuario aceitou ou recusou a acao pedida).
+void ui_assistant_confirm(webui::window::event* e) {
+    auto& rt = assistantRuntime();
+    {
+        std::lock_guard<std::mutex> lock(rt.mu);
+        if (!rt.confirmPending) { e->return_bool(false); return; }
+        rt.confirmAnswer = e->get_string() == "true";
+    }
+    rt.cv.notify_all();
+    e->return_bool(true);
+}
+
+// Interrompe no proximo passo (uma chamada ao modelo em andamento termina antes) e recusa confirmacoes pendentes.
+void ui_assistant_cancel(webui::window::event* e) {
+    auto& rt = assistantRuntime();
+    rt.cancel = true;
+    rt.cv.notify_all();
+    e->return_bool(true);
+}
+
 } // namespace
 
 
@@ -1365,6 +1598,13 @@ int main(int argc, char** argv) {
     win.bind("open_in_vscode", ui_open_in_vscode);
     win.bind("run_pipeline", ui_run_pipeline);
     win.bind("stop_pipeline", ui_stop_pipeline);
+    win.bind("assistant_status", ui_assistant_status);
+    win.bind("assistant_sessions", ui_assistant_sessions);
+    win.bind("assistant_session_load", ui_assistant_session_load);
+    win.bind("assistant_session_delete", ui_assistant_session_delete);
+    win.bind("assistant_send", ui_assistant_send);
+    win.bind("assistant_confirm", ui_assistant_confirm);
+    win.bind("assistant_cancel", ui_assistant_cancel);
     win.bind("exit_app", exit_app);
 
     // Registra o Emitter de Telemetria de Agentes em Tempo Real (Fase 10)

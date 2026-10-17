@@ -4,6 +4,7 @@ import { globalEventBus } from './core/EventBus.ts';
 import { Viewport } from './view/Viewport.ts';
 import { Toolbar } from './ui/Toolbar.ts';
 import { Inspector } from './ui/Inspector.ts';
+import { AssistantPanel } from './ui/AssistantPanel.ts';
 import { CodeModal } from './ui/CodeModal.ts';
 import { ConsolePanel } from './ui/ConsolePanel.ts';
 import { BreadcrumbsBar } from './ui/BreadcrumbsBar.ts';
@@ -108,7 +109,11 @@ function bootstrap() {
   appContainer.insertBefore(toolbar.getContainer(), mainLayout);
 
   // 7. Sidebar de propriedades (Inspetor / Task Pane Office) dentro de mainLayout
-  new Inspector(mainLayout, graph, globalEventBus);
+  const inspector = new Inspector(mainLayout, graph, globalEventBus);
+
+  // 7.1 Aba Assistente no mesmo painel (o laço da conversa roda no backend C++)
+  new AssistantPanel(inspector.getAssistantContainer(), graph, globalEventBus);
+  globalEventBus.on('modal:open-global-defaults', () => globalDefaultsModal.show());
 
   // 8. Console de Execução & Build na base da área central (Docked Bottom Drawer)
   new ConsolePanel(centerArea);

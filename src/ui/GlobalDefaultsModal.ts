@@ -671,6 +671,31 @@ export class GlobalDefaultsModal {
     }
     this.syncStudioBaseUrlField();
     await this.refreshStudioModelStatus();
+    await this.markAssistantSupport();
+  }
+
+  /** Destaca os provedores que não servem ao Assistente (sem chamada de ferramentas), segundo o backend. */
+  private async markAssistantSupport(): Promise<void> {
+    const providerSel = this.overlay.querySelector('#studio-provider') as HTMLSelectElement | null;
+    const webui = typeof window !== 'undefined' ? (window as any).webui : undefined;
+    if (!providerSel || !webui || typeof webui.call !== 'function') return;
+    let status: any = null;
+    try {
+      const raw = await webui.call('assistant_status');
+      status = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch {
+      return;
+    }
+    const unsupported = new Set<string>(
+      (status?.providers || []).filter((p: any) => p && p.supportsTools === false).map((p: any) => String(p.id))
+    );
+    for (const option of Array.from(providerSel.options)) {
+      if (!unsupported.has(option.value)) continue;
+      const base = option.dataset.baseLabel || option.textContent || option.value;
+      option.dataset.baseLabel = base;
+      option.textContent = `${base} — ${t('assistant.provider_unsupported')}`;
+      option.classList.add('assistant-unsupported-option');
+    }
   }
 
   /** Mostra qual modelo o Studio usaria agora, com as mesmas regras do backend. */

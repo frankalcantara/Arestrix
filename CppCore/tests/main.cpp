@@ -19,6 +19,10 @@
 #include "core/Graph.hpp"
 #include "platform/Process.hpp"
 #include "project/OpenableFiles.hpp"
+#include "assistant/AssistantSession.hpp"
+#include "assistant/AssistantTools.hpp"
+#include "assistant/GraphDocument.hpp"
+#include "rt/ModelClient.hpp"
 #include "rt/Decision.hpp"
 #include "rt/Http.hpp"
 #include "rt/NetGuard.hpp"
@@ -1669,6 +1673,354 @@ TEST(open_screen_lists_folders_projects_packages_and_graphs) {
     CHECK(limited["entries"].size() == 2);
     CHECK(prj::listOpenableEntries(root.root_path())["parent"].get<std::string>().empty());
 
+    fs::remove_all(root);
+}
+
+// ---------------------------------------------------------------------------
+// Assistente do Studio
+// ---------------------------------------------------------------------------
+namespace {
+
+struct FakeAssistantHost : taskforge::assistant::AssistantHost {
+    json project = json{{"projectId", "p1"}, {"name", "Demo"}, {"rootPath", "C:/demo"}};
+    fs::path docs;
+    int created = 0, saved = 0, runs = 0;
+    std::string lastCreateName;
+
+    json currentProject() override { return project; }
+    json recentProjects() override { return json::array(); }
+    std::optional<json> createProject(const std::string& name, const std::string&, const std::string&, std::string&) override {
+        ++created;
+        lastCreateName = name;
+        project = json{{"projectId", "p2"}, {"name", name}, {"rootPath", "C:/novo/" + name}};
+        return taskforge::assistant::GraphDocument::emptySchema(name, "p2");
+    }
+    std::optional<json> openProject(const std::string& path, std::string& error) override {
+        error = "nao existe: " + path;
+        return std::nullopt;
+    }
+    bool savePipeline(const json&, std::string&) override { ++saved; return true; }
+    bool runPipeline(const json&, std::string&) override { ++runs; return true; }
+    fs::path docsDirectory(taskforge::rt::RuntimeLang) override { return docs; }
+};
+
+taskforge::rt::ChatReply scriptedCall(const std::string& id, const std::string& name, json args) {
+    taskforge::rt::ChatReply r;
+    r.ok = true;
+    r.toolCalls.push_back({id, name, std::move(args)});
+    return r;
+}
+
+taskforge::rt::ChatReply scriptedText(const std::string& text) {
+    taskforge::rt::ChatReply r;
+    r.ok = true;
+    r.text = text;
+    return r;
+}
+
+} // namespace
+
+TEST(assistant_graph_document_edits_without_losing_fields) {
+    namespace as = taskforge::assistant;
+    using taskforge::rt::RuntimeLang;
+    json schema = as::GraphDocument::emptySchema("g", "p");
+    schema["nodes"].push_back(json{{"id", "x"}, {"type", "static"}, {"label", "X"}, {"inputs", json::array()},
+                                   {"outputs", json::array()}, {"campoDesconhecido", 42}});
+    as::GraphDocument doc(schema);
+
+    auto a = doc.addNode("agent", "Pesquisador", std::nullopt, std::nullopt, "", RuntimeLang::Pt);
+    auto b = doc.addNode("static", "Relatorio", 600.0, 100.0, "return;", RuntimeLang::Pt);
+    CHECK(a.ok && b.ok);
+    CHECK(a.uiOp.value("op", std::string()) == "add_node");
+    std::string ida = a.result.value("id", std::string()), idb = b.result.value("id", std::string());
+    CHECK(doc.node(ida)->at("outputs").size() == 2);   // out + artifact_out
+    CHECK(doc.node(idb)->value("customLambdaBody", std::string()) == "return;");
+    CHECK(!doc.addNode("inexistente", "?", std::nullopt, std::nullopt, "", RuntimeLang::Pt).ok);
+
+    auto c = doc.connect(ida, "", idb, "", RuntimeLang::Pt);
+    CHECK(c.ok);
+    CHECK(c.uiOp["edge"].value("sourcePortId", std::string()) == ida + "_out_0");
+    CHECK(!doc.connect(ida, "", idb, "", RuntimeLang::Pt).ok);                     // duplicada
+    CHECK(doc.connect(ida, "artifact_out", idb, "in", RuntimeLang::Pt).ok);        // porta pelo nome
+    CHECK(!doc.connect(ida, "nao-existe", idb, "", RuntimeLang::En).ok);
+    CHECK(!doc.connect(ida, "", ida, "", RuntimeLang::Pt).ok);
+
+    auto u = doc.updateNode(ida, json{{"label", "Analista"}, {"agentSettings", json{{"inheritModel", false}}}}, RuntimeLang::Pt);
+    CHECK(u.ok);
+    CHECK(doc.node(ida)->at("agentSettings").value("inheritModel", true) == false);
+    CHECK(doc.node(ida)->at("agentSettings").value("inheritSandbox", false) == true);   // mesclado, nao substituido
+    CHECK(!doc.updateNode(ida, json{{"type", "static"}}, RuntimeLang::Pt).ok);
+
+    // Ciclo sem decisao e erro; com um condition no meio, e um laco valido.
+    auto back = doc.connect(idb, "", ida, "", RuntimeLang::Pt);
+    CHECK(back.ok);
+    CHECK(!doc.validate(RuntimeLang::Pt).value("ok", true));
+    CHECK(doc.disconnect(back.result.value("edgeId", std::string()), RuntimeLang::Pt).ok);
+    auto cond = doc.addNode("condition", "Revisar", std::nullopt, std::nullopt, "", RuntimeLang::Pt);
+    std::string idc = cond.result.value("id", std::string());
+    CHECK(doc.connect(idb, "", idc, "", RuntimeLang::Pt).ok);
+    CHECK(doc.connect(idc, "branch 0", ida, "", RuntimeLang::Pt).ok);
+    json v = doc.validate(RuntimeLang::Pt);
+    CHECK(v.value("ok", false));
+    CHECK(v.at("warnings").size() >= 1);   // branch 1 sem destino e o vertice X isolado
+
+    auto rm = doc.removeNode(idb, RuntimeLang::Pt);
+    CHECK(rm.ok && rm.result.at("removedEdges").size() == 3);
+    CHECK(doc.node("x")->value("campoDesconhecido", 0) == 42);
+    CHECK(doc.schema().at("edges").size() == 1);
+}
+
+TEST(assistant_tools_validate_arguments_and_only_read_listed_docs) {
+    namespace as = taskforge::assistant;
+    using taskforge::rt::RuntimeLang;
+    FakeAssistantHost host;
+    host.docs = makeTempDir("assistant-docs");
+    { std::ofstream(host.docs / "06-interface.md") << "# Interface\n\nO ribbon tem abas."; }
+    { std::ofstream(host.docs.parent_path() / "segredo.md") << "# Segredo"; }
+    as::GraphDocument doc;
+
+    auto missing = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "add_node", json{{"type", "agent"}});
+    CHECK(missing.result.isError);
+    CHECK(missing.result.content.find("label") != std::string::npos);
+    auto wrongType = as::executeAssistantTool(doc, host, RuntimeLang::En, "move_node", json{{"id", "a"}, {"x", "1"}, {"y", 2}});
+    CHECK(wrongType.result.isError);
+
+    auto list = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "studio_docs_list", json::object());
+    CHECK(list.result.content.find("06-interface") != std::string::npos);
+    CHECK(list.result.content.find("Interface") != std::string::npos);
+    auto read = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "studio_docs_read", json{{"id", "06-interface"}});
+    CHECK(!read.result.isError && read.result.content.find("ribbon") != std::string::npos);
+    auto escape = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "studio_docs_read", json{{"id", "../segredo"}});
+    CHECK(escape.result.isError);
+
+    CHECK(as::toolRisk("get_graph") == as::ToolRisk::Read);
+    CHECK(as::toolRisk("connect") == as::ToolRisk::Edit);
+    CHECK(as::toolRisk("create_project") == as::ToolRisk::Confirm);
+    CHECK(as::toolRisk("run_pipeline") == as::ToolRisk::Confirm);
+    CHECK(!as::toolRisk("apagar_tudo").has_value());
+    CHECK(as::assistantTools(RuntimeLang::En)[0].def.description.find("Lists") != std::string::npos);
+
+    // run_pipeline valida antes: grafo com ciclo sem decisao nao executa.
+    auto a = doc.addNode("static", "A", std::nullopt, std::nullopt, "", RuntimeLang::Pt).result.value("id", std::string());
+    auto b = doc.addNode("static", "B", std::nullopt, std::nullopt, "", RuntimeLang::Pt).result.value("id", std::string());
+    doc.connect(a, "", b, "", RuntimeLang::Pt);
+    doc.connect(b, "", a, "", RuntimeLang::Pt);
+    CHECK(as::executeAssistantTool(doc, host, RuntimeLang::Pt, "run_pipeline", json::object()).result.isError);
+    CHECK(host.runs == 0);
+    fs::remove_all(host.docs);
+}
+
+TEST(model_client_converts_history_for_openai_and_anthropic) {
+    namespace rt = taskforge::rt;
+    rt::ChatRequest req;
+    req.model = "m";
+    req.system = "sys";
+    rt::ChatMessage u; u.role = "user"; u.text = "oi";
+    rt::ChatMessage a; a.role = "assistant"; a.text = "vou ver"; a.reasoning = "pensando";
+    a.toolCalls.push_back({"c1", "get_graph", json::object()});
+    a.toolCalls.push_back({"c2", "get_project", json::object()});
+    rt::ChatMessage t1; t1.role = "tool"; t1.toolCallId = "c1"; t1.text = "{}";
+    rt::ChatMessage t2; t2.role = "tool"; t2.toolCallId = "c2"; t2.text = "erro"; t2.isError = true;
+    req.messages = {u, a, t1, t2};
+    req.tools.push_back({"get_graph", "d", json{{"type", "object"}}});
+
+    json oa = rt::buildRequestBody(rt::resolveProvider("deepseek"), req, true);
+    CHECK(oa["messages"].size() == 5);   // system + user + assistant + 2 tool
+    CHECK(oa["messages"][2]["tool_calls"][0]["function"].value("arguments", std::string()) == "{}");
+    CHECK(oa["messages"][2].value("reasoning_content", std::string()) == "pensando");
+    CHECK(!rt::buildRequestBody(rt::resolveProvider("deepseek"), req, false)["messages"][2].contains("reasoning_content"));
+    CHECK(oa["tools"][0]["function"].value("name", std::string()) == "get_graph");
+
+    json an = rt::buildRequestBody(rt::resolveProvider("anthropic"), req, true);
+    CHECK(an.value("system", std::string()) == "sys");
+    CHECK(an["messages"].size() == 3);   // user, assistant, user com os dois tool_result
+    CHECK(an["messages"][2]["content"].size() == 2);
+    CHECK(an["messages"][2]["content"][1].value("is_error", false));
+    CHECK(an["messages"][1]["content"][1].value("type", std::string()) == "tool_use");
+    CHECK(an["tools"][0].contains("input_schema"));
+
+    auto r1 = rt::parseResponseBody(rt::resolveProvider("openai"),
+        R"({"choices":[{"finish_reason":"tool_calls","message":{"content":null,"tool_calls":[{"id":"x","function":{"name":"connect","arguments":"{\"from\":\"a\"}"}}]}}],"usage":{"prompt_tokens":5,"completion_tokens":2}})");
+    CHECK(r1.ok && r1.toolCalls.size() == 1 && r1.toolCalls[0].args.value("from", std::string()) == "a" && r1.inTokens == 5);
+    auto r2 = rt::parseResponseBody(rt::resolveProvider("anthropic"),
+        R"({"stop_reason":"tool_use","content":[{"type":"text","text":"ok"},{"type":"tool_use","id":"t","name":"get_graph","input":{}}],"usage":{"input_tokens":3,"output_tokens":1}})");
+    CHECK(r2.text == "ok" && r2.toolCalls.size() == 1 && r2.outTokens == 1);
+
+    CHECK(!rt::resolveProvider("jev").supportsTools);
+    CHECK(!rt::resolveProvider("local").supportsTools);
+    CHECK(rt::resolveProvider("anthropic").supportsTools && rt::resolveProvider("deepseek").supportsTools);
+    auto roundTrip = rt::ChatMessage::fromJson(a.toJson());
+    CHECK(roundTrip.toolCalls.size() == 2 && roundTrip.reasoning == "pensando");
+}
+
+TEST(assistant_turn_edits_the_graph_asks_before_projects_and_persists_the_session) {
+    namespace as = taskforge::assistant;
+    namespace rt = taskforge::rt;
+    auto root = makeTempDir("assistant-session");
+    as::SessionStore store(root);
+    FakeAssistantHost host;
+    as::GraphDocument doc;
+    std::vector<json> events;
+    std::vector<json> confirms;
+    bool acceptConfirm = false;
+    as::TurnIO io;
+    io.emit = [&](const json& e) { events.push_back(e); };
+    io.confirm = [&](const json& req) { confirms.push_back(req); return acceptConfirm; };
+
+    // Turno 1: cria dois vertices, liga e responde.
+    std::vector<rt::ChatReply> script;
+    script.push_back(scriptedCall("c1", "add_node", json{{"type", "agent"}, {"label", "Coletor"}}));
+    script.push_back(scriptedCall("c2", "add_node", json{{"type", "static"}, {"label", "Saida"}}));
+    script.push_back(rt::ChatReply{});   // placeholder: substituido abaixo pelo connect com os ids reais
+    script.push_back(scriptedText("Pronto: dois vertices ligados."));
+    size_t next = 0;
+    std::vector<rt::ChatRequest> requests;
+    as::ModelFn model = [&](const rt::ChatRequest& req) {
+        requests.push_back(req);
+        if (next == 2) {
+            auto nodes = doc.summary().at("nodes");
+            return scriptedCall("c3", "connect", json{{"from", nodes[0].value("id", std::string())},
+                                                     {"to", nodes[1].value("id", std::string())}});
+        }
+        return script[next];
+    };
+    auto counted = [&](const rt::ChatRequest& req) { auto r = model(req); ++next; return r; };
+
+    as::Session session = as::SessionStore::create();
+    as::TurnOptions opts;
+    as::runTurn(session, store, "Monte um pipeline simples", doc, host, as::ModelChoice{"deepseek", "x"}, counted, io, opts);
+
+    CHECK(doc.nodeCount() == 2);
+    CHECK(doc.schema().at("edges").size() == 1);
+    int ops = 0, texts = 0;
+    for (const auto& e : events) {
+        if (e.value("type", std::string()) == "op") ++ops;
+        if (e.value("type", std::string()) == "text") ++texts;
+        CHECK(e.value("sessionId", std::string()) == session.id);
+    }
+    CHECK(ops == 3 && texts == 1);
+    CHECK(events.back().value("type", std::string()) == "done" && events.back().value("ok", false));
+    CHECK(requests[0].system.find("Responda em portugues") != std::string::npos);
+    CHECK(requests[0].tools.size() == as::assistantTools(rt::RuntimeLang::Pt).size());
+    CHECK(requests.back().messages.size() == 7);   // user + 3x(assistant+tool)
+
+    // A sessao fica gravada no projeto e volta igual.
+    auto loaded = store.load(session.id);
+    CHECK(loaded.has_value());
+    CHECK(loaded->title == "Monte um pipeline simples");
+    CHECK(loaded->messages.size() == 8);
+    CHECK(loaded->transcript.size() == 5);   // user + 3 atividades + resposta
+    CHECK(store.list().size() == 1);
+
+    // Turno 2 (en-US): criar projeto pede confirmacao; recusado nao cria; aceito cria e recarrega o canvas.
+    events.clear();
+    next = 0;
+    script = {scriptedCall("p1", "create_project", json{{"name", "Novo"}}), scriptedText("ok"),
+              scriptedCall("p2", "create_project", json{{"name", "Novo"}}), scriptedText("done")};
+    as::ModelFn plain = [&](const rt::ChatRequest& req) { requests.push_back(req); return script[next++]; };
+    opts.locale = "en-US";
+    as::runTurn(session, store, "create a project", doc, host, as::ModelChoice{"deepseek", "x"}, plain, io, opts);
+    CHECK(confirms.size() == 1 && confirms[0].value("tool", std::string()) == "create_project");
+    CHECK(host.created == 0);
+    CHECK(requests.back().messages.back().text == "The user declined this action.");
+    CHECK(requests.back().system.find("Answer in English") != std::string::npos);
+
+    acceptConfirm = true;
+    events.clear();
+    as::runTurn(session, store, "yes, create it", doc, host, as::ModelChoice{"deepseek", "x"}, plain, io, opts);
+    CHECK(host.created == 1 && host.lastCreateName == "Novo");
+    CHECK(doc.nodeCount() == 0);   // o canvas passa a ser o grafo vazio do projeto novo
+    bool reload = false;
+    for (const auto& e : events) {
+        if (e.value("type", std::string()) == "op" && e.at("op").value("op", std::string()) == "load_project") reload = true;
+    }
+    CHECK(reload);
+
+    // Provedor sem ferramentas e IA nao configurada: erro com codigo, sem chamar o modelo.
+    size_t before = requests.size();
+    events.clear();
+    as::runTurn(session, store, "oi", doc, host, as::ModelChoice{"jev", "j"}, plain, io, opts);
+    CHECK(events[0].value("code", std::string()) == "tools_unsupported");
+    as::runTurn(session, store, "oi", doc, host, std::nullopt, plain, io, opts);
+    CHECK(requests.size() == before);
+    CHECK(events[2].value("code", std::string()) == "model_not_configured");
+
+    CHECK(!as::SessionStore::isValidId("../fora"));
+    CHECK(!store.load("../fora").has_value());
+    CHECK(store.remove(session.id));
+    CHECK(store.list().size() == 0);
+    fs::remove_all(root);
+}
+
+TEST(assistant_talks_to_a_real_http_model_in_both_protocols) {
+    namespace as = taskforge::assistant;
+    namespace rt = taskforge::rt;
+    const char* py = taskforge::platform::commandExists("python") ? "python" : (taskforge::platform::commandExists("python3") ? "python3" : nullptr);
+    if (!py) { std::cout << "  (python ausente: teste ignorado)" << std::endl; return; }
+
+    auto root = makeTempDir("assistant-http");
+    fs::path log = root / "requests.log";
+    int port = 18000 + (std::rand() % 2000);
+    taskforge::platform::ProcessSpec spec;
+    spec.argv = {py, fs::absolute(fs::path("CppCore") / "tests" / "e2e" / "mock_assistant_llm.py").string(),
+                 std::to_string(port), log.string()};
+    std::string err;
+    auto server = taskforge::platform::Process::start(spec, err);
+    CHECK(server != nullptr);
+    if (!server) return;
+    std::string base = "http://127.0.0.1:" + std::to_string(port);
+    for (int i = 0; i < 50; ++i) {
+        rt::HttpRequest ping;
+        ping.method = "GET";
+        ping.url = base + "/";
+        ping.timeoutSeconds = 2;
+        if (rt::httpSend(ping).status == 200) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    setTestEnv("DEEPSEEK_BASE_URL", base.c_str());
+    setTestEnv("DEEPSEEK_API_KEY", "test-key-assistant");
+    setTestEnv("ANTHROPIC_BASE_URL", base.c_str());
+    setTestEnv("ANTHROPIC_API_KEY", "test-key-assistant");
+
+    auto turn = [&](const std::string& provider, std::vector<json>& events, as::GraphDocument& doc) {
+        FakeAssistantHost host;
+        as::SessionStore store(root);
+        as::Session session = as::SessionStore::create();
+        as::TurnIO io;
+        io.emit = [&](const json& e) { events.push_back(e); };
+        as::runTurn(session, store, "crie um agente", doc, host, as::ModelChoice{provider, "modelo-teste"},
+                    [](const rt::ChatRequest& r) { return rt::chatOnce(r); }, io, as::TurnOptions{});
+    };
+
+    for (const char* provider : {"deepseek", "anthropic"}) {
+        std::vector<json> events;
+        as::GraphDocument doc;
+        turn(provider, events, doc);
+        CHECK(doc.nodeCount() == 1);
+        bool text = false;
+        for (const auto& e : events) {
+            if (e.value("type", std::string()) == "text" && e.value("text", std::string()).find("Criei o vertice node_") == 0) text = true;
+        }
+        CHECK(text);
+        CHECK(!events.empty() && events.back().value("type", std::string()) == "done" && events.back().value("ok", false));
+    }
+    std::string requests = taskforge::jsonutil::readFile(log);
+    CHECK(requests.find("/chat/completions") != std::string::npos);
+    CHECK(requests.find("/v1/messages") != std::string::npos);
+    CHECK(requests.find("\"tool_result\"") != std::string::npos);   // o resultado voltou no formato Anthropic
+
+    // Chave errada: erro com codigo estavel, sem travar o laco.
+    setTestEnv("DEEPSEEK_API_KEY", "chave-errada");
+    std::vector<json> events;
+    as::GraphDocument doc;
+    turn("deepseek", events, doc);
+    std::string code;
+    for (const auto& e : events) if (e.value("type", std::string()) == "error") code = e.value("code", std::string());
+    CHECK(code == "http_error");
+    CHECK(doc.nodeCount() == 0);
+
+    for (const char* k : {"DEEPSEEK_BASE_URL", "DEEPSEEK_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY"}) setTestEnv(k, "");
+    server->kill();
     fs::remove_all(root);
 }
 

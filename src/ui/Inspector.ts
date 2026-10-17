@@ -10,7 +10,11 @@ import { t, translateMcpError } from '../i18n/index.ts';
  * Painel dinâmico, redimensionável por splitter, recolhível e destacável em janela flutuante.
  */
 export class Inspector {
-  private container: HTMLElement;
+  private container: HTMLElement;          // visão Propriedades (redesenhada a cada seleção)
+  private paneEl!: HTMLElement;           // o painel em si: largura, flutuar, recolher
+  private paneTabsEl!: HTMLElement;
+  private assistantViewEl!: HTMLElement;
+  private paneTab: 'properties' | 'assistant' = 'properties';
   private graph: Graph;
   private bus: EventBus;
   private currentNodeId: string | null = null;
@@ -36,11 +40,24 @@ export class Inspector {
     this.splitterEl.innerHTML = `<div class="splitter-grip-v"></div>`;
     parent.appendChild(this.splitterEl);
 
-    // 2. Contêiner principal do Task Pane
-    this.container = document.createElement('aside');
-    this.container.className = 'inspector-panel office-task-pane';
-    this.container.style.width = `${this.panelWidth}px`;
-    parent.appendChild(this.container);
+    // 2. Contêiner principal do Task Pane, com abas de topo: Propriedades (este Inspector) e Assistente.
+    //    O Inspector redesenha só a própria visão; a do Assistente sobrevive às trocas de seleção.
+    this.paneEl = document.createElement('aside');
+    this.paneEl.className = 'inspector-panel office-task-pane';
+    this.paneEl.style.width = `${this.panelWidth}px`;
+    this.paneTabsEl = document.createElement('div');
+    this.paneTabsEl.className = 'task-pane-tabs';
+    (this.paneTabsEl as any).role = 'tablist';
+    this.container = document.createElement('div');
+    this.container.className = 'task-pane-view task-pane-view-properties';
+    this.assistantViewEl = document.createElement('div');
+    this.assistantViewEl.className = 'task-pane-view task-pane-view-assistant';
+    this.assistantViewEl.style.display = 'none';
+    this.paneEl.appendChild(this.paneTabsEl);
+    this.paneEl.appendChild(this.container);
+    this.paneEl.appendChild(this.assistantViewEl);
+    parent.appendChild(this.paneEl);
+    this.renderPaneTabs();
 
     // 3. Fita lateral de reabertura quando recolhido
     this.toggleStripEl = document.createElement('div');
@@ -57,6 +74,35 @@ export class Inspector {
     this.initSplitterDrag();
     this.renderEmpty();
     this.bindEvents();
+  }
+
+  // Visão onde o Assistente desenha (preservada entre as trocas de seleção).
+  public getAssistantContainer(): HTMLElement {
+    return this.assistantViewEl;
+  }
+
+  public showPaneTab(tab: 'properties' | 'assistant'): void {
+    this.paneTab = tab;
+    this.container.style.display = tab === 'properties' ? '' : 'none';
+    this.assistantViewEl.style.display = tab === 'assistant' ? '' : 'none';
+    this.renderPaneTabs();
+    if (this.isCollapsed) this.toggleCollapse(false);
+    this.bus.emit('taskpane:tab-changed', tab);
+  }
+
+  private renderPaneTabs(): void {
+    const tabs: Array<['properties' | 'assistant', string, string]> = [
+      ['properties', '📐', t('inspector.pane_tabs.properties')],
+      ['assistant', '✨', t('inspector.pane_tabs.assistant')]
+    ];
+    this.paneTabsEl.innerHTML = tabs.map(([id, icon, label]) => `
+      <button type="button" role="tab" class="task-pane-tab ${this.paneTab === id ? 'active' : ''}" data-pane-tab="${id}" aria-selected="${this.paneTab === id}">
+        <span aria-hidden="true">${icon}</span><span>${label}</span>
+      </button>
+    `).join('');
+    this.paneTabsEl.querySelectorAll?.<HTMLElement>('[data-pane-tab]').forEach(btn => {
+      btn.addEventListener('click', () => this.showPaneTab(btn.dataset.paneTab === 'assistant' ? 'assistant' : 'properties'));
+    });
   }
 
   private bindEvents(): void {
@@ -100,6 +146,7 @@ export class Inspector {
     this.bus.on('graph:loaded', onGraphChange);
 
     this.bus.on('locale:changed', () => {
+      this.renderPaneTabs();
       if (this.currentNodeId) {
         const node = this.graph.getNode(this.currentNodeId);
         if (node) this.renderNode(node);
@@ -117,24 +164,24 @@ export class Inspector {
     this.isFloating = !this.isFloating;
     if (this.isFloating) {
       this.isCollapsed = false;
-      this.container.classList.remove('collapsed');
-      this.container.classList.add('is-floating');
+      this.paneEl.classList.remove('collapsed');
+      this.paneEl.classList.add('is-floating');
       this.toggleStripEl.style.display = 'none';
       this.splitterEl.style.display = 'none';
 
       // Posiciona a janela flutuante no canto superior direito do workspace
       const defaultLeft = Math.max(20, window.innerWidth - this.panelWidth - 30);
       const defaultTop = 110;
-      this.container.style.left = `${defaultLeft}px`;
-      this.container.style.top = `${defaultTop}px`;
-      this.container.style.width = `${this.panelWidth}px`;
-      this.container.style.height = '580px';
+      this.paneEl.style.left = `${defaultLeft}px`;
+      this.paneEl.style.top = `${defaultTop}px`;
+      this.paneEl.style.width = `${this.panelWidth}px`;
+      this.paneEl.style.height = '580px';
     } else {
-      this.container.classList.remove('is-floating');
-      this.container.style.left = '';
-      this.container.style.top = '';
-      this.container.style.height = '100%';
-      this.container.style.width = `${this.panelWidth}px`;
+      this.paneEl.classList.remove('is-floating');
+      this.paneEl.style.left = '';
+      this.paneEl.style.top = '';
+      this.paneEl.style.height = '100%';
+      this.paneEl.style.width = `${this.panelWidth}px`;
       this.splitterEl.style.display = 'flex';
     }
 
@@ -158,13 +205,13 @@ export class Inspector {
 
     this.isCollapsed = force !== undefined ? force : !this.isCollapsed;
     if (this.isCollapsed) {
-      this.container.classList.add('collapsed');
-      this.container.style.width = '0px';
+      this.paneEl.classList.add('collapsed');
+      this.paneEl.style.width = '0px';
       this.splitterEl.style.display = 'none';
       this.toggleStripEl.style.display = 'flex';
     } else {
-      this.container.classList.remove('collapsed');
-      this.container.style.width = `${this.panelWidth}px`;
+      this.paneEl.classList.remove('collapsed');
+      this.paneEl.style.width = `${this.panelWidth}px`;
       this.splitterEl.style.display = 'flex';
       this.toggleStripEl.style.display = 'none';
     }
@@ -205,7 +252,7 @@ export class Inspector {
       e.preventDefault();
       isDragging = true;
       startX = e.clientX;
-      startWidth = this.container.offsetWidth || this.panelWidth;
+      startWidth = this.paneEl.offsetWidth || this.panelWidth;
       this.splitterEl.classList.add('resizing');
       document.body.style.cursor = 'col-resize';
       try {
@@ -233,7 +280,7 @@ export class Inspector {
    */
   public setWidth(newWidth: number): void {
     this.panelWidth = Math.max(260, Math.min(window.innerWidth - 300, Math.round(newWidth)));
-    this.container.style.width = `${this.panelWidth}px`;
+    this.paneEl.style.width = `${this.panelWidth}px`;
     const widthVal = this.container.querySelector('.tp-width-val');
     if (widthVal) {
       widthVal.textContent = `${this.panelWidth}px`;
@@ -274,8 +321,8 @@ export class Inspector {
       const onDragMove = (e: PointerEvent) => {
         const dx = e.clientX - startMouseX;
         const dy = e.clientY - startMouseY;
-        this.container.style.left = `${Math.max(10, Math.min(window.innerWidth - 100, startLeft + dx))}px`;
-        this.container.style.top = `${Math.max(40, Math.min(window.innerHeight - 100, startTop + dy))}px`;
+        this.paneEl.style.left = `${Math.max(10, Math.min(window.innerWidth - 100, startLeft + dx))}px`;
+        this.paneEl.style.top = `${Math.max(40, Math.min(window.innerHeight - 100, startTop + dy))}px`;
       };
 
       const onDragUp = () => {
@@ -289,8 +336,8 @@ export class Inspector {
         e.preventDefault();
         startMouseX = e.clientX;
         startMouseY = e.clientY;
-        startLeft = this.container.offsetLeft;
-        startTop = this.container.offsetTop;
+        startLeft = this.paneEl.offsetLeft;
+        startTop = this.paneEl.offsetTop;
         window.addEventListener('pointermove', onDragMove);
         window.addEventListener('pointerup', onDragUp);
       });

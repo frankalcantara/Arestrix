@@ -48,6 +48,10 @@ add_library(arestrix_core STATIC
   ${SRC}/rt/RuntimeLang.cpp
   ${SRC}/rt/Tools.cpp
   ${SRC}/rt/Agent.cpp
+  ${SRC}/rt/ModelClient.cpp
+  ${SRC}/assistant/GraphDocument.cpp
+  ${SRC}/assistant/AssistantTools.cpp
+  ${SRC}/assistant/AssistantSession.cpp
   ${SRC}/rt/Decision.cpp
   ${SRC}/rt/McpTools.cpp
   ${SRC}/rt/NodeInput.cpp

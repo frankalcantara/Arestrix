@@ -1,4 +1,5 @@
 #include "search/SynonymAgent.hpp"
+#include "platform/Process.hpp"
 
 #include <cstdlib>
 #include <mutex>
@@ -13,8 +14,8 @@ namespace search {
 namespace {
 
 std::string env(const char* name) {
-    const char* v = std::getenv(name);
-    return (v && *v) ? std::string(v) : std::string();
+    // Ambiente real do processo: os Padroes Globais gravam com a API do SO, que o getenv do CRT nao enxerga.
+    return platform::getEnv(name);
 }
 
 // Modelo usado quando so o provedor foi informado.

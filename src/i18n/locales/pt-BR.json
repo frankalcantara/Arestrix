@@ -549,6 +549,10 @@
   "inspector": {
     "title_diagram": "Propriedades do Diagrama",
     "title_node": "Propriedade do Vértice",
+    "pane_tabs": {
+      "properties": "Propriedades",
+      "assistant": "Assistente"
+    },
     "tabs": {
       "general": "Geral",
       "lambda": "Código Lambda",
@@ -1581,5 +1585,74 @@
     "orphan": "Nó isolado \"{{label}}\" ({{id}}) não possui conexões.",
     "missing_branch": "Nó de condição \"{{label}}\" tem o ramo \"{{name}}\" desconectado.",
     "cycle": "Ciclo estático proibido detectado: {{cycle}}. Tarefas estáticas não podem formar dependência cíclica sem um nó de condição."
+  },
+  "assistant": {
+    "new_session": "Nova conversa",
+    "sessions_label": "Conversas gravadas neste projeto",
+    "delete_session": "Apagar esta conversa",
+    "delete_confirm": "Apagar esta conversa do projeto? Esta ação não pode ser desfeita.",
+    "empty_title": "Como posso ajudar no Studio?",
+    "empty_hint": "Pergunte como algo funciona ou peça para eu montar e alterar grafos e projetos. Tudo o que eu fizer no canvas pode ser desfeito com Ctrl+Z.",
+    "suggest_learn": "Como funciona um vértice switch?",
+    "suggest_build": "Monte um pipeline com um agente que pesquisa e outro que revisa, com laço de correção.",
+    "suggest_project": "Crie um projeto novo chamado Triagem de Pedidos.",
+    "input_placeholder": "Escreva sua mensagem (Enter envia, Shift+Enter quebra a linha)",
+    "send": "Enviar",
+    "stop": "Parar",
+    "stopping": "Interrompendo...",
+    "thinking": "Pensando...",
+    "model_label": "Modelo: {{model}}",
+    "not_configured": "A IA padrão do Studio não está configurada.",
+    "open_defaults": "Abrir Padrões Globais",
+    "tools_unsupported_banner": "O provedor {{provider}} não suporta o Assistente: ele não oferece chamada de ferramentas.",
+    "provider_unsupported": "sem suporte ao Assistente",
+    "desktop_only": "O Assistente só está disponível no aplicativo desktop do Arestrix.",
+    "undo_label": "Alterações do Assistente",
+    "cancelled": "Conversa interrompida.",
+    "confirm_accept": "Permitir",
+    "confirm_decline": "Recusar",
+    "confirm_answered_yes": "Permitido.",
+    "confirm_answered_no": "Recusado.",
+    "activity_declined": "Recusado: {{action}}",
+    "activity": {
+      "studio_docs_list": "Consultou o sumário da documentação",
+      "studio_docs_read": "Leu a documentação: {{title}}",
+      "list_node_types": "Consultou os tipos de vértice",
+      "get_project": "Consultou o projeto",
+      "get_graph": "Leu o grafo",
+      "get_node": "Leu o vértice \"{{label}}\"",
+      "validate_graph": "Validou o grafo",
+      "add_node": "Adicionou o vértice \"{{label}}\"",
+      "update_node": "Alterou o vértice \"{{label}}\"",
+      "remove_node": "Removeu o vértice \"{{label}}\"",
+      "connect": "Ligou \"{{from}}\" a \"{{to}}\"",
+      "disconnect": "Removeu uma aresta",
+      "move_node": "Moveu o vértice \"{{label}}\"",
+      "create_project": "Criar o projeto \"{{name}}\"",
+      "open_project": "Abrir o projeto em {{path}}",
+      "clear_graph": "Começar um grafo novo",
+      "save_project": "Salvar o projeto",
+      "run_pipeline": "Executar o pipeline"
+    },
+    "confirm": {
+      "create_project": "O Assistente quer criar o projeto \"{{name}}\" e abri-lo no Studio.",
+      "open_project": "O Assistente quer abrir o projeto em {{path}}. O projeto atual será fechado.",
+      "clear_graph": "O Assistente quer começar um grafo novo, removendo todos os vértices do canvas.",
+      "save_project": "O Assistente quer gravar o grafo do canvas no projeto ativo.",
+      "run_pipeline": "O Assistente quer compilar e executar o pipeline. Isso pode gastar tokens e rodar código."
+    },
+    "errors": {
+      "model_not_configured": "A IA padrão do Studio não está configurada (Padrões Globais).",
+      "tools_unsupported": "O provedor configurado não suporta o Assistente: ele não oferece chamada de ferramentas.",
+      "api_key_missing": "Falta a chave de API do provedor (Padrões Globais > Chaves de API).",
+      "base_url_missing": "Falta o endereço do servidor do provedor (Padrões Globais).",
+      "rate_limited": "O provedor recusou por limite de taxa ou cota. Tente de novo em instantes.",
+      "http_error": "A chamada à IA falhou.",
+      "bad_response": "A IA devolveu uma resposta que não pôde ser lida.",
+      "max_steps": "O Assistente atingiu o limite de passos nesta resposta.",
+      "internal": "Erro interno do Assistente.",
+      "busy": "O Assistente ainda está respondendo.",
+      "unknown": "Não foi possível falar com o Assistente."
+    }
   }
 }

@@ -1,4 +1,5 @@
 #include "rt/Runtime.hpp"
+#include "platform/Process.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -15,6 +16,7 @@
 
 #include "rt/Http.hpp"
 #include "rt/McpTools.hpp"
+#include "rt/ModelClient.hpp"
 #include "rt/RuntimeLang.hpp"
 #include "rt/Tools.hpp"
 #include "sandbox/AgentTelemetryEmitter.hpp"
@@ -167,264 +169,15 @@ std::string replaceAll(std::string s, const std::string& from, const std::string
     return s;
 }
 
-// ---------------------------------------------------------------------------
-// Provedores
-// ---------------------------------------------------------------------------
-struct ProviderInfo {
-    std::string protocol;      // "openai" | "anthropic"
-    std::string baseUrl;
-    std::string path;
-    std::string keyEnv;
-    bool keyRequired = true;
-};
-
 std::string upper(std::string s) {
     for (auto& c : s) c = (char)std::toupper((unsigned char)c);
     return s;
 }
 
 std::string envOr(const std::string& name, const std::string& fallback) {
-    const char* v = std::getenv(name.c_str());
-    return (v && *v) ? std::string(v) : fallback;
+    std::string v = platform::getEnv(name);
+    return v.empty() ? fallback : v;
 }
-
-ProviderInfo resolveProvider(const std::string& provider) {
-    ProviderInfo p;
-    if (provider == "anthropic") {
-        p = {"anthropic", "https://api.anthropic.com", "/v1/messages", "ANTHROPIC_API_KEY", true};
-    } else if (provider == "openai") {
-        p = {"openai", "https://api.openai.com/v1", "/chat/completions", "OPENAI_API_KEY", true};
-    } else if (provider == "google") {
-        p = {"openai", "https://generativelanguage.googleapis.com/v1beta/openai", "/chat/completions", "GEMINI_API_KEY", true};
-    } else if (provider == "groq") {
-        p = {"openai", "https://api.groq.com/openai/v1", "/chat/completions", "GROQ_API_KEY", true};
-    } else if (provider == "jev") {
-        p = {"openai", "", "/chat/completions", "JEV_API_KEY", false};
-    } else if (provider == "local") {
-        p = {"openai", "http://localhost:11434/v1", "/chat/completions", "LOCAL_LLM_API_KEY", false};
-    } else {   // deepseek e qualquer outro compativel com OpenAI
-        p = {"openai", "https://api.deepseek.com", "/chat/completions", "DEEPSEEK_API_KEY", true};
-    }
-    // Sobrescrita por ambiente: DEEPSEEK_BASE_URL, JEV_BASE_URL, LOCAL_LLM_BASE_URL...
-    std::string baseVar = provider == "local" ? "LOCAL_LLM_BASE_URL" : upper(provider) + "_BASE_URL";
-    p.baseUrl = envOr(baseVar, p.baseUrl);
-    while (!p.baseUrl.empty() && p.baseUrl.back() == '/') p.baseUrl.pop_back();
-    return p;
-}
-
-struct ToolCall {
-    std::string id;
-    std::string name;
-    json args = json::object();
-};
-
-struct Turn {
-    std::string text;
-    std::string reasoning;
-    std::vector<ToolCall> calls;
-    std::string stopReason;
-};
-
-struct Usage {
-    long long inTokens = 0;
-    long long outTokens = 0;
-};
-
-// Chamada HTTP com retentativas: 429/5xx/529 respeitam Retry-After ou backoff exponencial.
-HttpResponse postWithRetry(const std::string& nodeId, const HttpRequest& req, int maxAttempts = 6) {
-    HttpResponse resp;
-    for (int attempt = 1; attempt <= maxAttempts; ++attempt) {
-        resp = httpSend(req);
-        bool retryable = resp.status == 0 || resp.status == 429 || resp.status == 500 ||
-                         resp.status == 502 || resp.status == 503 || resp.status == 504 || resp.status == 529;
-        if (!retryable || attempt == maxAttempts) break;
-
-        int wait = std::min(60, 2 << attempt);   // 4, 8, 16, 32, 60
-        auto ra = resp.headers.find("retry-after");
-        if (ra != resp.headers.end()) {
-            try { wait = std::max(1, std::min(120, std::stoi(ra->second))); } catch (...) {}
-        }
-        if (resp.status == 429) {
-            AgentTelemetryEmitter::emitRateLimit(nodeId, wait, "HTTP 429 (limite de taxa/cota). Tentativa " + std::to_string(attempt));
-        } else {
-            AgentTelemetryEmitter::emitEvent(nodeId, "log",
-                json{{"logLine", "Falha temporaria (" + (resp.status ? "HTTP " + std::to_string(resp.status) : resp.error) +
-                                  "); nova tentativa em " + std::to_string(wait) + "s"}});
-        }
-        std::this_thread::sleep_for(std::chrono::seconds(wait));
-    }
-    return resp;
-}
-
-std::string errorDetail(const HttpResponse& r) {
-    if (r.status == 0) return r.error;
-    std::string body = r.body.substr(0, 600);
-    return "HTTP " + std::to_string(r.status) + ": " + body;
-}
-
-class ChatBackend {
-public:
-    virtual ~ChatBackend() = default;
-    virtual Turn complete() = 0;
-    virtual void addToolResults(const std::vector<std::pair<ToolCall, ToolResult>>& results) = 0;
-    Usage usage;
-};
-
-// --- Protocolo OpenAI (DeepSeek, OpenAI, Gemini, Groq, Jev, Ollama/llama.cpp...) -------------
-class OpenAiBackend : public ChatBackend {
-public:
-    OpenAiBackend(const AgentSpec& spec, const ProviderInfo& info, std::string apiKey, const std::string& system,
-                  const std::string& user, const std::vector<ToolDef>& tools)
-        : spec_(spec), url_(info.baseUrl + info.path), apiKey_(std::move(apiKey)) {
-        messages_ = json::array();
-        messages_.push_back({{"role", "system"}, {"content", system}});
-        messages_.push_back({{"role", "user"}, {"content", user}});
-        tools_ = json::array();
-        for (const auto& t : tools) {
-            tools_.push_back({{"type", "function"},
-                              {"function", {{"name", t.name}, {"description", t.description}, {"parameters", t.parameters}}}});
-        }
-    }
-
-    Turn complete() override {
-        json body = {{"model", spec_.model}, {"messages", messages_}};
-        if (!tools_.empty()) body["tools"] = tools_;
-        if (spec_.hasTemperature) body["temperature"] = spec_.temperature;
-
-        HttpRequest req;
-        req.url = url_;
-        req.headers["Content-Type"] = "application/json";
-        if (!apiKey_.empty()) req.headers["Authorization"] = "Bearer " + apiKey_;
-        req.body = body.dump();
-
-        HttpResponse resp = postWithRetry(spec_.nodeId, req, spec_.httpAttempts);
-        if (resp.status == 400 && resp.body.find("reasoning_content") != std::string::npos && !strippedReasoning_) {
-            // Alguns servidores recusam reasoning_content no historico: reenvia sem ele.
-            strippedReasoning_ = true;
-            for (auto& m : messages_) if (m.is_object()) m.erase("reasoning_content");
-            body["messages"] = messages_;
-            req.body = body.dump();
-            resp = postWithRetry(spec_.nodeId, req, spec_.httpAttempts);
-        }
-        if (resp.status != 200) throw std::runtime_error("Falha na API (" + spec_.provider + "): " + errorDetail(resp));
-
-        json j = jsonutil::parse(resp.body);
-        if (j.contains("usage") && j["usage"].is_object()) {
-            usage.inTokens += j["usage"].value("prompt_tokens", 0);
-            usage.outTokens += j["usage"].value("completion_tokens", 0);
-        }
-        if (!j.contains("choices") || !j["choices"].is_array() || j["choices"].empty()) {
-            throw std::runtime_error("Resposta inesperada da API (sem 'choices'): " + resp.body.substr(0, 400));
-        }
-        const json& choice = j["choices"][0];
-        const json& msg = choice.at("message");
-
-        Turn t;
-        if (msg.contains("content") && msg["content"].is_string()) t.text = msg["content"].get<std::string>();
-        if (msg.contains("reasoning_content") && msg["reasoning_content"].is_string()) t.reasoning = msg["reasoning_content"].get<std::string>();
-        t.stopReason = choice.value("finish_reason", "");
-        if (msg.contains("tool_calls") && msg["tool_calls"].is_array()) {
-            for (const auto& c : msg["tool_calls"]) {
-                ToolCall tc;
-                tc.id = c.value("id", "");
-                const json& fn = c.at("function");
-                tc.name = fn.value("name", "");
-                std::string argsText = fn.contains("arguments") && fn["arguments"].is_string() ? fn["arguments"].get<std::string>() : "{}";
-                auto parsed = argsText.empty() ? std::optional<json>(json::object()) : jsonutil::tryParse(argsText);
-                tc.args = parsed ? *parsed : json::object();
-                if (!parsed) tc.args = json{{"__invalid_arguments", argsText}};
-                t.calls.push_back(std::move(tc));
-            }
-        }
-        messages_.push_back(msg);   // historico fiel (inclui tool_calls e reasoning_content)
-        return t;
-    }
-
-    void addToolResults(const std::vector<std::pair<ToolCall, ToolResult>>& results) override {
-        for (const auto& [call, res] : results) {
-            messages_.push_back({{"role", "tool"}, {"tool_call_id", call.id}, {"content", res.content}});
-        }
-    }
-
-private:
-    AgentSpec spec_;
-    std::string url_;
-    std::string apiKey_;
-    json messages_;
-    json tools_;
-    bool strippedReasoning_ = false;
-};
-
-// --- Protocolo Anthropic Messages --------------------------------------------------------------
-class AnthropicBackend : public ChatBackend {
-public:
-    AnthropicBackend(const AgentSpec& spec, const ProviderInfo& info, std::string apiKey, const std::string& system,
-                     const std::string& user, const std::vector<ToolDef>& tools)
-        : spec_(spec), url_(info.baseUrl + info.path), apiKey_(std::move(apiKey)), system_(system) {
-        messages_ = json::array();
-        messages_.push_back({{"role", "user"}, {"content", user}});
-        tools_ = json::array();
-        for (const auto& t : tools) {
-            tools_.push_back({{"name", t.name}, {"description", t.description}, {"input_schema", t.parameters}});
-        }
-    }
-
-    Turn complete() override {
-        json body = {{"model", spec_.model}, {"max_tokens", spec_.maxTokens}, {"system", system_}, {"messages", messages_}};
-        if (!tools_.empty()) body["tools"] = tools_;
-        if (spec_.hasTemperature) body["temperature"] = spec_.temperature;
-
-        HttpRequest req;
-        req.url = url_;
-        req.headers["Content-Type"] = "application/json";
-        req.headers["x-api-key"] = apiKey_;
-        req.headers["anthropic-version"] = "2023-06-01";
-        req.body = body.dump();
-
-        HttpResponse resp = postWithRetry(spec_.nodeId, req, spec_.httpAttempts);
-        if (resp.status != 200) throw std::runtime_error("Falha na API (anthropic): " + errorDetail(resp));
-
-        json j = jsonutil::parse(resp.body);
-        if (j.contains("usage") && j["usage"].is_object()) {
-            usage.inTokens += j["usage"].value("input_tokens", 0);
-            usage.outTokens += j["usage"].value("output_tokens", 0);
-        }
-        Turn t;
-        t.stopReason = j.value("stop_reason", "");
-        if (j.contains("content") && j["content"].is_array()) {
-            for (const auto& block : j["content"]) {
-                std::string type = block.value("type", "");
-                if (type == "text") t.text += block.value("text", "");
-                else if (type == "thinking") t.reasoning += block.value("thinking", "");
-                else if (type == "tool_use") {
-                    ToolCall tc;
-                    tc.id = block.value("id", "");
-                    tc.name = block.value("name", "");
-                    tc.args = block.contains("input") ? block["input"] : json::object();
-                    t.calls.push_back(std::move(tc));
-                }
-            }
-        }
-        messages_.push_back({{"role", "assistant"}, {"content", j.value("content", json::array())}});
-        return t;
-    }
-
-    void addToolResults(const std::vector<std::pair<ToolCall, ToolResult>>& results) override {
-        json blocks = json::array();
-        for (const auto& [call, res] : results) {
-            blocks.push_back({{"type", "tool_result"}, {"tool_use_id", call.id}, {"content", res.content}, {"is_error", res.isError}});
-        }
-        messages_.push_back({{"role", "user"}, {"content", blocks}});
-    }
-
-private:
-    AgentSpec spec_;
-    std::string url_;
-    std::string apiKey_;
-    std::string system_;
-    json messages_;
-    json tools_;
-};
 
 std::string summarizeArgs(const json& args) {
     std::string s = args.dump();
@@ -512,11 +265,21 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
         for (const auto& d : mcpTools->definitions()) tools.push_back(d);
     }
 
-    std::unique_ptr<ChatBackend> backend;
-    if (info.protocol == "anthropic") {
-        backend = std::make_unique<AnthropicBackend>(spec, info, apiKey, sys.str(), userPrompt, tools);
-    } else {
-        backend = std::make_unique<OpenAiBackend>(spec, info, apiKey, sys.str(), userPrompt, tools);
+    ChatRequest chat;
+    chat.provider = spec.provider;
+    chat.model = spec.model;
+    chat.system = sys.str();
+    chat.tools = tools;
+    chat.maxTokens = spec.maxTokens;
+    chat.hasTemperature = spec.hasTemperature;
+    chat.temperature = spec.temperature;
+    chat.httpAttempts = spec.httpAttempts;
+    chat.telemetryId = nodeId;
+    {
+        ChatMessage first;
+        first.role = "user";
+        first.text = userPrompt;
+        chat.messages.push_back(std::move(first));
     }
 
     ToolContext tctx;
@@ -530,9 +293,14 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
 
     std::string finalText;
     bool finished = false;
+    long long inTokens = 0, outTokens = 0;
     for (int turn = 1; turn <= spec.maxTurns; ++turn) {
         AgentTelemetryEmitter::emitStatus(nodeId, "thinking", "Turno " + std::to_string(turn));
-        Turn t = backend->complete();
+        ChatReply t = chatOnce(chat);
+        if (!t.ok) throw std::runtime_error(t.error);
+        if (t.reasoningRejected) chat.includeReasoning = false;
+        inTokens += t.inTokens;
+        outTokens += t.outTokens;
 
         if (!t.reasoning.empty()) {
             AgentTelemetryEmitter::emitThinking(nodeId, t.reasoning.size(), t.reasoning.substr(0, 200));
@@ -541,10 +309,15 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
             finalText = t.text;
             AgentTelemetryEmitter::emitEvent(nodeId, "log", json{{"logLine", t.text.substr(0, 400)}});
         }
-        if (t.calls.empty()) { finished = true; break; }
+        ChatMessage reply;
+        reply.role = "assistant";
+        reply.text = t.text;
+        reply.reasoning = t.reasoning;
+        reply.toolCalls = t.toolCalls;
+        chat.messages.push_back(std::move(reply));
+        if (t.toolCalls.empty()) { finished = true; break; }
 
-        std::vector<std::pair<ToolCall, ToolResult>> results;
-        for (auto& call : t.calls) {
+        for (auto& call : t.toolCalls) {
             AgentTelemetryEmitter::emitToolStart(nodeId, call.name, summarizeArgs(call.args));
             ToolResult res = (mcpTools && mcpTools->owns(call.name)) ? mcpTools->call(call.name, call.args)
                                                                        : executeTool(tctx, call.name, call.args);
@@ -552,9 +325,13 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
             if (res.isError) {
                 AgentTelemetryEmitter::emitEvent(nodeId, "log", json{{"logLine", "[" + call.name + "] " + res.content.substr(0, 300)}});
             }
-            results.emplace_back(call, std::move(res));
+            ChatMessage result;
+            result.role = "tool";
+            result.toolCallId = call.id;
+            result.text = res.content;
+            result.isError = res.isError;
+            chat.messages.push_back(std::move(result));
         }
-        backend->addToolResults(results);
     }
 
     if (!finished) {
@@ -568,8 +345,8 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
     fs::create_directories(outDir, ec);
     std::ofstream(outDir / (nodeId + ".txt"), std::ios::binary | std::ios::trunc) << finalText;
 
-    std::cout << "[Agent " << label << "] concluido (tokens: entrada=" << backend->usage.inTokens
-              << ", saida=" << backend->usage.outTokens << ")\n";
+    std::cout << "[Agent " << label << "] concluido (tokens: entrada=" << inTokens
+              << ", saida=" << outTokens << ")\n";
 }
 
 // ---------------------------------------------------------------------------
@@ -578,42 +355,28 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
 // ---------------------------------------------------------------------------
 CompletionResult completeText(const CompletionRequest& req) {
     CompletionResult out;
-    try {
-        if (req.model.empty()) { out.error = "modelo nao configurado"; return out; }
-        ProviderInfo info = resolveProvider(req.provider);
-        if (info.baseUrl.empty()) {
-            out.error = "defina a variavel " + upper(req.provider) + "_BASE_URL";
-            return out;
-        }
-        std::string apiKey = envOr(info.keyEnv, "");
-        if (apiKey.empty() && info.keyRequired) {
-            out.error = "chave de API ausente: defina " + info.keyEnv;
-            return out;
-        }
+    ChatRequest chat;
+    chat.provider = req.provider;
+    chat.model = req.model;
+    chat.system = req.system;
+    chat.maxTokens = req.maxTokens;
+    chat.httpAttempts = std::max(1, req.maxAttempts);
+    chat.hasTemperature = req.hasTemperature;
+    chat.temperature = req.temperature;
+    chat.telemetryId = "studio:complete";
+    ChatMessage user;
+    user.role = "user";
+    user.text = req.user;
+    chat.messages.push_back(std::move(user));
 
-        AgentSpec spec;
-        spec.nodeId = "studio:complete";
-        spec.label = "studio";
-        spec.provider = req.provider;
-        spec.model = req.model;
-        spec.maxTokens = req.maxTokens;
-        spec.httpAttempts = std::max(1, req.maxAttempts);
-        if (req.hasTemperature) { spec.hasTemperature = true; spec.temperature = req.temperature; }
-
-        std::unique_ptr<ChatBackend> backend;
-        if (info.protocol == "anthropic") {
-            backend = std::make_unique<AnthropicBackend>(spec, info, apiKey, req.system, req.user, std::vector<ToolDef>{});
-        } else {
-            backend = std::make_unique<OpenAiBackend>(spec, info, apiKey, req.system, req.user, std::vector<ToolDef>{});
-        }
-        Turn t = backend->complete();
-        out.text = t.text;
-        out.ok = !out.text.empty();
-        if (!out.ok) out.error = "resposta vazia do modelo";
-    } catch (const std::exception& ex) {
-        out.ok = false;
-        out.error = ex.what();
+    ChatReply t = chatOnce(chat);
+    if (!t.ok) {
+        out.error = t.error;
+        return out;
     }
+    out.text = t.text;
+    out.ok = !out.text.empty();
+    if (!out.ok) out.error = "resposta vazia do modelo";
     return out;
 }
 

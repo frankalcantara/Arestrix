@@ -63,8 +63,8 @@
       "label": "1. Fila_Buffer_ThreadSafe",
       "type": "static",
       "position": {
-        "x": 640,
-        "y": 240,
+        "x": 650,
+        "y": 370,
         "z": 0
       },
       "inputs": [
@@ -103,8 +103,8 @@
       "label": "2. Visao_Subflow_Paralelo",
       "type": "subflow",
       "position": {
-        "x": -450,
-        "y": 0,
+        "x": -410,
+        "y": 300,
         "z": 0
       },
       "inputs": [
@@ -142,8 +142,8 @@
       "label": "3. LLM_Prompt_Decisor",
       "type": "condition",
       "position": {
-        "x": 0,
-        "y": 670,
+        "x": 70,
+        "y": 570,
         "z": 0
       },
       "inputs": [
@@ -197,8 +197,8 @@
       "label": "4. SQLite_Persistencia_ACID",
       "type": "critical",
       "position": {
-        "x": 750,
-        "y": 620,
+        "x": 1210,
+        "y": 710,
         "z": 0
       },
       "inputs": [
@@ -238,8 +238,8 @@
       "label": "5. Modulo_Consenso_Final",
       "type": "module",
       "position": {
-        "x": 1350,
-        "y": 280,
+        "x": 1170,
+        "y": 210,
         "z": 0
       },
       "inputs": [
@@ -337,6 +337,13 @@
       "sourcePortId": "sqlite_persistence_agent_498070_out_0",
       "targetNodeId": "consensus_module_agent_498083",
       "targetPortId": "consensus_module_agent_498083_in_0"
+    },
+    {
+      "id": "edge_1792185441202_8dkf",
+      "sourceNodeId": "node_1792180573332",
+      "sourcePortId": "node_1792180573332_out_0",
+      "targetNodeId": "llm_decision_agent_498062",
+      "targetPortId": "llm_decision_agent_498062_in_1"
     }
   ]
 }

@@ -549,6 +549,10 @@
   "inspector": {
     "title_diagram": "Diagram Properties",
     "title_node": "Vertex Property",
+    "pane_tabs": {
+      "properties": "Properties",
+      "assistant": "Assistant"
+    },
     "tabs": {
       "general": "General",
       "lambda": "Lambda Code",
@@ -1581,5 +1585,74 @@
     "orphan": "Isolated node \"{{label}}\" ({{id}}) has no connections.",
     "missing_branch": "Condition node \"{{label}}\" has disconnected branch \"{{name}}\".",
     "cycle": "Forbidden static cycle detected: {{cycle}}. Static tasks cannot form cyclical dependencies without a condition node."
+  },
+  "assistant": {
+    "new_session": "New conversation",
+    "sessions_label": "Conversations saved in this project",
+    "delete_session": "Delete this conversation",
+    "delete_confirm": "Delete this conversation from the project? This cannot be undone.",
+    "empty_title": "How can I help with the Studio?",
+    "empty_hint": "Ask how something works or ask me to build and change graphs and projects. Anything I do on the canvas can be undone with Ctrl+Z.",
+    "suggest_learn": "How does a switch vertex work?",
+    "suggest_build": "Build a pipeline with an agent that researches and another that reviews, with a correction loop.",
+    "suggest_project": "Create a new project called Order Triage.",
+    "input_placeholder": "Type your message (Enter sends, Shift+Enter adds a line)",
+    "send": "Send",
+    "stop": "Stop",
+    "stopping": "Stopping...",
+    "thinking": "Thinking...",
+    "model_label": "Model: {{model}}",
+    "not_configured": "The Studio default AI is not configured.",
+    "open_defaults": "Open Global Defaults",
+    "tools_unsupported_banner": "The provider {{provider}} does not support the Assistant: it does not offer tool calling.",
+    "provider_unsupported": "no Assistant support",
+    "desktop_only": "The Assistant is only available in the Arestrix desktop app.",
+    "undo_label": "Assistant changes",
+    "cancelled": "Conversation stopped.",
+    "confirm_accept": "Allow",
+    "confirm_decline": "Decline",
+    "confirm_answered_yes": "Allowed.",
+    "confirm_answered_no": "Declined.",
+    "activity_declined": "Declined: {{action}}",
+    "activity": {
+      "studio_docs_list": "Looked at the documentation contents",
+      "studio_docs_read": "Read the documentation: {{title}}",
+      "list_node_types": "Looked at the vertex types",
+      "get_project": "Looked at the project",
+      "get_graph": "Read the graph",
+      "get_node": "Read vertex \"{{label}}\"",
+      "validate_graph": "Validated the graph",
+      "add_node": "Added vertex \"{{label}}\"",
+      "update_node": "Changed vertex \"{{label}}\"",
+      "remove_node": "Removed vertex \"{{label}}\"",
+      "connect": "Connected \"{{from}}\" to \"{{to}}\"",
+      "disconnect": "Removed an edge",
+      "move_node": "Moved vertex \"{{label}}\"",
+      "create_project": "Create project \"{{name}}\"",
+      "open_project": "Open the project at {{path}}",
+      "clear_graph": "Start a new graph",
+      "save_project": "Save the project",
+      "run_pipeline": "Run the pipeline"
+    },
+    "confirm": {
+      "create_project": "The Assistant wants to create project \"{{name}}\" and open it in the Studio.",
+      "open_project": "The Assistant wants to open the project at {{path}}. The current project will be closed.",
+      "clear_graph": "The Assistant wants to start a new graph, removing every vertex from the canvas.",
+      "save_project": "The Assistant wants to save the canvas graph into the active project.",
+      "run_pipeline": "The Assistant wants to compile and run the pipeline. This may spend tokens and run code."
+    },
+    "errors": {
+      "model_not_configured": "The Studio default AI is not configured (Global Defaults).",
+      "tools_unsupported": "The configured provider does not support the Assistant: it does not offer tool calling.",
+      "api_key_missing": "The provider API key is missing (Global Defaults > API Keys).",
+      "base_url_missing": "The provider server address is missing (Global Defaults).",
+      "rate_limited": "The provider refused due to rate limit or quota. Try again shortly.",
+      "http_error": "The call to the AI failed.",
+      "bad_response": "The AI returned a response that could not be read.",
+      "max_steps": "The Assistant reached the step limit for this reply.",
+      "internal": "Internal Assistant error.",
+      "busy": "The Assistant is still replying.",
+      "unknown": "Could not reach the Assistant."
+    }
   }
 }

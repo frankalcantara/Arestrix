@@ -75,6 +75,27 @@ Um pacote `.arestrix` é extraído numa pasta nova ao lado dele (`nome`, `nome (
 projeto. Um grafo `.json` dentro de `<projeto>/pipelines` abre o projeto inteiro; um grafo avulso só
 substitui o canvas do projeto atual depois de confirmação.
 
+## Assistente
+
+O painel lateral tem duas abas: **Propriedades** e **Assistente**. O Assistente é um chat com a IA padrão do
+Studio (Padrões Globais > Modelo padrão do Studio) que ajuda a **operar** e a **aprender** o Studio:
+
+- Responde dúvidas consultando esta documentação (no idioma do Studio).
+- Cria projetos e monta ou altera grafos: adiciona, liga, altera, move e remove vértices, valida o grafo.
+- Salva o projeto e executa o pipeline.
+
+As edições no grafo aparecem na hora no canvas. Tudo o que o Assistente fizer numa resposta pode ser
+desfeito de uma vez com **Ctrl+Z**. Criar, abrir ou limpar um grafo, salvar e executar pedem
+confirmação antes (botões **Permitir** e **Recusar** no chat).
+
+Cada conversa é uma **sessão** gravada no projeto, em `.arestrix/assistant/sessions/`; o seletor no topo da
+aba reabre as anteriores. O Assistente responde no idioma do Studio.
+
+O Assistente precisa de um provedor com **chamada de ferramentas**. Os provedores sem esse recurso (Jev e
+modelo local) aparecem marcados como "sem suporte ao Assistente" no seletor do modelo padrão, e a aba
+indica a impossibilidade. Todo o laço da conversa, as ferramentas e a gravação das sessões rodam no
+backend C++; a aba só desenha a conversa e aplica as alterações no canvas.
+
 ## Canvas
 
 O canvas é infinito. Os cartões são SVG, desenhados sobre a cena WebGL, com texto vetorial nítido e sem

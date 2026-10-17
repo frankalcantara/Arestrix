@@ -75,6 +75,27 @@ An `.arestrix` package is extracted into a new folder next to it (`name`, `name 
 project. A `.json` graph inside `<project>/pipelines` opens the whole project; a loose graph replaces the
 current project's canvas only after confirmation.
 
+## Assistant
+
+The side panel has two tabs: **Properties** and **Assistant**. The Assistant is a chat with the Studio's
+default AI (Global Defaults > Studio default model) that helps you **operate** and **learn** the Studio:
+
+- It answers questions by reading this documentation (in the Studio language).
+- It creates projects and builds or changes graphs: adds, connects, changes, moves and removes vertices, validates the graph.
+- It saves the project and runs the pipeline.
+
+Graph edits show up on the canvas right away. Everything the Assistant does in one reply can be undone at
+once with **Ctrl+Z**. Creating, opening or clearing a graph, saving and running ask for confirmation first
+(**Allow** and **Decline** buttons in the chat).
+
+Each conversation is a **session** saved in the project, under `.arestrix/assistant/sessions/`; the selector
+at the top of the tab reopens earlier ones. The Assistant answers in the Studio language.
+
+The Assistant needs a provider with **tool calling**. Providers without it (Jev and local model) are marked
+"no Assistant support" in the default model selector, and the tab states that it cannot be used. The whole
+conversation loop, the tools and session storage run in the C++ backend; the tab only draws the conversation
+and applies the changes on the canvas.
+
 ## Canvas
 
 The canvas is infinite. The cards are SVG, drawn over the WebGL scene, with sharp vector text and no
