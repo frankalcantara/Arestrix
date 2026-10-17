@@ -994,7 +994,7 @@ void ui_save_arestrix_file(webui::window::event* e) {
         std::string content = j.value("content", "");
         bool isBase64 = j.value("isBase64", false);
 
-        std::filesystem::path p(targetPath);
+        std::filesystem::path p = taskforge::project::pathFromUtf8(targetPath);
         std::string ext = p.extension().string();
         if (targetPath.empty() || (ext != ".arestrix" && ext != ".json")) {
             std::cerr << "[C++ Erro] save_arestrix_file: extensao nao permitida: " << targetPath << "\n";

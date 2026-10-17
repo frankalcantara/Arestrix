@@ -59,7 +59,7 @@ modules), the skills of the workspace and the pipelines. Press `Ctrl+K` to focus
 ## Backstage
 
 Opened by **File**. It has the project information (two cards: the active project and the physical
-workspace), the **Open** screen, *Save As* with folder and drive navigation, and the **Options**
+workspace), the **Open** screen, the unified **Save** screen, and the **Options**
 (Studio defaults, workspace governance and the **language** selector).
 
 The **Open** screen follows Office's Open. The places are on the left:
@@ -74,6 +74,16 @@ The **Open** screen follows Office's Open. The places are on the left:
 An `.arestrix` package is extracted into a new folder next to it (`name`, `name (2)`, ...) and opened as a
 project. A `.json` graph inside `<project>/pipelines` opens the whole project; a loose graph replaces the
 current project's canvas only after confirmation.
+
+The **Save** screen unifies quick saving and *Save As* in the Office style:
+
+- On the left, you can **Save Current Project** directly in place or choose a destination via **This PC**,
+  **Recent Locations**, or **Browse Folder**.
+- On the right, a prominent scope selector at the top lets you choose between **Complete Project**
+  (`.arestrix` package or structured project folder with `arestrix.project.json` + `pipelines/main.json`) and
+  **Single Project Graph** (`.json` pipeline file). It provides full drive, folder, and breadcrumb navigation,
+  quick shortcuts to the active project's root and `pipelines/` folder, and automatic registration in the
+  project manifest when a graph is saved inside the open project.
 
 ## Assistant
 

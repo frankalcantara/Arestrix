@@ -912,6 +912,206 @@
   text-shadow: none !important;
 }
 
+.backstage-save-target-section {
+  margin-bottom: 18px;
+}
+
+.backstage-save-target-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.backstage-save-target-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-shadow: none !important;
+}
+
+.backstage-save-active-proj-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-shadow: none !important;
+}
+
+.backstage-save-target-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.backstage-save-target-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 2px solid #cbd5e1;
+  background-color: #f8fafc;
+  color: #0f172a;
+  text-align: left;
+  cursor: pointer;
+  opacity: 0.78;
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  text-shadow: none !important;
+}
+
+.backstage-save-target-card:hover {
+  opacity: 0.95;
+  background-color: #f1f5f9;
+  border-color: #64748b;
+}
+
+.backstage-save-target-card.active {
+  opacity: 1;
+  background-color: #e8f1fb;
+  border-color: #0f6cbd;
+}
+
+.backstage-save-target-icon {
+  font-size: 24px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.backstage-save-target-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.backstage-save-target-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.backstage-save-target-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+  text-shadow: none !important;
+}
+
+.backstage-save-target-card.active .backstage-save-target-title {
+  color: #0f6cbd;
+}
+
+.backstage-save-target-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  background-color: #e2e8f0;
+  color: #334155;
+  text-shadow: none !important;
+}
+
+.backstage-save-target-card.active .backstage-save-target-badge {
+  background-color: #0f6cbd;
+  color: #ffffff;
+}
+
+.backstage-save-target-desc {
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.4;
+  text-shadow: none !important;
+}
+
+.backstage-save-form-panel {
+  background-color: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+.backstage-save-form-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.backstage-save-dest-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 12px;
+  color: #475569;
+}
+
+.backstage-save-context-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background-color: #e0f2fe;
+  color: #0369a1;
+  font-size: 11px;
+  font-weight: 700;
+  text-shadow: none !important;
+}
+
+.backstage-save-shortcuts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.backstage-save-shortcut-btn {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  background-color: #f0f9ff;
+  color: #0369a1;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  text-shadow: none !important;
+}
+
+.backstage-save-shortcut-btn:hover {
+  background-color: #e0f2fe;
+  border-color: #0284c7;
+}
+
+@media (max-width: 900px) {
+  .backstage-save-form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .backstage-brand-header {
   user-select: none;
   text-shadow: none !important;

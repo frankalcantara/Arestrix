@@ -11,7 +11,7 @@ import {
   OpenableEntryKind
 } from '../../core/types.ts';
 import { hashProjectName } from '../../core/hash.ts';
-import { dirName, joinPath, pathCrumbs } from '../../core/paths.ts';
+import { dirName, joinPath, pathCrumbs, stripExtension } from '../../core/paths.ts';
 import { CodeModal } from '../CodeModal.ts';
 import { GlobalDefaultsModal } from '../GlobalDefaultsModal.ts';
 import { WorkspaceManager } from '../../core/workspace/WorkspaceManager.ts';
@@ -19,6 +19,9 @@ import { t, getLocale, setLocale } from '../../i18n/index.ts';
 
 type OpenPlace = 'recent' | 'computer';
 type OpenRecentTab = 'projects' | 'graphs';
+type SavePlace = 'computer' | 'recent';
+type SaveTarget = 'project' | 'graph';
+type SaveFormat = 'arestrix' | 'folder' | 'json';
 export type RecencyGroup = 'today' | 'yesterday' | 'last_week' | 'last_month' | 'older';
 
 const RECENCY_ORDER: RecencyGroup[] = ['today', 'yesterday', 'last_week', 'last_month', 'older'];
@@ -52,12 +55,17 @@ export class BackstageView {
   private globalDefaultsModal: GlobalDefaultsModal;
   private activeSection: 'info' | 'new' | 'open' | 'saveas' | 'export' | 'options' = 'info';
 
-  // Estado da Tela "Salvar Como" (Navegação de Discos e Pastas)
+  // Estado da Tela "Salvar" unificada (Estilo Office: Projeto Completo vs Apenas um Grafo + Navegação de Pastas)
+  private saveAsPlace: SavePlace = 'computer';
+  private saveAsTarget: SaveTarget = 'project';
+  private saveAsQuery: string = '';
   private saveAsCurrentPath: string = '';
+  private saveAsParentPath: string = '';
   private saveAsDrives: string[] = ['C:\\'];
   private saveAsSubdirectories: Array<{ name: string; path: string }> = [];
+  private saveAsEntries: IOpenableEntry[] = [];
   private saveAsFileName: string = '';
-  private saveAsFormat: 'arestrix' | 'json' = 'arestrix';
+  private saveAsFormat: SaveFormat = 'arestrix';
 
   // Estado da Tela "Abrir" (Recentes / Este Computador / Procurar)
   private openPlace: OpenPlace = 'recent';
@@ -112,11 +120,35 @@ export class BackstageView {
     }
     this.saveAsCurrentPath = this.saveAsCurrentPath.replace(/\\/g, '/');
     this.saveAsDrives = await this.projectManager.listDrives();
-    this.saveAsSubdirectories = await this.projectManager.listSubdirectories(this.saveAsCurrentPath);
+    await this.loadSaveDirectoryListing(this.saveAsCurrentPath);
     const proj = this.projectManager.getCurrentProject();
     if (!this.saveAsFileName) {
       this.saveAsFileName = (proj.name || 'projeto').toLowerCase().replace(/\s+/g, '_');
     }
+  }
+
+  private async loadSaveDirectoryListing(targetPath: string): Promise<void> {
+    const cleanPath = (targetPath || 'C:/Projetos').replace(/\\/g, '/');
+    const listing = await this.projectManager.listOpenableEntries(cleanPath);
+    if (listing && listing.available && listing.exists) {
+      this.saveAsCurrentPath = listing.path.replace(/\\/g, '/');
+      this.saveAsParentPath = listing.parent ? listing.parent.replace(/\\/g, '/') : '';
+      this.saveAsEntries = listing.entries;
+      this.saveAsSubdirectories = listing.entries
+        .filter(e => e.kind === 'folder' || e.kind === 'project')
+        .map(e => ({ name: e.name, path: e.path.replace(/\\/g, '/') }));
+      return;
+    }
+
+    this.saveAsCurrentPath = cleanPath;
+    this.saveAsParentPath = '';
+    const subs = await this.projectManager.listSubdirectories(this.saveAsCurrentPath);
+    this.saveAsSubdirectories = subs.map(s => ({ name: s.name, path: s.path.replace(/\\/g, '/') }));
+    this.saveAsEntries = this.saveAsSubdirectories.map(s => ({
+      name: s.name,
+      path: s.path,
+      kind: 'folder' as OpenableEntryKind
+    }));
   }
 
   // Este Computador comeca na pasta que contem o projeto ativo, onde costumam estar os projetos irmaos.
@@ -145,8 +177,8 @@ export class BackstageView {
     }
   }
 
-  public async open(section: 'info' | 'new' | 'open' | 'saveas' | 'export' | 'options' = 'info'): Promise<void> {
-    this.activeSection = section;
+  public async open(section: 'info' | 'new' | 'open' | 'save' | 'saveas' | 'export' | 'options' = 'info'): Promise<void> {
+    this.activeSection = section === 'save' ? 'saveas' : section;
     try {
       await this.projectManager.init(true);
       await this.prepareSection();
@@ -214,11 +246,8 @@ export class BackstageView {
             <li class="backstage-nav-item ${this.activeSection === 'open' ? 'active' : ''}" data-section="open">
               <span>📂</span> ${t('backstage.sidebar.open')}
             </li>
-            <li class="backstage-nav-item" id="btn-backstage-save">
-              <span>💾</span> ${t('backstage.sidebar.save_file')}
-            </li>
-            <li class="backstage-nav-item ${this.activeSection === 'saveas' ? 'active' : ''}" data-section="saveas">
-              <span>📥</span> ${t('backstage.sidebar.saveas')}
+            <li class="backstage-nav-item ${this.activeSection === 'saveas' ? 'active' : ''}" data-section="saveas" id="nav-backstage-save">
+              <span>💾</span> ${t('backstage.sidebar.saveas')}
             </li>
             <li class="backstage-nav-item ${this.activeSection === 'export' ? 'active' : ''}" data-section="export">
               <span>📤</span> ${t('backstage.sidebar.export')}
@@ -495,6 +524,261 @@ export class BackstageView {
     }
   }
 
+  // --- Tela "Salvar" unificada (inspirada no Salvar do Office): locais a esquerda, escopo Projeto vs Grafo e pastas a direita ---
+
+  public getSavePreviewPath(): string {
+    const baseDir = (this.saveAsCurrentPath || '.').replace(/\\/g, '/').replace(/\/$/, '');
+    const cleanName = (this.saveAsFileName || 'projeto').trim().replace(/\.(arestrix|json)$/i, '') || 'projeto';
+    if (this.saveAsFormat === 'folder') {
+      return `${baseDir}/${cleanName}/arestrix.project.json`;
+    }
+    if (this.saveAsFormat === 'json') {
+      return `${baseDir}/${cleanName}.json`;
+    }
+    return `${baseDir}/${cleanName}.arestrix`;
+  }
+
+  private getSaveDestinationContextLabel(proj: IProjectManifest): string {
+    const cur = (this.saveAsCurrentPath || '').replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
+    const root = (proj.rootPath || '').replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
+    if (root && root !== '.') {
+      if (cur === `${root}/pipelines` || cur.startsWith(`${root}/pipelines/`)) {
+        return `📊 ${t('backstage.saveas.dest_context_project_pipelines')}`;
+      }
+      if (cur === root || cur.startsWith(`${root}/`)) {
+        return `🗂️ ${t('backstage.saveas.dest_context_project_root')}`;
+      }
+    }
+    if (cur.endsWith('/pipelines')) {
+      return `📊 ${t('backstage.saveas.dest_context_project_pipelines')}`;
+    }
+    return `📁 ${t('backstage.saveas.dest_context_external_folder')}`;
+  }
+
+  private renderSaveSection(proj: IProjectManifest, recentList: IRecentProjectItem[]): string {
+    const isComputer = this.saveAsPlace === 'computer';
+    const isGraph = this.saveAsTarget === 'graph';
+    return `
+      <h2 class="backstage-header-title">${t('backstage.saveas.title')}</h2>
+      <p class="backstage-header-sub">${t('backstage.saveas.subtitle')}</p>
+
+      <div class="backstage-open-layout">
+        <nav class="backstage-open-places">
+          <button type="button" class="backstage-open-place" id="btn-backstage-save" title="${t('backstage.saveas.quick_save_sub', { name: this.escapeHtml(proj.name) })}">
+            <span class="backstage-open-place-icon">💾</span>
+            <span class="backstage-open-row-text">
+              <span class="backstage-open-row-name">${t('backstage.saveas.quick_save_btn')}</span>
+              <span class="backstage-open-row-detail">${this.escapeHtml(proj.name)}</span>
+            </span>
+          </button>
+          <div class="backstage-open-places-sep"></div>
+          <button type="button" class="backstage-open-place ${isComputer ? 'active' : ''}" data-save-place="computer">
+            <span class="backstage-open-place-icon">💻</span><span>${t('backstage.saveas.place_computer')}</span>
+          </button>
+          <button type="button" class="backstage-open-place ${!isComputer ? 'active' : ''}" data-save-place="recent">
+            <span class="backstage-open-place-icon">🕘</span><span>${t('backstage.saveas.place_recent')}</span>
+          </button>
+          <div class="backstage-open-places-sep"></div>
+          <button type="button" class="backstage-open-place" id="btn-saveas-browse-native" title="${t('backstage.saveas.place_browse_tip')}">
+            <span class="backstage-open-place-icon">📂</span><span>${t('backstage.saveas.place_browse')}</span>
+          </button>
+        </nav>
+
+        <section class="backstage-open-content">
+          <div class="backstage-save-target-section">
+            <div class="backstage-save-target-heading">
+              <span class="backstage-save-target-label">${t('backstage.saveas.target_label')}</span>
+              <span class="backstage-save-active-proj-pill">🗂️ ${t('backstage.saveas.active_project_context', { name: this.escapeHtml(proj.name) })}</span>
+            </div>
+            <div class="backstage-save-target-grid">
+              <button type="button" class="backstage-save-target-card ${!isGraph ? 'active' : ''}" id="btn-saveas-target-project" data-save-target="project">
+                <span class="backstage-save-target-icon">🗂️</span>
+                <span class="backstage-save-target-body">
+                  <span class="backstage-save-target-top">
+                    <span class="backstage-save-target-title">${t('backstage.saveas.target_project_title')}</span>
+                    <span class="backstage-save-target-badge">${t('backstage.saveas.target_project_badge')}</span>
+                  </span>
+                  <span class="backstage-save-target-desc">${t('backstage.saveas.target_project_desc')}</span>
+                </span>
+              </button>
+              <button type="button" class="backstage-save-target-card ${isGraph ? 'active' : ''}" id="btn-saveas-target-graph" data-save-target="graph">
+                <span class="backstage-save-target-icon">📊</span>
+                <span class="backstage-save-target-body">
+                  <span class="backstage-save-target-top">
+                    <span class="backstage-save-target-title">${t('backstage.saveas.target_graph_title')}</span>
+                    <span class="backstage-save-target-badge">${t('backstage.saveas.target_graph_badge')}</span>
+                  </span>
+                  <span class="backstage-save-target-desc">${t('backstage.saveas.target_graph_desc')}</span>
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div class="backstage-save-form-panel">
+            <div class="backstage-save-form-row">
+              <div>
+                <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">${isGraph ? t('backstage.saveas.filename_graph_field') : t('backstage.saveas.filename_project_field')}</label>
+                <input type="text" id="saveas-input-filename" value="${this.escapeHtml(this.saveAsFileName)}" placeholder="${t('backstage.saveas.filename_placeholder')}" style="width: 100%; height: 36px; padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 600; color: #0f172a; box-sizing: border-box; background: #ffffff;" />
+              </div>
+
+              <div>
+                <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">${t('backstage.saveas.filetype_field')}</label>
+                <select id="saveas-select-format" style="width: 100%; height: 36px; padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 600; color: #0f172a; box-sizing: border-box; background: #ffffff;">
+                  <option value="arestrix" ${this.saveAsFormat === 'arestrix' ? 'selected' : ''}>${t('backstage.saveas.format_arestrix')}</option>
+                  <option value="folder" ${this.saveAsFormat === 'folder' ? 'selected' : ''}>${t('backstage.saveas.format_folder')}</option>
+                  <option value="json" ${this.saveAsFormat === 'json' ? 'selected' : ''}>${t('backstage.saveas.format_json')}</option>
+                </select>
+              </div>
+
+              <button type="button" class="tool-btn btn-action" id="btn-saveas-submit" style="background: #0f6cbd; color: #ffffff; font-weight: 700; padding: 0 22px; height: 36px; font-size: 13px; display: inline-flex; align-items: center; gap: 8px;">
+                <span>💾</span> ${isGraph ? t('backstage.saveas.btn_save_graph') : t('backstage.saveas.btn_save_project')}
+              </button>
+            </div>
+
+            <div class="backstage-save-dest-bar">
+              <div>
+                <span>${t('backstage.saveas.final_dest')}</span>
+                <code id="saveas-path-preview">${this.escapeHtml(this.getSavePreviewPath())}</code>
+              </div>
+              <span class="backstage-save-context-pill" id="saveas-dest-context-pill">${this.getSaveDestinationContextLabel(proj)}</span>
+            </div>
+          </div>
+
+          ${isComputer ? this.renderSaveComputer(proj) : this.renderSaveRecentFolders(proj, recentList)}
+        </section>
+      </div>
+    `;
+  }
+
+  private renderSaveComputer(proj: IProjectManifest): string {
+    const drives = this.saveAsDrives.map(drive => {
+      const cleanDrive = drive.replace(/\\/g, '/');
+      const isCurrent = this.saveAsCurrentPath.toUpperCase().startsWith(cleanDrive.replace(/\/$/, '').toUpperCase());
+      return `<button type="button" class="tool-btn btn-saveas-drive backstage-open-drive ${isCurrent ? 'active active-drive' : ''}" data-drive="${this.escapeHtml(cleanDrive)}">💾 ${this.escapeHtml(drive)}</button>`;
+    }).join('');
+
+    const projRoot = (proj.rootPath && proj.rootPath !== '.') ? proj.rootPath.replace(/\\/g, '/').replace(/\/$/, '') : '';
+    const shortcuts = projRoot ? `
+      <div class="backstage-save-shortcuts">
+        <button type="button" class="backstage-save-shortcut-btn" id="btn-saveas-go-project-root" data-save-navigate="${this.escapeHtml(projRoot)}">🗂️ ${t('backstage.saveas.shortcut_project_root')}</button>
+        <button type="button" class="backstage-save-shortcut-btn" id="btn-saveas-go-project-pipelines" data-save-navigate="${this.escapeHtml(`${projRoot}/pipelines`)}">📊 ${t('backstage.saveas.shortcut_project_pipelines')}</button>
+      </div>
+    ` : '';
+
+    const crumbs = pathCrumbs(this.saveAsCurrentPath).map((c, i) => `
+      ${i > 0 ? '<span class="backstage-open-crumb-sep">›</span>' : ''}
+      <button type="button" class="backstage-open-crumb" data-save-navigate="${this.escapeHtml(c.path)}">${this.escapeHtml(c.label)}</button>
+    `).join('');
+
+    const entries = this.saveAsEntries.length > 0
+      ? this.saveAsEntries
+      : this.saveAsSubdirectories.map(s => ({ name: s.name, path: s.path, kind: 'folder' as OpenableEntryKind }));
+
+    const listBody = entries.length > 0
+      ? `
+        ${this.renderOpenListHeader(t('backstage.open.col_type'))}
+        <div class="backstage-open-list saveas-folders-grid-list">
+          ${entries.map(entry => this.renderSaveDiskEntryRow(entry)).join('')}
+        </div>
+        <div class="backstage-open-empty" id="backstage-save-no-matches" style="display: none;">${t('backstage.open.no_matches')}</div>
+      `
+      : `<div class="backstage-open-empty">${t('backstage.saveas.empty_subfolders')}</div>`;
+
+    return `
+      <div class="backstage-open-pathbar">
+        <div class="backstage-open-drives" style="justify-content: space-between;">
+          <div class="saveas-drives-list" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span class="backstage-open-drives-label">${t('backstage.saveas.drives')}</span>
+            ${drives}
+          </div>
+          ${shortcuts}
+        </div>
+        <div class="backstage-open-location">
+          <button type="button" class="backstage-open-nav-btn" id="btn-saveas-up-dir" title="${t('backstage.saveas.up_tip')}">⬆ ${t('backstage.saveas.btn_up')}</button>
+          <button type="button" class="backstage-open-nav-btn" id="btn-saveas-refresh-dir" title="${t('backstage.saveas.refresh_tip')}">🔄 ${t('backstage.saveas.btn_refresh')}</button>
+          <nav class="backstage-open-breadcrumb" id="saveas-current-path-display">${crumbs || this.escapeHtml(this.saveAsCurrentPath)}</nav>
+        </div>
+      </div>
+
+      <label class="backstage-open-search" style="margin-top: 10px;">
+        <span aria-hidden="true">🔍</span>
+        <input type="search" id="backstage-save-search" value="${this.escapeHtml(this.saveAsQuery)}" placeholder="${t('backstage.saveas.filter_folder_placeholder')}" />
+      </label>
+
+      ${listBody}
+    `;
+  }
+
+  private renderSaveDiskEntryRow(entry: IOpenableEntry): string {
+    const isDir = entry.kind === 'folder' || entry.kind === 'project';
+    const rowClasses = isDir ? 'backstage-open-row backstage-save-row saveas-folder-card' : 'backstage-open-row backstage-save-row';
+    const action = isDir ? 'navigate' : 'pick-file';
+    const pipelinesBtn = entry.kind === 'project'
+      ? `<button type="button" class="backstage-open-enter btn-saveas-enter-pipelines" data-save-pipelines="${this.escapeHtml(joinPath(entry.path, 'pipelines'))}" title="${t('backstage.saveas.enter_pipelines_tip')}">${t('backstage.saveas.enter_pipelines_btn')}</button>`
+      : '';
+
+    return `
+      <div class="${rowClasses}" role="button" tabindex="0" data-save-action="${action}" data-path="${this.escapeHtml(entry.path)}" data-name="${this.escapeHtml(entry.name)}" data-kind="${entry.kind}" data-search="${this.escapeHtml(entry.name.toLowerCase())}">
+        <span class="backstage-open-row-icon">${ENTRY_ICONS[entry.kind] || ENTRY_ICONS.folder}</span>
+        <span class="backstage-open-row-text">
+          <span class="backstage-open-row-name">${this.escapeHtml(entry.name)}</span>
+          <span class="backstage-open-row-detail">${this.escapeHtml(entry.path)}</span>
+        </span>
+        <span class="backstage-open-row-meta">${t(`backstage.open.kind_${entry.kind}`)}</span>
+        ${pipelinesBtn}
+      </div>
+    `;
+  }
+
+  private renderSaveRecentFolders(proj: IProjectManifest, recentList: IRecentProjectItem[]): string {
+    const projRoot = (proj.rootPath && proj.rootPath !== '.') ? proj.rootPath.replace(/\\/g, '/').replace(/\/$/, '') : '';
+    const activeGroup = projRoot ? `
+      <div class="backstage-open-group">
+        <div class="backstage-open-group-title">${t('backstage.saveas.current_project_folders_group', { name: this.escapeHtml(proj.name) })}</div>
+        ${this.renderOpenRow(
+          `data-save-navigate="${this.escapeHtml(projRoot)}"`,
+          ENTRY_ICONS.project,
+          this.escapeHtml(proj.name),
+          this.escapeHtml(projRoot),
+          t('backstage.open.kind_project'),
+          `<button type="button" class="backstage-open-enter btn-saveas-enter-pipelines" data-save-pipelines="${this.escapeHtml(`${projRoot}/pipelines`)}" title="${t('backstage.saveas.enter_pipelines_tip')}">${t('backstage.saveas.enter_pipelines_btn')}</button>`
+        )}
+        ${this.renderOpenRow(
+          `data-save-navigate="${this.escapeHtml(`${projRoot}/pipelines`)}"`,
+          ENTRY_ICONS.json,
+          `${this.escapeHtml(proj.name)} / pipelines`,
+          this.escapeHtml(`${projRoot}/pipelines`),
+          t('backstage.saveas.shortcut_project_pipelines')
+        )}
+      </div>
+    ` : '';
+
+    const recentsGroup = recentList && recentList.length > 0 ? `
+      <div class="backstage-open-group">
+        <div class="backstage-open-group-title">${t('backstage.saveas.recent_folders_group')}</div>
+        ${recentList.map(item => {
+          const cleanRoot = (item.rootPath || '').replace(/\\/g, '/').replace(/\/$/, '');
+          return this.renderOpenRow(
+            `data-save-navigate="${this.escapeHtml(cleanRoot)}"`,
+            ENTRY_ICONS.project,
+            this.escapeHtml(item.name),
+            this.escapeHtml(cleanRoot),
+            item.lastOpened ? this.formatDateTime(item.lastOpened) : t('backstage.recent.recently'),
+            `<button type="button" class="backstage-open-enter btn-saveas-enter-pipelines" data-save-pipelines="${this.escapeHtml(`${cleanRoot}/pipelines`)}" title="${t('backstage.saveas.enter_pipelines_tip')}">${t('backstage.saveas.enter_pipelines_btn')}</button>`
+          );
+        }).join('')}
+      </div>
+    ` : `<div class="backstage-open-empty">${t('backstage.recent.empty')}</div>`;
+
+    return `
+      ${this.renderOpenListHeader(t('backstage.open.col_last_opened'))}
+      <div class="backstage-open-list">
+        ${activeGroup}
+        ${recentsGroup}
+      </div>
+    `;
+  }
+
   private renderSectionContent(proj: IProjectManifest, recentList: IRecentProjectItem[]): string {
     switch (this.activeSection) {
       case 'info':
@@ -605,101 +889,7 @@ export class BackstageView {
         return this.renderOpenSection(proj, recentList);
 
       case 'saveas':
-        return `
-          <h2 class="backstage-header-title">${t('backstage.sidebar.saveas')}</h2>
-          <p class="backstage-header-sub">${t('backstage.saveas.saveas_desc')}</p>
-
-          <!-- BARRA DE DISCOS & LOCALIZAÇÃO RÁPIDA -->
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 22px; margin-bottom: 22px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">${t('backstage.saveas.drives')}</span>
-                <div class="saveas-drives-list" style="display: flex; gap: 8px; flex-wrap: wrap;">
-                  ${this.saveAsDrives.map(drive => {
-                    const cleanDrive = drive.replace(/\\/g, '/');
-                    const isCurrent = this.saveAsCurrentPath.toUpperCase().startsWith(cleanDrive.replace(/\/$/, '').toUpperCase());
-                    return `
-                      <button class="tool-btn btn-saveas-drive ${isCurrent ? 'active-drive' : ''}" data-drive="${this.escapeHtml(cleanDrive)}" style="font-weight: 700; padding: 6px 14px; font-size: 12px; border-radius: 6px; ${isCurrent ? 'background: #0f6cbd; color: #ffffff; border: 1px solid #0f6cbd;' : 'background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1;'}">
-                        💾 ${this.escapeHtml(drive)}
-                      </button>
-                    `;
-                  }).join('')}
-                </div>
-              </div>
-
-              <button class="tool-btn btn-secondary" id="btn-saveas-browse-native" style="font-weight: 700; padding: 6px 16px; font-size: 12px; height: 32px; display: inline-flex; align-items: center; gap: 6px;">
-                <span>📂</span> ${t('backstage.saveas.btn_browse_windows')}
-              </button>
-            </div>
-
-            <!-- BARRA DE NAVEGAÇÃO DE DIRETÓRIO (BREADCRUMB & SUBIR NÍVEL) -->
-            <div style="display: flex; align-items: center; gap: 10px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 12px;">
-              <button class="tool-btn btn-secondary" id="btn-saveas-up-dir" title="${t('backstage.saveas.up_tip')}" style="padding: 4px 10px; font-size: 12px; font-weight: 700; height: 28px;">
-                📁 ⬆ ${t('backstage.saveas.btn_up')}
-              </button>
-              <button class="tool-btn btn-secondary" id="btn-saveas-refresh-dir" title="${t('backstage.saveas.refresh_tip')}" style="padding: 4px 10px; font-size: 12px; font-weight: 700; height: 28px;">
-                🔄 ${t('backstage.saveas.btn_refresh')}
-              </button>
-
-              <div style="flex: 1; display: flex; align-items: center; gap: 4px; overflow-x: auto; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #334155; padding: 2px 4px;">
-                <span style="color: #64748b; font-weight: 700;">${t('backstage.saveas.location_prefix')}</span>
-                <span style="font-weight: 600; color: #0f172a;" id="saveas-current-path-display">${this.escapeHtml(this.saveAsCurrentPath)}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- ÁREA DE SUBPASTAS PARA NAVEGAÇÃO INTERATIVA -->
-          <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 22px; margin-bottom: 22px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-              <h4 style="font-size: 13px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">${t('backstage.saveas.subfolders_in_dir')}</h4>
-              <span style="font-size: 11.5px; color: #64748b;">${t('backstage.saveas.subfolders_count', { count: this.saveAsSubdirectories.length })}</span>
-            </div>
-
-            <div class="saveas-folders-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; max-height: 240px; overflow-y: auto; padding: 4px;">
-              ${this.saveAsSubdirectories.length > 0 ? this.saveAsSubdirectories.map(sub => `
-                <div class="saveas-folder-card" data-path="${this.escapeHtml(sub.path)}" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; transition: all 0.15s ease;">
-                  <span style="font-size: 18px;">📁</span>
-                  <span style="font-size: 12.5px; font-weight: 600; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(sub.name)}</span>
-                </div>
-              `).join('') : `
-                <div style="grid-column: 1 / -1; padding: 24px; text-align: center; color: #64748b; font-size: 12.5px; background: #f8fafc; border-radius: 8px;">
-                  ${t('backstage.saveas.empty_subfolders')}
-                </div>
-              `}
-            </div>
-          </div>
-
-          <!-- PAINEL DE SALVAMENTO (ESTILO DIÁLOGO OFFICE SAVE AS) -->
-          <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 20px 24px;">
-            <h4 style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 14px;">${t('backstage.saveas.pkg_props_title')}</h4>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
-              <div>
-                <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">${t('backstage.saveas.filename_field')}</label>
-                <input type="text" id="saveas-input-filename" value="${this.escapeHtml(this.saveAsFileName)}" placeholder="${t('backstage.saveas.filename_placeholder')}" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 600; color: #0f172a; box-sizing: border-box;" />
-              </div>
-
-              <div>
-                <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">${t('backstage.saveas.filetype_field')}</label>
-                <select id="saveas-select-format" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 600; color: #0f172a; box-sizing: border-box; background: #ffffff;">
-                  <option value="arestrix" ${this.saveAsFormat === 'arestrix' ? 'selected' : ''}>${t('backstage.saveas.format_arestrix')}</option>
-                  <option value="json" ${this.saveAsFormat === 'json' ? 'selected' : ''}>${t('backstage.saveas.format_json')}</option>
-                </select>
-              </div>
-            </div>
-
-            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
-              <div style="font-size: 12px; color: #475569;">
-                <span>${t('backstage.saveas.final_dest')}</span>
-                <code id="saveas-path-preview" style="background: #e2e8f0; padding: 3px 8px; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #0f172a;">${this.escapeHtml(this.saveAsCurrentPath)}/${this.escapeHtml(this.saveAsFileName)}.${this.saveAsFormat}</code>
-              </div>
-
-              <button class="tool-btn btn-action" id="btn-saveas-submit" style="background: #0f6cbd; color: #ffffff; font-weight: 700; padding: 10px 26px; height: 38px; font-size: 13px; display: inline-flex; align-items: center; gap: 8px;">
-                <span>💾</span> ${t('backstage.saveas.btn_save_package')}
-              </button>
-            </div>
-          </div>
-        `;
+        return this.renderSaveSection(proj, recentList);
 
       case 'export':
         return `
@@ -946,110 +1136,204 @@ export class BackstageView {
       }
     });
 
-    // Controles da Tela "Salvar Como"
+    // Controles da Tela "Salvar" Unificada (Estilo Office)
     if (this.activeSection === 'saveas') {
+      // 0. Alternar Locais (Este Computador / Locais Recentes)
+      this.overlay.querySelectorAll<HTMLElement>('[data-save-place]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const rawPlace = btn.dataset?.savePlace || btn.getAttribute?.('data-save-place');
+          const place: SavePlace = rawPlace === 'recent' ? 'recent' : 'computer';
+          if (place === this.saveAsPlace) return;
+          this.saveAsPlace = place;
+          this.saveAsQuery = '';
+          this.render();
+        });
+      });
+
+      // 0b. Alternar Escopo de Salvamento: Projeto Completo vs Apenas um Grafo do Projeto
+      this.overlay.querySelectorAll<HTMLElement>('[data-save-target]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const rawTarget = btn.dataset?.saveTarget || btn.getAttribute?.('data-save-target');
+          const target: SaveTarget = rawTarget === 'graph' ? 'graph' : 'project';
+          this.saveAsTarget = target;
+          const proj = this.projectManager.getCurrentProject();
+          const projRoot = (proj.rootPath && proj.rootPath !== '.') ? proj.rootPath.replace(/\\/g, '/').replace(/\/$/, '') : '';
+          if (target === 'graph') {
+            this.saveAsFormat = 'json';
+            if (projRoot && this.saveAsCurrentPath.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase() === projRoot.toLowerCase()) {
+              await this.loadSaveDirectoryListing(`${projRoot}/pipelines`);
+            }
+          } else {
+            if (this.saveAsFormat === 'json') {
+              this.saveAsFormat = 'arestrix';
+            }
+            const curNorm = this.saveAsCurrentPath.replace(/\\/g, '/').replace(/\/$/, '');
+            if (curNorm.toLowerCase().endsWith('/pipelines')) {
+              await this.loadSaveDirectoryListing(dirName(curNorm));
+            }
+          }
+          this.render();
+        });
+      });
+
       // 1. Botões de Unidades de Disco
       this.overlay.querySelectorAll<HTMLButtonElement>('.btn-saveas-drive').forEach(btn => {
         btn.addEventListener('click', async () => {
-          const drive = btn.dataset.drive;
+          const drive = btn.dataset?.drive || btn.getAttribute?.('data-drive');
           if (drive) {
-            this.saveAsCurrentPath = drive.replace(/\\/g, '/');
-            this.saveAsSubdirectories = await this.projectManager.listSubdirectories(this.saveAsCurrentPath);
-            this.render();
+            await this.navigateSaveFolder(drive);
           }
         });
       });
 
-      // 2. Navegação em Pastas
+      // 1b. Migalhas do Caminho (Breadcrumbs) e Atalhos Rápidos
+      this.overlay.querySelectorAll<HTMLElement>('[data-save-navigate]').forEach(el => {
+        el.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const targetPath = el.dataset?.saveNavigate || el.getAttribute?.('data-save-navigate');
+          if (targetPath) {
+            this.saveAsPlace = 'computer';
+            await this.navigateSaveFolder(targetPath);
+          }
+        });
+      });
+
+      // 1c. Botão rápido para entrar na pasta pipelines de um projeto e salvar um grafo
+      this.overlay.querySelectorAll<HTMLElement>('[data-save-pipelines]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const pipePath = btn.dataset?.savePipelines || btn.getAttribute?.('data-save-pipelines');
+          if (pipePath) {
+            this.saveAsTarget = 'graph';
+            this.saveAsFormat = 'json';
+            this.saveAsPlace = 'computer';
+            await this.navigateSaveFolder(pipePath);
+          }
+        });
+      });
+
+      // 2. Navegação em Pastas e Seleção de Arquivos Existentes
       this.overlay.querySelectorAll<HTMLElement>('.saveas-folder-card').forEach(card => {
         card.addEventListener('click', async () => {
-          const p = card.dataset.path;
+          const p = card.dataset?.path || card.getAttribute?.('data-path');
           if (p) {
-            this.saveAsCurrentPath = p.replace(/\\/g, '/');
-            this.saveAsSubdirectories = await this.projectManager.listSubdirectories(this.saveAsCurrentPath);
-            this.render();
+            await this.navigateSaveFolder(p);
           }
+        });
+      });
+
+      this.overlay.querySelectorAll<HTMLElement>('.backstage-save-row[data-save-action="pick-file"]').forEach(row => {
+        row.addEventListener('click', () => {
+          const name = row.dataset?.name || row.getAttribute?.('data-name') || '';
+          if (!name) return;
+          this.saveAsFileName = stripExtension(name);
+          if (name.toLowerCase().endsWith('.json')) {
+            this.saveAsTarget = 'graph';
+            this.saveAsFormat = 'json';
+          } else if (name.toLowerCase().endsWith('.arestrix')) {
+            this.saveAsTarget = 'project';
+            this.saveAsFormat = 'arestrix';
+          }
+          this.render();
         });
       });
 
       // 3. Subir Nível
       this.overlay.querySelector('#btn-saveas-up-dir')?.addEventListener('click', async () => {
+        if (this.saveAsParentPath) {
+          await this.navigateSaveFolder(this.saveAsParentPath);
+          return;
+        }
         const cur = this.saveAsCurrentPath.replace(/\\/g, '/').replace(/\/$/, '');
         const lastSlash = cur.lastIndexOf('/');
+        let nextPath = 'C:/';
         if (lastSlash > 0) {
-          this.saveAsCurrentPath = cur.substring(0, lastSlash);
-          if (/^[a-zA-Z]:$/.test(this.saveAsCurrentPath)) {
-            this.saveAsCurrentPath += '/';
+          nextPath = cur.substring(0, lastSlash);
+          if (/^[a-zA-Z]:$/.test(nextPath)) {
+            nextPath += '/';
           }
-        } else {
-          this.saveAsCurrentPath = 'C:/';
         }
-        this.saveAsSubdirectories = await this.projectManager.listSubdirectories(this.saveAsCurrentPath);
-        this.render();
+        await this.navigateSaveFolder(nextPath);
       });
 
       // 4. Atualizar
       this.overlay.querySelector('#btn-saveas-refresh-dir')?.addEventListener('click', async () => {
-        this.saveAsSubdirectories = await this.projectManager.listSubdirectories(this.saveAsCurrentPath);
-        this.render();
+        await this.navigateSaveFolder(this.saveAsCurrentPath);
       });
 
-      // 5. Procurar Nativo
+      // 5. Procurar Pasta Nativa
       this.overlay.querySelector('#btn-saveas-browse-native')?.addEventListener('click', async () => {
         try {
           if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
             const picked = await (window as any).webui.call('pick_folder');
             if (picked && picked.trim()) {
-              this.saveAsCurrentPath = picked.trim().replace(/\\/g, '/');
-              this.saveAsSubdirectories = await this.projectManager.listSubdirectories(this.saveAsCurrentPath);
-              this.render();
+              this.saveAsPlace = 'computer';
+              await this.navigateSaveFolder(picked.trim());
             }
           }
         } catch (_) {}
       });
 
-      // 6. Atualização de Nome do Arquivo
+      // 5b. Filtro de busca na pasta atual
+      const saveSearch = this.overlay.querySelector('#backstage-save-search') as HTMLInputElement | null;
+      saveSearch?.addEventListener('input', () => {
+        this.saveAsQuery = saveSearch.value;
+        this.applySaveFilter();
+      });
+      this.applySaveFilter();
+
+      // 6. Atualização de Nome do Arquivo / Projeto / Grafo
       const nameInput = this.overlay.querySelector('#saveas-input-filename') as HTMLInputElement;
       nameInput?.addEventListener('input', () => {
         this.saveAsFileName = nameInput.value;
         const preview = this.overlay?.querySelector('#saveas-path-preview');
         if (preview) {
-          preview.textContent = `${this.saveAsCurrentPath}/${this.saveAsFileName}.${this.saveAsFormat}`;
+          preview.textContent = this.getSavePreviewPath();
         }
       });
 
-      // 7. Atualização do Formato
+      // 7. Atualização do Formato (sincroniza automaticamente com o escopo Projeto vs Grafo)
       const formatSelect = this.overlay.querySelector('#saveas-select-format') as HTMLSelectElement;
       formatSelect?.addEventListener('change', () => {
-        this.saveAsFormat = formatSelect.value as any;
+        this.saveAsFormat = formatSelect.value as SaveFormat;
+        this.saveAsTarget = this.saveAsFormat === 'json' ? 'graph' : 'project';
         const preview = this.overlay?.querySelector('#saveas-path-preview');
         if (preview) {
-          preview.textContent = `${this.saveAsCurrentPath}/${this.saveAsFileName}.${this.saveAsFormat}`;
+          preview.textContent = this.getSavePreviewPath();
         }
+        this.render();
       });
 
-      // 8. Executar Salvamento do Arquivo
+      // 8. Executar Salvamento (Projeto em pacote .arestrix, Pasta de Projeto, ou Grafo .json)
       this.overlay.querySelector('#btn-saveas-submit')?.addEventListener('click', async () => {
         const fileName = (this.saveAsFileName || 'projeto').trim();
         if (!fileName) {
-          if (typeof alert !== 'undefined') alert(t('backstage.alerts.enter_filename'));
+          this.notify(t('backstage.alerts.enter_filename'));
           return;
         }
 
         if (this.saveAsFormat === 'arestrix') {
           const res = await this.projectManager.saveProjectAsArestrix(this.saveAsCurrentPath, fileName, this.graph);
           if (res && res.success) {
-            if (typeof alert !== 'undefined') {
-              alert(t('backstage.alerts.pkg_saved', { path: res.filePath }));
-            }
+            this.notify(t('backstage.alerts.pkg_saved', { path: res.filePath }));
             this.render();
           } else {
-            if (typeof alert !== 'undefined') alert(t('backstage.alerts.pkg_error'));
+            this.notify(t('backstage.alerts.pkg_error'));
+          }
+        } else if (this.saveAsFormat === 'folder') {
+          const res = await this.projectManager.saveProjectToDirectory(this.saveAsCurrentPath, fileName, this.graph);
+          if (res && res.success) {
+            this.notify(t('backstage.alerts.project_dir_saved', { path: res.rootPath }));
+            this.render();
           }
         } else {
-          const ok = await this.projectManager.saveProject(this.graph);
-          if (ok) {
-            if (typeof alert !== 'undefined') alert(t('backstage.alerts.json_saved'));
+          const res = await this.projectManager.saveGraphToFile(this.saveAsCurrentPath, fileName, this.graph);
+          if (res && res.success) {
+            this.notify(
+              res.registeredInProject
+                ? t('backstage.alerts.graph_file_saved_linked', { path: res.filePath })
+                : t('backstage.alerts.graph_file_saved', { path: res.filePath })
+            );
             this.render();
           }
         }
@@ -1295,7 +1579,7 @@ export class BackstageView {
             await this.openRecentProject(path || row.dataset.id || '', row.dataset.name || '');
             break;
           case 'pipeline':
-            await this.projectManager.loadPipeline(this.graph);
+            await this.projectManager.loadPipeline(this.graph, row.dataset.pipelineFile);
             this.notify(t('backstage.alerts.canvas_graph_loaded'));
             this.close();
             break;
@@ -1323,6 +1607,30 @@ export class BackstageView {
       const res = await this.projectManager.openFromBytes(bytes, file.name, this.graph, this.openOptions());
       this.reportOpenResult(res, file.name);
     });
+  }
+
+  private async navigateSaveFolder(path: string): Promise<void> {
+    this.saveAsQuery = '';
+    await this.loadSaveDirectoryListing(path);
+    this.render();
+  }
+
+  private applySaveFilter(): void {
+    const overlay = this.overlay;
+    if (!overlay) return;
+    const query = this.saveAsQuery.trim().toLowerCase();
+    const rows = Array.from(overlay.querySelectorAll<HTMLElement>('.backstage-save-row'));
+    let visible = 0;
+    rows.forEach(row => {
+      const searchStr = row.dataset?.search || row.getAttribute?.('data-search') || '';
+      const match = !query || searchStr.includes(query);
+      row.style.display = match ? '' : 'none';
+      if (match) visible++;
+    });
+    const noMatches = overlay.querySelector('#backstage-save-no-matches') as HTMLElement | null;
+    if (noMatches) {
+      noMatches.style.display = query && rows.length > 0 && visible === 0 ? '' : 'none';
+    }
   }
 
   // Filtra as linhas visiveis sem re-renderizar, para nao tirar o foco da caixa de busca.

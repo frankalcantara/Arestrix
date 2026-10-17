@@ -59,7 +59,7 @@ subfluxos e módulos), as skills do workspace e os pipelines. Pressione `Ctrl+K`
 ## Backstage
 
 Aberta por **Arquivo**. Traz as informações do projeto (dois cartões: o projeto ativo e o workspace
-físico), a tela **Abrir**, o *Salvar Como* com navegação por pastas e unidades, e as **Opções**
+físico), a tela **Abrir**, a tela unificada **Salvar** e as **Opções**
 (padrões do Studio, governança do workspace e o seletor de **idioma**).
 
 A tela **Abrir** segue o Abrir do Office. À esquerda ficam os locais:
@@ -74,6 +74,16 @@ A tela **Abrir** segue o Abrir do Office. À esquerda ficam os locais:
 Um pacote `.arestrix` é extraído numa pasta nova ao lado dele (`nome`, `nome (2)`, ...) e aberto como
 projeto. Um grafo `.json` dentro de `<projeto>/pipelines` abre o projeto inteiro; um grafo avulso só
 substitui o canvas do projeto atual depois de confirmação.
+
+A tela **Salvar** unifica o salvamento rápido e o *Salvar Como* no estilo do Office:
+
+- À esquerda, permite **Salvar Projeto Atual** diretamente no local existente ou escolher onde salvar via
+  **Este Computador**, **Locais Recentes** ou **Procurar Pasta**.
+- À direita, destaca no topo o seletor de escopo: **Projeto Completo** (pacote `.arestrix` ou pasta estruturada
+  com `arestrix.project.json` + `pipelines/main.json`) ou **Apenas um Grafo do Projeto** (arquivo `.json` do
+  pipeline). Inclui navegação por unidades, pastas e breadcrumbs, atalhos para a raiz e para a pasta
+  `pipelines/` do projeto ativo, além de registro automático do grafo no manifesto quando salvo dentro do
+  projeto aberto.
 
 ## Assistente
 

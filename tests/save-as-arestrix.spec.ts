@@ -152,11 +152,10 @@ function parseHTMLToMock(html: string, root: MockElement) {
         const typeMatch = attrs.match(/type=["']([^"']+)["']/);
         if (typeMatch) el.type = typeMatch[1];
 
-        const dataSection = attrs.match(/data-section=["']([^"']+)["']/);
-        if (dataSection) el.setAttribute('data-section', dataSection[1]);
-
-        const dataDrive = attrs.match(/data-drive=["']([^"']+)["']/);
-        if (dataDrive) el.setAttribute('data-drive', dataDrive[1]);
+        const dataAttrs = attrs.matchAll(/(data-[a-zA-Z0-9_\-]+)=["']([^"']*)["']/g);
+        for (const dm of dataAttrs) {
+          el.setAttribute(dm[1], dm[2]);
+        }
 
         if (attrs.includes('checked')) el.checked = true;
       }
@@ -170,7 +169,7 @@ function parseHTMLToMock(html: string, root: MockElement) {
   }
 }
 
-describe('Pacotes de Projeto .arestrix e Tela Salvar Como (Estilo Office)', () => {
+describe('Pacotes de Projeto .arestrix e Tela Salvar Unificada (Estilo Office)', () => {
   let graph: Graph;
   let bus: EventBus;
   let pm: ProjectManager;
@@ -205,6 +204,9 @@ describe('Pacotes de Projeto .arestrix e Tela Salvar Como (Estilo Office)', () =
     graph = new Graph(bus);
     pm = ProjectManager.getInstance(bus);
     pm.resetForTesting(bus);
+    if ((globalThis as any).document?.body) {
+      (globalThis as any).document.body.children = [];
+    }
   });
 
   it('deve exportar um IArestrixBundle contendo manifesto, grafos/pipelines, variáveis e defaults', () => {
@@ -273,6 +275,60 @@ describe('Pacotes de Projeto .arestrix e Tela Salvar Como (Estilo Office)', () =
     expect(recents[0].manifestPath).toBe('C:/Projetos/Testes/pipeline_financeiro.arestrix');
   });
 
+  it('deve salvar apenas um grafo (.json) e vinculá-lo ao projeto ativo quando salvo dentro da pasta do projeto', async () => {
+    await pm.createProject({
+      projectId: 'proj-financas',
+      name: 'Financas2026',
+      rootPath: 'C:/Projetos/Financas2026'
+    }, graph);
+
+    graph.addNode({
+      id: 'node-auditoria',
+      type: 'agent',
+      label: 'Auditor Contábil',
+      position: { x: 120, y: 80 },
+      inputs: [],
+      outputs: []
+    });
+
+    const res = await pm.saveGraphToFile('C:/Projetos/Financas2026/pipelines', 'subfluxo_auditoria', graph);
+    expect(res.success).toBe(true);
+    expect(res.filePath).toBe('C:/Projetos/Financas2026/pipelines/subfluxo_auditoria.json');
+    expect(res.registeredInProject).toBe(true);
+
+    const updatedProj = pm.getCurrentProject();
+    const registered = updatedProj.pipelines.find(p => p.file === 'pipelines/subfluxo_auditoria.json');
+    expect(registered).toBeDefined();
+    expect(registered?.name).toBe('subfluxo_auditoria');
+
+    // Limpa o grafo e verifica se loadPipeline carrega o grafo secundário salvo
+    graph.clear();
+    expect(graph.getAllNodes().length).toBe(0);
+
+    const loaded = await pm.loadPipeline(graph, 'pipelines/subfluxo_auditoria.json');
+    expect(loaded).toBe(true);
+    expect(graph.getAllNodes().length).toBe(1);
+    expect(graph.getNode('node-auditoria')?.label).toBe('Auditor Contábil');
+  });
+
+  it('deve salvar projeto completo em pasta estruturada via saveProjectToDirectory preservando o grafo ativo', async () => {
+    graph.addNode({
+      id: 'node-etl',
+      type: 'static',
+      label: 'Ingestão C++20',
+      position: { x: 40, y: 60 },
+      inputs: [],
+      outputs: []
+    });
+
+    const res = await pm.saveProjectToDirectory('C:/Projetos/Workspaces', 'PipelineETL', graph);
+    expect(res.success).toBe(true);
+    expect(res.rootPath).toBe('C:/Projetos/Workspaces/PipelineETL');
+    expect(res.manifestPath).toBe('C:/Projetos/Workspaces/PipelineETL/arestrix.project.json');
+    expect(pm.getCurrentProject().name).toBe('PipelineETL');
+    expect(graph.getAllNodes().length).toBe(1);
+  });
+
   it('deve carregar pacote IArestrixBundle completo restaurando manifesto e nós no canvas', async () => {
     const customBundle: IArestrixBundle = {
       format: 'arestrix-package',
@@ -322,20 +378,28 @@ describe('Pacotes de Projeto .arestrix e Tela Salvar Como (Estilo Office)', () =
     expect(Array.isArray(subs)).toBe(true);
   });
 
-  it('deve renderizar a tela "Salvar Como" no Backstage com controles de discos, pastas e botão de salvar', async () => {
+  it('deve renderizar o menu único "Salvar" no Backstage (Estilo Office) com seleção Projeto vs Grafo e navegação de pastas', async () => {
     const fakeCodeModal = { show: () => {} } as any;
     const fakeDefaultsModal = { show: () => {} } as any;
     const backstage = new BackstageView(graph, fakeCodeModal, fakeDefaultsModal);
 
-    await backstage.open('saveas');
+    await backstage.open('save');
 
     expect(backstage.isOpen()).toBe(true);
     const overlay = document.querySelector('.office-backstage-overlay');
     expect(overlay).not.toBeNull();
 
-    // Item de navegação ativo
+    // Item de navegação único "Salvar" ativo na barra lateral
     const activeItem = overlay?.querySelector('.backstage-nav-item.active');
     expect(activeItem?.getAttribute('data-section')).toBe('saveas');
+    expect(overlay?.querySelector('#nav-backstage-save')).not.toBeNull();
+
+    // Cartões de escopo: Projeto Completo vs Apenas um Grafo do Projeto
+    const targetProjectBtn = overlay?.querySelector('#btn-saveas-target-project');
+    const targetGraphBtn = overlay?.querySelector('#btn-saveas-target-graph');
+    expect(targetProjectBtn).not.toBeNull();
+    expect(targetGraphBtn).not.toBeNull();
+    expect(targetProjectBtn?.classList.contains('active')).toBe(true);
 
     // Botões de navegação e discos
     expect(overlay?.querySelector('.btn-saveas-drive')).not.toBeNull();
@@ -347,6 +411,15 @@ describe('Pacotes de Projeto .arestrix e Tela Salvar Como (Estilo Office)', () =
     expect(overlay?.querySelector('#saveas-input-filename')).not.toBeNull();
     expect(overlay?.querySelector('#saveas-select-format')).not.toBeNull();
     expect(overlay?.querySelector('#btn-saveas-submit')).not.toBeNull();
+
+    // Alterna para "Apenas um Grafo do Projeto" e verifica mudança automática para .json
+    targetGraphBtn?.click();
+    await new Promise(r => setTimeout(r, 20));
+
+    const activeGraphBtn = overlay?.querySelector('#btn-saveas-target-graph');
+    expect(activeGraphBtn?.classList.contains('active')).toBe(true);
+    const preview = overlay?.querySelector('#saveas-path-preview');
+    expect(preview?.textContent).toContain('.json');
 
     backstage.close();
     expect(backstage.isOpen()).toBe(false);

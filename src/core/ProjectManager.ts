@@ -506,8 +506,34 @@ export class ProjectManager {
     }
   }
 
-  public async loadPipeline(graph: Graph): Promise<boolean> {
+  public async loadPipeline(graph: Graph, pipelineFile?: string): Promise<boolean> {
     try {
+      if (pipelineFile && pipelineFile.replace(/\\/g, '/') !== 'pipelines/main.json') {
+        const cleanRel = pipelineFile.replace(/\\/g, '/').replace(/^\/+/, '');
+        const root = (this.currentProject.rootPath || '.').replace(/\\/g, '/').replace(/\/$/, '');
+        const fullPath = pipelineFile.includes(':') || pipelineFile.startsWith('/')
+          ? pipelineFile.replace(/\\/g, '/')
+          : `${root}/${cleanRel}`;
+        const bytes = await this.readDiskFile(fullPath);
+        if (bytes) {
+          const decoded = new TextDecoder().decode(bytes);
+          const schema = JSON.parse(decoded);
+          if (schema && Array.isArray(schema.nodes)) {
+            graph.fromJSON(schema);
+            return true;
+          }
+        }
+        const storageKey = `${this.currentProject.projectId}:${cleanRel}`;
+        const cached = this.pipelineStorage.get(storageKey)
+          || (typeof localStorage !== 'undefined' ? localStorage.getItem(`arestrix_pipeline_${storageKey}`) || '' : '');
+        if (cached && cached.trim()) {
+          const schema = JSON.parse(cached);
+          if (schema && Array.isArray(schema.nodes)) {
+            graph.fromJSON(schema);
+            return true;
+          }
+        }
+      }
       let rawPipeline = '';
       if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
         rawPipeline = await (window as any).webui.call('load_pipeline');
@@ -699,6 +725,183 @@ export class ProjectManager {
     this.bus.emit('project:exported', { filePath: fullPath, bundle });
 
     return { success: true, filePath: fullPath, bundle };
+  }
+
+  public async saveProjectToDirectory(
+    targetDir: string,
+    folderName: string,
+    graph: Graph
+  ): Promise<{ success: boolean; rootPath: string; manifestPath: string }> {
+    const now = new Date().toISOString();
+    let cleanFolder = folderName.trim().replace(/\.(arestrix|json)$/i, '').trim();
+    if (!cleanFolder) cleanFolder = this.currentProject.name || 'projeto';
+
+    const normalizedDir = (targetDir || '.').replace(/\\/g, '/').replace(/\/$/, '');
+    const dirBase = baseName(normalizedDir);
+    const rootPath = dirBase.toLowerCase() === cleanFolder.toLowerCase()
+      ? normalizedDir
+      : `${normalizedDir}/${cleanFolder}`;
+    const manifestPath = `${rootPath}/arestrix.project.json`;
+
+    const fullManifest: IProjectManifest = {
+      ...this.currentProject,
+      projectId: hashProjectName(cleanFolder),
+      name: cleanFolder,
+      updatedAt: now,
+      rootPath,
+      pipelines: this.currentProject.pipelines && this.currentProject.pipelines.length > 0
+        ? this.currentProject.pipelines
+        : [
+            {
+              id: 'main',
+              name: 'Pipeline Principal',
+              file: 'pipelines/main.json',
+              isPrimary: true,
+              description: 'Pipeline central do projeto'
+            }
+          ]
+    };
+
+    try {
+      const webui = this.webuiBridge();
+      if (webui) {
+        const ok = await webui.call('create_project', JSON.stringify(fullManifest));
+        if (!ok) {
+          await webui.call('save_project', JSON.stringify(fullManifest));
+        }
+      }
+    } catch (e) {
+      console.warn('[ProjectManager] Fallback local ao salvar pasta de projeto:', e);
+    }
+
+    this.currentProject = fullManifest;
+    this.syncWithGraph(graph);
+    await this.savePipeline(graph);
+
+    this.addRecentItem({
+      projectId: fullManifest.projectId,
+      name: fullManifest.name,
+      rootPath: fullManifest.rootPath,
+      manifestPath,
+      lastOpened: now
+    });
+
+    this.bus.emit('project:saved', this.currentProject);
+    this.bus.emit('project:changed', this.currentProject);
+
+    return { success: true, rootPath, manifestPath };
+  }
+
+  public async saveGraphToFile(
+    targetDir: string,
+    fileName: string,
+    graph: Graph
+  ): Promise<{ success: boolean; filePath: string; registeredInProject: boolean; schema: IGraphSchema }> {
+    let cleanName = fileName.trim().replace(/\.(arestrix|json)$/i, '').trim();
+    if (!cleanName) {
+      cleanName = graph.getMetadata()?.graphName || 'pipeline';
+    }
+    const baseGraphName = cleanName;
+    const jsonFileName = `${cleanName}.json`;
+
+    const normalizedDir = (targetDir || '.').replace(/\\/g, '/').replace(/\/$/, '');
+    const fullPath = `${normalizedDir}/${jsonFileName}`;
+
+    const schema = graph.getRootSchema();
+    schema.metadata = {
+      ...(schema.metadata || { graphName: baseGraphName }),
+      graphName: baseGraphName,
+      projectId: this.currentProject.projectId
+    };
+    const jsonStr = JSON.stringify(schema, null, 2);
+
+    let savedOnDisk = false;
+    try {
+      const webui = this.webuiBridge();
+      if (webui) {
+        const ok = await webui.call('save_arestrix_file', JSON.stringify({
+          targetPath: fullPath,
+          content: jsonStr,
+          isBase64: false
+        }));
+        savedOnDisk = Boolean(ok);
+      }
+    } catch (e) {
+      console.warn('[ProjectManager] Erro ao salvar grafo via WebUI:', e);
+    }
+
+    if (!savedOnDisk && typeof document !== 'undefined' && typeof Blob !== 'undefined') {
+      try {
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = jsonFileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        savedOnDisk = true;
+      } catch (_) {}
+    }
+
+    this.pipelineStorage.set(fullPath, jsonStr);
+
+    let registeredInProject = false;
+    const projRoot = (this.currentProject.rootPath || '').replace(/\\/g, '/').replace(/\/$/, '');
+    if (projRoot && projRoot !== '.') {
+      const normLower = normalizedDir.toLowerCase();
+      const rootLower = projRoot.toLowerCase();
+      if (normLower === rootLower || normLower.startsWith(`${rootLower}/`)) {
+        const relDir = normLower === rootLower ? '' : normalizedDir.slice(projRoot.length + 1);
+        const relFile = relDir ? `${relDir}/${jsonFileName}` : jsonFileName;
+        const pipeId = baseGraphName.toLowerCase().replace(/[^a-z0-9_-]/g, '_') || 'pipeline';
+
+        const pipelines = Array.isArray(this.currentProject.pipelines) ? [...this.currentProject.pipelines] : [];
+        const existingIdx = pipelines.findIndex(
+          p => p.file.replace(/\\/g, '/').toLowerCase() === relFile.toLowerCase() || p.id === pipeId
+        );
+        if (existingIdx >= 0) {
+          pipelines[existingIdx] = {
+            ...pipelines[existingIdx],
+            name: baseGraphName,
+            file: relFile
+          };
+        } else {
+          pipelines.push({
+            id: pipeId,
+            name: baseGraphName,
+            file: relFile,
+            isPrimary: pipelines.length === 0,
+            description: schema.metadata?.description || ''
+          });
+        }
+        this.currentProject = {
+          ...this.currentProject,
+          pipelines,
+          updatedAt: new Date().toISOString()
+        };
+
+        const storageKey = `${this.currentProject.projectId}:${relFile}`;
+        this.pipelineStorage.set(storageKey, jsonStr);
+        if (relFile.toLowerCase() === 'pipelines/main.json') {
+          this.pipelineStorage.set(this.currentProject.projectId, jsonStr);
+        }
+        if (typeof localStorage !== 'undefined') {
+          try {
+            localStorage.setItem(`arestrix_pipeline_${storageKey}`, jsonStr);
+          } catch (_) {}
+        }
+
+        await this.saveCurrentProject();
+        registeredInProject = true;
+      }
+    }
+
+    this.bus.emit('graph:saved', { filePath: fullPath, registeredInProject, schema });
+    this.bus.emit('project:saved', this.currentProject);
+
+    return { success: true, filePath: fullPath, registeredInProject, schema };
   }
 
   public async loadArestrixBundle(bundle: IArestrixBundle, graph?: Graph): Promise<boolean> {

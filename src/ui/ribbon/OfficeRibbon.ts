@@ -1013,7 +1013,7 @@ export class OfficeRibbon {
     return this.backstageView;
   }
 
-  public openBackstage(section: 'info' | 'new' | 'open' | 'saveas' | 'export' = 'info'): Promise<void> {
+  public openBackstage(section: 'info' | 'new' | 'open' | 'save' | 'saveas' | 'export' | 'options' = 'info'): Promise<void> {
     return this.backstageView.open(section);
   }
 

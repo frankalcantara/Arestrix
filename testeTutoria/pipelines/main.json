@@ -59,230 +59,17 @@
   },
   "nodes": [
     {
-      "id": "concurrent_queue_worker_498010",
-      "label": "1. Fila_Buffer_ThreadSafe",
+      "id": "node_perceive",
+      "label": "1. Percepcao_Ambiente",
       "type": "static",
       "position": {
-        "x": 650,
-        "y": 370,
+        "x": -480,
+        "y": 320,
         "z": 0
       },
       "inputs": [
         {
-          "id": "concurrent_queue_worker_498010_in_0",
-          "name": "stream_in",
-          "direction": "input",
-          "type": "flow"
-        }
-      ],
-      "outputs": [
-        {
-          "id": "concurrent_queue_worker_498010_out_0",
-          "name": "batch_out",
-          "direction": "output",
-          "type": "flow",
-          "conditionBranchIndex": 0
-        }
-      ],
-      "parameters": {
-        "workerTag": "Worker-Alpha",
-        "batchSize": 32,
-        "queueCapacity": 1024
-      },
-      "customLambdaBody": "// Agente de Fila Concorrente: Processamento seguro de lote\n// Tag: Worker-Alpha | Tamanho do Lote: 32\nsize_t processed_count = 0;\n{\n  std::lock_guard<std::mutex> lock(ctx.queue_mutex);\n  // Alimenta e drena mensagens concorrentes com protecao de mutex\n  for (int i = 0; i < 32; ++i) {\n    ctx.task_queue.push(\"Msg_\" + std::to_string(ctx.tick_count + i));\n  }\n  while (!ctx.task_queue.empty() && processed_count < 32) {\n    auto item = ctx.task_queue.front();\n    ctx.task_queue.pop();\n    processed_count++;\n  }\n}\nstd::osyncstream(std::cout) << \"[1. Fila_Buffer_ThreadSafe] Worker Worker-Alpha processou com sucesso \" \n                            << processed_count << \" itens da fila thread-safe em paralelo.\\n\";",
-      "templateId": "concurrent_queue_worker",
-      "requiredHeaders": [
-        "<queue>",
-        "<mutex>",
-        "<string>",
-        "<syncstream>"
-      ]
-    },
-    {
-      "id": "vision_pipeline_subflow_498052",
-      "label": "2. Visao_Subflow_Paralelo",
-      "type": "subflow",
-      "position": {
-        "x": -410,
-        "y": 300,
-        "z": 0
-      },
-      "inputs": [
-        {
-          "id": "vision_pipeline_subflow_498052_in_0",
-          "name": "frame_in",
-          "direction": "input",
-          "type": "data",
-          "dataType": "FrameBuffer"
-        }
-      ],
-      "outputs": [
-        {
-          "id": "vision_pipeline_subflow_498052_out_0",
-          "name": "features_out",
-          "direction": "output",
-          "type": "data",
-          "conditionBranchIndex": 0
-        }
-      ],
-      "parameters": {
-        "resolution": "1920x1080",
-        "tileCount": 4,
-        "filterAlgorithm": "SobelGradients"
-      },
-      "customLambdaBody": "// Agente de Visao: Decomposicao dinamica de quadro em Subflow\n// Resolucao: 1920x1080 | Algoritmo: SobelGradients | Quadrantes: 4\nstd::osyncstream(std::cout) << \"[2. Visao_Subflow_Paralelo] Decompondo frame 1920x1080 em 4 quadrantes paralelos...\\n\";\n\nauto t1 = sf.emplace([]() {\n  std::osyncstream(std::cout) << \"  [Tile 0: Top-Left] Filtrando com SobelGradients...\\n\";\n}).name(\"Tile_TopLeft\");\n\nauto t2 = sf.emplace([]() {\n  std::osyncstream(std::cout) << \"  [Tile 1: Top-Right] Filtrando com SobelGradients...\\n\";\n}).name(\"Tile_TopRight\");\n\nauto t3 = sf.emplace([]() {\n  std::osyncstream(std::cout) << \"  [Tile 2: Bottom-Left] Filtrando com SobelGradients...\\n\";\n}).name(\"Tile_BottomLeft\");\n\nauto t4 = sf.emplace([]() {\n  std::osyncstream(std::cout) << \"  [Tile 3: Bottom-Right] Filtrando com SobelGradients...\\n\";\n}).name(\"Tile_BottomRight\");\n\nauto merge = sf.emplace([]() {\n  std::osyncstream(std::cout) << \"  [Consolidacao] Mesclando matriz de features dos quadrantes.\\n\";\n}).name(\"Tile_Merge\");\n\nt1.precede(merge);\nt2.precede(merge);\nt3.precede(merge);\nt4.precede(merge);",
-      "templateId": "vision_pipeline_subflow",
-      "requiredHeaders": [
-        "<string>",
-        "<syncstream>"
-      ]
-    },
-    {
-      "id": "llm_decision_agent_498062",
-      "label": "3. LLM_Prompt_Decisor",
-      "type": "condition",
-      "position": {
-        "x": 70,
-        "y": 570,
-        "z": 0
-      },
-      "inputs": [
-        {
-          "id": "llm_decision_agent_498062_in_0",
-          "name": "prompt_in",
-          "direction": "input",
-          "type": "data",
-          "dataType": "std::string"
-        },
-        {
-          "id": "llm_decision_agent_498062_in_1",
-          "name": "context_flow",
-          "direction": "input",
-          "type": "flow"
-        }
-      ],
-      "outputs": [
-        {
-          "id": "llm_decision_agent_498062_out_0",
-          "name": "aprovado (ramo 0)",
-          "direction": "output",
-          "type": "flow",
-          "conditionBranchIndex": 0
-        },
-        {
-          "id": "llm_decision_agent_498062_out_1",
-          "name": "re-tentativa (ramo 1)",
-          "direction": "output",
-          "type": "flow",
-          "conditionBranchIndex": 1
-        }
-      ],
-      "parameters": {
-        "modelName": "gemini-2.5-flash",
-        "temperature": 0.7,
-        "confidenceThreshold": 0.85,
-        "maxRetries": 3
-      },
-      "customLambdaBody": "// Agente LLM: Avaliacao de Prompt e Decisao Estocastica C++20\n// Modelo: gemini-2.5-flash | Temperatura: 0.7\nstd::mt19937_64 rng(std::random_device{}());\nstd::uniform_real_distribution<double> dist(0.0, 1.0);\ndouble confidence = dist(rng);\nctx.last_confidence_score = confidence;\n\nstd::osyncstream(std::cout) << \"[3. LLM_Prompt_Decisor] Inferindo com gemini-2.5-flash (temp: 0.7)... Score: \" \n                            << confidence << \" (Limiar: 0.85)\\n\";\n\nif (confidence >= 0.85 || ctx.retry_counter >= 3) {\n  std::osyncstream(std::cout) << \"  -> [3. LLM_Prompt_Decisor] Resposta APROVADA! Avancando para o proximo estagio (Ramo 0).\\n\";\n  ctx.retry_counter = 0;\n  return 0; // Ramo 0: Sucesso / Avanco\n} else {\n  ctx.retry_counter++;\n  std::osyncstream(std::cout) << \"  -> [3. LLM_Prompt_Decisor] Confianca insuficiente (\" << ctx.retry_counter \n                              << \"/3). Realimentando loop para refinamento (Ramo 1).\\n\";\n  return 1; // Ramo 1: Feedback Loop / Refinamento\n}",
-      "templateId": "llm_decision_agent",
-      "requiredHeaders": [
-        "<random>",
-        "<chrono>",
-        "<string>",
-        "<syncstream>"
-      ]
-    },
-    {
-      "id": "sqlite_persistence_agent_498070",
-      "label": "4. SQLite_Persistencia_ACID",
-      "type": "critical",
-      "position": {
-        "x": 1210,
-        "y": 710,
-        "z": 0
-      },
-      "inputs": [
-        {
-          "id": "sqlite_persistence_agent_498070_in_0",
-          "name": "data_in",
-          "direction": "input",
-          "type": "data",
-          "dataType": "AgentState"
-        }
-      ],
-      "outputs": [
-        {
-          "id": "sqlite_persistence_agent_498070_out_0",
-          "name": "ack_out",
-          "direction": "output",
-          "type": "flow",
-          "conditionBranchIndex": 0
-        }
-      ],
-      "parameters": {
-        "tableName": "agent_execution_logs",
-        "journalMode": "WAL",
-        "syncMode": "NORMAL"
-      },
-      "customLambdaBody": "// Agente SQLite / Persistencia Transacional (CriticalSection)\n// Tabela: agent_execution_logs | Journal: WAL\nstd::lock_guard<std::mutex> lock(ctx.db_mutex);\nstd::string log_key = \"log_step_\" + std::to_string(ctx.tick_count++);\nstd::string log_entry = \"Transacao ACID: Gravado registro na tabela [agent_execution_logs] com Journal WAL\";\nctx.persistent_store[log_key] = log_entry;\n\nstd::osyncstream(std::cout) << \"[4. SQLite_Persistencia_ACID] Transacao persistida com seguranca em SQLite: \" \n                            << log_key << \" (\" << ctx.persistent_store.size() << \" registros totais)\\n\";",
-      "templateId": "sqlite_persistence_agent",
-      "requiredHeaders": [
-        "<unordered_map>",
-        "<mutex>",
-        "<string>",
-        "<syncstream>"
-      ]
-    },
-    {
-      "id": "consensus_module_agent_498083",
-      "label": "5. Modulo_Consenso_Final",
-      "type": "module",
-      "position": {
-        "x": 1170,
-        "y": 210,
-        "z": 0
-      },
-      "inputs": [
-        {
-          "id": "consensus_module_agent_498083_in_0",
-          "name": "evaluations_in",
-          "direction": "input",
-          "type": "flow"
-        }
-      ],
-      "outputs": [
-        {
-          "id": "consensus_module_agent_498083_out_0",
-          "name": "verdict_out",
-          "direction": "output",
-          "type": "flow",
-          "conditionBranchIndex": 0
-        }
-      ],
-      "parameters": {
-        "quorumMin": 3,
-        "votingStrategy": "majority",
-        "auditLog": true
-      },
-      "customLambdaBody": "// Agente de Modulo: Votacao de Consenso e Sintese Final\n// Quorum Minimo: 3 | Estrategia: majority\nstd::osyncstream(std::cout) << \"[5. Modulo_Consenso_Final] Coletando votos dos agentes especializados (Estrategia: majority)...\\n\";\nstd::osyncstream(std::cout) << \"[5. Modulo_Consenso_Final] Quorum de 3 agentes atingido. Veredito final consolidado com sucesso!\\n\";",
-      "templateId": "consensus_module_agent",
-      "requiredHeaders": [
-        "<string>",
-        "<syncstream>"
-      ]
-    },
-    {
-      "id": "node_1792180573332",
-      "label": "Agente_Worker_6",
-      "type": "static",
-      "position": {
-        "x": -510,
-        "y": 670,
-        "z": 0
-      },
-      "inputs": [
-        {
-          "id": "node_1792180573332_in_0",
+          "id": "node_perceive_in_0",
           "name": "in",
           "direction": "input",
           "type": "flow"
@@ -290,60 +77,180 @@
       ],
       "outputs": [
         {
-          "id": "node_1792180573332_out_0",
+          "id": "node_perceive_out_0",
           "name": "out",
           "direction": "output",
           "type": "flow"
         }
       ],
       "parameters": {},
-      "customLambdaBody": "// Execução computacional determinística do agente: Agente_Worker_6\nstd::cout << \"Executando agente: Agente_Worker_6\\n\";"
+      "customLambdaBody": "// Execução computacional determinística do agente: 1. Percepcao_Ambiente\nstd::cout << \"Executando agente: 1. Percepcao_Ambiente\\n\";"
+    },
+    {
+      "id": "node_state_lock",
+      "label": "2. Atualizar_Estado_Global",
+      "type": "critical",
+      "position": {
+        "x": -40,
+        "y": 180,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "node_state_lock_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "node_state_lock_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "// Seção crítica com acesso exclusivo a recursos compartilhados\nstd::cout << \"Acesso exclusivo seguro pelo agente 2. Atualizar_Estado_Global\\n\";"
+    },
+    {
+      "id": "node_evaluator",
+      "label": "3. Avaliacao_Convergencia",
+      "type": "condition",
+      "position": {
+        "x": 370,
+        "y": -60,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "node_evaluator_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "node_evaluator_out_0",
+          "name": "branch 0",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 0
+        },
+        {
+          "id": "node_evaluator_out_1",
+          "name": "branch 1",
+          "direction": "output",
+          "type": "flow",
+          "conditionBranchIndex": 1
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "// Decisão de branch do agente 3. Avaliacao_Convergencia\n// Retorna 0 para ramo 0, 1 para ramo 1\nreturn (rand() % 2);"
+    },
+    {
+      "id": "node_cluster",
+      "label": "4. Decomposicao_Subflow",
+      "type": "subflow",
+      "position": {
+        "x": 480,
+        "y": 380,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "node_cluster_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "node_cluster_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "// Subfluxo gerado dinamicamente para 4. Decomposicao_Subflow\nauto sub_a = sf.emplace([]() { std::cout << \"Subtask A\\n\"; }).name(\"SubA\");\nauto sub_b = sf.emplace([]() { std::cout << \"Subtask B\\n\"; }).name(\"SubB\");\nsub_a.precede(sub_b);"
+    },
+    {
+      "id": "node_cleanup",
+      "label": "5. Modulo_Consolidacao",
+      "type": "module",
+      "position": {
+        "x": 850,
+        "y": 150,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "node_cleanup_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "node_cleanup_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "// Módulo reutilizável composto de outro subgrafo"
     }
   ],
   "edges": [
     {
-      "id": "edge_concurrent_queue_worker_498010_concurrent_queue_worker_498010_out_0_to_vision_pipeline_subflow_498052_vision_pipeline_subflow_498052_in_0",
-      "sourceNodeId": "concurrent_queue_worker_498010",
-      "sourcePortId": "concurrent_queue_worker_498010_out_0",
-      "targetNodeId": "vision_pipeline_subflow_498052",
-      "targetPortId": "vision_pipeline_subflow_498052_in_0"
+      "id": "edge_node_perceive_node_perceive_out_0_to_node_state_lock_node_state_lock_in_0",
+      "sourceNodeId": "node_perceive",
+      "sourcePortId": "node_perceive_out_0",
+      "targetNodeId": "node_state_lock",
+      "targetPortId": "node_state_lock_in_0"
     },
     {
-      "id": "edge_vision_pipeline_subflow_498052_vision_pipeline_subflow_498052_out_0_to_llm_decision_agent_498062_llm_decision_agent_498062_in_0",
-      "sourceNodeId": "vision_pipeline_subflow_498052",
-      "sourcePortId": "vision_pipeline_subflow_498052_out_0",
-      "targetNodeId": "llm_decision_agent_498062",
-      "targetPortId": "llm_decision_agent_498062_in_0"
+      "id": "edge_node_state_lock_node_state_lock_out_0_to_node_evaluator_node_evaluator_in_0",
+      "sourceNodeId": "node_state_lock",
+      "sourcePortId": "node_state_lock_out_0",
+      "targetNodeId": "node_evaluator",
+      "targetPortId": "node_evaluator_in_0"
     },
     {
-      "id": "edge_llm_decision_agent_498062_llm_decision_agent_498062_out_0_to_sqlite_persistence_agent_498070_sqlite_persistence_agent_498070_in_0",
-      "sourceNodeId": "llm_decision_agent_498062",
-      "sourcePortId": "llm_decision_agent_498062_out_0",
-      "targetNodeId": "sqlite_persistence_agent_498070",
-      "targetPortId": "sqlite_persistence_agent_498070_in_0",
+      "id": "edge_node_evaluator_node_evaluator_out_0_to_node_cluster_node_cluster_in_0",
+      "sourceNodeId": "node_evaluator",
+      "sourcePortId": "node_evaluator_out_0",
+      "targetNodeId": "node_cluster",
+      "targetPortId": "node_cluster_in_0",
       "isFeedbackLoop": false
     },
     {
-      "id": "edge_llm_decision_agent_498062_llm_decision_agent_498062_out_1_to_concurrent_queue_worker_498010_concurrent_queue_worker_498010_in_0",
-      "sourceNodeId": "llm_decision_agent_498062",
-      "sourcePortId": "llm_decision_agent_498062_out_1",
-      "targetNodeId": "concurrent_queue_worker_498010",
-      "targetPortId": "concurrent_queue_worker_498010_in_0",
+      "id": "edge_node_evaluator_node_evaluator_out_1_to_node_perceive_node_perceive_in_0",
+      "sourceNodeId": "node_evaluator",
+      "sourcePortId": "node_evaluator_out_1",
+      "targetNodeId": "node_perceive",
+      "targetPortId": "node_perceive_in_0",
       "isFeedbackLoop": true
     },
     {
-      "id": "edge_sqlite_persistence_agent_498070_sqlite_persistence_agent_498070_out_0_to_consensus_module_agent_498083_consensus_module_agent_498083_in_0",
-      "sourceNodeId": "sqlite_persistence_agent_498070",
-      "sourcePortId": "sqlite_persistence_agent_498070_out_0",
-      "targetNodeId": "consensus_module_agent_498083",
-      "targetPortId": "consensus_module_agent_498083_in_0"
+      "id": "edge_node_cluster_node_cluster_out_0_to_node_cleanup_node_cleanup_in_0",
+      "sourceNodeId": "node_cluster",
+      "sourcePortId": "node_cluster_out_0",
+      "targetNodeId": "node_cleanup",
+      "targetPortId": "node_cleanup_in_0"
     },
     {
-      "id": "edge_1792185441202_8dkf",
-      "sourceNodeId": "node_1792180573332",
-      "sourcePortId": "node_1792180573332_out_0",
-      "targetNodeId": "llm_decision_agent_498062",
-      "targetPortId": "llm_decision_agent_498062_in_1"
+      "id": "edge_1792206730583_xzdr",
+      "sourceNodeId": "node_cluster",
+      "sourcePortId": "node_cluster_out_0",
+      "targetNodeId": "node_state_lock",
+      "targetPortId": "node_state_lock_in_0"
     }
   ]
 }
