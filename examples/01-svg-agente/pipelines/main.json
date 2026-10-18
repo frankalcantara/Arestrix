@@ -57,8 +57,8 @@
       "label": "Agente_Gerador_DeepSeek",
       "type": "agent",
       "position": {
-        "x": 0,
-        "y": 0
+        "x": -630,
+        "y": 370
       },
       "inputs": [
         {
@@ -82,10 +82,53 @@
         "inheritSandbox": true,
         "inheritModel": false,
         "model": {
-          "skillPath": "skills/gerador.md"
+          "skillPath": "skills/gerador.md",
+          "promptTemplate": "# DIRETRIZES DE REDAÇÃO TÉCNICA E CONCEITUAL\nVocê é um redator técnico de precisão.\n- Desenvolva cada parágrafo com substância conceitual densa.\n- Evite lugares-comuns, introduções vazias ou repetições de premissas.\n- Use terminologia técnica exata e contextualizada.\n- Estruture o documento com seções claras, encadeamento lógico e exemplos concretos."
         },
         "inheritCodeMode": true,
-        "inheritMemory": true
+        "inheritMemory": false,
+        "memory": {
+          "enabled": false,
+          "persistent": false,
+          "projectId": "exemplo-svg-agente",
+          "readBlackboard": false,
+          "writeBlackboard": false,
+          "semanticLessons": false,
+          "recordLessons": false,
+          "allowedKeys": [],
+          "domains": []
+        },
+        "skills": [
+          {
+            "id": "skill-gerador",
+            "name": "Agente_Gerador_DeepSeek",
+            "description": "Habilidade operacional padrão para o agente Agente_Gerador_DeepSeek",
+            "markdownContent": "---\nname: \"Agente_Gerador_DeepSeek\"\ndescription: \"Execução especializada de tarefas\"\nlicense: \"MIT\"\ntools:\n  - write\n  - edit\n  - read\n---\n\n# Agente_Gerador_DeepSeek\n\nInstruções operacionais e diretrizes para execução do agente.\n\n## Diretrizes\n1. Atuação com máxima precisão e objetividade.\n2. Cumprimento estrito das regras de formatação e integridade dos artefatos.",
+            "systemPrompt": "Você é o agente responsável por \"Agente_Gerador_DeepSeek\". Execute suas tarefas com precisão técnica e rigor conceitual.",
+            "tools": [
+              "write",
+              "edit",
+              "read"
+            ],
+            "license": "MIT",
+            "updatedAt": "2026-10-18T17:24:19.673Z"
+          },
+          {
+            "id": "redacao-tecnica-profunda",
+            "name": "Redação Técnica e Conceitual",
+            "description": "Produção de conteúdo denso, estruturado, sem redundâncias e com máxima clareza expositiva.",
+            "license": "MIT",
+            "tools": [
+              "write",
+              "edit",
+              "read"
+            ],
+            "systemPrompt": "# DIRETRIZES DE REDAÇÃO TÉCNICA E CONCEITUAL\nVocê é um redator técnico de precisão.\n- Desenvolva cada parágrafo com substância conceitual densa.\n- Evite lugares-comuns, introduções vazias ou repetições de premissas.\n- Use terminologia técnica exata e contextualizada.\n- Estruture o documento com seções claras, encadeamento lógico e exemplos concretos.",
+            "markdownContent": "---\nname: \"Redação Técnica e Conceitual\"\ndescription: \"Produção de conteúdo denso, estruturado e com rigor acadêmico/técnico\"\nlicense: \"MIT\"\ntools:\n  - write\n  - edit\n  - read\n---\n\n# Redação Técnica e Conceitual\n\nEsta habilidade capacita o agente a gerar textos de alta fidelidade técnica, documentações profundas e artigos com encadeamento causal impecável.\n\n## Objetivos e Escopo\n1. Exposição clara de conceitos complexos sem simplismo.\n2. Organização hierárquica em seções e subseções balanceadas.\n3. Integração de diagramas e tabelas conceituais quando aplicável.\n\n## Regras de Execução\n- **Tom**: Neutro, assertivo e fundamentado.\n- **Formatação**: Markdown canônico, código em blocos delimitados e referências explícitas.\n- **Validação**: Nenhum parágrafo deve conter menos de duas ideias estruturadas interligadas.",
+            "updatedAt": "2026-10-18T17:24:34.894Z"
+          }
+        ],
+        "activeSkillId": "redacao-tecnica-profunda"
       }
     },
     {
@@ -93,8 +136,8 @@
       "label": "Linter_Tipografia_Estatico",
       "type": "static",
       "position": {
-        "x": 300,
-        "y": -100
+        "x": -210,
+        "y": 430
       },
       "inputs": [
         {
@@ -120,8 +163,8 @@
       "label": "Auditor_Timeline_SMIL",
       "type": "static",
       "position": {
-        "x": 300,
-        "y": 100
+        "x": -210,
+        "y": 170
       },
       "inputs": [
         {
@@ -147,8 +190,8 @@
       "label": "Consolidador_Diagnostico",
       "type": "static",
       "position": {
-        "x": 600,
-        "y": 0
+        "x": 210,
+        "y": 370
       },
       "inputs": [
         {
@@ -174,8 +217,8 @@
       "label": "Agente_Auditor_JEV",
       "type": "agent",
       "position": {
-        "x": 900,
-        "y": 0
+        "x": 630,
+        "y": 220
       },
       "inputs": [
         {
@@ -210,8 +253,8 @@
       "label": "Decisor_Qualidade",
       "type": "condition",
       "position": {
-        "x": 1200,
-        "y": 0
+        "x": -210,
+        "y": -280
       },
       "inputs": [
         {
@@ -245,8 +288,8 @@
       "label": "Entrega_SVG_Final",
       "type": "output",
       "position": {
-        "x": 1500,
-        "y": -80
+        "x": 210,
+        "y": -430
       },
       "inputs": [
         {

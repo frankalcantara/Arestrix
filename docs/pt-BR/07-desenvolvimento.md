@@ -25,6 +25,41 @@ gerados em `examples/`. Rode `npm run hooks:install` uma vez por clone para torn
 também falha com qualquer achado em `examples/`. Os segredos vivem só em variáveis de ambiente do usuário; os arquivos de projeto
 guardam no máximo o *nome* de uma variável ou uma referência `${NOME}`.
 
+## Compilação, Hardening e Segurança em C++20
+
+O script `CppCore/dev.py` automatiza o ciclo completo de build local (TypeScript + Vite + CMake + MSVC/GCC). O processo de compilação C++ incorpora as melhores práticas de segurança de software livre, mitigação de vulnerabilidades e análise de código:
+
+### Opções do orquestrador (`dev.py`)
+
+| Comando | Descrição |
+| :--- | :--- |
+| `python CppCore/dev.py` | Compila frontend, compila backend nativo C++20 com hardening e abre o Studio. |
+| `python CppCore/dev.py --no-run` | Apenas compila (frontend e backend) sem abrir a interface gráfica. |
+| `python CppCore/dev.py --no-frontend` | Pula a compilação do TypeScript/Vite (útil durante iterações puras de C++). |
+| `python CppCore/dev.py --test` | Compila e executa a suíte de testes unitários do runtime via `ctest`. |
+| `python CppCore/dev.py --asan` | Instrumenta os binários com **AddressSanitizer** para detecção em tempo de execução de estouros de buffer, *use-after-free* e vazamentos de memória. |
+| `python CppCore/dev.py --clang-tidy` | Executa análise estática integrada via **Clang-Tidy** usando as regras corporativas de `.clang-tidy` (C++ Core Guidelines e CERT C++). |
+| `python CppCore/dev.py --cppcheck` | Executa análise estática de bugs comportamentais via **Cppcheck**. |
+| `python CppCore/dev.py --no-hardening` | Desativa as flags estritas de mitigação de memória (útil para profiling específico). |
+
+### Camadas de Proteção Ativas no CMake
+
+A biblioteca de interface `arestrix_security_flags` em [`CMakeLists.txt`](../../CMakeLists.txt) injeta proteções nativas no compilador e no linker:
+
+- **No Windows (MSVC):**
+  - **Canários de Pilha (`/GS`):** Detecta sobrescrita de buffers na pilha antes do retorno de funções.
+  - **Control Flow Guard (`/guard:cf`):** Validação de alvos de chamadas indiretas no compilador e no linker contra ataques ROP.
+  - **Security Development Lifecycle (`/sdl`):** Ativa verificações adicionais de runtime da Microsoft para funções com risco de segurança.
+  - **Randomização de Endereçamento (`/DYNAMICBASE` e `/HIGHENTROPYVA`):** Habilita ASLR de 64 bits com espaço de busca expandido.
+  - **Data Execution Prevention (`/NXCOMPAT`):** Bloqueia execução de código arbitrário em regiões de memória marcadas como dados (pilha/heap).
+  - **Rigor de Código e Isolamento de Terceiros:** Compilação em nível `/W4` para o código do Arestrix, isolando bibliotecas em C (`sqlite3.c`, `simdjson.cpp`, `webui.c`) com `/w` para evitar falso-positivos.
+- **No Linux (GCC/Clang):**
+  - **Canários Reforçados:** `-fstack-protector-strong`.
+  - **Validação de Buffers:** `-D_FORTIFY_SOURCE=2`.
+  - **Full RELRO:** `-Wl,-z,relro,-z,now` (marca tabelas de resolução de símbolos como somente leitura).
+  - **Pilha Não-Executável:** `-Wl,-z,noexecstack`.
+  - **Format Security:** `-Wformat=2 -Wformat-security`.
+
 ## Testes
 
 ```bash
