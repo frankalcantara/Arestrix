@@ -16,7 +16,7 @@ O Studio segue o layout do Microsoft Office, porque a maioria das pessoas já o 
 | **Dados** | *Memória do projeto* e *Armazenamento do workspace*, mantidos visivelmente separados. |
 | **Executar** | Compilar e Executar, o motor Taskflow e o orquestrador de Lote e Retomada. |
 
-Outras comodidades: a **Barra de Acesso Rápido** (Salvar, Desfazer, Refazer, Executar), uma chave de
+Outras comodidades: a **Barra de Acesso Rápido** (Salvar, Desfazer, Refazer, Executar e o botão de **Sincronização Git** com indicador de status em tempo real), uma chave de
 salvamento automático, a caixa de busca no projeto (abaixo) e `Ctrl+F1` para recolher o ribbon.
 
 ### Busca no projeto
@@ -58,7 +58,7 @@ subfluxos e módulos), as skills do workspace e os pipelines. Pressione `Ctrl+K`
 
 ## Backstage
 
-Aberta por **Arquivo**. Traz as informações do projeto (dois cartões: o projeto ativo e o workspace
+Aberta por **Arquivo**. Traz as informações do projeto (três cartões: o projeto ativo, a sincronização do repositório Git e o workspace
 físico), a tela **Abrir**, a tela unificada **Salvar** e as **Opções**
 (padrões do Studio, governança do workspace e o seletor de **idioma**).
 
@@ -134,6 +134,7 @@ Os modais são janelas flutuantes: arrastáveis pela barra de título, redimensi
 | Repositórios GitHub | Catálogo de skills de todo o Studio |
 | Servidores MCP | Workspace |
 | Gerenciador de projetos | Metadados do projeto, caminho do workspace, `.env` do projeto |
+| Sincronização Git do projeto | Projeto / SO (Configuração de repositório privado, login seguro no SO e consentimento comercial) |
 | Lote e Retomada | Executar |
 
 ## Console e Painel de Artefatos

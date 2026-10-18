@@ -15,11 +15,25 @@ A project is described by `arestrix.project.json` in its folder:
 | `rootPath` | The physical workspace folder. |
 | `pipelines` | The graphs of the project (`pipelines/main.json` is the primary one). |
 | `database` | The SQLite file, by default `storage/database.sqlite`. |
+| `git` | Dedicated Git repository synchronization (`provider`, `serverUrl`, `repositoryName`, `remoteUrl`, `isPrivate`, `autoCommitOnRun`, `autoCommitOnShutdown`, `lastSyncAt`). |
 | `globalDefaults` | Default `model`, `sandbox`, `codeMode` (allowed tools) and `memory` for the vertices. |
 | `environment` | Variables local to the project (`.env`). |
 
 The Studio keeps a list of recent projects and restores the last one on start. *Save As* produces a
 compressed `.arestrix` package.
+
+### Per-Project Git Repository Synchronization (GitHub & Remotes)
+
+Each project in Arestrix maps to an **independent Git repository** on a configurable Git server (default: a **GitHub** account):
+
+1. **Auto-save inside the local clone:** Continuous real-time auto-save remains in effect inside the project folder on disk, which acts as the local Git clone/repository.
+2. **Automated Commit & Push:**
+   - **On every pipeline execution (`F5`):** A commit with contextual message is created and pushed immediately to the remote server prior to graph execution.
+   - **On application shutdown:** Triggered natively by the C++ backend when closing the application or window, guaranteeing that no work remains unversioned on the remote server.
+3. **Absolute Security (Zero-Secrets in Arestrix):** No credentials, passwords, or Personal Access Tokens (PAT) are stored in Arestrix files, manifests, or databases. Identity registration and authentication workflows are guided by Arestrix but managed **exclusively by the Operating System** via **Git Credential Manager (GCM)** / Windows Credential Store.
+4. **Private Repositories by Default:** Repositories are created automatically with the project name and strictly enforced as **private** (`isPrivate: true`).
+5. **Commercial Service Governance Warning:** When pointing to an external commercial Git host (e.g., `github.com` or `gitlab.com`), Arestrix displays a mandatory governance disclaimer reminding the user that project data (prompts, agent instructions, graphs, and metadata) will reside on third-party infrastructure outside Arestrix's custody, requiring explicit user consent.
+
 
 ## Global defaults and inheritance
 

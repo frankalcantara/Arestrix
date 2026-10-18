@@ -16,7 +16,7 @@ The Studio follows the Microsoft Office layout, because most people already know
 | **Data** | *Project memory* and *Workspace storage*, kept visibly apart. |
 | **Run** | Build & Run, the Taskflow engine, and the Batch & Resume orchestrator. |
 
-Other conveniences: the **Quick Access Toolbar** (Save, Undo, Redo, Run), an autosave switch, the
+Other conveniences: the **Quick Access Toolbar** (Save, Undo, Redo, Run, and the **Git Sync** button with real-time status badge), an autosave switch, the
 project search box (below), and `Ctrl+F1` to collapse the ribbon.
 
 ### Project search
@@ -58,7 +58,7 @@ modules), the skills of the workspace and the pipelines. Press `Ctrl+K` to focus
 
 ## Backstage
 
-Opened by **File**. It has the project information (two cards: the active project and the physical
+Opened by **File**. It has the project information (three cards: the active project, Git repository synchronization, and the physical
 workspace), the **Open** screen, the unified **Save** screen, and the **Options**
 (Studio defaults, workspace governance and the **language** selector).
 
@@ -134,6 +134,7 @@ Modals are floating windows: draggable by the title bar, resizable, and stackabl
 | GitHub repositories | Studio-wide skill catalog |
 | MCP servers | Workspace |
 | Project manager | Project metadata, workspace path, project `.env` |
+| Project Git synchronization | Project / OS (Private remote repo setup, OS secure login, and commercial service disclaimer) |
 | Batch & Resume | Run |
 
 ## Console and Artifacts Drawer

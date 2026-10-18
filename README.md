@@ -30,6 +30,7 @@ I am building this project because I like things that are graphical and simple t
 - **Fast and parallel.** The generated program is native C++20; independent branches run concurrently.
 - **Safe by default.** Sandboxes fail closed, file access is confined to the project, and feedback loops have a spending cap.
 - **Reusable.** A library of ready-made vertices, your own saved templates, skills, and MCP servers.
+- **Per-project Git synchronization.** Each project maps to a private Git repository (default GitHub) with continuous auto-save in the local clone and automated commit/push on F5 and on shutdown. Credentials managed securely in the OS (GCM), zero secrets stored in Arestrix, and governance warnings for commercial services.
 - **Windows and Linux**, bilingual interface (English and Portuguese), MIT licensed.
 
 ## Quick start

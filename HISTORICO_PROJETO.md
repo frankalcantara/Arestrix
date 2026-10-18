@@ -44,6 +44,15 @@ fica para depois que o Studio criar e rodar grafos completos. Entregas (commit e
 Falha de CMake por `build/` no `.gitignore`, analise do `npm audit`; ver
 `HISTORICO_SESSAO_2026-10-13.md` e `SEGURANCA_DEPENDENCIAS.md`.
 
+### 2026-10-18 - Sincronizacao Git por Projeto e Zero-Secrets
+- Cada projeto mapeado para um repositorio Git configuravel (padrao GitHub) com clone local e auto-save continuo.
+- Commit e push automaticos na execucao (F5) e no encerramento do Arestrix (backend C++ hooks).
+- Seguranca Zero-Secrets: nenhuma credencial ou token no Arestrix; autenticacao e identidade delegadas integralmente ao Git Credential Manager no SO.
+- Criacao automatica de repositorios privados com o nome do projeto.
+- Aviso obrigatorio de governanca e privacidade para servicos comerciais de terceiros (GitHub/GitLab).
+- Modal Fluent/Office (`GitAccountModal`), indicador no QAT e informacoes no Backstage.
+- Bateria de testes: 764/764 verificacoes nativas C++ e 289/289 testes Vitest.
+
 ## Linha do tempo (git)
 
 | Data | Marco |
@@ -59,6 +68,7 @@ Falha de CMake por `build/` no `.gitignore`, analise do `npm audit`; ver
 | 10-11 | ID de projeto por SHA-256, restaurar ultimo projeto, Salvar Como com pacote `.arestrix`, autosave, vertices SVG, abas de padroes globais |
 | 10-12 | Governanca de workspace, aba de skills pre-aprovadas, arquitetura tripartite Studio/Workspace/Projeto, exportador Taskflow C++20 com Monaco, i18n pt-BR/en-US (i18next), guia de novos idiomas |
 | 10-13 | i18n profunda de toda a UI; READMEs bilingues; motor de execucao + simdjson + `third_party`; correcao do `.gitignore` |
+| 10-18 | Sincronizacao Git por projeto (GitHub/privado), login seguro via GCM no SO, push automatico F5/shutdown, aviso comercial |
 
 ## Estado atual e pendencias
 

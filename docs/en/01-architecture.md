@@ -51,7 +51,7 @@ redo work for everything, including paste, duplicate and delete.
 | `native/` | The native tool servers (files, HTTP, data, memory, time, Git, SQLite): C++ that runs inside the program, with project confinement. |
 | `mcp/` | Native Model Context Protocol client with persistent sessions (stdio and HTTP) and the server registry. |
 | `memory/` | Blackboard and semantic-lessons memory. |
-| `project/` | Projects and workspaces (`arestrix.project.json`). |
+| `project/` | Projects and workspaces (`arestrix.project.json`), native Git synchronization service (`GitSyncService`), auto-commit/push, and private repository creation. |
 | `search/` | Project search: lexical ranking (BM25 + character trigrams) over every pipeline, subflow and skill, with a content-hash index. |
 | `pi/` | Scanner for importing existing Pi agent projects. |
 | `cli/` | `arestrix-cli`, the headless runner. |
@@ -67,7 +67,7 @@ credentials, memory and files never leak between things that should be independe
 | | **Studio** | **Workspace** | **Project** |
 | :--- | :--- | :--- | :--- |
 | What | The application: canvas, compiler toolchain | The physical folder and its infrastructure | One business purpose and its pipelines |
-| Holds | Global API keys, authorized GitHub skill repositories, recent projects | `.workspace/` skills and MCPs, SQLite database, sandboxes, limits | `arestrix.project.json`, `pipelines/*.json`, prompts, memory scoped by `projectId` |
+| Holds | Global API keys, authorized GitHub skill repositories, recent projects | `.workspace/` skills and MCPs, SQLite database, sandboxes, limits | `arestrix.project.json`, `pipelines/*.json`, dedicated Git repository (local clone with remote sync), prompts, memory scoped by `projectId` |
 | Analogy | The factory | The workshop | The product being built |
 
 Interface elements are tagged with their scope (`Studio`, `Workspace`, `Projeto`) so you always know

@@ -51,7 +51,7 @@ refazer funcionam para tudo, inclusive colar, duplicar e apagar.
 | `native/` | Os servidores de ferramentas nativos (arquivos, HTTP, dados, memória, tempo, Git, SQLite): C++ que roda dentro do programa, com confinamento ao projeto. |
 | `mcp/` | Cliente nativo do Model Context Protocol com sessões persistentes (stdio e HTTP) e o registro de servidores. |
 | `memory/` | Memória Blackboard e de lições semânticas. |
-| `project/` | Projetos e workspaces (`arestrix.project.json`). |
+| `project/` | Projetos e workspaces (`arestrix.project.json`), serviço nativo de sincronização Git (`GitSyncService`), auto-commit/push e criação de repositórios privados. |
 | `search/` | Busca no projeto: ranking lexical (BM25 + trigramas de caracteres) sobre todos os pipelines, subfluxos e skills, com índice por hash de conteúdo. |
 | `pi/` | Scanner para importar projetos de agentes Pi. |
 | `cli/` | `arestrix-cli`, o executor sem interface. |
@@ -67,7 +67,7 @@ memória e arquivos nunca vazem entre coisas que devem ser independentes.
 | | **Studio** | **Workspace** | **Projeto** |
 | :--- | :--- | :--- | :--- |
 | O que é | O aplicativo: canvas, toolchain de compilação | A pasta física e sua infraestrutura | Um propósito de negócio e seus pipelines |
-| Guarda | Chaves de API globais, repositórios GitHub de skills autorizados, projetos recentes | Skills e MCPs em `.workspace/`, banco SQLite, sandboxes, limites | `arestrix.project.json`, `pipelines/*.json`, prompts, memória isolada por `projectId` |
+| Guarda | Chaves de API globais, repositórios GitHub de skills autorizados, projetos recentes | Skills e MCPs em `.workspace/`, banco SQLite, sandboxes, limites | `arestrix.project.json`, `pipelines/*.json`, repositório Git dedicado (clone local com sync remoto), prompts, memória isolada por `projectId` |
 | Analogia | A fábrica | A oficina | O produto em construção |
 
 Os elementos da interface levam a etiqueta do escopo (`Studio`, `Workspace`, `Projeto`) para que você

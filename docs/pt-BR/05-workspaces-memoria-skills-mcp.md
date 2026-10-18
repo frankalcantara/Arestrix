@@ -15,11 +15,25 @@ Um projeto é descrito por `arestrix.project.json` na sua pasta:
 | `rootPath` | A pasta física do workspace. |
 | `pipelines` | Os grafos do projeto (`pipelines/main.json` é o principal). |
 | `database` | O arquivo SQLite, por padrão `storage/database.sqlite`. |
+| `git` | Sincronização com repositório Git dedicado (`provider`, `serverUrl`, `repositoryName`, `remoteUrl`, `isPrivate`, `autoCommitOnRun`, `autoCommitOnShutdown`, `lastSyncAt`). |
 | `globalDefaults` | Padrões de `model`, `sandbox`, `codeMode` (ferramentas permitidas) e `memory` para os vértices. |
 | `environment` | Variáveis locais ao projeto (`.env`). |
 
 O Studio mantém a lista de projetos recentes e restaura o último ao iniciar. *Salvar Como* gera um pacote
 comprimido `.arestrix`.
+
+### Sincronização Git por projeto (GitHub e repositórios remotos)
+
+Cada projeto no Arestrix é mapeado para um **repositório Git independente** em um servidor Git configurável (por padrão, uma conta do **GitHub**):
+
+1. **Auto-save no clone local:** O salvamento automático contínuo continua operando em tempo real na pasta local do projeto, que atua como o clone/repositório local do Git.
+2. **Commit e Push automáticos:**
+   - **A cada execução do pipeline (`F5`):** Um commit com mensagem contextual é gerado e enviado (`push`) imediatamente ao servidor remoto antes da inicialização do grafo.
+   - **No encerramento do Arestrix:** Disparado nativamente pelo backend C++ ao fechar o aplicativo ou a janela, garantindo que nenhum trabalho fique não versionado no servidor remoto.
+3. **Segurança Absoluta (Zero-Secrets no Arestrix):** Nenhum dado de autenticação, senha ou Personal Access Token (PAT) é registrado nos arquivos, manifestos ou banco do Arestrix. O processo de registro de identidade e autenticação é orientado pelo Arestrix mas gerenciado **exclusivamente pelo Sistema Operacional** através do **Git Credential Manager (GCM)** / Cofre de Credenciais do Windows.
+4. **Repositórios Privados por Padrão:** Novos repositórios são criados de forma automática e transparente com o nome do projeto e marcados obrigatoriamente como **privados** (`isPrivate: true`).
+5. **Aviso de Governança para Serviços Comerciais:** Quando o servidor configurado for um serviço comercial externo (como `github.com` ou `gitlab.com`), o Arestrix exibe obrigatoriamente um aviso legal de que os dados do projeto (instruções de agentes, grafos e metadados) residirão em infraestrutura de terceiros fora do controle do software, exigindo consentimento explícito do usuário.
+
 
 ## Padrões globais e herança
 
