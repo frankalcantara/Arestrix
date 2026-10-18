@@ -138,6 +138,28 @@ Os modais são janelas flutuantes: arrastáveis pela barra de título, redimensi
 | Runner Standalone | Projeto / Distribuição (Telas de Progresso, Diagnóstico, Operação e Empacotamento) |
 | Lote e Retomada | Executar |
 
+### Modal do Runner Standalone
+
+O modal do **Runner Standalone** (acionado na aba **Executar** > grupo **Distribuição** ou no **Backstage**) oferece uma interface limpa, de alto contraste e sem dependência do editor gráfico completo. Ele é estruturado em 4 abas:
+
+1. **Progresso:**
+   - **Indicador de Estado:** Selo de status dinâmico (`Aguardando`, `Compilando`, `Executando`, `Sucesso`, `Erro`, `Interrompido`).
+   - **Barra de Progresso Linear e Cronômetro:** Acompanhamento percentual contínuo com contagem de tempo decorrido.
+   - **Linha do Tempo de Etapas:** Exibe a sequência de vértices do pipeline, duração individual, carimbo de horário e status de conclusão.
+2. **Diagnóstico:**
+   - **KPIs de Telemetria:** Painel com cartões de contagem de tokens (Prompt, Conclusão, Total), chamadas a ferramentas, retries de limite de taxa 429 e latência média.
+   - **Streaming de Thinking:** Área de exibição em tempo real do raciocínio cognitivo emitido pelos modelos de IA.
+   - **Inspeção de Chamadas:** Tabela de ferramentas invocadas, parâmetros recebidos, tempo de execução e resultado retornado.
+   - **Exportar Diagnóstico:** Copia todos os logs e métricas consolidadas em JSON para a área de transferência.
+3. **Operação:**
+   - **Controles de Ação:** Botões para Iniciar (`F5`), Parar (`Shift+F5`) e Reiniciar o pipeline.
+   - **Formulário de Parâmetros:** Campos dinâmicos gerados a partir do schema de parâmetros declarado no projeto, permitindo ajustar entradas sem tocar no grafo.
+   - **Entregáveis:** Atalho direto para abrir a pasta de artefatos (`exports/`) no Windows Explorer.
+4. **Exportar:**
+   - Seleção da pasta de saída (padrão `dist/runner`).
+   - Compilação nativa e empacotamento com manifesto `runner_manifest.json` e script `run.bat`.
+   - Execução da auditoria automática **Zero-Segredos** (bloqueio *fail-closed* contra qualquer credencial ou chave embutida).
+
 ## Console e Painel de Artefatos
 
 Uma gaveta acoplada na base da tela (redimensionável por splitter e minimizável) centraliza a observabilidade e os produtos da execução em três abas:

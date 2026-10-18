@@ -138,6 +138,28 @@ Modals are floating windows: draggable by the title bar, resizable, and stackabl
 | Standalone Runner | Project / Distribution (Progress, Diagnostics, Operations and Packaging screens) |
 | Batch & Resume | Run |
 
+### Standalone Runner Modal
+
+The **Standalone Runner** modal (opened via the **Run** tab > **Distribution** group or from **Backstage**) offers a high-contrast, clean execution environment independent of the full visual graph editor. It is organized into 4 tabs:
+
+1. **Progress:**
+   - **Status Badge:** Live status pill (`Waiting`, `Compiling`, `Running`, `Success`, `Error`, `Stopped`).
+   - **Linear Progress Bar & Elapsed Timer:** Continuous percentage progress tracking with real-time millisecond elapsed timer.
+   - **Step Timeline:** Sequence of pipeline stages showing individual vertex duration, execution status, and timestamp.
+2. **Diagnostics:**
+   - **Telemetry KPIs:** Real-time KPI cards for token counts (Prompt, Completion, Total), tool invocations, 429 rate limit retries, and average latency.
+   - **Thinking Stream:** Live streaming view of the cognitive deliberations and reasoning emitted by AI models.
+   - **Tool Call Inspection:** Detailed table of invoked tools, input arguments, execution time, and output status.
+   - **Export Diagnostics:** Copies structured JSON logs and metrics to clipboard.
+3. **Operations:**
+   - **Action Controls:** Buttons to Start (`F5`), Stop (`Shift+F5`), and Restart workflow execution.
+   - **Dynamic Parameters Form:** Form fields generated automatically from the project's parameter schema, allowing runtime tweaks without touching the graph.
+   - **Artifacts Access:** Direct button to open the deliverables directory (`exports/`) in Windows Explorer.
+4. **Export:**
+   - Output directory selector (defaults to `dist/runner`).
+   - One-click native compilation and packaging with `runner_manifest.json` and `run.bat`.
+   - Automated **Zero-Secrets** fail-closed audit preventing any embedded keys or sensitive files.
+
 ## Console and Artifacts Drawer
 
 A docked drawer at the bottom of the screen (resizable with a splitter and collapsible) centralizes observability and pipeline deliverables across three tabs:

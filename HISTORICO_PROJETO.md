@@ -44,14 +44,21 @@ fica para depois que o Studio criar e rodar grafos completos. Entregas (commit e
 Falha de CMake por `build/` no `.gitignore`, analise do `npm audit`; ver
 `HISTORICO_SESSAO_2026-10-13.md` e `SEGURANCA_DEPENDENCIAS.md`.
 
-### 2026-10-18 - Sincronizacao Git por Projeto e Zero-Secrets
+### 2026-10-18 - Sincronizacao Git por Projeto, Runner Standalone e Zero-Secrets
 - Cada projeto mapeado para um repositorio Git configuravel (padrao GitHub) com clone local e auto-save continuo.
 - Commit e push automaticos na execucao (F5) e no encerramento do Arestrix (backend C++ hooks).
-- Seguranca Zero-Secrets: nenhuma credencial ou token no Arestrix; autenticacao e identidade delegadas integralmente ao Git Credential Manager no SO.
-- Criacao automatica de repositorios privados com o nome do projeto.
-- Aviso obrigatorio de governanca e privacidade para servicos comerciais de terceiros (GitHub/GitLab).
-- Modal Fluent/Office (`GitAccountModal`), indicador no QAT e informacoes no Backstage.
-- Bateria de testes: 764/764 verificacoes nativas C++ e 289/289 testes Vitest.
+- Criacao automatica de repositorios privados com o nome do projeto e aviso obrigatorio de governanca comercial.
+- Standalone Runner (Fase 1: Executavel Independente):
+  - Acionamento via botao no Ribbon (Aba Executar > Grupo Distribuicao) e/ou propriedade no manifesto do projeto (`arestrix.project.json`).
+  - Interface operacional com 3 telas: Progresso (timeline de vertices, barra de avanco, cronometro), Diagnostico (telemetria ao vivo, streaming de thinking, inspecao de chamadas de ferramentas, exportacao JSON) e Operacao (controles F5/Shift+F5, formulario de parametros dinamicos, acesso a entregaveis).
+  - Aba de Exportacao para compilacao e geracao de pacote autonomo em `dist/runner` com launcher `run.bat`.
+- Politica Estrita Zero-Segredos:
+  - Nenhuma credencial ou token gravado no executavel (.exe) ou nos arquivos de distribuicao.
+  - Auditoria preventiva fail-closed em TypeScript e C++ bloqueando tokens (OpenAI, Anthropic, Google, GitHub PATs, JWTs, AWS keys, senhas e chaves privadas).
+  - Bloqueio e exclusao automatica de arquivos perigosos (.env*, credentials.json, *.pem, *.key, id_rsa*).
+  - Varredura de binarios .exe compilados e resolucao dinamica estrita via variaveis de ambiente do sistema operacional hospedeiro.
+  - Higienizacao automatica de ambiente em subprocessos (scrubSecrets).
+- Bateria de testes: 792/792 verificacoes nativas C++ e 298/298 testes Vitest aprovados.
 
 ## Linha do tempo (git)
 
@@ -68,11 +75,12 @@ Falha de CMake por `build/` no `.gitignore`, analise do `npm audit`; ver
 | 10-11 | ID de projeto por SHA-256, restaurar ultimo projeto, Salvar Como com pacote `.arestrix`, autosave, vertices SVG, abas de padroes globais |
 | 10-12 | Governanca de workspace, aba de skills pre-aprovadas, arquitetura tripartite Studio/Workspace/Projeto, exportador Taskflow C++20 com Monaco, i18n pt-BR/en-US (i18next), guia de novos idiomas |
 | 10-13 | i18n profunda de toda a UI; READMEs bilingues; motor de execucao + simdjson + `third_party`; correcao do `.gitignore` |
-| 10-18 | Sincronizacao Git por projeto (GitHub/privado), login seguro via GCM no SO, push automatico F5/shutdown, aviso comercial |
+| 10-18 | Sincronizacao Git por projeto, Runner Standalone (Fase 1: Progresso, Diagnostico, Operacao) e politica fail-closed Zero-Segredos |
 
 ## Estado atual e pendencias
 
 - `main` limpo e publicado; clone novo com submodulos compila e roda (`python CppCore/dev.py`).
+- Runner Standalone (Fase 1) implementado com telas de Progresso, Diagnostico e Operacao, empacotador e auditoria de segredos.
 - `SEGURANCA_DEPENDENCIAS.md`: atualizar vite/vitest e monaco-editor/dompurify.
 - Avisos do Vite: `webui.js` sem `type="module"`; `fs`/`path` em `GenericPiProjectScanner.ts`.
-- Futuro: criacao de aplicativos runner standalone (so Windows) depois que o Studio executar grafos completos.
+

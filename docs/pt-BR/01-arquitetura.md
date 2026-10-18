@@ -30,9 +30,9 @@ A janela é uma janela nativa **WebUI** (sem Electron). A interface é empacotad
 
 | Camada | Pasta | Responsabilidade |
 | :--- | :--- | :--- |
-| Lógica | `src/core/` | `Graph` em memória, validação, hierarquia de subfluxos, histórico com **padrão Command** (desfazer/refazer), templates, skills, projetos e workspaces. Sem renderização. |
+| Lógica | `src/core/` | `Graph` em memória, validação, hierarquia de subfluxos, histórico com **padrão Command** (desfazer/refazer), templates, skills, projetos e workspaces, sincronização Git e orquestrador do Runner Standalone (`RunnerManager`). Sem renderização. |
 | Visual | `src/view/` | Canvas ortográfico Three.js, câmera (pan/zoom), grade infinita, arestas de Bézier e a camada SVG que desenha os cartões dos vértices por cima. |
-| Interface | `src/ui/` | Ribbon estilo Office, visão Backstage, inspetor, modais, console, menu de contexto. |
+| Interface | `src/ui/` | Ribbon estilo Office, visão Backstage, inspetor, modais (`StandaloneRunnerModal`, `GitAccountModal`), console, menu de contexto. |
 | i18n | `src/i18n/` | Catálogos `pt-BR` e `en-US`, carregados via i18next. |
 
 Toda alteração no grafo passa por um comando (`AddNodeCommand`, `RemoveNodeCommand`,
@@ -51,7 +51,7 @@ refazer funcionam para tudo, inclusive colar, duplicar e apagar.
 | `native/` | Os servidores de ferramentas nativos (arquivos, HTTP, dados, memória, tempo, Git, SQLite): C++ que roda dentro do programa, com confinamento ao projeto. |
 | `mcp/` | Cliente nativo do Model Context Protocol com sessões persistentes (stdio e HTTP) e o registro de servidores. |
 | `memory/` | Memória Blackboard e de lições semânticas. |
-| `project/` | Projetos e workspaces (`arestrix.project.json`), serviço nativo de sincronização Git (`GitSyncService`), auto-commit/push e criação de repositórios privados. |
+| `project/` | Projetos e workspaces (`arestrix.project.json`), serviço de sincronização Git (`GitSyncService`), exportador do Runner Standalone (`RunnerService`) com auditoria zero-segredos, auto-commit/push e criação de repositórios privados. |
 | `search/` | Busca no projeto: ranking lexical (BM25 + trigramas de caracteres) sobre todos os pipelines, subfluxos e skills, com índice por hash de conteúdo. |
 | `pi/` | Scanner para importar projetos de agentes Pi. |
 | `cli/` | `arestrix-cli`, o executor sem interface. |
@@ -85,6 +85,17 @@ saiba sempre o que está alterando. Mais em
 5. Logs e telemetria voltam em fluxo para o console e para os selos no canvas.
 
 Os passos 4 e 5 estão detalhados em [Agentes e execução](04-agentes-e-execucao.md).
+
+## Arquitetura do Runner Standalone
+
+O **Runner Standalone** desacopla a execução do pipeline do ambiente de edição do Studio:
+1. **Frontend (`RunnerManager`):** Controla o ciclo de vida da execução simplificada, orquestra os eventos do `EventBus` para as telas de Progresso, Diagnóstico e Operação, e realiza a pré-auditoria de segurança.
+2. **Backend (`RunnerService`):**
+   - Compila o grafo nativo Taskflow diretamente em um binário executável autocontido.
+   - Gera o manifesto de distribuição (`runner_manifest.json`) com schema de parâmetros dinâmicos.
+   - Copia as dependências de skills confinadas ao projeto.
+   - Executa a auditoria estrita *fail-closed* contra vazamento de segredos em arquivos e no binário antes de finalizar a exportação.
+3. **Resolução de Segredos em Runtime:** O binário gerado não contém chaves embutidas; ele consulta as variáveis de ambiente da máquina de destino no SO (`platform::getEnv`), garantindo total portabilidade segura.
 
 ## Relacionados
 
