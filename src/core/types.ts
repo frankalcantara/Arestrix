@@ -401,6 +401,20 @@ export interface IProjectDatabaseConfig {
   url?: string;
 }
 
+export interface IProjectGitConfig {
+  enabled: boolean;
+  provider: 'github' | 'gitlab' | 'gitea' | 'custom';
+  serverUrl: string;
+  username: string; // apenas identificador (sem senhas/tokens)
+  repositoryName: string; // nome do repositorio remoto (privado)
+  remoteUrl: string; // URL do repositorio remoto
+  isPrivate: boolean; // repositorios criados pelo Arestrix sao privados
+  autoCommitOnRun: boolean; // commit e push a cada execucao (F5)
+  autoCommitOnShutdown: boolean; // commit e push ao encerrar o sistema
+  lastSyncAt?: string;
+  lastCommitHash?: string;
+}
+
 export interface IProjectManifest {
   projectId: string;
   name: string;
@@ -414,6 +428,7 @@ export interface IProjectManifest {
   globalDefaults?: IGlobalPipelineDefaults;
   database?: IProjectDatabaseConfig;
   environment?: Record<string, string>;
+  git?: IProjectGitConfig;
 }
 
 export interface IRecentProjectItem {

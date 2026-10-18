@@ -9,6 +9,7 @@
 #include "memory/SemanticMemoryEngine.hpp"
 #include "mcp/McpRegistry.hpp"
 #include "project/ProjectManager.hpp"
+#include "project/GitSyncService.hpp"
 #include "project/OpenableFiles.hpp"
 #include "assistant/AssistantSession.hpp"
 #include "rt/ModelClient.hpp"
@@ -1358,8 +1359,139 @@ void ui_stop_pipeline(webui::window::event* e) {
     e->return_bool(true);
 }
 
+// ============================================================================
+// Wrappers JS -> C++ (Git Sync & Integracao com SO)
+// ============================================================================
+
+void ui_git_get_status(webui::window::event* e) {
+    try {
+        std::string payload = e->get_string();
+        std::string root = "";
+        if (!payload.empty() && payload[0] == '{') {
+            auto j = taskforge::jsonutil::parse(payload);
+            root = j.value("rootPath", "");
+        } else if (!payload.empty()) {
+            root = payload;
+        }
+        if (root.empty()) {
+            root = taskforge::project::ProjectManager::getInstance().getCurrentProject().rootPath;
+        }
+        auto st = taskforge::project::GitSyncService::getStatus(root);
+        taskforge::Json j = st;
+        e->return_string(j.dump());
+    } catch (const std::exception& ex) {
+        taskforge::Json err = {{"error", ex.what()}};
+        e->return_string(err.dump());
+    }
+}
+
+void ui_git_get_system_identity(webui::window::event* e) {
+    std::string name, email;
+    bool ok = taskforge::project::GitSyncService::getSystemIdentity(name, email);
+    taskforge::Json res = {{"configured", ok}, {"userName", name}, {"userEmail", email}};
+    e->return_string(res.dump());
+}
+
+void ui_git_set_system_identity(webui::window::event* e) {
+    try {
+        auto j = taskforge::jsonutil::parse(e->get_string());
+        std::string name = j.value("name", "");
+        std::string email = j.value("email", "");
+        std::string err;
+        bool ok = taskforge::project::GitSyncService::setSystemIdentity(name, email, err);
+        taskforge::Json res = {{"ok", ok}, {"error", err}};
+        e->return_string(res.dump());
+    } catch (const std::exception& ex) {
+        taskforge::Json res = {{"ok", false}, {"error", ex.what()}};
+        e->return_string(res.dump());
+    }
+}
+
+void ui_git_list_accounts(webui::window::event* e) {
+    std::string provider = e->get_string();
+    auto accounts = taskforge::project::GitSyncService::listGcmAccounts(provider);
+    taskforge::Json res = accounts;
+    e->return_string(res.dump());
+}
+
+void ui_git_launch_login(webui::window::event* e) {
+    std::string provider = e->get_string();
+    std::string err;
+    bool ok = taskforge::project::GitSyncService::launchGcmLogin(provider, err);
+    taskforge::Json res = {{"ok", ok}, {"error", err}};
+    e->return_string(res.dump());
+}
+
+void ui_git_init_project(webui::window::event* e) {
+    try {
+        auto j = taskforge::jsonutil::parse(e->get_string());
+        std::string root = j.value("rootPath", "");
+        if (root.empty()) root = taskforge::project::ProjectManager::getInstance().getCurrentProject().rootPath;
+        std::string remoteUrl = j.value("remoteUrl", "");
+        std::string err;
+        bool ok = taskforge::project::GitSyncService::initProjectRepo(root, remoteUrl, err);
+        taskforge::Json res = {{"ok", ok}, {"error", err}};
+        e->return_string(res.dump());
+    } catch (const std::exception& ex) {
+        taskforge::Json res = {{"ok", false}, {"error", ex.what()}};
+        e->return_string(res.dump());
+    }
+}
+
+void ui_git_create_remote_repo(webui::window::event* e) {
+    try {
+        auto j = taskforge::jsonutil::parse(e->get_string());
+        std::string provider = j.value("provider", "github");
+        std::string repoName = j.value("repoName", "");
+        bool isPrivate = j.value("isPrivate", true);
+        std::string username = j.value("username", "");
+        std::string serverUrl = j.value("serverUrl", "https://github.com");
+        std::string root = j.value("rootPath", "");
+        if (root.empty()) root = taskforge::project::ProjectManager::getInstance().getCurrentProject().rootPath;
+
+        std::string remoteUrl, err;
+        bool ok = taskforge::project::GitSyncService::createRemoteRepo(provider, repoName, isPrivate, username, serverUrl, remoteUrl, err);
+        if (ok && !root.empty()) {
+            std::string initErr;
+            taskforge::project::GitSyncService::initProjectRepo(root, remoteUrl, initErr);
+        }
+        taskforge::Json res = {{"ok", ok}, {"remoteUrl", remoteUrl}, {"error", err}};
+        e->return_string(res.dump());
+    } catch (const std::exception& ex) {
+        taskforge::Json res = {{"ok", false}, {"error", ex.what()}};
+        e->return_string(res.dump());
+    }
+}
+
+void ui_git_commit_push(webui::window::event* e) {
+    try {
+        auto j = taskforge::jsonutil::parse(e->get_string());
+        std::string root = j.value("rootPath", "");
+        if (root.empty()) root = taskforge::project::ProjectManager::getInstance().getCurrentProject().rootPath;
+        std::string msg = j.value("message", "");
+        std::string branch = j.value("branch", "main");
+        std::string out, err;
+        bool ok = taskforge::project::GitSyncService::commitAndPush(root, msg, branch, out, err);
+        taskforge::Json res = {{"ok", ok}, {"output", out}, {"error", err}};
+        e->return_string(res.dump());
+    } catch (const std::exception& ex) {
+        taskforge::Json res = {{"ok", false}, {"error", ex.what()}};
+        e->return_string(res.dump());
+    }
+}
+
+void ui_git_is_commercial(webui::window::event* e) {
+    std::string s = e->get_string();
+    bool comm = taskforge::project::GitSyncService::isCommercialService(s);
+    e->return_bool(comm);
+}
+
 void exit_app(webui::window::event* e) {
     std::cout << "[C++] Comando de encerramento recebido." << std::endl;
+    auto cur = taskforge::project::ProjectManager::getInstance().getCurrentProject();
+    if (cur.git.enabled && cur.git.autoCommitOnShutdown && !cur.rootPath.empty()) {
+        taskforge::project::GitSyncService::onShutdown(cur.rootPath);
+    }
     webui::exit();
 }
 
@@ -1750,6 +1882,17 @@ int main(int argc, char** argv) {
     win.bind("assistant_cancel", ui_assistant_cancel);
     win.bind("exit_app", exit_app);
 
+    // Bindings de Git Sync & SO
+    win.bind("git_get_status", ui_git_get_status);
+    win.bind("git_get_system_identity", ui_git_get_system_identity);
+    win.bind("git_set_system_identity", ui_git_set_system_identity);
+    win.bind("git_list_accounts", ui_git_list_accounts);
+    win.bind("git_launch_login", ui_git_launch_login);
+    win.bind("git_init_project", ui_git_init_project);
+    win.bind("git_create_remote_repo", ui_git_create_remote_repo);
+    win.bind("git_commit_push", ui_git_commit_push);
+    win.bind("git_is_commercial", ui_git_is_commercial);
+
     // Registra o Emitter de Telemetria de Agentes em Tempo Real (Fase 10)
     taskforge::sandbox::AgentTelemetryEmitter::setCallback([&win](const std::string& jsonMsg) {
         // jsonMsg nasce do dump() do emissor, mas chega por um callback cru: reparseia e re-serializa para
@@ -1785,6 +1928,10 @@ int main(int argc, char** argv) {
     }
 
     webui::wait();
+    auto curProj = taskforge::project::ProjectManager::getInstance().getCurrentProject();
+    if (curProj.git.enabled && curProj.git.autoCommitOnShutdown && !curProj.rootPath.empty()) {
+        taskforge::project::GitSyncService::onShutdown(curProj.rootPath);
+    }
     taskforge::mcp::McpClient::shutdownSessions();   // encerra os servidores MCP que ficaram abertos
     return 0;
 }

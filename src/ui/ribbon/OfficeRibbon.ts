@@ -23,6 +23,8 @@ import { ImportOpenAiModal } from '../modals/ImportOpenAiModal.ts';
 import { ImportHermesModal } from '../modals/ImportHermesModal.ts';
 import { ImportExcelModal } from '../modals/ImportExcelModal.ts';
 import { GraphvizExportModal } from '../modals/GraphvizExportModal.ts';
+import { GitAccountModal } from '../modals/GitAccountModal.ts';
+import { GitSyncManager } from '../../core/git/GitSyncManager.ts';
 import { t } from '../../i18n/index.ts';
 import { ProjectSearchBox, reindexProjectSearch } from '../ProjectSearchBox.ts';
 import { sanitizeEnvReferences } from '../../core/env/EnvironmentManager.ts';
@@ -47,6 +49,7 @@ export class OfficeRibbon {
   private importOpenAiModal: ImportOpenAiModal;
   private importHermesModal: ImportHermesModal;
   private importExcelModal: ImportExcelModal;
+  private gitAccountModal: GitAccountModal;
 
   private activeTab: 'home' | 'insert' | 'agents' | 'connectors' | 'data' | 'run' = 'home';
   private isCollapsed: boolean = false;
@@ -96,6 +99,7 @@ export class OfficeRibbon {
     this.importHermesModal = new ImportHermesModal(this.graph, this.viewport);
     this.importExcelModal = new ImportExcelModal(this.graph, this.viewport);
     this.graphvizExportModal = new GraphvizExportModal(this.graph);
+    this.gitAccountModal = new GitAccountModal(globalEventBus);
 
     if (typeof document !== 'undefined') {
       this.container = document.createElement('header');
@@ -149,6 +153,12 @@ export class OfficeRibbon {
               <span class="office-autosave-label" id="qat-autosave-label">${t('ribbon.titlebar.autosave')}</span>
               <span class="office-autosave-badge" id="qat-autosave-badge" title="${t('ribbon.titlebar.autosave_saved_badge')}">✓</span>
             </div>
+
+            <!-- Botão e Indicador de Sincronização Git Privado -->
+            <button id="qat-btn-git-sync" class="office-qat-btn" title="${t('git_sync.modal_title', 'Conta Git & Repositório do Projeto')}" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; margin-left: 2px;">
+              <span style="font-size: 13px;">🌿</span>
+              <span id="qat-git-status-badge" style="font-size: 11px; font-weight: 700; color: #0f766e;">Git</span>
+            </button>
 
             <button id="qat-btn-save" class="office-qat-btn" title="${t('ribbon.titlebar.save_now')}">💾</button>
             <button id="qat-btn-undo" class="office-qat-btn" title="${t('ribbon.titlebar.undo')}" disabled>↶</button>
@@ -584,6 +594,10 @@ export class OfficeRibbon {
       }
     });
 
+    this.container.querySelector('#qat-btn-git-sync')?.addEventListener('click', () => {
+      this.gitAccountModal.open();
+    });
+
     this.container.querySelector('#qat-btn-save')?.addEventListener('click', async () => {
       await this.saveNow();
     });
@@ -748,6 +762,55 @@ export class OfficeRibbon {
     globalEventBus.on('locale:changed', () => {
       this.render();
     });
+
+    // Abertura do Modal de Conta Git
+    globalEventBus.on('modal:open-git-account', () => {
+      this.gitAccountModal.open();
+    });
+
+    // Atualização de status do Git no QAT
+    globalEventBus.on('git:syncing', () => {
+      const badge = this.container.querySelector('#qat-git-status-badge') as HTMLElement;
+      if (badge) {
+        badge.textContent = 'Enviando...';
+        badge.style.color = '#0284c7';
+      }
+    });
+
+    globalEventBus.on('git:synced', () => {
+      const badge = this.container.querySelector('#qat-git-status-badge') as HTMLElement;
+      if (badge) {
+        badge.textContent = 'Git ✓';
+        badge.style.color = '#0f766e';
+      }
+    });
+
+    globalEventBus.on('git:error', () => {
+      const badge = this.container.querySelector('#qat-git-status-badge') as HTMLElement;
+      if (badge) {
+        badge.textContent = 'Git ⚠️';
+        badge.style.color = '#dc2626';
+      }
+    });
+
+    globalEventBus.on('git:status-changed', (st: any) => {
+      const badge = this.container.querySelector('#qat-git-status-badge') as HTMLElement;
+      if (badge) {
+        if (!st.gitInstalled) {
+          badge.textContent = 'Sem Git';
+          badge.style.color = '#94a3b8';
+        } else if (st.hasUncommittedChanges) {
+          badge.textContent = 'Git *';
+          badge.style.color = '#d97706';
+        } else {
+          badge.textContent = 'Git ✓';
+          badge.style.color = '#0f766e';
+        }
+      }
+    });
+
+    // Consulta inicial silenciosa de status do Git
+    void GitSyncManager.getInstance().refreshStatus();
 
     // Estado de Execução (Build & Run <-> Stop)
     globalEventBus.on('pipeline:compiling', () => this.setExecutionRunning(true));

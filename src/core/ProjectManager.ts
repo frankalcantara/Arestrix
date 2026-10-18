@@ -172,7 +172,18 @@ export class ProjectManager {
         type: 'sqlite',
         filePath: 'storage/database.sqlite'
       },
-      environment: {}
+      environment: {},
+      git: {
+        enabled: true,
+        provider: 'github',
+        serverUrl: 'https://github.com',
+        username: '',
+        repositoryName: '',
+        remoteUrl: '',
+        isPrivate: true,
+        autoCommitOnRun: true,
+        autoCommitOnShutdown: true
+      }
     };
   }
 

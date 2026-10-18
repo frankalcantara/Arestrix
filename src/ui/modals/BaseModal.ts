@@ -70,7 +70,7 @@ export abstract class BaseModal {
       });
     }
 
-    if (this.config.closeOnEscape) {
+    if (this.config.closeOnEscape && typeof window !== 'undefined') {
       window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && this.isOpen) {
           this.hide();

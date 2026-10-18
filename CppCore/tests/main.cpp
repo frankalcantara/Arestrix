@@ -19,6 +19,7 @@
 #include "core/Graph.hpp"
 #include "platform/Process.hpp"
 #include "project/OpenableFiles.hpp"
+#include "project/GitSyncService.hpp"
 #include "assistant/AssistantSession.hpp"
 #include "assistant/AssistantTools.hpp"
 #include "assistant/GraphDocument.hpp"
@@ -2022,6 +2023,56 @@ TEST(assistant_talks_to_a_real_http_model_in_both_protocols) {
     for (const char* k : {"DEEPSEEK_BASE_URL", "DEEPSEEK_API_KEY", "ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY"}) setTestEnv(k, "");
     server->kill();
     fs::remove_all(root);
+}
+
+TEST(git_sync_service_and_project_manifest_config) {
+    using namespace taskforge::project;
+
+    // 1. Deteccao de servicos comerciais
+    CHECK(GitSyncService::isCommercialService("github"));
+    CHECK(GitSyncService::isCommercialService("https://github.com/org/repo.git"));
+    CHECK(GitSyncService::isCommercialService("gitlab.com"));
+    CHECK(GitSyncService::isCommercialService("bitbucket.org"));
+    CHECK(!GitSyncService::isCommercialService("gitea.local"));
+    CHECK(!GitSyncService::isCommercialService("https://git.empresa.com.br"));
+
+    // 2. Serializacao do Manifesto com Git
+    ProjectManifest m;
+    m.projectId = "test-git-proj";
+    m.name = "Projeto Git Teste";
+    m.git.enabled = true;
+    m.git.provider = "github";
+    m.git.serverUrl = "https://github.com";
+    m.git.username = "frankalcantara";
+    m.git.repositoryName = "projeto-git-teste";
+    m.git.remoteUrl = "https://github.com/frankalcantara/projeto-git-teste.git";
+    m.git.isPrivate = true;
+    m.git.autoCommitOnRun = true;
+    m.git.autoCommitOnShutdown = true;
+
+    taskforge::Json j = m;
+    CHECK(j["git"]["enabled"] == true);
+    CHECK(j["git"]["isPrivate"] == true);
+    CHECK(j["git"]["provider"] == "github");
+    CHECK(j["git"]["repositoryName"] == "projeto-git-teste");
+
+    // Desserializacao
+    auto m2 = j.get<ProjectManifest>();
+    CHECK(m2.git.enabled == true);
+    CHECK(m2.git.isPrivate == true);
+    CHECK(m2.git.username == "frankalcantara");
+    CHECK(m2.git.repositoryName == "projeto-git-teste");
+    CHECK(m2.git.remoteUrl == "https://github.com/frankalcantara/projeto-git-teste.git");
+
+    // 3. Verificacao de presenca do Git na maquina
+    std::string ver;
+    bool installed = GitSyncService::checkGitInstalled(ver);
+    CHECK(installed && !ver.empty());
+
+    // 4. Identidade do SO
+    std::string uName, uEmail;
+    bool hasId = GitSyncService::getSystemIdentity(uName, uEmail);
+    CHECK(hasId && !uName.empty());
 }
 
 int main() {

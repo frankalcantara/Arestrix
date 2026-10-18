@@ -830,6 +830,22 @@ export class BackstageView {
               <p style="margin-bottom: 8px;"><strong>${t('backstage.info.edges_links')}</strong> ${this.graph.getAllEdges().length}</p>
               <p style="margin-bottom: 8px;"><strong>${t('backstage.info.registered_pipelines')}</strong> ${proj.pipelines ? proj.pipelines.length : 0}</p>
             </div>
+
+            <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
+                <h4 style="margin: 0; min-width: 0;">🌿 ${t('git_sync.card_git_title', 'Repositório Git Remoto')}</h4>
+                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0; color: #0f766e; font-weight: 700;">🔒 ${proj.git?.isPrivate !== false ? 'Privado' : 'Público'}</span>
+              </div>
+              <p style="margin-bottom: 8px;"><strong>Provedor:</strong> ${this.escapeHtml(proj.git?.provider || 'GitHub')}</p>
+              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;">
+                <strong>URL Remota:</strong>
+                <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.git?.remoteUrl || 'Não configurado')}</code>
+              </p>
+              <p style="margin-bottom: 8px;"><strong>Auto Commit (F5/Fim):</strong> ${proj.git?.autoCommitOnRun !== false ? 'Ativado' : 'Desativado'}</p>
+              <button class="tool-btn btn-action" id="btn-backstage-open-git" style="margin-top: 6px; font-size: 11.5px; font-weight: 700; background: #0f6cbd; color: #fff; padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer;">
+                🌿 ${t('git_sync.btn_configure_git', 'Configurar Git & Sincronização...')}
+              </button>
+            </div>
           </div>
 
           <div style="margin-top: 14px;">
@@ -1423,6 +1439,11 @@ export class BackstageView {
     // Repositórios do GitHub (Abre diretamente sobre a BackstageView)
     this.overlay.querySelector('#btn-backstage-github-repos')?.addEventListener('click', () => {
       globalEventBus.emit('modal:open-github-repos');
+    });
+
+    // Configurar Git do Projeto
+    this.overlay.querySelector('#btn-backstage-open-git')?.addEventListener('click', () => {
+      globalEventBus.emit('modal:open-git-account');
     });
 
     // Criar Projeto

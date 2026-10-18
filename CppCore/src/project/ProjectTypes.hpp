@@ -54,6 +54,50 @@ inline void from_json(const taskforge::Json& j, ProjectDatabaseConfig& d) {
     d.url = j.value("url", "");
 }
 
+struct ProjectGitConfig {
+    bool enabled = true;
+    std::string provider = "github"; // "github", "gitlab", "gitea", "custom"
+    std::string serverUrl = "https://github.com";
+    std::string username = ""; // Apenas identificador (sem tokens ou senhas)
+    std::string repositoryName = ""; // Nome do repositorio remoto (privado)
+    std::string remoteUrl = ""; // URL remota Git (ex: https://github.com/user/repo.git)
+    bool isPrivate = true;
+    bool autoCommitOnRun = true;
+    bool autoCommitOnShutdown = true;
+    std::string lastSyncAt = "";
+    std::string lastCommitHash = "";
+};
+
+inline void to_json(taskforge::Json& j, const ProjectGitConfig& g) {
+    j = taskforge::Json{
+        {"enabled", g.enabled},
+        {"provider", g.provider},
+        {"serverUrl", g.serverUrl},
+        {"username", g.username},
+        {"repositoryName", g.repositoryName},
+        {"remoteUrl", g.remoteUrl},
+        {"isPrivate", g.isPrivate},
+        {"autoCommitOnRun", g.autoCommitOnRun},
+        {"autoCommitOnShutdown", g.autoCommitOnShutdown},
+        {"lastSyncAt", g.lastSyncAt},
+        {"lastCommitHash", g.lastCommitHash}
+    };
+}
+
+inline void from_json(const taskforge::Json& j, ProjectGitConfig& g) {
+    g.enabled = j.value("enabled", true);
+    g.provider = j.value("provider", "github");
+    g.serverUrl = j.value("serverUrl", "https://github.com");
+    g.username = j.value("username", "");
+    g.repositoryName = j.value("repositoryName", "");
+    g.remoteUrl = j.value("remoteUrl", "");
+    g.isPrivate = j.value("isPrivate", true);
+    g.autoCommitOnRun = j.value("autoCommitOnRun", true);
+    g.autoCommitOnShutdown = j.value("autoCommitOnShutdown", true);
+    g.lastSyncAt = j.value("lastSyncAt", "");
+    g.lastCommitHash = j.value("lastCommitHash", "");
+}
+
 struct ProjectManifest {
     std::string projectId;
     std::string name;
@@ -66,6 +110,7 @@ struct ProjectManifest {
     taskforge::Json globalDefaults = taskforge::Json::object();
     ProjectDatabaseConfig database;
     std::map<std::string, std::string> environment;
+    ProjectGitConfig git;
 };
 
 inline void to_json(taskforge::Json& j, const ProjectManifest& m) {
@@ -80,7 +125,8 @@ inline void to_json(taskforge::Json& j, const ProjectManifest& m) {
         {"pipelines", m.pipelines},
         {"globalDefaults", m.globalDefaults},
         {"database", m.database},
-        {"environment", m.environment}
+        {"environment", m.environment},
+        {"git", m.git}
     };
 }
 
@@ -103,6 +149,9 @@ inline void from_json(const taskforge::Json& j, ProjectManifest& m) {
     }
     if (j.contains("environment")) {
         m.environment = j["environment"].get<std::map<std::string, std::string>>();
+    }
+    if (j.contains("git")) {
+        m.git = j["git"].get<ProjectGitConfig>();
     }
 }
 

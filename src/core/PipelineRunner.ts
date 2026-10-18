@@ -1,6 +1,7 @@
 import { Graph } from './Graph.ts';
 import { GraphValidator } from './Validator.ts';
 import { globalEventBus } from './EventBus.ts';
+import { GitSyncManager } from './git/GitSyncManager.ts';
 
 /** Evento enviado pelo backend C++ durante a execução (window.onArestrixPipelineEvent). */
 export interface IPipelineBackendEvent {
@@ -54,6 +55,14 @@ export class PipelineRunner {
     }
 
     globalEventBus.emit('telemetry:reset');
+
+    // Auto-commit e push no repositório Git a cada execução
+    try {
+      await GitSyncManager.getInstance().syncOnRun();
+    } catch (e) {
+      console.warn('[PipelineRunner] Aviso no Git sync antes de executar:', e);
+    }
+
     globalEventBus.emit('pipeline:compiling', 'Enviando o grafo ao backend C++...');
     PipelineRunner.running = true;
 
