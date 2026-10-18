@@ -13,6 +13,7 @@
     "submodule:check": "node scripts/update-submodules.mjs --check",
     "submodule:update": "node scripts/update-submodules.mjs --update",
     "check:secrets": "node scripts/check-secrets.mjs",
+    "capture:screenshots": "node scripts/capture-screenshots.mjs",
     "hooks:install": "node scripts/install-hooks.mjs"
   },
   "dependencies": {
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@types/three": "^0.169.0",
+    "puppeteer-core": "^25.14.0",
     "typescript": "^5.6.3",
     "vite": "^6.4.4",
     "vite-plugin-singlefile": "^2.3.3",
