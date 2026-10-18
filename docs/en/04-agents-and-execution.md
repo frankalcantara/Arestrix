@@ -149,6 +149,39 @@ Under strict security guidelines, **no secrets, passwords, or API keys are ever 
 - **Prohibited Files Exclusion:** Local credential files (`.env`, `.env.*`, `credentials.json`, `*.key`, `*.pem`, `id_rsa`) are strictly filtered and never copied to distribution folders.
 - **Child Process Scrubbing:** The process driver automatically strips all sensitive environment variables (`_API_KEY`, `_TOKEN`, `_SECRET`, `_PASSWORD`) before launching child tool processes on the host.
 
+## Corporate Governance & Packaging (Phase 2: Enterprise IT & Security)
+
+Phase 2 establishes enterprise security foundations, cryptographic integrity enforcement, and deployment packaging certified for IT and InfoSec (SecOps) teams.
+
+### 1. Fail-Closed Cryptographic Package Validation
+- **Canonical SHA-256 and HMAC-SHA256 / Ed25519 Hashing:** Every generated runner distribution package is hashed canonically using NIST FIPS 180-4 SHA-256.
+- **Embedded & Detached Signatures:** The `runner_manifest.json` file embeds a dedicated `"signature"` section and emits a detached `runner_manifest.json.sig` file.
+- **Fail-Closed Execution Policy:** When `"requiredForExecution": true` is enforced, the runner strictly validates digital signature authenticity and payload integrity prior to bootstrapping the pipeline. Any signature tampering, payload modification, or missing corporate issuer blocks startup immediately with an explicit security audit log.
+
+### 2. Native Enterprise Vault Integration (Zero Secrets in Disk & RAM)
+Enterprise pipelines and autonomous agents do not store secrets or API tokens on local disk files:
+- **Windows Credential Vault (DPAPI):** Native Win32 Credential Manager integration (`CredReadW`, `CredWriteW`, `CredDeleteW`) protected by Windows DPAPI under the `Arestrix/` corporate namespace.
+- **Azure Key Vault (REST API / IMDS):** Direct secret retrieval from Azure Key Vault via native HTTPS REST API (`api-version=7.4`), authenticated seamlessly via Azure Instance Metadata Service (IMDS Managed Identity at `169.254.169.254`) or Entra ID Service Principal tokens.
+- **Cascading Resolution Engine:** Resolves secrets hierarchically (Azure Key Vault -> Windows Credential Vault -> sanitized OS environment variables).
+- **Immediate Memory Purging (`SecureZeroMemory`):** Memory buffers containing tokens, keys, and credentials are scrubbed immediately after use using Win32 `SecureZeroMemory` (`secureWipeMemory`), preventing sensitive tokens from lingering in memory dumps, crash logs, or paging files.
+
+### 3. Enterprise Packaging for Microsoft Intune and SCCM
+To facilitate seamless enterprise rollout via Microsoft Endpoint Manager (Intune) and SCCM, the export process automatically generates enterprise packaging artifacts:
+- **WiX Toolset Corporate MSI Installer:**
+  - Automated `installer.wxs` with deterministic RFC 4122 `UpgradeCode` GUIDs for silent automated upgrades.
+  - Automated build scripts `build_msi.bat` and `build_msi.ps1`.
+  - Silent deployment support:
+    ```cmd
+    msiexec.exe /i "Arestrix_Runner.msi" /qn ALLUSERS=1 /l*v "%TEMP%\install.log"
+    ```
+- **Modern MSIX Package (AppxManifest):**
+  - Generates `AppxManifest.xml` featuring the `runFullTrust` restricted capability for enterprise AppLocker/WDAC environments.
+  - Packaging script `package_msix.ps1` utilizing `MakeAppx.exe` and `SignTool.exe`.
+- **Intune Custom Detection Script (`intune_detection_rule.ps1`):**
+  - PowerShell detection rule script verifying physical installation under `%ProgramFiles%\Arestrix\Runners\` as well as Windows Uninstall Registry keys (`HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`), exiting with code `0` when compliant.
+- **Cryptographic Manifest (`SHA256SUMS`):**
+  - Checksum manifest providing SHA-256 hashes for all bundled distribution files, enabling zero-trust auditing and verification by enterprise EDR and firewall solutions.
+
 ## Related
 
 - [Workspaces, memory, skills and MCP](05-workspaces-memory-skills-mcp.md)

@@ -145,6 +145,9 @@ add_library(arestrix_core STATIC
   ${SRC}/project/OpenableFiles.cpp
   ${SRC}/project/GitSyncService.cpp
   ${SRC}/project/RunnerService.cpp
+  ${SRC}/project/CorporateVault.cpp
+  ${SRC}/project/RunnerSecurity.cpp
+  ${SRC}/project/RunnerPackaging.cpp
   ${SRC}/search/ProjectSearch.cpp
   ${SRC}/search/Synonyms.cpp
   ${SRC}/search/SynonymAgent.cpp

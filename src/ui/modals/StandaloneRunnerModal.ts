@@ -4,6 +4,7 @@ import { RunnerManager, RunnerStatus } from '../../core/runner/RunnerManager.ts'
 import { ProjectManager } from '../../core/ProjectManager.ts';
 import { globalEventBus } from '../../core/EventBus.ts';
 import { t } from '../../i18n/index.ts';
+import { IProjectRunnerConfig } from '../../core/types.ts';
 
 export type RunnerTab = 'progress' | 'diagnostics' | 'operations' | 'export';
 
@@ -418,11 +419,12 @@ export class StandaloneRunnerModal extends BaseModal {
   }
 
   // =========================================================================
-  // TELA 4: EXPORTAR EXECUTÁVEL
+  // TELA 4: EXPORTAR EXECUTÁVEL & GOVERNANÇA CORPORATIVA
   // =========================================================================
   private renderExportScreen(): string {
     const cur = this.projectManager.getCurrentProject();
-    const runnerConfig = cur.runner || {
+    const runnerConfig: IProjectRunnerConfig = cur.runner || {
+      enabled: true,
       title: `${cur.name} Runner`,
       version: cur.version || '1.0.0',
       description: cur.description || '',
@@ -433,74 +435,220 @@ export class StandaloneRunnerModal extends BaseModal {
       allowRestart: true
     };
 
+    const pkg = runnerConfig.packaging || {
+      format: 'standalone-folder',
+      appId: `Arestrix.${cur.name.replace(/[^A-Za-z0-9]/g, '')}.Runner`,
+      publisher: 'CN=Corporate, O=Enterprise, C=BR',
+      silentInstallArgs: '/qn ALLUSERS=1',
+      createDesktopShortcut: true,
+      createStartMenuShortcut: true
+    };
+
+    const vault = runnerConfig.vault || {
+      provider: 'windows-credential-vault',
+      azureKeyVaultUrl: '',
+      azureAuthMethod: 'managed-identity',
+      secretPrefix: 'Arestrix_',
+      fallbackToEnvironment: true,
+      autoPurgeMemory: true
+    };
+
+    const sig = runnerConfig.signature || {
+      enabled: false,
+      algorithm: 'hmac-sha256',
+      keyId: 'corp-signing-key-1',
+      requiredForExecution: false,
+      issuer: 'Arestrix Enterprise Security'
+    };
+
     return `
       <div>
-        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-          <h3 style="font-size: 13px; font-weight: 700; color: #0f172a; margin: 0 0 12px 0; display: flex; align-items: center; gap: 8px;">
-            <span>📦</span> ${t('runner.export_settings_title', 'Configuração do Executável Corporativo')}
-          </h3>
-          <p style="font-size: 11.5px; color: #64748b; margin: 0 0 14px 0;">
-            Gera um pacote standalone autocontido para distribuição corporativa, com o executável nativo do pipeline, o manifesto de execução e scripts de inicialização direta.
-          </p>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px;">
-            <div>
-              <label style="display: block; font-size: 11.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">
-                Título da Aplicação:
-              </label>
-              <input type="text" id="runner-input-title" class="office-input" value="${this.escapeHtml(runnerConfig.title || '')}" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+        <!-- Feedback da Operação de Exportação -->
+        ${this.exportStatusMessage ? `
+          <div style="padding: 12px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; margin-bottom: 14px; ${this.getExportMessageStyle()}">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span>${this.escapeHtml(this.exportStatusMessage)}</span>
+              ${this.lastExportResult?.ok ? `<span style="font-size: 10.5px; background: #059669; color: #ffffff; padding: 2px 8px; border-radius: 4px; font-weight: 700;">Auditoria Fail-Closed OK</span>` : ''}
             </div>
-
-            <div>
-              <label style="display: block; font-size: 11.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">
-                Versão:
-              </label>
-              <input type="text" id="runner-input-version" class="office-input" value="${this.escapeHtml(runnerConfig.version || '1.0.0')}" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
-            </div>
-
-            <div>
-              <label style="display: block; font-size: 11.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">
-                Pasta de Saída (Output Dir):
-              </label>
-              <input type="text" id="runner-input-dir" class="office-input" value="${this.escapeHtml(runnerConfig.outputDir || 'dist/runner')}" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
-            </div>
-
-            <div>
-              <label style="display: block; font-size: 11.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">
-                Nome do Executável (.exe):
-              </label>
-              <input type="text" id="runner-input-exe-name" class="office-input" value="${this.escapeHtml(runnerConfig.outputName || 'runner_app.exe')}" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
-            </div>
+            ${this.lastExportResult?.packagingArtifacts && this.lastExportResult.packagingArtifacts.length > 0 ? `
+              <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.08); font-size: 11px; font-weight: 500;">
+                <div style="font-weight: 700; margin-bottom: 4px;">Artefatos Corporativos Gerados:</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                  ${this.lastExportResult.packagingArtifacts.map((f: string) => {
+                    const name = f.split(/[\\/]/).pop() || f;
+                    return `<span style="background: #ffffff; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 10.5px;">${this.escapeHtml(name)}</span>`;
+                  }).join('')}
+                </div>
+              </div>
+            ` : ''}
           </div>
+        ` : ''}
 
-          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
-              <input type="checkbox" id="runner-chk-autostart" ${runnerConfig.autoStart ? 'checked' : ''}>
-              <span>Iniciar execução do pipeline imediatamente ao abrir o Runner</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
-              <input type="checkbox" id="runner-chk-restart" ${runnerConfig.allowRestart !== false ? 'checked' : ''}>
-              <span>Permitir reinicialização manual pelo operador</span>
-            </label>
+        <!-- Barra Superior de Disparo e Pasta -->
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-size: 13px; font-weight: 700; color: #0f172a;">Exportação & Empacotamento Corporativo</div>
+            <div style="font-size: 11.5px; color: #64748b;">Gera executável autônomo limpo, validação criptográfica e instalador para Intune/SCCM.</div>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button id="btn-export-runner-now" class="tool-btn" style="height: 36px; padding: 0 18px; font-size: 12px; font-weight: 700; background: #0f6cbd; color: #ffffff; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+              <span>🚀</span> Gerar Pacote Agora
+            </button>
+            <button id="btn-launch-exported-runner" class="tool-btn" style="height: 36px; padding: 0 14px; font-size: 12px; font-weight: 700; background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;" ${!this.lastExportResult ? 'disabled' : ''}>
+              <span>📂</span> Abrir Pasta
+            </button>
           </div>
         </div>
 
-        <!-- Ação de Exportação & Feedback -->
-        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
-          ${this.exportStatusMessage ? `
-            <div style="padding: 10px 14px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-bottom: 12px; ${this.getExportMessageStyle()}">
-              ${this.escapeHtml(this.exportStatusMessage)}
-            </div>
-          ` : ''}
+        <!-- Grade 2x2 de Configurações Corporativas -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
 
-          <div style="display: flex; gap: 10px;">
-            <button id="btn-export-runner-now" class="tool-btn" style="height: 38px; padding: 0 20px; font-size: 12.5px; font-weight: 700; background: #0f6cbd; color: #ffffff; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-              <span>🚀</span> Gerar Pacote Standalone Agora
-            </button>
-            <button id="btn-launch-exported-runner" class="tool-btn" style="height: 38px; padding: 0 16px; font-size: 12px; font-weight: 700; background: #e2e8f0; color: #475569; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;" ${!this.lastExportResult ? 'disabled' : ''}>
-              <span>📂</span> Abrir Pasta do Executável
-            </button>
+          <!-- CARD 1: Configuração Básica do Executável -->
+          <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;">
+            <h4 style="font-size: 12px; font-weight: 700; color: #0f172a; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
+              <span>⚙️</span> Executável & Pipeline
+            </h4>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <div>
+                <label style="display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 3px;">Título da Aplicação:</label>
+                <input type="text" id="runner-input-title" class="office-input" value="${this.escapeHtml(runnerConfig.title || '')}" style="width: 100%; height: 30px; padding: 3px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div>
+                  <label style="display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 3px;">Versão:</label>
+                  <input type="text" id="runner-input-version" class="office-input" value="${this.escapeHtml(runnerConfig.version || '1.0.0')}" style="width: 100%; height: 30px; padding: 3px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label style="display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 3px;">Nome do Binário (.exe):</label>
+                  <input type="text" id="runner-input-exe-name" class="office-input" value="${this.escapeHtml(runnerConfig.outputName || 'runner_app.exe')}" style="width: 100%; height: 30px; padding: 3px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+                </div>
+              </div>
+              <div>
+                <label style="display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 3px;">Pasta de Saída:</label>
+                <input type="text" id="runner-input-dir" class="office-input" value="${this.escapeHtml(runnerConfig.outputDir || 'dist/runner')}" style="width: 100%; height: 30px; padding: 3px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; cursor: pointer;">
+                  <input type="checkbox" id="runner-chk-autostart" ${runnerConfig.autoStart ? 'checked' : ''}>
+                  <span>Iniciar pipeline automaticamente ao carregar</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; cursor: pointer;">
+                  <input type="checkbox" id="runner-chk-restart" ${runnerConfig.allowRestart !== false ? 'checked' : ''}>
+                  <span>Permitir reinício manual pelo operador</span>
+                </label>
+              </div>
+            </div>
           </div>
+
+          <!-- CARD 2: Empacotamento Corporativo (MSI / MSIX / Intune) -->
+          <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;">
+            <h4 style="font-size: 12px; font-weight: 700; color: #0f172a; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
+              <span>📦</span> Empacotamento (Intune & SCCM)
+            </h4>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <div>
+                <label style="display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 3px;">Formato de Distribuição:</label>
+                <select id="runner-select-pkg-format" class="office-select" style="width: 100%; height: 30px; padding: 3px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; background: #ffffff;">
+                  <option value="standalone-folder" ${pkg.format === 'standalone-folder' ? 'selected' : ''}>Pasta Standalone com Scripts (.bat)</option>
+                  <option value="msi-installer" ${pkg.format === 'msi-installer' ? 'selected' : ''}>Instalador Corporativo MSI (WiX Toolset)</option>
+                  <option value="msix-package" ${pkg.format === 'msix-package' ? 'selected' : ''}>Pacote Moderno MSIX (AppxManifest)</option>
+                </select>
+              </div>
+              <div>
+                <label style="display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 3px;">ID da Aplicação Corporativa:</label>
+                <input type="text" id="runner-input-pkg-appid" class="office-input" value="${this.escapeHtml(pkg.appId || '')}" style="width: 100%; height: 30px; padding: 3px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+              </div>
+              <div>
+                <label style="display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 3px;">Fabricante / Publisher:</label>
+                <input type="text" id="runner-input-pkg-publisher" class="office-input" value="${this.escapeHtml(pkg.publisher || 'CN=Corporate, O=Enterprise, C=BR')}" style="width: 100%; height: 30px; padding: 3px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+              </div>
+              <div style="display: flex; gap: 14px; margin-top: 4px;">
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; cursor: pointer;">
+                  <input type="checkbox" id="runner-chk-pkg-desktop" ${pkg.createDesktopShortcut !== false ? 'checked' : ''}>
+                  <span>Atalho no Desktop</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; cursor: pointer;">
+                  <input type="checkbox" id="runner-chk-pkg-startmenu" ${pkg.createStartMenuShortcut !== false ? 'checked' : ''}>
+                  <span>Menu Iniciar</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- CARD 3: Governança & Cofre de Segredos Corporativos -->
+          <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;">
+            <h4 style="font-size: 12px; font-weight: 700; color: #0f172a; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
+              <span>🔒</span> Cofre Corporativo (Zero Secrets)
+            </h4>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <div>
+                <label style="display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 3px;">Provedor de Chaves / Segredos:</label>
+                <select id="runner-select-vault-provider" class="office-select" style="width: 100%; height: 30px; padding: 3px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; background: #ffffff;">
+                  <option value="windows-credential-vault" ${vault.provider === 'windows-credential-vault' ? 'selected' : ''}>Cofre do Windows (Credential Manager / DPAPI)</option>
+                  <option value="azure-key-vault" ${vault.provider === 'azure-key-vault' ? 'selected' : ''}>Azure Key Vault (Managed Identity / Entra ID)</option>
+                  <option value="hybrid" ${vault.provider === 'hybrid' ? 'selected' : ''}>Híbrido (Azure Key Vault com fallback DPAPI)</option>
+                  <option value="none" ${vault.provider === 'none' ? 'selected' : ''}>Apenas Variáveis de Ambiente do SO</option>
+                </select>
+              </div>
+              <div>
+                <label style="display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 3px;">URL do Azure Key Vault (opcional):</label>
+                <input type="text" id="runner-input-akv-url" class="office-input" value="${this.escapeHtml(vault.azureKeyVaultUrl || '')}" placeholder="https://corp-vault.vault.azure.net" style="width: 100%; height: 30px; padding: 3px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div>
+                  <label style="display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 3px;">Autenticação Azure:</label>
+                  <select id="runner-select-akv-auth" class="office-select" style="width: 100%; height: 30px; padding: 3px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; background: #ffffff;">
+                    <option value="managed-identity" ${vault.azureAuthMethod === 'managed-identity' ? 'selected' : ''}>Managed Identity (IMDS)</option>
+                    <option value="service-principal" ${vault.azureAuthMethod === 'service-principal' ? 'selected' : ''}>Service Principal</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 3px;">Prefixo de Segredos:</label>
+                  <input type="text" id="runner-input-secret-prefix" class="office-input" value="${this.escapeHtml(vault.secretPrefix || 'Arestrix_')}" style="width: 100%; height: 30px; padding: 3px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+                </div>
+              </div>
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; cursor: pointer; margin-top: 4px;">
+                <input type="checkbox" id="runner-chk-vault-purge" ${vault.autoPurgeMemory !== false ? 'checked' : ''}>
+                <span>Limpeza imediata de memória RAM (SecureZeroMemory)</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- CARD 4: Assinatura Criptográfica & Integridade Fail-Closed -->
+          <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;">
+            <h4 style="font-size: 12px; font-weight: 700; color: #0f172a; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
+              <span>🛡️</span> Assinatura & Integridade (Fail-Closed)
+            </h4>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
+                <input type="checkbox" id="runner-chk-sig-enabled" ${sig.enabled ? 'checked' : ''}>
+                <span>Habilitar Assinatura Digital do Pacote</span>
+              </label>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div>
+                  <label style="display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 3px;">Algoritmo:</label>
+                  <select id="runner-select-sig-algo" class="office-select" style="width: 100%; height: 30px; padding: 3px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; background: #ffffff;">
+                    <option value="hmac-sha256" ${sig.algorithm === 'hmac-sha256' ? 'selected' : ''}>HMAC-SHA256 (NIST FIPS)</option>
+                    <option value="ed25519" ${sig.algorithm === 'ed25519' ? 'selected' : ''}>Ed25519 (Chave Pública)</option>
+                    <option value="sha256-rsa" ${sig.algorithm === 'sha256-rsa' ? 'selected' : ''}>SHA256-RSA PKCS#1</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 3px;">Alias da Chave / KeyId:</label>
+                  <input type="text" id="runner-input-sig-keyid" class="office-input" value="${this.escapeHtml(sig.keyId || 'corp-signing-key-1')}" style="width: 100%; height: 30px; padding: 3px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+                </div>
+              </div>
+              <div>
+                <label style="display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 3px;">Emissor / Autoridade Corporativa:</label>
+                <input type="text" id="runner-input-sig-issuer" class="office-input" value="${this.escapeHtml(sig.issuer || 'Arestrix Enterprise Security')}" style="width: 100%; height: 30px; padding: 3px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+              </div>
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; cursor: pointer; margin-top: 4px;">
+                <input type="checkbox" id="runner-chk-sig-required" ${sig.requiredForExecution ? 'checked' : ''}>
+                <span>Exigir assinatura válida para execução (bloqueio fail-closed)</span>
+              </label>
+            </div>
+          </div>
+
         </div>
       </div>
     `;
@@ -606,19 +754,67 @@ export class StandaloneRunnerModal extends BaseModal {
     const autoStart = (this.dialog.querySelector('#runner-chk-autostart') as HTMLInputElement)?.checked ?? false;
     const allowRestart = (this.dialog.querySelector('#runner-chk-restart') as HTMLInputElement)?.checked ?? true;
 
+    // Empacotamento
+    const pkgFormat = (this.dialog.querySelector('#runner-select-pkg-format') as HTMLSelectElement)?.value || 'standalone-folder';
+    const pkgAppId = (this.dialog.querySelector('#runner-input-pkg-appid') as HTMLInputElement)?.value.trim();
+    const pkgPublisher = (this.dialog.querySelector('#runner-input-pkg-publisher') as HTMLInputElement)?.value.trim();
+    const pkgDesktop = (this.dialog.querySelector('#runner-chk-pkg-desktop') as HTMLInputElement)?.checked ?? true;
+    const pkgStartMenu = (this.dialog.querySelector('#runner-chk-pkg-startmenu') as HTMLInputElement)?.checked ?? true;
+
+    // Cofre
+    const vaultProvider = (this.dialog.querySelector('#runner-select-vault-provider') as HTMLSelectElement)?.value || 'windows-credential-vault';
+    const akvUrl = (this.dialog.querySelector('#runner-input-akv-url') as HTMLInputElement)?.value.trim();
+    const akvAuth = (this.dialog.querySelector('#runner-select-akv-auth') as HTMLSelectElement)?.value || 'managed-identity';
+    const secretPrefix = (this.dialog.querySelector('#runner-input-secret-prefix') as HTMLInputElement)?.value.trim() || 'Arestrix_';
+    const vaultPurge = (this.dialog.querySelector('#runner-chk-vault-purge') as HTMLInputElement)?.checked ?? true;
+
+    // Assinatura
+    const sigEnabled = (this.dialog.querySelector('#runner-chk-sig-enabled') as HTMLInputElement)?.checked ?? false;
+    const sigAlgo = (this.dialog.querySelector('#runner-select-sig-algo') as HTMLSelectElement)?.value || 'hmac-sha256';
+    const sigKeyId = (this.dialog.querySelector('#runner-input-sig-keyid') as HTMLInputElement)?.value.trim();
+    const sigIssuer = (this.dialog.querySelector('#runner-input-sig-issuer') as HTMLInputElement)?.value.trim();
+    const sigRequired = (this.dialog.querySelector('#runner-chk-sig-required') as HTMLInputElement)?.checked ?? false;
+
     this.exportStatusMessage = 'Compilando e gerando pacote standalone...';
     this.exportStatusType = 'info';
     this.render();
 
-    const res = await this.runnerManager.exportStandaloneRunner(this.graph, {
+    const runnerConfigToSave = {
       title,
       version,
       outputDir,
       outputName,
       autoStart,
       allowRestart,
-      defaultTab: 'progress'
-    });
+      defaultTab: 'progress' as const,
+      packaging: {
+        format: pkgFormat as any,
+        appId: pkgAppId,
+        publisher: pkgPublisher,
+        silentInstallArgs: '/qn ALLUSERS=1',
+        createDesktopShortcut: pkgDesktop,
+        createStartMenuShortcut: pkgStartMenu
+      },
+      vault: {
+        provider: vaultProvider as any,
+        azureKeyVaultUrl: akvUrl,
+        azureAuthMethod: akvAuth as any,
+        secretPrefix,
+        autoPurgeMemory: vaultPurge,
+        fallbackToEnvironment: true
+      },
+      signature: {
+        enabled: sigEnabled,
+        algorithm: sigAlgo as any,
+        keyId: sigKeyId,
+        issuer: sigIssuer,
+        requiredForExecution: sigRequired
+      }
+    };
+
+    this.projectManager.updateProjectMetadata({ runner: runnerConfigToSave as any }, this.graph);
+
+    const res = await this.runnerManager.exportStandaloneRunner(this.graph, runnerConfigToSave);
 
     this.lastExportResult = res;
     if (res.ok) {

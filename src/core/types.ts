@@ -423,6 +423,38 @@ export interface IProjectRunnerParameter {
   description?: string;
 }
 
+export interface IRunnerSignatureConfig {
+  enabled: boolean;
+  algorithm: 'hmac-sha256' | 'ed25519' | 'sha256-rsa';
+  keyId?: string;
+  publicKey?: string;
+  requiredForExecution: boolean;
+  signature?: string;
+  signedAt?: string;
+  issuer?: string;
+}
+
+export interface IRunnerVaultConfig {
+  provider: 'windows-credential-vault' | 'azure-key-vault' | 'hybrid' | 'none';
+  azureKeyVaultUrl?: string;
+  azureAuthMethod?: 'managed-identity' | 'service-principal' | 'azure-cli';
+  azureTenantId?: string;
+  azureClientId?: string;
+  secretPrefix?: string;
+  fallbackToEnvironment?: boolean;
+  autoPurgeMemory?: boolean;
+}
+
+export interface IRunnerPackagingConfig {
+  format: 'standalone-folder' | 'msi-installer' | 'msix-package';
+  appId?: string;
+  publisher?: string;
+  upgradeCode?: string;
+  silentInstallArgs?: string;
+  createDesktopShortcut?: boolean;
+  createStartMenuShortcut?: boolean;
+}
+
 export interface IProjectRunnerConfig {
   enabled: boolean;
   title?: string;
@@ -434,6 +466,9 @@ export interface IProjectRunnerConfig {
   defaultTab?: 'progress' | 'diagnostics' | 'operations';
   allowRestart?: boolean;
   parameters?: IProjectRunnerParameter[];
+  signature?: IRunnerSignatureConfig;
+  vault?: IRunnerVaultConfig;
+  packaging?: IRunnerPackagingConfig;
 }
 
 export interface IProjectManifest {

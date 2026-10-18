@@ -21,6 +21,9 @@
 #include "project/OpenableFiles.hpp"
 #include "project/GitSyncService.hpp"
 #include "project/RunnerService.hpp"
+#include "project/CorporateVault.hpp"
+#include "project/RunnerSecurity.hpp"
+#include "project/RunnerPackaging.hpp"
 #include "assistant/AssistantSession.hpp"
 #include "assistant/AssistantTools.hpp"
 #include "assistant/GraphDocument.hpp"
@@ -2183,6 +2186,237 @@ TEST(runner_security_audit_blocks_secrets_fail_closed) {
     auto res = RunnerService::exportRunner(tempRoot, m, g);
     CHECK(res.ok == false);
     CHECK(res.error.find("Segredo detectado") != std::string::npos || res.error.find("fail-closed") != std::string::npos);
+
+    fs::remove_all(tempRoot);
+}
+
+TEST(runner_security_cryptographic_signature_fail_closed) {
+    using namespace taskforge::project;
+
+    // 1. Validacao de vetores SHA-256 conhecidos (NIST FIPS 180-4)
+    CHECK(RunnerSecurity::sha256("") == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    CHECK(RunnerSecurity::sha256("hello world") == "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+
+    // 2. Assinatura e verificacao de integridade de pacote
+    auto tempRoot = makeTempDir("runner-sig-test");
+    auto manifestPath = tempRoot / "runner_manifest.json";
+    {
+        std::ofstream out(manifestPath);
+        out << "{\n  \"name\": \"TestPipeline\",\n  \"version\": \"1.0.0\"\n}\n";
+    }
+
+    std::string testSigningSecret = "test-corp-secret-signing-key";
+    auto sigRes = RunnerSecurity::signPackage(
+        manifestPath,
+        testSigningSecret,
+        "hmac-sha256",
+        "Arestrix Corporate Security",
+        "key-corp-01"
+    );
+
+    CHECK(sigRes.ok == true);
+    CHECK(!sigRes.signature.empty());
+    CHECK(!sigRes.packageHash.empty());
+    CHECK(fs::exists(tempRoot / "runner_manifest.json.sig"));
+
+    // 3. Verificacao valida deve passar
+    std::string vErr;
+    bool valid = RunnerSecurity::verifyPackage(manifestPath, testSigningSecret, true, vErr);
+    CHECK(valid == true);
+    CHECK(vErr.empty());
+
+    // 4. Delegacao do RunnerService::verifyPackage
+    bool validViaService = RunnerService::verifyPackage(manifestPath, testSigningSecret, true, vErr);
+    CHECK(validViaService == true);
+
+    // 5. Tentativa de adulteracao do pacote (ataque de adulteracao de grafo/manifesto)
+    {
+        auto jTamper = taskforge::jsonutil::parseFile(manifestPath);
+        jTamper["version"] = "9.9.9-malicious";
+        std::ofstream out(manifestPath, std::ios::trunc);
+        out << jTamper.dump(2);
+    }
+
+    // Fail-Closed: a verificacao DEVE falhar imediatamente e bloquear a execucao
+    bool tamperedValid = RunnerSecurity::verifyPackage(manifestPath, testSigningSecret, true, vErr);
+    CHECK(tamperedValid == false);
+    CHECK(!vErr.empty());
+    CHECK(vErr.find("Bloqueio de seguranca") != std::string::npos || vErr.find("fail-closed") != std::string::npos);
+
+    // 6. Manifesto sem assinatura com politica obrigatoria (fail-closed)
+    auto unsignedManifest = tempRoot / "unsigned_manifest.json";
+    {
+        std::ofstream out(unsignedManifest);
+        out << "{\n  \"name\": \"Unsigned\",\n  \"version\": \"1.0.0\"\n}\n";
+    }
+    bool unsignedValid = RunnerSecurity::verifyPackage(unsignedManifest, testSigningSecret, true, vErr);
+    CHECK(unsignedValid == false);
+    CHECK(vErr.find("fail-closed") != std::string::npos);
+
+    fs::remove_all(tempRoot);
+}
+
+TEST(runner_corporate_vault_and_memory_purging) {
+    using namespace taskforge::project;
+
+    // 1. Limpeza segura de memoria RAM (SecureZeroMemory)
+    std::string testSensitiveBuffer = "test_sensitive_memory_wipe_buffer_123456789";
+    size_t origSize = testSensitiveBuffer.size();
+    CHECK(origSize > 0);
+    secureWipeString(testSensitiveBuffer);
+    CHECK(testSensitiveBuffer.empty());
+
+    char rawBuffer[64];
+    std::memset(rawBuffer, 0xAA, sizeof(rawBuffer));
+    secureWipeMemory(rawBuffer, sizeof(rawBuffer));
+    bool allZero = true;
+    for (size_t i = 0; i < sizeof(rawBuffer); ++i) {
+        if (rawBuffer[i] != 0) allZero = false;
+    }
+    CHECK(allZero == true);
+
+    // 2. Resolucao corporativa em cascata com fallback para Variaveis de Ambiente
+#ifdef _WIN32
+    _putenv("ARESTRIX_TEST_CORP_TOKEN=CorporateTokenValue123");
+#else
+    setenv("ARESTRIX_TEST_CORP_TOKEN", "CorporateTokenValue123", 1);
+#endif
+
+    RunnerVaultConfig vConfig;
+    vConfig.provider = "windows-credential-vault";
+    vConfig.fallbackToEnvironment = true;
+
+    std::string resolvedSec;
+    std::string rErr;
+    bool resOk = CorporateSecretResolver::resolve("ARESTRIX_TEST_CORP_TOKEN", vConfig, resolvedSec, rErr);
+    CHECK(resOk == true);
+    CHECK(resolvedSec == "CorporateTokenValue123");
+    secureWipeString(resolvedSec);
+
+    // Tentativa de segredo inexistente deve falhar limpa sem crash
+    std::string notFound;
+    bool notFoundOk = CorporateSecretResolver::resolve("NON_EXISTENT_ARESTRIX_SECRET_XYZ", vConfig, notFound, rErr);
+    CHECK(notFoundOk == false);
+    CHECK(!rErr.empty());
+
+    // 3. Teste do Windows Credential Vault (se disponivel no Windows)
+#ifdef _WIN32
+    if (WindowsCredentialVault::isAvailable()) {
+        std::string winErr;
+        std::string testKey = "TestCorpRunnerKey";
+        std::string testVal = "SecretDPAPIProtectedValue42";
+
+        bool stored = WindowsCredentialVault::storeSecret(testKey, testVal, winErr);
+        if (stored) {
+            std::string readVal;
+            bool readOk = WindowsCredentialVault::readSecret(testKey, readVal, winErr);
+            CHECK(readOk == true);
+            CHECK(readVal == testVal);
+            secureWipeString(readVal);
+
+            bool deleted = WindowsCredentialVault::deleteSecret(testKey, winErr);
+            CHECK(deleted == true);
+        }
+    }
+#endif
+}
+
+TEST(runner_enterprise_packaging_wix_msix_and_intune) {
+    using namespace taskforge::project;
+
+    // 1. Validacao de GUID deterministico RFC 4122
+    std::string guid1 = RunnerPackaging::formatGuid("Arestrix.Finance.Runner");
+    std::string guid2 = RunnerPackaging::formatGuid("Arestrix.Finance.Runner");
+    CHECK(guid1 == guid2); // Determinismo
+    CHECK(guid1.size() == 38);
+    CHECK(guid1.front() == '{' && guid1.back() == '}');
+    CHECK(guid1[15] == '4'); // UUID v4 version nibble
+
+    std::string guidOther = RunnerPackaging::formatGuid("Arestrix.Other.Runner");
+    CHECK(guid1 != guidOther);
+
+    // 2. Geracao de instalador corporativo WiX MSI para Intune e SCCM
+    auto tempRoot = makeTempDir("runner-packaging-test");
+    ProjectManifest m;
+    m.name = "BillingPipeline";
+    m.version = "1.3.0";
+    m.description = "Corporate automated billing runner";
+    m.runner.enabled = true;
+    m.runner.title = "Billing Pipeline Runner";
+    m.runner.packaging.format = "msi-installer";
+    m.runner.packaging.appId = "Arestrix.Billing.Runner";
+    m.runner.packaging.publisher = "CN=Corporate TI, O=Enterprise, C=BR";
+    m.runner.packaging.silentInstallArgs = "/qn ALLUSERS=1";
+    m.runner.packaging.createDesktopShortcut = true;
+    m.runner.packaging.createStartMenuShortcut = true;
+
+    // Cria arquivos ficticios para integridade do checksum
+    {
+        std::ofstream(tempRoot / "billing_runner.exe") << "MZ-BINARY-STUB";
+        std::ofstream(tempRoot / "runner_manifest.json") << "{\"format\":\"runner\"}";
+        std::ofstream(tempRoot / "run.bat") << "@echo off";
+    }
+
+    auto pkgRes = RunnerPackaging::generatePackagingArtifacts(tempRoot, m, "billing_runner.exe");
+    CHECK(pkgRes.ok == true);
+    CHECK(fs::exists(tempRoot / "installer.wxs"));
+    CHECK(fs::exists(tempRoot / "build_msi.bat"));
+    CHECK(fs::exists(tempRoot / "build_msi.ps1"));
+    CHECK(fs::exists(tempRoot / "intune_detection_rule.ps1"));
+    CHECK(fs::exists(tempRoot / "intune_install_command.txt"));
+    CHECK(fs::exists(tempRoot / "SHA256SUMS"));
+
+    // Inspeciona conteudo do installer.wxs
+    {
+        std::ifstream in(tempRoot / "installer.wxs");
+        std::stringstream ss;
+        ss << in.rdbuf();
+        std::string wxsContent = ss.str();
+        CHECK(wxsContent.find("<Wix") != std::string::npos);
+        CHECK(wxsContent.find("Billing Pipeline Runner") != std::string::npos);
+        CHECK(wxsContent.find("Version=\"1.3.0\"") != std::string::npos);
+        CHECK(wxsContent.find("Manufacturer=\"CN=Corporate TI, O=Enterprise, C=BR\"") != std::string::npos);
+        CHECK(wxsContent.find("InstallScope=\"perMachine\"") != std::string::npos);
+    }
+
+    // Inspeciona regra de deteccao Intune
+    {
+        std::ifstream in(tempRoot / "intune_detection_rule.ps1");
+        std::stringstream ss;
+        ss << in.rdbuf();
+        std::string psContent = ss.str();
+        CHECK(psContent.find("$AppName = \"Billing Pipeline Runner\"") != std::string::npos);
+        CHECK(psContent.find("exit 0") != std::string::npos);
+        CHECK(psContent.find("exit 1") != std::string::npos);
+    }
+
+    // Inspeciona SHA256SUMS
+    {
+        std::ifstream in(tempRoot / "SHA256SUMS");
+        std::stringstream ss;
+        ss << in.rdbuf();
+        std::string sums = ss.str();
+        CHECK(!sums.empty());
+        CHECK(sums.find("billing_runner.exe") != std::string::npos);
+        CHECK(sums.find("runner_manifest.json") != std::string::npos);
+    }
+
+    // 3. Geracao de pacote modernizado MSIX (AppxManifest.xml)
+    m.runner.packaging.format = "msix-package";
+    auto msixRes = RunnerPackaging::generatePackagingArtifacts(tempRoot, m, "billing_runner.exe");
+    CHECK(msixRes.ok == true);
+    CHECK(fs::exists(tempRoot / "AppxManifest.xml"));
+    CHECK(fs::exists(tempRoot / "package_msix.ps1"));
+
+    {
+        std::ifstream in(tempRoot / "AppxManifest.xml");
+        std::stringstream ss;
+        ss << in.rdbuf();
+        std::string xmlContent = ss.str();
+        CHECK(xmlContent.find("<Package") != std::string::npos);
+        CHECK(xmlContent.find("runFullTrust") != std::string::npos);
+        CHECK(xmlContent.find("Name=\"Arestrix.Billing.Runner\"") != std::string::npos);
+    }
 
     fs::remove_all(tempRoot);
 }

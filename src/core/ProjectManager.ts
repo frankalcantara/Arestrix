@@ -198,7 +198,30 @@ export class ProjectManager {
         autoStart: false,
         defaultTab: 'progress',
         allowRestart: true,
-        parameters: []
+        parameters: [],
+        signature: {
+          enabled: false,
+          algorithm: 'hmac-sha256',
+          keyId: 'corp-signing-key-1',
+          requiredForExecution: false,
+          issuer: 'Arestrix Enterprise Security'
+        },
+        vault: {
+          provider: 'windows-credential-vault',
+          azureKeyVaultUrl: '',
+          azureAuthMethod: 'managed-identity',
+          secretPrefix: 'Arestrix_',
+          fallbackToEnvironment: true,
+          autoPurgeMemory: true
+        },
+        packaging: {
+          format: 'standalone-folder',
+          appId: 'Arestrix.Company.PipelineRunner',
+          publisher: 'CN=Corporate, O=Enterprise, C=BR',
+          silentInstallArgs: '/qn ALLUSERS=1',
+          createDesktopShortcut: true,
+          createStartMenuShortcut: true
+        }
       }
     };
   }

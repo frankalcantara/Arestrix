@@ -40,6 +40,8 @@ export interface IRunnerExportResult {
   outputDir?: string;
   executablePath?: string;
   manifestPath?: string;
+  signaturePath?: string;
+  packagingArtifacts?: string[];
 }
 
 export interface IRunnerDiagnostics {

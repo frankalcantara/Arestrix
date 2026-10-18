@@ -147,6 +147,39 @@ Por diretriz rígida de segurança e conformidade, **nenhum segredo, senha ou ch
 - **Bloqueio de Arquivos Proibidos:** Arquivos de credenciais locais (`.env`, `.env.*`, `credentials.json`, `*.key`, `*.pem`, `id_rsa`) são filtrados e nunca são transferidos para a pasta de distribuição.
 - **Higienização de Subprocessos:** O driver de processos do Arestrix remove automaticamente todas as variáveis com sufixos sensíveis (`_API_KEY`, `_TOKEN`, `_SECRET`, `_PASSWORD`) antes de lançar qualquer ferramenta filha no host.
 
+## Governança & Empacotamento Corporativo (Fase 2: TI e Segurança Corporativa)
+
+A Fase 2 estabelece os pilares de segurança corporativa, integridade criptográfica e homologação para equipes de TI e Segurança da Informação (SecOps).
+
+### 1. Validação Criptográfica de Pacotes (Fail-Closed)
+- **Hash Canônico SHA-256 e HMAC-SHA256 / Ed25519:** Cada pacote gerado recebe um hash criptográfico canônico do manifesto do pipeline.
+- **Assinatura Desanexada e no Manifesto:** O arquivo `runner_manifest.json` recebe a seção `"signature"` e opcionalmente emite o arquivo `runner_manifest.json.sig`.
+- **Execução Estrita (Fail-Closed):** Quando `"requiredForExecution": true`, o Runner verifica a integridade e autenticidade da assinatura digital antes de inicializar o runtime. Qualquer divergência de hash, corrupção de dados ou ausência de assinatura corporativa autorizada bloqueia a execução imediatamente com log explícito de auditoria.
+
+### 2. Integração com Cofres Corporativos (Zero Secrets em Disco e Memória)
+Os agentes e pipelines corporativos não precisam e **não devem** manter chaves de API ou segredos gravados em arquivos locais:
+- **Windows Credential Vault (DPAPI):** Integração nativa via Win32 Credential Manager (`CredReadW`, `CredWriteW`, `CredDeleteW`) protegida pelo subsistema de segurança do Windows sob o namespace corporativo `Arestrix/`.
+- **Azure Key Vault (REST API / IMDS):** Resolução direta de segredos corporativos no Azure Key Vault via REST API nativa (`api-version=7.4`), autenticada transparentemente por Managed Identity (IMDS no endereço `169.254.169.254`) ou credenciais de Service Principal do Entra ID.
+- **Resolução em Cascata Segura:** O resolvedor corporativo busca primeiro no Azure Key Vault (se configurado), recai sobre o Windows Credential Vault e, por fim, consulta variáveis de ambiente autorizadas.
+- **Limpeza Imediata de Memória RAM (`SecureZeroMemory`):** Buffers de texto e estruturas que manipulam tokens e chaves são imediatamente apagados da memória com chamadas nativas de `SecureZeroMemory` (`secureWipeMemory`), impedindo persistência de credenciais em dumps de memória, arquivos de paginação ou hibernação do sistema operacional.
+
+### 3. Empacotamento Homologável para Microsoft Intune e SCCM
+Para viabilizar a implantação automatizada em larga escala pelas equipes de TI corporativa, a exportação gera os artefatos de empacotamento corporativo:
+- **Instalador MSI Corporativo (WiX Toolset):**
+  - Geração de `installer.wxs` parametrizado com `UpgradeCode` determinístico RFC 4122 para suportar atualizações silenciosas automáticas (*major/minor upgrades*).
+  - Scripts automatizados `build_msi.bat` e `build_msi.ps1`.
+  - Suporte completo aos parâmetros de implantação silenciosa corporativa:
+    ```cmd
+    msiexec.exe /i "Arestrix_Runner.msi" /qn ALLUSERS=1 /l*v "%TEMP%\install.log"
+    ```
+- **Pacote Moderno MSIX (AppxManifest):**
+  - Geração de `AppxManifest.xml` com capability `runFullTrust` para ambientes com restrição de execução (AppLocker / Windows Defender Application Control).
+  - Script `package_msix.ps1` para geração com `MakeAppx.exe` e assinatura digital via `SignTool.exe`.
+- **Regra de Detecção Personalizada para Intune (`intune_detection_rule.ps1`):**
+  - Script em PowerShell compatível com o portal do Microsoft Intune (Endpoint Manager) que inspeciona o caminho físico da instalação em `%ProgramFiles%\Arestrix\Runners\` e o registro do Windows (`HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`), retornando código `0` quando o pacote estiver instalado e na versão correta.
+- **Manifesto de Integridade (`SHA256SUMS`):**
+  - Lista canônica de hashes SHA-256 de todos os arquivos do pacote de distribuição para validação e auditoria por firewalls e ferramentas de EDR corporativo.
+
 ## Relacionados
 
 - [Workspaces, memória, skills e MCP](05-workspaces-memoria-skills-mcp.md)

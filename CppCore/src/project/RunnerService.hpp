@@ -14,6 +14,8 @@ struct RunnerExportResult {
     std::string outputDir;
     std::string executablePath;
     std::string manifestPath;
+    std::string signaturePath;
+    std::vector<std::string> packagingArtifacts;
 };
 
 class RunnerService {
@@ -38,6 +40,14 @@ public:
 
     static bool auditDirectoryForSecrets(
         const std::filesystem::path& dir,
+        std::string& outError
+    );
+
+    // Validacao criptografica fail-closed do pacote de distribuicao
+    static bool verifyPackage(
+        const std::filesystem::path& manifestPath,
+        const std::string& publicKeyOrSecret,
+        bool requiredForExecution,
         std::string& outError
     );
 };

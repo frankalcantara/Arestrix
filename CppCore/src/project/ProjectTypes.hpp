@@ -124,6 +124,111 @@ inline void from_json(const taskforge::Json& j, ProjectRunnerParameter& p) {
     p.description = j.value("description", "");
 }
 
+// Fase 2: Governanca e Assinatura Criptografica de Pacotes
+struct RunnerSignatureConfig {
+    bool enabled = false;
+    std::string algorithm = "ed25519"; // "ed25519", "sha256-rsa", "hmac-sha256"
+    std::string keyId;
+    std::string publicKey;
+    bool requiredForExecution = false; // Se true, o runner recusa executar pacotes sem assinatura valida (fail-closed)
+    std::string signature;
+    std::string signedAt;
+    std::string issuer;
+};
+
+inline void to_json(taskforge::Json& j, const RunnerSignatureConfig& s) {
+    j = taskforge::Json{
+        {"enabled", s.enabled},
+        {"algorithm", s.algorithm},
+        {"keyId", s.keyId},
+        {"publicKey", s.publicKey},
+        {"requiredForExecution", s.requiredForExecution},
+        {"signature", s.signature},
+        {"signedAt", s.signedAt},
+        {"issuer", s.issuer}
+    };
+}
+
+inline void from_json(const taskforge::Json& j, RunnerSignatureConfig& s) {
+    s.enabled = j.value("enabled", false);
+    s.algorithm = j.value("algorithm", "ed25519");
+    s.keyId = j.value("keyId", "");
+    s.publicKey = j.value("publicKey", "");
+    s.requiredForExecution = j.value("requiredForExecution", false);
+    s.signature = j.value("signature", "");
+    s.signedAt = j.value("signedAt", "");
+    s.issuer = j.value("issuer", "");
+}
+
+// Fase 2: Integracao com Cofres Corporativos (Windows Credential Vault e Azure Key Vault)
+struct RunnerVaultConfig {
+    std::string provider = "windows-credential-vault"; // "windows-credential-vault", "azure-key-vault", "hybrid", "none"
+    std::string azureKeyVaultUrl;
+    std::string azureAuthMethod = "managed-identity"; // "managed-identity", "service-principal", "azure-cli"
+    std::string azureTenantId;
+    std::string azureClientId;
+    std::string secretPrefix = "Arestrix_";
+    bool fallbackToEnvironment = true;
+    bool autoPurgeMemory = true;
+};
+
+inline void to_json(taskforge::Json& j, const RunnerVaultConfig& v) {
+    j = taskforge::Json{
+        {"provider", v.provider},
+        {"azureKeyVaultUrl", v.azureKeyVaultUrl},
+        {"azureAuthMethod", v.azureAuthMethod},
+        {"azureTenantId", v.azureTenantId},
+        {"azureClientId", v.azureClientId},
+        {"secretPrefix", v.secretPrefix},
+        {"fallbackToEnvironment", v.fallbackToEnvironment},
+        {"autoPurgeMemory", v.autoPurgeMemory}
+    };
+}
+
+inline void from_json(const taskforge::Json& j, RunnerVaultConfig& v) {
+    v.provider = j.value("provider", "windows-credential-vault");
+    v.azureKeyVaultUrl = j.value("azureKeyVaultUrl", "");
+    v.azureAuthMethod = j.value("azureAuthMethod", "managed-identity");
+    v.azureTenantId = j.value("azureTenantId", "");
+    v.azureClientId = j.value("azureClientId", "");
+    v.secretPrefix = j.value("secretPrefix", "Arestrix_");
+    v.fallbackToEnvironment = j.value("fallbackToEnvironment", true);
+    v.autoPurgeMemory = j.value("autoPurgeMemory", true);
+}
+
+// Fase 2: Empacotamento Corporativo Homologavel (MSI WiX / MSIX AppxManifest para Intune e SCCM)
+struct RunnerPackagingConfig {
+    std::string format = "standalone-folder"; // "standalone-folder", "msi-installer", "msix-package"
+    std::string appId = "Arestrix.Company.PipelineRunner";
+    std::string publisher = "CN=Corporate, O=Enterprise, C=BR";
+    std::string upgradeCode; // GUID para silent upgrades
+    std::string silentInstallArgs = "/qn ALLUSERS=1";
+    bool createDesktopShortcut = true;
+    bool createStartMenuShortcut = true;
+};
+
+inline void to_json(taskforge::Json& j, const RunnerPackagingConfig& p) {
+    j = taskforge::Json{
+        {"format", p.format},
+        {"appId", p.appId},
+        {"publisher", p.publisher},
+        {"upgradeCode", p.upgradeCode},
+        {"silentInstallArgs", p.silentInstallArgs},
+        {"createDesktopShortcut", p.createDesktopShortcut},
+        {"createStartMenuShortcut", p.createStartMenuShortcut}
+    };
+}
+
+inline void from_json(const taskforge::Json& j, RunnerPackagingConfig& p) {
+    p.format = j.value("format", "standalone-folder");
+    p.appId = j.value("appId", "Arestrix.Company.PipelineRunner");
+    p.publisher = j.value("publisher", "CN=Corporate, O=Enterprise, C=BR");
+    p.upgradeCode = j.value("upgradeCode", "");
+    p.silentInstallArgs = j.value("silentInstallArgs", "/qn ALLUSERS=1");
+    p.createDesktopShortcut = j.value("createDesktopShortcut", true);
+    p.createStartMenuShortcut = j.value("createStartMenuShortcut", true);
+}
+
 struct ProjectRunnerConfig {
     bool enabled = false;
     std::string title;
@@ -135,6 +240,9 @@ struct ProjectRunnerConfig {
     std::string defaultTab = "progress"; // "progress", "diagnostics", "operations"
     bool allowRestart = true;
     std::vector<ProjectRunnerParameter> parameters;
+    RunnerSignatureConfig signature;
+    RunnerVaultConfig vault;
+    RunnerPackagingConfig packaging;
 };
 
 inline void to_json(taskforge::Json& j, const ProjectRunnerConfig& r) {
@@ -148,7 +256,10 @@ inline void to_json(taskforge::Json& j, const ProjectRunnerConfig& r) {
         {"autoStart", r.autoStart},
         {"defaultTab", r.defaultTab},
         {"allowRestart", r.allowRestart},
-        {"parameters", r.parameters}
+        {"parameters", r.parameters},
+        {"signature", r.signature},
+        {"vault", r.vault},
+        {"packaging", r.packaging}
     };
 }
 
@@ -164,6 +275,15 @@ inline void from_json(const taskforge::Json& j, ProjectRunnerConfig& r) {
     r.allowRestart = j.value("allowRestart", true);
     if (j.contains("parameters") && j["parameters"].is_array()) {
         r.parameters = j["parameters"].get<std::vector<ProjectRunnerParameter>>();
+    }
+    if (j.contains("signature") && j["signature"].is_object()) {
+        r.signature = j["signature"].get<RunnerSignatureConfig>();
+    }
+    if (j.contains("vault") && j["vault"].is_object()) {
+        r.vault = j["vault"].get<RunnerVaultConfig>();
+    }
+    if (j.contains("packaging") && j["packaging"].is_object()) {
+        r.packaging = j["packaging"].get<RunnerPackagingConfig>();
     }
 }
 

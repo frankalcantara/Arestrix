@@ -1,4 +1,6 @@
 #include "project/RunnerService.hpp"
+#include "project/RunnerSecurity.hpp"
+#include "project/RunnerPackaging.hpp"
 #include "compiler/TaskflowGenerator.hpp"
 #include "build/BuildService.hpp"
 #include "platform/Process.hpp"
@@ -379,7 +381,35 @@ RunnerExportResult RunnerService::exportRunner(
     }
 #endif
 
-    // 7. Auditoria profunda final de todo o diretorio de saida (fail-closed)
+    // 7. Assinatura Criptografica Corporativa do Pacote
+    if (manifest.runner.signature.enabled) {
+        std::string signKey = manifest.runner.signature.keyId;
+        if (signKey.empty()) {
+            signKey = "arestrix-corp-security-default-key";
+        }
+        auto sigRes = RunnerSecurity::signPackage(
+            manifestPath,
+            signKey,
+            manifest.runner.signature.algorithm.empty() ? "hmac-sha256" : manifest.runner.signature.algorithm,
+            manifest.runner.signature.issuer.empty() ? "Arestrix Enterprise Security" : manifest.runner.signature.issuer,
+            manifest.runner.signature.keyId
+        );
+        if (sigRes.ok) {
+            res.signaturePath = (manifestPath.parent_path() / "runner_manifest.json.sig").string();
+        }
+    }
+
+    // 8. Empacotamento Corporativo (WiX MSI / MSIX / Intune Detection Rules & Checksums)
+    auto packRes = RunnerPackaging::generatePackagingArtifacts(targetDir, manifest, appName);
+    if (packRes.ok) {
+        res.packagingArtifacts = packRes.generatedFiles;
+    } else if (!packRes.error.empty()) {
+        res.ok = false;
+        res.error = "Falha ao gerar empacotamento corporativo: " + packRes.error;
+        return res;
+    }
+
+    // 9. Auditoria profunda final de todo o diretorio de saida (fail-closed)
     std::string dirAuditErr;
     if (!auditDirectoryForSecrets(targetDir, dirAuditErr)) {
         // Remove arquivos gerados para prevenir pacote vulneravel
@@ -435,6 +465,15 @@ bool RunnerService::launchRunner(const fs::path& projectRoot, const std::string&
 #endif
     }
     return false;
+}
+
+bool RunnerService::verifyPackage(
+    const fs::path& manifestPath,
+    const std::string& publicKeyOrSecret,
+    bool requiredForExecution,
+    std::string& outError
+) {
+    return RunnerSecurity::verifyPackage(manifestPath, publicKeyOrSecret, requiredForExecution, outError);
 }
 
 } // namespace project
