@@ -74,10 +74,39 @@
     "enabled": false,
     "outputDir": "dist/runner",
     "outputName": "",
+    "packaging": {
+      "appId": "Arestrix.Company.PipelineRunner",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "format": "standalone-folder",
+      "publisher": "CN=Corporate, O=Enterprise, C=BR",
+      "silentInstallArgs": "/qn ALLUSERS=1",
+      "upgradeCode": ""
+    },
     "parameters": [],
+    "signature": {
+      "algorithm": "ed25519",
+      "enabled": false,
+      "issuer": "",
+      "keyId": "",
+      "publicKey": "",
+      "requiredForExecution": false,
+      "signature": "",
+      "signedAt": ""
+    },
     "title": "",
+    "vault": {
+      "autoPurgeMemory": true,
+      "azureAuthMethod": "managed-identity",
+      "azureClientId": "",
+      "azureKeyVaultUrl": "",
+      "azureTenantId": "",
+      "fallbackToEnvironment": true,
+      "provider": "windows-credential-vault",
+      "secretPrefix": "Arestrix_"
+    },
     "version": "1.0.0"
   },
-  "updatedAt": "2026-10-18T17:24:35Z",
+  "updatedAt": "2026-10-18T22:59:45Z",
   "version": "1.0.0"
 }

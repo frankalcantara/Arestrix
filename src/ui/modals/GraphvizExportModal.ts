@@ -1,6 +1,7 @@
 import { Graph } from '../../core/Graph.ts';
 import { GraphvizGenerator } from '../../core/GraphvizGenerator.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
+import { t } from '../../i18n/index.ts';
 
 /**
  * Arestrix Studio - Diálogo de Exportação e Visualização Graphviz (WASM)
@@ -91,10 +92,10 @@ export class GraphvizExportModal {
         <!-- Abas Estilo Office 365 -->
         <div class="modal-tabs" role="tablist">
           <button type="button" class="tab-btn ${this.activeTab === 'preview' ? 'active' : ''}" data-tab="preview" role="tab" aria-selected="${this.activeTab === 'preview'}">
-            🖼️ Diagrama SVG
+            ${t('graphviz_export.tab_preview', 'Diagrama SVG')}
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'dot' ? 'active' : ''}" data-tab="dot" role="tab" aria-selected="${this.activeTab === 'dot'}">
-            📄 Código Fonte DOT
+            ${t('graphviz_export.tab_dot', 'Código Fonte DOT')}
           </button>
         </div>
 
@@ -103,17 +104,17 @@ export class GraphvizExportModal {
           <!-- Barra de Ações Superior Estilo Office -->
           <div style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
             <div style="display: flex; gap: 8px; align-items: center;">
-              <button id="btn-graphviz-download-svg" class="tool-btn btn-action btn-primary-office" style="height: 32px; padding: 4px 14px; font-size: 12.5px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
-                📥 Baixar SVG
+              <button id="btn-graphviz-download-svg" class="tool-btn btn-action btn-primary-office" style="height: 32px; padding: 4px 14px; font-size: 12.5px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">
+                ${t('graphviz_export.btn_download_svg', 'Baixar SVG')}
               </button>
               <button id="btn-graphviz-download-dot" class="tool-btn btn-secondary btn-secondary-office" style="height: 32px; padding: 4px 12px; font-size: 12px; border-radius: 6px; cursor: pointer;">
-                📄 Baixar DOT
+                ${t('graphviz_export.btn_download_dot', 'Baixar DOT')}
               </button>
               <button id="btn-graphviz-copy-svg" class="tool-btn btn-secondary btn-secondary-office" style="height: 32px; padding: 4px 12px; font-size: 12px; border-radius: 6px; cursor: pointer;">
-                📋 Copiar SVG
+                ${t('graphviz_export.btn_copy_svg', 'Copiar SVG')}
               </button>
               <button id="btn-graphviz-open-tab" class="tool-btn btn-secondary btn-secondary-office" style="height: 32px; padding: 4px 12px; font-size: 12px; border-radius: 6px; cursor: pointer;">
-                🌐 Nova Janela
+                ${t('graphviz_export.btn_open_tab', 'Nova Janela')}
               </button>
             </div>
 
@@ -137,7 +138,7 @@ export class GraphvizExportModal {
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <span style="font-size: 12px; color: #64748b; font-weight: 600;">Especificação DOT gerada a partir da topologia do grafo ativo:</span>
             <button id="btn-graphviz-copy-dot-source" class="tool-btn btn-secondary btn-secondary-office" style="height: 30px; padding: 4px 12px; font-size: 12px;">
-              📋 Copiar DOT
+              ${t('graphviz_export.btn_copy_dot', 'Copiar DOT')}
             </button>
           </div>
           <textarea id="graphviz-dot-source" class="office-textarea" readonly style="flex: 1; font-family: Consolas, 'Courier New', monospace; font-size: 12px; resize: none; background: #faf9f8; line-height: 1.5; border: 1px solid #d1d1d1; border-radius: 4px; padding: 12px;">${this.escapeHtml(this.currentDot || '')}</textarea>

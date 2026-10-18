@@ -419,16 +419,16 @@ export class CodeModal {
         <div class="modal-tabs-bar">
           <div class="modal-tabs-group">
             <button class="code-tab-btn ${this.currentTab === 'cpp' ? 'active' : ''}" data-tab="cpp">
-              📄 main.cpp <span style="font-size: 10px; opacity: 0.8;">(C++20 Taskflow)</span>
+              main.cpp <span style="font-size: 10px; opacity: 0.8;">(C++20 Taskflow)</span>
             </button>
             <button class="code-tab-btn ${this.currentTab === 'msvc' ? 'active' : ''}" data-tab="msvc">
-              📜 build_msvc.ps1 <span style="font-size: 10px; opacity: 0.8;">(PowerShell MSVC)</span>
+              build_msvc.ps1 <span style="font-size: 10px; opacity: 0.8;">(PowerShell MSVC)</span>
             </button>
             <button class="code-tab-btn ${this.currentTab === 'cmake' ? 'active' : ''}" data-tab="cmake">
-              ⚙️ CMakeLists.txt <span style="font-size: 10px; opacity: 0.8;">(CMake)</span>
+              CMakeLists.txt <span style="font-size: 10px; opacity: 0.8;">(CMake)</span>
             </button>
             <button class="code-tab-btn ${this.currentTab === 'makefile' ? 'active' : ''}" data-tab="makefile">
-              🛠️ Makefile <span style="font-size: 10px; opacity: 0.8;">(NMake)</span>
+              Makefile <span style="font-size: 10px; opacity: 0.8;">(NMake)</span>
             </button>
           </div>
 

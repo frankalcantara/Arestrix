@@ -949,7 +949,7 @@ export class Inspector {
           <label class="form-label" for="mcp-server">${t('inspector.mcp.server_label')}</label>
           <div style="display: flex; gap: 6px;">
             <select id="mcp-server" class="form-select" style="flex: 1;">${opt(s.server, s.server || t('inspector.mcp.choose'), true)}</select>
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-mcp-refresh" title="${t('inspector.mcp.refresh_tip')}">↻</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-mcp-refresh" title="${t('inspector.mcp.refresh_tip')}">${t('common.refresh', 'Atualizar')}</button>
           </div>
           <div class="office-field-hint" id="mcp-status"></div>
         </div>
@@ -1373,7 +1373,7 @@ export class Inspector {
 
         <div style="margin-top: 10px; display: flex; gap: 8px;">
           <button type="button" class="btn btn-secondary btn-sm" id="btn-view-artifact-now" style="flex: 1; border-color: #10b981; color: #047857;">
-            👁️ ${t('inspector.output.view_now', 'Ver no Painel de Artefatos')}
+            ${t('inspector.output.view_now', 'Ver no Painel de Artefatos')}
           </button>
         </div>
       </div>

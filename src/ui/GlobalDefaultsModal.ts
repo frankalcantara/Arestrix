@@ -55,16 +55,16 @@ export class GlobalDefaultsModal {
         <!-- Abas do Modal / Modal Tabs com Escopos Claros -->
         <div class="modal-tabs">
           <button type="button" class="tab-btn ${this.activeTab === 'model' ? 'active' : ''}" data-tab="model">
-            <span>🧠</span> ${t('global_defaults.tab_model')}
+            ${t('global_defaults.tab_model')}
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'sandbox' ? 'active' : ''}" data-tab="sandbox">
-            <span>🛡️</span> ${t('global_defaults.tab_sandbox')}
+            ${t('global_defaults.tab_sandbox')}
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'tools' ? 'active' : ''}" data-tab="tools">
-            <span>🛠️</span> ${t('global_defaults.tab_tools')}
+            ${t('global_defaults.tab_tools')}
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'memory' ? 'active' : ''}" data-tab="memory">
-            <span>💾</span> ${t('global_defaults.tab_memory')}
+            ${t('global_defaults.tab_memory')}
           </button>
         </div>
 

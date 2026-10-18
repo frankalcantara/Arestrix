@@ -92,13 +92,13 @@ export class McpServersModal {
         <!-- Abas Fluent / Office 365 -->
         <div class="modal-tabs" role="tablist">
           <button type="button" class="tab-btn ${this.activeTab === 'servers' ? 'active' : ''}" data-tab="servers">
-            <span>🔌</span> ${t('mcp_servers.tab_servers', '1. Servidores Ativos')}
+            ${t('mcp_servers.tab_servers', '1. Servidores Ativos')}
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'add' ? 'active' : ''}" data-tab="add">
-            <span>➕</span> ${t('mcp_servers.tab_add', '2. Conectar Novo Servidor')}
+            ${t('mcp_servers.tab_add', '2. Conectar Novo Servidor')}
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'playground' ? 'active' : ''}" data-tab="playground">
-            <span>⚡</span> ${t('mcp_servers.tab_playground', '3. Testes & Inspeção')}
+            ${t('mcp_servers.tab_playground', '3. Testes & Inspeção')}
           </button>
         </div>
 
@@ -327,7 +327,7 @@ export class McpServersModal {
                 ${t('mcp_servers.btn_test_discover')}
               </button>
               <button class="btn-delete-server tool-btn btn-danger-pill" data-id="${s.id}" title="${t('mcp_servers.btn_delete_title')}">
-                🗑️
+                ${t('common.delete', 'Excluir')}
               </button>
             </div>
           </div>

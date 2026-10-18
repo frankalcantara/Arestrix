@@ -143,13 +143,13 @@ export class NodeSkillsModal extends BaseModal {
       <!-- Abas de Navegação Particionadas por Escopo -->
       <div class="office-modal-tab-bar">
         <button class="office-modal-tab-btn ${this.activeTab === 'workspace' ? 'active' : ''}" data-tab="workspace">
-          ${t('node_skills.tab_workspace', '🛡️ Habilidades Pré-Aprovadas do Workspace')}
+          ${t('node_skills.tab_workspace', 'Habilidades Pré-Aprovadas do Workspace')}
         </button>
         <button class="office-modal-tab-btn ${this.activeTab === 'editor' ? 'active' : ''}" data-tab="editor">
-          ${t('node_skills.tab_editor', '📝 [Projeto] Habilidade do Agente & Editor')}
+          ${t('node_skills.tab_editor', '[Projeto] Habilidade do Agente & Editor')}
         </button>
         <button class="office-modal-tab-btn ${this.activeTab === 'github' ? 'active' : ''}" data-tab="github">
-          ${t('node_skills.tab_github', '🌐 [Studio] Importar do Catálogo (GitHub Open Source)')}
+          ${t('node_skills.tab_github', '[Studio] Importar do Catálogo (GitHub Open Source)')}
         </button>
       </div>
 
@@ -226,7 +226,7 @@ export class NodeSkillsModal extends BaseModal {
 
                 <div style="display: flex; justify-content: flex-end; border-top: 1px solid #f1f5f9; padding-top: 10px;">
                   <button class="btn btn-primary btn-sm btn-import-workspace-skill" data-skill-id="${item.id}" style="font-weight: 700;">
-                    ${t('node_skills.btn_import_to_agent', '📥 Importar para este Agente')}
+                    ${t('node_skills.btn_import_to_agent', 'Importar para este Agente')}
                   </button>
                 </div>
               </div>
@@ -327,10 +327,10 @@ export class NodeSkillsModal extends BaseModal {
                 <label class="form-label" style="margin: 0; font-weight: 700;">${t('node_skills.label_markdown_content', 'Conteúdo Integral do SKILL.md (Markdown)')}</label>
                 <div class="office-subtab-group" style="display: flex; gap: 4px;">
                   <button class="office-subtab-btn ${this.markdownViewMode === 'edit' ? 'active' : ''}" id="btn-mode-md-edit">
-                    ${t('node_skills.btn_edit_markdown', '✏️ Editar Markdown')}
+                    ${t('node_skills.btn_edit_markdown', 'Editar Markdown')}
                   </button>
                   <button class="office-subtab-btn ${this.markdownViewMode === 'preview' ? 'active' : ''}" id="btn-mode-md-preview">
-                    ${t('node_skills.btn_preview_markdown', '👁️ Visualizar Prévia')}
+                    ${t('node_skills.btn_preview_markdown', 'Visualizar Prévia')}
                   </button>
                 </div>
               </div>
@@ -365,7 +365,7 @@ export class NodeSkillsModal extends BaseModal {
               </div>
             </div>
             <button class="btn btn-secondary btn-sm" id="btn-open-global-repos-from-node" style="white-space: nowrap; font-weight: 600; font-size: 11px;">
-              ${t('node_skills.btn_configure_repos', '⚙️ Configurar Projetos GitHub...')}
+              ${t('node_skills.btn_configure_repos', 'Configurar Projetos GitHub...')}
             </button>
           </div>
 
@@ -390,7 +390,7 @@ export class NodeSkillsModal extends BaseModal {
               <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: #64748b; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 4px;">
                 <p style="margin: 0 0 10px 0; font-size: 13px;">${t('node_skills.empty_gh_search', 'Nenhuma habilidade encontrada para o termo pesquisado ou não há repositórios ativos.')}</p>
                 <button class="btn btn-secondary btn-sm" id="btn-empty-open-global-repos" style="font-weight: 600;">
-                  ${t('node_skills.btn_empty_open_repos', '⚙️ Abrir Configuração Global de Repositórios GitHub')}
+                  ${t('node_skills.btn_empty_open_repos', 'Abrir Configuração Global de Repositórios GitHub')}
                 </button>
               </div>
             ` : githubSkills.map(item => `
@@ -423,7 +423,7 @@ export class NodeSkillsModal extends BaseModal {
                     </a>
                   ` : '<span></span>'}
                   <button class="btn btn-secondary btn-sm btn-import-github-skill" data-skill-id="${item.id}" style="font-weight: 600;">
-                    ${t('node_skills.btn_import_to_agent', '📥 Importar para este Agente')}
+                    ${t('node_skills.btn_import_to_agent', 'Importar para este Agente')}
                   </button>
                 </div>
               </div>

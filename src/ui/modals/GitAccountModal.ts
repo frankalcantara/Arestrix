@@ -40,11 +40,11 @@ export class GitAccountModal extends BaseModal {
       minHeight: 560,
       dialogClass: 'git-account-modal-dialog',
       tabs: [
-        { id: 'identity', label: t('git_sync.tab_identity', '1. Conta & Identidade SO'), icon: '👤' },
-        { id: 'repository', label: t('git_sync.tab_repository', '2. Repositório Remoto'), icon: '📦' },
-        { id: 'automation', label: t('git_sync.tab_automation', '3. Automação & Governança'), icon: '🛡️' }
+        { id: 'identity', label: t('git_sync.tab_identity', '1. Conta & Identidade SO') },
+        { id: 'repository', label: t('git_sync.tab_repository', '2. Repositório Remoto') },
+        { id: 'automation', label: t('git_sync.tab_automation', '3. Automação & Governança') }
       ],
-      defaultTabId: 'identity'
+      defaultTab: 'identity'
     });
 
     this.gitManager = GitSyncManager.getInstance(bus);
@@ -200,8 +200,8 @@ export class GitAccountModal extends BaseModal {
                   ${t('git_sync.gcm_desc', 'O Git Credential Manager gerencia os tokens e senhas com segurança nativa de hardware/SO.')}
                 </div>
               </div>
-              <button id="btn-launch-os-login" class="tool-btn btn-action" style="height: 32px; padding: 0 16px; font-size: 11.5px; font-weight: 600; background: #0f6cbd; color: #fff; border-radius: 4px; border: none; cursor: pointer; display: flex; align-items: center; gap: 6px; white-space: nowrap;">
-                <span>🔑</span> ${t('git_sync.btn_launch_login', 'Efetuar Login Seguro no SO')}
+              <button id="btn-launch-os-login" class="tool-btn btn-action" style="height: 32px; padding: 0 16px; font-size: 11.5px; font-weight: 600; background: #0f6cbd; color: #fff; border-radius: 4px; border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;">
+                ${t('git_sync.btn_launch_login', 'Efetuar login')}
               </button>
             </div>
           </div>

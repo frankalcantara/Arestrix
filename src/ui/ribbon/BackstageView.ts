@@ -460,7 +460,7 @@ export class BackstageView {
     const drives = this.openDrives.map(drive => {
       const clean = drive.replace(/\\/g, '/');
       const active = listing.path.toUpperCase().startsWith(clean.replace(/\/$/, '').toUpperCase());
-      return `<button type="button" class="backstage-open-drive ${active ? 'active' : ''}" data-open-navigate="${this.escapeHtml(clean)}">💾 ${this.escapeHtml(drive)}</button>`;
+      return `<button type="button" class="backstage-open-drive ${active ? 'active' : ''}" data-open-navigate="${this.escapeHtml(clean)}">${this.escapeHtml(drive)}</button>`;
     }).join('');
     const crumbs = pathCrumbs(listing.path).map((c, i) => `
       ${i > 0 ? '<span class="backstage-open-crumb-sep">›</span>' : ''}
@@ -489,8 +489,8 @@ export class BackstageView {
           ${drives}
         </div>
         <div class="backstage-open-location">
-          <button type="button" class="backstage-open-nav-btn" id="btn-open-up" title="${t('backstage.open.up_tip')}" ${listing.parent ? '' : 'disabled'}>⬆ ${t('backstage.open.btn_up')}</button>
-          <button type="button" class="backstage-open-nav-btn" id="btn-open-refresh">🔄 ${t('backstage.open.btn_refresh')}</button>
+          <button type="button" class="backstage-open-nav-btn" id="btn-open-up" title="${t('backstage.open.up_tip')}" ${listing.parent ? '' : 'disabled'}>${t('backstage.open.btn_up')}</button>
+          <button type="button" class="backstage-open-nav-btn" id="btn-open-refresh">${t('backstage.open.btn_refresh')}</button>
           <nav class="backstage-open-breadcrumb">${crumbs}</nav>
         </div>
       </div>
@@ -502,7 +502,7 @@ export class BackstageView {
   private renderDiskEntryRow(entry: IOpenableEntry): string {
     const action = entry.kind === 'folder' ? 'navigate' : 'disk';
     const enter = entry.kind === 'project'
-      ? `<button type="button" class="backstage-open-enter" data-open-navigate="${this.escapeHtml(entry.path)}" title="${t('backstage.open.enter_folder_tip')}">📁 ›</button>`
+      ? `<button type="button" class="backstage-open-enter" data-open-navigate="${this.escapeHtml(entry.path)}" title="${t('backstage.open.enter_folder_tip')}">›</button>`
       : '';
     return this.renderOpenRow(
       `data-open-action="${action}" data-path="${this.escapeHtml(entry.path)}" data-search="${this.escapeHtml(entry.name.toLowerCase())}"`,
@@ -630,8 +630,8 @@ export class BackstageView {
                 </select>
               </div>
 
-              <button type="button" class="tool-btn btn-action" id="btn-saveas-submit" style="background: #0f6cbd; color: #ffffff; font-weight: 700; padding: 0 22px; height: 36px; font-size: 13px; display: inline-flex; align-items: center; gap: 8px;">
-                <span>💾</span> ${isGraph ? t('backstage.saveas.btn_save_graph') : t('backstage.saveas.btn_save_project')}
+              <button type="button" class="tool-btn btn-action" id="btn-saveas-submit" style="background: #0f6cbd; color: #ffffff; font-weight: 700; padding: 0 22px; height: 36px; font-size: 13px; display: inline-flex; align-items: center; justify-content: center;">
+                ${isGraph ? t('backstage.saveas.btn_save_graph') : t('backstage.saveas.btn_save_project')}
               </button>
             </div>
 
@@ -654,14 +654,14 @@ export class BackstageView {
     const drives = this.saveAsDrives.map(drive => {
       const cleanDrive = drive.replace(/\\/g, '/');
       const isCurrent = this.saveAsCurrentPath.toUpperCase().startsWith(cleanDrive.replace(/\/$/, '').toUpperCase());
-      return `<button type="button" class="tool-btn btn-saveas-drive backstage-open-drive ${isCurrent ? 'active active-drive' : ''}" data-drive="${this.escapeHtml(cleanDrive)}">💾 ${this.escapeHtml(drive)}</button>`;
+      return `<button type="button" class="tool-btn btn-saveas-drive backstage-open-drive ${isCurrent ? 'active active-drive' : ''}" data-drive="${this.escapeHtml(cleanDrive)}">${this.escapeHtml(drive)}</button>`;
     }).join('');
 
     const projRoot = (proj.rootPath && proj.rootPath !== '.') ? proj.rootPath.replace(/\\/g, '/').replace(/\/$/, '') : '';
     const shortcuts = projRoot ? `
       <div class="backstage-save-shortcuts">
-        <button type="button" class="backstage-save-shortcut-btn" id="btn-saveas-go-project-root" data-save-navigate="${this.escapeHtml(projRoot)}">🗂️ ${t('backstage.saveas.shortcut_project_root')}</button>
-        <button type="button" class="backstage-save-shortcut-btn" id="btn-saveas-go-project-pipelines" data-save-navigate="${this.escapeHtml(`${projRoot}/pipelines`)}">📊 ${t('backstage.saveas.shortcut_project_pipelines')}</button>
+        <button type="button" class="backstage-save-shortcut-btn" id="btn-saveas-go-project-root" data-save-navigate="${this.escapeHtml(projRoot)}">${t('backstage.saveas.shortcut_project_root')}</button>
+        <button type="button" class="backstage-save-shortcut-btn" id="btn-saveas-go-project-pipelines" data-save-navigate="${this.escapeHtml(`${projRoot}/pipelines`)}">${t('backstage.saveas.shortcut_project_pipelines')}</button>
       </div>
     ` : '';
 
@@ -694,8 +694,8 @@ export class BackstageView {
           ${shortcuts}
         </div>
         <div class="backstage-open-location">
-          <button type="button" class="backstage-open-nav-btn" id="btn-saveas-up-dir" title="${t('backstage.saveas.up_tip')}">⬆ ${t('backstage.saveas.btn_up')}</button>
-          <button type="button" class="backstage-open-nav-btn" id="btn-saveas-refresh-dir" title="${t('backstage.saveas.refresh_tip')}">🔄 ${t('backstage.saveas.btn_refresh')}</button>
+          <button type="button" class="backstage-open-nav-btn" id="btn-saveas-up-dir" title="${t('backstage.saveas.up_tip')}">${t('backstage.saveas.btn_up')}</button>
+          <button type="button" class="backstage-open-nav-btn" id="btn-saveas-refresh-dir" title="${t('backstage.saveas.refresh_tip')}">${t('backstage.saveas.btn_refresh')}</button>
           <nav class="backstage-open-breadcrumb" id="saveas-current-path-display">${crumbs || this.escapeHtml(this.saveAsCurrentPath)}</nav>
         </div>
       </div>
@@ -843,7 +843,7 @@ export class BackstageView {
               </p>
               <p style="margin-bottom: 8px;"><strong>Auto Commit (F5/Fim):</strong> ${proj.git?.autoCommitOnRun !== false ? 'Ativado' : 'Desativado'}</p>
               <button class="tool-btn btn-action" id="btn-backstage-open-git" style="margin-top: 6px; font-size: 11.5px; font-weight: 700; background: #0f6cbd; color: #fff; padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer;">
-                🌿 ${t('git_sync.btn_configure_git', 'Configurar Git & Sincronização...')}
+                ${t('git_sync.btn_configure_git', 'Configurar Git & Sincronização...')}
               </button>
             </div>
 
@@ -856,7 +856,7 @@ export class BackstageView {
               <p style="margin-bottom: 8px;"><strong>Executável:</strong> <code>${this.escapeHtml(proj.runner?.outputName || 'pipeline_runner.exe')}</code></p>
               <p style="margin-bottom: 8px;"><strong>Pasta de Saída:</strong> <code>${this.escapeHtml(proj.runner?.outputDir || 'dist/runner')}</code></p>
               <button class="tool-btn btn-action" id="btn-backstage-open-runner" style="margin-top: 6px; font-size: 11.5px; font-weight: 700; background: #0284c7; color: #fff; padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer;">
-                🚀 ${t('runner.btn_open_runner', 'Abrir Painel do Runner Standalone...')}
+                ${t('runner.btn_open_runner', 'Abrir Painel do Runner Standalone...')}
               </button>
             </div>
           </div>
@@ -864,8 +864,8 @@ export class BackstageView {
           <div style="margin-top: 14px;">
             <h4 style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 8px;">${t('backstage.info.quick_maintenance')}</h4>
             <div style="display: flex; gap: 10px;">
-              <button class="tool-btn btn-secondary" id="btn-quick-sync-db" style="font-weight: 700;">🔄 ${t('backstage.info.btn_sync_db')}</button>
-              <button class="tool-btn btn-secondary" id="btn-quick-clean-cache" style="font-weight: 700;">🧹 ${t('backstage.info.btn_clean_cache')}</button>
+              <button class="tool-btn btn-secondary" id="btn-quick-sync-db" style="font-weight: 700;">${t('backstage.info.btn_sync_db')}</button>
+              <button class="tool-btn btn-secondary" id="btn-quick-clean-cache" style="font-weight: 700;">${t('backstage.info.btn_clean_cache')}</button>
             </div>
           </div>
 
@@ -901,7 +901,7 @@ export class BackstageView {
 
             <div style="display: flex; gap: 12px;">
               <button class="tool-btn btn-action" id="btn-backstage-create-submit" style="background: #0f6cbd; color: #fff; font-weight: 700; padding: 10px 22px; height: 38px; font-size: 13px;">
-                🚀 ${t('backstage.new.btn_create_submit')}
+                ${t('backstage.new.btn_create_submit')}
               </button>
             </div>
           </div>
@@ -986,8 +986,8 @@ export class BackstageView {
               <p><strong>${t('backstage.options.mcps_path_label')}</strong> <code>${this.escapeHtml(dirs.mcps)}</code></p>
               <p><strong>${t('backstage.options.agents_path_label')}</strong> <code>${this.escapeHtml(dirs.agents)}</code></p>
               <div style="margin-top: 14px;">
-                <button class="tool-btn btn-action" id="btn-sync-workspace-disk" style="background: #0f6cbd; color: #ffffff; font-weight: 700; padding: 8px 16px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
-                  <span>📥</span> ${t('backstage.options.btn_sync_disk')}
+                <button class="tool-btn btn-action" id="btn-sync-workspace-disk" style="background: #0f6cbd; color: #ffffff; font-weight: 700; padding: 8px 16px; font-size: 12px; display: inline-flex; align-items: center; justify-content: center;">
+                  ${t('backstage.options.btn_sync_disk')}
                 </button>
               </div>
             </div>
@@ -1002,7 +1002,7 @@ export class BackstageView {
               <p><strong>${t('backstage.options.iso_mode_label')}</strong> ${t('backstage.options.iso_mode_val')}</p>
               <div style="margin-top: 14px;">
                 <button class="tool-btn btn-secondary" id="btn-open-global-defaults-modal" style="font-weight: 700; padding: 8px 16px; font-size: 12px;">
-                  ⚙️ ${t('backstage.options.btn_adv_pref')}
+                  ${t('backstage.options.btn_adv_pref')}
                 </button>
               </div>
             </div>
@@ -1025,7 +1025,7 @@ export class BackstageView {
                   </p>
                 </div>
                 <button class="tool-btn btn-action" id="btn-run-workspace-auditor" style="background: #107c41; color: #ffffff; font-weight: 700; padding: 8px 14px; font-size: 12px; margin-top: 10px;">
-                  ▶ ${t('backstage.options.btn_run_auditor')}
+                  ${t('backstage.options.btn_run_auditor')}
                 </button>
               </div>
 
@@ -1040,7 +1040,7 @@ export class BackstageView {
                   </p>
                 </div>
                 <button class="tool-btn btn-secondary" id="btn-run-workspace-linter" style="font-weight: 700; padding: 8px 14px; font-size: 12px; margin-top: 10px;">
-                  ▶ ${t('backstage.options.btn_run_linter')}
+                  ${t('backstage.options.btn_run_linter')}
                 </button>
               </div>
 
@@ -1055,7 +1055,7 @@ export class BackstageView {
                   </p>
                 </div>
                 <button class="tool-btn btn-action" id="btn-run-workspace-project" style="background: #0f6cbd; color: #ffffff; font-weight: 700; padding: 8px 14px; font-size: 12px; margin-top: 10px;">
-                  ▶ ${t('backstage.options.btn_run_proj_pipeline')}
+                  ${t('backstage.options.btn_run_proj_pipeline')}
                 </button>
               </div>
             </div>

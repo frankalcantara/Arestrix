@@ -160,7 +160,7 @@ export class OfficeRibbon {
             <!-- Botão e Indicador de Sincronização Git Privado -->
             <button id="qat-btn-git-sync" class="office-qat-btn" title="${t('git_sync.modal_title', 'Conta Git & Repositório do Projeto')}" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; margin-left: 2px;">
               <span style="font-size: 13px;">🌿</span>
-              <span id="qat-git-status-badge" style="font-size: 11px; font-weight: 700; color: #0f766e;">Git</span>
+              <span id="qat-git-status-badge" style="font-size: 11px; font-weight: 700; color: #64748b;">Git</span>
             </button>
 
             <button id="qat-btn-save" class="office-qat-btn" title="${t('ribbon.titlebar.save_now')}">💾</button>
@@ -794,8 +794,18 @@ export class OfficeRibbon {
     globalEventBus.on('git:synced', () => {
       const badge = this.container.querySelector('#qat-git-status-badge') as HTMLElement;
       if (badge) {
-        badge.textContent = 'Git ✓';
-        badge.style.color = '#0f766e';
+        const lastSt = GitSyncManager.getInstance().getLastStatus();
+        const isLoggedIn = lastSt && (
+          (Array.isArray(lastSt.gcmAccounts) && lastSt.gcmAccounts.length > 0) ||
+          (lastSt.isIdentityConfigured && !!lastSt.remoteUrl)
+        );
+        if (isLoggedIn) {
+          badge.textContent = 'Git ✓';
+          badge.style.color = '#0f766e';
+        } else {
+          badge.textContent = 'Git';
+          badge.style.color = '#64748b';
+        }
       }
     });
 
@@ -810,9 +820,18 @@ export class OfficeRibbon {
     globalEventBus.on('git:status-changed', (st: any) => {
       const badge = this.container.querySelector('#qat-git-status-badge') as HTMLElement;
       if (badge) {
+        const isLoggedIn = st && (
+          (Array.isArray(st.gcmAccounts) && st.gcmAccounts.length > 0) ||
+          (st.isIdentityConfigured && !!st.remoteUrl)
+        );
+
         if (!st.gitInstalled) {
           badge.textContent = 'Sem Git';
           badge.style.color = '#94a3b8';
+        } else if (!isLoggedIn) {
+          // Usuário não autenticado: neutro, sem check e sem verde
+          badge.textContent = 'Git';
+          badge.style.color = '#64748b';
         } else if (st.hasUncommittedChanges) {
           badge.textContent = 'Git *';
           badge.style.color = '#d97706';

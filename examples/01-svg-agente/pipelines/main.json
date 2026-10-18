@@ -57,8 +57,8 @@
       "label": "Agente_Gerador_DeepSeek",
       "type": "agent",
       "position": {
-        "x": -630,
-        "y": 370
+        "x": -660,
+        "y": 210
       },
       "inputs": [
         {
@@ -163,8 +163,8 @@
       "label": "Auditor_Timeline_SMIL",
       "type": "static",
       "position": {
-        "x": -210,
-        "y": 170
+        "x": -220,
+        "y": 70
       },
       "inputs": [
         {
@@ -190,8 +190,8 @@
       "label": "Consolidador_Diagnostico",
       "type": "static",
       "position": {
-        "x": 210,
-        "y": 370
+        "x": 310,
+        "y": 180
       },
       "inputs": [
         {
@@ -217,8 +217,8 @@
       "label": "Agente_Auditor_JEV",
       "type": "agent",
       "position": {
-        "x": 630,
-        "y": 220
+        "x": 770,
+        "y": 100
       },
       "inputs": [
         {
@@ -240,10 +240,7 @@
       "customLambdaBody": "",
       "agentSettings": {
         "inheritSandbox": true,
-        "inheritModel": false,
-        "model": {
-          "skillPath": "skills/jev.md"
-        },
+        "inheritModel": true,
         "inheritCodeMode": true,
         "inheritMemory": true
       }
@@ -253,8 +250,8 @@
       "label": "Decisor_Qualidade",
       "type": "condition",
       "position": {
-        "x": -210,
-        "y": -280
+        "x": 1040,
+        "y": -340
       },
       "inputs": [
         {

@@ -55,13 +55,13 @@ export class StatusBar {
 
       <div class="office-statusbar-right">
         <button id="sb-btn-grid" class="office-sb-btn" title="${t('statusbar.grid_tip')}">
-          <span class="office-sb-icon">⊞</span> ${t('statusbar.grid')}
+          ${t('statusbar.grid')}
         </button>
         <button id="sb-btn-fit" class="office-sb-btn" title="${t('statusbar.fit_tip')}">
-          <span class="office-sb-icon">🎯</span> ${t('statusbar.fit')}
+          ${t('statusbar.fit')}
         </button>
         <button id="sb-btn-lang" class="office-sb-btn office-sb-lang" title="${t('statusbar.language_tip')}">
-          <span>🌐</span> ${isPt ? 'PT-BR' : 'EN-US'}
+          ${isPt ? 'PT-BR' : 'EN-US'}
         </button>
 
         <div class="office-zoom-control">

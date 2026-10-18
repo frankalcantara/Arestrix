@@ -383,11 +383,11 @@ export class AssistantPanel {
       <div class="assistant-panel">
         <div class="assistant-toolbar">
           <select id="assistant-session-select" class="assistant-session-select" title="${t('assistant.sessions_label')}" ${this.busy ? 'disabled' : ''}>
-            <option value="">${this.sessionId ? t('assistant.new_session') : `✨ ${t('assistant.new_session')}`}</option>
+            <option value="">${t('assistant.new_session')}</option>
             ${this.sessions.map(s => `<option value="${this.esc(s.id)}" ${s.id === this.sessionId ? 'selected' : ''}>${this.esc(s.title || s.id)}</option>`).join('')}
           </select>
-          <button type="button" class="assistant-icon-btn" id="assistant-new" title="${t('assistant.new_session')}" ${this.busy ? 'disabled' : ''}>＋</button>
-          <button type="button" class="assistant-icon-btn" id="assistant-delete" title="${t('assistant.delete_session')}" ${this.busy || !this.sessionId ? 'disabled' : ''}>🗑</button>
+          <button type="button" class="assistant-icon-btn" id="assistant-new" title="${t('assistant.new_session')}" ${this.busy ? 'disabled' : ''}>+</button>
+          <button type="button" class="assistant-icon-btn" id="assistant-delete" title="${t('assistant.delete_session')}" ${this.busy || !this.sessionId ? 'disabled' : ''}>✕</button>
         </div>
         ${this.renderBanner()}
         <div class="assistant-messages" id="assistant-messages">
@@ -399,7 +399,7 @@ export class AssistantPanel {
           <div class="assistant-composer-bar">
             <span class="assistant-model">${model}</span>
             ${this.busy
-              ? `<button type="button" class="assistant-btn" id="assistant-stop" ${this.stopping ? 'disabled' : ''}>⏹ ${t('assistant.stop')}</button>`
+              ? `<button type="button" class="assistant-btn" id="assistant-stop" ${this.stopping ? 'disabled' : ''}>${t('assistant.stop')}</button>`
               : `<button type="button" class="assistant-btn primary" id="assistant-send" ${this.canSend() ? '' : 'disabled'}>${t('assistant.send')}</button>`}
           </div>
         </div>

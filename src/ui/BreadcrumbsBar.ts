@@ -47,7 +47,7 @@ export class BreadcrumbsBar {
     if (!isAtRoot) {
       html += `
         <button id="btn-navigate-up" class="btn-navigate-up" title="${t('breadcrumbs.up_level_tip')}">
-          <span>⬅ ${t('breadcrumbs.up_level')}</span>
+          <span>${t('breadcrumbs.up_level')}</span>
         </button>
       `;
     }

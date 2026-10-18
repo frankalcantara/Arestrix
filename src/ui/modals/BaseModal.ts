@@ -108,7 +108,6 @@ export abstract class BaseModal {
           const isActive = tab.id === this.activeTabId;
           return `
             <button type="button" role="tab" class="office-modal-tab-btn ${isActive ? 'active' : ''}" data-modal-tab="${tab.id}" aria-selected="${isActive}">
-              ${tab.icon ? `<span class="tab-icon">${tab.icon}</span>` : ''}
               <span>${tab.label}</span>
               ${tab.badge ? `<span class="office-modal-tab-badge">${tab.badge}</span>` : ''}
             </button>

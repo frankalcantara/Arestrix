@@ -368,7 +368,7 @@ describe('Workspace Governance, Execution & Pre-Approved Catalogs', () => {
       modal.open('agent-n1');
 
       const body = (modal as any).renderBody();
-      expect(body).toContain('🛡️ Habilidades Pré-Aprovadas do Workspace');
+      expect(body).toContain('Habilidades Pré-Aprovadas do Workspace');
       expect(body).toContain('pane-workspace');
       expect(body).toContain('btn-import-workspace-skill');
       expect(body).toContain('Rigor Matemático');

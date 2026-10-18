@@ -249,7 +249,7 @@ export class BatchPipelineModal {
                             `;
                           }).join('')}
                           <td class="batch-actions-cell">
-                            <button class="batch-item-reset-btn" data-item-id="${itemId}" title="${t('batch_pipeline.btn_reset_item_tip')}">🧹</button>
+                            <button class="batch-item-reset-btn" data-item-id="${itemId}" title="${t('batch_pipeline.btn_reset_item_tip')}">Reset</button>
                           </td>
                         </tr>
                       `;

@@ -169,7 +169,7 @@ export class SkillEditorModal extends BaseModal {
             <button type="button" class="skill-tool-btn" data-action="ul" title="${t('skill_editor.btn_ul', 'Lista não ordenada')}">• Lista</button>
             <button type="button" class="skill-tool-btn" data-action="ol" title="${t('skill_editor.btn_ol', 'Lista numerada')}">1. Lista</button>
             <button type="button" class="skill-tool-btn" data-action="code" title="${t('skill_editor.btn_code', 'Bloco de código (```)')}">&lt;/&gt;</button>
-            <button type="button" class="skill-tool-btn" data-action="template" title="${t('skill_editor.btn_template', 'Inserir Template Canônico')}">📋 Template</button>
+            <button type="button" class="skill-tool-btn" data-action="template" title="${t('skill_editor.btn_template', 'Inserir Template Canônico')}">Template</button>
           </div>
 
           <div class="skill-toolbar-spacer"></div>

@@ -57,15 +57,12 @@ export class ConsolePanel {
 
         <div class="console-actions office-console-actions">
           <button id="btn-copy-console" class="btn-console-office" title="${t('console.copy_tip', 'Copiar para a Área de Transferência')}">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             <span>${t('console.copy', 'Copiar')}</span>
           </button>
           <button id="btn-clear-console" class="btn-console-office" title="${t('console.clear_tip', 'Limpar')}">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
             <span>${t('console.clear', 'Limpar')}</span>
           </button>
           <button id="btn-toggle-console" class="btn-console-office" title="${t('console.toggle_tip', 'Minimizar/Restaurar')}">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             <span>${t('console.minmax', 'Min/Max')}</span>
           </button>
         </div>
@@ -449,7 +446,7 @@ export class ConsolePanel {
           <div class="empty-state-title">${t('console.artifacts_empty_title', 'Nenhum entregável disponível')}</div>
           <div class="empty-state-desc">${t('console.artifacts_empty_desc', 'Adicione um nó de Saída (Output) ao pipeline ou execute o projeto (F5) para gerar e inspecionar os arquivos produzidos.')}</div>
           <button class="btn-console-office" id="btn-refresh-artifacts-empty" style="margin-top: 10px;">
-            🔄 ${t('common.refresh', 'Atualizar')}
+            ${t('common.refresh', 'Atualizar')}
           </button>
         </div>
       `;
@@ -469,7 +466,7 @@ export class ConsolePanel {
           <aside class="office-artifacts-sidebar">
             <div class="office-artifacts-sidebar-header">
               <span>${t('console.artifacts_list_header', 'Entregáveis')} (${this.artifacts.length})</span>
-              <button class="btn-icon-subtle" id="btn-refresh-artifacts" title="${t('common.refresh', 'Atualizar')}">🔄</button>
+              <button class="btn-icon-subtle" id="btn-refresh-artifacts" title="${t('common.refresh', 'Atualizar')}">${t('common.refresh', 'Atualizar')}</button>
             </div>
             <div class="office-artifacts-nav">
               ${this.artifacts.map(a => `
@@ -547,13 +544,13 @@ export class ConsolePanel {
           ` : ''}
 
           <button class="btn-console-office" id="btn-open-explorer" title="${t('console.open_explorer_tip', 'Abrir pasta no Windows Explorer')}">
-            📂 ${t('console.open_explorer', 'No Explorer')}
+            ${t('console.open_explorer', 'No Explorer')}
           </button>
           <button class="btn-console-office" id="btn-copy-artifact" title="${t('common.copy', 'Copiar Conteúdo')}">
-            📋 ${t('common.copy', 'Copiar')}
+            ${t('common.copy', 'Copiar')}
           </button>
           <button class="btn-console-office" id="btn-download-artifact" title="${t('common.download', 'Salvar Como...')}">
-            💾 ${t('common.download', 'Baixar')}
+            ${t('common.download', 'Baixar')}
           </button>
         </div>
       </header>

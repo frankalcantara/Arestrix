@@ -29,10 +29,10 @@ export class StandaloneRunnerModal extends BaseModal {
       resizable: true,
       draggable: true,
       tabs: [
-        { id: 'progress', label: t('runner.tab_progress', '1. Progresso'), icon: '⏱️' },
-        { id: 'diagnostics', label: t('runner.tab_diagnostics', '2. Diagnóstico'), icon: '📊' },
-        { id: 'operations', label: t('runner.tab_operations', '3. Operação'), icon: '⚙️' },
-        { id: 'export', label: t('runner.tab_export', 'Exportar Executável'), icon: '📦' }
+        { id: 'progress', label: t('runner.tab_progress', '1. Progresso') },
+        { id: 'diagnostics', label: t('runner.tab_diagnostics', '2. Diagnóstico') },
+        { id: 'operations', label: t('runner.tab_operations', '3. Operação') },
+        { id: 'export', label: t('runner.tab_export', 'Exportar Executável') }
       ],
       defaultTab: 'progress'
     });
@@ -127,14 +127,14 @@ export class StandaloneRunnerModal extends BaseModal {
             </div>
 
             <!-- Botões Principais de Controle -->
-            <button id="btn-runner-start" class="tool-btn btn-action" style="height: 30px; padding: 0 14px; font-size: 11.5px; font-weight: 600; background: #0f6cbd; color: #ffffff; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-              <span>▶</span> ${t('runner.btn_run', 'Executar (F5)')}
+            <button id="btn-runner-start" class="tool-btn btn-action" style="height: 30px; padding: 0 14px; font-size: 11.5px; font-weight: 600; background: #0f6cbd; color: #ffffff; border: none; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">
+              ${t('runner.btn_run', 'Executar (F5)')}
             </button>
             <button id="btn-runner-stop" class="tool-btn btn-secondary" style="height: 30px; padding: 0 12px; font-size: 11.5px; font-weight: 600; background: #ffffff; color: #323130; border: 1px solid #d2d0ce; border-radius: 4px; cursor: pointer;">
-              <span>⏹</span> ${t('runner.btn_stop', 'Interromper')}
+              ${t('runner.btn_stop', 'Interromper')}
             </button>
-            <button id="btn-runner-restart" class="tool-btn btn-secondary" style="height: 30px; padding: 0 10px; font-size: 11.5px; font-weight: 600; background: #ffffff; color: #323130; border: 1px solid #d2d0ce; border-radius: 4px; cursor: pointer;" title="${t('runner.btn_restart_tip', 'Reiniciar execução')}">
-              <span>↻</span>
+            <button id="btn-runner-restart" class="tool-btn btn-secondary" style="height: 30px; padding: 0 12px; font-size: 11.5px; font-weight: 600; background: #ffffff; color: #323130; border: 1px solid #d2d0ce; border-radius: 4px; cursor: pointer;" title="${t('runner.btn_restart_tip', 'Reiniciar execução')}">
+              ${t('common.restart', 'Reiniciar')}
             </button>
           </div>
         </div>
@@ -283,10 +283,10 @@ export class StandaloneRunnerModal extends BaseModal {
         <!-- Ações do Diagnóstico -->
         <div style="display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 14px;">
           <button id="btn-copy-diag-json" class="tool-btn" style="height: 30px; padding: 0 12px; font-size: 11px; font-weight: 700; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;">
-            📋 ${t('runner.btn_copy_diag', 'Copiar Diagnóstico (JSON)')}
+            ${t('runner.btn_copy_diag', 'Copiar Diagnóstico (JSON)')}
           </button>
           <button id="btn-clear-diag" class="tool-btn" style="height: 30px; padding: 0 10px; font-size: 11px; font-weight: 600; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer; color: #64748b;">
-            🗑️ ${t('runner.btn_clear_diag', 'Limpar')}
+            ${t('runner.btn_clear_diag', 'Limpar')}
           </button>
         </div>
 
@@ -366,11 +366,11 @@ export class StandaloneRunnerModal extends BaseModal {
           </p>
 
           <div style="display: flex; gap: 10px;">
-            <button id="btn-op-run-now" class="tool-btn" style="height: 38px; padding: 0 20px; font-size: 12.5px; font-weight: 700; background: #0f6cbd; color: #ffffff; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-              <span>▶</span> Iniciar Execução Completa
+            <button id="btn-op-run-now" class="tool-btn" style="height: 38px; padding: 0 20px; font-size: 12.5px; font-weight: 700; background: #0f6cbd; color: #ffffff; border: none; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">
+              Iniciar Execução Completa
             </button>
             <button id="btn-op-stop-now" class="tool-btn" style="height: 38px; padding: 0 16px; font-size: 12px; font-weight: 700; background: #e2e8f0; color: #475569; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;">
-              <span>⏹</span> Interromper
+              Interromper
             </button>
           </div>
         </div>
@@ -407,7 +407,7 @@ export class StandaloneRunnerModal extends BaseModal {
               <span>📁</span> ${t('runner.artifacts_title', 'Entregáveis & Artefatos')}
             </h3>
             <button id="btn-op-open-explorer" class="tool-btn" style="height: 28px; padding: 0 10px; font-size: 11px; font-weight: 700; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;">
-              📂 Abrir Pasta de Saída no Explorer
+              Abrir Pasta de Saída no Explorer
             </button>
           </div>
           <p style="font-size: 11.5px; color: #64748b; margin: 0 0 12px 0;">
@@ -491,11 +491,11 @@ export class StandaloneRunnerModal extends BaseModal {
             <div style="font-size: 11.5px; color: #64748b;">Gera executável autônomo limpo, validação criptográfica e instalador para Intune/SCCM.</div>
           </div>
           <div style="display: flex; gap: 10px;">
-            <button id="btn-export-runner-now" class="tool-btn" style="height: 36px; padding: 0 18px; font-size: 12px; font-weight: 700; background: #0f6cbd; color: #ffffff; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-              <span>🚀</span> Gerar Pacote Agora
+            <button id="btn-export-runner-now" class="tool-btn" style="height: 36px; padding: 0 18px; font-size: 12px; font-weight: 700; background: #0f6cbd; color: #ffffff; border: none; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">
+              Gerar Pacote Agora
             </button>
             <button id="btn-launch-exported-runner" class="tool-btn" style="height: 36px; padding: 0 14px; font-size: 12px; font-weight: 700; background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;" ${!this.lastExportResult ? 'disabled' : ''}>
-              <span>📂</span> Abrir Pasta
+              Abrir Pasta
             </button>
           </div>
         </div>
