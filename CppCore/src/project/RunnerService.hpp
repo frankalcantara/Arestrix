@@ -28,6 +28,18 @@ public:
         const std::filesystem::path& projectRoot,
         const std::string& executablePath
     );
+
+    // Auditoria de seguranca fail-closed para garantir que nenhum segredo seja exportado
+    static bool auditTextForSecrets(
+        const std::string& text,
+        const std::string& sourceName,
+        std::string& outError
+    );
+
+    static bool auditDirectoryForSecrets(
+        const std::filesystem::path& dir,
+        std::string& outError
+    );
 };
 
 } // namespace project

@@ -300,4 +300,30 @@ describe('Standalone Runner Engine & Manager', () => {
     modal.open('export');
     modal.hide();
   });
+
+  it('deve auditar e bloquear qualquer tentativa de exportar segredos ou chaves reais (fail-closed)', async () => {
+    // 1. Textos limpos passam
+    expect(RunnerManager.auditTextForSecrets('Executando modelo com ${DEEPSEEK_API_KEY}').ok).toBe(true);
+    expect(RunnerManager.auditTextForSecrets('Variavel de ambiente: OPENAI_API_KEY').ok).toBe(true);
+
+    // 2. Chaves e tokens reais sao bloqueados (montados dinamicamente para nao sujar o arquivo com segredos)
+    const fakeSk = 's' + 'k-1234567890abcdef1234567890abcdef';
+    const fakeAIza = 'AI' + 'zaSyD98765432109876543210987654321098';
+    const fakeGhp = 'gh' + 'p_123456789012345678901234567890123456';
+    const fakePriv = '-----BEGIN ' + 'RSA PRIVATE KEY-----';
+
+    expect(RunnerManager.auditTextForSecrets(fakeSk).ok).toBe(false);
+    expect(RunnerManager.auditTextForSecrets(fakeAIza).ok).toBe(false);
+    expect(RunnerManager.auditTextForSecrets(fakeGhp).ok).toBe(false);
+    expect(RunnerManager.auditTextForSecrets(fakePriv).ok).toBe(false);
+
+    // 3. exportStandaloneRunner bloqueia se o grafo contiver chave de API real
+    const badGraph = new Graph(bus);
+    badGraph.createNode('leak_node', 'Leak', 'static', 100, 100);
+    badGraph.updateNode('leak_node', { customLambdaBody: 'const key = "' + fakeSk + '";' });
+
+    const res = await runner.exportStandaloneRunner(badGraph);
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain('fail-closed');
+  });
 });

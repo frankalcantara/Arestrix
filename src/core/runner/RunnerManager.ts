@@ -371,6 +371,51 @@ export class RunnerManager {
     this.bus.emit('runner:diagnostics-updated', this.diagnostics);
   }
 
+  public static auditTextForSecrets(text: string): { ok: boolean; error?: string } {
+    if (!text) return { ok: true };
+
+    const tokenPatterns = [
+      { name: 'chave sk-... (OpenAI/DeepSeek/Anthropic)', re: /\bsk-[A-Za-z0-9][A-Za-z0-9_-]{19,}/ },
+      { name: 'chave Google (AIza...)', re: /\bAIza[0-9A-Za-z_-]{30,}/ },
+      { name: 'chave Groq (gsk_...)', re: /\bgsk_[A-Za-z0-9]{30,}/ },
+      { name: 'token GitHub', re: /\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})/ },
+      { name: 'chave privada', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
+      { name: 'JWT', re: /\beyJ[A-Za-z0-9_-]{15,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/ },
+      { name: 'cabecalho Bearer com token', re: /\bBearer\s+[A-Za-z0-9._~+/=-]{24,}/ }
+    ];
+
+    const placeholderHints = /(test|fake|mock|dummy|example|sample|placeholder|changeme|your[-_]?|xxxx|\*{3,}|\.{3}|<[^>]+>|redacted)/i;
+    const envRefRe = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$|^%[A-Za-z_][A-Za-z0-9_]*%$|^\$[A-Za-z_][A-Za-z0-9_]*$/;
+    const envNameRe = /^[A-Z][A-Z0-9_]{2,}$/;
+
+    for (const pat of tokenPatterns) {
+      const match = text.match(pat.re);
+      if (match) {
+        const val = match[0];
+        if (!placeholderHints.test(val) && !envRefRe.test(val) && !envNameRe.test(val)) {
+          return {
+            ok: false,
+            error: `Segredo proibido detectado: ${pat.name} (${val.substring(0, 4)}... - ${val.length} caracteres)`
+          };
+        }
+      }
+    }
+
+    const assignmentRe = /["']?\b([A-Za-z0-9_.-]*(?:api[_-]?key|secret|passw(?:or)?d|passwd|token|credential|private[_-]?key)[A-Za-z0-9_.-]*)["']?\s*[:=]\s*["']([^"'\r\n]{14,})["']/gi;
+    let m: RegExpExecArray | null;
+    while ((m = assignmentRe.exec(text)) !== null) {
+      const val = m[2].trim();
+      if (!placeholderHints.test(val) && !envRefRe.test(val) && !envNameRe.test(val)) {
+        return {
+          ok: false,
+          error: `Atribuição de credencial/senha detectada: ${m[1]} (${val.substring(0, 4)}... - ${val.length} caracteres)`
+        };
+      }
+    }
+
+    return { ok: true };
+  }
+
   // Exportação Standalone RPC
   public async exportStandaloneRunner(graph: Graph, config?: Partial<IProjectRunnerConfig>): Promise<IRunnerExportResult> {
     const cur = this.projectManager.getCurrentProject();
@@ -390,6 +435,21 @@ export class RunnerManager {
       ...config
     };
 
+    const payload = {
+      runner: runnerConfig,
+      graph: graph.toJSON()
+    };
+    const payloadStr = JSON.stringify(payload);
+
+    // Auditoria preventiva imediata no frontend
+    const audit = RunnerManager.auditTextForSecrets(payloadStr);
+    if (!audit.ok) {
+      return {
+        ok: false,
+        error: `Exportação bloqueada por política de segurança (fail-closed): ${audit.error}`
+      };
+    }
+
     // @ts-ignore
     if (typeof webui === 'undefined') {
       return {
@@ -399,12 +459,8 @@ export class RunnerManager {
     }
 
     try {
-      const payload = {
-        runner: runnerConfig,
-        graph: graph.toJSON()
-      };
       // @ts-ignore
-      const raw = await webui.call('export_standalone_runner', JSON.stringify(payload));
+      const raw = await webui.call('export_standalone_runner', payloadStr);
       const res: IRunnerExportResult = typeof raw === 'string' && raw ? JSON.parse(raw) : { ok: false, error: 'Resposta nula do backend' };
       if (res.ok) {
         this.projectManager.updateProjectMetadata({ runner: runnerConfig });

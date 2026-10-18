@@ -2141,6 +2141,52 @@ TEST(standalone_runner_service_and_manifest_config) {
     fs::remove_all(tempRoot);
 }
 
+TEST(runner_security_audit_blocks_secrets_fail_closed) {
+    using namespace taskforge::project;
+    std::string err;
+
+    // 1. Textos limpos ou com placeholders de variaveis de ambiente devem passar
+    CHECK(RunnerService::auditTextForSecrets("Variavel de ambiente: DEEPSEEK_API_KEY", "test", err) == true);
+    CHECK(RunnerService::auditTextForSecrets("Referencia: ${OPENAI_API_KEY}", "test", err) == true);
+    CHECK(RunnerService::auditTextForSecrets("Chave de exemplo: your-key-here", "test", err) == true);
+
+    // 2. Chaves reais devem ser bloqueadas (montadas dinamicamente para nao sujar o arquivo de teste)
+    std::string fakeSk = std::string("s") + "k-" + "1234567890abcdef1234567890abcdef";
+    CHECK(RunnerService::auditTextForSecrets("chave real: " + fakeSk, "test", err) == false);
+    CHECK(!err.empty());
+
+    std::string fakeAIza = std::string("AI") + "zaSyD98765432109876543210987654321098";
+    CHECK(RunnerService::auditTextForSecrets("google key: " + fakeAIza, "test", err) == false);
+
+    std::string fakePriv = std::string("-----BEGIN ") + "RSA PRIVATE KEY-----";
+    CHECK(RunnerService::auditTextForSecrets(fakePriv, "test", err) == false);
+
+    std::string fakeGhp = std::string("gh") + "p_123456789012345678901234567890123456";
+    CHECK(RunnerService::auditTextForSecrets("token: " + fakeGhp, "test", err) == false);
+
+    // 3. exportRunner deve abortar se um segredo for injetado no grafo
+    auto tempRoot = makeTempDir("runner-sec-test");
+    ProjectManifest m;
+    m.projectId = "sec-test";
+    m.name = "Security Test";
+    m.runner.enabled = true;
+    m.runner.outputDir = "dist/runner";
+
+    taskforge::core::Graph g;
+    taskforge::core::NodeData badNode;
+    badNode.id = "bad_node";
+    badNode.label = "LeakNode";
+    badNode.type = taskforge::core::TaskflowNodeType::Static;
+    badNode.customLambdaBody = "std::string key = \"" + fakeSk + "\";";
+    g.addNode(badNode);
+
+    auto res = RunnerService::exportRunner(tempRoot, m, g);
+    CHECK(res.ok == false);
+    CHECK(res.error.find("Segredo detectado") != std::string::npos || res.error.find("fail-closed") != std::string::npos);
+
+    fs::remove_all(tempRoot);
+}
+
 int main() {
     std::srand((unsigned)std::time(nullptr));
     for (auto& t : tests()) {

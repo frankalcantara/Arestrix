@@ -140,6 +140,13 @@ A aba **Exportar** do Runner Standalone automatiza a compilação e empacotament
 - Criação do manifesto `runner_manifest.json` com parâmetros e metadados.
 - Criação de scripts inicializadores de fácil execução (`run.bat`).
 
+### Política Zero-Segredos no Executável e nos Arquivos do Runner
+Por diretriz rígida de segurança e conformidade, **nenhum segredo, senha ou chave de API é gravado no executável (`.exe`) ou nos arquivos necessários para sua execução**:
+- **Resolução Exclusiva via Ambiente do SO:** O executável C++ resolve chaves de API estritamente a partir das variáveis de ambiente do sistema operacional (ex.: `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`) no computador onde for executado. Se a variável não estiver definida na máquina de destino, o Runner falha de forma fechada, solicitando a configuração no SO.
+- **Auditoria Preventiva (Fail-Closed):** Tanto o frontend quanto o backend C++ realizam uma varredura rigorosa antes da exportação. Qualquer ocorrência de chaves de API reais (`sk-...`, `AIza...`, tokens GitHub, JWTs, chaves privadas ou senhas) bloqueia o empacotamento imediatamente.
+- **Bloqueio de Arquivos Proibidos:** Arquivos de credenciais locais (`.env`, `.env.*`, `credentials.json`, `*.key`, `*.pem`, `id_rsa`) são filtrados e nunca são transferidos para a pasta de distribuição.
+- **Higienização de Subprocessos:** O driver de processos do Arestrix remove automaticamente todas as variáveis com sufixos sensíveis (`_API_KEY`, `_TOKEN`, `_SECRET`, `_PASSWORD`) antes de lançar qualquer ferramenta filha no host.
+
 ## Relacionados
 
 - [Workspaces, memória, skills e MCP](05-workspaces-memoria-skills-mcp.md)

@@ -142,6 +142,13 @@ The **Export** tab in the Standalone Runner modal coordinates native distributio
 - Generates `runner_manifest.json` with metadata, schema, and parameter definitions.
 - Generates single-click launcher batch scripts (`run.bat`).
 
+### Zero-Secrets Policy in Executables and Runner Files
+Under strict security guidelines, **no secrets, passwords, or API keys are ever stored inside the executable (`.exe`) or any files required for runner operation**:
+- **Exclusive OS Environment Resolution:** The compiled C++ executable resolves API keys dynamically from the host operating system's environment variables (e.g., `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`). If the environment variable is not defined on the target machine, the runner fails closed with an informative message.
+- **Fail-Closed Pre-Export Audit:** Both frontend and C++ backend perform strict automated scanning before export. Any detection of real API key formats (`sk-...`, `AIza...`, GitHub tokens, JWTs, private keys, or password assignments) aborts packaging immediately.
+- **Prohibited Files Exclusion:** Local credential files (`.env`, `.env.*`, `credentials.json`, `*.key`, `*.pem`, `id_rsa`) are strictly filtered and never copied to distribution folders.
+- **Child Process Scrubbing:** The process driver automatically strips all sensitive environment variables (`_API_KEY`, `_TOKEN`, `_SECRET`, `_PASSWORD`) before launching child tool processes on the host.
+
 ## Related
 
 - [Workspaces, memory, skills and MCP](05-workspaces-memory-skills-mcp.md)
