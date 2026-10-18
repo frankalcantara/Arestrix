@@ -66,8 +66,16 @@ def find_vcvars():
     return None, None, None
 
 
-def build_backend(run_tests: bool):
-    cfg = ["-S", str(ROOT), "-B", str(BUILD), "-DCMAKE_BUILD_TYPE=Release"]
+def build_backend(run_tests: bool, hardening: bool = True, asan: bool = False, clang_tidy: bool = False, cppcheck: bool = False):
+    cfg = [
+        "-S", str(ROOT),
+        "-B", str(BUILD),
+        "-DCMAKE_BUILD_TYPE=Release",
+        f"-DARESTRIX_ENABLE_HARDENING={'ON' if hardening else 'OFF'}",
+        f"-DARESTRIX_ENABLE_ASAN={'ON' if asan else 'OFF'}",
+        f"-DARESTRIX_ENABLE_CLANG_TIDY={'ON' if clang_tidy else 'OFF'}",
+        f"-DARESTRIX_ENABLE_CPPCHECK={'ON' if cppcheck else 'OFF'}"
+    ]
     if IS_WINDOWS:
         vcvars, vs_path, installer = find_vcvars()
         if not vcvars:
@@ -99,11 +107,16 @@ def build_backend(run_tests: bool):
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--no-run", action="store_true")
-    ap.add_argument("--no-frontend", action="store_true")
-    ap.add_argument("--setup", action="store_true")
-    ap.add_argument("--test", action="store_true")
+    ap = argparse.ArgumentParser(description="Arestrix Build & Dev Runner")
+    ap.add_argument("--no-run", action="store_true", help="Apenas compila sem iniciar o Studio")
+    ap.add_argument("--no-frontend", action="store_true", help="Nao recompila o frontend TypeScript/Vite")
+    ap.add_argument("--setup", action="store_true", help="Apenas inicializa os submodulos")
+    ap.add_argument("--test", action="store_true", help="Executa a suite de testes C++20")
+    ap.add_argument("--hardening", action="store_true", default=True, help="Ativa flags de seguranca de memoria e mitigacao de exploracao")
+    ap.add_argument("--no-hardening", dest="hardening", action="store_false", help="Desativa flags de hardening")
+    ap.add_argument("--asan", action="store_true", help="Ativa AddressSanitizer")
+    ap.add_argument("--clang-tidy", action="store_true", help="Ativa analise estatica Clang-Tidy integrada")
+    ap.add_argument("--cppcheck", action="store_true", help="Ativa analise estatica Cppcheck integrada")
     args = ap.parse_args()
 
     ensure_submodules()
@@ -111,7 +124,13 @@ def main():
         return
     if not args.no_frontend:
         build_frontend()
-    build_backend(run_tests=args.test)
+    build_backend(
+        run_tests=args.test,
+        hardening=args.hardening,
+        asan=args.asan,
+        clang_tidy=args.clang_tidy,
+        cppcheck=args.cppcheck
+    )
     if args.no_run or args.test:
         return
     exe = ROOT / ("arestrix.exe" if IS_WINDOWS else "arestrix")

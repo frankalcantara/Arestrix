@@ -654,12 +654,6 @@ export class StandaloneRunnerModal extends BaseModal {
     }
   }
 
-  // Estilos limpos (Aderência total a RULE[user_global]: sem sombras em fontes)
-  private getTabButtonStyle(tab: RunnerTab): string {
-    const isActive = this.currentTab === tab;
-    return `height: 28px; padding: 0 12px; font-size: 11.5px; font-weight: ${isActive ? '700' : '500'}; background: ${isActive ? '#e0f2fe' : 'transparent'}; color: ${isActive ? '#0369a1' : '#64748b'}; border: 1px solid ${isActive ? '#bae6fd' : 'transparent'}; border-radius: 20px; cursor: pointer; display: flex; align-items: center; gap: 6px;`;
-  }
-
   private getStatusPillStyle(status: RunnerStatus): string {
     switch (status) {
       case 'running': return 'background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;';
@@ -754,12 +748,5 @@ export class StandaloneRunnerModal extends BaseModal {
     const s = sec % 60;
     const tenths = Math.floor((ms % 1000) / 100);
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${tenths}`;
-  }
-
-  private escapeHtml(text: string): string {
-    if (!text) return '';
-    return text.replace(/[&<>"']/g, m => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[m] || m));
   }
 }

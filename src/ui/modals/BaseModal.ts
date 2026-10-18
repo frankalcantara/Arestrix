@@ -33,6 +33,7 @@ export interface IBaseModalConfig {
   closeOnBackdropClick?: boolean;
   tabs?: IModalTabDefinition[];
   defaultTab?: string;
+  defaultTabId?: string;
 }
 
 export abstract class BaseModal {
@@ -57,7 +58,7 @@ export abstract class BaseModal {
 
     if (this.config.tabs && this.config.tabs.length > 0) {
       this.tabs = [...this.config.tabs];
-      this.activeTabId = this.config.defaultTab || this.tabs[0].id;
+      this.activeTabId = this.config.defaultTabId || this.config.defaultTab || this.tabs[0].id;
     }
 
     this.overlay = document.createElement('div');
@@ -187,6 +188,7 @@ export abstract class BaseModal {
     const exists = this.tabs.some(t => t.id === tabId);
     if (!exists) return;
 
+    this.saveTabState();
     this.activeTabId = tabId;
 
     if (typeof this.dialog.querySelectorAll === 'function') {
@@ -222,6 +224,13 @@ export abstract class BaseModal {
   }
 
   /**
+   * Gancho chamado antes da troca de aba para persistir inputs no estado do modal
+   */
+  protected saveTabState(): void {
+    // Pode ser implementado por subclasses que desejam capturar inputs antes de alternar abas
+  }
+
+  /**
    * Gancho chamado após a troca de aba para vincular manipuladores específicos daquela visualização
    */
   protected onTabSwitched(_tabId: string): void {
@@ -252,16 +261,22 @@ export abstract class BaseModal {
   protected renderStandardFooter(options?: {
     saveText?: string;
     cancelText?: string;
+    primaryLabel?: string;
+    secondaryLabel?: string;
+    primaryId?: string;
+    secondaryId?: string;
     extraHtml?: string;
   }): string {
-    const saveLabel = options?.saveText || 'OK';
-    const cancelLabel = options?.cancelText || 'Cancelar';
+    const saveLabel = options?.primaryLabel || options?.saveText || 'OK';
+    const cancelLabel = options?.secondaryLabel || options?.cancelText || 'Cancelar';
+    const saveId = options?.primaryId || 'btn-modal-save';
+    const cancelId = options?.secondaryId || 'btn-modal-cancel';
     return `
       <div class="modal-footer office-modal-footer">
         <div class="modal-footer-left">${options?.extraHtml || ''}</div>
         <div class="modal-footer-right" style="display: flex; gap: 8px;">
-          <button type="button" class="btn btn-secondary-office" id="btn-modal-cancel">${cancelLabel}</button>
-          <button type="button" class="btn btn-primary-office" id="btn-modal-save">${saveLabel}</button>
+          <button type="button" class="btn btn-secondary-office" id="${cancelId}">${cancelLabel}</button>
+          <button type="button" class="btn btn-primary-office" id="${saveId}">${saveLabel}</button>
         </div>
       </div>
     `;

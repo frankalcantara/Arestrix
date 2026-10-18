@@ -13,6 +13,112 @@ endif()
 option(ARESTRIX_BUILD_STUDIO "Compila o Studio (executavel com interface WebUI)" ON)
 option(ARESTRIX_BUILD_TESTS "Compila os testes do runtime" ON)
 
+# ---------------------------------------------------------------------------
+# Seguranca Corporativa, Hardening e Analise Estatica / Dinamica em C++20
+# ---------------------------------------------------------------------------
+option(ARESTRIX_ENABLE_HARDENING "Ativa flags de seguranca de memoria e mitigacao de exploracao" ON)
+option(ARESTRIX_ENABLE_ASAN "Ativa AddressSanitizer (deteccao de use-after-free e buffer overflows)" OFF)
+option(ARESTRIX_ENABLE_UBSAN "Ativa UndefinedBehaviorSanitizer (deteccao de comportamento indefinido)" OFF)
+option(ARESTRIX_ENABLE_TSAN "Ativa ThreadSanitizer (deteccao de data races em multithreading)" OFF)
+option(ARESTRIX_ENABLE_CLANG_TIDY "Ativa analise estatica Clang-Tidy integrada ao build" OFF)
+option(ARESTRIX_ENABLE_CPPCHECK "Ativa analise estatica Cppcheck integrada ao build" OFF)
+option(ARESTRIX_WARNINGS_AS_ERRORS "Trata avisos do compilador como erros fatais (/WX ou -Werror)" OFF)
+
+# Integracao com Clang-Tidy
+if(ARESTRIX_ENABLE_CLANG_TIDY)
+  find_program(CLANG_TIDY_EXE NAMES clang-tidy
+    PATHS
+      "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/Llvm/x64/bin"
+      "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/bin"
+      "C:/Program Files/LLVM/bin"
+      "/usr/bin"
+      "/usr/local/bin")
+  if(CLANG_TIDY_EXE)
+    message(STATUS "[Seguranca] Clang-Tidy habilitado: ${CLANG_TIDY_EXE}")
+    set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--config-file=${CMAKE_SOURCE_DIR}/.clang-tidy;--extra-arg=-fcxx-exceptions")
+  else()
+    message(WARNING "[Seguranca] Clang-Tidy solicitado mas executavel nao encontrado.")
+  endif()
+endif()
+
+# Integracao com Cppcheck
+if(ARESTRIX_ENABLE_CPPCHECK)
+  find_program(CPPCHECK_EXE NAMES cppcheck)
+  if(CPPCHECK_EXE)
+    message(STATUS "[Seguranca] Cppcheck habilitado: ${CPPCHECK_EXE}")
+    set(CMAKE_CXX_CPPCHECK "${CPPCHECK_EXE};--enable=warning,performance,portability;--inline-suppr;--suppress=*:*third_party/*;--inconclusive")
+  else()
+    message(WARNING "[Seguranca] Cppcheck solicitado mas executavel nao encontrado.")
+  endif()
+endif()
+
+# ---------------------------------------------------------------------------
+# Target de Interface com Flags de Seguranca & Hardening Compartilhadas
+# ---------------------------------------------------------------------------
+add_library(arestrix_security_flags INTERFACE)
+
+if(MSVC)
+  target_compile_options(arestrix_security_flags INTERFACE
+    $<$<COMPILE_LANGUAGE:CXX>:/utf-8 /permissive- /Zc:__cplusplus /EHsc>)
+  
+  if(ARESTRIX_ENABLE_HARDENING)
+    target_compile_options(arestrix_security_flags INTERFACE
+      $<$<COMPILE_LANGUAGE:CXX>:/GS /guard:cf /sdl /W4>)
+    target_link_options(arestrix_security_flags INTERFACE
+      /DYNAMICBASE /HIGHENTROPYVA /NXCOMPAT /guard:cf)
+  else()
+    target_compile_options(arestrix_security_flags INTERFACE
+      $<$<COMPILE_LANGUAGE:CXX>:/W3>)
+  endif()
+
+  if(ARESTRIX_WARNINGS_AS_ERRORS)
+    target_compile_options(arestrix_security_flags INTERFACE
+      $<$<COMPILE_LANGUAGE:CXX>:/WX>)
+  endif()
+
+  if(ARESTRIX_ENABLE_ASAN)
+    message(STATUS "[Seguranca] AddressSanitizer (MSVC) ativado.")
+    target_compile_options(arestrix_security_flags INTERFACE /fsanitize=address)
+  endif()
+
+  target_compile_definitions(arestrix_security_flags INTERFACE _CRT_SECURE_NO_WARNINGS)
+
+else()
+  # GCC / Clang
+  target_compile_options(arestrix_security_flags INTERFACE
+    $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Wpedantic -Wno-unused-parameter>)
+
+  if(ARESTRIX_ENABLE_HARDENING)
+    target_compile_options(arestrix_security_flags INTERFACE
+      $<$<COMPILE_LANGUAGE:CXX>:-fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat=2 -Wformat-security>)
+    target_link_options(arestrix_security_flags INTERFACE
+      -Wl,-z,relro,-z,now -Wl,-z,noexecstack)
+  endif()
+
+  if(ARESTRIX_WARNINGS_AS_ERRORS)
+    target_compile_options(arestrix_security_flags INTERFACE
+      $<$<COMPILE_LANGUAGE:CXX>:-Werror>)
+  endif()
+
+  if(ARESTRIX_ENABLE_ASAN)
+    message(STATUS "[Seguranca] AddressSanitizer (GCC/Clang) ativado.")
+    target_compile_options(arestrix_security_flags INTERFACE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(arestrix_security_flags INTERFACE -fsanitize=address)
+  endif()
+
+  if(ARESTRIX_ENABLE_UBSAN)
+    message(STATUS "[Seguranca] UndefinedBehaviorSanitizer ativado.")
+    target_compile_options(arestrix_security_flags INTERFACE -fsanitize=undefined)
+    target_link_options(arestrix_security_flags INTERFACE -fsanitize=undefined)
+  endif()
+
+  if(ARESTRIX_ENABLE_TSAN)
+    message(STATUS "[Seguranca] ThreadSanitizer ativado.")
+    target_compile_options(arestrix_security_flags INTERFACE -fsanitize=thread)
+    target_link_options(arestrix_security_flags INTERFACE -fsanitize=thread)
+  endif()
+endif()
+
 set(TP "${CMAKE_SOURCE_DIR}/third_party")
 set(SRC "${CMAKE_SOURCE_DIR}/CppCore/src")
 
@@ -78,22 +184,15 @@ target_include_directories(arestrix_core PUBLIC
 set_source_files_properties(${TP}/sqlite/sqlite3.c PROPERTIES
   COMPILE_DEFINITIONS "SQLITE_OMIT_LOAD_EXTENSION;SQLITE_DQS=0;SQLITE_THREADSAFE=1;SQLITE_DEFAULT_FOREIGN_KEYS=1;SQLITE_OMIT_DEPRECATED;SQLITE_OMIT_SHARED_CACHE;SQLITE_USE_URI=0;SQLITE_DEFAULT_MEMSTATUS=0")
 if(MSVC)
-  set_source_files_properties(${TP}/sqlite/sqlite3.c PROPERTIES COMPILE_OPTIONS "/w")
+  set_source_files_properties(${TP}/sqlite/sqlite3.c ${TP}/simdjson/singleheader/simdjson.cpp PROPERTIES COMPILE_OPTIONS "/w")
 else()
-  set_source_files_properties(${TP}/sqlite/sqlite3.c PROPERTIES COMPILE_OPTIONS "-w")
+  set_source_files_properties(${TP}/sqlite/sqlite3.c ${TP}/simdjson/singleheader/simdjson.cpp PROPERTIES COMPILE_OPTIONS "-w")
 endif()
 
 find_package(Threads REQUIRED)
-target_link_libraries(arestrix_core PUBLIC Threads::Threads)
+target_link_libraries(arestrix_core PUBLIC arestrix_security_flags Threads::Threads)
 if(WIN32)
   target_link_libraries(arestrix_core PUBLIC winhttp ws2_32 advapi32 ole32 shell32 user32)
-endif()
-
-if(MSVC)
-  target_compile_options(arestrix_core PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/W3 /utf-8 /permissive- /Zc:__cplusplus /EHsc>)
-  target_compile_definitions(arestrix_core PUBLIC _CRT_SECURE_NO_WARNINGS)
-else()
-  target_compile_options(arestrix_core PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Wno-unused-parameter>)
 endif()
 
 # Os executaveis gerados procuram a biblioteca em <raiz>/runtime/lib.
@@ -111,10 +210,7 @@ add_executable(arestrix-cli
   ${SRC}/core/Graph.cpp
   ${SRC}/compiler/TaskflowGenerator.cpp
   ${SRC}/build/BuildService.cpp)
-target_link_libraries(arestrix-cli PRIVATE arestrix_core)
-if(MSVC)
-  target_compile_options(arestrix-cli PRIVATE /W3 /utf-8 /permissive- /Zc:__cplusplus /EHsc)
-endif()
+target_link_libraries(arestrix-cli PRIVATE arestrix_core arestrix_security_flags)
 add_custom_command(TARGET arestrix-cli POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:arestrix-cli>" "${CMAKE_SOURCE_DIR}/"
   VERBATIM)
@@ -135,6 +231,7 @@ if(ARESTRIX_BUILD_STUDIO)
   if(WIN32)
     target_link_libraries(webui PUBLIC user32 advapi32 shell32 ole32 ws2_32)
     target_compile_definitions(webui PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(webui PRIVATE /w)
   else()
     target_compile_options(webui PRIVATE -w)
     target_link_libraries(webui PUBLIC Threads::Threads ${CMAKE_DL_LIBS} m)
@@ -148,12 +245,9 @@ if(ARESTRIX_BUILD_STUDIO)
     ${SRC}/cli/Cli.cpp
     ${SRC}/project/ProjectManager.cpp
     ${SRC}/pi/PiProjectScanner.cpp)
-  target_link_libraries(arestrix PRIVATE arestrix_core webui)
+  target_link_libraries(arestrix PRIVATE arestrix_core arestrix_security_flags webui)
   if(UNIX)
     target_link_libraries(arestrix PRIVATE ${CMAKE_DL_LIBS} m)
-  endif()
-  if(MSVC)
-    target_compile_options(arestrix PRIVATE /W3 /utf-8 /permissive- /Zc:__cplusplus /EHsc)
   endif()
 
   add_custom_command(TARGET arestrix POST_BUILD
@@ -171,9 +265,6 @@ if(ARESTRIX_BUILD_TESTS)
     ${SRC}/core/Graph.cpp
     ${SRC}/compiler/TaskflowGenerator.cpp
     ${SRC}/build/BuildService.cpp)
-  target_link_libraries(arestrix_tests PRIVATE arestrix_core)
-  if(MSVC)
-    target_compile_options(arestrix_tests PRIVATE /W3 /utf-8 /permissive- /Zc:__cplusplus /EHsc)
-  endif()
+  target_link_libraries(arestrix_tests PRIVATE arestrix_core arestrix_security_flags)
   add_test(NAME arestrix_tests COMMAND arestrix_tests WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endif()

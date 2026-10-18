@@ -535,14 +535,6 @@ export class SkillEditorModal extends BaseModal {
     }
     this.hide();
   }
-
-  private escapeHtml(str: string): string {
-    return (str || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
 }
 
 /**

@@ -1,0 +1,31 @@
+---
+# Arestrix C++20 Core - Configuracao de Analise Estatica Clang-Tidy
+# Alinhado as C++ Core Guidelines, CERT C++ e deteccao de vulnerabilidades
+
+Checks: >
+  -*,
+  clang-analyzer-*,
+  clang-analyzer-security.*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  cert-*,
+  cppcoreguidelines-*,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-pro-type-vararg,
+  -cppcoreguidelines-owning-memory,
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  -modernize-use-nodiscard,
+  performance-*
+
+# Apenas headers internos de CppCore serao verificados (ignora third_party)
+HeaderFilterRegex: 'CppCore/src/.*'
+FormatStyle: none
+
+CheckOptions:
+  cppcoreguidelines-special-member-functions.AllowMissingMoveFunctions: 'true'
+  cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor: 'true'
+...

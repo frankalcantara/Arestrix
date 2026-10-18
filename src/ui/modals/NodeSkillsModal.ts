@@ -732,13 +732,4 @@ export class NodeSkillsModal extends BaseModal {
 
     return `<div style="font-family: 'Segoe UI', Inter, sans-serif;">${html}</div>`;
   }
-
-  private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
 }
