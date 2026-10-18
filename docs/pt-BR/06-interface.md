@@ -59,7 +59,7 @@ subfluxos e módulos), as skills do workspace e os pipelines. Pressione `Ctrl+K`
 ## Backstage
 
 Aberta por **Arquivo**. Traz as informações do projeto (quatro cartões: o projeto ativo, a sincronização do repositório Git, o workspace
-físico e o **Runner Standalone Departamental**), a tela **Abrir**, a tela unificada **Salvar** e as **Opções**
+físico e o **Runner Standalone**), a tela **Abrir**, a tela unificada **Salvar** e as **Opções**
 (padrões do Studio, governança do workspace e o seletor de **idioma**).
 
 A tela **Abrir** segue o Abrir do Office. À esquerda ficam os locais:

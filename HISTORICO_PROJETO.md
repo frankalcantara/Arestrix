@@ -26,7 +26,7 @@ Primeiros submodulos em `third_party/`: NVIDIA/skills e NVIDIA/SkillSpector. Dep
 - Refeito sem icones, tom sobrio, abrindo com a motivacao do projeto (4c0707f).
 
 ### 2026-10-13 - Motor de execucao (sessao cc0aec22)
-Analise do projeto e roadmap: Studio roda em Windows e Linux; a geracao de apps departamentais
+Analise do projeto e roadmap: Studio roda em Windows e Linux; a geracao de apps runner
 fica para depois que o Studio criar e rodar grafos completos. Entregas (commit e82b6f1):
 - Submodulos Taskflow 4.1.0, simdjson 5.0.4 e WebUI 2.4.2 em `third_party/`, com agradecimentos.
 - Todo parse JSON via simdjson; nlohmann removido e substituido por `taskforge::Json`.
@@ -75,4 +75,4 @@ Falha de CMake por `build/` no `.gitignore`, analise do `npm audit`; ver
 - `main` limpo e publicado; clone novo com submodulos compila e roda (`python CppCore/dev.py`).
 - `SEGURANCA_DEPENDENCIAS.md`: atualizar vite/vitest e monaco-editor/dompurify.
 - Avisos do Vite: `webui.js` sem `type="module"`; `fs`/`path` em `GenericPiProjectScanner.ts`.
-- Futuro: criacao de aplicativos departamentais (so Windows) depois que o Studio executar grafos completos.
+- Futuro: criacao de aplicativos runner standalone (so Windows) depois que o Studio executar grafos completos.

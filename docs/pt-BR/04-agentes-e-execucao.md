@@ -106,11 +106,11 @@ Todo pipeline voltado a produzir entregáveis (gráficos vetoriais, relatórios,
 
 ## Runner Standalone (Fase 1: Executável Independente)
 
-O **Runner Standalone** permite transformar qualquer grafo de agentes em uma aplicação autônoma para distribuição departamental ou execução simplificada, sem exigir que o operador utilize o editor visual completo.
+O **Runner Standalone** permite transformar qualquer grafo de agentes em uma aplicação autônoma para distribuição ou execução simplificada, sem exigir que o operador utilize o editor visual completo.
 
 ### Formas de Acionamento
 1. **Botão no Ribbon:** Na aba **Executar**, o grupo **Distribuição** disponibiliza o botão **Runner Standalone** (ícone 🚀).
-2. **Backstage (Arquivo):** No cartão **Runner Standalone Departamental** na tela de informações do projeto ativo.
+2. **Backstage (Arquivo):** No cartão **Runner Standalone** na tela de informações do projeto ativo.
 3. **Propriedade no Manifesto:** Configuração direta no `arestrix.project.json` através do bloco `"runner": { "enabled": true, ... }`.
 
 ### As Três Telas Operacionais

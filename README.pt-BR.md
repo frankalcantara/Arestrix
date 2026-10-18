@@ -31,7 +31,7 @@ O **Arestrix Studio** é um editor visual de grafos de agentes de IA. Você dese
 - **Seguro por padrão.** Os sandboxes falham de forma fechada, o acesso a arquivos é confinado ao projeto e os laços de feedback têm um teto de gasto.
 - **Reutilizável.** Uma biblioteca de vértices prontos, seus próprios templates salvos, skills e servidores MCP.
 - **Sincronização Git por projeto.** Cada projeto é mapeado para um repositório Git privado (padrão GitHub) com auto-save no clone local e commit/push automáticos no F5 e ao encerrar. Credenciais gerenciadas com segurança no SO (GCM), com zero segredos no Arestrix e avisos de soberania para serviços comerciais.
-- **Runner Standalone e Distribuição.** Exportação em um clique de pipelines para executáveis autônomos com telas integradas de Progresso, Diagnóstico e Operação para distribuição departamental.
+- **Runner Standalone e Distribuição.** Exportação em um clique de pipelines para executáveis autônomos com telas integradas de Progresso, Diagnóstico e Operação para distribuição.
 - **Windows e Linux**, interface bilíngue (português e inglês), licença MIT.
 
 ## Início rápido

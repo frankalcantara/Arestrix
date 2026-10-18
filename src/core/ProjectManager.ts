@@ -191,7 +191,7 @@ export class ProjectManager {
       runner: {
         enabled: true,
         title: 'Workspace Padrão - Runner',
-        description: 'Executável departamental do pipeline',
+        description: 'Executável do pipeline',
         version: '1.0.0',
         outputDir: 'dist/runner',
         outputName: 'pipeline_runner.exe',

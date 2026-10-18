@@ -59,7 +59,7 @@ modules), the skills of the workspace and the pipelines. Press `Ctrl+K` to focus
 ## Backstage
 
 Opened by **File**. It has the project information (four cards: the active project, Git repository synchronization, the physical
-workspace, and the **Departmental Standalone Runner**), the **Open** screen, the unified **Save** screen, and the **Options**
+workspace, and the **Standalone Runner**), the **Open** screen, the unified **Save** screen, and the **Options**
 (Studio defaults, workspace governance and the **language** selector).
 
 The **Open** screen follows Office's Open. The places are on the left:

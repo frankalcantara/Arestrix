@@ -1744,8 +1744,8 @@
     "btn_configure_git": "Configure Git..."
   },
   "runner": {
-    "modal_title": "Enterprise Standalone Runner",
-    "modal_subtitle": "Autonomous execution, real-time diagnostics, and departmental delivery",
+    "modal_title": "Standalone Runner",
+    "modal_subtitle": "Autonomous execution, real-time diagnostics, and deliverable handoff",
     "btn_run": "Run (F5)",
     "btn_stop": "Stop",
     "btn_restart_tip": "Restart execution",
@@ -1760,11 +1760,11 @@
     "thinking_title": "Agent Thinking Stream",
     "tool_calls_title": "Tool Calls (I/O)",
     "operation_controls": "Control & Launch Panel",
-    "operation_desc": "Start enterprise pipeline execution or provide runtime operational input parameters prior to processing.",
+    "operation_desc": "Start pipeline execution or provide runtime operational input parameters prior to processing.",
     "parameters_title": "Operational Input Parameters",
     "artifacts_title": "Deliverables & Artifacts",
-    "export_settings_title": "Enterprise Executable Configuration",
-    "card_title": "Departmental Standalone Runner",
+    "export_settings_title": "Runner Executable Configuration",
+    "card_title": "Standalone Runner",
     "btn_open_runner": "Open Standalone Runner Panel..."
   }
 }

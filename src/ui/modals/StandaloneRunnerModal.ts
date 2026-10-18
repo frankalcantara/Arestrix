@@ -21,8 +21,8 @@ export class StandaloneRunnerModal extends BaseModal {
   constructor(graph: Graph) {
     super({
       id: 'modal-standalone-runner',
-      title: t('runner.modal_title', 'Runner Standalone Corporativo'),
-      subtitle: t('runner.modal_subtitle', 'Operação autônoma, diagnóstico em tempo real e entrega departamental'),
+      title: t('runner.modal_title', 'Runner Standalone'),
+      subtitle: t('runner.modal_subtitle', 'Operação autônoma, diagnóstico em tempo real e entrega de resultados'),
       icon: '🚀',
       minWidth: 840,
       minHeight: 580,
@@ -99,7 +99,7 @@ export class StandaloneRunnerModal extends BaseModal {
                 </span>
               </div>
               <p style="font-size: 11px; color: #64748b; margin: 2px 0 0 0;">
-                ${this.escapeHtml(runnerConfig.description || 'Executável departamental do pipeline')}
+                ${this.escapeHtml(runnerConfig.description || 'Executável do pipeline')}
               </p>
             </div>
           </div>

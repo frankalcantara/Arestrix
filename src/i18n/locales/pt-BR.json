@@ -1744,8 +1744,8 @@
     "btn_configure_git": "Configurar Git..."
   },
   "runner": {
-    "modal_title": "Runner Standalone Corporativo",
-    "modal_subtitle": "Operação autônoma, diagnóstico em tempo real e entrega departamental",
+    "modal_title": "Runner Standalone",
+    "modal_subtitle": "Operação autônoma, diagnóstico em tempo real e entrega de resultados",
     "btn_run": "Executar (F5)",
     "btn_stop": "Interromper",
     "btn_restart_tip": "Reiniciar execução",
@@ -1760,11 +1760,11 @@
     "thinking_title": "Raciocínio dos Agentes (Thinking)",
     "tool_calls_title": "Chamadas de Ferramentas (I/O)",
     "operation_controls": "Painel de Controle e Disparo",
-    "operation_desc": "Inicie a execução do pipeline corporativo ou forneça parâmetros operacionais de entrada antes do processamento.",
+    "operation_desc": "Inicie a execução do pipeline ou forneça parâmetros operacionais de entrada antes do processamento.",
     "parameters_title": "Parâmetros Operacionais de Entrada",
     "artifacts_title": "Entregáveis & Artefatos",
-    "export_settings_title": "Configuração do Executável Corporativo",
-    "card_title": "Runner Standalone Departamental",
+    "export_settings_title": "Configuração do Executável do Runner",
+    "card_title": "Runner Standalone",
     "btn_open_runner": "Abrir Painel do Runner Standalone..."
   }
 }

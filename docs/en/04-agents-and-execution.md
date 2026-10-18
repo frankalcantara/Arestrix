@@ -108,11 +108,11 @@ Any pipeline designed to generate deliverable products (vector graphics, reports
 
 ## Standalone Runner (Phase 1: Autonomous Executable)
 
-The **Standalone Runner** transforms any agent graph into an independent application suitable for departmental distribution or streamlined operation, without requiring operators to launch the full visual graph editor.
+The **Standalone Runner** transforms any agent graph into an independent application suitable for standalone distribution or streamlined operation, without requiring operators to launch the full visual graph editor.
 
 ### Activation Triggers
 1. **Ribbon Button:** In the **Run** tab, the **Distribution** group exposes the **Standalone Runner** button (icon 🚀).
-2. **Backstage (File):** In the **Departmental Standalone Runner** card on the active project overview page.
+2. **Backstage (File):** In the **Standalone Runner** card on the active project overview page.
 3. **Project Manifest Property:** Configured directly in `arestrix.project.json` under `"runner": { "enabled": true, ... }`.
 
 ### The Three Operational Views

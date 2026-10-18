@@ -849,7 +849,7 @@ export class BackstageView {
 
             <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h4 style="margin: 0; min-width: 0;">🚀 ${t('runner.card_title', 'Runner Standalone Departamental')}</h4>
+                <h4 style="margin: 0; min-width: 0;">🚀 ${t('runner.card_title', 'Runner Standalone')}</h4>
                 <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0; color: #0284c7; font-weight: 700;">${proj.runner?.enabled !== false ? 'Ativado' : 'Desativado'}</span>
               </div>
               <p style="margin-bottom: 8px;"><strong>Aplicação:</strong> ${this.escapeHtml(proj.runner?.title || (proj.name + ' Runner'))}</p>
