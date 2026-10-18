@@ -102,7 +102,7 @@ Arestrix adopts a defense-in-depth security architecture designed to meet rigoro
 ## High-Resolution Feature Showcase
 
 ### 1. Studio Canvas & Agent Swarm Workflow
-Clean, responsive, Office 365-inspired user interface. Seamlessly orchestrate LLM agents, deterministic computation nodes, conditional routers, and MCP tools with real-time visual execution states.
+Clean, responsive interface inspired by Microsoft Office 365 showcasing an active multi-agent pipeline in **real-time concurrent execution (F5)**: completed and active vertices, live thinking telemetry badges, docked MSVC C++20 Taskflow build terminal, and agent properties inspector.
 
 <p align="center">
   <img src="docs/assets/screenshots/studio-main.png" alt="Arestrix Studio Main Canvas" width="960">

@@ -102,7 +102,7 @@ O Arestrix adota a filosofia de segurança em profundidade (*defense-in-depth*),
 ## Galeria de Recursos em Alta Resolução
 
 ### 1. Studio Principal & Canvas de Fluxo de Agentes
-Interface limpa, moderna e inspirada no Microsoft Office 365. Crie conexões entre agentes de linguagem, nós determinísticos, condicionais e integrações MCP com retorno visual em tempo real.
+Interface limpa e profissional inspirada no Microsoft Office 365 exibindo um pipeline multi-agente em **execução concorrente ativa (F5)**: visualização de nós concluídos e ativos, telemetria em tempo real com streaming de raciocínio, terminal de compilação MSVC C++20 acoplado e inspetor de propriedades do agente.
 
 <p align="center">
   <img src="docs/assets/screenshots/studio-main.png" alt="Arestrix Studio Canvas Principal" width="960">

@@ -173,6 +173,12 @@ function bootstrap() {
     }
   };
   // @ts-ignore
+  window.globalEventBus = globalEventBus;
+  // @ts-ignore
+  window.arestrixGraph = graph;
+  // @ts-ignore
+  window.arestrixViewport = viewport;
+  // @ts-ignore
   window.onArestrixTelemetry = onTelemetryHandler;
   // @ts-ignore
   window.onTaskForgeTelemetry = onTelemetryHandler;
