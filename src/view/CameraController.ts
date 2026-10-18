@@ -22,6 +22,10 @@ export class CameraController {
     this.initEvents();
   }
 
+  public setFrustumSize(frustumSize: number): void {
+    this.frustumSize = frustumSize;
+  }
+
   private initEvents(): void {
     // Zoom centrado na posicao do cursor do mouse
     this.domElement.addEventListener('wheel', (e: WheelEvent) => {

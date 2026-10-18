@@ -8,6 +8,7 @@ export class NodeSandboxModal {
   private overlay: HTMLElement;
   private graph: Graph;
   private windowController?: IModalWindowController;
+  private activeTab: 'isolation' | 'network' | 'mounts' = 'isolation';
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -23,6 +24,7 @@ export class NodeSandboxModal {
     const node = this.graph.getNode(nodeId);
     if (!node) return;
 
+    this.activeTab = 'isolation';
     this.render(node);
     this.overlay.classList.remove('hidden');
     this.windowController?.bringToFront();
@@ -58,6 +60,20 @@ export class NodeSandboxModal {
     this.overlay.innerHTML = `
       <div class="modal-dialog node-settings-modal-dialog">
         ${titleBarHtml}
+
+        <!-- Abas Fluent / Office 365 -->
+        <div class="modal-tabs" role="tablist">
+          <button type="button" class="tab-btn ${this.activeTab === 'isolation' ? 'active' : ''}" data-tab="isolation">
+            <span>🛡️</span> ${t('node_modals.tab_isolation', '1. Isolamento & Recursos')}
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'network' ? 'active' : ''}" data-tab="network">
+            <span>🌐</span> ${t('node_modals.tab_network', '2. Rede & Confinamento')}
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'mounts' ? 'active' : ''}" data-tab="mounts">
+            <span>📁</span> ${t('node_modals.tab_mounts', '3. Pastas & Volumes')}
+          </button>
+        </div>
+
         <div class="modal-body-scrollable">
           <!-- Toggle de Herança -->
           <div class="inheritance-toggle-card">
@@ -74,7 +90,8 @@ export class NodeSandboxModal {
           </div>
 
           <div class="settings-form-wrapper ${isInherited ? 'form-disabled-opacity' : ''}" id="sandbox-form-wrapper">
-            <div class="form-row-grid">
+            <!-- ABA 1: Isolamento & Recursos -->
+            <div class="tab-pane" id="pane-tab-isolation" style="${this.activeTab === 'isolation' ? '' : 'display: none;'}">
               <div class="form-group">
                 <label class="form-label" for="node-sandbox-isolation">${t('node_modals.isolation_label')}</label>
                 <select id="node-sandbox-isolation" class="form-select" ${isInherited ? 'disabled' : ''}>
@@ -84,6 +101,21 @@ export class NodeSandboxModal {
                 </select>
               </div>
 
+              <div class="form-row-grid" style="margin-top: 14px;">
+                <div class="form-group">
+                  <label class="form-label" for="node-sandbox-memory">${t('node_modals.memory_limit_label')}</label>
+                  <input type="number" id="node-sandbox-memory" class="form-input" value="${effectiveSandbox.maxMemoryMB}" min="64" step="64" ${isInherited ? 'disabled' : ''} />
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="node-sandbox-timeout">${t('node_modals.timeout_label')}</label>
+                  <input type="number" id="node-sandbox-timeout" class="form-input" value="${effectiveSandbox.timeoutSeconds}" min="10" step="10" ${isInherited ? 'disabled' : ''} />
+                </div>
+              </div>
+            </div>
+
+            <!-- ABA 2: Rede & Confinamento -->
+            <div class="tab-pane" id="pane-tab-network" style="${this.activeTab === 'network' ? '' : 'display: none;'}">
               <div class="form-group">
                 <label class="form-label" for="node-sandbox-network">${t('node_modals.network_label')}</label>
                 <select id="node-sandbox-network" class="form-select" ${isInherited ? 'disabled' : ''}>
@@ -91,38 +123,30 @@ export class NodeSandboxModal {
                   <option value="offline" ${effectiveSandbox.network === 'offline' ? 'selected' : ''}>${t('node_modals.network_offline')}</option>
                   <option value="full" ${effectiveSandbox.network === 'full' ? 'selected' : ''}>${t('node_modals.network_full')}</option>
                 </select>
+                <div class="form-hint" style="margin-top: 6px;">${t('node_modals.network_policy_hint', 'A restrição de rede impede vazamento de dados confidenciais e conexões indevidas.')}</div>
               </div>
             </div>
 
-            <div class="form-row-grid">
+            <!-- ABA 3: Montagens & Pastas -->
+            <div class="tab-pane" id="pane-tab-mounts" style="${this.activeTab === 'mounts' ? '' : 'display: none;'}">
               <div class="form-group">
-                <label class="form-label" for="node-sandbox-memory">${t('node_modals.memory_limit_label')}</label>
-                <input type="number" id="node-sandbox-memory" class="form-input" value="${effectiveSandbox.maxMemoryMB}" min="64" step="64" ${isInherited ? 'disabled' : ''} />
+                <label class="form-label" for="node-sandbox-ro">${t('node_modals.ro_mounts_label')}</label>
+                <input type="text" id="node-sandbox-ro" class="form-input" value="${this.escapeHtml((effectiveSandbox.readOnlyMounts || []).join(', '))}" placeholder=".agents/, shared/" ${isInherited ? 'disabled' : ''} />
+                <div class="form-hint">${t('node_modals.ro_mounts_desc')}</div>
               </div>
 
-              <div class="form-group">
-                <label class="form-label" for="node-sandbox-timeout">${t('node_modals.timeout_label')}</label>
-                <input type="number" id="node-sandbox-timeout" class="form-input" value="${effectiveSandbox.timeoutSeconds}" min="10" step="10" ${isInherited ? 'disabled' : ''} />
+              <div class="form-group" style="margin-top: 14px;">
+                <label class="form-label" for="node-sandbox-rw">${t('node_modals.rw_mounts_label')}</label>
+                <input type="text" id="node-sandbox-rw" class="form-input" value="${this.escapeHtml((effectiveSandbox.readWriteMounts || []).join(', '))}" placeholder="output/, assets/" ${isInherited ? 'disabled' : ''} />
+                <div class="form-hint">${t('node_modals.rw_mounts_desc')}</div>
               </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="node-sandbox-ro">${t('node_modals.ro_mounts_label')}</label>
-              <input type="text" id="node-sandbox-ro" class="form-input" value="${this.escapeHtml((effectiveSandbox.readOnlyMounts || []).join(', '))}" placeholder=".agents/, shared/" ${isInherited ? 'disabled' : ''} />
-              <div class="form-hint">${t('node_modals.ro_mounts_desc')}</div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="node-sandbox-rw">${t('node_modals.rw_mounts_label')}</label>
-              <input type="text" id="node-sandbox-rw" class="form-input" value="${this.escapeHtml((effectiveSandbox.readWriteMounts || []).join(', '))}" placeholder="output/, assets/" ${isInherited ? 'disabled' : ''} />
-              <div class="form-hint">${t('node_modals.rw_mounts_desc')}</div>
             </div>
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button class="btn btn-secondary-pill" id="btn-cancel-sandbox-modal">${t('global_defaults.btn_cancel')}</button>
-          <button class="btn btn-primary" id="btn-save-sandbox-modal">${t('node_modals.btn_save_agent_settings')}</button>
+        <div class="modal-footer office-modal-footer">
+          <button class="btn btn-secondary-pill btn-secondary-office" id="btn-cancel-sandbox-modal">${t('global_defaults.btn_cancel')}</button>
+          <button class="btn btn-primary btn-primary-office" id="btn-save-sandbox-modal">${t('node_modals.btn_save_agent_settings')}</button>
         </div>
       </div>
     `;
@@ -147,6 +171,26 @@ export class NodeSandboxModal {
   private bindDialogEvents(node: INodeData): void {
     this.overlay.querySelector('#btn-close-sandbox-modal')?.addEventListener('click', () => this.hide());
     this.overlay.querySelector('#btn-cancel-sandbox-modal')?.addEventListener('click', () => this.hide());
+
+    // Manipulador de abas
+    const tabButtons = this.overlay.querySelectorAll<HTMLButtonElement>('.modal-tabs .tab-btn');
+    tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = (btn.dataset?.tab || btn.getAttribute('data-tab')) as 'isolation' | 'network' | 'mounts';
+        if (!tab) return;
+        this.activeTab = tab;
+        tabButtons.forEach(b => {
+          const bTab = b.dataset?.tab || b.getAttribute('data-tab');
+          if (b.classList && typeof b.classList.toggle === 'function') {
+            b.classList.toggle('active', bTab === tab);
+          }
+        });
+        const panes = this.overlay.querySelectorAll<HTMLElement>('.tab-pane');
+        panes.forEach(p => {
+          p.style.display = p.id === `pane-tab-${tab}` ? '' : 'none';
+        });
+      });
+    });
 
     const inheritCheck = this.overlay.querySelector('#chk-inherit-sandbox') as HTMLInputElement;
     const formWrapper = this.overlay.querySelector('#sandbox-form-wrapper') as HTMLElement;

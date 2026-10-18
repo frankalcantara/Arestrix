@@ -55,16 +55,16 @@ export class GlobalDefaultsModal {
         <!-- Abas do Modal / Modal Tabs com Escopos Claros -->
         <div class="modal-tabs">
           <button type="button" class="tab-btn ${this.activeTab === 'model' ? 'active' : ''}" data-tab="model">
-            ${t('global_defaults.tab_model')}
+            <span>🧠</span> ${t('global_defaults.tab_model')}
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'sandbox' ? 'active' : ''}" data-tab="sandbox">
-            ${t('global_defaults.tab_sandbox')}
+            <span>🛡️</span> ${t('global_defaults.tab_sandbox')}
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'tools' ? 'active' : ''}" data-tab="tools">
-            ${t('global_defaults.tab_tools')}
+            <span>🛠️</span> ${t('global_defaults.tab_tools')}
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'memory' ? 'active' : ''}" data-tab="memory">
-            ${t('global_defaults.tab_memory')}
+            <span>💾</span> ${t('global_defaults.tab_memory')}
           </button>
         </div>
 
@@ -424,11 +424,11 @@ export class GlobalDefaultsModal {
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button class="btn btn-secondary-pill" id="btn-reset-defaults">${t('global_defaults.btn_reset')}</button>
+        <div class="modal-footer office-modal-footer">
+          <button class="btn btn-secondary-pill btn-secondary-office" id="btn-reset-defaults">${t('global_defaults.btn_reset')}</button>
           <div style="flex: 1;"></div>
-          <button class="btn btn-secondary-pill" id="btn-cancel-defaults">${t('global_defaults.btn_cancel')}</button>
-          <button class="btn btn-primary" id="btn-save-defaults">${t('global_defaults.btn_save')}</button>
+          <button class="btn btn-secondary-pill btn-secondary-office" id="btn-cancel-defaults">${t('global_defaults.btn_cancel')}</button>
+          <button class="btn btn-primary btn-primary-office" id="btn-save-defaults">${t('global_defaults.btn_save')}</button>
         </div>
       </div>
     `;

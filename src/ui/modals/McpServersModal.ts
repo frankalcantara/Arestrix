@@ -9,6 +9,7 @@ export class McpServersModal {
   private windowController?: IModalWindowController;
   private servers: IMcpServerConfig[] = [];
   private selectedServerId: string | null = null;
+  private activeTab: 'servers' | 'add' | 'playground' = 'servers';
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -21,6 +22,7 @@ export class McpServersModal {
   }
 
   public show(): void {
+    this.activeTab = 'servers';
     this.overlay.classList.remove('hidden');
     this.windowController?.bringToFront();
     this.refreshServers();
@@ -87,154 +89,180 @@ export class McpServersModal {
       <div class="modal-dialog project-memory-modal-dialog" style="max-width: 900px;">
         ${titleBarHtml}
 
+        <!-- Abas Fluent / Office 365 -->
+        <div class="modal-tabs" role="tablist">
+          <button type="button" class="tab-btn ${this.activeTab === 'servers' ? 'active' : ''}" data-tab="servers">
+            <span>🔌</span> ${t('mcp_servers.tab_servers', '1. Servidores Ativos')}
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'add' ? 'active' : ''}" data-tab="add">
+            <span>➕</span> ${t('mcp_servers.tab_add', '2. Conectar Novo Servidor')}
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'playground' ? 'active' : ''}" data-tab="playground">
+            <span>⚡</span> ${t('mcp_servers.tab_playground', '3. Testes & Inspeção')}
+          </button>
+        </div>
+
         <div class="modal-body-scrollable">
-          <!-- Callout de Escopo do Workspace -->
-          <div class="office-info-callout" style="margin-bottom: 14px; background: #f0f7ff; border: 1px solid #c7e0f4; border-radius: 4px; padding: 10px 14px; display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 16px;">🛠️</span>
-            <div style="font-size: 12px; color: #242424; line-height: 1.4;">
-              ${t('mcp_servers.callout_scope')}
+          <!-- ABA 1: Servidores Conectados -->
+          <div class="tab-pane" id="pane-tab-servers" style="${this.activeTab === 'servers' ? '' : 'display: none;'}">
+            <!-- Callout de Escopo do Workspace -->
+            <div class="office-info-callout" style="margin-bottom: 14px; background: #f0f7ff; border: 1px solid #c7e0f4; border-radius: 4px; padding: 10px 14px; display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 16px;">🛠️</span>
+              <div style="font-size: 12px; color: #242424; line-height: 1.4;">
+                ${t('mcp_servers.callout_scope')}
+              </div>
+            </div>
+
+            <!-- Toolbar de Ações MCP -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <span style="font-size: 11px; font-weight: 600; color: #0f6cbd; background: #eef6fc; padding: 2px 8px; border-radius: 2px; border: 1px solid #c7e0f4;">
+                  ${t('mcp_servers.servers_count_badge', { count: this.servers.length })}
+                </span>
+                <span style="font-size: 11px; font-weight: 600; color: #107c41; background: #f1fbf4; padding: 2px 8px; border-radius: 2px; border: 1px solid #c3edd3;">
+                  ${t('mcp_servers.tools_count_badge', { count: this.getTotalToolsCount() })}
+                </span>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button id="btn-mcp-refresh" class="tool-btn btn-secondary" style="height: 30px; font-size: 11.5px;">
+                  ${t('mcp_servers.btn_refresh')}
+                </button>
+                <button id="btn-mcp-add-new" class="tool-btn btn-action" style="height: 30px; font-size: 11.5px; background: #0f6cbd; color: #fff; border: none; border-radius: 4px; padding: 0 12px; cursor: pointer;">
+                  ${t('mcp_servers.btn_add_new')}
+                </button>
+              </div>
+            </div>
+
+            <!-- Lista de Servidores Registrados -->
+            <div class="mcp-servers-list" style="display: flex; flex-direction: column; gap: 14px;">
+              ${this.renderServersList()}
             </div>
           </div>
 
-          <!-- Toolbar de Ações MCP -->
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <div style="display: flex; gap: 8px; align-items: center;">
-              <span style="font-size: 11px; font-weight: 600; color: #0f6cbd; background: #eef6fc; padding: 2px 8px; border-radius: 2px; border: 1px solid #c7e0f4;">
-                ${t('mcp_servers.servers_count_badge', { count: this.servers.length })}
-              </span>
-              <span style="font-size: 11px; font-weight: 600; color: #107c41; background: #f1fbf4; padding: 2px 8px; border-radius: 2px; border: 1px solid #c3edd3;">
-                ${t('mcp_servers.tools_count_badge', { count: this.getTotalToolsCount() })}
-              </span>
-            </div>
-            <div style="display: flex; gap: 8px;">
-              <button id="btn-mcp-refresh" class="tool-btn btn-secondary">
-                ${t('mcp_servers.btn_refresh')}
-              </button>
-              <button id="btn-mcp-add-new" class="tool-btn btn-action">
-                ${t('mcp_servers.btn_add_new')}
-              </button>
+          <!-- ABA 2: Formulário de Conexão & Presets -->
+          <div class="tab-pane" id="pane-tab-add" style="${this.activeTab === 'add' ? '' : 'display: none;'}">
+            <div id="mcp-form-container" class="settings-section-card" style="margin-bottom: 20px; border: 1px solid #edebe9; border-radius: 4px; padding: 16px;">
+              <div class="section-card-header">
+                <div class="section-card-titles">
+                  <h3 class="section-card-title" id="mcp-form-title">${t('mcp_servers.form_title')}</h3>
+                  <p class="section-card-desc">${t('mcp_servers.form_desc')}</p>
+                </div>
+              </div>
+
+              <!-- Presets rápidos -->
+              <div style="margin: 12px 0;">
+                <label class="form-label">${t('mcp_servers.presets_label')}</label>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="filesystem">${t('mcp_servers.preset_filesystem')}</button>
+                  <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="fetch">${t('mcp_servers.preset_fetch')}</button>
+                  <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="sqlite">${t('mcp_servers.preset_sqlite')}</button>
+                  <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="github">${t('mcp_servers.preset_github')}</button>
+                </div>
+              </div>
+
+              <div class="form-row-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                  <label class="form-label" for="mcp-input-id">${t('mcp_servers.input_id_label')}</label>
+                  <input type="text" id="mcp-input-id" class="form-input" placeholder="ex: local-filesystem" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="mcp-input-name">${t('mcp_servers.input_name_label')}</label>
+                  <input type="text" id="mcp-input-name" class="form-input" placeholder="ex: Filesystem Explorer" />
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top: 12px;">
+                <label class="form-label">${t('mcp_servers.transport_label')}</label>
+                <div style="display: flex; gap: 16px;">
+                  <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                    <input type="radio" name="mcp-transport" value="stdio" checked />
+                    <strong>${t('mcp_servers.transport_stdio')}</strong>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                    <input type="radio" name="mcp-transport" value="sse" />
+                    <strong>${t('mcp_servers.transport_sse')}</strong>
+                  </label>
+                </div>
+              </div>
+
+              <div id="mcp-stdio-fields" style="margin-top: 12px;">
+                <div class="form-group">
+                  <label class="form-label" for="mcp-input-command">${t('mcp_servers.command_label')}</label>
+                  <input type="text" id="mcp-input-command" class="form-input" placeholder="ex: npx, uvx, python, mock" />
+                </div>
+                <div class="form-group" style="margin-top: 8px;">
+                  <label class="form-label" for="mcp-input-args">${t('mcp_servers.args_label')}</label>
+                  <input type="text" id="mcp-input-args" class="form-input" placeholder="ex: -y @modelcontextprotocol/server-filesystem C:\\Projetos" />
+                </div>
+              </div>
+
+              <div id="mcp-sse-fields" class="hidden" style="margin-top: 12px;">
+                <div class="form-group">
+                  <label class="form-label" for="mcp-input-url">${t('mcp_servers.url_label')}</label>
+                  <input type="text" id="mcp-input-url" class="form-input" placeholder="ex: http://localhost:8000/sse" />
+                </div>
+              </div>
+
+              <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+                <button id="btn-cancel-mcp-form" class="btn btn-secondary-pill btn-secondary-office">
+                  ${t('mcp_servers.btn_cancel')}
+                </button>
+                <button id="btn-save-mcp-server" class="btn btn-primary btn-primary-office">
+                  ${t('mcp_servers.btn_save_connector')}
+                </button>
+              </div>
             </div>
           </div>
 
-          <!-- Formulário de Adição/Edição (Oculto por padrão) -->
-          <div id="mcp-form-container" class="settings-section-card hidden" style="margin-bottom: 20px; border: 1px solid var(--border-color);">
-            <div class="section-card-header">
-              <div class="section-card-titles">
-                <h3 class="section-card-title" id="mcp-form-title">${t('mcp_servers.form_title')}</h3>
-                <p class="section-card-desc">${t('mcp_servers.form_desc')}</p>
+          <!-- ABA 3: Playground de Teste de Ferramenta -->
+          <div class="tab-pane" id="pane-tab-playground" style="${this.activeTab === 'playground' ? '' : 'display: none;'}">
+            <div class="settings-section-card" style="border: 1px solid #edebe9; border-radius: 4px; padding: 16px;">
+              <div class="section-card-header">
+                <span class="section-card-icon">⚡</span>
+                <div class="section-card-titles">
+                  <h3 class="section-card-title">${t('mcp_servers.playground_title')}</h3>
+                  <p class="section-card-desc">${t('mcp_servers.playground_desc')}</p>
+                </div>
               </div>
-            </div>
 
-            <!-- Presets rápidos -->
-            <div style="margin: 12px 0;">
-              <label class="form-label">${t('mcp_servers.presets_label')}</label>
-              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="filesystem">${t('mcp_servers.preset_filesystem')}</button>
-                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="fetch">${t('mcp_servers.preset_fetch')}</button>
-                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="sqlite">${t('mcp_servers.preset_sqlite')}</button>
-                <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="github">${t('mcp_servers.preset_github')}</button>
+              <div class="form-row-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+                <div class="form-group">
+                  <label class="form-label" for="playground-select-server">${t('mcp_servers.playground_server_label')}</label>
+                  <select id="playground-select-server" class="form-input">
+                    ${this.servers.map(s => `<option value="${s.id}">${this.escapeHtml(s.name)} (${s.id})</option>`).join('')}
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="playground-select-tool">${t('mcp_servers.playground_tool_label')}</label>
+                  <select id="playground-select-tool" class="form-input">
+                    ${this.getToolsOptionsForSelectedServer()}
+                  </select>
+                </div>
               </div>
-            </div>
 
-            <div class="form-row-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-              <div class="form-group">
-                <label class="form-label" for="mcp-input-id">${t('mcp_servers.input_id_label')}</label>
-                <input type="text" id="mcp-input-id" class="form-input" placeholder="ex: local-filesystem" />
+              <div class="form-group" style="margin-top: 12px;">
+                <label class="form-label" for="playground-args">${t('mcp_servers.playground_args_label')}</label>
+                <textarea id="playground-args" class="form-input" style="height: 60px; font-family: monospace; font-size: 12px;" placeholder='{"path": "package.json"}'></textarea>
               </div>
-              <div class="form-group">
-                <label class="form-label" for="mcp-input-name">${t('mcp_servers.input_name_label')}</label>
-                <input type="text" id="mcp-input-name" class="form-input" placeholder="ex: Filesystem Explorer" />
-              </div>
-            </div>
 
-            <div class="form-group" style="margin-top: 12px;">
-              <label class="form-label">${t('mcp_servers.transport_label')}</label>
-              <div style="display: flex; gap: 16px;">
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input type="radio" name="mcp-transport" value="stdio" checked />
-                  <strong>${t('mcp_servers.transport_stdio')}</strong>
-                </label>
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                  <input type="radio" name="mcp-transport" value="sse" />
-                  <strong>${t('mcp_servers.transport_sse')}</strong>
-                </label>
+              <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
+                <button id="btn-run-mcp-playground" class="btn btn-primary btn-primary-office">
+                  ${t('mcp_servers.btn_invoke_tool')}
+                </button>
               </div>
-            </div>
 
-            <div id="mcp-stdio-fields" style="margin-top: 12px;">
-              <div class="form-group">
-                <label class="form-label" for="mcp-input-command">${t('mcp_servers.command_label')}</label>
-                <input type="text" id="mcp-input-command" class="form-input" placeholder="ex: npx, uvx, python, mock" />
+              <div id="playground-result-container" class="hidden" style="margin-top: 12px; background: #0f172a; border-radius: 4px; padding: 12px; font-family: monospace; font-size: 12px; max-height: 160px; overflow-y: auto;">
+                <div style="font-weight: 700; color: #38bdf8; margin-bottom: 4px;">${t('mcp_servers.response_label')}</div>
+                <div id="playground-result-output" style="white-space: pre-wrap; word-break: break-all; color: #f8fafc;"></div>
               </div>
-              <div class="form-group" style="margin-top: 8px;">
-                <label class="form-label" for="mcp-input-args">${t('mcp_servers.args_label')}</label>
-                <input type="text" id="mcp-input-args" class="form-input" placeholder="ex: -y @modelcontextprotocol/server-filesystem C:\\Projetos" />
-              </div>
-            </div>
-
-            <div id="mcp-sse-fields" class="hidden" style="margin-top: 12px;">
-              <div class="form-group">
-                <label class="form-label" for="mcp-input-url">${t('mcp_servers.url_label')}</label>
-                <input type="text" id="mcp-input-url" class="form-input" placeholder="ex: http://localhost:8000/sse" />
-              </div>
-            </div>
-
-            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
-              <button id="btn-cancel-mcp-form" class="btn-action-pill" style="background: var(--surface-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
-                ${t('mcp_servers.btn_cancel')}
-              </button>
-              <button id="btn-save-mcp-server" class="btn-action-pill" style="background: var(--gradient-blue); color: #fff;">
-                ${t('mcp_servers.btn_save_connector')}
-              </button>
             </div>
           </div>
+        </div>
 
-          <!-- Lista de Servidores Registrados -->
-          <div class="mcp-servers-list" style="display: flex; flex-direction: column; gap: 14px;">
-            ${this.renderServersList()}
-          </div>
-
-          <!-- Playground de Teste de Ferramenta -->
-          <div class="settings-section-card" style="margin-top: 24px;">
-            <div class="section-card-header">
-              <span class="section-card-icon">⚡</span>
-              <div class="section-card-titles">
-                <h3 class="section-card-title">${t('mcp_servers.playground_title')}</h3>
-                <p class="section-card-desc">${t('mcp_servers.playground_desc')}</p>
-              </div>
-            </div>
-
-            <div class="form-row-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
-              <div class="form-group">
-                <label class="form-label" for="playground-select-server">${t('mcp_servers.playground_server_label')}</label>
-                <select id="playground-select-server" class="form-input">
-                  ${this.servers.map(s => `<option value="${s.id}">${this.escapeHtml(s.name)} (${s.id})</option>`).join('')}
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="playground-select-tool">${t('mcp_servers.playground_tool_label')}</label>
-                <select id="playground-select-tool" class="form-input">
-                  ${this.getToolsOptionsForSelectedServer()}
-                </select>
-              </div>
-            </div>
-
-            <div class="form-group" style="margin-top: 12px;">
-              <label class="form-label" for="playground-args">${t('mcp_servers.playground_args_label')}</label>
-              <textarea id="playground-args" class="form-input" style="height: 60px; font-family: monospace; font-size: 12px;" placeholder='{"path": "package.json"}'></textarea>
-            </div>
-
-            <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
-              <button id="btn-run-mcp-playground" class="btn-action-pill" style="background: var(--gradient-blue); color: white;">
-                ${t('mcp_servers.btn_invoke_tool')}
-              </button>
-            </div>
-
-            <div id="playground-result-container" class="hidden" style="margin-top: 12px; background: rgba(0,0,0,0.15); border-radius: 8px; padding: 12px; font-family: monospace; font-size: 12px; max-height: 140px; overflow-y: auto;">
-              <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">${t('mcp_servers.response_label')}</div>
-              <div id="playground-result-output" style="white-space: pre-wrap; word-break: break-all; color: var(--text-secondary);"></div>
-            </div>
-          </div>
+        <div class="modal-footer office-modal-footer">
+          <button class="btn btn-secondary-pill btn-secondary-office" id="btn-close-mcp-footer">
+            ${t('common.close', 'Fechar')}
+          </button>
         </div>
       </div>
     `;
@@ -350,24 +378,48 @@ export class McpServersModal {
   private bindInternalEvents(): void {
     const btnClose = this.overlay.querySelector('#btn-close-mcp-modal');
     if (btnClose) btnClose.addEventListener('click', () => this.hide());
+    const btnCloseFooter = this.overlay.querySelector('#btn-close-mcp-footer');
+    if (btnCloseFooter) btnCloseFooter.addEventListener('click', () => this.hide());
+
+    // Manipulador de abas
+    const tabButtons = this.overlay.querySelectorAll<HTMLButtonElement>('.modal-tabs .tab-btn');
+    const switchTab = (tab: 'servers' | 'add' | 'playground') => {
+      this.activeTab = tab;
+      tabButtons.forEach(b => {
+        const bTab = b.dataset?.tab || b.getAttribute('data-tab');
+        if (b.classList && typeof b.classList.toggle === 'function') {
+          b.classList.toggle('active', bTab === tab);
+        }
+      });
+      const panes = this.overlay.querySelectorAll<HTMLElement>('.tab-pane');
+      panes.forEach(p => {
+        p.style.display = p.id === `pane-tab-${tab}` ? '' : 'none';
+      });
+    };
+
+    tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = (btn.dataset?.tab || btn.getAttribute('data-tab')) as 'servers' | 'add' | 'playground';
+        if (tab) switchTab(tab);
+      });
+    });
 
     const btnRefresh = this.overlay.querySelector('#btn-mcp-refresh');
     if (btnRefresh) btnRefresh.addEventListener('click', () => this.refreshServers());
 
     const btnAddNew = this.overlay.querySelector('#btn-mcp-add-new');
-    const formContainer = this.overlay.querySelector('#mcp-form-container') as HTMLElement;
     const btnCancelForm = this.overlay.querySelector('#btn-cancel-mcp-form');
 
-    if (btnAddNew && formContainer) {
+    if (btnAddNew) {
       btnAddNew.addEventListener('click', () => {
-        formContainer.classList.remove('hidden');
-        (this.overlay.querySelector('#mcp-input-id') as HTMLInputElement).focus();
+        switchTab('add');
+        (this.overlay.querySelector('#mcp-input-id') as HTMLInputElement)?.focus();
       });
     }
 
-    if (btnCancelForm && formContainer) {
+    if (btnCancelForm) {
       btnCancelForm.addEventListener('click', () => {
-        formContainer.classList.add('hidden');
+        switchTab('servers');
       });
     }
 

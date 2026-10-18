@@ -19,6 +19,7 @@ export class GraphvizExportModal {
   private zoomLevel: number = 1.0;
   private isLoading: boolean = false;
   private errorMessage: string = '';
+  private activeTab: 'preview' | 'dot' = 'preview';
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -66,6 +67,11 @@ export class GraphvizExportModal {
       this.errorMessage = err?.message || 'Falha ao processar diagrama DOT com Graphviz WASM.';
       this.updateContentArea();
     }
+
+    const dotArea = this.modal?.querySelector('#graphviz-dot-source') as HTMLTextAreaElement;
+    if (dotArea) {
+      dotArea.value = this.currentDot;
+    }
   }
 
   private render(): void {
@@ -82,41 +88,65 @@ export class GraphvizExportModal {
       <div class="modal-window" style="max-width: 920px; width: 92%; height: 82vh; display: flex; flex-direction: column; background: #ffffff; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); overflow: hidden;">
         ${titleBarHtml}
 
-        <!-- Barra de Ações Superior Estilo Office -->
-        <div style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <button id="btn-graphviz-download-svg" class="tool-btn btn-action" style="background: #0f6cbd; color: #ffffff; font-weight: 700; height: 32px; padding: 4px 14px; font-size: 12.5px; border-radius: 6px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
-              📥 Baixar SVG
-            </button>
-            <button id="btn-graphviz-download-dot" class="tool-btn btn-secondary" style="height: 32px; padding: 4px 12px; font-size: 12px; font-weight: 600; border-radius: 6px; background: #ffffff; border: 1px solid #cbd5e1; cursor: pointer; color: #1e293b;">
-              📄 Baixar DOT
-            </button>
-            <button id="btn-graphviz-copy-svg" class="tool-btn btn-secondary" style="height: 32px; padding: 4px 12px; font-size: 12px; font-weight: 600; border-radius: 6px; background: #ffffff; border: 1px solid #cbd5e1; cursor: pointer; color: #1e293b;">
-              📋 Copiar SVG
-            </button>
-            <button id="btn-graphviz-open-tab" class="tool-btn btn-secondary" style="height: 32px; padding: 4px 12px; font-size: 12px; font-weight: 600; border-radius: 6px; background: #ffffff; border: 1px solid #cbd5e1; cursor: pointer; color: #1e293b;">
-              🌐 Nova Janela
-            </button>
+        <!-- Abas Estilo Office 365 -->
+        <div class="modal-tabs" role="tablist">
+          <button type="button" class="tab-btn ${this.activeTab === 'preview' ? 'active' : ''}" data-tab="preview" role="tab" aria-selected="${this.activeTab === 'preview'}">
+            🖼️ Diagrama SVG
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'dot' ? 'active' : ''}" data-tab="dot" role="tab" aria-selected="${this.activeTab === 'dot'}">
+            📄 Código Fonte DOT
+          </button>
+        </div>
+
+        <!-- Aba 1: Diagrama SVG -->
+        <div id="pane-tab-preview" class="tab-pane" style="${this.activeTab === 'preview' ? '' : 'display: none;'} flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+          <!-- Barra de Ações Superior Estilo Office -->
+          <div style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button id="btn-graphviz-download-svg" class="tool-btn btn-action btn-primary-office" style="height: 32px; padding: 4px 14px; font-size: 12.5px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                📥 Baixar SVG
+              </button>
+              <button id="btn-graphviz-download-dot" class="tool-btn btn-secondary btn-secondary-office" style="height: 32px; padding: 4px 12px; font-size: 12px; border-radius: 6px; cursor: pointer;">
+                📄 Baixar DOT
+              </button>
+              <button id="btn-graphviz-copy-svg" class="tool-btn btn-secondary btn-secondary-office" style="height: 32px; padding: 4px 12px; font-size: 12px; border-radius: 6px; cursor: pointer;">
+                📋 Copiar SVG
+              </button>
+              <button id="btn-graphviz-open-tab" class="tool-btn btn-secondary btn-secondary-office" style="height: 32px; padding: 4px 12px; font-size: 12px; border-radius: 6px; cursor: pointer;">
+                🌐 Nova Janela
+              </button>
+            </div>
+
+            <!-- Controles de Zoom -->
+            <div style="display: flex; gap: 4px; align-items: center;">
+              <button id="btn-graphviz-zoom-out" title="Diminuir Zoom" style="width: 28px; height: 28px; border-radius: 4px; border: 1px solid #cbd5e1; background: #ffffff; font-size: 14px; font-weight: 700; cursor: pointer;">−</button>
+              <span id="graphviz-zoom-label" style="font-size: 12px; font-weight: 600; color: #475569; min-width: 44px; text-align: center;">100%</span>
+              <button id="btn-graphviz-zoom-in" title="Aumentar Zoom" style="width: 28px; height: 28px; border-radius: 4px; border: 1px solid #cbd5e1; background: #ffffff; font-size: 14px; font-weight: 700; cursor: pointer;">+</button>
+              <button id="btn-graphviz-zoom-reset" title="Ajustar" style="height: 28px; padding: 0 8px; border-radius: 4px; border: 1px solid #cbd5e1; background: #ffffff; font-size: 11px; font-weight: 600; cursor: pointer; color: #475569;">100%</button>
+            </div>
           </div>
 
-          <!-- Controles de Zoom -->
-          <div style="display: flex; gap: 4px; align-items: center;">
-            <button id="btn-graphviz-zoom-out" title="Diminuir Zoom" style="width: 28px; height: 28px; border-radius: 4px; border: 1px solid #cbd5e1; background: #ffffff; font-size: 14px; font-weight: 700; cursor: pointer;">−</button>
-            <span id="graphviz-zoom-label" style="font-size: 12px; font-weight: 600; color: #475569; min-width: 44px; text-align: center;">100%</span>
-            <button id="btn-graphviz-zoom-in" title="Aumentar Zoom" style="width: 28px; height: 28px; border-radius: 4px; border: 1px solid #cbd5e1; background: #ffffff; font-size: 14px; font-weight: 700; cursor: pointer;">+</button>
-            <button id="btn-graphviz-zoom-reset" title="Ajustar" style="height: 28px; padding: 0 8px; border-radius: 4px; border: 1px solid #cbd5e1; background: #ffffff; font-size: 11px; font-weight: 600; cursor: pointer; color: #475569;">100%</button>
+          <!-- Área Central de Visualização -->
+          <div id="graphviz-modal-viewport" style="flex: 1; overflow: auto; background: #f1f5f9; padding: 24px; display: flex; justify-content: center; align-items: center; position: relative;">
+            <!-- Injetado dinamicamente via updateContentArea -->
           </div>
         </div>
 
-        <!-- Área Central de Visualização -->
-        <div id="graphviz-modal-viewport" style="flex: 1; overflow: auto; background: #f1f5f9; padding: 24px; display: flex; justify-content: center; align-items: center; position: relative;">
-          <!-- Injetado dinamicamente via updateContentArea -->
+        <!-- Aba 2: Código Fonte DOT -->
+        <div id="pane-tab-dot" class="tab-pane" style="${this.activeTab === 'dot' ? '' : 'display: none;'} flex: 1; padding: 16px; display: flex; flex-direction: column; overflow: hidden; background: #ffffff;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 12px; color: #64748b; font-weight: 600;">Especificação DOT gerada a partir da topologia do grafo ativo:</span>
+            <button id="btn-graphviz-copy-dot-source" class="tool-btn btn-secondary btn-secondary-office" style="height: 30px; padding: 4px 12px; font-size: 12px;">
+              📋 Copiar DOT
+            </button>
+          </div>
+          <textarea id="graphviz-dot-source" class="office-textarea" readonly style="flex: 1; font-family: Consolas, 'Courier New', monospace; font-size: 12px; resize: none; background: #faf9f8; line-height: 1.5; border: 1px solid #d1d1d1; border-radius: 4px; padding: 12px;">${this.escapeHtml(this.currentDot || '')}</textarea>
         </div>
 
         <!-- Rodapé com Informações -->
-        <div style="background: #ffffff; border-top: 1px solid #e2e8f0; padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: #64748b;">
+        <div class="modal-footer office-modal-footer" style="padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: #64748b;">
           <div>Motor: <strong>Graphviz C++ compilado para WebAssembly (@hpcc-js/wasm)</strong> · 100% offline</div>
-          <div><button id="btn-graphviz-close-footer" style="padding: 4px 14px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; font-size: 12px; font-weight: 600; cursor: pointer; color: #334155;">Fechar</button></div>
+          <div><button id="btn-graphviz-close-footer" class="tool-btn btn-secondary btn-secondary-office" style="padding: 4px 14px; font-size: 12px;">Fechar</button></div>
         </div>
       </div>
     `;
@@ -183,8 +213,39 @@ export class GraphvizExportModal {
   private bindEvents(): void {
     if (!this.modal) return;
 
+    // Alternância de abas
+    this.modal.querySelectorAll('.modal-tabs .tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = (btn as HTMLElement).getAttribute('data-tab') as 'preview' | 'dot';
+        if (!tab) return;
+        this.activeTab = tab;
+        this.modal?.querySelectorAll('.modal-tabs .tab-btn').forEach(b => {
+          const isCurrent = b.getAttribute('data-tab') === tab;
+          b.classList.toggle('active', isCurrent);
+          b.setAttribute('aria-selected', isCurrent ? 'true' : 'false');
+        });
+        this.modal?.querySelectorAll('.tab-pane').forEach(p => {
+          const el = p as HTMLElement;
+          el.style.display = el.id === `pane-tab-${tab}` ? (tab === 'dot' ? 'flex' : 'flex') : 'none';
+        });
+      });
+    });
+
     this.modal.querySelector('#btn-close-graphviz-modal')?.addEventListener('click', () => this.hide());
     this.modal.querySelector('#btn-graphviz-close-footer')?.addEventListener('click', () => this.hide());
+
+    // Copiar DOT da aba de código
+    this.modal.querySelector('#btn-graphviz-copy-dot-source')?.addEventListener('click', async () => {
+      const dot = this.currentDot || GraphvizGenerator.generateDot(this.graph);
+      try {
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(dot);
+          this.showToast('✓ Código DOT copiado para a área de transferência!');
+        }
+      } catch (e) {
+        console.warn('Erro ao copiar DOT:', e);
+      }
+    });
 
     // 1. Baixar SVG
     this.modal.querySelector('#btn-graphviz-download-svg')?.addEventListener('click', () => {
@@ -338,4 +399,14 @@ export class GraphvizExportModal {
       setTimeout(() => toast.remove(), 200);
     }, 2200);
   }
+
+  private escapeHtml(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
 }
+

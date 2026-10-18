@@ -14,6 +14,7 @@ export class EnvGuidanceModal {
   private envManager: EnvironmentManager;
   private onSavedCallback?: () => void;
   private windowController?: IModalWindowController;
+  private activeTab: 'auto' | 'manual' = 'auto';
 
   private constructor() {
     this.envManager = EnvironmentManager.getInstance();
@@ -69,9 +70,19 @@ export class EnvGuidanceModal {
       <div class="modal-window" style="max-width: 660px; width: 92%; max-height: 88vh; display: flex; flex-direction: column;">
         ${titleBarHtml}
 
+        <!-- Abas Estilo Office 365 -->
+        <div class="modal-tabs" role="tablist">
+          <button type="button" class="tab-btn ${this.activeTab === 'auto' ? 'active' : ''}" data-tab="auto" role="tab" aria-selected="${this.activeTab === 'auto'}">
+            ${t('env_guidance.tab_auto', '⚡ Gravar Automaticamente')}
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'manual' ? 'active' : ''}" data-tab="manual" role="tab" aria-selected="${this.activeTab === 'manual'}">
+            ${t('env_guidance.tab_manual', '📖 Instruções Manuais')}
+          </button>
+        </div>
+
         <!-- Corpo do Diálogo -->
         <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
-          <!-- Aviso de Segurança -->
+          <!-- Aviso de Segurança Comum -->
           <div class="office-group" style="background: #ffffff; border-left: 3px solid #0f6cbd; margin-bottom: 0;">
             <strong style="display: block; font-size: 12.5px; color: #242424; margin-bottom: 4px;">
               ${t('env_guidance.security_title')}
@@ -81,55 +92,59 @@ export class EnvGuidanceModal {
             </p>
           </div>
 
-          <!-- Opção 1: Gravar Automaticamente pelo Arestrix no Windows -->
-          <div class="office-group" style="margin-bottom: 0;">
-            <span class="office-group-title">${t('env_guidance.option1_title')}</span>
-            <p style="margin: 0 0 8px 0; font-size: 12px; color: #616161;">
-              ${t('env_guidance.option1_desc')}
-            </p>
-            <div style="display: flex; gap: 8px;">
-              <input type="password" id="input-env-key-val" class="office-input" placeholder="${t('env_guidance.placeholder_key', { key: g.keyName })}" style="flex: 1;" />
-              <button id="btn-save-env-auto" class="tool-btn btn-action" style="white-space: nowrap; font-size: 12px; height: 32px; padding: 4px 14px;">
-                ${t('env_guidance.btn_save_windows')}
-              </button>
+          <!-- Aba 1: Gravar Automaticamente pelo Arestrix no Windows -->
+          <div id="pane-tab-auto" class="tab-pane" style="${this.activeTab === 'auto' ? '' : 'display: none;'}">
+            <div class="office-group" style="margin-bottom: 0;">
+              <span class="office-group-title">${t('env_guidance.option1_title')}</span>
+              <p style="margin: 0 0 8px 0; font-size: 12px; color: #616161;">
+                ${t('env_guidance.option1_desc')}
+              </p>
+              <div style="display: flex; gap: 8px;">
+                <input type="password" id="input-env-key-val" class="office-input" placeholder="${t('env_guidance.placeholder_key', { key: g.keyName })}" style="flex: 1;" />
+                <button id="btn-save-env-auto" class="tool-btn btn-action btn-primary-office" style="white-space: nowrap; font-size: 12px; height: 32px; padding: 4px 14px;">
+                  ${t('env_guidance.btn_save_windows')}
+                </button>
+              </div>
+              <div id="env-save-status" style="margin-top: 6px; font-size: 11.5px; display: none;"></div>
             </div>
-            <div id="env-save-status" style="margin-top: 6px; font-size: 11.5px; display: none;"></div>
           </div>
 
-          <!-- Opção 2: Gravar Manualmente -->
-          <div class="office-group" style="margin-bottom: 0;">
-            <span class="office-group-title">${t('env_guidance.option2_title')}</span>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-              <!-- Bloco PowerShell -->
-              <div style="background: #ffffff; border: 1px solid #d1d1d1; border-radius: 2px; padding: 8px 10px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                  <strong style="font-size: 11.5px; color: #323130;">${t('env_guidance.label_powershell')}</strong>
-                  <button class="btn-copy-code tool-btn btn-secondary" data-code="${this.escapeHtml(g.powershellCmd)}" style="font-size: 11px; height: 24px; padding: 2px 8px;">
-                    ${t('env_guidance.btn_copy')}
-                  </button>
+          <!-- Aba 2: Gravar Manualmente -->
+          <div id="pane-tab-manual" class="tab-pane" style="${this.activeTab === 'manual' ? '' : 'display: none;'}">
+            <div class="office-group" style="margin-bottom: 0;">
+              <span class="office-group-title">${t('env_guidance.option2_title')}</span>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <!-- Bloco PowerShell -->
+                <div style="background: #ffffff; border: 1px solid #d1d1d1; border-radius: 2px; padding: 8px 10px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <strong style="font-size: 11.5px; color: #323130;">${t('env_guidance.label_powershell')}</strong>
+                    <button class="btn-copy-code tool-btn btn-secondary btn-secondary-office" data-code="${this.escapeHtml(g.powershellCmd)}" style="font-size: 11px; height: 24px; padding: 2px 8px;">
+                      ${t('env_guidance.btn_copy')}
+                    </button>
+                  </div>
+                  <code style="display: block; background: #f3f2f1; color: #242424; padding: 6px 8px; border-radius: 2px; font-size: 11px; font-family: Consolas, monospace; overflow-x: auto;">
+                    ${this.escapeHtml(g.powershellCmd)}
+                  </code>
                 </div>
-                <code style="display: block; background: #f3f2f1; color: #242424; padding: 6px 8px; border-radius: 2px; font-size: 11px; font-family: Consolas, monospace; overflow-x: auto;">
-                  ${this.escapeHtml(g.powershellCmd)}
-                </code>
-              </div>
 
-              <!-- Bloco Interface Gráfica -->
-              <div style="background: #ffffff; border: 1px solid #d1d1d1; border-radius: 2px; padding: 8px 10px; font-size: 11.5px; color: #616161;">
-                <strong style="display: block; color: #323130; margin-bottom: 4px;">${t('env_guidance.label_gui')}</strong>
-                <ol style="margin: 0; padding-left: 18px; line-height: 1.45;">
-                  ${g.guiInstructions.map(step => `<li>${step}</li>`).join('')}
-                </ol>
+                <!-- Bloco Interface Gráfica -->
+                <div style="background: #ffffff; border: 1px solid #d1d1d1; border-radius: 2px; padding: 8px 10px; font-size: 11.5px; color: #616161;">
+                  <strong style="display: block; color: #323130; margin-bottom: 4px;">${t('env_guidance.label_gui')}</strong>
+                  <ol style="margin: 0; padding-left: 18px; line-height: 1.45;">
+                    ${g.guiInstructions.map(step => `<li>${step}</li>`).join('')}
+                  </ol>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         <!-- Rodapé Estilo Office -->
-        <div class="modal-footer">
+        <div class="modal-footer office-modal-footer">
           <span class="footer-info">${t('env_guidance.footer_info')}</span>
           <div class="footer-actions">
-            <button id="btn-env-cancel" class="tool-btn btn-secondary">${t('env_guidance.btn_close')}</button>
-            <button id="btn-env-recheck" class="tool-btn btn-action">${t('env_guidance.btn_recheck')}</button>
+            <button id="btn-env-cancel" class="tool-btn btn-secondary btn-secondary-office">${t('env_guidance.btn_close')}</button>
+            <button id="btn-env-recheck" class="tool-btn btn-action btn-primary-office">${t('env_guidance.btn_recheck')}</button>
           </div>
         </div>
       </div>
@@ -151,6 +166,24 @@ export class EnvGuidanceModal {
   private bindEvents(): void {
     if (!this.modal || !this.currentGuidance) return;
     const g = this.currentGuidance;
+
+    // Alternância de abas
+    this.modal.querySelectorAll('.modal-tabs .tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = (btn as HTMLElement).getAttribute('data-tab') as 'auto' | 'manual';
+        if (!tab) return;
+        this.activeTab = tab;
+        this.modal?.querySelectorAll('.modal-tabs .tab-btn').forEach(b => {
+          const isCurrent = b.getAttribute('data-tab') === tab;
+          b.classList.toggle('active', isCurrent);
+          b.setAttribute('aria-selected', isCurrent ? 'true' : 'false');
+        });
+        const pAuto = this.modal?.querySelector('#pane-tab-auto') as HTMLElement;
+        const pManual = this.modal?.querySelector('#pane-tab-manual') as HTMLElement;
+        if (pAuto) pAuto.style.display = tab === 'auto' ? '' : 'none';
+        if (pManual) pManual.style.display = tab === 'manual' ? '' : 'none';
+      });
+    });
 
     this.modal.querySelector('#btn-close-env-modal')?.addEventListener('click', () => this.hide());
     this.modal.querySelector('#btn-env-cancel')?.addEventListener('click', () => this.hide());

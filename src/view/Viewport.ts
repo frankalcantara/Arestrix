@@ -58,16 +58,16 @@ export class Viewport {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(THEME.canvasBackground);
 
-    // 2. Camera Ortográfica com dimensões seguras (evita NaN se o contêiner estiver com 0px)
+    // 2. Camera Ortográfica com dimensões métricas invariantes a redimensionamento
     const initialW = this.container.clientWidth > 0 ? this.container.clientWidth : Math.max(window.innerWidth - 380, 800);
     const initialH = this.container.clientHeight > 0 ? this.container.clientHeight : Math.max(window.innerHeight - 120, 600);
-    const aspect = initialW / initialH;
+    this.frustumSize = initialH;
 
     this.camera = new THREE.OrthographicCamera(
-      (this.frustumSize * aspect) / -2,
-      (this.frustumSize * aspect) / 2,
-      this.frustumSize / 2,
-      this.frustumSize / -2,
+      -initialW / 2,
+      initialW / 2,
+      initialH / 2,
+      -initialH / 2,
       0.1,
       3000
     );
@@ -1159,11 +1159,13 @@ export class Viewport {
     const width = this.container.clientWidth > 0 ? this.container.clientWidth : Math.max(window.innerWidth - 380, 800);
     const height = this.container.clientHeight > 0 ? this.container.clientHeight : Math.max(window.innerHeight - 120, 600);
 
-    const aspect = width / height;
-    this.camera.left = (this.frustumSize * aspect) / -2;
-    this.camera.right = (this.frustumSize * aspect) / 2;
-    this.camera.top = this.frustumSize / 2;
-    this.camera.bottom = this.frustumSize / -2;
+    this.frustumSize = height;
+    this.cameraController.setFrustumSize(height);
+
+    this.camera.left = -width / 2;
+    this.camera.right = width / 2;
+    this.camera.top = height / 2;
+    this.camera.bottom = -height / 2;
     this.camera.updateProjectionMatrix();
 
     this.renderer.setSize(width, height);
@@ -1222,9 +1224,9 @@ export class Viewport {
     // Anima partículas e fluxo vetorial nas arestas ativas
     this.animateActiveEdges();
 
-    // Sincroniza matriz da camada SVG vetorial com a câmera Three.js (perfeita em qualquer zoom)
+    // Sincroniza matriz da camada SVG vetorial com a câmera Three.js (escala pura invariante a resize)
     if (this.svgRoot) {
-      const scale = (height / this.frustumSize) * this.camera.zoom;
+      const scale = this.camera.zoom;
       const cx = width / 2 - this.camera.position.x * scale;
       const cy = height / 2 + this.camera.position.y * scale;
       this.svgRoot.setAttribute('transform', `matrix(${scale}, 0, 0, ${scale}, ${cx}, ${cy})`);

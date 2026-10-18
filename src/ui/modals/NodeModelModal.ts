@@ -10,6 +10,7 @@ export class NodeModelModal {
   private graph: Graph;
   private windowController?: IModalWindowController;
   private skillEditorModal: SkillEditorModal;
+  private activeTab: 'provider' | 'prompt' | 'parameters' = 'provider';
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -26,6 +27,7 @@ export class NodeModelModal {
     const node = this.graph.getNode(nodeId);
     if (!node) return;
 
+    this.activeTab = 'provider';
     this.render(node);
     this.overlay.classList.remove('hidden');
     this.windowController?.bringToFront();
@@ -61,8 +63,22 @@ export class NodeModelModal {
     this.overlay.innerHTML = `
       <div class="modal-dialog node-settings-modal-dialog">
         ${titleBarHtml}
+
+        <!-- Abas Fluent / Office 365 -->
+        <div class="modal-tabs" role="tablist">
+          <button type="button" class="tab-btn ${this.activeTab === 'provider' ? 'active' : ''}" data-tab="provider">
+            <span>🧠</span> ${t('node_modals.tab_provider', '1. Provedor & Modelo')}
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'prompt' ? 'active' : ''}" data-tab="prompt">
+            <span>📝</span> ${t('node_modals.tab_prompt', '2. Instruções & Skills')}
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'parameters' ? 'active' : ''}" data-tab="parameters">
+            <span>⚙️</span> ${t('node_modals.tab_params', '3. Parâmetros')}
+          </button>
+        </div>
+
         <div class="modal-body-scrollable">
-          <!-- Toggle de Herança -->
+          <!-- Toggle de Herança do Projeto -->
           <div class="inheritance-toggle-card">
             <label class="inheritance-checkbox-label">
               <input type="checkbox" id="chk-inherit-model" ${isInherited ? 'checked' : ''} />
@@ -77,51 +93,61 @@ export class NodeModelModal {
           </div>
 
           <div class="settings-form-wrapper ${isInherited ? 'form-disabled-opacity' : ''}" id="model-form-wrapper">
-            <div class="form-row-grid">
+            <!-- ABA 1: Provedor & Modelo -->
+            <div class="tab-pane" id="pane-tab-provider" style="${this.activeTab === 'provider' ? '' : 'display: none;'}">
+              <div class="form-row-grid">
+                <div class="form-group">
+                  <label class="form-label" for="node-model-provider">${t('node_modals.provider_label')}</label>
+                  <select id="node-model-provider" class="form-select" ${isInherited ? 'disabled' : ''}>
+                    <option value="deepseek" ${effectiveModel.provider === 'deepseek' ? 'selected' : ''}>DeepSeek</option>
+                    <option value="anthropic" ${effectiveModel.provider === 'anthropic' ? 'selected' : ''}>Anthropic (Claude)</option>
+                    <option value="google" ${effectiveModel.provider === 'google' ? 'selected' : ''}>Google (Gemini)</option>
+                    <option value="openai" ${effectiveModel.provider === 'openai' ? 'selected' : ''}>OpenAI</option>
+                    <option value="jev" ${effectiveModel.provider === 'jev' ? 'selected' : ''}>Jev / Engine Visual</option>
+                    <option value="local" ${effectiveModel.provider === 'local' ? 'selected' : ''}>Local (Ollama / vLLM)</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="node-model-name">${t('node_modals.model_id_label')}</label>
+                  <input type="text" id="node-model-name" class="form-input" value="${this.escapeHtml(effectiveModel.model)}" placeholder="ex: claude-opus-5.5, deepseek-v4-pro" ${isInherited ? 'disabled' : ''} />
+                </div>
+              </div>
+            </div>
+
+            <!-- ABA 2: Instruções & Skills -->
+            <div class="tab-pane" id="pane-tab-prompt" style="${this.activeTab === 'prompt' ? '' : 'display: none;'}">
               <div class="form-group">
-                <label class="form-label" for="node-model-provider">${t('node_modals.provider_label')}</label>
-                <select id="node-model-provider" class="form-select" ${isInherited ? 'disabled' : ''}>
-                  <option value="deepseek" ${effectiveModel.provider === 'deepseek' ? 'selected' : ''}>DeepSeek</option>
-                  <option value="anthropic" ${effectiveModel.provider === 'anthropic' ? 'selected' : ''}>Anthropic (Claude)</option>
-                  <option value="google" ${effectiveModel.provider === 'google' ? 'selected' : ''}>Google (Gemini)</option>
-                  <option value="openai" ${effectiveModel.provider === 'openai' ? 'selected' : ''}>OpenAI</option>
-                  <option value="jev" ${effectiveModel.provider === 'jev' ? 'selected' : ''}>Jev / Engine Visual</option>
-                  <option value="local" ${effectiveModel.provider === 'local' ? 'selected' : ''}>Local (Ollama / vLLM)</option>
-                </select>
+                <label class="form-label" for="node-skill-path">${t('node_modals.skill_path_label')}</label>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <input type="text" id="node-skill-path" class="form-input" style="flex: 1;" value="${this.escapeHtml(effectiveModel.skillPath || '')}" placeholder=".agents/default/SKILL.md" ${isInherited ? 'disabled' : ''} />
+                  <button type="button" class="btn btn-secondary-pill" id="btn-edit-skill-modal" title="${t('node_modals.btn_edit_skill_title')}" style="white-space: nowrap; padding: 6px 12px; font-size: 12px;">${t('node_modals.btn_edit_skill')}</button>
+                  <button type="button" class="btn btn-secondary-pill" id="btn-new-skill-modal" title="${t('node_modals.btn_new_skill_title')}" style="white-space: nowrap; padding: 6px 12px; font-size: 12px;">${t('node_modals.btn_new_skill')}</button>
+                </div>
+                <div class="form-hint">${t('node_modals.skill_path_hint')}</div>
               </div>
 
+              <div class="form-group" style="margin-top: 14px;">
+                <label class="form-label" for="node-prompt-template">${t('node_modals.prompt_template_label')}</label>
+                <textarea id="node-prompt-template" class="form-textarea" rows="4" ${isInherited ? 'disabled' : ''}>${this.escapeHtml(effectiveModel.promptTemplate || '')}</textarea>
+                <div class="form-hint">${t('node_modals.prompt_vars_hint')}</div>
+              </div>
+            </div>
+
+            <!-- ABA 3: Parâmetros Cognitivos -->
+            <div class="tab-pane" id="pane-tab-parameters" style="${this.activeTab === 'parameters' ? '' : 'display: none;'}">
               <div class="form-group">
-                <label class="form-label" for="node-model-name">${t('node_modals.model_id_label')}</label>
-                <input type="text" id="node-model-name" class="form-input" value="${this.escapeHtml(effectiveModel.model)}" placeholder="ex: claude-opus-5.5, deepseek-v4-pro" ${isInherited ? 'disabled' : ''} />
+                <label class="form-label" for="node-temperature">${t('node_modals.temperature_label')}</label>
+                <input type="number" id="node-temperature" class="form-input" min="0" max="1" step="0.05" value="${effectiveModel.temperature ?? 0.7}" ${isInherited ? 'disabled' : ''} />
+                <div class="form-hint">${t('node_modals.temperature_hint', 'Valores menores geram respostas determinísticas; valores maiores geram respostas mais criativas.')}</div>
               </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="node-skill-path">${t('node_modals.skill_path_label')}</label>
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <input type="text" id="node-skill-path" class="form-input" style="flex: 1;" value="${this.escapeHtml(effectiveModel.skillPath || '')}" placeholder=".agents/default/SKILL.md" ${isInherited ? 'disabled' : ''} />
-                <button type="button" class="btn btn-secondary-pill" id="btn-edit-skill-modal" title="${t('node_modals.btn_edit_skill_title')}" style="white-space: nowrap; padding: 6px 12px; font-size: 12px;">${t('node_modals.btn_edit_skill')}</button>
-                <button type="button" class="btn btn-secondary-pill" id="btn-new-skill-modal" title="${t('node_modals.btn_new_skill_title')}" style="white-space: nowrap; padding: 6px 12px; font-size: 12px;">${t('node_modals.btn_new_skill')}</button>
-              </div>
-              <div class="form-hint">${t('node_modals.skill_path_hint')}</div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="node-prompt-template">${t('node_modals.prompt_template_label')}</label>
-              <textarea id="node-prompt-template" class="form-textarea" rows="4" ${isInherited ? 'disabled' : ''}>${this.escapeHtml(effectiveModel.promptTemplate || '')}</textarea>
-              <div class="form-hint">${t('node_modals.prompt_vars_hint')}</div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="node-temperature">${t('node_modals.temperature_label')}</label>
-              <input type="number" id="node-temperature" class="form-input" min="0" max="1" step="0.05" value="${effectiveModel.temperature ?? 0.7}" ${isInherited ? 'disabled' : ''} />
             </div>
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button class="btn btn-secondary-pill" id="btn-cancel-model-modal">${t('global_defaults.btn_cancel')}</button>
-          <button class="btn btn-primary" id="btn-save-model-modal">${t('node_modals.btn_save_agent_settings')}</button>
+        <div class="modal-footer office-modal-footer">
+          <button class="btn btn-secondary-pill btn-secondary-office" id="btn-cancel-model-modal">${t('global_defaults.btn_cancel')}</button>
+          <button class="btn btn-primary btn-primary-office" id="btn-save-model-modal">${t('node_modals.btn_save_agent_settings')}</button>
         </div>
       </div>
     `;
@@ -146,6 +172,26 @@ export class NodeModelModal {
   private bindDialogEvents(node: INodeData): void {
     this.overlay.querySelector('#btn-close-model-modal')?.addEventListener('click', () => this.hide());
     this.overlay.querySelector('#btn-cancel-model-modal')?.addEventListener('click', () => this.hide());
+
+    // Manipulador de abas
+    const tabButtons = this.overlay.querySelectorAll<HTMLButtonElement>('.modal-tabs .tab-btn');
+    tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = (btn.dataset?.tab || btn.getAttribute('data-tab')) as 'provider' | 'prompt' | 'parameters';
+        if (!tab) return;
+        this.activeTab = tab;
+        tabButtons.forEach(b => {
+          const bTab = b.dataset?.tab || b.getAttribute('data-tab');
+          if (b.classList && typeof b.classList.toggle === 'function') {
+            b.classList.toggle('active', bTab === tab);
+          }
+        });
+        const panes = this.overlay.querySelectorAll<HTMLElement>('.tab-pane');
+        panes.forEach(p => {
+          p.style.display = p.id === `pane-tab-${tab}` ? '' : 'none';
+        });
+      });
+    });
 
     const inheritCheck = this.overlay.querySelector('#chk-inherit-model') as HTMLInputElement;
     const formWrapper = this.overlay.querySelector('#model-form-wrapper') as HTMLElement;

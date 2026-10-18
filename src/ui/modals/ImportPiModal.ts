@@ -162,20 +162,20 @@ export class ImportPiModal {
           </div>
 
           <!-- Rodapé Estilo Office -->
-          <div class="modal-footer">
+          <div class="modal-footer office-modal-footer">
             <span class="footer-info" id="pi-status-msg">
               ${this.isScanning ? t('import_modals.status_analyzing') : (this.activeTab === 'project' 
                 ? (this.currentScanResult?.isValid ? t('import_modals.status_ready_project') : t('import_modals.status_select_folder')) 
                 : t('import_modals.status_ready_chat'))}
             </span>
             <div class="footer-actions">
-              <button id="btn-cancel-pi" class="tool-btn btn-secondary">${t('import_modals.btn_cancel')}</button>
+              <button id="btn-cancel-pi" class="tool-btn btn-secondary btn-secondary-office">${t('import_modals.btn_cancel')}</button>
               ${this.activeTab === 'project' ? `
-                <button id="btn-import-project-now" class="tool-btn btn-action" ${(!this.currentScanResult || !this.currentScanResult.isValid || this.isScanning) ? 'disabled' : ''}>
+                <button id="btn-import-project-now" class="tool-btn btn-action btn-primary-office" ${(!this.currentScanResult || !this.currentScanResult.isValid || this.isScanning) ? 'disabled' : ''}>
                   ${t('import_modals.btn_import')}
                 </button>
               ` : `
-                <button id="btn-inject-pi-agent" class="tool-btn btn-action">
+                <button id="btn-inject-pi-agent" class="tool-btn btn-action btn-primary-office">
                   ${t('import_modals.btn_import')}
                 </button>
               `}

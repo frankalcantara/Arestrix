@@ -10,6 +10,7 @@ export class NodeToolsModal {
   private graph: Graph;
   private windowController?: IModalWindowController;
   private mcpPicker?: McpToolPicker;
+  private activeTab: 'native' | 'mcp' | 'governance' = 'native';
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -25,6 +26,7 @@ export class NodeToolsModal {
     const node = this.graph.getNode(nodeId);
     if (!node) return;
 
+    this.activeTab = 'native';
     this.render(node);
     this.overlay.classList.remove('hidden');
     this.windowController?.bringToFront();
@@ -62,6 +64,20 @@ export class NodeToolsModal {
     this.overlay.innerHTML = `
       <div class="modal-dialog node-settings-modal-dialog">
         ${titleBarHtml}
+
+        <!-- Abas Fluent / Office 365 -->
+        <div class="modal-tabs" role="tablist">
+          <button type="button" class="tab-btn ${this.activeTab === 'native' ? 'active' : ''}" data-tab="native">
+            <span>🛠️</span> ${t('node_modals.tab_native_tools', '1. Ferramentas Nativas')}
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'mcp' ? 'active' : ''}" data-tab="mcp">
+            <span>⚡</span> ${t('node_modals.tab_mcp_tools', '2. Servidores MCP')}
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'governance' ? 'active' : ''}" data-tab="governance">
+            <span>🛡️</span> ${t('node_modals.tab_validation', '3. Validação & Lote')}
+          </button>
+        </div>
+
         <div class="modal-body-scrollable">
           <!-- Toggle de Herança -->
           <div class="inheritance-toggle-card">
@@ -78,94 +94,101 @@ export class NodeToolsModal {
           </div>
 
           <div class="settings-form-wrapper ${isInherited ? 'form-disabled-opacity' : ''}" id="tools-form-wrapper">
-            <div class="tools-checkbox-grid">
-              <label class="tool-checkbox-pill ${allowed.includes('write') ? 'checked' : ''}">
-                <input type="checkbox" class="node-tool-check" value="write" ${allowed.includes('write') ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
-                <span class="tool-pill-name">tools.write</span>
-                <span class="tool-pill-desc">${t('node_modals.tool_desc_write')}</span>
-              </label>
-
-              <label class="tool-checkbox-pill ${allowed.includes('edit') ? 'checked' : ''}">
-                <input type="checkbox" class="node-tool-check" value="edit" ${allowed.includes('edit') ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
-                <span class="tool-pill-name">tools.edit</span>
-                <span class="tool-pill-desc">${t('node_modals.tool_desc_edit')}</span>
-              </label>
-
-              <label class="tool-checkbox-pill ${allowed.includes('read') ? 'checked' : ''}">
-                <input type="checkbox" class="node-tool-check" value="read" ${allowed.includes('read') ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
-                <span class="tool-pill-name">tools.read</span>
-                <span class="tool-pill-desc">${t('node_modals.tool_desc_read')}</span>
-              </label>
-
-              <label class="tool-checkbox-pill ${allowed.includes('bash') ? 'checked' : ''}">
-                <input type="checkbox" class="node-tool-check" value="bash" ${allowed.includes('bash') ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
-                <span class="tool-pill-name">tools.bash</span>
-                <span class="tool-pill-desc">${t('node_modals.tool_desc_bash')}</span>
-              </label>
-
-              <label class="tool-checkbox-pill ${allowed.includes('validate_svg') ? 'checked' : ''}">
-                <input type="checkbox" class="node-tool-check" value="validate_svg" ${allowed.includes('validate_svg') ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
-                <span class="tool-pill-name">tools.validate_svg</span>
-                <span class="tool-pill-desc">${t('node_modals.tool_desc_validate_svg')}</span>
-              </label>
-            </div>
-
-            <!-- Ferramentas MCP (Model Context Protocol) -->
-            <div style="margin-top: 18px; border-top: 1px solid var(--border-color); padding-top: 14px;">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                <label class="form-label" style="margin: 0; font-weight: 700;">${t('node_modals.mcp_section_title')}</label>
-                <span style="font-size: 11px; color: var(--text-secondary);">${t('node_modals.mcp_section_sub')}</span>
-              </div>
-              <div id="node-mcp-picker"></div>
-            </div>
-
-            <div class="form-group" style="margin-top: 16px;">
-              <label class="form-label" for="node-custom-scripts">${t('node_modals.custom_scripts_label')}</label>
-              <input type="text" id="node-custom-scripts" class="form-input" value="${this.escapeHtml((effectiveTools.customScripts || []).join(', '))}" placeholder="python scripts/audit_exercises.py" ${isInherited ? 'disabled' : ''} />
-              <div class="form-hint">${t('node_modals.custom_scripts_hint')}</div>
-            </div>
-          </div>
-
-          <!-- Validação de Artefato & Resume Engine (Fase 11) -->
-          <div class="settings-section-card" style="margin-top: 16px;">
-            <div class="section-card-header">
-              <span class="section-card-icon">🛡️</span>
-              <div class="section-card-titles">
-                <h3 class="section-card-title">${t('node_modals.artifact_section_title')}</h3>
-                <p class="section-card-desc">${t('node_modals.artifact_section_desc')}</p>
-              </div>
-            </div>
-
-            <div class="form-row-grid">
-              <div class="form-group full-width">
-                <label class="form-label" for="node-artifact-pattern">${t('node_modals.artifact_pattern_label')}</label>
-                <input type="text" id="node-artifact-pattern" class="form-input" value="${this.escapeHtml((settings.validationRules && settings.validationRules[0]?.targetPathPattern) || '')}" placeholder="output/{itemId}.md" />
-                <div class="form-hint">${t('node_modals.artifact_pattern_hint')}</div>
-              </div>
-
-              <div class="form-group">
-                <label class="form-label" for="node-artifact-min-size">${t('node_modals.artifact_min_size_label')}</label>
-                <input type="number" id="node-artifact-min-size" class="form-input" value="${(settings.validationRules && settings.validationRules[0]?.minSizeBytes) || 0}" min="0" step="100" />
-              </div>
-
-              <div class="form-group">
-                <label class="form-label" for="node-artifact-regex">${t('node_modals.artifact_regex_label')}</label>
-                <input type="text" id="node-artifact-regex" class="form-input" value="${this.escapeHtml((settings.validationRules && settings.validationRules[0]?.contentPattern) || '')}" placeholder="^---[\\s\\S]+---" />
-              </div>
-
-              <div class="form-group full-width">
-                <label class="clean-checkbox-label">
-                  <input type="checkbox" id="chk-node-serial-batch" ${settings.isSerialAcrossBatch ? 'checked' : ''} />
-                  <span><strong>${t('node_modals.serial_batch_label')}</strong> ${t('node_modals.serial_batch_desc')}</span>
+            <!-- ABA 1: Ferramentas Nativas -->
+            <div class="tab-pane" id="pane-tab-native" style="${this.activeTab === 'native' ? '' : 'display: none;'}">
+              <div class="tools-checkbox-grid">
+                <label class="tool-checkbox-pill ${allowed.includes('write') ? 'checked' : ''}">
+                  <input type="checkbox" class="node-tool-check" value="write" ${allowed.includes('write') ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
+                  <span class="tool-pill-name">tools.write</span>
+                  <span class="tool-pill-desc">${t('node_modals.tool_desc_write')}</span>
                 </label>
+
+                <label class="tool-checkbox-pill ${allowed.includes('edit') ? 'checked' : ''}">
+                  <input type="checkbox" class="node-tool-check" value="edit" ${allowed.includes('edit') ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
+                  <span class="tool-pill-name">tools.edit</span>
+                  <span class="tool-pill-desc">${t('node_modals.tool_desc_edit')}</span>
+                </label>
+
+                <label class="tool-checkbox-pill ${allowed.includes('read') ? 'checked' : ''}">
+                  <input type="checkbox" class="node-tool-check" value="read" ${allowed.includes('read') ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
+                  <span class="tool-pill-name">tools.read</span>
+                  <span class="tool-pill-desc">${t('node_modals.tool_desc_read')}</span>
+                </label>
+
+                <label class="tool-checkbox-pill ${allowed.includes('bash') ? 'checked' : ''}">
+                  <input type="checkbox" class="node-tool-check" value="bash" ${allowed.includes('bash') ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
+                  <span class="tool-pill-name">tools.bash</span>
+                  <span class="tool-pill-desc">${t('node_modals.tool_desc_bash')}</span>
+                </label>
+
+                <label class="tool-checkbox-pill ${allowed.includes('validate_svg') ? 'checked' : ''}">
+                  <input type="checkbox" class="node-tool-check" value="validate_svg" ${allowed.includes('validate_svg') ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
+                  <span class="tool-pill-name">tools.validate_svg</span>
+                  <span class="tool-pill-desc">${t('node_modals.tool_desc_validate_svg')}</span>
+                </label>
+              </div>
+
+              <div class="form-group" style="margin-top: 16px;">
+                <label class="form-label" for="node-custom-scripts">${t('node_modals.custom_scripts_label')}</label>
+                <input type="text" id="node-custom-scripts" class="form-input" value="${this.escapeHtml((effectiveTools.customScripts || []).join(', '))}" placeholder="python scripts/audit_exercises.py" ${isInherited ? 'disabled' : ''} />
+                <div class="form-hint">${t('node_modals.custom_scripts_hint')}</div>
+              </div>
+            </div>
+
+            <!-- ABA 2: Servidores MCP -->
+            <div class="tab-pane" id="pane-tab-mcp" style="${this.activeTab === 'mcp' ? '' : 'display: none;'}">
+              <div style="padding-top: 6px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                  <label class="form-label" style="margin: 0; font-weight: 700;">${t('node_modals.mcp_section_title')}</label>
+                  <span style="font-size: 11px; color: var(--text-secondary);">${t('node_modals.mcp_section_sub')}</span>
+                </div>
+                <div id="node-mcp-picker"></div>
+              </div>
+            </div>
+
+            <!-- ABA 3: Validação de Artefatos & Lote -->
+            <div class="tab-pane" id="pane-tab-governance" style="${this.activeTab === 'governance' ? '' : 'display: none;'}">
+              <div class="settings-section-card">
+                <div class="section-card-header">
+                  <span class="section-card-icon">🛡️</span>
+                  <div class="section-card-titles">
+                    <h3 class="section-card-title">${t('node_modals.artifact_section_title')}</h3>
+                    <p class="section-card-desc">${t('node_modals.artifact_section_desc')}</p>
+                  </div>
+                </div>
+
+                <div class="form-row-grid">
+                  <div class="form-group full-width">
+                    <label class="form-label" for="node-artifact-pattern">${t('node_modals.artifact_pattern_label')}</label>
+                    <input type="text" id="node-artifact-pattern" class="form-input" value="${this.escapeHtml((settings.validationRules && settings.validationRules[0]?.targetPathPattern) || '')}" placeholder="output/{itemId}.md" />
+                    <div class="form-hint">${t('node_modals.artifact_pattern_hint')}</div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label" for="node-artifact-min-size">${t('node_modals.artifact_min_size_label')}</label>
+                    <input type="number" id="node-artifact-min-size" class="form-input" value="${(settings.validationRules && settings.validationRules[0]?.minSizeBytes) || 0}" min="0" step="100" />
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label" for="node-artifact-regex">${t('node_modals.artifact_regex_label')}</label>
+                    <input type="text" id="node-artifact-regex" class="form-input" value="${this.escapeHtml((settings.validationRules && settings.validationRules[0]?.contentPattern) || '')}" placeholder="^---[\\s\\S]+---" />
+                  </div>
+
+                  <div class="form-group full-width">
+                    <label class="clean-checkbox-label">
+                      <input type="checkbox" id="chk-node-serial-batch" ${settings.isSerialAcrossBatch ? 'checked' : ''} />
+                      <span><strong>${t('node_modals.serial_batch_label')}</strong> ${t('node_modals.serial_batch_desc')}</span>
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button class="btn btn-secondary-pill" id="btn-cancel-tools-modal">${t('global_defaults.btn_cancel')}</button>
-          <button class="btn btn-primary" id="btn-save-tools-modal">${t('node_modals.btn_save_agent_settings')}</button>
+        <div class="modal-footer office-modal-footer">
+          <button class="btn btn-secondary-pill btn-secondary-office" id="btn-cancel-tools-modal">${t('global_defaults.btn_cancel')}</button>
+          <button class="btn btn-primary btn-primary-office" id="btn-save-tools-modal">${t('node_modals.btn_save_agent_settings')}</button>
         </div>
       </div>
     `;
@@ -196,6 +219,26 @@ export class NodeToolsModal {
   private bindDialogEvents(node: INodeData): void {
     this.overlay.querySelector('#btn-close-tools-modal')?.addEventListener('click', () => this.hide());
     this.overlay.querySelector('#btn-cancel-tools-modal')?.addEventListener('click', () => this.hide());
+
+    // Manipulador de abas
+    const tabButtons = this.overlay.querySelectorAll<HTMLButtonElement>('.modal-tabs .tab-btn');
+    tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = (btn.dataset?.tab || btn.getAttribute('data-tab')) as 'native' | 'mcp' | 'governance';
+        if (!tab) return;
+        this.activeTab = tab;
+        tabButtons.forEach(b => {
+          const bTab = b.dataset?.tab || b.getAttribute('data-tab');
+          if (b.classList && typeof b.classList.toggle === 'function') {
+            b.classList.toggle('active', bTab === tab);
+          }
+        });
+        const panes = this.overlay.querySelectorAll<HTMLElement>('.tab-pane');
+        panes.forEach(p => {
+          p.style.display = p.id === `pane-tab-${tab}` ? '' : 'none';
+        });
+      });
+    });
 
     const inheritCheck = this.overlay.querySelector('#chk-inherit-tools') as HTMLInputElement;
     const formWrapper = this.overlay.querySelector('#tools-form-wrapper') as HTMLElement;

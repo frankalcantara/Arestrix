@@ -11,7 +11,6 @@ export class StandaloneRunnerModal extends BaseModal {
   private graph: Graph;
   private runnerManager: RunnerManager;
   private projectManager: ProjectManager;
-  private currentTab: RunnerTab = 'progress';
 
   // Feedback do exportador
   private exportStatusMessage: string = '';
@@ -27,7 +26,14 @@ export class StandaloneRunnerModal extends BaseModal {
       minWidth: 840,
       minHeight: 580,
       resizable: true,
-      draggable: true
+      draggable: true,
+      tabs: [
+        { id: 'progress', label: t('runner.tab_progress', '1. Progresso'), icon: '⏱️' },
+        { id: 'diagnostics', label: t('runner.tab_diagnostics', '2. Diagnóstico'), icon: '📊' },
+        { id: 'operations', label: t('runner.tab_operations', '3. Operação'), icon: '⚙️' },
+        { id: 'export', label: t('runner.tab_export', 'Exportar Executável'), icon: '📦' }
+      ],
+      defaultTab: 'progress'
     });
 
     this.graph = graph;
@@ -57,21 +63,29 @@ export class StandaloneRunnerModal extends BaseModal {
     });
   }
 
+  public get currentTab(): RunnerTab {
+    return (this.activeTabId || 'progress') as RunnerTab;
+  }
+
+  public set currentTab(val: RunnerTab) {
+    this.activeTabId = val;
+  }
+
   public override open(initialTab?: RunnerTab): void {
     const cur = this.projectManager.getCurrentProject();
     if (initialTab) {
-      this.currentTab = initialTab;
+      this.activeTabId = initialTab;
     } else if (cur.runner?.defaultTab) {
-      this.currentTab = cur.runner.defaultTab as RunnerTab;
+      this.activeTabId = cur.runner.defaultTab as RunnerTab;
     } else {
-      this.currentTab = 'progress';
+      this.activeTabId = 'progress';
     }
 
     this.runnerManager.initGraph(this.graph);
     super.open();
   }
 
-  protected renderBody(): string {
+  protected override renderBody(): string {
     const state = this.runnerManager.getState();
     const cur = this.projectManager.getCurrentProject();
     const runnerConfig = cur.runner || {
@@ -81,24 +95,24 @@ export class StandaloneRunnerModal extends BaseModal {
     };
 
     return `
-      <div class="standalone-runner-container" style="display: flex; flex-direction: column; height: 100%; box-sizing: border-box; background: #f8fafc; color: #1e293b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+      <div class="standalone-runner-container" style="display: flex; flex-direction: column; height: 100%; box-sizing: border-box; background: #faf9f8; color: #201f1e; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;">
         
         <!-- BARRA SUPERIOR OPERACIONAL (STATUS & CONTROLES) -->
-        <div style="background: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 12px 18px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-shrink: 0;">
+        <div style="background: #ffffff; border-bottom: 1px solid #edebe9; padding: 12px 18px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-shrink: 0;">
           <div style="display: flex; align-items: center; gap: 12px;">
-            <div style="width: 38px; height: 38px; border-radius: 8px; background: #0f172a; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+            <div style="width: 36px; height: 36px; border-radius: 4px; background: #0f6cbd; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 18px;">
               🚀
             </div>
             <div>
               <div style="display: flex; align-items: center; gap: 8px;">
-                <h2 style="font-size: 15px; font-weight: 700; color: #0f172a; margin: 0;">
+                <h2 style="font-size: 14px; font-weight: 700; color: #201f1e; margin: 0;">
                   ${this.escapeHtml(runnerConfig.title || cur.name)}
                 </h2>
-                <span style="background: #e2e8f0; color: #475569; font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 4px;">
+                <span style="background: #edebe9; color: #323130; font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 3px;">
                   v${this.escapeHtml(runnerConfig.version || '1.0.0')}
                 </span>
               </div>
-              <p style="font-size: 11px; color: #64748b; margin: 2px 0 0 0;">
+              <p style="font-size: 11px; color: #605e5c; margin: 2px 0 0 0;">
                 ${this.escapeHtml(runnerConfig.description || 'Executável do pipeline')}
               </p>
             </div>
@@ -106,38 +120,22 @@ export class StandaloneRunnerModal extends BaseModal {
 
           <!-- Pílula de Status & Ações Rápidas -->
           <div style="display: flex; align-items: center; gap: 10px;">
-            <div id="runner-header-status-pill" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; ${this.getStatusPillStyle(state.status)}">
+            <div id="runner-header-status-pill" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; ${this.getStatusPillStyle(state.status)}">
               <span style="font-size: 8px;">●</span>
               <span>${this.getStatusLabel(state.status)}</span>
             </div>
 
             <!-- Botões Principais de Controle -->
-            <button id="btn-runner-start" class="tool-btn" style="height: 32px; padding: 0 14px; font-size: 11.5px; font-weight: 700; background: #0f6cbd; color: #ffffff; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+            <button id="btn-runner-start" class="tool-btn btn-action" style="height: 30px; padding: 0 14px; font-size: 11.5px; font-weight: 600; background: #0f6cbd; color: #ffffff; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
               <span>▶</span> ${t('runner.btn_run', 'Executar (F5)')}
             </button>
-            <button id="btn-runner-stop" class="tool-btn" style="height: 32px; padding: 0 12px; font-size: 11.5px; font-weight: 700; background: #e2e8f0; color: #475569; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;">
+            <button id="btn-runner-stop" class="tool-btn btn-secondary" style="height: 30px; padding: 0 12px; font-size: 11.5px; font-weight: 600; background: #ffffff; color: #323130; border: 1px solid #d2d0ce; border-radius: 4px; cursor: pointer;">
               <span>⏹</span> ${t('runner.btn_stop', 'Interromper')}
             </button>
-            <button id="btn-runner-restart" class="tool-btn" style="height: 32px; padding: 0 10px; font-size: 11.5px; font-weight: 700; background: #e2e8f0; color: #475569; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;" title="${t('runner.btn_restart_tip', 'Reiniciar execução')}">
+            <button id="btn-runner-restart" class="tool-btn btn-secondary" style="height: 30px; padding: 0 10px; font-size: 11.5px; font-weight: 600; background: #ffffff; color: #323130; border: 1px solid #d2d0ce; border-radius: 4px; cursor: pointer;" title="${t('runner.btn_restart_tip', 'Reiniciar execução')}">
               <span>↻</span>
             </button>
           </div>
-        </div>
-
-        <!-- SELETOR DE TELAS (PÍLULAS FLUENT / NEOMORPHIC LIMPAS) -->
-        <div style="background: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 6px 18px; display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-          <button class="runner-nav-tab ${this.currentTab === 'progress' ? 'active' : ''}" data-tab="progress" style="${this.getTabButtonStyle('progress')}">
-            <span>⏱️</span> ${t('runner.tab_progress', '1. Progresso')}
-          </button>
-          <button class="runner-nav-tab ${this.currentTab === 'diagnostics' ? 'active' : ''}" data-tab="diagnostics" style="${this.getTabButtonStyle('diagnostics')}">
-            <span>📊</span> ${t('runner.tab_diagnostics', '2. Diagnóstico')}
-          </button>
-          <button class="runner-nav-tab ${this.currentTab === 'operations' ? 'active' : ''}" data-tab="operations" style="${this.getTabButtonStyle('operations')}">
-            <span>⚙️</span> ${t('runner.tab_operations', '3. Operação')}
-          </button>
-          <button class="runner-nav-tab ${this.currentTab === 'export' ? 'active' : ''}" data-tab="export" style="${this.getTabButtonStyle('export')}">
-            <span>📦</span> ${t('runner.tab_export', 'Exportar Executável')}
-          </button>
         </div>
 
         <!-- CONTEÚDO DA TELA ATIVA -->

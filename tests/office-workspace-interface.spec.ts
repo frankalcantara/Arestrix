@@ -403,4 +403,39 @@ describe('Inspetor: vértice switch sem código', () => {
       expect(html).toContain('value="relatorio.txt"');
     } finally { restore(); }
   });
+
+  it('redimensionamento vertical/horizontal não altera a escala de zoom da câmera ortográfica', () => {
+    const width = 1000;
+    const height = 800;
+    const camera = new THREE.OrthographicCamera(-width / 2, width / 2, height / 2, -height / 2, 0.1, 2000);
+    camera.position.set(0, 0, 1000);
+    camera.zoom = 1.0;
+
+    const fakeDom = {
+      getBoundingClientRect: () => ({ left: 0, top: 0, width, height }),
+      addEventListener: () => {},
+      clientWidth: width,
+      clientHeight: height,
+      style: {}
+    } as any;
+
+    const controller = new CameraController(camera, fakeDom, height);
+    expect(controller.getZoom()).toBe(1.0);
+
+    // Simula redimensionamento vertical (painel inferior arrastado para cima de 800px para 450px)
+    const newHeight = 450;
+    camera.top = newHeight / 2;
+    camera.bottom = -newHeight / 2;
+    camera.updateProjectionMatrix();
+    controller.setFrustumSize(newHeight);
+
+    // O zoom deve permanecer rigorosamente 1.0 (sem distorção de escala)
+    expect(controller.getZoom()).toBe(1.0);
+
+    // A conversão mundo para tela de um cartão de 340px continua medindo exatamente 340px na tela
+    const p1 = controller.worldToScreen(new THREE.Vector3(0, 0, 0));
+    const p2 = controller.worldToScreen(new THREE.Vector3(340, 0, 0));
+    expect(Math.round(p2.x - p1.x)).toBe(340);
+  });
 });
+

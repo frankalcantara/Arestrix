@@ -38,8 +38,30 @@ class MockElement {
       },
       contains: (cls: string) => {
         return this.className.split(/\s+/).includes(cls);
+      },
+      toggle: (cls: string, force?: boolean) => {
+        const has = this.className.split(/\s+/).includes(cls);
+        const shouldAdd = force !== undefined ? force : !has;
+        const set = new Set(this.className.split(/\s+/).filter(Boolean));
+        if (shouldAdd) {
+          set.add(cls);
+        } else {
+          set.delete(cls);
+        }
+        this.className = Array.from(set).join(' ');
       }
     };
+  }
+
+  get dataset(): Record<string, string> {
+    const ds: Record<string, string> = {};
+    for (const [k, v] of Object.entries(this.attributes)) {
+      if (k.startsWith('data-')) {
+        const camel = k.slice(5).replace(/-([a-z])/g, (_, l) => l.toUpperCase());
+        ds[camel] = v;
+      }
+    }
+    return ds;
   }
 
   get offsetWidth(): number {
@@ -227,17 +249,11 @@ function parseHTMLToMock(html: string, root: MockElement) {
     } else {
       const el = new MockElement(tagName);
       if (attrs) {
-        const idMatch = attrs.match(/id=["']([^"']+)["']/);
-        if (idMatch) el.id = idMatch[1];
-
-        const classMatch = attrs.match(/class=["']([^"']+)["']/);
-        if (classMatch) el.className = classMatch[1];
-
-        const titleMatch = attrs.match(/title=["']([^"']+)["']/);
-        if (titleMatch) el.title = titleMatch[1];
-
-        const typeMatch = attrs.match(/type=["']([^"']+)["']/);
-        if (typeMatch) el.type = typeMatch[1];
+        const attrRegex = /([a-zA-Z0-9\-]+)=["']([^"']*)["']/g;
+        let attrMatch: RegExpExecArray | null;
+        while ((attrMatch = attrRegex.exec(attrs)) !== null) {
+          el.setAttribute(attrMatch[1], attrMatch[2]);
+        }
       }
       stack[stack.length - 1].appendChild(el);
 
@@ -467,6 +483,48 @@ describe('ModalWindowManager & BaseModal (Fase 15.1 - Window Management Engine)'
       expect(overlayEl.classList.contains('hidden')).toBe(true);
 
       testModal.destroy();
+    });
+
+    it('deve suportar sistema unificado de abas Office 365 e permitir alternar abas', () => {
+      class TabbedModal extends BaseModal {
+        protected override renderTabContent(tabId: string): string {
+          return `<div class="tab-content-${tabId}">Conteúdo da aba ${tabId}</div>`;
+        }
+      }
+
+      const modal = new TabbedModal({
+        id: 'test-tabbed-modal',
+        title: 'Modal com Abas',
+        tabs: [
+          { id: 'tab1', label: 'Primeira Aba', icon: '📝' },
+          { id: 'tab2', label: 'Segunda Aba', icon: '⚙️', badge: '3' }
+        ],
+        defaultTab: 'tab1'
+      });
+
+      modal.open();
+      const overlayEl = mockDoc.querySelector('#test-tabbed-modal-overlay') as any;
+      expect(overlayEl).not.toBeNull();
+
+      // Verifica barra de abas
+      const tabStrip = overlayEl.querySelector('.office-modal-tab-strip');
+      expect(tabStrip).not.toBeNull();
+
+      const tabButtons = overlayEl.querySelectorAll('.office-modal-tab-btn');
+      expect(tabButtons.length).toBe(2);
+      expect(tabButtons[0].classList.contains('active')).toBe(true);
+      expect(tabButtons[1].classList.contains('active')).toBe(false);
+
+      // Conteúdo da aba 1 ativo
+      expect(overlayEl.querySelector('.tab-content-tab1')?.textContent).toContain('Conteúdo da aba tab1');
+
+      // Troca para a aba 2
+      modal.switchTab('tab2');
+      expect(tabButtons[0].classList.contains('active')).toBe(false);
+      expect(tabButtons[1].classList.contains('active')).toBe(true);
+      expect(overlayEl.querySelector('.tab-content-tab2')?.textContent).toContain('Conteúdo da aba tab2');
+
+      modal.destroy();
     });
   });
 });

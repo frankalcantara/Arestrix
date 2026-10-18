@@ -1,32 +1,26 @@
 {
-  "projectId": "exemplo-svg-agente",
-  "name": "Exemplo 1 - Agente de SVG",
-  "description": "Agente que cria e audita SVGs animados (tutorial do Arestrix)",
-  "version": "1.0.0",
   "createdAt": "2026-10-13T00:00:00Z",
-  "updatedAt": "2026-10-13T00:00:00Z",
-  "rootPath": ".",
   "database": {
-    "type": "sqlite",
     "filePath": "storage/database.sqlite",
+    "type": "sqlite",
     "url": ""
   },
+  "description": "Agente que cria e audita SVGs animados (tutorial do Arestrix)",
   "environment": {},
+  "git": {
+    "autoCommitOnRun": true,
+    "autoCommitOnShutdown": true,
+    "enabled": true,
+    "isPrivate": true,
+    "lastCommitHash": "",
+    "lastSyncAt": "",
+    "provider": "github",
+    "remoteUrl": "",
+    "repositoryName": "",
+    "serverUrl": "https://github.com",
+    "username": ""
+  },
   "globalDefaults": {
-    "model": {
-      "provider": "deepseek",
-      "model": "deepseek-flash",
-      "skillPath": "",
-      "promptTemplate": ""
-    },
-    "sandbox": {
-      "isolationLevel": "host_direct",
-      "network": "egress_llm_only",
-      "maxMemoryMB": 512,
-      "timeoutSeconds": 180,
-      "readOnlyMounts": [],
-      "readWriteMounts": []
-    },
     "codeMode": {
       "allowedTools": [
         "write",
@@ -36,23 +30,54 @@
       "customScripts": []
     },
     "memory": {
+      "allowedKeys": [],
+      "domains": [],
       "enabled": false,
       "persistent": false,
       "readBlackboard": false,
-      "writeBlackboard": false,
-      "semanticLessons": false,
       "recordLessons": false,
-      "allowedKeys": [],
-      "domains": []
+      "semanticLessons": false,
+      "writeBlackboard": false
+    },
+    "model": {
+      "model": "deepseek-flash",
+      "promptTemplate": "",
+      "provider": "deepseek",
+      "skillPath": ""
+    },
+    "sandbox": {
+      "isolationLevel": "host_direct",
+      "maxMemoryMB": 512,
+      "network": "egress_llm_only",
+      "readOnlyMounts": [],
+      "readWriteMounts": [],
+      "timeoutSeconds": 180
     }
   },
+  "name": "Exemplo 1 - Agente de SVG",
   "pipelines": [
     {
-      "id": "main",
-      "name": "Pipeline Principal",
+      "description": "Agente que cria e audita SVGs animados (tutorial do Arestrix)",
       "file": "pipelines/main.json",
+      "id": "main",
       "isPrimary": true,
-      "description": "Agente que cria e audita SVGs animados (tutorial do Arestrix)"
+      "name": "Pipeline Principal"
     }
-  ]
+  ],
+  "projectId": "exemplo-svg-agente",
+  "rootPath": ".",
+  "runner": {
+    "allowRestart": true,
+    "autoStart": false,
+    "defaultTab": "progress",
+    "description": "",
+    "enabled": false,
+    "outputDir": "dist/runner",
+    "outputName": "",
+    "parameters": [],
+    "title": "",
+    "version": "1.0.0"
+  },
+  "updatedAt": "2026-10-18T16:02:07Z",
+  "version": "1.0.0"
 }

@@ -1355,6 +1355,9 @@
   "batch_pipeline": {
     "title": "Orquestrador em Lote & Resume Engine",
     "subtitle": "📦 Projeto: <strong>{{projectId}}</strong> | Execução em lote e auto-recuperação no 🛠️ Workspace",
+    "tab_items": "📋 Itens & Execução",
+    "tab_serial": "⛓️ Estágios Sequenciais",
+    "tab_matrix": "📊 Matriz de Checkpoint",
     "params_title": "Parâmetros do Lote de Execução",
     "params_desc": "Lista de identificadores a serem processados através deste grafo",
     "items_label": "Itens do Lote (um por linha ou separados por vírgula):",
@@ -1385,6 +1388,8 @@
   "github_repos": {
     "title": "Repositórios do GitHub (Catálogo Global de Skills)",
     "subtitle": "🏢 Escopo Global do Studio: Gerencie os projetos open source autorizados na aplicação",
+    "tab_repos": "🌐 Repositórios Ativos",
+    "tab_add": "➕ Cadastrar Repositório",
     "governance_title": "Governança Global do Studio:",
     "governance_desc": "Estes repositórios open source fornecem habilidades prontas para o catálogo global da aplicação (Studio). Habilitar ou desabilitar um repositório aqui afeta a disponibilidade de suas skills para importação em qualquer workspace ou projeto.",
     "authorized_projects": "Projetos Open Source Autorizados ({{count}})",
@@ -1517,6 +1522,8 @@
   "env_guidance": {
     "title": "Variável de Ambiente: {{key}}",
     "subtitle": "Política de Segurança e Proteção de Chaves de API do Arestrix",
+    "tab_auto": "⚡ Gravar Automaticamente",
+    "tab_manual": "📖 Instruções Manuais",
     "security_title": "Armazenamento Seguro de Segredos",
     "security_desc": "O Arestrix nunca armazena chaves de API em arquivos locais, bancos de dados ou código-fonte. Todas as credenciais são lidas exclusivamente das variáveis de ambiente do seu sistema operacional.",
     "option1_title": "Opção 1: Gravar automaticamente no seu perfil do Windows",
@@ -1538,6 +1545,18 @@
     "msg_not_detected": "A variável {{key}} ainda não foi detectada no ambiente."
   },
   "import_modals": {
+    "tab_model": "🧠 Modelo & Agente",
+    "tab_prompt": "📝 Diretrizes de Prompt",
+    "tab_sandbox": "🛡️ Sandbox & Isolamento",
+    "tab_file_db": "📁 Planilha & Banco",
+    "tab_tables": "📊 Tabelas Inferidas",
+    "tab_agents": "🤖 Rede de Agentes",
+    "label_sandbox_level": "Nível de Isolamento:",
+    "label_max_memory": "Limite de Memória (MB):",
+    "label_timeout": "Timeout Máximo (s):",
+    "opt_sandbox_container": "Contêiner Seguro",
+    "opt_sandbox_microvm": "MicroVM Isolada",
+    "opt_sandbox_process": "Processo Host Restrito",
     "pi_title": "Importar Projeto Pi",
     "pi_subtitle": "Importe projetos e agentes do ecossistema Pi para o 📦 Projeto Ativo no 🛠️ Workspace.",
     "tab_full_project": "Projeto Completo",
@@ -1766,5 +1785,25 @@
     "export_settings_title": "Configuração do Executável do Runner",
     "card_title": "Runner Standalone",
     "btn_open_runner": "Abrir Painel do Runner Standalone..."
+  },
+  "graphviz_export": {
+    "title": "Arquitetura de Grafo (Graphviz)",
+    "subtitle": "Visualização e exportação vetorial de arquitetura concorrente Taskflow C++20",
+    "tab_preview": "🖼️ Diagrama SVG",
+    "tab_dot": "📄 Código Fonte DOT",
+    "btn_download_svg": "📥 Baixar SVG",
+    "btn_download_dot": "📄 Baixar DOT",
+    "btn_copy_svg": "📋 Copiar SVG",
+    "btn_copy_dot": "📋 Copiar DOT",
+    "btn_open_tab": "🌐 Nova Janela",
+    "btn_close": "Fechar",
+    "engine_info": "Motor: <strong>Graphviz C++ WebAssembly (@hpcc-js/wasm)</strong> · 100% offline",
+    "zoom_out_tip": "Diminuir Zoom",
+    "zoom_in_tip": "Aumentar Zoom",
+    "zoom_reset_tip": "Ajustar",
+    "rendering": "Processando renderização Graphviz...",
+    "dot_copied": "Código DOT copiado para a área de transferência!",
+    "svg_copied": "SVG copiado para a área de transferência!"
   }
 }
+

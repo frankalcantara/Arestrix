@@ -6,6 +6,7 @@ export class ProjectMemoryModal {
   private overlay: HTMLElement;
   private graph: Graph;
   private windowController?: IModalWindowController;
+  private activeTab: 'blackboard' | 'lessons' | 'maintenance' = 'blackboard';
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -18,6 +19,7 @@ export class ProjectMemoryModal {
   }
 
   public show(): void {
+    this.activeTab = 'blackboard';
     this.render();
     this.overlay.classList.remove('hidden');
     this.windowController?.bringToFront();
@@ -45,96 +47,115 @@ export class ProjectMemoryModal {
       <div class="modal-dialog project-memory-modal-dialog">
         ${titleBarHtml}
 
+        <!-- Abas Fluent / Office 365 -->
+        <div class="modal-tabs" role="tablist">
+          <button type="button" class="tab-btn ${this.activeTab === 'blackboard' ? 'active' : ''}" data-tab="blackboard">
+            <span>📋</span> ${t('project_memory.tab_blackboard', '1. Blackboard')}
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'lessons' ? 'active' : ''}" data-tab="lessons">
+            <span>📚</span> ${t('project_memory.tab_lessons', '2. Lições Globais')}
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'maintenance' ? 'active' : ''}" data-tab="maintenance">
+            <span>⚡</span> ${t('project_memory.tab_maintenance', '3. Manutenção')}
+          </button>
+        </div>
+
         <div class="modal-body-scrollable">
-          <!-- Overview Cards -->
-          <div class="form-row-grid">
+          <!-- ABA 1: Blackboard Viewer -->
+          <div class="tab-pane" id="pane-tab-blackboard" style="${this.activeTab === 'blackboard' ? '' : 'display: none;'}">
             <div class="settings-section-card">
               <div class="section-card-header">
-                <span class="section-card-icon">🧠</span>
+                <span class="section-card-icon">📋</span>
                 <div class="section-card-titles">
-                  <h3 class="section-card-title">${t('project_memory.persistence_regime')}</h3>
-                  <p class="section-card-desc">${t('project_memory.persistence_desc')}</p>
+                  <h3 class="section-card-title">${t('project_memory.bb_title')}</h3>
+                  <p class="section-card-desc">${t('project_memory.bb_desc')}</p>
                 </div>
               </div>
-              <div style="margin-top: 8px;">
-                <span class="inheritance-status-badge ${isGloballyPersistent ? 'badge-memory-persistent' : 'badge-memory-ephemeral'}">
-                  ${isGloballyPersistent ? t('project_memory.badge_persistent') : t('project_memory.badge_ephemeral')}
-                </span>
-                <div class="form-hint" style="margin-top: 8px;">
-                  ${t('project_memory.pipeline_default_hint', { status: isGloballyEnabled ? t('project_memory.status_active') : t('project_memory.status_optin') })}
-                </div>
-              </div>
-            </div>
-
-            <div class="settings-section-card">
-              <div class="section-card-header">
-                <span class="section-card-icon">⚡</span>
-                <div class="section-card-titles">
-                  <h3 class="section-card-title">${t('project_memory.maintenance_title')}</h3>
-                  <p class="section-card-desc">${t('project_memory.maintenance_desc')}</p>
-                </div>
-              </div>
-              <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
-                <button class="btn btn-secondary-pill" id="btn-refresh-memory">${t('project_memory.btn_refresh')}</button>
-                <button class="btn btn-secondary-pill" id="btn-clear-session-mem" title="${t('project_memory.btn_clear_session_tip')}">${t('project_memory.btn_clear_session')}</button>
-                <button class="btn btn-danger-pill" id="btn-clear-all-mem" title="${t('project_memory.btn_clear_all_tip')}">${t('project_memory.btn_clear_all')}</button>
+              <div id="blackboard-viewer" class="code-editor-header" style="background:#0f172a; color:#f8fafc; font-family:monospace; padding:12px; border-radius:6px; max-height:280px; overflow-y:auto; font-size:11.5px; white-space:pre-wrap;">
+  ${t('project_memory.bb_loading')}
               </div>
             </div>
           </div>
 
-          <!-- Blackboard Viewer -->
-          <div class="settings-section-card">
-            <div class="section-card-header">
-              <span class="section-card-icon">📋</span>
-              <div class="section-card-titles">
-                <h3 class="section-card-title">${t('project_memory.bb_title')}</h3>
-                <p class="section-card-desc">${t('project_memory.bb_desc')}</p>
+          <!-- ABA 2: Semantic Lessons Viewer -->
+          <div class="tab-pane" id="pane-tab-lessons" style="${this.activeTab === 'lessons' ? '' : 'display: none;'}">
+            <div class="settings-section-card">
+              <div class="section-card-header">
+                <span class="section-card-icon">📚</span>
+                <div class="section-card-titles">
+                  <h3 class="section-card-title">${t('project_memory.lessons_title')}</h3>
+                  <p class="section-card-desc">${t('project_memory.lessons_desc')}</p>
+                </div>
               </div>
-            </div>
-            <div id="blackboard-viewer" class="code-editor-header" style="background:#0f172a; color:#f8fafc; font-family:monospace; padding:12px; border-radius:8px; max-height:220px; overflow-y:auto; font-size:11px; white-space:pre-wrap;">
-${t('project_memory.bb_loading')}
+              <div id="lessons-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto;">
+                <div style="color: #64748b; font-size: 11px;">${t('project_memory.lessons_loading')}</div>
+              </div>
+
+              <!-- Adicionar Lição de Teste -->
+              <div style="margin-top: 14px; border-top: 1px solid #edebe9; padding-top: 12px;">
+                <details>
+                  <summary style="cursor: pointer; font-size: 11.5px; font-weight: 700; color: #0f6cbd;">${t('project_memory.manual_lesson_summary')}</summary>
+                  <div class="form-row-grid" style="margin-top: 8px;">
+                    <div class="form-group">
+                      <label class="form-label" for="manual-lesson-domain">${t('project_memory.manual_domain_label')}</label>
+                      <input type="text" id="manual-lesson-domain" class="form-input" placeholder="ex: svg_typography, validation" />
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="manual-lesson-trigger">${t('project_memory.manual_trigger_label')}</label>
+                      <input type="text" id="manual-lesson-trigger" class="form-input" placeholder="ex: text-shadow detectado no SVG" />
+                    </div>
+                  </div>
+                  <div class="form-group" style="margin-top: 8px;">
+                    <label class="form-label" for="manual-lesson-rule">${t('project_memory.manual_rule_label')}</label>
+                    <input type="text" id="manual-lesson-rule" class="form-input" placeholder="ex: Proibido usar text-shadow ou feDropShadow em fontes SVG; usar peso 800 e pílulas sólidas" />
+                  </div>
+                  <button class="btn btn-primary btn-primary-office" id="btn-add-manual-lesson" style="margin-top: 10px; padding: 6px 14px; font-size: 11.5px;">${t('project_memory.btn_save_lesson')}</button>
+                </details>
+              </div>
             </div>
           </div>
 
-          <!-- Semantic Lessons Viewer -->
-          <div class="settings-section-card">
-            <div class="section-card-header">
-              <span class="section-card-icon">📚</span>
-              <div class="section-card-titles">
-                <h3 class="section-card-title">${t('project_memory.lessons_title')}</h3>
-                <p class="section-card-desc">${t('project_memory.lessons_desc')}</p>
+          <!-- ABA 3: Overview & Manutenção -->
+          <div class="tab-pane" id="pane-tab-maintenance" style="${this.activeTab === 'maintenance' ? '' : 'display: none;'}">
+            <div class="form-row-grid">
+              <div class="settings-section-card">
+                <div class="section-card-header">
+                  <span class="section-card-icon">🧠</span>
+                  <div class="section-card-titles">
+                    <h3 class="section-card-title">${t('project_memory.persistence_regime')}</h3>
+                    <p class="section-card-desc">${t('project_memory.persistence_desc')}</p>
+                  </div>
+                </div>
+                <div style="margin-top: 8px;">
+                  <span class="inheritance-status-badge ${isGloballyPersistent ? 'badge-memory-persistent' : 'badge-memory-ephemeral'}">
+                    ${isGloballyPersistent ? t('project_memory.badge_persistent') : t('project_memory.badge_ephemeral')}
+                  </span>
+                  <div class="form-hint" style="margin-top: 8px;">
+                    ${t('project_memory.pipeline_default_hint', { status: isGloballyEnabled ? t('project_memory.status_active') : t('project_memory.status_optin') })}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div id="lessons-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto;">
-              <div style="color: #64748b; font-size: 11px;">${t('project_memory.lessons_loading')}</div>
-            </div>
 
-            <!-- Adicionar Lição de Teste -->
-            <div style="margin-top: 14px; border-top: 1px solid #f1f5f9; padding-top: 12px;">
-              <details>
-                <summary style="cursor: pointer; font-size: 11px; font-weight: 700; color: #4338ca;">${t('project_memory.manual_lesson_summary')}</summary>
-                <div class="form-row-grid" style="margin-top: 8px;">
-                  <div class="form-group">
-                    <label class="form-label" for="manual-lesson-domain">${t('project_memory.manual_domain_label')}</label>
-                    <input type="text" id="manual-lesson-domain" class="form-input" placeholder="ex: svg_typography, validation" />
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label" for="manual-lesson-trigger">${t('project_memory.manual_trigger_label')}</label>
-                    <input type="text" id="manual-lesson-trigger" class="form-input" placeholder="ex: text-shadow detectado no SVG" />
+              <div class="settings-section-card">
+                <div class="section-card-header">
+                  <span class="section-card-icon">⚡</span>
+                  <div class="section-card-titles">
+                    <h3 class="section-card-title">${t('project_memory.maintenance_title')}</h3>
+                    <p class="section-card-desc">${t('project_memory.maintenance_desc')}</p>
                   </div>
                 </div>
-                <div class="form-group">
-                  <label class="form-label" for="manual-lesson-rule">${t('project_memory.manual_rule_label')}</label>
-                  <input type="text" id="manual-lesson-rule" class="form-input" placeholder="ex: Proibido usar text-shadow ou feDropShadow em fontes SVG; usar peso 800 e pílulas sólidas" />
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
+                  <button class="btn btn-secondary-pill btn-secondary-office" id="btn-refresh-memory">${t('project_memory.btn_refresh')}</button>
+                  <button class="btn btn-secondary-pill btn-secondary-office" id="btn-clear-session-mem" title="${t('project_memory.btn_clear_session_tip')}">${t('project_memory.btn_clear_session')}</button>
+                  <button class="btn btn-danger-pill" id="btn-clear-all-mem" title="${t('project_memory.btn_clear_all_tip')}" style="background: #dc2626; color: #fff; border: none; border-radius: 4px; padding: 6px 12px; font-size: 11.5px; cursor: pointer;">${t('project_memory.btn_clear_all')}</button>
                 </div>
-                <button class="btn btn-primary" id="btn-add-manual-lesson" style="margin-top: 8px; padding: 6px 14px; font-size: 11px;">${t('project_memory.btn_save_lesson')}</button>
-              </details>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button class="btn btn-secondary-pill" id="btn-close-project-mem-footer">${t('project_memory.btn_close')}</button>
+        <div class="modal-footer office-modal-footer">
+          <button class="btn btn-secondary-pill btn-secondary-office" id="btn-close-project-mem-footer">${t('project_memory.btn_close')}</button>
         </div>
       </div>
     `;
@@ -153,6 +174,28 @@ ${t('project_memory.bb_loading')}
   }
 
   private attachDialogEvents(): void {
+    this.overlay.querySelector('#btn-close-project-mem')?.addEventListener('click', () => this.hide());
+    this.overlay.querySelector('#btn-close-project-mem-footer')?.addEventListener('click', () => this.hide());
+
+    // Manipulador de abas
+    const tabButtons = this.overlay.querySelectorAll<HTMLButtonElement>('.modal-tabs .tab-btn');
+    tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = (btn.dataset?.tab || btn.getAttribute('data-tab')) as 'blackboard' | 'lessons' | 'maintenance';
+        if (!tab) return;
+        this.activeTab = tab;
+        tabButtons.forEach(b => {
+          const bTab = b.dataset?.tab || b.getAttribute('data-tab');
+          if (b.classList && typeof b.classList.toggle === 'function') {
+            b.classList.toggle('active', bTab === tab);
+          }
+        });
+        const panes = this.overlay.querySelectorAll<HTMLElement>('.tab-pane');
+        panes.forEach(p => {
+          p.style.display = p.id === `pane-tab-${tab}` ? '' : 'none';
+        });
+      });
+    });
     this.overlay.querySelector('#btn-close-project-mem')?.addEventListener('click', () => this.hide());
     this.overlay.querySelector('#btn-close-project-mem-footer')?.addEventListener('click', () => this.hide());
     this.overlay.querySelector('#btn-refresh-memory')?.addEventListener('click', () => this.refreshMemoryData());

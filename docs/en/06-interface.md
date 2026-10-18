@@ -106,13 +106,19 @@ The Assistant needs a provider with **tool calling**. Providers without it (Jev 
 conversation loop, the tools and session storage run in the C++ backend; the tab only draws the conversation
 and applies the changes on the canvas.
 
-## Canvas
+## Canvas and Viewport
 
-The canvas is infinite. The cards are SVG, drawn over the WebGL scene, with sharp vector text and no
-text shadows. When you zoom out the cards drop detail. Hovering ports and buttons shows tooltips.
+The workspace is organized into three integrated areas:
+1. **Side Area:** Task Pane, Inspector, and Assistant with a freely resizable vertical splitter.
+2. **Central Area (Diagram):** Infinite canvas powered by WebGL/Three.js with crisp SVG nodes and high-contrast vector typography.
+3. **Bottom Area (Console):** Docked drawer for observability and deliverables with a horizontal splitter.
 
-Each card shows a header with the type icon and color, the title, ports, and, when selected, the
-quick action bar. During a run, badges show `thinking`, tool calls, `429 retry` and completion.
+### Resizing and Zoom Invariance
+
+The Viewport's orthographic projection operates on a 1:1 metric scale anchored strictly to physical pixel resolution:
+- **Scale Preservation:** Resizing the side pane (horizontally) or the bottom console (vertically) **never changes diagram zoom**. The canvas merely expands or contracts its visible clipping window, without compressing or distorting graph elements.
+- **Crisp Typography:** Strict prohibition of shadows, blurs, or glow effects (`text-shadow`, `drop-shadow`) on fonts, numbers, and labels. Text outlines remain 100% sharp across any display scale. Hovering ports and buttons displays contextual tooltips.
+- **Live Run Feedback:** Clean badges and pills indicate `thinking`, active tool calls, `429 retry` rate limit retries, and step completion.
 
 ## Inspector
 
@@ -121,22 +127,32 @@ shows two overview cards, one for the active project graph and one for the works
 Each action button carries its scope tag: `[Project]` for Model, Memory and Tools, `[Workspace]` for Sandbox,
 `[Workspace / Project]` for Skills.
 
-## Modals
+## Modals and Office 365 Tab Architecture
 
-Modals are floating windows: draggable by the title bar, resizable, and stackable.
+All Studio dialogs adhere to the **Microsoft Office 365 (Fluent 2)** corporate design system:
+- **Floating Windows:** Draggable by title bar, resizable, and stackable with automated z-index and focus management.
+- **Tabbed Structure:** Complex forms are partitioned into structured 34px-high tabs with a `#0f6cbd` active indicator.
+- **State Preservation:** Switching between tabs keeps all entered form values intact without unmounting data.
+- **Standardized Footer:** 44px action bar with Fluent primary buttons (`#0f6cbd`), cancel, and contextual help shortcuts.
 
-| Modal | Scope |
-| :--- | :--- |
-| Global defaults | Studio keys, Workspace sandbox and tools, Project model and memory |
-| Node library | Templates, preset, import/export |
-| Sandbox, Model, Tools, Memory, Skills | Per vertex |
-| Skill editor | Markdown editor with preview |
-| GitHub repositories | Studio-wide skill catalog |
-| MCP servers | Workspace |
-| Project manager | Project metadata, workspace path, project `.env` |
-| Project Git synchronization | Project / OS (Private remote repo setup, OS secure login, and commercial service disclaimer) |
-| Standalone Runner | Project / Distribution (Progress, Diagnostics, Operations and Packaging screens) |
-| Batch & Resume | Run |
+| Modal | Office 365 Tabs | Scope |
+| :--- | :--- | :--- |
+| **Global Defaults** | Studio Model \| Sandbox & Network \| Tools & MCP \| Blackboard Memory | Studio / Workspace / Project |
+| **Node Library** | Template Catalog \| Pipeline Presets \| Import / Export Plugins | Studio |
+| **Node Model** | Provider & Model \| Cognitive Parameters \| Connectivity & Keys | Per vertex |
+| **Node Tools** | Native Tools \| MCP Servers \| Execution Policies | Per vertex |
+| **Node Sandbox** | Isolation Level \| Network & DNS Guard \| Quotas & Limits | Per vertex |
+| **Node Memory** | Vertex Blackboard \| Semantic Lessons \| Retention & TTL | Per vertex |
+| **Node Skills** | Enabled Skills \| Workspace Catalog \| Import New Skill | Per vertex |
+| **Skill Editor** | Markdown Editor \| Rendered Preview \| Metadata & Testing | Per vertex / Workspace |
+| **GitHub Repositories** | Authorized Repositories \| Register New Repository | Studio Catalog |
+| **MCP Servers** | Active Servers \| Connect New Server \| Inspection & Logs | Workspace |
+| **Project Manager** | General Metadata \| Environment Variables (.env) \| Folder Structure | Project |
+| **Git Synchronization** | OS Identity & Account \| Remote Repository \| Automation & Governance | Project / OS |
+| **Standalone Runner** | Progress \| Diagnostics \| Operations \| Export | Project / Distribution |
+| **Batch Pipeline** | Input Data \| Concurrency & Bottlenecks \| Checkpoint Matrix | Run |
+| **External Importers** | File / Connection \| Agent Mapping \| Options & Destination | Connectors |
+| **Graphviz Export** | Graphic Preview \| DOT Code \| Export Options | Tools |
 
 ### Standalone Runner Modal
 
@@ -162,11 +178,13 @@ The **Standalone Runner** modal (opened via the **Run** tab > **Distribution** g
 
 ## Console and Artifacts Drawer
 
-A docked drawer at the bottom of the screen (resizable with a splitter and collapsible) centralizes observability and pipeline deliverables across three tabs:
-
-1. **MSVC C++20 Terminal:** Displays generated C++20 source code, native compiler invocations, and raw execution logs from the Taskflow engine.
-2. **Real-Time Telemetry:** Monitors cognitive agent execution steps (thinking reasoning progress, tool calls, parameters, and 429 rate limit retries).
-3. **Artifacts (Deliverables):** Dedicated multi-format panel for inspecting and exporting pipeline deliverables:
+A docked drawer at the bottom of the screen (resizable with a splitter and collapsible) centralizes observability and pipeline deliverables. Its tab strip follows the **Microsoft Office / Excel** corporate design:
+- **Fluent Tab Strip:** Connected 34px-high tabs, 'Segoe UI' 12px / 600 typography, `#ffffff` active background, and `#0f6cbd` blue accent line.
+- **Vector Icons and Sharp Badges:** Clean SVG iconography without loose emojis or text shadows; high-contrast artifact count badge and compact actions for copy, clear, and minimize/maximize.
+- **Three Specialized Tabs:**
+  1. **MSVC C++20 Terminal:** Displays generated C++20 source code, native compiler invocations, and raw execution logs from the Taskflow engine.
+  2. **Real-Time Telemetry:** Monitors cognitive agent execution steps (thinking reasoning progress, tool calls, parameters, and 429 rate limit retries).
+  3. **Artifacts (Deliverables):** Dedicated multi-format panel for inspecting and exporting pipeline deliverables:
    - **Vector SVG:** Interactive native vector preview with pan/zoom controls and one-click toggle between graphic scene and clean XML/SVG source code.
    - **Spreadsheets & Tabular Data (CSV/TSV):** Paginated data grid with instant cell search and raw data inspection.
    - **Technical Documents & Markdown:** Formatted reader with code block syntax highlighting and one-click copy.

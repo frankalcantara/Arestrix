@@ -8,6 +8,7 @@ export class NodeMemoryModal {
   private overlay: HTMLElement;
   private graph: Graph;
   private windowController?: IModalWindowController;
+  private activeTab: 'blackboard' | 'lessons' | 'retention' = 'blackboard';
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -23,6 +24,7 @@ export class NodeMemoryModal {
     const node = this.graph.getNode(nodeId);
     if (!node) return;
 
+    this.activeTab = 'blackboard';
     this.render(node);
     this.overlay.classList.remove('hidden');
     this.windowController?.bringToFront();
@@ -75,6 +77,20 @@ export class NodeMemoryModal {
     this.overlay.innerHTML = `
       <div class="modal-dialog node-settings-modal-dialog">
         ${titleBarHtml}
+
+        <!-- Abas Fluent / Office 365 -->
+        <div class="modal-tabs" role="tablist">
+          <button type="button" class="tab-btn ${this.activeTab === 'blackboard' ? 'active' : ''}" data-tab="blackboard">
+            <span>📋</span> ${t('node_modals.tab_blackboard', '1. Blackboard')}
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'lessons' ? 'active' : ''}" data-tab="lessons">
+            <span>🧠</span> ${t('node_modals.tab_lessons', '2. Lições Cognitivas')}
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'retention' ? 'active' : ''}" data-tab="retention">
+            <span>💾</span> ${t('node_modals.tab_retention', '3. Regime & Escopo')}
+          </button>
+        </div>
+
         <div class="modal-body-scrollable">
           <!-- Toggle de Herança -->
           <div class="inheritance-toggle-card">
@@ -106,124 +122,144 @@ export class NodeMemoryModal {
           </div>
 
           <div class="settings-form-wrapper ${isInherited ? 'form-disabled-opacity' : ''}" id="memory-form-wrapper">
-            <!-- 1. Toggle Principal: Ativar/Desativar Memória -->
-            <div class="settings-section-card">
-              <div class="section-card-header">
-                <span class="section-card-icon">⚡</span>
-                <div class="section-card-titles">
-                  <h3 class="section-card-title">${t('node_modals.memory_opt_in_title')}</h3>
-                  <p class="section-card-desc">${t('node_modals.memory_opt_in_desc')}</p>
+            <!-- ABA 1: Memória Blackboard -->
+            <div class="tab-pane" id="pane-tab-blackboard" style="${this.activeTab === 'blackboard' ? '' : 'display: none;'}">
+              <div class="settings-section-card ${isEnabled ? '' : 'form-disabled-opacity'}">
+                <div class="section-card-header">
+                  <span class="section-card-icon">📋</span>
+                  <div class="section-card-titles">
+                    <h3 class="section-card-title">Comunicação via Blackboard</h3>
+                    <p class="section-card-desc">Leitura e publicação de deltas no quadro compartilhado do pipeline</p>
+                  </div>
                 </div>
-              </div>
 
-              <div class="memory-enable-toggle-row">
-                <label class="memory-toggle-label">
-                  <input type="checkbox" id="node-memory-enabled" ${isEnabled ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
-                  <span class="memory-toggle-text">${t('node_modals.toggle_enable_memory')}</span>
-                </label>
-              </div>
-            </div>
-
-            <!-- 2. Persistência & Escopo de Projeto (Apenas se ativado) -->
-            <div class="settings-section-card ${isEnabled ? '' : 'form-disabled-opacity'}" id="memory-details-card">
-              <div class="section-card-header">
-                <span class="section-card-icon">🗄️</span>
-                <div class="section-card-titles">
-                  <h3 class="section-card-title">${t('node_modals.memory_persistence_section_title')}</h3>
-                  <p class="section-card-desc">${t('node_modals.memory_persistence_section_desc')}</p>
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label class="form-label">${t('node_modals.memory_retention_mode_label')}</label>
-                <div class="memory-persistence-options">
-                  <label class="persistence-radio-card ${!isPersistent ? 'selected' : ''}">
-                    <input type="radio" name="node-memory-persistence" value="ephemeral" ${!isPersistent ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
-                    <div class="persistence-card-content">
-                      <span class="persistence-card-title">${t('node_modals.opt_ephemeral_title')}</span>
-                      <span class="persistence-card-desc">${t('node_modals.opt_ephemeral_desc')}</span>
+                <div class="memory-perms-grid">
+                  <label class="memory-perm-item">
+                    <input type="checkbox" id="mem-perm-read-bb" ${effectiveMemory.readBlackboard ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
+                    <div>
+                      <span class="perm-item-title">${t('node_modals.perm_read_bb_title')}</span>
+                      <span class="perm-item-desc">${t('node_modals.perm_read_bb_desc')}</span>
                     </div>
                   </label>
 
-                  <label class="persistence-radio-card ${isPersistent ? 'selected' : ''}">
-                    <input type="radio" name="node-memory-persistence" value="persistent" ${isPersistent ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
-                    <div class="persistence-card-content">
-                      <span class="persistence-card-title">${t('node_modals.opt_persistent_title')}</span>
-                      <span class="persistence-card-desc">${t('node_modals.opt_persistent_desc')}</span>
+                  <label class="memory-perm-item">
+                    <input type="checkbox" id="mem-perm-write-bb" ${effectiveMemory.writeBlackboard ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
+                    <div>
+                      <span class="perm-item-title">${t('node_modals.perm_write_bb_title')}</span>
+                      <span class="perm-item-desc">${t('node_modals.perm_write_bb_desc')}</span>
                     </div>
                   </label>
                 </div>
-              </div>
 
-              <div class="form-group" style="margin-top: 12px;">
-                <label class="form-label" for="node-memory-project">Escopo do Projeto (Namespace de Isolamento)</label>
-                <input type="text" id="node-memory-project" class="form-input" value="${this.escapeHtml(effectiveMemory.projectId || projectId)}" ${isInherited || !isEnabled ? 'disabled' : ''} />
-                <div class="form-hint">Agentes em projetos distintos operam em partições estritamente isoladas.</div>
-              </div>
-            </div>
-
-            <!-- 3. Permissões Granulares da Memória -->
-            <div class="settings-section-card ${isEnabled ? '' : 'form-disabled-opacity'}" id="memory-permissions-card">
-              <div class="section-card-header">
-                <span class="section-card-icon">🛡️</span>
-                <div class="section-card-titles">
-                  <h3 class="section-card-title">Permissões de Acesso à Memória</h3>
-                  <p class="section-card-desc">Controle granular sobre o Blackboard intra-pipeline e lições semânticas</p>
-                </div>
-              </div>
-
-              <div class="memory-perms-grid">
-                <label class="memory-perm-item">
-                  <input type="checkbox" id="mem-perm-read-bb" ${effectiveMemory.readBlackboard ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
-                  <div>
-                    <span class="perm-item-title">${t('node_modals.perm_read_bb_title')}</span>
-                    <span class="perm-item-desc">${t('node_modals.perm_read_bb_desc')}</span>
-                  </div>
-                </label>
-
-                <label class="memory-perm-item">
-                  <input type="checkbox" id="mem-perm-write-bb" ${effectiveMemory.writeBlackboard ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
-                  <div>
-                    <span class="perm-item-title">${t('node_modals.perm_write_bb_title')}</span>
-                    <span class="perm-item-desc">${t('node_modals.perm_write_bb_desc')}</span>
-                  </div>
-                </label>
-
-                <label class="memory-perm-item">
-                  <input type="checkbox" id="mem-perm-read-lessons" ${effectiveMemory.semanticLessons ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
-                  <div>
-                    <span class="perm-item-title">${t('node_modals.perm_read_lessons_title')}</span>
-                    <span class="perm-item-desc">${t('node_modals.perm_read_lessons_desc')}</span>
-                  </div>
-                </label>
-
-                <label class="memory-perm-item">
-                  <input type="checkbox" id="mem-perm-write-lessons" ${effectiveMemory.recordLessons ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
-                  <div>
-                    <span class="perm-item-title">${t('node_modals.perm_write_lessons_title')}</span>
-                    <span class="perm-item-desc">${t('node_modals.perm_write_lessons_desc')}</span>
-                  </div>
-                </label>
-              </div>
-
-              <div class="form-row-grid" style="margin-top: 14px;">
-                <div class="form-group">
+                <div class="form-group" style="margin-top: 14px;">
                   <label class="form-label" for="node-memory-keys">Chaves Autorizadas no Blackboard (Opcional)</label>
                   <input type="text" id="node-memory-keys" class="form-input" value="${this.escapeHtml((effectiveMemory.allowedKeys || []).join(', '))}" placeholder="ex: resumo, schema, svg_specs (vazio = todas)" ${isInherited || !isEnabled ? 'disabled' : ''} />
+                  <div class="form-hint">Restringe o agente a ler/escrever apenas nestas chaves estruturadas.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ABA 2: Lições Cognitivas -->
+            <div class="tab-pane" id="pane-tab-lessons" style="${this.activeTab === 'lessons' ? '' : 'display: none;'}">
+              <div class="settings-section-card ${isEnabled ? '' : 'form-disabled-opacity'}">
+                <div class="section-card-header">
+                  <span class="section-card-icon">🧠</span>
+                  <div class="section-card-titles">
+                    <h3 class="section-card-title">Lições e Experiências Anteriores</h3>
+                    <p class="section-card-desc">Injeção preventiva de correções e registro de auditorias de execuções</p>
+                  </div>
+                </div>
+
+                <div class="memory-perms-grid">
+                  <label class="memory-perm-item">
+                    <input type="checkbox" id="mem-perm-read-lessons" ${effectiveMemory.semanticLessons ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
+                    <div>
+                      <span class="perm-item-title">${t('node_modals.perm_read_lessons_title')}</span>
+                      <span class="perm-item-desc">${t('node_modals.perm_read_lessons_desc')}</span>
+                    </div>
+                  </label>
+
+                  <label class="memory-perm-item">
+                    <input type="checkbox" id="mem-perm-write-lessons" ${effectiveMemory.recordLessons ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
+                    <div>
+                      <span class="perm-item-title">${t('node_modals.perm_write_lessons_title')}</span>
+                      <span class="perm-item-desc">${t('node_modals.perm_write_lessons_desc')}</span>
+                    </div>
+                  </label>
+                </div>
+
+                <div class="form-group" style="margin-top: 14px;">
+                  <label class="form-label" for="node-memory-domains">Domínios Semânticos Filtrados (Opcional)</label>
+                  <input type="text" id="node-memory-domains" class="form-input" value="${this.escapeHtml((effectiveMemory.domains || []).join(', '))}" placeholder="ex: svg_typography, validation (vazio = todos)" ${isInherited || !isEnabled ? 'disabled' : ''} />
+                  <div class="form-hint">Filtra as lições semânticas apenas pelas categorias e domínios relevantes.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ABA 3: Regime de Persistência & Escopo -->
+            <div class="tab-pane" id="pane-tab-retention" style="${this.activeTab === 'retention' ? '' : 'display: none;'}">
+              <!-- Ativar/Desativar Memória -->
+              <div class="settings-section-card">
+                <div class="section-card-header">
+                  <span class="section-card-icon">⚡</span>
+                  <div class="section-card-titles">
+                    <h3 class="section-card-title">${t('node_modals.memory_opt_in_title')}</h3>
+                    <p class="section-card-desc">${t('node_modals.memory_opt_in_desc')}</p>
+                  </div>
+                </div>
+
+                <div class="memory-enable-toggle-row">
+                  <label class="memory-toggle-label">
+                    <input type="checkbox" id="node-memory-enabled" ${isEnabled ? 'checked' : ''} ${isInherited ? 'disabled' : ''} />
+                    <span class="memory-toggle-text">${t('node_modals.toggle_enable_memory')}</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Persistência & Escopo de Projeto -->
+              <div class="settings-section-card ${isEnabled ? '' : 'form-disabled-opacity'}" id="memory-details-card" style="margin-top: 14px;">
+                <div class="section-card-header">
+                  <span class="section-card-icon">🗄️</span>
+                  <div class="section-card-titles">
+                    <h3 class="section-card-title">${t('node_modals.memory_persistence_section_title')}</h3>
+                    <p class="section-card-desc">${t('node_modals.memory_persistence_section_desc')}</p>
+                  </div>
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label" for="node-memory-domains">Domínios Semânticos Filtrados (Opcional)</label>
-                  <input type="text" id="node-memory-domains" class="form-input" value="${this.escapeHtml((effectiveMemory.domains || []).join(', '))}" placeholder="ex: svg_typography, validation (vazio = todos)" ${isInherited || !isEnabled ? 'disabled' : ''} />
+                  <label class="form-label">${t('node_modals.memory_retention_mode_label')}</label>
+                  <div class="memory-persistence-options">
+                    <label class="persistence-radio-card ${!isPersistent ? 'selected' : ''}">
+                      <input type="radio" name="node-memory-persistence" value="ephemeral" ${!isPersistent ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
+                      <div class="persistence-card-content">
+                        <span class="persistence-card-title">${t('node_modals.opt_ephemeral_title')}</span>
+                        <span class="persistence-card-desc">${t('node_modals.opt_ephemeral_desc')}</span>
+                      </div>
+                    </label>
+
+                    <label class="persistence-radio-card ${isPersistent ? 'selected' : ''}">
+                      <input type="radio" name="node-memory-persistence" value="persistent" ${isPersistent ? 'checked' : ''} ${isInherited || !isEnabled ? 'disabled' : ''} />
+                      <div class="persistence-card-content">
+                        <span class="persistence-card-title">${t('node_modals.opt_persistent_title')}</span>
+                        <span class="persistence-card-desc">${t('node_modals.opt_persistent_desc')}</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 12px;">
+                  <label class="form-label" for="node-memory-project">Escopo do Projeto (Namespace de Isolamento)</label>
+                  <input type="text" id="node-memory-project" class="form-input" value="${this.escapeHtml(effectiveMemory.projectId || projectId)}" ${isInherited || !isEnabled ? 'disabled' : ''} />
+                  <div class="form-hint">Agentes em projetos distintos operam em partições estritamente isoladas.</div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button class="btn btn-secondary" id="btn-cancel-memory-modal">${t('global_defaults.btn_cancel')}</button>
-          <button class="btn btn-primary" id="btn-save-memory-modal">${t('node_modals.btn_save_agent_settings')}</button>
+        <div class="modal-footer office-modal-footer">
+          <button class="btn btn-secondary-pill btn-secondary-office" id="btn-cancel-memory-modal">${t('global_defaults.btn_cancel')}</button>
+          <button class="btn btn-primary btn-primary-office" id="btn-save-memory-modal">${t('node_modals.btn_save_agent_settings')}</button>
         </div>
       </div>
     `;
@@ -246,6 +282,29 @@ export class NodeMemoryModal {
     const chkInherit = this.overlay.querySelector<HTMLInputElement>('#chk-inherit-memory');
     const chkEnabled = this.overlay.querySelector<HTMLInputElement>('#node-memory-enabled');
     const radios = this.overlay.querySelectorAll<HTMLInputElement>('input[name="node-memory-persistence"]');
+
+    btnClose?.addEventListener('click', () => this.hide());
+    btnCancel?.addEventListener('click', () => this.hide());
+
+    // Manipulador de abas
+    const tabButtons = this.overlay.querySelectorAll<HTMLButtonElement>('.modal-tabs .tab-btn');
+    tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = (btn.dataset?.tab || btn.getAttribute('data-tab')) as 'blackboard' | 'lessons' | 'retention';
+        if (!tab) return;
+        this.activeTab = tab;
+        tabButtons.forEach(b => {
+          const bTab = b.dataset?.tab || b.getAttribute('data-tab');
+          if (b.classList && typeof b.classList.toggle === 'function') {
+            b.classList.toggle('active', bTab === tab);
+          }
+        });
+        const panes = this.overlay.querySelectorAll<HTMLElement>('.tab-pane');
+        panes.forEach(p => {
+          p.style.display = p.id === `pane-tab-${tab}` ? '' : 'none';
+        });
+      });
+    });
 
     btnClose?.addEventListener('click', () => this.hide());
     btnCancel?.addEventListener('click', () => this.hide());

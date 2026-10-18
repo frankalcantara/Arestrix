@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "metadata": {
     "projectId": "exemplo-svg-agente",
-    "graphName": "SVG_Agent_Pipeline",
+    "graphName": "Exemplo 1 - Agente de SVG",
     "description": "Agente que cria e audita SVGs animados (tutorial do Arestrix)",
     "targetStandard": "C++20",
     "compilerConfig": {

@@ -1355,6 +1355,9 @@
   "batch_pipeline": {
     "title": "Batch Orchestrator & Resume Engine",
     "subtitle": "📦 Project: <strong>{{projectId}}</strong> | Batch execution and auto-recovery in 🛠️ Workspace",
+    "tab_items": "📋 Items & Execution",
+    "tab_serial": "⛓️ Serial Stages",
+    "tab_matrix": "📊 Checkpoint Matrix",
     "params_title": "Batch Execution Parameters",
     "params_desc": "List of identifiers to be processed through this graph",
     "items_label": "Batch Items (one per line or comma-separated):",
@@ -1385,6 +1388,8 @@
   "github_repos": {
     "title": "GitHub Repositories (Global Skills Catalog)",
     "subtitle": "🏢 Studio Global Scope: Manage authorized open source projects in the application",
+    "tab_repos": "🌐 Active Repositories",
+    "tab_add": "➕ Register Repository",
     "governance_title": "Studio Global Governance:",
     "governance_desc": "These open source repositories provide ready-to-use skills for the global application catalog (Studio). Enabling or disabling a repository here affects the availability of its skills for import across any workspace or project.",
     "authorized_projects": "Authorized Open Source Projects ({{count}})",
@@ -1517,6 +1522,8 @@
   "env_guidance": {
     "title": "Environment Variable: {{key}}",
     "subtitle": "Arestrix API Key Security & Protection Policy",
+    "tab_auto": "⚡ Save Automatically",
+    "tab_manual": "📖 Manual Instructions",
     "security_title": "Secure Secrets Storage",
     "security_desc": "Arestrix never stores API keys in local files, databases or source code. All credentials are exclusively read from your operating system's environment variables.",
     "option1_title": "Option 1: Save automatically to your Windows profile",
@@ -1538,6 +1545,18 @@
     "msg_not_detected": "Variable {{key}} was not detected in environment yet."
   },
   "import_modals": {
+    "tab_model": "🧠 Model & Agent",
+    "tab_prompt": "📝 Prompt Guidelines",
+    "tab_sandbox": "🛡️ Sandbox & Isolation",
+    "tab_file_db": "📁 Spreadsheet & Database",
+    "tab_tables": "📊 Inferred Tables",
+    "tab_agents": "🤖 Agent Network",
+    "label_sandbox_level": "Isolation Level:",
+    "label_max_memory": "Memory Limit (MB):",
+    "label_timeout": "Max Timeout (s):",
+    "opt_sandbox_container": "Secure Container",
+    "opt_sandbox_microvm": "Isolated MicroVM",
+    "opt_sandbox_process": "Restricted Host Process",
     "pi_title": "Import Pi Project",
     "pi_subtitle": "Import projects and agents from the Pi ecosystem into the Active 📦 Project in the 🛠️ Workspace.",
     "tab_full_project": "Full Project",
@@ -1766,5 +1785,25 @@
     "export_settings_title": "Runner Executable Configuration",
     "card_title": "Standalone Runner",
     "btn_open_runner": "Open Standalone Runner Panel..."
+  },
+  "graphviz_export": {
+    "title": "Graph Architecture (Graphviz)",
+    "subtitle": "Vector visualization and export for Taskflow C++20 concurrent architecture",
+    "tab_preview": "🖼️ SVG Diagram",
+    "tab_dot": "📄 DOT Source Code",
+    "btn_download_svg": "📥 Download SVG",
+    "btn_download_dot": "📄 Download DOT",
+    "btn_copy_svg": "📋 Copy SVG",
+    "btn_copy_dot": "📋 Copy DOT",
+    "btn_open_tab": "🌐 New Window",
+    "btn_close": "Close",
+    "engine_info": "Engine: <strong>Graphviz C++ WebAssembly (@hpcc-js/wasm)</strong> · 100% offline",
+    "zoom_out_tip": "Zoom Out",
+    "zoom_in_tip": "Zoom In",
+    "zoom_reset_tip": "Reset Zoom",
+    "rendering": "Processing Graphviz rendering...",
+    "dot_copied": "DOT source code copied to clipboard!",
+    "svg_copied": "SVG copied to clipboard!"
   }
 }
+

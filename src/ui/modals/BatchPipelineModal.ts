@@ -14,6 +14,7 @@ export class BatchPipelineModal {
   private overlay: HTMLElement;
   private graph: Graph;
   private windowController?: IModalWindowController;
+  private activeTab: 'items' | 'serial' | 'matrix' = 'items';
   private config: IBatchPipelineConfig = {
     items: ['ART-001', 'ART-002', 'ART-003'],
     serializedStages: [],
@@ -109,148 +110,165 @@ export class BatchPipelineModal {
     this.overlay.innerHTML = `
       <div class="modal-dialog batch-pipeline-modal-dialog">
         ${titleBarHtml}
+        <div class="modal-tabs" role="tablist">
+          <button type="button" class="tab-btn ${this.activeTab === 'items' ? 'active' : ''}" data-tab="items" role="tab" aria-selected="${this.activeTab === 'items'}">
+            ${t('batch_pipeline.tab_items')}
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'serial' ? 'active' : ''}" data-tab="serial" role="tab" aria-selected="${this.activeTab === 'serial'}">
+            ${t('batch_pipeline.tab_serial')}
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'matrix' ? 'active' : ''}" data-tab="matrix" role="tab" aria-selected="${this.activeTab === 'matrix'}">
+            ${t('batch_pipeline.tab_matrix')}
+          </button>
+        </div>
         <div class="modal-body-scrollable">
           <!-- 1. Configuração de Itens e Concorrência -->
-          <div class="settings-section-card">
-            <div class="section-card-header">
-              <span class="section-card-icon">📋</span>
-              <div class="section-card-titles">
-                <h3 class="section-card-title">${t('batch_pipeline.params_title')}</h3>
-                <p class="section-card-desc">${t('batch_pipeline.params_desc')}</p>
-              </div>
-            </div>
-
-            <div class="form-row-grid">
-              <div class="form-group full-width">
-                <label class="form-label" for="batch-items-input">${t('batch_pipeline.items_label')}</label>
-                <textarea id="batch-items-input" class="form-textarea" rows="3" placeholder="ART-001&#10;ART-002&#10;ART-003">${itemsText}</textarea>
+          <div id="pane-tab-items" class="tab-pane" style="${this.activeTab === 'items' ? '' : 'display: none;'}">
+            <div class="settings-section-card">
+              <div class="section-card-header">
+                <span class="section-card-icon">📋</span>
+                <div class="section-card-titles">
+                  <h3 class="section-card-title">${t('batch_pipeline.params_title')}</h3>
+                  <p class="section-card-desc">${t('batch_pipeline.params_desc')}</p>
+                </div>
               </div>
 
-              <div class="form-group">
-                <label class="form-label" for="batch-concurrency">${t('batch_pipeline.concurrency_label')}</label>
-                <input id="batch-concurrency" type="number" min="1" max="16" value="${this.config.maxConcurrency}" class="form-input" />
-              </div>
+              <div class="form-row-grid">
+                <div class="form-group full-width">
+                  <label class="form-label" for="batch-items-input">${t('batch_pipeline.items_label')}</label>
+                  <textarea id="batch-items-input" class="form-textarea" rows="4" placeholder="ART-001&#10;ART-002&#10;ART-003">${itemsText}</textarea>
+                </div>
 
-              <div class="form-group">
-                <label class="form-label" for="batch-cooldown">${t('batch_pipeline.cooldown_label')}</label>
-                <input id="batch-cooldown" type="number" min="0" step="500" value="${this.config.cooldownMs}" class="form-input" />
-              </div>
+                <div class="form-group">
+                  <label class="form-label" for="batch-concurrency">${t('batch_pipeline.concurrency_label')}</label>
+                  <input id="batch-concurrency" type="number" min="1" max="16" value="${this.config.maxConcurrency}" class="form-input" />
+                </div>
 
-              <div class="form-group full-width">
-                <label class="form-label" for="batch-state-file">${t('batch_pipeline.state_file_label')}</label>
-                <input id="batch-state-file" type="text" value="${this.config.stateFilePath}" class="form-input" />
-              </div>
+                <div class="form-group">
+                  <label class="form-label" for="batch-cooldown">${t('batch_pipeline.cooldown_label')}</label>
+                  <input id="batch-cooldown" type="number" min="0" step="500" value="${this.config.cooldownMs}" class="form-input" />
+                </div>
 
-              <div class="form-group full-width">
-                <label class="clean-checkbox-label">
-                  <input type="checkbox" id="batch-auto-resume" ${this.config.autoResume ? 'checked' : ''} />
-                  <span>${t('batch_pipeline.auto_resume_label')}</span>
-                </label>
+                <div class="form-group full-width">
+                  <label class="form-label" for="batch-state-file">${t('batch_pipeline.state_file_label')}</label>
+                  <input id="batch-state-file" type="text" value="${this.config.stateFilePath}" class="form-input" />
+                </div>
+
+                <div class="form-group full-width">
+                  <label class="clean-checkbox-label">
+                    <input type="checkbox" id="batch-auto-resume" ${this.config.autoResume ? 'checked' : ''} />
+                    <span>${t('batch_pipeline.auto_resume_label')}</span>
+                  </label>
+                </div>
               </div>
             </div>
           </div>
 
           <!-- 2. Etapas Sequenciais (Serializadas entre Itens) -->
-          <div class="settings-section-card">
-            <div class="section-card-header">
-              <span class="section-card-icon">⛓️</span>
-              <div class="section-card-titles">
-                <h3 class="section-card-title">${t('batch_pipeline.serial_title')}</h3>
-                <p class="section-card-desc">${t('batch_pipeline.serial_desc')}</p>
+          <div id="pane-tab-serial" class="tab-pane" style="${this.activeTab === 'serial' ? '' : 'display: none;'}">
+            <div class="settings-section-card">
+              <div class="section-card-header">
+                <span class="section-card-icon">⛓️</span>
+                <div class="section-card-titles">
+                  <h3 class="section-card-title">${t('batch_pipeline.serial_title')}</h3>
+                  <p class="section-card-desc">${t('batch_pipeline.serial_desc')}</p>
+                </div>
               </div>
-            </div>
 
-            <div class="tools-checkbox-grid">
-              ${agentNodes.length === 0 ? `<div class="empty-hint">${t('batch_pipeline.no_agent_nodes')}</div>` : ''}
-              ${agentNodes.map(node => {
-                const checked = serializedSet.has(node.id) ? 'checked' : '';
-                return `
-                  <label class="tool-checkbox-item">
-                    <input type="checkbox" class="serial-stage-cb" data-node-id="${node.id}" ${checked} />
-                    <div class="tool-info">
-                      <span class="tool-name">${this.escapeHtml(node.label)}</span>
-                      <span class="tool-desc">ID: ${node.id}</span>
-                    </div>
-                  </label>
-                `;
-              }).join('')}
+              <div class="tools-checkbox-grid">
+                ${agentNodes.length === 0 ? `<div class="empty-hint">${t('batch_pipeline.no_agent_nodes')}</div>` : ''}
+                ${agentNodes.map(node => {
+                  const checked = serializedSet.has(node.id) ? 'checked' : '';
+                  return `
+                    <label class="tool-checkbox-item">
+                      <input type="checkbox" class="serial-stage-cb" data-node-id="${node.id}" ${checked} />
+                      <div class="tool-info">
+                        <span class="tool-name">${this.escapeHtml(node.label)}</span>
+                        <span class="tool-desc">ID: ${node.id}</span>
+                      </div>
+                    </label>
+                  `;
+                }).join('')}
+              </div>
             </div>
           </div>
 
           <!-- 3. Matriz de Estado do Checkpoint (Resume Table) -->
-          <div class="settings-section-card">
-            <div class="section-card-header">
-              <span class="section-card-icon">📊</span>
-              <div class="section-card-titles">
-                <h3 class="section-card-title">${t('batch_pipeline.matrix_title')}</h3>
-                <p class="section-card-desc">${t('batch_pipeline.matrix_desc', { time: new Date(this.checkpointState.lastUpdated || Date.now()).toLocaleTimeString() })}</p>
+          <div id="pane-tab-matrix" class="tab-pane" style="${this.activeTab === 'matrix' ? '' : 'display: none;'}">
+            <div class="settings-section-card">
+              <div class="section-card-header">
+                <span class="section-card-icon">📊</span>
+                <div class="section-card-titles">
+                  <h3 class="section-card-title">${t('batch_pipeline.matrix_title')}</h3>
+                  <p class="section-card-desc">${t('batch_pipeline.matrix_desc', { time: new Date(this.checkpointState.lastUpdated || Date.now()).toLocaleTimeString() })}</p>
+                </div>
               </div>
-            </div>
 
-            <div class="batch-matrix-wrapper">
-              <table class="batch-status-table">
-                <thead>
-                  <tr>
-                    <th>${t('batch_pipeline.th_item_id')}</th>
-                    ${agentNodes.map(n => `<th>${this.escapeHtml(n.label)}</th>`).join('')}
-                    <th>${t('batch_pipeline.th_actions')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${this.config.items.length === 0 ? `<tr><td colspan="10" class="empty-hint">${t('batch_pipeline.empty_items')}</td></tr>` : ''}
-                  ${this.config.items.map(itemId => {
-                    const itemData = this.checkpointState.items?.[itemId];
-                    return `
-                      <tr>
-                        <td class="batch-item-cell"><strong>${this.escapeHtml(itemId)}</strong></td>
-                        ${agentNodes.map(n => {
-                          const stageInfo = itemData?.stages?.[n.id];
-                          const status = stageInfo?.status || 'pendente';
-                          let badgeClass = 'pill-pending';
-                          let badgeText = t('batch_pipeline.status_pending');
+              <div class="batch-matrix-wrapper">
+                <table class="batch-status-table">
+                  <thead>
+                    <tr>
+                      <th>${t('batch_pipeline.th_item_id')}</th>
+                      ${agentNodes.map(n => `<th>${this.escapeHtml(n.label)}</th>`).join('')}
+                      <th>${t('batch_pipeline.th_actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${this.config.items.length === 0 ? `<tr><td colspan="10" class="empty-hint">${t('batch_pipeline.empty_items')}</td></tr>` : ''}
+                    ${this.config.items.map(itemId => {
+                      const itemData = this.checkpointState.items?.[itemId];
+                      return `
+                        <tr>
+                          <td class="batch-item-cell"><strong>${this.escapeHtml(itemId)}</strong></td>
+                          ${agentNodes.map(n => {
+                            const stageInfo = itemData?.stages?.[n.id];
+                            const status = stageInfo?.status || 'pendente';
+                            let badgeClass = 'pill-pending';
+                            let badgeText = t('batch_pipeline.status_pending');
 
-                          if (status === 'concluido') {
-                            if (stageInfo?.recoveredFromArtifact) {
-                              badgeClass = 'pill-cached';
-                              badgeText = t('batch_pipeline.status_cached');
-                            } else {
-                              badgeClass = 'pill-completed';
-                              badgeText = t('batch_pipeline.status_ok');
+                            if (status === 'concluido') {
+                              if (stageInfo?.recoveredFromArtifact) {
+                                badgeClass = 'pill-cached';
+                                badgeText = t('batch_pipeline.status_cached');
+                              } else {
+                                badgeClass = 'pill-completed';
+                                badgeText = t('batch_pipeline.status_ok');
+                              }
+                            } else if (status === 'executando') {
+                              badgeClass = 'pill-running';
+                              badgeText = t('batch_pipeline.status_running');
+                            } else if (status === 'erro') {
+                              badgeClass = 'pill-error';
+                              badgeText = t('batch_pipeline.status_error');
                             }
-                          } else if (status === 'executando') {
-                            badgeClass = 'pill-running';
-                            badgeText = t('batch_pipeline.status_running');
-                          } else if (status === 'erro') {
-                            badgeClass = 'pill-error';
-                            badgeText = t('batch_pipeline.status_error');
-                          }
 
-                          return `
-                            <td class="batch-stage-cell">
-                              <span class="pill-badge ${badgeClass}">${badgeText}</span>
-                            </td>
-                          `;
-                        }).join('')}
-                        <td class="batch-actions-cell">
-                          <button class="batch-item-reset-btn" data-item-id="${itemId}" title="${t('batch_pipeline.btn_reset_item_tip')}">🧹</button>
-                        </td>
-                      </tr>
-                    `;
-                  }).join('')}
-                </tbody>
-              </table>
+                            return `
+                              <td class="batch-stage-cell">
+                                <span class="pill-badge ${badgeClass}">${badgeText}</span>
+                              </td>
+                            `;
+                          }).join('')}
+                          <td class="batch-actions-cell">
+                            <button class="batch-item-reset-btn" data-item-id="${itemId}" title="${t('batch_pipeline.btn_reset_item_tip')}">🧹</button>
+                          </td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="modal-footer">
+        <div class="modal-footer office-modal-footer">
           <div class="footer-left-group">
-            <button id="btn-batch-refresh" class="btn-clean-secondary">${t('batch_pipeline.btn_refresh')}</button>
+            <button id="btn-batch-refresh" class="btn-clean-secondary btn-secondary-office">${t('batch_pipeline.btn_refresh')}</button>
             <button id="btn-batch-clear-all" class="btn-clean-danger">${t('batch_pipeline.btn_clear_all')}</button>
           </div>
           <div class="footer-right-group">
-            <button id="btn-batch-close" class="btn-clean-secondary">${t('batch_pipeline.btn_close')}</button>
-            <button id="btn-batch-save-run" class="btn-clean-primary">${t('batch_pipeline.btn_save_run')}</button>
+            <button id="btn-batch-close" class="btn-clean-secondary btn-secondary-office">${t('batch_pipeline.btn_close')}</button>
+            <button id="btn-batch-save-run" class="btn-clean-primary btn-primary-office">${t('batch_pipeline.btn_save_run')}</button>
           </div>
         </div>
       </div>
@@ -278,6 +296,25 @@ export class BatchPipelineModal {
   }
 
   private bindDialogEvents(): void {
+    // Tab switching
+    this.overlay.querySelectorAll('.modal-tabs .tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = (btn as HTMLElement).getAttribute('data-tab') as 'items' | 'serial' | 'matrix';
+        if (!tab) return;
+        this.activeTab = tab;
+        this.overlay.querySelectorAll('.modal-tabs .tab-btn').forEach(b => {
+          const isCurrent = b.getAttribute('data-tab') === tab;
+          b.classList.toggle('active', isCurrent);
+          b.setAttribute('aria-selected', isCurrent ? 'true' : 'false');
+        });
+        const panes = this.overlay.querySelectorAll('.tab-pane');
+        panes.forEach(p => {
+          const el = p as HTMLElement;
+          el.style.display = el.id === `pane-tab-${tab}` ? '' : 'none';
+        });
+      });
+    });
+
     const btnClose = this.overlay.querySelector('#btn-close-batch-modal');
     const btnCloseBottom = this.overlay.querySelector('#btn-batch-close');
     btnClose?.addEventListener('click', () => this.hide());

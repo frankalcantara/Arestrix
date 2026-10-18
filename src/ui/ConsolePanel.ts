@@ -38,29 +38,35 @@ export class ConsolePanel {
       </div>
 
       <div class="console-header office-console-header">
-        <div class="office-console-tabs-group">
-          <button class="office-console-tab-btn active" id="tab-console-build" data-tab="build">
-            <span class="tab-icon">⚡</span> ${t('console.tab_terminal', 'Terminal MSVC C++20')}
+        <div class="office-console-tabs-group" role="tablist">
+          <button class="office-console-tab-btn active" id="tab-console-build" data-tab="build" role="tab" aria-selected="true">
+            <svg class="tab-icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+            <span>${t('console.tab_terminal', 'Terminal MSVC C++20')}</span>
           </button>
-          <button class="office-console-tab-btn" id="tab-console-telemetry" data-tab="telemetry">
-            <span class="tab-icon">📡</span> ${t('console.tab_telemetry', 'Telemetria em Tempo Real')}
+          <button class="office-console-tab-btn" id="tab-console-telemetry" data-tab="telemetry" role="tab" aria-selected="false">
+            <svg class="tab-icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+            <span>${t('console.tab_telemetry', 'Telemetria em Tempo Real')}</span>
           </button>
-          <button class="office-console-tab-btn" id="tab-console-artifacts" data-tab="artifacts">
-            <span class="tab-icon">📦</span> ${t('console.tab_artifacts', 'Artefatos')}
+          <button class="office-console-tab-btn" id="tab-console-artifacts" data-tab="artifacts" role="tab" aria-selected="false">
+            <svg class="tab-icon-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            <span>${t('console.tab_artifacts', 'Artefatos')}</span>
             <span class="office-artifact-badge-count" id="artifacts-badge-count" style="display: none;">0</span>
           </button>
-          <span class="console-status-badge status-idle" id="console-status">${t('console.status_idle', '● OCIOSO')}</span>
+          <span class="console-status-badge status-idle" id="console-status"><span class="status-dot">●</span> ${t('console.status_idle', 'OCIOSO')}</span>
         </div>
 
         <div class="console-actions office-console-actions">
           <button id="btn-copy-console" class="btn-console-office" title="${t('console.copy_tip', 'Copiar para a Área de Transferência')}">
-            📋 ${t('console.copy', 'Copiar')}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            <span>${t('console.copy', 'Copiar')}</span>
           </button>
           <button id="btn-clear-console" class="btn-console-office" title="${t('console.clear_tip', 'Limpar')}">
-            🗑️ ${t('console.clear', 'Limpar')}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            <span>${t('console.clear', 'Limpar')}</span>
           </button>
           <button id="btn-toggle-console" class="btn-console-office" title="${t('console.toggle_tip', 'Minimizar/Restaurar')}">
-            _ ${t('console.minmax', 'Min/Max')}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>${t('console.minmax', 'Min/Max')}</span>
           </button>
         </div>
       </div>
@@ -107,6 +113,10 @@ export class ConsolePanel {
     tabBuild?.classList.toggle('active', tab === 'build');
     tabTelem?.classList.toggle('active', tab === 'telemetry');
     tabArt?.classList.toggle('active', tab === 'artifacts');
+
+    tabBuild?.setAttribute('aria-selected', tab === 'build' ? 'true' : 'false');
+    tabTelem?.setAttribute('aria-selected', tab === 'telemetry' ? 'true' : 'false');
+    tabArt?.setAttribute('aria-selected', tab === 'artifacts' ? 'true' : 'false');
 
     this.contentEl.style.display = tab === 'build' ? 'block' : 'none';
     this.telemetryEl.style.display = tab === 'telemetry' ? 'block' : 'none';

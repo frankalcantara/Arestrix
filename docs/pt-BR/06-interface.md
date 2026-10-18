@@ -106,13 +106,19 @@ modelo local) aparecem marcados como "sem suporte ao Assistente" no seletor do m
 indica a impossibilidade. Todo o laço da conversa, as ferramentas e a gravação das sessões rodam no
 backend C++; a aba só desenha a conversa e aplica as alterações no canvas.
 
-## Canvas
+## Canvas e Viewport
 
-O canvas é infinito. Os cartões são SVG, desenhados sobre a cena WebGL, com texto vetorial nítido e sem
-sombras. Ao afastar o zoom, os cartões perdem detalhes. Passar o mouse sobre portas e botões mostra dicas.
+O espaço de trabalho é dividido em três áreas integradas:
+1. **Área Lateral:** Painel de Tarefas, Inspetor e Assistente com splitter vertical de largura livre.
+2. **Área Central (Diagrama):** Canvas infinito acelerado via WebGL/Three.js com nós em SVG e texto vetorial de alto contraste.
+3. **Área Inferior (Console):** Gaveta acoplada de observabilidade e artefatos com splitter horizontal.
 
-Cada cartão mostra um cabeçalho com o ícone e a cor do tipo, o título, as portas e, quando selecionado, a
-barra de ações rápidas. Durante a execução, selos mostram `thinking`, chamadas de ferramenta, `429 retry` e a conclusão.
+### Redimensionamento e Zoom Invariante
+
+O cálculo de projeção ortográfica do Viewport opera em escala métrica 1:1 baseada na resolução física em pixels:
+- **Preservação de Escala:** Ao redimensionar a área lateral (horizontalmente) ou a área inferior do console (verticalmente), o nível de zoom dos cartões, nós e arestas **não sofre qualquer alteração**. A área do diagrama apenas expande ou contrai sua janela visível de corte (clipping), sem comprimir ou distorcer os elementos.
+- **Tipografia Nítida:** Proibição estrita de sombras, borrões ou halos luminosos (`text-shadow`, `drop-shadow`) em textos, números e rótulos. As fontes permanecem com contornos 100% nítidos em qualquer resolução. Passar o mouse sobre portas e botões exibe dicas contextuais.
+- **Feedback em Execução:** Durante uma execução, selos e badges limpos exibem `thinking`, chamadas de ferramenta ativas, retentativas de limite de taxa `429 retry` e conclusão.
 
 ## Inspetor
 
@@ -121,22 +127,32 @@ seleção, mostra dois cartões de visão geral: o grafo do projeto ativo e o am
 botão de ação leva a etiqueta do escopo: `[Projeto]` para Modelo, Memória e Ferramentas, `[Workspace]` para
 Sandbox, `[Workspace / Projeto]` para Skills.
 
-## Modais
+## Modais e Arquitetura de Abas Office 365
 
-Os modais são janelas flutuantes: arrastáveis pela barra de título, redimensionáveis e empilháveis.
+Todos os modais do Studio seguem o padrão de design corporativo **Microsoft Office 365 (Fluent 2)**:
+- **Janelas Flutuantes:** Arrastáveis pela barra de título, redimensionáveis, empilháveis com controle de foco e z-index automático.
+- **Estrutura em Abas:** Formulários complexos são organizados em abas temáticas de 34px de altura com indicador ativo `#0f6cbd` e transição suave.
+- **Preservação de Estado:** Alternar entre abas mantém todos os valores preenchidos nos formulários intactos, evitando perda de dados antes da confirmação.
+- **Rodapé Padronizado:** Barra de ações de 44px com botões primários Fluent (`#0f6cbd`), cancelamento e atalhos de ajuda.
 
-| Modal | Escopo |
-| :--- | :--- |
-| Padrões globais | Chaves do Studio, sandbox e ferramentas do Workspace, modelo e memória do Projeto |
-| Biblioteca de vértices | Templates, preset, importar/exportar |
-| Sandbox, Modelo, Ferramentas, Memória, Skills | Por vértice |
-| Editor de skill | Editor Markdown com pré-visualização |
-| Repositórios GitHub | Catálogo de skills de todo o Studio |
-| Servidores MCP | Workspace |
-| Gerenciador de projetos | Metadados do projeto, caminho do workspace, `.env` do projeto |
-| Sincronização Git do projeto | Projeto / SO (Configuração de repositório privado, login seguro no SO e consentimento comercial) |
-| Runner Standalone | Projeto / Distribuição (Telas de Progresso, Diagnóstico, Operação e Empacotamento) |
-| Lote e Retomada | Executar |
+| Modal | Abas Office 365 | Escopo |
+| :--- | :--- | :--- |
+| **Padrões Globais** | Modelo Studio \| Sandbox & Rede \| Ferramentas & MCP \| Memória Blackboard | Studio / Workspace / Projeto |
+| **Biblioteca de Vértices** | Catálogo de Modelos \| Presets de Pipeline \| Importar / Exportar Plugins | Studio |
+| **Modelo do Nó** | Provedor & Modelo \| Parâmetros Cognitivos \| Conectividade & Chaves | Por vértice |
+| **Ferramentas do Nó** | Ferramentas Nativas \| Servidores MCP \| Políticas de Execução | Por vértice |
+| **Sandbox do Nó** | Nível de Isolamento \| Rede & DNS Guard \| Cotas & Limites | Por vértice |
+| **Memória do Nó** | Blackboard do Vértice \| Lições Semânticas \| Retenção & TTL | Por vértice |
+| **Skills do Nó** | Skills Habilitadas \| Catálogo do Workspace \| Importar Nova Skill | Por vértice |
+| **Editor de Skill** | Editor Markdown \| Pré-visualização Renderizada \| Metadados & Teste | Por vértice / Workspace |
+| **Repositórios GitHub** | Repositórios Autorizados \| Cadastrar Novo Repositório | Catálogo Studio |
+| **Servidores MCP** | Servidores Ativos \| Conectar Novo Servidor \| Inspeção & Logs | Workspace |
+| **Gerenciador de Projetos** | Metadados Gerais \| Variáveis de Ambiente (.env) \| Estrutura de Pastas | Projeto |
+| **Sincronização Git** | Conta & Identidade no SO \| Repositório Remoto \| Automação & Governança | Projeto / SO |
+| **Runner Standalone** | Progresso \| Diagnóstico \| Operação \| Exportação | Projeto / Distribuição |
+| **Execução em Lote** | Dados de Entrada \| Concorrência & Gargalos \| Matriz de Checkpoints | Executar |
+| **Importadores Externos** | Arquivo / Conexão \| Mapeamento de Agentes \| Opções & Destino | Conectores |
+| **Exportação Graphviz** | Visualização Gráfica \| Código DOT \| Opções de Exportação | Ferramentas |
 
 ### Modal do Runner Standalone
 
@@ -162,11 +178,13 @@ O modal do **Runner Standalone** (acionado na aba **Executar** > grupo **Distrib
 
 ## Console e Painel de Artefatos
 
-Uma gaveta acoplada na base da tela (redimensionável por splitter e minimizável) centraliza a observabilidade e os produtos da execução em três abas:
-
-1. **Terminal MSVC C++20:** Registra a geração do código-fonte, a compilação nativa pelo compilador e os logs brutos da execução da engine Taskflow.
-2. **Telemetria em Tempo Real:** Monitora as etapas cognitivas dos agentes (início e término de raciocínio *thinking*, invocação de ferramentas, parâmetros e retries de *rate limit* 429).
-3. **Artefatos (Entregáveis):** Painel multiformato dedicado à inspeção e entrega dos arquivos produzidos pelo pipeline:
+Uma gaveta acoplada na base da tela (redimensionável por splitter e minimizável) centraliza a observabilidade e os produtos da execução. Sua barra de abas adota o padrão visual corporativo **Microsoft Office / Excel**:
+- **Fita de Abas Fluent:** Abas conectadas de 34px de altura, fonte 'Segoe UI' 12px / 600, fundo `#ffffff` na aba ativa e linha de realce azul `#0f6cbd`.
+- **Ícones Vetoriais e Badges Nítidos:** Sem emojis soltos ou sombras em fontes; contagem de artefatos com badge em pílula de alto contraste e ações compactas de cópia, limpeza e alternância de estado.
+- **Três Abas Especializadas:**
+  1. **Terminal MSVC C++20:** Registra a geração do código-fonte, a compilação nativa pelo compilador e os logs brutos da execução da engine Taskflow.
+  2. **Telemetria em Tempo Real:** Monitora as etapas cognitivas dos agentes (início e término de raciocínio *thinking*, invocação de ferramentas, parâmetros e retries de *rate limit* 429).
+  3. **Artefatos (Entregáveis):** Painel multiformato dedicado à inspeção e entrega dos arquivos produzidos pelo pipeline:
    - **Vetor SVG:** Renderização vetorial nativa e interativa com pan/zoom e alternância instantânea entre a cena gráfica e o código-fonte XML/SVG limpo.
    - **Planilhas e Dados Tabulares (CSV/TSV):** Grid interativo com busca instantânea por termos em células e visualização de dados brutos.
    - **Documentos Técnicos e Markdown:** Leitor com realce de blocos de código e botão de cópia rápida.
