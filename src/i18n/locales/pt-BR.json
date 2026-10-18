@@ -267,6 +267,9 @@
       "export_grp": "Exportação",
       "export_code": "Exportar<br>Código C++",
       "export_svg": "Exportar<br>SVG (Graphviz)",
+      "distribution_grp": "Distribuição",
+      "standalone_runner": "Runner<br>Standalone",
+      "standalone_runner_tip": "Abrir ambiente do Runner Standalone com telas de Progresso, Diagnóstico e Operação",
       "examples_grp": "Exemplos",
       "load_demo": "Carregar Demo<br>Concorrente"
     },
@@ -1739,5 +1742,29 @@
     "card_git_title": "Repositório Git Remoto",
     "card_git_desc": "Sincronização contínua com repositório privado",
     "btn_configure_git": "Configurar Git..."
+  },
+  "runner": {
+    "modal_title": "Runner Standalone Corporativo",
+    "modal_subtitle": "Operação autônoma, diagnóstico em tempo real e entrega departamental",
+    "btn_run": "Executar (F5)",
+    "btn_stop": "Interromper",
+    "btn_restart_tip": "Reiniciar execução",
+    "tab_progress": "1. Progresso",
+    "tab_diagnostics": "2. Diagnóstico",
+    "tab_operations": "3. Operação",
+    "tab_export": "Exportar Executável",
+    "steps_title": "Etapas do Pipeline",
+    "no_nodes": "Nenhum vértice configurado no pipeline aberto.",
+    "btn_copy_diag": "Copiar Diagnóstico (JSON)",
+    "btn_clear_diag": "Limpar",
+    "thinking_title": "Raciocínio dos Agentes (Thinking)",
+    "tool_calls_title": "Chamadas de Ferramentas (I/O)",
+    "operation_controls": "Painel de Controle e Disparo",
+    "operation_desc": "Inicie a execução do pipeline corporativo ou forneça parâmetros operacionais de entrada antes do processamento.",
+    "parameters_title": "Parâmetros Operacionais de Entrada",
+    "artifacts_title": "Entregáveis & Artefatos",
+    "export_settings_title": "Configuração do Executável Corporativo",
+    "card_title": "Runner Standalone Departamental",
+    "btn_open_runner": "Abrir Painel do Runner Standalone..."
   }
 }

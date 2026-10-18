@@ -14,7 +14,7 @@ The Studio follows the Microsoft Office layout, because most people already know
 | **Agents** | Workspace security and skills, MCP servers, the global GitHub skill catalog. |
 | **Connectors** | Import Pi projects, Claude, OpenAI, Hermes, Excel. |
 | **Data** | *Project memory* and *Workspace storage*, kept visibly apart. |
-| **Run** | Build & Run, the Taskflow engine, and the Batch & Resume orchestrator. |
+| **Run** | Build & Run, the Taskflow engine, the Batch & Resume orchestrator, and Distribution (**Standalone Runner**). |
 
 Other conveniences: the **Quick Access Toolbar** (Save, Undo, Redo, Run, and the **Git Sync** button with real-time status badge), an autosave switch, the
 project search box (below), and `Ctrl+F1` to collapse the ribbon.
@@ -58,8 +58,8 @@ modules), the skills of the workspace and the pipelines. Press `Ctrl+K` to focus
 
 ## Backstage
 
-Opened by **File**. It has the project information (three cards: the active project, Git repository synchronization, and the physical
-workspace), the **Open** screen, the unified **Save** screen, and the **Options**
+Opened by **File**. It has the project information (four cards: the active project, Git repository synchronization, the physical
+workspace, and the **Departmental Standalone Runner**), the **Open** screen, the unified **Save** screen, and the **Options**
 (Studio defaults, workspace governance and the **language** selector).
 
 The **Open** screen follows Office's Open. The places are on the left:
@@ -135,6 +135,7 @@ Modals are floating windows: draggable by the title bar, resizable, and stackabl
 | MCP servers | Workspace |
 | Project manager | Project metadata, workspace path, project `.env` |
 | Project Git synchronization | Project / OS (Private remote repo setup, OS secure login, and commercial service disclaimer) |
+| Standalone Runner | Project / Distribution (Progress, Diagnostics, Operations and Packaging screens) |
 | Batch & Resume | Run |
 
 ## Console and Artifacts Drawer

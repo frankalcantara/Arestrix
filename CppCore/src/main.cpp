@@ -10,6 +10,7 @@
 #include "mcp/McpRegistry.hpp"
 #include "project/ProjectManager.hpp"
 #include "project/GitSyncService.hpp"
+#include "project/RunnerService.hpp"
 #include "project/OpenableFiles.hpp"
 #include "assistant/AssistantSession.hpp"
 #include "rt/ModelClient.hpp"
@@ -1486,6 +1487,75 @@ void ui_git_is_commercial(webui::window::event* e) {
     e->return_bool(comm);
 }
 
+void ui_get_runner_config(webui::window::event* e) {
+    auto cur = taskforge::project::ProjectManager::getInstance().getCurrentProject();
+    taskforge::Json res = cur.runner;
+    e->return_string(res.dump());
+}
+
+void ui_set_runner_config(webui::window::event* e) {
+    try {
+        auto j = taskforge::jsonutil::parse(e->get_string());
+        taskforge::project::ProjectRunnerConfig cfg = j.get<taskforge::project::ProjectRunnerConfig>();
+        auto cur = taskforge::project::ProjectManager::getInstance().getCurrentProject();
+        cur.runner = cfg;
+        taskforge::project::ProjectManager::getInstance().saveProject(cur);
+        e->return_string("{\"ok\":true}");
+    } catch (const std::exception& ex) {
+        taskforge::Json res = {{"ok", false}, {"error", ex.what()}};
+        e->return_string(res.dump());
+    }
+}
+
+void ui_export_standalone_runner(webui::window::event* e) {
+    try {
+        auto j = taskforge::jsonutil::parse(e->get_string());
+        auto& pm = taskforge::project::ProjectManager::getInstance();
+        auto cur = pm.getCurrentProject();
+        std::string root = cur.rootPath.empty() ? std::filesystem::current_path().string() : cur.rootPath;
+
+        if (j.contains("runner") && j["runner"].is_object()) {
+            cur.runner = j["runner"].get<taskforge::project::ProjectRunnerConfig>();
+            pm.saveProject(cur);
+        }
+
+        taskforge::core::Graph g;
+        if (j.contains("graph") && j["graph"].is_object()) {
+            loadGraphFromPayload(j["graph"].dump(), g);
+        } else {
+            g = globalGraph;
+        }
+
+        auto exportRes = taskforge::project::RunnerService::exportRunner(root, cur, g);
+        taskforge::Json out = {
+            {"ok", exportRes.ok},
+            {"error", exportRes.error},
+            {"outputDir", exportRes.outputDir},
+            {"executablePath", exportRes.executablePath},
+            {"manifestPath", exportRes.manifestPath}
+        };
+        e->return_string(out.dump());
+    } catch (const std::exception& ex) {
+        taskforge::Json res = {{"ok", false}, {"error", ex.what()}};
+        e->return_string(res.dump());
+    }
+}
+
+void ui_launch_standalone_runner(webui::window::event* e) {
+    try {
+        auto j = taskforge::jsonutil::parse(e->get_string());
+        std::string exe = j.value("executablePath", "");
+        auto cur = taskforge::project::ProjectManager::getInstance().getCurrentProject();
+        std::string root = cur.rootPath.empty() ? std::filesystem::current_path().string() : cur.rootPath;
+        bool launched = taskforge::project::RunnerService::launchRunner(root, exe);
+        taskforge::Json out = {{"ok", launched}};
+        e->return_string(out.dump());
+    } catch (const std::exception& ex) {
+        taskforge::Json res = {{"ok", false}, {"error", ex.what()}};
+        e->return_string(res.dump());
+    }
+}
+
 void exit_app(webui::window::event* e) {
     std::cout << "[C++] Comando de encerramento recebido." << std::endl;
     auto cur = taskforge::project::ProjectManager::getInstance().getCurrentProject();
@@ -1892,6 +1962,12 @@ int main(int argc, char** argv) {
     win.bind("git_create_remote_repo", ui_git_create_remote_repo);
     win.bind("git_commit_push", ui_git_commit_push);
     win.bind("git_is_commercial", ui_git_is_commercial);
+
+    // Bindings de Standalone Runner (Fase 1)
+    win.bind("get_runner_config", ui_get_runner_config);
+    win.bind("set_runner_config", ui_set_runner_config);
+    win.bind("export_standalone_runner", ui_export_standalone_runner);
+    win.bind("launch_standalone_runner", ui_launch_standalone_runner);
 
     // Registra o Emitter de Telemetria de Agentes em Tempo Real (Fase 10)
     taskforge::sandbox::AgentTelemetryEmitter::setCallback([&win](const std::string& jsonMsg) {

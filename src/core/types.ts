@@ -415,6 +415,27 @@ export interface IProjectGitConfig {
   lastCommitHash?: string;
 }
 
+export interface IProjectRunnerParameter {
+  id: string;
+  label: string;
+  type: 'string' | 'number' | 'boolean' | 'file';
+  defaultValue?: any;
+  description?: string;
+}
+
+export interface IProjectRunnerConfig {
+  enabled: boolean;
+  title?: string;
+  description?: string;
+  version?: string;
+  outputDir?: string;
+  outputName?: string;
+  autoStart?: boolean;
+  defaultTab?: 'progress' | 'diagnostics' | 'operations';
+  allowRestart?: boolean;
+  parameters?: IProjectRunnerParameter[];
+}
+
 export interface IProjectManifest {
   projectId: string;
   name: string;
@@ -429,6 +450,7 @@ export interface IProjectManifest {
   database?: IProjectDatabaseConfig;
   environment?: Record<string, string>;
   git?: IProjectGitConfig;
+  runner?: IProjectRunnerConfig;
 }
 
 export interface IRecentProjectItem {

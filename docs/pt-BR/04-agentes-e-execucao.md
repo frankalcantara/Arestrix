@@ -104,6 +104,42 @@ Todo pipeline voltado a produzir entregáveis (gráficos vetoriais, relatórios,
 - **Aba Artefatos no Painel Inferior:** Ao lado do *Terminal* e da *Telemetria*, a aba *Artefatos* exibe a contagem de entregáveis em tempo real e permite alternar entre visualização gráfica e código, copiar o conteúdo ou abrir a pasta `exports/` no Windows Explorer com um clique.
 - **Operação via Assistente Local (Chat):** O assistente de chat nativo do Studio é integrado ao ciclo de vida de artefatos pelas ferramentas `list_artifacts` e `get_artifact`, sendo capaz de inspecionar a saída produzida e reportar conclusões ao usuário.
 
+## Runner Standalone (Fase 1: Executável Independente)
+
+O **Runner Standalone** permite transformar qualquer grafo de agentes em uma aplicação autônoma para distribuição departamental ou execução simplificada, sem exigir que o operador utilize o editor visual completo.
+
+### Formas de Acionamento
+1. **Botão no Ribbon:** Na aba **Executar**, o grupo **Distribuição** disponibiliza o botão **Runner Standalone** (ícone 🚀).
+2. **Backstage (Arquivo):** No cartão **Runner Standalone Departamental** na tela de informações do projeto ativo.
+3. **Propriedade no Manifesto:** Configuração direta no `arestrix.project.json` através do bloco `"runner": { "enabled": true, ... }`.
+
+### As Três Telas Operacionais
+O Runner provê uma interface moderna e limpa com 3 visões essenciais para acompanhamento e controle operacional:
+
+1. **Tela de Progresso:**
+   - **Indicador de Status em Tempo Real:** Selo de status (`Aguardando`, `Compilando`, `Executando`, `Sucesso`, `Erro`, `Interrompido`).
+   - **Barra de Progresso Linear:** Indicador percentual suave e visual do avanço do pipeline.
+   - **Cronômetro:** Duração decorrida da execução atual em tempo real.
+   - **Linha do Tempo de Etapas:** Rastreamento individual de cada vértice do pipeline Taskflow com selos de status, timestamp de início e duração de cada etapa.
+
+2. **Tela de Diagnóstico:**
+   - **KPIs de Telemetria:** Cartões de métricas ao vivo para consumo de tokens (Prompt, Conclusão e Total), chamadas de ferramentas, retries de limite de taxa 429 e latência média.
+   - **Streaming de Raciocínio (Thinking):** Visualização em tempo real das deliberações cognitivas dos agentes durante o laço de execução.
+   - **Inspeção de Chamadas de Ferramenta (Tool Calls):** Registro de ferramentas invocadas, argumentos transmitidos, duração e status de sucesso/falha.
+   - **Exportação de Diagnóstico:** Botão para copiar o relatório completo de diagnóstico em formato JSON estruturado.
+
+3. **Tela de Operação:**
+   - **Controles de Execução:** Iniciar Execução (`F5`), Parar (`Shift+F5`) e Reiniciar.
+   - **Parâmetros Operacionais Dinâmicos:** Formulário de entrada gerado automaticamente a partir dos parâmetros declarados no manifesto do projeto (textos, números, booleanos), permitindo personalizar a execução sem alterar o grafo.
+   - **Acesso a Entregáveis:** Botão direto para abrir a pasta de artefatos gerados no Windows Explorer.
+
+### Empacotamento para Distribuição
+A aba **Exportar** do Runner Standalone automatiza a compilação e empacotamento do pacote executável:
+- Geração da pasta de distribuição configurável (padrão `dist/runner`).
+- Cópia do executável C++ nativo e das skills locais necessárias.
+- Criação do manifesto `runner_manifest.json` com parâmetros e metadados.
+- Criação de scripts inicializadores de fácil execução (`run.bat`).
+
 ## Relacionados
 
 - [Workspaces, memória, skills e MCP](05-workspaces-memoria-skills-mcp.md)

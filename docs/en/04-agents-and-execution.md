@@ -106,6 +106,42 @@ Any pipeline designed to generate deliverable products (vector graphics, reports
 - **Artifacts Tab in the Bottom Drawer:** Positioned alongside the *Terminal* and *Telemetry* tabs, the *Artifacts* tab displays the real-time count of generated deliverables, lets users inspect visual graphics or code, copy content, and open the `exports/` folder in Windows Explorer with one click.
 - **Local Chat Assistant Operation:** The Studio's native chat assistant integrates with the artifact lifecycle through the `list_artifacts` and `get_artifact` tools, allowing the assistant to examine generated deliverables and provide analytical feedback directly to the user.
 
+## Standalone Runner (Phase 1: Autonomous Executable)
+
+The **Standalone Runner** transforms any agent graph into an independent application suitable for departmental distribution or streamlined operation, without requiring operators to launch the full visual graph editor.
+
+### Activation Triggers
+1. **Ribbon Button:** In the **Run** tab, the **Distribution** group exposes the **Standalone Runner** button (icon 🚀).
+2. **Backstage (File):** In the **Departmental Standalone Runner** card on the active project overview page.
+3. **Project Manifest Property:** Configured directly in `arestrix.project.json` under `"runner": { "enabled": true, ... }`.
+
+### The Three Operational Views
+The Runner provides a modern, high-contrast, clean UI with 3 essential screens for monitoring and operational control:
+
+1. **Progress Screen:**
+   - **Real-Time Status Indicator:** Status pill (`Waiting`, `Compiling`, `Running`, `Success`, `Error`, `Stopped`).
+   - **Linear Progress Bar:** Smooth visual progress bar tracking workflow completion percentage.
+   - **Elapsed Timer:** Real-time run duration timer with millisecond accuracy.
+   - **Step Timeline:** Granular tracking of each Taskflow pipeline stage with status badges, start timestamps, and stage execution duration.
+
+2. **Diagnostics Screen:**
+   - **Telemetry KPIs:** Live cards monitoring token consumption (Prompt, Completion, Total), tool calls count, 429 rate limit retries, and average latency.
+   - **Agent Thinking Stream:** Live streaming view of agent reasoning and cognitive deliberations during execution loops.
+   - **Tool Call Inspection:** Detailed table of invoked tools, arguments passed, execution duration, and success/failure status.
+   - **Diagnostic Export:** One-click button to copy complete diagnostic logs in structured JSON format.
+
+3. **Operations Screen:**
+   - **Execution Controls:** Start Execution (`F5`), Stop (`Shift+F5`), and Restart.
+   - **Configurable Input Parameters:** Dynamically rendered form based on manifest parameters (strings, numbers, booleans), allowing runtime customization without modifying graph definitions.
+   - **Artifacts Access:** Direct button to open the generated outputs directory in Windows Explorer.
+
+### Standalone Packaging
+The **Export** tab in the Standalone Runner modal coordinates native distribution packaging:
+- Target distribution directory (defaults to `dist/runner`).
+- Copies the native C++ executable and referenced workspace skills.
+- Generates `runner_manifest.json` with metadata, schema, and parameter definitions.
+- Generates single-click launcher batch scripts (`run.bat`).
+
 ## Related
 
 - [Workspaces, memory, skills and MCP](05-workspaces-memory-skills-mcp.md)

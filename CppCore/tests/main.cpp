@@ -20,6 +20,7 @@
 #include "platform/Process.hpp"
 #include "project/OpenableFiles.hpp"
 #include "project/GitSyncService.hpp"
+#include "project/RunnerService.hpp"
 #include "assistant/AssistantSession.hpp"
 #include "assistant/AssistantTools.hpp"
 #include "assistant/GraphDocument.hpp"
@@ -2073,6 +2074,71 @@ TEST(git_sync_service_and_project_manifest_config) {
     std::string uName, uEmail;
     bool hasId = GitSyncService::getSystemIdentity(uName, uEmail);
     CHECK(hasId && !uName.empty());
+}
+
+TEST(standalone_runner_service_and_manifest_config) {
+    using namespace taskforge::project;
+    // 1. Configuracao do Runner e serializacao
+    ProjectManifest m;
+    m.projectId = "runner-test-id";
+    m.name = "Runner Test Project";
+    m.runner.enabled = true;
+    m.runner.title = "Finance Report Runner";
+    m.runner.description = "Automated corporate financial pipeline runner";
+    m.runner.version = "1.2.0";
+    m.runner.outputDir = "dist/runner";
+    m.runner.outputName = "finance_runner.exe";
+    m.runner.autoStart = true;
+    m.runner.defaultTab = "diagnostics";
+    m.runner.allowRestart = true;
+
+    ProjectRunnerParameter param;
+    param.id = "month";
+    param.label = "Mes de Referencia";
+    param.type = "string";
+    param.defaultValue = "2026-10";
+    param.description = "Mes para geracao do relatorio contabil";
+    m.runner.parameters.push_back(param);
+
+    taskforge::Json j = m;
+    CHECK(j["runner"]["enabled"] == true);
+    CHECK(j["runner"]["title"] == "Finance Report Runner");
+    CHECK(j["runner"]["outputName"] == "finance_runner.exe");
+    CHECK(j["runner"]["defaultTab"] == "diagnostics");
+    CHECK(j["runner"]["parameters"].size() == 1);
+    CHECK(j["runner"]["parameters"][0]["id"] == "month");
+
+    // Desserializacao
+    auto m2 = j.get<ProjectManifest>();
+    CHECK(m2.runner.enabled == true);
+    CHECK(m2.runner.title == "Finance Report Runner");
+    CHECK(m2.runner.version == "1.2.0");
+    CHECK(m2.runner.parameters.size() == 1);
+    CHECK(m2.runner.parameters[0].defaultValue == "2026-10");
+
+    // 2. Teste do RunnerService::exportRunner
+    auto tempRoot = makeTempDir("runner-export-test");
+    taskforge::core::Graph g;
+    taskforge::core::NodeData node;
+    node.id = "n1";
+    node.label = "Tarefa1";
+    node.type = taskforge::core::TaskflowNodeType::Static;
+    node.customLambdaBody = "int x = 42;";
+    g.addNode(node);
+
+    auto res = RunnerService::exportRunner(tempRoot, m, g);
+    CHECK(res.ok == true);
+    CHECK(fs::exists(res.outputDir));
+    CHECK(fs::exists(res.manifestPath));
+
+    // Valida conteudo do runner_manifest.json gerado
+    auto parsed = taskforge::jsonutil::parseFile(res.manifestPath);
+    CHECK(parsed["format"] == "arestrix-standalone-runner");
+    CHECK(parsed["title"] == "Finance Report Runner");
+    CHECK(parsed["defaultTab"] == "diagnostics");
+    CHECK(parsed["graph"]["nodes"].size() == 1);
+
+    fs::remove_all(tempRoot);
 }
 
 int main() {

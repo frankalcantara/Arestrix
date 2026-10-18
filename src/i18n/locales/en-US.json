@@ -267,6 +267,9 @@
       "export_grp": "Export",
       "export_code": "Export<br>C++ Code",
       "export_svg": "Export<br>SVG (Graphviz)",
+      "distribution_grp": "Distribution",
+      "standalone_runner": "Standalone<br>Runner",
+      "standalone_runner_tip": "Open Standalone Runner environment with Progress, Diagnostics, and Operations screens",
       "examples_grp": "Examples",
       "load_demo": "Load Concurrency<br>Demo"
     },
@@ -1739,5 +1742,29 @@
     "card_git_title": "Remote Git Repository",
     "card_git_desc": "Continuous synchronization with private repository",
     "btn_configure_git": "Configure Git..."
+  },
+  "runner": {
+    "modal_title": "Enterprise Standalone Runner",
+    "modal_subtitle": "Autonomous execution, real-time diagnostics, and departmental delivery",
+    "btn_run": "Run (F5)",
+    "btn_stop": "Stop",
+    "btn_restart_tip": "Restart execution",
+    "tab_progress": "1. Progress",
+    "tab_diagnostics": "2. Diagnostics",
+    "tab_operations": "3. Operations",
+    "tab_export": "Export Executable",
+    "steps_title": "Pipeline Steps",
+    "no_nodes": "No nodes configured in the active pipeline.",
+    "btn_copy_diag": "Copy Diagnostics (JSON)",
+    "btn_clear_diag": "Clear",
+    "thinking_title": "Agent Thinking Stream",
+    "tool_calls_title": "Tool Calls (I/O)",
+    "operation_controls": "Control & Launch Panel",
+    "operation_desc": "Start enterprise pipeline execution or provide runtime operational input parameters prior to processing.",
+    "parameters_title": "Operational Input Parameters",
+    "artifacts_title": "Deliverables & Artifacts",
+    "export_settings_title": "Enterprise Executable Configuration",
+    "card_title": "Departmental Standalone Runner",
+    "btn_open_runner": "Open Standalone Runner Panel..."
   }
 }

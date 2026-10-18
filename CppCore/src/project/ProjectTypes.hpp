@@ -98,6 +98,75 @@ inline void from_json(const taskforge::Json& j, ProjectGitConfig& g) {
     g.lastCommitHash = j.value("lastCommitHash", "");
 }
 
+struct ProjectRunnerParameter {
+    std::string id;
+    std::string label;
+    std::string type = "string"; // "string", "number", "boolean", "file"
+    std::string defaultValue;
+    std::string description;
+};
+
+inline void to_json(taskforge::Json& j, const ProjectRunnerParameter& p) {
+    j = taskforge::Json{
+        {"id", p.id},
+        {"label", p.label},
+        {"type", p.type},
+        {"defaultValue", p.defaultValue},
+        {"description", p.description}
+    };
+}
+
+inline void from_json(const taskforge::Json& j, ProjectRunnerParameter& p) {
+    p.id = j.value("id", "");
+    p.label = j.value("label", "");
+    p.type = j.value("type", "string");
+    p.defaultValue = j.value("defaultValue", "");
+    p.description = j.value("description", "");
+}
+
+struct ProjectRunnerConfig {
+    bool enabled = false;
+    std::string title;
+    std::string description;
+    std::string version = "1.0.0";
+    std::string outputDir = "dist/runner";
+    std::string outputName;
+    bool autoStart = false;
+    std::string defaultTab = "progress"; // "progress", "diagnostics", "operations"
+    bool allowRestart = true;
+    std::vector<ProjectRunnerParameter> parameters;
+};
+
+inline void to_json(taskforge::Json& j, const ProjectRunnerConfig& r) {
+    j = taskforge::Json{
+        {"enabled", r.enabled},
+        {"title", r.title},
+        {"description", r.description},
+        {"version", r.version},
+        {"outputDir", r.outputDir},
+        {"outputName", r.outputName},
+        {"autoStart", r.autoStart},
+        {"defaultTab", r.defaultTab},
+        {"allowRestart", r.allowRestart},
+        {"parameters", r.parameters}
+    };
+}
+
+inline void from_json(const taskforge::Json& j, ProjectRunnerConfig& r) {
+    r.enabled = j.value("enabled", false);
+    r.title = j.value("title", "");
+    r.description = j.value("description", "");
+    r.version = j.value("version", "1.0.0");
+    r.outputDir = j.value("outputDir", "dist/runner");
+    r.outputName = j.value("outputName", "");
+    r.autoStart = j.value("autoStart", false);
+    r.defaultTab = j.value("defaultTab", "progress");
+    r.allowRestart = j.value("allowRestart", true);
+    if (j.contains("parameters") && j["parameters"].is_array()) {
+        r.parameters = j["parameters"].get<std::vector<ProjectRunnerParameter>>();
+    }
+}
+
 struct ProjectManifest {
     std::string projectId;
     std::string name;
@@ -111,6 +180,7 @@ struct ProjectManifest {
     ProjectDatabaseConfig database;
     std::map<std::string, std::string> environment;
     ProjectGitConfig git;
+    ProjectRunnerConfig runner;
 };
 
 inline void to_json(taskforge::Json& j, const ProjectManifest& m) {
@@ -126,7 +196,8 @@ inline void to_json(taskforge::Json& j, const ProjectManifest& m) {
         {"globalDefaults", m.globalDefaults},
         {"database", m.database},
         {"environment", m.environment},
-        {"git", m.git}
+        {"git", m.git},
+        {"runner", m.runner}
     };
 }
 
@@ -152,6 +223,9 @@ inline void from_json(const taskforge::Json& j, ProjectManifest& m) {
     }
     if (j.contains("git")) {
         m.git = j["git"].get<ProjectGitConfig>();
+    }
+    if (j.contains("runner")) {
+        m.runner = j["runner"].get<ProjectRunnerConfig>();
     }
 }
 

@@ -24,6 +24,7 @@ import { ImportHermesModal } from '../modals/ImportHermesModal.ts';
 import { ImportExcelModal } from '../modals/ImportExcelModal.ts';
 import { GraphvizExportModal } from '../modals/GraphvizExportModal.ts';
 import { GitAccountModal } from '../modals/GitAccountModal.ts';
+import { StandaloneRunnerModal } from '../modals/StandaloneRunnerModal.ts';
 import { GitSyncManager } from '../../core/git/GitSyncManager.ts';
 import { t } from '../../i18n/index.ts';
 import { ProjectSearchBox, reindexProjectSearch } from '../ProjectSearchBox.ts';
@@ -50,6 +51,7 @@ export class OfficeRibbon {
   private importHermesModal: ImportHermesModal;
   private importExcelModal: ImportExcelModal;
   private gitAccountModal: GitAccountModal;
+  private standaloneRunnerModal: StandaloneRunnerModal;
 
   private activeTab: 'home' | 'insert' | 'agents' | 'connectors' | 'data' | 'run' = 'home';
   private isCollapsed: boolean = false;
@@ -100,6 +102,7 @@ export class OfficeRibbon {
     this.importExcelModal = new ImportExcelModal(this.graph, this.viewport);
     this.graphvizExportModal = new GraphvizExportModal(this.graph);
     this.gitAccountModal = new GitAccountModal(globalEventBus);
+    this.standaloneRunnerModal = new StandaloneRunnerModal(this.graph);
 
     if (typeof document !== 'undefined') {
       this.container = document.createElement('header');
@@ -529,6 +532,16 @@ export class OfficeRibbon {
 
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
+            <button class="ribbon-btn-large" id="ribbon-btn-standalone-runner" title="${t('ribbon.panes.standalone_runner_tip', 'Abrir ambiente do Runner Standalone com telas de Progresso, Diagnóstico e Operação')}">
+              <span class="ribbon-btn-icon" style="color: #0284c7;">🚀</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.standalone_runner', 'Runner Standalone')}</span>
+            </button>
+          </div>
+          <div class="office-ribbon-group-title">${t('ribbon.panes.distribution_grp', 'Distribuição')}</div>
+        </div>
+
+        <div class="office-ribbon-group">
+          <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-export-code-tab">
               <span class="ribbon-btn-icon">⚙️</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.export_code')}</span>
@@ -687,6 +700,7 @@ export class OfficeRibbon {
     // 11. Botões da Aba Execução & Lote
     this.container.querySelector('#ribbon-btn-run-tab')?.addEventListener('click', () => this.toggleExecuteOrStop());
     this.container.querySelector('#ribbon-btn-batch-modal')?.addEventListener('click', () => this.batchPipelineModal.open());
+    this.container.querySelector('#ribbon-btn-standalone-runner')?.addEventListener('click', () => this.standaloneRunnerModal.open());
     this.container.querySelector('#ribbon-btn-export-code-tab')?.addEventListener('click', () => this.codeModal.show());
     this.container.querySelector('#ribbon-btn-export-svg-tab')?.addEventListener('click', () => this.exportGraphvizSVG());
     this.container.querySelector('#ribbon-btn-open-artifacts-tab')?.addEventListener('click', () => globalEventBus.emit('console:open-artifacts'));
@@ -807,6 +821,10 @@ export class OfficeRibbon {
           badge.style.color = '#0f766e';
         }
       }
+    });
+
+    globalEventBus.on('runner:open-modal', (tab?: any) => {
+      this.standaloneRunnerModal.open(tab);
     });
 
     // Consulta inicial silenciosa de status do Git

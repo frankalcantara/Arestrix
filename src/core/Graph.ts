@@ -281,6 +281,10 @@ export class Graph {
     return Array.from(this.nodes.values());
   }
 
+  getNodes(): INodeData[] {
+    return this.getAllNodes();
+  }
+
   // --- Operações com Arestas ---
 
   addEdge(edge: IEdgeData): void {

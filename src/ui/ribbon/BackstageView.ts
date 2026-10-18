@@ -846,6 +846,19 @@ export class BackstageView {
                 🌿 ${t('git_sync.btn_configure_git', 'Configurar Git & Sincronização...')}
               </button>
             </div>
+
+            <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
+                <h4 style="margin: 0; min-width: 0;">🚀 ${t('runner.card_title', 'Runner Standalone Departamental')}</h4>
+                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0; color: #0284c7; font-weight: 700;">${proj.runner?.enabled !== false ? 'Ativado' : 'Desativado'}</span>
+              </div>
+              <p style="margin-bottom: 8px;"><strong>Aplicação:</strong> ${this.escapeHtml(proj.runner?.title || (proj.name + ' Runner'))}</p>
+              <p style="margin-bottom: 8px;"><strong>Executável:</strong> <code>${this.escapeHtml(proj.runner?.outputName || 'pipeline_runner.exe')}</code></p>
+              <p style="margin-bottom: 8px;"><strong>Pasta de Saída:</strong> <code>${this.escapeHtml(proj.runner?.outputDir || 'dist/runner')}</code></p>
+              <button class="tool-btn btn-action" id="btn-backstage-open-runner" style="margin-top: 6px; font-size: 11.5px; font-weight: 700; background: #0284c7; color: #fff; padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer;">
+                🚀 ${t('runner.btn_open_runner', 'Abrir Painel do Runner Standalone...')}
+              </button>
+            </div>
           </div>
 
           <div style="margin-top: 14px;">
@@ -1444,6 +1457,12 @@ export class BackstageView {
     // Configurar Git do Projeto
     this.overlay.querySelector('#btn-backstage-open-git')?.addEventListener('click', () => {
       globalEventBus.emit('modal:open-git-account');
+    });
+
+    // Abrir Runner Standalone do Projeto
+    this.overlay.querySelector('#btn-backstage-open-runner')?.addEventListener('click', () => {
+      this.close();
+      globalEventBus.emit('runner:open-modal');
     });
 
     // Criar Projeto

@@ -14,7 +14,7 @@ O Studio segue o layout do Microsoft Office, porque a maioria das pessoas já o 
 | **Agentes** | Segurança e skills do workspace, servidores MCP, o catálogo global de skills do GitHub. |
 | **Conectores** | Importar projetos Pi, Claude, OpenAI, Hermes, Excel. |
 | **Dados** | *Memória do projeto* e *Armazenamento do workspace*, mantidos visivelmente separados. |
-| **Executar** | Compilar e Executar, o motor Taskflow e o orquestrador de Lote e Retomada. |
+| **Executar** | Compilar e Executar, o motor Taskflow, o orquestrador de Lote e Retomada e a Distribuição (**Runner Standalone**). |
 
 Outras comodidades: a **Barra de Acesso Rápido** (Salvar, Desfazer, Refazer, Executar e o botão de **Sincronização Git** com indicador de status em tempo real), uma chave de
 salvamento automático, a caixa de busca no projeto (abaixo) e `Ctrl+F1` para recolher o ribbon.
@@ -58,8 +58,8 @@ subfluxos e módulos), as skills do workspace e os pipelines. Pressione `Ctrl+K`
 
 ## Backstage
 
-Aberta por **Arquivo**. Traz as informações do projeto (três cartões: o projeto ativo, a sincronização do repositório Git e o workspace
-físico), a tela **Abrir**, a tela unificada **Salvar** e as **Opções**
+Aberta por **Arquivo**. Traz as informações do projeto (quatro cartões: o projeto ativo, a sincronização do repositório Git, o workspace
+físico e o **Runner Standalone Departamental**), a tela **Abrir**, a tela unificada **Salvar** e as **Opções**
 (padrões do Studio, governança do workspace e o seletor de **idioma**).
 
 A tela **Abrir** segue o Abrir do Office. À esquerda ficam os locais:
@@ -135,6 +135,7 @@ Os modais são janelas flutuantes: arrastáveis pela barra de título, redimensi
 | Servidores MCP | Workspace |
 | Gerenciador de projetos | Metadados do projeto, caminho do workspace, `.env` do projeto |
 | Sincronização Git do projeto | Projeto / SO (Configuração de repositório privado, login seguro no SO e consentimento comercial) |
+| Runner Standalone | Projeto / Distribuição (Telas de Progresso, Diagnóstico, Operação e Empacotamento) |
 | Lote e Retomada | Executar |
 
 ## Console e Painel de Artefatos

@@ -148,6 +148,10 @@ export class ProjectManager {
     return ProjectManager.instance;
   }
 
+  public static resetInstance(): void {
+    ProjectManager.instance = undefined as any;
+  }
+
   public createDefaultManifest(): IProjectManifest {
     const now = new Date().toISOString();
     return {
@@ -183,6 +187,18 @@ export class ProjectManager {
         isPrivate: true,
         autoCommitOnRun: true,
         autoCommitOnShutdown: true
+      },
+      runner: {
+        enabled: true,
+        title: 'Workspace Padrão - Runner',
+        description: 'Executável departamental do pipeline',
+        version: '1.0.0',
+        outputDir: 'dist/runner',
+        outputName: 'pipeline_runner.exe',
+        autoStart: false,
+        defaultTab: 'progress',
+        allowRestart: true,
+        parameters: []
       }
     };
   }
