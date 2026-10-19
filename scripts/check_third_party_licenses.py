@@ -35,6 +35,7 @@ COMPONENTS = {
     "SkillSpector":  ("Apache-2.0", "LICENSE",     "Apache License"),
     "fonts/inter":   ("OFL-1.1",    "OFL-Inter.txt", "SIL Open Font License"),
     "sqlite":        ("blessing",   "LICENSE.md",  "May you do good and not evil"),   # dominio publico
+    "httplib":       ("MIT",        "LICENSE",     "MIT License"),
 }
 
 errors = []

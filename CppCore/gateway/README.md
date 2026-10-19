@@ -84,6 +84,17 @@ gateway.
 
 Streaming (`stream: true`) ainda não é suportado e retorna `400 streaming_unsupported`.
 
+## Smoke test
+
+```bash
+python CppCore/dev.py --gateway-smoke --no-frontend
+# ou, com o binário já compilado:
+node scripts/gateway-smoke.mjs
+```
+
+O teste sobe um upstream OpenAI falso, cria uma chave virtual com budget, valida a primeira chamada
+(200), o bloqueio seguinte (402), `/metrics` e `/v1/usage`. Não usa rede externa nem chaves reais.
+
 ## Limitações do MVP
 
 - SQLite single-node; para HA/multi-instância, migrar contadores para Postgres/Redis.

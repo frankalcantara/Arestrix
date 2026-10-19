@@ -31,6 +31,10 @@ Useful commands:
 | :--- | :--- |
 | `python CppCore/dev.py` | Build frontend and backend, then open the Studio. |
 | `python CppCore/dev.py --test` | Build and run the C++ test suite with `ctest`. |
+| `python CppCore/dev.py --full` | Build + CTest + Vitest + version/assets/secrets/licenses + gateway smoke. |
+| `python CppCore/dev.py --check` | Fast repository checks without building. |
+| `python CppCore/dev.py --gateway-smoke` | HTTP smoke test for the AI Gateway (fake upstream, 200 → 402). |
+| `python CppCore/dev.py --e2e` | Tutorial and examples end to end. |
 | `npm test` | Run the frontend Vitest suites. |
 | `npm run build` | Type-check and build the single-file frontend bundle. |
 | `npm run check:secrets` | Scan for credentials and personal data. |
@@ -51,10 +55,10 @@ Useful commands:
 
 A pull request is ready for review when:
 
-- `npm test` passes.
-- `python CppCore/dev.py --test` passes for engine changes.
-- `npm run check:secrets`, `npm run check:version` and the license check pass.
+- `python CppCore/dev.py --full` passes (build, CTest, Vitest, version/assets/secrets/licenses and gateway smoke).
+- `python CppCore/dev.py --e2e` passes when a change touches the examples or the compiler output.
 - New behavior has a test, or the pull request explains why a test is not feasible.
+- Gateway route/budget changes also run `python CppCore/dev.py --gateway-smoke`.
 - User-facing documentation is updated in **both** `docs/en/` and `docs/pt-BR/`.
 - Screenshots are regenerated with `npm run capture:screenshots` when the interface changes.
 

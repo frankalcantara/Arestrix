@@ -28,6 +28,8 @@ Beta 1.5 focuses on local AI models and enterprise usage governance.
 - AI Gateway settings in Global Defaults, plus an enterprise policy lock
   (`ARESTRIX_AI_GATEWAY_POLICY=locked`).
 - Mistral provider support (API, Studio, vertex settings and gateway route).
+- `dev.py` verification modes: `--test-all`, `--check`, `--gateway-smoke`, `--e2e` and `--full`;
+  a fake-upstream HTTP smoke test for the gateway.
 
 ### Changed
 

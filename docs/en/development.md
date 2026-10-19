@@ -41,6 +41,11 @@ The `CppCore/dev.py` script automates the full local development and build loop 
 | `python CppCore/dev.py --no-run` | Only compiles (frontend and backend) without launching the GUI. |
 | `python CppCore/dev.py --no-frontend` | Skips TypeScript/Vite compilation (useful during backend-only iterations). |
 | `python CppCore/dev.py --test` | Compiles frontend + all native targets (including `arestrix-gateway`) and runs the **C++** suite via `ctest`. It does not run Vitest; use `npm test` for the frontend. |
+| `python CppCore/dev.py --test-all` | Build + CTest + Vitest. |
+| `python CppCore/dev.py --check` | Version, local assets, secrets and third-party licenses; no build. |
+| `python CppCore/dev.py --gateway-smoke` | HTTP smoke test of `arestrix-gateway` with a fake upstream and budget rejection. |
+| `python CppCore/dev.py --e2e` | Tutorial/examples end-to-end scripts. |
+| `python CppCore/dev.py --full` | Build + CTest + Vitest + checks + gateway smoke; does not open the Studio and does not include `--e2e`. |
 | `python CppCore/dev.py --asan` | Instruments binaries with **AddressSanitizer** for runtime detection of buffer overflows, *use-after-free*, and memory leaks. |
 | `python CppCore/dev.py --clang-tidy` | Runs static analysis via **Clang-Tidy** using enterprise rules in `.clang-tidy` (C++ Core Guidelines and CERT C++). |
 | `python CppCore/dev.py --cppcheck` | Runs behavioral static analysis via **Cppcheck**. |
@@ -66,17 +71,23 @@ The `arestrix_security_flags` interface library in [`CMakeLists.txt`](../../CMak
 
 ## Tests and verification gate
 
-`dev.py` builds the frontend and every native target (Studio, CLI, gateway and tests) and can run the C++
-suite. It deliberately does not run Vitest or the repository checks, so a release-quality local gate is:
+`dev.py` builds the frontend and every native target (Studio, CLI, gateway and tests). The canonical local gate is:
 
 ```bash
-npm test                          # frontend: Vitest
-python CppCore/dev.py --no-run --test  # frontend build + all native targets + CTest
-npm run check:version             # version.txt, package.json, package-lock.json, CHANGELOG
-npm run check:local-assets        # GGUF catalog + llama.cpp manifest
-npm run check:secrets             # secrets and personal data
+python CppCore/dev.py --full   # build + CTest + Vitest + checks + gateway smoke
+python CppCore/dev.py --e2e    # optional: tutorial/examples end to end
+```
+
+If you prefer individual steps:
+
+```bash
+npm test                                # frontend: Vitest
+python CppCore/dev.py --no-run --test   # frontend build + all native targets + CTest
+npm run check:version                   # version.txt, package.json, package-lock.json, CHANGELOG
+npm run check:local-assets              # GGUF catalog + llama.cpp manifest
+npm run check:secrets                   # secrets and personal data
 python scripts/check_third_party_licenses.py
-python scripts/e2e_tutorial.py    # optional: end to end with a scripted fake LLM
+node scripts/gateway-smoke.mjs          # gateway proxy/budget smoke
 ```
 
 The frontend suite covers graph validation and cycles, undo/redo, subflows, templates, settings

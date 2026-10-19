@@ -42,6 +42,11 @@ O script `CppCore/dev.py` automatiza o ciclo completo de build local (TypeScript
 | `python CppCore/dev.py --no-run` | Apenas compila (frontend e backend) sem abrir a interface gráfica. |
 | `python CppCore/dev.py --no-frontend` | Pula a compilação do TypeScript/Vite (útil durante iterações puras de C++). |
 | `python CppCore/dev.py --test` | Compila frontend + todos os alvos nativos (incluindo `arestrix-gateway`) e executa a suíte **C++** via `ctest`. Não roda Vitest; use `npm test` para o frontend. |
+| `python CppCore/dev.py --test-all` | Build + CTest + Vitest. |
+| `python CppCore/dev.py --check` | Versão, ativos locais, segredos e licenças de terceiros; sem build. |
+| `python CppCore/dev.py --gateway-smoke` | Smoke test HTTP do `arestrix-gateway` com upstream falso e bloqueio de budget. |
+| `python CppCore/dev.py --e2e` | Scripts ponta a ponta de tutorial/exemplos. |
+| `python CppCore/dev.py --full` | Build + CTest + Vitest + checks + gateway smoke; não abre o Studio e não inclui `--e2e`. |
 | `python CppCore/dev.py --asan` | Instrumenta os binários com **AddressSanitizer** para detecção em tempo de execução de estouros de buffer, *use-after-free* e vazamentos de memória. |
 | `python CppCore/dev.py --clang-tidy` | Executa análise estática integrada via **Clang-Tidy** usando as regras corporativas de `.clang-tidy` (C++ Core Guidelines e CERT C++). |
 | `python CppCore/dev.py --cppcheck` | Executa análise estática de bugs comportamentais via **Cppcheck**. |
@@ -67,18 +72,24 @@ A biblioteca de interface `arestrix_security_flags` em [`CMakeLists.txt`](../../
 
 ## Testes e gate de verificação
 
-O `dev.py` compila o frontend e todos os alvos nativos (Studio, CLI, gateway e testes) e pode rodar a suíte
-C++. Ele deliberadamente não roda Vitest nem as verificações do repositório, então o gate local de qualidade
-é:
+O `dev.py` compila o frontend e todos os alvos nativos (Studio, CLI, gateway e testes). O gate local
+canônico é:
 
 ```bash
-npm test                               # frontend: Vitest
-python CppCore/dev.py --no-run --test  # build do frontend + alvos nativos + CTest
-npm run check:version                  # version.txt, package.json, package-lock.json, CHANGELOG
-npm run check:local-assets             # catálogo GGUF + manifesto do llama.cpp
-npm run check:secrets                  # segredos e dados pessoais
+python CppCore/dev.py --full   # build + CTest + Vitest + checks + gateway smoke
+python CppCore/dev.py --e2e    # opcional: tutorial/exemplos ponta a ponta
+```
+
+Se preferir passos individuais:
+
+```bash
+npm test                                # frontend: Vitest
+python CppCore/dev.py --no-run --test   # build do frontend + alvos nativos + CTest
+npm run check:version                   # version.txt, package.json, package-lock.json, CHANGELOG
+npm run check:local-assets              # catálogo GGUF + manifesto do llama.cpp
+npm run check:secrets                   # segredos e dados pessoais
 python scripts/check_third_party_licenses.py
-python scripts/e2e_tutorial.py         # opcional: ponta a ponta com LLM falso roteirizado
+node scripts/gateway-smoke.mjs          # smoke do proxy/budget do gateway
 ```
 
 A suíte do frontend cobre validação de grafo e ciclos, desfazer/refazer, subfluxos, templates, herança de
