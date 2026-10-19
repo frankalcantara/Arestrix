@@ -50,7 +50,7 @@ const PLACEHOLDER_HINTS = /(test|fake|mock|dummy|example|sample|placeholder|chan
 const ENV_NAME_RE = /^[A-Z][A-Z0-9_]{2,}$/;
 const ENV_REF_RE = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$|^%[A-Za-z_][A-Za-z0-9_]*%$|^\$[A-Za-z_][A-Za-z0-9_]*$/;
 const SAFE_EMAIL_DOMAINS = /@(example\.(com|org|net)|exemplo\.(com|org|net)|users\.noreply\.github\.com|anthropic\.com|invalid|localhost|test)$/i;
-const SAFE_EMAILS = new Set(['noreply@anthropic.com', 'noreply@github.com']);
+const SAFE_EMAILS = new Set(['noreply@anthropic.com', 'noreply@github.com', 'contact@arestrix.com']);
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'third_party', 'dist', 'build', 'runtime', '.arestrix']);
 const SKIP_FILES = new Set(['package-lock.json']);

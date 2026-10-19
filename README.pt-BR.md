@@ -158,6 +158,12 @@ O Arestrix é construído sobre Taskflow, simdjson, WebUI, SQLite, Monaco Editor
 entre outros projetos open source. Consulte [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) e
 [`third_party/`](third_party/README.md) para versões, papéis e licenças.
 
+## Contato
+
+- Assuntos gerais, comerciais e de conduta: [contact@arestrix.com](mailto:contact@arestrix.com)
+- Relatos de segurança: siga o [SECURITY.md](SECURITY.md) e use o reporte privado do GitHub primeiro.
+- Dúvidas técnicas: [GitHub Discussions](https://github.com/frankalcantara/Arestrix/discussions)
+
 ## Licença
 
 Distribuído sob a [Licença MIT](LICENSE). Livre para uso comercial e acadêmico.

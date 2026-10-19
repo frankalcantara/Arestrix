@@ -32,6 +32,14 @@ Before opening an issue:
 2. Search existing issues and Discussions.
 3. Remove API keys, tokens and personal paths from logs and screenshots.
 
+## Contact
+
+- **General, conduct and commercial matters:** [contact@arestrix.com](mailto:contact@arestrix.com)
+- **Security vulnerabilities:** use [SECURITY.md](SECURITY.md) and GitHub private vulnerability
+  reporting. Email the same address only if private reporting is unavailable.
+
+Please use the public channels for technical questions so the answer can help other users.
+
 ## Security
 
 Do **not** open a public issue for security vulnerabilities. Follow [SECURITY.md](SECURITY.md)

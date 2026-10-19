@@ -24,8 +24,8 @@ Use **GitHub private vulnerability reporting**:
 Do **not** include real API keys, tokens or customer data in the report. Use test credentials
 and redact local paths.
 
-If private reporting is unavailable, contact the maintainer privately through the GitHub profile
-[@frankalcantara](https://github.com/frankalcantara) before disclosing anything publicly.
+If private reporting is unavailable, email [contact@arestrix.com](mailto:contact@arestrix.com)
+before disclosing anything publicly. Do not send secrets or customer data in the first message.
 
 ## What to include
 

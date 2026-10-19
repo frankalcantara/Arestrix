@@ -155,6 +155,12 @@ Arestrix builds on Taskflow, simdjson, WebUI, SQLite, Monaco Editor, i18next and
 open-source projects. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
 [`third_party/`](third_party/README.md) for versions, roles and licenses.
 
+## Contact
+
+- General, commercial and conduct matters: [contact@arestrix.com](mailto:contact@arestrix.com)
+- Security reports: follow [SECURITY.md](SECURITY.md) and use GitHub private reporting first.
+- Technical questions: [GitHub Discussions](https://github.com/frankalcantara/Arestrix/discussions)
+
 ## License
 
 Released under the [MIT License](LICENSE). Free for commercial and academic use.
