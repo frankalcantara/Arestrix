@@ -23,7 +23,9 @@
   <b>Plataforma Empresarial Visual de Orquestração e Compilação Nativa de Agentes Inteligentes</b><br>
   <i>Do grafo visual ao executável C++20 de alta performance com segurança de ponta a ponta e zero dependências de runtime.</i>
 </p>
-
+<p align="center">
+  <b>Versão: Beta 1.0</b>
+</p>
 <p align="center">
   <img src="docs/assets/screenshots/studio-main.png" alt="Arestrix Studio - Interface Principal" width="960">
 </p>
