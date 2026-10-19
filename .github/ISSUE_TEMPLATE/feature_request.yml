@@ -1,0 +1,68 @@
+name: Feature request
+description: Propose a capability, integration or improvement for Arestrix.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem before the solution. Concrete use cases help maintainers evaluate
+        scope and compatibility with the beta roadmap.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Studio / interface
+        - Graph model and editor
+        - C++20 generation and runtime
+        - Standalone runner and packaging
+        - CLI
+        - MCP, tools and skills
+        - Workspaces and memory
+        - Security and governance
+        - Documentation and examples
+        - Developer experience
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to accomplish, and what blocks you today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior you would like, including alternatives you considered.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Current workarounds or other tools that solve part of the problem.
+    validations:
+      required: false
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Who benefits, and how does this affect existing projects or file formats?
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Mockups, references, related issues or prior art.
+    validations:
+      required: false

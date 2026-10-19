@@ -1,0 +1,85 @@
+name: Bug report
+description: Report a reproducible problem in Arestrix Studio, the CLI, the runner or the examples.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please remove API keys, tokens and personal paths from logs
+        and screenshots before submitting.
+
+        For security vulnerabilities, do **not** open a public issue. Follow
+        [SECURITY.md](https://github.com/frankalcantara/Arestrix/blob/main/SECURITY.md).
+
+  - type: input
+    id: version
+    attributes:
+      label: Arestrix version
+      description: Release tag or the contents of version.txt.
+      placeholder: "1.0.0-beta.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Studio (interface)
+        - Graph editor
+        - C++20 generation / compilation
+        - Standalone runner
+        - CLI
+        - MCP / tools
+        - Workspaces, memory or skills
+        - Examples
+        - Documentation
+        - Build or installation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Node.js, Python and compiler versions.
+      placeholder: "Windows 11 24H2, Node 20.18, Python 3.11, MSVC 19.4"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps that reliably reproduce the problem.
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the full error message and relevant logs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Screenshots, recordings, project folder structure or workarounds.
+    validations:
+      required: false

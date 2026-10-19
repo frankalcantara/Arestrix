@@ -7,7 +7,7 @@ Arestrix Studio runs on **Windows and Linux**. The programs generated from a gra
 ## Requirements
 
 1. **Git with submodules.** Taskflow, simdjson, WebUI, i18next, Monaco and SkillSpector live in `third_party/`.
-2. **Node.js 18+ and npm** (Vite, TypeScript, Three.js, Vitest).
+2. **Node.js 20+ and npm** (Vite, TypeScript, Three.js, Vitest).
 3. **Python 3.10+**, which drives the build script (`CppCore/dev.py`) and the end-to-end test.
 4. **A C++20 compiler and CMake 3.20+.**
    - Windows: Visual Studio 2022 or newer (Community or Build Tools) with the *Desktop development with C++* workload. Its bundled CMake and Ninja are detected automatically.

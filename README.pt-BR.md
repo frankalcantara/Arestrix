@@ -24,7 +24,7 @@
   <i>Do grafo visual ao executável C++20 de alta performance com segurança de ponta a ponta e zero dependências de runtime.</i>
 </p>
 <p align="center">
-  <b>Versão: Beta 1.0</b>
+  <b>Versão: Beta 1.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a>
 </p>
 <p align="center">
   <img src="docs/assets/screenshots/studio-main.png" alt="Arestrix Studio - Interface Principal" width="960">
@@ -171,7 +171,7 @@ O Arestrix adota uma arquitetura em camadas projetada para eliminar o overhead d
 
 ### Pré-requisitos
 - Git 2.30+
-- Node.js 18+
+- Node.js 20+
 - Python 3.10+
 - CMake 3.20+
 - Compilador C++20 compatível (MSVC v143+ no Windows, GCC 11+ ou Clang 14+ no Linux)

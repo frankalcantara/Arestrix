@@ -1,0 +1,12 @@
+# Default owner for the repository.
+* @frankalcantara
+
+# Security-sensitive areas.
+/SECURITY.md @frankalcantara
+/scripts/check-secrets.mjs @frankalcantara
+/CppCore/src/project/CorporateVault.* @frankalcantara
+/CppCore/src/project/RunnerSecurity.* @frankalcantara
+
+# Documentation and community files.
+/docs/ @frankalcantara
+/.github/ @frankalcantara

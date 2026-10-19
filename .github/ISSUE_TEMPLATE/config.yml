@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/frankalcantara/Arestrix#complete-documentation
+    about: Installation, architecture, graphs, agents, workspaces, MCP and development guides.
+  - name: Questions and ideas
+    url: https://github.com/frankalcantara/Arestrix/discussions
+    about: Ask for help, share a project or discuss an idea before opening an issue.
+  - name: Security policy
+    url: https://github.com/frankalcantara/Arestrix/blob/main/SECURITY.md
+    about: Report vulnerabilities privately. Do not open a public issue.

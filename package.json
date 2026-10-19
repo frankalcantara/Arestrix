@@ -2,7 +2,15 @@
   "name": "arestrix",
   "description": "Arestrix - Visual Node Graph Orchestrator for Concurrent Multi-Agent Pipelines with Taskflow C++20 and Three.js",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0-beta.1",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/frankalcantara/Arestrix.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,6 +21,7 @@
     "submodule:check": "node scripts/update-submodules.mjs --check",
     "submodule:update": "node scripts/update-submodules.mjs --update",
     "check:secrets": "node scripts/check-secrets.mjs",
+    "check:version": "node scripts/check-version.mjs",
     "capture:screenshots": "node scripts/capture-screenshots.mjs",
     "hooks:install": "node scripts/install-hooks.mjs"
   },

@@ -24,7 +24,7 @@
   <i>From interactive graph to high-performance standalone C++20 binaries with end-to-end security and zero runtime dependencies.</i>
 </p>
 <p align="center">
-  <b>Version: Beta 1.0</b>
+  <b>Version: Beta 1.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a>
 </p>
 <p align="center">
   <img src="docs/assets/screenshots/studio-main.png" alt="Arestrix Studio - Main Interface" width="960">
@@ -171,7 +171,7 @@ Arestrix utilizes a lightweight, multi-tiered architecture that bypasses Electro
 
 ### Prerequisites
 - Git 2.30+
-- Node.js 18+
+- Node.js 20+
 - Python 3.10+
 - CMake 3.20+
 - C++20 compliant compiler (MSVC v143+ on Windows, GCC 11+ or Clang 14+ on Linux)
