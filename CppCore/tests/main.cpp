@@ -1914,6 +1914,12 @@ TEST(local_runtime_catalog_manifest_and_storage) {
     CHECK(runtimeState.value("installed", true) == false);
     CHECK(runtimeState.value("version", std::string()) == "b11669");
     CHECK(!runtimeState.value("binaryId", std::string()).empty());
+    const auto hardware = runtimeState["hardware"];
+    CHECK(hardware.is_object());
+    CHECK(hardware.value("ramTotalBytes", 0LL) > 0);
+    CHECK(hardware.value("cpuThreads", 0LL) > 0);
+    CHECK(hardware.value("recommendedModelId", std::string()).find("qwen2.5") != std::string::npos);
+    CHECK(hardware.value("modelsMax", 0LL) >= 1);
     CHECK(runtime.startServer().value("ok", true) == false);
     CHECK(runtime.startServer().value("error", std::string()) == "runtime_not_installed");
     CHECK(runtime.stopServer().value("ok", false) == true);

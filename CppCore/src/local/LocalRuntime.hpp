@@ -82,10 +82,11 @@ public:
     Json verifyModel(const std::string& modelId);
 
     // Runtime gerenciado (llama.cpp) e servidor em modo router.
-    bool runtimeInstalled();
-    std::string installRuntime(std::string& error);
+    // `backend` vazio = escolha automatica (Vulkan/CUDA/CPU conforme o hardware).
+    bool runtimeInstalled(const std::string& backend = "");
+    std::string installRuntime(std::string& error, const std::string& backend = "");
     Json runtimeStatus();
-    Json startServer();
+    Json startServer(const std::string& backend = "");
     Json stopServer();
     Json serverLogs();
     bool serverRunning();
@@ -113,13 +114,20 @@ private:
     std::shared_ptr<Job> latestJobForKindLocked(const std::string& kind, const std::string& targetId) const;
 
     std::string platformTag() const;
-    std::string selectBinaryIdLocked() const;
+    std::string selectBinaryIdLocked(const std::string& backend = "") const;
+    std::string installedBinaryIdLocked(const std::string& backend = "") const;
+    std::string backendOfBinaryLocked(const std::string& binaryId) const;
     std::filesystem::path runtimeDirFor(const std::string& version, const std::string& binaryId) const;
     std::filesystem::path findServerBinary(const std::filesystem::path& dir, const std::string& entryPoint) const;
     std::filesystem::path runtimeServerPathLocked(const std::string& version, const std::string& binaryId) const;
     std::string writeRouterPresetLocked(std::vector<std::string>& modelNames);
+    Json detectHardware();
     void stopServerLocked();
     void appendLog(const std::string& line);
+
+    mutable std::mutex hardwareMu_;
+    bool hardwareDetected_ = false;
+    Json hardware_;
 
     mutable std::mutex serverMu_;
     std::shared_ptr<platform::Process> server_;
@@ -131,6 +139,10 @@ private:
     std::string serverApiKey_;
     int serverPort_ = 0;
     bool serverReady_ = false;
+    std::atomic<bool> serverCrashed_{false};
+    std::string serverBackend_;
+    std::string serverBinaryId_;
+    std::string serverPath_;
     std::vector<std::string> serverModels_;
     uint64_t serverGeneration_ = 0;
 

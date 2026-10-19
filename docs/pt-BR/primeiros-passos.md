@@ -158,6 +158,11 @@ O botão **Usar** de um modelo baixado instala o runtime se necessário, inicia 
 e modelo no projeto. Para inspecionar problemas, use **Logs** na mesma tela. O servidor é encerrado ao fechar
 o Arestrix.
 
+A tela também detecta RAM, threads de CPU e GPUs via `llama-server --list-devices`, mostra o modelo
+recomendado para a máquina e limita `--models-max` conforme a VRAM discreta (1 por padrão; 2 com pelo menos
+10 GiB livres). Para sobrescrever, defina `ARESTRIX_LOCAL_MODELS_MAX=1..4`. Se o backend principal falhar ao
+iniciar, o Arestrix instala o binário **CPU** sob demanda e tenta novamente automaticamente.
+
 O manifesto de binários pinados fica em `CppCore/runtime/llama.manifest.json` e usa o build oficial
 `llama.cpp b11669`, que já inclui o modo router nativo do `llama-server` (`--models-preset`).
 

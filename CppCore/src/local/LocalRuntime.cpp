@@ -659,13 +659,14 @@ std::string LocalRuntime::platformTag() const {
 #endif
 }
 
-std::string LocalRuntime::selectBinaryIdLocked() const {
+std::string LocalRuntime::selectBinaryIdLocked(const std::string& backendOverride) const {
     const Json& llama = manifestValue_["components"]["llama.cpp"];
     const Json& binaries = llama["binaries"];
     const std::string platformName = platformTag();
     if (platformName.empty()) return std::string();
 
-    const std::string requested = lower(platform::getEnv("ARESTRIX_LOCAL_BACKEND"));
+    std::string requested = lower(backendOverride);
+    if (requested.empty()) requested = lower(platform::getEnv("ARESTRIX_LOCAL_BACKEND"));
     std::vector<std::string> priority;
     if (!requested.empty()) priority.push_back(requested);
     for (const char* backend : {"vulkan", "cuda", "cpu"}) {
@@ -681,6 +682,212 @@ std::string LocalRuntime::selectBinaryIdLocked() const {
         }
     }
     return std::string();
+}
+
+std::string LocalRuntime::backendOfBinaryLocked(const std::string& binaryId) const {
+    const Json& binaries = manifestValue_["components"]["llama.cpp"]["binaries"];
+    for (const auto& binary : binaries) {
+        if (binary.value("id", std::string()) == binaryId) {
+            return binary.value("backend", std::string());
+        }
+    }
+    return std::string();
+}
+
+std::string LocalRuntime::installedBinaryIdLocked(const std::string& backendOverride) const {
+    const std::string version = manifestValue_["components"]["llama.cpp"].value("version", std::string());
+    if (version.empty()) return std::string();
+
+    if (!backendOverride.empty()) {
+        const std::string id = selectBinaryIdLocked(backendOverride);
+        if (id.empty()) return std::string();
+        const fs::path path = runtimeServerPathLocked(version, id);
+        std::error_code ec;
+        return !path.empty() && fs::is_regular_file(path, ec) ? id : std::string();
+    }
+
+    std::vector<std::string> candidates;
+    const std::string desired = selectBinaryIdLocked();
+    if (!desired.empty()) candidates.push_back(desired);
+    for (const char* backend : {"cpu", "vulkan", "cuda"}) {
+        const std::string id = selectBinaryIdLocked(backend);
+        if (!id.empty() && std::find(candidates.begin(), candidates.end(), id) == candidates.end()) {
+            candidates.push_back(id);
+        }
+    }
+
+    for (const auto& id : candidates) {
+        const fs::path path = runtimeServerPathLocked(version, id);
+        std::error_code ec;
+        if (!path.empty() && fs::is_regular_file(path, ec)) return id;
+    }
+    return std::string();
+}
+
+Json LocalRuntime::detectHardware() {
+    {
+        std::lock_guard<std::mutex> lock(hardwareMu_);
+        if (hardwareDetected_) return hardware_;
+    }
+
+    long long ramTotal = 0;
+    long long ramFree = 0;
+    unsigned cpuThreads = std::thread::hardware_concurrency();
+    if (cpuThreads == 0) cpuThreads = 4;
+
+#ifdef _WIN32
+    MEMORYSTATUSEX memory{};
+    memory.dwLength = sizeof(memory);
+    if (GlobalMemoryStatusEx(&memory)) {
+        ramTotal = static_cast<long long>(memory.ullTotalPhys);
+        ramFree = static_cast<long long>(memory.ullAvailPhys);
+    }
+#else
+    {
+        std::ifstream meminfo("/proc/meminfo");
+        std::string line;
+        auto parseKiB = [](const std::string& value) -> long long {
+            long long number = 0;
+            bool found = false;
+            for (char c : value) {
+                if (std::isdigit(static_cast<unsigned char>(c))) {
+                    number = number * 10 + (c - '0');
+                    found = true;
+                } else if (found) {
+                    break;
+                }
+            }
+            return found ? number * 1024LL : 0;
+        };
+        while (std::getline(meminfo, line)) {
+            if (line.rfind("MemTotal:", 0) == 0) ramTotal = parseKiB(line);
+            else if (line.rfind("MemAvailable:", 0) == 0) ramFree = parseKiB(line);
+        }
+    }
+#endif
+
+    std::string serverPath;
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        ensureLoadedLocked();
+        const std::string version = manifestValue_["components"]["llama.cpp"].value("version", std::string());
+        const std::string binaryId = installedBinaryIdLocked();
+        if (!version.empty() && !binaryId.empty()) {
+            const fs::path path = runtimeServerPathLocked(version, binaryId);
+            if (!path.empty()) serverPath = project::pathToUtf8(path);
+        }
+    }
+
+    Json devices = Json::array();
+    long long discreteVramFree = 0;
+    if (!serverPath.empty()) {
+        platform::ProcessSpec spec;
+        spec.argv = {serverPath, "--list-devices"};
+        const auto result = platform::run(spec, 15000);
+        if (result.ok()) {
+            std::istringstream stream(result.output);
+            std::string line;
+            auto trim = [](std::string value) {
+                const size_t first = value.find_first_not_of(" \t\r\n");
+                if (first == std::string::npos) return std::string();
+                const size_t last = value.find_last_not_of(" \t\r\n");
+                return value.substr(first, last - first + 1);
+            };
+            auto firstNumber = [](const std::string& value) -> long long {
+                long long number = 0;
+                bool found = false;
+                for (char c : value) {
+                    if (std::isdigit(static_cast<unsigned char>(c))) {
+                        number = number * 10 + (c - '0');
+                        found = true;
+                    } else if (found) {
+                        break;
+                    }
+                }
+                return found ? number : 0;
+            };
+            while (std::getline(stream, line)) {
+                const size_t colon = line.find(':');
+                if (colon == std::string::npos) continue;
+                const std::string prefix = trim(line.substr(0, colon));
+                std::string backend;
+                for (char c : prefix) {
+                    const unsigned char uc = static_cast<unsigned char>(c);
+                    if (std::isalpha(uc)) backend.push_back(static_cast<char>(std::tolower(uc)));
+                    else break;
+                }
+                if (backend.empty()) continue;
+
+                const std::string rest = trim(line.substr(colon + 1));
+                const size_t open = rest.rfind('(');
+                const size_t close = rest.find(')', open == std::string::npos ? 0 : open);
+                if (open == std::string::npos || close == std::string::npos) continue;
+                const std::string name = trim(rest.substr(0, open));
+                const std::string memoryInfo = rest.substr(open + 1, close - open - 1);
+                const size_t comma = memoryInfo.find(',');
+                const long long total = firstNumber(comma == std::string::npos ? memoryInfo : memoryInfo.substr(0, comma)) * 1024LL * 1024LL;
+                const long long free = comma == std::string::npos ? 0 : firstNumber(memoryInfo.substr(comma + 1)) * 1024LL * 1024LL;
+                if (total <= 0) continue;
+
+                Json device = Json::object();
+                device["backend"] = backend;
+                device["name"] = name;
+                device["vramTotalBytes"] = total;
+                device["vramFreeBytes"] = free;
+                devices.push_back(device);
+
+                const std::string loweredName = lower(name);
+                const bool integrated =
+                    loweredName.find("uhd graphics") != std::string::npos ||
+                    loweredName.find("iris") != std::string::npos ||
+                    loweredName.find("radeon graphics") != std::string::npos ||
+                    loweredName.find("vega") != std::string::npos ||
+                    loweredName.find("llvmpipe") != std::string::npos ||
+                    loweredName.find("swiftshader") != std::string::npos ||
+                    loweredName.find("microsoft basic") != std::string::npos;
+                if (!integrated && free > discreteVramFree) discreteVramFree = free;
+            }
+        }
+    }
+
+    long long modelsMax = 1;
+    const std::string envMax = platform::getEnv("ARESTRIX_LOCAL_MODELS_MAX");
+    if (!envMax.empty()) {
+        try {
+            const int value = std::stoi(envMax);
+            if (value >= 1 && value <= 4) modelsMax = value;
+        } catch (...) {}
+    } else if (discreteVramFree >= 10LL * 1024 * 1024 * 1024) {
+        modelsMax = 2;
+    }
+
+    std::string recommended;
+    if (discreteVramFree >= 12LL * 1024 * 1024 * 1024) {
+        recommended = "qwen2.5-14b-instruct-q4_k_m";
+    } else if (discreteVramFree >= 6LL * 1024 * 1024 * 1024 ||
+               ramTotal >= 12LL * 1024 * 1024 * 1024) {
+        recommended = "qwen2.5-7b-instruct-q4_k_m";
+    } else if (ramTotal >= 6LL * 1024 * 1024 * 1024) {
+        recommended = "qwen2.5-1.5b-instruct-q4_k_m";
+    } else {
+        recommended = "qwen2.5-0.5b-instruct-q4_k_m";
+    }
+
+    Json out = Json::object();
+    out["ramTotalBytes"] = ramTotal;
+    out["ramFreeBytes"] = ramFree;
+    out["cpuThreads"] = static_cast<long long>(cpuThreads);
+    out["devices"] = devices;
+    out["discreteVramFreeBytes"] = discreteVramFree;
+    out["modelsMax"] = modelsMax;
+    out["recommendedModelId"] = recommended;
+
+    {
+        std::lock_guard<std::mutex> lock(hardwareMu_);
+        hardware_ = out;
+        hardwareDetected_ = true;
+    }
+    return out;
 }
 
 fs::path LocalRuntime::runtimeDirFor(const std::string& version, const std::string& binaryId) const {
@@ -735,18 +942,13 @@ std::shared_ptr<LocalRuntime::Job> LocalRuntime::latestJobForKindLocked(
     return latest;
 }
 
-bool LocalRuntime::runtimeInstalled() {
+bool LocalRuntime::runtimeInstalled(const std::string& backend) {
     std::lock_guard<std::mutex> lock(mu_);
     ensureLoadedLocked();
-    const std::string version = manifestValue_["components"]["llama.cpp"].value("version", std::string());
-    const std::string binaryId = selectBinaryIdLocked();
-    if (version.empty() || binaryId.empty()) return false;
-    const fs::path path = runtimeServerPathLocked(version, binaryId);
-    std::error_code ec;
-    return !path.empty() && fs::is_regular_file(path, ec);
+    return !installedBinaryIdLocked(backend).empty();
 }
 
-std::string LocalRuntime::installRuntime(std::string& error) {
+std::string LocalRuntime::installRuntime(std::string& error, const std::string& backend) {
     error.clear();
     std::shared_ptr<Job> job;
     std::string version;
@@ -765,9 +967,9 @@ std::string LocalRuntime::installRuntime(std::string& error) {
 
         const Json& llama = manifestValue_["components"]["llama.cpp"];
         version = llama.value("version", std::string());
-        binaryId = selectBinaryIdLocked();
+        binaryId = selectBinaryIdLocked(backend);
         if (version.empty() || binaryId.empty()) {
-            error = "unsupported_platform";
+            error = backend.empty() ? "unsupported_platform" : "backend_not_found";
             return std::string();
         }
         if (!runtimeServerPathLocked(version, binaryId).empty()) {
@@ -861,6 +1063,12 @@ std::string LocalRuntime::installRuntime(std::string& error) {
         const fs::path serverPath = findServerBinary(runtimeDir, entryPoint);
         if (serverPath.empty()) { fail("server_binary_not_found"); return; }
 
+        {
+            std::lock_guard<std::mutex> hardwareLock(hardwareMu_);
+            hardwareDetected_ = false;
+            hardware_ = Json::object();
+        }
+
         std::lock_guard<std::mutex> lock(job->mu);
         job->status = "done";
         job->received = size;
@@ -918,6 +1126,10 @@ void LocalRuntime::stopServerLocked() {
     if (logThread_.joinable()) logThread_.join();
     server_.reset();
     serverReady_ = false;
+    serverCrashed_ = false;
+    serverBackend_.clear();
+    serverBinaryId_.clear();
+    serverPath_.clear();
     serverModels_.clear();
     platform::setProcessEnv("LOCAL_LLM_BASE_URL", "");
     platform::setProcessEnv("LOCAL_LLM_API_KEY", "");
@@ -933,26 +1145,38 @@ Json LocalRuntime::runtimeStatus() {
     std::string backend;
     std::string installedPath;
     Json download;
+    Json installedBackends = Json::array();
     std::vector<std::string> modelNames;
+    long long modelsMax = 1;
+    std::string recommendedModelId;
+    Json hardware;
 
     {
         std::lock_guard<std::mutex> lock(mu_);
         ensureLoadedLocked();
         const Json& llama = manifestValue_["components"]["llama.cpp"];
         version = llama.value("version", std::string());
-        binaryId = selectBinaryIdLocked();
+        const std::string installedBinary = installedBinaryIdLocked();
+        const std::string desiredBinary = selectBinaryIdLocked();
+        binaryId = installedBinary.empty() ? desiredBinary : installedBinary;
+        backend = backendOfBinaryLocked(binaryId);
 
         const Json& binaries = llama["binaries"];
         for (const auto& binary : binaries) {
-            if (binary.value("id", std::string()) == binaryId) {
-                backend = binary.value("backend", std::string());
-                break;
+            const std::string id = binary.value("id", std::string());
+            if (id.empty()) continue;
+            const fs::path path = runtimeServerPathLocked(version, id);
+            std::error_code ec;
+            if (!path.empty() && fs::is_regular_file(path, ec)) {
+                installedBackends.push_back(binary.value("backend", std::string()));
             }
         }
 
-        const fs::path path = runtimeServerPathLocked(version, binaryId);
-        installedPath = path.empty() ? std::string() : project::pathToUtf8(path);
-        if (auto job = latestJobForKindLocked("runtime", binaryId)) download = job->toJson();
+        if (!installedBinary.empty()) {
+            const fs::path path = runtimeServerPathLocked(version, installedBinary);
+            if (!path.empty()) installedPath = project::pathToUtf8(path);
+        }
+        if (auto job = latestJobForKindLocked("runtime", "")) download = job->toJson();
 
         for (const auto& model : models_) {
             const fs::path modelFile = modelPath(model);
@@ -964,13 +1188,21 @@ Json LocalRuntime::runtimeStatus() {
         }
     }
 
+    hardware = detectHardware();
+    modelsMax = hardware.value("modelsMax", 1LL);
+    recommendedModelId = hardware.value("recommendedModelId", std::string());
+
     out["installed"] = !installedPath.empty();
     out["version"] = version;
     out["binaryId"] = binaryId;
     out["backend"] = backend;
     out["path"] = installedPath;
+    out["installedBackends"] = installedBackends;
     out["models"] = stringArray(modelNames);
     if (!download.is_null()) out["download"] = download;
+    if (!hardware.is_null()) out["hardware"] = hardware;
+    out["modelsMax"] = modelsMax;
+    out["recommendedModelId"] = recommendedModelId;
 
     {
         std::lock_guard<std::mutex> lock(serverMu_);
@@ -979,15 +1211,23 @@ Json LocalRuntime::runtimeStatus() {
         out["ready"] = running && serverReady_;
         out["baseUrl"] = running ? serverBaseUrl_ : std::string();
         out["port"] = running ? serverPort_ : 0;
+        out["crashed"] = !running && serverCrashed_.load();
         out["presetModels"] = running ? stringArray(serverModels_) : Json::array();
+        if (running) {
+            out["backend"] = serverBackend_;
+            out["binaryId"] = serverBinaryId_;
+            out["path"] = serverPath_;
+        }
     }
     out["log"] = serverLogs();
     return out;
 }
 
-Json LocalRuntime::startServer() {
+Json LocalRuntime::startServer(const std::string& backend) {
     std::string serverPath;
     std::string presetPath;
+    std::string backendName;
+    std::string binaryId;
     std::vector<std::string> modelNames;
 
     {
@@ -995,19 +1235,26 @@ Json LocalRuntime::startServer() {
         ensureLoadedLocked();
         const Json& llama = manifestValue_["components"]["llama.cpp"];
         const std::string version = llama.value("version", std::string());
-        const std::string binaryId = selectBinaryIdLocked();
-        if (version.empty() || binaryId.empty()) {
+        binaryId = installedBinaryIdLocked(backend);
+        if (version.empty()) {
             return Json{{"ok", false}, {"error", "unsupported_platform"}};
+        }
+        if (binaryId.empty()) {
+            return Json{{"ok", false}, {"error", "runtime_not_installed"}};
         }
         const fs::path runtimePath = runtimeServerPathLocked(version, binaryId);
         if (runtimePath.empty()) {
             return Json{{"ok", false}, {"error", "runtime_not_installed"}};
         }
+        backendName = backendOfBinaryLocked(binaryId);
         serverPath = project::pathToUtf8(runtimePath);
         presetPath = writeRouterPresetLocked(modelNames);
         if (presetPath.empty()) return Json{{"ok", false}, {"error", "preset_failed"}};
         if (modelNames.empty()) return Json{{"ok", false}, {"error", "no_models"}};
     }
+
+    const Json hardware = detectHardware();
+    const long long modelsMax = hardware.value("modelsMax", 1LL);
 
     std::shared_ptr<platform::Process> process;
     std::string baseUrl;
@@ -1020,7 +1267,7 @@ Json LocalRuntime::startServer() {
         if (server_ && server_->running() && modelNames == serverModels_) {
             return Json{{"ok", true}, {"running", true}, {"ready", serverReady_},
                         {"baseUrl", serverBaseUrl_}, {"port", serverPort_},
-                        {"models", stringArray(modelNames)}};
+                        {"backend", backendName}, {"models", stringArray(modelNames)}};
         }
         // Se o conjunto de modelos mudou, reinicia com o preset atualizado.
         stopServerLocked();
@@ -1036,7 +1283,7 @@ Json LocalRuntime::startServer() {
                      "--port", std::to_string(port),
                      "--api-key", apiKey,
                      "--models-preset", presetPath,
-                     "--models-max", "2",
+                     "--models-max", std::to_string(modelsMax),
                      "--jinja",
                      "--no-webui"};
         spec.workingDir = fs::path(serverPath).parent_path();
@@ -1051,13 +1298,19 @@ Json LocalRuntime::startServer() {
         std::string startError;
         auto started = platform::Process::start(spec, startError);
         if (!started) {
-            return Json{{"ok", false}, {"error", "server_start_failed"}, {"detail", startError}};
+            Json failure = Json{{"ok", false}, {"error", "server_start_failed"}, {"detail", startError}};
+            if (backendName != "cpu") failure["suggestedBackend"] = "cpu";
+            return failure;
         }
         server_ = std::shared_ptr<platform::Process>(std::move(started));
         serverBaseUrl_ = baseUrl;
         serverApiKey_ = apiKey;
         serverPort_ = port;
         serverReady_ = false;
+        serverCrashed_ = false;
+        serverBackend_ = backendName;
+        serverBinaryId_ = binaryId;
+        serverPath_ = serverPath;
         serverModels_ = modelNames;
         logStop_ = false;
         {
@@ -1088,6 +1341,7 @@ Json LocalRuntime::startServer() {
                 if (status == platform::ReadStatus::Eof) break;
             }
             if (!pending.empty()) appendLog(pending);
+            if (!logStop_.load()) serverCrashed_ = true;
         });
     }
 
@@ -1112,7 +1366,9 @@ Json LocalRuntime::startServer() {
         if (!ready) {
             const Json log = serverLogs();
             stopServerLocked();
-            return Json{{"ok", false}, {"error", "server_failed"}, {"log", log}};
+            Json failure = Json{{"ok", false}, {"error", "server_failed"}, {"log", log}};
+            if (backendName != "cpu") failure["suggestedBackend"] = "cpu";
+            return failure;
         }
         serverReady_ = true;
         platform::setProcessEnv("LOCAL_LLM_BASE_URL", baseUrl);
@@ -1120,7 +1376,7 @@ Json LocalRuntime::startServer() {
     }
 
     return Json{{"ok", true}, {"running", true}, {"ready", true}, {"baseUrl", baseUrl},
-                {"port", port}, {"models", stringArray(modelNames)}};
+                {"port", port}, {"backend", backendName}, {"models", stringArray(modelNames)}};
 }
 
 Json LocalRuntime::stopServer() {

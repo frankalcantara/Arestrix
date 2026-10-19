@@ -156,6 +156,11 @@ The **Use** button on a downloaded model installs the runtime if needed, starts 
 project provider and model. Use **Logs** in the same screen to diagnose failures. The server is stopped when
 Arestrix exits.
 
+The screen also detects RAM, CPU threads and GPUs through `llama-server --list-devices`, shows the recommended
+model for the machine and sizes `--models-max` from discrete VRAM (1 by default; 2 with at least 10 GiB free).
+Set `ARESTRIX_LOCAL_MODELS_MAX=1..4` to override it. If the primary backend fails to start, Arestrix installs
+the **CPU** binary on demand and retries automatically.
+
 The pinned binary manifest lives at `CppCore/runtime/llama.manifest.json` and uses official
 `llama.cpp b11669`, which already includes the native `llama-server` router mode (`--models-preset`).
 

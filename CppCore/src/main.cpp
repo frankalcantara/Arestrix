@@ -1110,13 +1110,19 @@ void ui_local_runtime_install(webui::window::event* e) {
     taskforge::Json out;
     try {
         auto& runtime = taskforge::local::LocalRuntime::instance();
-        if (runtime.runtimeInstalled()) {
+        std::string backend;
+        const std::string payload = e->get_string();
+        if (!payload.empty()) {
+            auto req = taskforge::jsonutil::parse(payload);
+            backend = req.value("backend", std::string());
+        }
+        if (runtime.runtimeInstalled(backend)) {
             out["ok"] = true;
             out["installed"] = true;
             out["jobId"] = "";
         } else {
             std::string error;
-            const std::string jobId = runtime.installRuntime(error);
+            const std::string jobId = runtime.installRuntime(error, backend);
             if (error == "already_installed") {
                 out["ok"] = true;
                 out["installed"] = true;
@@ -1137,7 +1143,13 @@ void ui_local_runtime_install(webui::window::event* e) {
 
 void ui_local_runtime_start(webui::window::event* e) {
     try {
-        e->return_string(taskforge::local::LocalRuntime::instance().startServer().dump());
+        std::string backend;
+        const std::string payload = e->get_string();
+        if (!payload.empty()) {
+            auto req = taskforge::jsonutil::parse(payload);
+            backend = req.value("backend", std::string());
+        }
+        e->return_string(taskforge::local::LocalRuntime::instance().startServer(backend).dump());
     } catch (const std::exception& ex) {
         e->return_string(taskforge::Json{{"ok", false}, {"error", std::string(ex.what())}}.dump());
     }

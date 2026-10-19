@@ -35,21 +35,41 @@ interface DownloadState {
   error?: string;
 }
 
+interface HardwareState {
+  ramTotalBytes?: number;
+  ramFreeBytes?: number;
+  cpuThreads?: number;
+  discreteVramFreeBytes?: number;
+  modelsMax?: number;
+  devices?: Array<{
+    backend?: string;
+    name?: string;
+    vramTotalBytes?: number;
+    vramFreeBytes?: number;
+  }>;
+}
+
 interface RuntimeState {
   installed?: boolean;
   running?: boolean;
   ready?: boolean;
+  crashed?: boolean;
   version?: string;
   binaryId?: string;
   backend?: string;
+  installedBackends?: string[];
   path?: string;
   baseUrl?: string;
   port?: number;
   models?: string[];
   presetModels?: string[];
+  modelsMax?: number;
+  recommendedModelId?: string;
+  hardware?: HardwareState;
   download?: DownloadState;
   log?: string[];
   error?: string;
+  suggestedBackend?: string;
 }
 
 interface LocalModelsState {
@@ -176,6 +196,7 @@ export class LocalModelsModal {
     const installed = Boolean(runtime?.installed);
     const running = Boolean(runtime?.running);
     const ready = Boolean(runtime?.ready);
+    const crashed = Boolean(runtime?.crashed);
     const download = runtime?.download;
     const downloading = Boolean(download && ACTIVE_STATUSES.has(download.status));
     const received = download?.received || 0;
@@ -183,11 +204,25 @@ export class LocalModelsModal {
     const percent = total > 0 ? Math.min(100, Math.max(0, (received / total) * 100)) : 0;
     const status = running
       ? (ready ? t('local_models.runtime_running') : t('local_models.runtime_starting'))
-      : installed
-        ? t('local_models.runtime_stopped')
-        : t('local_models.runtime_not_installed');
-    const statusColor = running ? (ready ? '#0e700e' : '#0f6cbd') : installed ? '#616161' : '#a80000';
+      : crashed
+        ? t('local_models.runtime_crashed')
+        : installed
+          ? t('local_models.runtime_stopped')
+          : t('local_models.runtime_not_installed');
+    const statusColor = running
+      ? (ready ? '#0e700e' : '#0f6cbd')
+      : crashed ? '#a80000' : installed ? '#616161' : '#a80000';
     const logLines = (runtime?.log || []).slice(-40).join('\n');
+    const hardware = runtime?.hardware;
+    const ram = hardware?.ramTotalBytes ? this.formatBytes(hardware.ramTotalBytes) : '—';
+    const cpus = hardware?.cpuThreads ? String(hardware.cpuThreads) : '—';
+    const gpuNames = (hardware?.devices || [])
+      .map(device => device.name)
+      .filter((name): name is string => Boolean(name))
+      .join(', ') || (runtime?.installed ? t('local_models.device_cpu') : t('local_models.device_unknown'));
+    const vram = hardware?.discreteVramFreeBytes ? this.formatBytes(hardware.discreteVramFreeBytes) : '—';
+    const recommendedId = runtime?.recommendedModelId || '';
+    const recommendedName = (this.state?.models || []).find(model => model.id === recommendedId)?.name || recommendedId;
 
     const actions: string[] = [];
     const buttonStyle = 'font-size:11.5px;height:28px;padding:0 10px;';
@@ -220,6 +255,14 @@ export class LocalModelsModal {
               ${running && runtime?.baseUrl ? ` · <span style="font-family:monospace;">${this.esc(runtime.baseUrl)}</span>` : ''}
             </div>
             <div style="font-size:11.5px; color:#616161;">${t('local_models.runtime_models_count', { count: (runtime?.models || []).length })}</div>
+            <div style="display:flex; flex-wrap:wrap; gap:14px; font-size:11.5px; color:#616161;">
+              <span><strong>${t('local_models.hardware_ram')}:</strong> ${this.esc(ram)}</span>
+              <span><strong>${t('local_models.hardware_cpu')}:</strong> ${this.esc(cpus)}</span>
+              <span><strong>${t('local_models.hardware_gpu')}:</strong> ${this.esc(gpuNames)}</span>
+              <span><strong>${t('local_models.hardware_vram')}:</strong> ${this.esc(vram)}</span>
+              <span><strong>${t('local_models.hardware_models_max')}:</strong> ${runtime?.modelsMax || 1}</span>
+            </div>
+            ${recommendedName ? `<div style="font-size:11.5px; color:#0f6cbd;">${t('local_models.recommended_for_machine', { name: recommendedName })}</div>` : ''}
           </div>
           <div style="display:flex; flex-wrap:wrap; gap:6px;">${actions.join('')}</div>
         </div>
@@ -311,10 +354,27 @@ export class LocalModelsModal {
     }
   }
 
-  private async startServer(): Promise<boolean> {
+  private async startServer(backend?: string): Promise<boolean> {
     this.showMessage(true, t('local_models.runtime_starting'));
     try {
-      const res = await this.call('local_runtime_start');
+      let res = await this.call('local_runtime_start', backend ? JSON.stringify({ backend }) : '');
+
+      if (!res.ok && !backend && res.suggestedBackend) {
+        const fallback = String(res.suggestedBackend);
+        this.showMessage(true, t('local_models.runtime_fallback', { backend: fallback }));
+        const install = await this.call('local_runtime_install', JSON.stringify({ backend: fallback }));
+        if (!install.ok) {
+          this.showMessage(false, t('local_models.runtime_install_failed', { error: install.error || '?' }));
+          return false;
+        }
+        if (!install.installed && install.jobId) {
+          const installed = await this.waitForJob(install.jobId);
+          if (!installed) return false;
+        }
+        await this.refresh();
+        res = await this.call('local_runtime_start', JSON.stringify({ backend: fallback }));
+      }
+
       await this.refresh();
       if (!res.ok) {
         const detail = res.detail ? ` (${res.detail})` : '';
@@ -404,6 +464,9 @@ export class LocalModelsModal {
             : t('local_models.not_installed');
 
     const badges: string[] = [];
+    if (this.state?.runtime?.recommendedModelId === model.id) {
+      badges.push(`<span class="badge-inherited" style="background:#fff4ce;color:#797673;">${t('local_models.recommended')}</span>`);
+    }
     if (model.curated) badges.push(`<span class="badge-inherited">${t('local_models.curated')}</span>`);
     if (model.verified) badges.push(`<span class="badge-inherited">${t('local_models.verified')}</span>`);
     badges.push(model.supportsTools

@@ -22,6 +22,8 @@ First public beta of Arestrix Studio and the native C++20 pipeline compiler.
   llama.cpp binary manifest (`b11669`).
 - Managed local runtime: on-demand llama.cpp download/extraction, native `llama-server` router mode,
   loopback-only binding, ephemeral API key, generated model preset, health checks and logs.
+- Hardware detection (RAM, CPU threads, GPUs/VRAM), model recommendation, VRAM-aware `--models-max`
+  and automatic CPU fallback when the primary backend fails to start.
 - Local Models screen with runtime install/start/stop, per-model download/verify/delete and one-click
   "Use" that starts the runtime and fills the project provider/model.
 - Projects, workspaces, persistent memory, local skills and skill catalogs.
