@@ -39,6 +39,7 @@
 - [Architecture: From Canvas to C++20 Taskflow](#architecture-from-canvas-to-c20-taskflow)
 - [Quick Start](#quick-start)
 - [Engineered in Collaboration with Intelligent AI Agents](#engineered-in-collaboration-with-intelligent-ai-agents)
+- [Code Integrity & Test Audit Log](TEST_REPORT.md)
 - [Complete Documentation](#complete-documentation)
 - [Acknowledgements](#acknowledgements)
 - [License](#license)
@@ -222,6 +223,7 @@ This collaborative engineering process stands as a living testament to what mode
 | [Development & Testing](docs/en/07-development.md) | Unit tests, security checks, third-party policies, and coding standards. |
 | [Brand Guidelines](docs/en/08-brand.md) | Visual identity, color palette, and crisp shadow-free typography standards. |
 | [Worked Examples](examples/README.md) | Pre-built pipelines from multi-agent triage with MCP to concurrent workflows. |
+| [Test Audit Log](TEST_REPORT.md) | Chronological test execution ledger, category breakdown, and code integrity audits. |
 
 ---
 

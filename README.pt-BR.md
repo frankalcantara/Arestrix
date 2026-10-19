@@ -39,6 +39,7 @@
 - [Arquitetura: Do Canvas ao Taskflow C++20](#arquitetura-do-canvas-ao-taskflow-c20)
 - [Início Rápido](#início-rápido)
 - [Construído em Colaboração com Agentes Inteligentes](#construído-em-colaboração-com-agentes-inteligentes)
+- [Integridade de Código e Registro de Auditoria](TEST_REPORT.md)
 - [Documentação Completa](#documentação-completa)
 - [Agradecimentos](#agradecimentos)
 - [Licença](#licença)
@@ -222,6 +223,7 @@ Esta colaboração personifica o propósito central do Arestrix: demonstrar como
 | [Desenvolvimento e Testes](docs/pt-BR/07-desenvolvimento.md) | Suíte de testes automatizados, scripts de validação de segurança e padrões de código. |
 | [Diretrizes de Marca](docs/pt-BR/08-marca.md) | Identidade visual, paleta de cores corporativa e padrões tipográficos sem sombras. |
 | [Exemplos Prontos](examples/README.pt-BR.md) | Pipelines completos, desde triagem multi-agente com MCP até processamento em lote. |
+| [Registro de Auditoria de Testes](TEST_REPORT.md) | Histórico cronológico das rodadas de testes, métricas por categoria e integridade do código. |
 
 ---
 
