@@ -11,7 +11,6 @@
 
 <p align="center">
   <a href="https://github.com/frankalcantara/Arestrix/releases"><img alt="Beta release" src="https://img.shields.io/github/v/release/frankalcantara/Arestrix?include_prereleases&label=beta&style=flat-square"></a>
-  <a href="https://github.com/frankalcantara/Arestrix/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/frankalcantara/Arestrix/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-14151A?style=flat-square"></a>
   <img alt="Platform: Windows and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-4B4F5C?style=flat-square">
   <img alt="C++20" src="https://img.shields.io/badge/C%2B%2B-20-00599C?style=flat-square&logo=c%2B%2B">
