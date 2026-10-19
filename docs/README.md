@@ -2,7 +2,7 @@
 
 **English** · [Português](pt-BR/README.md)
 
-> **Applies to:** Arestrix Beta 1.0 (`1.0.0-beta.1`) · Last reviewed: 2026-10-19
+> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-19
 >
 > Beta APIs, file formats and command-line flags may change before general availability.
 > See the [changelog](../CHANGELOG.md) for user-visible changes.
@@ -35,6 +35,7 @@
 | [Test audit log](quality/test-audit-log.md) | Chronological test rounds, category breakdown and integrity audits (in Portuguese). |
 | [Security and governance model](security/governance.md) | Credential handling, integrity verification, sandboxing and deployment boundaries. |
 | [Dependency advisories](security/dependency-advisories.md) | Known npm advisories, exposure analysis and mitigation status. |
+| [Roadmap and known limitations](en/roadmap.md) · [Roadmap e limitações](pt-BR/roadmap.md) | Delivered scope, known gaps and the next planned steps. |
 | [Security policy](../SECURITY.md) | Supported versions and private vulnerability reporting. |
 | [Contributing](../CONTRIBUTING.md) | Development setup, tests, commit conventions and pull request checklist. |
 

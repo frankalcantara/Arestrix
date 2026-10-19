@@ -2,7 +2,7 @@
 
 [English](../en/README.md) · [Toda a documentação](../README.md)
 
-> **Aplica-se a:** Arestrix Beta 1.0 (`1.0.0-beta.1`) · Última revisão: 2026-10-19
+> **Aplica-se a:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Última revisão: 2026-10-19
 
 ## Trilha de aprendizado
 
@@ -21,6 +21,7 @@
 
 ## Operação
 
+- [Roadmap e limitações conhecidas](roadmap.md) — escopo entregue, lacunas e próximos passos.
 - [Registro de auditoria de testes](../quality/test-audit-log.md)
 - [Modelo de segurança e governança](../security/governance.md)
 - [Avisos de dependências](../security/dependency-advisories.md)

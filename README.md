@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <b>Beta 1.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentation</a>
+  <b>Beta 1.5</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentation</a>
 </p>
 
 <p align="center">
@@ -63,9 +63,13 @@ graph canvas; Arestrix validates it, generates C++20 source and compiles it with
   undo/redo and graph validation.
 - **Native C++20 compiler** — inspect generated Taskflow code in Monaco, compile it with MSVC or
   GCC/Clang, and reuse unchanged builds.
-- **Agent runtime** — tool loop, sandboxes, per-vertex model settings, live telemetry and batch
+- **Agent runtime** - tool loop, sandboxes, per-vertex model settings, live telemetry and batch
   resume.
-- **Workspaces, memory and skills** — persistent project context, local skill catalogs and MCP
+- **Local AI models** - managed llama.cpp runtime, pre-approved GGUF catalog, hardware-aware
+  recommendation and CPU fallback. No inference runtime is bundled by default.
+- **Enterprise AI Gateway** - on-prem proxy with virtual keys, budgets and rate limits by
+  key/project/user/provider/model, usage ledger and fail-closed routing. Local models are exempt.
+- **Workspaces, memory and skills** - persistent project context, local skill catalogs and MCP
   servers with a persistent session per server.
 - **Delivery and governance** — standalone runner, MSI/MSIX packaging, DPAPI/Azure Key Vault
   integration and HMAC integrity verification.
@@ -126,7 +130,7 @@ python scripts/e2e_examples.py
 
 ## Project status
 
-**Beta 1.0** is an early public release. The Studio runs on Windows and Linux; programs generated
+**Beta 1.5** is an early public release. The Studio runs on Windows and Linux; programs generated
 from a graph currently target Windows. Beta APIs, file formats and command-line flags may change
 before general availability. See the [changelog](CHANGELOG.md) for the current limitations.
 

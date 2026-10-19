@@ -4,7 +4,48 @@ All notable changes to Arestrix are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-Pre-release identifiers follow SemVer (`1.0.0-beta.1`); the marketing name is **Beta 1.0**.
+Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **Beta 1.5**.
+
+## [1.5.0-beta.1] - 2026-10-19
+
+Beta 1.5 focuses on local AI models and enterprise usage governance.
+
+### Added
+
+- Pre-approved GGUF model catalog with resumable downloads, SHA-256 verification and per-model
+  provenance (`verifiedAt`, `verifiedWith`). Qwen2.5 7B/14B passed real tool-calling tests.
+- Managed local runtime: on-demand llama.cpp download/extraction, native `llama-server` router mode,
+  generated preset, loopback-only binding, ephemeral API key, health checks and logs.
+- Hardware detection (RAM, CPU threads, GPUs/VRAM), model recommendation, VRAM-aware `--models-max`
+  and automatic CPU fallback when the primary backend fails to start.
+- Runtime version upgrades with cleanup of old versions, local asset validation and a Windows
+  Authenticode signing script.
+- Local Models screen with runtime install/start/stop, per-model download/verify/delete, quick setup
+  for the recommended model and "Use in Assistant".
+- On-prem `arestrix-gateway`: OpenAI/Anthropic-compatible proxy with virtual keys, budgets by
+  key/project/user/provider/model, rate limits, usage ledger, Prometheus metrics and fail-closed
+  runner integration.
+- AI Gateway settings in Global Defaults, plus an enterprise policy lock
+  (`ARESTRIX_AI_GATEWAY_POLICY=locked`).
+- Mistral provider support (API, Studio, vertex settings and gateway route).
+
+### Changed
+
+- Version and documentation banners moved to Beta 1.5 (`1.5.0-beta.1`).
+- Hosted providers can be routed through the AI Gateway; local providers (`local`/`jev`) remain
+  direct and exempt from budgets.
+
+### Known limitations
+
+- Linux end-to-end validation and CI remain pending.
+- Final distribution (code-signing certificate, remote signed catalog, installer packaging) remains
+  pending and depends on external key/certificate decisions.
+- `arestrix-gateway` is single-node SQLite, without streaming, web admin or SSO; TLS is delegated to
+  a reverse proxy.
+- Pricing for unknown models defaults to zero; operators must maintain the price table. Token budgets
+  still apply.
+- A signed remote catalog (Ed25519/minisign) is not implemented yet; the catalog is embedded in the
+  signed application binary.
 
 ## [1.0.0-beta.1] - 2026-10-19
 
@@ -18,21 +59,6 @@ First public beta of Arestrix Studio and the native C++20 pipeline compiler.
 - Model Context Protocol (MCP) client with a tool registry and per-vertex tool selection.
 - Local/OpenAI-compatible model endpoints (Ollama, LM Studio, llama.cpp, vLLM) configurable per
   project and per vertex, with native model discovery. No inference runtime is bundled or started.
-- Pre-approved GGUF model catalog with resumable downloads and SHA-256 verification, plus a pinned
-  llama.cpp binary manifest (`b11669`).
-- Managed local runtime: on-demand llama.cpp download/extraction, native `llama-server` router mode,
-  loopback-only binding, ephemeral API key, generated model preset, health checks and logs.
-- Hardware detection (RAM, CPU threads, GPUs/VRAM), model recommendation, VRAM-aware `--models-max`
-  and automatic CPU fallback when the primary backend fails to start.
-- Tool-calling verification for Qwen2.5 7B/14B, with `verifiedAt`/`verifiedWith` provenance in the catalog.
-- Runtime version upgrades with cleanup of old versions, plus local asset validation and a Windows
-  Authenticode signing script.
-- Quick setup for the recommended model and "Use in Assistant" to configure the Studio default model.
-- On-prem `arestrix-gateway`: OpenAI/Anthropic-compatible proxy with virtual keys, budgets by key/project/
-  user/provider/model, rate limits, usage ledger, Prometheus metrics and fail-closed runner integration.
-- Mistral provider support (API and gateway route).
-- Local Models screen with runtime install/start/stop, per-model download/verify/delete and one-click
-  "Use" that starts the runtime and fills the project provider/model.
 - Projects, workspaces, persistent memory, local skills and skill catalogs.
 - Bilingual interface and documentation (`en-US` and `pt-BR`).
 - Worked examples covering an SVG agent pipeline, support triage and a composed
@@ -67,4 +93,5 @@ First public beta of Arestrix Studio and the native C++20 pipeline compiler.
 - The `braces` advisory documented in `docs/security/dependency-advisories.md` affects the build chain only;
   no fixed release is available upstream yet.
 
+[1.5.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v1.5.0-beta.1
 [1.0.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v1.0.0-beta.1

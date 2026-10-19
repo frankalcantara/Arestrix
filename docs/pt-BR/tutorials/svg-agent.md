@@ -1,6 +1,6 @@
 # ⚡ Tutorial Arestrix: Agente Auditor e Criador de SVGs Animados
 
-> **Aplica-se a:** Arestrix Beta 1.0 (`1.0.0-beta.1`) · Última revisão: 2026-10-19
+> **Aplica-se a:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Última revisão: 2026-10-19
 
 ## Guia Didático para Iniciantes: Orquestração Cognitiva e Concorrência C++20 com Taskflow
 

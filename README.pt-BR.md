@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <b>Beta 1.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentação</a>
+  <b>Beta 1.5</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentação</a>
 </p>
 
 <p align="center">
@@ -66,6 +66,10 @@ um pipeline em um canvas de grafo; o Arestrix valida, gera código C++20 e compi
   GCC/Clang e reutilize builds inalterados.
 - **Runtime de agentes** — laço de ferramentas, sandboxes, modelo por vértice, telemetria ao vivo e
   retomada de execuções em lote.
+- **Modelos locais** — runtime llama.cpp gerenciado, catálogo GGUF pré-aprovado, recomendação por
+  hardware e fallback para CPU. Nenhum runtime de inferência é incluído por padrão.
+- **AI Gateway empresarial** — proxy on-prem com chaves virtuais, budgets e rate limits por
+  chave/projeto/usuário/provedor/modelo, ledger de uso e roteamento fail-closed. Modelos locais são isentos.
 - **Workspaces, memória e skills** — contexto persistente, catálogos locais de skills e servidores
   MCP com sessão persistente por servidor.
 - **Entrega e governança** — runner independente, empacotamento MSI/MSIX, integração com DPAPI e
@@ -128,7 +132,7 @@ python scripts/e2e_examples.py
 
 ## Status do projeto
 
-A **Beta 1.0** é uma release pública inicial. O Studio roda no Windows e no Linux; programas gerados
+A **Beta 1.5** é uma release pública inicial. O Studio roda no Windows e no Linux; programas gerados
 a partir de um grafo atualmente têm o Windows como alvo. APIs, formatos de arquivo e flags de linha
 de comando podem mudar antes da disponibilidade geral. Consulte o [changelog](CHANGELOG.md) para as
 limitações atuais.
