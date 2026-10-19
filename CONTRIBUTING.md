@@ -62,6 +62,16 @@ A pull request is ready for review when:
 - User-facing documentation is updated in **both** `docs/en/` and `docs/pt-BR/`.
 - Screenshots are regenerated with `npm run capture:screenshots` when the interface changes.
 
+## Branch and tag protections
+
+GitHub rulesets are active for this repository:
+
+- `main-protection`: `refs/heads/main` cannot be deleted or force-pushed.
+- `release-tags`: `refs/tags/v*` cannot be deleted or force-pushed.
+
+Normal fast-forward pushes remain allowed. Pull-request and required-status-check rules will be enabled
+when CI is re-enabled (see the Linux + CI item in the [roadmap](docs/en/roadmap.md)).
+
 ## Documentation
 
 - English is the canonical language; Portuguese must mirror the same structure.
