@@ -7,21 +7,28 @@ Este script unifica o ciclo de vida completo de desenvolvimento e compilacao do 
 3. Sincronizacao de artefatos web para CppCore/dist.
 4. Deteccao de toolchain C++20 (MSVC vswhere/vcvars64 no Windows; GCC/Clang no Linux).
 5. Configuracao CMake com flags de hardening, protecoes de seguranca e analise estatica.
-6. Compilacao concorrente dos binarios nativos (arestrix, arestrix-cli, arestrix_tests).
-7. Execucao automatizada de testes do runtime via CTest.
+6. Compilacao concorrente dos binarios nativos (arestrix, arestrix-cli, arestrix-gateway, arestrix_tests).
+7. Execucao automatizada dos testes nativos C++ via CTest (nao inclui o Vitest do frontend).
 8. Inicializacao do Studio na area de trabalho.
 
 Exemplos de uso comuns:
     python CppCore/dev.py                        # Compila frontend + backend e abre o Studio
     python CppCore/dev.py --no-run               # Apenas compila (frontend e backend)
     python CppCore/dev.py --no-frontend          # Apenas compila o backend C++
-    python CppCore/dev.py --test                 # Compila e roda todos os testes nativos (CTest)
+    python CppCore/dev.py --test                 # Compila e roda os testes nativos C++ (CTest)
     python CppCore/dev.py --test --no-frontend   # Roda testes C++ pulando build do frontend
     python CppCore/dev.py --setup                # Apenas clona e inicializa os submodulos Git
     python CppCore/dev.py --asan                 # Compila com AddressSanitizer ativado
     python CppCore/dev.py --clang-tidy           # Compila executando analise estatica Clang-Tidy
     python CppCore/dev.py --cppcheck             # Compila executando analise estatica Cppcheck
     python CppCore/dev.py --no-hardening         # Desativa as protecoes de memoria estritas
+
+Gate completo recomendado (dev.py cobre build + CTest, nao o Vitest):
+    npm test
+    python CppCore/dev.py --no-run --test
+    npm run check:version
+    npm run check:local-assets
+    npm run check:secrets
 
 Pre-requisitos do sistema:
     - Git no PATH do sistema operacional.
@@ -207,7 +214,7 @@ Exemplos:
     ap.add_argument("--no-run", action="store_true", help="Apenas compila os artefatos sem iniciar o Arestrix Studio")
     ap.add_argument("--no-frontend", action="store_true", help="Pula a etapa de compilacao do frontend (TypeScript/Vite)")
     ap.add_argument("--setup", action="store_true", help="Apenas inicializa e atualiza os submodulos Git em third_party/")
-    ap.add_argument("--test", action="store_true", help="Executa a suite completa de testes automatizados C++20 (CTest)")
+    ap.add_argument("--test", action="store_true", help="Executa a suite de testes nativos C++20 (CTest); o Vitest e rodado com npm test")
     ap.add_argument("--hardening", action="store_true", default=True, help="Ativa flags de seguranca de memoria e mitigacao de exploracao (padrao: ativado)")
     ap.add_argument("--no-hardening", dest="hardening", action="store_false", help="Desativa flags estritas de hardening de memoria")
     ap.add_argument("--asan", action="store_true", help="Ativa instrumentacao AddressSanitizer (deteccao de use-after-free e buffer overflows)")

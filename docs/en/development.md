@@ -10,9 +10,12 @@
 | :--- | :--- |
 | `src/` | TypeScript frontend (core, view, ui, i18n). |
 | `CppCore/` | C++20 backend, the runtime and the CLI. `dev.py` is the build entry point. |
+| `CppCore/src/local/` | Managed local runtime: GGUF catalog, downloads, llama.cpp process and native router. |
+| `CppCore/src/gateway/` | `arestrix-gateway` core: virtual keys, budgets, usage ledger and HTTP proxy. |
+| `CppCore/gateway/` | Gateway example config and operator guide (`README.md`). |
 | `tests/` | Vitest suites for the frontend. |
-| `scripts/` | End-to-end tutorial, license check, submodule helper. |
-| `third_party/` | All external code (submodules or vendored files with their license). |
+| `scripts/` | End-to-end tutorial, license checks, local asset validation, Authenticode signing and submodule helpers. |
+| `third_party/` | All external code (submodules or vendored files with their license), including SQLite and `cpp-httplib`. |
 | `docs/` | This documentation, in `en/` and `pt-BR/`, plus tutorials, quality and security notes. |
 | `docs/pt-BR/tutorials/svg-agent.md` | A complete worked example (in Portuguese). |
 
@@ -37,7 +40,7 @@ The `CppCore/dev.py` script automates the full local development and build loop 
 | `python CppCore/dev.py` | Builds frontend, builds native C++20 backend with hardening, and opens the Studio. |
 | `python CppCore/dev.py --no-run` | Only compiles (frontend and backend) without launching the GUI. |
 | `python CppCore/dev.py --no-frontend` | Skips TypeScript/Vite compilation (useful during backend-only iterations). |
-| `python CppCore/dev.py --test` | Compiles and runs the runtime unit test suite via `ctest`. |
+| `python CppCore/dev.py --test` | Compiles frontend + all native targets (including `arestrix-gateway`) and runs the **C++** suite via `ctest`. It does not run Vitest; use `npm test` for the frontend. |
 | `python CppCore/dev.py --asan` | Instruments binaries with **AddressSanitizer** for runtime detection of buffer overflows, *use-after-free*, and memory leaks. |
 | `python CppCore/dev.py --clang-tidy` | Runs static analysis via **Clang-Tidy** using enterprise rules in `.clang-tidy` (C++ Core Guidelines and CERT C++). |
 | `python CppCore/dev.py --cppcheck` | Runs behavioral static analysis via **Cppcheck**. |
@@ -61,17 +64,47 @@ The `arestrix_security_flags` interface library in [`CMakeLists.txt`](../../CMak
   - **Non-Executable Stack:** `-Wl,-z,noexecstack`.
   - **Format Security:** `-Wformat=2 -Wformat-security`.
 
-## Tests
+## Tests and verification gate
+
+`dev.py` builds the frontend and every native target (Studio, CLI, gateway and tests) and can run the C++
+suite. It deliberately does not run Vitest or the repository checks, so a release-quality local gate is:
 
 ```bash
-npm test                      # frontend: Vitest
-python CppCore/dev.py --test  # backend: ctest
-python scripts/e2e_tutorial.py  # end to end, against a scripted fake LLM
+npm test                          # frontend: Vitest
+python CppCore/dev.py --no-run --test  # frontend build + all native targets + CTest
+npm run check:version             # version.txt, package.json, package-lock.json, CHANGELOG
+npm run check:local-assets        # GGUF catalog + llama.cpp manifest
+npm run check:secrets             # secrets and personal data
+python scripts/check_third_party_licenses.py
+python scripts/e2e_tutorial.py    # optional: end to end with a scripted fake LLM
 ```
 
 The frontend suite covers graph validation and cycles, undo/redo, subflows, templates, settings
 inheritance, telemetry, the resume engine, memory, MCP, projects and workspaces, the Office interface, SVG
-vertices and i18n parity.
+vertices and i18n parity. The C++ suite includes the gateway budget store and local runtime catalog tests;
+the gateway HTTP proxy should also be smoke-tested with a fake upstream when its routes change.
+
+## Local runtime and AI Gateway
+
+The local model runtime lives in `CppCore/src/local/` and writes to
+`%LOCALAPPDATA%\Arestrix` (Windows) or `~/.local/share/arestrix` (Linux); `ARESTRIX_DATA_DIR` overrides
+the root for tests. The catalog and pinned llama.cpp manifest are embedded from
+`CppCore/runtime/*.json` and validated by `npm run check:local-assets`.
+
+The on-prem AI Gateway is a separate executable, `arestrix-gateway`, built by the same CMake project.
+Operator setup, budgets, keys and deployment are documented in
+[`CppCore/gateway/README.md`](../../CppCore/gateway/README.md). For development, copy
+`CppCore/gateway/arestrix-gateway.example.json` and run:
+
+```bash
+arestrix-gateway init --db arestrix-gateway.db
+arestrix-gateway key create --name dev --budget-usd 10 --period monthly --db arestrix-gateway.db
+arestrix-gateway serve --config arestrix-gateway.json
+```
+
+The Studio/runners use `ARESTRIX_AI_GATEWAY_URL`, `ARESTRIX_AI_GATEWAY_KEY` and
+`ARESTRIX_REQUIRE_AI_GATEWAY`. Local providers are exempt; hosted providers fail closed when required and
+the gateway is missing. See the [roadmap](roadmap.md) for the gateway/HA and Linux/CI gaps.
 
 ## Adding a language
 
@@ -117,6 +150,9 @@ npm run submodule:update   # move to the latest upstream
 
 ## Known pending items
 
+- Linux end-to-end validation, CI matrix and final distribution/signing: see the
+  [roadmap and known limitations](roadmap.md).
+- AI Gateway HA, streaming and admin/SSO are not implemented; the current gateway is single-node SQLite.
 - Dependency advisories: see [`dependency-advisories.md`](../security/dependency-advisories.md)
   (update `vite`/`vitest`, then `monaco-editor` or pin `dompurify`).
 - Vite warnings: `webui.js` loaded without `type="module"`, and `fs`/`path` imported in

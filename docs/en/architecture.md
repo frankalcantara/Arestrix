@@ -49,6 +49,8 @@ redo work for everything, including paste, duplicate and delete.
 | `compiler/` | `TaskflowGenerator`: graph → `main.cpp`. Detects loop (feedback) edges. |
 | `build/` | `BuildService`: compiles the generated program with MSVC, g++ or clang++ and runs it. |
 | `rt/` | The **runtime** every generated program links to: HTTPS clients, the agent tool-use loop, the switch decision (AI model or keywords), confined file tools, and the network guard against DNS rebinding. |
+| `local/` | Managed local models: GGUF catalog, resumable downloads, llama.cpp process lifecycle, hardware detection and the native `llama-server` router. |
+| `gateway/` | On-prem AI Gateway: virtual keys, budgets, rate limits, usage ledger and the OpenAI/Anthropic-compatible proxy. |
 | `sandbox/` | Isolation drivers (host process, Docker, MicroVM), telemetry emitter, resume engine. |
 | `native/` | The native tool servers (files, HTTP, data, memory, time, Git, SQLite): C++ that runs inside the program, with project confinement. |
 | `mcp/` | Native Model Context Protocol client with persistent sessions (stdio and HTTP) and the server registry. |
@@ -60,6 +62,26 @@ redo work for everything, including paste, duplicate and delete.
 | `util/` | Own JSON layer on top of **simdjson**. |
 
 Everything external lives in `third_party/` (see [Development](development.md)).
+
+## Local models and the AI Gateway
+
+Hosted and local models use different paths:
+
+```text
+Studio / Runner ──(virtual key)──► arestrix-gateway ──(provider keys)──► OpenAI/Anthropic/...
+Studio / Runner ──(direct)────────► llama-server (local, exempt from budgets)
+```
+
+- **Local runtime (`CppCore/src/local/`).** Arestrix downloads a pinned `llama.cpp` build on demand,
+  verifies its SHA-256, extracts it and starts `llama-server` in native router mode. The server binds to
+  `127.0.0.1`, uses an ephemeral key and a generated model preset. The runtime endpoint/key are set only
+  in the process environment; local models never pass through the gateway.
+- **AI Gateway (`arestrix-gateway`).** A separate executable that keeps the real provider keys and
+  exposes virtual keys to the Studio and runners. It enforces budgets by key/project/user/provider/model,
+  rate limits and a usage ledger. Hosted providers can be configured as fail-closed through
+  `ARESTRIX_REQUIRE_AI_GATEWAY` or the enterprise policy lock.
+- **Runner portability.** Generated runners read the gateway URL/key or local endpoint from the target
+  environment; provider keys and runtime secrets are not baked into the binary.
 
 ## Studio, Workspace and Project
 
@@ -96,7 +118,7 @@ The **Standalone Runner** decouples workflow execution from the visual Studio ca
    - Generates distribution manifests (`runner_manifest.json`) supporting runtime parameter customization.
    - Bundles referenced workspace skills and launcher scripts.
    - Enforces a strict *fail-closed* zero-secrets policy by auditing manifest files, skill assets, and executable binaries before finalizing the bundle.
-3. **Runtime Secrets Isolation:** The compiled executable contains zero baked-in secrets or keys; it resolves credentials dynamically from the target host OS environment variables (`platform::getEnv`), ensuring secure portability.
+3. **Runtime Secrets Isolation:** The compiled executable contains zero baked-in secrets or keys; it resolves credentials dynamically from the target host OS environment variables (`platform::getEnv`), ensuring secure portability. In enterprise deployments, hosted providers receive a gateway virtual key instead of provider credentials; local providers use the local endpoint and remain exempt from gateway budgets.
 
 ## Related
 

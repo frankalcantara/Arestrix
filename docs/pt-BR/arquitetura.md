@@ -49,6 +49,8 @@ refazer funcionam para tudo, inclusive colar, duplicar e apagar.
 | `compiler/` | `TaskflowGenerator`: grafo → `main.cpp`. Detecta arestas de laço (feedback). |
 | `build/` | `BuildService`: compila o programa gerado com MSVC, g++ ou clang++ e o executa. |
 | `rt/` | O **runtime** ao qual todo programa gerado se liga: clientes HTTPS, o laço de uso de ferramentas dos agentes, a decisão do switch (modelo de IA ou palavras), ferramentas de arquivo confinadas e a proteção de rede contra DNS rebinding. |
+| `local/` | Modelos locais gerenciados: catálogo GGUF, downloads retomáveis, ciclo de vida do llama.cpp, detecção de hardware e o router nativo do `llama-server`. |
+| `gateway/` | AI Gateway on-prem: chaves virtuais, budgets, rate limits, ledger de uso e proxy compatível com OpenAI/Anthropic. |
 | `sandbox/` | Drivers de isolamento (processo do host, Docker, MicroVM), emissor de telemetria, motor de retomada. |
 | `native/` | Os servidores de ferramentas nativos (arquivos, HTTP, dados, memória, tempo, Git, SQLite): C++ que roda dentro do programa, com confinamento ao projeto. |
 | `mcp/` | Cliente nativo do Model Context Protocol com sessões persistentes (stdio e HTTP) e o registro de servidores. |
@@ -60,6 +62,26 @@ refazer funcionam para tudo, inclusive colar, duplicar e apagar.
 | `util/` | Camada JSON própria sobre o **simdjson**. |
 
 Todo código externo fica em `third_party/` (veja [Desenvolvimento](desenvolvimento.md)).
+
+## Modelos locais e AI Gateway
+
+Modelos hospedados e locais usam caminhos diferentes:
+
+```text
+Studio / Runner ──(chave virtual)──► arestrix-gateway ──(chaves reais)──► OpenAI/Anthropic/...
+Studio / Runner ──(direto)─────────► llama-server (local, isento de budgets)
+```
+
+- **Runtime local (`CppCore/src/local/`).** O Arestrix baixa um build pinado do `llama.cpp` sob demanda,
+  verifica o SHA-256, extrai e inicia o `llama-server` no modo router nativo. O servidor escuta em
+  `127.0.0.1`, usa chave efêmera e um preset gerado. Endpoint/chave ficam apenas no ambiente do processo;
+  modelos locais nunca passam pelo gateway.
+- **AI Gateway (`arestrix-gateway`).** Executável separado que guarda as chaves reais dos provedores e
+  expõe chaves virtuais ao Studio e aos runners. Ele impõe budgets por chave/projeto/usuário/provedor/modelo,
+  rate limits e ledger de uso. Provedores hospedados podem ser configurados como fail-closed via
+  `ARESTRIX_REQUIRE_AI_GATEWAY` ou pela política empresarial bloqueada.
+- **Portabilidade do runner.** Runners gerados leem URL/chave do gateway ou endpoint local do ambiente de
+  destino; chaves de provedor e segredos do runtime não são embutidos no binário.
 
 ## Studio, Workspace e Projeto
 
@@ -97,7 +119,7 @@ O **Runner Standalone** desacopla a execução do pipeline do ambiente de ediç�
    - Gera o manifesto de distribuição (`runner_manifest.json`) com schema de parâmetros dinâmicos.
    - Copia as dependências de skills confinadas ao projeto.
    - Executa a auditoria estrita *fail-closed* contra vazamento de segredos em arquivos e no binário antes de finalizar a exportação.
-3. **Resolução de Segredos em Runtime:** O binário gerado não contém chaves embutidas; ele consulta as variáveis de ambiente da máquina de destino no SO (`platform::getEnv`), garantindo total portabilidade segura.
+3. **Resolução de Segredos em Runtime:** O binário gerado não contém chaves embutidas; ele consulta as variáveis de ambiente da máquina de destino no SO (`platform::getEnv`), garantindo total portabilidade segura. Em deployments empresariais, provedores hospedados recebem uma chave virtual do gateway em vez de credenciais de provedor; provedores locais usam o endpoint local e ficam isentos dos budgets do gateway.
 
 ## Relacionados
 
