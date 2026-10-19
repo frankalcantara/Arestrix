@@ -97,6 +97,55 @@ machine (DeepSeek, OpenAI, Anthropic, Google, Groq, in that order). The keys and
 variables listed above, so a local model (Ollama, llama.cpp, vLLM) needs `ARESTRIX_DEFAULT_PROVIDER=local`,
 `ARESTRIX_DEFAULT_MODEL=<name>` and `LOCAL_LLM_BASE_URL`.
 
+### Local models (Arestrix does not install or start the server)
+
+Arestrix does **not** bundle, download or start inference runtimes such as llama.cpp, Ollama or vLLM. To use
+a local model, an OpenAI-compatible inference server must already be running. Typical base URLs:
+
+| Server | Typical base URL |
+| :--- | :--- |
+| Ollama | `http://localhost:11434/v1` |
+| LM Studio (local server) | `http://localhost:1234/v1` |
+| llama.cpp (`llama-server`) | `http://localhost:8080/v1` |
+| vLLM | `http://localhost:8000/v1` |
+
+Steps:
+
+1. Start the server and load the model (for example `ollama serve` and `ollama pull qwen2.5:7b`, or
+   `llama-server -m model.gguf --port 8080`).
+2. In the Studio, open **Global Defaults → Provider & Model**, choose **Local (Ollama / vLLM)** and enter the
+   base URL in `LOCAL_LLM_BASE_URL`.
+3. Click **Find models**: Arestrix queries `GET /v1/models` through the native backend (no CORS dependency)
+   and lists the available models. If the server does not list models, type the name manually.
+4. For a single vertex, the same field appears in **Model → Provider & Model** when the vertex does not
+   inherit the global model.
+
+No API key is required; `LOCAL_LLM_API_KEY` is only sent if you set it (some servers require a dummy token).
+Tool calling depends on the model and server: models without tool support still work for chat, but the Studio
+Assistant reports `tools_unsupported` when it tries to operate the graph. An exported runner reads
+`LOCAL_LLM_BASE_URL` and the model name on the target machine; the address is never written into the project.
+
+#### Catalog and model downloads
+
+Arestrix ships a pre-approved catalog at `CppCore/runtime/models.catalog.json` with GGUF model metadata
+(Qwen2.5 and Mistral), license, size, SHA-256, RAM/VRAM requirements and tool support. Weights are **not**
+distributed with the product: downloads come directly from the pinned official source.
+
+In **Global Defaults → Provider & Model → Local**, click **Manage local models...** to:
+
+- download a model with progress, resume and SHA-256 verification;
+- verify or delete an already downloaded model;
+- select the model for the project.
+
+Files live in `%LOCALAPPDATA%\Arestrix\models` on Windows and `~/.local/share/arestrix/models` on Linux
+(or under `ARESTRIX_DATA_DIR` when set). In this phase the download only prepares the file; the managed
+runtime and llama.cpp's native router arrive in the next phase. Until then, point the endpoint field at an
+already-running `llama-server`, Ollama or LM Studio.
+
+The pinned binary manifest lives at `CppCore/runtime/llama.manifest.json` and uses official
+`llama.cpp b11669`, which already includes the native `llama-server` router mode (`--models-dir` /
+`--models-preset`).
+
 ### Try the tutorial without spending money
 
 ```bash

@@ -97,6 +97,56 @@ Se `ARESTRIX_DEFAULT_PROVIDER` não existir (ou for `auto`), o Studio usa o prim
 listadas acima; um modelo local (Ollama, llama.cpp, vLLM) precisa de `ARESTRIX_DEFAULT_PROVIDER=local`,
 `ARESTRIX_DEFAULT_MODEL=<nome>` e `LOCAL_LLM_BASE_URL`.
 
+### Modelos locais (o Arestrix não instala nem inicia o servidor)
+
+O Arestrix **não** empacota, baixa ou inicia runtimes como llama.cpp, Ollama ou vLLM. Para usar um modelo
+local, você já precisa ter um servidor de inferência rodando com uma API compatível com OpenAI. Exemplos de
+endereço base:
+
+| Servidor | Endereço base típico |
+| :--- | :--- |
+| Ollama | `http://localhost:11434/v1` |
+| LM Studio (servidor local) | `http://localhost:1234/v1` |
+| llama.cpp (`llama-server`) | `http://localhost:8080/v1` |
+| vLLM | `http://localhost:8000/v1` |
+
+Passos:
+
+1. Inicie o servidor e carregue o modelo (por exemplo, `ollama serve` e `ollama pull qwen2.5:7b`, ou
+   `llama-server -m modelo.gguf --port 8080`).
+2. No Studio, abra **Padrões Globais → Provedor & Modelo**, escolha **Local (Ollama / vLLM)** e informe o
+   endereço base em `LOCAL_LLM_BASE_URL`.
+3. Clique em **Buscar modelos**: o Arestrix consulta `GET /v1/models` pelo backend nativo (sem depender de
+   CORS) e lista os modelos carregados. Se o servidor não listar modelos, digite o nome manualmente.
+4. Para um vértice específico, o mesmo campo aparece em **Modelo de IA → Provedor & Modelo** quando o
+   vértice não herda o modelo global.
+
+Nenhuma chave de API é obrigatória; `LOCAL_LLM_API_KEY` só é enviada se você a definir (alguns servidores
+exigem um token qualquer). A chamada de ferramentas depende do modelo e do servidor: modelos sem suporte a
+tools continuam servindo para conversa, mas o Assistente do Studio informa `tools_unsupported` ao tentar
+operar o grafo. Um runner exportado lê `LOCAL_LLM_BASE_URL` e o nome do modelo na máquina de destino; o
+endereço não é gravado dentro do projeto.
+
+#### Catálogo e download de modelos
+
+O Arestrix traz um catálogo pré-aprovado em `CppCore/runtime/models.catalog.json`, com metadados de modelos
+GGUF (Qwen2.5 e Mistral), licença, tamanho, SHA-256, requisitos de RAM/VRAM e suporte a ferramentas. Os pesos
+**não** são distribuídos com o produto: o download vai direto da origem oficial pinada.
+
+Em **Padrões Globais → Provedor & Modelo → Local**, clique em **Gerenciar modelos locais...** para:
+
+- baixar um modelo com progresso, retomada e verificação SHA-256;
+- verificar ou excluir um modelo já baixado;
+- selecionar o modelo para o projeto.
+
+Os arquivos ficam em `%LOCALAPPDATA%\Arestrix\models` no Windows e em
+`~/.local/share/arestrix/models` no Linux (ou em `ARESTRIX_DATA_DIR`, quando definido). Nesta fase, o
+download prepara o arquivo; o runtime gerenciado e o roteador nativo do llama.cpp entram na fase seguinte.
+Enquanto isso, use um `llama-server`, Ollama ou LM Studio já em execução no campo de endpoint.
+
+O manifesto de binários pinados fica em `CppCore/runtime/llama.manifest.json` e usa o build oficial
+`llama.cpp b11669`, que já inclui o modo router nativo do `llama-server` (`--models-dir` / `--models-preset`).
+
 ### Teste o tutorial sem gastar dinheiro
 
 ```bash

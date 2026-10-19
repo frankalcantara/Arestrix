@@ -4,6 +4,15 @@ import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 import { SkillEditorModal } from './SkillEditorModal.ts';
 import { t } from '../../i18n/index.ts';
+import {
+  LOCAL_LLM_DEFAULT_URL,
+  LOCAL_LLM_ENV,
+  discoverLocalModels,
+  normalizeLocalBaseUrl,
+  renderModelChips,
+  saveLocalBaseUrl
+} from '../LocalModelField.ts';
+import { EnvironmentManager } from '../../core/env/EnvironmentManager.ts';
 
 export class NodeModelModal {
   private overlay: HTMLElement;
@@ -104,14 +113,28 @@ export class NodeModelModal {
                     <option value="google" ${effectiveModel.provider === 'google' ? 'selected' : ''}>Google (Gemini)</option>
                     <option value="openai" ${effectiveModel.provider === 'openai' ? 'selected' : ''}>OpenAI</option>
                     <option value="jev" ${effectiveModel.provider === 'jev' ? 'selected' : ''}>Jev / Engine Visual</option>
-                    <option value="local" ${effectiveModel.provider === 'local' ? 'selected' : ''}>Local (Ollama / vLLM)</option>
+                    <option value="local" ${effectiveModel.provider === 'local' ? 'selected' : ''}>Local / OpenAI-compatível (Ollama, LM Studio, llama.cpp, vLLM)</option>
                   </select>
                 </div>
 
                 <div class="form-group">
                   <label class="form-label" for="node-model-name">${t('node_modals.model_id_label')}</label>
-                  <input type="text" id="node-model-name" class="form-input" value="${this.escapeHtml(effectiveModel.model)}" placeholder="ex: claude-opus-5.5, deepseek-v4-pro" ${isInherited ? 'disabled' : ''} />
+                  <input type="text" id="node-model-name" class="form-input" value="${this.escapeHtml(effectiveModel.model)}" placeholder="ex: claude-opus-5.5, deepseek-v4-pro, qwen2.5:7b" ${isInherited ? 'disabled' : ''} />
                 </div>
+              </div>
+
+              <!-- Endpoint do servidor local já em execução (variável de ambiente desta máquina) -->
+              <div class="form-group" id="node-local-endpoint-group" style="display: none; margin-top: 12px;">
+                <label class="form-label" for="node-local-base-url" id="node-local-endpoint-label"></label>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <input type="text" id="node-local-base-url" class="form-input" style="font-family: monospace;" placeholder="${LOCAL_LLM_DEFAULT_URL}" ${isInherited ? 'disabled' : ''} />
+                  <button type="button" class="btn btn-secondary-pill" id="btn-node-discover-models" style="white-space: nowrap; height: 34px; padding: 0 14px; font-size: 12px;" ${isInherited ? 'disabled' : ''}>
+                    ${t('global_defaults.local_discover_btn')}
+                  </button>
+                </div>
+                <div class="form-hint" id="node-local-endpoint-hint"></div>
+                <div id="node-local-models" style="display: none; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
+                <div id="node-local-model-status" style="display: none; margin-top: 6px; font-size: 11.5px;"></div>
               </div>
             </div>
 
@@ -210,6 +233,8 @@ export class NodeModelModal {
       } else {
         formWrapper.classList.remove('form-disabled-opacity');
       }
+      this.syncLocalEndpointField();
+      if (!isInherited) void this.loadNodeEndpoint();
     });
 
     providerSelect?.addEventListener('change', () => {
@@ -219,6 +244,14 @@ export class NodeModelModal {
       else if (val === 'google') modelInput.value = 'gemini-2.5-flash';
       else if (val === 'openai') modelInput.value = 'gpt-4o';
       else if (val === 'jev') modelInput.value = 'jev-svg-validator';
+      this.syncLocalEndpointField();
+      void this.loadNodeEndpoint();
+      const status = this.overlay.querySelector('#node-local-model-status') as HTMLElement | null;
+      if (status) status.style.display = 'none';
+    });
+
+    this.overlay.querySelector('#btn-node-discover-models')?.addEventListener('click', () => {
+      void this.discoverNodeModels();
     });
 
     const skillPathInput = this.overlay.querySelector('#node-skill-path') as HTMLInputElement;
@@ -257,12 +290,105 @@ export class NodeModelModal {
     });
 
     this.overlay.querySelector('#btn-save-model-modal')?.addEventListener('click', () => {
-      this.saveNodeModel(node, inheritCheck.checked);
-      this.hide();
+      void this.saveNodeModel(node, inheritCheck.checked).finally(() => this.hide());
     });
+
+    this.syncLocalEndpointField();
+    void this.loadNodeEndpoint();
   }
 
-  private saveNodeModel(node: INodeData, inherit: boolean): void {
+  private localEndpointVar(provider: LLMProvider | string): string | null {
+    if (provider === 'local') return LOCAL_LLM_ENV;
+    if (provider === 'jev') return 'JEV_BASE_URL';
+    return null;
+  }
+
+  private syncLocalEndpointField(): void {
+    const inherit = (this.overlay.querySelector('#chk-inherit-model') as HTMLInputElement)?.checked !== false;
+    const provider = (this.overlay.querySelector('#node-model-provider') as HTMLSelectElement)?.value || 'deepseek';
+    const group = this.overlay.querySelector('#node-local-endpoint-group') as HTMLElement | null;
+    const label = this.overlay.querySelector('#node-local-endpoint-label') as HTMLElement | null;
+    const hint = this.overlay.querySelector('#node-local-endpoint-hint') as HTMLElement | null;
+    const input = this.overlay.querySelector('#node-local-base-url') as HTMLInputElement | null;
+    const discover = this.overlay.querySelector('#btn-node-discover-models') as HTMLButtonElement | null;
+    const list = this.overlay.querySelector('#node-local-models') as HTMLElement | null;
+    const status = this.overlay.querySelector('#node-local-model-status') as HTMLElement | null;
+    if (!group) return;
+
+    const varName = this.localEndpointVar(provider);
+    group.style.display = varName && !inherit ? 'block' : 'none';
+    if (!varName) return;
+    if (label) label.textContent = t('global_defaults.local_endpoint_label', { key: varName });
+    if (hint) hint.textContent = provider === 'local'
+      ? t('node_modals.local_endpoint_hint')
+      : t('global_defaults.jev_endpoint_hint');
+    if (input) {
+      input.disabled = inherit;
+      input.placeholder = provider === 'local' ? LOCAL_LLM_DEFAULT_URL : 'http://localhost:8080/v1';
+    }
+    if (discover) {
+      discover.disabled = inherit;
+      discover.style.display = provider === 'local' ? '' : 'none';
+    }
+    if (list && provider !== 'local') { list.style.display = 'none'; list.innerHTML = ''; }
+    if (status && provider !== 'local') status.style.display = 'none';
+  }
+
+  private async loadNodeEndpoint(): Promise<void> {
+    const provider = (this.overlay.querySelector('#node-model-provider') as HTMLSelectElement)?.value || 'deepseek';
+    const varName = this.localEndpointVar(provider);
+    const input = this.overlay.querySelector('#node-local-base-url') as HTMLInputElement | null;
+    if (!varName || !input) return;
+    const value = await EnvironmentManager.getInstance().getEnvVar(varName);
+    if (value) input.value = value;
+  }
+
+  private async discoverNodeModels(): Promise<void> {
+    const provider = (this.overlay.querySelector('#node-model-provider') as HTMLSelectElement)?.value || 'deepseek';
+    if (provider !== 'local') return;
+
+    const input = this.overlay.querySelector('#node-local-base-url') as HTMLInputElement | null;
+    const list = this.overlay.querySelector('#node-local-models') as HTMLElement | null;
+    const status = this.overlay.querySelector('#node-local-model-status') as HTMLElement | null;
+    const modelInput = this.overlay.querySelector('#node-model-name') as HTMLInputElement | null;
+    if (!input || !status) return;
+
+    const base = normalizeLocalBaseUrl(input.value || LOCAL_LLM_DEFAULT_URL);
+    input.value = base;
+    status.style.display = 'block';
+    status.style.color = '#616161';
+    status.textContent = t('global_defaults.local_discovering');
+
+    const result = await discoverLocalModels(base);
+    if (result.baseUrl) input.value = result.baseUrl;
+
+    if (result.ok && result.models.length > 0) {
+      status.style.color = '#0e700e';
+      status.textContent = t('global_defaults.local_models_found', { count: result.models.length });
+      if (list) {
+        list.style.display = 'flex';
+        renderModelChips(list, result.models, (model) => {
+          if (modelInput) modelInput.value = model;
+          status.style.color = '#0e700e';
+          status.textContent = t('global_defaults.local_model_selected', { model });
+        });
+      }
+    } else if (result.ok) {
+      status.style.color = '#797673';
+      status.textContent = t('global_defaults.local_models_none');
+      if (list) { list.style.display = 'none'; list.innerHTML = ''; }
+    } else {
+      status.style.color = '#a80000';
+      status.textContent = result.errorCode === 'invalid_url'
+        ? t('global_defaults.local_url_required')
+        : result.errorCode === 'http_error'
+          ? t('global_defaults.local_http_error', { url: result.baseUrl || base, detail: result.error || '' })
+          : t('global_defaults.local_unreachable', { url: result.baseUrl || base });
+      if (list) { list.style.display = 'none'; list.innerHTML = ''; }
+    }
+  }
+
+  private async saveNodeModel(node: INodeData, inherit: boolean): Promise<void> {
     const currentSettings = node.agentSettings || {
       inheritSandbox: true,
       inheritModel: true,
@@ -277,6 +403,23 @@ export class NodeModelModal {
       const skillPath = (this.overlay.querySelector('#node-skill-path') as HTMLInputElement)?.value.trim();
       const promptTemplate = (this.overlay.querySelector('#node-prompt-template') as HTMLTextAreaElement)?.value.trim();
       const temperature = parseFloat((this.overlay.querySelector('#node-temperature') as HTMLInputElement)?.value) || 0.7;
+
+      // O endpoint do servidor local/Jev é global desta máquina; grava antes de fechar para que a
+      // execução do pipeline já encontre o valor.
+      const endpointVar = this.localEndpointVar(provider);
+      if (endpointVar) {
+        const input = this.overlay.querySelector('#node-local-base-url') as HTMLInputElement | null;
+        const raw = input?.value.trim() || (provider === 'local' ? LOCAL_LLM_DEFAULT_URL : '');
+        if (raw) {
+          if (provider === 'local') {
+            const normalized = normalizeLocalBaseUrl(raw);
+            if (input) input.value = normalized;
+            await saveLocalBaseUrl(normalized);
+          } else {
+            await EnvironmentManager.getInstance().setEnvVar(endpointVar, raw);
+          }
+        }
+      }
 
       newModelData = {
         provider,

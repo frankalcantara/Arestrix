@@ -6,6 +6,16 @@ import { EnvironmentManager } from '../core/env/EnvironmentManager.ts';
 import { EnvGuidanceModal } from './modals/EnvGuidanceModal.ts';
 import { t } from '../i18n/index.ts';
 import { McpToolPicker } from './McpToolPicker.ts';
+import { LocalModelsModal } from './modals/LocalModelsModal.ts';
+import {
+  LOCAL_LLM_DEFAULT_URL,
+  LOCAL_LLM_ENV,
+  discoverLocalModels,
+  loadLocalBaseUrl,
+  normalizeLocalBaseUrl,
+  renderModelChips,
+  saveLocalBaseUrl
+} from './LocalModelField.ts';
 
 export type GlobalDefaultsTab = 'model' | 'sandbox' | 'tools' | 'memory';
 
@@ -15,6 +25,7 @@ export class GlobalDefaultsModal {
   private windowController?: IModalWindowController;
   private activeTab: GlobalDefaultsTab = 'model';
   private mcpPicker?: McpToolPicker;
+  private localModelsModal?: LocalModelsModal;
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -89,7 +100,7 @@ export class GlobalDefaultsModal {
                     <option value="google" ${defaults.model.provider === 'google' ? 'selected' : ''}>Google (Gemini 2.5 Flash / Pro)</option>
                     <option value="openai" ${defaults.model.provider === 'openai' ? 'selected' : ''}>OpenAI (GPT-4o / o3)</option>
                     <option value="jev" ${defaults.model.provider === 'jev' ? 'selected' : ''}>Jev / Engine Visual Local</option>
-                    <option value="local" ${defaults.model.provider === 'local' ? 'selected' : ''}>Local (Ollama / vLLM)</option>
+                    <option value="local" ${defaults.model.provider === 'local' ? 'selected' : ''}>Local / OpenAI-compatível (Ollama, LM Studio, llama.cpp, vLLM)</option>
                   </select>
                 </div>
 
@@ -97,6 +108,25 @@ export class GlobalDefaultsModal {
                   <label class="form-label" for="def-model">${t('global_defaults.model_name_label')}</label>
                   <input type="text" id="def-model" class="form-input" value="${this.escapeHtml(defaults.model.model)}" placeholder="ex: deepseek-flash, claude-opus-5.5" />
                 </div>
+              </div>
+
+              <!-- Servidor local já em execução (Ollama / llama.cpp / vLLM / LM Studio / Jev) -->
+              <div class="form-group" id="def-local-endpoint-group" style="display: none; margin-top: 12px;">
+                <label class="form-label" for="def-local-base-url" id="def-local-endpoint-label"></label>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <input type="text" id="def-local-base-url" class="form-input" style="font-family: monospace;" placeholder="${LOCAL_LLM_DEFAULT_URL}" />
+                  <button type="button" class="btn btn-secondary-pill" id="btn-def-discover-models" style="white-space: nowrap; height: 34px; padding: 0 14px; font-size: 12px;">
+                    ${t('global_defaults.local_discover_btn')}
+                  </button>
+                </div>
+                <div class="form-hint" id="def-local-endpoint-hint"></div>
+                <div style="margin-top: 8px;">
+                  <button type="button" class="btn btn-secondary-pill" id="btn-open-local-models" style="font-size: 12px; height: 30px; padding: 0 12px;">
+                    ${t('local_models.manage_btn')}
+                  </button>
+                </div>
+                <div id="def-local-models" style="display: none; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
+                <div id="def-local-model-status" style="display: none; margin-top: 6px; font-size: 11.5px;"></div>
               </div>
 
               <!-- Seção de Conexão com API e Credenciais Globais do Studio -->
@@ -186,7 +216,7 @@ export class GlobalDefaultsModal {
                     <option value="google">Google (Gemini)</option>
                     <option value="groq">Groq</option>
                     <option value="jev">Jev / Engine Visual Local</option>
-                    <option value="local">Local (Ollama / vLLM)</option>
+                    <option value="local">Local / OpenAI-compatível (Ollama, LM Studio, llama.cpp, vLLM)</option>
                   </select>
                 </div>
                 <div class="form-group">
@@ -445,6 +475,7 @@ export class GlobalDefaultsModal {
 
     this.bindDialogEvents();
     this.updateKeyIndicator();
+    void this.loadProjectEndpoint();
     void this.loadStudioModel();
     this.mountToolsExtras(defaults.codeMode.mcpServers || [], defaults.codeMode.allowedMcpTools || []);
   }
@@ -568,7 +599,18 @@ export class GlobalDefaultsModal {
       const statusDiv = this.overlay.querySelector('#api-test-status') as HTMLElement;
       if (statusDiv) statusDiv.style.display = 'none';
 
+      void this.loadProjectEndpoint();
       this.updateKeyIndicator();
+    });
+
+    // Descobrir modelos de um servidor local já em execução
+    this.overlay.querySelector('#btn-def-discover-models')?.addEventListener('click', () => {
+      void this.discoverProjectModels();
+    });
+
+    // Catálogo e download de modelos locais (runtime gerenciado entra na Fase 2)
+    this.overlay.querySelector('#btn-open-local-models')?.addEventListener('click', () => {
+      this.openLocalModels();
     });
 
     // Testar API do Agente
@@ -630,9 +672,121 @@ export class GlobalDefaultsModal {
 
     // Salvar
     this.overlay.querySelector('#btn-save-defaults')?.addEventListener('click', () => {
-      this.saveValues();
-      this.hide();
+      void this.saveValues().finally(() => this.hide());
     });
+  }
+
+  // --- Endpoint de servidor local (escopo da máquina, mas usado pelo projeto e pelos vértices) ---
+
+  private openLocalModels(): void {
+    if (!this.localModelsModal) {
+      this.localModelsModal = new LocalModelsModal({
+        onUse: (model) => {
+          const providerSelect = this.overlay.querySelector('#def-provider') as HTMLSelectElement | null;
+          if (providerSelect) providerSelect.value = 'local';
+          const modelInput = this.overlay.querySelector('#def-model') as HTMLInputElement | null;
+          if (modelInput) modelInput.value = model.apiModel || model.id;
+          this.syncProjectEndpointField();
+          void this.loadProjectEndpoint();
+        }
+      });
+    }
+    this.localModelsModal.show();
+  }
+
+  private projectEndpointVar(provider: string): string | null {
+    if (provider === 'local') return LOCAL_LLM_ENV;
+    if (provider === 'jev') return 'JEV_BASE_URL';
+    return null;
+  }
+
+  private syncProjectEndpointField(): void {
+    const provider = (this.overlay.querySelector('#def-provider') as HTMLSelectElement)?.value || 'deepseek';
+    const group = this.overlay.querySelector('#def-local-endpoint-group') as HTMLElement | null;
+    const label = this.overlay.querySelector('#def-local-endpoint-label') as HTMLElement | null;
+    const hint = this.overlay.querySelector('#def-local-endpoint-hint') as HTMLElement | null;
+    const input = this.overlay.querySelector('#def-local-base-url') as HTMLInputElement | null;
+    const discover = this.overlay.querySelector('#btn-def-discover-models') as HTMLElement | null;
+    const manage = this.overlay.querySelector('#btn-open-local-models') as HTMLElement | null;
+    const models = this.overlay.querySelector('#def-local-models') as HTMLElement | null;
+    const status = this.overlay.querySelector('#def-local-model-status') as HTMLElement | null;
+    if (!group) return;
+
+    const varName = this.projectEndpointVar(provider);
+    group.style.display = varName ? 'block' : 'none';
+    if (!varName) return;
+
+    if (label) label.textContent = t('global_defaults.local_endpoint_label', { key: varName });
+    if (hint) hint.textContent = provider === 'local'
+      ? t('global_defaults.local_endpoint_hint')
+      : t('global_defaults.jev_endpoint_hint');
+    if (input) input.placeholder = provider === 'local' ? LOCAL_LLM_DEFAULT_URL : 'http://localhost:8080/v1';
+    if (discover) discover.style.display = provider === 'local' ? '' : 'none';
+    if (manage) manage.style.display = provider === 'local' ? '' : 'none';
+    if (models && provider !== 'local') {
+      models.style.display = 'none';
+      models.innerHTML = '';
+    }
+    if (status && provider !== 'local') status.style.display = 'none';
+  }
+
+  private async loadProjectEndpoint(): Promise<void> {
+    this.syncProjectEndpointField();
+    const provider = (this.overlay.querySelector('#def-provider') as HTMLSelectElement)?.value || 'deepseek';
+    const varName = this.projectEndpointVar(provider);
+    const input = this.overlay.querySelector('#def-local-base-url') as HTMLInputElement | null;
+    if (!varName || !input) return;
+    const value = provider === 'local'
+      ? await loadLocalBaseUrl()
+      : ((await EnvironmentManager.getInstance().getEnvVar(varName)) || '');
+    input.value = value || '';
+  }
+
+  private async discoverProjectModels(): Promise<void> {
+    const provider = (this.overlay.querySelector('#def-provider') as HTMLSelectElement)?.value || 'deepseek';
+    if (provider !== 'local') return;
+
+    const input = this.overlay.querySelector('#def-local-base-url') as HTMLInputElement | null;
+    const list = this.overlay.querySelector('#def-local-models') as HTMLElement | null;
+    const status = this.overlay.querySelector('#def-local-model-status') as HTMLElement | null;
+    if (!input || !status) return;
+
+    const base = normalizeLocalBaseUrl(input.value || LOCAL_LLM_DEFAULT_URL);
+    input.value = base;
+    status.style.display = 'block';
+    status.style.color = '#616161';
+    status.textContent = t('global_defaults.local_discovering');
+
+    const result = await discoverLocalModels(base);
+    if (result.baseUrl) input.value = result.baseUrl;
+
+    if (result.ok) {
+      if (result.models.length > 0) {
+        status.style.color = '#0e700e';
+        status.textContent = t('global_defaults.local_models_found', { count: result.models.length });
+        if (list) {
+          list.style.display = 'flex';
+          const modelInput = this.overlay.querySelector('#def-model') as HTMLInputElement | null;
+          renderModelChips(list, result.models, (model) => {
+            if (modelInput) modelInput.value = model;
+            status.style.color = '#0e700e';
+            status.textContent = t('global_defaults.local_model_selected', { model });
+          });
+        }
+      } else {
+        status.style.color = '#797673';
+        status.textContent = t('global_defaults.local_models_none');
+        if (list) { list.style.display = 'none'; list.innerHTML = ''; }
+      }
+    } else {
+      status.style.color = '#a80000';
+      status.textContent = result.errorCode === 'invalid_url'
+        ? t('global_defaults.local_url_required')
+        : result.errorCode === 'http_error'
+          ? t('global_defaults.local_http_error', { url: result.baseUrl || base, detail: result.error || '' })
+          : t('global_defaults.local_unreachable', { url: result.baseUrl || base });
+      if (list) { list.style.display = 'none'; list.innerHTML = ''; }
+    }
   }
 
   // --- Modelo padrão do Studio (variáveis de ambiente do usuário; nunca gravado no projeto) ---
@@ -653,6 +807,8 @@ export class GlobalDefaultsModal {
     const varName = this.studioBaseUrlVar(provider);
     if (group) group.style.display = varName ? 'block' : 'none';
     if (label && varName) label.textContent = t('global_defaults.studio_base_url_label', { key: varName });
+    const input = this.overlay.querySelector('#studio-base-url') as HTMLInputElement | null;
+    if (input) input.placeholder = provider === 'local' ? LOCAL_LLM_DEFAULT_URL : 'http://localhost:8080/v1';
   }
 
   private async loadStudioModel(): Promise<void> {
@@ -713,6 +869,11 @@ export class GlobalDefaultsModal {
       for (const p of ['deepseek', 'openai', 'anthropic', 'google', 'groq']) {
         if (await env.hasEnvVar(this.getEnvKeyForProvider(p))) { provider = p; break; }
       }
+      // Modelo local: a escolha só é automática quando há endpoint configurado e um nome de modelo
+      // explícito; o backend exige o nome porque cada servidor local expõe modelos diferentes.
+      if (!provider && model !== 'auto' && (await env.hasEnvVar(LOCAL_LLM_ENV))) {
+        provider = 'local';
+      }
     }
     if (model === 'auto') model = provider ? (defaults[provider] || '') : '';
     if (provider && model) {
@@ -728,7 +889,13 @@ export class GlobalDefaultsModal {
     const provider = (this.overlay.querySelector('#studio-provider') as HTMLSelectElement)?.value || 'auto';
     const model = (this.overlay.querySelector('#studio-model') as HTMLInputElement)?.value.trim() || 'auto';
     const baseVar = this.studioBaseUrlVar(provider);
-    const baseUrl = (this.overlay.querySelector('#studio-base-url') as HTMLInputElement)?.value.trim() || '';
+    const baseInput = this.overlay.querySelector('#studio-base-url') as HTMLInputElement | null;
+    let baseUrl = baseInput?.value.trim() || '';
+    if (provider === 'local') {
+      // Sem endereço explícito, vale o padrão do runtime: Ollama em localhost:11434.
+      baseUrl = normalizeLocalBaseUrl(baseUrl || LOCAL_LLM_DEFAULT_URL);
+      if (baseInput) baseInput.value = baseUrl;
+    }
     const feedback = this.overlay.querySelector('#studio-model-feedback') as HTMLElement;
 
     const show = (ok: boolean, text: string) => {
@@ -767,6 +934,8 @@ export class GlobalDefaultsModal {
       case 'google': return 'GEMINI_API_KEY';
       case 'openai': return 'OPENAI_API_KEY';
       case 'groq': return 'GROQ_API_KEY';
+      case 'local': return 'LOCAL_LLM_API_KEY';
+      case 'jev': return 'JEV_API_KEY';
       default: return 'DEEPSEEK_API_KEY';
     }
   }
@@ -776,6 +945,7 @@ export class GlobalDefaultsModal {
     const provider = providerSelect?.value || 'deepseek';
     const indicator = this.overlay.querySelector('#api-key-indicator') as HTMLElement;
     const deployKeyNameInput = this.overlay.querySelector('#deploy-key-name') as HTMLInputElement;
+    const envManager = EnvironmentManager.getInstance();
 
     if (provider === 'jev') {
       if (indicator) {
@@ -783,17 +953,27 @@ export class GlobalDefaultsModal {
         indicator.style.background = '#e1dfdd';
         indicator.style.color = '#242424';
       }
-      if (deployKeyNameInput) deployKeyNameInput.value = '';
+      if (deployKeyNameInput) deployKeyNameInput.value = 'JEV_API_KEY';
       return;
     }
 
     if (provider === 'local') {
+      // Chave opcional: só existe em servidores locais protegidos por token.
+      const keyName = 'LOCAL_LLM_API_KEY';
+      const keyVal = await envManager.getEnvVar(keyName);
+      if (deployKeyNameInput) deployKeyNameInput.value = keyName;
       if (indicator) {
-        indicator.textContent = t('global_defaults.indicator_local');
-        indicator.style.background = '#e1dfdd';
-        indicator.style.color = '#242424';
+        if (keyVal && keyVal.length > 0) {
+          const masked = keyVal.length > 8 ? `${keyVal.slice(0, 3)}...${keyVal.slice(-3)}` : '••••';
+          indicator.textContent = t('global_defaults.indicator_configured', { key: keyName, masked });
+          indicator.style.background = '#dff6dd';
+          indicator.style.color = '#0e700e';
+        } else {
+          indicator.textContent = t('global_defaults.indicator_local');
+          indicator.style.background = '#e1dfdd';
+          indicator.style.color = '#242424';
+        }
       }
-      if (deployKeyNameInput) deployKeyNameInput.value = '';
       return;
     }
 
@@ -802,7 +982,6 @@ export class GlobalDefaultsModal {
       deployKeyNameInput.value = keyName;
     }
 
-    const envManager = EnvironmentManager.getInstance();
     const keyVal = await envManager.getEnvVar(keyName);
 
     if (indicator) {
@@ -840,23 +1019,23 @@ export class GlobalDefaultsModal {
     }
 
     if (provider === 'local') {
-      try {
-        const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 3000);
-        const resp = await fetch('http://localhost:11434/api/tags', { signal: ctrl.signal });
-        clearTimeout(tid);
-        if (resp.ok) {
-          statusDiv.style.background = '#dff6dd';
-          statusDiv.style.color = '#0e700e';
-          statusDiv.style.border = '1px solid #107c41';
-          statusDiv.textContent = t('global_defaults.test_local_ok');
-          return;
-        }
-      } catch {}
-      statusDiv.style.background = '#fff4ce';
-      statusDiv.style.color = '#797673';
-      statusDiv.style.border = '1px solid #fce100';
-      statusDiv.textContent = t('global_defaults.test_local_hint');
+      const input = this.overlay.querySelector('#def-local-base-url') as HTMLInputElement | null;
+      const base = normalizeLocalBaseUrl(input?.value || LOCAL_LLM_DEFAULT_URL);
+      if (input) input.value = base;
+      const result = await discoverLocalModels(base);
+      if (result.ok) {
+        statusDiv.style.background = '#dff6dd';
+        statusDiv.style.color = '#0e700e';
+        statusDiv.style.border = '1px solid #107c41';
+        statusDiv.textContent = result.models.length > 0
+          ? t('global_defaults.test_local_ok', { url: result.baseUrl || base, count: result.models.length })
+          : t('global_defaults.test_local_ok_empty', { url: result.baseUrl || base });
+      } else {
+        statusDiv.style.background = '#fff4ce';
+        statusDiv.style.color = '#797673';
+        statusDiv.style.border = '1px solid #fce100';
+        statusDiv.textContent = t('global_defaults.test_local_fail', { url: result.baseUrl || base });
+      }
       return;
     }
 
@@ -976,7 +1155,7 @@ export class GlobalDefaultsModal {
     }
   }
 
-  private saveValues(): void {
+  private async saveValues(): Promise<void> {
     const provider = (this.overlay.querySelector('#def-provider') as HTMLSelectElement)?.value as LLMProvider || 'deepseek';
     const model = (this.overlay.querySelector('#def-model') as HTMLInputElement)?.value.trim() || 'deepseek-flash';
     const skillPath = (this.overlay.querySelector('#def-skill') as HTMLInputElement)?.value.trim();
@@ -1042,6 +1221,23 @@ export class GlobalDefaultsModal {
         domains: []
       }
     };
+
+    // O endpoint do servidor local/Jev é uma variável de ambiente da máquina (não vai para o projeto).
+    // Grava antes de atualizar o grafo para que a execução seguinte já encontre o valor.
+    const endpointVar = this.projectEndpointVar(provider);
+    if (endpointVar) {
+      const input = this.overlay.querySelector('#def-local-base-url') as HTMLInputElement | null;
+      const raw = input?.value.trim() || (provider === 'local' ? LOCAL_LLM_DEFAULT_URL : '');
+      if (raw) {
+        if (provider === 'local') {
+          const normalized = normalizeLocalBaseUrl(raw);
+          if (input) input.value = normalized;
+          await saveLocalBaseUrl(normalized);
+        } else {
+          await EnvironmentManager.getInstance().setEnvVar(endpointVar, raw);
+        }
+      }
+    }
 
     this.graph.updateGlobalDefaults(newDefaults);
   }

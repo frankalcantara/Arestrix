@@ -26,6 +26,11 @@ struct ProviderInfo {
 const std::vector<std::string>& knownProviders();
 ProviderInfo resolveProvider(const std::string& provider);
 
+// Normaliza a URL de um servidor local OpenAI-compativel. Aceita a raiz do servidor
+// (http://localhost:11434), a base ja versionada (http://host:8000/v1) e, por conveniencia,
+// a URL completa de /models ou /chat/completions. So acrescenta /v1 quando a URL nao tem caminho.
+std::string normalizeLocalBaseUrl(std::string baseUrl);
+
 struct ChatToolCall {
     std::string id;
     std::string name;

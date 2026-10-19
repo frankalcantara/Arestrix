@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-10-19",
+  "notes": "Binarios oficiais pinados. O roteador e o modo nativo do llama-server (--models-dir / --models-preset), sem componente externo.",
+  "components": {
+    "llama.cpp": {
+      "version": "b11669",
+      "releaseTag": "b11669",
+      "releasedAt": "2026-10-15T16:10:46Z",
+      "sourceUrl": "https://github.com/ggml-org/llama.cpp/releases/tag/b11669",
+      "license": "MIT",
+      "licenseUrl": "https://github.com/ggml-org/llama.cpp/blob/master/LICENSE",
+      "binaries": [
+        {
+          "id": "windows-x64-cpu",
+          "platform": "windows-x64",
+          "backend": "cpu",
+          "archive": "zip",
+          "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11669/llama-b11669-bin-win-cpu-x64.zip",
+          "sha256": "37b3efcf962847ca869745fd4ccf7f5e7e8dacfeff9fa3523b4ca8cdc66d632b",
+          "sizeBytes": 19537886,
+          "entryPoint": "llama-server.exe"
+        },
+        {
+          "id": "windows-x64-vulkan",
+          "platform": "windows-x64",
+          "backend": "vulkan",
+          "archive": "zip",
+          "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11669/llama-b11669-bin-win-vulkan-x64.zip",
+          "sha256": "2c07574e7bde71321cb785282b20cc821e951132149eeceeea32ddebdbf0598e",
+          "sizeBytes": 32182350,
+          "entryPoint": "llama-server.exe"
+        },
+        {
+          "id": "windows-x64-cuda-12.4",
+          "platform": "windows-x64",
+          "backend": "cuda",
+          "archive": "zip",
+          "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11669/llama-b11669-bin-win-cuda-12.4-x64.zip",
+          "sha256": "c2da1f73ed176ae093ac5aceb978a7b167a16113f6d74c6789eeaee2135cb8dc",
+          "sizeBytes": 266582698,
+          "entryPoint": "llama-server.exe"
+        },
+        {
+          "id": "linux-x64-cpu",
+          "platform": "linux-x64",
+          "backend": "cpu",
+          "archive": "tar.gz",
+          "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11669/llama-b11669-bin-ubuntu-x64.tar.gz",
+          "sha256": "cf07c1c112d709bd67e522017471de57ed0ec8bea031d732c5422351c07f65ac",
+          "sizeBytes": 17851611,
+          "entryPoint": "llama-server"
+        },
+        {
+          "id": "linux-x64-vulkan",
+          "platform": "linux-x64",
+          "backend": "vulkan",
+          "archive": "tar.gz",
+          "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11669/llama-b11669-bin-ubuntu-vulkan-x64.tar.gz",
+          "sha256": "e8709e5ba6c1b093dea7f3de57f4aba842f9a188fba6b465782d65d6fcfa4d9f",
+          "sizeBytes": 30497889,
+          "entryPoint": "llama-server"
+        },
+        {
+          "id": "linux-x64-cuda-12.8",
+          "platform": "linux-x64",
+          "backend": "cuda",
+          "archive": "tar.gz",
+          "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11669/llama-b11669-bin-ubuntu-cuda-12.8-x64.tar.gz",
+          "sha256": "4703ed1a3cd6e8504affb6cb9866f501e96d634d68a002dc9a8251c9e2819b49",
+          "sizeBytes": 172525113,
+          "entryPoint": "llama-server"
+        }
+      ]
+    }
+  }
+}

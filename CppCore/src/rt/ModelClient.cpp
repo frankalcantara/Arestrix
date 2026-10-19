@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <optional>
 #include <stdexcept>
 #include <thread>
@@ -139,6 +140,36 @@ const std::vector<std::string>& knownProviders() {
     return list;
 }
 
+std::string normalizeLocalBaseUrl(std::string baseUrl) {
+    auto trim = [](std::string& s) {
+        size_t b = s.find_first_not_of(" \t\r\n");
+        if (b == std::string::npos) { s.clear(); return; }
+        size_t e = s.find_last_not_of(" \t\r\n");
+        s = s.substr(b, e - b + 1);
+    };
+    trim(baseUrl);
+    while (!baseUrl.empty() && baseUrl.back() == '/') baseUrl.pop_back();
+    if (baseUrl.empty()) return baseUrl;
+
+    // O usuario pode colar a URL de um endpoint visto na documentacao do servidor.
+    for (const char* suffix : {"/chat/completions", "/models"}) {
+        size_t n = std::strlen(suffix);
+        if (baseUrl.size() > n && baseUrl.compare(baseUrl.size() - n, n, suffix) == 0) {
+            baseUrl.erase(baseUrl.size() - n);
+            while (!baseUrl.empty() && baseUrl.back() == '/') baseUrl.pop_back();
+            break;
+        }
+    }
+    if (baseUrl.empty()) return baseUrl;
+
+    // Ollama, llama.cpp, vLLM e LM Studio expoem a API OpenAI em /v1. Se o usuario informou so
+    // host:porta (sem caminho), completamos; caminhos customizados sao preservados.
+    size_t scheme = baseUrl.find("://");
+    size_t pathStart = scheme == std::string::npos ? std::string::npos : baseUrl.find('/', scheme + 3);
+    if (pathStart == std::string::npos) baseUrl += "/v1";
+    return baseUrl;
+}
+
 ProviderInfo resolveProvider(const std::string& provider) {
     ProviderInfo p;
     if (provider == "anthropic") {
@@ -153,15 +184,20 @@ ProviderInfo resolveProvider(const std::string& provider) {
         // Modelos System One do Jev devolvem julgamentos tipados, sem chamada de ferramentas.
         p = {"openai", "", "/chat/completions", "JEV_API_KEY", false, false};
     } else if (provider == "local") {
-        // Servidor local (Ollama/llama.cpp): chamada de ferramentas depende do modelo carregado e nao e garantida.
-        p = {"openai", "http://localhost:11434/v1", "/chat/completions", "LOCAL_LLM_API_KEY", false, false};
+        // Servidor local (Ollama, llama.cpp, vLLM, LM Studio...). A chamada de ferramentas depende do
+        // modelo carregado; quando o servidor recusa tools, o erro tools_unsupported e devolvido.
+        p = {"openai", "http://localhost:11434/v1", "/chat/completions", "LOCAL_LLM_API_KEY", false, true};
     } else {   // deepseek e qualquer outro compativel com OpenAI
         p = {"openai", "https://api.deepseek.com", "/chat/completions", "DEEPSEEK_API_KEY", true, true};
     }
     // Sobrescrita por ambiente: DEEPSEEK_BASE_URL, JEV_BASE_URL, LOCAL_LLM_BASE_URL...
     std::string baseVar = provider == "local" ? "LOCAL_LLM_BASE_URL" : upper(provider) + "_BASE_URL";
     p.baseUrl = envOr(baseVar, p.baseUrl);
-    while (!p.baseUrl.empty() && p.baseUrl.back() == '/') p.baseUrl.pop_back();
+    if (provider == "local") {
+        p.baseUrl = normalizeLocalBaseUrl(p.baseUrl);
+    } else {
+        while (!p.baseUrl.empty() && p.baseUrl.back() == '/') p.baseUrl.pop_back();
+    }
     return p;
 }
 
@@ -317,6 +353,8 @@ ChatReply chatOnce(const ChatRequest& req) {
         }
         http.body = buildRequestBody(info, req, req.includeReasoning).dump();
         int attempts = std::max(1, req.httpAttempts);
+        // Servidor local desligado/inalcancavel: falhar rapido em vez de esperar o backoff das APIs remotas.
+        if (req.provider == "local") attempts = std::min(attempts, 2);
         HttpResponse resp = postWithRetry(req.telemetryId, http, attempts);
         bool reasoningRejected = false;
         if (info.protocol == "openai" && req.includeReasoning && resp.status == 400 &&

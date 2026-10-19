@@ -1,0 +1,13 @@
+#pragma once
+
+// Gerado por CMake a partir de CppCore/runtime/*.json.
+// Nao editar este arquivo gerado; altere os JSONs de origem.
+
+namespace taskforge {
+namespace local {
+
+inline constexpr const char* kModelCatalogJson = R"ARXJSON(@ARESTRIX_MODEL_CATALOG_JSON@)ARXJSON";
+inline constexpr const char* kLlamaManifestJson = R"ARXJSON(@ARESTRIX_LLAMA_MANIFEST_JSON@)ARXJSON";
+
+} // namespace local
+} // namespace taskforge

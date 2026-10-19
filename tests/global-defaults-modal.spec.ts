@@ -135,6 +135,12 @@ describe('GlobalDefaultsModal - Abas, Teste de API e Limpeza de Textos Fixos', (
       expect(renderedHtml).toContain('id="btn-test-agent-api"');
       expect(renderedHtml).toContain('id="btn-toggle-deploy-key"');
       expect(renderedHtml).toContain('id="btn-submit-deploy-key"');
+
+      // Modelos locais: endpoint configurável e descoberta de modelos sem instalar servidor
+      expect(renderedHtml).toContain('id="def-local-base-url"');
+      expect(renderedHtml).toContain('id="btn-def-discover-models"');
+      expect(renderedHtml).toContain('id="def-local-models"');
+      expect(renderedHtml).toContain('id="btn-open-local-models"');
     });
   });
 

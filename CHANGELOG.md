@@ -16,6 +16,10 @@ First public beta of Arestrix Studio and the native C++20 pipeline compiler.
 - Native C++20 / Taskflow code generation and compilation from the visual graph.
 - Standalone runner export with execution timeline, diagnostics and telemetry.
 - Model Context Protocol (MCP) client with a tool registry and per-vertex tool selection.
+- Local/OpenAI-compatible model endpoints (Ollama, LM Studio, llama.cpp, vLLM) configurable per
+  project and per vertex, with native model discovery. No inference runtime is bundled or started.
+- Pre-approved GGUF model catalog with resumable downloads and SHA-256 verification, plus a pinned
+  llama.cpp binary manifest (`b11669`) that already includes the native `llama-server` router mode.
 - Projects, workspaces, persistent memory, local skills and skill catalogs.
 - Bilingual interface and documentation (`en-US` and `pt-BR`).
 - Worked examples covering an SVG agent pipeline, support triage and a composed

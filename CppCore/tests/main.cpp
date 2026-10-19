@@ -28,6 +28,7 @@
 #include "assistant/AssistantTools.hpp"
 #include "assistant/GraphDocument.hpp"
 #include "rt/ModelClient.hpp"
+#include "local/LocalRuntime.hpp"
 #include "rt/Decision.hpp"
 #include "rt/Http.hpp"
 #include "rt/NetGuard.hpp"
@@ -1852,10 +1853,68 @@ TEST(model_client_converts_history_for_openai_and_anthropic) {
     CHECK(r2.text == "ok" && r2.toolCalls.size() == 1 && r2.outTokens == 1);
 
     CHECK(!rt::resolveProvider("jev").supportsTools);
-    CHECK(!rt::resolveProvider("local").supportsTools);
+    // Servidor local compativel com OpenAI: o suporte a tools depende do modelo, mas o provedor nao e
+    // bloqueado de antemao. Se o servidor recusar, a chamada devolve tools_unsupported.
+    CHECK(rt::resolveProvider("local").supportsTools);
     CHECK(rt::resolveProvider("anthropic").supportsTools && rt::resolveProvider("deepseek").supportsTools);
+    CHECK(rt::normalizeLocalBaseUrl("http://localhost:11434") == "http://localhost:11434/v1");
+    CHECK(rt::normalizeLocalBaseUrl("http://localhost:11434/") == "http://localhost:11434/v1");
+    CHECK(rt::normalizeLocalBaseUrl(" http://localhost:8080/v1/ ") == "http://localhost:8080/v1");
+    CHECK(rt::normalizeLocalBaseUrl("http://localhost:8080/v1/chat/completions") == "http://localhost:8080/v1");
+    CHECK(rt::normalizeLocalBaseUrl("http://localhost:8080/custom") == "http://localhost:8080/custom");
     auto roundTrip = rt::ChatMessage::fromJson(a.toJson());
     CHECK(roundTrip.toolCalls.size() == 2 && roundTrip.reasoning == "pensando");
+}
+
+TEST(local_runtime_catalog_manifest_and_storage) {
+    namespace lr = taskforge::local;
+    auto& runtime = lr::LocalRuntime::instance();
+    auto catalog = runtime.catalog();
+    CHECK(catalog.value("schemaVersion", 0) == 1);
+    CHECK(runtime.models().size() >= 3);
+
+    for (const auto& model : runtime.models()) {
+        CHECK(!model.id.empty());
+        CHECK(model.downloadUrl.rfind("https://", 0) == 0);
+        CHECK(model.sha256.size() == 64);
+        CHECK(model.sizeBytes > 0);
+        CHECK(model.fileName.find('/') == std::string::npos);
+        CHECK(model.fileName.find('\\') == std::string::npos);
+    }
+
+    auto manifest = runtime.manifest();
+    CHECK(manifest["components"].contains("llama.cpp"));
+    CHECK(manifest["components"]["llama.cpp"].value("version", std::string()) == "b11669");
+
+    const auto* qwen = runtime.findModel("qwen2.5-7b-instruct-q4_k_m");
+    CHECK(qwen != nullptr);
+    CHECK(runtime.modelPath(*qwen).filename().string() == "Qwen2.5-7B-Instruct-Q4_K_M.gguf");
+
+    auto state = runtime.state();
+    CHECK(state["models"].is_array());
+    CHECK(state["models"].size() == runtime.models().size());
+    CHECK(state["downloads"].is_array());
+    CHECK(state["manifest"]["components"].contains("llama.cpp"));
+
+    std::string downloadError;
+    CHECK(runtime.startModelDownload("modelo-inexistente", downloadError).empty());
+    CHECK(downloadError == "model_not_found");
+    CHECK(runtime.deleteModel("modelo-inexistente").value("ok", true) == false);
+
+    auto dir = makeTempDir("local-runtime");
+#ifdef _WIN32
+    _putenv_s("ARESTRIX_DATA_DIR", dir.string().c_str());
+#else
+    setenv("ARESTRIX_DATA_DIR", dir.string().c_str(), 1);
+#endif
+    CHECK(runtime.dataRoot() == dir);
+    CHECK(runtime.modelsDir() == dir / "models");
+#ifdef _WIN32
+    _putenv_s("ARESTRIX_DATA_DIR", "");
+#else
+    unsetenv("ARESTRIX_DATA_DIR");
+#endif
+    fs::remove_all(dir);
 }
 
 TEST(assistant_turn_edits_the_graph_asks_before_projects_and_persists_the_session) {

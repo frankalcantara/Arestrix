@@ -7,6 +7,22 @@ project(Arestrix VERSION ${ARESTRIX_VERSION_NUMERIC} LANGUAGES C CXX)
 
 message(STATUS "Arestrix ${ARESTRIX_VERSION}")
 
+# ---------------------------------------------------------------------------
+# Runtime local: catalogo de modelos e manifesto de binarios embutidos no binario.
+# Os JSONs ficam em CppCore/runtime e sao a fonte de verdade; o header gerado evita
+# depender do diretorio de trabalho no aplicativo empacotado.
+# ---------------------------------------------------------------------------
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/CppCore/runtime/models.catalog.json" ARESTRIX_MODEL_CATALOG_JSON)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/CppCore/runtime/llama.manifest.json" ARESTRIX_LLAMA_MANIFEST_JSON)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/CppCore/runtime/models.catalog.json"
+  "${CMAKE_CURRENT_SOURCE_DIR}/CppCore/runtime/llama.manifest.json")
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/CppCore/runtime/LocalRuntimeData.hpp.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/generated/LocalRuntimeData.hpp"
+  @ONLY
+)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -166,6 +182,8 @@ add_library(arestrix_core STATIC
   ${SRC}/rt/Tools.cpp
   ${SRC}/rt/Agent.cpp
   ${SRC}/rt/ModelClient.cpp
+  ${SRC}/local/LocalRuntime.cpp
+  ${SRC}/local/Download.cpp
   ${SRC}/assistant/GraphDocument.cpp
   ${SRC}/assistant/AssistantTools.cpp
   ${SRC}/assistant/AssistantSession.cpp
@@ -183,6 +201,7 @@ add_library(arestrix_core STATIC
   ${TP}/simdjson/singleheader/simdjson.cpp)
 
 target_include_directories(arestrix_core PUBLIC
+  ${CMAKE_CURRENT_BINARY_DIR}/generated
   ${SRC}
   ${TP}/sqlite
   ${TP}/simdjson/singleheader

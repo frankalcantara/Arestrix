@@ -14,6 +14,8 @@
 #include "project/OpenableFiles.hpp"
 #include "assistant/AssistantSession.hpp"
 #include "rt/ModelClient.hpp"
+#include "rt/Http.hpp"
+#include "local/LocalRuntime.hpp"
 #include "pi/PiProjectScanner.hpp"
 #include "build/BuildService.hpp"
 #include "cli/Cli.hpp"
@@ -909,6 +911,200 @@ void ui_set_http_policy(webui::window::event* e) {
         std::string error;
         out["ok"] = taskforge::native::http::writePolicy(root, hosts, error);
         if (!error.empty()) out["error"] = error;
+    } catch (const std::exception& ex) {
+        out["ok"] = false;
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+// JS -> C++: descobre os modelos de um servidor local OpenAI-compativel (Ollama, llama.cpp, vLLM, LM Studio...).
+// Payload opcional: {"baseUrl": "http://localhost:11434"}; sem ele usa LOCAL_LLM_BASE_URL. A chamada sai pelo
+// cliente nativo, entao nao depende de CORS e funciona tambem no aplicativo empacotado. O Arestrix NAO inicia
+// nem instala o servidor: ele apenas consulta um endpoint que ja esteja rodando.
+void ui_list_local_models(webui::window::event* e) {
+    taskforge::Json out;
+    out["ok"] = false;
+    out["models"] = taskforge::Json::array();
+    try {
+        std::string base = taskforge::platform::getEnv("LOCAL_LLM_BASE_URL");
+        std::string apiKey = taskforge::platform::getEnv("LOCAL_LLM_API_KEY");
+        std::string payload = e->get_string();
+        if (!payload.empty()) {
+            auto req = taskforge::jsonutil::parse(payload);
+            std::string provided = req.value("baseUrl", std::string());
+            if (!provided.empty()) base = provided;
+            std::string providedKey = req.value("apiKey", std::string());
+            if (!providedKey.empty()) apiKey = providedKey;
+        }
+        if (base.empty()) base = "http://localhost:11434/v1";
+        base = taskforge::rt::normalizeLocalBaseUrl(base);
+        out["baseUrl"] = base;
+        if (base.rfind("http://", 0) != 0 && base.rfind("https://", 0) != 0) {
+            out["errorCode"] = "invalid_url";
+            out["error"] = "A URL deve comecar com http:// ou https://.";
+            e->return_string(out.dump());
+            return;
+        }
+
+        auto get = [&](const std::string& url) {
+            taskforge::rt::HttpRequest http;
+            http.method = "GET";
+            http.url = url;
+            http.timeoutSeconds = 6;
+            if (!apiKey.empty()) http.headers["Authorization"] = "Bearer " + apiKey;
+            return taskforge::rt::httpSend(http);
+        };
+        auto append = [&](const std::string& id) {
+            if (id.empty()) return;
+            for (size_t i = 0; i < out["models"].size(); ++i)
+                if (out["models"][i].is_string() && out["models"][i].str() == id) return;
+            out["models"].push_back(id);
+        };
+        auto collect = [&](const std::string& body, const char* arrayKey,
+                           std::initializer_list<const char*> idKeys) {
+            auto parsed = taskforge::jsonutil::tryParse(body);
+            if (!parsed) return;
+            const taskforge::Json& list = (*parsed)[arrayKey];
+            if (!list.is_array()) return;
+            for (const auto& m : list) {
+                if (m.is_string()) { append(m.str()); continue; }
+                if (!m.is_object()) continue;
+                for (const char* key : idKeys) {
+                    std::string id = m.value(key, std::string());
+                    if (!id.empty()) { append(id); break; }
+                }
+            }
+        };
+
+        taskforge::rt::HttpResponse resp = get(base + "/models");
+        if (resp.status == 200) collect(resp.body, "data", {"id", "name", "model"});
+        if (out["models"].size() == 0) {
+            // Fallback para a API nativa do Ollama, que lista os modelos carregados no disco.
+            std::string root = base;
+            if (root.size() > 3 && root.compare(root.size() - 3, 3, "/v1") == 0) root.erase(root.size() - 3);
+            taskforge::rt::HttpResponse tags = get(root + "/api/tags");
+            if (tags.status == 200) {
+                collect(tags.body, "models", {"name", "model", "id"});
+                if (out["models"].size() > 0) resp = tags;
+            }
+        }
+
+        if (out["models"].size() > 0) {
+            out["ok"] = true;
+        } else if (resp.status == 200) {
+            out["ok"] = true;   // servidor respondeu, mas nao listou modelos
+        } else if (resp.status == 0) {
+            out["errorCode"] = "unreachable";
+            out["error"] = resp.error;
+        } else {
+            out["errorCode"] = "http_error";
+            out["error"] = "HTTP " + std::to_string(resp.status);
+        }
+    } catch (const std::exception& ex) {
+        out["ok"] = false;
+        out["errorCode"] = "bad_request";
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+// ---------------------------------------------------------------------------
+// Modelos locais: catalogo, download, verificacao e remocao (Fase 1)
+// ---------------------------------------------------------------------------
+
+void ui_local_models_state(webui::window::event* e) {
+    try {
+        e->return_string(taskforge::local::LocalRuntime::instance().state().dump());
+    } catch (const std::exception& ex) {
+        e->return_string(taskforge::Json{{"error", std::string(ex.what())}}.dump());
+    }
+}
+
+// Payload: {"modelId": "qwen2.5-7b-instruct-q4_k_m"}. Devolve {ok, jobId, error}.
+void ui_local_model_download(webui::window::event* e) {
+    taskforge::Json out;
+    try {
+        auto req = taskforge::jsonutil::parse(e->get_string());
+        const std::string modelId = req.value("modelId", std::string());
+        std::string error;
+        const std::string jobId = taskforge::local::LocalRuntime::instance().startModelDownload(modelId, error);
+        out["ok"] = !jobId.empty();
+        out["jobId"] = jobId;
+        if (!error.empty()) out["error"] = error;
+    } catch (const std::exception& ex) {
+        out["ok"] = false;
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+// Payload: {"jobId": "dl-..."} ou vazio para listar todos.
+void ui_local_model_download_status(webui::window::event* e) {
+    taskforge::Json out;
+    try {
+        const std::string payload = e->get_string();
+        if (payload.empty()) {
+            out["ok"] = true;
+            out["downloads"] = taskforge::local::LocalRuntime::instance().downloads();
+        } else {
+            auto req = taskforge::jsonutil::parse(payload);
+            out = taskforge::local::LocalRuntime::instance().downloadStatus(req.value("jobId", std::string()));
+        }
+    } catch (const std::exception& ex) {
+        out["ok"] = false;
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+// Payload: {"jobId": "dl-..."}.
+void ui_local_model_download_cancel(webui::window::event* e) {
+    taskforge::Json out;
+    try {
+        auto req = taskforge::jsonutil::parse(e->get_string());
+        out["ok"] = taskforge::local::LocalRuntime::instance().cancelDownload(req.value("jobId", std::string()));
+    } catch (const std::exception& ex) {
+        out["ok"] = false;
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+// Payload: {"modelId": "..."}.
+void ui_local_model_delete(webui::window::event* e) {
+    taskforge::Json out;
+    try {
+        auto req = taskforge::jsonutil::parse(e->get_string());
+        out = taskforge::local::LocalRuntime::instance().deleteModel(req.value("modelId", std::string()));
+    } catch (const std::exception& ex) {
+        out["ok"] = false;
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+// Payload: {"modelId": "..."}.
+void ui_local_model_verify(webui::window::event* e) {
+    taskforge::Json out;
+    try {
+        auto req = taskforge::jsonutil::parse(e->get_string());
+        out = taskforge::local::LocalRuntime::instance().verifyModel(req.value("modelId", std::string()));
+    } catch (const std::exception& ex) {
+        out["ok"] = false;
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+void ui_local_models_open_folder(webui::window::event* e) {
+    taskforge::Json out;
+    try {
+        const auto dir = taskforge::local::LocalRuntime::instance().modelsDir();
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+        out["ok"] = taskforge::platform::openFolderInExplorer(dir);
+        out["path"] = taskforge::project::pathToUtf8(dir);
     } catch (const std::exception& ex) {
         out["ok"] = false;
         out["error"] = std::string(ex.what());
@@ -1918,6 +2114,14 @@ int main(int argc, char** argv) {
     win.bind("list_project_mcp_servers", ui_list_project_mcp_servers);
     win.bind("list_project_mcp_tools", ui_list_project_mcp_tools);
     win.bind("get_http_policy", ui_get_http_policy);
+    win.bind("list_local_models", ui_list_local_models);
+    win.bind("local_models_state", ui_local_models_state);
+    win.bind("local_model_download", ui_local_model_download);
+    win.bind("local_model_download_status", ui_local_model_download_status);
+    win.bind("local_model_download_cancel", ui_local_model_download_cancel);
+    win.bind("local_model_delete", ui_local_model_delete);
+    win.bind("local_model_verify", ui_local_model_verify);
+    win.bind("local_models_open_folder", ui_local_models_open_folder);
     win.bind("set_http_policy", ui_set_http_policy);
     win.bind("search_ensure_synonyms", ui_search_ensure_synonyms);
     win.bind("list_recent_projects", ui_list_recent_projects);

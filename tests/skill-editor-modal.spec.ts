@@ -433,6 +433,9 @@ const x = 42;
       expect(html).toContain('id="btn-new-skill-modal"');
       expect(html).toContain('Editar Skill');
       expect(html).toContain('Novo Skill');
+      // Endpoint de servidor local disponível no vértice (quando não herda o modelo global)
+      expect(html).toContain('id="node-local-base-url"');
+      expect(html).toContain('id="btn-node-discover-models"');
     });
   });
 });
