@@ -1,6 +1,6 @@
 # Arestrix examples
 
-[Português](README.pt-BR.md) · [Documentation index](../README.md#documentation)
+[Português](README.pt-BR.md) · [Documentation](../docs/README.md)
 
 Three ready-to-run projects, from simple to complex. Each one is a normal Arestrix project folder: open it in the Studio,
 choose your model, set your API key, press **F5**.

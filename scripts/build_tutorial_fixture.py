@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gera o projeto de teste do TUTORIAL_AGENTE_SVG_ARESTRIX.md.
+"""Gera o projeto de teste de docs/pt-BR/tutorials/svg-agent.md.
 
 Cria CppCore/tests/e2e/svg-agent/ com:
   - graph.json          grafo exatamente como o tutorial manda montar na interface
@@ -14,7 +14,7 @@ import pathlib
 import re
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-TUTORIAL = (ROOT / "TUTORIAL_AGENTE_SVG_ARESTRIX.md").read_text(encoding="utf-8")
+TUTORIAL = (ROOT / "docs" / "pt-BR" / "tutorials" / "svg-agent.md").read_text(encoding="utf-8")
 OUT = ROOT / "CppCore" / "tests" / "e2e" / "svg-agent"
 
 

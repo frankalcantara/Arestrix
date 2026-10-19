@@ -5,11 +5,11 @@ help efficiently.
 
 ## Documentation first
 
-- [Documentation](README.md#complete-documentation) — guides for installation, architecture,
-  graphs, agents, workspaces, MCP and development.
+- [Documentation](docs/README.md) — guides for installation, architecture, graphs, agents,
+  workspaces, MCP and development.
 - [Examples](examples/README.md) — runnable projects and the scripted end-to-end tests.
 - [Changelog](CHANGELOG.md) — user-visible changes and known limitations.
-- [Dependency advisories](SEGURANCA_DEPENDENCIAS.md) — known npm advisories and mitigation status.
+- [Dependency advisories](docs/security/dependency-advisories.md) — known npm advisories and mitigation status.
 
 ## Questions and ideas
 

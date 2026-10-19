@@ -2,7 +2,7 @@
 
 [English](README.md) · [Todos os exemplos](../README.pt-BR.md)
 
-O projeto do [`TUTORIAL_AGENTE_SVG_ARESTRIX.md`](../../TUTORIAL_AGENTE_SVG_ARESTRIX.md): um agente que cria um SVG animado e
+O projeto do [tutorial do agente SVG](../../docs/pt-BR/tutorials/svg-agent.md): um agente que cria um SVG animado e
 outro que o audita.
 
 ```

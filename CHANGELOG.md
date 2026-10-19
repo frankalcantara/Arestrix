@@ -34,6 +34,11 @@ First public beta of Arestrix Studio and the native C++20 pipeline compiler.
 - Repository versioning is now centralized in `version.txt` and checked by
   `npm run check:version`.
 - Repository governance files and GitHub collaboration templates were added.
+- Documentation was reorganized under `docs/`, with a bilingual hub, semantic file names,
+  version banners and separate product, quality and security sections.
+- READMEs were shortened to focus on what the project is, how to run it and where to find the
+  detailed documentation.
+- Screenshots were converted to WebP and resized to reduce repository and page weight.
 
 ### Known limitations
 
@@ -42,7 +47,7 @@ First public beta of Arestrix Studio and the native C++20 pipeline compiler.
 - Beta APIs, project formats and command-line flags may change before general availability.
 - Third-party license verification is automated; a consolidated `THIRD_PARTY_NOTICES.md`
   is planned for a follow-up release.
-- The `braces` advisory documented in `SEGURANCA_DEPENDENCIAS.md` affects the build chain only;
+- The `braces` advisory documented in `docs/security/dependency-advisories.md` affects the build chain only;
   no fixed release is available upstream yet.
 
 [1.0.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v1.0.0-beta.1

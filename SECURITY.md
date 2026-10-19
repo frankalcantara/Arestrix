@@ -64,4 +64,4 @@ This is a community project and does not offer a bug bounty or a contractual res
 ## Dependency advisories
 
 Known dependency issues and their mitigation status are tracked in
-[`SEGURANCA_DEPENDENCIAS.md`](SEGURANCA_DEPENDENCIAS.md).
+[`docs/security/dependency-advisories.md`](docs/security/dependency-advisories.md).

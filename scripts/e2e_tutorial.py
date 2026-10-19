@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Teste ponta a ponta do TUTORIAL_AGENTE_SVG_ARESTRIX.md.
+"""Teste ponta a ponta de docs/pt-BR/tutorials/svg-agent.md.
 
 Fluxo: grafo do tutorial -> `arestrix run` (gera C++, compila com Taskflow, executa) ->
 agentes falam com um servidor LLM falso -> laco de auto-correcao -> SVG final aprovado.

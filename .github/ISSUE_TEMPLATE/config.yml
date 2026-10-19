@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: Documentation
-    url: https://github.com/frankalcantara/Arestrix#complete-documentation
+    url: https://github.com/frankalcantara/Arestrix/blob/main/docs/README.md
     about: Installation, architecture, graphs, agents, workspaces, MCP and development guides.
   - name: Questions and ideas
     url: https://github.com/frankalcantara/Arestrix/discussions

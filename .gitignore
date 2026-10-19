@@ -48,6 +48,9 @@ taskforge-recent-projects.json
 /runtime/
 Output/
 
+# Notas internas de projeto (nao fazem parte da documentacao publica)
+/docs/internal/
+
 # Cache da busca no projeto
 .arestrix/
 

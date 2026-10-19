@@ -1,6 +1,6 @@
 # Exemplos do Arestrix
 
-[English](README.md) · [Índice da documentação](../README.pt-BR.md#documentação)
+[English](README.md) · [Documentação](../docs/README.md)
 
 Três projetos prontos para executar, do simples ao complexo. Cada um é uma pasta de projeto Arestrix comum: abra no Studio,
 escolha seu modelo, grave sua chave de API e pressione **F5**.

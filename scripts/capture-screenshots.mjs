@@ -43,7 +43,7 @@ try {
     defaultViewport: {
       width: 1440,
       height: 900,
-      deviceScaleFactor: 2
+      deviceScaleFactor: 1.5
     },
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
@@ -140,10 +140,12 @@ try {
 
   // Screenshot 1: Tela Principal do Arestrix Studio com Grafo Ativo e Rodando
   await page.screenshot({
-    path: resolve(SCREENSHOTS_DIR, 'studio-main.png'),
+    type: 'webp',
+    quality: 85,
+    path: resolve(SCREENSHOTS_DIR, 'studio-main.webp'),
     fullPage: false
   });
-  console.log('[OK] studio-main.png capturado (com grafo de exemplo ativamente rodando).');
+  console.log('[OK] studio-main.webp capturado (com grafo de exemplo ativamente rodando).');
 
   // Screenshot 2: Modal C++20 Taskflow Code Exporter
   await page.evaluate(() => {
@@ -160,10 +162,12 @@ try {
   await new Promise(r => setTimeout(r, 1000));
 
   await page.screenshot({
-    path: resolve(SCREENSHOTS_DIR, 'cpp20-taskflow-generator.png'),
+    type: 'webp',
+    quality: 85,
+    path: resolve(SCREENSHOTS_DIR, 'cpp20-taskflow-generator.webp'),
     fullPage: false
   });
-  console.log('[OK] cpp20-taskflow-generator.png capturado.');
+  console.log('[OK] cpp20-taskflow-generator.webp capturado.');
 
   // Fecha modal de código
   await page.evaluate(() => {
@@ -184,10 +188,12 @@ try {
   await new Promise(r => setTimeout(r, 800));
 
   await page.screenshot({
-    path: resolve(SCREENSHOTS_DIR, 'standalone-runner.png'),
+    type: 'webp',
+    quality: 85,
+    path: resolve(SCREENSHOTS_DIR, 'standalone-runner.webp'),
     fullPage: false
   });
-  console.log('[OK] standalone-runner.png capturado.');
+  console.log('[OK] standalone-runner.webp capturado.');
 
   // Screenshot 4: Runner Standalone - Aba 2: Diagnóstico
   await page.evaluate(() => {
@@ -201,10 +207,12 @@ try {
   await new Promise(r => setTimeout(r, 600));
 
   await page.screenshot({
-    path: resolve(SCREENSHOTS_DIR, 'runner-diagnostics.png'),
+    type: 'webp',
+    quality: 85,
+    path: resolve(SCREENSHOTS_DIR, 'runner-diagnostics.webp'),
     fullPage: false
   });
-  console.log('[OK] runner-diagnostics.png capturado.');
+  console.log('[OK] runner-diagnostics.webp capturado.');
 
   // Screenshot 5: Runner Standalone - Aba 4: Exportar Executável & Governança Corporativa
   await page.evaluate(() => {
@@ -218,10 +226,12 @@ try {
   await new Promise(r => setTimeout(r, 600));
 
   await page.screenshot({
-    path: resolve(SCREENSHOTS_DIR, 'runner-export-governance.png'),
+    type: 'webp',
+    quality: 85,
+    path: resolve(SCREENSHOTS_DIR, 'runner-export-governance.webp'),
     fullPage: false
   });
-  console.log('[OK] runner-export-governance.png capturado.');
+  console.log('[OK] runner-export-governance.webp capturado.');
 
   await browser.close();
   console.log('[Screenshot] Todos os prints foram atualizados com perfeição!');

@@ -1,3 +1,33 @@
-# Scripts de shell precisam de fim de linha LF, mesmo em clones no Windows com autocrlf.
+# Normalize line endings for text files.
+* text=auto eol=lf
+
+# Windows scripts keep CRLF.
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Shell hooks must stay LF even on Windows clones.
 .githooks/* text eol=lf
 *.sh text eol=lf
+
+# Binary assets.
+*.png binary
+*.webp binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.exe binary
+*.dll binary
+*.lib binary
+*.msi binary
+*.msix binary
+*.zip binary
+*.pdf binary
+*.pptx binary
+
+# GitHub language and diff hints.
+third_party/** linguist-vendored
+docs/assets/** linguist-documentation
+package-lock.json linguist-generated

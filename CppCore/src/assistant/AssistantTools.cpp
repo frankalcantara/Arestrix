@@ -139,7 +139,7 @@ std::vector<AssistantToolDef> assistantTools(RuntimeLang lang) {
     tools.push_back(tool("studio_docs_read",
         L("Le um capitulo da documentacao do Studio pelo id devolvido por studio_docs_list.",
           "Reads a Studio documentation chapter by the id returned by studio_docs_list."),
-        object(Json{{"id", prop("string", L("Id do capitulo (ex.: 06-interface).", "Chapter id (e.g. 06-interface)."))}}, {"id"}),
+        object(Json{{"id", prop("string", L("Id do capitulo (ex.: interface).", "Chapter id (e.g. interface)."))}}, {"id"}),
         ToolRisk::Read));
     tools.push_back(tool("list_node_types",
         L("Lista os tipos de vertice disponiveis, com portas e finalidade.", "Lists the available vertex types, with ports and purpose."),
