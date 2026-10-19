@@ -23,7 +23,9 @@
   <b>Enterprise Visual Orchestration and Native C++20 Compiler for Intelligent AI Agent Swarms</b><br>
   <i>From interactive graph to high-performance standalone C++20 binaries with end-to-end security and zero runtime dependencies.</i>
 </p>
-
+<p align="center">
+  <b>Version: Beta 1.0</b>
+</p>
 <p align="center">
   <img src="docs/assets/screenshots/studio-main.png" alt="Arestrix Studio - Main Interface" width="960">
 </p>
