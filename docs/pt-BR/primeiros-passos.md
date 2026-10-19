@@ -140,12 +140,26 @@ Em **Padrões Globais → Provedor & Modelo → Local**, clique em **Gerenciar m
 - selecionar o modelo para o projeto.
 
 Os arquivos ficam em `%LOCALAPPDATA%\Arestrix\models` no Windows e em
-`~/.local/share/arestrix/models` no Linux (ou em `ARESTRIX_DATA_DIR`, quando definido). Nesta fase, o
-download prepara o arquivo; o runtime gerenciado e o roteador nativo do llama.cpp entram na fase seguinte.
-Enquanto isso, use um `llama-server`, Ollama ou LM Studio já em execução no campo de endpoint.
+`~/.local/share/arestrix/models` no Linux (ou em `ARESTRIX_DATA_DIR`, quando definido).
+
+#### Runtime gerenciado
+
+Na mesma tela, o botão **Instalar runtime** baixa o `llama.cpp` pinado para a plataforma atual, verifica o
+SHA-256 e extrai em `%LOCALAPPDATA%\Arestrix\runtime` (Windows) ou `~/.local/share/arestrix/runtime` (Linux).
+O backend preferido é **Vulkan**, com fallback para **CPU**; para forçar outro backend, defina
+`ARESTRIX_LOCAL_BACKEND=cuda`, `vulkan` ou `cpu` antes de instalar.
+
+**Iniciar servidor** sobe o `llama-server` em modo router nativo, escutando apenas em `127.0.0.1` numa porta
+livre, com chave efêmera por execução. O Arestrix gera o preset `.ini` com os modelos baixados e configura
+`LOCAL_LLM_BASE_URL`/`LOCAL_LLM_API_KEY` somente no processo atual — esses valores não são gravados nas
+variáveis do usuário. O modelo é carregado na primeira requisição, não no startup.
+
+O botão **Usar** de um modelo baixado instala o runtime se necessário, inicia o servidor e preenche provedor
+e modelo no projeto. Para inspecionar problemas, use **Logs** na mesma tela. O servidor é encerrado ao fechar
+o Arestrix.
 
 O manifesto de binários pinados fica em `CppCore/runtime/llama.manifest.json` e usa o build oficial
-`llama.cpp b11669`, que já inclui o modo router nativo do `llama-server` (`--models-dir` / `--models-preset`).
+`llama.cpp b11669`, que já inclui o modo router nativo do `llama-server` (`--models-preset`).
 
 ### Teste o tutorial sem gastar dinheiro
 

@@ -78,6 +78,10 @@ bool commandExists(const std::string& program);
 // Variavel de ambiente (vazio se ausente).
 std::string getEnv(const std::string& name);
 
+// Define/remove uma variavel apenas no processo atual (nao persiste no usuario).
+// Usado pelo runtime local gerenciado, cuja porta e chave mudam a cada execucao.
+bool setProcessEnv(const std::string& name, const std::string& value);
+
 // Define a variavel no processo atual e a persiste para o usuario
 // (Registro HKCU\Environment no Windows; ~/.config/arestrix/env no Linux).
 // Nao usa shell. Devolve false se o nome/valor forem invalidos.

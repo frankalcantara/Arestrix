@@ -26,6 +26,7 @@ export class GlobalDefaultsModal {
   private activeTab: GlobalDefaultsTab = 'model';
   private mcpPicker?: McpToolPicker;
   private localModelsModal?: LocalModelsModal;
+  private runtimeManaged = false;
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -475,7 +476,7 @@ export class GlobalDefaultsModal {
 
     this.bindDialogEvents();
     this.updateKeyIndicator();
-    void this.loadProjectEndpoint();
+    void this.loadRuntimeManaged();
     void this.loadStudioModel();
     this.mountToolsExtras(defaults.codeMode.mcpServers || [], defaults.codeMode.allowedMcpTools || []);
   }
@@ -688,6 +689,11 @@ export class GlobalDefaultsModal {
           if (modelInput) modelInput.value = model.apiModel || model.id;
           this.syncProjectEndpointField();
           void this.loadProjectEndpoint();
+        },
+        onRuntimeChanged: (running) => {
+          this.runtimeManaged = running;
+          this.syncProjectEndpointField();
+          void this.loadProjectEndpoint();
         }
       });
     }
@@ -718,9 +724,12 @@ export class GlobalDefaultsModal {
 
     if (label) label.textContent = t('global_defaults.local_endpoint_label', { key: varName });
     if (hint) hint.textContent = provider === 'local'
-      ? t('global_defaults.local_endpoint_hint')
+      ? (this.runtimeManaged ? t('global_defaults.local_endpoint_managed') : t('global_defaults.local_endpoint_hint'))
       : t('global_defaults.jev_endpoint_hint');
-    if (input) input.placeholder = provider === 'local' ? LOCAL_LLM_DEFAULT_URL : 'http://localhost:8080/v1';
+    if (input) {
+      input.placeholder = provider === 'local' ? LOCAL_LLM_DEFAULT_URL : 'http://localhost:8080/v1';
+      input.readOnly = provider === 'local' && this.runtimeManaged;
+    }
     if (discover) discover.style.display = provider === 'local' ? '' : 'none';
     if (manage) manage.style.display = provider === 'local' ? '' : 'none';
     if (models && provider !== 'local') {
@@ -728,6 +737,23 @@ export class GlobalDefaultsModal {
       models.innerHTML = '';
     }
     if (status && provider !== 'local') status.style.display = 'none';
+  }
+
+  private async loadRuntimeManaged(): Promise<void> {
+    const webui = this.backend();
+    if (webui) {
+      try {
+        const raw = await webui.call('local_runtime_status', '');
+        const status = typeof raw === 'string' ? JSON.parse(raw || '{}') : raw;
+        this.runtimeManaged = Boolean(status?.running && status?.ready);
+      } catch {
+        this.runtimeManaged = false;
+      }
+    } else {
+      this.runtimeManaged = false;
+    }
+    this.syncProjectEndpointField();
+    await this.loadProjectEndpoint();
   }
 
   private async loadProjectEndpoint(): Promise<void> {
@@ -808,7 +834,10 @@ export class GlobalDefaultsModal {
     if (group) group.style.display = varName ? 'block' : 'none';
     if (label && varName) label.textContent = t('global_defaults.studio_base_url_label', { key: varName });
     const input = this.overlay.querySelector('#studio-base-url') as HTMLInputElement | null;
-    if (input) input.placeholder = provider === 'local' ? LOCAL_LLM_DEFAULT_URL : 'http://localhost:8080/v1';
+    if (input) {
+      input.placeholder = provider === 'local' ? LOCAL_LLM_DEFAULT_URL : 'http://localhost:8080/v1';
+      input.readOnly = provider === 'local' && this.runtimeManaged;
+    }
   }
 
   private async loadStudioModel(): Promise<void> {
@@ -920,7 +949,9 @@ export class GlobalDefaultsModal {
       await env.setEnvVar(GlobalDefaultsModal.STUDIO_PROVIDER_VAR, provider),
       await env.setEnvVar(GlobalDefaultsModal.STUDIO_MODEL_VAR, model)
     ];
-    if (baseVar && baseUrl) results.push(await env.setEnvVar(baseVar, baseUrl));
+    if (baseVar && baseUrl && !(provider === 'local' && this.runtimeManaged)) {
+      results.push(await env.setEnvVar(baseVar, baseUrl));
+    }
 
     if (results.every(Boolean)) show(true, t('global_defaults.studio_saved'));
     else show(false, t('global_defaults.studio_saved_session'));
@@ -1225,7 +1256,7 @@ export class GlobalDefaultsModal {
     // O endpoint do servidor local/Jev é uma variável de ambiente da máquina (não vai para o projeto).
     // Grava antes de atualizar o grafo para que a execução seguinte já encontre o valor.
     const endpointVar = this.projectEndpointVar(provider);
-    if (endpointVar) {
+    if (endpointVar && !(provider === 'local' && this.runtimeManaged)) {
       const input = this.overlay.querySelector('#def-local-base-url') as HTMLInputElement | null;
       const raw = input?.value.trim() || (provider === 'local' ? LOCAL_LLM_DEFAULT_URL : '');
       if (raw) {

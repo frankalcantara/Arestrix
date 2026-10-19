@@ -61,7 +61,16 @@ describe('LocalModelsModal - catálogo e download de modelos locais', () => {
           manifest: { components: { 'llama.cpp': { version: 'b11669' } } },
           catalog: { models: [{ id: 'm1', name: 'Qwen2.5 7B Instruct' }] },
           models: [{ id: 'm1', name: 'Qwen2.5 7B Instruct', sizeBytes: 100, installed: false }],
-          downloads: []
+          downloads: [],
+          runtime: {
+            installed: true,
+            running: true,
+            ready: true,
+            version: 'b11669',
+            backend: 'vulkan',
+            baseUrl: 'http://127.0.0.1:1234/v1',
+            models: ['m1']
+          }
         });
       }
     };
@@ -73,6 +82,8 @@ describe('LocalModelsModal - catálogo e download de modelos locais', () => {
     expect(calls).toContain('local_models_state');
     expect((modal as any).state.models).toHaveLength(1);
     expect((modal as any).state.manifest.components['llama.cpp'].version).toBe('b11669');
+    expect((modal as any).state.runtime.ready).toBe(true);
+    expect((modal as any).state.runtime.baseUrl).toBe('http://127.0.0.1:1234/v1');
   });
 
   it('não quebra quando a bridge nativa não existe', async () => {

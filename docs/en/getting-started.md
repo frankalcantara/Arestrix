@@ -138,13 +138,26 @@ In **Global Defaults → Provider & Model → Local**, click **Manage local mode
 - select the model for the project.
 
 Files live in `%LOCALAPPDATA%\Arestrix\models` on Windows and `~/.local/share/arestrix/models` on Linux
-(or under `ARESTRIX_DATA_DIR` when set). In this phase the download only prepares the file; the managed
-runtime and llama.cpp's native router arrive in the next phase. Until then, point the endpoint field at an
-already-running `llama-server`, Ollama or LM Studio.
+(or under `ARESTRIX_DATA_DIR` when set).
+
+#### Managed runtime
+
+In the same screen, **Install runtime** downloads the pinned `llama.cpp` for the current platform, verifies
+its SHA-256 and extracts it under `%LOCALAPPDATA%\Arestrix\runtime` (Windows) or
+`~/.local/share/arestrix/runtime` (Linux). The preferred backend is **Vulkan**, with **CPU** as fallback; to
+force another backend, set `ARESTRIX_LOCAL_BACKEND=cuda`, `vulkan` or `cpu` before installing.
+
+**Start server** launches `llama-server` in its native router mode, listening only on `127.0.0.1` on a free
+port with an ephemeral per-run key. Arestrix generates the `.ini` preset from the downloaded models and sets
+`LOCAL_LLM_BASE_URL`/`LOCAL_LLM_API_KEY` only in the current process — these values are never written to
+user environment variables. The model is loaded on the first request, not at startup.
+
+The **Use** button on a downloaded model installs the runtime if needed, starts the server and fills the
+project provider and model. Use **Logs** in the same screen to diagnose failures. The server is stopped when
+Arestrix exits.
 
 The pinned binary manifest lives at `CppCore/runtime/llama.manifest.json` and uses official
-`llama.cpp b11669`, which already includes the native `llama-server` router mode (`--models-dir` /
-`--models-preset`).
+`llama.cpp b11669`, which already includes the native `llama-server` router mode (`--models-preset`).
 
 ### Try the tutorial without spending money
 

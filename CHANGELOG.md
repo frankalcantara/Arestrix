@@ -19,7 +19,11 @@ First public beta of Arestrix Studio and the native C++20 pipeline compiler.
 - Local/OpenAI-compatible model endpoints (Ollama, LM Studio, llama.cpp, vLLM) configurable per
   project and per vertex, with native model discovery. No inference runtime is bundled or started.
 - Pre-approved GGUF model catalog with resumable downloads and SHA-256 verification, plus a pinned
-  llama.cpp binary manifest (`b11669`) that already includes the native `llama-server` router mode.
+  llama.cpp binary manifest (`b11669`).
+- Managed local runtime: on-demand llama.cpp download/extraction, native `llama-server` router mode,
+  loopback-only binding, ephemeral API key, generated model preset, health checks and logs.
+- Local Models screen with runtime install/start/stop, per-model download/verify/delete and one-click
+  "Use" that starts the runtime and fills the project provider/model.
 - Projects, workspaces, persistent memory, local skills and skill catalogs.
 - Bilingual interface and documentation (`en-US` and `pt-BR`).
 - Worked examples covering an SVG agent pipeline, support triage and a composed

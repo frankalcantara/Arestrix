@@ -35,6 +35,23 @@ interface DownloadState {
   error?: string;
 }
 
+interface RuntimeState {
+  installed?: boolean;
+  running?: boolean;
+  ready?: boolean;
+  version?: string;
+  binaryId?: string;
+  backend?: string;
+  path?: string;
+  baseUrl?: string;
+  port?: number;
+  models?: string[];
+  presetModels?: string[];
+  download?: DownloadState;
+  log?: string[];
+  error?: string;
+}
+
 interface LocalModelsState {
   dataRoot?: string;
   modelsDir?: string;
@@ -44,14 +61,16 @@ interface LocalModelsState {
   manifest?: { components?: Record<string, any> };
   models?: CatalogModel[];
   downloads?: DownloadState[];
+  runtime?: RuntimeState;
   error?: string;
 }
 
 interface LocalModelsOptions {
   onUse?: (model: CatalogModel) => void;
+  onRuntimeChanged?: (running: boolean, baseUrl?: string) => void;
 }
 
-const ACTIVE_STATUSES = new Set(['queued', 'downloading', 'verifying', 'cancelling']);
+const ACTIVE_STATUSES = new Set(['queued', 'downloading', 'verifying', 'extracting', 'cancelling']);
 
 export class LocalModelsModal {
   private overlay: HTMLElement;
@@ -59,6 +78,8 @@ export class LocalModelsModal {
   private windowController?: IModalWindowController;
   private state?: LocalModelsState;
   private pollTimer: any = null;
+  private busy = false;
+  private logsVisible = false;
 
   constructor(options: LocalModelsOptions = {}) {
     this.options = options;
@@ -144,22 +165,204 @@ export class LocalModelsModal {
   private renderSummary(): void {
     const host = this.overlay.querySelector('#local-models-summary') as HTMLElement | null;
     if (!host) return;
+
+    const runtime = this.state?.runtime;
     const manifest = this.state?.manifest?.components?.['llama.cpp'];
-    const version = manifest?.version ? String(manifest.version) : '—';
+    const version = runtime?.version || (manifest?.version ? String(manifest.version) : '—');
+    const backend = runtime?.backend || '—';
+    const license = manifest?.license ? String(manifest.license) : 'MIT';
     const modelsDir = this.state?.modelsDir || '—';
     const free = this.state?.diskFreeBytes ? this.formatBytes(this.state.diskFreeBytes) : '—';
+    const installed = Boolean(runtime?.installed);
+    const running = Boolean(runtime?.running);
+    const ready = Boolean(runtime?.ready);
+    const download = runtime?.download;
+    const downloading = Boolean(download && ACTIVE_STATUSES.has(download.status));
+    const received = download?.received || 0;
+    const total = download?.total || 0;
+    const percent = total > 0 ? Math.min(100, Math.max(0, (received / total) * 100)) : 0;
+    const status = running
+      ? (ready ? t('local_models.runtime_running') : t('local_models.runtime_starting'))
+      : installed
+        ? t('local_models.runtime_stopped')
+        : t('local_models.runtime_not_installed');
+    const statusColor = running ? (ready ? '#0e700e' : '#0f6cbd') : installed ? '#616161' : '#a80000';
+    const logLines = (runtime?.log || []).slice(-40).join('\n');
+
+    const actions: string[] = [];
+    const buttonStyle = 'font-size:11.5px;height:28px;padding:0 10px;';
+    if (!installed && !downloading) {
+      actions.push(`<button type="button" class="btn btn-primary" data-runtime-action="install" style="${buttonStyle}">${t('local_models.runtime_install')}</button>`);
+    }
+    if (installed && !running && !downloading) {
+      actions.push(`<button type="button" class="btn btn-primary" data-runtime-action="start" style="${buttonStyle}">${t('local_models.runtime_start')}</button>`);
+    }
+    if (running) {
+      actions.push(`<button type="button" class="btn btn-secondary-pill" data-runtime-action="stop" style="${buttonStyle}">${t('local_models.runtime_stop')}</button>`);
+    }
+    if (logLines) {
+      actions.push(`<button type="button" class="btn btn-secondary-pill" data-runtime-action="logs" style="${buttonStyle}">${t('local_models.runtime_logs')}</button>`);
+    }
+
     host.innerHTML = `
       <div class="settings-section-card" style="padding: 12px 14px;">
-        <div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: center; font-size: 12px; color: #424242;">
-          <div><strong>${t('local_models.runtime_label')}:</strong> ${t('local_models.runtime_not_installed')}</div>
-          <div><strong>${t('local_models.manifest_label')}:</strong> llama.cpp ${this.esc(version)}</div>
-          <div><strong>${t('local_models.storage_label')}:</strong> <span style="font-family: monospace;">${this.esc(modelsDir)}</span></div>
-          <div><strong>${t('local_models.disk_free')}:</strong> ${this.esc(free)}</div>
+        <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+          <div style="display:flex; flex-direction:column; gap:6px; min-width:260px;">
+            <div style="font-weight:700; font-size:13px; color:#242424;">${t('local_models.runtime_title')}</div>
+            <div style="display:flex; flex-wrap:wrap; gap:18px; font-size:12px; color:#424242;">
+              <div><strong>${t('local_models.runtime_label')}:</strong> llama.cpp ${this.esc(version)} · ${this.esc(backend)}</div>
+              <div><strong>${t('local_models.manifest_label')}:</strong> ${this.esc(version)} · ${this.esc(license)}</div>
+              <div><strong>${t('local_models.storage_label')}:</strong> <span style="font-family:monospace;">${this.esc(modelsDir)}</span></div>
+              <div><strong>${t('local_models.disk_free')}:</strong> ${this.esc(free)}</div>
+            </div>
+            <div style="font-size:12px; color:${statusColor};">
+              <strong>${t('local_models.runtime_status')}:</strong> ${this.esc(status)}
+              ${running && runtime?.baseUrl ? ` · <span style="font-family:monospace;">${this.esc(runtime.baseUrl)}</span>` : ''}
+            </div>
+            <div style="font-size:11.5px; color:#616161;">${t('local_models.runtime_models_count', { count: (runtime?.models || []).length })}</div>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:6px;">${actions.join('')}</div>
         </div>
-        <div class="form-hint" style="margin-top: 8px;">${t('local_models.phase_hint')}</div>
-        ${this.state?.error ? `<div class="form-hint" style="color: #a80000;">${this.esc(this.state.error)}</div>` : ''}
+        ${downloading ? `
+          <div style="margin-top:10px;">
+            <div style="height:6px; background:#edebe9; border-radius:3px; overflow:hidden;">
+              <div style="height:100%; width:${percent.toFixed(1)}%; background:#0f6cbd;"></div>
+            </div>
+            <div style="font-size:10.5px; color:#616161; margin-top:4px;">
+              ${this.statusLabel(download!.status)} · ${this.formatBytes(received)} / ${this.formatBytes(total)}
+            </div>
+          </div>
+        ` : ''}
+        ${download?.error ? `<div style="font-size:11.5px; color:#a80000; margin-top:6px;">${this.esc(download.error)}</div>` : ''}
+        <div id="local-runtime-log" style="display:${this.logsVisible ? 'block' : 'none'}; margin-top:10px; background:#1e1e1e; color:#d4d4d4; border-radius:4px; padding:8px; max-height:180px; overflow:auto; font-family:monospace; font-size:10.5px; white-space:pre-wrap;">${this.esc(logLines)}</div>
+        ${this.state?.error ? `<div class="form-hint" style="color: #a80000; margin-top:6px;">${this.esc(this.state.error)}</div>` : ''}
       </div>
     `;
+
+    host.querySelector('[data-runtime-action="install"]')?.addEventListener('click', () => void this.installRuntime());
+    host.querySelector('[data-runtime-action="start"]')?.addEventListener('click', () => void this.startServer());
+    host.querySelector('[data-runtime-action="stop"]')?.addEventListener('click', () => void this.stopServer());
+    host.querySelector('[data-runtime-action="logs"]')?.addEventListener('click', () => {
+      this.logsVisible = !this.logsVisible;
+      const panel = this.overlay.querySelector('#local-runtime-log') as HTMLElement | null;
+      if (panel) panel.style.display = this.logsVisible ? 'block' : 'none';
+    });
+  }
+
+  private async installRuntime(): Promise<void> {
+    try {
+      const res = await this.call('local_runtime_install');
+      if (res.installed) {
+        this.showMessage(true, t('local_models.runtime_installed'));
+        await this.refresh();
+        return;
+      }
+      if (!res.ok) {
+        this.showMessage(false, t('local_models.runtime_install_failed', { error: res.error || '?' }));
+        return;
+      }
+      this.showMessage(true, t('local_models.runtime_downloading'));
+      await this.refresh();
+    } catch {
+      this.showMessage(false, t('local_models.needs_native'));
+    }
+  }
+
+  private async waitForJob(jobId: string): Promise<boolean> {
+    for (let attempt = 0; attempt < 900; ++attempt) {
+      try {
+        const status = await this.call('local_model_download_status', JSON.stringify({ jobId }));
+        const state = String(status.status || '');
+        if (state === 'done') return true;
+        if (state === 'failed' || state === 'cancelled') {
+          this.showMessage(false, t('local_models.download_failed', { error: status.error || state }));
+          return false;
+        }
+      } catch {
+        this.showMessage(false, t('local_models.needs_native'));
+        return false;
+      }
+      await new Promise(resolve => setTimeout(resolve, 800));
+    }
+    this.showMessage(false, t('local_models.download_failed', { error: 'timeout' }));
+    return false;
+  }
+
+  private async ensureRuntime(): Promise<boolean> {
+    if (this.state?.runtime?.installed) return true;
+    try {
+      const res = await this.call('local_runtime_install');
+      if (res.installed) {
+        await this.refresh();
+        return true;
+      }
+      if (!res.ok) {
+        this.showMessage(false, t('local_models.runtime_install_failed', { error: res.error || '?' }));
+        return false;
+      }
+      this.showMessage(true, t('local_models.runtime_downloading'));
+      await this.refresh();
+      const ok = await this.waitForJob(res.jobId);
+      await this.refresh();
+      return ok;
+    } catch {
+      this.showMessage(false, t('local_models.needs_native'));
+      return false;
+    }
+  }
+
+  private async startServer(): Promise<boolean> {
+    this.showMessage(true, t('local_models.runtime_starting'));
+    try {
+      const res = await this.call('local_runtime_start');
+      await this.refresh();
+      if (!res.ok) {
+        const detail = res.detail ? ` (${res.detail})` : '';
+        this.showMessage(false, t('local_models.runtime_start_failed', { error: res.error || '?' }) + detail);
+        return false;
+      }
+      this.options.onRuntimeChanged?.(true, res.baseUrl);
+      this.showMessage(true, t('local_models.runtime_started', { url: res.baseUrl || '' }));
+      return true;
+    } catch {
+      this.showMessage(false, t('local_models.needs_native'));
+      return false;
+    }
+  }
+
+  private async stopServer(): Promise<void> {
+    try {
+      await this.call('local_runtime_stop');
+      this.options.onRuntimeChanged?.(false);
+      await this.refresh();
+      this.showMessage(true, t('local_models.runtime_stopped'));
+    } catch {
+      this.showMessage(false, t('local_models.needs_native'));
+    }
+  }
+
+  private async useModel(model: CatalogModel): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      if (!(await this.ensureRuntime())) return;
+
+      const modelName = model.apiModel || model.id;
+      let runtime = this.state?.runtime;
+      // Um modelo baixado depois do start não está no preset atual: reinicia para incluí-lo.
+      if (runtime?.running && !(runtime.presetModels || []).includes(modelName)) {
+        await this.stopServer();
+        runtime = this.state?.runtime;
+      }
+      if (!runtime?.running) {
+        if (!(await this.startServer())) return;
+      }
+
+      this.options.onUse?.(model);
+      this.hide();
+    } finally {
+      this.busy = false;
+    }
   }
 
   private renderModels(): void {
@@ -244,8 +447,7 @@ export class LocalModelsModal {
     card.querySelector('[data-action="delete"]')?.addEventListener('click', () => void this.remove(model));
     card.querySelector('[data-action="verify"]')?.addEventListener('click', () => void this.verify(model));
     card.querySelector('[data-action="use"]')?.addEventListener('click', () => {
-      this.options.onUse?.(model);
-      this.hide();
+      void this.useModel(model);
     });
     return card;
   }
@@ -310,6 +512,7 @@ export class LocalModelsModal {
     try {
       const res = await this.call('local_model_delete', JSON.stringify({ modelId: model.id }));
       this.showMessage(Boolean(res.ok), res.ok ? t('local_models.deleted') : t('local_models.delete_failed', { error: res.error || '?' }));
+      this.options.onRuntimeChanged?.(false);
       await this.refresh();
     } catch {
       this.showMessage(false, t('local_models.needs_native'));
@@ -330,8 +533,10 @@ export class LocalModelsModal {
   }
 
   private updatePolling(): void {
+    const runtimeDownload = this.state?.runtime?.download;
     const active = (this.state?.downloads || []).some(d => ACTIVE_STATUSES.has(d.status)) ||
-      (this.state?.models || []).some(m => m.download && ACTIVE_STATUSES.has(m.download.status));
+      (this.state?.models || []).some(m => m.download && ACTIVE_STATUSES.has(m.download.status)) ||
+      Boolean(runtimeDownload && ACTIVE_STATUSES.has(runtimeDownload.status));
     if (active && !this.pollTimer) {
       this.pollTimer = setInterval(() => void this.refresh(), 800);
     } else if (!active) {

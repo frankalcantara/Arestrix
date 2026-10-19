@@ -1097,6 +1097,68 @@ void ui_local_model_verify(webui::window::event* e) {
     e->return_string(out.dump());
 }
 
+void ui_local_runtime_status(webui::window::event* e) {
+    try {
+        e->return_string(taskforge::local::LocalRuntime::instance().runtimeStatus().dump());
+    } catch (const std::exception& ex) {
+        e->return_string(taskforge::Json{{"error", std::string(ex.what())}}.dump());
+    }
+}
+
+// Baixa e extrai o llama.cpp pinado para a plataforma atual (Vulkan com fallback CPU).
+void ui_local_runtime_install(webui::window::event* e) {
+    taskforge::Json out;
+    try {
+        auto& runtime = taskforge::local::LocalRuntime::instance();
+        if (runtime.runtimeInstalled()) {
+            out["ok"] = true;
+            out["installed"] = true;
+            out["jobId"] = "";
+        } else {
+            std::string error;
+            const std::string jobId = runtime.installRuntime(error);
+            if (error == "already_installed") {
+                out["ok"] = true;
+                out["installed"] = true;
+                out["jobId"] = "";
+            } else {
+                out["ok"] = !jobId.empty();
+                out["installed"] = false;
+                out["jobId"] = jobId;
+                if (!error.empty()) out["error"] = error;
+            }
+        }
+    } catch (const std::exception& ex) {
+        out["ok"] = false;
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+void ui_local_runtime_start(webui::window::event* e) {
+    try {
+        e->return_string(taskforge::local::LocalRuntime::instance().startServer().dump());
+    } catch (const std::exception& ex) {
+        e->return_string(taskforge::Json{{"ok", false}, {"error", std::string(ex.what())}}.dump());
+    }
+}
+
+void ui_local_runtime_stop(webui::window::event* e) {
+    try {
+        e->return_string(taskforge::local::LocalRuntime::instance().stopServer().dump());
+    } catch (const std::exception& ex) {
+        e->return_string(taskforge::Json{{"ok", false}, {"error", std::string(ex.what())}}.dump());
+    }
+}
+
+void ui_local_runtime_logs(webui::window::event* e) {
+    try {
+        e->return_string(taskforge::local::LocalRuntime::instance().serverLogs().dump());
+    } catch (const std::exception& ex) {
+        e->return_string(taskforge::Json{{"error", std::string(ex.what())}}.dump());
+    }
+}
+
 void ui_local_models_open_folder(webui::window::event* e) {
     taskforge::Json out;
     try {
@@ -1754,6 +1816,7 @@ void ui_launch_standalone_runner(webui::window::event* e) {
 
 void exit_app(webui::window::event* e) {
     std::cout << "[C++] Comando de encerramento recebido." << std::endl;
+    taskforge::local::LocalRuntime::instance().stopServer();
     auto cur = taskforge::project::ProjectManager::getInstance().getCurrentProject();
     if (cur.git.enabled && cur.git.autoCommitOnShutdown && !cur.rootPath.empty()) {
         taskforge::project::GitSyncService::onShutdown(cur.rootPath);
@@ -2116,6 +2179,11 @@ int main(int argc, char** argv) {
     win.bind("get_http_policy", ui_get_http_policy);
     win.bind("list_local_models", ui_list_local_models);
     win.bind("local_models_state", ui_local_models_state);
+    win.bind("local_runtime_status", ui_local_runtime_status);
+    win.bind("local_runtime_install", ui_local_runtime_install);
+    win.bind("local_runtime_start", ui_local_runtime_start);
+    win.bind("local_runtime_stop", ui_local_runtime_stop);
+    win.bind("local_runtime_logs", ui_local_runtime_logs);
     win.bind("local_model_download", ui_local_model_download);
     win.bind("local_model_download_status", ui_local_model_download_status);
     win.bind("local_model_download_cancel", ui_local_model_download_cancel);
@@ -2208,6 +2276,7 @@ int main(int argc, char** argv) {
     }
 
     webui::wait();
+    taskforge::local::LocalRuntime::instance().stopServer();
     auto curProj = taskforge::project::ProjectManager::getInstance().getCurrentProject();
     if (curProj.git.enabled && curProj.git.autoCommitOnShutdown && !curProj.rootPath.empty()) {
         taskforge::project::GitSyncService::onShutdown(curProj.rootPath);

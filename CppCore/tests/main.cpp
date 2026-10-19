@@ -1909,6 +1909,16 @@ TEST(local_runtime_catalog_manifest_and_storage) {
 #endif
     CHECK(runtime.dataRoot() == dir);
     CHECK(runtime.modelsDir() == dir / "models");
+
+    auto runtimeState = runtime.runtimeStatus();
+    CHECK(runtimeState.value("installed", true) == false);
+    CHECK(runtimeState.value("version", std::string()) == "b11669");
+    CHECK(!runtimeState.value("binaryId", std::string()).empty());
+    CHECK(runtime.startServer().value("ok", true) == false);
+    CHECK(runtime.startServer().value("error", std::string()) == "runtime_not_installed");
+    CHECK(runtime.stopServer().value("ok", false) == true);
+    CHECK(runtime.serverRunning() == false);
+
 #ifdef _WIN32
     _putenv_s("ARESTRIX_DATA_DIR", "");
 #else

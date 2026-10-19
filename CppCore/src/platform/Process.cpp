@@ -333,6 +333,14 @@ std::string getEnv(const std::string& name) {
     return narrow(v);
 }
 
+bool setProcessEnv(const std::string& name, const std::string& value) {
+    if (name.empty() || name.size() > 128 || value.find('\0') != std::string::npos) return false;
+    std::wstring wname = widen(name);
+    if (value.empty()) return SetEnvironmentVariableW(wname.c_str(), nullptr) != 0;
+    std::wstring wvalue = widen(value);
+    return SetEnvironmentVariableW(wname.c_str(), wvalue.c_str()) != 0;
+}
+
 bool setUserEnv(const std::string& name, const std::string& value) {
     if (name.empty() || name.size() > 128) return false;
     for (char c : name) {
@@ -647,6 +655,12 @@ bool commandExists(const std::string& program) {
 std::string getEnv(const std::string& name) {
     const char* v = std::getenv(name.c_str());
     return v ? std::string(v) : std::string();
+}
+
+bool setProcessEnv(const std::string& name, const std::string& value) {
+    if (name.empty() || name.size() > 128 || value.find('\0') != std::string::npos) return false;
+    if (value.empty()) return ::unsetenv(name.c_str()) == 0;
+    return ::setenv(name.c_str(), value.c_str(), 1) == 0;
 }
 
 bool setUserEnv(const std::string& name, const std::string& value) {

@@ -7,14 +7,18 @@
 // O runtime de inferencia (llama.cpp) e um componente separado, baixado sob demanda.
 
 #include <atomic>
+#include <cstdint>
+#include <deque>
 #include <filesystem>
 #include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
+#include "platform/Process.hpp"
 #include "util/JsonValue.hpp"
 
 namespace taskforge {
@@ -77,6 +81,15 @@ public:
     Json deleteModel(const std::string& modelId);
     Json verifyModel(const std::string& modelId);
 
+    // Runtime gerenciado (llama.cpp) e servidor em modo router.
+    bool runtimeInstalled();
+    std::string installRuntime(std::string& error);
+    Json runtimeStatus();
+    Json startServer();
+    Json stopServer();
+    Json serverLogs();
+    bool serverRunning();
+
     std::filesystem::path dataRoot() const;
     std::filesystem::path modelsDir() const;
     std::filesystem::path modelPath(const ModelRecord& model) const;
@@ -97,6 +110,29 @@ private:
     Json modelStateLocked(const ModelRecord& model) const;
     std::shared_ptr<Job> activeJobForModelLocked(const std::string& modelId) const;
     std::shared_ptr<Job> latestJobForModelLocked(const std::string& modelId) const;
+    std::shared_ptr<Job> latestJobForKindLocked(const std::string& kind, const std::string& targetId) const;
+
+    std::string platformTag() const;
+    std::string selectBinaryIdLocked() const;
+    std::filesystem::path runtimeDirFor(const std::string& version, const std::string& binaryId) const;
+    std::filesystem::path findServerBinary(const std::filesystem::path& dir, const std::string& entryPoint) const;
+    std::filesystem::path runtimeServerPathLocked(const std::string& version, const std::string& binaryId) const;
+    std::string writeRouterPresetLocked(std::vector<std::string>& modelNames);
+    void stopServerLocked();
+    void appendLog(const std::string& line);
+
+    mutable std::mutex serverMu_;
+    std::shared_ptr<platform::Process> server_;
+    std::thread logThread_;
+    std::atomic<bool> logStop_{false};
+    std::mutex logMu_;
+    std::deque<std::string> serverLog_;
+    std::string serverBaseUrl_;
+    std::string serverApiKey_;
+    int serverPort_ = 0;
+    bool serverReady_ = false;
+    std::vector<std::string> serverModels_;
+    uint64_t serverGeneration_ = 0;
 
     mutable std::mutex mu_;
     bool loaded_ = false;
