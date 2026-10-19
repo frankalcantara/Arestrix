@@ -94,7 +94,7 @@ O Arestrix adota a filosofia de segurança em profundidade (*defense-in-depth*),
 
 1. **Arquitetura Zero-Secret**: Nenhuma senha, token ou chave de API é gravada no executável gerado ou nos arquivos de projeto. A resolução de credenciais ocorre em tempo de execução consultando o **Cofre de Credenciais do Windows (DPAPI)** ou o **Azure Key Vault** (autenticado de forma transparente via **Managed Identity/IMDS** em ambientes corporativos). Ao término da execução, as variáveis sensíveis são zeradas da memória (`SecureZeroMemory`).
 2. **Assinatura Criptográfica de Pacotes**: Todo pipeline empacotado para o Runner Standalone gera um manifesto de integridade (`arestrix.manifest.sig`). Na inicialização, a assinatura SHA-256 HMAC é checada; caso qualquer arquivo de configuração, prompt ou dependência tenha sido adulterado, o executável recusa a inicialização (*fail-closed*).
-3. **Homologação para Intune e SCCM**: Com suporte aos geradores de instalador WiX MSI e MSIX corporativo, o departamento de TI pode distribuir atualizações silenciosas (`msiexec /i arestrix-runner.msi /qn`) com políticas corporativas centralizadas.
+3. **Homologação para Intune e SCCM**: Com suporte aos geradores de instalador WiX MSI e MSIX corporativo, a equipe de TI corporativa pode distribuir atualizações silenciosas (`msiexec /i arestrix-runner.msi /qn`) com políticas corporativas centralizadas.
 4. **Sandboxing e Confinamento de Escopo**: Operações de escrita em disco executadas por agentes e ferramentas são restritas à raiz do projeto. Laços de feedback e auto-reparação possuem limites rígidos configuráveis de chamadas e teto orçamentário para impedir loops infinitos de custos de API.
 
 ---

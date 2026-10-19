@@ -18,7 +18,22 @@ const preview = spawn('npx.cmd', ['vite', 'preview', '--port', '4173', '--strict
   stdio: 'pipe'
 });
 
-await new Promise(r => setTimeout(r, 2500));
+let ready = false;
+for (let i = 0; i < 30; i++) {
+  try {
+    const res = await fetch('http://localhost:4173');
+    if (res.status) {
+      ready = true;
+      console.log('[Screenshot] Servidor Vite preview pronto!');
+      break;
+    }
+  } catch {
+    await new Promise(r => setTimeout(r, 500));
+  }
+}
+if (!ready) {
+  console.warn('[Screenshot] Servidor demorou para responder, prosseguindo...');
+}
 
 try {
   console.log('[Screenshot] Lancando Microsoft Edge em modo headless...');
