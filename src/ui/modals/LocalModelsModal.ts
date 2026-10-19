@@ -1,5 +1,6 @@
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 import { t } from '../../i18n/index.ts';
+import { EnvironmentManager } from '../../core/env/EnvironmentManager.ts';
 
 interface CatalogModel {
   id: string;
@@ -16,6 +17,8 @@ interface CatalogModel {
   contextLength?: number;
   supportsTools?: boolean;
   verified?: boolean;
+  verifiedAt?: string;
+  verifiedWith?: string;
   curated?: boolean;
   minRamGB?: number;
   minVramGB?: number;
@@ -51,6 +54,7 @@ interface HardwareState {
 
 interface RuntimeState {
   installed?: boolean;
+  outdated?: boolean;
   running?: boolean;
   ready?: boolean;
   crashed?: boolean;
@@ -88,6 +92,7 @@ interface LocalModelsState {
 interface LocalModelsOptions {
   onUse?: (model: CatalogModel) => void;
   onRuntimeChanged?: (running: boolean, baseUrl?: string) => void;
+  onAssistantConfigured?: () => void;
 }
 
 const ACTIVE_STATUSES = new Set(['queued', 'downloading', 'verifying', 'extracting', 'cancelling']);
@@ -222,12 +227,16 @@ export class LocalModelsModal {
       .join(', ') || (runtime?.installed ? t('local_models.device_cpu') : t('local_models.device_unknown'));
     const vram = hardware?.discreteVramFreeBytes ? this.formatBytes(hardware.discreteVramFreeBytes) : '—';
     const recommendedId = runtime?.recommendedModelId || '';
-    const recommendedName = (this.state?.models || []).find(model => model.id === recommendedId)?.name || recommendedId;
+    const recommendedModel = (this.state?.models || []).find(model => model.id === recommendedId);
+    const recommendedName = recommendedModel?.name || recommendedId;
+    const quickSetupNeeded = Boolean(recommendedModel) &&
+      (!installed || !recommendedModel?.installed || !running);
 
     const actions: string[] = [];
     const buttonStyle = 'font-size:11.5px;height:28px;padding:0 10px;';
     if (!installed && !downloading) {
-      actions.push(`<button type="button" class="btn btn-primary" data-runtime-action="install" style="${buttonStyle}">${t('local_models.runtime_install')}</button>`);
+      const label = runtime?.outdated ? t('local_models.runtime_update') : t('local_models.runtime_install');
+      actions.push(`<button type="button" class="btn btn-primary" data-runtime-action="install" style="${buttonStyle}">${label}</button>`);
     }
     if (installed && !running && !downloading) {
       actions.push(`<button type="button" class="btn btn-primary" data-runtime-action="start" style="${buttonStyle}">${t('local_models.runtime_start')}</button>`);
@@ -276,6 +285,15 @@ export class LocalModelsModal {
             </div>
           </div>
         ` : ''}
+        ${quickSetupNeeded ? `
+          <div style="margin-top:12px; padding:10px 12px; border:1px solid #c7e0f4; background:#f3f9fd; border-radius:6px; display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap;">
+            <div style="font-size:12px; color:#424242;">
+              <div style="font-weight:700; color:#242424;">${t('local_models.quick_setup_title')}</div>
+              <div>${t('local_models.quick_setup_desc', { name: recommendedName })}</div>
+            </div>
+            <button type="button" class="btn btn-primary" data-runtime-action="quick-setup" style="${buttonStyle}">${t('local_models.quick_setup_btn')}</button>
+          </div>
+        ` : ''}
         ${download?.error ? `<div style="font-size:11.5px; color:#a80000; margin-top:6px;">${this.esc(download.error)}</div>` : ''}
         <div id="local-runtime-log" style="display:${this.logsVisible ? 'block' : 'none'}; margin-top:10px; background:#1e1e1e; color:#d4d4d4; border-radius:4px; padding:8px; max-height:180px; overflow:auto; font-family:monospace; font-size:10.5px; white-space:pre-wrap;">${this.esc(logLines)}</div>
         ${this.state?.error ? `<div class="form-hint" style="color: #a80000; margin-top:6px;">${this.esc(this.state.error)}</div>` : ''}
@@ -283,6 +301,7 @@ export class LocalModelsModal {
     `;
 
     host.querySelector('[data-runtime-action="install"]')?.addEventListener('click', () => void this.installRuntime());
+    host.querySelector('[data-runtime-action="quick-setup"]')?.addEventListener('click', () => void this.quickSetup());
     host.querySelector('[data-runtime-action="start"]')?.addEventListener('click', () => void this.startServer());
     host.querySelector('[data-runtime-action="stop"]')?.addEventListener('click', () => void this.stopServer());
     host.querySelector('[data-runtime-action="logs"]')?.addEventListener('click', () => {
@@ -401,25 +420,92 @@ export class LocalModelsModal {
     }
   }
 
+  private async ensureModelServed(model: CatalogModel): Promise<boolean> {
+    if (!(await this.ensureRuntime())) return false;
+
+    const modelName = model.apiModel || model.id;
+    let runtime = this.state?.runtime;
+    // Um modelo baixado depois do start não está no preset atual: reinicia para incluí-lo.
+    if (runtime?.running && !(runtime.presetModels || []).includes(modelName)) {
+      await this.stopServer();
+      runtime = this.state?.runtime;
+    }
+    if (!runtime?.running) return this.startServer();
+    return true;
+  }
+
+  private async activateModel(model: CatalogModel): Promise<void> {
+    if (!(await this.ensureModelServed(model))) return;
+    this.options.onUse?.(model);
+    this.hide();
+  }
+
   private async useModel(model: CatalogModel): Promise<void> {
     if (this.busy) return;
     this.busy = true;
     try {
-      if (!(await this.ensureRuntime())) return;
+      await this.activateModel(model);
+    } finally {
+      this.busy = false;
+    }
+  }
 
-      const modelName = model.apiModel || model.id;
-      let runtime = this.state?.runtime;
-      // Um modelo baixado depois do start não está no preset atual: reinicia para incluí-lo.
-      if (runtime?.running && !(runtime.presetModels || []).includes(modelName)) {
-        await this.stopServer();
-        runtime = this.state?.runtime;
+  private async configureAssistant(model: CatalogModel): Promise<void> {
+    if (!model.supportsTools) {
+      this.showMessage(false, t('local_models.assistant_requires_tools'));
+      return;
+    }
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      if (!(await this.ensureModelServed(model))) return;
+      const env = EnvironmentManager.getInstance();
+      const okProvider = await env.setEnvVar('ARESTRIX_DEFAULT_PROVIDER', 'local');
+      const okModel = await env.setEnvVar('ARESTRIX_DEFAULT_MODEL', model.apiModel || model.id);
+      if (okProvider && okModel) {
+        this.showMessage(true, t('local_models.assistant_configured', { model: model.name || model.id }));
+        this.options.onAssistantConfigured?.();
+      } else {
+        this.showMessage(false, t('local_models.assistant_config_failed'));
       }
-      if (!runtime?.running) {
-        if (!(await this.startServer())) return;
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async quickSetup(): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const recommendedId = this.state?.runtime?.recommendedModelId || '';
+      const model = (this.state?.models || []).find(candidate => candidate.id === recommendedId);
+      if (!model) {
+        this.showMessage(false, t('local_models.no_recommended'));
+        return;
       }
 
-      this.options.onUse?.(model);
-      this.hide();
+      if (!model.installed) {
+        const license = model.license || '?';
+        if (!confirm(t('local_models.license_confirm', { name: model.name || model.id, license }))) return;
+        const res = await this.call('local_model_download', JSON.stringify({ modelId: model.id }));
+        if (!res.ok) {
+          this.showMessage(false, t('local_models.download_failed', { error: res.error || '?' }));
+          return;
+        }
+        if (res.jobId) {
+          this.showMessage(true, t('local_models.download_started', { name: model.name || model.id }));
+          const downloaded = await this.waitForJob(res.jobId);
+          if (!downloaded) return;
+        }
+        await this.refresh();
+        const refreshed = (this.state?.models || []).find(candidate => candidate.id === model.id);
+        if (!refreshed?.installed) {
+          this.showMessage(false, t('local_models.download_failed', { error: 'not_installed' }));
+          return;
+        }
+      }
+
+      await this.activateModel(model);
     } finally {
       this.busy = false;
     }
@@ -468,7 +554,10 @@ export class LocalModelsModal {
       badges.push(`<span class="badge-inherited" style="background:#fff4ce;color:#797673;">${t('local_models.recommended')}</span>`);
     }
     if (model.curated) badges.push(`<span class="badge-inherited">${t('local_models.curated')}</span>`);
-    if (model.verified) badges.push(`<span class="badge-inherited">${t('local_models.verified')}</span>`);
+    if (model.verified) {
+      const title = [model.verifiedAt, model.verifiedWith].filter(Boolean).join(' · ');
+      badges.push(`<span class="badge-inherited" title="${this.esc(title)}">${t('local_models.verified')}</span>`);
+    }
     badges.push(model.supportsTools
       ? `<span class="badge-inherited" style="background:#dff6dd;color:#0e700e;">${t('local_models.tools_yes')}</span>`
       : `<span class="badge-inherited" style="background:#f3f2f1;color:#616161;">${t('local_models.tools_no')}</span>`);
@@ -500,7 +589,7 @@ export class LocalModelsModal {
         <div style="font-size:10.5px; color:#616161;">${this.formatBytes(received)} / ${this.formatBytes(total)}</div>
       ` : ''}
       <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:auto;">
-        ${this.actionButtons(active, installed)}
+        ${this.actionButtons(model, active, installed)}
       </div>
       ${download?.error ? `<div style="font-size:11px; color:#a80000;">${this.esc(download.error)}</div>` : ''}
     `;
@@ -509,23 +598,28 @@ export class LocalModelsModal {
     card.querySelector('[data-action="cancel"]')?.addEventListener('click', () => void this.cancel(model));
     card.querySelector('[data-action="delete"]')?.addEventListener('click', () => void this.remove(model));
     card.querySelector('[data-action="verify"]')?.addEventListener('click', () => void this.verify(model));
+    card.querySelector('[data-action="assistant"]')?.addEventListener('click', () => void this.configureAssistant(model));
     card.querySelector('[data-action="use"]')?.addEventListener('click', () => {
       void this.useModel(model);
     });
     return card;
   }
 
-  private actionButtons(active: boolean, installed: boolean): string {
+  private actionButtons(model: CatalogModel, active: boolean, installed: boolean): string {
     const buttons: string[] = [];
+    const style = 'font-size:11.5px;height:28px;padding:0 10px;';
     if (active) {
-      buttons.push(`<button type="button" class="btn btn-secondary-pill" data-action="cancel" style="font-size:11.5px;height:28px;padding:0 10px;">${t('local_models.cancel')}</button>`);
+      buttons.push(`<button type="button" class="btn btn-secondary-pill" data-action="cancel" style="${style}">${t('local_models.cancel')}</button>`);
     } else if (!installed) {
-      buttons.push(`<button type="button" class="btn btn-primary" data-action="download" style="font-size:11.5px;height:28px;padding:0 10px;">${t('local_models.download')}</button>`);
+      buttons.push(`<button type="button" class="btn btn-primary" data-action="download" style="${style}">${t('local_models.download')}</button>`);
     }
     if (installed) {
-      buttons.push(`<button type="button" class="btn btn-primary" data-action="use" style="font-size:11.5px;height:28px;padding:0 10px;">${t('local_models.use')}</button>`);
-      buttons.push(`<button type="button" class="btn btn-secondary-pill" data-action="verify" style="font-size:11.5px;height:28px;padding:0 10px;">${t('local_models.verify')}</button>`);
-      buttons.push(`<button type="button" class="btn btn-secondary-pill" data-action="delete" style="font-size:11.5px;height:28px;padding:0 10px;">${t('local_models.delete')}</button>`);
+      buttons.push(`<button type="button" class="btn btn-primary" data-action="use" style="${style}">${t('local_models.use')}</button>`);
+      if (model.supportsTools) {
+        buttons.push(`<button type="button" class="btn btn-secondary-pill" data-action="assistant" style="${style}">${t('local_models.use_assistant')}</button>`);
+      }
+      buttons.push(`<button type="button" class="btn btn-secondary-pill" data-action="verify" style="${style}">${t('local_models.verify')}</button>`);
+      buttons.push(`<button type="button" class="btn btn-secondary-pill" data-action="delete" style="${style}">${t('local_models.delete')}</button>`);
     }
     return buttons.join('');
   }

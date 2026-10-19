@@ -21,6 +21,7 @@
     "submodule:check": "node scripts/update-submodules.mjs --check",
     "submodule:update": "node scripts/update-submodules.mjs --update",
     "check:secrets": "node scripts/check-secrets.mjs",
+    "check:local-assets": "node scripts/check-local-assets.mjs",
     "check:version": "node scripts/check-version.mjs",
     "capture:screenshots": "node scripts/capture-screenshots.mjs",
     "hooks:install": "node scripts/install-hooks.mjs"

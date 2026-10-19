@@ -163,6 +163,38 @@ recomendado para a máquina e limita `--models-max` conforme a VRAM discreta (1 
 10 GiB livres). Para sobrescrever, defina `ARESTRIX_LOCAL_MODELS_MAX=1..4`. Se o backend principal falhar ao
 iniciar, o Arestrix instala o binário **CPU** sob demanda e tenta novamente automaticamente.
 
+O cartão **Configuração rápida** baixa o modelo recomendado, instala o runtime, inicia o servidor e configura
+o projeto em um clique. O botão **Usar no Assistente** grava `ARESTRIX_DEFAULT_PROVIDER=local` e
+`ARESTRIX_DEFAULT_MODEL` nas variáveis do usuário, sem persistir a porta/chave efêmeras do runtime.
+
+### Distribuição e assinatura
+
+Antes de publicar, valide o catálogo e o manifesto:
+
+```bash
+npm run check:local-assets
+```
+
+O script verifica esquema, IDs únicos, URLs HTTPS, SHA-256, tamanhos, licenças, modelos verificados e a
+cobertura mínima Windows/Linux com fallback CPU.
+
+No Windows, assine os binários com Authenticode usando um certificado fornecido por variável de ambiente:
+
+```powershell
+$env:ARESTRIX_SIGN_PFX = "C:\secrets\arestrix.pfx"
+$env:ARESTRIX_SIGN_PFX_PASSWORD = "..."
+pwsh scripts/sign-windows.ps1
+```
+
+Alternativamente, use `ARESTRIX_SIGN_THUMBPRINT` para um certificado no repositório `My`. O script também
+aceita `-RuntimePath` para assinar um runtime preparado para distribuição. Nenhum segredo é gravado no
+repositório.
+
+A atualização do runtime é controlada pelo manifesto embutido: quando o Arestrix sobe de versão, a nova
+versão do `llama.cpp` é baixada, verificada e as versões antigas são removidas. Catálogo remoto assinado
+(Ed25519/minisign) ainda depende da definição de par de chaves e hospedagem; até lá o catálogo é embutido no
+binário assinado.
+
 O manifesto de binários pinados fica em `CppCore/runtime/llama.manifest.json` e usa o build oficial
 `llama.cpp b11669`, que já inclui o modo router nativo do `llama-server` (`--models-preset`).
 

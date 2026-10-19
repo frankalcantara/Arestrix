@@ -90,6 +90,8 @@ ModelRecord parseModel(const Json& value) {
     model.minVramGB = value.value("minVramGB", 0);
     model.supportsTools = value.value("supportsTools", false);
     model.verified = value.value("verified", false);
+    model.verifiedAt = value.value("verifiedAt", std::string());
+    model.verifiedWith = value.value("verifiedWith", std::string());
     model.curated = value.value("curated", false);
 
     const Json& backends = value["recommendedBackends"];
@@ -250,6 +252,8 @@ Json ModelRecord::toJson() const {
     j["contextLength"] = contextLength;
     j["supportsTools"] = supportsTools;
     j["verified"] = verified;
+    j["verifiedAt"] = verifiedAt;
+    j["verifiedWith"] = verifiedWith;
     j["curated"] = curated;
     j["minRamGB"] = minRamGB;
     j["minVramGB"] = minVramGB;
@@ -1068,6 +1072,7 @@ std::string LocalRuntime::installRuntime(std::string& error, const std::string& 
             hardwareDetected_ = false;
             hardware_ = Json::object();
         }
+        if (!serverRunning()) cleanupOldRuntimeVersions(version);
 
         std::lock_guard<std::mutex> lock(job->mu);
         job->status = "done";
@@ -1077,6 +1082,21 @@ std::string LocalRuntime::installRuntime(std::string& error, const std::string& 
     }).detach();
 
     return job->id;
+}
+
+void LocalRuntime::cleanupOldRuntimeVersions(const std::string& currentVersion) {
+    if (currentVersion.empty()) return;
+    std::error_code ec;
+    const fs::path root = dataRoot() / "runtime" / "llama.cpp";
+    if (!fs::is_directory(root, ec)) return;
+    const fs::path keep = project::pathFromUtf8(currentVersion);
+    for (fs::directory_iterator it(root, fs::directory_options::skip_permission_denied, ec), end;
+         it != end; it.increment(ec)) {
+        if (ec) { ec.clear(); continue; }
+        if (!it->is_directory(ec)) continue;
+        if (it->path().filename() == keep) continue;
+        fs::remove_all(it->path(), ec);
+    }
 }
 
 std::string LocalRuntime::writeRouterPresetLocked(std::vector<std::string>& modelNames) {
@@ -1192,7 +1212,24 @@ Json LocalRuntime::runtimeStatus() {
     modelsMax = hardware.value("modelsMax", 1LL);
     recommendedModelId = hardware.value("recommendedModelId", std::string());
 
+    bool outdated = false;
+    if (installedPath.empty()) {
+        std::error_code ec;
+        const fs::path root = dataRoot() / "runtime" / "llama.cpp";
+        if (fs::is_directory(root, ec)) {
+            for (fs::directory_iterator it(root, fs::directory_options::skip_permission_denied, ec), end;
+                 it != end; it.increment(ec)) {
+                if (ec) { ec.clear(); continue; }
+                if (it->is_directory(ec) && it->path().filename() != project::pathFromUtf8(version)) {
+                    outdated = true;
+                    break;
+                }
+            }
+        }
+    }
+
     out["installed"] = !installedPath.empty();
+    out["outdated"] = outdated;
     out["version"] = version;
     out["binaryId"] = binaryId;
     out["backend"] = backend;

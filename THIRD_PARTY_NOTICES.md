@@ -20,6 +20,17 @@ of the components you redistribute.
 | [SQLite](https://sqlite.org) | `3.54.0` amalgamation | Public domain | Embedded persistence. |
 | [Inter](https://github.com/rsms/inter) | `third_party/fonts/inter` | SIL OFL-1.1 | Interface and canvas typography. |
 
+## Components downloaded at runtime (not bundled)
+
+| Component | Version / source | License | Role |
+| :--- | :--- | :--- | :--- |
+| [llama.cpp / ggml](https://github.com/ggml-org/llama.cpp) | `b11669`, pinned in `CppCore/runtime/llama.manifest.json` | MIT | Optional local inference runtime (`llama-server`). Downloaded on demand and verified by SHA-256. |
+| GGUF model weights | Pinned revisions in `CppCore/runtime/models.catalog.json` | Per model (currently Apache-2.0) | Downloaded directly from the model publisher. Arestrix does not redistribute weights. |
+
+The `llama.cpp` source is not vendored or linked into Arestrix; it runs as a separate process behind an
+OpenAI-compatible HTTP endpoint. Model licenses are displayed in the Local Models screen and must be
+accepted by the user before download.
+
 ## Direct npm dependencies
 
 | Package | Version | License | Role |

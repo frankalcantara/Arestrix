@@ -24,6 +24,10 @@ First public beta of Arestrix Studio and the native C++20 pipeline compiler.
   loopback-only binding, ephemeral API key, generated model preset, health checks and logs.
 - Hardware detection (RAM, CPU threads, GPUs/VRAM), model recommendation, VRAM-aware `--models-max`
   and automatic CPU fallback when the primary backend fails to start.
+- Tool-calling verification for Qwen2.5 7B/14B, with `verifiedAt`/`verifiedWith` provenance in the catalog.
+- Runtime version upgrades with cleanup of old versions, plus local asset validation and a Windows
+  Authenticode signing script.
+- Quick setup for the recommended model and "Use in Assistant" to configure the Studio default model.
 - Local Models screen with runtime install/start/stop, per-model download/verify/delete and one-click
   "Use" that starts the runtime and fills the project provider/model.
 - Projects, workspaces, persistent memory, local skills and skill catalogs.

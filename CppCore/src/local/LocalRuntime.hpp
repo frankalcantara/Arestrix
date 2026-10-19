@@ -44,6 +44,8 @@ struct ModelRecord {
     int minVramGB = 0;
     bool supportsTools = false;
     bool verified = false;
+    std::string verifiedAt;
+    std::string verifiedWith;
     bool curated = false;
     std::vector<std::string> recommendedBackends;
     std::vector<std::string> languages;
@@ -122,6 +124,7 @@ private:
     std::filesystem::path runtimeServerPathLocked(const std::string& version, const std::string& binaryId) const;
     std::string writeRouterPresetLocked(std::vector<std::string>& modelNames);
     Json detectHardware();
+    void cleanupOldRuntimeVersions(const std::string& currentVersion);
     void stopServerLocked();
     void appendLog(const std::string& line);
 

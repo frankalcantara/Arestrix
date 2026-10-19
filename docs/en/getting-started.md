@@ -161,6 +161,37 @@ model for the machine and sizes `--models-max` from discrete VRAM (1 by default;
 Set `ARESTRIX_LOCAL_MODELS_MAX=1..4` to override it. If the primary backend fails to start, Arestrix installs
 the **CPU** binary on demand and retries automatically.
 
+The **Quick setup** card downloads the recommended model, installs the runtime, starts the server and configures
+the project in one click. **Use in Assistant** stores `ARESTRIX_DEFAULT_PROVIDER=local` and
+`ARESTRIX_DEFAULT_MODEL` in the user environment, without persisting the runtime's ephemeral port/key.
+
+### Distribution and signing
+
+Validate the catalog and manifest before releasing:
+
+```bash
+npm run check:local-assets
+```
+
+The script checks schema, unique IDs, HTTPS URLs, SHA-256, sizes, licenses, verified models and minimum
+Windows/Linux coverage with a CPU fallback.
+
+On Windows, sign the binaries with Authenticode using a certificate supplied through environment variables:
+
+```powershell
+$env:ARESTRIX_SIGN_PFX = "C:\secrets\arestrix.pfx"
+$env:ARESTRIX_SIGN_PFX_PASSWORD = "..."
+pwsh scripts/sign-windows.ps1
+```
+
+Alternatively, use `ARESTRIX_SIGN_THUMBPRINT` for a certificate in the `My` store. The script also accepts
+`-RuntimePath` to sign a runtime staged for distribution. No secret is written to the repository.
+
+Runtime upgrades are controlled by the embedded manifest: when Arestrix moves to a new version, the new
+`llama.cpp` build is downloaded, verified and older versions are removed. A signed remote catalog
+(Ed25519/minisign) still depends on a key pair and hosting decision; until then the catalog is embedded in the
+signed application binary.
+
 The pinned binary manifest lives at `CppCore/runtime/llama.manifest.json` and uses official
 `llama.cpp b11669`, which already includes the native `llama-server` router mode (`--models-preset`).
 

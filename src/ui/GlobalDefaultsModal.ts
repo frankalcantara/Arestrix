@@ -694,6 +694,9 @@ export class GlobalDefaultsModal {
           this.runtimeManaged = running;
           this.syncProjectEndpointField();
           void this.loadProjectEndpoint();
+        },
+        onAssistantConfigured: () => {
+          void this.loadStudioModel();
         }
       });
     }
