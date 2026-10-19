@@ -87,6 +87,9 @@ bool setProcessEnv(const std::string& name, const std::string& value);
 // Nao usa shell. Devolve false se o nome/valor forem invalidos.
 bool setUserEnv(const std::string& name, const std::string& value);
 
+// Remove a variavel do processo atual e da configuracao do usuario.
+bool clearUserEnv(const std::string& name);
+
 // Seletor de pasta nativo; vazio se cancelado/indisponivel.
 std::string pickFolderDialog(const std::string& title);
 

@@ -20,6 +20,8 @@ struct ProviderInfo {
     std::string keyEnv;
     bool keyRequired = true;
     bool supportsTools = true;   // false: o provedor nao serve ao Assistente (sem chamada de ferramentas)
+    bool gateway = false;        // roteado pelo arestrix-gateway (chave virtual)
+    std::string configError;     // gateway_required, etc.; preenchido antes de qualquer chamada
 };
 
 // Provedores conhecidos, na ordem de exibicao.
@@ -73,8 +75,8 @@ struct ChatReply {
     long long inTokens = 0;
     long long outTokens = 0;
     bool reasoningRejected = false;   // o servidor recusou reasoning_content: envie os proximos sem ele
-    // Falha: codigo estavel (model_not_configured, base_url_missing, api_key_missing, tools_unsupported,
-    // rate_limited, http_error, bad_response) e detalhe tecnico.
+    // Falha: codigo estavel (model_not_configured, base_url_missing, api_key_missing, gateway_required,
+    // tools_unsupported, budget_exceeded, rate_limited, http_error, bad_response) e detalhe tecnico.
     std::string errorCode;
     std::string error;
 };

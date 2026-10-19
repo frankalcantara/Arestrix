@@ -18,6 +18,7 @@ of the components you redistribute.
 | [Monaco Editor](https://github.com/microsoft/monaco-editor) | npm `0.57.0`; submodule `473775c` | MIT | Code editor used by the Studio. |
 | [SkillSpector](https://github.com/NVIDIA/SkillSpector) | `v2.12.0-630-g69d7d059` | Apache-2.0 | Skill security analysis. |
 | [SQLite](https://sqlite.org) | `3.54.0` amalgamation | Public domain | Embedded persistence. |
+| [cpp-httplib](https://github.com/yhirose/cpp-httplib) | `v0.62.0` | MIT | HTTP server of the on-prem `arestrix-gateway`. |
 | [Inter](https://github.com/rsms/inter) | `third_party/fonts/inter` | SIL OFL-1.1 | Interface and canvas typography. |
 
 ## Components downloaded at runtime (not bundled)

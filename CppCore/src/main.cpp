@@ -1278,6 +1278,88 @@ void ui_set_env_var(webui::window::event* e) {
     }
 }
 
+// Wrapper JS -> C++ (Remove uma variavel de ambiente do usuario)
+void ui_clear_env_var(webui::window::event* e) {
+    const std::string key = e->get_string();
+    if (!isValidEnvName(key)) { e->return_bool(false); return; }
+    e->return_bool(taskforge::platform::clearUserEnv(key));
+}
+
+// Wrapper JS -> C++ (Testa /health do AI Gateway)
+void ui_ai_gateway_health(webui::window::event* e) {
+    taskforge::Json out;
+    try {
+        std::string url;
+        std::string key;
+        const std::string payload = e->get_string();
+        if (!payload.empty()) {
+            auto req = taskforge::jsonutil::parse(payload);
+            url = req.value("url", std::string());
+            key = req.value("key", std::string());
+        }
+        if (url.empty()) url = taskforge::platform::getEnv("ARESTRIX_AI_GATEWAY_URL");
+        if (key.empty()) key = taskforge::platform::getEnv("ARESTRIX_AI_GATEWAY_KEY");
+        while (!url.empty() && url.back() == '/') url.pop_back();
+        if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0) {
+            out["ok"] = false;
+            out["error"] = "invalid_url";
+            e->return_string(out.dump());
+            return;
+        }
+        taskforge::rt::HttpRequest http;
+        http.method = "GET";
+        http.url = url + "/health";
+        http.timeoutSeconds = 10;
+        if (!key.empty()) http.headers["Authorization"] = "Bearer " + key;
+        const auto response = taskforge::rt::httpSend(http);
+        out["ok"] = response.status == 200;
+        out["status"] = response.status;
+        out["body"] = response.body.substr(0, 4000);
+        if (response.status == 0) out["error"] = response.error;
+    } catch (const std::exception& ex) {
+        out["ok"] = false;
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+// Wrapper JS -> C++ (Orcamento/uso da chave virtual no gateway)
+void ui_ai_gateway_usage(webui::window::event* e) {
+    taskforge::Json out;
+    try {
+        std::string url;
+        std::string key;
+        const std::string payload = e->get_string();
+        if (!payload.empty()) {
+            auto req = taskforge::jsonutil::parse(payload);
+            url = req.value("url", std::string());
+            key = req.value("key", std::string());
+        }
+        if (url.empty()) url = taskforge::platform::getEnv("ARESTRIX_AI_GATEWAY_URL");
+        if (key.empty()) key = taskforge::platform::getEnv("ARESTRIX_AI_GATEWAY_KEY");
+        while (!url.empty() && url.back() == '/') url.pop_back();
+        taskforge::rt::HttpRequest http;
+        http.method = "GET";
+        http.url = url + "/v1/usage";
+        http.timeoutSeconds = 10;
+        if (!key.empty()) http.headers["Authorization"] = "Bearer " + key;
+        const auto response = taskforge::rt::httpSend(http);
+        out["ok"] = response.status == 200;
+        out["status"] = response.status;
+        if (response.status == 200) {
+            auto parsed = taskforge::jsonutil::tryParse(response.body);
+            if (parsed) out["usage"] = *parsed;
+        } else {
+            out["body"] = response.body.substr(0, 4000);
+        }
+        if (response.status == 0) out["error"] = response.error;
+    } catch (const std::exception& ex) {
+        out["ok"] = false;
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
 // Wrapper JS -> C++ (Retorna o diretório de execução atual onde o Arestrix foi aberto)
 void ui_get_current_working_dir(webui::window::event* e) {
     std::error_code ec;
@@ -2208,6 +2290,9 @@ int main(int argc, char** argv) {
     win.bind("scan_pi_project", ui_scan_pi_project);
     win.bind("get_known_pi_projects", ui_get_known_pi_projects);
     win.bind("get_env_var", ui_get_env_var);
+    win.bind("clear_env_var", ui_clear_env_var);
+    win.bind("ai_gateway_health", ui_ai_gateway_health);
+    win.bind("ai_gateway_usage", ui_ai_gateway_usage);
     win.bind("set_env_var", ui_set_env_var);
     win.bind("pick_folder", ui_pick_folder);
     win.bind("pick_file", ui_pick_file);

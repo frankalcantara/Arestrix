@@ -99,6 +99,7 @@ export class GlobalDefaultsModal {
                     <option value="deepseek" ${defaults.model.provider === 'deepseek' ? 'selected' : ''}>DeepSeek (v4-pro / Flash)</option>
                     <option value="anthropic" ${defaults.model.provider === 'anthropic' ? 'selected' : ''}>Anthropic (Claude Opus 5.5 / Sonnet)</option>
                     <option value="google" ${defaults.model.provider === 'google' ? 'selected' : ''}>Google (Gemini 2.5 Flash / Pro)</option>
+                    <option value="mistral" ${defaults.model.provider === 'mistral' ? 'selected' : ''}>Mistral (Large / Codestral)</option>
                     <option value="openai" ${defaults.model.provider === 'openai' ? 'selected' : ''}>OpenAI (GPT-4o / o3)</option>
                     <option value="jev" ${defaults.model.provider === 'jev' ? 'selected' : ''}>Jev / Engine Visual Local</option>
                     <option value="local" ${defaults.model.provider === 'local' ? 'selected' : ''}>Local / OpenAI-compatível (Ollama, LM Studio, llama.cpp, vLLM)</option>
@@ -179,6 +180,45 @@ export class GlobalDefaultsModal {
                 </div>
               </div>
 
+              <!-- AI Gateway empresarial (escopo Studio; runners usam as mesmas variáveis) -->
+              <div class="settings-section-card" style="margin-top: 16px;" id="card-ai-gateway">
+                <div class="section-card-header">
+                  <span class="section-card-icon">🛡️</span>
+                  <div class="section-card-titles">
+                    <h3 class="section-card-title">${t('global_defaults.gateway_title')} <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">${t('global_defaults.badge_studio_scope')}</span></h3>
+                    <p class="section-card-desc">${t('global_defaults.gateway_desc')}</p>
+                  </div>
+                </div>
+
+                <div class="form-row-grid">
+                  <div class="form-group">
+                    <label class="form-label" for="def-gateway-url">${t('global_defaults.gateway_url_label')}</label>
+                    <input type="text" id="def-gateway-url" class="form-input" style="font-family: monospace;" placeholder="https://gateway.empresa.com" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="def-gateway-key">${t('global_defaults.gateway_key_label')}</label>
+                    <input type="password" id="def-gateway-key" class="form-input" style="font-family: monospace;" placeholder="av_..." />
+                    <div class="form-hint" id="def-gateway-key-hint"></div>
+                  </div>
+                </div>
+
+                <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: #424242;">
+                  <input type="checkbox" id="def-gateway-require" />
+                  ${t('global_defaults.gateway_require_label')}
+                </label>
+
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;">
+                  <button type="button" class="btn btn-primary" id="btn-save-gateway" style="font-size: 12px; font-weight: 600; height: 32px; padding: 0 14px;">${t('global_defaults.gateway_save')}</button>
+                  <button type="button" class="btn btn-secondary-pill" id="btn-test-gateway" style="font-size: 12px; height: 32px; padding: 0 14px;">${t('global_defaults.gateway_test')}</button>
+                  <button type="button" class="btn btn-secondary-pill" id="btn-clear-gateway" style="font-size: 12px; height: 32px; padding: 0 14px;">${t('global_defaults.gateway_clear')}</button>
+                </div>
+
+                <div id="gateway-policy-hint" class="form-hint" style="display: none; margin-top: 8px; color: #a80000;"></div>
+                <div id="gateway-test-status" style="display: none; margin-top: 8px; padding: 8px 12px; border-radius: 4px; font-size: 12px;"></div>
+                <div id="gateway-usage-status" class="form-hint" style="margin-top: 8px;"></div>
+                <div class="form-hint" style="margin-top: 6px;">${t('global_defaults.gateway_local_exempt')}</div>
+              </div>
+
               <div class="form-group" style="margin-top: 14px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                   <label class="form-label" for="def-skill" style="margin: 0;">${t('global_defaults.skill_label')}</label>
@@ -215,6 +255,7 @@ export class GlobalDefaultsModal {
                     <option value="openai">OpenAI</option>
                     <option value="anthropic">Anthropic</option>
                     <option value="google">Google (Gemini)</option>
+                    <option value="mistral">Mistral</option>
                     <option value="groq">Groq</option>
                     <option value="jev">Jev / Engine Visual Local</option>
                     <option value="local">Local / OpenAI-compatível (Ollama, LM Studio, llama.cpp, vLLM)</option>
@@ -477,6 +518,7 @@ export class GlobalDefaultsModal {
     this.bindDialogEvents();
     this.updateKeyIndicator();
     void this.loadRuntimeManaged();
+    void this.loadGatewaySettings();
     void this.loadStudioModel();
     this.mountToolsExtras(defaults.codeMode.mcpServers || [], defaults.codeMode.allowedMcpTools || []);
   }
@@ -593,6 +635,7 @@ export class GlobalDefaultsModal {
       if (val === 'deepseek') modelInput.value = 'deepseek-flash';
       else if (val === 'anthropic') modelInput.value = 'claude-opus-5.5';
       else if (val === 'google') modelInput.value = 'gemini-2.5-flash';
+      else if (val === 'mistral') modelInput.value = 'mistral-large-latest';
       else if (val === 'openai') modelInput.value = 'gpt-4o';
       else if (val === 'jev') modelInput.value = 'jev-svg-validator';
 
@@ -661,6 +704,17 @@ export class GlobalDefaultsModal {
     // Salvar/Implantar chave no Windows
     this.overlay.querySelector('#btn-submit-deploy-key')?.addEventListener('click', () => {
       this.deployApiKey();
+    });
+
+    // AI Gateway
+    this.overlay.querySelector('#btn-save-gateway')?.addEventListener('click', () => {
+      void this.saveGatewaySettings();
+    });
+    this.overlay.querySelector('#btn-test-gateway')?.addEventListener('click', () => {
+      void this.testGateway();
+    });
+    this.overlay.querySelector('#btn-clear-gateway')?.addEventListener('click', () => {
+      void this.clearGatewaySettings();
     });
 
     // Restaurar Fábrica
@@ -818,6 +872,170 @@ export class GlobalDefaultsModal {
     }
   }
 
+  // --- AI Gateway (chave virtual + política empresarial; modelos locais ficam isentos) ---
+
+  private async loadGatewaySettings(): Promise<void> {
+    const env = EnvironmentManager.getInstance();
+    const url = (await env.getEnvVar('ARESTRIX_AI_GATEWAY_URL')) || '';
+    const key = (await env.getEnvVar('ARESTRIX_AI_GATEWAY_KEY')) || '';
+    const requireValue = (await env.getEnvVar('ARESTRIX_REQUIRE_AI_GATEWAY')) || '';
+
+    const urlInput = this.overlay.querySelector('#def-gateway-url') as HTMLInputElement | null;
+    const keyInput = this.overlay.querySelector('#def-gateway-key') as HTMLInputElement | null;
+    const keyHint = this.overlay.querySelector('#def-gateway-key-hint') as HTMLElement | null;
+    const requireInput = this.overlay.querySelector('#def-gateway-require') as HTMLInputElement | null;
+    const usage = this.overlay.querySelector('#gateway-usage-status') as HTMLElement | null;
+    const policyHint = this.overlay.querySelector('#gateway-policy-hint') as HTMLElement | null;
+    const policy = ((await env.getEnvVar('ARESTRIX_AI_GATEWAY_POLICY')) || '').toLowerCase();
+    const locked = policy === 'locked' || policy === 'enforced';
+    const saveButton = this.overlay.querySelector('#btn-save-gateway') as HTMLButtonElement | null;
+    const clearButton = this.overlay.querySelector('#btn-clear-gateway') as HTMLButtonElement | null;
+
+    if (urlInput) { urlInput.value = url; urlInput.disabled = locked; }
+    if (keyInput) { keyInput.value = ''; keyInput.disabled = locked; }
+    if (requireInput) {
+      requireInput.checked = locked || requireValue === '1' || requireValue.toLowerCase() === 'true';
+      requireInput.disabled = locked;
+    }
+    if (saveButton) saveButton.disabled = locked;
+    if (clearButton) clearButton.disabled = locked;
+    if (policyHint) {
+      policyHint.style.display = locked ? 'block' : 'none';
+      policyHint.textContent = locked ? t('global_defaults.gateway_policy_locked') : '';
+    }
+    if (keyHint) {
+      keyHint.textContent = key
+        ? t('global_defaults.gateway_key_configured')
+        : t('global_defaults.gateway_key_missing');
+    }
+    if (usage) usage.textContent = '';
+
+    if (url && key) void this.refreshGatewayUsage(url, key);
+  }
+
+  private async saveGatewaySettings(): Promise<void> {
+    const env = EnvironmentManager.getInstance();
+    const urlInput = this.overlay.querySelector('#def-gateway-url') as HTMLInputElement | null;
+    const keyInput = this.overlay.querySelector('#def-gateway-key') as HTMLInputElement | null;
+    const requireInput = this.overlay.querySelector('#def-gateway-require') as HTMLInputElement | null;
+    const status = this.overlay.querySelector('#gateway-test-status') as HTMLElement | null;
+    const policy = ((await env.getEnvVar('ARESTRIX_AI_GATEWAY_POLICY')) || '').toLowerCase();
+    if (policy === 'locked' || policy === 'enforced') return;
+    const url = urlInput?.value.trim() || '';
+    const key = keyInput?.value.trim() || '';
+    const require = requireInput?.checked || false;
+
+    const show = (ok: boolean, text: string) => {
+      if (!status) return;
+      status.style.display = 'block';
+      status.style.background = ok ? '#dff6dd' : '#fde7e9';
+      status.style.color = ok ? '#0e700e' : '#a80000';
+      status.textContent = text;
+    };
+
+    const results: boolean[] = [];
+    results.push(url ? await env.setEnvVar('ARESTRIX_AI_GATEWAY_URL', url) : await env.clearEnvVar('ARESTRIX_AI_GATEWAY_URL'));
+    if (key) results.push(await env.setEnvVar('ARESTRIX_AI_GATEWAY_KEY', key));
+    results.push(await env.setEnvVar('ARESTRIX_REQUIRE_AI_GATEWAY', require ? '1' : '0'));
+
+    if (keyInput) keyInput.value = '';
+    await this.loadGatewaySettings();
+    this.updateKeyIndicator();
+
+    if (results.every(Boolean)) show(true, t('global_defaults.gateway_saved'));
+    else show(false, t('global_defaults.gateway_saved_session'));
+  }
+
+  private async clearGatewaySettings(): Promise<void> {
+    const env = EnvironmentManager.getInstance();
+    const policy = ((await env.getEnvVar('ARESTRIX_AI_GATEWAY_POLICY')) || '').toLowerCase();
+    if (policy === 'locked' || policy === 'enforced') return;
+    if (!confirm(t('global_defaults.confirm_clear_gateway'))) return;
+    await env.clearEnvVar('ARESTRIX_AI_GATEWAY_URL');
+    await env.clearEnvVar('ARESTRIX_AI_GATEWAY_KEY');
+    await env.clearEnvVar('ARESTRIX_REQUIRE_AI_GATEWAY');
+    await this.loadGatewaySettings();
+    this.updateKeyIndicator();
+    const status = this.overlay.querySelector('#gateway-test-status') as HTMLElement | null;
+    if (status) {
+      status.style.display = 'block';
+      status.style.background = '#dff6dd';
+      status.style.color = '#0e700e';
+      status.textContent = t('global_defaults.gateway_cleared');
+    }
+  }
+
+  private async testGateway(): Promise<void> {
+    const webui = this.backend();
+    const status = this.overlay.querySelector('#gateway-test-status') as HTMLElement | null;
+    const urlInput = this.overlay.querySelector('#def-gateway-url') as HTMLInputElement | null;
+    const keyInput = this.overlay.querySelector('#def-gateway-key') as HTMLInputElement | null;
+    if (!status) return;
+
+    const show = (ok: boolean, text: string) => {
+      status.style.display = 'block';
+      status.style.background = ok ? '#dff6dd' : '#fde7e9';
+      status.style.color = ok ? '#0e700e' : '#a80000';
+      status.textContent = text;
+    };
+
+    if (!webui) { show(false, t('global_defaults.gateway_needs_native')); return; }
+    const env = EnvironmentManager.getInstance();
+    const url = urlInput?.value.trim() || (await env.getEnvVar('ARESTRIX_AI_GATEWAY_URL')) || '';
+    const key = keyInput?.value.trim() || (await env.getEnvVar('ARESTRIX_AI_GATEWAY_KEY')) || '';
+    if (!url) { show(false, t('global_defaults.gateway_url_required')); return; }
+
+    show(true, t('global_defaults.gateway_testing'));
+    try {
+      const raw = await webui.call('ai_gateway_health', JSON.stringify({ url, key }));
+      const result = typeof raw === 'string' ? JSON.parse(raw || '{}') : raw;
+      if (result?.ok) {
+        show(true, t('global_defaults.gateway_test_ok', { status: String(result.status || 200) }));
+        void this.refreshGatewayUsage(url, key);
+      } else {
+        const detail = result?.error || result?.status || result?.body || '?';
+        show(false, t('global_defaults.gateway_test_failed', { detail: String(detail) }));
+      }
+    } catch {
+      show(false, t('global_defaults.gateway_test_failed', { detail: 'bridge_error' }));
+    }
+  }
+
+  private async refreshGatewayUsage(url: string, key: string): Promise<void> {
+    const webui = this.backend();
+    const host = this.overlay.querySelector('#gateway-usage-status') as HTMLElement | null;
+    if (!webui || !host) return;
+    try {
+      const raw = await webui.call('ai_gateway_usage', JSON.stringify({ url, key }));
+      const result = typeof raw === 'string' ? JSON.parse(raw || '{}') : raw;
+      if (!result?.ok || !result.usage) {
+        host.textContent = t('global_defaults.gateway_usage_unavailable');
+        return;
+      }
+      const usage = result.usage;
+      const totals = usage.usage || {};
+      const lines: string[] = [];
+      lines.push(t('global_defaults.gateway_usage', {
+        requests: String(totals.requests ?? 0),
+        cost: Number(totals.costUsd || 0).toFixed(6),
+        tokens: String((totals.inputTokens || 0) + (totals.outputTokens || 0))
+      }));
+      for (const budget of usage.budgets || []) {
+        const limit = budget.limitUsd;
+        lines.push(t('global_defaults.gateway_budget_line', {
+          scope: String(budget.scopeType || '?'),
+          id: String(budget.scopeId || '?'),
+          period: String(budget.period || '?'),
+          spent: Number(budget.spentUsd || 0).toFixed(6),
+          limit: limit === null || limit === undefined ? t('global_defaults.gateway_budget_no_limit') : `US$ ${Number(limit).toFixed(6)}`
+        }));
+      }
+      host.textContent = lines.join(' · ');
+    } catch {
+      host.textContent = t('global_defaults.gateway_usage_unavailable');
+    }
+  }
+
   // --- Modelo padrão do Studio (variáveis de ambiente do usuário; nunca gravado no projeto) ---
 
   private static readonly STUDIO_PROVIDER_VAR = 'ARESTRIX_DEFAULT_PROVIDER';
@@ -894,11 +1112,12 @@ export class GlobalDefaultsModal {
     let provider = (await env.getEnvVar(GlobalDefaultsModal.STUDIO_PROVIDER_VAR)) || 'auto';
     let model = (await env.getEnvVar(GlobalDefaultsModal.STUDIO_MODEL_VAR)) || 'auto';
     const defaults: Record<string, string> = {
-      deepseek: 'deepseek-flash', openai: 'gpt-4o-mini', anthropic: 'claude-haiku-5-5', google: 'gemini-2.5-flash', groq: 'llama-3.3-70b-versatile'
+      deepseek: 'deepseek-flash', openai: 'gpt-4o-mini', anthropic: 'claude-haiku-5-5',
+      google: 'gemini-2.5-flash', mistral: 'mistral-small-latest', groq: 'llama-3.3-70b-versatile'
     };
     if (provider === 'auto') {
       provider = '';
-      for (const p of ['deepseek', 'openai', 'anthropic', 'google', 'groq']) {
+      for (const p of ['deepseek', 'openai', 'anthropic', 'google', 'mistral', 'groq']) {
         if (await env.hasEnvVar(this.getEnvKeyForProvider(p))) { provider = p; break; }
       }
       // Modelo local: a escolha só é automática quando há endpoint configurado e um nome de modelo
@@ -966,6 +1185,7 @@ export class GlobalDefaultsModal {
       case 'deepseek': return 'DEEPSEEK_API_KEY';
       case 'anthropic': return 'ANTHROPIC_API_KEY';
       case 'google': return 'GEMINI_API_KEY';
+      case 'mistral': return 'MISTRAL_API_KEY';
       case 'openai': return 'OPENAI_API_KEY';
       case 'groq': return 'GROQ_API_KEY';
       case 'local': return 'LOCAL_LLM_API_KEY';
@@ -1008,6 +1228,18 @@ export class GlobalDefaultsModal {
           indicator.style.color = '#242424';
         }
       }
+      return;
+    }
+
+    // Provedor hospedado com gateway: a credencial relevante é a chave virtual.
+    const gatewayUrl = await envManager.getEnvVar('ARESTRIX_AI_GATEWAY_URL');
+    if (gatewayUrl) {
+      if (indicator) {
+        indicator.textContent = t('global_defaults.indicator_gateway');
+        indicator.style.background = '#dff6dd';
+        indicator.style.color = '#0e700e';
+      }
+      if (deployKeyNameInput) deployKeyNameInput.value = 'ARESTRIX_AI_GATEWAY_KEY';
       return;
     }
 
@@ -1071,6 +1303,39 @@ export class GlobalDefaultsModal {
         statusDiv.textContent = t('global_defaults.test_local_fail', { url: result.baseUrl || base });
       }
       return;
+    }
+
+    // Com AI Gateway configurado, a credencial relevante e a chave virtual.
+    if (provider !== 'local' && provider !== 'jev') {
+      const envManager = EnvironmentManager.getInstance();
+      const gatewayUrl = await envManager.getEnvVar('ARESTRIX_AI_GATEWAY_URL');
+      if (gatewayUrl) {
+        const webui = this.backend();
+        if (webui) {
+          try {
+            const raw = await webui.call('ai_gateway_health', JSON.stringify({ url: gatewayUrl, key: '' }));
+            const result = typeof raw === 'string' ? JSON.parse(raw || '{}') : raw;
+            if (result?.ok) {
+              statusDiv.style.background = '#dff6dd';
+              statusDiv.style.color = '#0e700e';
+              statusDiv.style.border = '1px solid #107c41';
+              statusDiv.textContent = t('global_defaults.gateway_test_ok', { status: String(result.status || 200) });
+            } else {
+              statusDiv.style.background = '#fde7e9';
+              statusDiv.style.color = '#a80000';
+              statusDiv.style.border = '1px solid #d13438';
+              statusDiv.textContent = t('global_defaults.gateway_test_failed', {
+                detail: String(result?.error || result?.status || result?.body || '?')
+              });
+            }
+          } catch {
+            statusDiv.style.background = '#fde7e9';
+            statusDiv.style.color = '#a80000';
+            statusDiv.textContent = t('global_defaults.gateway_test_failed', { detail: 'bridge_error' });
+          }
+          return;
+        }
+      }
     }
 
     const keyName = this.getEnvKeyForProvider(provider);

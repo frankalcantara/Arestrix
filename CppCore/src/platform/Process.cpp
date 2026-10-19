@@ -341,6 +341,22 @@ bool setProcessEnv(const std::string& name, const std::string& value) {
     return SetEnvironmentVariableW(wname.c_str(), wvalue.c_str()) != 0;
 }
 
+bool clearUserEnv(const std::string& name) {
+    if (name.empty() || name.size() > 128) return false;
+    std::wstring wname = widen(name);
+    SetEnvironmentVariableW(wname.c_str(), nullptr);
+
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_SET_VALUE, &key) != ERROR_SUCCESS) {
+        return false;
+    }
+    const LONG result = RegDeleteValueW(key, wname.c_str());
+    RegCloseKey(key);
+    DWORD_PTR res = 0;
+    SendMessageTimeoutW(HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)L"Environment", SMTO_ABORTIFHUNG, 2000, &res);
+    return result == ERROR_SUCCESS || result == ERROR_FILE_NOT_FOUND;
+}
+
 bool setUserEnv(const std::string& name, const std::string& value) {
     if (name.empty() || name.size() > 128) return false;
     for (char c : name) {
@@ -661,6 +677,28 @@ bool setProcessEnv(const std::string& name, const std::string& value) {
     if (name.empty() || name.size() > 128 || value.find('\0') != std::string::npos) return false;
     if (value.empty()) return ::unsetenv(name.c_str()) == 0;
     return ::setenv(name.c_str(), value.c_str(), 1) == 0;
+}
+
+bool clearUserEnv(const std::string& name) {
+    if (name.empty() || name.size() > 128) return false;
+    ::unsetenv(name.c_str());
+
+    const char* home = std::getenv("HOME");
+    if (!home) return true;
+    const std::filesystem::path file = std::filesystem::path(home) / ".config" / "arestrix" / "env";
+    std::ifstream in(file);
+    if (!in.is_open()) return true;
+    std::vector<std::string> lines;
+    std::string line;
+    const std::string prefix = "export " + name + "=";
+    while (std::getline(in, line)) {
+        if (line.rfind(prefix, 0) != 0) lines.push_back(line);
+    }
+    in.close();
+    std::ofstream out(file, std::ios::trunc);
+    if (!out.is_open()) return false;
+    for (const auto& kept : lines) out << kept << "\n";
+    return out.good();
 }
 
 bool setUserEnv(const std::string& name, const std::string& value) {

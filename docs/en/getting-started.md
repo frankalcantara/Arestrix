@@ -72,6 +72,7 @@ or `~/.config/arestrix/env` on Linux) and never passes them through a shell.
 | `openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1` |
 | `anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com` |
 | `google` | `GEMINI_API_KEY` | Gemini OpenAI-compatible endpoint |
+| `mistral` | `MISTRAL_API_KEY` | `https://api.mistral.ai/v1` |
 | `jev` | `JEV_API_KEY` (optional) | `JEV_BASE_URL` is **required** (any OpenAI-compatible server) |
 | `local` | `LOCAL_LLM_API_KEY` (optional) | `LOCAL_LLM_BASE_URL`, default `http://localhost:11434/v1` (Ollama, llama.cpp, vLLM) |
 
@@ -164,6 +165,45 @@ the **CPU** binary on demand and retries automatically.
 The **Quick setup** card downloads the recommended model, installs the runtime, starts the server and configures
 the project in one click. **Use in Assistant** stores `ARESTRIX_DEFAULT_PROVIDER=local` and
 `ARESTRIX_DEFAULT_MODEL` in the user environment, without persisting the runtime's ephemeral port/key.
+
+### Enterprise AI Gateway and budgets
+
+To enforce usage limits across every runner, use the on-prem `arestrix-gateway`. It is a separate
+OpenAI/Anthropic-compatible executable that keeps the real provider keys and issues **virtual keys** with
+budgets, rate limits and auditing.
+
+```bash
+# Config and database
+cp CppCore/gateway/arestrix-gateway.example.json arestrix-gateway.json
+arestrix-gateway init --db arestrix-gateway.db
+
+# Virtual key with a US$ 50 monthly budget
+arestrix-gateway key create --name "runner-ana" --project "demo" --user "ana" \
+  --budget-usd 50 --period monthly --db arestrix-gateway.db
+
+# Per-provider budget
+arestrix-gateway budget set --scope provider --id openai --period monthly \
+  --usd 200 --db arestrix-gateway.db
+
+# Server (put a TLS reverse proxy in front)
+arestrix-gateway serve --config arestrix-gateway.json
+```
+
+In the Studio and runners:
+
+```text
+ARESTRIX_AI_GATEWAY_URL=https://gateway.company.com
+ARESTRIX_AI_GATEWAY_KEY=av_...
+ARESTRIX_REQUIRE_AI_GATEWAY=1
+```
+
+With `ARESTRIX_REQUIRE_AI_GATEWAY=1`, hosted providers fail closed when the gateway is not configured.
+`local` and `jev` stay direct and are exempt from budgets. The gateway exposes `/v1/usage`, `/health`
+and Prometheus `/metrics`. See `CppCore/gateway/README.md` for the full guide.
+
+For an immutable company policy, distribute `ARESTRIX_AI_GATEWAY_POLICY=locked` through GPO/MDM. The
+backend keeps the gateway mandatory and the settings screen becomes read-only. Real enforcement depends
+on not distributing provider keys to runners and restricting their egress to the gateway.
 
 ### Distribution and signing
 

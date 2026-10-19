@@ -28,6 +28,9 @@ First public beta of Arestrix Studio and the native C++20 pipeline compiler.
 - Runtime version upgrades with cleanup of old versions, plus local asset validation and a Windows
   Authenticode signing script.
 - Quick setup for the recommended model and "Use in Assistant" to configure the Studio default model.
+- On-prem `arestrix-gateway`: OpenAI/Anthropic-compatible proxy with virtual keys, budgets by key/project/
+  user/provider/model, rate limits, usage ledger, Prometheus metrics and fail-closed runner integration.
+- Mistral provider support (API and gateway route).
 - Local Models screen with runtime install/start/stop, per-model download/verify/delete and one-click
   "Use" that starts the runtime and fills the project provider/model.
 - Projects, workspaces, persistent memory, local skills and skill catalogs.

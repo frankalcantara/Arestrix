@@ -41,7 +41,7 @@ export interface IPort {
 
 // --- Configuracoes de Agentes, Code Mode e Sandbox/VM ---
 
-export type LLMProvider = 'anthropic' | 'deepseek' | 'google' | 'openai' | 'jev' | 'local';
+export type LLMProvider = 'anthropic' | 'deepseek' | 'google' | 'mistral' | 'openai' | 'jev' | 'local';
 
 export type SandboxIsolationLevel = 'container' | 'microvm' | 'host_direct';
 export type SandboxNetworkPolicy = 'offline' | 'egress_llm_only' | 'full';

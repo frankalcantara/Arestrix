@@ -111,6 +111,7 @@ export class NodeModelModal {
                     <option value="deepseek" ${effectiveModel.provider === 'deepseek' ? 'selected' : ''}>DeepSeek</option>
                     <option value="anthropic" ${effectiveModel.provider === 'anthropic' ? 'selected' : ''}>Anthropic (Claude)</option>
                     <option value="google" ${effectiveModel.provider === 'google' ? 'selected' : ''}>Google (Gemini)</option>
+                    <option value="mistral" ${effectiveModel.provider === 'mistral' ? 'selected' : ''}>Mistral</option>
                     <option value="openai" ${effectiveModel.provider === 'openai' ? 'selected' : ''}>OpenAI</option>
                     <option value="jev" ${effectiveModel.provider === 'jev' ? 'selected' : ''}>Jev / Engine Visual</option>
                     <option value="local" ${effectiveModel.provider === 'local' ? 'selected' : ''}>Local / OpenAI-compatível (Ollama, LM Studio, llama.cpp, vLLM)</option>
@@ -242,6 +243,7 @@ export class NodeModelModal {
       if (val === 'deepseek') modelInput.value = 'deepseek-flash';
       else if (val === 'anthropic') modelInput.value = 'claude-opus-5.5';
       else if (val === 'google') modelInput.value = 'gemini-2.5-flash';
+      else if (val === 'mistral') modelInput.value = 'mistral-large-latest';
       else if (val === 'openai') modelInput.value = 'gpt-4o';
       else if (val === 'jev') modelInput.value = 'jev-svg-validator';
       this.syncLocalEndpointField();
@@ -451,6 +453,7 @@ export class NodeModelModal {
       anthropic: 'Anthropic',
       deepseek: 'DeepSeek',
       google: 'Google Gemini',
+      mistral: 'Mistral',
       openai: 'OpenAI',
       jev: 'Jev Visual',
       local: 'Local'

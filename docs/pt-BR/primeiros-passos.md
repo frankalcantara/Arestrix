@@ -72,6 +72,7 @@ Windows, ou `~/.config/arestrix/env` no Linux) e nunca as passa por um shell.
 | `openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1` |
 | `anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com` |
 | `google` | `GEMINI_API_KEY` | Endpoint do Gemini compatível com OpenAI |
+| `mistral` | `MISTRAL_API_KEY` | `https://api.mistral.ai/v1` |
 | `jev` | `JEV_API_KEY` (opcional) | `JEV_BASE_URL` é **obrigatória** (qualquer servidor compatível com OpenAI) |
 | `local` | `LOCAL_LLM_API_KEY` (opcional) | `LOCAL_LLM_BASE_URL`, padrão `http://localhost:11434/v1` (Ollama, llama.cpp, vLLM) |
 
@@ -166,6 +167,45 @@ iniciar, o Arestrix instala o binário **CPU** sob demanda e tenta novamente aut
 O cartão **Configuração rápida** baixa o modelo recomendado, instala o runtime, inicia o servidor e configura
 o projeto em um clique. O botão **Usar no Assistente** grava `ARESTRIX_DEFAULT_PROVIDER=local` e
 `ARESTRIX_DEFAULT_MODEL` nas variáveis do usuário, sem persistir a porta/chave efêmeras do runtime.
+
+### AI Gateway e budgets empresariais
+
+Para impor limites de uso em todos os runners, use o `arestrix-gateway` on-prem. Ele é um executável
+separado, compatível com OpenAI/Anthropic, que guarda as chaves reais e expõe **chaves virtuais** com
+budget, rate limit e auditoria.
+
+```bash
+# Configuracao e banco
+cp CppCore/gateway/arestrix-gateway.example.json arestrix-gateway.json
+arestrix-gateway init --db arestrix-gateway.db
+
+# Chave virtual com budget mensal de US$ 50
+arestrix-gateway key create --name "runner-ana" --project "demo" --user "ana" \
+  --budget-usd 50 --period monthly --db arestrix-gateway.db
+
+# Budget por provedor
+arestrix-gateway budget set --scope provider --id openai --period monthly \
+  --usd 200 --db arestrix-gateway.db
+
+# Servidor (coloque um reverse proxy TLS na frente)
+arestrix-gateway serve --config arestrix-gateway.json
+```
+
+No Studio e nos runners:
+
+```text
+ARESTRIX_AI_GATEWAY_URL=https://gateway.empresa.com
+ARESTRIX_AI_GATEWAY_KEY=av_...
+ARESTRIX_REQUIRE_AI_GATEWAY=1
+```
+
+Com `ARESTRIX_REQUIRE_AI_GATEWAY=1`, provedores hospedados falham fechados se o gateway não estiver
+configurado. `local` e `jev` continuam diretos e isentos de budget. O gateway expõe `/v1/usage`,
+`/health` e `/metrics` (Prometheus). O guia completo está em `CppCore/gateway/README.md`.
+
+Para política imutável, distribua `ARESTRIX_AI_GATEWAY_POLICY=locked` por GPO/MDM. O backend mantém o
+gateway obrigatório e a tela fica somente leitura. A imposição real depende de não distribuir as chaves
+reais aos runners e de restringir a saída de rede deles ao gateway.
 
 ### Distribuição e assinatura
 

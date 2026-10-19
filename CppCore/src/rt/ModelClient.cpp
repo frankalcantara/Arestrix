@@ -25,6 +25,11 @@ std::string upper(std::string s) {
     return s;
 }
 
+std::string lower(std::string s) {
+    for (auto& c : s) c = (char)std::tolower((unsigned char)c);
+    return s;
+}
+
 std::string envOr(const std::string& name, const std::string& fallback) {
     // Ambiente real do processo: os Padroes Globais gravam com a API do SO, que o getenv do CRT nao enxerga.
     std::string v = platform::getEnv(name);
@@ -136,7 +141,7 @@ Json anthropicMessages(const ChatRequest& req) {
 } // namespace
 
 const std::vector<std::string>& knownProviders() {
-    static const std::vector<std::string> list = {"deepseek", "anthropic", "openai", "google", "groq", "jev", "local"};
+    static const std::vector<std::string> list = {"deepseek", "anthropic", "openai", "google", "groq", "mistral", "jev", "local"};
     return list;
 }
 
@@ -180,6 +185,8 @@ ProviderInfo resolveProvider(const std::string& provider) {
         p = {"openai", "https://generativelanguage.googleapis.com/v1beta/openai", "/chat/completions", "GEMINI_API_KEY", true, true};
     } else if (provider == "groq") {
         p = {"openai", "https://api.groq.com/openai/v1", "/chat/completions", "GROQ_API_KEY", true, true};
+    } else if (provider == "mistral") {
+        p = {"openai", "https://api.mistral.ai/v1", "/chat/completions", "MISTRAL_API_KEY", true, true};
     } else if (provider == "jev") {
         // Modelos System One do Jev devolvem julgamentos tipados, sem chamada de ferramentas.
         p = {"openai", "", "/chat/completions", "JEV_API_KEY", false, false};
@@ -197,6 +204,25 @@ ProviderInfo resolveProvider(const std::string& provider) {
         p.baseUrl = normalizeLocalBaseUrl(p.baseUrl);
     } else {
         while (!p.baseUrl.empty() && p.baseUrl.back() == '/') p.baseUrl.pop_back();
+    }
+
+    // Provedores hospedados podem ser obrigados a passar pelo AI Gateway. Modelos locais
+    // (local e jev) nunca passam pelo gateway.
+    const bool localLike = provider == "local" || provider == "jev";
+    std::string gatewayUrl = envOr("ARESTRIX_AI_GATEWAY_URL", "");
+    while (!gatewayUrl.empty() && gatewayUrl.back() == '/') gatewayUrl.pop_back();
+    const std::string requireValue = lower(envOr("ARESTRIX_REQUIRE_AI_GATEWAY", ""));
+    const std::string policyValue = lower(envOr("ARESTRIX_AI_GATEWAY_POLICY", ""));
+    const bool policyLocked = policyValue == "locked" || policyValue == "enforced";
+    const bool requireGateway = policyLocked || requireValue == "1" ||
+                                requireValue == "true" || requireValue == "yes";
+    if (!localLike && !gatewayUrl.empty()) {
+        p.baseUrl = gatewayUrl + "/" + provider;
+        p.keyEnv = "ARESTRIX_AI_GATEWAY_KEY";
+        p.gateway = true;
+    } else if (!localLike && requireGateway) {
+        p.baseUrl.clear();
+        p.configError = "gateway_required";
     }
     return p;
 }
@@ -329,9 +355,15 @@ ChatReply chatOnce(const ChatRequest& req) {
         return out;
     }
     ProviderInfo info = resolveProvider(req.provider);
+    if (!info.configError.empty()) {
+        out.errorCode = info.configError;
+        out.error = "AI Gateway obrigatorio: defina ARESTRIX_AI_GATEWAY_URL e "
+                    "ARESTRIX_AI_GATEWAY_KEY (ou desative ARESTRIX_REQUIRE_AI_GATEWAY).";
+        return out;
+    }
     if (info.baseUrl.empty()) {
         out.errorCode = "base_url_missing";
-        out.error = "defina a variavel " + upper(req.provider) + "_BASE_URL";
+        out.error = "defina a variavel " + upper(req.provider) + "_BASE_URL ou ARESTRIX_AI_GATEWAY_URL";
         return out;
     }
     std::string apiKey = envOr(info.keyEnv, "");
@@ -345,7 +377,13 @@ ChatReply chatOnce(const ChatRequest& req) {
         HttpRequest http;
         http.url = info.baseUrl + info.path;
         http.headers["Content-Type"] = "application/json";
-        if (info.protocol == "anthropic") {
+        if (info.gateway) {
+            // O gateway aceita a chave virtual via Bearer, inclusive na rota Anthropic.
+            http.headers["Authorization"] = "Bearer " + apiKey;
+            if (info.protocol == "anthropic") {
+                http.headers["anthropic-version"] = "2023-06-01";
+            }
+        } else if (info.protocol == "anthropic") {
             http.headers["x-api-key"] = apiKey;
             http.headers["anthropic-version"] = "2023-06-01";
         } else if (!apiKey.empty()) {
@@ -366,6 +404,7 @@ ChatReply chatOnce(const ChatRequest& req) {
         }
         if (resp.status != 200) {
             out.errorCode = looksLikeToolsRejected(resp) ? "tools_unsupported"
+                          : resp.status == 402 ? "budget_exceeded"
                           : resp.status == 429 ? "rate_limited" : "http_error";
             out.error = "Falha na API (" + req.provider + "): " + errorDetail(resp);
             return out;

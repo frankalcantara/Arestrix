@@ -24,6 +24,7 @@ std::string defaultModelFor(const std::string& provider) {
     if (provider == "openai") return "gpt-4o-mini";
     if (provider == "anthropic") return "claude-haiku-5-5";
     if (provider == "google") return "gemini-2.5-flash";
+    if (provider == "mistral") return "mistral-small-latest";
     if (provider == "groq") return "llama-3.3-70b-versatile";
     return "";
 }
@@ -44,7 +45,7 @@ std::optional<StudioModel> studioDefaultModel() {
         // primeiro provedor com chave configurada nesta maquina
         static const std::pair<const char*, const char*> order[] = {
             {"deepseek", "DEEPSEEK_API_KEY"}, {"openai", "OPENAI_API_KEY"}, {"anthropic", "ANTHROPIC_API_KEY"},
-            {"google", "GEMINI_API_KEY"},     {"groq", "GROQ_API_KEY"}};
+            {"google", "GEMINI_API_KEY"},     {"mistral", "MISTRAL_API_KEY"}, {"groq", "GROQ_API_KEY"}};
         for (const auto& [p, keyVar] : order) {
             if (!env(keyVar).empty()) { provider = p; break; }
         }

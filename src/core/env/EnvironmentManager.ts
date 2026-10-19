@@ -141,6 +141,26 @@ export class EnvironmentManager {
   }
 
   /**
+   * Remove uma variável do processo atual e da configuração do usuário.
+   */
+  public async clearEnvVar(keyName: string): Promise<boolean> {
+    if (!keyName) return false;
+    try {
+      const g = (typeof window !== 'undefined' ? window : globalThis) as any;
+      if (g && g.__ARESTRIX_RUNTIME_ENV__) delete g.__ARESTRIX_RUNTIME_ENV__[keyName];
+    } catch {}
+    try {
+      if (typeof window !== 'undefined' && (window as any).webui && (window as any).webui.call) {
+        const res = await (window as any).webui.call('clear_env_var', keyName);
+        return res === true || res === 'true';
+      }
+    } catch (e) {
+      console.warn('[EnvironmentManager] Falha ao remover variável do SO via WebUI:', e);
+    }
+    return false;
+  }
+
+  /**
    * Retorna guia e comandos detalhados para o usuário gravar a variável no Windows
    */
   public getGuidance(keyName: string): IEnvKeyGuidance {
@@ -149,6 +169,7 @@ export class EnvironmentManager {
       OPENAI_API_KEY: 'OpenAI (GPT-4o / O1)',
       ANTHROPIC_API_KEY: 'Anthropic (Claude 3.5 Sonnet)',
       GEMINI_API_KEY: 'Google Gemini (Gemini 2.0 Flash)',
+      MISTRAL_API_KEY: 'Mistral AI (Large / Codestral)',
       GROQ_API_KEY: 'Groq Cloud LPU'
     };
 

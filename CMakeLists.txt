@@ -151,6 +151,18 @@ foreach(dep taskflow/taskflow/taskflow.hpp simdjson/singleheader/simdjson.cpp)
 endforeach()
 
 # ---------------------------------------------------------------------------
+# arestrix_gateway_core: persistencia e regras de budget do AI Gateway.
+# ---------------------------------------------------------------------------
+add_library(arestrix_gateway_core STATIC
+  ${SRC}/gateway/GatewayTypes.cpp
+  ${SRC}/gateway/GatewayStore.cpp)
+target_include_directories(arestrix_gateway_core PUBLIC
+  ${SRC}
+  ${TP}/sqlite
+  ${TP}/simdjson/singleheader)
+target_link_libraries(arestrix_gateway_core PUBLIC arestrix_core arestrix_security_flags Threads::Threads)
+
+# ---------------------------------------------------------------------------
 # arestrix_core: parsing JSON (simdjson), processos, sandbox, memoria, MCP e runtime dos agentes.
 # E a biblioteca que os executaveis gerados a partir de um grafo linkam.
 # ---------------------------------------------------------------------------
@@ -243,6 +255,19 @@ add_custom_command(TARGET arestrix-cli POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:arestrix-cli>" "${CMAKE_SOURCE_DIR}/"
   VERBATIM)
 
+# AI Gateway on-prem: executavel separado, OpenAI/Anthropic-compatible, com budgets.
+add_executable(arestrix-gateway
+  ${SRC}/gateway/main.cpp
+  ${SRC}/gateway/GatewayServer.cpp)
+target_include_directories(arestrix-gateway PRIVATE
+  ${SRC}
+  ${TP}/httplib)
+target_compile_definitions(arestrix-gateway PRIVATE ARESTRIX_GATEWAY_VERSION="${ARESTRIX_VERSION}")
+target_link_libraries(arestrix-gateway PRIVATE arestrix_gateway_core arestrix_core arestrix_security_flags)
+add_custom_command(TARGET arestrix-gateway POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:arestrix-gateway>" "${CMAKE_SOURCE_DIR}/"
+  VERBATIM)
+
 # ---------------------------------------------------------------------------
 # Studio
 # ---------------------------------------------------------------------------
@@ -293,6 +318,6 @@ if(ARESTRIX_BUILD_TESTS)
     ${SRC}/core/Graph.cpp
     ${SRC}/compiler/TaskflowGenerator.cpp
     ${SRC}/build/BuildService.cpp)
-  target_link_libraries(arestrix_tests PRIVATE arestrix_core arestrix_security_flags)
+  target_link_libraries(arestrix_tests PRIVATE arestrix_gateway_core arestrix_core arestrix_security_flags)
   add_test(NAME arestrix_tests COMMAND arestrix_tests WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endif()

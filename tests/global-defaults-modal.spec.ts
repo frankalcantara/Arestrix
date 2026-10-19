@@ -141,6 +141,12 @@ describe('GlobalDefaultsModal - Abas, Teste de API e Limpeza de Textos Fixos', (
       expect(renderedHtml).toContain('id="btn-def-discover-models"');
       expect(renderedHtml).toContain('id="def-local-models"');
       expect(renderedHtml).toContain('id="btn-open-local-models"');
+
+      // AI Gateway empresarial e provedor Mistral
+      expect(renderedHtml).toContain('id="def-gateway-url"');
+      expect(renderedHtml).toContain('id="def-gateway-key"');
+      expect(renderedHtml).toContain('id="btn-save-gateway"');
+      expect(renderedHtml).toContain('value="mistral"');
     });
   });
 

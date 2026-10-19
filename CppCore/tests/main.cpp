@@ -29,6 +29,7 @@
 #include "assistant/GraphDocument.hpp"
 #include "rt/ModelClient.hpp"
 #include "local/LocalRuntime.hpp"
+#include "gateway/GatewayStore.hpp"
 #include "rt/Decision.hpp"
 #include "rt/Http.hpp"
 #include "rt/NetGuard.hpp"
@@ -1864,6 +1865,139 @@ TEST(model_client_converts_history_for_openai_and_anthropic) {
     CHECK(rt::normalizeLocalBaseUrl("http://localhost:8080/custom") == "http://localhost:8080/custom");
     auto roundTrip = rt::ChatMessage::fromJson(a.toJson());
     CHECK(roundTrip.toolCalls.size() == 2 && roundTrip.reasoning == "pensando");
+}
+
+TEST(model_client_ai_gateway_and_mistral_provider) {
+    namespace rt = taskforge::rt;
+    auto setv = [](const char* key, const char* value) {
+#ifdef _WIN32
+        _putenv_s(key, value);
+#else
+        if (*value) setenv(key, value, 1); else unsetenv(key);
+#endif
+    };
+    const char* vars[] = {"ARESTRIX_AI_GATEWAY_URL", "ARESTRIX_AI_GATEWAY_KEY",
+                          "ARESTRIX_REQUIRE_AI_GATEWAY", "ARESTRIX_AI_GATEWAY_POLICY",
+                          "OPENAI_BASE_URL", "LOCAL_LLM_BASE_URL"};
+    std::vector<std::pair<std::string, std::string>> saved;
+    for (const char* var : vars) {
+        const char* current = std::getenv(var);
+        saved.push_back({var, current ? current : ""});
+        setv(var, "");
+    }
+
+    auto mistral = rt::resolveProvider("mistral");
+    CHECK(mistral.baseUrl == "https://api.mistral.ai/v1");
+    CHECK(mistral.keyEnv == "MISTRAL_API_KEY");
+
+    setv("ARESTRIX_AI_GATEWAY_URL", "https://gw.example.com/");
+    setv("ARESTRIX_AI_GATEWAY_KEY", "av_test");
+    auto openai = rt::resolveProvider("openai");
+    CHECK(openai.gateway);
+    CHECK(openai.baseUrl == "https://gw.example.com/openai");
+    CHECK(openai.keyEnv == "ARESTRIX_AI_GATEWAY_KEY");
+    CHECK(openai.configError.empty());
+
+    auto anthropic = rt::resolveProvider("anthropic");
+    CHECK(anthropic.gateway);
+    CHECK(anthropic.baseUrl == "https://gw.example.com/anthropic");
+    CHECK(anthropic.path == "/v1/messages");
+
+    auto local = rt::resolveProvider("local");
+    CHECK(!local.gateway);
+    CHECK(local.baseUrl.find("localhost:11434") != std::string::npos);
+
+    setv("ARESTRIX_AI_GATEWAY_URL", "");
+    setv("ARESTRIX_REQUIRE_AI_GATEWAY", "1");
+    auto required = rt::resolveProvider("deepseek");
+    CHECK(required.configError == "gateway_required");
+    CHECK(required.baseUrl.empty());
+    auto localStillDirect = rt::resolveProvider("local");
+    CHECK(localStillDirect.configError.empty());
+    CHECK(!localStillDirect.gateway);
+
+    // Politica empresarial: gateway obrigatorio mesmo com require=0 do usuario.
+    setv("ARESTRIX_AI_GATEWAY_POLICY", "locked");
+    setv("ARESTRIX_REQUIRE_AI_GATEWAY", "0");
+    auto lockedMissing = rt::resolveProvider("openai");
+    CHECK(lockedMissing.configError == "gateway_required");
+    setv("ARESTRIX_AI_GATEWAY_URL", "https://gw.example.com");
+    auto locked = rt::resolveProvider("openai");
+    CHECK(locked.gateway);
+    CHECK(locked.configError.empty());
+
+    for (const auto& [key, value] : saved) setv(key.c_str(), value.c_str());
+}
+
+TEST(gateway_store_enforces_budgets_and_records_usage) {
+    namespace gw = taskforge::gateway;
+    auto dir = makeTempDir("gateway-store");
+    gw::GatewayStore store;
+    std::string error;
+    CHECK(store.open((dir / "gateway.db").string(), error));
+    CHECK(store.initSchema(error));
+
+    std::string key;
+    std::string keyId;
+    CHECK(store.createKey("test", "demo", "frank", 0, 0, key, keyId, error));
+    CHECK(!key.empty());
+    CHECK(key.rfind("av_", 0) == 0);
+
+    gw::VirtualKey authenticated;
+    CHECK(store.authenticate(key, authenticated, error));
+    CHECK(authenticated.id == keyId);
+    CHECK(authenticated.project == "demo");
+
+    CHECK(store.setBudget("key", keyId, "monthly", 1.0, -1, true, 0.8, error));
+
+    gw::RequestContext context;
+    context.requestId = "req_test_1";
+    context.keyId = keyId;
+    context.project = "demo";
+    context.user = "frank";
+    context.provider = "openai";
+    context.model = "gpt-4o";
+
+    gw::BudgetDecision decision;
+    CHECK(store.checkAndReserve(context, 0.6, 1000, decision, error));
+    CHECK(decision.allowed);
+    CHECK(!decision.budgets.empty());
+
+    gw::BudgetDecision second;
+    CHECK(store.checkAndReserve(context, 0.6, 1000, second, error));
+    CHECK(!second.allowed);
+    CHECK(second.reason == "budget_usd_exceeded");
+
+    gw::TokenUsage usage;
+    usage.input = 50;
+    usage.output = 50;
+    CHECK(store.reconcile(context, usage, 0.2, 0.6, 1000, error));
+
+    gw::BudgetDecision third;
+    CHECK(store.checkAndReserve(context, 0.7, 100, third, error));
+    CHECK(third.allowed);
+    CHECK(store.reconcile(context, gw::TokenUsage{}, 0.0, 0.7, 100, error));
+
+    gw::UsageEvent event;
+    event.context = context;
+    event.usage = usage;
+    event.costUsd = 0.2;
+    event.status = "ok";
+    CHECK(store.recordUsage(event, error));
+
+    json report;
+    CHECK(store.usageReport("", keyId, "", report, error));
+    CHECK(report["totals"].value("requests", 0LL) == 1);
+    CHECK(report["totals"].value("inputTokens", 0LL) == 50);
+    CHECK(report["totals"].value("outputTokens", 0LL) == 50);
+
+    json usageForToken;
+    CHECK(store.usageForToken(key, usageForToken, error));
+    CHECK(usageForToken["key"].value("id", std::string()) == keyId);
+    CHECK(usageForToken["budgets"].is_array());
+
+    store.close();
+    fs::remove_all(dir);
 }
 
 TEST(local_runtime_catalog_manifest_and_storage) {

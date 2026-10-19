@@ -1,0 +1,69 @@
+{
+  "host": "127.0.0.1",
+  "port": 8787,
+  "database": "arestrix-gateway.db",
+  "defaultMaxTokens": 8192,
+  "requestTimeoutSeconds": 600,
+  "maxBodyBytes": 33554432,
+  "routes": {
+    "openai": {
+      "protocol": "openai",
+      "baseUrl": "https://api.openai.com/v1",
+      "keyEnv": "OPENAI_API_KEY"
+    },
+    "anthropic": {
+      "protocol": "anthropic",
+      "baseUrl": "https://api.anthropic.com",
+      "keyEnv": "ANTHROPIC_API_KEY"
+    },
+    "google": {
+      "protocol": "openai",
+      "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "keyEnv": "GEMINI_API_KEY"
+    },
+    "deepseek": {
+      "protocol": "openai",
+      "baseUrl": "https://api.deepseek.com",
+      "keyEnv": "DEEPSEEK_API_KEY"
+    },
+    "groq": {
+      "protocol": "openai",
+      "baseUrl": "https://api.groq.com/openai/v1",
+      "keyEnv": "GROQ_API_KEY"
+    },
+    "mistral": {
+      "protocol": "openai",
+      "baseUrl": "https://api.mistral.ai/v1",
+      "keyEnv": "MISTRAL_API_KEY"
+    }
+  },
+  "notes": "Precos em USD por 1M tokens. Atualize esta tabela antes de usar budgets em producao.",
+  "pricing": {
+    "openai": {
+      "gpt-4o": { "input": 2.5, "output": 10.0, "cachedInput": 1.25 },
+      "gpt-4o-mini": { "input": 0.15, "output": 0.6, "cachedInput": 0.075 },
+      "o3": { "input": 2.0, "output": 8.0, "cachedInput": 0.5 }
+    },
+    "anthropic": {
+      "claude-opus-5-5": { "input": 15.0, "output": 75.0, "cachedInput": 1.5 },
+      "claude-sonnet-5-5": { "input": 3.0, "output": 15.0, "cachedInput": 0.3 },
+      "claude-haiku-5-5": { "input": 0.8, "output": 4.0, "cachedInput": 0.08 }
+    },
+    "google": {
+      "gemini-2.5-flash": { "input": 0.3, "output": 2.5, "cachedInput": 0.075 },
+      "gemini-2.5-pro": { "input": 1.25, "output": 10.0, "cachedInput": 0.31 }
+    },
+    "deepseek": {
+      "deepseek-flash": { "input": 0.27, "output": 1.1, "cachedInput": 0.07 },
+      "deepseek-reasoner": { "input": 0.55, "output": 2.19, "cachedInput": 0.14 }
+    },
+    "groq": {
+      "llama-3.3-70b-versatile": { "input": 0.59, "output": 0.79, "cachedInput": 0.0 }
+    },
+    "mistral": {
+      "mistral-large-latest": { "input": 2.0, "output": 6.0, "cachedInput": 0.0 },
+      "mistral-small-latest": { "input": 0.1, "output": 0.3, "cachedInput": 0.0 },
+      "codestral-latest": { "input": 0.3, "output": 0.9, "cachedInput": 0.0 }
+    }
+  }
+}

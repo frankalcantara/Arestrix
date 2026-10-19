@@ -198,13 +198,22 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
     if (spec.model.empty()) throw std::runtime_error("Agente '" + label + "': modelo nao configurado.");
 
     ProviderInfo info = resolveProvider(spec.provider);
+    if (!info.configError.empty()) {
+        throw std::runtime_error("Provedor '" + spec.provider + "': AI Gateway obrigatorio. "
+                                 "Defina ARESTRIX_AI_GATEWAY_URL e ARESTRIX_AI_GATEWAY_KEY "
+                                 "(ou desative ARESTRIX_REQUIRE_AI_GATEWAY).");
+    }
     if (info.baseUrl.empty()) {
-        throw std::runtime_error("Provedor '" + spec.provider + "': defina a variavel " + upper(spec.provider) + "_BASE_URL.");
+        throw std::runtime_error("Provedor '" + spec.provider + "': defina a variavel " +
+                                 upper(spec.provider) + "_BASE_URL ou ARESTRIX_AI_GATEWAY_URL.");
     }
     std::string apiKey = envOr(info.keyEnv, "");
     if (apiKey.empty() && info.keyRequired) {
-        throw std::runtime_error("Chave de API ausente: defina a variavel de ambiente " + info.keyEnv +
-                                 " (Padroes Globais > Chaves de API).");
+        throw std::runtime_error(
+            info.gateway
+                ? "Chave virtual do AI Gateway ausente: defina ARESTRIX_AI_GATEWAY_KEY."
+                : "Chave de API ausente: defina a variavel de ambiente " + info.keyEnv +
+                      " (Padroes Globais > Chaves de API).");
     }
 
     fs::path root = workspaceRoot();
