@@ -89,6 +89,46 @@ Linux.
 Validates graph, codegen, project root, runtime, toolchain and required variables without compiling
 or calling a model. Returns `5` when preflight fails.
 
+### `doctor`
+
+```powershell
+.\arestrix-cli.exe doctor --json
+```
+
+Diagnoses runtime, toolchain, root and provider key presence. Keys are only `present`/`absent`;
+values are never printed.
+
+### `memory report`
+
+```powershell
+.\arestrix-cli.exe memory report --project .\examples\04-memoria
+.\arestrix-cli.exe memory report --project .\examples\04-memoria --json
+```
+
+Reads SQLite natively and shows tokens, calls, retries, success/failure, context and
+injected/used memories. It replaces `memory_report.py` in automation; the Python script remains
+optional for development.
+
+### `mcp`
+
+```powershell
+.\arestrix-cli.exe mcp list --project .\examples\02-triagem-de-suporte
+.\arestrix-cli.exe mcp tools clientes --project .\examples\02-triagem-de-suporte
+.\arestrix-cli.exe mcp test clientes --project .\examples\02-triagem-de-suporte --json
+```
+
+Lists servers, discovers tools and tests the connection before the pipeline.
+
+### `project`
+
+```powershell
+.\arestrix-cli.exe project info --project .\examples\04-memoria
+.\arestrix-cli.exe project graphs --project .\examples\04-memoria
+.\arestrix-cli.exe project validate --project .\examples\04-memoria --json
+```
+
+Inspects the manifest, lists pipelines and validates graph + codegen without compiling.
+
 ### `run`
 
 Generates, compiles and runs the pipeline:

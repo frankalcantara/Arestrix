@@ -89,6 +89,46 @@ stdin. O armazenamento é o mesmo do Studio: Registro do usuário no Windows e
 Valida grafo, codegen, raiz do projeto, runtime, toolchain e variáveis exigidas sem compilar nem
 chamar modelo. Retorna `5` se o preflight falhar.
 
+### `doctor`
+
+```powershell
+.\arestrix-cli.exe doctor --json
+```
+
+Diagnostica runtime, toolchain, raiz e presença de chaves de provedor. Chaves são apenas
+`presente`/`ausente`; valores nunca são exibidos.
+
+### `memory report`
+
+```powershell
+.\arestrix-cli.exe memory report --project .\examples\04-memoria
+.\arestrix-cli.exe memory report --project .\examples\04-memoria --json
+```
+
+Lê o SQLite nativamente e mostra tokens, chamadas, retries, sucesso/falha, contexto e memórias
+injetadas/usadas. Substitui o `memory_report.py` no fluxo de automação; o script Python continua
+opcional para desenvolvimento.
+
+### `mcp`
+
+```powershell
+.\arestrix-cli.exe mcp list --project .\examples\02-triagem-de-suporte
+.\arestrix-cli.exe mcp tools clientes --project .\examples\02-triagem-de-suporte
+.\arestrix-cli.exe mcp test clientes --project .\examples\02-triagem-de-suporte --json
+```
+
+Lista servidores, descobre ferramentas e testa a conexão antes do pipeline.
+
+### `project`
+
+```powershell
+.\arestrix-cli.exe project info --project .\examples\04-memoria
+.\arestrix-cli.exe project graphs --project .\examples\04-memoria
+.\arestrix-cli.exe project validate --project .\examples\04-memoria --json
+```
+
+Inspeciona o manifesto, lista pipelines e valida grafo + codegen sem compilar.
+
 ### `run`
 
 Gera, compila e executa o pipeline:

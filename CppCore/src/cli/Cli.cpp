@@ -16,8 +16,14 @@
 #include "build/BuildService.hpp"
 #include "compiler/TaskflowGenerator.hpp"
 #include "core/Graph.hpp"
+#include "mcp/McpClient.hpp"
+#include "mcp/McpErrors.hpp"
+#include "native/NativeTools.hpp"
 #include "platform/Process.hpp"
+#include "rt/McpTools.hpp"
 #include "util/Json.hpp"
+
+#include <sqlite3.h>
 
 namespace taskforge {
 namespace cli {
@@ -83,6 +89,10 @@ void printHelp() {
         "  arestrix-cli env reset <NOME> [--json]\n"
         "  arestrix-cli env list [--json]\n"
         "  arestrix-cli env check <NOME>... [--json]\n"
+        "  arestrix-cli doctor [--project <pasta>] [--json]\n"
+        "  arestrix-cli memory report [--project <pasta>] [--json]\n"
+        "  arestrix-cli mcp list|test|tools [id] [--project <pasta>] [--json]\n"
+        "  arestrix-cli project info|validate|graphs [--project <pasta>] [--json]\n"
         "  arestrix-cli version [--json]\n\n"
         "Opcoes de run:\n"
         "  --root <pasta>          Raiz do projeto (padrao: diretorio atual)\n"
@@ -345,6 +355,489 @@ int runEnv(const std::vector<std::string>& args) {
     return kExitUsage;
 }
 
+int runDoctor(const std::vector<std::string>& args) {
+    Options opt;
+    std::string parseError;
+    if (!parseOptions(args, 1, opt, parseError)) {
+        std::cerr << "arestrix-cli doctor: " << parseError << "\n";
+        return kExitUsage;
+    }
+    if (opt.help) {
+        std::cout << "arestrix-cli doctor [--project <pasta>] [--root <pasta>] [--json]\n";
+        return 0;
+    }
+
+    fs::path root = opt.root.empty() ? fs::current_path() : fs::absolute(opt.root);
+    if (!opt.project.empty()) {
+        ProjectPaths project = resolveProject(opt.project);
+        if (!project.ok) {
+            if (opt.json) std::cout << json{{"ok", false}, {"error", project.error}}.dump() << "\n";
+            else std::cerr << "arestrix-cli doctor: " << project.error << "\n";
+            return kExitConfig;
+        }
+        root = project.root;
+    }
+
+    json checks = json::array();
+    auto add = [&](const std::string& name, bool ok, bool critical, const std::string& detail) {
+        checks.push_back(json{{"name", name}, {"ok", ok}, {"critical", critical}, {"detail", detail}});
+    };
+
+    std::error_code ec;
+    add("root", fs::is_directory(root, ec), true, root.string());
+    const auto runtime = build::locateRuntime();
+    add("runtime", runtime.ok, true, runtime.ok ? runtime.home.string() : runtime.error);
+    const auto toolchain = build::detectToolchain();
+    add("toolchain", toolchain.kind != build::Toolchain::Kind::None, true, toolchain.description);
+
+    const std::vector<std::string> providerKeys = {
+        "DEEPSEEK_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY",
+        "GROQ_API_KEY", "MISTRAL_API_KEY", "JEV_API_KEY", "LOCAL_LLM_API_KEY"
+    };
+    bool anyProvider = false;
+    for (const auto& key : providerKeys) {
+        const bool present = !persistedOrProcessEnv(key).empty();
+        anyProvider = anyProvider || present;
+        add("env:" + key, present, false, present ? "presente" : "ausente");
+    }
+    add("provider-key", anyProvider, false, anyProvider ? "ao menos uma chave de provedor encontrada" : "nenhuma chave de provedor encontrada");
+    for (const char* key : {"KEENABLE_API", "ARESTRIX_AI_GATEWAY_URL", "ARESTRIX_AI_GATEWAY_KEY"}) {
+        const bool present = !persistedOrProcessEnv(key).empty();
+        add(std::string("env:") + key, present, false, present ? "presente" : "ausente");
+    }
+
+    bool ok = true;
+    for (const auto& check : checks) {
+        if (check.value("critical", false) && !check.value("ok", false)) ok = false;
+    }
+    if (opt.json) {
+        std::cout << json{{"ok", ok}, {"root", root.string()}, {"checks", checks}}.dump() << "\n";
+    } else {
+        for (const auto& check : checks) {
+            const bool passed = check.value("ok", false);
+            const bool critical = check.value("critical", false);
+            std::cout << (passed ? "OK    " : (critical ? "FALHA " : "AVISO "))
+                      << check.value("name", std::string()) << "  "
+                      << check.value("detail", std::string()) << "\n";
+        }
+        std::cout << (ok ? "doctor: OK\n" : "doctor: FALHOU\n");
+    }
+    return ok ? 0 : kExitPreflight;
+}
+
+std::string sqliteText(sqlite3_stmt* stmt, int index) {
+    const unsigned char* p = sqlite3_column_text(stmt, index);
+    return p ? reinterpret_cast<const char*>(p) : std::string();
+}
+
+int runMemory(const std::vector<std::string>& args) {
+    if (args.size() < 2 || args[1] == "--help" || args[1] == "-h") {
+        std::cout << "arestrix-cli memory report [--project <pasta>] [--root <pasta>] [--db <arquivo>] [--json]\n";
+        return args.size() < 2 ? kExitUsage : 0;
+    }
+    if (args[1] != "report") {
+        std::cerr << "arestrix-cli memory: comando desconhecido: " << args[1] << "\n";
+        return kExitUsage;
+    }
+
+    Options opt;
+    fs::path dbPath;
+    std::string parseError;
+    for (size_t i = 2; i < args.size(); ++i) {
+        const std::string& a = args[i];
+        if (a == "--json") opt.json = true;
+        else if (a == "--project") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --project\n"; return kExitUsage; }
+            opt.project = args[++i];
+        } else if (a == "--root") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --root\n"; return kExitUsage; }
+            opt.root = args[++i];
+        } else if (a == "--db") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --db\n"; return kExitUsage; }
+            dbPath = args[++i];
+        } else {
+            parseError = "opcao desconhecida: " + a;
+        }
+    }
+    if (!parseError.empty()) {
+        std::cerr << "arestrix-cli memory: " << parseError << "\n";
+        return kExitUsage;
+    }
+
+    fs::path root = opt.root.empty() ? fs::current_path() : fs::absolute(opt.root);
+    if (!opt.project.empty()) {
+        ProjectPaths project = resolveProject(opt.project);
+        if (!project.ok) {
+            std::cerr << "arestrix-cli memory: " << project.error << "\n";
+            return kExitConfig;
+        }
+        root = project.root;
+    }
+    if (dbPath.empty()) dbPath = root / ".arestrix" / "memory" / "memory.db";
+    std::error_code ec;
+    if (!fs::is_regular_file(dbPath, ec)) {
+        std::cerr << "Banco de memoria nao encontrado: " << dbPath.string() << "\n";
+        return kExitConfig;
+    }
+
+    sqlite3* db = nullptr;
+    if (sqlite3_open_v2(dbPath.string().c_str(), &db, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK) {
+        std::cerr << "Falha ao abrir o banco: " << (db ? sqlite3_errmsg(db) : "sqlite") << "\n";
+        if (db) sqlite3_close(db);
+        return kExitConfig;
+    }
+
+    auto prepare = [&](const char* sql, sqlite3_stmt** stmt) {
+        return sqlite3_prepare_v2(db, sql, -1, stmt, nullptr) == SQLITE_OK;
+    };
+
+    json out{{"database", dbPath.string()}, {"runs", 0}, {"successRuns", 0}, {"failureRuns", 0},
+             {"retries", 0}, {"promptTokens", 0}, {"completionTokens", 0}, {"totalTokens", 0},
+             {"calls", 0}, {"avgLatencyMs", 0.0}, {"memoryContextChars", 0}, {"memoryEnabledRuns", 0},
+             {"hits", json{{"total", 0}, {"injected", 0}, {"used", 0}, {"success", 0}, {"failure", 0}}},
+             {"modes", json::array()}, {"nodes", json::array()}};
+
+    sqlite3_stmt* st = nullptr;
+    if (prepare("SELECT COUNT(*), COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
+                "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0), COALESCE(SUM(retries),0), "
+                "COALESCE(SUM(prompt_tokens),0), COALESCE(SUM(completion_tokens),0), COALESCE(SUM(total_tokens),0), "
+                "COALESCE(SUM(calls),0), COALESCE(AVG(latency_ms),0), COALESCE(SUM(memory_context_chars),0), "
+                "COALESCE(SUM(memory_enabled),0) FROM memory_usage", &st)) {
+        if (sqlite3_step(st) == SQLITE_ROW) {
+            out["runs"] = sqlite3_column_int64(st, 0);
+            out["successRuns"] = sqlite3_column_int64(st, 1);
+            out["failureRuns"] = sqlite3_column_int64(st, 2);
+            out["retries"] = sqlite3_column_int64(st, 3);
+            out["promptTokens"] = sqlite3_column_int64(st, 4);
+            out["completionTokens"] = sqlite3_column_int64(st, 5);
+            out["totalTokens"] = sqlite3_column_int64(st, 6);
+            out["calls"] = sqlite3_column_int64(st, 7);
+            out["avgLatencyMs"] = sqlite3_column_double(st, 8);
+            out["memoryContextChars"] = sqlite3_column_int64(st, 9);
+            out["memoryEnabledRuns"] = sqlite3_column_int64(st, 10);
+        }
+        sqlite3_finalize(st);
+        st = nullptr;
+    }
+
+    if (prepare("SELECT memory_enabled, COUNT(*), COALESCE(SUM(prompt_tokens),0), COALESCE(SUM(completion_tokens),0), "
+                "COALESCE(SUM(total_tokens),0), COALESCE(SUM(calls),0), COALESCE(AVG(latency_ms),0), "
+                "COALESCE(SUM(memory_context_chars),0), COALESCE(SUM(retries),0), "
+                "COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
+                "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0) "
+                "FROM memory_usage GROUP BY memory_enabled ORDER BY memory_enabled DESC", &st)) {
+        while (sqlite3_step(st) == SQLITE_ROW) {
+            out["modes"].push_back(json{{"memoryEnabled", sqlite3_column_int64(st, 0) != 0},
+                                        {"runs", sqlite3_column_int64(st, 1)},
+                                        {"promptTokens", sqlite3_column_int64(st, 2)},
+                                        {"completionTokens", sqlite3_column_int64(st, 3)},
+                                        {"totalTokens", sqlite3_column_int64(st, 4)},
+                                        {"calls", sqlite3_column_int64(st, 5)},
+                                        {"avgLatencyMs", sqlite3_column_double(st, 6)},
+                                        {"memoryContextChars", sqlite3_column_int64(st, 7)},
+                                        {"retries", sqlite3_column_int64(st, 8)},
+                                        {"successRuns", sqlite3_column_int64(st, 9)},
+                                        {"failureRuns", sqlite3_column_int64(st, 10)}});
+        }
+        sqlite3_finalize(st);
+        st = nullptr;
+    }
+
+    if (prepare("SELECT COALESCE(node_id,'(sem no)'), COUNT(*), COALESCE(SUM(prompt_tokens),0), "
+                "COALESCE(SUM(completion_tokens),0), COALESCE(SUM(total_tokens),0), COALESCE(SUM(calls),0), "
+                "COALESCE(AVG(latency_ms),0), COALESCE(SUM(memory_context_chars),0), COALESCE(SUM(retries),0), "
+                "COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
+                "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0) "
+                "FROM memory_usage GROUP BY node_id ORDER BY SUM(total_tokens) DESC", &st)) {
+        while (sqlite3_step(st) == SQLITE_ROW) {
+            out["nodes"].push_back(json{{"nodeId", sqliteText(st, 0)},
+                                        {"runs", sqlite3_column_int64(st, 1)},
+                                        {"promptTokens", sqlite3_column_int64(st, 2)},
+                                        {"completionTokens", sqlite3_column_int64(st, 3)},
+                                        {"totalTokens", sqlite3_column_int64(st, 4)},
+                                        {"calls", sqlite3_column_int64(st, 5)},
+                                        {"avgLatencyMs", sqlite3_column_double(st, 6)},
+                                        {"memoryContextChars", sqlite3_column_int64(st, 7)},
+                                        {"retries", sqlite3_column_int64(st, 8)},
+                                        {"successRuns", sqlite3_column_int64(st, 9)},
+                                        {"failureRuns", sqlite3_column_int64(st, 10)}});
+        }
+        sqlite3_finalize(st);
+        st = nullptr;
+    }
+
+    if (prepare("SELECT COUNT(*), COALESCE(SUM(injected),0), COALESCE(SUM(used),0), "
+                "COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
+                "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0) FROM memory_hit", &st)) {
+        if (sqlite3_step(st) == SQLITE_ROW) {
+            out["hits"] = json{{"total", sqlite3_column_int64(st, 0)},
+                               {"injected", sqlite3_column_int64(st, 1)},
+                               {"used", sqlite3_column_int64(st, 2)},
+                               {"success", sqlite3_column_int64(st, 3)},
+                               {"failure", sqlite3_column_int64(st, 4)}};
+        }
+        sqlite3_finalize(st);
+        st = nullptr;
+    }
+
+    sqlite3_close(db);
+
+    if (opt.json) {
+        std::cout << out.dump(2) << "\n";
+    } else {
+        std::cout << "Banco: " << out["database"].str() << "\n";
+        std::cout << "Execucoes: " << out["runs"].get<long long>()
+                  << " | sucesso: " << out["successRuns"].get<long long>()
+                  << " | falha: " << out["failureRuns"].get<long long>()
+                  << " | chamadas: " << out["calls"].get<long long>()
+                  << " | retries: " << out["retries"].get<long long>() << "\n";
+        std::cout << "Tokens: " << out["totalTokens"].get<long long>()
+                  << " (prompt " << out["promptTokens"].get<long long>()
+                  << " / saida " << out["completionTokens"].get<long long>() << ")\n";
+        std::cout << "Contexto: " << out["memoryContextChars"].get<long long>()
+                  << " caracteres | runs com memoria: " << out["memoryEnabledRuns"].get<long long>() << "\n";
+        std::cout << "Memorias injetadas: " << out["hits"]["injected"].get<long long>()
+                  << " | usadas: " << out["hits"]["used"].get<long long>() << "\n";
+        for (const auto& mode : out["modes"]) {
+            std::cout << "  " << (mode.value("memoryEnabled", false) ? "memoria ON " : "memoria OFF")
+                      << ": runs=" << mode["runs"].get<long long>()
+                      << " tokens=" << mode["totalTokens"].get<long long>() << "\n";
+        }
+    }
+    return 0;
+}
+
+int runMcp(const std::vector<std::string>& args) {
+    if (args.size() < 2 || args[1] == "--help" || args[1] == "-h") {
+        std::cout << "arestrix-cli mcp list|test|tools [id] [--project <pasta>] [--json]\n";
+        return args.size() < 2 ? kExitUsage : 0;
+    }
+    const std::string cmd = args[1];
+    Options opt;
+    std::vector<std::string> positional;
+    std::string parseError;
+    for (size_t i = 2; i < args.size(); ++i) {
+        const std::string& a = args[i];
+        if (a == "--json") opt.json = true;
+        else if (a == "--project") {
+            if (i + 1 >= args.size()) { parseError = "faltou --project"; break; }
+            opt.project = args[++i];
+        } else if (a == "--root") {
+            if (i + 1 >= args.size()) { parseError = "faltou --root"; break; }
+            opt.root = args[++i];
+        } else if (a == "--help" || a == "-h") {
+            std::cout << "arestrix-cli mcp list|test|tools [id] [--project <pasta>] [--json]\n";
+            return 0;
+        } else if (a.rfind("--", 0) == 0) {
+            parseError = "opcao desconhecida: " + a;
+        } else {
+            positional.push_back(a);
+        }
+    }
+    if (!parseError.empty()) {
+        std::cerr << "arestrix-cli mcp: " << parseError << "\n";
+        return kExitUsage;
+    }
+
+    fs::path root = opt.root.empty() ? fs::current_path() : fs::absolute(opt.root);
+    if (!opt.project.empty()) {
+        ProjectPaths project = resolveProject(opt.project);
+        if (!project.ok) {
+            if (opt.json) std::cout << json{{"ok", false}, {"error", project.error}}.dump() << "\n";
+            else std::cerr << "arestrix-cli mcp: " << project.error << "\n";
+            return kExitConfig;
+        }
+        root = project.root;
+    }
+
+    if (cmd == "list") {
+        json servers = rt::McpToolbox::listProjectServers(root);
+        if (opt.json) {
+            std::cout << json{{"ok", true}, {"root", root.string()}, {"servers", servers}}.dump(2) << "\n";
+        } else {
+            for (const auto& server : servers) {
+                std::cout << server.value("id", std::string()) << "  "
+                          << server.value("name", std::string()) << "  "
+                          << server.value("transport", std::string()) << "\n";
+            }
+        }
+        return 0;
+    }
+
+    if (cmd != "test" && cmd != "tools") {
+        std::cerr << "arestrix-cli mcp: comando desconhecido: " << cmd << "\n";
+        return kExitUsage;
+    }
+    if (positional.empty()) {
+        std::cerr << "arestrix-cli mcp " << cmd << ": informe o id do servidor\n";
+        return kExitUsage;
+    }
+    const std::string serverId = positional[0];
+    json tools = json::array();
+    std::string error;
+    std::string errorCode;
+    std::string errorDetail;
+
+    if (native::isNativeServer(serverId)) {
+        const auto* ns = native::findServer(serverId);
+        if (!ns) {
+            error = "servidor nativo nao encontrado: " + serverId;
+            errorCode = "server_not_found";
+        } else {
+            for (const auto& tool : ns->tools) {
+                tools.push_back(json{{"name", tool.name}, {"description", tool.description},
+                                     {"inputSchema", tool.inputSchema}, {"risk", tool.risk}});
+            }
+        }
+    } else {
+        try {
+            auto cfg = rt::McpToolbox::loadServerConfig(root, serverId);
+            mcp::McpClient client;
+            mcp::McpErrorInfo info;
+            const auto found = client.listTools(cfg, 20000, &info);
+            for (const auto& tool : found) {
+                tools.push_back(json{{"name", tool.name}, {"description", tool.description},
+                                     {"inputSchema", tool.inputSchema}});
+            }
+            if (found.empty() && !info.empty()) {
+                error = info.message;
+                errorCode = info.codeName();
+                errorDetail = info.detail;
+            }
+        } catch (const std::exception& ex) {
+            error = ex.what();
+        }
+    }
+
+    const bool ok = error.empty();
+    if (opt.json) {
+        json out{{"ok", ok}, {"server", serverId}, {"root", root.string()}, {"tools", tools}};
+        if (!error.empty()) out["error"] = error;
+        if (!errorCode.empty()) out["errorCode"] = errorCode;
+        if (!errorDetail.empty()) out["errorDetail"] = errorDetail;
+        std::cout << out.dump(2) << "\n";
+    } else if (ok) {
+        for (const auto& tool : tools) {
+            std::cout << tool.value("name", std::string());
+            const std::string desc = tool.value("description", std::string());
+            if (!desc.empty()) std::cout << "  " << desc;
+            std::cout << "\n";
+        }
+    } else {
+        std::cerr << "mcp " << serverId << ": " << error << "\n";
+    }
+    return ok ? 0 : kExitRuntime;
+}
+
+int runProject(const std::vector<std::string>& args) {
+    if (args.size() < 2 || args[1] == "--help" || args[1] == "-h") {
+        std::cout << "arestrix-cli project info|validate|graphs [--project <pasta>] [--root <pasta>] [--json]\n";
+        return args.size() < 2 ? kExitUsage : 0;
+    }
+    const std::string cmd = args[1];
+    Options opt;
+    std::string parseError;
+    for (size_t i = 2; i < args.size(); ++i) {
+        const std::string& a = args[i];
+        if (a == "--json") opt.json = true;
+        else if (a == "--project") {
+            if (i + 1 >= args.size()) { parseError = "faltou --project"; break; }
+            opt.project = args[++i];
+        } else if (a == "--root") {
+            if (i + 1 >= args.size()) { parseError = "faltou --root"; break; }
+            opt.root = args[++i];
+        } else {
+            parseError = "opcao desconhecida: " + a;
+        }
+    }
+    if (!parseError.empty()) {
+        std::cerr << "arestrix-cli project: " << parseError << "\n";
+        return kExitUsage;
+    }
+
+    fs::path root = opt.root.empty() ? fs::current_path() : fs::absolute(opt.root);
+    if (!opt.project.empty()) {
+        std::error_code ec;
+        root = fs::absolute(opt.project, ec);
+        if (root.filename() == "arestrix.project.json") root = root.parent_path();
+    }
+    json manifest;
+    std::string error;
+    if (!readJsonFile(root / "arestrix.project.json", manifest, error)) {
+        if (opt.json) std::cout << json{{"ok", false}, {"error", "manifesto: " + error}}.dump() << "\n";
+        else std::cerr << "arestrix-cli project: manifesto: " << error << "\n";
+        return kExitConfig;
+    }
+
+    json pipelines = json::array();
+    if (manifest.contains("pipelines") && manifest["pipelines"].is_array()) pipelines = manifest["pipelines"];
+
+    if (cmd == "info") {
+        json out{{"ok", true}, {"root", root.string()},
+                 {"projectId", manifest.value("projectId", std::string())},
+                 {"name", manifest.value("name", std::string())},
+                 {"version", manifest.value("version", std::string())},
+                 {"rootPath", manifest.value("rootPath", std::string())},
+                 {"pipelines", pipelines}};
+        if (opt.json) std::cout << out.dump(2) << "\n";
+        else {
+            std::cout << "Projeto: " << out["name"].str() << " (" << out["projectId"].str() << ")\n";
+            std::cout << "Versao: " << out["version"].str() << "\n";
+            std::cout << "Raiz: " << root.string() << "\n";
+            for (const auto& p : pipelines) {
+                std::cout << "  pipeline: " << p.value("id", std::string()) << " -> "
+                          << p.value("file", std::string());
+                if (p.value("isPrimary", false)) std::cout << " (primario)";
+                std::cout << "\n";
+            }
+        }
+        return 0;
+    }
+
+    if (cmd == "graphs") {
+        if (opt.json) std::cout << json{{"ok", true}, {"root", root.string()}, {"pipelines", pipelines}}.dump(2) << "\n";
+        else for (const auto& p : pipelines) std::cout << p.value("id", std::string()) << " " << p.value("file", std::string()) << "\n";
+        return 0;
+    }
+
+    if (cmd != "validate") {
+        std::cerr << "arestrix-cli project: comando desconhecido: " << cmd << "\n";
+        return kExitUsage;
+    }
+
+    json checks = json::array();
+    bool ok = true;
+    for (const auto& p : pipelines) {
+        const std::string file = p.value("file", std::string());
+        if (file.empty()) continue;
+        const fs::path graphFile = root / file;
+        core::Graph graph;
+        std::string graphError;
+        bool good = loadGraph(graphFile, graph, graphError);
+        if (good) {
+            try {
+                good = !compiler::TaskflowGenerator::generateSource(graph).empty();
+                if (!good) graphError = "codegen vazio";
+            } catch (const std::exception& ex) {
+                good = false;
+                graphError = ex.what();
+            }
+        }
+        checks.push_back(json{{"file", file}, {"ok", good}, {"error", graphError}});
+        ok = ok && good;
+    }
+    if (opt.json) std::cout << json{{"ok", ok}, {"root", root.string()}, {"checks", checks}}.dump(2) << "\n";
+    else {
+        for (const auto& c : checks) {
+            std::cout << (c.value("ok", false) ? "OK   " : "FALHA ") << c.value("file", std::string());
+            if (!c.value("error", std::string()).empty()) std::cout << "  " << c.value("error", std::string());
+            std::cout << "\n";
+        }
+        std::cout << (ok ? "project validate: OK\n" : "project validate: FALHOU\n");
+    }
+    return ok ? 0 : kExitPreflight;
+}
+
 int runCheck(const std::vector<std::string>& args) {
     Options opt;
     std::string parseError;
@@ -568,6 +1061,10 @@ int runCli(int argc, char** argv) {
     }
     if (args[0] == "env") return runEnv(args);
     if (args[0] == "check") return runCheck(args);
+    if (args[0] == "doctor") return runDoctor(args);
+    if (args[0] == "memory") return runMemory(args);
+    if (args[0] == "mcp") return runMcp(args);
+    if (args[0] == "project") return runProject(args);
     if (args[0] == "run") return runGraph(args, false);
     if (args[0] == "gen") return runGraph(args, true);
 
