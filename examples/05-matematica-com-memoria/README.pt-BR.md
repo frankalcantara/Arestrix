@@ -68,7 +68,7 @@ O agente usa o modelo configurado nos Padrões Globais (DeepSeek por padrão) e 
 correspondente. Para inspecionar a memória e o consumo:
 
 ```powershell
-python scripts/memory_report.py examples/05-matematica-com-memoria
+arestrix-cli memory report --project examples/05-matematica-com-memoria
 ```
 
 ## O que observar

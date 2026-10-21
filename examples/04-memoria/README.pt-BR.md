@@ -62,17 +62,20 @@ confere a injeção no system prompt, os filtros, o consumo de API e a persistê
 
 ## Avaliar o efeito no consumo de API
 
-O runtime grava tokens, chamadas, latência e tamanho do contexto de memória em `memory_usage`.
-Para comparar com e sem memória:
+O runtime grava tokens, chamadas, retries, sucesso/falha, contexto e memórias injetadas/usadas.
+No Studio, use **Padrões Globais → Memória → Modo de Medição / A-B**: rode com **Normal** e depois
+com **A/B: memória OFF** + **Registrar métricas**, no mesmo grafo. Para automação:
 
 ```bash
-# memória desligada, mas com métricas
+# memória ligada, com métricas
 ARESTRIX_MEMORY_METRICS=1 arestrix-cli run pipelines/main.json --root <projeto>
 
-# memória ligada (configuração do exemplo)
-arestrix-cli run pipelines/main.json --root <projeto>
+# memória OFF no mesmo grafo
+ARESTRIX_MEMORY_METRICS=1 ARESTRIX_MEMORY_DISABLE=1 \
+  arestrix-cli run pipelines/main.json --root <projeto>
 
-python scripts/memory_report.py <projeto>
+# relatório nativo
+arestrix-cli memory report --project <projeto>
 ```
 
 ## Limites desta fase
@@ -82,8 +85,9 @@ python scripts/memory_report.py <projeto>
   parecer.
 - O brief de memória é limitado por `contextBudgetTokens` (400 neste exemplo); se necessário, o
   agente usa `memory_search` para buscar detalhes.
-- O armazenamento é SQLite por projeto, com multigrafo temporal simples. Os escopos de
-  workspace/instituição e a aprendizagem recursiva entram nas próximas fases; o orçamento de
-  contexto já é aplicado por `contextBudgetTokens`.
+- O armazenamento é SQLite por projeto, com multigrafo temporal simples. Ainda não há extração
+  semântica, embeddings, dedup, contradição nem playbooks; esses itens e os escopos de
+  workspace/instituição entram nas próximas fases. O orçamento de contexto já é aplicado por
+  `contextBudgetTokens`.
 
 **Precisa de:** um modelo e a chave de API dele. Python não é necessário.

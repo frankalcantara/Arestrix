@@ -51,8 +51,16 @@ or build the CMake target `arestrix-cli` directly.
 ## Usage
 
 ```text
-arestrix-cli run <graph.json> [--root <project-folder>]
-arestrix-cli gen <graph.json> [--root <project-folder>]
+arestrix-cli run <graph.json>|--project <folder> [options]
+arestrix-cli gen <graph.json>
+arestrix-cli check [--project <folder> | <graph.json>] [--require-env NAME]
+arestrix-cli doctor [--project <folder>]
+arestrix-cli env set|reset|list|check
+arestrix-cli memory report [--project <folder>]
+arestrix-cli mcp list|test|tools [id]
+arestrix-cli project info|graphs|validate
+arestrix-cli completion powershell|bash|zsh
+arestrix-cli version
 ```
 
 With no arguments it prints usage. `--help` and `version` return `0`.
@@ -129,6 +137,16 @@ Lists servers, discovers tools and tests the connection before the pipeline.
 
 Inspects the manifest, lists pipelines and validates graph + codegen without compiling.
 
+### `completion`
+
+```powershell
+.\arestrix-cli.exe completion powershell | Out-String | Invoke-Expression
+.\arestrix-cli.exe completion bash
+.\arestrix-cli.exe completion zsh
+```
+
+Prints the shell completion script.
+
 ### `run`
 
 Generates, compiles and runs the pipeline:
@@ -202,10 +220,21 @@ Use it to debug codegen, review a vertex body or compare two graph configuration
 3. `BuildService` compiles it with the configured compiler.
 4. The generated binary runs.
 5. Logs, agent telemetry and `[OUTPUT_DELIVERY]` lines appear in the terminal.
-6. Exit code is `0` on success, `1` on build/run failure and `2` on usage or graph read errors.
+6. Exit code is `0` on success, `1` on build/run failure, `2` on usage, `3` on configuration, `4` on
+   missing dependency, `5` on preflight and `124` on timeout.
 
 The CLI does **not** call the model directly. The generated pipeline calls the provider using the
 configured keys and endpoints.
+
+| Code | Meaning |
+| :---: | :--- |
+| `0` | Success |
+| `1` | Build/run failure |
+| `2` | Invalid usage |
+| `3` | Invalid configuration/project |
+| `4` | Missing dependency (toolchain) |
+| `5` | Preflight failed |
+| `124` | Timeout |
 
 ## Requirements
 
@@ -236,22 +265,23 @@ $env:KEENABLE_API = "your-key"
 ### Compare memory on and off
 
 ```powershell
-# run without memory, still recording metrics
+# memory ON, recording metrics
 $env:ARESTRIX_MEMORY_METRICS = "1"
 .\arestrix-cli.exe run .\examples\04-memoria\pipelines\main.json `
   --root .\examples\04-memoria
 
-# run with memory (graph configuration)
-Remove-Item Env:ARESTRIX_MEMORY_METRICS
+# memory OFF on the SAME graph
+$env:ARESTRIX_MEMORY_DISABLE = "1"
 .\arestrix-cli.exe run .\examples\04-memoria\pipelines\main.json `
   --root .\examples\04-memoria
 
-# consumption report (development tool)
-python scripts\memory_report.py .\examples\04-memoria
+# native report
+.\arestrix-cli.exe memory report --project .\examples\04-memoria
 ```
 
-The report reads `.arestrix/memory/memory.db` and shows tokens, calls, latency and memory context
-per agent and mode. See [Workspaces, memory, skills and MCP](workspaces-memory-skills-mcp.md).
+The report reads `.arestrix/memory/memory.db` and shows tokens, calls, retries, success/failure,
+context and injected/used memories. See
+[Workspaces, memory, skills and MCP](workspaces-memory-skills-mcp.md).
 
 ### CI
 

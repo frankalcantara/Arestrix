@@ -70,7 +70,8 @@ graph canvas; Arestrix validates it, generates C++20 source and compiles it with
 - **Enterprise AI Gateway** - on-prem proxy with virtual keys, budgets and rate limits by
   key/project/user/provider/model, usage ledger and fail-closed routing. Local models are exempt.
 - **Project memory (AMG)** - SQLite temporal multigraph with lessons, a shared Blackboard,
-  `memory_search`/`memory_record_lesson`, a token-budgeted brief and API-usage metrics.
+  `memory_search`/`memory_record_lesson`, success/failure episodes, injected/used-memory tracking,
+  a token-budgeted brief, API-usage metrics and memory A/B in the Studio.
 - **Workspaces, skills and MCP** - local skill catalogs and MCP servers with a persistent session
   per server, including HTTP/Streamable HTTP and per-server headers.
 - **Delivery and governance** — standalone runner, MSI/MSIX packaging, DPAPI/Azure Key Vault
@@ -119,8 +120,8 @@ For CI, servers or a terminal-only workflow, use the headless runner generated b
 .\arestrix-cli.exe run .\examples\04-memoria\pipelines\main.json --root .\examples\04-memoria
 ```
 
-See [`arestrix-cli`](docs/en/arestrix-cli.md) for `gen`, exit codes, environment variables and
-troubleshooting.
+See [`arestrix-cli`](docs/en/arestrix-cli.md) for `gen`, `env`, `check`, `doctor`, native
+`memory report`, `mcp`, `project`, `--ci`, batch mode, exit codes and troubleshooting.
 
 No API key is required to run the scripted end-to-end examples:
 

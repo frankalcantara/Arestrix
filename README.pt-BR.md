@@ -71,7 +71,8 @@ um pipeline em um canvas de grafo; o Arestrix valida, gera código C++20 e compi
 - **AI Gateway empresarial** — proxy on-prem com chaves virtuais, budgets e rate limits por
   chave/projeto/usuário/provedor/modelo, ledger de uso e roteamento fail-closed. Modelos locais são isentos.
 - **Memória de projeto (AMG)** — multigrafo temporal em SQLite com lições, Blackboard,
-  `memory_search`/`memory_record_lesson`, brief com orçamento de tokens e métricas de consumo de API.
+  `memory_search`/`memory_record_lesson`, episódios de sucesso/falha, rastreio de memórias
+  injetadas/usadas, brief com orçamento de tokens, métricas de API e A/B no Studio.
 - **Workspaces, skills e MCP** — catálogos locais de skills e servidores MCP com sessão persistente
   por servidor, incluindo HTTP/Streamable HTTP e headers por servidor.
 - **Entrega e governança** — runner independente, empacotamento MSI/MSIX, integração com DPAPI e
@@ -121,8 +122,8 @@ Para CI, servidores ou fluxo somente terminal, use o executor headless gerado pe
 .\arestrix-cli.exe run .\examples\04-memoria\pipelines\main.json --root .\examples\04-memoria
 ```
 
-Veja [`arestrix-cli`](docs/pt-BR/arestrix-cli.md) para `gen`, códigos de saída, variáveis de ambiente
-e solução de problemas.
+Veja [`arestrix-cli`](docs/pt-BR/arestrix-cli.md) para `gen`, `env`, `check`, `doctor`,
+`memory report` nativo, `mcp`, `project`, `--ci`, modo lote, códigos de saída e solução de problemas.
 
 Nenhuma chave de API é necessária para rodar os exemplos ponta a ponta com LLM falso:
 

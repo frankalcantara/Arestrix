@@ -58,9 +58,12 @@ Implemented in the core:
 
 - AMG in SQLite (`.arestrix/memory/memory.db`) with temporal edges, evidence, audit, working memory
   and usage metrics.
-- Lessons, Blackboard, `memory_search`/`memory_record_lesson` tools and a `contextBudgetTokens` brief.
+- Lessons, Blackboard, `memory_search`/`memory_record_lesson` tools and a compiled
+  `contextBudgetTokens` brief ordered by confidence/recency.
+- Success/failure episodes, `memory_hit` (injected/consulted) and metrics with retries and outcome.
 - One-time legacy JSON import and automatic agent-failure lessons.
-- API-consumption panel in the UI, `memory_report.py` and examples 04 and 05.
+- API-consumption panel in the UI, native `arestrix-cli memory report`, AI Gateway memory impact,
+  Studio A/B and examples 04 and 05. `memory_report.py` remains optional for development.
 
 Still pending:
 

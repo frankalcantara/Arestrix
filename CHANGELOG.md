@@ -41,6 +41,8 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   validation without Python or the Studio.
 - `arestrix-cli` adds `--ci`, shell completion and sequential `run --batch` with checkpoint and
   `--resume`.
+- Documentation now covers the instrumented memory (episodes, hits, outcomes, A/B, gateway impact),
+  the complete CLI automation surface and native `memory report`.
 - Legacy `AgentBlackboard`/`SemanticMemoryEngine` JSON files are imported into SQLite.
 
 ## [1.5.0-beta.1] - 2026-10-19

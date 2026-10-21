@@ -68,7 +68,7 @@ The agent uses the model from Global Defaults (DeepSeek by default) and needs th
 To inspect memory and API consumption:
 
 ```powershell
-python scripts/memory_report.py examples/05-matematica-com-memoria
+arestrix-cli memory report --project examples/05-matematica-com-memoria
 ```
 
 ## What to look for

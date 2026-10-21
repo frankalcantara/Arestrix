@@ -61,7 +61,10 @@ declara quais chaves pode ler ou escrever.
 
 - Banco SQLite em `.arestrix/memory/memory.db` por projeto.
 - Esquema: `memory_scope`/`memory_scope_closure`, `memory_node`, `memory_edge`, `memory_episode`,
-  `memory_evidence`, `memory_audit`, `memory_working`, `memory_usage` e `memory_node_fts` (FTS5).
+  `memory_evidence`, `memory_audit`, `memory_working`, `memory_usage`, `memory_hit` e
+  `memory_node_fts` (FTS5).
+- O runtime grava episódios sanitizados de sucesso e falha por agente, com tokens, retries,
+  ferramentas e artefatos; não grava prompt/resposta brutos.
 - Escopo atual: **projeto** (`project:<projectId>`). Workspace e instituição entram nas próximas
   fases.
 - Lições e Blackboard podem ser lidos no início da execução e gravados no fim.
@@ -75,18 +78,21 @@ declara quais chaves pode ler ou escrever.
 - `memory_usage` registra tokens, chamadas, retries, latência, contexto e sucesso/falha.
 - O JSON legado (`arestrix-blackboard-*.json`, `arestrix-memory-*.json`) é importado uma única vez
   e marcado como `legacy_imported`.
-- Nenhum LLM é usado para extrair ou consolidar memória por padrão. O agente propõe; o runtime
-  mantém a política de escopo e evidência.
+- Nenhum LLM é usado para extrair ou consolidar memória por padrão. Ainda não há fila de propostas
+  nem consolidação: o agente grava lições diretamente, e a promoção automática de fatos/entidades
+  ainda não existe.
 
 ### Como a memória chega ao agente
 
 No pipeline gerado, o runtime:
 
 1. abre o banco do projeto quando `persistent: true`;
-2. monta um brief com as lições do domínio configurado e o snapshot das chaves autorizadas;
+2. compila um brief por seções com lições ordenadas por confiança/recência e o snapshot das chaves
+   autorizadas;
 3. injeta esse brief no system prompt como **dado histórico não confiável**;
-4. grava a lição e o Blackboard no fim da execução;
-5. registra automaticamente uma lição quando um agente falha e `recordLessons` está ligado.
+4. registra `memory_hit` para cada lição/chave injetada e marca as consultadas via `memory_search`;
+5. grava a lição, o Blackboard, o episódio e o outcome no fim da execução;
+6. registra automaticamente uma lição quando um agente falha e `recordLessons` está ligado.
 
 Lições de auditoria são registradas pelo nó que interpreta o parecer (por exemplo, um `condition`
 que chama `recordLesson` no ramo de reprovação); o runtime não adivinha a semântica de um switch.
@@ -131,13 +137,13 @@ ARESTRIX_MEMORY_METRICS=1 arestrix-cli run pipelines/main.json --root <projeto>
 ARESTRIX_MEMORY_METRICS=1 ARESTRIX_MEMORY_DISABLE=1 \
   arestrix-cli run pipelines/main.json --root <projeto>
 
-# 3) relatório (ferramenta opcional de desenvolvimento)
-python scripts/memory_report.py <projeto>
+# 3) relatório nativo
+arestrix-cli memory report --project <projeto>
 ```
 
 O relatório mostra sucesso/falha, retries, memórias injetadas e memórias usadas/consultadas.
-`memory_report.py` é apenas um leitor do SQLite para desenvolvimento; o runtime não depende de
-Python. Veja também [`arestrix-cli`](arestrix-cli.md).
+`memory_report.py` continua opcional para desenvolvimento; o runtime não depende de Python. Veja
+também [`arestrix-cli`](arestrix-cli.md).
 
 O **Runner Standalone** recebe os tokens do agente por um único evento de telemetria emitido pelo
 runtime C++ (`type: "usage"`), agregado pelo `RunnerManager`. Não há parsing de stdout nem processo
@@ -153,9 +159,9 @@ inteiramente em C++: nenhum Python ou processo JS participa da execução do gra
 ### Limitações atuais
 
 - A visualização dedicada do grafo e dos conflitos ainda não está na UI.
-- O ranking híbrido completo (entidades + grafo + embeddings) ainda não foi implementado.
-- Escopos de workspace e instituição, `memory_handoff` e consolidação por LLM ficam para as
-  próximas fases.
+- Não há extração semântica, embeddings, ranking híbrido, dedup, contradição, decay nem playbooks.
+- Escopos de workspace e instituição, `memory_handoff`, propostas e consolidação por LLM ficam para
+  as próximas fases.
 
 ## Skills
 

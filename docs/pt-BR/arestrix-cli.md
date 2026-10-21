@@ -51,8 +51,16 @@ ou compile o alvo CMake `arestrix-cli` diretamente.
 ## Uso
 
 ```text
-arestrix-cli run <grafo.json> [--root <pasta-do-projeto>]
-arestrix-cli gen <grafo.json> [--root <pasta-do-projeto>]
+arestrix-cli run <grafo.json>|--project <pasta> [opções]
+arestrix-cli gen <grafo.json>
+arestrix-cli check [--project <pasta> | <grafo.json>] [--require-env NOME]
+arestrix-cli doctor [--project <pasta>]
+arestrix-cli env set|reset|list|check
+arestrix-cli memory report [--project <pasta>]
+arestrix-cli mcp list|test|tools [id]
+arestrix-cli project info|graphs|validate
+arestrix-cli completion powershell|bash|zsh
+arestrix-cli version
 ```
 
 Sem argumentos, ele imprime o uso. `--help` e `version` retornam `0`.
@@ -129,6 +137,16 @@ Lista servidores, descobre ferramentas e testa a conexão antes do pipeline.
 
 Inspeciona o manifesto, lista pipelines e valida grafo + codegen sem compilar.
 
+### `completion`
+
+```powershell
+.\arestrix-cli.exe completion powershell | Out-String | Invoke-Expression
+.\arestrix-cli.exe completion bash
+.\arestrix-cli.exe completion zsh
+```
+
+Imprime o script de autocompletar para o shell.
+
 ### `run`
 
 Gera, compila e executa o pipeline:
@@ -203,11 +221,21 @@ configurações de grafo.
 3. O `BuildService` compila o programa com o compilador configurado.
 4. O binário gerado é executado.
 5. Logs, telemetria dos agentes e linhas `[OUTPUT_DELIVERY]` aparecem no terminal.
-6. O código de saída é `0` em sucesso, `1` em falha de build/execução e `2` em erro de uso ou de
-   leitura do grafo.
+6. O código de saída é `0` em sucesso, `1` em falha de build/execução, `2` em erro de uso, `3` em
+   configuração, `4` em dependência ausente, `5` em preflight e `124` em timeout.
 
 O CLI **não** chama o modelo diretamente. Quem chama o provedor é o pipeline gerado, usando as
 chaves e os endpoints configurados.
+
+| Código | Significado |
+| :---: | :--- |
+| `0` | Sucesso |
+| `1` | Falha de build/execução |
+| `2` | Uso inválido |
+| `3` | Configuração/projeto inválido |
+| `4` | Dependência ausente (toolchain) |
+| `5` | Preflight falhou |
+| `124` | Timeout |
 
 ## Requisitos
 
@@ -239,22 +267,23 @@ $env:KEENABLE_API = "sua-chave"
 ### Comparar memória ligada e desligada
 
 ```powershell
-# execução sem memória, mas registrando métricas
+# memória ON, gravando métricas
 $env:ARESTRIX_MEMORY_METRICS = "1"
 .\arestrix-cli.exe run .\examples\04-memoria\pipelines\main.json `
   --root .\examples\04-memoria
 
-# execução com memória (configuração do grafo)
-Remove-Item Env:ARESTRIX_MEMORY_METRICS
+# memória OFF no MESMO grafo
+$env:ARESTRIX_MEMORY_DISABLE = "1"
 .\arestrix-cli.exe run .\examples\04-memoria\pipelines\main.json `
   --root .\examples\04-memoria
 
-# relatório de consumo (ferramenta de desenvolvimento)
-python scripts\memory_report.py .\examples\04-memoria
+# relatório nativo
+.\arestrix-cli.exe memory report --project .\examples\04-memoria
 ```
 
-O relatório lê `.arestrix/memory/memory.db` e mostra tokens, chamadas, latência e contexto de
-memória por agente e por modo. Veja [Workspaces, memória, skills e MCP](workspaces-memoria-skills-mcp.md).
+O relatório lê `.arestrix/memory/memory.db` e mostra tokens, chamadas, retries, sucesso/falha,
+contexto e memórias injetadas/usadas. Veja
+[Workspaces, memória, skills e MCP](workspaces-memoria-skills-mcp.md).
 
 ### CI
 

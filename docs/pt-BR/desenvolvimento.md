@@ -27,9 +27,9 @@ Os cinco projetos de [`examples/`](../../examples/README.pt-BR.md) são gerados 
 O cenário do exemplo 05 só acessa a rede quando `KEENABLE_API` está definida.
 A memória de projeto tem um teste próprio de duas execuções: `python scripts/e2e_memory.py`.
 Para comparar o consumo de API com a memória ligada/desligada, use
-`python scripts/memory_report.py <raiz-do-projeto>` (lê `memory_usage` no banco). Esses scripts são
-ferramentas de desenvolvimento; o runtime do produto não depende de Python. Veja
-[`arestrix-cli`](arestrix-cli.md).
+`arestrix-cli memory report --project <raiz-do-projeto>` (lê `memory_usage` no banco). O
+`scripts/memory_report.py` permanece opcional para desenvolvimento; o runtime do produto não depende
+de Python. Veja [`arestrix-cli`](arestrix-cli.md).
 
 **Nenhum segredo pode chegar ao Git.** O `scripts/check-secrets.mjs` (`npm run check:secrets`) sinaliza formatos de chave de API,
 valores literais em campos `api_key`/`token`/`password`, caminhos de usuário, e-mails pessoais, arquivos de credencial e artefatos

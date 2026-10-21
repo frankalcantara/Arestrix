@@ -61,17 +61,20 @@ It checks prompt injection, filters, API usage and persistence.
 
 ## Measure the effect on API consumption
 
-The runtime records tokens, calls, latency and memory context size in `memory_usage`. To compare
-with and without memory:
+The runtime records tokens, calls, retries, success/failure, context and injected/used memories. In
+the Studio, use **Global Defaults → Memory → Measurement / A-B**: run with **Normal** and then with
+**A/B: memory OFF** + **Record metrics**, on the same graph. For automation:
 
 ```bash
-# memory off, metrics on
+# memory on, metrics on
 ARESTRIX_MEMORY_METRICS=1 arestrix-cli run pipelines/main.json --root <project>
 
-# memory on (example configuration)
-arestrix-cli run pipelines/main.json --root <project>
+# memory OFF on the same graph
+ARESTRIX_MEMORY_METRICS=1 ARESTRIX_MEMORY_DISABLE=1 \
+  arestrix-cli run pipelines/main.json --root <project>
 
-python scripts/memory_report.py <project>
+# native report
+arestrix-cli memory report --project <project>
 ```
 
 ## Limits of this phase
@@ -81,8 +84,9 @@ python scripts/memory_report.py <project>
   interprets the audit decision.
 - The memory brief is bounded by `contextBudgetTokens` (400 in this example); when needed, the
   agent uses `memory_search` to fetch details.
-- Storage is SQLite per project, with a simple temporal multigraph. Workspace/institution scopes
-  and recursive learning arrive in the next phases; context budgeting is already enforced by
+- Storage is SQLite per project, with a simple temporal multigraph. There is no semantic
+  extraction, embeddings, dedup, contradiction or playbooks yet; those items and
+  workspace/institution scopes arrive in the next phases. Context budgeting is already enforced by
   `contextBudgetTokens`.
 
 **Needs:** a model and its API key. Python is not required.

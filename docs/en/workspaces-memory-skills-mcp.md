@@ -61,7 +61,10 @@ which keys it may read or write.
 
 - SQLite database at `.arestrix/memory/memory.db` per project.
 - Schema: `memory_scope`/`memory_scope_closure`, `memory_node`, `memory_edge`, `memory_episode`,
-  `memory_evidence`, `memory_audit`, `memory_working`, `memory_usage` and `memory_node_fts` (FTS5).
+  `memory_evidence`, `memory_audit`, `memory_working`, `memory_usage`, `memory_hit` and
+  `memory_node_fts` (FTS5).
+- The runtime records sanitized success/failure episodes per agent with tokens, retries, tools and
+  artifacts; it does not store raw prompts/responses.
 - Current scope: **project** (`project:<projectId>`). Workspace and institution arrive in later
   phases.
 - Lessons and Blackboard can be read at the start of a run and written at the end.
@@ -75,18 +78,21 @@ which keys it may read or write.
 - `memory_usage` records tokens, calls, retries, latency, context and success/failure.
 - Legacy JSON (`arestrix-blackboard-*.json`, `arestrix-memory-*.json`) is imported once and marked
   `legacy_imported`.
-- No LLM is used to extract or consolidate memory by default. The agent proposes; the runtime keeps
-  the scope and evidence policy.
+- No LLM is used to extract or consolidate memory by default. There is no proposal queue or
+  consolidation yet: the agent writes lessons directly, and automatic fact/entity promotion does not
+  exist yet.
 
 ### How memory reaches the agent
 
 In the generated pipeline, the runtime:
 
 1. opens the project database when `persistent: true`;
-2. builds a brief with the configured domains' lessons and the authorized key snapshot;
+2. compiles a sectioned brief with lessons ordered by confidence/recency and the authorized key
+   snapshot;
 3. injects that brief into the system prompt as **untrusted historical data**;
-4. saves the lesson and Blackboard at the end of the run;
-5. automatically records a lesson when an agent fails and `recordLessons` is on.
+4. records `memory_hit` for each injected lesson/key and marks those consulted via `memory_search`;
+5. saves the lesson, Blackboard, episode and outcome at the end of the run;
+6. automatically records a lesson when an agent fails and `recordLessons` is on.
 
 Audit lessons are recorded by the node that interprets the decision (for example, a `condition`
 that calls `recordLesson` on the rejection branch); the runtime does not guess the semantics of a
@@ -131,13 +137,13 @@ ARESTRIX_MEMORY_METRICS=1 arestrix-cli run pipelines/main.json --root <project>
 ARESTRIX_MEMORY_METRICS=1 ARESTRIX_MEMORY_DISABLE=1 \
   arestrix-cli run pipelines/main.json --root <project>
 
-# 3) report (optional development tool)
-python scripts/memory_report.py <project>
+# 3) native report
+arestrix-cli memory report --project <project>
 ```
 
 The report shows success/failure, retries, injected memories and used/consulted memories.
-`memory_report.py` is only a SQLite reader for development; the runtime does not depend on Python.
-See also [`arestrix-cli`](arestrix-cli.md).
+`memory_report.py` remains optional for development; the runtime does not depend on Python. See also
+[`arestrix-cli`](arestrix-cli.md).
 
 The **Standalone Runner** receives agent tokens through a single telemetry event emitted by the C++
 runtime (`type: "usage"`), aggregated by `RunnerManager`. There is no stdout parsing and no auxiliary
@@ -153,8 +159,9 @@ Python or JS process participates in graph execution.
 ### Current limitations
 
 - A dedicated graph/conflict visualization is not in the UI yet.
-- Full hybrid ranking (entities + graph + embeddings) is not implemented yet.
-- Workspace/institution scopes, `memory_handoff` and LLM consolidation are future phases.
+- There is no semantic extraction, embeddings, hybrid ranking, dedup, contradiction, decay or
+  playbooks yet.
+- Workspace/institution scopes, `memory_handoff`, proposals and LLM consolidation are future phases.
 
 ## Skills
 
