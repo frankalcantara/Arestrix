@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Teste ponta a ponta da memoria de projeto (Fase 0).
+"""Teste ponta a ponta da memoria de projeto (Fases 0-2): persistencia, injecao, ferramentas e metricas.
 
 Cria um projeto temporario com dois grafos:
 

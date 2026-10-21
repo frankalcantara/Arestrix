@@ -1,6 +1,6 @@
 # Workspaces, memória, skills e MCP
 
-> **Aplica-se a:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Última revisão: 2026-10-19
+> **Aplica-se a:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Última revisão: 2026-10-21
 
 [English](../en/workspaces-memory-skills-mcp.md) · [Índice](../README.md)
 
@@ -44,37 +44,67 @@ memória. Cada vértice pode herdá-los (uma caixa de seleção no vértice) ou 
 
 ## Memória
 
-A memória é opcional e vem desativada por padrão.
+A memória é opcional e vem desativada por padrão. Na Beta 2 ela é implementada pelo **AMG
+(Arestrix Memory Graph)**, um multigrafo temporal em SQLite, nativo em C++20.
 
 | Tipo | Escopo | Finalidade |
 | :--- | :--- | :--- |
 | **Blackboard** | Projeto | Estado chave-valor compartilhado entre os agentes do mesmo projeto. |
 | **Lições semânticas** | Projeto | Lições que os agentes registram e consultam depois. |
-| **Efêmera ou persistente** | Por vértice | Só em RAM, ou gravada em disco no banco do workspace. |
+| **Efêmera ou persistente** | Por vértice | Só em RAM, ou gravada no SQLite do projeto. |
+| **Consumo de API** | Projeto | Tokens, chamadas, latência e tamanho do contexto injetado. |
 
 A memória é particionada por `projectId`, então dois projetos nunca leem os dados um do outro. Cada vértice
 declara quais chaves pode ler ou escrever.
+
+### O que existe hoje
+
+- Banco SQLite em `.arestrix/memory/memory.db` por projeto.
+- Esquema: `memory_scope`/`memory_scope_closure`, `memory_node`, `memory_edge`, `memory_episode`,
+  `memory_evidence`, `memory_audit`, `memory_working`, `memory_usage` e `memory_node_fts` (FTS5).
+- Escopo atual: **projeto** (`project:<projectId>`). Workspace e instituição entram nas próximas
+  fases.
+- Lições e Blackboard podem ser lidos no início da execução e gravados no fim.
+- O agente pode consultar a memória com `memory_search` e, quando `recordLessons` está ligado,
+  registrar uma lição com `memory_record_lesson`.
+- O campo `contextBudgetTokens` limita o brief injetado; o padrão é 800 tokens aproximados
+  (cerca de 4 caracteres por token).
+- O JSON legado (`arestrix-blackboard-*.json`, `arestrix-memory-*.json`) é importado uma única vez
+  e marcado como `legacy_imported`.
+- Nenhum LLM é usado para extrair ou consolidar memória por padrão. O agente propõe; o runtime
+  mantém a política de escopo e evidência.
 
 ### Como a memória chega ao agente
 
 No pipeline gerado, o runtime:
 
-1. carrega as lições e o Blackboard do projeto quando `persistent: true`;
-2. monta um bloco com as lições do domínio configurado e o snapshot das chaves autorizadas;
-3. injeta esse bloco no system prompt como **dado histórico não confiável**;
+1. abre o banco do projeto quando `persistent: true`;
+2. monta um brief com as lições do domínio configurado e o snapshot das chaves autorizadas;
+3. injeta esse brief no system prompt como **dado histórico não confiável**;
 4. grava a lição e o Blackboard no fim da execução;
 5. registra automaticamente uma lição quando um agente falha e `recordLessons` está ligado.
-
-Quando a memória está habilitada, o agente também recebe as ferramentas `memory_search` (busca
-lições e fatos) e, se `recordLessons` estiver ligado, `memory_record_lesson`. O campo
-`contextBudgetTokens` limita o tamanho do brief injetado; o padrão é 800 tokens aproximados.
 
 Lições de auditoria são registradas pelo nó que interpreta o parecer (por exemplo, um `condition`
 que chama `recordLesson` no ramo de reprovação); o runtime não adivinha a semântica de um switch.
 
-O exemplo [`04-memoria`](../../examples/04-memoria) demonstra o ciclo completo. O armazenamento
-atual é SQLite (`.arestrix/memory/memory.db`) por projeto; a evolução para multigrafo, escopos de
-workspace/instituição e consultas recursivas fica nas notas internas de arquitetura do projeto.
+### Memória de projeto e `arestrix.memoria`
+
+São coisas diferentes:
+
+- **Memória de projeto** é o AMG em SQLite, usado pelos agentes e pelas ferramentas
+  `memory_search` / `memory_record_lesson`.
+- **`arestrix.memoria`** é uma ferramenta nativa pequena, chave-valor, que grava
+  `.arestrix/memory.json`. Ela continua disponível para casos simples e manuais, mas não é o banco
+  de memória dos agentes.
+
+### Exemplos
+
+- [`04-memoria`](../../examples/04-memoria) — lição persistente, Blackboard, injeção no prompt,
+  `memory_search`, `memory_record_lesson` e entrega de artefato.
+- [`05-matematica-com-memoria`](../../examples/05-matematica-com-memoria) — pesquisa web via MCP
+  Keenable, brief de memória e redação de um texto de matemática com referências.
+
+### Medindo o consumo de API
 
 Cada execução de agente registra tokens, chamadas, latência e tamanho do contexto de memória na
 tabela `memory_usage`. Para comparar o consumo com a memória ligada/desligada:
@@ -86,9 +116,19 @@ ARESTRIX_MEMORY_METRICS=1 arestrix-cli run pipelines/main.json --root <projeto>
 # 2) execução com memória (configuração do grafo)
 arestrix-cli run pipelines/main.json --root <projeto>
 
-# 3) relatório
+# 3) relatório (ferramenta opcional de desenvolvimento)
 python scripts/memory_report.py <projeto>
 ```
+
+O `memory_report.py` é apenas um leitor do SQLite para desenvolvimento; o runtime não depende de
+Python. Veja também [`arestrix-cli`](arestrix-cli.md).
+
+### Limitações atuais
+
+- A visualização dedicada do grafo e dos conflitos ainda não está na UI.
+- O ranking híbrido completo (entidades + grafo + embeddings) ainda não foi implementado.
+- Escopos de workspace e instituição, `memory_handoff` e consolidação por LLM ficam para as
+  próximas fases.
 
 ## Skills
 
@@ -116,7 +156,7 @@ sem processo filho e sem código de terceiros. Elas aparecem no vértice MCP e n
 | `arestrix.arquivos` | `read_file`, `write_file`, `list_directory`, `file_info`, `make_directory`, `search_text` | Confinado ao projeto. Só texto, 1 MB para ler, 2 MB para gravar. |
 | `arestrix.http` | `http_get`, `http_post_json` | **Só hosts que o projeto autorizar** (abaixo). Somente HTTPS. |
 | `arestrix.dados` | `json_query`, `csv_to_json`, `json_to_csv`, `regex_extract`, `base64_encode`, `base64_decode` | Transformação pura de dados. Padrões de regex que poderiam travar o programa são recusados. |
-| `arestrix.memoria` | `memory_set`, `memory_get`, `memory_list`, `memory_delete` | Pequenos textos em `.arestrix/memory.json` (1000 chaves, 64 KB cada). |
+| `arestrix.memoria` | `memory_set`, `memory_get`, `memory_list`, `memory_delete` | Ferramenta manual independente do AMG: pequenos textos em `.arestrix/memory.json` (1000 chaves, 64 KB cada). |
 | `arestrix.tempo` | `now`, `add_duration`, `diff` | ISO 8601, anos bissextos, fusos. |
 | `arestrix.git` | `git_status`, `git_log`, `git_diff`, `git_show_file` | **Somente leitura.** Exige o Git instalado. |
 | `arestrix.sqlite` | `list_tables`, `describe_table`, `sql_query`, `sql_execute` | Banco SQLite embutido, em um arquivo do projeto (padrão `data/arestrix.db`). Veja abaixo. |

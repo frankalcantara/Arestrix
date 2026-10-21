@@ -23,6 +23,8 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   hosted APIs such as Keenable (`X-API-Key`) without storing secrets in the project.
 - `examples/05-matematica-com-memoria` wires a Keenable research vertex to a mathematics writer
   that uses project memory and delivers Markdown.
+- Documentation now covers the AMG SQLite store, memory tools/budget/metrics, the new example and
+  the headless `arestrix-cli` (`run`, `gen`, CI, exit codes and troubleshooting).
 - Legacy `AgentBlackboard`/`SemanticMemoryEngine` JSON files are imported into SQLite.
 
 ## [1.5.0-beta.1] - 2026-10-19

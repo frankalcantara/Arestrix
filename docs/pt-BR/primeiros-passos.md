@@ -1,6 +1,6 @@
 # Primeiros passos
 
-> **Aplica-se a:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Última revisão: 2026-10-19
+> **Aplica-se a:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Última revisão: 2026-10-21
 
 [English](../en/getting-started.md) · [Índice](../README.md)
 
@@ -42,7 +42,7 @@ O `dev.py` inicializa os submódulos, compila o frontend (`npm run build`) e o b
 | Saída | O que é |
 | :--- | :--- |
 | `arestrix` / `arestrix.exe` | O Studio: a janela WebUI e o motor. |
-| `arestrix-cli` / `arestrix-cli.exe` | Executor sem interface: `arestrix-cli run graph.json --root <projeto>` e `arestrix-cli gen graph.json`. |
+| [`arestrix-cli`](arestrix-cli.md) / `arestrix-cli.exe` | Executor sem interface: `arestrix-cli run graph.json --root <projeto>` e `arestrix-cli gen graph.json`. No Windows, também é copiado para a raiz do repositório. |
 | `runtime/lib/arestrix_core.lib` (`libarestrix_core.a`) | O runtime ao qual todo programa gerado se liga. |
 
 ## Outras formas de trabalhar
@@ -50,6 +50,7 @@ O `dev.py` inicializa os submódulos, compila o frontend (`npm run build`) e o b
 | Modo | Comando | Para quê |
 | :--- | :--- | :--- |
 | Servidor de desenvolvimento no navegador | `npm run dev` (http://localhost:5173) | Editar canvas, estilos e modais com recarga instantânea. Execução, compilação e MCP exigem o aplicativo nativo. |
+| Execução headless | `arestrix-cli run graph.json --root <projeto>` | CI, servidores e terminal; veja [`arestrix-cli`](arestrix-cli.md). |
 | Testes do frontend | `npm test` | Suíte Vitest (veja [Desenvolvimento](desenvolvimento.md)). |
 | Só o build do frontend | `npm run build` | Gera o `dist/index.html` de arquivo único e o copia para `CppCore/dist/`. |
 

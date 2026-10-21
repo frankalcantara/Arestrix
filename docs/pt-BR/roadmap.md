@@ -1,6 +1,6 @@
 # Roadmap e limitações conhecidas
 
-> **Aplica-se a:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Última revisão: 2026-10-19
+> **Aplica-se a:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Última revisão: 2026-10-21
 >
 > Esta página registra o que está intencionalmente incompleto e a ordem planejada para resolver. Não é
 > um compromisso de datas.
@@ -53,6 +53,24 @@
 - A imposição empresarial real depende de não distribuir chaves de provedor aos runners e restringir a
   saída de rede deles ao gateway. `ARESTRIX_AI_GATEWAY_POLICY=locked` é a camada de política do
   cliente/SO, não substitui controles de rede.
+
+### Memória de projeto (Beta 2)
+
+Implementado no núcleo:
+
+- AMG em SQLite (`.arestrix/memory/memory.db`) com arestas temporais, evidências, auditoria,
+  working memory e métricas de uso.
+- Lições, Blackboard, ferramentas `memory_search`/`memory_record_lesson` e brief com
+  `contextBudgetTokens`.
+- Importação única dos JSONs legados e registro automático de falhas de agente.
+- Painel de consumo de API na UI, `memory_report.py` e exemplos 04 e 05.
+
+Ainda pendente:
+
+- Escopos de workspace e instituição.
+- Visualização dedicada do grafo e dos conflitos na UI.
+- Ranking híbrido completo, embeddings e consolidação por LLM.
+- `memory_handoff` e aprendizagem recursiva.
 
 ### Modelos
 

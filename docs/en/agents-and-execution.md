@@ -1,6 +1,6 @@
 # Agents and execution
 
-> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-19
+> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-21
 
 [Português](../pt-BR/agentes-e-execucao.md) · [Index](../README.md)
 
@@ -18,6 +18,8 @@
 arestrix-cli gen graph.json                    # print the generated C++
 arestrix-cli run graph.json --root <project>   # generate, compile and run
 ```
+
+See [`arestrix-cli`](arestrix-cli.md) for requirements, exit codes, CI and troubleshooting.
 
 ## What an agent vertex does
 

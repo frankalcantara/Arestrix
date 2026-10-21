@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Gera os quatro projetos de exemplo em examples/ (do simples ao complexo).
+"""Gera os cinco projetos de exemplo em examples/ (do simples ao complexo).
 
   01-svg-agente           o tutorial: dois agentes, fork/join, laco de autocorrecao (decisao em C++)
   02-triagem-de-suporte   agentes, agentes de decisao (switch com IA e por palavras) e MCP
   03-atendimento-ilustrado  "projeto de projetos": a triagem (02) seguida do agente de SVG (01)
   04-memoria              licao semantica + Blackboard persistidos e injetados no agente
+  05-matematica-com-memoria  pesquisa web via MCP Keenable + redacao de matematica com memoria
 
 Os projetos nao contem NENHUM segredo: o modelo vem dos Padroes Globais do projeto (provedor/modelo, sem chave) e as
 chaves vivem so em variaveis de ambiente do usuario (DEEPSEEK_API_KEY, OPENAI_API_KEY...). Os caminhos sao relativos

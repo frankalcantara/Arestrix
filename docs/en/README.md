@@ -2,7 +2,7 @@
 
 [Português](../pt-BR/README.md) · [All documentation](../README.md)
 
-> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-19
+> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-21
 
 ## Learning path
 
@@ -22,6 +22,7 @@
 
 ## Reference
 
+- [`arestrix-cli`](arestrix-cli.md) — headless execution for CI, servers and scripts.
 - [Development](development.md) — repository layout, build hardening, tests and third-party policy.
 - [Brand](brand.md) — logo usage, palette and typography.
 - [Portuguese documentation](../pt-BR/README.md) — the same guides in Portuguese.

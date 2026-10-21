@@ -2,7 +2,7 @@
 
 [Português](README.pt-BR.md) · [Documentation](../docs/README.md)
 
-Four ready-to-run projects, from simple to complex. Each one is a normal Arestrix project folder: open it in the Studio,
+Five ready-to-run projects, from simple to complex. Each one is a normal Arestrix project folder: open it in the Studio,
 choose your model, set your API key, press **F5**.
 
 | # | Project | What it shows | Needs |
@@ -32,6 +32,7 @@ python scripts/copy_example.py 02-triagem-de-suporte C:/my-projects/triage     #
 3. Press **F5**.
 
 Without the Studio: `arestrix-cli run pipelines/main.json --root <the copied folder>`.
+See [`arestrix-cli`](../docs/en/arestrix-cli.md) for build, `gen`, CI and troubleshooting.
 
 Examples 2 and 3 read a support ticket. Pick one of `samples/` with the `ARESTRIX_EXAMPLE_TICKET` environment variable
 (`chamado_urgente.txt`, `chamado_normal.txt` or `chamado_duvida.txt`), or put your own text in `workspace/ticket.txt`.

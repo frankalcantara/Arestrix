@@ -1,6 +1,6 @@
 # Workspaces, memory, skills and MCP
 
-> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-19
+> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-21
 
 [Português](../pt-BR/workspaces-memoria-skills-mcp.md) · [Index](../README.md)
 
@@ -44,38 +44,67 @@ inherit them (a checkbox on the vertex) or override them. Studio-level keys are 
 
 ## Memory
 
-Memory is opt-in and disabled by default.
+Memory is opt-in and disabled by default. In Beta 2 it is implemented by **AMG (Arestrix Memory
+Graph)**, a temporal SQLite multigraph written natively in C++20.
 
 | Kind | Scope | Purpose |
 | :--- | :--- | :--- |
 | **Blackboard** | Project | Shared key-value state between agents of the same project. |
 | **Semantic lessons** | Project | Lessons agents record and recall later. |
-| **Ephemeral vs. persistent** | Per vertex | RAM only, or stored on disk in the workspace database. |
+| **Ephemeral vs. persistent** | Per vertex | RAM only, or stored in the project SQLite database. |
+| **API consumption** | Project | Tokens, calls, latency and injected context size. |
 
 Memory is partitioned by `projectId`, so two projects never read each other's data. Each vertex declares
 which keys it may read or write.
+
+### What exists today
+
+- SQLite database at `.arestrix/memory/memory.db` per project.
+- Schema: `memory_scope`/`memory_scope_closure`, `memory_node`, `memory_edge`, `memory_episode`,
+  `memory_evidence`, `memory_audit`, `memory_working`, `memory_usage` and `memory_node_fts` (FTS5).
+- Current scope: **project** (`project:<projectId>`). Workspace and institution arrive in later
+  phases.
+- Lessons and Blackboard can be read at the start of a run and written at the end.
+- The agent can query memory with `memory_search` and, when `recordLessons` is on, record a lesson
+  with `memory_record_lesson`.
+- `contextBudgetTokens` limits the injected brief; the default is roughly 800 tokens (about 4
+  characters per token).
+- Legacy JSON (`arestrix-blackboard-*.json`, `arestrix-memory-*.json`) is imported once and marked
+  `legacy_imported`.
+- No LLM is used to extract or consolidate memory by default. The agent proposes; the runtime keeps
+  the scope and evidence policy.
 
 ### How memory reaches the agent
 
 In the generated pipeline, the runtime:
 
-1. loads the project's lessons and Blackboard when `persistent: true`;
-2. builds a block with the configured domains' lessons and the authorized key snapshot;
-3. injects that block into the system prompt as **untrusted historical data**;
+1. opens the project database when `persistent: true`;
+2. builds a brief with the configured domains' lessons and the authorized key snapshot;
+3. injects that brief into the system prompt as **untrusted historical data**;
 4. saves the lesson and Blackboard at the end of the run;
 5. automatically records a lesson when an agent fails and `recordLessons` is on.
-
-When memory is enabled, the agent also receives the `memory_search` tool (searches lessons and
-facts) and, when `recordLessons` is on, `memory_record_lesson`. `contextBudgetTokens` limits the
-injected brief; the default is roughly 800 tokens.
 
 Audit lessons are recorded by the node that interprets the decision (for example, a `condition`
 that calls `recordLesson` on the rejection branch); the runtime does not guess the semantics of a
 switch.
 
-The [`04-memoria`](../../examples/04-memoria) example demonstrates the full cycle. Storage is
-currently SQLite (`.arestrix/memory/memory.db`) per project; the evolution to a multigraph,
-workspace/institution scopes and recursive queries is kept in the project's internal architecture notes.
+### Project memory vs. `arestrix.memoria`
+
+These are different things:
+
+- **Project memory** is the SQLite AMG used by agents and by `memory_search` /
+  `memory_record_lesson`.
+- **`arestrix.memoria`** is a small native key-value tool that writes `.arestrix/memory.json`. It
+  remains available for simple manual cases, but it is not the agents' memory database.
+
+### Examples
+
+- [`04-memoria`](../../examples/04-memoria) — persistent lesson, Blackboard, prompt injection,
+  `memory_search`, `memory_record_lesson` and artifact delivery.
+- [`05-matematica-com-memoria`](../../examples/05-matematica-com-memoria) — web research through the
+  Keenable MCP, memory brief and a mathematics text with references.
+
+### Measuring API consumption
 
 Each agent run records tokens, calls, latency and memory context size in the `memory_usage` table.
 To compare consumption with memory on/off:
@@ -87,9 +116,18 @@ ARESTRIX_MEMORY_METRICS=1 arestrix-cli run pipelines/main.json --root <project>
 # 2) run with memory (graph configuration)
 arestrix-cli run pipelines/main.json --root <project>
 
-# 3) report
+# 3) report (optional development tool)
 python scripts/memory_report.py <project>
 ```
+
+`memory_report.py` is only a SQLite reader for development; the runtime does not depend on Python.
+See also [`arestrix-cli`](arestrix-cli.md).
+
+### Current limitations
+
+- A dedicated graph/conflict visualization is not in the UI yet.
+- Full hybrid ranking (entities + graph + embeddings) is not implemented yet.
+- Workspace/institution scopes, `memory_handoff` and LLM consolidation are future phases.
 
 ## Skills
 
@@ -117,7 +155,7 @@ function call.
 | `arestrix.arquivos` | `read_file`, `write_file`, `list_directory`, `file_info`, `make_directory`, `search_text` | Confined to the project. Text only, 1 MB to read, 2 MB to write. |
 | `arestrix.http` | `http_get`, `http_post_json` | **Only hosts the project authorizes** (below). HTTPS only. |
 | `arestrix.dados` | `json_query`, `csv_to_json`, `json_to_csv`, `regex_extract`, `base64_encode`, `base64_decode` | Pure data transformation. Regex patterns that could hang the program are refused. |
-| `arestrix.memoria` | `memory_set`, `memory_get`, `memory_list`, `memory_delete` | Small text values kept in `.arestrix/memory.json` (1000 keys, 64 KB each). |
+| `arestrix.memoria` | `memory_set`, `memory_get`, `memory_list`, `memory_delete` | Manual tool independent of AMG: small text values in `.arestrix/memory.json` (1000 keys, 64 KB each). |
 | `arestrix.tempo` | `now`, `add_duration`, `diff` | ISO 8601, leap years, time zones. |
 | `arestrix.git` | `git_status`, `git_log`, `git_diff`, `git_show_file` | **Read-only.** Needs Git installed. |
 | `arestrix.sqlite` | `list_tables`, `describe_table`, `sql_query`, `sql_execute` | An embedded SQLite database in a project file (default `data/arestrix.db`). See below. |

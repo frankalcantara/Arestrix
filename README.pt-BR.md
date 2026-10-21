@@ -70,8 +70,10 @@ um pipeline em um canvas de grafo; o Arestrix valida, gera código C++20 e compi
   hardware e fallback para CPU. Nenhum runtime de inferência é incluído por padrão.
 - **AI Gateway empresarial** — proxy on-prem com chaves virtuais, budgets e rate limits por
   chave/projeto/usuário/provedor/modelo, ledger de uso e roteamento fail-closed. Modelos locais são isentos.
-- **Workspaces, memória e skills** — contexto persistente, catálogos locais de skills e servidores
-  MCP com sessão persistente por servidor.
+- **Memória de projeto (AMG)** — multigrafo temporal em SQLite com lições, Blackboard,
+  `memory_search`/`memory_record_lesson`, brief com orçamento de tokens e métricas de consumo de API.
+- **Workspaces, skills e MCP** — catálogos locais de skills e servidores MCP com sessão persistente
+  por servidor, incluindo HTTP/Streamable HTTP e headers por servidor.
 - **Entrega e governança** — runner independente, empacotamento MSI/MSIX, integração com DPAPI e
   Azure Key Vault, além de verificação de integridade HMAC.
 - **Bilíngue** — interface e documentação em inglês e português.
@@ -113,6 +115,15 @@ Dentro do Studio:
 3. Pressione **F5** para compilar e executar o grafo com telemetria ao vivo.
 4. Use **Exportar Runner Independente** para empacotar o pipeline para entrega.
 
+Para CI, servidores ou fluxo somente terminal, use o executor headless gerado pelo mesmo build:
+
+```powershell
+.\arestrix-cli.exe run .\examples\04-memoria\pipelines\main.json --root .\examples\04-memoria
+```
+
+Veja [`arestrix-cli`](docs/pt-BR/arestrix-cli.md) para `gen`, códigos de saída, variáveis de ambiente
+e solução de problemas.
+
 Nenhuma chave de API é necessária para rodar os exemplos ponta a ponta com LLM falso:
 
 ```bash
@@ -126,6 +137,7 @@ python scripts/e2e_examples.py
 | [Central de documentação](docs/README.md) | O guia completo, organizado por idioma e assunto. |
 | [Primeiros passos](docs/pt-BR/primeiros-passos.md) | Requisitos, build, configuração de modelo e primeira execução. |
 | [Arquitetura](docs/pt-BR/arquitetura.md) | Studio, engine, WebUI e o caminho do grafo ao C++. |
+| [`arestrix-cli`](docs/pt-BR/arestrix-cli.md) | Execução headless, CI, códigos de saída e solução de problemas. |
 | [Exemplos](examples/README.pt-BR.md) | Cinco projetos executáveis, de um pipeline de dois agentes a fluxos compostos, de memória e de pesquisa web. |
 | [Registro de auditoria de testes](docs/quality/test-audit-log.md) | Rodadas cronológicas de testes e auditorias de integridade. |
 | [Changelog](CHANGELOG.md) | Histórico de releases, mudanças e limitações conhecidas. |

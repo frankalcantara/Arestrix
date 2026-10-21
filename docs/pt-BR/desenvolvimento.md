@@ -1,6 +1,6 @@
 # Desenvolvimento
 
-> **Aplica-se a:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Última revisão: 2026-10-19
+> **Aplica-se a:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Última revisão: 2026-10-21
 
 [English](../en/development.md) · [Índice](../README.md)
 
@@ -10,22 +10,26 @@
 | :--- | :--- |
 | `src/` | Frontend em TypeScript (core, view, ui, i18n). |
 | `CppCore/` | Backend C++20, o runtime e a CLI. `dev.py` é o ponto de entrada do build. |
+| `CppCore/src/cli/` | O executor headless `arestrix-cli` (`run` e `gen`). |
 | `CppCore/src/local/` | Runtime local gerenciado: catálogo GGUF, downloads, processo llama.cpp e router nativo. |
 | `CppCore/src/gateway/` | Núcleo do `arestrix-gateway`: chaves virtuais, budgets, ledger de uso e proxy HTTP. |
 | `CppCore/gateway/` | Configuração de exemplo e guia do operador do gateway (`README.md`). |
 | `tests/` | Suítes Vitest do frontend. |
-| `scripts/` | Tutorial ponta a ponta, verificação de licenças, validação de ativos locais, assinatura Authenticode e auxiliares de submódulos. |
+| `scripts/` | Testes e2e, geração de exemplos, relatório de memória, verificação de licenças, validação de ativos locais, assinatura Authenticode e auxiliares de submódulos. |
 | `third_party/` | Todo código externo (submódulos ou arquivos incluídos com sua licença), incluindo SQLite e `cpp-httplib`. |
 | `docs/` | Esta documentação, em `en/` e `pt-BR/`, além de tutoriais, qualidade e segurança. |
 | `docs/pt-BR/tutorials/svg-agent.md` | Um exemplo completo passo a passo. |
 
 ## Exemplos e segredos
 
-Os quatro projetos de [`examples/`](../../examples/README.pt-BR.md) são gerados por `python scripts/build_examples.py` (nunca edite o
+Os cinco projetos de [`examples/`](../../examples/README.pt-BR.md) são gerados por `python scripts/build_examples.py` (nunca edite o
 `pipelines/main.json` deles à mão) e testados com `python scripts/e2e_examples.py` (um LLM falso roteirizado; sem chaves, sem custo).
+O cenário do exemplo 05 só acessa a rede quando `KEENABLE_API` está definida.
 A memória de projeto tem um teste próprio de duas execuções: `python scripts/e2e_memory.py`.
 Para comparar o consumo de API com a memória ligada/desligada, use
-`python scripts/memory_report.py <raiz-do-projeto>` (lê `memory_usage` no banco).
+`python scripts/memory_report.py <raiz-do-projeto>` (lê `memory_usage` no banco). Esses scripts são
+ferramentas de desenvolvimento; o runtime do produto não depende de Python. Veja
+[`arestrix-cli`](arestrix-cli.md).
 
 **Nenhum segredo pode chegar ao Git.** O `scripts/check-secrets.mjs` (`npm run check:secrets`) sinaliza formatos de chave de API,
 valores literais em campos `api_key`/`token`/`password`, caminhos de usuário, e-mails pessoais, arquivos de credencial e artefatos

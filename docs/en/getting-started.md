@@ -1,6 +1,6 @@
 # Getting started
 
-> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-19
+> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-21
 
 [Português](../pt-BR/primeiros-passos.md) · [Index](../README.md)
 
@@ -42,7 +42,7 @@ then opens the Studio.
 | Output | What it is |
 | :--- | :--- |
 | `arestrix` / `arestrix.exe` | The Studio: the WebUI window and the engine. |
-| `arestrix-cli` / `arestrix-cli.exe` | Headless runner: `arestrix-cli run graph.json --root <project>` and `arestrix-cli gen graph.json`. |
+| [`arestrix-cli`](arestrix-cli.md) / `arestrix-cli.exe` | Headless runner: `arestrix-cli run graph.json --root <project>` and `arestrix-cli gen graph.json`. On Windows it is also copied to the repository root. |
 | `runtime/lib/arestrix_core.lib` (`libarestrix_core.a`) | The runtime that every generated program links against. |
 
 ## Other ways to work
@@ -50,6 +50,7 @@ then opens the Studio.
 | Mode | Command | Use it for |
 | :--- | :--- | :--- |
 | Browser dev server | `npm run dev` (http://localhost:5173) | Editing the canvas, styling and modals with hot reload. Execution, compilation and MCP need the native app. |
+| Headless execution | `arestrix-cli run graph.json --root <project>` | CI, servers and terminal; see [`arestrix-cli`](arestrix-cli.md). |
 | Frontend tests | `npm test` | Vitest suite (see [Development](development.md)). |
 | Frontend build only | `npm run build` | Produces the single-file `dist/index.html` and copies it to `CppCore/dist/`. |
 

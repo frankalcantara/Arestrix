@@ -2,7 +2,7 @@
 
 [English](README.md) · [Documentação](../docs/README.md)
 
-Quatro projetos prontos para executar, do simples ao complexo. Cada um é uma pasta de projeto Arestrix comum: abra no Studio,
+Cinco projetos prontos para executar, do simples ao complexo. Cada um é uma pasta de projeto Arestrix comum: abra no Studio,
 escolha seu modelo, grave sua chave de API e pressione **F5**.
 
 | # | Projeto | O que mostra | Precisa de |
@@ -32,6 +32,7 @@ python scripts/copy_example.py 02-triagem-de-suporte C:/meus-projetos/triagem   
 3. Pressione **F5**.
 
 Sem o Studio: `arestrix-cli run pipelines/main.json --root <a pasta copiada>`.
+Veja [`arestrix-cli`](../docs/pt-BR/arestrix-cli.md) para build, `gen`, CI e solução de problemas.
 
 Os exemplos 2 e 3 leem um chamado de suporte. Escolha um de `samples/` com a variável de ambiente `ARESTRIX_EXAMPLE_TICKET`
 (`chamado_urgente.txt`, `chamado_normal.txt` ou `chamado_duvida.txt`), ou coloque seu próprio texto em `workspace/ticket.txt`.
