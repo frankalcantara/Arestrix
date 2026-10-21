@@ -39,6 +39,8 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
 - `arestrix-cli doctor`, native `memory report`, `mcp list|test|tools` and
   `project info|graphs|validate` cover preflight, memory inspection, MCP diagnostics and project
   validation without Python or the Studio.
+- `arestrix-cli` adds `--ci`, shell completion and sequential `run --batch` with checkpoint and
+  `--resume`.
 - Legacy `AgentBlackboard`/`SemanticMemoryEngine` JSON files are imported into SQLite.
 
 ## [1.5.0-beta.1] - 2026-10-19

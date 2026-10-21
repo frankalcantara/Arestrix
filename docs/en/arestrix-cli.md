@@ -160,7 +160,30 @@ Automation options:
 - `--json` emits JSONL (`phase`, `log`, `telemetry`, `result`);
 - `--timeout` cancels the pipeline and returns `124`;
 - `--report` writes a JSON summary even on failure;
-- `--quiet` suppresses phases/logs/telemetry.
+- `--quiet` suppresses phases/logs/telemetry;
+- `--ci` is `--json --quiet --no-color` with a default 900s timeout;
+- `--batch <file.json>` runs sequential items;
+- `--state <file>` sets the checkpoint (default `.arestrix/batch-state.json`);
+- `--resume` skips completed items.
+
+Batch manifest:
+
+```json
+{
+  "graph": "pipelines/main.json",
+  "items": [
+    { "id": "a", "env": { "ARESTRIX_EXAMPLE_TICKET": "ticket_a.txt" } },
+    { "id": "b", "env": { "ARESTRIX_EXAMPLE_TICKET": "ticket_b.txt" } }
+  ]
+}
+```
+
+```powershell
+.\arestrix-cli.exe run --batch .\batch.json --root .\my-project --json --resume
+```
+
+The batch is sequential; each item receives its environment variables and its result is stored in
+the checkpoint. `completion powershell|bash|zsh` prints the shell completion script.
 
 ### `gen`
 

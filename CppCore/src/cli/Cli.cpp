@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -44,12 +45,16 @@ struct Options {
     bool json = false;
     bool quiet = false;
     bool noColor = false;
+    bool ci = false;
     bool help = false;
     int timeoutSeconds = 0;
     fs::path root;
     fs::path project;
     fs::path graph;
     fs::path report;
+    fs::path batchFile;
+    fs::path stateFile;
+    bool resume = false;
     std::vector<std::string> requireEnv;
 };
 
@@ -93,7 +98,9 @@ void printHelp() {
         "  arestrix-cli memory report [--project <pasta>] [--json]\n"
         "  arestrix-cli mcp list|test|tools [id] [--project <pasta>] [--json]\n"
         "  arestrix-cli project info|validate|graphs [--project <pasta>] [--json]\n"
+        "  arestrix-cli completion powershell|bash|zsh\n"
         "  arestrix-cli version [--json]\n\n"
+        "  --ci                    Equivale a --json --quiet --no-color e timeout padrao de 900s\n\n"
         "Opcoes de run:\n"
         "  --root <pasta>          Raiz do projeto (padrao: diretorio atual)\n"
         "  --project <pasta>       Le arestrix.project.json e usa o pipeline primario\n"
@@ -101,7 +108,10 @@ void printHelp() {
         "  --quiet                 Suprime fases, logs e telemetria\n"
         "  --no-color              Sem cores (aceito para compatibilidade)\n"
         "  --timeout <segundos>    Cancela o pipeline ao estourar (0 = sem limite)\n"
-        "  --report <arquivo>      Grava um resumo JSON mesmo em falha\n\n"
+        "  --report <arquivo>      Grava um resumo JSON mesmo em falha\n"
+        "  --batch <arquivo.json>  Executa itens sequenciais de um manifesto de lote\n"
+        "  --state <arquivo>       Checkpoint do lote (padrao .arestrix/batch-state.json)\n"
+        "  --resume                Pula itens ja concluidos no checkpoint\n\n"
         "Opcoes de check:\n"
         "  --require-env <NOME>    Exige a variavel (pode repetir ou separar por virgula)\n\n"
         "Variaveis de ambiente sao gravadas no mesmo cofre do Studio:\n"
@@ -215,10 +225,14 @@ bool parseOptions(const std::vector<std::string>& args, size_t start, Options& o
         if (a == "--json") opt.json = true;
         else if (a == "--quiet") opt.quiet = true;
         else if (a == "--no-color") opt.noColor = true;
+        else if (a == "--ci") opt.ci = true;
         else if (a == "--help" || a == "-h") opt.help = true;
         else if (a == "--root") { std::string v; if (!next("--root", v)) return false; opt.root = v; }
         else if (a == "--project") { std::string v; if (!next("--project", v)) return false; opt.project = v; }
         else if (a == "--report") { std::string v; if (!next("--report", v)) return false; opt.report = v; }
+        else if (a == "--batch") { std::string v; if (!next("--batch", v)) return false; opt.batchFile = v; }
+        else if (a == "--state") { std::string v; if (!next("--state", v)) return false; opt.stateFile = v; }
+        else if (a == "--resume") opt.resume = true;
         else if (a == "--timeout") {
             std::string v;
             if (!next("--timeout", v)) return false;
@@ -363,9 +377,10 @@ int runDoctor(const std::vector<std::string>& args) {
         return kExitUsage;
     }
     if (opt.help) {
-        std::cout << "arestrix-cli doctor [--project <pasta>] [--root <pasta>] [--json]\n";
+        std::cout << "arestrix-cli doctor [--project <pasta>] [--root <pasta>] [--json] [--ci]\n";
         return 0;
     }
+    if (opt.ci) opt.json = true;
 
     fs::path root = opt.root.empty() ? fs::current_path() : fs::absolute(opt.root);
     if (!opt.project.empty()) {
@@ -846,9 +861,10 @@ int runCheck(const std::vector<std::string>& args) {
         return kExitUsage;
     }
     if (opt.help) {
-        std::cout << "arestrix-cli check [--project <pasta> | <grafo.json>] [--require-env NOME] [--json]\n";
+        std::cout << "arestrix-cli check [--project <pasta> | <grafo.json>] [--require-env NOME] [--json] [--ci]\n";
         return 0;
     }
+    if (opt.ci) opt.json = true;
 
     fs::path root = opt.root.empty() ? fs::current_path() : fs::absolute(opt.root);
     fs::path graphFile = opt.graph;
@@ -918,6 +934,173 @@ int runCheck(const std::vector<std::string>& args) {
     return ok ? 0 : kExitPreflight;
 }
 
+struct BuildOutcome {
+    build::BuildResult result;
+    bool timeoutHit = false;
+    int exitCode = kExitRuntime;
+    std::string error;
+};
+
+BuildOutcome executeBuild(const core::Graph& graph, const fs::path& root, const Options& opt,
+                          const build::BuildEvents& ev) {
+    std::atomic<bool> cancel{false};
+    std::atomic<bool> done{false};
+    std::atomic<bool> timeoutHit{false};
+    build::BuildResult result;
+    std::thread worker([&]() {
+        result = build::buildAndRun(graph, root, ev, &cancel);
+        done = true;
+    });
+    if (opt.timeoutSeconds > 0) {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(opt.timeoutSeconds);
+        while (!done.load() && std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        if (!done.load()) {
+            timeoutHit = true;
+            cancel = true;
+        }
+    }
+    worker.join();
+
+    BuildOutcome out;
+    out.result = result;
+    out.timeoutHit = timeoutHit;
+    out.error = timeoutHit ? ("timeout de " + std::to_string(opt.timeoutSeconds) + "s") : result.error;
+    out.exitCode = (result.success && !timeoutHit) ? 0
+                 : (timeoutHit ? kExitTimeout : (result.stage == "toolchain" ? kExitDependency : kExitRuntime));
+    return out;
+}
+
+int runBatch(const Options& opt) {
+    json batch;
+    std::string error;
+    if (!readJsonFile(opt.batchFile, batch, error)) {
+        std::cerr << "arestrix-cli run --batch: " << error << "\n";
+        return kExitConfig;
+    }
+    if (!batch.is_object() || !batch.contains("items") || !batch["items"].is_array()) {
+        std::cerr << "arestrix-cli run --batch: manifesto precisa de items[]\n";
+        return kExitConfig;
+    }
+
+    fs::path root = opt.root.empty() ? fs::current_path() : fs::absolute(opt.root);
+    if (opt.root.empty() && batch.contains("root") && batch["root"].is_string()) {
+        root = fs::absolute(batch["root"].get<std::string>());
+    }
+    fs::path graphFile = opt.graph;
+    if (graphFile.empty() && batch.contains("graph") && batch["graph"].is_string()) {
+        graphFile = fs::path(batch["graph"].get<std::string>());
+    }
+    if (graphFile.empty() && !opt.project.empty()) {
+        ProjectPaths project = resolveProject(opt.project);
+        if (!project.ok) {
+            std::cerr << "arestrix-cli run --batch: " << project.error << "\n";
+            return kExitConfig;
+        }
+        root = project.root;
+        graphFile = project.graph;
+    }
+    if (graphFile.empty()) {
+        std::cerr << "arestrix-cli run --batch: informe graph no manifesto ou --project\n";
+        return kExitConfig;
+    }
+    if (graphFile.is_relative()) graphFile = root / graphFile;
+
+    core::Graph graph;
+    if (!loadGraph(graphFile, graph, error)) {
+        std::cerr << "arestrix-cli run --batch: " << error << "\n";
+        return kExitConfig;
+    }
+
+    fs::path statePath = opt.stateFile.empty() ? root / ".arestrix" / "batch-state.json" : fs::absolute(opt.stateFile);
+    json state = json::object();
+    state["items"] = json::object();
+    if (opt.resume) {
+        json old;
+        std::string oldError;
+        if (readJsonFile(statePath, old, oldError) && old.is_object() && old.contains("items") && old["items"].is_object()) {
+            state["items"] = old["items"];
+        }
+    }
+
+    json results = json::array();
+    bool allOk = true;
+    for (size_t i = 0; i < batch["items"].size(); ++i) {
+        const json& item = batch["items"][i];
+        const std::string id = item.is_object() && item.contains("id") && item["id"].is_string()
+            ? item["id"].get<std::string>() : std::to_string(i + 1);
+        if (opt.resume && state["items"].contains(id) && state["items"][id].value("ok", false)) {
+            if (opt.json) std::cout << json{{"event", "item"}, {"id", id}, {"ok", true}, {"skipped", true}}.dump() << "\n";
+            results.push_back(json{{"id", id}, {"ok", true}, {"skipped", true}});
+            continue;
+        }
+
+        std::map<std::string, std::string> oldEnv;
+        bool envOk = true;
+        if (item.is_object() && item.contains("env") && item["env"].is_object()) {
+            for (auto it = item["env"].begin(); it != item["env"].end(); ++it) {
+                if (!it->is_string() || !validEnvName(it.key())) { envOk = false; break; }
+                oldEnv[it.key()] = platform::getEnv(it.key());
+                platform::setProcessEnv(it.key(), it->get<std::string>());
+            }
+        }
+        if (!envOk) {
+            for (const auto& [key, value] : oldEnv) platform::setProcessEnv(key, value);
+            allOk = false;
+            results.push_back(json{{"id", id}, {"ok", false}, {"error", "env invalido"}});
+            continue;
+        }
+
+        build::BuildEvents ev;
+        ev.onPhase = [&](const std::string& phase, const std::string& msg) {
+            if (opt.quiet) return;
+            if (opt.json) std::cout << json{{"event", "item"}, {"id", id}, {"kind", "phase"}, {"phase", phase}, {"message", msg}}.dump() << "\n";
+            else std::cout << "[" << id << "][" << phase << "] " << msg << std::endl;
+        };
+        ev.onLog = [&](const std::string& line, bool isError) {
+            if (opt.quiet) return;
+            if (opt.json) std::cout << json{{"event", "item"}, {"id", id}, {"kind", "log"}, {"line", line}, {"error", isError}}.dump() << "\n";
+            else std::cout << "[" << id << "] " << line << std::endl;
+        };
+        ev.onTelemetry = [&](const std::string& line) {
+            if (opt.quiet) return;
+            if (opt.json) std::cout << json{{"event", "item"}, {"id", id}, {"kind", "telemetry"}, {"raw", line}}.dump() << "\n";
+            else std::cout << "[" << id << "][telemetria] " << line << std::endl;
+        };
+
+        BuildOutcome outcome = executeBuild(graph, root, opt, ev);
+        for (const auto& [key, value] : oldEnv) platform::setProcessEnv(key, value);
+        const bool ok = outcome.exitCode == 0;
+        allOk = allOk && ok;
+        state["items"][id] = json{{"ok", ok}, {"exitCode", outcome.exitCode}, {"elapsedMs", outcome.result.elapsedMs}};
+        results.push_back(json{{"id", id}, {"ok", ok}, {"exitCode", outcome.exitCode},
+                               {"elapsedMs", outcome.result.elapsedMs}, {"error", outcome.error}});
+        if (opt.json) std::cout << json{{"event", "item"}, {"id", id}, {"ok", ok},
+                                        {"exitCode", outcome.exitCode}, {"elapsedMs", outcome.result.elapsedMs},
+                                        {"error", outcome.error}}.dump() << "\n";
+        else std::cout << "[" << id << "] " << (ok ? "OK" : "FALHA") << " (" << outcome.result.elapsedMs << " ms)\n";
+    }
+
+    std::error_code ec;
+    fs::create_directories(statePath.parent_path(), ec);
+    std::ofstream stateOut(statePath, std::ios::binary | std::ios::trunc);
+    if (stateOut) stateOut << state.dump(2) << "\n";
+
+    json report{{"schema", 1}, {"command", "run-batch"}, {"graph", graphFile.string()},
+                {"root", root.string()}, {"success", allOk}, {"items", results}};
+    if (opt.json) std::cout << json{{"event", "result"}, {"ok", allOk}, {"graph", graphFile.string()},
+                                    {"root", root.string()}, {"items", results}}.dump() << "\n";
+    else std::cout << "batch: " << (allOk ? "OK" : "FALHOU") << " (" << results.size() << " itens)\n";
+    if (!opt.report.empty()) {
+        const fs::path reportPath = fs::absolute(opt.report, ec);
+        if (!reportPath.parent_path().empty()) fs::create_directories(reportPath.parent_path(), ec);
+        std::ofstream out(reportPath, std::ios::binary | std::ios::trunc);
+        if (out) out << report.dump(2) << "\n";
+    }
+    return allOk ? 0 : kExitRuntime;
+}
+
 int runGraph(const std::vector<std::string>& args, bool genOnly) {
     Options opt;
     std::string parseError;
@@ -928,9 +1111,16 @@ int runGraph(const std::vector<std::string>& args, bool genOnly) {
     if (opt.help) {
         std::cout << (genOnly
             ? "arestrix-cli gen <grafo.json> [--root <pasta>]\n"
-            : "arestrix-cli run <grafo.json>|--project <pasta> [--root <pasta>] [--json] [--quiet] [--timeout N] [--report FILE]\n");
+            : "arestrix-cli run <grafo.json>|--project <pasta> [--root <pasta>] [--json] [--quiet] [--ci] [--timeout N] [--report FILE]\n");
         return 0;
     }
+    if (opt.ci) {
+        opt.json = true;
+        opt.quiet = true;
+        opt.noColor = true;
+        if (opt.timeoutSeconds == 0) opt.timeoutSeconds = 900;
+    }
+    if (!genOnly && !opt.batchFile.empty()) return runBatch(opt);
 
     fs::path root = opt.root.empty() ? fs::current_path() : fs::absolute(opt.root);
     fs::path graphFile = opt.graph;
@@ -989,30 +1179,11 @@ int runGraph(const std::vector<std::string>& args, bool genOnly) {
         else emitEvent(json{{"event", "telemetry"}, {"raw", line}}, true);
     };
 
-    std::atomic<bool> cancel{false};
-    std::atomic<bool> done{false};
-    build::BuildResult result;
-    std::atomic<bool> timeoutHit{false};
-    std::thread worker([&]() {
-        result = build::buildAndRun(graph, root, ev, &cancel);
-        done = true;
-    });
-
-    if (opt.timeoutSeconds > 0) {
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(opt.timeoutSeconds);
-        while (!done.load() && std::chrono::steady_clock::now() < deadline) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        }
-        if (!done.load()) {
-            timeoutHit = true;
-            cancel = true;
-        }
-    }
-    worker.join();
-
-    bool success = result.success && !timeoutHit;
-    std::string error = timeoutHit ? ("timeout de " + std::to_string(opt.timeoutSeconds) + "s") : result.error;
-    int exitCode = success ? 0 : (timeoutHit ? kExitTimeout : (result.stage == "toolchain" ? kExitDependency : kExitRuntime));
+    BuildOutcome outcome = executeBuild(graph, root, opt, ev);
+    const bool success = outcome.exitCode == 0;
+    const std::string& error = outcome.error;
+    const int exitCode = outcome.exitCode;
+    const auto& result = outcome.result;
 
     json report{{"schema", 1}, {"command", "run"}, {"graph", graphFile.string()}, {"root", root.string()},
                 {"success", success}, {"stage", result.stage}, {"exitCode", exitCode},
@@ -1025,7 +1196,7 @@ int runGraph(const std::vector<std::string>& args, bool genOnly) {
     } else if (success) {
         std::cout << "[OK] Pipeline concluido em " << result.elapsedMs << " ms" << std::endl;
     } else {
-        std::cerr << "[FALHA:" << (timeoutHit ? "timeout" : result.stage) << "] " << error << std::endl;
+        std::cerr << "[FALHA:" << (outcome.timeoutHit ? "timeout" : result.stage) << "] " << error << std::endl;
     }
 
     if (!opt.report.empty()) {
@@ -1037,6 +1208,44 @@ int runGraph(const std::vector<std::string>& args, bool genOnly) {
         else std::cerr << "aviso: nao foi possivel gravar o relatorio: " << reportPath.string() << "\n";
     }
     return exitCode;
+}
+
+int runCompletion(const std::vector<std::string>& args) {
+    if (args.size() < 2 || args[1] == "--help" || args[1] == "-h") {
+        std::cout << "arestrix-cli completion powershell|bash|zsh\n";
+        return args.size() < 2 ? kExitUsage : 0;
+    }
+    const std::string shell = args[1];
+    const std::string commands = "run gen check doctor env memory mcp project version completion";
+    if (shell == "powershell" || shell == "pwsh") {
+        std::cout <<
+            "Register-ArgumentCompleter -Native -CommandName arestrix-cli -ScriptBlock {\n"
+            "    param($wordToComplete, $commandAst, $cursorPosition)\n"
+            "    '" << commands << "'.Split(' ') | Where-Object { $_ -like \"$wordToComplete*\" } |\n"
+            "        ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }\n"
+            "}\n";
+        return 0;
+    }
+    if (shell == "bash") {
+        std::cout <<
+            "_arestrix_cli() {\n"
+            "  local cur=\"${COMP_WORDS[COMP_CWORD]}\"\n"
+            "  COMPREPLY=( $(compgen -W \"" << commands << "\" -- \"$cur\") )\n"
+            "}\n"
+            "complete -F _arestrix_cli arestrix-cli\n";
+        return 0;
+    }
+    if (shell == "zsh") {
+        std::cout <<
+            "#compdef arestrix-cli\n"
+            "_arestrix_cli() {\n"
+            "  compadd " << commands << "\n"
+            "}\n"
+            "compdef _arestrix_cli arestrix-cli\n";
+        return 0;
+    }
+    std::cerr << "arestrix-cli completion: shell desconhecido: " << shell << "\n";
+    return kExitUsage;
 }
 
 } // namespace
@@ -1065,6 +1274,7 @@ int runCli(int argc, char** argv) {
     if (args[0] == "memory") return runMemory(args);
     if (args[0] == "mcp") return runMcp(args);
     if (args[0] == "project") return runProject(args);
+    if (args[0] == "completion") return runCompletion(args);
     if (args[0] == "run") return runGraph(args, false);
     if (args[0] == "gen") return runGraph(args, true);
 

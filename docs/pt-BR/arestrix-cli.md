@@ -160,7 +160,30 @@ Opções de automação:
 - `--json` emite JSONL (`phase`, `log`, `telemetry`, `result`);
 - `--timeout` cancela o pipeline e retorna `124`;
 - `--report` grava um resumo JSON mesmo em falha;
-- `--quiet` suprime fases/logs/telemetria.
+- `--quiet` suprime fases/logs/telemetria;
+- `--ci` equivale a `--json --quiet --no-color`, com timeout padrão de 900s;
+- `--batch <arquivo.json>` executa itens sequenciais;
+- `--state <arquivo>` define o checkpoint (padrão `.arestrix/batch-state.json`);
+- `--resume` pula itens já concluídos.
+
+Manifesto de lote:
+
+```json
+{
+  "graph": "pipelines/main.json",
+  "items": [
+    { "id": "a", "env": { "ARESTRIX_EXAMPLE_TICKET": "chamado_a.txt" } },
+    { "id": "b", "env": { "ARESTRIX_EXAMPLE_TICKET": "chamado_b.txt" } }
+  ]
+}
+```
+
+```powershell
+.\arestrix-cli.exe run --batch .\batch.json --root .\meu-projeto --json --resume
+```
+
+O lote é sequencial; cada item recebe suas variáveis de ambiente e tem seu resultado persistido no
+checkpoint. `completion powershell|bash|zsh` imprime o script de autocompletar.
 
 ### `gen`
 
