@@ -90,6 +90,14 @@ bool setUserEnv(const std::string& name, const std::string& value);
 // Remove a variavel do processo atual e da configuracao do usuario.
 bool clearUserEnv(const std::string& name);
 
+// Le a configuracao persistida do usuario (Registro HKCU no Windows; ~/.config/arestrix/env no Linux).
+std::string getPersistedEnv(const std::string& name);
+std::vector<std::string> listUserEnvNames();
+
+// Carrega para o processo atual as variaveis persistidas que ainda nao existem no ambiente.
+// Usado pelo CLI para que `env set` tenha efeito em processos posteriores sem reiniciar o shell.
+bool loadPersistedUserEnv();
+
 // Seletor de pasta nativo; vazio se cancelado/indisponivel.
 std::string pickFolderDialog(const std::string& title);
 

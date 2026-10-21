@@ -55,7 +55,39 @@ arestrix-cli run <graph.json> [--root <project-folder>]
 arestrix-cli gen <graph.json> [--root <project-folder>]
 ```
 
-With no arguments it prints usage and returns code `2`.
+With no arguments it prints usage. `--help` and `version` return `0`.
+
+### `env`
+
+Environment variables use the same store as the Studio:
+
+```powershell
+# value from stdin (recommended for secrets)
+"sk-..." | .\arestrix-cli.exe env set DEEPSEEK_API_KEY
+
+# inspect names (never values)
+.\arestrix-cli.exe env list
+
+# check presence
+.\arestrix-cli.exe env check DEEPSEEK_API_KEY KEENABLE_API
+
+# remove
+.\arestrix-cli.exe env reset DEEPSEEK_API_KEY
+```
+
+`env set` also accepts `--value`, but it may appear in shell history or the process list. Prefer
+stdin. Storage is shared with the Studio: Windows user registry and `~/.config/arestrix/env` on
+Linux.
+
+### `check`
+
+```powershell
+.\arestrix-cli.exe check --project .\examples\04-memoria `
+  --require-env DEEPSEEK_API_KEY --json
+```
+
+Validates graph, codegen, project root, runtime, toolchain and required variables without compiling
+or calling a model. Returns `5` when preflight fails.
 
 ### `run`
 
@@ -77,6 +109,18 @@ Generates, compiles and runs the pipeline:
 
 If `--root` is omitted, the root is the current directory. In automation, always pass the explicit
 path.
+
+Automation options:
+
+```powershell
+.\arestrix-cli.exe run --project .\examples\04-memoria --json --timeout 300 --report .\run.json
+```
+
+- `--project` discovers `arestrix.project.json` and the primary pipeline;
+- `--json` emits JSONL (`phase`, `log`, `telemetry`, `result`);
+- `--timeout` cancels the pipeline and returns `124`;
+- `--report` writes a JSON summary even on failure;
+- `--quiet` suppresses phases/logs/telemetry.
 
 ### `gen`
 

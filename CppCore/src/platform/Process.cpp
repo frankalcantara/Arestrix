@@ -380,6 +380,46 @@ bool setUserEnv(const std::string& name, const std::string& value) {
     return r == ERROR_SUCCESS;
 }
 
+std::string getPersistedEnv(const std::string& name) {
+    if (name.empty()) return std::string();
+    std::wstring wn = widen(name);
+    wchar_t buffer[8192];
+    DWORD size = sizeof(buffer);
+    DWORD type = 0;
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Environment", wn.c_str(), RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ,
+                     &type, buffer, &size) != ERROR_SUCCESS) {
+        return std::string();
+    }
+    return narrow(std::wstring(buffer, size / sizeof(wchar_t) > 0 ? size / sizeof(wchar_t) - 1 : 0));
+}
+
+std::vector<std::string> listUserEnvNames() {
+    std::vector<std::string> names;
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_READ, &key) != ERROR_SUCCESS) return names;
+    for (DWORD index = 0;; ++index) {
+        wchar_t name[512];
+        DWORD nameSize = static_cast<DWORD>(std::size(name));
+        const LONG r = RegEnumValueW(key, index, name, &nameSize, nullptr, nullptr, nullptr, nullptr);
+        if (r == ERROR_NO_MORE_ITEMS) break;
+        if (r != ERROR_SUCCESS) continue;
+        if (nameSize > 0) names.push_back(narrow(std::wstring(name, nameSize)));
+    }
+    RegCloseKey(key);
+    std::sort(names.begin(), names.end());
+    return names;
+}
+
+bool loadPersistedUserEnv() {
+    bool ok = true;
+    for (const auto& name : listUserEnvNames()) {
+        if (!getEnv(name).empty()) continue;
+        const std::string value = getPersistedEnv(name);
+        if (!value.empty() && !setProcessEnv(name, value)) ok = false;
+    }
+    return ok;
+}
+
 namespace {
 
 // IFileOpenDialog em primeiro plano. `extraOptions` decide entre pasta (FOS_PICKFOLDERS) e arquivo.
@@ -738,6 +778,65 @@ bool setUserEnv(const std::string& name, const std::string& value) {
     }
     ::chmod(file.c_str(), 0600);
     return true;
+}
+
+namespace {
+std::filesystem::path persistedEnvFile() {
+    const char* home = std::getenv("HOME");
+    return home ? std::filesystem::path(home) / ".config" / "arestrix" / "env" : std::filesystem::path();
+}
+
+std::string unquoteEnv(const std::string& raw) {
+    if (raw.size() < 2 || raw.front() != '\'' || raw.back() != '\'') return raw;
+    std::string out;
+    for (size_t i = 1; i + 1 < raw.size(); ++i) {
+        if (raw[i] == '\'' && i + 3 < raw.size() && raw[i + 1] == '\\' && raw[i + 2] == '\'') {
+            out += '\'';
+            i += 3;
+        } else {
+            out += raw[i];
+        }
+    }
+    return out;
+}
+} // namespace
+
+std::string getPersistedEnv(const std::string& name) {
+    const auto file = persistedEnvFile();
+    if (file.empty() || name.empty()) return std::string();
+    std::ifstream in(file);
+    std::string line;
+    const std::string prefix = "export " + name + "=";
+    while (std::getline(in, line)) {
+        if (line.rfind(prefix, 0) == 0) return unquoteEnv(line.substr(prefix.size()));
+    }
+    return std::string();
+}
+
+std::vector<std::string> listUserEnvNames() {
+    std::vector<std::string> names;
+    const auto file = persistedEnvFile();
+    if (file.empty()) return names;
+    std::ifstream in(file);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.rfind("export ", 0) != 0) continue;
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos || eq <= 7) continue;
+        names.push_back(line.substr(7, eq - 7));
+    }
+    std::sort(names.begin(), names.end());
+    return names;
+}
+
+bool loadPersistedUserEnv() {
+    bool ok = true;
+    for (const auto& name : listUserEnvNames()) {
+        if (!getEnv(name).empty()) continue;
+        const std::string value = getPersistedEnv(name);
+        if (!value.empty() && !setProcessEnv(name, value)) ok = false;
+    }
+    return ok;
 }
 
 std::string pickFolderDialog(const std::string& title) {

@@ -253,6 +253,7 @@ add_executable(arestrix-cli
   ${SRC}/compiler/TaskflowGenerator.cpp
   ${SRC}/build/BuildService.cpp)
 target_link_libraries(arestrix-cli PRIVATE arestrix_core arestrix_security_flags)
+target_compile_definitions(arestrix-cli PRIVATE ARESTRIX_CLI_VERSION="${ARESTRIX_VERSION}")
 add_custom_command(TARGET arestrix-cli POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:arestrix-cli>" "${CMAKE_SOURCE_DIR}/"
   VERBATIM)

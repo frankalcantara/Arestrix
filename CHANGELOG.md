@@ -34,6 +34,8 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   never emits partial Blackboard JSON.
 - Studio **Global Defaults → Memory** now exposes Measurement / A-B mode and metric recording; the
   `ARESTRIX_MEMORY_DISABLE` / `ARESTRIX_MEMORY_METRICS` variables remain the automation fallback.
+- `arestrix-cli` adds automation commands: `env set|reset|list|check`, `check`, `--project`,
+  `--json`, `--timeout` and `--report`. Environment variables share the Studio's secure user store.
 - Legacy `AgentBlackboard`/`SemanticMemoryEngine` JSON files are imported into SQLite.
 
 ## [1.5.0-beta.1] - 2026-10-19

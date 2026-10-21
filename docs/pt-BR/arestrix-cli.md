@@ -55,7 +55,39 @@ arestrix-cli run <grafo.json> [--root <pasta-do-projeto>]
 arestrix-cli gen <grafo.json> [--root <pasta-do-projeto>]
 ```
 
-Sem argumentos, ele imprime o uso e retorna código `2`.
+Sem argumentos, ele imprime o uso. `--help` e `version` retornam `0`.
+
+### `env`
+
+As variáveis de ambiente ficam no mesmo cofre do Studio:
+
+```powershell
+# valor via stdin (recomendado para segredos)
+"sk-..." | .\arestrix-cli.exe env set DEEPSEEK_API_KEY
+
+# inspecionar nomes (nunca valores)
+.\arestrix-cli.exe env list
+
+# verificar presença
+.\arestrix-cli.exe env check DEEPSEEK_API_KEY KEENABLE_API
+
+# remover
+.\arestrix-cli.exe env reset DEEPSEEK_API_KEY
+```
+
+`env set` também aceita `--value`, mas ele pode aparecer no histórico/lista de processos. Prefira
+stdin. O armazenamento é o mesmo do Studio: Registro do usuário no Windows e
+`~/.config/arestrix/env` no Linux.
+
+### `check`
+
+```powershell
+.\arestrix-cli.exe check --project .\examples\04-memoria `
+  --require-env DEEPSEEK_API_KEY --json
+```
+
+Valida grafo, codegen, raiz do projeto, runtime, toolchain e variáveis exigidas sem compilar nem
+chamar modelo. Retorna `5` se o preflight falhar.
 
 ### `run`
 
@@ -77,6 +109,18 @@ O `--root` é a raiz do projeto. É dela que o runtime resolve:
 
 Se `--root` for omitido, a raiz é o diretório atual. Em automação, passe sempre o caminho
 explícito.
+
+Opções de automação:
+
+```powershell
+.\arestrix-cli.exe run --project .\examples\04-memoria --json --timeout 300 --report .\run.json
+```
+
+- `--project` descobre o `arestrix.project.json` e o pipeline primário;
+- `--json` emite JSONL (`phase`, `log`, `telemetry`, `result`);
+- `--timeout` cancela o pipeline e retorna `124`;
+- `--report` grava um resumo JSON mesmo em falha;
+- `--quiet` suprime fases/logs/telemetria.
 
 ### `gen`
 
