@@ -11,11 +11,12 @@ choose your model, set your API key, press **F5**.
 | 2 | [`02-triagem-de-suporte`](02-triagem-de-suporte) | Support-ticket triage: agents, **decision vertices** (an AI model picks the path; keyword rules close a quality loop) and an **MCP** (an MCP vertex and an agent using MCP tools). | A model, Python. |
 | 3 | [`03-atendimento-ilustrado`](03-atendimento-ilustrado) | A "project of projects": example 2 followed, on the FAQ branch, by example 1 (the answer gets an animated SVG). | A model, Python. |
 | 4 | [`04-memoria`](04-memoria) | Project memory: a semantic lesson and the Blackboard are persisted, loaded and injected into the prompt; the answer becomes an artifact. | A model. |
+| 5 | [`05-matematica-com-memoria`](05-matematica-com-memoria) | Web research through the Keenable MCP vertex, followed by a mathematics text written with project memory and delivered as Markdown. | A model, `KEENABLE_API`. |
 
-Example 3 is **generated** from 1 and 2 (`python scripts/build_examples.py`), so examples 1, 2 and 3 never drift apart.
+Examples 3 and 5 are **generated** by `python scripts/build_examples.py`, so the shared pieces do not drift apart.
 Vertices cannot yet execute a nested graph, so the composition is flattened into a single pipeline.
 
-All four end in **output vertices**: the produced file is copied to `exports/` and registered in the **Artifacts** tab,
+All five end in **output vertices**: the produced file is copied to `exports/` and registered in the **Artifacts** tab,
 with a viewer per format (SVG, Markdown, spreadsheets, PDF and JSON).
 
 ## Run an example

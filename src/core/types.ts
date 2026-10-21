@@ -90,6 +90,8 @@ export interface IMcpServerConfig {
   args?: string[];
   env?: Record<string, string>;
   url?: string;
+  /** Headers HTTP (ex.: X-API-Key). Valores devem usar ${VARIAVEL}; segredos nunca ficam no arquivo. */
+  headers?: Record<string, string>;
   isEnabled: boolean;
   cachedTools?: IMcpToolDefinition[];
 }

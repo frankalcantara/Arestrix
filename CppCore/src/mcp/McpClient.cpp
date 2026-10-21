@@ -1,6 +1,7 @@
 #include "McpClient.hpp"
 
 #include <cctype>
+#include <cstdlib>
 #include <chrono>
 #include <iostream>
 #include <map>
@@ -74,6 +75,27 @@ McpErrorInfo validateMcpHttpUrl(const std::string& url) {
             return fail(McpErrorCode::UrlInvalidHost, host);
     std::string reason = rt::net::checkHostIsPublic(host);
     if (!reason.empty()) return fail(McpErrorCode::UrlNonPublicHost, reason);
+    return info;
+}
+
+McpErrorInfo validateMcpHeaders(const std::map<std::string, std::string>& headers) {
+    McpErrorInfo info;
+    for (const auto& [name, value] : headers) {
+        bool validName = !name.empty() && name.size() <= 100;
+        if (validName) {
+            for (unsigned char c : name) {
+                if (!(std::isalnum(c) || c == '-' || c == '_')) { validName = false; break; }
+            }
+        }
+        if (!validName) {
+            info.set(McpErrorCode::InvalidHeader, name);
+            return info;
+        }
+        if (value.size() > 4096 || value.find('\r') != std::string::npos || value.find('\n') != std::string::npos) {
+            info.set(McpErrorCode::InvalidHeader, name);
+            return info;
+        }
+    }
     return info;
 }
 
@@ -237,7 +259,8 @@ private:
 // ---------------------------------------------------------------------------
 class HttpSession {
 public:
-    explicit HttpSession(std::string url) : url_(std::move(url)) {}
+    HttpSession(std::string url, std::map<std::string, std::string> headers)
+        : url_(std::move(url)), headers_(std::move(headers)) {}
 
     bool post(const json& msg, int timeoutMs, json* response, std::string& error,
               McpErrorCode* code = nullptr, std::string* detail = nullptr) {
@@ -250,6 +273,18 @@ public:
         req.headers["Accept"] = "application/json, text/event-stream";
         if (!sessionId_.empty()) req.headers["Mcp-Session-Id"] = sessionId_;
         if (initialized_) req.headers["MCP-Protocol-Version"] = kProtocolVersion;
+        // Headers declarados pelo servidor (ex.: X-API-Key). Reservados nao podem ser sobrescritos
+        // por arquivos do projeto: sessao e framing continuam sob controle do cliente.
+        for (const auto& [name, value] : headers_) {
+            std::string lower = name;
+            for (char& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (lower == "host" || lower == "content-length" || lower == "connection" ||
+                lower == "transfer-encoding" || lower == "mcp-session-id" ||
+                lower == "mcp-protocol-version") {
+                continue;
+            }
+            req.headers[name] = value;
+        }
         req.body = msg.dump();
 
         auto resp = rt::httpSend(req);
@@ -338,6 +373,7 @@ public:
 
 private:
     std::string url_;
+    std::map<std::string, std::string> headers_;
     std::string sessionId_;
     bool initialized_ = false;
 };
@@ -380,6 +416,50 @@ McpCallResult McpClient::executeMockTool(const std::string& toolName, const json
 // ---------------------------------------------------------------------------
 // API publica
 // ---------------------------------------------------------------------------
+McpServerConfig McpClient::expandConfig(const McpServerConfig& config) {
+    auto expand = [](const std::string& text) {
+        std::string out;
+        size_t i = 0;
+        while (i < text.size()) {
+            if (text[i] == '$' && i + 1 < text.size() && text[i + 1] == '{') {
+                size_t end = text.find('}', i + 2);
+                if (end != std::string::npos) {
+                    std::string inner = text.substr(i + 2, end - i - 2);
+                    std::string name = inner, fallback;
+                    bool hasFallback = false;
+                    size_t sep = inner.find(":-");
+                    if (sep != std::string::npos) {
+                        name = inner.substr(0, sep);
+                        fallback = inner.substr(sep + 2);
+                        hasFallback = true;
+                    }
+                    bool ok = !name.empty() && (std::isalpha(static_cast<unsigned char>(name[0])) || name[0] == '_');
+                    for (char c : name)
+                        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '_')) ok = false;
+                    if (ok) {
+                        const char* v = std::getenv(name.c_str());
+                        if (v && *v) out += v;
+                        else if (hasFallback) out += fallback;
+                        else throw McpError(McpErrorCode::EnvVarUnset, name);
+                        i = end + 1;
+                        continue;
+                    }
+                }
+            }
+            out += text[i++];
+        }
+        return out;
+    };
+
+    McpServerConfig cfg = config;
+    cfg.command = expand(cfg.command);
+    cfg.url = expand(cfg.url);
+    for (auto& a : cfg.args) a = expand(a);
+    for (auto& [k, v] : cfg.env) v = expand(v);
+    for (auto& [k, v] : cfg.headers) v = expand(v);
+    return cfg;
+}
+
 std::vector<McpTool> McpClient::listTools(const McpServerConfig& config, int timeoutMs, McpErrorInfo* errorInfo) {
     if (isMockServer(config)) return getMockTools(config);
     return config.transport == McpTransportType::Stdio ? listToolsStdio(config, timeoutMs, errorInfo)
@@ -433,6 +513,7 @@ std::string fingerprintOf(const McpServerConfig& c) {
     std::string s = c.command + '\x1f' + c.url;
     for (const auto& a : c.args) s += '\x1e' + a;
     for (const auto& [k, v] : c.env) s += '\x1d' + k + '=' + v;
+    for (const auto& [k, v] : c.headers) s += '\x1c' + k + '=' + v;
     return s;
 }
 
@@ -489,6 +570,12 @@ bool httpRequest(const McpServerConfig& cfg, const std::string& method, const js
         if (info) *info = urlInfo;
         return false;
     }
+    McpErrorInfo headerInfo = validateMcpHeaders(cfg.headers);
+    if (!headerInfo.empty()) {
+        error = headerInfo.message;
+        if (info) *info = headerInfo;
+        return false;
+    }
     HttpEntry& e = httpEntry(cfg.id);
     std::lock_guard<std::mutex> lock(e.mutex);
     const std::string fp = fingerprintOf(cfg);
@@ -497,7 +584,7 @@ bool httpRequest(const McpServerConfig& cfg, const std::string& method, const js
         McpErrorCode code = McpErrorCode::None;
         std::string detail;
         if (!e.session) {
-            auto s = std::make_unique<HttpSession>(cfg.url);
+            auto s = std::make_unique<HttpSession>(cfg.url, cfg.headers);
             if (!s->handshake(timeoutMs, error, &code, &detail)) {
                 if (info) info->set(code, detail, error);
                 return false;

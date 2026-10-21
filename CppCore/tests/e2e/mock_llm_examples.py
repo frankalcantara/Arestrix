@@ -159,6 +159,22 @@ def decide(body):
                              "A regra aprendida foi aplicada a resposta.\n"})
         return text("OK")
 
+    if "REDATOR DE MATEMATICA" in system:
+        if step == 0:
+            return tool_call("c1", "read", {"path": "workspace/fontes.json"})
+        if step == 1:
+            return tool_call("c2", "memory_search", {"query": "matematica", "limit": 5})
+        if step == 2:
+            content = (
+                "# Teorema de Pitagoras\n\n"
+                "Em um triangulo retangulo, a soma dos quadrados dos catetos e igual ao quadrado da hipotenusa.\n\n"
+                "## Demonstracao\n\nA demonstracao usa a decomposicao de um quadrado de lado (a+b) de duas formas.\n\n"
+                "## Exemplo\n\nSe os catetos medem 3 e 4, a hipotenusa mede 5.\n\n"
+                "## Referencias\n\n- Fontes retornadas em workspace/fontes.json.\n"
+            )
+            return tool_call("c3", "write", {"path": "workspace/texto-matematica.md", "content": content})
+        return text("OK")
+
     if "SVG Animation Architect" in system:
         if step == 0:
             if it >= 2:

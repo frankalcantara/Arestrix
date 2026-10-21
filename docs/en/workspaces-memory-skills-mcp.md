@@ -156,7 +156,7 @@ about 56 microseconds for a trivial tool, and opening a process per call took ro
 
 ## MCP servers
 
-Arestrix is an MCP client over stdio and SSE. There are two separate things:
+Arestrix is an MCP client over stdio and HTTP/SSE (Streamable HTTP). There are two separate things:
 
 - **The Studio registry** (`arestrix-mcp-servers.json`, *Workspace MCP servers* screen): to register and test servers.
 - **Tools for agents at run time:** an agent can call the tools of the MCP servers **configured in the project**, in
@@ -170,8 +170,17 @@ Arestrix is an MCP client over stdio and SSE. There are two separate things:
   "env": { "API_TOKEN": "${CRM_TOKEN}" }, "isEnabled": true }
 ```
 
-**Secrets never go in this file.** `command`, `args`, `url` and every `env` value accept `${NAME}` (the value of an environment
-variable of your user, resolved when the pipeline runs) and `${NAME:-default}`. The secret scanner rejects a literal value in `env`.
+Remote servers use `"transport": "http"` (or `"sse"`), `url` and optional `headers`. Keenable (web
+search) example, with no key in the repository:
+
+```json
+{ "id": "keenable", "transport": "http", "url": "https://api.keenable.ai/mcp",
+  "headers": { "X-API-Key": "${KEENABLE_API}" }, "isEnabled": true }
+```
+
+**Secrets never go in this file.** `command`, `args`, `url`, every `env` value and every `headers` value accept `${NAME}` (the value of an environment
+variable of your user, resolved when the pipeline runs) and `${NAME:-default}`. The secret scanner rejects a literal value in `env`;
+the UI and backend reject literal values in sensitive headers (key, token, secret, auth).
 Stdio servers run as normal processes of your user, **outside** the agent sandbox: only configure servers you trust.
 
 **Hardened transport.** Because these files can be written by third parties (imported projects), the MCP client refuses dangerous

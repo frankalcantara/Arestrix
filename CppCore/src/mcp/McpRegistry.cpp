@@ -92,7 +92,8 @@ taskforge::Json McpRegistry::testServer(const std::string& id) {
 
     try {
         McpErrorInfo info;
-        auto tools = client_.listTools(it->second, 20000, &info);
+        auto expanded = McpClient::expandConfig(it->second);
+        auto tools = client_.listTools(expanded, 20000, &info);
         if (tools.empty() && !info.empty()) {
             return {
                 {"success", false},
@@ -139,6 +140,17 @@ McpCallResult McpRegistry::callTool(const std::string& serverId,
         cfg = it->second;
     }
 
+    try {
+        cfg = McpClient::expandConfig(cfg);
+    } catch (const std::exception& ex) {
+        McpCallResult res;
+        res.isError = true;
+        McpErrorInfo info = McpErrorInfo::fromException(ex);
+        res.errorCode = info.codeName();
+        res.errorDetail = info.detail;
+        res.errorMessage = info.message;
+        return res;
+    }
     return client_.callTool(cfg, toolName, args);
 }
 

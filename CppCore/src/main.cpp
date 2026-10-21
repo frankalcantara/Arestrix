@@ -548,7 +548,43 @@ void ui_save_mcp_server(webui::window::event* e) {
     std::string jsonStr = e->get_string();
     try {
         auto cfg = taskforge::jsonutil::parse(jsonStr).get<taskforge::mcp::McpServerConfig>();
+
+        // O id vira nome de arquivo em .workspace/mcps: mesma regra do McpToolbox.
+        const bool validId = !cfg.id.empty() && cfg.id.size() <= 64 &&
+            std::all_of(cfg.id.begin(), cfg.id.end(), [](unsigned char c) {
+                return std::isalnum(c) || c == '_' || c == '-' || c == '.';
+            });
+        if (!validId) {
+            e->return_bool(false);
+            return;
+        }
+
+        // Segredos nunca sao gravados no projeto: headers sensiveis exigem ${VARIAVEL}.
+        for (const auto& [name, value] : cfg.headers) {
+            std::string lower = name;
+            std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+            const bool sensitive = lower.find("key") != std::string::npos ||
+                                   lower.find("token") != std::string::npos ||
+                                   lower.find("secret") != std::string::npos ||
+                                   lower.find("auth") != std::string::npos ||
+                                   lower.find("credential") != std::string::npos;
+            if (sensitive && !value.empty() && value.find("${") == std::string::npos) {
+                e->return_bool(false);
+                return;
+            }
+        }
+
         bool ok = taskforge::mcp::McpRegistry::getInstance().registerServer(cfg);
+        std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+        if (ok && !root.empty()) {
+            std::error_code ec;
+            auto dir = std::filesystem::path(root) / ".workspace" / "mcps";
+            std::filesystem::create_directories(dir, ec);
+            std::ofstream(dir / (cfg.id + ".json"), std::ios::binary | std::ios::trunc)
+                << taskforge::Json(cfg).dump(2) << "\n";
+        }
         e->return_bool(ok);
     } catch (const std::exception& ex) {
         std::cerr << "[C++ Erro] ui_save_mcp_server: " << ex.what() << "\n";
@@ -560,6 +596,11 @@ void ui_save_mcp_server(webui::window::event* e) {
 void ui_remove_mcp_server(webui::window::event* e) {
     std::string id = e->get_string();
     bool ok = taskforge::mcp::McpRegistry::getInstance().removeServer(id);
+    std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+    if (!root.empty()) {
+        std::error_code ec;
+        std::filesystem::remove(std::filesystem::path(root) / ".workspace" / "mcps" / (id + ".json"), ec);
+    }
     e->return_bool(ok);
 }
 

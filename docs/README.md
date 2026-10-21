@@ -25,7 +25,7 @@
 | Resource | Language | Description |
 | :--- | :--- | :--- |
 | [SVG agent tutorial](pt-BR/tutorials/svg-agent.md) | Português | End-to-end walkthrough: graph, skills, self-correction loop and delivery vertex. |
-| [Examples](../examples/README.md) | English | Four runnable projects, from a two-agent pipeline to memory workflows. |
+| [Examples](../examples/README.md) | English | Five runnable projects, from a two-agent pipeline to memory and web-research workflows. |
 | [Exemplos](../examples/README.pt-BR.md) | Português | Os mesmos projetos, com instruções em português. |
 
 ## Operations and quality

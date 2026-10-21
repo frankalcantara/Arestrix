@@ -565,6 +565,93 @@ description: Aplica as licoes e o resumo carregados da memoria do projeto
 """)
 
 
+def build_05():
+    """Pesquisa web via MCP (Keenable) + redacao de matematica com memoria de projeto."""
+    seed_body = (
+        'memory.recordLesson(projectId, "matematica", "revisao_anterior",\n'
+        '    "Toda afirmacao matematica deve citar a fonte ou justificar o passo.", "semear");\n'
+        'memory.setWorking(projectId, "pipeline", "tema", taskforge::Json("teorema de Pitagoras"));\n'
+        'std::cout << "[Semear] licao e tema gravados na memoria\\n";'
+    )
+    recall_body = (
+        'memory.setWorking(projectId, "pipeline", "ultimo_texto", taskforge::Json("workspace/texto-matematica.md"));\n'
+        'memory.recordLesson(projectId, "matematica", "pos_redacao",\n'
+        '    "Antes de publicar, confira se cada fonte citada foi realmente consultada.", "guardar_licao");\n'
+        'std::cout << "[Guardar] licao de revisao registrada\\n";'
+    )
+    nodes = [
+        static("semear", "Semear_Memoria", 0, 0, seed_body),
+        mcp("pesquisar", "Pesquisar_Fontes", 450, 0, "keenable", "search_web_pages",
+            {"query": "{{input}}"}, {"kind": "file", "path": "samples/tema.md"},
+            "workspace/fontes.json"),
+        agent("redigir", "Redigir_Texto_Matematico", 900, 0, "skills/redator-matematica.md",
+              tools=["read", "write"],
+              prompt=("Leia workspace/fontes.json (resultados da pesquisa web) e escreva "
+                      "workspace/texto-matematica.md seguindo a skill. Responda apenas OK.")),
+        static("guardar", "Guardar_Licao", 1350, 0, recall_body),
+        output("entrega", "Entrega_Texto", 1800, 0, "workspace/texto-matematica.md",
+               "exports/texto-matematica.md", "markdown", "Texto de matematica com fontes"),
+    ]
+    nodes[2]["agentSettings"]["inheritMemory"] = False
+    nodes[2]["agentSettings"]["memory"] = {
+        "enabled": True,
+        "persistent": True,
+        "projectId": "exemplo-matematica-memoria",
+        "readBlackboard": True,
+        "writeBlackboard": True,
+        "semanticLessons": True,
+        "recordLessons": True,
+        "allowedKeys": ["tema"],
+        "domains": ["matematica"],
+        "contextBudgetTokens": 600,
+    }
+    edges = [
+        edge("semear", 0, "pesquisar"),
+        edge("pesquisar", 0, "redigir"),
+        edge("redigir", 0, "guardar"),
+        edge("guardar", 0, "entrega"),
+    ]
+    g = graph("exemplo-matematica-memoria", "Matematica_Com_Memoria",
+              "Pesquisa web via MCP Keenable + redacao de matematica com licoes persistentes",
+              nodes, edges)
+    d = OUT / "05-matematica-com-memoria"
+    write_json(d / "arestrix.project.json",
+               manifest("exemplo-matematica-memoria", "Exemplo 5 - Matematica com Memoria",
+                        g["metadata"]["description"]))
+    write_json(d / "pipelines" / "main.json", g)
+    write_json(d / ".workspace" / "mcps" / "keenable.json", {
+        "id": "keenable",
+        "name": "Keenable Web Search",
+        "transport": "http",
+        "url": "https://api.keenable.ai/mcp",
+        "headers": {"X-API-Key": "${KEENABLE_API}"},
+        "isEnabled": True,
+    })
+    write_text(d / "samples" / "tema.md", """
+# Tema de pesquisa
+
+Demonstracoes do teorema de Pitagoras e aplicacoes em problemas de geometria.
+""")
+    write_text(d / "skills" / "redator-matematica.md", """
+---
+name: redator-matematica
+description: Escreve um texto didatico de matematica com fontes verificaveis e memoria do projeto
+---
+
+# Papel: REDATOR DE MATEMATICA
+
+1. Leia `workspace/fontes.json` com a ferramenta `read`. Ele contem os resultados da pesquisa web.
+2. Use a memoria do projeto (licoes injetadas) para seguir as regras de precisao e citacao.
+3. Escreva `workspace/texto-matematica.md` em Markdown, com:
+   - uma explicacao curta do tema;
+   - uma demonstracao ou justificativa passo a passo;
+   - um exemplo resolvido;
+   - uma secao de referencias com as URLs realmente presentes em `fontes.json`.
+4. Nao invente fontes, numeros ou citacoes. Se a pesquisa nao trouxer evidencia, declare a limitacao.
+5. Responda apenas `OK`.
+""")
+
+
 # ---------------------------------------------------------------------------------------------- exemplo 3
 def prefixed(nodes, edges, prefix, dx=0, dy=0):
     """Copia vertices/arestas com ids prefixados (portas e arestas incluidas) e posicoes deslocadas."""
@@ -649,6 +736,7 @@ def main():
     ex2_nodes, ex2_edges = build_02()
     build_03(ex1, ex2_nodes, ex2_edges)
     build_04()
+    build_05()
     for name, files in kept.items():
         for fname, text in files.items():
             (OUT / name / fname).write_text(text, encoding="utf-8")

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Teste ponta a ponta dos projetos de examples/ contra um servidor LLM falso. NAO usa chaves reais nem a rede.
+"""Teste ponta a ponta dos projetos de examples/ contra um servidor LLM falso. NAO usa chaves reais.
+O cenario 5 so acessa a rede (Keenable) quando a variavel KEENABLE_API esta definida; sem ela, ele e ignorado.
 
 Para cada cenario: copia o exemplo para uma pasta temporaria, ajusta o ambiente (somente chaves de TESTE),
 roda `arestrix-cli run`, confere o caminho percorrido e os arquivos gerados e apaga a copia.
@@ -259,6 +260,38 @@ def scenario_04_memoria():
         cleanup(work, mock)
 
 
+def scenario_05_matematica():
+    print("\n== Exemplo 5: pesquisa web (Keenable) + matematica com memoria ==")
+    if not os.environ.get("KEENABLE_API"):
+        print("  (KEENABLE_API ausente: cenario de rede ignorado)")
+        return
+    out, project, events, code, work, mock = run_example("05-matematica-com-memoria", timeout=2400)
+    try:
+        check(code == 0, "terminou com codigo 0")
+        check("[MCP Pesquisar_Fontes] keenable.search_web_pages ok" in out, "o vertice MCP pesquisou na web")
+        fontes = project / "workspace" / "fontes.json"
+        check(fontes.exists() and fontes.stat().st_size > 0, "os resultados da pesquisa foram gravados")
+        check("[MEMORIA] contexto injetado em Redigir_Texto_Matematico" in out, "a memoria foi injetada no redator")
+        texto = project / "workspace" / "texto-matematica.md"
+        exportado = project / "exports" / "texto-matematica.md"
+        check(texto.exists() and "Pitagoras" in texto.read_text(encoding="utf-8"), "o texto de matematica foi escrito")
+        check(exportado.exists() and exportado.read_bytes() == texto.read_bytes(), "o vertice de saida entregou o Markdown")
+        chats = [e for e in events if e["event"] == "chat"]
+        check(any(e.get("reply") == "tool_call:memory_search" for e in chats), "o redator consultou a memoria")
+        memoria = project / ".arestrix" / "memory" / "memory.db"
+        check(memoria.exists(), "o banco SQLite de memoria foi criado")
+        if memoria.exists():
+            with sqlite3.connect(memoria) as conn:
+                lessons = conn.execute("SELECT r.canonical_name FROM memory_edge e JOIN memory_node r ON r.id=e.dst_id "
+                                       "WHERE e.relation='HAS_LESSON' AND e.status='active'").fetchall()
+            check(any("Toda afirmacao matematica" in row[0] for row in lessons), "a licao inicial foi persistida")
+            check(any("Antes de publicar" in row[0] for row in lessons), "a licao final foi persistida")
+        no_secret_leak(out, "ex5")
+        check(os.environ["KEENABLE_API"] not in out, "ex5: a chave Keenable nao aparece na saida")
+    finally:
+        cleanup(work, mock)
+
+
 def scenario_secrets_guard():
     print("\n== Garantia de seguranca dos exemplos ==")
     node = shutil.which("node")
@@ -276,7 +309,8 @@ def scenario_secrets_guard():
 
 def main():
     for fn in (scenario_01, scenario_02_urgente, scenario_02_normal, scenario_02_duvida, scenario_02_sem_chave,
-               scenario_03_duvida, scenario_03_urgente, scenario_04_memoria, scenario_secrets_guard):
+               scenario_03_duvida, scenario_03_urgente, scenario_04_memoria, scenario_05_matematica,
+               scenario_secrets_guard):
         fn()
     if failures:
         print(f"\n{len(failures)} verificacao(oes) falharam:")

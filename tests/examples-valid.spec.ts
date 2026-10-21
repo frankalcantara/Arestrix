@@ -10,8 +10,8 @@ const dirs = readdirSync(EXAMPLES, { withFileTypes: true }).filter(d => d.isDire
 const read = (...p: string[]) => JSON.parse(readFileSync(join(EXAMPLES, ...p), 'utf8'));
 
 describe('projetos de exemplo (examples/)', () => {
-  it('existem os quatro projetos, do simples ao complexo', () => {
-    expect(dirs).toEqual(['01-svg-agente', '02-triagem-de-suporte', '03-atendimento-ilustrado', '04-memoria']);
+  it('existem os cinco projetos, do simples ao complexo', () => {
+    expect(dirs).toEqual(['01-svg-agente', '02-triagem-de-suporte', '03-atendimento-ilustrado', '04-memoria', '05-matematica-com-memoria']);
   });
 
   for (const name of dirs) {
@@ -122,6 +122,24 @@ describe('projetos de exemplo (examples/)', () => {
     });
     expect(delivery.type).toBe('output');
     expect(delivery.outputSettings.destinationPath).toBe('exports/resposta.md');
+  });
+
+  it('o exemplo 5 usa o vértice MCP Keenable e a memória na redação', () => {
+    const nodes = read('05-matematica-com-memoria', 'pipelines', 'main.json').nodes;
+    const research = nodes.find((n: any) => n.id === 'pesquisar');
+    const writer = nodes.find((n: any) => n.id === 'redigir');
+    expect(research.type).toBe('mcp');
+    expect(research.mcpSettings).toMatchObject({ server: 'keenable', tool: 'search_web_pages' });
+    expect(writer.agentSettings.memory).toMatchObject({
+      enabled: true,
+      persistent: true,
+      domains: ['matematica'],
+      contextBudgetTokens: 600,
+    });
+    const keenable = read('05-matematica-com-memoria', '.workspace', 'mcps', 'keenable.json');
+    expect(keenable.transport).toBe('http');
+    expect(keenable.url).toBe('https://api.keenable.ai/mcp');
+    expect(keenable.headers['X-API-Key']).toBe('${KEENABLE_API}');
   });
 
   it('o exemplo 3 é a composição dos exemplos 1 e 2', () => {

@@ -1,0 +1,287 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "projectId": "exemplo-matematica-memoria",
+    "graphName": "Matematica_Com_Memoria",
+    "description": "Pesquisa web via MCP Keenable + redacao de matematica com licoes persistentes",
+    "targetStandard": "C++20",
+    "compilerConfig": {
+      "compiler": "msvc",
+      "cppStandard": "C++20",
+      "buildSystem": "cmake",
+      "taskflowIncludePath": "third_party/taskflow",
+      "outputBinaryName": "exemplo_matematica_memoria",
+      "enableOpenMP": false,
+      "enableCuda": false,
+      "extraFlags": []
+    },
+    "version": "1.0.0",
+    "globalDefaults": {
+      "model": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "skillPath": "",
+        "promptTemplate": ""
+      },
+      "sandbox": {
+        "isolationLevel": "host_direct",
+        "network": "egress_llm_only",
+        "maxMemoryMB": 512,
+        "timeoutSeconds": 180,
+        "readOnlyMounts": [],
+        "readWriteMounts": []
+      },
+      "codeMode": {
+        "allowedTools": [
+          "read",
+          "write"
+        ],
+        "customScripts": []
+      },
+      "memory": {
+        "enabled": false,
+        "persistent": false,
+        "readBlackboard": false,
+        "writeBlackboard": false,
+        "semanticLessons": false,
+        "recordLessons": false,
+        "allowedKeys": [],
+        "domains": []
+      }
+    }
+  },
+  "nodes": [
+    {
+      "id": "semear",
+      "label": "Semear_Memoria",
+      "type": "static",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "semear_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "semear_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "memory.recordLesson(projectId, \"matematica\", \"revisao_anterior\",\n    \"Toda afirmacao matematica deve citar a fonte ou justificar o passo.\", \"semear\");\nmemory.setWorking(projectId, \"pipeline\", \"tema\", taskforge::Json(\"teorema de Pitagoras\"));\nstd::cout << \"[Semear] licao e tema gravados na memoria\\n\";"
+    },
+    {
+      "id": "pesquisar",
+      "label": "Pesquisar_Fontes",
+      "type": "mcp",
+      "position": {
+        "x": 450,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "pesquisar_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "pesquisar_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "mcpSettings": {
+        "server": "keenable",
+        "tool": "search_web_pages",
+        "arguments": {
+          "query": "{{input}}"
+        },
+        "source": {
+          "kind": "file",
+          "path": "samples/tema.md"
+        },
+        "output": {
+          "file": "workspace/fontes.json"
+        }
+      }
+    },
+    {
+      "id": "redigir",
+      "label": "Redigir_Texto_Matematico",
+      "type": "agent",
+      "position": {
+        "x": 900,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "redigir_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "redigir_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/redator-matematica.md",
+          "promptTemplate": "Leia workspace/fontes.json (resultados da pesquisa web) e escreva workspace/texto-matematica.md seguindo a skill. Responda apenas OK."
+        },
+        "inheritCodeMode": false,
+        "inheritMemory": false,
+        "codeMode": {
+          "allowedTools": [
+            "read",
+            "write"
+          ],
+          "customScripts": []
+        },
+        "memory": {
+          "enabled": true,
+          "persistent": true,
+          "projectId": "exemplo-matematica-memoria",
+          "readBlackboard": true,
+          "writeBlackboard": true,
+          "semanticLessons": true,
+          "recordLessons": true,
+          "allowedKeys": [
+            "tema"
+          ],
+          "domains": [
+            "matematica"
+          ],
+          "contextBudgetTokens": 600
+        }
+      }
+    },
+    {
+      "id": "guardar",
+      "label": "Guardar_Licao",
+      "type": "static",
+      "position": {
+        "x": 1350,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "guardar_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "guardar_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "memory.setWorking(projectId, \"pipeline\", \"ultimo_texto\", taskforge::Json(\"workspace/texto-matematica.md\"));\nmemory.recordLesson(projectId, \"matematica\", \"pos_redacao\",\n    \"Antes de publicar, confira se cada fonte citada foi realmente consultada.\", \"guardar_licao\");\nstd::cout << \"[Guardar] licao de revisao registrada\\n\";"
+    },
+    {
+      "id": "entrega",
+      "label": "Entrega_Texto",
+      "type": "output",
+      "position": {
+        "x": 1800,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "entrega_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        },
+        {
+          "id": "entrega_in_data",
+          "name": "data_in",
+          "direction": "input",
+          "type": "data",
+          "dataType": "std::string"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "entrega_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "outputSettings": {
+        "sourcePath": "workspace/texto-matematica.md",
+        "destinationPath": "exports/texto-matematica.md",
+        "artifactType": "markdown",
+        "displayName": "Texto de matematica com fontes",
+        "autoOpenPreview": true,
+        "description": ""
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_semear_0_to_pesquisar",
+      "sourceNodeId": "semear",
+      "sourcePortId": "semear_out_0",
+      "targetNodeId": "pesquisar",
+      "targetPortId": "pesquisar_in_0"
+    },
+    {
+      "id": "edge_pesquisar_0_to_redigir",
+      "sourceNodeId": "pesquisar",
+      "sourcePortId": "pesquisar_out_0",
+      "targetNodeId": "redigir",
+      "targetPortId": "redigir_in_0"
+    },
+    {
+      "id": "edge_redigir_0_to_guardar",
+      "sourceNodeId": "redigir",
+      "sourcePortId": "redigir_out_0",
+      "targetNodeId": "guardar",
+      "targetPortId": "guardar_in_0"
+    },
+    {
+      "id": "edge_guardar_0_to_entrega",
+      "sourceNodeId": "guardar",
+      "sourcePortId": "guardar_out_0",
+      "targetNodeId": "entrega",
+      "targetPortId": "entrega_in_0"
+    }
+  ]
+}

@@ -34,6 +34,7 @@ mcp::McpServerConfig expandedCopy(mcp::McpServerConfig cfg) {
     cfg.url = McpToolbox::expandEnv(cfg.url);
     for (auto& a : cfg.args) a = McpToolbox::expandEnv(a);
     for (auto& [k, v] : cfg.env) v = McpToolbox::expandEnv(v);
+    for (auto& [k, v] : cfg.headers) v = McpToolbox::expandEnv(v);
     return cfg;
 }
 
@@ -168,7 +169,8 @@ taskforge::Json McpToolbox::listProjectServers(const fs::path& root) {
             Json item;
             item["id"] = id;
             item["name"] = c.value("name", id);
-            item["transport"] = c.value("transport", std::string("stdio"));
+            const bool hasUrl = !c.value("url", std::string()).empty();
+            item["transport"] = c.value("transport", hasUrl ? std::string("http") : std::string("stdio"));
             item["isEnabled"] = c.value("isEnabled", true);
             out.push_back(item);
         }

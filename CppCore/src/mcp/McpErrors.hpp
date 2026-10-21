@@ -31,6 +31,7 @@ enum class McpErrorCode {
     UrlBadPort,             // porta diferente de 443
     UrlInvalidHost,         // host invalido
     UrlNonPublicHost,       // host nao resolve somente para enderecos publicos (DNS rebinding)
+    InvalidHeader,          // cabecalho HTTP invalido na configuracao MCP
     TransportFailed,        // falha de transporte HTTP
     InvalidResponse,        // resposta nao e JSON valido / HTTP de erro
     SseNoResult,            // stream SSE sem o resultado da chamada

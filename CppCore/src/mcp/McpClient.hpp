@@ -27,6 +27,10 @@ public:
                            const taskforge::Json& arguments,
                            int timeoutMs = 15000);
 
+    // Resolve ${VAR} / ${VAR:-default} em command, args, env, url e headers. Lanca McpError
+    // (EnvVarUnset) quando uma variavel obrigatoria nao existe. Nunca grava o valor resolvido.
+    static McpServerConfig expandConfig(const McpServerConfig& config);
+
     // Encerra todas as sessoes persistentes (processos filhos incluidos). Chamado ao sair e nos testes.
     static void shutdownSessions();
     // Quantidade de sessoes abertas e vivas (testes e diagnostico).

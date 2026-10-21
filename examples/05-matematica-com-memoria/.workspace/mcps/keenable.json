@@ -1,0 +1,10 @@
+{
+  "id": "keenable",
+  "name": "Keenable Web Search",
+  "transport": "http",
+  "url": "https://api.keenable.ai/mcp",
+  "headers": {
+    "X-API-Key": "${KEENABLE_API}"
+  },
+  "isEnabled": true
+}

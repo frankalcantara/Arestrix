@@ -156,7 +156,7 @@ persistente, cerca de 56 microssegundos para uma ferramenta trivial, e abrir um 
 
 ## Servidores MCP
 
-O Arestrix é um cliente MCP sobre stdio e SSE. Há duas coisas distintas:
+O Arestrix é um cliente MCP sobre stdio e HTTP/SSE (Streamable HTTP). Há duas coisas distintas:
 
 - **O cadastro do Studio** (`arestrix-mcp-servers.json`, tela *Servidores MCP do Workspace*): para registrar e testar servidores.
 - **Ferramentas dos agentes em tempo de execução:** um agente pode chamar as ferramentas dos servidores MCP **configurados no
@@ -170,9 +170,18 @@ O Arestrix é um cliente MCP sobre stdio e SSE. Há duas coisas distintas:
   "env": { "API_TOKEN": "${CRM_TOKEN}" }, "isEnabled": true }
 ```
 
-**Segredos nunca vão neste arquivo.** `command`, `args`, `url` e todo valor de `env` aceitam `${NOME}` (o valor de uma variável de
+Servidores remotos usam `"transport": "http"` (ou `"sse"`), `url` e `headers` opcionais. Exemplo com a
+Keenable (pesquisa web), sem a chave no repositório:
+
+```json
+{ "id": "keenable", "transport": "http", "url": "https://api.keenable.ai/mcp",
+  "headers": { "X-API-Key": "${KEENABLE_API}" }, "isEnabled": true }
+```
+
+**Segredos nunca vão neste arquivo.** `command`, `args`, `url`, todo valor de `env` e todo valor de `headers` aceitam `${NOME}` (o valor de uma variável de
 ambiente do seu usuário, resolvido quando o pipeline executa) e `${NOME:-padrão}`. O verificador de segredos recusa um valor
-literal em `env`. Servidores stdio rodam como processos comuns do seu usuário, **fora** do sandbox do agente: só configure
+literal em `env`; a interface e o backend recusam valores literais em headers sensíveis (chave, token, segredo, autenticação).
+Servidores stdio rodam como processos comuns do seu usuário, **fora** do sandbox do agente: só configure
 servidores em que você confia.
 
 **Transporte endurecido.** Como esses arquivos podem ser escritos por terceiros (projetos importados), o cliente MCP recusa entradas

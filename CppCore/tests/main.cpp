@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -1116,6 +1117,68 @@ static void setTestEnv(const char* k, const char* v) {
 #else
     if (*v) setenv(k, v, 1); else unsetenv(k);
 #endif
+}
+
+TEST(mcp_accepts_http_headers_and_streamable_http_transport) {
+    using taskforge::mcp::McpServerConfig;
+    using taskforge::mcp::McpTransportType;
+    const fs::path dir = makeTempDir("mcp-http-headers");
+    setTestEnv("ARX_TEST_KEENABLE_KEY", "segredo-de-teste");
+    fs::create_directories(dir / ".workspace" / "mcps");
+    {
+        std::ofstream f(dir / ".workspace" / "mcps" / "keenable.json", std::ios::binary | std::ios::trunc);
+        f << R"({"id":"keenable","name":"Keenable","url":"https://api.keenable.ai/mcp",
+                  "headers":{"X-API-Key":"${ARX_TEST_KEENABLE_KEY}"},"isEnabled":true})";
+    }
+
+    // Sem "transport", uma URL implica Streamable HTTP; headers aceitam ${VARIAVEL}.
+    auto cfg = taskforge::rt::McpToolbox::loadServerConfig(dir, "keenable");
+    CHECK(cfg.transport == McpTransportType::Sse);
+    CHECK(cfg.headers.size() == 1);
+    CHECK(cfg.headers["X-API-Key"] == "segredo-de-teste");
+
+    // O mesmo resolvedor e usado pelo registro global (teste/playground da UI).
+    McpServerConfig raw;
+    raw.headers["X-API-Key"] = "${ARX_TEST_KEENABLE_KEY}";
+    auto expanded = taskforge::mcp::McpClient::expandConfig(raw);
+    CHECK(expanded.headers["X-API-Key"] == "segredo-de-teste");
+
+    // Header com quebra de linha e recusado antes de qualquer conexao.
+    McpServerConfig bad;
+    bad.id = "bad-header";
+    bad.transport = McpTransportType::Sse;
+    bad.url = "https://example.com/mcp";
+    bad.headers["X-Test"] = "ok\r\nInjected: 1";
+    taskforge::mcp::McpClient client;
+    auto res = client.callTool(bad, "x", {}, 1000);
+    CHECK(res.isError && res.errorCode == "invalid_header");
+
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(mcp_keenable_live_optional) {
+    if (!std::getenv("ARX_TEST_KEENABLE")) {
+        std::cout << "  (ARX_TEST_KEENABLE ausente: teste de rede ignorado)" << std::endl;
+        return;
+    }
+    taskforge::mcp::McpServerConfig cfg;
+    cfg.id = "keenable-live";
+    cfg.transport = taskforge::mcp::McpTransportType::Sse;
+    cfg.url = "https://api.keenable.ai/mcp";
+    taskforge::mcp::McpClient client;
+    taskforge::mcp::McpErrorInfo info;
+    auto tools = client.listTools(cfg, 20000, &info);
+    CHECK(!tools.empty());
+    bool hasSearch = false, hasFetch = false;
+    for (const auto& t : tools) {
+        if (t.name == "search_web_pages") hasSearch = true;
+        if (t.name == "fetch_page_content") hasFetch = true;
+    }
+    CHECK(hasSearch && hasFetch);
+    auto res = client.callTool(cfg, "search_web_pages", {{"query", "teorema de Pitagoras"}}, 60000);
+    CHECK(res.success && !res.isError);
+    CHECK(!res.content.empty());
 }
 
 TEST(mcp_toolbox_expands_env_references_and_names_tools) {

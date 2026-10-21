@@ -124,7 +124,7 @@ python scripts/e2e_examples.py
 | [Documentation hub](docs/README.md) | The complete guide, organized by language and topic. |
 | [Getting started](docs/en/getting-started.md) | Requirements, build, model configuration and first execution. |
 | [Architecture](docs/en/architecture.md) | Studio, engine, WebUI and the graph-to-C++ pipeline. |
-| [Examples](examples/README.md) | Four runnable projects, from a two-agent pipeline to composed and memory workflows. |
+| [Examples](examples/README.md) | Five runnable projects, from a two-agent pipeline to composed, memory and web-research workflows. |
 | [Test audit log](docs/quality/test-audit-log.md) | Chronological test rounds and integrity audits. |
 | [Changelog](CHANGELOG.md) | Release history, changes and known limitations. |
 

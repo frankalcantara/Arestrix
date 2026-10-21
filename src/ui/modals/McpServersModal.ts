@@ -157,6 +157,7 @@ export class McpServersModal {
                   <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="fetch">${t('mcp_servers.preset_fetch')}</button>
                   <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="sqlite">${t('mcp_servers.preset_sqlite')}</button>
                   <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="github">${t('mcp_servers.preset_github')}</button>
+                  <button type="button" class="btn-preset-mcp tool-btn btn-secondary" data-preset="keenable">${t('mcp_servers.preset_keenable')}</button>
                 </div>
               </div>
 
@@ -199,7 +200,12 @@ export class McpServersModal {
               <div id="mcp-sse-fields" class="hidden" style="margin-top: 12px;">
                 <div class="form-group">
                   <label class="form-label" for="mcp-input-url">${t('mcp_servers.url_label')}</label>
-                  <input type="text" id="mcp-input-url" class="form-input" placeholder="ex: http://localhost:8000/sse" />
+                  <input type="text" id="mcp-input-url" class="form-input" placeholder="ex: https://api.keenable.ai/mcp" />
+                </div>
+                <div class="form-group" style="margin-top: 8px;">
+                  <label class="form-label" for="mcp-input-headers">${t('mcp_servers.headers_label')}</label>
+                  <textarea id="mcp-input-headers" class="form-textarea code-font" rows="3" spellcheck="false" placeholder='Ex.: {"X-API-Key":"..."}'></textarea>
+                  <div class="form-hint">${t('mcp_servers.headers_hint')}</div>
                 </div>
               </div>
 
@@ -493,6 +499,9 @@ export class McpServersModal {
     const nameInput = this.overlay.querySelector('#mcp-input-name') as HTMLInputElement;
     const cmdInput = this.overlay.querySelector('#mcp-input-command') as HTMLInputElement;
     const argsInput = this.overlay.querySelector('#mcp-input-args') as HTMLInputElement;
+    const urlInput = this.overlay.querySelector('#mcp-input-url') as HTMLInputElement;
+    const headersInput = this.overlay.querySelector('#mcp-input-headers') as HTMLTextAreaElement;
+    const sseRadio = this.overlay.querySelector('input[name="mcp-transport"][value="sse"]') as HTMLInputElement;
 
     if (!preset || !idInput) return;
 
@@ -516,6 +525,17 @@ export class McpServersModal {
       nameInput.value = 'GitHub Integration (MCP)';
       cmdInput.value = 'npx';
       argsInput.value = '-y @modelcontextprotocol/server-github';
+    } else if (preset === 'keenable') {
+      idInput.value = 'keenable';
+      nameInput.value = 'Keenable Web Search (MCP)';
+      cmdInput.value = '';
+      argsInput.value = '';
+      if (urlInput) urlInput.value = 'https://api.keenable.ai/mcp';
+      if (headersInput) headersInput.value = '{"X-API-Key":"${KEENABLE_API}"}';
+      if (sseRadio) {
+        sseRadio.checked = true;
+        sseRadio.dispatchEvent(new Event('change', { bubbles: true }));
+      }
     }
   }
 
@@ -526,10 +546,33 @@ export class McpServersModal {
     const command = (this.overlay.querySelector('#mcp-input-command') as HTMLInputElement)?.value.trim() || '';
     const argsRaw = (this.overlay.querySelector('#mcp-input-args') as HTMLInputElement)?.value.trim() || '';
     const url = (this.overlay.querySelector('#mcp-input-url') as HTMLInputElement)?.value.trim() || '';
+    const headersRaw = (this.overlay.querySelector('#mcp-input-headers') as HTMLTextAreaElement)?.value.trim() || '';
 
     if (!id || !name) {
       alert(t('mcp_servers.alert_fill_id_name'));
       return;
+    }
+    if (!/^[A-Za-z0-9_.-]{1,64}$/.test(id)) {
+      alert(t('mcp_servers.alert_invalid_id'));
+      return;
+    }
+
+    let headers: Record<string, string> = {};
+    if (headersRaw) {
+      try {
+        const parsed = JSON.parse(headersRaw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object');
+        for (const [key, value] of Object.entries(parsed)) {
+          if (typeof value !== 'string') throw new Error('header value must be a string');
+          if (/(api[_-]?key|token|secret|auth|credential)/i.test(key) && value && !value.includes('${')) {
+            throw new Error(t('mcp_servers.alert_header_secret'));
+          }
+          headers[key] = value;
+        }
+      } catch (e: any) {
+        alert(t('mcp_servers.alert_headers_invalid', { message: String(e?.message ?? e) }));
+        return;
+      }
     }
 
     const args = argsRaw ? argsRaw.split(' ').filter(a => a.length > 0) : [];
@@ -541,6 +584,7 @@ export class McpServersModal {
       command,
       args,
       url,
+      headers,
       isEnabled: true,
       cachedTools: []
     };
