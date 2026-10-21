@@ -129,7 +129,7 @@ The Runner provides a modern, high-contrast, clean UI with 3 essential screens f
    - **Step Timeline:** Granular tracking of each Taskflow pipeline stage with status badges, start timestamps, and stage execution duration.
 
 2. **Diagnostics Screen:**
-   - **Telemetry KPIs:** Live cards monitoring token consumption (Prompt, Completion, Total), tool calls count, 429 rate limit retries, and average latency.
+   - **Telemetry KPIs:** Live cards monitoring token consumption (Prompt, Completion, Total), injected memory context, tool calls count, 429 rate limit retries, and average latency. Tokens arrive through a `usage` event emitted by the C++ runtime; there is no stdout parsing and no auxiliary Python/JS process.
    - **Agent Thinking Stream:** Live streaming view of agent reasoning and cognitive deliberations during execution loops.
    - **Tool Call Inspection:** Detailed table of invoked tools, arguments passed, execution duration, and success/failure status.
    - **Diagnostic Export:** One-click button to copy complete diagnostic logs in structured JSON format.

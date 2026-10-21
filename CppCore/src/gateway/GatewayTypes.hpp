@@ -85,6 +85,13 @@ struct UsageEvent {
     long long latencyMs = 0;
     std::string status;
     std::string errorCode;
+    // Metadados de memoria enviados pelo runtime (X-Arestrix-Memory-*).
+    std::string agent;
+    std::string runId;
+    std::string memoryScope;
+    bool memoryEnabled = false;
+    long long memoryContextChars = 0;
+    long long memoryTokens = 0;   // estimativa: caracteres / 4
 };
 
 std::string nowIso();

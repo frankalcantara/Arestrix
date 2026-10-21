@@ -2109,6 +2109,18 @@ TEST(model_client_converts_history_for_openai_and_anthropic) {
     CHECK(!rt::buildRequestBody(rt::resolveProvider("deepseek"), req, false)["messages"][2].contains("reasoning_content"));
     CHECK(oa["tools"][0]["function"].value("name", std::string()) == "get_graph");
 
+    req.agentId = "agente\r\nx";
+    req.runId = "run-1";
+    req.memoryScope = "project:demo";
+    req.memoryEnabled = true;
+    req.memoryContextChars = 640;
+    auto gh = rt::gatewayMetadataHeaders(req);
+    CHECK(gh["X-Arestrix-Agent"] == "agentex");   // CR/LF removidos
+    CHECK(gh["X-Arestrix-Run-Id"] == "run-1");
+    CHECK(gh["X-Arestrix-Memory-Scope"] == "project:demo");
+    CHECK(gh["X-Arestrix-Memory-Enabled"] == "1");
+    CHECK(gh["X-Arestrix-Memory-Context-Chars"] == "640");
+
     json an = rt::buildRequestBody(rt::resolveProvider("anthropic"), req, true);
     CHECK(an.value("system", std::string()) == "sys");
     CHECK(an["messages"].size() == 3);   // user, assistant, user com os dois tool_result
@@ -2254,6 +2266,12 @@ TEST(gateway_store_enforces_budgets_and_records_usage) {
     event.usage = usage;
     event.costUsd = 0.2;
     event.status = "ok";
+    event.agent = "agente-teste";
+    event.runId = "run-teste";
+    event.memoryScope = "project:demo";
+    event.memoryEnabled = true;
+    event.memoryContextChars = 400;
+    event.memoryTokens = 100;
     CHECK(store.recordUsage(event, error));
 
     json report;
@@ -2261,11 +2279,20 @@ TEST(gateway_store_enforces_budgets_and_records_usage) {
     CHECK(report["totals"].value("requests", 0LL) == 1);
     CHECK(report["totals"].value("inputTokens", 0LL) == 50);
     CHECK(report["totals"].value("outputTokens", 0LL) == 50);
+    CHECK(report["totals"].value("memoryRequests", 0LL) == 1);
+    CHECK(report["totals"].value("memoryContextChars", 0LL) == 400);
+    CHECK(report["totals"].value("memoryTokens", 0LL) == 100);
+    CHECK(report["totals"].value("memoryInputRatio", 0.0) == 2.0);
+    CHECK(report["byMemory"].is_array() && report["byMemory"].size() == 1);
+    CHECK(report["byMemory"][0].value("memoryEnabled", false));
 
     json usageForToken;
     CHECK(store.usageForToken(key, usageForToken, error));
     CHECK(usageForToken["key"].value("id", std::string()) == keyId);
     CHECK(usageForToken["budgets"].is_array());
+    CHECK(usageForToken["usage"].value("memoryTokens", 0LL) == 100);
+    CHECK(usageForToken["byMemory"].is_array() && usageForToken["byMemory"].size() == 1);
+    CHECK(usageForToken["byMemory"][0].value("memoryEnabled", false));
 
     store.close();
     fs::remove_all(dir);

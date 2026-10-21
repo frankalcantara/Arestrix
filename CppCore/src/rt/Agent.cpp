@@ -304,6 +304,11 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
     chat.temperature = spec.temperature;
     chat.httpAttempts = spec.httpAttempts;
     chat.telemetryId = nodeId;
+    chat.agentId = nodeId;
+    chat.runId = runKey.empty() ? nodeId : runKey;
+    chat.memoryScope = spec.memoryProjectId;
+    chat.memoryEnabled = spec.memoryEnabled;
+    chat.memoryContextChars = static_cast<long long>(spec.memoryContext.size());
     {
         ChatMessage first;
         first.role = "user";
@@ -383,6 +388,16 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
 
     std::cout << "[Agent " << label << "] concluido (tokens: entrada=" << inTokens
               << ", saida=" << outTokens << ")\n";
+
+    // Um unico evento nativo por agente: o Runner agrega sem parsing de stdout nem processo auxiliar.
+    AgentTelemetryEmitter::emitEvent(nodeId, "usage", json{
+        {"prompt_tokens", inTokens},
+        {"completion_tokens", outTokens},
+        {"total_tokens", inTokens + outTokens},
+        {"calls", turns},
+        {"memory_enabled", spec.memoryEnabled},
+        {"memory_context_chars", static_cast<long long>(spec.memoryContext.size())}
+    });
 
     if (!spec.memoryProjectId.empty()) {
         const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(

@@ -45,6 +45,25 @@ std::string randomHex(std::size_t bytes) {
     return out;
 }
 
+std::string headerText(const httplib::Request& request, const char* name, size_t maxLen = 200) {
+    std::string value = request.get_header_value(name);
+    if (value.size() > maxLen) value.resize(maxLen);
+    for (char& c : value) {
+        if (static_cast<unsigned char>(c) < 0x20 || c == 0x7f) c = ' ';
+    }
+    return value;
+}
+
+long long headerNumber(const httplib::Request& request, const char* name) {
+    const std::string value = headerText(request, name, 32);
+    if (value.empty()) return 0;
+    try {
+        return std::max<long long>(0, std::stoll(value));
+    } catch (...) {
+        return 0;
+    }
+}
+
 std::string bearerToken(const httplib::Request& request) {
     const std::string auth = request.get_header_value("Authorization");
     if (auth.rfind("Bearer ", 0) == 0) return auth.substr(7);
@@ -177,6 +196,12 @@ void GatewayServer::logEvent(const UsageEvent& event, const BudgetDecision& budg
     line["costUsd"] = event.costUsd;
     line["latencyMs"] = event.latencyMs;
     line["status"] = event.status;
+    if (!event.agent.empty()) line["agent"] = event.agent;
+    if (!event.runId.empty()) line["runId"] = event.runId;
+    if (!event.memoryScope.empty()) line["memoryScope"] = event.memoryScope;
+    line["memoryEnabled"] = event.memoryEnabled;
+    line["memoryContextChars"] = event.memoryContextChars;
+    line["memoryTokens"] = event.memoryTokens;
     if (!event.errorCode.empty()) line["errorCode"] = event.errorCode;
     if (budget.warning) line["budgetWarning"] = true;
     std::osyncstream(std::cout) << line.dump() << '\n';
@@ -336,6 +361,13 @@ bool GatewayServer::run(std::string& error) {
 
             UsageEvent event;
             event.context = context;
+            event.agent = headerText(request, "X-Arestrix-Agent");
+            event.runId = headerText(request, "X-Arestrix-Run-Id");
+            event.memoryScope = headerText(request, "X-Arestrix-Memory-Scope");
+            event.memoryEnabled = headerText(request, "X-Arestrix-Memory-Enabled", 8) == "1";
+            event.memoryContextChars = std::min<long long>(
+                headerNumber(request, "X-Arestrix-Memory-Context-Chars"), 10'000'000);
+            event.memoryTokens = (event.memoryContextChars + 3) / 4;
             BudgetDecision budget;
 
             std::string rateError;

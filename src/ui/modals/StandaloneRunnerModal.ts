@@ -253,6 +253,12 @@ export class StandaloneRunnerModal extends BaseModal {
             <div style="font-size: 10.5px; color: #94a3b8; margin-top: 2px;">
               ${diag.promptTokens.toLocaleString()} prm / ${diag.completionTokens.toLocaleString()} cpl
             </div>
+            <div style="font-size: 10.5px; color: #0f6cbd; margin-top: 4px;">
+              ${t('runner.memory_usage', {
+                chars: diag.memoryContextChars.toLocaleString(),
+                runs: String(diag.memoryEnabledRuns)
+              })}
+            </div>
           </div>
 
           <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;">

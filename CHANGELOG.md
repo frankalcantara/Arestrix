@@ -25,6 +25,10 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   that uses project memory and delivers Markdown.
 - Documentation now covers the AMG SQLite store, memory tools/budget/metrics, the new example and
   the headless `arestrix-cli` (`run`, `gen`, CI, exit codes and troubleshooting).
+- AI Gateway records memory impact per request (`memory_enabled`, context chars, estimated memory
+  tokens, agent/run) from native C++ headers and exposes it in `/v1/usage` and the usage report.
+- The C++ agent emits one `usage` telemetry event per run, so the Standalone Runner diagnostics
+  receive real prompt/completion/total tokens and memory context without Python or JS parsers.
 - Legacy `AgentBlackboard`/`SemanticMemoryEngine` JSON files are imported into SQLite.
 
 ## [1.5.0-beta.1] - 2026-10-19

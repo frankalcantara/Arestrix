@@ -65,6 +65,14 @@ bool validPeriod(const std::string& period) {
     return period == "daily" || period == "monthly" || period == "total";
 }
 
+// Migracao aditiva para bancos criados antes das metricas de memoria. Ignora "duplicate column".
+void addColumnIfMissing(sqlite3* db, const char* table, const char* column, const char* ddl) {
+    std::string sql = std::string("ALTER TABLE ") + table + " ADD COLUMN " + column + " " + ddl + ";";
+    char* detail = nullptr;
+    sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &detail);
+    if (detail) sqlite3_free(detail);
+}
+
 } // namespace
 
 GatewayStore::~GatewayStore() {
@@ -154,13 +162,26 @@ CREATE TABLE IF NOT EXISTS usage_events (
   latency_ms INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL,
   error_code TEXT NOT NULL DEFAULT '',
-  runner TEXT NOT NULL DEFAULT ''
+  runner TEXT NOT NULL DEFAULT '',
+  agent TEXT NOT NULL DEFAULT '',
+  run_id TEXT NOT NULL DEFAULT '',
+  memory_scope TEXT NOT NULL DEFAULT '',
+  memory_enabled INTEGER NOT NULL DEFAULT 0,
+  memory_context_chars INTEGER NOT NULL DEFAULT 0,
+  memory_tokens INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_usage_ts ON usage_events(ts);
 CREATE INDEX IF NOT EXISTS idx_usage_key ON usage_events(key_id, ts);
 CREATE INDEX IF NOT EXISTS idx_usage_provider ON usage_events(provider, ts);
 )SQL";
-    return exec(db_, schema, error);
+    if (!exec(db_, schema, error)) return false;
+    addColumnIfMissing(db_, "usage_events", "agent", "TEXT NOT NULL DEFAULT ''");
+    addColumnIfMissing(db_, "usage_events", "run_id", "TEXT NOT NULL DEFAULT ''");
+    addColumnIfMissing(db_, "usage_events", "memory_scope", "TEXT NOT NULL DEFAULT ''");
+    addColumnIfMissing(db_, "usage_events", "memory_enabled", "INTEGER NOT NULL DEFAULT 0");
+    addColumnIfMissing(db_, "usage_events", "memory_context_chars", "INTEGER NOT NULL DEFAULT 0");
+    addColumnIfMissing(db_, "usage_events", "memory_tokens", "INTEGER NOT NULL DEFAULT 0");
+    return true;
 }
 
 bool GatewayStore::healthy(std::string& error) {
@@ -566,8 +587,9 @@ bool GatewayStore::insertUsageLocked(const UsageEvent& event, std::string& error
     Statement stmt;
     if (!stmt.prepare(db_,
         "INSERT INTO usage_events (id, ts, key_id, project, user, provider, model, input_tokens, "
-        "output_tokens, cached_tokens, cost_usd, latency_ms, status, error_code, runner) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", error)) {
+        "output_tokens, cached_tokens, cost_usd, latency_ms, status, error_code, runner, "
+        "agent, run_id, memory_scope, memory_enabled, memory_context_chars, memory_tokens) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", error)) {
         return false;
     }
     sqlite3_bind_text(stmt.stmt, 1, event.context.requestId.c_str(), -1, SQLITE_TRANSIENT);
@@ -586,6 +608,12 @@ bool GatewayStore::insertUsageLocked(const UsageEvent& event, std::string& error
     sqlite3_bind_text(stmt.stmt, 13, event.status.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt.stmt, 14, event.errorCode.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt.stmt, 15, event.context.runner.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt.stmt, 16, event.agent.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt.stmt, 17, event.runId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt.stmt, 18, event.memoryScope.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt.stmt, 19, event.memoryEnabled ? 1 : 0);
+    sqlite3_bind_int64(stmt.stmt, 20, event.memoryContextChars);
+    sqlite3_bind_int64(stmt.stmt, 21, event.memoryTokens);
     if (sqlite3_step(stmt.stmt) != SQLITE_DONE) {
         error = sqliteMessage(db_, "insert usage");
         return false;
@@ -603,9 +631,12 @@ Json GatewayStore::usageTotalsLocked(const std::string& keyId, std::string& erro
     Statement stmt;
     const char* sql = keyId.empty()
         ? "SELECT COUNT(*), COALESCE(SUM(cost_usd),0), COALESCE(SUM(input_tokens),0), "
-          "COALESCE(SUM(output_tokens),0) FROM usage_events;"
+          "COALESCE(SUM(output_tokens),0), COALESCE(SUM(memory_enabled),0), "
+          "COALESCE(SUM(memory_context_chars),0), COALESCE(SUM(memory_tokens),0) FROM usage_events;"
         : "SELECT COUNT(*), COALESCE(SUM(cost_usd),0), COALESCE(SUM(input_tokens),0), "
-          "COALESCE(SUM(output_tokens),0) FROM usage_events WHERE key_id = ?;";
+          "COALESCE(SUM(output_tokens),0), COALESCE(SUM(memory_enabled),0), "
+          "COALESCE(SUM(memory_context_chars),0), COALESCE(SUM(memory_tokens),0) "
+          "FROM usage_events WHERE key_id = ?;";
     if (!stmt.prepare(db_, sql, error)) return Json::object();
     if (!keyId.empty()) sqlite3_bind_text(stmt.stmt, 1, keyId.c_str(), -1, SQLITE_TRANSIENT);
     Json out = Json::object();
@@ -614,6 +645,13 @@ Json GatewayStore::usageTotalsLocked(const std::string& keyId, std::string& erro
         out["costUsd"] = sqlite3_column_double(stmt.stmt, 1);
         out["inputTokens"] = sqlite3_column_int64(stmt.stmt, 2);
         out["outputTokens"] = sqlite3_column_int64(stmt.stmt, 3);
+        out["memoryRequests"] = sqlite3_column_int64(stmt.stmt, 4);
+        out["memoryContextChars"] = sqlite3_column_int64(stmt.stmt, 5);
+        out["memoryTokens"] = sqlite3_column_int64(stmt.stmt, 6);
+        const long long input = out["inputTokens"].get<long long>();
+        out["memoryInputRatio"] = input > 0
+            ? static_cast<double>(out["memoryTokens"].get<long long>()) / static_cast<double>(input)
+            : 0.0;
     }
     return out;
 }
@@ -642,7 +680,9 @@ bool GatewayStore::usageReport(const std::string& since, const std::string& keyI
         Statement stmt;
         const std::string sql =
             "SELECT COUNT(*), COALESCE(SUM(cost_usd),0), COALESCE(SUM(input_tokens),0), "
-            "COALESCE(SUM(output_tokens),0) FROM usage_events" + where + ";";
+            "COALESCE(SUM(output_tokens),0), COALESCE(SUM(memory_enabled),0), "
+            "COALESCE(SUM(memory_context_chars),0), COALESCE(SUM(memory_tokens),0) "
+            "FROM usage_events" + where + ";";
         if (!stmt.prepare(db_, sql.c_str(), error)) return false;
         bindFilters(stmt);
         if (sqlite3_step(stmt.stmt) == SQLITE_ROW) {
@@ -651,8 +691,65 @@ bool GatewayStore::usageReport(const std::string& since, const std::string& keyI
             totals["costUsd"] = sqlite3_column_double(stmt.stmt, 1);
             totals["inputTokens"] = sqlite3_column_int64(stmt.stmt, 2);
             totals["outputTokens"] = sqlite3_column_int64(stmt.stmt, 3);
+            totals["memoryRequests"] = sqlite3_column_int64(stmt.stmt, 4);
+            totals["memoryContextChars"] = sqlite3_column_int64(stmt.stmt, 5);
+            totals["memoryTokens"] = sqlite3_column_int64(stmt.stmt, 6);
+            const long long input = sqlite3_column_int64(stmt.stmt, 2);
+            totals["memoryInputRatio"] = input > 0
+                ? static_cast<double>(sqlite3_column_int64(stmt.stmt, 6)) / static_cast<double>(input)
+                : 0.0;
             out["totals"] = totals;
         }
+    }
+
+    {
+        Statement stmt;
+        const std::string sql =
+            "SELECT memory_enabled, COUNT(*), COALESCE(SUM(input_tokens + output_tokens),0), "
+            "COALESCE(SUM(cost_usd),0), COALESCE(SUM(memory_context_chars),0), "
+            "COALESCE(SUM(memory_tokens),0) FROM usage_events" + where +
+            " GROUP BY memory_enabled ORDER BY memory_enabled DESC;";
+        if (!stmt.prepare(db_, sql.c_str(), error)) return false;
+        bindFilters(stmt);
+        Json rows = Json::array();
+        int step = sqlite3_step(stmt.stmt);
+        while (step == SQLITE_ROW) {
+            Json item = Json::object();
+            item["memoryEnabled"] = sqlite3_column_int64(stmt.stmt, 0) != 0;
+            item["requests"] = sqlite3_column_int64(stmt.stmt, 1);
+            item["tokens"] = sqlite3_column_int64(stmt.stmt, 2);
+            item["costUsd"] = sqlite3_column_double(stmt.stmt, 3);
+            item["memoryContextChars"] = sqlite3_column_int64(stmt.stmt, 4);
+            item["memoryTokens"] = sqlite3_column_int64(stmt.stmt, 5);
+            rows.push_back(item);
+            step = sqlite3_step(stmt.stmt);
+        }
+        out["byMemory"] = rows;
+    }
+
+    {
+        Statement stmt;
+        const std::string sql =
+            "SELECT agent, COUNT(*), COALESCE(SUM(input_tokens + output_tokens),0), "
+            "COALESCE(SUM(memory_enabled),0), COALESCE(SUM(memory_context_chars),0), "
+            "COALESCE(SUM(memory_tokens),0) FROM usage_events" + where +
+            " AND agent <> '' GROUP BY agent ORDER BY 3 DESC;";
+        if (!stmt.prepare(db_, sql.c_str(), error)) return false;
+        bindFilters(stmt);
+        Json rows = Json::array();
+        int step = sqlite3_step(stmt.stmt);
+        while (step == SQLITE_ROW) {
+            Json item = Json::object();
+            item["agent"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt.stmt, 0));
+            item["requests"] = sqlite3_column_int64(stmt.stmt, 1);
+            item["tokens"] = sqlite3_column_int64(stmt.stmt, 2);
+            item["memoryRequests"] = sqlite3_column_int64(stmt.stmt, 3);
+            item["memoryContextChars"] = sqlite3_column_int64(stmt.stmt, 4);
+            item["memoryTokens"] = sqlite3_column_int64(stmt.stmt, 5);
+            rows.push_back(item);
+            step = sqlite3_step(stmt.stmt);
+        }
+        out["byAgent"] = rows;
     }
 
     {
@@ -718,6 +815,30 @@ bool GatewayStore::usageForToken(const std::string& token, Json& out, std::strin
     keyInfo["tpmLimit"] = key.tpmLimit;
     out["key"] = keyInfo;
     out["usage"] = usageTotalsLocked(key.id, error);
+
+    {
+        Statement mem;
+        if (mem.prepare(db_,
+            "SELECT memory_enabled, COUNT(*), COALESCE(SUM(input_tokens + output_tokens),0), "
+            "COALESCE(SUM(memory_context_chars),0), COALESCE(SUM(memory_tokens),0) "
+            "FROM usage_events WHERE key_id = ? GROUP BY memory_enabled "
+            "ORDER BY memory_enabled DESC;", error)) {
+            sqlite3_bind_text(mem.stmt, 1, key.id.c_str(), -1, SQLITE_TRANSIENT);
+            Json rows = Json::array();
+            int step = sqlite3_step(mem.stmt);
+            while (step == SQLITE_ROW) {
+                Json item = Json::object();
+                item["memoryEnabled"] = sqlite3_column_int64(mem.stmt, 0) != 0;
+                item["requests"] = sqlite3_column_int64(mem.stmt, 1);
+                item["tokens"] = sqlite3_column_int64(mem.stmt, 2);
+                item["memoryContextChars"] = sqlite3_column_int64(mem.stmt, 3);
+                item["memoryTokens"] = sqlite3_column_int64(mem.stmt, 4);
+                rows.push_back(item);
+                step = sqlite3_step(mem.stmt);
+            }
+            out["byMemory"] = rows;
+        }
+    }
 
     Statement stmt;
     if (!stmt.prepare(db_,

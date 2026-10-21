@@ -127,7 +127,7 @@ O Runner provê uma interface moderna e limpa com 3 visões essenciais para acom
    - **Linha do Tempo de Etapas:** Rastreamento individual de cada vértice do pipeline Taskflow com selos de status, timestamp de início e duração de cada etapa.
 
 2. **Tela de Diagnóstico:**
-   - **KPIs de Telemetria:** Cartões de métricas ao vivo para consumo de tokens (Prompt, Conclusão e Total), chamadas de ferramentas, retries de limite de taxa 429 e latência média.
+   - **KPIs de Telemetria:** Cartões de métricas ao vivo para consumo de tokens (Prompt, Conclusão e Total), contexto de memória injetado, chamadas de ferramentas, retries de limite de taxa 429 e latência média. Os tokens chegam por um evento `usage` emitido pelo runtime C++; não há parsing de stdout nem processo Python/JS auxiliar.
    - **Streaming de Raciocínio (Thinking):** Visualização em tempo real das deliberações cognitivas dos agentes durante o laço de execução.
    - **Inspeção de Chamadas de Ferramenta (Tool Calls):** Registro de ferramentas invocadas, argumentos transmitidos, duração e status de sucesso/falha.
    - **Exportação de Diagnóstico:** Botão para copiar o relatório completo de diagnóstico em formato JSON estruturado.

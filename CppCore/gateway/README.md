@@ -68,6 +68,33 @@ ARESTRIX_REQUIRE_AI_GATEWAY=1
   configurado;
 - as chaves reais dos provedores não devem existir nos runners em produção.
 
+### Impacto da memória no gateway
+
+Quando o runtime usa o gateway, ele envia metadados por requisição:
+
+```text
+X-Arestrix-Agent
+X-Arestrix-Run-Id
+X-Arestrix-Memory-Scope
+X-Arestrix-Memory-Enabled
+X-Arestrix-Memory-Context-Chars
+```
+
+O gateway grava esses campos em `usage_events` e calcula `memory_tokens` como uma aproximação
+(caracteres / 4). O relatório e `/v1/usage` mostram:
+
+- requisições com memória;
+- caracteres de contexto injetados;
+- tokens aproximados de memória;
+- proporção sobre os tokens de entrada;
+- comparativo memória ON/OFF;
+- detalhamento por agente.
+
+Esses headers só são enviados quando a chamada passa pelo gateway. Em chamadas diretas ao
+provedor, o impacto continua disponível na tabela `memory_usage` do projeto, mas não no
+`usage_events` do gateway. Nenhum Python ou processo JS participa da coleta: o runtime C++ envia
+os headers e o gateway C++ agrega no SQLite.
+
 Para política empresarial imutável, distribua `ARESTRIX_AI_GATEWAY_POLICY=locked` por
 GPO/MDM. O backend trata o gateway como obrigatório mesmo que o usuário tente desativar, e a
 tela de Padrões Globais fica somente leitura. A fronteira de confiança real é o sistema
@@ -93,7 +120,8 @@ node scripts/gateway-smoke.mjs
 ```
 
 O teste sobe um upstream OpenAI falso, cria uma chave virtual com budget, valida a primeira chamada
-(200), o bloqueio seguinte (402), `/metrics` e `/v1/usage`. Não usa rede externa nem chaves reais.
+(200), o bloqueio seguinte (402), `/metrics` e `/v1/usage`, incluindo os campos de impacto da memória.
+Não usa rede externa nem chaves reais.
 
 ## Limitações do MVP
 

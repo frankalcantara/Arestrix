@@ -48,6 +48,8 @@ export interface IRunnerDiagnostics {
   totalTokens: number;
   promptTokens: number;
   completionTokens: number;
+  memoryContextChars: number;
+  memoryEnabledRuns: number;
   toolCallsCount: number;
   rateLimitRetries: number;
   avgLatencyMs: number;
@@ -78,6 +80,8 @@ export class RunnerManager {
     totalTokens: 0,
     promptTokens: 0,
     completionTokens: 0,
+    memoryContextChars: 0,
+    memoryEnabledRuns: 0,
     toolCallsCount: 0,
     rateLimitRetries: 0,
     avgLatencyMs: 0,
@@ -261,51 +265,70 @@ export class RunnerManager {
 
   private handleAgentTelemetry(ev: any): void {
     if (!ev) return;
+    const payload = (ev.payload && typeof ev.payload === 'object') ? ev.payload : {};
+    const pick = (key: string) => payload[key] !== undefined ? payload[key] : ev[key];
+    const type = String(ev.type || '');
 
-    // Tokens
-    if (ev.type === 'usage' || (ev.usage && typeof ev.usage === 'object')) {
-      const u = ev.usage || ev;
+    // Tokens: o runtime C++ envia { type: 'usage', payload: {...} }; aceita tambem o formato plano.
+    if (type === 'usage' || (ev.usage && typeof ev.usage === 'object')) {
+      const u = (payload.prompt_tokens !== undefined || payload.total_tokens !== undefined)
+        ? payload : (ev.usage || ev);
       const prompt = Number(u.prompt_tokens || u.promptTokens || 0);
       const completion = Number(u.completion_tokens || u.completionTokens || 0);
       const total = Number(u.total_tokens || u.totalTokens || (prompt + completion));
       this.diagnostics.promptTokens += prompt;
       this.diagnostics.completionTokens += completion;
       this.diagnostics.totalTokens += total;
+      this.diagnostics.memoryContextChars += Number(u.memory_context_chars || u.memoryContextChars || 0);
+      if (u.memory_enabled || u.memoryEnabled) this.diagnostics.memoryEnabledRuns += 1;
     }
 
-    // Thinking stream
-    if (ev.type === 'thinking' && ev.thought) {
-      this.diagnostics.thinkingLogs.push({
-        id: `thk-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        timestamp: new Date().toLocaleTimeString(),
-        nodeId: ev.nodeId || this.activeNodeId || '',
-        agentName: ev.agentName || 'Agente',
-        thought: String(ev.thought)
-      });
-      if (this.diagnostics.thinkingLogs.length > 200) {
-        this.diagnostics.thinkingLogs.shift();
+    // Thinking stream: o runtime envia o preview em payload.thinkingPreview.
+    if (type === 'thinking') {
+      const thought = pick('thought') || pick('thinkingPreview');
+      if (thought) {
+        this.diagnostics.thinkingLogs.push({
+          id: `thk-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          timestamp: new Date().toLocaleTimeString(),
+          nodeId: ev.nodeId || this.activeNodeId || '',
+          agentName: pick('agentName') || ev.nodeId || 'Agente',
+          thought: String(thought)
+        });
+        if (this.diagnostics.thinkingLogs.length > 200) {
+          this.diagnostics.thinkingLogs.shift();
+        }
       }
     }
 
-    // Chamadas de ferramentas (Tool Call)
-    if (ev.type === 'tool_call' || ev.type === 'tool_result') {
+    // Chamadas de ferramentas: tool_start cria o registro; tool_end atualiza o sucesso.
+    if (type === 'tool_start' || type === 'tool_call' || type === 'tool_result') {
+      const toolName = pick('toolName') || pick('tool') || 'ferramenta';
       this.diagnostics.toolCallsCount += 1;
       this.diagnostics.toolCalls.push({
         id: `tool-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         timestamp: new Date().toLocaleTimeString(),
-        toolName: ev.toolName || ev.tool || 'ferramenta',
+        toolName,
         nodeId: ev.nodeId || this.activeNodeId || '',
-        success: ev.isError !== true && ev.error === undefined,
-        durationMs: ev.durationMs || 0,
-        argsSummary: ev.args ? (typeof ev.args === 'string' ? ev.args : JSON.stringify(ev.args)) : ''
+        success: pick('isError') !== true && pick('error') === undefined,
+        durationMs: Number(pick('durationMs') || 0),
+        argsSummary: pick('args') ? (typeof pick('args') === 'string' ? pick('args') : JSON.stringify(pick('args'))) : String(pick('toolArgs') || '')
       });
       if (this.diagnostics.toolCalls.length > 200) {
         this.diagnostics.toolCalls.shift();
       }
+    } else if (type === 'tool_end') {
+      const toolName = String(pick('toolName') || '');
+      for (let i = this.diagnostics.toolCalls.length - 1; i >= 0; i--) {
+        const row = this.diagnostics.toolCalls[i];
+        if (row.toolName === toolName) {
+          row.success = pick('toolSuccess') !== false;
+          break;
+        }
+      }
     }
 
     // Retries 429
-    if (ev.type === 'rate_limit' || ev.status === 429 || ev.retry) {
+    if (type === 'rate_limit' || ev.status === 429 || ev.retry) {
       this.diagnostics.rateLimitRetries += 1;
     }
 
@@ -363,6 +386,8 @@ export class RunnerManager {
       totalTokens: 0,
       promptTokens: 0,
       completionTokens: 0,
+      memoryContextChars: 0,
+      memoryEnabledRuns: 0,
       toolCallsCount: 0,
       rateLimitRetries: 0,
       avgLatencyMs: 0,

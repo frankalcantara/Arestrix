@@ -148,7 +148,12 @@ async function main() {
   const headers = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${key}`,
-    Connection: 'close'
+    Connection: 'close',
+    'X-Arestrix-Agent': 'agente-smoke',
+    'X-Arestrix-Run-Id': 'run-smoke',
+    'X-Arestrix-Memory-Scope': 'project:demo',
+    'X-Arestrix-Memory-Enabled': '1',
+    'X-Arestrix-Memory-Context-Chars': '640'
   };
   const request = () => fetch(`${base}/fake/chat/completions`, {
     method: 'POST',
@@ -183,12 +188,22 @@ async function main() {
   });
   const usageText = await usage.text();
   if (!usage.ok || !usageText.includes('budgets')) fail('/v1/usage inválido', usageText);
+  const usageJson = JSON.parse(usageText);
+  if (!(Number(usageJson.usage?.memoryTokens) > 0)) fail('/v1/usage sem tokens de memória', usageText);
+  if (!(Number(usageJson.usage?.memoryContextChars) > 0)) fail('/v1/usage sem contexto de memória', usageText);
+  if (!(Number(usageJson.usage?.memoryRequests) > 0)) fail('/v1/usage sem requisições com memória', usageText);
+
+  const report = JSON.parse(execFileSync(gateway, [
+    'usage', 'report', '--key', keyData.keyId, '--db', db
+  ], { cwd: root, encoding: 'utf8' }));
+  if (!(Number(report.totals?.memoryTokens) > 0)) fail('usage report sem tokens de memória', JSON.stringify(report));
+  if (!Array.isArray(report.byMemory) || report.byMemory.length === 0) fail('usage report sem comparativo ON/OFF', JSON.stringify(report));
 }
 
 main()
   .then(async () => {
     await cleanup();
-    console.log('gateway-smoke: OK (200 -> 402, métricas e /v1/usage)');
+    console.log('gateway-smoke: OK (200 -> 402, métricas, /v1/usage e impacto da memória)');
   })
   .catch(async error => {
     await cleanup();

@@ -4,6 +4,7 @@
 // protocolo do provedor (OpenAI-compativel ou Anthropic Messages). Usado pelos agentes do pipeline e pelo
 // Assistente do Studio. Provedor, chave e URL seguem as variaveis de ambiente do usuario.
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -64,6 +65,12 @@ struct ChatRequest {
     int httpAttempts = 6;
     bool includeReasoning = true;   // false depois que o servidor recusou reasoning_content no historico
     std::string telemetryId;   // vazio = sem telemetria de retentativas
+    // Metadados de memoria enviados ao AI Gateway (somente quando info.gateway == true).
+    std::string agentId;
+    std::string runId;
+    std::string memoryScope;
+    bool memoryEnabled = false;
+    long long memoryContextChars = 0;
 };
 
 struct ChatReply {
@@ -83,6 +90,9 @@ struct ChatReply {
 
 // Corpo da requisicao no protocolo do provedor (exposto para testes).
 Json buildRequestBody(const ProviderInfo& info, const ChatRequest& req, bool includeReasoning = true);
+
+// Cabecalhos X-Arestrix-* enviados ao gateway (memoria/agente/run), expostos para testes.
+std::map<std::string, std::string> gatewayMetadataHeaders(const ChatRequest& req);
 
 // Interpreta a resposta do provedor (exposto para testes). Lanca std::runtime_error se o formato for inesperado.
 ChatReply parseResponseBody(const ProviderInfo& info, const std::string& body);

@@ -1020,6 +1020,25 @@ export class GlobalDefaultsModal {
         cost: Number(totals.costUsd || 0).toFixed(6),
         tokens: String((totals.inputTokens || 0) + (totals.outputTokens || 0))
       }));
+      if (Number(totals.memoryContextChars || 0) > 0) {
+        lines.push(t('global_defaults.gateway_memory_usage', {
+          requests: String(totals.memoryRequests ?? 0),
+          chars: String(totals.memoryContextChars ?? 0),
+          tokens: String(totals.memoryTokens ?? 0),
+          ratio: (Number(totals.memoryInputRatio || 0) * 100).toFixed(1)
+        }));
+        const modes = Array.isArray(usage.byMemory) ? usage.byMemory : [];
+        const on = modes.find((m: any) => m.memoryEnabled);
+        const off = modes.find((m: any) => !m.memoryEnabled);
+        if (on || off) {
+          lines.push(t('global_defaults.gateway_memory_compare', {
+            onRequests: String(on?.requests ?? 0),
+            onTokens: String(on?.tokens ?? 0),
+            offRequests: String(off?.requests ?? 0),
+            offTokens: String(off?.tokens ?? 0)
+          }));
+        }
+      }
       for (const budget of usage.budgets || []) {
         const limit = budget.limitUsd;
         lines.push(t('global_defaults.gateway_budget_line', {

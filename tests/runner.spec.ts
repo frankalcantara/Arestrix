@@ -237,41 +237,54 @@ describe('Standalone Runner Engine & Manager', () => {
   it('deve agregar telemetria de tokens, thinking e chamadas de ferramenta', () => {
     runner.resetDiagnostics();
 
-    // 1. Tokens
+    // 1. Tokens (formato real do runtime C++: payload aninhado)
     bus.emit('agent:telemetry', {
       type: 'usage',
-      prompt_tokens: 150,
-      completion_tokens: 80,
-      total_tokens: 230
+      payload: {
+        prompt_tokens: 150,
+        completion_tokens: 80,
+        total_tokens: 230,
+        memory_enabled: true,
+        memory_context_chars: 640
+      }
     });
 
-    // 2. Thinking
+    // 2. Thinking (payload aninhado do runtime)
     bus.emit('agent:telemetry', {
       type: 'thinking',
-      agentName: 'AuditorContabil',
-      thought: 'Analisando balancete do mês 10...'
+      nodeId: 'auditor',
+      payload: {
+        thinkingPreview: 'Analisando balancete do mês 10...',
+        thinkingChars: 120
+      }
     });
 
     // 3. Ferramenta
     bus.emit('agent:telemetry', {
-      type: 'tool_call',
-      toolName: 'read_file',
-      args: { path: 'balancete.csv' },
-      isError: false
+      type: 'tool_start',
+      nodeId: 'auditor',
+      payload: { toolName: 'read_file', toolArgs: '{"path":"balancete.csv"}' }
+    });
+    bus.emit('agent:telemetry', {
+      type: 'tool_end',
+      nodeId: 'auditor',
+      payload: { toolName: 'read_file', toolSuccess: true }
     });
 
     // 4. Rate limit 429
     bus.emit('agent:telemetry', {
       type: 'rate_limit',
-      retry: true
+      payload: { retrySeconds: 1 }
     });
 
     const diag = runner.getDiagnostics();
     expect(diag.totalTokens).toBe(230);
     expect(diag.promptTokens).toBe(150);
     expect(diag.completionTokens).toBe(80);
+    expect(diag.memoryContextChars).toBe(640);
+    expect(diag.memoryEnabledRuns).toBe(1);
     expect(diag.thinkingLogs.length).toBe(1);
-    expect(diag.thinkingLogs[0].agentName).toBe('AuditorContabil');
+    expect(diag.thinkingLogs[0].agentName).toBe('auditor');
     expect(diag.toolCallsCount).toBe(1);
     expect(diag.toolCalls[0].toolName).toBe('read_file');
     expect(diag.rateLimitRetries).toBe(1);

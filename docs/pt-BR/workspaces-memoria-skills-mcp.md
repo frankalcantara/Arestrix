@@ -123,6 +123,17 @@ python scripts/memory_report.py <projeto>
 O `memory_report.py` é apenas um leitor do SQLite para desenvolvimento; o runtime não depende de
 Python. Veja também [`arestrix-cli`](arestrix-cli.md).
 
+O **Runner Standalone** recebe os tokens do agente por um único evento de telemetria emitido pelo
+runtime C++ (`type: "usage"`), agregado pelo `RunnerManager`. Não há parsing de stdout nem processo
+Python/JS auxiliar durante a execução do grafo.
+
+Se o projeto usar o **AI Gateway**, o impacto da memória também é registrado no gateway. O runtime
+envia `X-Arestrix-Memory-Enabled`, `X-Arestrix-Memory-Context-Chars`, `X-Arestrix-Agent` e
+`X-Arestrix-Run-Id`; o gateway grava `memory_enabled`, `memory_context_chars` e `memory_tokens`
+(estimativa de caracteres / 4) em `usage_events`. A tela **Padrões Globais → AI Gateway** e
+`/v1/usage` mostram a proporção sobre a entrada e o comparativo memória ON/OFF. A coleta é feita
+inteiramente em C++: nenhum Python ou processo JS participa da execução do grafo.
+
 ### Limitações atuais
 
 - A visualização dedicada do grafo e dos conflitos ainda não está na UI.

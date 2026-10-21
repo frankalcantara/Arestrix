@@ -255,6 +255,7 @@ def scenario_04_memoria():
         check(any("memory_search" in e.get("tools", []) for e in chats), "a ferramenta memory_search foi oferecida")
         check(any(e.get("reply") == "tool_call:memory_search" for e in chats), "o agente chamou memory_search")
         check(any(e.get("reply") == "tool_call:memory_record_lesson" for e in chats), "o agente chamou memory_record_lesson")
+        check(re.search(r'"type"\s*:\s*"usage"', out) is not None, "o runtime emitiu telemetria de tokens para o Runner")
         no_secret_leak(out, "ex4")
     finally:
         cleanup(work, mock)

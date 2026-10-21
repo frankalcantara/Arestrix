@@ -30,6 +30,18 @@ std::string lower(std::string s) {
     return s;
 }
 
+// Cabecalhos nao podem carregar CR/LF nem valores arbitrariamente longos.
+std::string headerSafe(std::string value, size_t maxLen = 200) {
+    std::string out;
+    out.reserve(std::min(value.size(), maxLen));
+    for (unsigned char c : value) {
+        if (c < 0x20 || c == 0x7f) continue;
+        out.push_back(static_cast<char>(c));
+        if (out.size() >= maxLen) break;
+    }
+    return out;
+}
+
 std::string envOr(const std::string& name, const std::string& fallback) {
     // Ambiente real do processo: os Padroes Globais gravam com a API do SO, que o getenv do CRT nao enxerga.
     std::string v = platform::getEnv(name);
@@ -347,6 +359,16 @@ ChatReply parseResponseBody(const ProviderInfo& info, const std::string& body) {
     return r;
 }
 
+std::map<std::string, std::string> gatewayMetadataHeaders(const ChatRequest& req) {
+    std::map<std::string, std::string> headers;
+    if (!req.agentId.empty()) headers["X-Arestrix-Agent"] = headerSafe(req.agentId);
+    if (!req.runId.empty()) headers["X-Arestrix-Run-Id"] = headerSafe(req.runId);
+    if (!req.memoryScope.empty()) headers["X-Arestrix-Memory-Scope"] = headerSafe(req.memoryScope);
+    headers["X-Arestrix-Memory-Enabled"] = req.memoryEnabled ? "1" : "0";
+    headers["X-Arestrix-Memory-Context-Chars"] = std::to_string(req.memoryContextChars);
+    return headers;
+}
+
 ChatReply chatOnce(const ChatRequest& req) {
     ChatReply out;
     if (req.model.empty()) {
@@ -383,6 +405,8 @@ ChatReply chatOnce(const ChatRequest& req) {
             if (info.protocol == "anthropic") {
                 http.headers["anthropic-version"] = "2023-06-01";
             }
+            // Metadados de memoria: o gateway agrega o impacto sem precisar interpretar o prompt.
+            for (const auto& [name, value] : gatewayMetadataHeaders(req)) http.headers[name] = value;
         } else if (info.protocol == "anthropic") {
             http.headers["x-api-key"] = apiKey;
             http.headers["anthropic-version"] = "2023-06-01";
