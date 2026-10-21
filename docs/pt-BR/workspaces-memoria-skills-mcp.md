@@ -113,6 +113,16 @@ São coisas diferentes:
 Cada execução de agente registra tokens, chamadas, latência e tamanho do contexto de memória na
 tabela `memory_usage`. Para comparar o consumo com a memória ligada/desligada:
 
+No **Studio**, abra **Padrões Globais → Memória** e use **Modo de Medição / A-B**:
+
+- **Normal**: usa a configuração de memória dos vértices.
+- **A/B: memória OFF neste projeto**: desliga brief e ferramentas de memória em runtime, sem editar
+  os vértices.
+- **Registrar métricas mesmo com a memória OFF**: mantém `memory_usage`, outcomes, retries e hits.
+
+Depois rode o mesmo grafo normalmente e consulte **Memória do Projeto → Manutenção**. Para
+automação/CI, as mesmas opções existem como variáveis de ambiente:
+
 ```bash
 # 1) memória ON no mesmo grafo, gravando métricas
 ARESTRIX_MEMORY_METRICS=1 arestrix-cli run pipelines/main.json --root <projeto>
@@ -125,10 +135,9 @@ ARESTRIX_MEMORY_METRICS=1 ARESTRIX_MEMORY_DISABLE=1 \
 python scripts/memory_report.py <projeto>
 ```
 
-`ARESTRIX_MEMORY_DISABLE=1` remove o brief e as ferramentas de memória em runtime, mas mantém a
-gravação de `memory_usage` para a comparação. O relatório mostra sucesso/falha, retries, memórias
-injetadas e memórias usadas/consultadas. `memory_report.py` é apenas um leitor do SQLite para
-desenvolvimento; o runtime não depende de Python. Veja também [`arestrix-cli`](arestrix-cli.md).
+O relatório mostra sucesso/falha, retries, memórias injetadas e memórias usadas/consultadas.
+`memory_report.py` é apenas um leitor do SQLite para desenvolvimento; o runtime não depende de
+Python. Veja também [`arestrix-cli`](arestrix-cli.md).
 
 O **Runner Standalone** recebe os tokens do agente por um único evento de telemetria emitido pelo
 runtime C++ (`type: "usage"`), agregado pelo `RunnerManager`. Não há parsing de stdout nem processo

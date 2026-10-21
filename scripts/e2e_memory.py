@@ -131,7 +131,9 @@ def make_graphs():
     off_agent = copy.deepcopy(agent)
     off_agent["agentSettings"]["memory"]["enabled"] = False
     g4 = graph([off_agent], [])
-    return g1, g2, g3, g4
+    g5 = graph([copy.deepcopy(agent)], [])
+    g5["metadata"]["globalDefaults"]["memory"].update({"measurementMode": "memory_off", "recordMetrics": True})
+    return g1, g2, g3, g4, g5
 
 
 class MockHandler(BaseHTTPRequestHandler):
@@ -179,11 +181,12 @@ def main():
     project = work / "projeto"
     project.mkdir(parents=True)
     log_file = work / "systems.log"
-    g1, g2, g3, g4 = make_graphs()
+    g1, g2, g3, g4, g5 = make_graphs()
     (work / "graph1.json").write_text(json.dumps(g1, indent=2), encoding="utf-8")
     (work / "graph2.json").write_text(json.dumps(g2, indent=2), encoding="utf-8")
     (work / "graph3.json").write_text(json.dumps(g3, indent=2), encoding="utf-8")
     (work / "graph4.json").write_text(json.dumps(g4, indent=2), encoding="utf-8")
+    (work / "graph5.json").write_text(json.dumps(g5, indent=2), encoding="utf-8")
 
     port_num = free_port()
     server = HTTPServer(("127.0.0.1", port_num), MockHandler)
@@ -254,6 +257,16 @@ def main():
                               "FROM memory_usage WHERE memory_enabled=0")
         check(ab and ab[0][0] >= 1 and ab[0][1] == 0 and ab[0][2] >= 1,
               "o mesmo grafo foi registrado como memoria OFF com outcome=success")
+
+        print("\n== A/B configurado no projeto (opcao da UI), sem variavel de ambiente ==")
+        p_ui = run_graph(EXE, work / "graph5.json", project, env)
+        out_ui = (p_ui.stdout or "") + (p_ui.stderr or "")
+        check(p_ui.returncode == 0, "a execucao A/B configurada no projeto terminou com codigo 0")
+        check("[MEMORIA] contexto injetado" not in out_ui, "measurementMode=memory_off removeu o contexto")
+        ui_off = db_rows(project, "SELECT COUNT(*), COALESCE(SUM(memory_enabled),0) "
+                                  "FROM memory_usage WHERE memory_enabled=0 AND outcome='success'")
+        check(ui_off and ui_off[0][0] >= 1 and ui_off[0][1] == 0,
+              "measurementMode=memory_off foi registrado como memoria OFF")
 
         print("\n== Memoria de projeto: falha de agente gera licao automatica ==")
         p3 = run_graph(EXE, work / "graph3.json", project, env)

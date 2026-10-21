@@ -79,6 +79,7 @@ struct AgentSpec {
     std::string memoryProjectId;
     bool memoryEnabled = false;
     bool memoryWriteEnabled = false;
+    bool memoryForceDisabled = false;
     std::vector<std::string> memoryDomains;
     std::vector<std::string> tools;
     std::vector<std::string> mcpServers;   // ids em .workspace/mcps
@@ -116,6 +117,7 @@ AgentSpec parseSpec(const json& j, const std::string& nodeId, const std::string&
     s.memoryProjectId = j.value("memoryProjectId", "");
     s.memoryEnabled = j.value("memoryEnabled", false);
     s.memoryWriteEnabled = j.value("memoryWriteEnabled", false);
+    s.memoryForceDisabled = j.value("memoryForceDisabled", false);
     if (j.contains("memoryDomains") && j["memoryDomains"].is_array()) {
         for (const auto& d : j["memoryDomains"]) if (d.is_string()) s.memoryDomains.push_back(d.get<std::string>());
     }
@@ -208,7 +210,7 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
     spec.memoryContext = memoryContext;
 
     // A/B controlado no mesmo grafo: desliga injecao e ferramentas de memoria sem editar o JSON.
-    if (std::getenv("ARESTRIX_MEMORY_DISABLE") != nullptr) {
+    if (spec.memoryForceDisabled || std::getenv("ARESTRIX_MEMORY_DISABLE") != nullptr) {
         spec.memoryEnabled = false;
         spec.memoryContext.clear();
         spec.memoryWriteEnabled = false;

@@ -119,6 +119,10 @@ export interface INodeMemoryConfig {
   allowedKeys?: string[];    // Chaves específicas do Blackboard (vazio = todas autorizadas)
   domains?: string[];        // Domínios semânticos (ex: ["svg_typography", "validation"])
   contextBudgetTokens?: number; // Orçamento aproximado do brief injetado (padrão 800)
+  /** normal = usa a configuração dos vértices; memory_off = força OFF no projeto (A/B). */
+  measurementMode?: 'normal' | 'memory_off';
+  /** Mantém a gravação de memory_usage mesmo quando a memória está OFF. */
+  recordMetrics?: boolean;
 }
 
 export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {
@@ -130,7 +134,9 @@ export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {
   recordLessons: false,
   allowedKeys: [],
   domains: [],
-  contextBudgetTokens: 800
+  contextBudgetTokens: 800,
+  measurementMode: 'normal',
+  recordMetrics: false
 };
 
 export interface IGlobalPipelineDefaults {

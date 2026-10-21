@@ -167,8 +167,8 @@ Para testes sem chave real, os scripts de e2e usam LLMs falsos e MCPs de teste; 
 | :--- | :--- |
 | `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`, etc. | Chave do provedor usado pelos agentes. |
 | `KEENABLE_API` | Chave do MCP Keenable no exemplo 05. |
-| `ARESTRIX_MEMORY_METRICS=1` | Grava métricas mesmo com a memória desligada, para comparação. |
-| `ARESTRIX_MEMORY_DISABLE=1` | Desliga brief e ferramentas de memória em runtime, sem editar o grafo; útil para A/B. |
+| `ARESTRIX_MEMORY_METRICS=1` | Grava métricas mesmo com a memória desligada. No Studio, use **Padrões Globais → Memória → Registrar métricas**. |
+| `ARESTRIX_MEMORY_DISABLE=1` | Desliga brief e ferramentas de memória em runtime. No Studio, use **Modo de Medição / A-B**. |
 | `ARESTRIX_PYTHON` | Usada apenas por exemplos que declaram um MCP stdio em Python. |
 
 Nunca coloque chaves no grafo, no `arestrix.project.json` ou em `.workspace/mcps`. Use variáveis

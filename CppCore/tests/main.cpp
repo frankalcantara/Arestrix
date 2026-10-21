@@ -613,6 +613,19 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(src.find("recordLesson(projectId, \"svg_typography\", \"agent_failure\"") != std::string::npos);
     CHECK(src.find("setWorking(projectId, \"pipeline\", \"last_stage\", taskforge::Json(\"agente\"))") != std::string::npos);
     CHECK(src.find("memory.clearSession(projectId)") != std::string::npos);
+
+    // A/B configurado no projeto (sem env): desliga brief/ferramentas, mantém metricas.
+    json offSchema = schema;
+    offSchema["metadata"]["globalDefaults"] = json{{"memory", json{{"measurementMode", "memory_off"},
+                                                                   {"recordMetrics", true}}}};
+    taskforge::core::Graph offGraph;
+    offGraph.fromJson(offSchema);
+    std::string offSrc = TaskflowGenerator::generateSource(offGraph);
+    CHECK(offSrc.find("\"memoryForceDisabled\":true") != std::string::npos);
+    CHECK(offSrc.find("\"memoryEnabled\":false") != std::string::npos);
+    CHECK(offSrc.find("\"memory_search\"") == std::string::npos);
+    CHECK(offSrc.find("memory.buildBrief(") == std::string::npos);
+    CHECK(offSrc.find("|| true || std::getenv") != std::string::npos);
 }
 
 TEST(memory_store_working_lessons_temporal_and_usage) {

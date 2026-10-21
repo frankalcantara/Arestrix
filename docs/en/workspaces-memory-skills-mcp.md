@@ -113,6 +113,16 @@ These are different things:
 Each agent run records tokens, calls, latency and memory context size in the `memory_usage` table.
 To compare consumption with memory on/off:
 
+In the **Studio**, open **Global Defaults → Memory** and use **Measurement / A-B Mode**:
+
+- **Normal**: use the vertices' memory configuration.
+- **A/B: memory OFF in this project**: disables the brief and memory tools at runtime without
+  editing vertices.
+- **Record metrics even with memory OFF**: keeps `memory_usage`, outcomes, retries and hits.
+
+Then run the same graph normally and check **Project Memory → Maintenance**. For automation/CI, the
+same options exist as environment variables:
+
 ```bash
 # 1) memory ON on the same graph, recording metrics
 ARESTRIX_MEMORY_METRICS=1 arestrix-cli run pipelines/main.json --root <project>
@@ -125,10 +135,9 @@ ARESTRIX_MEMORY_METRICS=1 ARESTRIX_MEMORY_DISABLE=1 \
 python scripts/memory_report.py <project>
 ```
 
-`ARESTRIX_MEMORY_DISABLE=1` removes the brief and memory tools at runtime while still recording
-`memory_usage` for comparison. The report shows success/failure, retries, injected memories and
-used/consulted memories. `memory_report.py` is only a SQLite reader for development; the runtime
-does not depend on Python. See also [`arestrix-cli`](arestrix-cli.md).
+The report shows success/failure, retries, injected memories and used/consulted memories.
+`memory_report.py` is only a SQLite reader for development; the runtime does not depend on Python.
+See also [`arestrix-cli`](arestrix-cli.md).
 
 The **Standalone Runner** receives agent tokens through a single telemetry event emitted by the C++
 runtime (`type: "usage"`), aggregated by `RunnerManager`. There is no stdout parsing and no auxiliary

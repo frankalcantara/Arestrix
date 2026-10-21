@@ -32,8 +32,8 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
 - Memory runtime now records sanitized success/failure episodes, injected/used memory hits,
   retries and task outcomes. The brief compiler orders newer/higher-confidence lessons first and
   never emits partial Blackboard JSON.
-- `ARESTRIX_MEMORY_DISABLE=1` runs the same graph with memory disabled for A/B measurement while
-  still recording usage.
+- Studio **Global Defaults → Memory** now exposes Measurement / A-B mode and metric recording; the
+  `ARESTRIX_MEMORY_DISABLE` / `ARESTRIX_MEMORY_METRICS` variables remain the automation fallback.
 - Legacy `AgentBlackboard`/`SemanticMemoryEngine` JSON files are imported into SQLite.
 
 ## [1.5.0-beta.1] - 2026-10-19

@@ -459,6 +459,20 @@ export class GlobalDefaultsModal {
                 </div>
               </div>
 
+              <div class="form-group" style="margin-top: 14px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                <label class="form-label" for="def-memory-measurement">${t('global_defaults.memory_measurement_label')}</label>
+                <select id="def-memory-measurement" class="form-select">
+                  <option value="normal" ${(defaults.memory?.measurementMode || 'normal') === 'normal' ? 'selected' : ''}>${t('global_defaults.memory_measurement_normal')}</option>
+                  <option value="memory_off" ${defaults.memory?.measurementMode === 'memory_off' ? 'selected' : ''}>${t('global_defaults.memory_measurement_off')}</option>
+                </select>
+                <div class="form-hint">${t('global_defaults.memory_measurement_hint')}</div>
+                <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; cursor: pointer;">
+                  <input type="checkbox" id="def-memory-record-metrics" ${defaults.memory?.recordMetrics ? 'checked' : ''} />
+                  <span>${t('global_defaults.memory_record_metrics_label')}</span>
+                </label>
+                <div class="form-hint">${t('global_defaults.memory_record_metrics_hint')}</div>
+              </div>
+
               <div class="memory-perms-grid" style="margin-top: 14px;">
                 <label class="memory-perm-item">
                   <input type="checkbox" id="def-mem-read-bb" ${defaults.memory?.readBlackboard ? 'checked' : ''} />
@@ -1506,6 +1520,8 @@ export class GlobalDefaultsModal {
     const memWriteBb = (this.overlay.querySelector('#def-mem-write-bb') as HTMLInputElement)?.checked || false;
     const memReadLessons = (this.overlay.querySelector('#def-mem-read-lessons') as HTMLInputElement)?.checked || false;
     const memWriteLessons = (this.overlay.querySelector('#def-mem-write-lessons') as HTMLInputElement)?.checked || false;
+    const memMeasurement = ((this.overlay.querySelector('#def-memory-measurement') as HTMLSelectElement)?.value || 'normal') as 'normal' | 'memory_off';
+    const memRecordMetrics = (this.overlay.querySelector('#def-memory-record-metrics') as HTMLInputElement)?.checked || false;
 
     const newDefaults: IGlobalPipelineDefaults = {
       sandbox: {
@@ -1536,7 +1552,9 @@ export class GlobalDefaultsModal {
         semanticLessons: memReadLessons,
         recordLessons: memWriteLessons,
         allowedKeys: [],
-        domains: []
+        domains: [],
+        measurementMode: memMeasurement,
+        recordMetrics: memRecordMetrics
       }
     };
 

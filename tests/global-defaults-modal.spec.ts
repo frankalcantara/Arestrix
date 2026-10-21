@@ -130,6 +130,8 @@ describe('GlobalDefaultsModal - Abas, Teste de API e Limpeza de Textos Fixos', (
       expect(renderedHtml).toContain('id="pane-tab-sandbox"');
       expect(renderedHtml).toContain('id="pane-tab-tools"');
       expect(renderedHtml).toContain('id="pane-tab-memory"');
+      expect(renderedHtml).toContain('id="def-memory-measurement"');
+      expect(renderedHtml).toContain('id="def-memory-record-metrics"');
 
       // Verifica botões de teste e implantação de chave
       expect(renderedHtml).toContain('id="btn-test-agent-api"');

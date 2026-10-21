@@ -235,6 +235,16 @@ bool anyMemoryPersistent(const core::Graph& graph) {
     return persistent;
 }
 
+bool memoryMeasurementOff(const core::Graph& graph) {
+    json global = objectOrEmpty(graph.getMetadata().globalDefaults, "memory");
+    return global.value("measurementMode", std::string("normal")) == "memory_off";
+}
+
+bool memoryRecordMetrics(const core::Graph& graph) {
+    json global = objectOrEmpty(graph.getMetadata().globalDefaults, "memory");
+    return global.value("recordMetrics", false);
+}
+
 std::string cppStringList(const json& values) {
     std::string out = "std::vector<std::string>{";
     bool first = true;
@@ -282,14 +292,17 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
     spec["skillPath"] = skillPath;
 
     json memory = effectiveSection(defaults, settings, "inheritMemory", "memory");
-    spec["memoryEnabled"] = memory.value("enabled", false);
+    const bool forceMemoryOff = memoryMeasurementOff(graph);
+    const bool effectiveMemoryEnabled = memory.value("enabled", false) && !forceMemoryOff;
+    spec["memoryEnabled"] = effectiveMemoryEnabled;
+    spec["memoryForceDisabled"] = forceMemoryOff;
     spec["memoryProjectId"] = graph.getMetadata().projectId;
-    spec["memoryWriteEnabled"] = memory.value("recordLessons", false);
+    spec["memoryWriteEnabled"] = effectiveMemoryEnabled && memory.value("recordLessons", false);
     if (memory.contains("domains") && memory["domains"].is_array()) spec["memoryDomains"] = memory["domains"];
 
     json tools = json::array();
     if (codeMode.contains("allowedTools") && codeMode["allowedTools"].is_array()) tools = codeMode["allowedTools"];
-    if (memory.value("enabled", false)) {
+    if (effectiveMemoryEnabled) {
         auto addTool = [&](const std::string& name) {
             for (const auto& tool : tools) if (tool.is_string() && tool.get<std::string>() == name) return;
             tools.push_back(name);
@@ -387,6 +400,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
     code += "  const std::string projectId = " + cppString(meta.projectId.empty() ? "default" : meta.projectId) + ";\n";
     code += "  auto& memory = taskforge::memory::MemoryService::getInstance();\n";
     code += "  const bool arx_mem_persistent = " + std::string(anyMemoryPersistent(graph) ? "true" : "false") +
+            " || " + std::string(memoryRecordMetrics(graph) ? "true" : "false") +
             " || std::getenv(\"ARESTRIX_MEMORY_METRICS\") != nullptr;\n";
     code += "  if (!memory.configure(projectId, arx_mem_persistent)) {\n";
     code += "    std::cerr << \"[MEMORIA] nao foi possivel abrir o banco do projeto\\n\";\n";
@@ -511,7 +525,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
             body = node.customLambdaBody.empty() ? "(void)sf; // subflow hierarquico" : node.customLambdaBody;
         } else if (node.type == core::TaskflowNodeType::Agent && node.customLambdaBody.empty()) {
             json mem = effectiveMemory(graph, node);
-            const bool memEnabled = mem.value("enabled", false);
+            const bool memEnabled = mem.value("enabled", false) && !memoryMeasurementOff(graph);
             if (memEnabled) {
                 json domains = mem.contains("domains") && mem["domains"].is_array() ? mem["domains"] : json::array();
                 json keys = mem.contains("allowedKeys") && mem["allowedKeys"].is_array() ? mem["allowedKeys"] : json::array();
