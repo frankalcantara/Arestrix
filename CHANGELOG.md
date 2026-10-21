@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **Beta 1.5**.
 
+## [Unreleased]
+
+### Added
+
+- Project memory is now stored in SQLite (`.arestrix/memory/memory.db`) by `MemoryStore` and
+  `MemoryService`, with scopes, nodes, temporal edges, episodes, evidence, audit and working state.
+- Temporal multigraph queries (`as of`, invalidation, recursive neighbours) and FTS5 node search.
+- `memory_usage` records API prompt/completion tokens, calls, latency and injected memory context
+  for each agent; `scripts/memory_report.py` summarises it.
+- Agents can use `memory_search` and `memory_record_lesson` when memory is enabled.
+- Context briefs are bounded by `contextBudgetTokens` (~4 characters per token).
+- `examples/04-memoria` and `scripts/e2e_memory.py` verify persistence, injection, filters,
+  automatic failure lessons and API usage.
+- Legacy `AgentBlackboard`/`SemanticMemoryEngine` JSON files are imported into SQLite.
+
 ## [1.5.0-beta.1] - 2026-10-19
 
 Beta 1.5 focuses on local AI models and enterprise usage governance.

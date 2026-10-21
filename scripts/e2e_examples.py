@@ -13,6 +13,7 @@ import pathlib
 import re
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -86,9 +87,13 @@ def scenario_01():
     try:
         check(code == 0, "terminou com codigo 0")
         check("JEV REPROVOU" in out and "JEV APROVOU" in out, "laco de autocorrecao: reprovou e depois aprovou")
-        check("[Entrega] SVG aprovado" in out, "vertice de entrega executado")
+        check("[OUTPUT: Entrega_SVG_Final]" in out and "[OUTPUT_DELIVERY]" in out, "vertice de saida registrou o entregavel")
         svg = project / "workspace" / "scene.svg"
         check(svg.exists() and "feDropShadow" not in svg.read_text(encoding="utf-8"), "SVG final sem sombra em texto")
+        export = project / "exports" / "scene.svg"
+        check(export.exists() and export.read_text(encoding="utf-8") == svg.read_text(encoding="utf-8"),
+              "vertice de saida copiou o SVG para exports/scene.svg")
+        check('"destination": "exports/scene.svg"' in out, "o entregavel foi anunciado com origem e destino")
         chats = [e for e in events if e["event"] == "chat"]
         check(chats and all(e["model"] == "deepseek-flash" for e in chats), "o modelo veio dos Padroes Globais do projeto (deepseek-flash)")
         check(not any(e["event"] == "401" for e in events), "nenhuma chamada sem chave valida")
@@ -97,12 +102,18 @@ def scenario_01():
         cleanup(work, mock)
 
 
-def support_checks(out, project, events, path, label):
+def support_checks(out, project, events, path, label, artifact):
     check(f"caminho: {path}" in out and f"(caminho: {path})" in out, f"{label}: triagem e entrega pelo caminho '{path}'")
     routes = [e for e in events if e["event"] == "route"]
     check(routes and routes[0]["chosen"] == path, f"{label}: o modelo recebeu as opcoes e escolheu '{path}'")
     check(routes and "revisao_humana" in routes[0]["options"], f"{label}: a opcao default foi oferecida ao modelo")
-    check((project / "workspace" / "resposta.md").exists(), f"{label}: workspace/resposta.md criado")
+    resposta = project / "workspace" / "resposta.md"
+    check(resposta.exists(), f"{label}: workspace/resposta.md criado")
+    exported = project / "exports" / artifact
+    check(exported.exists(), f"{label}: vertice de saida exportou exports/{artifact}")
+    check(exported.exists() and resposta.exists() and exported.read_bytes() == resposta.read_bytes(),
+          f"{label}: o artefato exportado e a resposta escrita")
+    check(f'"destination": "exports/{artifact}"' in out, f"{label}: o entregavel foi anunciado com origem e destino")
     chats = [e for e in events if e["event"] == "chat"]
     check("[MCP Extrair_Email] arestrix.dados.regex_extract ok" in out, f"{label}: a ferramenta NATIVA extraiu o e-mail do chamado (sem processo externo)")
     check("[MCP Consultar_Cliente] clientes.lookup_customer ok" in out, f"{label}: o vertice MCP consultou o cadastro de clientes com esse e-mail")
@@ -118,7 +129,7 @@ def scenario_02_urgente():
     out, project, events, code, work, mock = run_example("02-triagem-de-suporte", "chamado_urgente.txt")
     try:
         check(code == 0, "terminou com codigo 0")
-        support_checks(out, project, events, "urgente", "urgente")
+        support_checks(out, project, events, "urgente", "urgente", "resposta-urgente.md")
         log = project / "output" / "escalonamentos.jsonl"
         check(log.exists() and "ESC-0001" in log.read_text(encoding="utf-8"), "o servidor MCP registrou o escalonamento ESC-0001")
         chats = [e for e in events if e["event"] == "chat"]
@@ -135,7 +146,7 @@ def scenario_02_normal():
     out, project, events, code, work, mock = run_example("02-triagem-de-suporte", "chamado_normal.txt")
     try:
         check(code == 0, "terminou com codigo 0")
-        support_checks(out, project, events, "normal", "normal")
+        support_checks(out, project, events, "normal", "normal", "resposta-normal.md")
         check(out.count("[Switch Controle_de_Qualidade] caminho: ajustar") == 1, "o controle de qualidade pediu ajuste uma vez")
         check("[Switch Controle_de_Qualidade] caminho: aprovado" in out, "e aprovou depois da correcao")
         check(out.count("[Agent Agente_Redator] concluido") == 2, "o redator rodou duas vezes (laco de feedback)")
@@ -150,7 +161,7 @@ def scenario_02_duvida():
     out, project, events, code, work, mock = run_example("02-triagem-de-suporte", "chamado_duvida.txt")
     try:
         check(code == 0, "terminou com codigo 0")
-        support_checks(out, project, events, "duvida", "duvida")
+        support_checks(out, project, events, "duvida", "duvida", "resposta-duvida.md")
         check("Exportar" in (project / "workspace" / "resposta.md").read_text(encoding="utf-8"), "a resposta usa a base de conhecimento")
     finally:
         cleanup(work, mock)
@@ -177,7 +188,15 @@ def scenario_03_duvida():
         check("explicacao animada em workspace/scene.svg (caminho: duvida)" in out, "entrega final do exemplo 3")
         svg = project / "workspace" / "scene.svg"
         check(svg.exists() and "feDropShadow" not in svg.read_text(encoding="utf-8"), "SVG final aprovado")
-        check((project / "workspace" / "resposta.md").exists(), "a resposta escrita tambem foi gerada")
+        resposta = project / "workspace" / "resposta.md"
+        check(resposta.exists(), "a resposta escrita tambem foi gerada")
+        resposta_exportada = project / "exports" / "resposta-duvida.md"
+        check(resposta_exportada.exists() and resposta_exportada.read_bytes() == resposta.read_bytes(),
+              "vertice de saida entregou a resposta escrita antes da ilustracao")
+        svg_exportado = project / "exports" / "scene.svg"
+        check(svg_exportado.exists() and svg_exportado.read_bytes() == svg.read_bytes(),
+              "vertice de saida entregou o SVG animado")
+        check(out.count("[OUTPUT_DELIVERY]") == 2, "os dois vertices de saida do ramo registraram entregaveis")
         no_secret_leak(out, "ex3-duvida")
     finally:
         cleanup(work, mock)
@@ -191,7 +210,51 @@ def scenario_03_urgente():
         check("[Switch Triagem_de_Urgencia] caminho: urgente" in out, "a triagem escolheu 'urgente'")
         log = project / "output" / "escalonamentos.jsonl"
         check(log.exists() and "ESC-0001" in log.read_text(encoding="utf-8"), "escalonamento registrado via MCP")
+        check((project / "exports" / "resposta-urgente.md").exists(), "vertice de saida entregou a resposta urgente")
+        check(not (project / "exports" / "scene.svg").exists(), "o fluxo de SVG nao gerou entregavel neste ramo")
         check("[Agent Agente_Gerador_DeepSeek]" not in out and "svg_gerador" not in out, "o fluxo de SVG nao rodou neste ramo")
+    finally:
+        cleanup(work, mock)
+
+
+def scenario_04_memoria():
+    print("\n== Exemplo 4: memoria de projeto (licao, Blackboard e saida) ==")
+    out, project, events, code, work, mock = run_example("04-memoria")
+    try:
+        check(code == 0, "terminou com codigo 0")
+        check("[MEMORIA] contexto injetado em Agente_Com_Memoria" in out, "o runtime injetou a memoria no agente")
+        resposta = project / "workspace" / "resposta.txt"
+        check(resposta.exists(), "o agente gravou workspace/resposta.txt")
+        exportado = project / "exports" / "resposta.md"
+        check(exportado.exists() and resposta.exists() and exportado.read_bytes() == resposta.read_bytes(),
+              "o vertice de saida entregou a resposta")
+        memoria = project / ".arestrix" / "memory" / "memory.db"
+        check(memoria.exists(), "o banco SQLite de memoria foi criado")
+        if memoria.exists():
+            with sqlite3.connect(memoria) as conn:
+                lessons = conn.execute("SELECT r.canonical_name FROM memory_edge e JOIN memory_node r ON r.id=e.dst_id "
+                                       "WHERE e.relation='HAS_LESSON' AND e.status='active'").fetchall()
+                working = conn.execute("SELECT value_json FROM memory_working WHERE item_id='pipeline' AND key='resumo'").fetchall()
+                usage = conn.execute("SELECT COUNT(*), COALESCE(SUM(calls),0) FROM memory_usage").fetchone()
+            check(any("A resposta deve citar a regra aprendida" in row[0] for row in lessons),
+                  "a licao foi persistida no banco")
+            check(any("Licao registrada pelo agente no teste" in row[0] for row in lessons),
+                  "o agente registrou uma nova licao via memory_record_lesson")
+            check(any("chamado de exemplo" in row[0] for row in working),
+                  "o Blackboard foi persistido no banco")
+            check(usage and usage[0] >= 1 and usage[1] >= 1, "o consumo de API foi registrado no banco")
+        else:
+            check(False, "a licao foi persistida no banco")
+            check(False, "o Blackboard foi persistido no banco")
+            check(False, "o consumo de API foi registrado no banco")
+        chats = [e for e in events if e["event"] == "chat"]
+        system = chats[0].get("system", "") if chats else ""
+        check("A resposta deve citar a regra aprendida" in system, "a licao apareceu no system prompt")
+        check("chamado de exemplo" in system, "o resumo do Blackboard apareceu no system prompt")
+        check(any("memory_search" in e.get("tools", []) for e in chats), "a ferramenta memory_search foi oferecida")
+        check(any(e.get("reply") == "tool_call:memory_search" for e in chats), "o agente chamou memory_search")
+        check(any(e.get("reply") == "tool_call:memory_record_lesson" for e in chats), "o agente chamou memory_record_lesson")
+        no_secret_leak(out, "ex4")
     finally:
         cleanup(work, mock)
 
@@ -213,7 +276,7 @@ def scenario_secrets_guard():
 
 def main():
     for fn in (scenario_01, scenario_02_urgente, scenario_02_normal, scenario_02_duvida, scenario_02_sem_chave,
-               scenario_03_duvida, scenario_03_urgente, scenario_secrets_guard):
+               scenario_03_duvida, scenario_03_urgente, scenario_04_memoria, scenario_secrets_guard):
         fn()
     if failures:
         print(f"\n{len(failures)} verificacao(oes) falharam:")

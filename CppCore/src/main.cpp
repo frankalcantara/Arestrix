@@ -7,6 +7,7 @@
 #include "sandbox/PipelineResumeEngine.hpp"
 #include "memory/AgentBlackboard.hpp"
 #include "memory/SemanticMemoryEngine.hpp"
+#include "memory/MemoryService.hpp"
 #include "mcp/McpRegistry.hpp"
 #include "project/ProjectManager.hpp"
 #include "project/GitSyncService.hpp"
@@ -37,6 +38,7 @@
 #include <string>
 #include <fstream>
 #include <sstream>
+#include <cctype>
 #include <filesystem>
 #include <vector>
 
@@ -417,6 +419,36 @@ void ui_reset_pipeline_checkpoint(webui::window::event* e) {
 }
 
 // Wrapper de comunicação JS -> C++ (Status da Memória Heterogênea)
+namespace {
+std::string activeMemoryRoot() {
+    std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+    if (root.empty()) root = std::filesystem::current_path().string();
+    return root;
+}
+
+std::string activeMemoryDb(const std::string& projectId) {
+    (void)projectId;
+    return (std::filesystem::path(activeMemoryRoot()) / ".arestrix" / "memory" / "memory.db").string();
+}
+
+std::string memorySafeName(const std::string& projectId) {
+    std::string out = projectId.empty() ? "default" : projectId;
+    for (char& c : out) {
+        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_') c = '_';
+    }
+    return out;
+}
+
+bool configureProjectMemory(const std::string& projectId, bool persistent) {
+    const std::string root = activeMemoryRoot();
+    const std::string safe = memorySafeName(projectId);
+    return taskforge::memory::MemoryService::getInstance().configure(
+        projectId, persistent, activeMemoryDb(projectId),
+        (std::filesystem::path(root) / ("arestrix-blackboard-" + safe + ".json")).string(),
+        (std::filesystem::path(root) / ("arestrix-memory-" + safe + ".json")).string());
+}
+} // namespace
+
 void ui_get_memory_status(webui::window::event* e) {
     std::string payload = e->get_string();
     std::string projectId = "default";
@@ -429,15 +461,17 @@ void ui_get_memory_status(webui::window::event* e) {
         }
     } catch (...) {}
 
-    auto& bb = taskforge::memory::AgentBlackboard::getInstance();
-    auto& sem = taskforge::memory::SemanticMemoryEngine::getInstance();
+    configureProjectMemory(projectId, true);
+    auto data = taskforge::memory::MemoryService::getInstance().toJson(projectId);
 
-    taskforge::Json res;
+    taskforge::Json res = data;
     res["projectId"] = projectId;
-    res["blackboard"] = bb.toJson(projectId);
-    res["semantic"] = sem.toJson(projectId);
-    res["isBlackboardPersistent"] = bb.isPersistent(projectId);
-    res["isSemanticPersistent"] = sem.isPersistent(projectId);
+    // Compatibilidade com o modal atual: Blackboard e Lições.
+    res["blackboard"] = data.contains("working") ? data["working"] : taskforge::Json::object();
+    res["semantic"] = taskforge::Json::object();
+    res["semantic"]["lessons"] = data.contains("lessons") ? data["lessons"] : taskforge::Json::array();
+    res["isBlackboardPersistent"] = true;
+    res["isSemanticPersistent"] = true;
 
     e->return_string(res.dump());
 }
@@ -455,12 +489,7 @@ void ui_set_memory_persistence(webui::window::event* e) {
         }
     } catch (...) {}
 
-    auto& bb = taskforge::memory::AgentBlackboard::getInstance();
-    auto& sem = taskforge::memory::SemanticMemoryEngine::getInstance();
-    bb.setPersistence(projectId, persistent);
-    sem.setPersistence(projectId, persistent);
-
-    e->return_bool(true);
+    e->return_bool(configureProjectMemory(projectId, persistent));
 }
 
 // Wrapper de comunicação JS -> C++ (Limpar Memória)
@@ -478,17 +507,10 @@ void ui_clear_memory(webui::window::event* e) {
         }
     } catch (...) {}
 
-    auto& bb = taskforge::memory::AgentBlackboard::getInstance();
-    auto& sem = taskforge::memory::SemanticMemoryEngine::getInstance();
-
-    if (sessionOnly) {
-        bb.clearSession(projectId);
-        sem.clearSession(projectId);
-    } else {
-        bb.clearProject(projectId);
-        sem.clearLessons(projectId);
-    }
-
+    configureProjectMemory(projectId, true);
+    auto& memory = taskforge::memory::MemoryService::getInstance();
+    if (sessionOnly) memory.clearSession(projectId);
+    else memory.clearProject(projectId);
     e->return_bool(true);
 }
 
@@ -505,9 +527,9 @@ void ui_record_semantic_lesson(webui::window::event* e) {
             std::string lessonRule = j.value("lessonRule", "");
             std::string sourceItem = j.value("sourceItem", "");
 
-            id = taskforge::memory::SemanticMemoryEngine::getInstance().recordLesson(
-                projectId, domain, triggerError, lessonRule, sourceItem
-            );
+            configureProjectMemory(projectId, true);
+            id = taskforge::memory::MemoryService::getInstance().recordLesson(
+                projectId, domain, triggerError, lessonRule, sourceItem);
         }
     } catch (...) {}
 

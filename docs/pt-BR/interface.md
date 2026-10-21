@@ -144,7 +144,7 @@ Todos os modais do Studio seguem o padrão de design corporativo **Microsoft Off
 | **Modelo do Nó** | Provedor & Modelo \| Parâmetros Cognitivos \| Conectividade & Chaves | Por vértice |
 | **Ferramentas do Nó** | Ferramentas Nativas \| Servidores MCP \| Políticas de Execução | Por vértice |
 | **Sandbox do Nó** | Nível de Isolamento \| Rede & DNS Guard \| Cotas & Limites | Por vértice |
-| **Memória do Nó** | Blackboard do Vértice \| Lições Semânticas \| Retenção & TTL | Por vértice |
+| **Memória do Nó** | Blackboard do Vértice \| Lições Semânticas \| Regime & Escopo | Por vértice |
 | **Skills do Nó** | Skills Habilitadas \| Catálogo do Workspace \| Importar Nova Skill | Por vértice |
 | **Editor de Skill** | Editor Markdown \| Pré-visualização Renderizada \| Metadados & Teste | Por vértice / Workspace |
 | **Repositórios GitHub** | Repositórios Autorizados \| Cadastrar Novo Repositório | Catálogo Studio |

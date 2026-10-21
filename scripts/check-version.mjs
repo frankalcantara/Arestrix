@@ -45,7 +45,8 @@ if (lock.version !== versionFile || lockRoot !== versionFile) {
 }
 
 const changelog = read('CHANGELOG.md');
-const changelogVersion = changelog.match(/^##\s*\[([^\]]+)\]/m)?.[1];
+const changelogVersions = [...changelog.matchAll(/^##\s*\[([^\]]+)\]/gm)].map(m => m[1]);
+const changelogVersion = changelogVersions.find(v => v.toLowerCase() !== 'unreleased');
 if (changelogVersion !== versionFile) {
   fail(`CHANGELOG.md=${changelogVersion ?? 'ausente'} difere de version.txt=${versionFile}`);
 }

@@ -1390,6 +1390,16 @@
     "manual_trigger_label": "Erro Disparador",
     "manual_rule_label": "Regra Profilática Formulada",
     "btn_save_lesson": "Salvar Lição no Projeto",
+    "usage_title": "Consumo de API da Memória",
+    "usage_desc": "Tokens, chamadas e contexto injetado registrados no banco do projeto",
+    "usage_loading": "Carregando consumo de API...",
+    "usage_empty": "Nenhuma execução com métricas registrada para este projeto.",
+    "usage_runs": "Execuções",
+    "usage_calls": "Chamadas",
+    "usage_tokens": "Tokens",
+    "usage_output": "saída",
+    "usage_context": "Contexto de memória (caracteres)",
+    "usage_latency": "Latência média (ms)",
     "btn_close": "Fechar"
   },
   "batch_pipeline": {

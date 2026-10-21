@@ -19,6 +19,7 @@ Generator (agent) ─┬─► Typography linter ─┐
 | Consolidador | static | Joins both reports. |
 | Agente_Auditor | agent | Reads the reports and the SVG, writes `workspace/audit_decision.txt` (`skills/jev.md`). |
 | Decisor_Qualidade | condition (C++) | `STATUS: APROVADO` → delivery; anything else → back to the generator. |
+| Entrega_SVG_Final | output | Copies `workspace/scene.svg` to `exports/scene.svg` and registers the artifact in the **Artifacts** tab. |
 
 **Needs:** a model and its API key (see [how to run](../README.md#run-an-example)). Both agents inherit the project's model
 (DeepSeek `deepseek-flash` by default). To use a different model for the auditor, open the vertex, press **Model**, uncheck

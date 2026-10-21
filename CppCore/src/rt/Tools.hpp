@@ -52,6 +52,10 @@ struct ToolContext {
     std::filesystem::path workspaceRoot;
     sandbox::SandboxPolicy sandbox;
     std::string agentId;
+    std::string projectId;              // projeto da memoria (MemoryService)
+    std::string memoryItemId = "pipeline";
+    bool memoryWriteEnabled = false;
+    std::vector<std::string> memoryDomains;
     std::vector<std::string> allowed;
     RuntimeLang lang = RuntimeLang::Pt;   // idioma do agente (skill + prompt)
 };

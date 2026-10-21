@@ -116,6 +116,7 @@ export interface INodeMemoryConfig {
   recordLessons: boolean;    // Registro de novas lições derivadas de falhas/auditorias
   allowedKeys?: string[];    // Chaves específicas do Blackboard (vazio = todas autorizadas)
   domains?: string[];        // Domínios semânticos (ex: ["svg_typography", "validation"])
+  contextBudgetTokens?: number; // Orçamento aproximado do brief injetado (padrão 800)
 }
 
 export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {
@@ -126,7 +127,8 @@ export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {
   semanticLessons: false,
   recordLessons: false,
   allowedKeys: [],
-  domains: []
+  domains: [],
+  contextBudgetTokens: 800
 };
 
 export interface IGlobalPipelineDefaults {

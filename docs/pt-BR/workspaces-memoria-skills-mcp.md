@@ -55,6 +55,41 @@ A memória é opcional e vem desativada por padrão.
 A memória é particionada por `projectId`, então dois projetos nunca leem os dados um do outro. Cada vértice
 declara quais chaves pode ler ou escrever.
 
+### Como a memória chega ao agente
+
+No pipeline gerado, o runtime:
+
+1. carrega as lições e o Blackboard do projeto quando `persistent: true`;
+2. monta um bloco com as lições do domínio configurado e o snapshot das chaves autorizadas;
+3. injeta esse bloco no system prompt como **dado histórico não confiável**;
+4. grava a lição e o Blackboard no fim da execução;
+5. registra automaticamente uma lição quando um agente falha e `recordLessons` está ligado.
+
+Quando a memória está habilitada, o agente também recebe as ferramentas `memory_search` (busca
+lições e fatos) e, se `recordLessons` estiver ligado, `memory_record_lesson`. O campo
+`contextBudgetTokens` limita o tamanho do brief injetado; o padrão é 800 tokens aproximados.
+
+Lições de auditoria são registradas pelo nó que interpreta o parecer (por exemplo, um `condition`
+que chama `recordLesson` no ramo de reprovação); o runtime não adivinha a semântica de um switch.
+
+O exemplo [`04-memoria`](../../examples/04-memoria) demonstra o ciclo completo. O armazenamento
+atual é SQLite (`.arestrix/memory/memory.db`) por projeto; a evolução para multigrafo, escopos de
+workspace/instituição e consultas recursivas fica nas notas internas de arquitetura do projeto.
+
+Cada execução de agente registra tokens, chamadas, latência e tamanho do contexto de memória na
+tabela `memory_usage`. Para comparar o consumo com a memória ligada/desligada:
+
+```bash
+# 1) execução sem memória, mas gravando métricas
+ARESTRIX_MEMORY_METRICS=1 arestrix-cli run pipelines/main.json --root <projeto>
+
+# 2) execução com memória (configuração do grafo)
+arestrix-cli run pipelines/main.json --root <projeto>
+
+# 3) relatório
+python scripts/memory_report.py <projeto>
+```
+
 ## Skills
 
 Uma **skill** é um arquivo `SKILL.md` (front matter YAML mais instruções) que vira o prompt de sistema do agente.

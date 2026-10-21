@@ -43,6 +43,8 @@ taskforge-recent-projects.json
 *.sqlite
 *.sqlite3
 *.db
+/arestrix-blackboard-*.json
+/arestrix-memory-*.json
 
 /build/
 /runtime/

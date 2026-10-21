@@ -6,14 +6,15 @@ O exemplo 2 e o exemplo 1 trabalhando juntos: a triagem de suporte roda como ant
 escrita é entregue ao agente de SVG, que desenha uma explicação animada em 3 passos e a manda para auditoria.
 
 ```
-Receber ─► Leitor ─► Triagem ─┬─ urgente ─► Escalonador (MCP) ─► Entrega
- (exemplo 2)                  ├─ normal ──► Redator ⇄ Revisor ⇄ Qualidade ─► Entrega
-                              ├─ duvida ──► FAQ ─► [ exemplo 1: Gerador ─► verificações ─► Auditor ─► Decisão ] ─► Entrega (resposta + SVG)
+Receber ─► Leitor ─► Triagem ─┬─ urgente ─► Escalonador (MCP) ─► Entrega (resposta)
+ (exemplo 2)                  ├─ normal ──► Redator ⇄ Revisor ⇄ Qualidade ─► Entrega (resposta)
+                              ├─ duvida ──► FAQ ─► Entrega (resposta) ─► [ exemplo 1: Gerador ─► verificações ─► Auditor ─► Decisão ] ─► Entrega (SVG)
                               └─ revisao_humana ─► Revisão humana
 ```
 
-- Os vértices do exemplo 2 têm o prefixo `atd_`, os do exemplo 1 `svg_`; a única aresta nova é **FAQ → gerador de SVG**, e o gerador
-  recebe outro prompt ("explique `workspace/resposta.md` em 3 passos animados").
+- Os vértices do exemplo 2 têm o prefixo `atd_`, os do exemplo 1 `svg_`. No ramo de dúvidas, a resposta escrita passa por um
+  **vértice de saída** (`Entrega_Resposta`) antes de alimentar o gerador de SVG; a ilustração aprovada termina em outro vértice
+  de saída (`Entrega_SVG_Final`). Os dois artefatos ficam em `exports/` e na aba **Artefatos**.
 - O pipeline é **gerado** a partir das duas origens (`python scripts/build_examples.py`). Subfluxos aninhados ainda não são
   executados, por isso os dois fluxos são fundidos em um único grafo em vez de embutidos.
 - Tudo o que vale para os exemplos 1 e 2 vale aqui: a mesma herança de modelo, o mesmo servidor MCP, os mesmos chamados em `samples/`.

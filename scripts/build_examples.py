@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Gera os tres projetos de exemplo em examples/ (do simples ao complexo).
+"""Gera os quatro projetos de exemplo em examples/ (do simples ao complexo).
 
   01-svg-agente           o tutorial: dois agentes, fork/join, laco de autocorrecao (decisao em C++)
   02-triagem-de-suporte   agentes, agentes de decisao (switch com IA e por palavras) e MCP
   03-atendimento-ilustrado  "projeto de projetos": a triagem (02) seguida do agente de SVG (01)
+  04-memoria              licao semantica + Blackboard persistidos e injetados no agente
 
 Os projetos nao contem NENHUM segredo: o modelo vem dos Padroes Globais do projeto (provedor/modelo, sem chave) e as
 chaves vivem so em variaveis de ambiente do usuario (DEEPSEEK_API_KEY, OPENAI_API_KEY...). Os caminhos sao relativos
@@ -56,6 +57,23 @@ def static(nid, label, x, y, body, headers=None):
     n = base(nid, label, "static", x, y, [port(f"{nid}_out_0", "out", "output")], body)
     if headers:
         n["requiredHeaders"] = headers
+    return n
+
+
+def output(nid, label, x, y, source_path, destination_path, artifact_type, display_name, body="", description=""):
+    """Vertice de Saida / Artefato: entrega (copia) um arquivo produzido pelos vertices anteriores."""
+    n = base(nid, label, "output", x, y, [port(f"{nid}_out_0", "out", "output")], body)
+    data_in = port(f"{nid}_in_data", "data_in", "input", "data")
+    data_in["dataType"] = "std::string"
+    n["inputs"].append(data_in)
+    n["outputSettings"] = {
+        "sourcePath": source_path,
+        "destinationPath": destination_path,
+        "artifactType": artifact_type,
+        "displayName": display_name,
+        "autoOpenPreview": True,
+        "description": description,
+    }
     return n
 
 
@@ -186,8 +204,11 @@ if (!fs::exists("workspace/ticket.txt")) {
 std::cout << "[Receber] chamado em workspace/ticket.txt\\n";"""
 
 
-def entrega(nid, label, x, y, caminho):
-    return static(nid, label, x, y, f'std::cout << "[Entrega] resposta pronta em workspace/resposta.md (caminho: {caminho})\\n";')
+def entrega(nid, label, x, y, caminho, destino, nome):
+    """Entrega do ramo: registra workspace/resposta.md como artefato Markdown em exports/."""
+    body = f'std::cout << "[Entrega] resposta pronta em workspace/resposta.md (caminho: {caminho})\\n";'
+    return output(nid, label, x, y, "workspace/resposta.md", f"exports/{destino}", "markdown", nome, body,
+                  f"Resposta ao chamado ({caminho})")
 
 
 def support_nodes():
@@ -211,17 +232,17 @@ def support_nodes():
         # --- urgente
         agent("escalonador", "Agente_Escalonador", 1800, -430, "skills/escalonador.md", tools=["read", "write"],
               mcp=clientes, mcp_tools=["registrar_escalonamento"]),
-        entrega("entrega_urgente", "Entrega_Urgente", 2250, -430, "urgente"),
+        entrega("entrega_urgente", "Entrega_Urgente", 2250, -430, "urgente", "resposta-urgente.md", "Resposta ao chamado urgente"),
         # --- normal: redige, revisa e, se preciso, refaz (laco)
         agent("redator", "Agente_Redator", 1800, 0, "skills/redator.md", tools=["read", "write"]),
         agent("revisor", "Agente_Revisor", 2250, 0, "skills/revisor.md", tools=["read", "write"]),
         switch("qualidade", "Controle_de_Qualidade", 2700, 0, ["ajustar", "aprovado"], "revisao_humana",
                mode="rules", source={"kind": "file", "path": "workspace/revisao.txt"},
                rules=["AJUSTAR, reprovado, corrigir", "APROVADO"]),
-        entrega("entrega_normal", "Entrega_Normal", 3150, -90, "normal"),
+        entrega("entrega_normal", "Entrega_Normal", 3150, -90, "normal", "resposta-normal.md", "Resposta ao chamado normal"),
         # --- duvida
         agent("faq", "Agente_FAQ", 1800, 430, "skills/faq.md", tools=["read", "write"]),
-        entrega("entrega_faq", "Entrega_FAQ", 2250, 430, "duvida"),
+        entrega("entrega_faq", "Entrega_FAQ", 2250, 430, "duvida", "resposta-duvida.md", "Resposta à dúvida"),
         # --- ninguem decidiu: pessoa
         static("humano", "Revisao_Humana", 3150, 330,
                'std::cout << "[Humano] caso encaminhado para revisao humana. Leia workspace/ticket.txt e workspace/resumo.md.\\n";'),
@@ -487,6 +508,63 @@ def build_02():
     return nodes, edges
 
 
+# ---------------------------------------------------------------------------------------------- exemplo 4
+def build_04():
+    """Memoria de projeto de ponta a ponta: uma licao e um resumo sao gravados, persistidos e
+    injetados no agente; a resposta vira um artefato de saida."""
+    seed_body = (
+        'memory.recordLesson(projectId, "memoria", "auditoria_anterior",\n'
+        '    "A resposta deve citar a regra aprendida antes de concluir.", "semear");\n'
+        'memory.setWorking(projectId, "pipeline", "resumo", taskforge::Json("chamado de exemplo"));\n'
+        'std::cout << "[Semear] licao e resumo gravados\\n";'
+    )
+    nodes = [
+        static("semear", "Semear_Licao", 0, 0, seed_body),
+        agent("agente", "Agente_Com_Memoria", 450, 0, "skills/memoria.md", tools=["read", "write"],
+              prompt=("Leia a memoria injetada e grave workspace/resposta.txt com uma frase citando a regra aprendida. "
+                      "Responda apenas OK.")),
+        output("entrega", "Entrega_Resposta", 900, 0, "workspace/resposta.txt", "exports/resposta.md",
+               "markdown", "Resposta com memória"),
+    ]
+    nodes[1]["agentSettings"]["inheritMemory"] = False
+    nodes[1]["agentSettings"]["memory"] = {
+        "enabled": True,
+        "persistent": True,
+        "projectId": "exemplo-memoria",
+        "readBlackboard": True,
+        "writeBlackboard": True,
+        "semanticLessons": True,
+        "recordLessons": True,
+        "allowedKeys": ["resumo"],
+        "domains": ["memoria"],
+        "contextBudgetTokens": 400,
+    }
+    edges = [
+        edge("semear", 0, "agente"),
+        edge("agente", 0, "entrega"),
+    ]
+    g = graph("exemplo-memoria", "Memoria_de_Projeto",
+              "Memoria de projeto: licao persistente, Blackboard e injecao no agente", nodes, edges)
+    d = OUT / "04-memoria"
+    write_json(d / "arestrix.project.json",
+               manifest("exemplo-memoria", "Exemplo 4 - Memória de Projeto", g["metadata"]["description"]))
+    write_json(d / "pipelines" / "main.json", g)
+    write_text(d / "skills" / "memoria.md", """
+---
+name: agente-com-memoria
+description: Aplica as licoes e o resumo carregados da memoria do projeto
+---
+
+# Papel: AGENTE COM MEMORIA
+
+1. Leia as licoes semanticas e o resumo do Blackboard injetados no seu contexto.
+2. Se precisar de detalhe extra, use `memory_search`.
+3. Se descobrir uma regra nova e duradoura, registre-a com `memory_record_lesson`.
+4. Grave `workspace/resposta.txt` com uma frase curta citando a regra aprendida.
+5. Responda apenas `OK`.
+""")
+
+
 # ---------------------------------------------------------------------------------------------- exemplo 3
 def prefixed(nodes, edges, prefix, dx=0, dy=0):
     """Copia vertices/arestas com ids prefixados (portas e arestas incluidas) e posicoes deslocadas."""
@@ -519,10 +597,12 @@ def prefixed(nodes, edges, prefix, dx=0, dy=0):
 def build_03(ex1_graph, ex2_nodes, ex2_edges):
     """Projeto de projetos: a triagem (02); na ramificacao "duvida" a resposta ganha uma explicacao em SVG animado (01)."""
     a_nodes, a_edges = prefixed(ex2_nodes, ex2_edges, "atd_")
-    # a ramificacao "duvida" deixa de terminar na entrega simples e segue para o agente de SVG
-    drop = {"atd_entrega_faq"}
-    a_nodes = [n for n in a_nodes if n["id"] not in drop]
-    a_edges = [e for e in a_edges if e["targetNodeId"] not in drop and e["sourceNodeId"] not in drop]
+    # a ramificacao "duvida" entrega a resposta escrita e DEPOIS segue para o agente de SVG
+    for n in a_nodes:
+        if n["id"] == "atd_entrega_faq":
+            n["label"] = "Entrega_Resposta"
+            n["outputSettings"]["displayName"] = "Resposta à dúvida"
+            n["outputSettings"]["description"] = "Resposta escrita antes da explicação animada"
 
     s_nodes, s_edges = prefixed(ex1_graph["nodes"], ex1_graph["edges"], "svg_", dx=2700, dy=430)
     for n in s_nodes:
@@ -534,7 +614,9 @@ def build_03(ex1_graph, ex2_nodes, ex2_edges):
         if n["id"] == "svg_entrega":
             n["customLambdaBody"] = ('std::cout << "[Entrega] resposta em workspace/resposta.md e explicacao animada em '
                                      'workspace/scene.svg (caminho: duvida)\\n";')
-    link = edge("atd_faq", 0, "svg_gerador")
+            n["outputSettings"]["displayName"] = "Explicação animada da resposta"
+            n["outputSettings"]["description"] = "SVG animado que ilustra a resposta ao chamado"
+    link = edge("atd_entrega_faq", 0, "svg_gerador")
 
     nodes = a_nodes + s_nodes
     edges = a_edges + s_edges + [link]
@@ -566,6 +648,7 @@ def main():
     ex1 = build_01()
     ex2_nodes, ex2_edges = build_02()
     build_03(ex1, ex2_nodes, ex2_edges)
+    build_04()
     for name, files in kept.items():
         for fname, text in files.items():
             (OUT / name / fname).write_text(text, encoding="utf-8")

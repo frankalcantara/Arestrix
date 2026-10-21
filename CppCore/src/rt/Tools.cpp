@@ -1,4 +1,5 @@
 #include "rt/Tools.hpp"
+#include "memory/MemoryService.hpp"
 
 #include <algorithm>
 #include <fstream>
@@ -125,6 +126,24 @@ std::vector<ToolDef> toolDefinitions(const std::vector<std::string>& allowed, Ru
                    json{{"type", "object"},
                         {"properties", {{"path", {{"type", "string"}, {"description", langPick(lang, "Caminho do .svg", "Path of the .svg")}}}}},
                         {"required", {"path"}}}});
+
+    all.push_back({"memory_search",
+                   langPick(lang,
+                            "Busca licoes e fatos na memoria do projeto. Devolve dados historicos nao confiaveis.",
+                            "Searches lessons and facts in project memory. Returns untrusted historical data."),
+                   json{{"type", "object"},
+                        {"properties", {{"query", {{"type", "string"}, {"description", langPick(lang, "Texto a buscar", "Text to search")}}},
+                                        {"limit", {{"type", "integer"}, {"description", langPick(lang, "Maximo de resultados (1-20)", "Maximum results (1-20)")}}}}},
+                        {"required", {"query"}}}});
+    all.push_back({"memory_record_lesson",
+                   langPick(lang,
+                            "Registra uma licao preventiva na memoria do projeto, com dominio, gatilho e regra.",
+                            "Records a preventive lesson in project memory with domain, trigger and rule."),
+                   json{{"type", "object"},
+                        {"properties", {{"domain", {{"type", "string"}, {"description", langPick(lang, "Dominio da licao", "Lesson domain")}}},
+                                        {"rule", {{"type", "string"}, {"description", langPick(lang, "Regra preventiva", "Preventive rule")}}},
+                                        {"trigger", {{"type", "string"}, {"description", langPick(lang, "Erro ou situacao que motivou a licao", "Error or situation that motivated the lesson")}}}}},
+                        {"required", {"domain", "rule"}}}});
 
     std::vector<ToolDef> out;
     for (auto& t : all) {
@@ -356,6 +375,35 @@ ToolResult executeTool(const ToolContext& ctx, const std::string& name, const js
             ss << issues.size() << T(" problema(s) encontrado(s):\n", " problem(s) found:\n");
             for (auto& s : issues) ss << "- " << s << "\n";
             return ToolResult{ss.str(), false};
+        }
+
+        if (name == "memory_search") {
+            if (ctx.projectId.empty()) return err(T("Memoria nao configurada para este projeto.", "Memory is not configured for this project."));
+            std::string query = stringArg(args, "query");
+            if (query.empty()) return err(T("Parametro 'query' ausente.", "Missing parameter 'query'."));
+            int limit = 10;
+            if (args.contains("limit") && args["limit"].is_number()) limit = static_cast<int>(args["limit"].get<double>());
+            limit = std::max(1, std::min(20, limit));
+            std::string result = taskforge::memory::MemoryService::getInstance().searchContext(ctx.projectId, query, static_cast<size_t>(limit));
+            if (result.empty()) return ToolResult{T("Nenhuma memoria encontrada para: ", "No memory found for: ") + query, false};
+            return ToolResult{result, false};
+        }
+
+        if (name == "memory_record_lesson") {
+            if (ctx.projectId.empty()) return err(T("Memoria nao configurada para este projeto.", "Memory is not configured for this project."));
+            if (!ctx.memoryWriteEnabled) return err(T("Escrita de licoes nao autorizada para este agente.", "Lesson recording is not authorized for this agent."));
+            std::string domain = stringArg(args, "domain");
+            std::string rule = stringArg(args, "rule");
+            std::string trigger = stringArg(args, "trigger");
+            if (rule.empty()) return err(T("Parametro 'rule' ausente.", "Missing parameter 'rule'."));
+            if (!ctx.memoryDomains.empty() &&
+                std::find(ctx.memoryDomains.begin(), ctx.memoryDomains.end(), domain.empty() ? "geral" : domain) == ctx.memoryDomains.end()) {
+                return err(T("Dominio nao autorizado para este agente: ", "Domain not authorized for this agent: ") + domain);
+            }
+            std::string id = taskforge::memory::MemoryService::getInstance().recordLesson(
+                ctx.projectId, domain.empty() ? "geral" : domain, trigger, rule, ctx.agentId);
+            if (id.empty()) return err(T("Nao foi possivel registrar a licao.", "Could not record the lesson."));
+            return ToolResult{T("OK: licao registrada (", "OK: lesson recorded (") + id + ")", false};
         }
 
         if (name == "bash") {

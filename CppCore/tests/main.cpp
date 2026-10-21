@@ -17,6 +17,8 @@
 #include "compiler/TaskflowGenerator.hpp"
 #include "mcp/McpClient.hpp"
 #include "core/Graph.hpp"
+#include "memory/MemoryStore.hpp"
+#include "memory/MemoryService.hpp"
 #include "platform/Process.hpp"
 #include "project/OpenableFiles.hpp"
 #include "project/GitSyncService.hpp"
@@ -520,6 +522,212 @@ TEST(generator_cpp_string_escapes) {
     CHECK(TaskflowGenerator::cppString("a\\b") == "\"a\\\\b\"");
     CHECK(TaskflowGenerator::cppString("x\ny") == "\"x\\ny\"");
     CHECK(TaskflowGenerator::cppString("??=") == "\"\\?\\?=\"");
+}
+
+TEST(generator_output_vertex_copies_artifact_with_non_empty_body) {
+    using taskforge::compiler::TaskflowGenerator;
+    auto port = [](const char* id, const char* name, const char* dir, const char* type) {
+        return json{{"id", id}, {"name", name}, {"direction", dir}, {"type", type}};
+    };
+    json schema = {
+        {"version", "1.0.0"},
+        {"metadata", {{"graphName", "output"}, {"description", ""}, {"targetStandard", "C++20"},
+                      {"compilerConfig", {{"compiler", "msvc"}, {"cppStandard", "C++20"}, {"buildSystem", "cmake"},
+                                          {"taskflowIncludePath", "third_party/taskflow"}, {"outputBinaryName", "o"},
+                                          {"enableOpenMP", false}, {"enableCuda", false}, {"extraFlags", json::array()}}},
+                      {"version", "1"}, {"projectId", "output"}}},
+        {"nodes", json::array({
+            json{{"id", "origem"}, {"label", "Origem"}, {"type", "static"}, {"position", {{"x", 0}, {"y", 0}}},
+                 {"inputs", json::array()}, {"outputs", json::array({port("origem_out", "out", "output", "flow")})},
+                 {"parameters", json::object()}, {"customLambdaBody", ""}},
+            json{{"id", "entrega"}, {"label", "Entrega"}, {"type", "output"}, {"position", {{"x", 300}, {"y", 0}}},
+                 {"inputs", json::array({port("entrega_in", "in", "input", "flow"),
+                                        port("entrega_data", "data_in", "input", "data")})},
+                 {"outputs", json::array({port("entrega_out", "out", "output", "flow")})},
+                 {"parameters", json::object()},
+                 // corpo padrao de um vertice criado na interface: nao copia por conta propria
+                 {"customLambdaBody", "std::cout << \"corpo do usuario\\n\";"},
+                 {"outputSettings", {{"sourcePath", "workspace/a.md"}, {"destinationPath", "exports/a.md"},
+                                     {"artifactType", "markdown"}, {"displayName", "A"}}}}
+                 })},
+        {"edges", json::array({json{{"id", "e1"}, {"sourceNodeId", "origem"}, {"sourcePortId", "origem_out"},
+                                    {"targetNodeId", "entrega"}, {"targetPortId", "entrega_in"}}})}};
+    taskforge::core::Graph g;
+    g.fromJson(schema);
+    std::string src = TaskflowGenerator::generateSource(g);
+
+    CHECK(src.find("std::string arx_out_src = \"workspace/a.md\";") != std::string::npos);
+    CHECK(src.find("std::string arx_out_dst = \"exports/a.md\";") != std::string::npos);
+    CHECK(src.find("std::filesystem::copy_file(arx_out_src, arx_out_dst") != std::string::npos);
+    CHECK(src.find("if (!arx_out_parent.empty()) std::filesystem::create_directories(arx_out_parent);") != std::string::npos);
+    CHECK(src.find("corpo do usuario") != std::string::npos);            // corpo do usuario preservado
+    CHECK(src.find("[OUTPUT_DELIVERY]") != std::string::npos);           // registrado uma vez para a interface
+}
+
+TEST(generator_injects_memory_context_for_enabled_agent) {
+    using taskforge::compiler::TaskflowGenerator;
+    auto port = [](const char* id, const char* name, const char* dir, const char* type) {
+        return json{{"id", id}, {"name", name}, {"direction", dir}, {"type", type}};
+    };
+    json schema = {
+        {"version", "1.0.0"},
+        {"metadata", {{"graphName", "memory"}, {"description", ""}, {"targetStandard", "C++20"},
+                      {"compilerConfig", {{"compiler", "msvc"}, {"cppStandard", "C++20"}, {"buildSystem", "cmake"},
+                                          {"taskflowIncludePath", "third_party/taskflow"}, {"outputBinaryName", "m"},
+                                          {"enableOpenMP", false}, {"enableCuda", false}, {"extraFlags", json::array()}}},
+                      {"version", "1"}, {"projectId", "proj-memoria"}}},
+        {"nodes", json::array({
+            json{{"id", "origem"}, {"label", "Origem"}, {"type", "static"}, {"position", {{"x", 0}, {"y", 0}}},
+                 {"inputs", json::array()}, {"outputs", json::array({port("origem_out", "out", "output", "flow")})},
+                 {"parameters", json::object()}, {"customLambdaBody", ""}},
+            json{{"id", "agente"}, {"label", "Agente"}, {"type", "agent"}, {"position", {{"x", 300}, {"y", 0}}},
+                 {"inputs", json::array({port("agente_in", "in", "input", "flow")})},
+                 {"outputs", json::array({port("agente_out", "out", "output", "flow")})},
+                 {"parameters", json::object()}, {"customLambdaBody", ""},
+                 {"agentSettings", {{"inheritMemory", false},
+                                    {"memory", {{"enabled", true}, {"persistent", true},
+                                                {"readBlackboard", true}, {"writeBlackboard", true},
+                                                {"semanticLessons", true}, {"recordLessons", true},
+                                                {"allowedKeys", json::array({"resumo"})},
+                                                {"domains", json::array({"svg_typography"})}}}}}}
+                 })},
+        {"edges", json::array({json{{"id", "e1"}, {"sourceNodeId", "origem"}, {"sourcePortId", "origem_out"},
+                                    {"targetNodeId", "agente"}, {"targetPortId", "agente_in"}}})}};
+    taskforge::core::Graph g;
+    g.fromJson(schema);
+    std::string src = TaskflowGenerator::generateSource(g);
+
+    CHECK(src.find("#include \"memory/MemoryService.hpp\"") != std::string::npos);
+    CHECK(src.find("memory.configure(projectId, arx_mem_persistent)") != std::string::npos);
+    CHECK(src.find("memory.buildBrief(projectId, \"pipeline\", std::vector<std::string>{\"svg_typography\"}, "
+                   "std::vector<std::string>{\"resumo\"}, 800, true, true)") != std::string::npos);
+    CHECK(src.find("\"memoryEnabled\":true") != std::string::npos);
+    CHECK(src.find("\"memory_search\"") != std::string::npos);
+    CHECK(src.find("\"memory_record_lesson\"") != std::string::npos);
+    CHECK(src.find("runAgent(\"agente\", \"Agente\"") != std::string::npos);
+    CHECK(src.find("arx_mem_ctx);") != std::string::npos);
+    CHECK(src.find("catch (const std::exception& arx_mem_err)") != std::string::npos);
+    CHECK(src.find("recordLesson(projectId, \"svg_typography\", \"agent_failure\"") != std::string::npos);
+    CHECK(src.find("setWorking(projectId, \"pipeline\", \"last_stage\", taskforge::Json(\"agente\"))") != std::string::npos);
+    CHECK(src.find("memory.clearSession(projectId)") != std::string::npos);
+}
+
+TEST(memory_store_working_lessons_temporal_and_usage) {
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryUsageRecord;
+    const fs::path dir = makeTempDir("memory-store");
+    MemoryStore store((dir / "memory.db").string());
+    std::string error;
+    CHECK(store.open(error));
+    CHECK(store.ensureScope("project:teste", "project", "", "teste"));
+
+    CHECK(store.setWorking("project:teste", "item-1", "resumo", taskforge::Json("valor")));
+    CHECK(store.setWorking("project:teste", "item-1", "ignorado", taskforge::Json("segredo")));
+    CHECK(store.getWorking("project:teste", "item-1", "resumo") == taskforge::Json("valor"));
+    auto snapshot = store.workingSnapshot("project:teste", "item-1", {"resumo"});
+    CHECK(snapshot["resumo"] == taskforge::Json("valor"));
+    CHECK(!snapshot.contains("ignorado"));
+    auto full = store.workingSnapshot("project:teste", "item-1");
+    CHECK(full.contains("ignorado"));
+
+    const std::string lesson1 = store.recordLesson("project:teste", "svg", "auditoria", "REGRA-XYZ", "src");
+    const std::string lesson2 = store.recordLesson("project:teste", "svg", "auditoria", "REGRA-XYZ", "src");
+    CHECK(!lesson1.empty() && lesson1 == lesson2);
+    CHECK(store.getLessons("project:teste", "svg").size() == 1);
+    CHECK(store.formatLessons("project:teste", {"svg"}).find("REGRA-XYZ") != std::string::npos);
+    CHECK(store.formatLessons("project:teste", {"outro"}).empty());
+
+    const std::string a = store.ensureNode("project:teste", "node-a", "project", "Alpha");
+    const std::string b = store.ensureNode("project:teste", "node-b", "library", "Biblioteca Y");
+    const std::string c = store.ensureNode("project:teste", "node-c", "library", "Biblioteca Z");
+    CHECK(!a.empty() && !b.empty() && !c.empty());
+
+    const std::string oldEdge = store.recordEdge("project:teste", a, b, "USES", taskforge::Json(),
+                                                 "2026-01-01T00:00:00Z", "2026-09-30T23:59:59Z");
+    const std::string newEdge = store.recordEdge("project:teste", a, c, "USES", taskforge::Json(),
+                                                 "2026-10-01T00:00:00Z", "");
+    CHECK(!oldEdge.empty() && !newEdge.empty());
+
+    auto before = store.neighbors("project:teste", a, 1, "2026-06-01T00:00:00Z");
+    CHECK(before.size() == 1 && before[0].id == oldEdge);
+    auto after = store.neighbors("project:teste", a, 1, "2026-10-15T00:00:00Z");
+    CHECK(after.size() == 1 && after[0].id == newEdge);
+
+    auto search = store.searchEdges("project:teste", "Alpha", 10);
+    CHECK(!search.empty());
+    CHECK(store.invalidateEdge(oldEdge, "2026-09-30T23:59:59Z", "migracao"));
+    auto superseded = store.neighbors("project:teste", a, 1, "2026-06-01T00:00:00Z");
+    CHECK(superseded.empty());
+
+    MemoryUsageRecord usage;
+    usage.scopeId = "project:teste";
+    usage.nodeId = "node-a";
+    usage.provider = "deepseek";
+    usage.model = "deepseek-flash";
+    usage.promptTokens = 100;
+    usage.completionTokens = 20;
+    usage.totalTokens = 120;
+    usage.calls = 1;
+    usage.memoryContextChars = 50;
+    usage.memoryEnabled = 1;
+    CHECK(store.recordUsage(usage));
+    auto summary = store.usageSummary("project:teste");
+    CHECK(summary["runs"] == 1);
+    CHECK(summary["promptTokens"] == 100);
+    CHECK(summary["totalTokens"] == 120);
+
+    store.close();
+    fs::remove_all(dir);
+}
+
+TEST(memory_service_imports_legacy_json) {
+    using taskforge::memory::MemoryService;
+    const fs::path dir = makeTempDir("memory-legacy");
+    const fs::path db = dir / "memory.db";
+    const fs::path bb = dir / "arestrix-blackboard-legacy.json";
+    const fs::path ls = dir / "arestrix-memory-legacy.json";
+
+    taskforge::Json blackboard = taskforge::Json::object();
+    blackboard["item-1"]["resumo"] = "valor-legado";
+    std::ofstream(bb) << blackboard.dump(2);
+
+    taskforge::Json lessons = taskforge::Json::object();
+    lessons["count"] = 1;
+    lessons["lessons"] = taskforge::Json::array();
+    lessons["lessons"].push_back(taskforge::Json::object());
+    lessons["lessons"][0]["domain"] = "memoria";
+    lessons["lessons"][0]["triggerError"] = "legado";
+    lessons["lessons"][0]["lessonRule"] = "REGRA-LEGADA";
+    lessons["lessons"][0]["sourceItem"] = "legacy";
+    std::ofstream(ls) << lessons.dump(2);
+
+    auto& memory = MemoryService::getInstance();
+    CHECK(memory.configure("legacy-import-test", true, db.string(), bb.string(), ls.string()));
+    auto imported = memory.getLessons("legacy-import-test", "memoria");
+    CHECK(imported.size() == 1 && imported[0].lessonRule == "REGRA-LEGADA");
+    CHECK(memory.getWorking("legacy-import-test", "item-1", "resumo") == taskforge::Json("valor-legado"));
+    CHECK(!memory.formatLessons("legacy-import-test", {"memoria"}).empty());
+
+    memory.closeProject("legacy-import-test");
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_service_brief_respects_budget) {
+    using taskforge::memory::MemoryService;
+    const fs::path dir = makeTempDir("memory-brief");
+    const fs::path db = dir / "memory.db";
+    auto& memory = MemoryService::getInstance();
+    CHECK(memory.configure("brief-test", true, db.string()));
+    CHECK(memory.setWorking("brief-test", "pipeline", "resumo", taskforge::Json(std::string(4000, 'x'))));
+    CHECK(!memory.recordLesson("brief-test", "memoria", "teste", "uma regra longa para o teste de orcamento").empty());
+    std::string brief = memory.buildBrief("brief-test", "pipeline", {"memoria"}, {"resumo"}, 10);
+    CHECK(!brief.empty());
+    CHECK(brief.find("truncado pelo orcamento") != std::string::npos);
+    CHECK(brief.size() < 200);
+    memory.closeProject("brief-test");
+    std::error_code ec;
+    fs::remove_all(dir, ec);
 }
 
 // ---------------------------------------------------------------------------

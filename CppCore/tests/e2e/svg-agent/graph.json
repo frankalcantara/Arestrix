@@ -237,7 +237,7 @@
     {
       "id": "entrega",
       "label": "Entrega_SVG_Final",
-      "type": "static",
+      "type": "output",
       "position": {
         "x": 1500,
         "y": -80
@@ -248,6 +248,13 @@
           "name": "in",
           "direction": "input",
           "type": "flow"
+        },
+        {
+          "id": "entrega_in_data",
+          "name": "data_in",
+          "direction": "input",
+          "type": "data",
+          "dataType": "std::string"
         }
       ],
       "outputs": [
@@ -259,7 +266,15 @@
         }
       ],
       "parameters": {},
-      "customLambdaBody": "std::cout << \"[Entrega] SVG aprovado e exportado com sucesso!\\n\";"
+      "customLambdaBody": "// Coletor de Entrega / Artefato: Entrega_SVG_Final\n// Em runtime, este vertice registra e disponibiliza o artefato produzido na aba Artefatos e na pasta de saida.\nstd::cout << \"[OUTPUT: Entrega_SVG_Final] Entregavel registrado com sucesso!\\n\";",
+      "outputSettings": {
+        "sourcePath": "workspace/scene.svg",
+        "destinationPath": "exports/scene.svg",
+        "artifactType": "svg",
+        "displayName": "Cena SVG Animada Final",
+        "autoOpenPreview": true,
+        "description": "Vetor SVG animado e auditado gerado pelo pipeline de agentes"
+      }
     }
   ],
   "edges": [

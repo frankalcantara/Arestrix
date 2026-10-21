@@ -10,8 +10,8 @@ const dirs = readdirSync(EXAMPLES, { withFileTypes: true }).filter(d => d.isDire
 const read = (...p: string[]) => JSON.parse(readFileSync(join(EXAMPLES, ...p), 'utf8'));
 
 describe('projetos de exemplo (examples/)', () => {
-  it('existem os três projetos, do simples ao complexo', () => {
-    expect(dirs).toEqual(['01-svg-agente', '02-triagem-de-suporte', '03-atendimento-ilustrado']);
+  it('existem os quatro projetos, do simples ao complexo', () => {
+    expect(dirs).toEqual(['01-svg-agente', '02-triagem-de-suporte', '03-atendimento-ilustrado', '04-memoria']);
   });
 
   for (const name of dirs) {
@@ -34,7 +34,7 @@ describe('projetos de exemplo (examples/)', () => {
         const result = GraphValidator.validate(graph);
         const errors = result.errors.filter((e: any) => e.severity === 'error');
         expect(errors, JSON.stringify(errors)).toEqual([]);
-        expect(graph.getAllNodes().length).toBeGreaterThan(4);
+        expect(graph.getAllNodes().length).toBeGreaterThanOrEqual(3);
       });
 
       it('toda skill referenciada existe, e todo servidor MCP usado está configurado no projeto', () => {
@@ -79,10 +79,55 @@ describe('projetos de exemplo (examples/)', () => {
     expect(rules.outputs.map((p: any) => p.name).slice(0, 2)).toEqual(['ajustar', 'aprovado']);
   });
 
+  it('todo exemplo entrega seus produtos por vértices de saída (output)', () => {
+    for (const name of dirs) {
+      const nodes = read(name, 'pipelines', 'main.json').nodes;
+      const outputs = nodes.filter((n: any) => n.type === 'output');
+      expect(outputs.length, `${name}: sem vértice de saída`).toBeGreaterThan(0);
+      for (const node of outputs) {
+        const settings = node.outputSettings ?? {};
+        expect(settings.sourcePath, `${name}/${node.id}: origem`).toBeTruthy();
+        expect(settings.destinationPath, `${name}/${node.id}: destino`).toBeTruthy();
+        expect(settings.destinationPath.startsWith('exports/'), `${name}/${node.id}: destino em exports/`).toBe(true);
+        expect(settings.artifactType, `${name}/${node.id}: formato`).toBeTruthy();
+        expect(node.inputs.some((p: any) => p.name === 'data_in'), `${name}/${node.id}: porta de dados`).toBe(true);
+      }
+    }
+  });
+
+  it('o exemplo 2 entrega a resposta do chamado por cada ramo', () => {
+    const outputs = read('02-triagem-de-suporte', 'pipelines', 'main.json').nodes.filter((n: any) => n.type === 'output');
+    expect(outputs.map((n: any) => n.outputSettings.destinationPath).sort()).toEqual([
+      'exports/resposta-duvida.md',
+      'exports/resposta-normal.md',
+      'exports/resposta-urgente.md',
+    ]);
+  });
+
+  it('o exemplo 4 exercita a memória de projeto de ponta a ponta', () => {
+    const nodes = read('04-memoria', 'pipelines', 'main.json').nodes;
+    const seed = nodes.find((n: any) => n.id === 'semear');
+    const agent = nodes.find((n: any) => n.id === 'agente');
+    const delivery = nodes.find((n: any) => n.id === 'entrega');
+    expect(seed.customLambdaBody).toContain('recordLesson');
+    expect(agent.agentSettings.memory).toMatchObject({
+      enabled: true,
+      persistent: true,
+      readBlackboard: true,
+      writeBlackboard: true,
+      semanticLessons: true,
+      recordLessons: true,
+      allowedKeys: ['resumo'],
+      domains: ['memoria'],
+    });
+    expect(delivery.type).toBe('output');
+    expect(delivery.outputSettings.destinationPath).toBe('exports/resposta.md');
+  });
+
   it('o exemplo 3 é a composição dos exemplos 1 e 2', () => {
     const ids = (n: string) => read(n, 'pipelines', 'main.json').nodes.map((x: any) => x.id);
     const three = ids('03-atendimento-ilustrado');
     for (const id of ids('01-svg-agente')) expect(three).toContain(`svg_${id}`);
-    for (const id of ids('02-triagem-de-suporte').filter((i: string) => i !== 'entrega_faq')) expect(three).toContain(`atd_${id}`);
+    for (const id of ids('02-triagem-de-suporte')) expect(three).toContain(`atd_${id}`);
   });
 });

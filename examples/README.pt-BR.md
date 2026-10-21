@@ -2,7 +2,7 @@
 
 [English](README.md) · [Documentação](../docs/README.md)
 
-Três projetos prontos para executar, do simples ao complexo. Cada um é uma pasta de projeto Arestrix comum: abra no Studio,
+Quatro projetos prontos para executar, do simples ao complexo. Cada um é uma pasta de projeto Arestrix comum: abra no Studio,
 escolha seu modelo, grave sua chave de API e pressione **F5**.
 
 | # | Projeto | O que mostra | Precisa de |
@@ -10,9 +10,13 @@ escolha seu modelo, grave sua chave de API e pressione **F5**.
 | 1 | [`01-svg-agente`](01-svg-agente) | O tutorial: dois agentes, verificações em paralelo (fork/join) e um laço de autocorreção decidido em C++. | Um modelo. |
 | 2 | [`02-triagem-de-suporte`](02-triagem-de-suporte) | Triagem de chamados: agentes, **vértices de decisão** (um modelo de IA escolhe o caminho; regras por palavras fecham um laço de qualidade) e um **MCP** (um vértice MCP e um agente usando ferramentas MCP). | Um modelo, Python. |
 | 3 | [`03-atendimento-ilustrado`](03-atendimento-ilustrado) | Um "projeto de projetos": o exemplo 2 seguido, no ramo de dúvidas, pelo exemplo 1 (a resposta ganha um SVG animado). | Um modelo, Python. |
+| 4 | [`04-memoria`](04-memoria) | Memória de projeto: uma lição semântica e o Blackboard são persistidos, carregados e injetados no prompt; a resposta vira artefato. | Um modelo. |
 
-O exemplo 3 é **gerado** a partir do 1 e do 2 (`python scripts/build_examples.py`), então os três nunca ficam fora de
+O exemplo 3 é **gerado** a partir do 1 e do 2 (`python scripts/build_examples.py`), então os exemplos 1, 2 e 3 nunca ficam fora de
 sincronia. Os vértices ainda não executam um grafo aninhado, por isso a composição é achatada em um único pipeline.
+
+Todos os quatro terminam em **vértices de saída** (`output`): o arquivo produzido é copiado para `exports/` e registrado na
+aba **Artefatos**, com visualização por formato (SVG, Markdown, planilhas, PDF e JSON).
 
 ## Executar um exemplo
 

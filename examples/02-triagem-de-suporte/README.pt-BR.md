@@ -23,6 +23,7 @@ Receber ─► Extrair e-mail (ferramenta nativa) ─► Consultar cliente (vér
 | Agente_Escalonador | Um agente que recebe um servidor MCP como **ferramentas** e decide chamar `registrar_escalonamento` (grava `output/escalonamentos.jsonl`). As duas formas de usar MCP, lado a lado. |
 | Redator → Revisor → Controle_de_Qualidade | Um **laço de feedback**: o revisor grava `STATUS: AJUSTAR` ou `APROVADO`; um **switch no modo "palavras"** (sem IA) devolve ao redator até a aprovação. |
 | Agente_FAQ | Um agente que responde a partir de `base/faq.md`. |
+| Entrega_Urgente / Entrega_Normal / Entrega_FAQ | **Vértices de saída (output)**: cada ramo copia `workspace/resposta.md` para `exports/resposta-urgente.md`, `exports/resposta-normal.md` ou `exports/resposta-duvida.md` e registra o artefato na aba **Artefatos**. |
 | Revisao_Humana | O default do switch: quando nada serve, uma pessoa assume. |
 
 **Precisa de:** um modelo + a chave de API dele, e **Python** (ele executa o servidor MCP de demonstração em

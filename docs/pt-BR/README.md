@@ -31,6 +31,6 @@
 ## Tutoriais e produtos
 
 - [Tutorial do agente SVG](tutorials/svg-agent.md) — passo a passo completo, do grafo à entrega.
-- [Exemplos](../../examples/README.pt-BR.md) — três projetos executáveis com modelo falso.
+- [Exemplos](../../examples/README.pt-BR.md) — quatro projetos executáveis com modelo falso.
 - [Galeria de recursos](../product/showcase.md) — capturas do Studio, compilador, runner e governança.
 - [Comparativo](../product/comparison.md) — diferenças em relação a outras abordagens de orquestração.

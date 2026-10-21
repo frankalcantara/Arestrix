@@ -151,6 +151,17 @@ export class ProjectMemoryModal {
                 </div>
               </div>
             </div>
+
+            <div class="settings-section-card" style="margin-top: 12px;">
+              <div class="section-card-header">
+                <span class="section-card-icon">📊</span>
+                <div class="section-card-titles">
+                  <h3 class="section-card-title">${t('project_memory.usage_title')}</h3>
+                  <p class="section-card-desc">${t('project_memory.usage_desc')}</p>
+                </div>
+              </div>
+              <pre id="memory-usage-viewer" style="margin: 8px 0 0; padding: 10px; border-radius: 6px; background: #f8fafc; color: #0f172a; font-size: 11.5px; white-space: pre-wrap;">${t('project_memory.usage_loading')}</pre>
+            </div>
           </div>
         </div>
 
@@ -240,6 +251,7 @@ export class ProjectMemoryModal {
     const projectId = this.graph.getProjectId();
     const bbViewer = this.overlay.querySelector('#blackboard-viewer');
     const lessonsList = this.overlay.querySelector('#lessons-list');
+    const usageViewer = this.overlay.querySelector('#memory-usage-viewer');
 
     try {
       // @ts-ignore
@@ -276,6 +288,27 @@ export class ProjectMemoryModal {
               </div>
             `).join('');
           }
+        }
+
+        // Exibe consumo de API e contexto de memória
+        if (usageViewer) {
+          const u = data.usage || {};
+          const runs = Number(u.runs || 0);
+          const calls = Number(u.calls || 0);
+          const total = Number(u.totalTokens || 0);
+          const prompt = Number(u.promptTokens || 0);
+          const completion = Number(u.completionTokens || 0);
+          const ctx = Number(u.memoryContextChars || 0);
+          const latency = Number(u.avgLatencyMs || 0);
+          usageViewer.textContent = runs === 0
+            ? t('project_memory.usage_empty')
+            : [
+                `${t('project_memory.usage_runs')}: ${runs}`,
+                `${t('project_memory.usage_calls')}: ${calls}`,
+                `${t('project_memory.usage_tokens')}: ${total} (prompt ${prompt} / ${t('project_memory.usage_output')} ${completion})`,
+                `${t('project_memory.usage_context')}: ${ctx}`,
+                `${t('project_memory.usage_latency')}: ${latency.toFixed(0)} ms`,
+              ].join('\n');
         }
       } else {
         if (bbViewer) bbViewer.textContent = 'Backend WebUI em memória não detectado (Ambiente Local Vite).';

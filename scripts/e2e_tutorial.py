@@ -67,12 +67,15 @@ def main():
         check(proc.returncode == 0, "arestrix run terminou com codigo 0")
         check("JEV REPROVOU" in out, "1a rodada: auditor reprovou (violacao tipografica detectada pelo Linter)")
         check("JEV APROVOU" in out, "2a rodada: auditor aprovou apos a auto-correcao")
-        check("[Entrega] SVG aprovado" in out, "no de entrega executado")
+        check("[OUTPUT: Entrega_SVG_Final]" in out and "[OUTPUT_DELIVERY]" in out, "vertice de saida registrou o entregavel")
         check("[Thread A - VIOLA" in out, "Thread A (linter) detectou o feDropShadow")
         check(out.count("[Thread A] Iniciando") == 2 and out.count("[Thread B] Iniciando") == 2, "fork paralelo executou 2 vezes (A e B)")
 
         svg = project / "workspace" / "scene.svg"
         check(svg.exists() and "feDropShadow" not in svg.read_text(encoding="utf-8"), "SVG final sem sombra em texto")
+        export = project / "exports" / "scene.svg"
+        check(export.exists() and export.read_text(encoding="utf-8") == svg.read_text(encoding="utf-8"),
+              "vertice de saida copiou workspace/scene.svg para exports/scene.svg")
         decision = (project / "workspace" / "audit_decision.txt")
         check(decision.exists() and "STATUS: APROVADO" in decision.read_text(encoding="utf-8"), "audit_decision.txt = APROVADO")
         check("agent:telemetry" in out and '"tool_start"' in out, "telemetria de agentes (tool_start) emitida")

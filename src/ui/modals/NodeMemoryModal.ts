@@ -252,6 +252,12 @@ export class NodeMemoryModal {
                   <input type="text" id="node-memory-project" class="form-input" value="${this.escapeHtml(effectiveMemory.projectId || projectId)}" ${isInherited || !isEnabled ? 'disabled' : ''} />
                   <div class="form-hint">Agentes em projetos distintos operam em partições estritamente isoladas.</div>
                 </div>
+
+                <div class="form-group" style="margin-top: 12px;">
+                  <label class="form-label" for="node-memory-budget">Orçamento de contexto (tokens)</label>
+                  <input type="number" id="node-memory-budget" class="form-input" min="0" max="32000" step="100" value="${effectiveMemory.contextBudgetTokens ?? 800}" ${isInherited || !isEnabled ? 'disabled' : ''} />
+                  <div class="form-hint">Limite aproximado do brief de memória injetado no prompt. 0 = sem limite.</div>
+                </div>
               </div>
             </div>
           </div>
@@ -346,6 +352,7 @@ export class NodeMemoryModal {
     const chkWriteLessons = this.overlay.querySelector<HTMLInputElement>('#mem-perm-write-lessons');
     const txtKeys = this.overlay.querySelector<HTMLInputElement>('#node-memory-keys');
     const txtDomains = this.overlay.querySelector<HTMLInputElement>('#node-memory-domains');
+    const txtBudget = this.overlay.querySelector<HTMLInputElement>('#node-memory-budget');
 
     const allowedKeys = txtKeys ? txtKeys.value.split(',').map(s => s.trim()).filter(Boolean) : [];
     const domains = txtDomains ? txtDomains.value.split(',').map(s => s.trim()).filter(Boolean) : [];
@@ -359,7 +366,8 @@ export class NodeMemoryModal {
       semanticLessons: chkReadLessons ? chkReadLessons.checked : false,
       recordLessons: chkWriteLessons ? chkWriteLessons.checked : false,
       allowedKeys,
-      domains
+      domains,
+      contextBudgetTokens: txtBudget ? Math.max(0, Number(txtBudget.value) || 0) : 800
     };
 
     const currentSettings = node.agentSettings || {

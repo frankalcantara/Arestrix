@@ -44,8 +44,10 @@ private:
 // politica de sandbox (ver AgentSpec em Agent.cpp). Lanca std::runtime_error em falha.
 // `runKey` identifica a execucao para o orcamento de repeticoes (padrao: nodeId); em lotes,
 // use nodeId + item para que cada item tenha o proprio orcamento.
+// `memoryContext` e um bloco de dados historicos (Blackboard/licoes) injetado no prompt de
+// sistema como dado nao confiavel; vazio desativa a injecao.
 void runAgent(const std::string& nodeId, const std::string& label, const std::string& specJson,
-              const std::string& runKey = "");
+              const std::string& runKey = "", const std::string& memoryContext = "");
 
 // Chamada unica a um modelo (sem ferramentas): provider e chaves seguem as mesmas regras dos agentes
 // (variaveis de ambiente do usuario). Nunca lanca excecao; veja `ok` e `error`.

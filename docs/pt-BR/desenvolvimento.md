@@ -21,8 +21,11 @@
 
 ## Exemplos e segredos
 
-Os três projetos de [`examples/`](../../examples/README.pt-BR.md) são gerados por `python scripts/build_examples.py` (nunca edite o
+Os quatro projetos de [`examples/`](../../examples/README.pt-BR.md) são gerados por `python scripts/build_examples.py` (nunca edite o
 `pipelines/main.json` deles à mão) e testados com `python scripts/e2e_examples.py` (um LLM falso roteirizado; sem chaves, sem custo).
+A memória de projeto tem um teste próprio de duas execuções: `python scripts/e2e_memory.py`.
+Para comparar o consumo de API com a memória ligada/desligada, use
+`python scripts/memory_report.py <raiz-do-projeto>` (lê `memory_usage` no banco).
 
 **Nenhum segredo pode chegar ao Git.** O `scripts/check-secrets.mjs` (`npm run check:secrets`) sinaliza formatos de chave de API,
 valores literais em campos `api_key`/`token`/`password`, caminhos de usuário, e-mails pessoais, arquivos de credencial e artefatos

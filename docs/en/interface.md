@@ -144,7 +144,7 @@ All Studio dialogs adhere to the **Microsoft Office 365 (Fluent 2)** corporate d
 | **Node Model** | Provider & Model \| Cognitive Parameters \| Connectivity & Keys | Per vertex |
 | **Node Tools** | Native Tools \| MCP Servers \| Execution Policies | Per vertex |
 | **Node Sandbox** | Isolation Level \| Network & DNS Guard \| Quotas & Limits | Per vertex |
-| **Node Memory** | Vertex Blackboard \| Semantic Lessons \| Retention & TTL | Per vertex |
+| **Node Memory** | Vertex Blackboard \| Semantic Lessons \| Retention & Scope | Per vertex |
 | **Node Skills** | Enabled Skills \| Workspace Catalog \| Import New Skill | Per vertex |
 | **Skill Editor** | Markdown Editor \| Rendered Preview \| Metadata & Testing | Per vertex / Workspace |
 | **GitHub Repositories** | Authorized Repositories \| Register New Repository | Studio Catalog |

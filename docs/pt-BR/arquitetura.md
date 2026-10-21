@@ -54,7 +54,7 @@ refazer funcionam para tudo, inclusive colar, duplicar e apagar.
 | `sandbox/` | Drivers de isolamento (processo do host, Docker, MicroVM), emissor de telemetria, motor de retomada. |
 | `native/` | Os servidores de ferramentas nativos (arquivos, HTTP, dados, memória, tempo, Git, SQLite): C++ que roda dentro do programa, com confinamento ao projeto. |
 | `mcp/` | Cliente nativo do Model Context Protocol com sessões persistentes (stdio e HTTP) e o registro de servidores. |
-| `memory/` | Memória Blackboard e de lições semânticas. |
+| `memory/` | Memória Blackboard, lições semânticas e multigrafo temporal em SQLite (`MemoryStore`/`MemoryService`). |
 | `project/` | Projetos e workspaces (`arestrix.project.json`), serviço de sincronização Git (`GitSyncService`), exportador do Runner Standalone (`RunnerService`) com auditoria zero-segredos, auto-commit/push e criação de repositórios privados. |
 | `search/` | Busca no projeto: ranking lexical (BM25 + trigramas de caracteres) sobre todos os pipelines, subfluxos e skills, com índice por hash de conteúdo. |
 | `pi/` | Scanner para importar projetos de agentes Pi. |

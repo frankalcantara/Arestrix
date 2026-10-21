@@ -19,6 +19,7 @@ Gerador (agente) ─┬─► Linter de tipografia ─┐
 | Consolidador | estático | Junta os dois relatórios. |
 | Agente_Auditor | agente | Lê os relatórios e o SVG e grava `workspace/audit_decision.txt` (`skills/jev.md`). |
 | Decisor_Qualidade | condição (C++) | `STATUS: APROVADO` → entrega; qualquer outra coisa → volta ao gerador. |
+| Entrega_SVG_Final | saída (output) | Copia `workspace/scene.svg` para `exports/scene.svg` e registra o artefato na aba **Artefatos**. |
 
 **Precisa de:** um modelo e a chave de API dele (veja [como executar](../README.pt-BR.md#executar-um-exemplo)). Os dois agentes
 herdam o modelo do projeto (DeepSeek `deepseek-flash` por padrão). Para usar outro modelo no auditor, abra o vértice, pressione

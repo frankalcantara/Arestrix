@@ -23,6 +23,7 @@ Receive ─► Extract e-mail (native tool) ─► Consult customer (MCP vertex)
 | Agente_Escalonador | An agent that gets an MCP server as **tools** and decides to call `registrar_escalonamento` (it writes `output/escalonamentos.jsonl`). The two ways to use MCP, side by side. |
 | Redator → Revisor → Controle_de_Qualidade | A **feedback loop**: the reviewer writes `STATUS: AJUSTAR` or `APROVADO`; a **switch in "keywords" mode** (no AI) sends the writer back until approved. |
 | Agente_FAQ | An agent answering from `base/faq.md`. |
+| Entrega_Urgente / Entrega_Normal / Entrega_FAQ | **Output vertices**: each branch copies `workspace/resposta.md` to `exports/resposta-urgente.md`, `exports/resposta-normal.md` or `exports/resposta-duvida.md` and registers the artifact in the **Artifacts** tab. |
 | Revisao_Humana | The switch default: when nothing fits, a person takes over. |
 
 **Needs:** a model + its API key, and **Python** (it runs the demo MCP server in `mcp/clientes_server.py`; set `ARESTRIX_PYTHON`

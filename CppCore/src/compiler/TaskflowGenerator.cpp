@@ -220,6 +220,37 @@ json effectiveSection(const json& globalDefaults, const json& nodeSettings, cons
     return eff;
 }
 
+json effectiveMemory(const core::Graph& graph, const core::NodeData& node) {
+    return effectiveSection(graph.getMetadata().globalDefaults, node.agentSettings, "inheritMemory", "memory");
+}
+
+bool anyMemoryPersistent(const core::Graph& graph) {
+    json global = objectOrEmpty(graph.getMetadata().globalDefaults, "memory");
+    bool persistent = global.value("enabled", false) && global.value("persistent", false);
+    for (const auto& pair : graph.getNodes()) {
+        if (pair.second.type != core::TaskflowNodeType::Agent) continue;
+        json m = effectiveMemory(graph, pair.second);
+        if (m.value("enabled", false) && m.value("persistent", false)) return true;
+    }
+    return persistent;
+}
+
+std::string cppStringList(const json& values) {
+    std::string out = "std::vector<std::string>{";
+    bool first = true;
+    if (values.is_array()) {
+        for (const auto& v : values) {
+            if (!v.is_string()) continue;
+            if (!first) out += ", ";
+            out += TaskflowGenerator::cppString(v.get<std::string>());
+            first = false;
+        }
+    }
+    out += "}";
+    return out;
+}
+
+
 std::string skillAssetPath(const std::string& nodeId) {
     return ".arestrix/skills/" + TaskflowGenerator::sanitizeIdentifier(nodeId) + ".md";
 }
@@ -250,8 +281,22 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
     }
     spec["skillPath"] = skillPath;
 
+    json memory = effectiveSection(defaults, settings, "inheritMemory", "memory");
+    spec["memoryEnabled"] = memory.value("enabled", false);
+    spec["memoryProjectId"] = graph.getMetadata().projectId;
+    spec["memoryWriteEnabled"] = memory.value("recordLessons", false);
+    if (memory.contains("domains") && memory["domains"].is_array()) spec["memoryDomains"] = memory["domains"];
+
     json tools = json::array();
     if (codeMode.contains("allowedTools") && codeMode["allowedTools"].is_array()) tools = codeMode["allowedTools"];
+    if (memory.value("enabled", false)) {
+        auto addTool = [&](const std::string& name) {
+            for (const auto& tool : tools) if (tool.is_string() && tool.get<std::string>() == name) return;
+            tools.push_back(name);
+        };
+        addTool("memory_search");
+        if (memory.value("recordLessons", false)) addTool("memory_record_lesson");
+    }
     spec["tools"] = tools;
 
     // Ferramentas MCP: servidores (ids em .workspace/mcps) e, opcionalmente, quais ferramentas deles sao permitidas.
@@ -321,7 +366,8 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
 
     code += kStandardIncludes;
     if (hasCuda) code += "#include <taskflow/cuda/cudaflow.hpp>\n";
-    code += "#include \"rt/Runtime.hpp\"\n\n";
+    code += "#include \"rt/Runtime.hpp\"\n";
+    code += "#include \"memory/MemoryService.hpp\"\n\n";
 
     code += "struct AgentContext {\n";
     code += "  std::string pipeline_name = " + cppString(meta.graphName) + ";\n";
@@ -338,6 +384,16 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
     code += "int main(int argc, char* argv[]) {\n";
     code += "  (void)argc; (void)argv;\n";
     code += "  taskforge::rt::init();\n";
+    code += "  const std::string projectId = " + cppString(meta.projectId.empty() ? "default" : meta.projectId) + ";\n";
+    code += "  auto& memory = taskforge::memory::MemoryService::getInstance();\n";
+    code += "  const bool arx_mem_persistent = " + std::string(anyMemoryPersistent(graph) ? "true" : "false") +
+            " || std::getenv(\"ARESTRIX_MEMORY_METRICS\") != nullptr;\n";
+    code += "  if (!memory.configure(projectId, arx_mem_persistent)) {\n";
+    code += "    std::cerr << \"[MEMORIA] nao foi possivel abrir o banco do projeto\\n\";\n";
+    code += "  }\n";
+    code += "  auto arx_mem_flush = [&]() {\n";
+    code += "    if (!arx_mem_persistent) memory.clearSession(projectId);\n";
+    code += "  };\n";
     code += "  try {\n";
     code += "  std::osyncstream(std::cout) << \">>> Iniciando pipeline Taskflow: \" << " + cppString(meta.graphName) + " << \"...\\n\";\n\n";
     code += "  AgentContext ctx;\n";
@@ -357,9 +413,9 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
         std::string scope = "    taskforge::rt::NodeScope arx_scope(" + cppString(node.id) + ", " + cppString(label) + ");\n";
 
         std::string body;
-        std::string lambdaHead = "[&ctx]()";
+        std::string lambdaHead = "[&ctx, &memory, &projectId]()";
         if (node.type == core::TaskflowNodeType::Condition) {
-            lambdaHead = "[&ctx]() -> int";
+            lambdaHead = "[&ctx, &memory, &projectId]() -> int";
             body = node.customLambdaBody.empty() ? "return 0;" : node.customLambdaBody;
         } else if (node.type == core::TaskflowNodeType::Switch) {
             // Switch: o corpo devolve o indice do caso (0..N-1). Fora do intervalo cai no ultimo
@@ -414,7 +470,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
                 selector = "return taskforge::rt::decideCase(" + cppString(node.id) + ", " + cppString(label) + ",\n    " +
                            rawLiteral(spec.dump()) + ");";
             }
-            lambdaHead = "[&ctx]() -> int";
+            lambdaHead = "[&ctx, &memory, &projectId]() -> int";
             body = "auto arx_select = [&]() -> int {\n" + indent(selector, 4) + "\n};\n" +
                    "const int arx_cases = " + std::to_string(caseCount) + ";\n" +
                    "int arx_case = arx_select();\n" +
@@ -451,11 +507,43 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
                   "std::osyncstream(std::cout) << \"[CUDA] Grafo GPU executado.\\n\";"
                 : node.customLambdaBody;
         } else if (node.type == core::TaskflowNodeType::Subflow || node.type == core::TaskflowNodeType::Module) {
-            lambdaHead = "[&ctx](tf::Subflow& sf)";
+            lambdaHead = "[&ctx, &memory, &projectId](tf::Subflow& sf)";
             body = node.customLambdaBody.empty() ? "(void)sf; // subflow hierarquico" : node.customLambdaBody;
         } else if (node.type == core::TaskflowNodeType::Agent && node.customLambdaBody.empty()) {
-            body = "taskforge::rt::runAgent(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +
-                   rawLiteral(buildAgentSpec(graph, node).dump()) + ");";
+            json mem = effectiveMemory(graph, node);
+            const bool memEnabled = mem.value("enabled", false);
+            if (memEnabled) {
+                json domains = mem.contains("domains") && mem["domains"].is_array() ? mem["domains"] : json::array();
+                json keys = mem.contains("allowedKeys") && mem["allowedKeys"].is_array() ? mem["allowedKeys"] : json::array();
+                const int budget = mem.value("contextBudgetTokens", 800);
+                body = "    std::string arx_mem_ctx = memory.buildBrief(projectId, \"pipeline\", " +
+                       cppStringList(domains) + ", " + cppStringList(keys) + ", " +
+                       std::to_string(std::max(0, budget)) + ", " +
+                       (mem.value("semanticLessons", false) ? "true" : "false") + ", " +
+                       (mem.value("readBlackboard", false) ? "true" : "false") + ");\n";
+                body += "    if (!arx_mem_ctx.empty()) std::osyncstream(std::cout) << \"[MEMORIA] contexto injetado em \" << " + cppString(label) + " << \"\\n\";\n";
+                std::string runCall = "taskforge::rt::runAgent(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +
+                                      rawLiteral(buildAgentSpec(graph, node).dump()) + ", \"\", arx_mem_ctx);";
+                if (mem.value("recordLessons", false)) {
+                    std::string domain = "geral";
+                    if (domains.is_array()) {
+                        for (const auto& d : domains) if (d.is_string()) { domain = d.get<std::string>(); break; }
+                    }
+                    std::string failPrefix = "Falha no agente " + label + ": ";
+                    body += "    try {\n      " + runCall + "\n    } catch (const std::exception& arx_mem_err) {\n";
+                    body += "      memory.recordLesson(projectId, " + cppString(domain) +
+                            ", \"agent_failure\",\n          std::string(" + cppString(failPrefix) + ") + arx_mem_err.what(), " + cppString(node.id) + ");\n";
+                    body += "      throw;\n    }\n";
+                } else {
+                    body += "    " + runCall + "\n";
+                }
+                if (mem.value("writeBlackboard", false)) {
+                    body += "    memory.setWorking(projectId, \"pipeline\", \"last_stage\", taskforge::Json(" + cppString(node.id) + "));\n";
+                }
+            } else {
+                body = "taskforge::rt::runAgent(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +
+                       rawLiteral(buildAgentSpec(graph, node).dump()) + ");";
+            }
         } else if (node.type == core::TaskflowNodeType::Output) {
             std::string src = "";
             std::string dst = "";
@@ -465,24 +553,24 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
                 dst = node.outputSettings.value("destinationPath", "");
                 atype = node.outputSettings.value("artifactType", "auto");
             }
-            if (node.customLambdaBody.empty()) {
-                body = "std::cout << \"[OUTPUT: " + label + "] Registrando entregavel...\\n\";\n"
-                       "try {\n"
-                       "    std::string sPath = " + cppString(src) + ";\n"
-                       "    std::string dPath = " + cppString(dst) + ";\n"
-                       "    if (!dPath.empty() && !sPath.empty() && std::filesystem::exists(sPath)) {\n"
-                       "        std::filesystem::create_directories(std::filesystem::path(dPath).parent_path());\n"
-                       "        std::filesystem::copy_file(sPath, dPath, std::filesystem::copy_options::overwrite_existing);\n"
-                       "    }\n"
-                       "} catch (const std::exception& e) {\n"
-                       "    std::cerr << \"[OUTPUT Erro] \" << e.what() << \"\\n\";\n"
-                       "}\n"
-                       "std::cout << \"[OUTPUT_DELIVERY] {\\\"nodeId\\\": \\\"" + node.id + "\\\", \\\"label\\\": \\\"" + label + "\\\", \\\"source\\\": \\\"" + src + "\\\", \\\"destination\\\": \\\"" + dst + "\\\", \\\"type\\\": \\\"" + atype + "\\\"}\\n\";";
-            } else {
-                body = node.customLambdaBody;
-                if (body.find("[OUTPUT_DELIVERY]") == std::string::npos) {
-                    body += "\nstd::cout << \"[OUTPUT_DELIVERY] {\\\"nodeId\\\": \\\"" + node.id + "\\\", \\\"label\\\": \\\"" + label + "\\\", \\\"source\\\": \\\"" + src + "\\\", \\\"destination\\\": \\\"" + dst + "\\\", \\\"type\\\": \\\"" + atype + "\\\"}\\n\";";
-                }
+            // A entrega vem das configuracoes do vertice (origem/destino), nao do corpo: um vertice
+            // criado na interface traz o corpo padrao preenchido e ainda assim precisa copiar o artefato.
+            body = "try {\n"
+                   "    std::string arx_out_src = " + cppString(src) + ";\n"
+                   "    std::string arx_out_dst = " + cppString(dst) + ";\n"
+                   "    if (!arx_out_dst.empty() && !arx_out_src.empty() && std::filesystem::exists(arx_out_src)) {\n"
+                   "        auto arx_out_parent = std::filesystem::path(arx_out_dst).parent_path();\n"
+                   "        if (!arx_out_parent.empty()) std::filesystem::create_directories(arx_out_parent);\n"
+                   "        std::filesystem::copy_file(arx_out_src, arx_out_dst, std::filesystem::copy_options::overwrite_existing);\n"
+                   "    }\n"
+                   "} catch (const std::exception& e) {\n"
+                   "    std::cerr << \"[OUTPUT Erro] \" << e.what() << \"\\n\";\n"
+                   "}\n";
+            if (!node.customLambdaBody.empty()) {
+                body += node.customLambdaBody + "\n";
+            }
+            if (body.find("[OUTPUT_DELIVERY]") == std::string::npos) {
+                body += "std::cout << \"[OUTPUT_DELIVERY] {\\\"nodeId\\\": \\\"" + node.id + "\\\", \\\"label\\\": \\\"" + label + "\\\", \\\"source\\\": \\\"" + src + "\\\", \\\"destination\\\": \\\"" + dst + "\\\", \\\"type\\\": \\\"" + atype + "\\\"}\\n\";";
             }
         } else {
             body = node.customLambdaBody.empty()
@@ -574,8 +662,10 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
     code += "  executor.run(taskflow).get();\n\n";
     code += "  auto end = std::chrono::high_resolution_clock::now();\n";
     code += "  auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();\n";
+    code += "  arx_mem_flush();\n";
     code += "  std::cout << \">>> Pipeline concluido com sucesso em \" << elapsed_ms << \" ms.\\n\";\n";
     code += "  } catch (const std::exception& ex) {\n";
+    code += "    arx_mem_flush();\n";
     code += "    std::cerr << \">>> [ERRO] Pipeline interrompido: \" << ex.what() << std::endl;\n";
     code += "    return 1;\n";
     code += "  }\n";

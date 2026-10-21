@@ -328,7 +328,7 @@
     {
       "id": "atd_entrega_urgente",
       "label": "Entrega_Urgente",
-      "type": "static",
+      "type": "output",
       "position": {
         "x": 2700,
         "y": -430,
@@ -340,6 +340,13 @@
           "name": "in",
           "direction": "input",
           "type": "flow"
+        },
+        {
+          "id": "atd_entrega_urgente_in_data",
+          "name": "data_in",
+          "direction": "input",
+          "type": "data",
+          "dataType": "std::string"
         }
       ],
       "outputs": [
@@ -351,7 +358,15 @@
         }
       ],
       "parameters": {},
-      "customLambdaBody": "std::cout << \"[Entrega] resposta pronta em workspace/resposta.md (caminho: urgente)\\n\";"
+      "customLambdaBody": "std::cout << \"[Entrega] resposta pronta em workspace/resposta.md (caminho: urgente)\\n\";",
+      "outputSettings": {
+        "sourcePath": "workspace/resposta.md",
+        "destinationPath": "exports/resposta-urgente.md",
+        "artifactType": "markdown",
+        "displayName": "Resposta ao chamado urgente",
+        "autoOpenPreview": true,
+        "description": "Resposta ao chamado (urgente)"
+      }
     },
     {
       "id": "atd_redator",
@@ -505,7 +520,7 @@
     {
       "id": "atd_entrega_normal",
       "label": "Entrega_Normal",
-      "type": "static",
+      "type": "output",
       "position": {
         "x": 3600,
         "y": -90,
@@ -517,6 +532,13 @@
           "name": "in",
           "direction": "input",
           "type": "flow"
+        },
+        {
+          "id": "atd_entrega_normal_in_data",
+          "name": "data_in",
+          "direction": "input",
+          "type": "data",
+          "dataType": "std::string"
         }
       ],
       "outputs": [
@@ -528,7 +550,15 @@
         }
       ],
       "parameters": {},
-      "customLambdaBody": "std::cout << \"[Entrega] resposta pronta em workspace/resposta.md (caminho: normal)\\n\";"
+      "customLambdaBody": "std::cout << \"[Entrega] resposta pronta em workspace/resposta.md (caminho: normal)\\n\";",
+      "outputSettings": {
+        "sourcePath": "workspace/resposta.md",
+        "destinationPath": "exports/resposta-normal.md",
+        "artifactType": "markdown",
+        "displayName": "Resposta ao chamado normal",
+        "autoOpenPreview": true,
+        "description": "Resposta ao chamado (normal)"
+      }
     },
     {
       "id": "atd_faq",
@@ -572,6 +602,49 @@
           ],
           "customScripts": []
         }
+      }
+    },
+    {
+      "id": "atd_entrega_faq",
+      "label": "Entrega_Resposta",
+      "type": "output",
+      "position": {
+        "x": 2700,
+        "y": 430,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "atd_entrega_faq_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        },
+        {
+          "id": "atd_entrega_faq_in_data",
+          "name": "data_in",
+          "direction": "input",
+          "type": "data",
+          "dataType": "std::string"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "atd_entrega_faq_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "std::cout << \"[Entrega] resposta pronta em workspace/resposta.md (caminho: duvida)\\n\";",
+      "outputSettings": {
+        "sourcePath": "workspace/resposta.md",
+        "destinationPath": "exports/resposta-duvida.md",
+        "artifactType": "markdown",
+        "displayName": "Resposta à dúvida",
+        "autoOpenPreview": true,
+        "description": "Resposta escrita antes da explicação animada"
       }
     },
     {
@@ -794,7 +867,7 @@
     {
       "id": "svg_entrega",
       "label": "Entrega_SVG_Final",
-      "type": "static",
+      "type": "output",
       "position": {
         "x": 4200,
         "y": 350
@@ -805,6 +878,13 @@
           "name": "in",
           "direction": "input",
           "type": "flow"
+        },
+        {
+          "id": "svg_entrega_in_data",
+          "name": "data_in",
+          "direction": "input",
+          "type": "data",
+          "dataType": "std::string"
         }
       ],
       "outputs": [
@@ -816,7 +896,15 @@
         }
       ],
       "parameters": {},
-      "customLambdaBody": "std::cout << \"[Entrega] resposta em workspace/resposta.md e explicacao animada em workspace/scene.svg (caminho: duvida)\\n\";"
+      "customLambdaBody": "std::cout << \"[Entrega] resposta em workspace/resposta.md e explicacao animada em workspace/scene.svg (caminho: duvida)\\n\";",
+      "outputSettings": {
+        "sourcePath": "workspace/scene.svg",
+        "destinationPath": "exports/scene.svg",
+        "artifactType": "svg",
+        "displayName": "Explicação animada da resposta",
+        "autoOpenPreview": true,
+        "description": "SVG animado que ilustra a resposta ao chamado"
+      }
     }
   ],
   "edges": [
@@ -906,6 +994,13 @@
       "targetPortId": "atd_faq_in_0"
     },
     {
+      "id": "atd_edge_faq_0_to_entrega_faq",
+      "sourceNodeId": "atd_faq",
+      "sourcePortId": "atd_faq_out_0",
+      "targetNodeId": "atd_entrega_faq",
+      "targetPortId": "atd_entrega_faq_in_0"
+    },
+    {
       "id": "atd_edge_triagem_default_to_humano",
       "sourceNodeId": "atd_triagem",
       "sourcePortId": "atd_triagem_out_default",
@@ -977,9 +1072,9 @@
       "isFeedbackLoop": true
     },
     {
-      "id": "edge_atd_faq_0_to_svg_gerador",
-      "sourceNodeId": "atd_faq",
-      "sourcePortId": "atd_faq_out_0",
+      "id": "edge_atd_entrega_faq_0_to_svg_gerador",
+      "sourceNodeId": "atd_entrega_faq",
+      "sourcePortId": "atd_entrega_faq_out_0",
       "targetNodeId": "svg_gerador",
       "targetPortId": "svg_gerador_in_0"
     }

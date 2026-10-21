@@ -2,7 +2,10 @@
 # eles podem conter respostas de modelos, dados de clientes e caminhos da sua maquina.
 **/workspace/
 **/output/
+**/exports/
 **/storage/
+**/arestrix-blackboard-*.json
+**/arestrix-memory-*.json
 **/.arestrix/
 **/.cache/
 **/*.sqlite

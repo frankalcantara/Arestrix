@@ -1390,6 +1390,16 @@
     "manual_trigger_label": "Trigger Error",
     "manual_rule_label": "Formulated Prophylactic Rule",
     "btn_save_lesson": "Save Lesson to Project",
+    "usage_title": "Memory API Consumption",
+    "usage_desc": "Tokens, calls and injected context recorded in the project database",
+    "usage_loading": "Loading API consumption...",
+    "usage_empty": "No run with metrics recorded for this project yet.",
+    "usage_runs": "Runs",
+    "usage_calls": "Calls",
+    "usage_tokens": "Tokens",
+    "usage_output": "output",
+    "usage_context": "Memory context (characters)",
+    "usage_latency": "Average latency (ms)",
     "btn_close": "Close"
   },
   "batch_pipeline": {

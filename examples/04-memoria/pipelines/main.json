@@ -1,0 +1,203 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "projectId": "exemplo-memoria",
+    "graphName": "Memoria_de_Projeto",
+    "description": "Memoria de projeto: licao persistente, Blackboard e injecao no agente",
+    "targetStandard": "C++20",
+    "compilerConfig": {
+      "compiler": "msvc",
+      "cppStandard": "C++20",
+      "buildSystem": "cmake",
+      "taskflowIncludePath": "third_party/taskflow",
+      "outputBinaryName": "exemplo_memoria",
+      "enableOpenMP": false,
+      "enableCuda": false,
+      "extraFlags": []
+    },
+    "version": "1.0.0",
+    "globalDefaults": {
+      "model": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "skillPath": "",
+        "promptTemplate": ""
+      },
+      "sandbox": {
+        "isolationLevel": "host_direct",
+        "network": "egress_llm_only",
+        "maxMemoryMB": 512,
+        "timeoutSeconds": 180,
+        "readOnlyMounts": [],
+        "readWriteMounts": []
+      },
+      "codeMode": {
+        "allowedTools": [
+          "read",
+          "write"
+        ],
+        "customScripts": []
+      },
+      "memory": {
+        "enabled": false,
+        "persistent": false,
+        "readBlackboard": false,
+        "writeBlackboard": false,
+        "semanticLessons": false,
+        "recordLessons": false,
+        "allowedKeys": [],
+        "domains": []
+      }
+    }
+  },
+  "nodes": [
+    {
+      "id": "semear",
+      "label": "Semear_Licao",
+      "type": "static",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "semear_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "semear_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "memory.recordLesson(projectId, \"memoria\", \"auditoria_anterior\",\n    \"A resposta deve citar a regra aprendida antes de concluir.\", \"semear\");\nmemory.setWorking(projectId, \"pipeline\", \"resumo\", taskforge::Json(\"chamado de exemplo\"));\nstd::cout << \"[Semear] licao e resumo gravados\\n\";"
+    },
+    {
+      "id": "agente",
+      "label": "Agente_Com_Memoria",
+      "type": "agent",
+      "position": {
+        "x": 450,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "agente_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "agente_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/memoria.md",
+          "promptTemplate": "Leia a memoria injetada e grave workspace/resposta.txt com uma frase citando a regra aprendida. Responda apenas OK."
+        },
+        "inheritCodeMode": false,
+        "inheritMemory": false,
+        "codeMode": {
+          "allowedTools": [
+            "read",
+            "write"
+          ],
+          "customScripts": []
+        },
+        "memory": {
+          "enabled": true,
+          "persistent": true,
+          "projectId": "exemplo-memoria",
+          "readBlackboard": true,
+          "writeBlackboard": true,
+          "semanticLessons": true,
+          "recordLessons": true,
+          "allowedKeys": [
+            "resumo"
+          ],
+          "domains": [
+            "memoria"
+          ],
+          "contextBudgetTokens": 400
+        }
+      }
+    },
+    {
+      "id": "entrega",
+      "label": "Entrega_Resposta",
+      "type": "output",
+      "position": {
+        "x": 900,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "entrega_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        },
+        {
+          "id": "entrega_in_data",
+          "name": "data_in",
+          "direction": "input",
+          "type": "data",
+          "dataType": "std::string"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "entrega_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "outputSettings": {
+        "sourcePath": "workspace/resposta.txt",
+        "destinationPath": "exports/resposta.md",
+        "artifactType": "markdown",
+        "displayName": "Resposta com memória",
+        "autoOpenPreview": true,
+        "description": ""
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_semear_0_to_agente",
+      "sourceNodeId": "semear",
+      "sourcePortId": "semear_out_0",
+      "targetNodeId": "agente",
+      "targetPortId": "agente_in_0"
+    },
+    {
+      "id": "edge_agente_0_to_entrega",
+      "sourceNodeId": "agente",
+      "sourcePortId": "agente_out_0",
+      "targetNodeId": "entrega",
+      "targetPortId": "entrega_in_0"
+    }
+  ]
+}

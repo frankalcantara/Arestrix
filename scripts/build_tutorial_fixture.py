@@ -72,6 +72,29 @@ jev = node("jev", "Agente_Auditor_JEV", "agent", 900, 0, settings={
     "inheritCodeMode": True, "inheritMemory": True,
 })
 
+# Passo 6 do tutorial: o sucesso do decisor termina em um vertice de SAIDA (output).
+# O destino da copia vem de outputSettings; o corpo padrao e o mesmo que a interface cria.
+entrega_data = port("entrega_in_data", "data_in", "input", "data")
+entrega_data["dataType"] = "std::string"
+entrega = {
+    "id": "entrega", "label": "Entrega_SVG_Final", "type": "output", "position": {"x": 1500, "y": -80},
+    "inputs": [port("entrega_in_0", "in", "input"), entrega_data],
+    "outputs": [port("entrega_out_0", "out", "output")],
+    "parameters": {},
+    "customLambdaBody": ("// Coletor de Entrega / Artefato: Entrega_SVG_Final\n"
+                         "// Em runtime, este vertice registra e disponibiliza o artefato produzido na aba Artefatos "
+                         "e na pasta de saida.\n"
+                         "std::cout << \"[OUTPUT: Entrega_SVG_Final] Entregavel registrado com sucesso!\\n\";"),
+    "outputSettings": {
+        "sourcePath": "workspace/scene.svg",
+        "destinationPath": "exports/scene.svg",
+        "artifactType": "svg",
+        "displayName": "Cena SVG Animada Final",
+        "autoOpenPreview": True,
+        "description": "Vetor SVG animado e auditado gerado pelo pipeline de agentes",
+    },
+}
+
 nodes = [
     gen,
     node("linter", "Linter_Tipografia_Estatico", "static", 300, -100, lambda_a),
@@ -79,8 +102,7 @@ nodes = [
     node("join", "Consolidador_Diagnostico", "static", 600, 0, "std::cout << \"[Join] diagnosticos consolidados\\n\";"),
     jev,
     node("decisor", "Decisor_Qualidade", "condition", 1200, 0, lambda_cond, condition=True),
-    node("entrega", "Entrega_SVG_Final", "static", 1500, -80,
-         "std::cout << \"[Entrega] SVG aprovado e exportado com sucesso!\\n\";"),
+    entrega,
 ]
 
 # Sem isFeedbackLoop no retorno do decisor: o gerador de codigo deve detectar o ciclo sozinho,

@@ -55,6 +55,42 @@ Memory is opt-in and disabled by default.
 Memory is partitioned by `projectId`, so two projects never read each other's data. Each vertex declares
 which keys it may read or write.
 
+### How memory reaches the agent
+
+In the generated pipeline, the runtime:
+
+1. loads the project's lessons and Blackboard when `persistent: true`;
+2. builds a block with the configured domains' lessons and the authorized key snapshot;
+3. injects that block into the system prompt as **untrusted historical data**;
+4. saves the lesson and Blackboard at the end of the run;
+5. automatically records a lesson when an agent fails and `recordLessons` is on.
+
+When memory is enabled, the agent also receives the `memory_search` tool (searches lessons and
+facts) and, when `recordLessons` is on, `memory_record_lesson`. `contextBudgetTokens` limits the
+injected brief; the default is roughly 800 tokens.
+
+Audit lessons are recorded by the node that interprets the decision (for example, a `condition`
+that calls `recordLesson` on the rejection branch); the runtime does not guess the semantics of a
+switch.
+
+The [`04-memoria`](../../examples/04-memoria) example demonstrates the full cycle. Storage is
+currently SQLite (`.arestrix/memory/memory.db`) per project; the evolution to a multigraph,
+workspace/institution scopes and recursive queries is kept in the project's internal architecture notes.
+
+Each agent run records tokens, calls, latency and memory context size in the `memory_usage` table.
+To compare consumption with memory on/off:
+
+```bash
+# 1) run without memory, still recording metrics
+ARESTRIX_MEMORY_METRICS=1 arestrix-cli run pipelines/main.json --root <project>
+
+# 2) run with memory (graph configuration)
+arestrix-cli run pipelines/main.json --root <project>
+
+# 3) report
+python scripts/memory_report.py <project>
+```
+
 ## Skills
 
 A **skill** is a `SKILL.md` file (YAML front matter plus instructions) that becomes the agent's system prompt.

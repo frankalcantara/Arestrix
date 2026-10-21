@@ -148,6 +148,17 @@ def decide(body):
                              "Ola! Para exportar os relatorios, abra Relatorios, escolha o mes e clique em Exportar (padrao PDF; CSV para planilha).\n"})
         return text("Usado o item: Exportar relatorios.")
 
+    if "AGENTE COM MEMORIA" in system:
+        if step == 0:
+            return tool_call("c1", "memory_search", {"query": "REGRA", "limit": 5})
+        if step == 1:
+            return tool_call("c2", "memory_record_lesson", {"domain": "memoria", "rule":
+                             "Licao registrada pelo agente no teste", "trigger": "teste e2e"})
+        if step == 2:
+            return tool_call("c3", "write", {"path": "workspace/resposta.txt", "content":
+                             "A regra aprendida foi aplicada a resposta.\n"})
+        return text("OK")
+
     if "SVG Animation Architect" in system:
         if step == 0:
             if it >= 2:
@@ -206,6 +217,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         msg = decide(body)
         log({"event": "chat", "model": body.get("model"), "tools": sorted(t["function"]["name"] for t in body.get("tools", [])),
+             "system": body.get("messages", [{}])[0].get("content", ""),
              "reply": "tool_call:" + msg["tool_calls"][0]["function"]["name"] if msg.get("tool_calls") else "text"})
         self._send(200, {"choices": [{"message": msg, "finish_reason": "tool_calls" if msg.get("tool_calls") else "stop"}],
                          "usage": {"prompt_tokens": 10, "completion_tokens": 10}})

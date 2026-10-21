@@ -16,7 +16,7 @@
 ## Tutorials and examples
 
 - [SVG agent tutorial](../pt-BR/tutorials/svg-agent.md) — complete walkthrough in Portuguese.
-- [Examples](../../examples/README.md) — three runnable projects with a scripted fake model.
+- [Examples](../../examples/README.md) — four runnable projects with a scripted fake model.
 - [Feature showcase](../product/showcase.md) — screenshots of the Studio, compiler, runner and governance screens.
 - [Comparison](../product/comparison.md) — how Arestrix differs from other orchestration approaches.
 

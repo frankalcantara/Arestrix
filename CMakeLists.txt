@@ -176,6 +176,8 @@ add_library(arestrix_core STATIC
   ${SRC}/sandbox/PipelineResumeEngine.cpp
   ${SRC}/memory/AgentBlackboard.cpp
   ${SRC}/memory/SemanticMemoryEngine.cpp
+  ${SRC}/memory/MemoryStore.cpp
+  ${SRC}/memory/MemoryService.cpp
   ${SRC}/project/OpenableFiles.cpp
   ${SRC}/project/GitSyncService.cpp
   ${SRC}/project/RunnerService.cpp
@@ -222,7 +224,7 @@ target_include_directories(arestrix_core PUBLIC
 # SQLite (dominio publico), compilado dentro de arestrix_core: sem carga de extensoes, sem aspas duplas como texto,
 # chaves estrangeiras ligadas por padrao. Os executaveis gerados linkam so arestrix_core, entao ele precisa vir junto.
 set_source_files_properties(${TP}/sqlite/sqlite3.c PROPERTIES
-  COMPILE_DEFINITIONS "SQLITE_OMIT_LOAD_EXTENSION;SQLITE_DQS=0;SQLITE_THREADSAFE=1;SQLITE_DEFAULT_FOREIGN_KEYS=1;SQLITE_OMIT_DEPRECATED;SQLITE_OMIT_SHARED_CACHE;SQLITE_USE_URI=0;SQLITE_DEFAULT_MEMSTATUS=0")
+  COMPILE_DEFINITIONS "SQLITE_OMIT_LOAD_EXTENSION;SQLITE_DQS=0;SQLITE_THREADSAFE=1;SQLITE_DEFAULT_FOREIGN_KEYS=1;SQLITE_OMIT_DEPRECATED;SQLITE_OMIT_SHARED_CACHE;SQLITE_USE_URI=0;SQLITE_DEFAULT_MEMSTATUS=0;SQLITE_ENABLE_FTS5")
 if(MSVC)
   set_source_files_properties(${TP}/sqlite/sqlite3.c ${TP}/simdjson/singleheader/simdjson.cpp PROPERTIES COMPILE_OPTIONS "/w")
 else()
