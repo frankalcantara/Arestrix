@@ -28,6 +28,27 @@ struct MemoryLesson {
     std::string lessonRule;
     std::string sourceItem;
     std::string createdAt;
+    double confidence = 0.5;
+};
+
+struct MemoryBriefInfo {
+    std::vector<std::string> lessonIds;
+    std::vector<std::string> workingKeys;
+    size_t chars = 0;
+    size_t estimatedTokens = 0;
+    bool truncated = false;
+};
+
+struct MemoryHitRecord {
+    std::string id;
+    std::string runId;
+    std::string nodeId;
+    std::string memoryId;
+    std::string kind;
+    bool injected = false;
+    bool used = false;
+    std::string outcome;
+    std::string createdAt;
 };
 
 struct MemoryEdgeRecord {
@@ -62,6 +83,8 @@ struct MemoryUsageRecord {
     long long latencyMs = 0;
     long long memoryContextChars = 0;
     long long memoryEnabled = 0;
+    long long retries = 0;
+    std::string outcome;   // success | failure
     std::string createdAt;
 };
 
@@ -135,7 +158,19 @@ public:
                                               const std::string& text,
                                               size_t limit = 20) const;
     std::string searchContext(const std::string& scopeId, const std::string& text,
-                              size_t limit = 10) const;
+                              size_t limit = 10,
+                              std::vector<std::string>* hitIds = nullptr) const;
+
+    // Rastreio de memórias injetadas/consultadas e resultado da execução.
+    bool recordHit(const std::string& scopeId, const std::string& runId,
+                   const std::string& nodeId, const std::string& memoryId,
+                   const std::string& kind, bool injected, bool used,
+                   const std::string& outcome = "");
+    int markHitsUsed(const std::string& scopeId, const std::string& runId,
+                     const std::string& nodeId, const std::vector<std::string>& memoryIds);
+    bool finishHits(const std::string& scopeId, const std::string& runId,
+                    const std::string& nodeId, const std::string& outcome);
+    taskforge::Json hitSummary(const std::string& scopeId) const;
 
     // Métricas de consumo de API (tokens, chamadas e contexto de memória).
     bool recordUsage(const MemoryUsageRecord& usage);

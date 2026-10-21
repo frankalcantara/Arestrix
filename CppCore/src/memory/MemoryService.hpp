@@ -58,7 +58,8 @@ public:
                            const std::vector<std::string>& allowedKeys,
                            size_t maxTokens = 800,
                            bool includeLessons = true,
-                           bool includeBlackboard = true);
+                           bool includeBlackboard = true,
+                           MemoryBriefInfo* info = nullptr);
     void clearLessons(const std::string& projectId);
 
     // Episódios, arestas e métricas.
@@ -80,7 +81,16 @@ public:
     std::vector<MemoryEdgeRecord> searchEdges(const std::string& projectId,
                                               const std::string& text, size_t limit = 20);
     std::string searchContext(const std::string& projectId, const std::string& text,
-                              size_t limit = 10);
+                              size_t limit = 10,
+                              std::vector<std::string>* hitIds = nullptr);
+    // Rastreio de memórias injetadas/consultadas por execução.
+    bool recordBriefHits(const std::string& projectId, const std::string& runId,
+                         const std::string& nodeId, const MemoryBriefInfo& info);
+    int markHitsUsed(const std::string& projectId, const std::string& runId,
+                     const std::string& nodeId, const std::vector<std::string>& memoryIds);
+    bool finishHits(const std::string& projectId, const std::string& runId,
+                    const std::string& nodeId, const std::string& outcome);
+    taskforge::Json hitSummary(const std::string& projectId);
     bool invalidateEdge(const std::string& projectId, const std::string& edgeId,
                         const std::string& validTo, const std::string& reason,
                         const std::string& actor = "runtime");

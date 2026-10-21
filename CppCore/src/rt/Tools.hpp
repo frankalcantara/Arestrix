@@ -53,6 +53,7 @@ struct ToolContext {
     sandbox::SandboxPolicy sandbox;
     std::string agentId;
     std::string projectId;              // projeto da memoria (MemoryService)
+    std::string runId;                  // execucao corrente (memory_hit)
     std::string memoryItemId = "pipeline";
     bool memoryWriteEnabled = false;
     std::vector<std::string> memoryDomains;

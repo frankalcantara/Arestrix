@@ -215,6 +215,12 @@ def main():
                                  "COALESCE(SUM(memory_context_chars),0) FROM memory_usage")
         check(usage and usage[0][0] >= 1, "o consumo de API foi registrado em memory_usage")
         check(usage and usage[0][1] >= 1 and usage[0][3] > 0, "a chamada de API registrou contexto de memoria")
+        outcome = db_rows(project, "SELECT COALESCE(SUM(outcome='success'),0), COALESCE(SUM(retries),0) FROM memory_usage")
+        check(outcome and outcome[0][0] >= 1, "a execucao bem-sucedida foi registrada com outcome=success")
+        hits = db_rows(project, "SELECT COALESCE(SUM(injected),0), COALESCE(SUM(used),0) FROM memory_hit")
+        check(hits and hits[0][0] >= 1, "as memorias injetadas foram registradas em memory_hit")
+        episodes = db_rows(project, "SELECT kind, metadata FROM memory_episode WHERE kind='agent_success'")
+        check(episodes and '"outcome":"success"' in episodes[0][1], "o episodio de sucesso foi registrado com outcome")
 
         text1 = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
         check(RULE in text1, "a licao apareceu no system prompt")
@@ -235,6 +241,19 @@ def main():
         usage2 = db_rows(project, "SELECT COUNT(*), COALESCE(SUM(calls),0), COALESCE(SUM(prompt_tokens),0) FROM memory_usage")
         check(usage2 and usage2[0][0] >= 2, "a segunda execucao tambem registrou consumo de API")
         check(usage2 and usage2[0][1] >= 2, "as chamadas de API foram acumuladas no banco")
+
+        print("\n== A/B no mesmo grafo: memoria ON (acima) vs OFF (agora) ==")
+        env_ab = dict(env)
+        env_ab["ARESTRIX_MEMORY_DISABLE"] = "1"
+        env_ab["ARESTRIX_MEMORY_METRICS"] = "1"
+        p_ab = run_graph(EXE, work / "graph2.json", project, env_ab)
+        out_ab = (p_ab.stdout or "") + (p_ab.stderr or "")
+        check(p_ab.returncode == 0, "a execucao A/B OFF terminou com codigo 0")
+        check("[MEMORIA] contexto injetado" not in out_ab, "ARESTRIX_MEMORY_DISABLE removeu o contexto")
+        ab = db_rows(project, "SELECT COUNT(*), COALESCE(SUM(memory_enabled),0), COALESCE(SUM(outcome='success'),0) "
+                              "FROM memory_usage WHERE memory_enabled=0")
+        check(ab and ab[0][0] >= 1 and ab[0][1] == 0 and ab[0][2] >= 1,
+              "o mesmo grafo foi registrado como memoria OFF com outcome=success")
 
         print("\n== Memoria de projeto: falha de agente gera licao automatica ==")
         p3 = run_graph(EXE, work / "graph3.json", project, env)

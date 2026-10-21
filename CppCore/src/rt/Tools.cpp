@@ -384,7 +384,12 @@ ToolResult executeTool(const ToolContext& ctx, const std::string& name, const js
             int limit = 10;
             if (args.contains("limit") && args["limit"].is_number()) limit = static_cast<int>(args["limit"].get<double>());
             limit = std::max(1, std::min(20, limit));
-            std::string result = taskforge::memory::MemoryService::getInstance().searchContext(ctx.projectId, query, static_cast<size_t>(limit));
+            std::vector<std::string> hitIds;
+            auto& memory = taskforge::memory::MemoryService::getInstance();
+            std::string result = memory.searchContext(ctx.projectId, query, static_cast<size_t>(limit), &hitIds);
+            if (!hitIds.empty() && !ctx.runId.empty()) {
+                memory.markHitsUsed(ctx.projectId, ctx.runId, ctx.agentId, hitIds);
+            }
             if (result.empty()) return ToolResult{T("Nenhuma memoria encontrada para: ", "No memory found for: ") + query, false};
             return ToolResult{result, false};
         }

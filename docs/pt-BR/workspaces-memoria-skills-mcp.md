@@ -67,8 +67,12 @@ declara quais chaves pode ler ou escrever.
 - Lições e Blackboard podem ser lidos no início da execução e gravados no fim.
 - O agente pode consultar a memória com `memory_search` e, quando `recordLessons` está ligado,
   registrar uma lição com `memory_record_lesson`.
-- O campo `contextBudgetTokens` limita o brief injetado; o padrão é 800 tokens aproximados
-  (cerca de 4 caracteres por token).
+- O brief é compilado por seções, com lições mais recentes/confiáveis primeiro e Blackboard
+  completo ou omitido (nunca JSON parcial). `contextBudgetTokens` limita o brief; o padrão é 800
+  tokens aproximados (cerca de 4 caracteres por token).
+- `memory_hit` registra quais lições/chaves foram injetadas, quais foram consultadas via
+  `memory_search` e o outcome da execução.
+- `memory_usage` registra tokens, chamadas, retries, latência, contexto e sucesso/falha.
 - O JSON legado (`arestrix-blackboard-*.json`, `arestrix-memory-*.json`) é importado uma única vez
   e marcado como `legacy_imported`.
 - Nenhum LLM é usado para extrair ou consolidar memória por padrão. O agente propõe; o runtime
@@ -110,18 +114,21 @@ Cada execução de agente registra tokens, chamadas, latência e tamanho do cont
 tabela `memory_usage`. Para comparar o consumo com a memória ligada/desligada:
 
 ```bash
-# 1) execução sem memória, mas gravando métricas
+# 1) memória ON no mesmo grafo, gravando métricas
 ARESTRIX_MEMORY_METRICS=1 arestrix-cli run pipelines/main.json --root <projeto>
 
-# 2) execução com memória (configuração do grafo)
-arestrix-cli run pipelines/main.json --root <projeto>
+# 2) memória OFF no MESMO grafo (sem editar o JSON)
+ARESTRIX_MEMORY_METRICS=1 ARESTRIX_MEMORY_DISABLE=1 \
+  arestrix-cli run pipelines/main.json --root <projeto>
 
 # 3) relatório (ferramenta opcional de desenvolvimento)
 python scripts/memory_report.py <projeto>
 ```
 
-O `memory_report.py` é apenas um leitor do SQLite para desenvolvimento; o runtime não depende de
-Python. Veja também [`arestrix-cli`](arestrix-cli.md).
+`ARESTRIX_MEMORY_DISABLE=1` remove o brief e as ferramentas de memória em runtime, mas mantém a
+gravação de `memory_usage` para a comparação. O relatório mostra sucesso/falha, retries, memórias
+injetadas e memórias usadas/consultadas. `memory_report.py` é apenas um leitor do SQLite para
+desenvolvimento; o runtime não depende de Python. Veja também [`arestrix-cli`](arestrix-cli.md).
 
 O **Runner Standalone** recebe os tokens do agente por um único evento de telemetria emitido pelo
 runtime C++ (`type: "usage"`), agregado pelo `RunnerManager`. Não há parsing de stdout nem processo

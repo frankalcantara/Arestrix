@@ -49,13 +49,15 @@ std::string envOr(const std::string& name, const std::string& fallback) {
 }
 
 // Chamada HTTP com retentativas: 429/5xx/529 respeitam Retry-After ou backoff exponencial.
-HttpResponse postWithRetry(const std::string& telemetryId, const HttpRequest& req, int maxAttempts) {
+HttpResponse postWithRetry(const std::string& telemetryId, const HttpRequest& req, int maxAttempts,
+                           int* retries = nullptr) {
     HttpResponse resp;
     for (int attempt = 1; attempt <= maxAttempts; ++attempt) {
         resp = httpSend(req);
         bool retryable = resp.status == 0 || resp.status == 429 || resp.status == 500 ||
                          resp.status == 502 || resp.status == 503 || resp.status == 504 || resp.status == 529;
         if (!retryable || attempt == maxAttempts) break;
+        if (retries) ++(*retries);
 
         int wait = std::min(60, 2 << attempt);   // 4, 8, 16, 32, 60
         auto ra = resp.headers.find("retry-after");
@@ -417,15 +419,17 @@ ChatReply chatOnce(const ChatRequest& req) {
         int attempts = std::max(1, req.httpAttempts);
         // Servidor local desligado/inalcancavel: falhar rapido em vez de esperar o backoff das APIs remotas.
         if (req.provider == "local") attempts = std::min(attempts, 2);
-        HttpResponse resp = postWithRetry(req.telemetryId, http, attempts);
+        int retries = 0;
+        HttpResponse resp = postWithRetry(req.telemetryId, http, attempts, &retries);
         bool reasoningRejected = false;
         if (info.protocol == "openai" && req.includeReasoning && resp.status == 400 &&
             resp.body.find("reasoning_content") != std::string::npos) {
             // Alguns servidores recusam reasoning_content no historico: reenvia sem ele.
             reasoningRejected = true;
             http.body = buildRequestBody(info, req, false).dump();
-            resp = postWithRetry(req.telemetryId, http, attempts);
+            resp = postWithRetry(req.telemetryId, http, attempts, &retries);
         }
+        out.retries = retries;
         if (resp.status != 200) {
             out.errorCode = looksLikeToolsRejected(resp) ? "tools_unsupported"
                           : resp.status == 402 ? "budget_exceeded"
@@ -435,6 +439,7 @@ ChatReply chatOnce(const ChatRequest& req) {
         }
         ChatReply reply = parseResponseBody(info, resp.body);
         reply.reasoningRejected = reasoningRejected;
+        reply.retries = retries;
         return reply;
     } catch (const std::exception& ex) {
         out.ok = false;

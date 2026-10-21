@@ -1409,6 +1409,11 @@
     "usage_output": "output",
     "usage_context": "Memory context (characters)",
     "usage_latency": "Average latency (ms)",
+    "usage_success": "success",
+    "usage_failure": "failure",
+    "usage_retries": "retries",
+    "usage_hits": "Injected memories",
+    "usage_used": "used/consulted",
     "btn_close": "Close"
   },
   "batch_pipeline": {

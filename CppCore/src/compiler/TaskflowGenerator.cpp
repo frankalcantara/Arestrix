@@ -516,11 +516,17 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
                 json domains = mem.contains("domains") && mem["domains"].is_array() ? mem["domains"] : json::array();
                 json keys = mem.contains("allowedKeys") && mem["allowedKeys"].is_array() ? mem["allowedKeys"] : json::array();
                 const int budget = mem.value("contextBudgetTokens", 800);
-                body = "    std::string arx_mem_ctx = memory.buildBrief(projectId, \"pipeline\", " +
-                       cppStringList(domains) + ", " + cppStringList(keys) + ", " +
-                       std::to_string(std::max(0, budget)) + ", " +
-                       (mem.value("semanticLessons", false) ? "true" : "false") + ", " +
-                       (mem.value("readBlackboard", false) ? "true" : "false") + ");\n";
+                body = "    taskforge::memory::MemoryBriefInfo arx_brief_info;\n";
+                body += "    std::string arx_mem_ctx;\n";
+                body += "    if (std::getenv(\"ARESTRIX_MEMORY_DISABLE\") == nullptr) {\n";
+                body += "      arx_mem_ctx = memory.buildBrief(projectId, \"pipeline\", " +
+                        cppStringList(domains) + ", " + cppStringList(keys) + ", " +
+                        std::to_string(std::max(0, budget)) + ", " +
+                        (mem.value("semanticLessons", false) ? "true" : "false") + ", " +
+                        (mem.value("readBlackboard", false) ? "true" : "false") + ", &arx_brief_info);\n";
+                body += "      memory.recordBriefHits(projectId, " + cppString(node.id) + ", " +
+                        cppString(node.id) + ", arx_brief_info);\n";
+                body += "    }\n";
                 body += "    if (!arx_mem_ctx.empty()) std::osyncstream(std::cout) << \"[MEMORIA] contexto injetado em \" << " + cppString(label) + " << \"\\n\";\n";
                 std::string runCall = "taskforge::rt::runAgent(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +
                                       rawLiteral(buildAgentSpec(graph, node).dump()) + ", \"\", arx_mem_ctx);";

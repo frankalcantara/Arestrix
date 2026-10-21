@@ -206,7 +206,17 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
               const std::string& runKey, const std::string& memoryContext) {
     AgentSpec spec = parseSpec(jsonutil::parse(specJson), nodeId, label);
     spec.memoryContext = memoryContext;
-    int iteration = registerRun(runKey.empty() ? nodeId : runKey, spec.maxRuns);
+
+    // A/B controlado no mesmo grafo: desliga injecao e ferramentas de memoria sem editar o JSON.
+    if (std::getenv("ARESTRIX_MEMORY_DISABLE") != nullptr) {
+        spec.memoryEnabled = false;
+        spec.memoryContext.clear();
+        spec.memoryWriteEnabled = false;
+        spec.tools.erase(std::remove(spec.tools.begin(), spec.tools.end(), "memory_search"), spec.tools.end());
+        spec.tools.erase(std::remove(spec.tools.begin(), spec.tools.end(), "memory_record_lesson"), spec.tools.end());
+    }
+    const std::string runId = runKey.empty() ? nodeId : runKey;
+    int iteration = registerRun(runId, spec.maxRuns);
 
     if (spec.model.empty()) throw std::runtime_error("Agente '" + label + "': modelo nao configurado.");
 
@@ -305,7 +315,7 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
     chat.httpAttempts = spec.httpAttempts;
     chat.telemetryId = nodeId;
     chat.agentId = nodeId;
-    chat.runId = runKey.empty() ? nodeId : runKey;
+    chat.runId = runId;
     chat.memoryScope = spec.memoryProjectId;
     chat.memoryEnabled = spec.memoryEnabled;
     chat.memoryContextChars = static_cast<long long>(spec.memoryContext.size());
@@ -321,6 +331,7 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
     tctx.sandbox = spec.sandbox;
     tctx.agentId = nodeId;
     tctx.projectId = spec.memoryProjectId;
+    tctx.runId = runId;
     tctx.memoryItemId = "pipeline";
     tctx.memoryWriteEnabled = spec.memoryWriteEnabled;
     tctx.memoryDomains = spec.memoryDomains;
@@ -333,78 +344,15 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
     bool finished = false;
     long long inTokens = 0, outTokens = 0;
     int turns = 0;
+    int retries = 0;
     const auto runStart = std::chrono::steady_clock::now();
-    for (int turn = 1; turn <= spec.maxTurns; ++turn) {
-        AgentTelemetryEmitter::emitStatus(nodeId, "thinking", "Turno " + std::to_string(turn));
-        ChatReply t = chatOnce(chat);
-        ++turns;
-        if (!t.ok) throw std::runtime_error(t.error);
-        if (t.reasoningRejected) chat.includeReasoning = false;
-        inTokens += t.inTokens;
-        outTokens += t.outTokens;
-
-        if (!t.reasoning.empty()) {
-            AgentTelemetryEmitter::emitThinking(nodeId, t.reasoning.size(), t.reasoning.substr(0, 200));
-        }
-        if (!t.text.empty()) {
-            finalText = t.text;
-            AgentTelemetryEmitter::emitEvent(nodeId, "log", json{{"logLine", t.text.substr(0, 400)}});
-        }
-        ChatMessage reply;
-        reply.role = "assistant";
-        reply.text = t.text;
-        reply.reasoning = t.reasoning;
-        reply.toolCalls = t.toolCalls;
-        chat.messages.push_back(std::move(reply));
-        if (t.toolCalls.empty()) { finished = true; break; }
-
-        for (auto& call : t.toolCalls) {
-            AgentTelemetryEmitter::emitToolStart(nodeId, call.name, summarizeArgs(call.args));
-            ToolResult res = (mcpTools && mcpTools->owns(call.name)) ? mcpTools->call(call.name, call.args)
-                                                                       : executeTool(tctx, call.name, call.args);
-            AgentTelemetryEmitter::emitToolEnd(nodeId, call.name, !res.isError);
-            if (res.isError) {
-                AgentTelemetryEmitter::emitEvent(nodeId, "log", json{{"logLine", "[" + call.name + "] " + res.content.substr(0, 300)}});
-            }
-            ChatMessage result;
-            result.role = "tool";
-            result.toolCallId = call.id;
-            result.text = res.content;
-            result.isError = res.isError;
-            chat.messages.push_back(std::move(result));
-        }
-    }
-
-    if (!finished) {
-        throw std::runtime_error("Agente '" + label + "' excedeu o limite de " + std::to_string(spec.maxTurns) +
-                                 " turnos sem concluir.");
-    }
-
-    // Registra a resposta final do agente para consulta/depuracao.
-    std::error_code ec;
-    fs::path outDir = root / ".arestrix" / "out";
-    fs::create_directories(outDir, ec);
-    std::ofstream(outDir / (nodeId + ".txt"), std::ios::binary | std::ios::trunc) << finalText;
-
-    std::cout << "[Agent " << label << "] concluido (tokens: entrada=" << inTokens
-              << ", saida=" << outTokens << ")\n";
-
-    // Um unico evento nativo por agente: o Runner agrega sem parsing de stdout nem processo auxiliar.
-    AgentTelemetryEmitter::emitEvent(nodeId, "usage", json{
-        {"prompt_tokens", inTokens},
-        {"completion_tokens", outTokens},
-        {"total_tokens", inTokens + outTokens},
-        {"calls", turns},
-        {"memory_enabled", spec.memoryEnabled},
-        {"memory_context_chars", static_cast<long long>(spec.memoryContext.size())}
-    });
-
-    if (!spec.memoryProjectId.empty()) {
+    auto recordUsage = [&](bool success, const std::string& error = "") {
+        if (spec.memoryProjectId.empty()) return;
         const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                                  std::chrono::steady_clock::now() - runStart).count();
         memory::MemoryUsageRecord usage;
         usage.scopeId = spec.memoryProjectId;
-        usage.runId = runKey.empty() ? nodeId : runKey;
+        usage.runId = runId;
         usage.nodeId = nodeId;
         usage.provider = spec.provider;
         usage.model = spec.model;
@@ -415,8 +363,97 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
         usage.latencyMs = static_cast<long long>(elapsed);
         usage.memoryContextChars = static_cast<long long>(spec.memoryContext.size());
         usage.memoryEnabled = spec.memoryEnabled ? 1 : 0;
-        memory::MemoryService::getInstance().recordUsage(usage);
+        usage.retries = retries;
+        usage.outcome = success ? "success" : "failure";
+        auto& memory = memory::MemoryService::getInstance();
+        memory.recordUsage(usage);
+        memory.finishHits(spec.memoryProjectId, runId, nodeId, usage.outcome);
+        json meta{{"label", label}, {"provider", spec.provider}, {"model", spec.model},
+                  {"outcome", usage.outcome},
+                  {"tokens", usage.totalTokens}, {"calls", usage.calls}, {"retries", usage.retries},
+                  {"memoryEnabled", spec.memoryEnabled}, {"memoryContextChars", usage.memoryContextChars}};
+        if (!success && !error.empty()) meta["error"] = error.substr(0, 500);
+        memory.recordEpisode(spec.memoryProjectId, runId, nodeId, "pipeline",
+                             success ? "agent_success" : "agent_failure",
+                             success ? "agent completed" : "agent failed", meta);
+    };
+
+    try {
+        for (int turn = 1; turn <= spec.maxTurns; ++turn) {
+            AgentTelemetryEmitter::emitStatus(nodeId, "thinking", "Turno " + std::to_string(turn));
+            ChatReply t = chatOnce(chat);
+            ++turns;
+            if (!t.ok) throw std::runtime_error(t.error);
+            if (t.reasoningRejected) chat.includeReasoning = false;
+            inTokens += t.inTokens;
+            outTokens += t.outTokens;
+            retries += t.retries;
+
+            if (!t.reasoning.empty()) {
+                AgentTelemetryEmitter::emitThinking(nodeId, t.reasoning.size(), t.reasoning.substr(0, 200));
+            }
+            if (!t.text.empty()) {
+                finalText = t.text;
+                AgentTelemetryEmitter::emitEvent(nodeId, "log", json{{"logLine", t.text.substr(0, 400)}});
+            }
+            ChatMessage reply;
+            reply.role = "assistant";
+            reply.text = t.text;
+            reply.reasoning = t.reasoning;
+            reply.toolCalls = t.toolCalls;
+            chat.messages.push_back(std::move(reply));
+            if (t.toolCalls.empty()) { finished = true; break; }
+
+            for (auto& call : t.toolCalls) {
+                AgentTelemetryEmitter::emitToolStart(nodeId, call.name, summarizeArgs(call.args));
+                ToolResult res = (mcpTools && mcpTools->owns(call.name)) ? mcpTools->call(call.name, call.args)
+                                                                           : executeTool(tctx, call.name, call.args);
+                AgentTelemetryEmitter::emitToolEnd(nodeId, call.name, !res.isError);
+                if (res.isError) {
+                    AgentTelemetryEmitter::emitEvent(nodeId, "log", json{{"logLine", "[" + call.name + "] " + res.content.substr(0, 300)}});
+                }
+                ChatMessage result;
+                result.role = "tool";
+                result.toolCallId = call.id;
+                result.text = res.content;
+                result.isError = res.isError;
+                chat.messages.push_back(std::move(result));
+            }
+        }
+
+        if (!finished) {
+            throw std::runtime_error("Agente '" + label + "' excedeu o limite de " + std::to_string(spec.maxTurns) +
+                                     " turnos sem concluir.");
+        }
+
+        // Registra a resposta final do agente para consulta/depuracao.
+        std::error_code ec;
+        fs::path outDir = root / ".arestrix" / "out";
+        fs::create_directories(outDir, ec);
+        std::ofstream(outDir / (nodeId + ".txt"), std::ios::binary | std::ios::trunc) << finalText;
+
+        std::cout << "[Agent " << label << "] concluido (tokens: entrada=" << inTokens
+                  << ", saida=" << outTokens << ", retries=" << retries << ")\n";
+
+        // Um unico evento nativo por agente: o Runner agrega sem parsing de stdout nem processo auxiliar.
+        AgentTelemetryEmitter::emitEvent(nodeId, "usage", json{
+            {"prompt_tokens", inTokens},
+            {"completion_tokens", outTokens},
+            {"total_tokens", inTokens + outTokens},
+            {"calls", turns},
+            {"retries", retries},
+            {"memory_enabled", spec.memoryEnabled},
+            {"memory_context_chars", static_cast<long long>(spec.memoryContext.size())}
+        });
+    } catch (const std::exception& ex) {
+        recordUsage(false, ex.what());
+        throw;
+    } catch (...) {
+        recordUsage(false, "falha desconhecida");
+        throw;
     }
+
+    recordUsage(true);
 }
 
 // ---------------------------------------------------------------------------

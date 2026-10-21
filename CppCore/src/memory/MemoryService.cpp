@@ -1,5 +1,6 @@
 #include "MemoryService.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cctype>
 #include <filesystem>
@@ -147,25 +148,107 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
                                       const std::vector<std::string>& domains,
                                       const std::vector<std::string>& allowedKeys,
                                       size_t maxTokens, bool includeLessons,
-                                      bool includeBlackboard) {
+                                      bool includeBlackboard, MemoryBriefInfo* info) {
+    if (info) *info = MemoryBriefInfo{};
     if (!includeLessons && !includeBlackboard) return std::string();
-    std::string brief;
-    if (includeLessons) brief += formatLessons(projectId, domains);
-    if (includeBlackboard) {
-        auto snapshot = workingSnapshot(projectId, itemId, allowedKeys);
-        if (snapshot.is_object() && snapshot.size() > 0) {
-            brief += "\n[ARESTRIX MEMORY - BLACKBOARD]\n";
-            brief += snapshot.dump(2);
-            brief += "\n";
+    auto* s = ensureStore(projectId);
+    if (!s) return std::string();
+
+    std::vector<MemoryLesson> selectedLessons;
+    if (includeLessons) {
+        for (const auto& lesson : s->getLessons(scopeId(projectId))) {
+            if (domains.empty() || std::find(domains.begin(), domains.end(), lesson.domain) != domains.end()) {
+                selectedLessons.push_back(lesson);
+            }
         }
     }
-    if (brief.empty() || maxTokens == 0) return brief;
 
-    const size_t budget = maxTokens * 4;   // aproximacao: ~4 caracteres por token
-    if (brief.size() <= budget) return brief;
-    size_t cut = brief.rfind('\n', budget);
-    if (cut == std::string::npos || cut < budget / 2) cut = budget;
-    return brief.substr(0, cut) + "\n[... truncado pelo orcamento de memoria]\n";
+    std::string blackboardText;
+    std::vector<std::string> blackboardKeys;
+    if (includeBlackboard) {
+        auto snapshot = s->workingSnapshot(scopeId(projectId), itemId, allowedKeys);
+        if (snapshot.is_object() && snapshot.size() > 0) {
+            blackboardText = "\n[ARESTRIX MEMORY - BLACKBOARD]\n" + snapshot.dump(2) + "\n";
+            for (auto it = snapshot.begin(); it != snapshot.end(); ++it) blackboardKeys.push_back(it.key());
+        }
+    }
+
+    const size_t budget = maxTokens == 0 ? std::string::npos : maxTokens * 4;   // ~4 caracteres/token
+    std::string brief;
+    bool truncated = false;
+
+    if (!selectedLessons.empty()) {
+        const std::string header =
+            "\n--- [ARESTRIX MEMORIA SEMANTICA: LICOES APRENDIDAS - PROJETO: " + scopeId(projectId) + "] ---\n"
+            "Atencao: os itens anteriores identificaram as seguintes diretrizes para prevencao de erros:\n";
+        if (header.size() <= budget) {
+            brief += header;
+            int lessonNumber = 1;
+            for (const auto& lesson : selectedLessons) {
+                std::ostringstream line;
+                line << "[" << lessonNumber << "] (Dominio: " << lesson.domain
+                     << ", confianca " << lesson.confidence << ") " << lesson.lessonRule << "\n";
+                if (budget != std::string::npos && brief.size() + line.str().size() > budget) {
+                    truncated = true;
+                    break;
+                }
+                brief += line.str();
+                ++lessonNumber;
+                if (info) info->lessonIds.push_back(lesson.id);
+            }
+        } else {
+            truncated = true;
+        }
+    }
+
+    if (!blackboardText.empty()) {
+        if (budget == std::string::npos || brief.size() + blackboardText.size() <= budget) {
+            brief += blackboardText;
+            if (info) info->workingKeys = blackboardKeys;
+        } else {
+            truncated = true;
+        }
+    }
+
+    if (truncated) brief += "\n[... truncado pelo orcamento de memoria]\n";
+    if (info) {
+        info->chars = brief.size();
+        info->estimatedTokens = (brief.size() + 3) / 4;
+        info->truncated = truncated;
+    }
+    return brief;
+}
+
+bool MemoryService::recordBriefHits(const std::string& projectId, const std::string& runId,
+                                    const std::string& nodeId, const MemoryBriefInfo& info) {
+    auto* s = ensureStore(projectId);
+    if (!s) return false;
+    const std::string scope = scopeId(projectId);
+    bool ok = true;
+    for (const auto& id : info.lessonIds) {
+        ok = s->recordHit(scope, runId, nodeId, id, "lesson", true, false) && ok;
+    }
+    for (const auto& key : info.workingKeys) {
+        ok = s->recordHit(scope, runId, nodeId, "working:" + key, "working", true, false) && ok;
+    }
+    return ok;
+}
+
+int MemoryService::markHitsUsed(const std::string& projectId, const std::string& runId,
+                                const std::string& nodeId, const std::vector<std::string>& memoryIds) {
+    auto* s = ensureStore(projectId);
+    return s ? s->markHitsUsed(scopeId(projectId), runId, nodeId, memoryIds) : 0;
+}
+
+bool MemoryService::finishHits(const std::string& projectId, const std::string& runId,
+                               const std::string& nodeId, const std::string& outcome) {
+    auto* s = ensureStore(projectId);
+    return s ? s->finishHits(scopeId(projectId), runId, nodeId, outcome) : false;
+}
+
+taskforge::Json MemoryService::hitSummary(const std::string& projectId) {
+    auto* s = ensureStore(projectId);
+    return s ? s->hitSummary(scopeId(projectId)) : taskforge::Json::object();
 }
 
 void MemoryService::clearLessons(const std::string& projectId) {
@@ -207,9 +290,9 @@ std::vector<MemoryEdgeRecord> MemoryService::searchEdges(const std::string& proj
 }
 
 std::string MemoryService::searchContext(const std::string& projectId, const std::string& text,
-                                         size_t limit) {
+                                         size_t limit, std::vector<std::string>* hitIds) {
     auto* s = ensureStore(projectId);
-    return s ? s->searchContext(scopeId(projectId), text, limit) : std::string();
+    return s ? s->searchContext(scopeId(projectId), text, limit, hitIds) : std::string();
 }
 
 bool MemoryService::invalidateEdge(const std::string& projectId, const std::string& edgeId,

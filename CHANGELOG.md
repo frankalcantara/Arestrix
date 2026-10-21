@@ -29,6 +29,11 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   tokens, agent/run) from native C++ headers and exposes it in `/v1/usage` and the usage report.
 - The C++ agent emits one `usage` telemetry event per run, so the Standalone Runner diagnostics
   receive real prompt/completion/total tokens and memory context without Python or JS parsers.
+- Memory runtime now records sanitized success/failure episodes, injected/used memory hits,
+  retries and task outcomes. The brief compiler orders newer/higher-confidence lessons first and
+  never emits partial Blackboard JSON.
+- `ARESTRIX_MEMORY_DISABLE=1` runs the same graph with memory disabled for A/B measurement while
+  still recording usage.
 - Legacy `AgentBlackboard`/`SemanticMemoryEngine` JSON files are imported into SQLite.
 
 ## [1.5.0-beta.1] - 2026-10-19

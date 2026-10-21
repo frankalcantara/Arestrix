@@ -300,13 +300,18 @@ export class ProjectMemoryModal {
           const completion = Number(u.completionTokens || 0);
           const ctx = Number(u.memoryContextChars || 0);
           const latency = Number(u.avgLatencyMs || 0);
+          const retries = Number(u.retries || 0);
+          const success = Number(u.successRuns || 0);
+          const failure = Number(u.failureRuns || 0);
+          const hits = data.hits || {};
           usageViewer.textContent = runs === 0
             ? t('project_memory.usage_empty')
             : [
-                `${t('project_memory.usage_runs')}: ${runs}`,
-                `${t('project_memory.usage_calls')}: ${calls}`,
+                `${t('project_memory.usage_runs')}: ${runs} (${t('project_memory.usage_success')} ${success} / ${t('project_memory.usage_failure')} ${failure})`,
+                `${t('project_memory.usage_calls')}: ${calls} · ${t('project_memory.usage_retries')}: ${retries}`,
                 `${t('project_memory.usage_tokens')}: ${total} (prompt ${prompt} / ${t('project_memory.usage_output')} ${completion})`,
                 `${t('project_memory.usage_context')}: ${ctx}`,
+                `${t('project_memory.usage_hits')}: ${Number(hits.injected || 0)} · ${t('project_memory.usage_used')}: ${Number(hits.used || 0)}`,
                 `${t('project_memory.usage_latency')}: ${latency.toFixed(0)} ms`,
               ].join('\n');
         }

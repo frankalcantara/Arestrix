@@ -601,7 +601,9 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(src.find("#include \"memory/MemoryService.hpp\"") != std::string::npos);
     CHECK(src.find("memory.configure(projectId, arx_mem_persistent)") != std::string::npos);
     CHECK(src.find("memory.buildBrief(projectId, \"pipeline\", std::vector<std::string>{\"svg_typography\"}, "
-                   "std::vector<std::string>{\"resumo\"}, 800, true, true)") != std::string::npos);
+                   "std::vector<std::string>{\"resumo\"}, 800, true, true, &arx_brief_info)") != std::string::npos);
+    CHECK(src.find("ARESTRIX_MEMORY_DISABLE") != std::string::npos);
+    CHECK(src.find("recordBriefHits(projectId, \"agente\", \"agente\", arx_brief_info)") != std::string::npos);
     CHECK(src.find("\"memoryEnabled\":true") != std::string::npos);
     CHECK(src.find("\"memory_search\"") != std::string::npos);
     CHECK(src.find("\"memory_record_lesson\"") != std::string::npos);
@@ -635,8 +637,18 @@ TEST(memory_store_working_lessons_temporal_and_usage) {
     const std::string lesson2 = store.recordLesson("project:teste", "svg", "auditoria", "REGRA-XYZ", "src");
     CHECK(!lesson1.empty() && lesson1 == lesson2);
     CHECK(store.getLessons("project:teste", "svg").size() == 1);
+    const std::string lessonNew = store.recordLesson("project:teste", "svg", "auditoria", "REGRA-NOVA", "src2");
+    CHECK(!lessonNew.empty());
+    auto ordered = store.getLessons("project:teste", "svg");
+    CHECK(ordered.size() == 2 && ordered[0].id == lessonNew);   // mais recente primeiro
     CHECK(store.formatLessons("project:teste", {"svg"}).find("REGRA-XYZ") != std::string::npos);
     CHECK(store.formatLessons("project:teste", {"outro"}).empty());
+
+    CHECK(store.recordHit("project:teste", "run-1", "node-a", lessonNew, "lesson", true, false));
+    CHECK(store.markHitsUsed("project:teste", "run-1", "node-a", {lessonNew}) == 1);
+    CHECK(store.finishHits("project:teste", "run-1", "node-a", "success"));
+    auto hits = store.hitSummary("project:teste");
+    CHECK(hits["injected"] == 1 && hits["used"] == 1 && hits["successHits"] == 1);
 
     const std::string a = store.ensureNode("project:teste", "node-a", "project", "Alpha");
     const std::string b = store.ensureNode("project:teste", "node-b", "library", "Biblioteca Y");
@@ -671,11 +683,16 @@ TEST(memory_store_working_lessons_temporal_and_usage) {
     usage.calls = 1;
     usage.memoryContextChars = 50;
     usage.memoryEnabled = 1;
+    usage.retries = 2;
+    usage.outcome = "success";
     CHECK(store.recordUsage(usage));
     auto summary = store.usageSummary("project:teste");
     CHECK(summary["runs"] == 1);
     CHECK(summary["promptTokens"] == 100);
     CHECK(summary["totalTokens"] == 120);
+    CHECK(summary["successRuns"] == 1);
+    CHECK(summary["failureRuns"] == 0);
+    CHECK(summary["retries"] == 2);
 
     store.close();
     fs::remove_all(dir);
@@ -722,10 +739,18 @@ TEST(memory_service_brief_respects_budget) {
     CHECK(memory.configure("brief-test", true, db.string()));
     CHECK(memory.setWorking("brief-test", "pipeline", "resumo", taskforge::Json(std::string(4000, 'x'))));
     CHECK(!memory.recordLesson("brief-test", "memoria", "teste", "uma regra longa para o teste de orcamento").empty());
-    std::string brief = memory.buildBrief("brief-test", "pipeline", {"memoria"}, {"resumo"}, 10);
+    taskforge::memory::MemoryBriefInfo info;
+    std::string brief = memory.buildBrief("brief-test", "pipeline", {"memoria"}, {"resumo"}, 10, true, true, &info);
     CHECK(!brief.empty());
     CHECK(brief.find("truncado pelo orcamento") != std::string::npos);
     CHECK(brief.size() < 200);
+    CHECK(info.truncated);
+    CHECK(info.lessonIds.empty());   // nao registra item que nao entrou no prompt
+    taskforge::memory::MemoryBriefInfo fullInfo;
+    std::string fullBrief = memory.buildBrief("brief-test", "pipeline", {"memoria"}, {"resumo"}, 2000, true, true, &fullInfo);
+    CHECK(fullBrief.find("\"resumo\"") != std::string::npos);
+    CHECK(fullInfo.lessonIds.size() == 1 && fullInfo.workingKeys.size() == 1);
+    CHECK(!fullInfo.truncated);
     memory.closeProject("brief-test");
     std::error_code ec;
     fs::remove_all(dir, ec);
