@@ -73,7 +73,10 @@ Beta 1.5 focuses on local AI models and enterprise usage governance.
 ### Changed
 
 - Version and documentation banners moved to Beta 1.5 (`1.5.0-beta.1`).
-- Hosted providers can be routed through the AI Gateway; local providers (`local`/`jev`) remain
+- The `third_party/webui` submodule was replaced by `third_party/FastWebUI`
+  (https://github.com/frankalcantara/FastWebUI), a faster, API-compatible fork of WebUI
+  (`2.5.0-beta.4`). `CMakeLists.txt`, `dev.py` and the license check were updated accordingly; on
+  Windows the build now also compiles `src/webview/win32_wv2.cpp`.- Hosted providers can be routed through the AI Gateway; local providers (`local`/`jev`) remain
   direct and exempt from budgets.
 
 ### Known limitations

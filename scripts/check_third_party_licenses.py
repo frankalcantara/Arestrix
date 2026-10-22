@@ -29,7 +29,7 @@ FONT_ONLY = {"OFL-1.1"}
 COMPONENTS = {
     "taskflow":      ("MIT",        "LICENSE",     "MIT LICENSE"),
     "simdjson":      ("Apache-2.0", "LICENSE",     "Apache License"),   # tambem distribuido sob MIT (LICENSE-MIT)
-    "webui":         ("MIT",        "LICENSE",     "MIT License"),
+    "FastWebUI":     ("MIT",        "LICENSE",     "MIT License"),
     "i18next":       ("MIT",        "LICENSE",     "MIT License"),
     "monaco-editor": ("MIT",        "LICENSE.txt", "MIT License"),
     "SkillSpector":  ("Apache-2.0", "LICENSE",     "Apache License"),

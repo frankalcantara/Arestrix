@@ -19,7 +19,7 @@ python scripts/check_third_party_licenses.py
 | :--- | :--- | :--- | :--- |
 | `taskflow/` | https://github.com/taskflow/taskflow | `v4.1.0` | MIT |
 | `simdjson/` | https://github.com/simdjson/simdjson | `v5.0.4` | Apache-2.0 |
-| `webui/` | https://github.com/webui-dev/webui | `2.4.2` | MIT |
+| `FastWebUI/` | https://github.com/frankalcantara/FastWebUI (fork do WebUI) | `2.5.0-beta.4` (`a8e95c1`) | MIT |
 | `i18next/` | https://github.com/i18next/i18next | `v26.4.4-2-g15d0b9d9` | MIT |
 | `monaco-editor/` | https://github.com/microsoft/monaco-editor | `473775c` | MIT |
 | `SkillSpector/` | https://github.com/NVIDIA/SkillSpector | `v2.12.0-630-g69d7d059` | Apache-2.0 |

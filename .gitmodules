@@ -14,6 +14,6 @@
 [submodule "third_party/simdjson"]
 	path = third_party/simdjson
 	url = https://github.com/simdjson/simdjson
-[submodule "third_party/webui"]
-	path = third_party/webui
-	url = https://github.com/webui-dev/webui
+[submodule "third_party/FastWebUI"]
+	path = third_party/FastWebUI
+	url = https://github.com/frankalcantara/FastWebUI

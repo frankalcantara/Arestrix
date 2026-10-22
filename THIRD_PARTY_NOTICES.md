@@ -13,7 +13,7 @@ of the components you redistribute.
 | :--- | :--- | :--- | :--- |
 | [Taskflow](https://github.com/taskflow/taskflow) | `v4.1.0` (`45366fe`) | MIT | C++20 parallel and heterogeneous task DAG engine. |
 | [simdjson](https://github.com/simdjson/simdjson) | `v5.0.4` (`3b0b2b5`) | Apache-2.0 | SIMD-accelerated JSON parsing. |
-| [WebUI](https://github.com/webui-dev/webui) | `2.4.2` (`ac4ea8c`) | MIT | Native window and C++/web RPC bridge. |
+| [FastWebUI](https://github.com/frankalcantara/FastWebUI) (fork of [WebUI](https://github.com/webui-dev/webui)) | `2.5.0-beta.4` (`a8e95c1`) | MIT | Native window and C++/web RPC bridge. |
 | [i18next](https://github.com/i18next/i18next) | `v26.4.4-2-g15d0b9d9` | MIT | Internationalization runtime. |
 | [Monaco Editor](https://github.com/microsoft/monaco-editor) | npm `0.57.0`; submodule `473775c` | MIT | Code editor used by the Studio. |
 | [SkillSpector](https://github.com/NVIDIA/SkillSpector) | `v2.12.0-630-g69d7d059` | Apache-2.0 | Skill security analysis. |

@@ -54,7 +54,7 @@ IS_WINDOWS = os.name == "nt"
 SUBMODULES = [
     "third_party/taskflow",  # Motor de grafos de tarefas concorrentes ISO C++20
     "third_party/simdjson",  # Parser JSON de ultra-alto desempenho com instrucoes SIMD
-    "third_party/webui"      # Camada leve de integracao entre backend C++ e janela Web
+    "third_party/FastWebUI"  # Fork de alto desempenho do WebUI (API identica) para backend C++ e janela Web
 ]
 
 
