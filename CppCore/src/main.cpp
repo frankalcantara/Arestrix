@@ -21,6 +21,7 @@
 #include "build/BuildService.hpp"
 #include "cli/Cli.hpp"
 #include "platform/Process.hpp"
+#include "platform/StudioConsole.hpp"
 #include "rt/Tools.hpp"
 #include "mcp/McpClient.hpp"
 #include "native/NativeTools.hpp"
@@ -2283,6 +2284,7 @@ void ui_assistant_cancel(webui::window::event* e) {
 
 
 int main(int argc, char** argv) {
+    taskforge::platform::setupStudioConsole();
     if (argc >= 2 && (std::string(argv[1]) == "run" || std::string(argv[1]) == "gen")) {
         return taskforge::cli::runCli(argc, argv);
     }

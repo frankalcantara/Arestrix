@@ -44,6 +44,9 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
 - Documentation now covers the instrumented memory (episodes, hits, outcomes, A/B, gateway impact),
   the complete CLI automation surface and native `memory report`.
 - Legacy `AgentBlackboard`/`SemanticMemoryEngine` JSON files are imported into SQLite.
+- On Windows, `arestrix.exe` now hides the console window when launched outside a terminal
+  (double-click or shortcut). It keeps the console attached when launched from a terminal and always
+  mirrors the backend log to `%LOCALAPPDATA%\Arestrix\logs\studio.log` (rotated at 5 MB).
 
 ## [1.5.0-beta.1] - 2026-10-19
 

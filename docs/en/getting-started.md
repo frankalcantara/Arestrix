@@ -45,6 +45,12 @@ then opens the Studio.
 | [`arestrix-cli`](arestrix-cli.md) / `arestrix-cli.exe` | Headless runner: `arestrix-cli run graph.json --root <project>` and `arestrix-cli gen graph.json`. On Windows it is also copied to the repository root. |
 | `runtime/lib/arestrix_core.lib` (`libarestrix_core.a`) | The runtime that every generated program links against. |
 
+On Windows, `arestrix.exe` is a console application, but it **hides the console window** when
+launched outside a terminal (double-click or shortcut). When launched from a terminal (including
+`dev.py`), it keeps the console attached and mirrors the backend log there. It always writes the log
+to `%LOCALAPPDATA%\Arestrix\logs\studio.log` (rotated at 5 MB). On Linux the Studio keeps writing to
+the terminal.
+
 ## Other ways to work
 
 | Mode | Command | Use it for |

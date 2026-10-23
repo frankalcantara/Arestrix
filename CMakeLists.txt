@@ -311,8 +311,13 @@ if(ARESTRIX_BUILD_STUDIO)
     ${SRC}/build/BuildService.cpp
     ${SRC}/cli/Cli.cpp
     ${SRC}/project/ProjectManager.cpp
-    ${SRC}/pi/PiProjectScanner.cpp)
+    ${SRC}/pi/PiProjectScanner.cpp
+    ${SRC}/platform/StudioConsole.cpp)
   target_link_libraries(arestrix PRIVATE arestrix_core arestrix_security_flags webui)
+  target_compile_definitions(arestrix PRIVATE ARESTRIX_STUDIO_VERSION="${ARESTRIX_VERSION}")
+  # O Studio continua como aplicativo de console porque o FastWebUI/WebUI usa o console
+  # do processo. Quando iniciado fora de um terminal, platform/StudioConsole.cpp oculta
+  # a janela de console e espelha os logs em %LOCALAPPDATA%/Arestrix/logs.
   if(UNIX)
     target_link_libraries(arestrix PRIVATE ${CMAKE_DL_LIBS} m)
   endif()

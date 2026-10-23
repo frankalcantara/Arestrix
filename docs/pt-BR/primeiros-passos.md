@@ -45,6 +45,12 @@ O `dev.py` inicializa os submódulos, compila o frontend (`npm run build`) e o b
 | [`arestrix-cli`](arestrix-cli.md) / `arestrix-cli.exe` | Executor sem interface: `arestrix-cli run graph.json --root <projeto>` e `arestrix-cli gen graph.json`. No Windows, também é copiado para a raiz do repositório. |
 | `runtime/lib/arestrix_core.lib` (`libarestrix_core.a`) | O runtime ao qual todo programa gerado se liga. |
 
+No Windows, `arestrix.exe` é um aplicativo de console, mas **oculta a janela** quando iniciado fora
+de um terminal (duplo clique ou atalho). Quando iniciado por um terminal (inclusive `dev.py`), ele
+mantém o console anexado e espelha o log do backend nele. O log também é sempre gravado em
+`%LOCALAPPDATA%\Arestrix\logs\studio.log` (com rotação em 5 MB). No Linux, o Studio continua
+escrevendo no terminal.
+
 ## Outras formas de trabalhar
 
 | Modo | Comando | Para quê |
