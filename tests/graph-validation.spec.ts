@@ -74,4 +74,87 @@ describe('Validação Topológica e Regras de Grafo Taskflow', () => {
     expect(missingBranch).toBeDefined();
     expect(missingBranch?.severity).toBe('warning');
   });
+
+  describe('grafo de chamadas (kind = call)', () => {
+    const addCall = (graph: Graph, from: ReturnType<Graph['createNode']>, to: ReturnType<Graph['createNode']>, maxCalls = 1) => {
+      graph.addEdge({
+        id: `call_${from.id}_${to.id}`,
+        sourceNodeId: from.id,
+        sourcePortId: from.outputs[0].id,
+        targetNodeId: to.id,
+        targetPortId: to.inputs[0].id,
+        kind: 'call',
+        callSettings: { maxCalls, onError: 'fail' }
+      });
+    };
+
+    it('aceita um agente chamável sem arestas de fluxo', () => {
+      const graph = new Graph(new EventBus());
+      const caller = graph.createNode('caller', 'Caller', 'agent', 0, 0);
+      const specialist = graph.createNode('specialist', 'Specialist', 'agent', 200, 0);
+
+      addCall(graph, caller, specialist);
+
+      const result = GraphValidator.validate(graph);
+      expect(result.isValid).toBe(true);
+      expect(result.errors.filter(e => e.severity === 'error')).toHaveLength(0);
+    });
+
+    it('rejeita chamada saindo de um vértice que não é agente', () => {
+      const graph = new Graph(new EventBus());
+      const source = graph.createNode('source', 'Source', 'static', 0, 0);
+      const target = graph.createNode('target', 'Target', 'agent', 200, 0);
+
+      addCall(graph, source, target);
+
+      const result = GraphValidator.validate(graph);
+      expect(result.errors.some(e => e.type === 'invalid_call' && e.severity === 'error')).toBe(true);
+    });
+
+    it('rejeita chamada para um vértice que não é agente no v1', () => {
+      const graph = new Graph(new EventBus());
+      const caller = graph.createNode('caller', 'Caller', 'agent', 0, 0);
+      const target = graph.createNode('target', 'Target', 'static', 200, 0);
+
+      addCall(graph, caller, target);
+
+      const result = GraphValidator.validate(graph);
+      expect(result.errors.some(e => e.type === 'invalid_call' && e.severity === 'error')).toBe(true);
+    });
+
+    it('rejeita um chamável que também participa do fluxo', () => {
+      const graph = new Graph(new EventBus());
+      const caller = graph.createNode('caller', 'Caller', 'agent', 0, 0);
+      const target = graph.createNode('target', 'Target', 'agent', 200, 0);
+
+      graph.createEdge(caller.id, caller.outputs[0].id, target.id, target.inputs[0].id);
+      addCall(graph, caller, target);
+
+      const result = GraphValidator.validate(graph);
+      expect(result.errors.some(e => e.type === 'invalid_call' && e.severity === 'error')).toBe(true);
+    });
+
+    it('rejeita maxCalls menor que 1', () => {
+      const graph = new Graph(new EventBus());
+      const caller = graph.createNode('caller', 'Caller', 'agent', 0, 0);
+      const target = graph.createNode('target', 'Target', 'agent', 200, 0);
+
+      addCall(graph, caller, target, 0);
+
+      const result = GraphValidator.validate(graph);
+      expect(result.errors.some(e => e.type === 'invalid_call' && e.severity === 'error')).toBe(true);
+    });
+
+    it('rejeita ciclo de chamadas no v1', () => {
+      const graph = new Graph(new EventBus());
+      const a = graph.createNode('a', 'A', 'agent', 0, 0);
+      const b = graph.createNode('b', 'B', 'agent', 200, 0);
+
+      addCall(graph, a, b);
+      addCall(graph, b, a);
+
+      const result = GraphValidator.validate(graph);
+      expect(result.errors.some(e => e.type === 'call_cycle' && e.severity === 'error')).toBe(true);
+    });
+  });
 });

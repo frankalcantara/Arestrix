@@ -308,8 +308,9 @@ export class Graph {
       throw new Error(`Cannot add edge: source or target node not found.`);
     }
 
-    // Identificar se a aresta é um loop condicional
-    if (source.type === 'condition' || source.type === 'switch') {
+    // Identificar se a aresta é um loop condicional. Chamadas (kind = call) não são fluxo
+    // e nunca viram feedback.
+    if ((edge.kind ?? 'flow') !== 'call' && (source.type === 'condition' || source.type === 'switch')) {
       const sourcePort = source.outputs.find(p => p.id === edge.sourcePortId);
       if (sourcePort && sourcePort.conditionBranchIndex !== undefined) {
         // Se a aresta retorna para o próprio nó ou nó antecedente, marca como loopback
@@ -447,7 +448,9 @@ export class Graph {
       if (current === sourceId) return true;
       if (!visited.has(current)) {
         visited.add(current);
-        const outgoing = this.getAllEdges().filter(e => e.sourceNodeId === current);
+        const outgoing = this.getAllEdges().filter(
+          e => e.sourceNodeId === current && (e.kind ?? 'flow') !== 'call'
+        );
         outgoing.forEach(e => stack.push(e.targetNodeId));
       }
     }

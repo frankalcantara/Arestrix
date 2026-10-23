@@ -15,6 +15,40 @@ export type TaskflowNodeType =
 export type PortDirection = 'input' | 'output';
 export type PortType = 'flow' | 'data';
 
+/**
+ * Semântica da aresta:
+ *  - flow: dependência normal de execução (sólida);
+ *  - feedback: retorno de um laço condicional (tracejada âmbar);
+ *  - call: declaração de chamada/delegação, não agenda o destino (tracejada violeta).
+ * Arestas antigas sem `kind` são tratadas como `flow`.
+ */
+export type EdgeKind = 'flow' | 'feedback' | 'call';
+
+export interface ICallSettings {
+  /** Máximo de invocações desta aresta por execução do chamador. */
+  maxCalls: number;
+  /** 0 = sem timeout próprio; o chamador ainda tem maxTurns. */
+  timeoutSeconds?: number;
+  /** fail: devolve erro ao chamador; abort: derruba o pipeline. */
+  onError?: 'fail' | 'abort';
+  /** Texto injetado na descrição da ferramenta, para o modelo saber quando usar. */
+  description?: string;
+}
+
+export function defaultCallSettings(): ICallSettings {
+  return { maxCalls: 1, timeoutSeconds: 0, onError: 'fail', description: '' };
+}
+
+export interface ICallLimits {
+  maxDepth: number;
+  maxTotalCalls: number;
+}
+
+export const DEFAULT_CALL_LIMITS: ICallLimits = {
+  maxDepth: 3,
+  maxTotalCalls: 50
+};
+
 export type TargetCompiler = 'msvc' | 'gcc' | 'clang';
 export type BuildSystem = 'cmake' | 'makefile' | 'direct_script';
 
@@ -381,6 +415,10 @@ export interface IEdgeData {
   sourcePortId: string;
   targetNodeId: string;
   targetPortId: string;
+  /** flow (padrão), feedback ou call. */
+  kind?: EdgeKind;
+  /** Só para kind = call. */
+  callSettings?: ICallSettings;
   isFeedbackLoop?: boolean; // True quando for um retorno condicional
   controlPoints?: IEdgeControlPoints; // Alças Bézier customizadas pelo usuário (estilo Inkscape)
 }
@@ -393,6 +431,7 @@ export interface IGraphMetadata {
   compilerConfig: ICompilerConfig;
   version: string;
   globalDefaults?: IGlobalPipelineDefaults;
+  callLimits?: ICallLimits;
 }
 
 // --- Conceito de Projetos & Workspaces Isolados (Fase 14) ---
@@ -561,7 +600,7 @@ export interface IGraphSchema {
 }
 
 export interface IValidationError {
-  type: 'cycle' | 'orphan' | 'invalid_port' | 'missing_branch';
+  type: 'cycle' | 'orphan' | 'invalid_port' | 'missing_branch' | 'invalid_call' | 'call_cycle';
   message: string;
   nodeIds?: string[];
   edgeIds?: string[];

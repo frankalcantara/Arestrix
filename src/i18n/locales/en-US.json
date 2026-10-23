@@ -1718,7 +1718,14 @@
   "validator": {
     "orphan": "Isolated node \"{{label}}\" ({{id}}) has no connections.",
     "missing_branch": "Condition node \"{{label}}\" has disconnected branch \"{{name}}\".",
-    "cycle": "Forbidden static cycle detected: {{cycle}}. Static tasks cannot form cyclical dependencies without a condition node."
+    "cycle": "Forbidden static cycle detected: {{cycle}}. Static tasks cannot form cyclical dependencies without a condition node.",
+    "call_missing": "Call edge \"{{id}}\" points to a missing vertex.",
+    "call_source": "A call must start at an agent: \"{{label}}\" ({{id}}).",
+    "call_target": "A call must target an agent: \"{{label}}\" ({{id}}).",
+    "call_max": "The call from \"{{from}}\" to \"{{to}}\" requires maxCalls >= 1.",
+    "call_target_scheduled": "Callable vertex \"{{label}}\" ({{id}}) also participates in the flow. Remove its flow edges or duplicate the vertex.",
+    "call_duplicate": "There is both a flow edge and a call from \"{{from}}\" to \"{{to}}\".",
+    "call_cycle": "Unbounded call cycle detected: {{cycle}}. Call cycles need a depth limit."
   },
   "local_models": {
     "title": "Local models",

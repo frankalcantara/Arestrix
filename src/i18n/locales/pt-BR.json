@@ -1718,7 +1718,14 @@
   "validator": {
     "orphan": "Nó isolado \"{{label}}\" ({{id}}) não possui conexões.",
     "missing_branch": "Nó de condição \"{{label}}\" tem o ramo \"{{name}}\" desconectado.",
-    "cycle": "Ciclo estático proibido detectado: {{cycle}}. Tarefas estáticas não podem formar dependência cíclica sem um nó de condição."
+    "cycle": "Ciclo estático proibido detectado: {{cycle}}. Tarefas estáticas não podem formar dependência cíclica sem um nó de condição.",
+    "call_missing": "A aresta de chamada \"{{id}}\" aponta para um vértice inexistente.",
+    "call_source": "Uma chamada deve sair de um agente: \"{{label}}\" ({{id}}).",
+    "call_target": "Uma chamada deve apontar para um agente: \"{{label}}\" ({{id}}).",
+    "call_max": "A chamada de \"{{from}}\" para \"{{to}}\" exige maxCalls >= 1.",
+    "call_target_scheduled": "O vértice chamável \"{{label}}\" ({{id}}) também participa do fluxo. Remova as arestas de fluxo ou duplique o vértice.",
+    "call_duplicate": "Há uma aresta de fluxo e uma chamada entre \"{{from}}\" e \"{{to}}\".",
+    "call_cycle": "Ciclo de chamadas sem limite de profundidade detectado: {{cycle}}."
   },
   "local_models": {
     "title": "Modelos locais",

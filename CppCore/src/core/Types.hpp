@@ -4,6 +4,7 @@
 #include <vector>
 #include <map>
 #include <variant>
+#include <stdexcept>
 #include "util/JsonValue.hpp"
 
 using json = taskforge::Json;
@@ -28,6 +29,16 @@ enum class TaskflowNodeType {
 
 enum class PortDirection { Input, Output };
 enum class PortType { Flow, Data };
+
+// flow: dependencia normal; feedback: retorno de laco; call: chamada/delegacao.
+enum class EdgeKind { Flow, Feedback, Call };
+
+struct CallSettings {
+    int maxCalls = 1;
+    int timeoutSeconds = 0;
+    std::string onError = "fail";
+    std::string description;
+};
 
 struct Port {
     std::string id;
@@ -71,6 +82,8 @@ struct EdgeData {
     std::string sourcePortId;
     std::string targetNodeId;
     std::string targetPortId;
+    EdgeKind kind = EdgeKind::Flow;
+    CallSettings callSettings;
     bool isFeedbackLoop = false;
 };
 
@@ -93,6 +106,7 @@ struct GraphMetadata {
     std::string version;
     std::string projectId = "default";
     json globalDefaults = json::object();
+    json callLimits = json::object();
 };
 
 } // namespace core
@@ -127,6 +141,42 @@ ARX_JSON_ENUM(PortType, {
     {PortType::Flow, "flow"},
     {PortType::Data, "data"}
 })
+
+// Serializacao manual de EdgeKind: um valor desconhecido e erro explicito,
+// em vez de virar silenciosamente "flow" em um build antigo.
+inline void to_json(json& j, const EdgeKind& e) {
+    switch (e) {
+        case EdgeKind::Flow: j = "flow"; break;
+        case EdgeKind::Feedback: j = "feedback"; break;
+        case EdgeKind::Call: j = "call"; break;
+    }
+}
+inline void from_json(const json& j, EdgeKind& e) {
+    if (!j.is_string()) {
+        e = EdgeKind::Flow;
+        return;
+    }
+    const std::string s = j.str();
+    if (s == "flow") e = EdgeKind::Flow;
+    else if (s == "feedback") e = EdgeKind::Feedback;
+    else if (s == "call") e = EdgeKind::Call;
+    else throw std::runtime_error("EdgeKind desconhecido: " + s);
+}
+
+inline void to_json(json& j, const CallSettings& c) {
+    j = json{
+        {"maxCalls", c.maxCalls},
+        {"timeoutSeconds", c.timeoutSeconds},
+        {"onError", c.onError},
+        {"description", c.description}
+    };
+}
+inline void from_json(const json& j, CallSettings& c) {
+    c.maxCalls = j.value("maxCalls", 1);
+    c.timeoutSeconds = j.value("timeoutSeconds", 0);
+    c.onError = j.value("onError", std::string("fail"));
+    c.description = j.value("description", std::string());
+}
 
 // Serialização manual de Port para lidar com campos opcionais seguros
 inline void to_json(json& j, const Port& p) {
@@ -196,6 +246,8 @@ inline void to_json(json& j, const EdgeData& e) {
         {"sourcePortId", e.sourcePortId},
         {"targetNodeId", e.targetNodeId},
         {"targetPortId", e.targetPortId},
+        {"kind", e.kind},
+        {"callSettings", e.callSettings},
         {"isFeedbackLoop", e.isFeedbackLoop}
     };
 }
@@ -206,6 +258,9 @@ inline void from_json(const json& j, EdgeData& e) {
     j.at("targetNodeId").get_to(e.targetNodeId);
     j.at("targetPortId").get_to(e.targetPortId);
     e.isFeedbackLoop = j.value("isFeedbackLoop", false);
+    if (j.contains("kind")) j.at("kind").get_to(e.kind);
+    else e.kind = e.isFeedbackLoop ? EdgeKind::Feedback : EdgeKind::Flow;
+    if (j.contains("callSettings")) j.at("callSettings").get_to(e.callSettings);
 }
 
 inline void to_json(json& j, const CompilerConfig& c) {
@@ -240,7 +295,8 @@ inline void to_json(json& j, const GraphMetadata& m) {
         {"compilerConfig", m.compilerConfig},
         {"version", m.version},
         {"projectId", m.projectId},
-        {"globalDefaults", m.globalDefaults}
+        {"globalDefaults", m.globalDefaults},
+        {"callLimits", m.callLimits}
     };
 }
 inline void from_json(const json& j, GraphMetadata& m) {
@@ -251,6 +307,7 @@ inline void from_json(const json& j, GraphMetadata& m) {
     m.version = j.value("version", "1.0.0");
     m.projectId = j.value("projectId", "default");
     if(j.contains("globalDefaults")) j.at("globalDefaults").get_to(m.globalDefaults);
+    if(j.contains("callLimits")) j.at("callLimits").get_to(m.callLimits);
 }
 
 } // namespace core

@@ -4,6 +4,7 @@
 #include <functional>
 #include <set>
 #include <sstream>
+#include <stdexcept>
 
 namespace taskforge {
 namespace compiler {
@@ -129,6 +130,7 @@ std::set<std::string> computeLoopEdges(const core::Graph& graph, const std::vect
     std::map<std::string, std::vector<const core::EdgeData*>> out;
     std::map<std::string, int> incoming;
     for (const auto* e : edges) {
+        if (e->kind == core::EdgeKind::Call) continue;   // chamada nao e dependencia de fluxo
         if (e->isFeedbackLoop) { loops.insert(e->id); continue; }
         out[e->sourceNodeId].push_back(e);
         incoming[e->targetNodeId]++;
@@ -144,6 +146,7 @@ std::set<std::string> computeLoopEdges(const core::Graph& graph, const std::vect
             stack.pop_back();
             if (u == to) return true;
             for (const auto* e : edges) {
+                if (e->kind == core::EdgeKind::Call) continue;
                 if (e->sourceNodeId != u || e->id == skipEdge || loops.count(e->id)) continue;
                 if (seen.insert(e->targetNodeId).second) stack.push_back(e->targetNodeId);
             }
@@ -154,6 +157,7 @@ std::set<std::string> computeLoopEdges(const core::Graph& graph, const std::vect
         const auto& node = graph.getNodes().at(id);
         if (!isBranching(node)) continue;
         for (const auto* e : edges) {
+            if (e->kind == core::EdgeKind::Call) continue;
             if (e->sourceNodeId != id || loops.count(e->id)) continue;
             if (reaches(e->targetNodeId, id, e->id)) loops.insert(e->id);
         }
@@ -161,6 +165,7 @@ std::set<std::string> computeLoopEdges(const core::Graph& graph, const std::vect
     out.clear();
     incoming.clear();
     for (const auto* e : edges) {
+        if (e->kind == core::EdgeKind::Call) continue;
         if (loops.count(e->id)) continue;
         out[e->sourceNodeId].push_back(e);
         incoming[e->targetNodeId]++;
@@ -363,6 +368,68 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
     const auto loopEdges = computeLoopEdges(graph, ids);
     const auto edges = sortedEdges(graph);
 
+    // Grafo de chamadas (fechado): arestas "call" nao entram no fluxo. O gerador emite um
+    // registro de callables e a tabela de alvos de cada chamador para o runtime.
+    std::map<std::string, std::vector<const core::EdgeData*>> callsFrom;
+    std::set<std::string> callTargets;
+    for (const auto* e : edges) {
+        if (e->kind != core::EdgeKind::Call) continue;
+        if (!nodes.count(e->sourceNodeId) || !nodes.count(e->targetNodeId)) {
+            throw std::runtime_error("Aresta de chamada aponta para vertice inexistente: " + e->id);
+        }
+        const auto& src = nodes.at(e->sourceNodeId);
+        const auto& dst = nodes.at(e->targetNodeId);
+        if (src.type != core::TaskflowNodeType::Agent) {
+            throw std::runtime_error("Aresta de chamada deve sair de um vertice Agent: " + e->sourceNodeId);
+        }
+        if (dst.type != core::TaskflowNodeType::Agent) {
+            throw std::runtime_error("Destino de chamada nao suportado no v1 (use Agent): " + e->targetNodeId);
+        }
+        if (e->callSettings.maxCalls < 1) {
+            throw std::runtime_error("maxCalls deve ser >= 1 na chamada " + e->sourceNodeId + " -> " + e->targetNodeId);
+        }
+        callsFrom[e->sourceNodeId].push_back(e);
+        callTargets.insert(e->targetNodeId);
+    }
+    // v1: o alvo de uma chamada nao participa do fluxo (evita execucao dupla silenciosa).
+    for (const auto& target : callTargets) {
+        for (const auto* e : edges) {
+            if (e->kind == core::EdgeKind::Call) continue;
+            if (e->sourceNodeId == target || e->targetNodeId == target) {
+                throw std::runtime_error("Vertice chamavel tambem participa do fluxo: " + target);
+            }
+        }
+    }
+
+    auto callEdgesJson = [](const std::vector<const core::EdgeData*>& list) {
+        json out = json::array();
+        for (const auto* e : list) {
+            out.push_back(json{
+                {"target", e->targetNodeId},
+                {"maxCalls", e->callSettings.maxCalls},
+                {"timeoutSeconds", e->callSettings.timeoutSeconds},
+                {"onError", e->callSettings.onError},
+                {"description", e->callSettings.description}
+            });
+        }
+        return out;
+    };
+
+    json callers = json::object();
+    for (const auto& pair : callsFrom) callers[pair.first] = callEdgesJson(pair.second);
+
+    json registry = json::object();
+    for (const auto& target : callTargets) {
+        const auto& node = nodes.at(target);
+        json entry = json::object();
+        entry["kind"] = "agent";
+        entry["label"] = node.label.empty() ? node.id : node.label;
+        entry["spec"] = buildAgentSpec(graph, node);
+        auto it = callsFrom.find(target);
+        entry["calls"] = it == callsFrom.end() ? json::array() : callEdgesJson(it->second);
+        registry[target] = entry;
+    }
+
     bool hasCritical = false;
     bool hasCuda = false;
     for (const auto& pair : nodes) {
@@ -394,6 +461,13 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
     code += "  int retry_counter = 0;\n";
     code += "};\n\n";
 
+    // Registro de chamadas fechado. O runtime consulta estes mapas para saber quais alvos
+    // cada agente pode invocar e com quais limites; nao vira dependencia de Taskflow.
+    if (!callTargets.empty()) {
+        code += "[[maybe_unused]] static const char* arx_callables = " + rawLiteral(registry.dump()) + ";\n";
+        code += "[[maybe_unused]] static const char* arx_callers = " + rawLiteral(callers.dump()) + ";\n\n";
+    }
+
     code += "int main(int argc, char* argv[]) {\n";
     code += "  (void)argc; (void)argv;\n";
     code += "  taskforge::rt::init();\n";
@@ -421,6 +495,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
 
     // --- Tarefas ---------------------------------------------------------------------------
     for (const auto& id : ids) {
+        if (callTargets.count(id)) continue;   // chamavel puro: nao vira task de fluxo
         const auto& node = nodes.at(id);
         const std::string& var = names.at(id);
         std::string label = node.label.empty() ? node.id : node.label;
@@ -612,10 +687,13 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
     code += "  // Dependencias e Precedencias\n";
     std::map<std::string, int> strongIncoming;
     for (const auto* e : edges) {
+        if (e->kind == core::EdgeKind::Call) continue;   // chamada nao e precedencia
         if (!loopEdges.count(e->id)) strongIncoming[e->targetNodeId]++;
     }
     std::vector<std::string> entries;
-    for (const auto& id : ids) if (strongIncoming[id] == 0) entries.push_back(names.at(id));
+    for (const auto& id : ids) {
+        if (!callTargets.count(id) && strongIncoming[id] == 0) entries.push_back(names.at(id));
+    }
     if (!entries.empty()) {
         std::string targets;
         for (size_t i = 0; i < entries.size(); ++i) targets += (i ? ", " : "") + entries[i];
@@ -625,11 +703,15 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
 
     int noopCounter = 0;
     for (const auto& id : ids) {
+        if (callTargets.count(id)) continue;   // chamavel puro nao tem task de fluxo
         const auto& node = nodes.at(id);
         const std::string& var = names.at(id);
 
         std::vector<const core::EdgeData*> outEdges;
-        for (const auto* e : edges) if (e->sourceNodeId == id) outEdges.push_back(e);
+        for (const auto* e : edges) {
+            if (e->sourceNodeId != id || e->kind == core::EdgeKind::Call) continue;
+            outEdges.push_back(e);
+        }
         if (outEdges.empty()) continue;
 
         if (isBranching(node)) {
@@ -709,6 +791,12 @@ std::string TaskflowGenerator::generateBatchSource(
     const auto ids = sortedNodeIds(graph);
     const auto loopEdges = computeLoopEdges(graph, ids);
     const auto edges = sortedEdges(graph);
+
+    for (const auto* e : edges) {
+        if (e->kind == core::EdgeKind::Call) {
+            throw std::runtime_error("Pipeline em lote ainda nao suporta arestas de chamada no v1.");
+        }
+    }
 
     std::string code = "// ============================================================================\n";
     code += "// Gerado por Arestrix (Batch DAG & Resume Engine)\n";

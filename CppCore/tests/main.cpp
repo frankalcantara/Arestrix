@@ -467,6 +467,59 @@ TEST(generator_tutorial_topology) {
     CHECK(src.find("// Descricao: linha1 linha2") != std::string::npos);
 }
 
+TEST(generator_call_edges_are_not_flow) {
+    using taskforge::compiler::TaskflowGenerator;
+    auto base = tutorialGraph();
+    json schema = base.toJson();
+
+    auto port = [](const char* id, const char* dir, const char* type) {
+        return json{{"id", id}, {"name", id}, {"direction", dir}, {"type", type},
+                    {"dataType", ""}, {"conditionBranchIndex", -1}};
+    };
+    json specialist = {
+        {"id", "specialist"}, {"label", "Specialist"}, {"type", "agent"},
+        {"position", {{"x", 1200}, {"y", 400}}},
+        {"inputs", json::array({port("specialist_in", "input", "flow")})},
+        {"outputs", json::array({port("specialist_out", "output", "flow")})},
+        {"parameters", json::object()},
+        {"customLambdaBody", ""},
+        {"agentSettings", {{"inheritModel", true}, {"inheritSandbox", true}, {"inheritCodeMode", true}}}
+    };
+    schema["nodes"].push_back(specialist);
+    schema["edges"].push_back(json{
+        {"id", "call1"}, {"sourceNodeId", "gen"}, {"sourcePortId", "out"},
+        {"targetNodeId", "specialist"}, {"targetPortId", "specialist_in"},
+        {"kind", "call"},
+        {"callSettings", {{"maxCalls", 2}, {"timeoutSeconds", 30},
+                          {"onError", "fail"}, {"description", "use specialist"}}}
+    });
+
+    taskforge::core::Graph g;
+    g.fromJson(schema);
+    std::string src = TaskflowGenerator::generateSource(g);
+
+    CHECK(src.find("arx_callables") != std::string::npos);
+    CHECK(src.find("arx_callers") != std::string::npos);
+    CHECK(src.find("\"specialist\"") != std::string::npos);
+    CHECK(src.find("\"maxCalls\":2") != std::string::npos);
+    CHECK(src.find("task_specialist") == std::string::npos);          // chamavel puro nao vira task
+    CHECK(src.find("task_gen.precede(task_specialist)") == std::string::npos);
+    CHECK(src.find("task_gen.precede(task_a)") != std::string::npos); // fluxo existente preservado
+
+    // Chamada saindo de um no estatico deve falhar no gerador.
+    auto& callEdge = schema["edges"][schema["edges"].size() - 1];
+    callEdge["sourceNodeId"] = "a";
+    taskforge::core::Graph bad;
+    bad.fromJson(schema);
+    bool threw = false;
+    try {
+        (void)TaskflowGenerator::generateSource(bad);
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    CHECK(threw);
+}
+
 TEST(generator_condition_with_gap_uses_noop) {
     auto g = tutorialGraph();
     // remove o ramo 0 (entrega): o ramo 1 deve continuar sendo o indice 1

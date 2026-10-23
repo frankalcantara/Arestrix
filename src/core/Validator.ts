@@ -1,5 +1,5 @@
 import { Graph } from './Graph.ts';
-import { IValidationResult, IValidationError } from './types.ts';
+import { IValidationResult, IValidationError, IEdgeData } from './types.ts';
 import { t } from '../i18n/index.ts';
 
 export class GraphValidator {
@@ -8,7 +8,11 @@ export class GraphValidator {
     const nodes = graph.getAllNodes();
     const edges = graph.getAllEdges();
 
-    // 1. Verificação de nós órfãos
+    // Chamadas nao sao dependencias de fluxo: validamos os dois grafos separadamente.
+    const flowEdges = edges.filter(e => (e.kind ?? 'flow') !== 'call');
+    const callEdges = edges.filter(e => e.kind === 'call');
+
+    // 1. Verificação de nós órfãos (qualquer aresta conta, inclusive chamada).
     nodes.forEach(node => {
       const connectedEdges = graph.getEdgesForNode(node.id);
       if (connectedEdges.length === 0 && nodes.length > 1) {
@@ -21,12 +25,12 @@ export class GraphValidator {
       }
     });
 
-    // 2. Verificação de portas em nós de condição
+    // 2. Verificação de portas em nós de condição (somente arestas de fluxo).
     nodes.filter(n => n.type === 'condition' || n.type === 'switch').forEach(condNode => {
       condNode.outputs.forEach((port, portIdx) => {
         // O 'default' do switch (última porta) pode ficar desconectado: o fluxo apenas termina ali.
         if (condNode.type === 'switch' && portIdx === condNode.outputs.length - 1) return;
-        const hasConnection = edges.some(
+        const hasConnection = flowEdges.some(
           e => e.sourceNodeId === condNode.id && e.sourcePortId === port.id
         );
         if (!hasConnection) {
@@ -40,10 +44,10 @@ export class GraphValidator {
       });
     });
 
-    // 3. Detecção de Ciclos com Tarjan / DFS
-    // No Taskflow, ciclos são permitidos SE E SOMENTE SE contêm pelo menos um nó do tipo 'condition'
-    // que atue como sentinela de controle de branch para quebrar o ciclo em runtime.
-    const cycles = this.detectCycles(graph);
+    // 3. Detecção de ciclos de FLUXO com Tarjan / DFS.
+    // No Taskflow, ciclos são permitidos SE E SOMENTE SE contêm pelo menos um nó do tipo
+    // 'condition'/'switch' que atue como sentinela de controle de branch.
+    const cycles = this.detectCycles(graph, flowEdges);
     cycles.forEach(cycle => {
       const hasConditionNode = cycle.some(nodeId => {
         const node = graph.getNode(nodeId);
@@ -51,7 +55,6 @@ export class GraphValidator {
       });
 
       if (!hasConditionNode) {
-        // Ciclo estático fatal! O Taskflow entraria em deadlock ou compilaria um loop infinito estático.
         const cycleLabels = cycle.map(id => graph.getNode(id)?.label || id).join(' -> ');
         errors.push({
           type: 'cycle',
@@ -62,15 +65,111 @@ export class GraphValidator {
       }
     });
 
+    // 4. Grafo de chamadas: alvos declarados, sem misturar fluxo e chamada no v1.
+    this.validateCalls(graph, flowEdges, callEdges, errors);
+
     return {
       isValid: errors.filter(e => e.severity === 'error').length === 0,
       errors
     };
   }
 
-  private static detectCycles(graph: Graph): string[][] {
+  private static validateCalls(
+    graph: Graph,
+    flowEdges: IEdgeData[],
+    callEdges: IEdgeData[],
+    errors: IValidationError[]
+  ): void {
+    for (const edge of callEdges) {
+      const source = graph.getNode(edge.sourceNodeId);
+      const target = graph.getNode(edge.targetNodeId);
+
+      if (!source || !target) {
+        errors.push({
+          type: 'invalid_call',
+          severity: 'error',
+          message: t('validator.call_missing', { id: edge.id }),
+          edgeIds: [edge.id]
+        });
+        continue;
+      }
+
+      if (source.type !== 'agent') {
+        errors.push({
+          type: 'invalid_call',
+          severity: 'error',
+          message: t('validator.call_source', { label: source.label, id: source.id }),
+          nodeIds: [source.id],
+          edgeIds: [edge.id]
+        });
+        continue;
+      }
+
+      if (target.type !== 'agent') {
+        errors.push({
+          type: 'invalid_call',
+          severity: 'error',
+          message: t('validator.call_target', { label: target.label, id: target.id }),
+          nodeIds: [target.id],
+          edgeIds: [edge.id]
+        });
+        continue;
+      }
+
+      const maxCalls = edge.callSettings?.maxCalls ?? 1;
+      if (maxCalls < 1) {
+        errors.push({
+          type: 'invalid_call',
+          severity: 'error',
+          message: t('validator.call_max', { from: source.label, to: target.label }),
+          nodeIds: [source.id, target.id],
+          edgeIds: [edge.id]
+        });
+      }
+
+      // v1: o chamavel nao participa do fluxo (evita execucao dupla silenciosa).
+      const targetInFlow = flowEdges.some(
+        f => f.sourceNodeId === target.id || f.targetNodeId === target.id
+      );
+      if (targetInFlow) {
+        errors.push({
+          type: 'invalid_call',
+          severity: 'error',
+          message: t('validator.call_target_scheduled', { label: target.label, id: target.id }),
+          nodeIds: [target.id],
+          edgeIds: [edge.id]
+        });
+      }
+
+      const duplicateFlow = flowEdges.some(
+        f => f.sourceNodeId === edge.sourceNodeId && f.targetNodeId === edge.targetNodeId
+      );
+      if (duplicateFlow) {
+        errors.push({
+          type: 'invalid_call',
+          severity: 'error',
+          message: t('validator.call_duplicate', { from: source.label, to: target.label }),
+          nodeIds: [source.id, target.id],
+          edgeIds: [edge.id]
+        });
+      }
+    }
+
+    // v1: ciclos de chamada sao erro ate existir um limite de profundidade aplicado no runtime.
+    const callCycles = this.detectCycles(graph, callEdges);
+    callCycles.forEach(cycle => {
+      const labels = cycle.map(id => graph.getNode(id)?.label || id).join(' -> ');
+      errors.push({
+        type: 'call_cycle',
+        severity: 'error',
+        message: t('validator.call_cycle', { cycle: labels }),
+        nodeIds: cycle
+      });
+    });
+  }
+
+  private static detectCycles(graph: Graph, edges: IEdgeData[]): string[][] {
     const nodes = graph.getAllNodes();
-    const edges = graph.getAllEdges();
 
     const adjacency = new Map<string, string[]>();
     nodes.forEach(n => adjacency.set(n.id, []));
