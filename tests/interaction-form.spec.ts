@@ -54,6 +54,12 @@ describe('validateInteractionAnswers (formulário seguro)', () => {
     if (!result.ok) expect(result.code).toBe('invalid_number');
   });
 
+  it('rejeita booleano em campo numérico (sem coerção)', () => {
+    const result = validateInteractionAnswers(fields, { tipo: 'pf', idade: true });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('invalid_number');
+  });
+
   it('rejeita múltipla escolha fora das opções', () => {
     const result = validateInteractionAnswers(fields, { tipo: 'pf', tags: ['a', 'x'] });
     expect(result.ok).toBe(false);

@@ -72,6 +72,7 @@ export function validateInteractionAnswers(
         break;
 
       case 'number': {
+        if (typeof value !== 'number' && typeof value !== 'string') return failure(field, 'invalid_number');
         const numeric = typeof value === 'number' ? value : Number(value);
         if (!Number.isFinite(numeric)) return failure(field, 'invalid_number');
         answers[field.id] = numeric;
