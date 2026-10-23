@@ -165,7 +165,8 @@ export class Graph {
       inputs.push({ id: `${id}_in_prompt`, name: 'prompt_in', direction: 'input', type: 'data', dataType: 'std::string' });
       outputs = [
         { id: `${id}_out_0`, name: 'out', direction: 'output', type: 'flow' },
-        { id: `${id}_out_data`, name: 'artifact_out', direction: 'output', type: 'data', dataType: 'std::string' }
+        { id: `${id}_out_data`, name: 'artifact_out', direction: 'output', type: 'data', dataType: 'std::string' },
+        { id: `${id}_out_call`, name: 'call', direction: 'output', type: 'call' }
       ];
     } else if (type === 'output') {
       inputs.push({ id: `${id}_in_data`, name: 'data_in', direction: 'input', type: 'data', dataType: 'std::string' });

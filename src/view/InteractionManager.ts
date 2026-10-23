@@ -3,7 +3,7 @@ import { CameraController } from './CameraController.ts';
 import { NodeView } from './NodeView.ts';
 import { ConnectionView } from './ConnectionView.ts';
 import { Graph } from '../core/Graph.ts';
-import { IEdgeControlPoints } from '../core/types.ts';
+import { IEdgeControlPoints, IEdgeData, defaultCallSettings } from '../core/types.ts';
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
@@ -679,13 +679,20 @@ export class InteractionManager {
   private connectToPort(targetNodeId: string, targetPortId: string): void {
     if (!this.connectingSourceNodeId || !this.connectingSourcePortId) return;
     try {
-      const cmd = new AddEdgeCommand(this.graph, {
+      const sourceNode = this.graph.getNode(this.connectingSourceNodeId);
+      const sourcePort = sourceNode?.outputs.find(p => p.id === this.connectingSourcePortId);
+      const edgeData: IEdgeData = {
         id: `edge_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
         sourceNodeId: this.connectingSourceNodeId,
         sourcePortId: this.connectingSourcePortId,
         targetNodeId,
         targetPortId
-      });
+      };
+      if (sourcePort?.type === 'call') {
+        edgeData.kind = 'call';
+        edgeData.callSettings = defaultCallSettings();
+      }
+      const cmd = new AddEdgeCommand(this.graph, edgeData);
       this.graph.commandManager.execute(cmd);
     } catch (err) {
       console.warn('Falha ao conectar nós:', err);

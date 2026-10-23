@@ -2,7 +2,7 @@
 
 [Português](README.pt-BR.md) · [Documentation](../docs/README.md)
 
-Five ready-to-run projects, from simple to complex. Each one is a normal Arestrix project folder: open it in the Studio,
+Six ready-to-run projects, from simple to complex. Each one is a normal Arestrix project folder: open it in the Studio,
 choose your model, set your API key, press **F5**.
 
 | # | Project | What it shows | Needs |
@@ -12,11 +12,12 @@ choose your model, set your API key, press **F5**.
 | 3 | [`03-atendimento-ilustrado`](03-atendimento-ilustrado) | A "project of projects": example 2 followed, on the FAQ branch, by example 1 (the answer gets an animated SVG). | A model, Python. |
 | 4 | [`04-memoria`](04-memoria) | Project memory: a semantic lesson and the Blackboard are persisted, loaded and injected into the prompt; the answer becomes an artifact. | A model. |
 | 5 | [`05-matematica-com-memoria`](05-matematica-com-memoria) | Web research through the Keenable MCP vertex, followed by a mathematics text written with project memory and delivered as Markdown. | A model, `KEENABLE_API`. |
+| 6 | [`06-chamada-agente`](06-chamada-agente) | A coordinator agent declares a **call** to a specialist agent (dashed edge) and receives its answer synchronously; the result is delivered as an artifact. | A model. |
 
 Examples 3 and 5 are **generated** by `python scripts/build_examples.py`, so the shared pieces do not drift apart.
 Vertices cannot yet execute a nested graph, so the composition is flattened into a single pipeline.
 
-All five end in **output vertices**: the produced file is copied to `exports/` and registered in the **Artifacts** tab,
+All six end in **output vertices**: the produced file is copied to `exports/` and registered in the **Artifacts** tab,
 with a viewer per format (SVG, Markdown, spreadsheets, PDF and JSON).
 
 ## Run an example

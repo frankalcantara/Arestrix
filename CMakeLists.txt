@@ -195,6 +195,7 @@ add_library(arestrix_core STATIC
   ${SRC}/rt/RuntimeLang.cpp
   ${SRC}/rt/Tools.cpp
   ${SRC}/rt/Agent.cpp
+  ${SRC}/rt/CallGraph.cpp
   ${SRC}/rt/ModelClient.cpp
   ${SRC}/local/LocalRuntime.cpp
   ${SRC}/local/Download.cpp

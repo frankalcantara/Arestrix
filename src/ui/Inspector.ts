@@ -1,5 +1,5 @@
 import { Graph } from '../core/Graph.ts';
-import { INodeData, IPort, ISwitchSettings, SwitchMode, defaultSwitchSettings, IMcpVertexSettings, defaultMcpSettings, IOutputSettings, defaultOutputSettings, OutputArtifactType } from '../core/types.ts';
+import { INodeData, IPort, ISwitchSettings, SwitchMode, defaultSwitchSettings, IMcpVertexSettings, defaultMcpSettings, IOutputSettings, defaultOutputSettings, OutputArtifactType, defaultCallSettings } from '../core/types.ts';
 import { EventBus } from '../core/EventBus.ts';
 import { RemoveNodeCommand, RemoveEdgeCommand, UpdateNodeCommand, CompoundCommand } from '../core/history/GraphCommands.ts';
 import { AgentTemplateRegistry } from '../core/templates/AgentTemplateRegistry.ts';
@@ -528,6 +528,7 @@ export class Inspector {
           ${node.type === 'switch' ? this.renderSwitchSection(node) : ''}
           ${node.type === 'mcp' ? this.renderMcpSection(node) : ''}
           ${node.type === 'output' ? this.renderOutputSection(node) : ''}
+          ${node.type === 'agent' ? this.renderCallSection(node) : ''}
 
           <!-- Seção de Parâmetros do Template / Agente -->
           ${(node.type === 'switch' || node.type === 'mcp' || node.type === 'output') ? '' : this.renderParametersSection(node, tpl)}
@@ -761,6 +762,7 @@ export class Inspector {
     }
     if (node.type === 'mcp') this.bindMcpSettings(node);
     if (node.type === 'output') this.bindOutputSection(node);
+    if (node.type === 'agent') this.bindCallSection();
 
     // Sincronizar Lambda
     this.container.querySelector('#btn-sync-lambda')?.addEventListener('click', () => {
@@ -1421,6 +1423,69 @@ export class Inspector {
 
     this.container.querySelector('#btn-view-artifact-now')?.addEventListener('click', () => {
       this.bus.emit('console:open-artifacts', { nodeId: node.id });
+    });
+  }
+
+  // --- Delegação (arestas de chamada) ---------------------------------------------------
+  private renderCallSection(node: INodeData): string {
+    const calls = this.graph.getAllEdges().filter(e => e.sourceNodeId === node.id && e.kind === 'call');
+    if (calls.length === 0) {
+      return `
+        <div class="form-group">
+          <label class="form-label">${t('inspector.calls.title', 'Delegação (chamadas)')}</label>
+          <div class="office-field-hint">${t('inspector.calls.empty', 'Arraste da porta CALL para um agente para declarar uma chamada.')}</div>
+        </div>
+      `;
+    }
+
+    const rows = calls.map(edge => {
+      const target = this.graph.getNode(edge.targetNodeId);
+      const settings = edge.callSettings ?? defaultCallSettings();
+      const targetLabel = target?.label ?? edge.targetNodeId;
+      return `
+        <div class="form-group" style="border-left: 3px solid #7c3aed; padding-left: 8px;">
+          <label class="form-label">→ ${this.escapeHtml(targetLabel)}</label>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="number" class="form-input" data-call-max="${edge.id}" min="1"
+                   value="${settings.maxCalls}" style="width: 90px;" />
+            <input type="text" class="form-input" data-call-desc="${edge.id}"
+                   value="${this.escapeHtml(settings.description || '')}"
+                   placeholder="${t('inspector.calls.desc_placeholder', 'Quando o agente deve chamar este alvo')}" />
+          </div>
+          <div class="office-field-hint">${t('inspector.calls.max_hint', 'Máximo de chamadas por execução deste agente')}</div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="form-group">
+        <label class="form-label">${t('inspector.calls.title', 'Delegação (chamadas)')}</label>
+        ${rows}
+      </div>
+    `;
+  }
+
+  private bindCallSection(): void {
+    this.container.querySelectorAll<HTMLInputElement>('[data-call-max]').forEach(input => {
+      input.addEventListener('change', () => {
+        const edgeId = input.getAttribute('data-call-max');
+        const edge = edgeId ? this.graph.getEdge(edgeId) : undefined;
+        if (!edge) return;
+        const settings = { ...(edge.callSettings ?? defaultCallSettings()) };
+        settings.maxCalls = Math.max(1, parseInt(input.value, 10) || 1);
+        this.graph.updateEdge(edge.id, { callSettings: settings });
+      });
+    });
+
+    this.container.querySelectorAll<HTMLInputElement>('[data-call-desc]').forEach(input => {
+      input.addEventListener('change', () => {
+        const edgeId = input.getAttribute('data-call-desc');
+        const edge = edgeId ? this.graph.getEdge(edgeId) : undefined;
+        if (!edge) return;
+        const settings = { ...(edge.callSettings ?? defaultCallSettings()) };
+        settings.description = input.value.trim();
+        this.graph.updateEdge(edge.id, { callSettings: settings });
+      });
     });
   }
 

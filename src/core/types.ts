@@ -13,7 +13,7 @@ export type TaskflowNodeType =
   | 'output';     // Vértice de Entrega / Coletor de Artefatos (SVG, planilha, PDF, Markdown, texto, JSON...)
 
 export type PortDirection = 'input' | 'output';
-export type PortType = 'flow' | 'data';
+export type PortType = 'flow' | 'data' | 'call';
 
 /**
  * Semântica da aresta:

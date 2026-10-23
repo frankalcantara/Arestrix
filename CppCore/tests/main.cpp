@@ -31,6 +31,7 @@
 #include "assistant/AssistantTools.hpp"
 #include "assistant/GraphDocument.hpp"
 #include "rt/ModelClient.hpp"
+#include "rt/CallGraph.hpp"
 #include "local/LocalRuntime.hpp"
 #include "gateway/GatewayStore.hpp"
 #include "rt/Decision.hpp"
@@ -500,7 +501,9 @@ TEST(generator_call_edges_are_not_flow) {
 
     CHECK(src.find("arx_callables") != std::string::npos);
     CHECK(src.find("arx_callers") != std::string::npos);
+    CHECK(src.find("taskforge::rt::setCallRegistry(arx_callables, arx_callers)") != std::string::npos);
     CHECK(src.find("\"specialist\"") != std::string::npos);
+    CHECK(src.find("\"label\":\"Specialist\"") != std::string::npos);
     CHECK(src.find("\"maxCalls\":2") != std::string::npos);
     CHECK(src.find("task_specialist") == std::string::npos);          // chamavel puro nao vira task
     CHECK(src.find("task_gen.precede(task_specialist)") == std::string::npos);
@@ -518,6 +521,34 @@ TEST(generator_call_edges_are_not_flow) {
         threw = true;
     }
     CHECK(threw);
+}
+
+TEST(call_registry_and_tool_definition) {
+    using namespace taskforge::rt;
+    setCallRegistry(
+        R"({"specialist":{"kind":"agent","label":"Specialist","spec":{"provider":"deepseek","model":"x"}}})",
+        R"({"caller":[{"target":"specialist","label":"Specialist","kind":"agent","maxCalls":2,"timeoutSeconds":10,"onError":"fail","description":"use specialist"}]})");
+
+    auto targets = callTargetsFor("caller");
+    CHECK(targets.size() == 1);
+    CHECK(targets[0].id == "specialist");
+    CHECK(targets[0].maxCalls == 2);
+    CHECK(targets[0].description == "use specialist");
+    CHECK(callTargetsFor("unknown").empty());
+
+    auto defs = callToolDefinitions(targets, RuntimeLang::Pt);
+    CHECK(defs.size() == 1);
+    CHECK(defs[0].name == "call_agent");
+    const std::string schema = defs[0].parameters.dump();
+    CHECK(schema.find("\"specialist\"") != std::string::npos);
+
+    // Alvo inexistente falha antes de qualquer chamada ao modelo.
+    auto res = invokeCall("caller", "run", targets,
+                          taskforge::Json{{"target", "missing"}, {"input", "x"}}, RuntimeLang::Pt);
+    CHECK(res.isError);
+
+    // Nao interfere em outros testes que usem runAgent.
+    setCallRegistry("{}", "{}");
 }
 
 TEST(generator_condition_with_gap_uses_noop) {

@@ -20,17 +20,20 @@ export class ConnectionView {
   constructor(edgeData: IEdgeData, screenWidth: number, screenHeight: number) {
     this.edgeData = edgeData;
 
-    const isFeedback = !!edgeData.isFeedbackLoop;
-    const color = isFeedback ? THEME.edge.feedbackColor : THEME.edge.defaultColor;
+    const isCall = edgeData.kind === 'call';
+    const isFeedback = !isCall && !!edgeData.isFeedbackLoop;
+    const color = isCall
+      ? THEME.edge.callColor
+      : (isFeedback ? THEME.edge.feedbackColor : THEME.edge.defaultColor);
 
     this.material = new LineMaterial({
       color,
       linewidth: THEME.edge.lineWidth,
       resolution: new THREE.Vector2(screenWidth, screenHeight),
-      dashed: isFeedback,
+      dashed: isCall || isFeedback,
       dashScale: 0.1,
-      dashSize: 10,
-      gapSize: 5
+      dashSize: isCall ? 7 : 10,
+      gapSize: isCall ? 4 : 5
     });
 
     this.geometry = new LineGeometry();
@@ -98,9 +101,10 @@ export class ConnectionView {
       this.material.color.setHex(0xef4444);
       this.material.linewidth = THEME.edge.lineWidth + 1;
     } else {
-      this.material.color.setHex(
-        this.edgeData.isFeedbackLoop ? THEME.edge.feedbackColor : THEME.edge.defaultColor
-      );
+      const idleColor = this.edgeData.kind === 'call'
+        ? THEME.edge.callColor
+        : (this.edgeData.isFeedbackLoop ? THEME.edge.feedbackColor : THEME.edge.defaultColor);
+      this.material.color.setHex(idleColor);
       this.material.linewidth = THEME.edge.lineWidth;
     }
   }

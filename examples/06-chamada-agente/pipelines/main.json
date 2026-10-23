@@ -1,0 +1,242 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "projectId": "exemplo-chamada-agente",
+    "graphName": "Coordenador_e_Especialista",
+    "description": "Um agente coordenador chama um agente especialista declarado no grafo",
+    "targetStandard": "C++20",
+    "compilerConfig": {
+      "compiler": "msvc",
+      "cppStandard": "C++20",
+      "buildSystem": "cmake",
+      "taskflowIncludePath": "third_party/taskflow",
+      "outputBinaryName": "exemplo_chamada_agente",
+      "enableOpenMP": false,
+      "enableCuda": false,
+      "extraFlags": []
+    },
+    "version": "1.0.0",
+    "globalDefaults": {
+      "model": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "skillPath": "",
+        "promptTemplate": ""
+      },
+      "sandbox": {
+        "isolationLevel": "host_direct",
+        "network": "egress_llm_only",
+        "maxMemoryMB": 512,
+        "timeoutSeconds": 180,
+        "readOnlyMounts": [],
+        "readWriteMounts": []
+      },
+      "codeMode": {
+        "allowedTools": [
+          "read",
+          "write"
+        ],
+        "customScripts": []
+      },
+      "memory": {
+        "enabled": false,
+        "persistent": false,
+        "readBlackboard": false,
+        "writeBlackboard": false,
+        "semanticLessons": false,
+        "recordLessons": false,
+        "allowedKeys": [],
+        "domains": []
+      }
+    },
+    "callLimits": {
+      "maxDepth": 3,
+      "maxTotalCalls": 50
+    }
+  },
+  "nodes": [
+    {
+      "id": "coordenador",
+      "label": "Coordenador_de_Chamadas",
+      "type": "agent",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "coordenador_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        },
+        {
+          "id": "coordenador_in_prompt",
+          "name": "prompt_in",
+          "direction": "input",
+          "type": "data",
+          "dataType": "std::string"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "coordenador_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        },
+        {
+          "id": "coordenador_out_data",
+          "name": "artifact_out",
+          "direction": "output",
+          "type": "data",
+          "dataType": "std::string"
+        },
+        {
+          "id": "coordenador_out_call",
+          "name": "call",
+          "direction": "output",
+          "type": "call"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/coordenador.md"
+        },
+        "inheritCodeMode": true,
+        "inheritMemory": true
+      }
+    },
+    {
+      "id": "especialista",
+      "label": "Especialista_de_Chamadas",
+      "type": "agent",
+      "position": {
+        "x": 360,
+        "y": 220,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "especialista_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        },
+        {
+          "id": "especialista_in_prompt",
+          "name": "prompt_in",
+          "direction": "input",
+          "type": "data",
+          "dataType": "std::string"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "especialista_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        },
+        {
+          "id": "especialista_out_data",
+          "name": "artifact_out",
+          "direction": "output",
+          "type": "data",
+          "dataType": "std::string"
+        },
+        {
+          "id": "especialista_out_call",
+          "name": "call",
+          "direction": "output",
+          "type": "call"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/especialista.md"
+        },
+        "inheritCodeMode": true,
+        "inheritMemory": true
+      }
+    },
+    {
+      "id": "entrega",
+      "label": "Entrega_da_Resposta",
+      "type": "output",
+      "position": {
+        "x": 720,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "entrega_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        },
+        {
+          "id": "entrega_in_data",
+          "name": "data_in",
+          "direction": "input",
+          "type": "data",
+          "dataType": "std::string"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "entrega_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "outputSettings": {
+        "sourcePath": "workspace/resposta.txt",
+        "destinationPath": "exports/resposta.txt",
+        "artifactType": "text",
+        "displayName": "Resposta da chamada",
+        "autoOpenPreview": true,
+        "description": "Resultado gravado pelo coordenador apos a chamada ao especialista"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_fluxo",
+      "sourceNodeId": "coordenador",
+      "sourcePortId": "coordenador_out_0",
+      "targetNodeId": "entrega",
+      "targetPortId": "entrega_in_0",
+      "kind": "flow",
+      "isFeedbackLoop": false
+    },
+    {
+      "id": "e_chamada",
+      "sourceNodeId": "coordenador",
+      "sourcePortId": "coordenador_out_call",
+      "targetNodeId": "especialista",
+      "targetPortId": "especialista_in_0",
+      "kind": "call",
+      "callSettings": {
+        "maxCalls": 2,
+        "timeoutSeconds": 0,
+        "onError": "fail",
+        "description": "Peca um parecer ao especialista antes de concluir."
+      },
+      "isFeedbackLoop": false
+    }
+  ]
+}

@@ -199,6 +199,17 @@ def decide(body):
             return tool_call("c4", "write", {"path": "workspace/audit_decision.txt", "content": decision})
         return text("Decisao registrada em workspace/audit_decision.txt.")
 
+    if "COORDENADOR DE CHAMADAS" in system:
+        if step == 0:
+            return tool_call("c1", "call_agent", {"target": "especialista", "input": "preciso de um parecer"})
+        if step == 1:
+            parecer = tool_msgs[0]["content"]
+            return tool_call("c2", "write", {"path": "workspace/resposta.txt", "content": parecer})
+        return text("Chamada ao especialista concluida.")
+
+    if "ESPECIALISTA DE CHAMADAS" in system:
+        return text("Parecer do especialista: aprovado.")
+
     return text("Sem roteiro para este agente.")
 
 

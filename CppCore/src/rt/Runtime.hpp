@@ -46,8 +46,15 @@ private:
 // use nodeId + item para que cada item tenha o proprio orcamento.
 // `memoryContext` e um bloco de dados historicos (Blackboard/licoes) injetado no prompt de
 // sistema como dado nao confiavel; vazio desativa a injecao.
-void runAgent(const std::string& nodeId, const std::string& label, const std::string& specJson,
-              const std::string& runKey = "", const std::string& memoryContext = "");
+// `inputContext` e o payload de uma chamada de outro agente; vazio no fluxo normal.
+// Devolve o texto final do agente (o codigo gerado pode ignorar).
+std::string runAgent(const std::string& nodeId, const std::string& label, const std::string& specJson,
+                     const std::string& runKey = "", const std::string& memoryContext = "",
+                     const std::string& inputContext = "");
+
+// Registro do grafo de chamadas (mundo fechado). O codigo gerado chama uma vez no inicio.
+// Ver rt/CallGraph.hpp para o formato e para a tool call_agent.
+void setCallRegistry(const std::string& callablesJson, const std::string& callersJson);
 
 // Chamada unica a um modelo (sem ferramentas): provider e chaves seguem as mesmas regras dos agentes
 // (variaveis de ambiente do usuario). Nunca lanca excecao; veja `ok` e `error`.

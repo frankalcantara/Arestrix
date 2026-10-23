@@ -31,6 +31,26 @@ An agent vertex runs a real **tool-use loop** against its configured provider:
   to the project folder.
 - The loop continues until the model stops calling tools. Skills can add more tools and MCP servers.
 
+### Agent-to-agent calls
+
+An agent can call another agent **declared in the graph** through a dashed **call edge**. The target
+is callable-only (it has no flow edges) and runs synchronously inside the caller's task; it is not a
+scheduled Taskflow task.
+
+- The runtime exposes `call_agent` with an **enum of declared targets**; the model cannot invent a
+  target.
+- The call receives an explicit `input` payload and returns a JSON tool message with `callId`,
+  `target`, `status`, `output` and `depth`.
+- The skill guides when to call; the graph authorizes; the runtime enforces `maxCalls` per edge,
+  `ARESTRIX_MAX_CALL_DEPTH` (default 3) and `ARESTRIX_MAX_TOTAL_CALLS` (default 50).
+- `call_start` / `call_end` telemetry events carry the call path; the target's final text is also
+  written to `.arestrix/out/<target>.txt`.
+- The target never receives the caller's full conversation: only the explicit input. This keeps
+  cost and prompt-injection surface small.
+
+See [`examples/06-chamada-agente`](../examples/06-chamada-agente) and
+[Graph and nodes](graph-and-nodes.md#call-edges-delegation).
+
 **Agent language.** At run time the agent is configured in the language of its own constitution: the skill and the prompt
 template (the texts that define it). The runtime detects the language and emits everything the agent sees — the system
 context block, the default prompt, the built-in and native tool descriptions and schemas, and the error messages returned

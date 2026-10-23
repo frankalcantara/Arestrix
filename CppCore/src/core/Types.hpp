@@ -28,7 +28,7 @@ enum class TaskflowNodeType {
 };
 
 enum class PortDirection { Input, Output };
-enum class PortType { Flow, Data };
+enum class PortType { Flow, Data, Call };
 
 // flow: dependencia normal; feedback: retorno de laco; call: chamada/delegacao.
 enum class EdgeKind { Flow, Feedback, Call };
@@ -139,7 +139,8 @@ ARX_JSON_ENUM(PortDirection, {
 
 ARX_JSON_ENUM(PortType, {
     {PortType::Flow, "flow"},
-    {PortType::Data, "data"}
+    {PortType::Data, "data"},
+    {PortType::Call, "call"}
 })
 
 // Serializacao manual de EdgeKind: um valor desconhecido e erro explicito,

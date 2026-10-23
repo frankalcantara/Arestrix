@@ -276,7 +276,9 @@ export class SvgNodeView {
   private createSinglePort(port: IPort, px: number, py: number, isInput: boolean): void {
     const isConditionBranch = port.conditionBranchIndex !== undefined;
     let portColor = isInput ? '#0F6CBD' : '#C43E1C';
-    if (isConditionBranch) {
+    if (port.type === 'call') {
+      portColor = '#7C3AED';
+    } else if (isConditionBranch) {
       portColor = port.conditionBranchIndex === 0 ? '#10B981' : '#F59E0B';
     }
 

@@ -69,6 +69,40 @@ Como se comporta:
 - Como a condição, o switch pode fechar um laço (a aresta de retorno vira aresta de feedback).
 - Para converter um vértice de/para switch, remova antes as conexões de saída dele, porque as portas mudam.
 
+## Arestas de chamada (delegação)
+
+Uma **aresta de chamada** é tracejada em violeta e declara uma delegação, não uma dependência de
+agendamento. Ela significa:
+
+> O agente de origem **pode invocar** o agente de destino de forma síncrona, no máximo N vezes, e
+> recebe a resposta.
+
+No v1:
+
+- só um **agente** pode ser origem e destino;
+- o destino precisa ser **somente chamável**: não tem arestas de fluxo (entrada ou saída). Se ele
+  também precisar rodar como etapa normal, duplique o vértice;
+- o destino **não** é uma task top-level do Taskflow; ele roda dentro da task do chamador.
+
+Para criar uma chamada, arraste da porta **`call`** do agente (violeta) até a porta `in` do agente
+de destino. Selecione o agente de origem e use a seção **Delegação** do Inspetor para definir
+`maxCalls` e a descrição que o modelo vê ao escolher o alvo.
+
+Em execução, o chamador recebe a ferramenta `call_agent` com um **enum de alvos declarados**. O
+skill orienta; o grafo autoriza; o runtime aplica:
+
+| Limite | Padrão | Variável de ambiente |
+| :--- | :--- | :--- |
+| `maxCalls` por aresta, por execução do chamador | 1 | — |
+| Profundidade de aninhamento | 3 | `ARESTRIX_MAX_CALL_DEPTH` |
+| Total de chamadas por processo | 50 | `ARESTRIX_MAX_TOTAL_CALLS` |
+
+O resultado é uma mensagem de ferramenta JSON com `callId`, `target`, `status`, `output` e `depth`.
+O texto final do alvo também é gravado em `.arestrix/out/<target>.txt`.
+
+Veja [`examples/06-chamada-agente`](../examples/06-chamada-agente) para um coordenador chamando um
+especialista.
+
 ## Portas e arestas
 
 Cada vértice tem **portas de entrada** (azuis) e **portas de saída** (laranja). Uma porta carrega
@@ -80,6 +114,7 @@ Cada vértice tem **portas de entrada** (azuis) e **portas de saída** (laranja)
 | :--- | :--- | :--- |
 | **Aresta de fluxo** | Sólida, cinza-ardósia | Dependência normal: o destino executa depois que a origem termina. |
 | **Aresta de feedback** | Tracejada, âmbar | Aresta de retorno que fecha um laço. O aplicativo a marca automaticamente. |
+| **Aresta de chamada** | Tracejada, violeta | Delegação: a origem pode invocar o destino de forma síncrona e receber a resposta. Não agenda o destino. |
 
 Uma aresta vira **aresta de feedback** quando sai de um vértice de **condição** e aponta de volta para esse
 vértice ou para um que leva de volta a ele. No código gerado ela vira um laço do Taskflow, e não uma

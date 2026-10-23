@@ -30,6 +30,26 @@ Um vértice de agente executa um **laço real de uso de ferramentas** contra o p
   confinadas à pasta do projeto.
 - O laço continua até o modelo parar de chamar ferramentas. Skills podem acrescentar ferramentas e servidores MCP.
 
+### Chamadas entre agentes
+
+Um agente pode chamar outro agente **declarado no grafo** por uma **aresta de chamada** tracejada. O
+destino é somente chamável (não tem arestas de fluxo) e roda de forma síncrona dentro da task do
+chamador; não é uma task agendada do Taskflow.
+
+- O runtime expõe `call_agent` com um **enum de alvos declarados**; o modelo não consegue inventar
+  um alvo.
+- A chamada recebe um `input` explícito e devolve uma mensagem de ferramenta JSON com `callId`,
+  `target`, `status`, `output` e `depth`.
+- O skill orienta quando chamar; o grafo autoriza; o runtime aplica `maxCalls` por aresta,
+  `ARESTRIX_MAX_CALL_DEPTH` (padrão 3) e `ARESTRIX_MAX_TOTAL_CALLS` (padrão 50).
+- Os eventos `call_start` / `call_end` levam o caminho da chamada; o texto final do alvo também é
+  gravado em `.arestrix/out/<target>.txt`.
+- O alvo nunca recebe a conversa inteira do chamador: só o input explícito. Isso reduz custo e a
+  superfície de prompt injection.
+
+Veja [`examples/06-chamada-agente`](../examples/06-chamada-agente) e
+[Grafo e vértices](grafo-e-vertices.md#arestas-de-chamada-delegação).
+
 **Idioma do agente.** Em tempo de execução o agente é configurado no idioma da sua própria constituição: a skill e o template
 de prompt (os textos que o definem). O runtime detecta o idioma e emite tudo o que o agente enxerga — o bloco de contexto do
 sistema, o prompt padrão, as descrições e esquemas das ferramentas nativas e internas, e as mensagens de erro devolvidas a ele

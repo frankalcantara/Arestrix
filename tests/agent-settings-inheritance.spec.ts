@@ -210,10 +210,12 @@ describe('Fase 7: Sistema de Configurações de Agentes, Sandbox & Herança', ()
       expect(node.inputs[1].name).toBe('prompt_in');
       expect(node.inputs[1].type).toBe('data');
       
-      expect(node.outputs.length).toBe(2);
+      expect(node.outputs.length).toBe(3);
       expect(node.outputs[0].name).toBe('out');
       expect(node.outputs[1].name).toBe('artifact_out');
       expect(node.outputs[1].type).toBe('data');
+      expect(node.outputs[2].name).toBe('call');
+      expect(node.outputs[2].type).toBe('call');
 
       expect(node.agentSettings).toBeDefined();
       expect(node.agentSettings?.inheritSandbox).toBe(true);

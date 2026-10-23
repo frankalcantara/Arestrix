@@ -293,6 +293,38 @@ def scenario_05_matematica():
         cleanup(work, mock)
 
 
+def scenario_06_chamada_agente():
+    print("\n== Exemplo 6: chamada entre agentes ==")
+    out, project, events, code, work, mock = run_example("06-chamada-agente")
+    try:
+        check(code == 0, "terminou com codigo 0")
+        check("[Agent Coordenador_de_Chamadas] iniciando" in out, "o coordenador executou")
+        check("[Agent Especialista_de_Chamadas] iniciando" in out, "o especialista foi chamado")
+
+        resposta = project / "workspace" / "resposta.txt"
+        check(resposta.exists(), "workspace/resposta.txt criado")
+        if resposta.exists():
+            content = resposta.read_text(encoding="utf-8")
+            check('"status":"ok"' in content, "o resultado da chamada tem status ok")
+            check("Parecer do especialista: aprovado." in content, "o parecer chegou ao coordenador")
+
+        exported = project / "exports" / "resposta.txt"
+        check(exported.exists(), "vertice de saida exportou a resposta")
+
+        chats = [e for e in events if e["event"] == "chat"]
+        coord = [e for e in chats if "COORDENADOR DE CHAMADAS" in e.get("system", "")]
+        spec = [e for e in chats if "ESPECIALISTA DE CHAMADAS" in e.get("system", "")]
+        check(coord and any("call_agent" in e.get("tools", []) for e in coord),
+              "coordenador recebeu a tool call_agent")
+        check(spec and all("call_agent" not in e.get("tools", []) for e in spec),
+              "especialista nao recebeu call_agent")
+        check(any(e.get("reply") == "tool_call:call_agent" for e in coord),
+              "coordenador chamou o especialista")
+        no_secret_leak(out, "ex6")
+    finally:
+        cleanup(work, mock)
+
+
 def scenario_secrets_guard():
     print("\n== Garantia de seguranca dos exemplos ==")
     node = shutil.which("node")
@@ -311,7 +343,7 @@ def scenario_secrets_guard():
 def main():
     for fn in (scenario_01, scenario_02_urgente, scenario_02_normal, scenario_02_duvida, scenario_02_sem_chave,
                scenario_03_duvida, scenario_03_urgente, scenario_04_memoria, scenario_05_matematica,
-               scenario_secrets_guard):
+               scenario_06_chamada_agente, scenario_secrets_guard):
         fn()
     if failures:
         print(f"\n{len(failures)} verificacao(oes) falharam:")

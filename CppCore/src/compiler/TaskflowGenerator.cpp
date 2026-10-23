@@ -401,11 +401,14 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
         }
     }
 
-    auto callEdgesJson = [](const std::vector<const core::EdgeData*>& list) {
+    auto callEdgesJson = [&nodes](const std::vector<const core::EdgeData*>& list) {
         json out = json::array();
         for (const auto* e : list) {
+            const auto& targetNode = nodes.at(e->targetNodeId);
             out.push_back(json{
                 {"target", e->targetNodeId},
+                {"label", targetNode.label.empty() ? targetNode.id : targetNode.label},
+                {"kind", "agent"},
                 {"maxCalls", e->callSettings.maxCalls},
                 {"timeoutSeconds", e->callSettings.timeoutSeconds},
                 {"onError", e->callSettings.onError},
@@ -487,6 +490,9 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
     code += "  AgentContext ctx;\n";
     code += "  tf::Executor executor;\n";
     code += "  tf::Taskflow taskflow(" + cppString(meta.graphName) + ");\n\n";
+    if (!callTargets.empty()) {
+        code += "  taskforge::rt::setCallRegistry(arx_callables, arx_callers);\n\n";
+    }
     if (hasCritical) code += "  tf::Semaphore critical_sec(1);\n\n";
 
     code += "  auto task_bootstrap = taskflow.emplace([&ctx]() {\n";

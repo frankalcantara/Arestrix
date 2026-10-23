@@ -16,6 +16,7 @@
 #include <thread>
 
 #include "rt/Http.hpp"
+#include "rt/CallGraph.hpp"
 #include "rt/McpTools.hpp"
 #include "rt/ModelClient.hpp"
 #include "rt/RuntimeLang.hpp"
@@ -204,8 +205,9 @@ std::string summarizeArgs(const json& args) {
 // ---------------------------------------------------------------------------
 // Execucao do no de agente
 // ---------------------------------------------------------------------------
-void runAgent(const std::string& nodeId, const std::string& label, const std::string& specJson,
-              const std::string& runKey, const std::string& memoryContext) {
+std::string runAgent(const std::string& nodeId, const std::string& label, const std::string& specJson,
+                     const std::string& runKey, const std::string& memoryContext,
+                     const std::string& inputContext) {
     AgentSpec spec = parseSpec(jsonutil::parse(specJson), nodeId, label);
     spec.memoryContext = memoryContext;
 
@@ -293,8 +295,19 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
     userPrompt = replaceAll(userPrompt, "{{iteration}}", std::to_string(iteration));
     userPrompt = replaceAll(userPrompt, "{{nodeId}}", nodeId);
     userPrompt = replaceAll(userPrompt, "{{label}}", label);
+    if (!inputContext.empty()) {
+        const bool hasPlaceholder = userPrompt.find("{{input}}") != std::string::npos;
+        userPrompt = replaceAll(userPrompt, "{{input}}", inputContext);
+        if (!hasPlaceholder) {
+            userPrompt += "\n\n" +
+                langPick(lang, "Entrada recebida do chamador (dados):\n", "Input from the caller (data):\n") +
+                inputContext;
+        }
+    }
 
+    const std::vector<CallTarget> callTargets = callTargetsFor(nodeId);
     std::vector<ToolDef> tools = toolDefinitions(spec.tools, lang);
+    for (const auto& def : callToolDefinitions(callTargets, lang)) tools.push_back(def);
     // Ferramentas MCP (servidores de .workspace/mcps): so as dos servidores que o agente declarou.
     std::unique_ptr<McpToolbox> mcpTools;
     if (!spec.mcpServers.empty()) {
@@ -408,8 +421,14 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
 
             for (auto& call : t.toolCalls) {
                 AgentTelemetryEmitter::emitToolStart(nodeId, call.name, summarizeArgs(call.args));
-                ToolResult res = (mcpTools && mcpTools->owns(call.name)) ? mcpTools->call(call.name, call.args)
-                                                                           : executeTool(tctx, call.name, call.args);
+                ToolResult res;
+                if (call.name == "call_agent") {
+                    res = invokeCall(nodeId, runId, callTargets, call.args, lang);
+                } else if (mcpTools && mcpTools->owns(call.name)) {
+                    res = mcpTools->call(call.name, call.args);
+                } else {
+                    res = executeTool(tctx, call.name, call.args);
+                }
                 AgentTelemetryEmitter::emitToolEnd(nodeId, call.name, !res.isError);
                 if (res.isError) {
                     AgentTelemetryEmitter::emitEvent(nodeId, "log", json{{"logLine", "[" + call.name + "] " + res.content.substr(0, 300)}});
@@ -456,6 +475,7 @@ void runAgent(const std::string& nodeId, const std::string& label, const std::st
     }
 
     recordUsage(true);
+    return finalText;
 }
 
 // ---------------------------------------------------------------------------

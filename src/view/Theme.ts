@@ -160,6 +160,7 @@ export const THEME = {
     defaultColor: 0x64748b,   // Linha de conector neutro
     selectedColor: 0x0f6cbd,  // Azul Office de seleção
     feedbackColor: 0xd97706,  // Âmbar para feedback loops
+    callColor: 0x7c3aed,      // Violeta para chamadas/delegação
     activeFlowColor: 0x107c41,// Verde de execução ativa
     lineWidth: 3.0,
     pulseSpeed: 1.5

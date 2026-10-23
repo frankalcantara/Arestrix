@@ -69,6 +69,40 @@ How it behaves:
 - Like a condition, a switch may close a loop (the return edge becomes a feedback edge).
 - To convert a vertex to or from switch, first remove its output connections, because the ports change.
 
+## Call edges (delegation)
+
+A **call edge** is a dashed violet edge that declares a delegation, not a scheduling dependency. It
+means:
+
+> The source agent **may invoke** the target agent synchronously, at most N times, and receives its
+> answer.
+
+In v1:
+
+- only an **agent** can be the source and the target;
+- the target must be **callable-only**: it has no flow edges (in or out). If it also needs to run as a
+  normal step, duplicate the vertex;
+- the target is **not** a top-level Taskflow task; it runs inside the caller's task.
+
+To create a call, drag from the agent's **`call`** output port (violet) to the target agent's `in`
+port. Select the source agent and use the **Delegation** section of the Inspector to set `maxCalls`
+and a description that the model sees when choosing the target.
+
+At run time the caller receives the `call_agent` tool with an **enum of declared targets**. The
+skill guides the agent; the graph authorizes; the runtime enforces:
+
+| Limit | Default | Environment override |
+| :--- | :--- | :--- |
+| `maxCalls` per edge, per caller run | 1 | — |
+| Nesting depth | 3 | `ARESTRIX_MAX_CALL_DEPTH` |
+| Total calls per process | 50 | `ARESTRIX_MAX_TOTAL_CALLS` |
+
+The result is a JSON tool message with `callId`, `target`, `status`, `output` and `depth`. The
+target's final text is also written to `.arestrix/out/<target>.txt`.
+
+See [`examples/06-chamada-agente`](../examples/06-chamada-agente) for a coordinator calling a
+specialist.
+
 ## Ports and edges
 
 Each vertex has **input ports** (blue) and **output ports** (orange). A port carries either
@@ -80,6 +114,7 @@ Each vertex has **input ports** (blue) and **output ports** (orange). A port car
 | :--- | :--- | :--- |
 | **Flow edge** | Solid, slate gray | Normal dependency: the target runs after the source finishes. |
 | **Feedback edge** | Dashed, amber | A return edge that closes a loop. The app marks it automatically. |
+| **Call edge** | Dashed, violet | Delegation: the source may invoke the target synchronously and receive its answer. It does not schedule the target. |
 
 An edge becomes a **feedback edge** when it leaves a **condition** vertex and points back to that
 vertex or to one that leads back to it. In generated code it becomes a Taskflow loop instead of a

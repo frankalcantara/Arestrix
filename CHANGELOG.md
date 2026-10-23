@@ -49,6 +49,14 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
 - On Windows, `arestrix.exe` now hides the console window when launched outside a terminal
   (double-click or shortcut). It keeps the console attached when launched from a terminal and always
   mirrors the backend log to `%LOCALAPPDATA%\Arestrix\logs\studio.log` (rotated at 5 MB).
+- Agents can call agents declared in the graph through dashed **call edges**. The runtime exposes
+  `call_agent` only for the declared targets, returns the callee's answer synchronously, and enforces
+  `maxCalls`, `ARESTRIX_MAX_CALL_DEPTH` and `ARESTRIX_MAX_TOTAL_CALLS`. Call targets are callable-only
+  vertices and never become scheduled Taskflow tasks.
+- The graph schema adds `EdgeKind`/`CallSettings`, the agent `call` output port, dashed violet
+  rendering, an Inspector **Delegation** section and call-graph validation.
+- `examples/06-chamada-agente` and the examples E2E cover a coordinator calling a specialist,
+  including the `call_agent` tool, the call result and the output artifact.
 
 ## [1.5.0-beta.1] - 2026-10-19
 
