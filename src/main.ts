@@ -17,6 +17,7 @@ import { NodeMemoryModal } from './ui/modals/NodeMemoryModal.ts';
 import { NodeSkillsModal } from './ui/modals/NodeSkillsModal.ts';
 import { SkillEditorModal } from './ui/modals/SkillEditorModal.ts';
 import { GitHubReposModal } from './ui/modals/GitHubReposModal.ts';
+import { InteractionModal } from './ui/modals/InteractionModal.ts';
 import { ProjectManager } from './core/ProjectManager.ts';
 import { StatusBar } from './ui/StatusBar.ts';
 import { CanvasControls } from './ui/CanvasControls.ts';
@@ -87,6 +88,7 @@ function bootstrap() {
   const nodeSkillsModal = new NodeSkillsModal(graph, globalEventBus);
   const skillEditorModal = new SkillEditorModal(graph);
   const gitHubReposModal = new GitHubReposModal(globalEventBus);
+  const interactionModal = new InteractionModal();
 
   // Dicionario de sinonimos da busca: gerado em segundo plano para cada idioma sem dicionario
   void ensureSearchSynonyms(getLocale());
@@ -103,6 +105,13 @@ function bootstrap() {
   globalEventBus.on('node:open-skills-modal', (nodeId: string, initialTab?: any) => nodeSkillsModal.open(nodeId, initialTab));
   globalEventBus.on('node:open-skill-editor', (opts: any) => skillEditorModal.openSkill(opts));
   globalEventBus.on('modal:open-github-repos', () => gitHubReposModal.open());
+  globalEventBus.on('pipeline:interaction', (request: any) => interactionModal.open(request));
+  globalEventBus.on('pipeline:interaction-timeout', (requestId: string) => interactionModal.closeIf(requestId));
+  globalEventBus.on('pipeline:interaction-closed', (data: any) => {
+    if (data && data.requestId) interactionModal.closeIf(data.requestId);
+    else interactionModal.forceClose();
+  });
+  globalEventBus.on('pipeline:stopped', () => interactionModal.forceClose());
 
   // 6. Inicializa Barra de Ferramentas Ribbon e posiciona no topo
   const toolbar = new Toolbar(appContainer, graph, viewport, codeModal, templateModal, globalDefaultsModal);

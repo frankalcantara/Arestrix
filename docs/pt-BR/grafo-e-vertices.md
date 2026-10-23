@@ -79,14 +79,14 @@ agendamento. Ela significa:
 
 No v1:
 
-- só um **agente** pode ser origem e destino;
+- a origem é um **agente**; o destino é um **agente** ou uma **interação**;
 - o destino precisa ser **somente chamável**: não tem arestas de fluxo (entrada ou saída). Se ele
   também precisar rodar como etapa normal, duplique o vértice;
 - o destino **não** é uma task top-level do Taskflow; ele roda dentro da task do chamador.
 
-Para criar uma chamada, arraste da porta **`call`** do agente (violeta) até a porta `in` do agente
-de destino. Selecione o agente de origem e use a seção **Delegação** do Inspetor para definir
-`maxCalls` e a descrição que o modelo vê ao escolher o alvo.
+Para criar uma chamada, arraste da porta **`call`** do agente (violeta) até a porta `in` do destino.
+Selecione o agente de origem e use a seção **Delegação** do Inspetor para definir `maxCalls` e a
+descrição que o modelo vê ao escolher o alvo.
 
 Em execução, o chamador recebe a ferramenta `call_agent` com um **enum de alvos declarados**. O
 skill orienta; o grafo autoriza; o runtime aplica:
@@ -97,8 +97,9 @@ skill orienta; o grafo autoriza; o runtime aplica:
 | Profundidade de aninhamento | 3 | `ARESTRIX_MAX_CALL_DEPTH` |
 | Total de chamadas por processo | 50 | `ARESTRIX_MAX_TOTAL_CALLS` |
 
-O resultado é uma mensagem de ferramenta JSON com `callId`, `target`, `status`, `output` e `depth`.
-O texto final do alvo também é gravado em `.arestrix/out/<target>.txt`.
+O resultado é uma mensagem de ferramenta JSON com `callId`, `target`, `status`, `output` e `depth`;
+um destino de interação também traz `answers`. O texto final do alvo também é gravado em
+`.arestrix/out/<target>.txt`.
 
 Veja [`examples/06-chamada-agente`](../examples/06-chamada-agente) para um coordenador chamando um
 especialista.
@@ -111,8 +112,9 @@ Um vértice **interaction** pergunta algo a uma pessoa. Ele aceita um schema de 
 chamado por um agente por uma aresta de chamada.
 
 Execuções headless usam `--answers` (veja [`arestrix-cli`](arestrix-cli.md#interação-humana-headless));
-as respostas são validadas e gravadas em `.arestrix/out/<nodeId>.txt`/`.json`. Sem canal, o vértice
-falha fechado. O modal do Studio/Runner chega na próxima fase.
+as respostas são validadas e gravadas em `.arestrix/out/<nodeId>.txt`/`.json`. No Studio, o mesmo
+formulário seguro abre como modal e devolve as respostas validadas ao fluxo ou ao agente chamador.
+Sem canal, o vértice falha fechado.
 
 ## Portas e arestas
 

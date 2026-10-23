@@ -211,7 +211,8 @@ answers as JSON keyed by the interaction node id:
 The runtime validates required fields and choices, writes `.arestrix/out/<nodeId>.txt` and `.json`,
 and returns the answers to the caller. A repeated interaction may use a list of answer objects; they
 are consumed in order. Without `--answers` (and without `defaultAnswers` with `onTimeout: default`),
-the pipeline fails closed. The Studio/Runner form modal arrives in the next phase.
+the pipeline fails closed. In the Studio, the same form opens as a modal and sends the answer through
+the `answer_interaction` RPC.
 
 Batch manifest:
 

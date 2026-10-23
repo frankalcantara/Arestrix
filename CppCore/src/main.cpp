@@ -99,6 +99,80 @@ void pushToUi(const std::string& jsFunction, const taskforge::Json& payload) {
     gWindow->run("if (window." + jsFunction + ") { window." + jsFunction + "(" + payload.dump() + "); }");
 }
 
+// Ponte entre o worker de build (bloqueado no runtime) e a UI. O RPC
+// answer_interaction preenche a resposta e acorda a espera.
+std::mutex g_interactionMutex;
+std::condition_variable g_interactionCv;
+std::string g_interactionRequestId;
+std::string g_interactionAnswer;
+bool g_interactionReady = false;
+bool g_interactionCancelled = false;
+
+void resetInteractionBridge() {
+    std::lock_guard<std::mutex> lock(g_interactionMutex);
+    g_interactionRequestId.clear();
+    g_interactionAnswer.clear();
+    g_interactionReady = false;
+    g_interactionCancelled = false;
+}
+
+std::string awaitInteraction(const std::string& requestJson, const std::atomic<bool>* cancel) {
+    auto request = taskforge::jsonutil::tryParse(requestJson);
+    if (!request || !request->is_object()) {
+        return taskforge::Json{{"error", "Pedido de interacao invalido."}}.dump();
+    }
+    const std::string requestId = request->value("requestId", std::string());
+    if (requestId.empty()) {
+        return taskforge::Json{{"error", "Pedido de interacao sem requestId."}}.dump();
+    }
+    int timeoutSeconds = request->value("timeoutSeconds", 300);
+    if (timeoutSeconds < 1) timeoutSeconds = 300;
+    if (timeoutSeconds > 86400) timeoutSeconds = 86400;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeoutSeconds);
+
+    {
+        std::lock_guard<std::mutex> lock(g_interactionMutex);
+        g_interactionRequestId = requestId;
+        g_interactionAnswer.clear();
+        g_interactionReady = false;
+        g_interactionCancelled = false;
+    }
+    pushToUi("onArestrixPipelineEvent", {{"type", "interaction"}, {"request", *request}});
+
+    std::unique_lock<std::mutex> lock(g_interactionMutex);
+    while (!g_interactionReady) {
+        if ((cancel && cancel->load()) || g_interactionCancelled) {
+            g_interactionRequestId.clear();
+            g_interactionReady = false;
+            lock.unlock();
+            pushToUi("onArestrixPipelineEvent", {{"type", "interaction_closed"},
+                                                 {"requestId", requestId}, {"reason", "cancelled"}});
+            return taskforge::Json{{"requestId", requestId}, {"cancelled", true}}.dump();
+        }
+
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= deadline) {
+            g_interactionRequestId.clear();
+            g_interactionReady = false;
+            lock.unlock();
+            pushToUi("onArestrixPipelineEvent", {{"type", "interaction_timeout"}, {"requestId", requestId}});
+            return taskforge::Json{{"requestId", requestId}, {"timedOut", true}}.dump();
+        }
+
+        const auto wait = std::min<std::chrono::steady_clock::duration>(
+            deadline - now, std::chrono::milliseconds(200));
+        g_interactionCv.wait_for(lock, wait);
+    }
+
+    std::string answer = g_interactionAnswer;
+    g_interactionRequestId.clear();
+    g_interactionReady = false;
+    lock.unlock();
+    pushToUi("onArestrixPipelineEvent", {{"type", "interaction_closed"},
+                                         {"requestId", requestId}, {"reason", "answered"}});
+    return answer;
+}
+
 } // namespace
 
 // Instância global do nosso grafo central em C++
@@ -1740,7 +1814,9 @@ std::string startPipelineRun(const std::string& payload) {
     std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
     if (root.empty()) root = std::filesystem::current_path().string();
 
+    if (taskforge::build::BuildService::instance().isRunning()) return "Ja existe uma execucao em andamento";
     taskforge::build::BuildEvents ev;
+    resetInteractionBridge();
     ev.onPhase = [](const std::string& phase, const std::string& message) {
         pushToUi("onArestrixPipelineEvent", {{"type", "phase"}, {"phase", phase}, {"message", message}});
     };
@@ -1751,7 +1827,18 @@ std::string startPipelineRun(const std::string& payload) {
         auto parsed = taskforge::jsonutil::tryParse(jsonLine);
         if (parsed) pushToUi("onArestrixTelemetry", *parsed);
     };
+    ev.onInteraction = [](const std::string& requestJson, const std::atomic<bool>* cancel) {
+        return awaitInteraction(requestJson, cancel);
+    };
     ev.onFinished = [](bool success, int exitCode, long long elapsedMs, const std::string& error) {
+        {
+            std::lock_guard<std::mutex> lock(g_interactionMutex);
+            g_interactionRequestId.clear();
+            g_interactionAnswer.clear();
+            g_interactionReady = false;
+            g_interactionCancelled = false;
+        }
+        g_interactionCv.notify_all();
         pushToUi("onArestrixPipelineEvent", {{"type", "finished"}, {"success", success}, {"exitCode", exitCode},
                                               {"elapsedMs", elapsedMs}, {"error", error}});
     };
@@ -1772,8 +1859,41 @@ void ui_run_pipeline(webui::window::event* e) {
 
 // Wrapper JS -> C++ (Interromper a execucao em andamento)
 void ui_stop_pipeline(webui::window::event* e) {
+    {
+        std::lock_guard<std::mutex> lock(g_interactionMutex);
+        g_interactionCancelled = true;
+    }
+    g_interactionCv.notify_all();
     taskforge::build::BuildService::instance().stop();
     e->return_bool(true);
+}
+
+// Wrapper JS -> C++ (Responder a um pedido de interacao humana).
+// Payload: {"requestId":"...","answers":{...}} ou {"requestId":"...","cancelled":true}.
+void ui_answer_interaction(webui::window::event* e) {
+    try {
+        auto payload = taskforge::jsonutil::parse(e->get_string());
+        if (!payload.is_object()) {
+            e->return_string(taskforge::Json{{"ok", false}, {"error", "Payload de resposta invalido."}}.dump());
+            return;
+        }
+        const std::string requestId = payload.value("requestId", std::string());
+        taskforge::Json out;
+        {
+            std::lock_guard<std::mutex> lock(g_interactionMutex);
+            if (requestId.empty() || requestId != g_interactionRequestId) {
+                out = taskforge::Json{{"ok", false}, {"error", "Nao ha interacao pendente com este requestId."}};
+            } else {
+                g_interactionAnswer = payload.dump();
+                g_interactionReady = true;
+                out = taskforge::Json{{"ok", true}};
+            }
+        }
+        if (out.value("ok", false)) g_interactionCv.notify_all();
+        e->return_string(out.dump());
+    } catch (const std::exception& ex) {
+        e->return_string(taskforge::Json{{"ok", false}, {"error", ex.what()}}.dump());
+    }
 }
 
 // ============================================================================
@@ -2377,6 +2497,7 @@ int main(int argc, char** argv) {
     win.bind("get_artifact", ui_get_artifact);
     win.bind("run_pipeline", ui_run_pipeline);
     win.bind("stop_pipeline", ui_stop_pipeline);
+    win.bind("answer_interaction", ui_answer_interaction);
     win.bind("assistant_status", ui_assistant_status);
     win.bind("assistant_sessions", ui_assistant_sessions);
     win.bind("assistant_session_load", ui_assistant_session_load);

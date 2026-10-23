@@ -428,6 +428,106 @@ body, html {
   color: #242424;
 }
 
+/* --- Interação humana (formulário seguro do runtime) --- */
+.interaction-modal-overlay {
+  z-index: 3500;
+}
+
+.interaction-modal-dialog {
+  max-width: 620px;
+  width: 92%;
+  max-height: 88vh;
+  z-index: 3050;
+}
+
+.interaction-modal-body {
+  padding: 16px 18px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.interaction-modal-context {
+  white-space: pre-wrap;
+  background: #f5f5f4;
+  border: 1px solid #e5e5e4;
+  border-left: 3px solid #8764b8;
+  border-radius: 3px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  color: #424242;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.interaction-modal-meta {
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #5c5c5c;
+}
+
+.interaction-modal-sensitive {
+  color: #a80000;
+}
+
+.interaction-field {
+  margin-bottom: 14px;
+}
+
+.interaction-required {
+  color: #a80000;
+}
+
+.interaction-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.interaction-check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #323130;
+  cursor: pointer;
+}
+
+.interaction-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px;
+}
+
+.interaction-modal-timer {
+  font-size: 12px;
+  color: #5c5c5c;
+  font-variant-numeric: tabular-nums;
+}
+
+.interaction-modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.interaction-modal-error {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid #f1bbbb;
+  background: #fdf3f3;
+  color: #a80000;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.interaction-modal-error-visible {
+  display: block;
+}
+
+
 /* --- Modais de Conectores & Importação --- */
 .modal-backdrop {
   position: fixed;

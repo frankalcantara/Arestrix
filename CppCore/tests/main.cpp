@@ -596,7 +596,7 @@ TEST(interaction_runtime_reads_answers_file) {
     const fs::path answers = dir / "answers.json";
     {
         std::ofstream out(answers);
-        out << R"({"ask":{"tipo":"pj","obs":"ok"}})";
+        out << R"({"ask":{"tipo":"pj","obs":"ok"},"blank":{"tipo":"   "}})";
     }
 
     const std::string oldEnv = taskforge::platform::getEnv("ARESTRIX_INTERACTION_ANSWERS");
@@ -631,6 +631,15 @@ TEST(interaction_runtime_reads_answers_file) {
     }
     CHECK(threw);
 
+    // Campo obrigatório em branco também falha fechado.
+    bool blankThrew = false;
+    try {
+        (void)runInteraction("blank", "Em branco", spec);
+    } catch (const std::exception&) {
+        blankThrew = true;
+    }
+    CHECK(blankThrew);
+
     fs::current_path(oldCwd);
     taskforge::platform::setProcessEnv("ARESTRIX_INTERACTION_ANSWERS", oldEnv);
     fs::remove_all(dir);
@@ -664,6 +673,97 @@ TEST(interaction_runtime_via_call_agent) {
     setCallRegistry("{}", "{}");
     fs::current_path(oldCwd);
     taskforge::platform::setProcessEnv("ARESTRIX_INTERACTION_ANSWERS", oldEnv);
+    fs::remove_all(dir);
+}
+
+TEST(interaction_host_protocol_roundtrip) {
+    const fs::path dir = makeTempDir("interaction-host");
+    taskforge::platform::ProcessSpec spec;
+    spec.argv = {taskforge::platform::executablePath().string(), "--interaction-host-child"};
+    spec.workingDir = dir;
+    spec.captureStdin = true;
+    spec.env["ARESTRIX_INTERACTION_HOST"] = "1";
+    spec.env["ARESTRIX_INTERACTION_ANSWERS"] = "";
+
+    std::string error;
+    auto proc = taskforge::platform::Process::start(spec, error);
+    CHECK(proc != nullptr);
+    if (!proc) {
+        fs::remove_all(dir);
+        return;
+    }
+
+    std::string pending;
+    bool gotRequest = false;
+    bool sentAnswer = false;
+    int code = -1;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+    while (std::chrono::steady_clock::now() < deadline) {
+        std::string chunk;
+        auto status = proc->read(chunk, 100);
+        if (!chunk.empty()) {
+            pending += chunk;
+            size_t pos;
+            while ((pos = pending.find('\n')) != std::string::npos) {
+                std::string line = pending.substr(0, pos);
+                pending.erase(0, pos + 1);
+                if (!line.empty() && line.back() == '\r') line.pop_back();
+                const std::string prefix = "[ARX_INTERACTION] ";
+                if (line.rfind(prefix, 0) == 0) {
+                    auto request = taskforge::jsonutil::tryParse(line.substr(prefix.size()));
+                    CHECK(request && request->is_object());
+                    if (request && request->is_object()) {
+                        CHECK(request->value("nodeId", std::string()) == "ask");
+                        CHECK(request->value("timeoutSeconds", 0) == 5);
+                        CHECK(request->contains("form"));
+                        json answer{{"requestId", request->value("requestId", std::string())},
+                                    {"answers", json{{"tipo", "pj"}, {"obs", "host"}}}};
+                        sentAnswer = proc->writeStdin("[ARX_ANSWER] " + answer.dump() + "\n");
+                        gotRequest = true;
+                    }
+                }
+            }
+        }
+        if (status == taskforge::platform::ReadStatus::Eof) break;
+    }
+
+    proc->wait(5000, code);
+    CHECK(gotRequest);
+    CHECK(sentAnswer);
+    CHECK(code == 0);
+    CHECK(fs::is_regular_file(dir / ".arestrix" / "out" / "ask.txt"));
+    fs::remove_all(dir);
+}
+
+TEST(interaction_host_timeout_fails_closed) {
+    const fs::path dir = makeTempDir("interaction-host-timeout");
+    taskforge::platform::ProcessSpec spec;
+    spec.argv = {taskforge::platform::executablePath().string(), "--interaction-host-child-timeout"};
+    spec.workingDir = dir;
+    spec.captureStdin = true;
+    spec.env["ARESTRIX_INTERACTION_HOST"] = "1";
+    spec.env["ARESTRIX_INTERACTION_ANSWERS"] = "";
+
+    std::string error;
+    auto proc = taskforge::platform::Process::start(spec, error);
+    CHECK(proc != nullptr);
+    if (!proc) {
+        fs::remove_all(dir);
+        return;
+    }
+
+    std::string output;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(12);
+    while (std::chrono::steady_clock::now() < deadline) {
+        std::string chunk;
+        auto status = proc->read(chunk, 100);
+        output += chunk;
+        if (status == taskforge::platform::ReadStatus::Eof) break;
+    }
+    int code = -1;
+    proc->wait(5000, code);
+    CHECK(code != 0);
+    CHECK(output.find("tempo esgotado") != std::string::npos);
     fs::remove_all(dir);
 }
 
@@ -3212,7 +3312,37 @@ TEST(runner_enterprise_packaging_wix_msix_and_intune) {
     fs::remove_all(tempRoot);
 }
 
-int main() {
+static int runInteractionHostChild(const std::string& mode) {
+    const bool timedOutMode = mode == "timeout";
+    const std::string spec = std::string(R"({
+        "schemaSource": "static",
+        "form": {"title": "Host", "fields": [
+            {"id": "tipo", "type": "choice", "label": "Tipo", "required": true,
+             "options": [{"value": "pf"}, {"value": "pj"}]},
+            {"id": "obs", "type": "text", "label": "Observacao", "required": false}
+        ]},
+        "channel": "studio",
+        "timeoutSeconds": )") + (timedOutMode ? "1" : "5") + R"(,
+        "onTimeout": "fail",
+        "sensitive": false
+    })";
+    try {
+        std::string result = taskforge::rt::runInteraction("ask", "HostTest", spec, "contexto");
+        std::cout << "[HELPER_RESULT] " << result << "\n";
+        return 0;
+    } catch (const std::exception& ex) {
+        std::cerr << "[HELPER_ERROR] " << ex.what() << "\n";
+        return 1;
+    }
+}
+
+int main(int argc, char** argv) {
+    if (argc > 1 && std::string(argv[1]) == "--interaction-host-child") {
+        return runInteractionHostChild("normal");
+    }
+    if (argc > 1 && std::string(argv[1]) == "--interaction-host-child-timeout") {
+        return runInteractionHostChild("timeout");
+    }
     std::srand((unsigned)std::time(nullptr));
     for (auto& t : tests()) {
         int before = g_failed;

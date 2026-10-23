@@ -1,7 +1,7 @@
 # Exemplo 7 — Interação humana
 
-Um vértice de **interação** humana no fluxo. No Studio e no Runner ele mostra um formulário seguro;
-em execuções CI/headless as respostas vêm de `--answers`.
+Um vértice de **interação** humana no fluxo. No Studio ele abre um modal de formulário seguro; em
+execuções CI/headless as respostas vêm de `--answers`.
 
 ## Fluxo
 
@@ -20,8 +20,8 @@ Inicio ──(fluxo)──► Pergunta_ao_Usuario ──(fluxo)──► Entrega
 arestrix-cli run pipelines/main.json --root . --answers answers.json
 ```
 
-Sem `--answers` o pipeline falha fechado com uma mensagem clara. A UI do formulário no Studio chega
-na próxima fase; este exemplo exercita o canal headless.
+Sem `--answers` o pipeline falha fechado com uma mensagem clara. No Studio, execute o mesmo grafo e
+a interação abre como modal de formulário seguro; o canal headless é o que este exemplo roteiriza.
 
 ## Arquivo de respostas
 

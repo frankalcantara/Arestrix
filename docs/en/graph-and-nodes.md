@@ -79,14 +79,14 @@ means:
 
 In v1:
 
-- only an **agent** can be the source and the target;
+- the source is an **agent**; the target is an **agent** or an **interaction**;
 - the target must be **callable-only**: it has no flow edges (in or out). If it also needs to run as a
   normal step, duplicate the vertex;
 - the target is **not** a top-level Taskflow task; it runs inside the caller's task.
 
-To create a call, drag from the agent's **`call`** output port (violet) to the target agent's `in`
-port. Select the source agent and use the **Delegation** section of the Inspector to set `maxCalls`
-and a description that the model sees when choosing the target.
+To create a call, drag from the agent's **`call`** output port (violet) to the target's `in` port.
+Select the source agent and use the **Delegation** section of the Inspector to set `maxCalls` and a
+description that the model sees when choosing the target.
 
 At run time the caller receives the `call_agent` tool with an **enum of declared targets**. The
 skill guides the agent; the graph authorizes; the runtime enforces:
@@ -97,8 +97,9 @@ skill guides the agent; the graph authorizes; the runtime enforces:
 | Nesting depth | 3 | `ARESTRIX_MAX_CALL_DEPTH` |
 | Total calls per process | 50 | `ARESTRIX_MAX_TOTAL_CALLS` |
 
-The result is a JSON tool message with `callId`, `target`, `status`, `output` and `depth`. The
-target's final text is also written to `.arestrix/out/<target>.txt`.
+The result is a JSON tool message with `callId`, `target`, `status`, `output` and `depth`; an
+interaction target also carries `answers`. The target's final text is also written to
+`.arestrix/out/<target>.txt`.
 
 See [`examples/06-chamada-agente`](../examples/06-chamada-agente) for a coordinator calling a
 specialist.
@@ -111,8 +112,9 @@ who answers and a sensitive-answer flag. It can run in the flow or be called by 
 call edge.
 
 Headless runs use `--answers` (see [`arestrix-cli`](arestrix-cli.md#headless-human-interaction)); the
-answers are validated and written to `.arestrix/out/<nodeId>.txt`/`.json`. Without a channel the
-vertex fails closed. The Studio/Runner form modal arrives in the next phase.
+answers are validated and written to `.arestrix/out/<nodeId>.txt`/`.json`. In the Studio, the same
+safe form opens as a modal and returns the validated answers to the flow or to the calling agent.
+Without a channel the vertex fails closed.
 
 ## Ports and edges
 

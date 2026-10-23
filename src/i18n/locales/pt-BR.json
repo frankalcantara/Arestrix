@@ -710,7 +710,11 @@
       "native_tag": "nativo, instantâneo",
       "disabled": "desabilitado"
     },
+    "interaction": {
+      "pending": "Execução: modal seguro no Studio ou respostas headless com --answers."
+    },
     "explanations": {
+      "interaction": "Vértice de interação humana: formulário seguro com pergunta, opções e resposta. O Studio abre o formulário como modal; execuções headless usam --answers.",
       "static": "Tarefa estática determinística do Taskflow (tf::Task). Executa rotinas procedurais em C++20 com garantias sequenciais ou concorrentes baseadas em grafo de dependências.",
       "condition": "Tarefa de decisão e ramificação condicional (tf::Task retornando int). Avalia predicados em tempo de execução para direcionar o fluxo de controle para a ramificação correspondente.",
       "switch": "Seleção multivia (tf::Task retornando int). Escolhe, entre vários casos, qual caminho seguir: o corpo C++ devolve o índice do caso e cada caso é uma porta de saída. O último caso é o \"default\": qualquer valor fora do intervalo vai para ele.",
@@ -1968,5 +1972,22 @@
     "rendering": "Processando renderização Graphviz...",
     "dot_copied": "Código DOT copiado para a área de transferência!",
     "svg_copied": "SVG copiado para a área de transferência!"
+  },
+  "interaction_modal": {
+    "title": "Interação necessária",
+    "subtitle": "O pipeline aguarda uma resposta humana.",
+    "sensitive": "Resposta sensível: evite exibir a tela para terceiros.",
+    "yes": "Sim",
+    "select": "Selecione...",
+    "timeout": "Tempo restante: {{seconds}}s",
+    "timed_out": "Tempo esgotado. Aguardando o pipeline...",
+    "required_error": "Preencha o campo {{field}}.",
+    "invalid_text": "Valor inválido no campo {{field}}.",
+    "invalid_number": "Informe um número no campo {{field}}.",
+    "invalid_boolean": "Valor inválido no campo {{field}}.",
+    "invalid_choice": "Escolha uma opção válida em {{field}}.",
+    "invalid_multi": "Escolha opções válidas em {{field}}.",
+    "submit_failed": "Não foi possível enviar a resposta.",
+    "no_backend": "Sem backend C++ para responder à interação."
   }
 }

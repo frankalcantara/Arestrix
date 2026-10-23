@@ -44,6 +44,10 @@ struct BuildEvents {
     std::function<void(const std::string& phase, const std::string& message)> onPhase;
     std::function<void(const std::string& line, bool isError)> onLog;
     std::function<void(const std::string& telemetryJson)> onTelemetry;
+    // Canal interativo do Studio/Runner. Recebe o pedido [ARX_INTERACTION] (JSON) e
+    // devolve a resposta [ARX_ANSWER] (JSON) de forma bloqueante; `cancel` permite
+    // acordar a espera quando o usuario interrompe a execucao.
+    std::function<std::string(const std::string& requestJson, const std::atomic<bool>* cancel)> onInteraction;
     std::function<void(bool success, int exitCode, long long elapsedMs, const std::string& error)> onFinished;
 };
 

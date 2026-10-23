@@ -1,7 +1,7 @@
 # Example 7 — Human interaction
 
-A human **interaction** vertex in the flow. In the Studio and the Runner it shows a safe form;
-in CI/headless runs the answers come from `--answers`.
+A human **interaction** vertex in the flow. In the Studio it opens a safe form modal; in CI/headless
+runs the answers come from `--answers`.
 
 ## Flow
 
@@ -20,8 +20,8 @@ Inicio ──(flow)──► Pergunta_ao_Usuario ──(flow)──► Entrega_d
 arestrix-cli run pipelines/main.json --root . --answers answers.json
 ```
 
-Without `--answers` the pipeline fails closed with a clear message. The Studio UI for the form
-arrives in the next phase; this example exercises the headless channel.
+Without `--answers` the pipeline fails closed with a clear message. In the Studio, run the same graph
+and the interaction opens as a safe form modal; the headless channel is what this example scripts.
 
 ## Answer file
 

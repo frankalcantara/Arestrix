@@ -17,6 +17,7 @@ namespace fs = std::filesystem;
 namespace {
 
 const char* kTelemetryPrefix = "[NF_TELEMETRY:AGENT] ";
+const char* kInteractionPrefix = "[ARX_INTERACTION] ";
 
 uint64_t fnv1a(const std::string& s) {
     uint64_t h = 1469598103934665603ull;
@@ -245,17 +246,110 @@ BuildResult buildAndRun(const core::Graph& graph,
     platform::ProcessSpec runSpec;
     runSpec.argv = {exePath.string()};
     runSpec.workingDir = projectRoot;
-    auto rr = platform::run(runSpec, 0, [&](const std::string& line) {
+
+    // Sem host interativo (CLI, Runner headless, testes): caminho antigo, sem stdin.
+    if (!ev.onInteraction) {
+        runSpec.env["ARESTRIX_INTERACTION_HOST"] = "";
+        auto rr = platform::run(runSpec, 0, [&](const std::string& line) {
+            if (line.rfind(kTelemetryPrefix, 0) == 0) {
+                if (ev.onTelemetry) ev.onTelemetry(line.substr(std::strlen(kTelemetryPrefix)));
+            } else if (line.rfind(kInteractionPrefix, 0) == 0) {
+                log("[INTERACTION] Pedido de interacao sem host: o pipeline vai falhar fechado.", true);
+            } else if (!line.empty()) {
+                log(line, false);
+            }
+        }, cancel);
+        result.exitCode = rr.exitCode;
+        if (rr.cancelled) return finish(false, "run", "Execucao cancelada pelo usuario.");
+        if (!rr.error.empty()) return finish(false, "run", rr.error);
+        if (rr.exitCode != 0) return finish(false, "run", "O pipeline terminou com erro (codigo " + std::to_string(rr.exitCode) + ").");
+        return finish(true, "", "");
+    }
+
+    // Host interativo: o filho usa stdin/stdout delimitados por linha. O callback do
+    // Studio bloqueia nesta thread de build e devolve a resposta; o runtime valida.
+    runSpec.captureStdin = true;
+    runSpec.env["ARESTRIX_INTERACTION_HOST"] = "1";
+    std::string startError;
+    auto proc = platform::Process::start(runSpec, startError);
+    if (!proc) return finish(false, "run", startError);
+
+    std::string pending;
+    bool cancelled = false;
+    auto handleLine = [&](const std::string& line) {
         if (line.rfind(kTelemetryPrefix, 0) == 0) {
             if (ev.onTelemetry) ev.onTelemetry(line.substr(std::strlen(kTelemetryPrefix)));
-        } else if (!line.empty()) {
-            log(line, false);
+            return;
         }
-    }, cancel);
-    result.exitCode = rr.exitCode;
-    if (rr.cancelled) return finish(false, "run", "Execucao cancelada pelo usuario.");
-    if (!rr.error.empty()) return finish(false, "run", rr.error);
-    if (rr.exitCode != 0) return finish(false, "run", "O pipeline terminou com erro (codigo " + std::to_string(rr.exitCode) + ").");
+        if (line.rfind(kInteractionPrefix, 0) == 0) {
+            auto request = jsonutil::tryParse(line.substr(std::strlen(kInteractionPrefix)));
+            if (!request || !request->is_object()) {
+                log("[INTERACTION] Pedido de interacao invalido recebido do runtime.", true);
+                return;
+            }
+            const std::string requestId = request->value("requestId", std::string());
+            Json reply = Json::object();
+            try {
+                std::string raw = ev.onInteraction(request->dump(), cancel);
+                auto parsed = jsonutil::tryParse(raw);
+                if (parsed && parsed->is_object()) reply = *parsed;
+                else reply["error"] = "Host devolveu uma resposta invalida.";
+            } catch (const std::exception& ex) {
+                reply["error"] = std::string("Falha no host de interacao: ") + ex.what();
+            }
+            if (!reply.contains("requestId")) reply["requestId"] = requestId;
+            if (!proc->writeStdin("[ARX_ANSWER] " + reply.dump() + "\n")) {
+                log("[INTERACTION] Nao foi possivel responder ao runtime (stdin fechado).", true);
+            }
+            return;
+        }
+        if (!line.empty()) log(line, false);
+    };
+    auto flushLines = [&](bool final) {
+        size_t pos;
+        while ((pos = pending.find('\n')) != std::string::npos) {
+            std::string line = pending.substr(0, pos);
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            pending.erase(0, pos + 1);
+            handleLine(line);
+        }
+        if (final && !pending.empty()) {
+            handleLine(pending);
+            pending.clear();
+        }
+    };
+
+    while (true) {
+        std::string chunk;
+        platform::ReadStatus st = proc->read(chunk, 50);
+        if (!chunk.empty()) {
+            pending += chunk;
+            flushLines(false);
+        }
+        if (st == platform::ReadStatus::Eof) break;
+        if (cancel && cancel->load()) {
+            cancelled = true;
+            proc->kill();
+            break;
+        }
+    }
+    if (cancelled) {
+        std::string chunk;
+        while (proc->read(chunk, 20) == platform::ReadStatus::Data) {
+            pending += chunk;
+            chunk.clear();
+        }
+    }
+    flushLines(true);
+
+    int code = -1;
+    if (!proc->wait(cancelled ? 3000 : 600000, code)) {
+        proc->kill();
+        proc->wait(3000, code);
+    }
+    result.exitCode = code;
+    if (cancelled) return finish(false, "run", "Execucao cancelada pelo usuario.");
+    if (code != 0) return finish(false, "run", "O pipeline terminou com erro (codigo " + std::to_string(code) + ").");
     return finish(true, "", "");
 }
 

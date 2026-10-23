@@ -51,6 +51,26 @@ scheduled Taskflow task.
 See [`examples/06-chamada-agente`](../examples/06-chamada-agente) and
 [Graph and nodes](graph-and-nodes.md#call-edges-delegation).
 
+### Human interaction vertices
+
+An **interaction** vertex asks a person a question through a declarative form schema. The runtime
+builds the form from declared field types only (text, textarea, number, boolean, choice, multi-choice,
+date) and never executes HTML or JavaScript produced by a model.
+
+- In the Studio, **Build & Run** opens the form as a modal and sends the answer through the
+  `answer_interaction` RPC. The pipeline process is blocked on its stdin/stdout host channel while
+  the modal is open.
+- CLI/CI runs use `--answers <file.json>` keyed by the interaction node id. A list of answer objects
+  is consumed in order for repeated interactions.
+- The runtime validates required fields, types and declared choices again before returning the
+  answers. The result is written to `.arestrix/out/<nodeId>.txt`/`.json` and can feed the flow or a
+  calling agent.
+- Timeout, cancel and `fail`/`default`/`abort` policies are enforced; without a channel the vertex
+  fails closed.
+
+See [`examples/07-interacao`](../examples/07-interacao) and
+[Graph and nodes](graph-and-nodes.md#interaction-vertices).
+
 **Agent language.** At run time the agent is configured in the language of its own constitution: the skill and the prompt
 template (the texts that define it). The runtime detects the language and emits everything the agent sees — the system
 context block, the default prompt, the built-in and native tool descriptions and schemas, and the error messages returned

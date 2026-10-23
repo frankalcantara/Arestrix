@@ -710,7 +710,11 @@
       "native_tag": "native, instant",
       "disabled": "disabled"
     },
+    "interaction": {
+      "pending": "Execution: safe modal in the Studio or headless answers with --answers."
+    },
     "explanations": {
+      "interaction": "Human interaction vertex: safe form with a question, options and an answer. The Studio opens the form as a modal; headless runs use --answers.",
       "static": "Deterministic static task in Taskflow (tf::Task). Executes procedural routines in C++20 with sequential or concurrent guarantees based on a dependency graph.",
       "condition": "Decision and conditional branching task (tf::Task returning int). Evaluates predicates at runtime to direct control flow to the corresponding branch.",
       "switch": "Multiway selection (tf::Task returning int). Chooses which path to follow among several cases: the C++ body returns the case index and each case is an output port. The last case is the \"default\": any out-of-range value goes to it.",
@@ -1968,5 +1972,22 @@
     "rendering": "Processing Graphviz rendering...",
     "dot_copied": "DOT source code copied to clipboard!",
     "svg_copied": "SVG copied to clipboard!"
+  },
+  "interaction_modal": {
+    "title": "Input required",
+    "subtitle": "The pipeline is waiting for a human answer.",
+    "sensitive": "Sensitive answer: avoid showing the screen to others.",
+    "yes": "Yes",
+    "select": "Select...",
+    "timeout": "Time remaining: {{seconds}}s",
+    "timed_out": "Time is up. Waiting for the pipeline...",
+    "required_error": "Fill in {{field}}.",
+    "invalid_text": "Invalid value in {{field}}.",
+    "invalid_number": "Enter a number in {{field}}.",
+    "invalid_boolean": "Invalid value in {{field}}.",
+    "invalid_choice": "Choose a valid option in {{field}}.",
+    "invalid_multi": "Choose valid options in {{field}}.",
+    "submit_failed": "Could not send the answer.",
+    "no_backend": "No C++ backend available to answer the interaction."
   }
 }

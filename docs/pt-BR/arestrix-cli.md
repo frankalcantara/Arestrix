@@ -211,7 +211,8 @@ forneça as respostas em JSON, chaveadas pelo id do vértice de interação:
 O runtime valida campos obrigatórios e escolhas, grava `.arestrix/out/<nodeId>.txt` e `.json`, e
 devolve as respostas ao chamador. Uma interação repetida pode usar uma lista de objetos de resposta;
 eles são consumidos em ordem. Sem `--answers` (e sem `defaultAnswers` com `onTimeout: default`), o
-pipeline falha fechado. O modal do Studio/Runner chega na próxima fase.
+pipeline falha fechado. No Studio, o mesmo formulário abre como modal e envia a resposta pelo RPC
+`answer_interaction`.
 
 Manifesto de lote:
 

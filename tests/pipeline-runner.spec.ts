@@ -90,4 +90,28 @@ describe('PipelineRunner - ponte com o backend C++ (run_pipeline)', () => {
     expect(seen[4].data.error).toBe('falhou');
     dispose();
   });
+
+  it('entrega pedidos de interação ao modal e fecha no timeout/término', () => {
+    const { seen, dispose } = collect([
+      'pipeline:interaction', 'pipeline:interaction-timeout', 'pipeline:interaction-closed'
+    ]);
+
+    PipelineRunner.handleBackendEvent({
+      type: 'interaction',
+      request: { requestId: 'req-1', nodeId: 'ask', form: { fields: [] } }
+    });
+    PipelineRunner.handleBackendEvent({ type: 'interaction_timeout', requestId: 'req-1' });
+    PipelineRunner.handleBackendEvent({ type: 'interaction_closed', requestId: 'req-1', reason: 'answered' });
+    PipelineRunner.handleBackendEvent({ type: 'finished', success: true });
+
+    expect(seen.map(s => s.name)).toEqual([
+      'pipeline:interaction', 'pipeline:interaction-timeout', 'pipeline:interaction-closed',
+      'pipeline:interaction-closed'
+    ]);
+    expect(seen[0].data.requestId).toBe('req-1');
+    expect(seen[1].data).toBe('req-1');
+    expect(seen[2].data.reason).toBe('answered');
+    expect(seen[3].data.reason).toBe('finished');
+    dispose();
+  });
 });

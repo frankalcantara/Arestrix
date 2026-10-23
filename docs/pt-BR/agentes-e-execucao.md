@@ -50,6 +50,26 @@ chamador; não é uma task agendada do Taskflow.
 Veja [`examples/06-chamada-agente`](../examples/06-chamada-agente) e
 [Grafo e vértices](grafo-e-vertices.md#arestas-de-chamada-delegação).
 
+### Vértices de interação humana
+
+Um vértice **interaction** pergunta algo a uma pessoa por um schema declarativo de formulário. O
+runtime monta o formulário somente a partir dos tipos de campo declarados (texto, textarea, número,
+booleano, escolha, múltipla escolha, data) e nunca executa HTML ou JavaScript gerado por modelo.
+
+- No Studio, **Compilar & Executar** abre o formulário como modal e envia a resposta pelo RPC
+  `answer_interaction`. O processo do pipeline fica bloqueado no canal stdin/stdout do host enquanto
+  o modal está aberto.
+- Execuções CLI/CI usam `--answers <arquivo.json>` chaveado pelo id do vértice de interação. Uma
+  lista de objetos de resposta é consumida em ordem para interações repetidas.
+- O runtime valida de novo campos obrigatórios, tipos e escolhas declaradas antes de devolver as
+  respostas. O resultado é gravado em `.arestrix/out/<nodeId>.txt`/`.json` e pode alimentar o fluxo
+  ou um agente chamador.
+- Timeout, cancelamento e as políticas `fail`/`default`/`abort` são aplicados; sem canal, o vértice
+  falha fechado.
+
+Veja [`examples/07-interacao`](../examples/07-interacao) e
+[Grafo e vértices](grafo-e-vertices.md#vértices-de-interação).
+
 **Idioma do agente.** Em tempo de execução o agente é configurado no idioma da sua própria constituição: a skill e o template
 de prompt (os textos que o definem). O runtime detecta o idioma e emite tudo o que o agente enxerga — o bloco de contexto do
 sistema, o prompt padrão, as descrições e esquemas das ferramentas nativas e internas, e as mensagens de erro devolvidas a ele

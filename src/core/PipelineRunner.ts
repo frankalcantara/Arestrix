@@ -5,7 +5,7 @@ import { GitSyncManager } from './git/GitSyncManager.ts';
 
 /** Evento enviado pelo backend C++ durante a execução (window.onArestrixPipelineEvent). */
 export interface IPipelineBackendEvent {
-  type: 'phase' | 'log' | 'finished';
+  type: 'phase' | 'log' | 'finished' | 'interaction' | 'interaction_timeout' | 'interaction_closed';
   phase?: 'compiling' | 'running';
   message?: string;
   line?: string;
@@ -14,6 +14,9 @@ export interface IPipelineBackendEvent {
   exitCode?: number;
   elapsedMs?: number;
   error?: string;
+  request?: any;
+  requestId?: string;
+  reason?: string;
 }
 
 /**
@@ -115,8 +118,18 @@ export class PipelineRunner {
         PipelineRunner.parseLogTelemetry(line);
         break;
       }
+      case 'interaction':
+        globalEventBus.emit('pipeline:interaction', ev.request);
+        break;
+      case 'interaction_timeout':
+        globalEventBus.emit('pipeline:interaction-timeout', ev.requestId || '');
+        break;
+      case 'interaction_closed':
+        globalEventBus.emit('pipeline:interaction-closed', { requestId: ev.requestId || '', reason: ev.reason || '' });
+        break;
       case 'finished':
         PipelineRunner.running = false;
+        globalEventBus.emit('pipeline:interaction-closed', { requestId: '', reason: 'finished' });
         if (ev.success) {
           globalEventBus.emit('pipeline:success', { stdout: '', elapsedMs: ev.elapsedMs || 0 });
         } else {
