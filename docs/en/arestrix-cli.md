@@ -212,7 +212,12 @@ The runtime validates required fields and choices, writes `.arestrix/out/<nodeId
 and returns the answers to the caller. A repeated interaction may use a list of answer objects; they
 are consumed in order. Without `--answers` (and without `defaultAnswers` with `onTimeout: default`),
 the pipeline fails closed. In the Studio, the same form opens as a modal and sends the answer through
-the `answer_interaction` RPC.
+the `answer_interaction` RPC. In an interactive terminal, `arestrix-cli run` prompts field by field
+(`:q` cancels); a piped/non-TTY stdin without `--answers` still fails closed.
+
+Every attempt is audited at `.arestrix/runs/<runId>/interactions/<requestId>.json` with the form,
+answers, channel, timestamps and `answeredBy`. Sensitive answers stay out of telemetry and logs, and
+the Studio masks sensitive text fields.
 
 Batch manifest:
 

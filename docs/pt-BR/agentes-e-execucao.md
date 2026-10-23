@@ -58,12 +58,16 @@ booleano, escolha, múltipla escolha, data) e nunca executa HTML ou JavaScript g
 
 - No Studio, **Compilar & Executar** abre o formulário como modal e envia a resposta pelo RPC
   `answer_interaction`. O processo do pipeline fica bloqueado no canal stdin/stdout do host enquanto
-  o modal está aberto.
-- Execuções CLI/CI usam `--answers <arquivo.json>` chaveado pelo id do vértice de interação. Uma
-  lista de objetos de resposta é consumida em ordem para interações repetidas.
+  o modal está aberto. O painel do Runner mostra **Aguardando resposta** durante a espera.
+- Em um terminal interativo, `arestrix-cli run` pergunta campo a campo; automação CLI/CI usa
+  `--answers <arquivo.json>` chaveado pelo id do vértice de interação. Uma lista de objetos de resposta
+  é consumida em ordem para interações repetidas. Sem TTY e sem `--answers`, o CLI falha fechado.
 - O runtime valida de novo campos obrigatórios, tipos e escolhas declaradas antes de devolver as
   respostas. O resultado é gravado em `.arestrix/out/<nodeId>.txt`/`.json` e pode alimentar o fluxo
   ou um agente chamador.
+- Cada tentativa é auditada em `.arestrix/runs/<runId>/interactions/<requestId>.json` (formulário,
+  respostas, canal, horários, `answeredBy`). Valores sensíveis ficam fora da telemetria/logs e campos
+  de texto sensíveis são mascarados no Studio.
 - Timeout, cancelamento e as políticas `fail`/`default`/`abort` são aplicados; sem canal, o vértice
   falha fechado.
 

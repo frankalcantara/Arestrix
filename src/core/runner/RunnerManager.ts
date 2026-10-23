@@ -4,7 +4,7 @@ import { PipelineRunner } from '../PipelineRunner.ts';
 import { ProjectManager } from '../ProjectManager.ts';
 import { IProjectRunnerConfig } from '../types.ts';
 
-export type RunnerStatus = 'idle' | 'compiling' | 'running' | 'success' | 'error' | 'stopped';
+export type RunnerStatus = 'idle' | 'compiling' | 'running' | 'waiting_interaction' | 'success' | 'error' | 'stopped';
 
 export interface IRunnerNodeState {
   id: string;
@@ -42,6 +42,7 @@ export interface IRunnerExportResult {
   manifestPath?: string;
   signaturePath?: string;
   packagingArtifacts?: string[];
+  warnings?: string[];
 }
 
 export interface IRunnerDiagnostics {
@@ -142,6 +143,29 @@ export class RunnerManager {
       this.statusMessage = msg || 'Executando pipeline...';
       if (this.progressPercent < 25) this.progressPercent = 25;
       this.bus.emit('runner:state-changed', this.getState());
+    });
+
+    this.bus.on('pipeline:interaction', (request: any) => {
+      this.status = 'waiting_interaction';
+      const title = request?.form?.title || request?.label || request?.nodeId || 'formulário';
+      this.statusMessage = `Aguardando resposta: ${title}`;
+      this.bus.emit('runner:state-changed', this.getState());
+    });
+
+    this.bus.on('pipeline:interaction-closed', () => {
+      if (this.status === 'waiting_interaction') {
+        this.status = 'running';
+        this.statusMessage = 'Retomando pipeline...';
+        this.bus.emit('runner:state-changed', this.getState());
+      }
+    });
+
+    this.bus.on('pipeline:interaction-timeout', () => {
+      if (this.status === 'waiting_interaction') {
+        this.status = 'running';
+        this.statusMessage = 'Tempo da resposta esgotado; retomando pipeline...';
+        this.bus.emit('runner:state-changed', this.getState());
+      }
     });
 
     this.bus.on('pipeline:success', (data: { stdout: string; elapsedMs: number }) => {

@@ -12,7 +12,8 @@ Inicio ──(fluxo)──► Pergunta_ao_Usuario ──(fluxo)──► Entrega
 1. O runtime de interação carrega o formulário das configurações do vértice.
 2. Em modo headless ele lê `answers.json` (chaveado pelo id do vértice de interação).
 3. Valida os campos obrigatórios e as escolhas, grava `.arestrix/out/pergunta.txt` e `.json`.
-4. O vértice de saída copia a resposta para `exports/resposta.txt`.
+4. Registra a auditoria em `.arestrix/runs/<runId>/interactions/<requestId>.json`.
+5. O vértice de saída copia a resposta para `exports/resposta.txt`.
 
 ## Executar
 

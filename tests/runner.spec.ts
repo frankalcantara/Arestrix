@@ -191,6 +191,22 @@ describe('Standalone Runner Engine & Manager', () => {
     expect(state.progressPercent).toBeGreaterThanOrEqual(25);
   });
 
+  it('deve sinalizar aguardando resposta durante uma interação', () => {
+    graph.createNode('ask', 'Pergunta', 'interaction', 100, 100);
+    runner.initGraph(graph);
+
+    bus.emit('pipeline:running', 'Executando');
+    bus.emit('pipeline:interaction', { requestId: 'req-1', form: { title: 'Confirme os dados' } });
+
+    let state = runner.getState();
+    expect(state.status).toBe('waiting_interaction');
+    expect(state.statusMessage).toContain('Confirme os dados');
+
+    bus.emit('pipeline:interaction-closed', { requestId: 'req-1', reason: 'answered' });
+    state = runner.getState();
+    expect(state.status).toBe('running');
+  });
+
   it('deve rastrear início e fim de etapas individuais via telemetria', () => {
     const n1 = graph.createNode('ProcessarDados', 'ProcessarDados', 'static', 100, 100);
     runner.initGraph(graph);

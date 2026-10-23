@@ -114,7 +114,9 @@ chamado por um agente por uma aresta de chamada.
 Execuções headless usam `--answers` (veja [`arestrix-cli`](arestrix-cli.md#interação-humana-headless));
 as respostas são validadas e gravadas em `.arestrix/out/<nodeId>.txt`/`.json`. No Studio, o mesmo
 formulário seguro abre como modal e devolve as respostas validadas ao fluxo ou ao agente chamador.
-Sem canal, o vértice falha fechado.
+Cada tentativa é auditada em `.arestrix/runs/<runId>/interactions/<requestId>.json`. Sem canal, o
+vértice falha fechado. Runners standalone exportados avisam que interações exigem um host interativo
+ou `ARESTRIX_INTERACTION_ANSWERS`.
 
 ## Portas e arestas
 

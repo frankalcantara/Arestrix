@@ -12,7 +12,8 @@ Inicio ──(flow)──► Pergunta_ao_Usuario ──(flow)──► Entrega_d
 1. The interaction runtime loads the form from the vertex settings.
 2. In headless mode it reads `answers.json` (keyed by the interaction node id).
 3. It validates the required fields and choices, writes `.arestrix/out/pergunta.txt` and `.json`.
-4. The output vertex copies the answer to `exports/resposta.txt`.
+4. It records the request/answer at `.arestrix/runs/<runId>/interactions/<requestId>.json`.
+5. The output vertex copies the answer to `exports/resposta.txt`.
 
 ## Run
 

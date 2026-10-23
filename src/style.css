@@ -484,6 +484,10 @@ body, html {
   margin-top: 4px;
 }
 
+.interaction-masked {
+  -webkit-text-security: disc;
+}
+
 .interaction-check-row {
   display: flex;
   align-items: center;

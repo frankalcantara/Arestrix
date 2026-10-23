@@ -2063,12 +2063,15 @@ void ui_export_standalone_runner(webui::window::event* e) {
         }
 
         auto exportRes = taskforge::project::RunnerService::exportRunner(root, cur, g);
+        taskforge::Json warnings = taskforge::Json::array();
+        for (const auto& warning : exportRes.warnings) warnings.push_back(warning);
         taskforge::Json out = {
             {"ok", exportRes.ok},
             {"error", exportRes.error},
             {"outputDir", exportRes.outputDir},
             {"executablePath", exportRes.executablePath},
-            {"manifestPath", exportRes.manifestPath}
+            {"manifestPath", exportRes.manifestPath},
+            {"warnings", warnings}
         };
         e->return_string(out.dump());
     } catch (const std::exception& ex) {

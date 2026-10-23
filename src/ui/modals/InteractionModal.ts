@@ -205,6 +205,10 @@ export class InteractionModal {
       textarea.rows = 4;
       textarea.placeholder = field.placeholder || '';
       if (field.maxLength) textarea.maxLength = field.maxLength;
+      if (request.sensitive) {
+        textarea.classList.add('interaction-masked');
+        textarea.autocomplete = 'off';
+      }
       if (typeof initial === 'string') textarea.value = initial;
       wrapper.appendChild(textarea);
       control.input = textarea;
@@ -263,6 +267,10 @@ export class InteractionModal {
       input.type = field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text';
       input.placeholder = field.placeholder || '';
       if (field.maxLength) input.maxLength = field.maxLength;
+      if (request.sensitive && field.type === 'text') {
+        input.type = 'password';
+        input.autocomplete = 'off';
+      }
       if (field.type === 'number') {
         if (typeof field.min === 'number') input.min = String(field.min);
         if (typeof field.max === 'number') input.max = String(field.max);

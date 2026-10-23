@@ -4,15 +4,27 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
 #include "build/BuildService.hpp"
 #include "compiler/TaskflowGenerator.hpp"
@@ -947,14 +959,268 @@ struct BuildOutcome {
     std::string error;
 };
 
+bool stdinIsTerminal() {
+#ifdef _WIN32
+    const HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+    if (input == nullptr || input == INVALID_HANDLE_VALUE) return false;
+    DWORD mode = 0;
+    if (GetConsoleMode(input, &mode) != 0) return true;
+    // Git Bash/mintty usa um pty em pipe; o NUL (DEVNULL) e FILE_TYPE_CHAR.
+    return _isatty(_fileno(stdin)) != 0 && GetFileType(input) == FILE_TYPE_PIPE;
+#else
+    return isatty(STDIN_FILENO) != 0;
+#endif
+}
+
+std::string lowerText(std::string value) {
+    for (char& c : value) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return value;
+}
+
+std::string trimText(const std::string& value) {
+    const size_t first = value.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return "";
+    const size_t last = value.find_last_not_of(" \t\r\n");
+    return value.substr(first, last - first + 1);
+}
+
+std::vector<std::string> splitList(const std::string& value) {
+    std::vector<std::string> parts;
+    std::stringstream ss(value);
+    std::string part;
+    while (std::getline(ss, part, ',')) {
+        part = trimText(part);
+        if (!part.empty()) parts.push_back(part);
+    }
+    return parts;
+}
+
+std::string optionValue(const json& option) {
+    if (option.is_object()) {
+        return option.value("value", option.value("label", std::string()));
+    }
+    if (option.is_string()) return option.str();
+    return "";
+}
+
+std::string optionLabel(const json& option) {
+    if (option.is_object()) {
+        return option.value("label", option.value("value", std::string()));
+    }
+    if (option.is_string()) return option.str();
+    return optionValue(option);
+}
+
+// Host interativo do CLI: le o pedido do runtime e pergunta no terminal. Nunca
+// e usado quando --answers esta definido (CI/automacao) nem quando stdin nao e TTY.
+std::string cliPromptInteraction(const std::string& requestJson, const std::atomic<bool>* cancel) {
+    auto request = jsonutil::tryParse(requestJson);
+    if (!request || !request->is_object()) {
+        return json{{"error", "Pedido de interacao invalido."}}.dump();
+    }
+    const std::string requestId = request->value("requestId", std::string());
+    const auto cancelledResult = [&]() {
+        return json{{"requestId", requestId}, {"cancelled", true}}.dump();
+    };
+    if (cancel && cancel->load()) return cancelledResult();
+
+    const json form = request->contains("form") && (*request)["form"].is_object()
+                          ? (*request)["form"] : json::object();
+    const json fields = form.contains("fields") && form["fields"].is_array()
+                            ? form["fields"] : json::array();
+    const std::string title = form.value("title", request->value("label", std::string("Pergunta")));
+    const std::string description = form.value("description", std::string());
+
+    std::cout << "\n[INTERACAO] " << title << "\n";
+    if (!description.empty()) std::cout << description << "\n";
+    if (form.contains("context") && form["context"].is_object()) {
+        const std::string context = form["context"].value("markdown", std::string());
+        if (!context.empty()) std::cout << "\n" << context << "\n";
+    }
+    const std::string inputContext = request->value("inputContext", std::string());
+    if (!inputContext.empty()) std::cout << "\nContexto do chamador:\n" << inputContext << "\n";
+    if (request->value("sensitive", false)) {
+        std::cout << "[aviso] resposta sensivel: o terminal ecoa o que for digitado.\n";
+    }
+    std::cout << "Digite :q para cancelar a interacao.\n";
+
+    const auto readLine = [&](std::string& line) -> bool {
+        if (!std::getline(std::cin, line)) return false;
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        return true;
+    };
+
+    json answers = json::object();
+    for (const auto& field : fields) {
+        if (!field.is_object()) continue;
+        const std::string id = field.value("id", std::string());
+        if (id.empty()) continue;
+        const std::string type = field.value("type", std::string("text"));
+        const std::string label = field.value("label", id);
+        const bool required = field.value("required", false);
+        const json options = field.contains("options") && field["options"].is_array()
+                                 ? field["options"] : json::array();
+        const bool hasDefault = field.contains("defaultValue") && !field["defaultValue"].is_null();
+
+        while (true) {
+            if (cancel && cancel->load()) return cancelledResult();
+            std::cout << "\n" << label;
+            if (required) std::cout << " *";
+            std::cout << " [" << type << "]\n";
+            if (!options.empty()) {
+                for (size_t i = 0; i < options.size(); ++i) {
+                    std::cout << "  " << (i + 1) << ") " << optionLabel(options[i]) << "\n";
+                }
+            }
+            if (hasDefault) std::cout << "  padrao: " << field["defaultValue"].dump() << "\n";
+            std::cout << "> " << std::flush;
+
+            std::string line;
+            if (!readLine(line)) return cancelledResult();
+            if (trimText(line) == ":q" || lowerText(trimText(line)) == "cancel" ||
+                lowerText(trimText(line)) == "cancelar") {
+                return cancelledResult();
+            }
+
+            if (trimText(line).empty()) {
+                if (hasDefault) {
+                    answers[id] = field["defaultValue"];
+                    break;
+                }
+                if (required) {
+                    std::cout << "Campo obrigatorio.\n";
+                    continue;
+                }
+                break;
+            }
+
+            if (type == "number") {
+                try {
+                    size_t used = 0;
+                    const double number = std::stod(line, &used);
+                    if (used != line.size() || !std::isfinite(number)) throw std::invalid_argument("invalid");
+                    answers[id] = number;
+                    break;
+                } catch (...) {
+                    std::cout << "Informe um numero valido.\n";
+                    continue;
+                }
+            }
+
+            if (type == "boolean") {
+                const std::string value = lowerText(trimText(line));
+                if (value == "s" || value == "sim" || value == "y" || value == "yes" ||
+                    value == "1" || value == "true") {
+                    answers[id] = true;
+                    break;
+                }
+                if (value == "n" || value == "nao" || value == "não" || value == "no" ||
+                    value == "0" || value == "false") {
+                    answers[id] = false;
+                    break;
+                }
+                std::cout << "Responda s ou n.\n";
+                continue;
+            }
+
+            if (type == "choice") {
+                std::string selected = trimText(line);
+                if (!options.empty()) {
+                    bool matched = false;
+                    const std::string maybeIndex = trimText(line);
+                    if (!maybeIndex.empty() &&
+                        std::all_of(maybeIndex.begin(), maybeIndex.end(), [](char c) { return std::isdigit(static_cast<unsigned char>(c)) != 0; })) {
+                        const int index = std::atoi(maybeIndex.c_str());
+                        if (index >= 1 && static_cast<size_t>(index) <= options.size()) {
+                            selected = optionValue(options[static_cast<size_t>(index - 1)]);
+                            matched = true;
+                        }
+                    }
+                    if (!matched) {
+                        for (const auto& option : options) {
+                            if (selected == optionValue(option) || selected == optionLabel(option)) {
+                                selected = optionValue(option);
+                                matched = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!matched) {
+                        std::cout << "Escolha uma das opcoes listadas.\n";
+                        continue;
+                    }
+                }
+                answers[id] = selected;
+                break;
+            }
+
+            if (type == "multi_choice") {
+                const auto parts = splitList(line);
+                json selected = json::array();
+                bool valid = true;
+                for (const auto& part : parts) {
+                    std::string value = part;
+                    bool matched = false;
+                    if (!options.empty()) {
+                        if (std::all_of(part.begin(), part.end(), [](char c) { return std::isdigit(static_cast<unsigned char>(c)) != 0; })) {
+                            const int index = std::atoi(part.c_str());
+                            if (index >= 1 && static_cast<size_t>(index) <= options.size()) {
+                                value = optionValue(options[static_cast<size_t>(index - 1)]);
+                                matched = true;
+                            }
+                        }
+                        if (!matched) {
+                            for (const auto& option : options) {
+                                if (part == optionValue(option) || part == optionLabel(option)) {
+                                    value = optionValue(option);
+                                    matched = true;
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        matched = true;
+                    }
+                    if (!matched) {
+                        valid = false;
+                        break;
+                    }
+                    selected.push_back(value);
+                }
+                if (!valid) {
+                    std::cout << "Use numeros ou valores separados por virgula.\n";
+                    continue;
+                }
+                if (required && selected.empty()) {
+                    std::cout << "Escolha ao menos uma opcao.\n";
+                    continue;
+                }
+                answers[id] = selected;
+                break;
+            }
+
+            // text, textarea, date e tipos desconhecidos: texto cru.
+            answers[id] = line;
+            break;
+        }
+    }
+
+    return json{{"requestId", requestId}, {"answers", answers}}.dump();
+}
+
 BuildOutcome executeBuild(const core::Graph& graph, const fs::path& root, const Options& opt,
                           const build::BuildEvents& ev) {
     std::atomic<bool> cancel{false};
     std::atomic<bool> done{false};
     std::atomic<bool> timeoutHit{false};
     build::BuildResult result;
+    build::BuildEvents events = ev;
+    const bool useCliPrompt = opt.answersFile.empty() && !opt.json && !opt.ci && stdinIsTerminal();
+    if (useCliPrompt && !events.onInteraction) events.onInteraction = cliPromptInteraction;
+    const std::string oldHostKind = platform::getEnv("ARESTRIX_INTERACTION_HOST_KIND");
+    platform::setProcessEnv("ARESTRIX_INTERACTION_HOST_KIND", useCliPrompt ? "cli" : "");
     std::thread worker([&]() {
-        result = build::buildAndRun(graph, root, ev, &cancel);
+        result = build::buildAndRun(graph, root, events, &cancel);
         done = true;
     });
     if (opt.timeoutSeconds > 0) {
@@ -968,6 +1234,7 @@ BuildOutcome executeBuild(const core::Graph& graph, const fs::path& root, const 
         }
     }
     worker.join();
+    platform::setProcessEnv("ARESTRIX_INTERACTION_HOST_KIND", oldHostKind);
 
     BuildOutcome out;
     out.result = result;

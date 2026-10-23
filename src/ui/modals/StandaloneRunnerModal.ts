@@ -823,11 +823,12 @@ export class StandaloneRunnerModal extends BaseModal {
     const res = await this.runnerManager.exportStandaloneRunner(this.graph, runnerConfigToSave);
 
     this.lastExportResult = res;
+    const warningText = (res.warnings && res.warnings.length > 0) ? ` Avisos: ${res.warnings.join(' ')}` : '';
     if (res.ok) {
-      this.exportStatusMessage = `Pacote standalone gerado com sucesso em: ${res.outputDir}`;
+      this.exportStatusMessage = `Pacote standalone gerado com sucesso em: ${res.outputDir}${warningText}`;
       this.exportStatusType = 'success';
     } else {
-      this.exportStatusMessage = res.error || 'Falha ao exportar executável standalone.';
+      this.exportStatusMessage = (res.error || 'Falha ao exportar executável standalone.') + warningText;
       this.exportStatusType = 'error';
     }
     this.render();
@@ -859,6 +860,7 @@ export class StandaloneRunnerModal extends BaseModal {
   private getStatusPillStyle(status: RunnerStatus): string {
     switch (status) {
       case 'running': return 'background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;';
+      case 'waiting_interaction': return 'background: #fdf2f8; color: #be185d; border: 1px solid #fbcfe8;';
       case 'compiling': return 'background: #fffbeb; color: #b45309; border: 1px solid #fde68a;';
       case 'success': return 'background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0;';
       case 'error': return 'background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;';
@@ -870,6 +872,7 @@ export class StandaloneRunnerModal extends BaseModal {
   private getStatusLabel(status: RunnerStatus): string {
     switch (status) {
       case 'running': return 'Executando...';
+      case 'waiting_interaction': return 'Aguardando resposta';
       case 'compiling': return 'Compilando...';
       case 'success': return 'Concluído';
       case 'error': return 'Falha';
@@ -883,6 +886,7 @@ export class StandaloneRunnerModal extends BaseModal {
       case 'success': return '#10b981';
       case 'error': return '#ef4444';
       case 'compiling': return '#f59e0b';
+      case 'waiting_interaction': return '#db2777';
       default: return '#0f6cbd';
     }
   }

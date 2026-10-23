@@ -59,12 +59,16 @@ date) and never executes HTML or JavaScript produced by a model.
 
 - In the Studio, **Build & Run** opens the form as a modal and sends the answer through the
   `answer_interaction` RPC. The pipeline process is blocked on its stdin/stdout host channel while
-  the modal is open.
-- CLI/CI runs use `--answers <file.json>` keyed by the interaction node id. A list of answer objects
-  is consumed in order for repeated interactions.
+  the modal is open. The Runner panel shows **Aguardando resposta** during the wait.
+- In an interactive terminal, `arestrix-cli run` prompts field by field; CLI/CI automation uses
+  `--answers <file.json>` keyed by the interaction node id. A list of answer objects is consumed in
+  order for repeated interactions. Without a TTY and without `--answers`, the CLI fails closed.
 - The runtime validates required fields, types and declared choices again before returning the
   answers. The result is written to `.arestrix/out/<nodeId>.txt`/`.json` and can feed the flow or a
   calling agent.
+- Every attempt is audited at `.arestrix/runs/<runId>/interactions/<requestId>.json` (form, answers,
+  channel, timestamps, `answeredBy`). Sensitive values stay out of telemetry/logs and sensitive text
+  fields are masked in the Studio.
 - Timeout, cancel and `fail`/`default`/`abort` policies are enforced; without a channel the vertex
   fails closed.
 

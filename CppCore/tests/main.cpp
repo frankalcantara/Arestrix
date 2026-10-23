@@ -601,6 +601,8 @@ TEST(interaction_runtime_reads_answers_file) {
 
     const std::string oldEnv = taskforge::platform::getEnv("ARESTRIX_INTERACTION_ANSWERS");
     taskforge::platform::setProcessEnv("ARESTRIX_INTERACTION_ANSWERS", answers.string());
+    const std::string oldRunId = taskforge::platform::getEnv("ARESTRIX_RUN_ID");
+    taskforge::platform::setProcessEnv("ARESTRIX_RUN_ID", "run-test-audit");
     fs::current_path(dir);
 
     const std::string spec = R"({
@@ -621,6 +623,19 @@ TEST(interaction_runtime_reads_answers_file) {
     std::string content((std::istreambuf_iterator<char>(txt)), std::istreambuf_iterator<char>());
     txt.close();
     CHECK(content.find("Tipo: pj") != std::string::npos);
+    CHECK(fs::is_directory(dir / ".arestrix" / "runs" / "run-test-audit" / "interactions"));
+    int auditFiles = 0;
+    for (const auto& entry : fs::recursive_directory_iterator(dir / ".arestrix" / "runs")) {
+        if (entry.is_regular_file() && entry.path().extension() == ".json") {
+            ++auditFiles;
+            std::ifstream audit(entry.path());
+            std::string auditText((std::istreambuf_iterator<char>(audit)), std::istreambuf_iterator<char>());
+            CHECK(auditText.find("\"status\": \"ok\"") != std::string::npos);
+            CHECK(auditText.find("\"channel\": \"answers\"") != std::string::npos);
+            CHECK(auditText.find("tipo") != std::string::npos);
+        }
+    }
+    CHECK(auditFiles >= 1);
 
     // Sem resposta para o no, o canal falha fechado.
     bool threw = false;
@@ -642,6 +657,7 @@ TEST(interaction_runtime_reads_answers_file) {
 
     fs::current_path(oldCwd);
     taskforge::platform::setProcessEnv("ARESTRIX_INTERACTION_ANSWERS", oldEnv);
+    taskforge::platform::setProcessEnv("ARESTRIX_RUN_ID", oldRunId);
     fs::remove_all(dir);
 }
 
@@ -3020,6 +3036,22 @@ TEST(standalone_runner_service_and_manifest_config) {
     node.customLambdaBody = "int x = 42;";
     g.addNode(node);
 
+    taskforge::core::NodeData ask;
+    ask.id = "ask";
+    ask.label = "Pergunta";
+    ask.type = taskforge::core::TaskflowNodeType::Interaction;
+    ask.interactionSettings = {
+        {"schemaSource", "static"},
+        {"channel", "any"},
+        {"timeoutSeconds", 30},
+        {"onTimeout", "fail"},
+        {"sensitive", true},
+        {"form", {{"title", "Pergunta"}, {"fields", taskforge::Json::array({
+            taskforge::Json{{"id", "resposta"}, {"type", "text"}, {"label", "Resposta"}, {"required", true}}
+        })}}}
+    };
+    g.addNode(ask);
+
     auto res = RunnerService::exportRunner(tempRoot, m, g);
     CHECK(res.ok == true);
     CHECK(fs::exists(res.outputDir));
@@ -3030,7 +3062,15 @@ TEST(standalone_runner_service_and_manifest_config) {
     CHECK(parsed["format"] == "arestrix-standalone-runner");
     CHECK(parsed["title"] == "Finance Report Runner");
     CHECK(parsed["defaultTab"] == "diagnostics");
-    CHECK(parsed["graph"]["nodes"].size() == 1);
+    CHECK(parsed["graph"]["nodes"].size() == 2);
+    CHECK(parsed["interactions"].size() == 1);
+    CHECK(parsed["interactions"][0]["id"] == "ask");
+    CHECK(parsed["interactions"][0]["channel"] == "any");
+    CHECK(parsed["interactions"][0]["sensitive"] == true);
+    CHECK(parsed["interactionRequirements"]["count"] == 1);
+    CHECK(parsed["interactionRequirements"]["host"] == false);
+    CHECK(res.warnings.size() == 1);
+    CHECK(res.warnings[0].find("host interativo") != std::string::npos);
 
     fs::remove_all(tempRoot);
 }

@@ -114,7 +114,9 @@ call edge.
 Headless runs use `--answers` (see [`arestrix-cli`](arestrix-cli.md#headless-human-interaction)); the
 answers are validated and written to `.arestrix/out/<nodeId>.txt`/`.json`. In the Studio, the same
 safe form opens as a modal and returns the validated answers to the flow or to the calling agent.
-Without a channel the vertex fails closed.
+Every attempt is audited at `.arestrix/runs/<runId>/interactions/<requestId>.json`. Without a channel
+the vertex fails closed. Exported standalone runners warn that interactions need an interactive host
+or `ARESTRIX_INTERACTION_ANSWERS`.
 
 ## Ports and edges
 

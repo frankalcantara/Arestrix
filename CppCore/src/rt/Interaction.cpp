@@ -10,6 +10,7 @@
 #include <cctype>
 #include <chrono>
 #include <condition_variable>
+#include <ctime>
 #include <deque>
 #include <filesystem>
 #include <fstream>
@@ -216,6 +217,104 @@ std::mutex& hostInteractionMutex() {
     return mutex;
 }
 
+std::string isoNowUtc() {
+    const auto now = std::chrono::system_clock::now();
+    const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
+    std::tm tm{};
+#ifdef _WIN32
+    gmtime_s(&tm, &seconds);
+#else
+    gmtime_r(&seconds, &tm);
+#endif
+    char buffer[32]{};
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &tm);
+    return buffer;
+}
+
+bool safeSegment(const std::string& value) {
+    if (value.empty() || value.size() > 128 || value == "." || value == "..") return false;
+    for (char c : value) {
+        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == '.')) return false;
+    }
+    return true;
+}
+
+std::string generatedRunId() {
+    static std::atomic<unsigned long long> counter{0};
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    return "run-" + std::to_string(ms) + "-" + std::to_string(++counter);
+}
+
+// Auditoria local do run: .arestrix/runs/<runId>/interactions/<requestId>.json.
+// O arquivo guarda o pedido, a resposta e o canal; nunca vai para a telemetria.
+class InteractionAudit {
+public:
+    std::string runId;
+    std::string requestId;
+    std::string nodeId;
+    std::string label;
+    std::string channel = "none";
+    std::string inputContext;
+    bool sensitive = false;
+    Json form = Json::object();
+    Json answers = Json::object();
+    std::string answeredBy;
+    std::string error;
+    bool ok = false;
+
+    InteractionAudit(std::string runId_, std::string requestId_, std::string nodeId_,
+                     std::string label_, Json form_, bool sensitive_, std::string inputContext_)
+        : runId(std::move(runId_)), requestId(std::move(requestId_)), nodeId(std::move(nodeId_)),
+          label(std::move(label_)), inputContext(std::move(inputContext_)), sensitive(sensitive_),
+          form(std::move(form_)), requestedAt_(isoNowUtc()) {
+        std::error_code ec;
+        fs::path dir = workspaceRoot() / ".arestrix" / "runs" / runId / "interactions";
+        fs::create_directories(dir, ec);
+        path_ = dir / (requestId + ".json");
+    }
+
+    ~InteractionAudit() {
+        try {
+            write();
+        } catch (...) {
+            // Auditoria nunca derruba o pipeline.
+        }
+    }
+
+    void success(const Json& value, const std::string& by) {
+        answers = value;
+        answeredBy = by;
+        ok = true;
+    }
+
+private:
+    void write() {
+        if (path_.empty()) return;
+        Json out{
+            {"format", "arestrix-interaction-audit"},
+            {"runId", runId},
+            {"requestId", requestId},
+            {"nodeId", nodeId},
+            {"label", label},
+            {"channel", channel},
+            {"inputContext", inputContext},
+            {"form", form},
+            {"sensitive", sensitive},
+            {"requestedAt", requestedAt_},
+            {"answeredAt", isoNowUtc()},
+            {"status", ok ? "ok" : "error"},
+            {"answeredBy", answeredBy},
+            {"answers", ok ? answers : Json::object()}
+        };
+        if (!ok) out["error"] = error.empty() ? "interacao nao concluida" : error;
+        std::ofstream(path_, std::ios::binary | std::ios::trunc) << out.dump(2);
+    }
+
+    std::string requestedAt_;
+    fs::path path_;
+};
+
 void validateField(const Json& field, const Json& value) {
     const std::string type = field.value("type", std::string("text"));
     if (type == "text" || type == "textarea" || type == "date") {
@@ -287,7 +386,17 @@ std::string runInteraction(const std::string& nodeId, const std::string& label,
     if (timeoutSeconds < 1) timeoutSeconds = 300;
     if (timeoutSeconds > 86400) timeoutSeconds = 86400;
 
+    std::string runId = platform::getEnv("ARESTRIX_RUN_ID");
+    if (!safeSegment(runId)) {
+        static const std::string fallbackRunId = generatedRunId();
+        runId = fallbackRunId;
+    }
+    const std::string requestId = newRequestId();
+    InteractionAudit audit(runId, requestId, nodeId, label, form, sensitive, inputContext);
+
     const bool hostChannel = envEnabled(platform::getEnv("ARESTRIX_INTERACTION_HOST"));
+    const std::string hostKind = platform::getEnv("ARESTRIX_INTERACTION_HOST_KIND");
+    const bool hostIsCli = hostKind == "cli";
     const std::string answersPath = platform::getEnv("ARESTRIX_INTERACTION_ANSWERS");
     const bool fileChannel = !answersPath.empty();
 
@@ -295,12 +404,15 @@ std::string runInteraction(const std::string& nodeId, const std::string& label,
     bool useFile = false;
     if (channel == "cli") {
         useFile = fileChannel;
+        if (!useFile) useHost = hostChannel && hostIsCli;
     } else if (channel == "studio" || channel == "runner") {
-        useHost = hostChannel;
+        useHost = hostChannel && !hostIsCli;
     } else {
         useHost = hostChannel;
         useFile = !useHost && fileChannel;
     }
+    audit.channel = useHost ? (hostIsCli ? "cli" : "host")
+                            : (useFile ? "answers" : (channel == "any" ? "none" : channel));
 
     Json answers = Json::object();
     std::string answeredBy = "answers";
@@ -311,6 +423,7 @@ std::string runInteraction(const std::string& nodeId, const std::string& label,
         answers = (spec.contains("defaultAnswers") && spec["defaultAnswers"].is_object())
                       ? spec["defaultAnswers"] : Json::object();
         answeredBy = "default";
+        audit.channel = "default";
         haveAnswers = true;
         return true;
     };
@@ -318,7 +431,7 @@ std::string runInteraction(const std::string& nodeId, const std::string& label,
     if (!useHost && !useFile && !useDefaults()) {
         if (channel == "cli") {
             throw std::runtime_error("Vertice de interacao '" + label +
-                                     "': canal 'cli' exige respostas headless (--answers).");
+                                     "': canal 'cli' exige prompt TTY ou respostas headless (--answers).");
         }
         if (channel == "studio" || channel == "runner") {
             throw std::runtime_error("Vertice de interacao '" + label +
@@ -330,16 +443,16 @@ std::string runInteraction(const std::string& nodeId, const std::string& label,
 
     sandbox::AgentTelemetryEmitter::emitEvent(nodeId, "interaction_request", Json{
         {"nodeId", nodeId},
-        {"channel", useHost ? "host" : (useFile ? "answers" : "default")},
+        {"channel", useHost ? (hostIsCli ? "cli" : "host") : (useFile ? "answers" : "default")},
         {"fields", fields.size()},
         {"sensitive", sensitive}
     });
 
     if (useHost && !haveAnswers) {
         std::lock_guard<std::mutex> hostLock(hostInteractionMutex());
-        const std::string requestId = newRequestId();
         Json request{
             {"requestId", requestId},
+            {"runId", runId},
             {"nodeId", nodeId},
             {"label", label},
             {"form", form},
@@ -359,25 +472,30 @@ std::string runInteraction(const std::string& nodeId, const std::string& label,
         const int waitMs = timeoutSeconds * 1000 + 2000;
         HostReply reply = waitForHostAnswer(requestId, waitMs);
         if (!reply.error.empty()) {
+            audit.error = reply.error;
             throw std::runtime_error("Vertice de interacao '" + label + "': " + reply.error);
         }
         if (reply.cancelled) {
+            audit.error = "cancelada pelo usuario";
             throw std::runtime_error("Vertice de interacao '" + label + "': cancelada pelo usuario.");
         }
         if (reply.closed) {
+            audit.error = "canal do host encerrou antes da resposta";
             throw std::runtime_error("Vertice de interacao '" + label +
                                      "': o canal do host encerrou antes da resposta.");
         }
         if (reply.timedOut) {
             if (onTimeout == "abort") {
+                audit.error = "timeout com politica abort";
                 throw std::runtime_error("Vertice de interacao '" + label + "': timeout com politica abort.");
             }
             if (!useDefaults()) {
+                audit.error = "tempo esgotado sem resposta";
                 throw std::runtime_error("Vertice de interacao '" + label + "': tempo esgotado sem resposta.");
             }
         } else if (reply.answered) {
             answers = reply.answers;
-            answeredBy = "host";
+            answeredBy = "operator";
             haveAnswers = true;
         }
     }
@@ -387,11 +505,16 @@ std::string runInteraction(const std::string& nodeId, const std::string& label,
         if (path.is_relative()) path = workspaceRoot() / path;
         if (!fs::is_regular_file(path)) {
             if (!useDefaults()) {
+                audit.error = "arquivo de respostas nao encontrado: " + path.string();
                 throw std::runtime_error("Arquivo de respostas nao encontrado: " + path.string());
             }
+            audit.channel = "default";
         } else {
             Json root = jsonutil::parse(readFile(path));
-            if (!root.is_object()) throw std::runtime_error("Arquivo de respostas invalido: esperado um objeto JSON.");
+            if (!root.is_object()) {
+                audit.error = "arquivo de respostas invalido";
+                throw std::runtime_error("Arquivo de respostas invalido: esperado um objeto JSON.");
+            }
             if (root.contains(nodeId)) {
                 Json value = root[nodeId];
                 if (value.is_array()) {
@@ -402,23 +525,31 @@ std::string runInteraction(const std::string& nodeId, const std::string& label,
                         std::lock_guard<std::mutex> lock(countsMutex);
                         index = counts[nodeId]++;
                     }
-                    if (value.empty()) throw std::runtime_error("Lista de respostas vazia para '" + nodeId + "'.");
+                    if (value.empty()) {
+                        audit.error = "lista de respostas vazia";
+                        throw std::runtime_error("Lista de respostas vazia para '" + nodeId + "'.");
+                    }
                     value = value[std::min<size_t>(static_cast<size_t>(index), value.size() - 1)];
                 }
                 if (!value.is_object()) {
+                    audit.error = "resposta do vertice nao e um objeto JSON";
                     throw std::runtime_error("Resposta do vertice '" + nodeId + "' deve ser um objeto JSON.");
                 }
                 answers = value;
                 answeredBy = "answers";
                 haveAnswers = true;
             } else if (!useDefaults()) {
+                audit.error = "resposta ausente para '" + nodeId + "'";
                 throw std::runtime_error("Vertice de interacao '" + label +
                                          "': resposta ausente para '" + nodeId + "' no arquivo " + path.string() + ".");
+            } else {
+                audit.channel = "default";
             }
         }
     }
 
     if (!haveAnswers && !useDefaults()) {
+        audit.error = "nenhum canal de respostas disponivel";
         throw std::runtime_error("Vertice de interacao '" + label +
                                  "': nenhum canal de respostas disponivel. Use o Studio ou --answers <arquivo>.");
     }
@@ -427,7 +558,10 @@ std::string runInteraction(const std::string& nodeId, const std::string& label,
     for (const auto& field : fields) {
         if (!field.is_object()) continue;
         const std::string id = field.value("id", std::string());
-        if (id.empty()) throw std::runtime_error("Vertice de interacao '" + label + "': campo sem id.");
+        if (id.empty()) {
+            audit.error = "campo sem id";
+            throw std::runtime_error("Vertice de interacao '" + label + "': campo sem id.");
+        }
         const bool required = field.value("required", false);
         bool hasValue = answers.contains(id) && !isBlankValue(answers[id]);
         Json value = hasValue ? answers[id] : Json();
@@ -437,14 +571,22 @@ std::string runInteraction(const std::string& nodeId, const std::string& label,
         }
         if (!hasValue) {
             if (required) {
+                audit.error = "campo obrigatorio nao respondido: " + id;
                 throw std::runtime_error("Vertice de interacao '" + label + "': campo obrigatorio nao respondido: " +
                                          field.value("label", id));
             }
             continue;
         }
-        validateField(field, value);
+        try {
+            validateField(field, value);
+        } catch (const std::exception& ex) {
+            audit.error = ex.what();
+            throw;
+        }
         normalized[id] = value;
     }
+
+    audit.success(normalized, answeredBy);
 
     std::ostringstream text;
     if (!inputContext.empty()) text << "Contexto do chamador:\n" << inputContext << "\n\n";

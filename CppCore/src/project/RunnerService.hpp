@@ -4,6 +4,7 @@
 #include "core/Graph.hpp"
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace taskforge {
 namespace project {
@@ -16,6 +17,7 @@ struct RunnerExportResult {
     std::string manifestPath;
     std::string signaturePath;
     std::vector<std::string> packagingArtifacts;
+    std::vector<std::string> warnings;
 };
 
 class RunnerService {

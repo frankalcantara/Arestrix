@@ -44,6 +44,13 @@ std::string exeName(const std::string& base) { return base + ".exe"; }
 std::string exeName(const std::string& base) { return base; }
 #endif
 
+std::string newRunId() {
+    static std::atomic<unsigned long long> counter{0};
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    return "run-" + std::to_string(ms) + "-" + std::to_string(++counter);
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -246,6 +253,8 @@ BuildResult buildAndRun(const core::Graph& graph,
     platform::ProcessSpec runSpec;
     runSpec.argv = {exePath.string()};
     runSpec.workingDir = projectRoot;
+    const std::string runId = newRunId();
+    runSpec.env["ARESTRIX_RUN_ID"] = runId;
 
     // Sem host interativo (CLI, Runner headless, testes): caminho antigo, sem stdin.
     if (!ev.onInteraction) {

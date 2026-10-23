@@ -269,6 +269,37 @@ RunnerExportResult RunnerService::exportRunner(
     fs::path finalExePath = targetDir / appName;
 
     // 3. Monta o runner_manifest.json com a topologia do pipeline e configuracoes
+    Json interactions = Json::array();
+    std::vector<std::string> interactionChannels;
+    for (const auto& [nodeId, node] : graph.getNodes()) {
+        if (node.type != core::TaskflowNodeType::Interaction) continue;
+        const Json& settings = node.interactionSettings.is_object() ? node.interactionSettings : Json::object();
+        const Json& form = settings.contains("form") && settings["form"].is_object() ? settings["form"] : Json::object();
+        const Json& fields = form.contains("fields") && form["fields"].is_array() ? form["fields"] : Json::array();
+        const std::string channel = settings.value("channel", std::string("any"));
+        if (std::find(interactionChannels.begin(), interactionChannels.end(), channel) == interactionChannels.end()) {
+            interactionChannels.push_back(channel);
+        }
+        interactions.push_back(Json{
+            {"id", nodeId},
+            {"label", node.label.empty() ? nodeId : node.label},
+            {"schemaSource", settings.value("schemaSource", std::string("static"))},
+            {"channel", channel},
+            {"timeoutSeconds", settings.value("timeoutSeconds", 300)},
+            {"onTimeout", settings.value("onTimeout", std::string("fail"))},
+            {"sensitive", settings.value("sensitive", false)},
+            {"who", settings.value("who", std::string("any"))},
+            {"fieldCount", fields.size()}
+        });
+    }
+
+    const bool hasInteractions = !interactions.empty();
+    const std::string interactionWarning = hasInteractions
+        ? "O runner exportado nao inicia um host interativo; vertices de interacao falham fechado a menos que "
+          "ARESTRIX_INTERACTION_ANSWERS seja definido no ambiente."
+        : "";
+    if (hasInteractions) res.warnings.push_back(interactionWarning);
+
     taskforge::Json runnerJson = {
         {"format", "arestrix-standalone-runner"},
         {"version", manifest.runner.version.empty() ? "1.0.0" : manifest.runner.version},
@@ -281,6 +312,13 @@ RunnerExportResult RunnerService::exportRunner(
         {"autoStart", manifest.runner.autoStart},
         {"allowRestart", manifest.runner.allowRestart},
         {"parameters", manifest.runner.parameters},
+        {"interactions", interactions},
+        {"interactionRequirements", Json{
+            {"count", interactions.size()},
+            {"channels", interactionChannels},
+            {"host", false},
+            {"warning", interactionWarning}
+        }},
         {"exportedAt", currentIsoTimestamp()},
         {"graph", graph.toJson()}
     };

@@ -69,7 +69,17 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   `[ARX_INTERACTION]`, the Studio opens a safe form modal and answers through the
   `answer_interaction` RPC. Timeout, cancel and `fail`/`default`/`abort` policies are enforced.
 - The interaction modal builds controls from the declared field types with DOM/textContent only;
-  model-generated HTML/JavaScript is never rendered.
+  model-generated HTML/JavaScript is never rendered. Sensitive text fields are masked.
+- The Studio Runner panel shows **Aguardando resposta** while an interaction is pending and resumes
+  the status when it closes.
+- `arestrix-cli run` prompts field by field in an interactive terminal (`:q` cancels); piped/non-TTY
+  runs without `--answers` still fail closed. CLI and Studio use the same host protocol; exported
+  runners need an interactive host or `ARESTRIX_INTERACTION_ANSWERS`.
+- Every interaction attempt is audited at
+  `.arestrix/runs/<runId>/interactions/<requestId>.json` with form, answers, channel, timestamps and
+  `answeredBy`; sensitive values stay out of telemetry/logs. `runner_manifest.json` lists interaction
+  requirements and warns when an exported runner has no interactive host.
+- The examples E2E verifies the audit file for both answered and fail-closed interactions.
 
 ## [1.5.0-beta.1] - 2026-10-19
 

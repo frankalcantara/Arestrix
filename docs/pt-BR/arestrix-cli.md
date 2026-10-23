@@ -212,7 +212,12 @@ O runtime valida campos obrigatórios e escolhas, grava `.arestrix/out/<nodeId>.
 devolve as respostas ao chamador. Uma interação repetida pode usar uma lista de objetos de resposta;
 eles são consumidos em ordem. Sem `--answers` (e sem `defaultAnswers` com `onTimeout: default`), o
 pipeline falha fechado. No Studio, o mesmo formulário abre como modal e envia a resposta pelo RPC
-`answer_interaction`.
+`answer_interaction`. Em um terminal interativo, `arestrix-cli run` pergunta campo a campo (`:q`
+cancela); um stdin por pipe/sem TTY e sem `--answers` continua falhando fechado.
+
+Cada tentativa é auditada em `.arestrix/runs/<runId>/interactions/<requestId>.json` com o formulário,
+as respostas, o canal, os horários e `answeredBy`. Respostas sensíveis não vão para telemetria/logs, e
+o Studio mascara os campos de texto sensíveis.
 
 Manifesto de lote:
 

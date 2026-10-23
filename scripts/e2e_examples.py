@@ -64,7 +64,8 @@ def run_example(name, ticket=None, with_key=True, timeout=1500, answers=None):
         if answers:
             command.extend(["--answers", str(project / answers)])
         proc = subprocess.run(command, env=env, capture_output=True, text=True,
-                              encoding="utf-8", errors="replace", timeout=timeout)
+                              encoding="utf-8", errors="replace", timeout=timeout,
+                              stdin=subprocess.DEVNULL)
         out = proc.stdout + proc.stderr
         events = []
         if log_file.exists():
@@ -342,6 +343,14 @@ def scenario_07_interacao():
             check("Tipo: pj" in content, "a escolha chegou ao fluxo")
             check("Observacao: Cliente empresarial" in content, "o texto chegou ao fluxo")
         check("[OUTPUT_DELIVERY]" in out, "o entregavel foi anunciado")
+        audit_files = list((project / ".arestrix" / "runs").glob("*/interactions/*.json"))
+        check(bool(audit_files), "auditoria da interacao foi gravada")
+        if audit_files:
+            audit = json.loads(audit_files[0].read_text(encoding="utf-8"))
+            check(audit.get("status") == "ok", "auditoria registrou status ok")
+            check(audit.get("channel") == "answers", "auditoria registrou o canal answers")
+            check(audit.get("answers", {}).get("tipo") == "pj", "auditoria registrou a resposta")
+            check("test-key-examples" not in json.dumps(audit), "auditoria nao contem chave de API")
         no_secret_leak(out, "ex7")
     finally:
         cleanup(work, mock)
@@ -351,6 +360,11 @@ def scenario_07_interacao():
     try:
         check(code != 0, "sem canal, o pipeline falha")
         check("nenhum canal de respostas" in out, "a mensagem explica que falta o canal")
+        failed_audits = list((project / ".arestrix" / "runs").glob("*/interactions/*.json"))
+        check(bool(failed_audits), "auditoria registra a tentativa sem canal")
+        if failed_audits:
+            audit = json.loads(failed_audits[0].read_text(encoding="utf-8"))
+            check(audit.get("status") == "error", "auditoria registra o erro")
     finally:
         cleanup(work, mock)
 
