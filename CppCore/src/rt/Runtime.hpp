@@ -52,6 +52,12 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                      const std::string& runKey = "", const std::string& memoryContext = "",
                      const std::string& inputContext = "");
 
+// Executa um vertice de interacao humana. No 2B1 o canal e o arquivo indicado por
+// ARESTRIX_INTERACTION_ANSWERS (CLI --answers); sem canal, falha fechado (ou usa
+// defaultAnswers quando onTimeout = default). Devolve o resultado como JSON.
+std::string runInteraction(const std::string& nodeId, const std::string& label,
+                           const std::string& specJson, const std::string& inputContext = "");
+
 // Registro do grafo de chamadas (mundo fechado). O codigo gerado chama uma vez no inicio.
 // Ver rt/CallGraph.hpp para o formato e para a tool call_agent.
 void setCallRegistry(const std::string& callablesJson, const std::string& callersJson);

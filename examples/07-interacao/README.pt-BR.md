@@ -1,0 +1,34 @@
+# Exemplo 7 — Interação humana
+
+Um vértice de **interação** humana no fluxo. No Studio e no Runner ele mostra um formulário seguro;
+em execuções CI/headless as respostas vêm de `--answers`.
+
+## Fluxo
+
+```text
+Inicio ──(fluxo)──► Pergunta_ao_Usuario ──(fluxo)──► Entrega_da_Resposta
+```
+
+1. O runtime de interação carrega o formulário das configurações do vértice.
+2. Em modo headless ele lê `answers.json` (chaveado pelo id do vértice de interação).
+3. Valida os campos obrigatórios e as escolhas, grava `.arestrix/out/pergunta.txt` e `.json`.
+4. O vértice de saída copia a resposta para `exports/resposta.txt`.
+
+## Executar
+
+```bash
+arestrix-cli run pipelines/main.json --root . --answers answers.json
+```
+
+Sem `--answers` o pipeline falha fechado com uma mensagem clara. A UI do formulário no Studio chega
+na próxima fase; este exemplo exercita o canal headless.
+
+## Arquivo de respostas
+
+```json
+{
+  "pergunta": { "tipo": "pj", "obs": "Cliente empresarial" }
+}
+```
+
+Um valor também pode ser uma lista, para interações repetidas consumirem as respostas em ordem.

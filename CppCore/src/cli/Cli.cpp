@@ -54,6 +54,7 @@ struct Options {
     fs::path report;
     fs::path batchFile;
     fs::path stateFile;
+    fs::path answersFile;
     bool resume = false;
     std::vector<std::string> requireEnv;
 };
@@ -112,6 +113,7 @@ void printHelp() {
         "  --no-color              Sem cores (aceito para compatibilidade)\n"
         "  --timeout <segundos>    Cancela o pipeline ao estourar (0 = sem limite)\n"
         "  --report <arquivo>      Grava um resumo JSON mesmo em falha\n"
+        "  --answers <arquivo>     Respostas JSON para vertices de interacao (CI/testes)\n"
         "  --batch <arquivo.json>  Executa itens sequenciais de um manifesto de lote\n"
         "  --state <arquivo>       Checkpoint do lote (padrao .arestrix/batch-state.json)\n"
         "  --resume                Pula itens ja concluidos no checkpoint\n\n"
@@ -234,6 +236,7 @@ bool parseOptions(const std::vector<std::string>& args, size_t start, Options& o
         else if (a == "--project") { std::string v; if (!next("--project", v)) return false; opt.project = v; }
         else if (a == "--report") { std::string v; if (!next("--report", v)) return false; opt.report = v; }
         else if (a == "--batch") { std::string v; if (!next("--batch", v)) return false; opt.batchFile = v; }
+        else if (a == "--answers") { std::string v; if (!next("--answers", v)) return false; opt.answersFile = v; }
         else if (a == "--state") { std::string v; if (!next("--state", v)) return false; opt.stateFile = v; }
         else if (a == "--resume") opt.resume = true;
         else if (a == "--timeout") {
@@ -1104,6 +1107,13 @@ int runBatch(const Options& opt) {
     return allOk ? 0 : kExitRuntime;
 }
 
+void applyInteractionAnswers(const Options& opt) {
+    if (opt.answersFile.empty()) return;
+    fs::path answers = opt.answersFile;
+    if (answers.is_relative()) answers = fs::absolute(answers);
+    platform::setProcessEnv("ARESTRIX_INTERACTION_ANSWERS", answers.string());
+}
+
 int runGraph(const std::vector<std::string>& args, bool genOnly) {
     Options opt;
     std::string parseError;
@@ -1114,7 +1124,7 @@ int runGraph(const std::vector<std::string>& args, bool genOnly) {
     if (opt.help) {
         std::cout << (genOnly
             ? "arestrix-cli gen <grafo.json> [--root <pasta>]\n"
-            : "arestrix-cli run <grafo.json>|--project <pasta> [--root <pasta>] [--json] [--quiet] [--ci] [--timeout N] [--report FILE]\n");
+            : "arestrix-cli run <grafo.json>|--project <pasta> [--root <pasta>] [--json] [--quiet] [--ci] [--timeout N] [--report FILE] [--answers FILE]\n");
         return 0;
     }
     if (opt.ci) {
@@ -1123,6 +1133,7 @@ int runGraph(const std::vector<std::string>& args, bool genOnly) {
         opt.noColor = true;
         if (opt.timeoutSeconds == 0) opt.timeoutSeconds = 900;
     }
+    applyInteractionAnswers(opt);
     if (!genOnly && !opt.batchFile.empty()) return runBatch(opt);
 
     fs::path root = opt.root.empty() ? fs::current_path() : fs::absolute(opt.root);

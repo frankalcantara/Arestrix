@@ -59,8 +59,12 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   including the `call_agent` tool, the call result and the output artifact.
 - The graph editor can author **interaction** vertices: a safe form schema (text, textarea, number,
   boolean, choice, multi-choice, date), channel, timeout, who answers and a sensitive-answer flag,
-  with a rose card and an Inspector form builder. Execution is intentionally blocked until the human
-  channel lands; running such a graph fails with a clear message.
+  with a rose card and an Inspector form builder. The Studio/Runner form modal arrives in 2B2.
+- The interaction runtime validates the form and reads headless answers from `--answers`
+  (`ARESTRIX_INTERACTION_ANSWERS`), writes `.arestrix/out/<nodeId>.txt`/`.json`, fails closed without
+  a channel, and can be invoked by an agent through a call edge.
+- `arestrix-cli run --answers <file.json>` and `examples/07-interacao` cover the headless flow,
+  including the fail-closed case. The Studio/Runner form modal is the next step (2B2).
 
 ## [1.5.0-beta.1] - 2026-10-19
 

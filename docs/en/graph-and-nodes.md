@@ -103,6 +103,17 @@ target's final text is also written to `.arestrix/out/<target>.txt`.
 See [`examples/06-chamada-agente`](../examples/06-chamada-agente) for a coordinator calling a
 specialist.
 
+## Interaction vertices
+
+An **interaction** vertex asks a human a question. It accepts a safe form schema (text, textarea,
+number, boolean, choice, multi-choice, date), a channel (`studio`, `runner`, `cli`, `any`), a timeout,
+who answers and a sensitive-answer flag. It can run in the flow or be called by an agent through a
+call edge.
+
+Headless runs use `--answers` (see [`arestrix-cli`](arestrix-cli.md#headless-human-interaction)); the
+answers are validated and written to `.arestrix/out/<nodeId>.txt`/`.json`. Without a channel the
+vertex fails closed. The Studio/Runner form modal arrives in the next phase.
+
 ## Ports and edges
 
 Each vertex has **input ports** (blue) and **output ports** (orange). A port carries either

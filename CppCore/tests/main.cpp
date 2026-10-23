@@ -32,6 +32,7 @@
 #include "assistant/GraphDocument.hpp"
 #include "rt/ModelClient.hpp"
 #include "rt/CallGraph.hpp"
+#include "rt/Interaction.hpp"
 #include "local/LocalRuntime.hpp"
 #include "gateway/GatewayStore.hpp"
 #include "rt/Decision.hpp"
@@ -551,7 +552,7 @@ TEST(call_registry_and_tool_definition) {
     setCallRegistry("{}", "{}");
 }
 
-TEST(interaction_node_is_authored_but_execution_is_blocked) {
+TEST(interaction_node_is_authored_and_compiles) {
     using taskforge::compiler::TaskflowGenerator;
     json schema = {
         {"version", "1.0.0"},
@@ -583,14 +584,133 @@ TEST(interaction_node_is_authored_but_execution_is_blocked) {
     CHECK(ask->type == taskforge::core::TaskflowNodeType::Interaction);
     CHECK(ask->interactionSettings.contains("form"));
 
-    // Autoria permitida; execucao bloqueada de forma explicita ate a Fase 2B.
+    // O gerador emite a chamada ao runtime de interacao (canal headless na 2B1).
+    std::string src = TaskflowGenerator::generateSource(graph);
+    CHECK(src.find("taskforge::rt::runInteraction(\"ask\"") != std::string::npos);
+}
+
+TEST(interaction_runtime_reads_answers_file) {
+    using namespace taskforge::rt;
+    const fs::path oldCwd = fs::current_path();
+    const fs::path dir = makeTempDir("interaction-run");
+    const fs::path answers = dir / "answers.json";
+    {
+        std::ofstream out(answers);
+        out << R"({"ask":{"tipo":"pj","obs":"ok"}})";
+    }
+
+    const std::string oldEnv = taskforge::platform::getEnv("ARESTRIX_INTERACTION_ANSWERS");
+    taskforge::platform::setProcessEnv("ARESTRIX_INTERACTION_ANSWERS", answers.string());
+    fs::current_path(dir);
+
+    const std::string spec = R"({
+        "mode":"form","schemaSource":"static",
+        "form":{"title":"Pergunta","fields":[
+            {"id":"tipo","type":"choice","label":"Tipo","required":true,"options":[{"value":"pf"},{"value":"pj"}]},
+            {"id":"obs","type":"text","label":"Observacao","required":false}
+        ]},
+        "channel":"any","timeoutSeconds":300,"onTimeout":"fail","sensitive":false
+    })";
+
+    std::string result = runInteraction("ask", "Pergunta", spec);
+    CHECK(result.find("\"tipo\":\"pj\"") != std::string::npos);
+    CHECK(fs::is_regular_file(dir / ".arestrix" / "out" / "ask.txt"));
+    CHECK(fs::is_regular_file(dir / ".arestrix" / "out" / "ask.json"));
+
+    std::ifstream txt(dir / ".arestrix" / "out" / "ask.txt");
+    std::string content((std::istreambuf_iterator<char>(txt)), std::istreambuf_iterator<char>());
+    txt.close();
+    CHECK(content.find("Tipo: pj") != std::string::npos);
+
+    // Sem resposta para o no, o canal falha fechado.
     bool threw = false;
     try {
-        (void)TaskflowGenerator::generateSource(graph);
+        (void)runInteraction("ask2", "Sem respostas", spec);
     } catch (const std::exception&) {
         threw = true;
     }
     CHECK(threw);
+
+    fs::current_path(oldCwd);
+    taskforge::platform::setProcessEnv("ARESTRIX_INTERACTION_ANSWERS", oldEnv);
+    fs::remove_all(dir);
+}
+
+TEST(interaction_runtime_via_call_agent) {
+    using namespace taskforge::rt;
+    const fs::path oldCwd = fs::current_path();
+    const fs::path dir = makeTempDir("interaction-call");
+    const fs::path answers = dir / "answers.json";
+    {
+        std::ofstream out(answers);
+        out << R"({"ask":{"tipo":"pj"}})";
+    }
+
+    const std::string oldEnv = taskforge::platform::getEnv("ARESTRIX_INTERACTION_ANSWERS");
+    taskforge::platform::setProcessEnv("ARESTRIX_INTERACTION_ANSWERS", answers.string());
+    fs::current_path(dir);
+
+    setCallRegistry(
+        R"({"ask":{"kind":"interaction","label":"Pergunta","spec":{"schemaSource":"static","form":{"title":"Pergunta","fields":[{"id":"tipo","type":"choice","label":"Tipo","required":true,"options":[{"value":"pf"},{"value":"pj"}]}]},"onTimeout":"fail"}}})",
+        R"({"caller":[{"target":"ask","label":"Pergunta","kind":"interaction","maxCalls":1,"onError":"fail","description":"ask"}]})");
+
+    auto targets = callTargetsFor("caller");
+    auto res = invokeCall("caller", "run", targets,
+                          taskforge::Json{{"target", "ask"}, {"input", "oi"}}, RuntimeLang::Pt);
+    CHECK(!res.isError);
+    CHECK(res.content.find("\"answers\"") != std::string::npos);
+    CHECK(res.content.find("\"tipo\":\"pj\"") != std::string::npos);
+
+    setCallRegistry("{}", "{}");
+    fs::current_path(oldCwd);
+    taskforge::platform::setProcessEnv("ARESTRIX_INTERACTION_ANSWERS", oldEnv);
+    fs::remove_all(dir);
+}
+
+TEST(generator_interaction_as_callable) {
+    using taskforge::compiler::TaskflowGenerator;
+    auto port = [](const char* id, const char* dir, const char* type) {
+        return json{{"id", id}, {"name", id}, {"direction", dir}, {"type", type},
+                    {"dataType", ""}, {"conditionBranchIndex", -1}};
+    };
+    json schema = {
+        {"version", "1.0.0"},
+        {"metadata", {{"graphName", "InteractionCall"}, {"description", ""}, {"targetStandard", "C++20"},
+                      {"version", "1"}, {"projectId", "test"}}},
+        {"nodes", json::array({
+            json{{"id", "caller"}, {"label", "Caller"}, {"type", "agent"},
+                 {"position", {{"x", 0}, {"y", 0}}},
+                 {"inputs", json::array({port("caller_in", "input", "flow")})},
+                 {"outputs", json::array({port("caller_out", "output", "flow")})},
+                 {"parameters", json::object()}, {"customLambdaBody", ""}},
+            json{{"id", "ask"}, {"label", "Pergunta"}, {"type", "interaction"},
+                 {"position", {{"x", 300}, {"y", 0}}},
+                 {"inputs", json::array({port("ask_in", "input", "flow")})},
+                 {"outputs", json::array({port("ask_out", "output", "flow")})},
+                 {"parameters", json::object()}, {"customLambdaBody", ""},
+                 {"interactionSettings", json{
+                     {"schemaSource", "static"},
+                     {"form", json{{"title", "Pergunta"}, {"fields", json::array({
+                         json{{"id", "tipo"}, {"type", "choice"}, {"label", "Tipo"}, {"options", json::array({
+                             json{{"value", "pf"}}, json{{"value", "pj"}}
+                         })}}
+                     })}}},
+                     {"channel", "any"}, {"onTimeout", "fail"}
+                 }}}
+        })},
+        {"edges", json::array({
+            json{{"id", "call_ask"}, {"sourceNodeId", "caller"}, {"sourcePortId", "caller_out"},
+                 {"targetNodeId", "ask"}, {"targetPortId", "ask_in"}, {"kind", "call"},
+                 {"callSettings", {{"maxCalls", 1}, {"onError", "fail"}, {"description", "ask"}}}}
+        })}
+    };
+
+    taskforge::core::Graph graph;
+    graph.fromJson(schema);
+    std::string src = TaskflowGenerator::generateSource(graph);
+    CHECK(src.find("taskforge::rt::setCallRegistry(arx_callables, arx_callers)") != std::string::npos);
+    CHECK(src.find("\"kind\":\"interaction\"") != std::string::npos);
+    CHECK(src.find("task_ask") == std::string::npos);   // chamavel puro nao vira task de fluxo
 }
 
 TEST(generator_condition_with_gap_uses_noop) {

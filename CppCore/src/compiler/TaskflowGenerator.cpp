@@ -368,13 +368,6 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
     const auto loopEdges = computeLoopEdges(graph, ids);
     const auto edges = sortedEdges(graph);
 
-    for (const auto& pair : nodes) {
-        if (pair.second.type == core::TaskflowNodeType::Interaction) {
-            throw std::runtime_error("Vertice de interacao '" + pair.second.id +
-                                     "' ainda nao executavel: o canal humano chega na Fase 2B.");
-        }
-    }
-
     // Grafo de chamadas (fechado): arestas "call" nao entram no fluxo. O gerador emite um
     // registro de callables e a tabela de alvos de cada chamador para o runtime.
     std::map<std::string, std::vector<const core::EdgeData*>> callsFrom;
@@ -389,8 +382,8 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
         if (src.type != core::TaskflowNodeType::Agent) {
             throw std::runtime_error("Aresta de chamada deve sair de um vertice Agent: " + e->sourceNodeId);
         }
-        if (dst.type != core::TaskflowNodeType::Agent) {
-            throw std::runtime_error("Destino de chamada nao suportado no v1 (use Agent): " + e->targetNodeId);
+        if (dst.type != core::TaskflowNodeType::Agent && dst.type != core::TaskflowNodeType::Interaction) {
+            throw std::runtime_error("Destino de chamada nao suportado (use Agent ou Interaction): " + e->targetNodeId);
         }
         if (e->callSettings.maxCalls < 1) {
             throw std::runtime_error("maxCalls deve ser >= 1 na chamada " + e->sourceNodeId + " -> " + e->targetNodeId);
@@ -415,7 +408,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
             out.push_back(json{
                 {"target", e->targetNodeId},
                 {"label", targetNode.label.empty() ? targetNode.id : targetNode.label},
-                {"kind", "agent"},
+                {"kind", targetNode.type == core::TaskflowNodeType::Interaction ? "interaction" : "agent"},
                 {"maxCalls", e->callSettings.maxCalls},
                 {"timeoutSeconds", e->callSettings.timeoutSeconds},
                 {"onError", e->callSettings.onError},
@@ -432,9 +425,14 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
     for (const auto& target : callTargets) {
         const auto& node = nodes.at(target);
         json entry = json::object();
-        entry["kind"] = "agent";
         entry["label"] = node.label.empty() ? node.id : node.label;
-        entry["spec"] = buildAgentSpec(graph, node);
+        if (node.type == core::TaskflowNodeType::Interaction) {
+            entry["kind"] = "interaction";
+            entry["spec"] = node.interactionSettings.is_object() ? node.interactionSettings : json::object();
+        } else {
+            entry["kind"] = "agent";
+            entry["spec"] = buildAgentSpec(graph, node);
+        }
         auto it = callsFrom.find(target);
         entry["calls"] = it == callsFrom.end() ? json::array() : callEdgesJson(it->second);
         registry[target] = entry;
@@ -652,6 +650,10 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
                 body = "taskforge::rt::runAgent(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +
                        rawLiteral(buildAgentSpec(graph, node).dump()) + ");";
             }
+        } else if (node.type == core::TaskflowNodeType::Interaction) {
+            const json settings = node.interactionSettings.is_object() ? node.interactionSettings : json::object();
+            body = "taskforge::rt::runInteraction(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +
+                   rawLiteral(settings.dump()) + ");";
         } else if (node.type == core::TaskflowNodeType::Output) {
             std::string src = "";
             std::string dst = "";

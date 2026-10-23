@@ -103,6 +103,17 @@ O texto final do alvo também é gravado em `.arestrix/out/<target>.txt`.
 Veja [`examples/06-chamada-agente`](../examples/06-chamada-agente) para um coordenador chamando um
 especialista.
 
+## Vértices de interação
+
+Um vértice **interaction** pergunta algo a uma pessoa. Ele aceita um schema de formulário seguro
+(texto, textarea, número, booleano, escolha, múltipla escolha, data), um canal (`studio`, `runner`,
+`cli`, `any`), timeout, quem responde e flag de resposta sensível. Pode rodar no fluxo ou ser
+chamado por um agente por uma aresta de chamada.
+
+Execuções headless usam `--answers` (veja [`arestrix-cli`](arestrix-cli.md#interação-humana-headless));
+as respostas são validadas e gravadas em `.arestrix/out/<nodeId>.txt`/`.json`. Sem canal, o vértice
+falha fechado. O modal do Studio/Runner chega na próxima fase.
+
 ## Portas e arestas
 
 Cada vértice tem **portas de entrada** (azuis) e **portas de saída** (laranja). Uma porta carrega

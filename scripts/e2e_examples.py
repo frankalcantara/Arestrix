@@ -43,7 +43,7 @@ def free_port():
         return s.getsockname()[1]
 
 
-def run_example(name, ticket=None, with_key=True, timeout=1500):
+def run_example(name, ticket=None, with_key=True, timeout=1500, answers=None):
     """Roda um exemplo numa copia temporaria. Devolve (saida, pasta-do-projeto, eventos-do-mock, codigo)."""
     work = pathlib.Path(tempfile.mkdtemp(prefix="arestrix-ex-"))
     project = work / "projeto"
@@ -60,8 +60,11 @@ def run_example(name, ticket=None, with_key=True, timeout=1500):
             env["DEEPSEEK_API_KEY"] = TEST_KEY
         if ticket:
             env["ARESTRIX_EXAMPLE_TICKET"] = ticket
-        proc = subprocess.run([str(EXE), "run", str(project / "pipelines" / "main.json"), "--root", str(project)],
-                              env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
+        command = [str(EXE), "run", str(project / "pipelines" / "main.json"), "--root", str(project)]
+        if answers:
+            command.extend(["--answers", str(project / answers)])
+        proc = subprocess.run(command, env=env, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=timeout)
         out = proc.stdout + proc.stderr
         events = []
         if log_file.exists():
@@ -325,6 +328,33 @@ def scenario_06_chamada_agente():
         cleanup(work, mock)
 
 
+def scenario_07_interacao():
+    print("\n== Exemplo 7: interacao humana (--answers) ==")
+    out, project, events, code, work, mock = run_example("07-interacao", answers="answers.json")
+    try:
+        check(code == 0, "terminou com codigo 0")
+        check("[Interaction Pergunta_ao_Usuario] respondido" in out, "a interacao foi respondida")
+
+        exported = project / "exports" / "resposta.txt"
+        check(exported.exists(), "vertice de saida exportou a resposta")
+        if exported.exists():
+            content = exported.read_text(encoding="utf-8")
+            check("Tipo: pj" in content, "a escolha chegou ao fluxo")
+            check("Observacao: Cliente empresarial" in content, "o texto chegou ao fluxo")
+        check("[OUTPUT_DELIVERY]" in out, "o entregavel foi anunciado")
+        no_secret_leak(out, "ex7")
+    finally:
+        cleanup(work, mock)
+
+    print("  -- sem --answers: falha fechada --")
+    out, project, events, code, work, mock = run_example("07-interacao")
+    try:
+        check(code != 0, "sem canal, o pipeline falha")
+        check("nenhum canal de respostas" in out, "a mensagem explica que falta o canal")
+    finally:
+        cleanup(work, mock)
+
+
 def scenario_secrets_guard():
     print("\n== Garantia de seguranca dos exemplos ==")
     node = shutil.which("node")
@@ -343,7 +373,7 @@ def scenario_secrets_guard():
 def main():
     for fn in (scenario_01, scenario_02_urgente, scenario_02_normal, scenario_02_duvida, scenario_02_sem_chave,
                scenario_03_duvida, scenario_03_urgente, scenario_04_memoria, scenario_05_matematica,
-               scenario_06_chamada_agente, scenario_secrets_guard):
+               scenario_06_chamada_agente, scenario_07_interacao, scenario_secrets_guard):
         fn()
     if failures:
         print(f"\n{len(failures)} verificacao(oes) falharam:")

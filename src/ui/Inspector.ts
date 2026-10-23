@@ -1534,7 +1534,7 @@ export class Inspector {
     return `
       <div class="form-group">
         <label class="form-label">${t('inspector.interaction.title', 'Pergunta / Interação')}</label>
-        <div class="office-field-hint" style="color: #a80000;">${t('inspector.interaction.pending', 'Execução disponível na Fase 2B; por enquanto este vértice é apenas de autoria.')}</div>
+        <div class="office-field-hint" style="color: #a80000;">${t('inspector.interaction.pending', 'Execução headless via --answers; o modal do Studio chega na Fase 2B2.')}</div>
 
         <input class="form-input" id="interaction-title" value="${this.escapeHtml(settings.form?.title ?? node.label)}" placeholder="${t('inspector.interaction.form_title', 'Título do formulário')}" />
         <textarea class="form-textarea" id="interaction-description" rows="2" placeholder="${t('inspector.interaction.form_description', 'Descrição/ajuda')}">${this.escapeHtml(settings.form?.description ?? '')}</textarea>
@@ -1721,7 +1721,7 @@ export class Inspector {
       case 'agent':
         return t('inspector.explanations.agent');
       case 'interaction':
-        return t('inspector.explanations.interaction', 'Vértice de interação humana: formulário seguro com pergunta, opções e resposta. A execução pelo canal humano chega na Fase 2B.');
+        return t('inspector.explanations.interaction', 'Vértice de interação humana: formulário seguro com pergunta, opções e resposta. A execução headless usa --answers; o modal do Studio chega na Fase 2B2.');
       case 'output':
         return t('inspector.explanations.output', 'Vértice coletor de saída e entrega de artefatos. Permite definir os arquivos gerados (SVGs, planilhas, relatórios Markdown, PDFs, JSONs) para inspeção visual interativa na aba Artefatos e cópia para diretórios finais.');
       default:

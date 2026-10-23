@@ -1,4 +1,5 @@
 #include "rt/CallGraph.hpp"
+#include "rt/Interaction.hpp"
 #include "rt/Runtime.hpp"
 #include "sandbox/AgentTelemetryEmitter.hpp"
 #include "util/Json.hpp"
@@ -123,10 +124,10 @@ std::vector<ToolDef> callToolDefinitions(const std::vector<CallTarget>& targets,
     Json allowed = Json::array();
     std::ostringstream description;
     description << langPick(lang,
-        "Chama um dos agentes declarados no grafo. O alvo precisa estar na lista permitida. "
-        "A chamada e sincrona: voce recebe a resposta do agente antes de continuar.",
-        "Calls one of the agents declared in the graph. The target must be in the allowed list. "
-        "The call is synchronous: you receive the agent's answer before continuing.");
+        "Chama um dos agentes ou interacoes humanas declarados no grafo. O alvo precisa estar na lista permitida. "
+        "A chamada e sincrona: voce recebe a resposta do alvo antes de continuar.",
+        "Calls one of the agents or human interactions declared in the graph. The target must be in the allowed list. "
+        "The call is synchronous: you receive the target's answer before continuing.");
     for (const auto& target : targets) {
         allowed.push_back(target.id);
         description << "\n- " << target.id;
@@ -181,8 +182,8 @@ ToolResult invokeCall(const std::string& callerId, const std::string& callerRunI
     if (!target) {
         return invokeError(langPick(lang, "Alvo nao declarado no grafo: ", "Target not declared in the graph: ") + targetId);
     }
-    if (target->kind != "agent") {
-        return invokeError(langPick(lang, "Destino de chamada nao suportado no v1: ", "Call target not supported in v1: ") + target->kind);
+    if (target->kind != "agent" && target->kind != "interaction") {
+        return invokeError(langPick(lang, "Destino de chamada nao suportado: ", "Call target not supported: ") + target->kind);
     }
 
     static thread_local int depth = 0;
@@ -233,15 +234,20 @@ ToolResult invokeCall(const std::string& callerId, const std::string& callerRunI
             std::lock_guard<std::mutex> lock(r.mutex);
             auto it = r.callables.find(targetId);
             if (it == r.callables.end()) {
-                throw std::runtime_error(langPick(lang, "Agente chamado nao registrado: ", "Called agent not registered: ") + targetId);
+                throw std::runtime_error(langPick(lang, "Alvo chamado nao registrado: ", "Called target not registered: ") + targetId);
             }
             callable = it->second;
         }
 
         DepthGuard guard(depth);
         NodeScope scope(targetId, target->label.empty() ? targetId : target->label);
-        output = runAgent(targetId, target->label.empty() ? targetId : target->label,
-                          callable.specJson, runKey, "", input);
+        if (callable.kind == "interaction") {
+            output = runInteraction(targetId, target->label.empty() ? targetId : target->label,
+                                    callable.specJson, input);
+        } else {
+            output = runAgent(targetId, target->label.empty() ? targetId : target->label,
+                              callable.specJson, runKey, "", input);
+        }
     } catch (const std::exception& ex) {
         const std::string message = ex.what();
         Json end{
@@ -260,11 +266,17 @@ ToolResult invokeCall(const std::string& callerId, const std::string& callerRunI
         {"callId", callId},
         {"target", targetId},
         {"label", target->label},
-        {"kind", "agent"},
+        {"kind", target->kind},
         {"status", "ok"},
         {"output", output},
         {"depth", callDepth}
     };
+    if (target->kind == "interaction") {
+        auto parsed = jsonutil::tryParse(output);
+        if (parsed && parsed->is_object() && parsed->contains("answers")) {
+            result["answers"] = (*parsed)["answers"];
+        }
+    }
     sandbox::AgentTelemetryEmitter::emitEvent(callerId, "call_end", Json{
         {"callId", callId},
         {"target", targetId},

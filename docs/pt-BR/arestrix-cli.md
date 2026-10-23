@@ -190,7 +190,28 @@ Opções de automação:
 - `--ci` equivale a `--json --quiet --no-color`, com timeout padrão de 900s;
 - `--batch <arquivo.json>` executa itens sequenciais;
 - `--state <arquivo>` define o checkpoint (padrão `.arestrix/batch-state.json`);
-- `--resume` pula itens já concluídos.
+- `--resume` pula itens já concluídos;
+- `--answers <arquivo.json>` fornece respostas headless para vértices `interaction`.
+
+### Interação humana headless
+
+Um vértice `interaction` pergunta ao usuário com um formulário seguro. Em execuções headless,
+forneça as respostas em JSON, chaveadas pelo id do vértice de interação:
+
+```json
+{
+  "pergunta": { "tipo": "pj", "obs": "Cliente empresarial" }
+}
+```
+
+```powershell
+.\arestrix-cli.exe run --project .\examples\07-interacao --answers .\examples\07-interacao\answers.json
+```
+
+O runtime valida campos obrigatórios e escolhas, grava `.arestrix/out/<nodeId>.txt` e `.json`, e
+devolve as respostas ao chamador. Uma interação repetida pode usar uma lista de objetos de resposta;
+eles são consumidos em ordem. Sem `--answers` (e sem `defaultAnswers` com `onTimeout: default`), o
+pipeline falha fechado. O modal do Studio/Runner chega na próxima fase.
 
 Manifesto de lote:
 

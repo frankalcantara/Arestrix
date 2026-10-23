@@ -190,7 +190,28 @@ Automation options:
 - `--ci` is `--json --quiet --no-color` with a default 900s timeout;
 - `--batch <file.json>` runs sequential items;
 - `--state <file>` sets the checkpoint (default `.arestrix/batch-state.json`);
-- `--resume` skips completed items.
+- `--resume` skips completed items;
+- `--answers <file.json>` feeds headless responses to `interaction` vertices.
+
+### Headless human interaction
+
+An `interaction` vertex asks the user a question with a safe form. In headless runs, provide the
+answers as JSON keyed by the interaction node id:
+
+```json
+{
+  "pergunta": { "tipo": "pj", "obs": "Enterprise customer" }
+}
+```
+
+```powershell
+.\arestrix-cli.exe run --project .\examples\07-interacao --answers .\examples\07-interacao\answers.json
+```
+
+The runtime validates required fields and choices, writes `.arestrix/out/<nodeId>.txt` and `.json`,
+and returns the answers to the caller. A repeated interaction may use a list of answer objects; they
+are consumed in order. Without `--answers` (and without `defaultAnswers` with `onTimeout: default`),
+the pipeline fails closed. The Studio/Runner form modal arrives in the next phase.
 
 Batch manifest:
 
