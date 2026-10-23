@@ -15,7 +15,8 @@ import {
   Merge,
   ListTree,
   Plug,
-  FolderDown
+  FolderDown,
+  MessageCircle
 } from 'lucide';
 import type { TaskflowNodeType } from '../core/types.ts';
 import type { LucideIconNode } from './icons/VectorIcons.ts';
@@ -108,5 +109,6 @@ export const NODE_TYPE_ICONS: Record<TaskflowNodeType, { name: string; icon: Luc
   join: { name: 'merge', icon: Merge as unknown as LucideIconNode },
   switch: { name: 'list-tree', icon: ListTree as unknown as LucideIconNode },
   mcp: { name: 'plug', icon: Plug as unknown as LucideIconNode },
+  interaction: { name: 'message-circle', icon: MessageCircle as unknown as LucideIconNode },
   output: { name: 'folder-down', icon: FolderDown as unknown as LucideIconNode }
 } as Record<TaskflowNodeType, { name: string; icon: LucideIconNode }>;

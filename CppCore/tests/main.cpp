@@ -551,6 +551,48 @@ TEST(call_registry_and_tool_definition) {
     setCallRegistry("{}", "{}");
 }
 
+TEST(interaction_node_is_authored_but_execution_is_blocked) {
+    using taskforge::compiler::TaskflowGenerator;
+    json schema = {
+        {"version", "1.0.0"},
+        {"metadata", {{"graphName", "Interaction"}, {"description", ""}, {"targetStandard", "C++20"},
+                      {"version", "1"}, {"projectId", "test"}}},
+        {"nodes", json::array({
+            json{{"id", "ask"}, {"label", "Pergunta"}, {"type", "interaction"},
+                 {"position", {{"x", 0}, {"y", 0}}},
+                 {"inputs", json::array({json{{"id", "ask_in"}, {"name", "in"}, {"direction", "input"}, {"type", "flow"}}})},
+                 {"outputs", json::array({json{{"id", "ask_out"}, {"name", "out"}, {"direction", "output"}, {"type", "flow"}}})},
+                 {"parameters", json::object()},
+                 {"customLambdaBody", ""},
+                 {"interactionSettings", json{
+                     {"mode", "form"}, {"schemaSource", "static"},
+                     {"form", json{{"title", "Pergunta"}, {"fields", json::array({
+                         json{{"id", "resposta"}, {"type", "text"}, {"label", "Resposta"}}
+                     })}}},
+                     {"channel", "any"}, {"wait", true}, {"timeoutSeconds", 300},
+                     {"onTimeout", "fail"}, {"who", "any"}, {"sensitive", false}
+                 }}}
+        })},
+        {"edges", json::array()}
+    };
+
+    taskforge::core::Graph graph;
+    graph.fromJson(schema);
+    const auto* ask = graph.getNode("ask");
+    CHECK(ask != nullptr);
+    CHECK(ask->type == taskforge::core::TaskflowNodeType::Interaction);
+    CHECK(ask->interactionSettings.contains("form"));
+
+    // Autoria permitida; execucao bloqueada de forma explicita ate a Fase 2B.
+    bool threw = false;
+    try {
+        (void)TaskflowGenerator::generateSource(graph);
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    CHECK(threw);
+}
+
 TEST(generator_condition_with_gap_uses_noop) {
     auto g = tutorialGraph();
     // remove o ramo 0 (entrega): o ramo 1 deve continuar sendo o indice 1

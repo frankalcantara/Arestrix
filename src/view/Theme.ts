@@ -123,6 +123,12 @@ export const THEME = {
       badgeBg: 0x065f46,      // Esmeralda 800
       textColor: getContrastTextColor(0x047857),
       label: 'OUTPUT / ARTIFACT'
+    },
+    interaction: {
+      color: 0xdb2777,        // Rosa/Magenta Fluent / Interação humana
+      badgeBg: 0x9d174d,      // Rosa 800
+      textColor: getContrastTextColor(0xdb2777),
+      label: 'HUMAN INTERACTION'
     }
   } as Record<TaskflowNodeType, { color: number; badgeBg: number; textColor: string; label: string }>,
 

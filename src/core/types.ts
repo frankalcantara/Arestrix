@@ -10,6 +10,7 @@ export type TaskflowNodeType =
   | 'join'        // tf::Task - Barreira de Sincronização / Consolidação Concorrente
   | 'switch'      // tf::Task (retorna int) - Seleção multivia: um caso por porta de saída; o último é o 'default'
   | 'mcp'         // tf::Task - Chama UMA ferramenta de um servidor MCP do projeto (cliente C++ nativo, sessão persistente)
+  | 'interaction' // Interação humana: formulário seguro, canal Studio/Runner/CLI (Fase 2)
   | 'output';     // Vértice de Entrega / Coletor de Artefatos (SVG, planilha, PDF, Markdown, texto, JSON...)
 
 export type PortDirection = 'input' | 'output';
@@ -48,6 +49,94 @@ export const DEFAULT_CALL_LIMITS: ICallLimits = {
   maxDepth: 3,
   maxTotalCalls: 50
 };
+
+// --- Interação humana (Fase 2) -------------------------------------------------------------
+
+export type FormFieldType =
+  | 'text' | 'textarea' | 'number' | 'boolean'
+  | 'choice' | 'multi_choice' | 'date';
+
+export interface IFormOption {
+  value: string;
+  label: string;
+}
+
+export interface IFormField {
+  id: string;
+  type: FormFieldType;
+  label: string;
+  required?: boolean;
+  options?: IFormOption[];
+  defaultValue?: unknown;
+  help?: string;
+  placeholder?: string;
+  multiline?: boolean;
+  maxLength?: number;
+  min?: number;
+  max?: number;
+}
+
+export interface IFormContext {
+  markdown?: string;
+  artifacts?: Array<{ path: string; type: string; label?: string }>;
+}
+
+export interface IFormSchema {
+  title?: string;
+  description?: string;
+  context?: IFormContext;
+  fields: IFormField[];
+  submitLabel?: string;
+  cancelLabel?: string;
+}
+
+export type InteractionMode = 'form' | 'choice' | 'approval' | 'free_text';
+export type InteractionSchemaSource = 'static' | 'vertex' | 'caller';
+export type InteractionChannel = 'studio' | 'runner' | 'cli' | 'any';
+export type InteractionTimeoutPolicy = 'fail' | 'default' | 'abort';
+
+export interface IInteractionSettings {
+  mode: InteractionMode;
+  schemaSource: InteractionSchemaSource;
+  form: IFormSchema;
+  /** Só para schemaSource = 'vertex'. */
+  generator?: {
+    provider: string;
+    model: string;
+    temperature?: number;
+  };
+  channel: InteractionChannel;
+  /** v1: sempre true. O campo existe para o v2. */
+  wait: true;
+  timeoutSeconds: number;
+  onTimeout: InteractionTimeoutPolicy;
+  defaultAnswers?: Record<string, unknown>;
+  who?: 'operator' | 'end_user' | 'any';
+  sensitive?: boolean;
+}
+
+export function defaultInteractionSettings(label: string = 'Pergunta'): IInteractionSettings {
+  return {
+    mode: 'form',
+    schemaSource: 'static',
+    form: {
+      title: label,
+      description: '',
+      context: { markdown: '' },
+      fields: [
+        { id: 'resposta', type: 'textarea', label: 'Resposta', required: true, multiline: true }
+      ],
+      submitLabel: 'Continuar',
+      cancelLabel: 'Cancelar'
+    },
+    channel: 'any',
+    wait: true,
+    timeoutSeconds: 300,
+    onTimeout: 'fail',
+    who: 'any',
+    sensitive: false
+  };
+}
 
 export type TargetCompiler = 'msvc' | 'gcc' | 'clang';
 export type BuildSystem = 'cmake' | 'makefile' | 'direct_script';
@@ -392,6 +481,7 @@ export interface INodeData {
   switchSettings?: ISwitchSettings; // só para vértices do tipo 'switch'
   mcpSettings?: IMcpVertexSettings; // só para vértices do tipo 'mcp'
   outputSettings?: IOutputSettings; // só para vértices do tipo 'output'
+  interactionSettings?: IInteractionSettings; // só para vértices do tipo 'interaction'
 }
 
 export interface IBreadcrumbItem {
@@ -600,7 +690,7 @@ export interface IGraphSchema {
 }
 
 export interface IValidationError {
-  type: 'cycle' | 'orphan' | 'invalid_port' | 'missing_branch' | 'invalid_call' | 'call_cycle';
+  type: 'cycle' | 'orphan' | 'invalid_port' | 'missing_branch' | 'invalid_call' | 'call_cycle' | 'invalid_interaction';
   message: string;
   nodeIds?: string[];
   edgeIds?: string[];

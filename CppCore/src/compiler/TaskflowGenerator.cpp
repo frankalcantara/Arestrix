@@ -368,6 +368,13 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
     const auto loopEdges = computeLoopEdges(graph, ids);
     const auto edges = sortedEdges(graph);
 
+    for (const auto& pair : nodes) {
+        if (pair.second.type == core::TaskflowNodeType::Interaction) {
+            throw std::runtime_error("Vertice de interacao '" + pair.second.id +
+                                     "' ainda nao executavel: o canal humano chega na Fase 2B.");
+        }
+    }
+
     // Grafo de chamadas (fechado): arestas "call" nao entram no fluxo. O gerador emite um
     // registro de callables e a tabela de alvos de cada chamador para o runtime.
     std::map<std::string, std::vector<const core::EdgeData*>> callsFrom;
@@ -801,6 +808,11 @@ std::string TaskflowGenerator::generateBatchSource(
     for (const auto* e : edges) {
         if (e->kind == core::EdgeKind::Call) {
             throw std::runtime_error("Pipeline em lote ainda nao suporta arestas de chamada no v1.");
+        }
+    }
+    for (const auto& pair : nodes) {
+        if (pair.second.type == core::TaskflowNodeType::Interaction) {
+            throw std::runtime_error("Pipeline em lote nao suporta vertices de interacao no v1.");
         }
     }
 

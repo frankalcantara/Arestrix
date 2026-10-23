@@ -18,7 +18,7 @@ using rt::langPick;
 
 const std::vector<std::string>& nodeTypes() {
     static const std::vector<std::string> types = {"static", "condition", "subflow", "module", "critical", "cuda",
-                                                   "agent", "fork", "join", "switch", "mcp", "output"};
+                                                   "agent", "fork", "join", "switch", "mcp", "interaction", "output"};
     return types;
 }
 
@@ -43,6 +43,7 @@ Json port(const std::string& id, const std::string& name, const char* direction,
 // Mesmo texto padrao de Graph.getDefaultLambdaBody no Studio.
 std::string defaultLambda(const std::string& type, const std::string& label) {
     if (type == "mcp") return "";
+    if (type == "interaction") return "";   // interacao humana: sem codigo C++ no vertice
     if (type == "switch") {
         return "// Switch " + label + ": devolva o índice do caso (0, 1, 2...).\n"
                "// O último caso é o \"default\": qualquer valor fora do intervalo vai para ele.\nreturn 0;";
@@ -137,6 +138,21 @@ Json buildNode(const std::string& id, const std::string& label, const std::strin
         node["outputSettings"] = Json{{"sourcePath", ""}, {"destinationPath", ""},
                                       {"artifactType", "auto"}, {"displayName", label},
                                       {"autoOpenPreview", true}, {"description", ""}};
+    }
+    if (type == "interaction") {
+        node["interactionSettings"] = Json{
+            {"mode", "form"}, {"schemaSource", "static"},
+            {"form", Json{
+                {"title", label}, {"description", ""},
+                {"context", Json{{"markdown", ""}}},
+                {"fields", Json::array({Json{{"id", "resposta"}, {"type", "textarea"},
+                                             {"label", "Resposta"}, {"required", true},
+                                             {"multiline", true}}})},
+                {"submitLabel", "Continuar"}, {"cancelLabel", "Cancelar"}
+            }},
+            {"channel", "any"}, {"wait", true}, {"timeoutSeconds", 300},
+            {"onTimeout", "fail"}, {"who", "any"}, {"sensitive", false}
+        };
     }
     return node;
 }

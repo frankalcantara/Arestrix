@@ -1,5 +1,5 @@
 import { Graph } from '../core/Graph.ts';
-import { INodeData, IPort, ISwitchSettings, SwitchMode, defaultSwitchSettings, IMcpVertexSettings, defaultMcpSettings, IOutputSettings, defaultOutputSettings, OutputArtifactType, defaultCallSettings } from '../core/types.ts';
+import { INodeData, IPort, ISwitchSettings, SwitchMode, defaultSwitchSettings, IMcpVertexSettings, defaultMcpSettings, IOutputSettings, defaultOutputSettings, OutputArtifactType, defaultCallSettings, IInteractionSettings, IFormField, FormFieldType, defaultInteractionSettings } from '../core/types.ts';
 import { EventBus } from '../core/EventBus.ts';
 import { RemoveNodeCommand, RemoveEdgeCommand, UpdateNodeCommand, CompoundCommand } from '../core/history/GraphCommands.ts';
 import { AgentTemplateRegistry } from '../core/templates/AgentTemplateRegistry.ts';
@@ -506,6 +506,7 @@ export class Inspector {
               <option value="join" ${node.type === 'join' ? 'selected' : ''}>Join Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Barreira de Sincronização' : 'Synchronization Barrier'})</option>
               <option value="agent" ${node.type === 'agent' ? 'selected' : ''}>Agent (Code Mode IA)</option>
               <option value="output" ${node.type === 'output' ? 'selected' : ''}>Output / Artifact (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Entrega e Saída' : 'Delivery & Output'})</option>
+              <option value="interaction" ${node.type === 'interaction' ? 'selected' : ''}>Interaction (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Pergunta ao usuário' : 'Ask the user'})</option>
             </select>
           </div>
 
@@ -529,6 +530,7 @@ export class Inspector {
           ${node.type === 'mcp' ? this.renderMcpSection(node) : ''}
           ${node.type === 'output' ? this.renderOutputSection(node) : ''}
           ${node.type === 'agent' ? this.renderCallSection(node) : ''}
+          ${node.type === 'interaction' ? this.renderInteractionSection(node) : ''}
 
           <!-- Seção de Parâmetros do Template / Agente -->
           ${(node.type === 'switch' || node.type === 'mcp' || node.type === 'output') ? '' : this.renderParametersSection(node, tpl)}
@@ -705,6 +707,15 @@ export class Inspector {
             newProps.customLambdaBody = `// Coletor de Entrega / Artefato: ${node.label}\nstd::cout << "[OUTPUT: ${node.label}] Entregável registrado com sucesso!\\n";`;
           }
         }
+        if ((newType === 'interaction') !== (oldType === 'interaction')) {
+          oldProps.interactionSettings = current.interactionSettings ? JSON.parse(JSON.stringify(current.interactionSettings)) : undefined;
+          newProps.interactionSettings = newType === 'interaction' ? defaultInteractionSettings(node.label) : undefined;
+          if (newType === 'interaction') {
+            newProps.customLambdaBody = '';
+            newProps.inputs = [{ id: `${node.id}_in_0`, name: 'in', direction: 'input', type: 'flow' }];
+            newProps.outputs = [{ id: `${node.id}_out_0`, name: 'out', direction: 'output', type: 'flow' }];
+          }
+        }
         if (crossesSwitch) {
           oldProps.outputs = JSON.parse(JSON.stringify(current.outputs));
           newProps.outputs = newType === 'switch'
@@ -763,6 +774,7 @@ export class Inspector {
     if (node.type === 'mcp') this.bindMcpSettings(node);
     if (node.type === 'output') this.bindOutputSection(node);
     if (node.type === 'agent') this.bindCallSection();
+    if (node.type === 'interaction') this.bindInteractionSection(node);
 
     // Sincronizar Lambda
     this.container.querySelector('#btn-sync-lambda')?.addEventListener('click', () => {
@@ -1489,6 +1501,201 @@ export class Inspector {
     });
   }
 
+  // --- Interação humana (autoria; execução na Fase 2B) -----------------------------------
+  private renderInteractionSection(node: INodeData): string {
+    const settings = node.interactionSettings ?? defaultInteractionSettings(node.label);
+    const fields = settings.form?.fields ?? [];
+    const fieldRows = fields.map(field => {
+      const id = this.escapeHtml(field.id);
+      return `
+        <div class="form-group" style="border-left: 3px solid #db2777; padding-left: 8px;">
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <input class="form-input" data-field-label="${id}" value="${this.escapeHtml(field.label)}" placeholder="Pergunta/campo" />
+            <select class="form-select" data-field-type="${id}" style="width: 120px;">
+              ${this.formFieldTypeOptions(field.type)}
+            </select>
+            <button class="btn btn-small" data-field-remove="${id}" title="Remover campo">✕</button>
+          </div>
+          <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">
+            <label style="font-size: 11px; white-space: nowrap;"><input type="checkbox" data-field-required="${id}" ${field.required ? 'checked' : ''}/> ${t('inspector.interaction.required', 'Obrigatório')}</label>
+            <input class="form-input" data-field-options="${id}" value="${this.escapeHtml(this.formFieldOptionsText(field))}" placeholder="${t('inspector.interaction.options_placeholder', 'Opções separadas por vírgula (choice)')}" />
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const channelOptions = ['any', 'studio', 'runner', 'cli']
+      .map(value => `<option value="${value}" ${settings.channel === value ? 'selected' : ''}>${value}</option>`).join('');
+    const timeoutOptions = ['fail', 'default', 'abort']
+      .map(value => `<option value="${value}" ${settings.onTimeout === value ? 'selected' : ''}>${value}</option>`).join('');
+    const whoOptions = ['any', 'operator', 'end_user']
+      .map(value => `<option value="${value}" ${settings.who === value ? 'selected' : ''}>${value}</option>`).join('');
+
+    return `
+      <div class="form-group">
+        <label class="form-label">${t('inspector.interaction.title', 'Pergunta / Interação')}</label>
+        <div class="office-field-hint" style="color: #a80000;">${t('inspector.interaction.pending', 'Execução disponível na Fase 2B; por enquanto este vértice é apenas de autoria.')}</div>
+
+        <input class="form-input" id="interaction-title" value="${this.escapeHtml(settings.form?.title ?? node.label)}" placeholder="${t('inspector.interaction.form_title', 'Título do formulário')}" />
+        <textarea class="form-textarea" id="interaction-description" rows="2" placeholder="${t('inspector.interaction.form_description', 'Descrição/ajuda')}">${this.escapeHtml(settings.form?.description ?? '')}</textarea>
+        <textarea class="form-textarea" id="interaction-context" rows="3" placeholder="${t('inspector.interaction.context', 'Contexto em Markdown exibido junto às perguntas')}">${this.escapeHtml(settings.form?.context?.markdown ?? '')}</textarea>
+
+        <div style="margin-top: 8px;"><strong style="font-size: 12px;">${t('inspector.interaction.fields', 'Campos')}</strong></div>
+        ${fieldRows || `<div class="office-field-hint">${t('inspector.interaction.no_fields', 'Nenhum campo; adicione um.')}</div>`}
+        <button class="btn btn-small" id="btn-add-interaction-field" style="margin-top: 6px;">+ ${t('inspector.interaction.add_field', 'Campo')}</button>
+
+        <div style="display: flex; gap: 6px; margin-top: 8px; align-items: center;">
+          <label style="font-size: 11px; white-space: nowrap;">${t('inspector.interaction.channel', 'Canal')}</label>
+          <select class="form-select" id="interaction-channel">${channelOptions}</select>
+          <label style="font-size: 11px; white-space: nowrap;">${t('inspector.interaction.timeout', 'Timeout (s)')}</label>
+          <input type="number" class="form-input" id="interaction-timeout" min="0" value="${settings.timeoutSeconds}" style="width: 90px;" />
+        </div>
+        <div style="display: flex; gap: 6px; margin-top: 6px; align-items: center;">
+          <label style="font-size: 11px; white-space: nowrap;">${t('inspector.interaction.on_timeout', 'No timeout')}</label>
+          <select class="form-select" id="interaction-on-timeout">${timeoutOptions}</select>
+          <label style="font-size: 11px; white-space: nowrap;">${t('inspector.interaction.who', 'Quem responde')}</label>
+          <select class="form-select" id="interaction-who">${whoOptions}</select>
+        </div>
+        <label style="font-size: 11px; margin-top: 6px; display: block;"><input type="checkbox" id="interaction-sensitive" ${settings.sensitive ? 'checked' : ''}/> ${t('inspector.interaction.sensitive', 'Resposta sensível (fora da telemetria)')}</label>
+      </div>
+    `;
+  }
+
+  private formFieldTypeOptions(selected: FormFieldType): string {
+    const types: FormFieldType[] = ['text', 'textarea', 'number', 'boolean', 'choice', 'multi_choice', 'date'];
+    return types.map(type => `<option value="${type}" ${type === selected ? 'selected' : ''}>${type}</option>`).join('');
+  }
+
+  private formFieldOptionsText(field: IFormField): string {
+    return (field.options ?? []).map(option => option.value).join(', ');
+  }
+
+  private updateInteractionSettings(node: INodeData, mutate: (settings: IInteractionSettings) => void, description: string): void {
+    const current = node.interactionSettings ?? defaultInteractionSettings(node.label);
+    const oldSettings = JSON.parse(JSON.stringify(current)) as IInteractionSettings;
+    const nextSettings = JSON.parse(JSON.stringify(current)) as IInteractionSettings;
+    mutate(nextSettings);
+    const cmd = new UpdateNodeCommand(
+      this.graph,
+      node.id,
+      { interactionSettings: oldSettings },
+      { interactionSettings: nextSettings },
+      description
+    );
+    this.graph.commandManager.execute(cmd);
+  }
+
+  private bindInteractionSection(node: INodeData): void {
+    const title = this.container.querySelector<HTMLInputElement>('#interaction-title');
+    title?.addEventListener('change', () => {
+      this.updateInteractionSettings(node, s => { s.form.title = title.value.trim(); }, 'Alterar título da interação');
+    });
+    const description = this.container.querySelector<HTMLTextAreaElement>('#interaction-description');
+    description?.addEventListener('change', () => {
+      this.updateInteractionSettings(node, s => { s.form.description = description.value.trim(); }, 'Alterar descrição da interação');
+    });
+    const context = this.container.querySelector<HTMLTextAreaElement>('#interaction-context');
+    context?.addEventListener('change', () => {
+      this.updateInteractionSettings(node, s => {
+        s.form.context = { ...(s.form.context ?? {}), markdown: context.value };
+      }, 'Alterar contexto da interação');
+    });
+
+    const channel = this.container.querySelector<HTMLSelectElement>('#interaction-channel');
+    channel?.addEventListener('change', () => {
+      this.updateInteractionSettings(node, s => { s.channel = channel.value as IInteractionSettings['channel']; }, 'Alterar canal da interação');
+    });
+    const timeout = this.container.querySelector<HTMLInputElement>('#interaction-timeout');
+    timeout?.addEventListener('change', () => {
+      this.updateInteractionSettings(node, s => { s.timeoutSeconds = Math.max(0, parseInt(timeout.value, 10) || 0); }, 'Alterar timeout da interação');
+    });
+    const onTimeout = this.container.querySelector<HTMLSelectElement>('#interaction-on-timeout');
+    onTimeout?.addEventListener('change', () => {
+      this.updateInteractionSettings(node, s => { s.onTimeout = onTimeout.value as IInteractionSettings['onTimeout']; }, 'Alterar política de timeout');
+    });
+    const who = this.container.querySelector<HTMLSelectElement>('#interaction-who');
+    who?.addEventListener('change', () => {
+      this.updateInteractionSettings(node, s => { s.who = who.value as IInteractionSettings['who']; }, 'Alterar quem responde');
+    });
+    const sensitive = this.container.querySelector<HTMLInputElement>('#interaction-sensitive');
+    sensitive?.addEventListener('change', () => {
+      this.updateInteractionSettings(node, s => { s.sensitive = sensitive.checked; }, 'Alterar sensibilidade da resposta');
+    });
+
+    this.container.querySelectorAll<HTMLInputElement>('[data-field-label]').forEach(input => {
+      input.addEventListener('change', () => {
+        const id = input.getAttribute('data-field-label');
+        if (!id) return;
+        this.updateInteractionSettings(node, s => {
+          const field = s.form.fields.find(f => f.id === id);
+          if (field) field.label = input.value.trim();
+        }, 'Alterar rótulo do campo');
+      });
+    });
+
+    this.container.querySelectorAll<HTMLSelectElement>('[data-field-type]').forEach(select => {
+      select.addEventListener('change', () => {
+        const id = select.getAttribute('data-field-type');
+        if (!id) return;
+        this.updateInteractionSettings(node, s => {
+          const field = s.form.fields.find(f => f.id === id);
+          if (!field) return;
+          field.type = select.value as FormFieldType;
+          if ((field.type === 'choice' || field.type === 'multi_choice') && (!field.options || field.options.length < 2)) {
+            field.options = [{ value: 'opcao_1', label: 'Opção 1' }, { value: 'opcao_2', label: 'Opção 2' }];
+          }
+        }, 'Alterar tipo do campo');
+      });
+    });
+
+    this.container.querySelectorAll<HTMLInputElement>('[data-field-required]').forEach(input => {
+      input.addEventListener('change', () => {
+        const id = input.getAttribute('data-field-required');
+        if (!id) return;
+        this.updateInteractionSettings(node, s => {
+          const field = s.form.fields.find(f => f.id === id);
+          if (field) field.required = input.checked;
+        }, 'Alterar obrigatoriedade do campo');
+      });
+    });
+
+    this.container.querySelectorAll<HTMLInputElement>('[data-field-options]').forEach(input => {
+      input.addEventListener('change', () => {
+        const id = input.getAttribute('data-field-options');
+        if (!id) return;
+        this.updateInteractionSettings(node, s => {
+          const field = s.form.fields.find(f => f.id === id);
+          if (!field) return;
+          field.options = input.value.split(',').map(part => part.trim()).filter(Boolean)
+            .map(value => ({ value, label: value }));
+        }, 'Alterar opções do campo');
+      });
+    });
+
+    this.container.querySelectorAll<HTMLButtonElement>('[data-field-remove]').forEach(button => {
+      button.addEventListener('click', () => {
+        const id = button.getAttribute('data-field-remove');
+        if (!id) return;
+        this.updateInteractionSettings(node, s => {
+          s.form.fields = s.form.fields.filter(field => field.id !== id);
+        }, 'Remover campo da interação');
+        const updated = this.graph.getNode(node.id);
+        if (updated) this.renderNode(updated);
+      });
+    });
+
+    this.container.querySelector('#btn-add-interaction-field')?.addEventListener('click', () => {
+      this.updateInteractionSettings(node, s => {
+        let index = s.form.fields.length + 1;
+        let id = `campo_${index}`;
+        while (s.form.fields.some(field => field.id === id)) id = `campo_${++index}`;
+        s.form.fields.push({ id, type: 'text', label: `Campo ${index}`, required: false });
+      }, 'Adicionar campo à interação');
+      const updated = this.graph.getNode(node.id);
+      if (updated) this.renderNode(updated);
+    });
+  }
+
   private getTaskTypeExplanation(type: string): string {
     switch (type) {
       case 'static':
@@ -1513,6 +1720,8 @@ export class Inspector {
         return t('inspector.explanations.join');
       case 'agent':
         return t('inspector.explanations.agent');
+      case 'interaction':
+        return t('inspector.explanations.interaction', 'Vértice de interação humana: formulário seguro com pergunta, opções e resposta. A execução pelo canal humano chega na Fase 2B.');
       case 'output':
         return t('inspector.explanations.output', 'Vértice coletor de saída e entrega de artefatos. Permite definir os arquivos gerados (SVGs, planilhas, relatórios Markdown, PDFs, JSONs) para inspeção visual interativa na aba Artefatos e cópia para diretórios finais.');
       default:

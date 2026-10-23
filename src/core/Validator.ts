@@ -1,5 +1,5 @@
 import { Graph } from './Graph.ts';
-import { IValidationResult, IValidationError, IEdgeData } from './types.ts';
+import { IValidationResult, IValidationError, IEdgeData, INodeData } from './types.ts';
 import { t } from '../i18n/index.ts';
 
 export class GraphValidator {
@@ -68,6 +68,9 @@ export class GraphValidator {
     // 4. Grafo de chamadas: alvos declarados, sem misturar fluxo e chamada no v1.
     this.validateCalls(graph, flowEdges, callEdges, errors);
 
+    // 5. Interacao humana: formulario e politica de canal validos (autoria; execucao na Fase 2B).
+    this.validateInteractions(nodes, errors);
+
     return {
       isValid: errors.filter(e => e.severity === 'error').length === 0,
       errors
@@ -105,7 +108,7 @@ export class GraphValidator {
         continue;
       }
 
-      if (target.type !== 'agent') {
+      if (target.type !== 'agent' && target.type !== 'interaction') {
         errors.push({
           type: 'invalid_call',
           severity: 'error',
@@ -166,6 +169,82 @@ export class GraphValidator {
         nodeIds: cycle
       });
     });
+  }
+
+  private static validateInteractions(nodes: INodeData[], errors: IValidationError[]): void {
+    for (const node of nodes) {
+      if (node.type !== 'interaction') continue;
+      const settings = node.interactionSettings;
+      if (!settings || !settings.form) {
+        errors.push({
+          type: 'invalid_interaction',
+          severity: 'error',
+          message: t('validator.interaction_missing', { label: node.label, id: node.id }),
+          nodeIds: [node.id]
+        });
+        continue;
+      }
+
+      const fields = Array.isArray(settings.form.fields) ? settings.form.fields : [];
+      if (fields.length === 0) {
+        errors.push({
+          type: 'invalid_interaction',
+          severity: 'error',
+          message: t('validator.interaction_empty_form', { label: node.label }),
+          nodeIds: [node.id]
+        });
+      }
+
+      const seen = new Set<string>();
+      for (const field of fields) {
+        if (!field.id || seen.has(field.id)) {
+          errors.push({
+            type: 'invalid_interaction',
+            severity: 'error',
+            message: t('validator.interaction_field_id', { label: node.label }),
+            nodeIds: [node.id]
+          });
+        } else {
+          seen.add(field.id);
+        }
+        if (!field.label) {
+          errors.push({
+            type: 'invalid_interaction',
+            severity: 'error',
+            message: t('validator.interaction_field_label', { label: node.label, id: field.id || '?' }),
+            nodeIds: [node.id]
+          });
+        }
+        if (field.type === 'choice' || field.type === 'multi_choice') {
+          const options = field.options ?? [];
+          if (options.length < 2) {
+            errors.push({
+              type: 'invalid_interaction',
+              severity: 'error',
+              message: t('validator.interaction_options', { label: node.label, id: field.id || '?' }),
+              nodeIds: [node.id]
+            });
+          }
+        }
+      }
+
+      if (!['studio', 'runner', 'cli', 'any'].includes(settings.channel)) {
+        errors.push({
+          type: 'invalid_interaction',
+          severity: 'error',
+          message: t('validator.interaction_channel', { label: node.label }),
+          nodeIds: [node.id]
+        });
+      }
+      if (settings.timeoutSeconds < 0) {
+        errors.push({
+          type: 'invalid_interaction',
+          severity: 'error',
+          message: t('validator.interaction_timeout', { label: node.label }),
+          nodeIds: [node.id]
+        });
+      }
+    }
   }
 
   private static detectCycles(graph: Graph, edges: IEdgeData[]): string[][] {

@@ -109,6 +109,8 @@ Json nodeTypesCatalog(RuntimeLang lang) {
         {"critical", "Secao critica: acesso exclusivo a recurso compartilhado.", "Critical section: exclusive access to a shared resource."},
         {"cuda", "Tarefa com kernel CUDA na GPU.", "Task with a CUDA kernel on the GPU."},
         {"mcp", "Chama UMA ferramenta de um servidor MCP do projeto, sem IA.", "Calls ONE tool of a project MCP server, without AI."},
+        {"interaction", "Interação humana: formulário seguro, canal Studio/Runner/CLI, timeout e resposta de volta ao fluxo ou ao chamador.",
+                        "Human interaction: safe form, Studio/Runner/CLI channel, timeout and answer back to the flow or caller."},
         {"output", "Vertice coletor de saida e entrega de artefatos: define arquivos gerados (SVG, planilha, PDF, Markdown, texto, JSON) para visualizacao e exportacao.",
                    "Output / Artifact deliverable collector: defines deliverable files (SVG, spreadsheet, PDF, Markdown, text, JSON) for preview and export."},
     };

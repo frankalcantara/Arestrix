@@ -275,6 +275,7 @@ export class OfficeRibbon {
                 <option value="condition">${t('ribbon.nodes.condition')}</option>
                 <option value="switch">${t('ribbon.nodes.switch')}</option>
                 <option value="mcp">${t('ribbon.nodes.mcp')}</option>
+                <option value="interaction">${t('ribbon.nodes.interaction', 'Interação')}</option>
                 <option value="subflow">${t('ribbon.nodes.subflow')}</option>
                 <option value="module">${t('ribbon.nodes.module')}</option>
                 <option value="critical">${t('ribbon.nodes.critical')}</option>
@@ -355,6 +356,10 @@ export class OfficeRibbon {
             <button class="ribbon-btn-large" data-add="output" style="border-color: #059669;" title="Vértice coletor de saída e entrega de artefatos">
               <span class="ribbon-btn-icon">📥</span>
               <span class="ribbon-btn-label">Saída / Artefato</span>
+            </button>
+            <button class="ribbon-btn-large" data-add="interaction" style="border-color: #db2777;" title="Interação humana: formulário, pergunta ou aprovação">
+              <span class="ribbon-btn-icon">💬</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.interaction', 'Interação')}</span>
             </button>
           </div>
           <div class="office-ribbon-group-title">${t('ribbon.panes.flow_concurrency')}</div>
@@ -1115,6 +1120,7 @@ export class OfficeRibbon {
       join: `Join_Barrier_${existingCount + 1}`,
       switch: `Switch_${existingCount + 1}`,
       mcp: `MCP_${existingCount + 1}`,
+      interaction: `Interacao_${existingCount + 1}`,
       output: `Entrega_Artefato_${existingCount + 1}`
     };
 

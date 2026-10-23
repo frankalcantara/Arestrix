@@ -57,6 +57,10 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   rendering, an Inspector **Delegation** section and call-graph validation.
 - `examples/06-chamada-agente` and the examples E2E cover a coordinator calling a specialist,
   including the `call_agent` tool, the call result and the output artifact.
+- The graph editor can author **interaction** vertices: a safe form schema (text, textarea, number,
+  boolean, choice, multi-choice, date), channel, timeout, who answers and a sensitive-answer flag,
+  with a rose card and an Inspector form builder. Execution is intentionally blocked until the human
+  channel lands; running such a graph fails with a clear message.
 
 ## [1.5.0-beta.1] - 2026-10-19
 

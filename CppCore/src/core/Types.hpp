@@ -24,6 +24,7 @@ enum class TaskflowNodeType {
     Join,
     Switch,
     Mcp,
+    Interaction,
     Output
 };
 
@@ -74,6 +75,7 @@ struct NodeData {
     json mcpSettings;      // vertice mcp: servidor, ferramenta, argumentos, origem da entrada e arquivo de saida
     json switchSettings;   // vertice switch: modo de decisao (code | rules | model), origem do texto, palavras
     json outputSettings;   // vertice output: arquivos de entrega, origem/destino e formato
+    json interactionSettings; // vertice interaction: formulario, canal, timeout e politica
 };
 
 struct EdgeData {
@@ -129,6 +131,7 @@ ARX_JSON_ENUM(TaskflowNodeType, {
     {TaskflowNodeType::Join, "join"},
     {TaskflowNodeType::Switch, "switch"},
     {TaskflowNodeType::Mcp, "mcp"},
+    {TaskflowNodeType::Interaction, "interaction"},
     {TaskflowNodeType::Output, "output"}
 })
 
@@ -216,7 +219,8 @@ inline void to_json(json& j, const NodeData& n) {
         {"agentSettings", n.agentSettings},
         {"switchSettings", n.switchSettings},
         {"mcpSettings", n.mcpSettings},
-        {"outputSettings", n.outputSettings}
+        {"outputSettings", n.outputSettings},
+        {"interactionSettings", n.interactionSettings}
     };
 }
 inline void from_json(const json& j, NodeData& n) {
@@ -237,6 +241,7 @@ inline void from_json(const json& j, NodeData& n) {
     if(j.contains("switchSettings")) j.at("switchSettings").get_to(n.switchSettings);
     if(j.contains("mcpSettings")) j.at("mcpSettings").get_to(n.mcpSettings);
     if(j.contains("outputSettings")) j.at("outputSettings").get_to(n.outputSettings);
+    if(j.contains("interactionSettings")) j.at("interactionSettings").get_to(n.interactionSettings);
 }
 
 // Serialização manual de EdgeData para campos opcionais
