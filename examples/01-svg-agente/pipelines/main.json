@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "metadata": {
     "projectId": "exemplo-svg-agente",
-    "graphName": "SVG_Agent_Pipeline",
+    "graphName": "Exemplo 1 - Agente de SVG",
     "description": "Agente que cria e audita SVGs animados (tutorial do Arestrix)",
     "targetStandard": "C++20",
     "compilerConfig": {
@@ -57,8 +57,8 @@
       "label": "Agente_Gerador_DeepSeek",
       "type": "agent",
       "position": {
-        "x": 0,
-        "y": 0
+        "x": -630,
+        "y": 370
       },
       "inputs": [
         {
@@ -93,8 +93,8 @@
       "label": "Linter_Tipografia_Estatico",
       "type": "static",
       "position": {
-        "x": 300,
-        "y": -100
+        "x": -210,
+        "y": 430
       },
       "inputs": [
         {
@@ -120,8 +120,8 @@
       "label": "Auditor_Timeline_SMIL",
       "type": "static",
       "position": {
-        "x": 300,
-        "y": 100
+        "x": -210,
+        "y": 170
       },
       "inputs": [
         {
@@ -147,8 +147,8 @@
       "label": "Consolidador_Diagnostico",
       "type": "static",
       "position": {
-        "x": 600,
-        "y": 0
+        "x": 210,
+        "y": 370
       },
       "inputs": [
         {
@@ -174,8 +174,8 @@
       "label": "Agente_Auditor_JEV",
       "type": "agent",
       "position": {
-        "x": 900,
-        "y": 0
+        "x": 630,
+        "y": 220
       },
       "inputs": [
         {
@@ -210,8 +210,8 @@
       "label": "Decisor_Qualidade",
       "type": "condition",
       "position": {
-        "x": 1200,
-        "y": 0
+        "x": -190,
+        "y": -190
       },
       "inputs": [
         {
@@ -245,8 +245,8 @@
       "label": "Entrega_SVG_Final",
       "type": "output",
       "position": {
-        "x": 1500,
-        "y": -80
+        "x": 650,
+        "y": -140
       },
       "inputs": [
         {
@@ -339,7 +339,17 @@
       "sourcePortId": "decisor_out_1",
       "targetNodeId": "gerador",
       "targetPortId": "gerador_in_0",
-      "isFeedbackLoop": true
+      "isFeedbackLoop": true,
+      "controlPoints": {
+        "cp1Offset": {
+          "x": 240,
+          "y": -255
+        },
+        "cp2Offset": {
+          "x": -303,
+          "y": -784
+        }
+      }
     }
   ]
 }
