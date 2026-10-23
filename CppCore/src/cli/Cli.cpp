@@ -101,6 +101,9 @@ void printHelp() {
         "  arestrix-cli completion powershell|bash|zsh\n"
         "  arestrix-cli version [--json]\n\n"
         "  --ci                    Equivale a --json --quiet --no-color e timeout padrao de 900s\n\n"
+        "Opcoes globais:\n"
+        "  --no-user-env           Nao carrega credenciais persistidas do usuario (CI/testes)\n"
+        "                          Equivale a ARESTRIX_DISABLE_USER_ENV=1\n\n"
         "Opcoes de run:\n"
         "  --root <pasta>          Raiz do projeto (padrao: diretorio atual)\n"
         "  --project <pasta>       Le arestrix.project.json e usa o pipeline primario\n"
@@ -1251,13 +1254,24 @@ int runCompletion(const std::vector<std::string>& args) {
 } // namespace
 
 int runCli(int argc, char** argv) {
-    platform::loadPersistedUserEnv();
+    bool noUserEnv = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--no-user-env") noUserEnv = true;
+    }
+    if (!noUserEnv) platform::loadPersistedUserEnv();
     if (argc < 2) {
         printHelp();
         return 0;
     }
     std::vector<std::string> args;
-    for (int i = 1; i < argc; ++i) args.emplace_back(argv[i]);
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--no-user-env") continue;
+        args.emplace_back(argv[i]);
+    }
+    if (args.empty()) {
+        printHelp();
+        return 0;
+    }
 
     if (args[0] == "--version" || args[0] == "-V" || args[0] == "version") {
         bool asJson = std::find(args.begin() + 1, args.end(), "--json") != args.end();

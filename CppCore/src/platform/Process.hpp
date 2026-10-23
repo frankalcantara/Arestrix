@@ -96,6 +96,8 @@ std::vector<std::string> listUserEnvNames();
 
 // Carrega para o processo atual as variaveis persistidas que ainda nao existem no ambiente.
 // Usado pelo CLI para que `env set` tenha efeito em processos posteriores sem reiniciar o shell.
+// ARESTRIX_DISABLE_USER_ENV=1 (ou true/yes/on) desativa o carregamento; 0/false/no/off mantem.
+// Util em CI e testes hermeticos, onde apenas o ambiente explicito do processo deve valer.
 bool loadPersistedUserEnv();
 
 // Seletor de pasta nativo; vazio se cancelado/indisponivel.

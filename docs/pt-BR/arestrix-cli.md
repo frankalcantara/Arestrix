@@ -65,6 +65,9 @@ arestrix-cli version
 
 Sem argumentos, ele imprime o uso. `--help` e `version` retornam `0`.
 
+Opção global: `--no-user-env` (ou `ARESTRIX_DISABLE_USER_ENV=1`) ignora o cofre persistido do
+usuário; apenas o ambiente explícito do processo é usado. Útil em CI e testes herméticos.
+
 ### `env`
 
 As variáveis de ambiente ficam no mesmo cofre do Studio:
@@ -86,6 +89,10 @@ As variáveis de ambiente ficam no mesmo cofre do Studio:
 `env set` também aceita `--value`, mas ele pode aparecer no histórico/lista de processos. Prefira
 stdin. O armazenamento é o mesmo do Studio: Registro do usuário no Windows e
 `~/.config/arestrix/env` no Linux.
+
+Por padrão o CLI carrega essas variáveis persistidas para o processo. Em CI ou testes herméticos,
+use `--no-user-env` (ou `ARESTRIX_DISABLE_USER_ENV=1`) para que apenas o ambiente explícito do
+processo valha. Variáveis explícitas sempre têm precedência.
 
 ### `check`
 
@@ -179,6 +186,7 @@ Opções de automação:
 - `--timeout` cancela o pipeline e retorna `124`;
 - `--report` grava um resumo JSON mesmo em falha;
 - `--quiet` suprime fases/logs/telemetria;
+- `--no-user-env` ignora credenciais persistidas do usuário (só o ambiente do processo vale);
 - `--ci` equivale a `--json --quiet --no-color`, com timeout padrão de 900s;
 - `--batch <arquivo.json>` executa itens sequenciais;
 - `--state <arquivo>` define o checkpoint (padrão `.arestrix/batch-state.json`);

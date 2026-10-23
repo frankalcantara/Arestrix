@@ -55,6 +55,7 @@ def main():
             "DEEPSEEK_API_KEY": "test-key-deepseek",
             "JEV_BASE_URL": f"http://127.0.0.1:{port}",
             "JEV_API_KEY": "test-key-jev",
+            "ARESTRIX_DISABLE_USER_ENV": "1",
         })
         t0 = time.time()
         proc = subprocess.run([str(EXE), "run", str(project / "graph.json"), "--root", str(project)],

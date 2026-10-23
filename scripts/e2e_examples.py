@@ -55,7 +55,7 @@ def run_example(name, ticket=None, with_key=True, timeout=1500):
     try:
         env = {k: v for k, v in os.environ.items() if k not in REAL_KEY_VARS and not k.startswith("ARESTRIX_EXAMPLE")}
         env.update({"ARESTRIX_HOME": str(ROOT), "DEEPSEEK_BASE_URL": f"http://127.0.0.1:{port}",
-                    "ARESTRIX_PYTHON": sys.executable})
+                    "ARESTRIX_PYTHON": sys.executable, "ARESTRIX_DISABLE_USER_ENV": "1"})
         if with_key:
             env["DEEPSEEK_API_KEY"] = TEST_KEY
         if ticket:

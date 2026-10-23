@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <atomic>
+#include <cctype>
 #include <condition_variable>
 #include <cstring>
 #include <mutex>
@@ -37,6 +38,14 @@ namespace platform {
 using Clock = std::chrono::steady_clock;
 
 namespace {
+// Flags de ambiente no estilo "1/true/yes/on" (0/false/no/off desativam).
+bool envEnabled(const char* name) {
+    std::string value = getEnv(name);
+    if (value.empty()) return false;
+    for (char& ch : value) ch = (char)std::tolower((unsigned char)ch);
+    return value != "0" && value != "false" && value != "no" && value != "off";
+}
+
 bool looksLikeSecretName(const std::string& n) {
     std::string u;
     for (char ch : n) u.push_back((char)std::toupper((unsigned char)ch));
@@ -411,6 +420,7 @@ std::vector<std::string> listUserEnvNames() {
 }
 
 bool loadPersistedUserEnv() {
+    if (envEnabled("ARESTRIX_DISABLE_USER_ENV")) return true;
     bool ok = true;
     for (const auto& name : listUserEnvNames()) {
         if (!getEnv(name).empty()) continue;
@@ -830,6 +840,7 @@ std::vector<std::string> listUserEnvNames() {
 }
 
 bool loadPersistedUserEnv() {
+    if (envEnabled("ARESTRIX_DISABLE_USER_ENV")) return true;
     bool ok = true;
     for (const auto& name : listUserEnvNames()) {
         if (!getEnv(name).empty()) continue;
