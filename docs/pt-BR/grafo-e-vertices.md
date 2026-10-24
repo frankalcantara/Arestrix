@@ -103,6 +103,13 @@ skill orienta; o grafo autoriza; o runtime aplica:
 | Profundidade de aninhamento | 3 | `ARESTRIX_MAX_CALL_DEPTH` |
 | Total de chamadas por processo | 50 | `ARESTRIX_MAX_TOTAL_CALLS` |
 
+Por padrão, cada chamada concluída ou com falha também publica uma **notificação fire-and-forget**.
+Ela não altera o resultado síncrono: grava uma linha em
+`.arestrix/runs/<runId>/notifications.jsonl` e emite um evento de telemetria `notification`, que o
+Studio mostra como toast não bloqueante. A notificação leva IDs, status e metadados, nunca o input
+ou o output da chamada. Desligue por aresta no Inspetor (`notify`) ou globalmente com
+`ARESTRIX_NOTIFICATIONS=0`.
+
 O resultado é uma mensagem de ferramenta JSON com `callId`, `target`, `status`, `output` e `depth`;
 um destino de interação também traz `answers`. O texto final do alvo também é gravado em
 `.arestrix/out/<target>.txt`.

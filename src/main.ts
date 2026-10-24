@@ -25,6 +25,7 @@ import { ensureSearchSynonyms } from './ui/ProjectSearchBox.ts';
 import { getLocale, onLocaleChange } from './i18n/index.ts';
 import { NodeContextMenu } from './ui/NodeContextMenu.ts';
 import { PipelineRunner } from './core/PipelineRunner.ts';
+import { NotificationCenter } from './ui/NotificationCenter.ts';
 
 function bootstrap() {
   const appContainer = document.querySelector<HTMLDivElement>('#app');
@@ -32,6 +33,8 @@ function bootstrap() {
 
   // 0. Inicializa gerenciador de projetos
   const projectManager = ProjectManager.getInstance(globalEventBus);
+  const notificationCenter = new NotificationCenter(appContainer);
+  globalEventBus.on('notification:show', (payload: any) => notificationCenter.show(payload || {}));
 
   // 1. Instância do Grafo Central com compilador padrão MSVC C++20
   const graph = new Graph(globalEventBus, {
@@ -179,6 +182,9 @@ function bootstrap() {
     if (data && data.event) {
       globalEventBus.emit('agent:telemetry', data.event);
       globalEventBus.emit(`agent:telemetry:${data.event.nodeId}`, data.event);
+      if (data.event.type === 'notification') {
+        globalEventBus.emit('notification:show', data.event.payload || {});
+      }
     }
   };
   // @ts-ignore

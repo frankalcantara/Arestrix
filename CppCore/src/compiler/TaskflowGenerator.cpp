@@ -479,7 +479,8 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
                 {"maxCalls", e->callSettings.maxCalls},
                 {"timeoutSeconds", e->callSettings.timeoutSeconds},
                 {"onError", e->callSettings.onError},
-                {"description", e->callSettings.description}
+                {"description", e->callSettings.description},
+                {"notify", e->callSettings.notify}
             });
         }
         return out;

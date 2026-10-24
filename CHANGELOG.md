@@ -111,6 +111,10 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   answer to the next vertex. It does not expose `call_agent` to a model.
 - `examples/11-call-vertex` and the E2E cover a preparer, the Call vertex and the called specialist,
   including the input crossing the flow boundary and the exported answer.
+- **Call notifications (phase 4D):** completed/failed calls publish a non-blocking notification to
+  `.arestrix/runs/<runId>/notifications.jsonl` and to the `notification` telemetry event; the Studio
+  shows it as a toast. Notifications carry IDs/status/metadata, never input or output, and can be
+  disabled per call edge or with `ARESTRIX_NOTIFICATIONS=0`. Calls remain synchronous in v1.
 - **Database disaster recovery and Git sync safety:** binary SQLite databases are excluded from Git
   tracking in accordance with GitHub Acceptable Use Policies; `DatabaseBackupService` exports clean
   text SQL dumps (`storage/database.sql`) and cognitive memory snapshots (`storage/memory.dump.json`)

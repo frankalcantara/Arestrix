@@ -47,6 +47,10 @@ chamador; não é uma task agendada do Taskflow.
   sequencial. Use `ARESTRIX_PARALLEL_CALLS=0` para forçar a delegação sequencial.
 - Os eventos `call_start` / `call_end` levam o caminho da chamada; o texto final do alvo também é
   gravado em `.arestrix/out/<target>.txt`.
+- Chamadas publicam uma **notificação** não bloqueante em sucesso/falha (salvo se desligada por
+  aresta ou por `ARESTRIX_NOTIFICATIONS=0`). O runtime grava em
+  `.arestrix/runs/<runId>/notifications.jsonl` e o Studio mostra um toast. A notificação nunca inclui
+  input ou output; a chamada continua síncrona.
 - O alvo nunca recebe a conversa inteira do chamador: só o input explícito. Isso reduz custo e a
   superfície de prompt injection.
 - Um alvo **subflow** declarado com `childGraph` é compilado como uma função nativa no mesmo

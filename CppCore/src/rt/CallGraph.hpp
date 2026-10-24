@@ -31,6 +31,7 @@ struct CallTarget {
     int timeoutSeconds = 0;
     std::string onError = "fail";
     std::string description;
+    bool notify = true;
 };
 
 // Substitui o registro. O codigo gerado chama uma vez no inicio do pipeline.

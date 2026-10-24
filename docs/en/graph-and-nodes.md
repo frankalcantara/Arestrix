@@ -103,6 +103,13 @@ skill guides the agent; the graph authorizes; the runtime enforces:
 | Nesting depth | 3 | `ARESTRIX_MAX_CALL_DEPTH` |
 | Total calls per process | 50 | `ARESTRIX_MAX_TOTAL_CALLS` |
 
+By default each completed or failed call also publishes a **fire-and-forget notification**. It does
+not change the synchronous result: it appends a line to
+`.arestrix/runs/<runId>/notifications.jsonl` and emits a `notification` telemetry event, which the
+Studio shows as a non-blocking toast. The notification carries IDs, status and metadata, never the
+call input or output. Disable it per call edge in the Inspector (`notify`) or globally with
+`ARESTRIX_NOTIFICATIONS=0`.
+
 The result is a JSON tool message with `callId`, `target`, `status`, `output` and `depth`; an
 interaction target also carries `answers`. The target's final text is also written to
 `.arestrix/out/<target>.txt`.

@@ -48,6 +48,10 @@ scheduled Taskflow task.
   sequential. Set `ARESTRIX_PARALLEL_CALLS=0` to force sequential delegation.
 - `call_start` / `call_end` telemetry events carry the call path; the target's final text is also
   written to `.arestrix/out/<target>.txt`.
+- Calls publish a non-blocking **notification** on success/failure (unless disabled per edge or by
+  `ARESTRIX_NOTIFICATIONS=0`). The runtime appends it to
+  `.arestrix/runs/<runId>/notifications.jsonl` and the Studio shows a toast. Notifications never
+  include the call input or output; the call itself remains synchronous.
 - The target never receives the caller's full conversation: only the explicit input. This keeps
   cost and prompt-injection surface small.
 - A **subflow** target declared with a `childGraph` is compiled as a native function in the same

@@ -2,8 +2,26 @@ import { describe, it, expect } from 'vitest';
 import { Graph } from '../src/core/Graph.ts';
 import { GraphValidator } from '../src/core/Validator.ts';
 import { EventBus } from '../src/core/EventBus.ts';
+import { defaultCallSettings } from '../src/core/types.ts';
 
 describe('Vértice Call (chamada em fluxo, Fase 4C)', () => {
+  it('notifica por padrão e permite desligar por aresta', () => {
+    expect(defaultCallSettings().notify).toBe(true);
+    const graph = new Graph(new EventBus());
+    const caller = graph.createNode('caller', 'Caller', 'agent', 0, 0);
+    const target = graph.createNode('target', 'Target', 'agent', 200, 0);
+    graph.addEdge({
+      id: 'call_notify',
+      sourceNodeId: caller.id,
+      sourcePortId: caller.outputs[2].id,
+      targetNodeId: target.id,
+      targetPortId: target.inputs[0].id,
+      kind: 'call',
+      callSettings: { ...defaultCallSettings(), notify: false }
+    });
+    expect(graph.getEdge('call_notify')?.callSettings?.notify).toBe(false);
+  });
+
   it('cria o vértice com porta de fluxo e porta call', () => {
     const graph = new Graph(new EventBus());
     const call = graph.buildNode('call', 'Chamada', 'call', 0, 0);

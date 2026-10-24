@@ -1487,6 +1487,10 @@ export class Inspector {
                    value="${this.escapeHtml(settings.description || '')}"
                    placeholder="${t('inspector.calls.desc_placeholder', 'Quando o agente deve chamar este alvo')}" />
           </div>
+          <label style="font-size: 11px; display: inline-flex; gap: 6px; align-items: center; margin-top: 4px;">
+            <input type="checkbox" data-call-notify="${edge.id}" ${settings.notify !== false ? 'checked' : ''} />
+            ${t('inspector.calls.notify', 'Notificar conclusão no Studio')}
+          </label>
           <div class="office-field-hint">${t('inspector.calls.max_hint', 'Máximo de chamadas por execução deste agente')}</div>
         </div>
       `;
@@ -1585,6 +1589,17 @@ export class Inspector {
         if (!edge) return;
         const settings = { ...(edge.callSettings ?? defaultCallSettings()) };
         settings.description = input.value.trim();
+        this.graph.updateEdge(edge.id, { callSettings: settings });
+      });
+    });
+
+    this.container.querySelectorAll<HTMLInputElement>('[data-call-notify]').forEach(input => {
+      input.addEventListener('change', () => {
+        const edgeId = input.getAttribute('data-call-notify');
+        const edge = edgeId ? this.graph.getEdge(edgeId) : undefined;
+        if (!edge) return;
+        const settings = { ...(edge.callSettings ?? defaultCallSettings()) };
+        settings.notify = input.checked;
         this.graph.updateEdge(edge.id, { callSettings: settings });
       });
     });

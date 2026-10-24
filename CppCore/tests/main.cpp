@@ -35,6 +35,7 @@
 #include "rt/ModelClient.hpp"
 #include "rt/CallGraph.hpp"
 #include "rt/Interaction.hpp"
+#include "rt/Notification.hpp"
 #include "local/LocalRuntime.hpp"
 #include "gateway/GatewayStore.hpp"
 #include "rt/Decision.hpp"
@@ -530,13 +531,14 @@ TEST(call_registry_and_tool_definition) {
     using namespace taskforge::rt;
     setCallRegistry(
         R"({"specialist":{"kind":"agent","label":"Specialist","spec":{"provider":"deepseek","model":"x"}}})",
-        R"({"caller":[{"target":"specialist","label":"Specialist","kind":"agent","maxCalls":2,"timeoutSeconds":10,"onError":"fail","description":"use specialist"}]})");
+        R"({"caller":[{"target":"specialist","label":"Specialist","kind":"agent","maxCalls":2,"timeoutSeconds":10,"onError":"fail","description":"use specialist","notify":false}]})");
 
     auto targets = callTargetsFor("caller");
     CHECK(targets.size() == 1);
     CHECK(targets[0].id == "specialist");
     CHECK(targets[0].maxCalls == 2);
     CHECK(targets[0].description == "use specialist");
+    CHECK(!targets[0].notify);
     CHECK(callTargetsFor("unknown").empty());
 
     auto defs = callToolDefinitions(targets, RuntimeLang::Pt);
@@ -731,6 +733,45 @@ TEST(call_vertex_compiles_flow_call) {
         threw = true;
     }
     CHECK(threw);
+}
+
+TEST(notification_channel_writes_jsonl_and_respects_opt_out) {
+    using namespace taskforge::rt;
+    const fs::path oldCwd = fs::current_path();
+    const fs::path dir = makeTempDir("notification-run");
+    const std::string oldRunId = taskforge::platform::getEnv("ARESTRIX_RUN_ID");
+    const std::string oldEnabled = taskforge::platform::getEnv("ARESTRIX_NOTIFICATIONS");
+    taskforge::platform::setProcessEnv("ARESTRIX_RUN_ID", "run-test-notify");
+    taskforge::platform::setProcessEnv("ARESTRIX_NOTIFICATIONS", "1");
+    fs::current_path(dir);
+
+    notify("caller", "call.completed", "success", "Chamada concluída", "caller -> specialist",
+           taskforge::Json{{"target", "specialist"}, {"kind", "agent"}});
+
+    const fs::path file = dir / ".arestrix" / "runs" / "run-test-notify" / "notifications.jsonl";
+    CHECK(fs::is_regular_file(file));
+    std::ifstream in(file);
+    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+    CHECK(content.find("\"kind\":\"call.completed\"") != std::string::npos ||
+          content.find("\"kind\": \"call.completed\"") != std::string::npos);
+    CHECK(content.find("specialist") != std::string::npos);
+    CHECK(content.find("\"severity\":\"success\"") != std::string::npos ||
+          content.find("\"severity\": \"success\"") != std::string::npos);
+
+    if (fs::is_regular_file(file)) {
+        const auto before = fs::file_size(file);
+        taskforge::platform::setProcessEnv("ARESTRIX_NOTIFICATIONS", "0");
+        notify("caller", "call.failed", "error", "Chamada falhou", "nao deve gravar");
+        CHECK(fs::file_size(file) == before);
+    } else {
+        CHECK(false);
+    }
+
+    fs::current_path(oldCwd);
+    taskforge::platform::setProcessEnv("ARESTRIX_RUN_ID", oldRunId);
+    taskforge::platform::setProcessEnv("ARESTRIX_NOTIFICATIONS", oldEnabled);
+    fs::remove_all(dir);
 }
 
 TEST(interaction_runtime_reads_answers_file) {

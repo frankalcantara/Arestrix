@@ -326,6 +326,14 @@ def scenario_06_chamada_agente():
               "especialista nao recebeu call_agent")
         check(any(e.get("reply") == "tool_call:call_agent" for e in coord),
               "coordenador chamou o especialista")
+
+        notification_files = list((project / ".arestrix" / "runs").glob("*/notifications.jsonl"))
+        check(bool(notification_files), "a chamada gerou notificacao de execucao")
+        if notification_files:
+            notifications = notification_files[0].read_text(encoding="utf-8")
+            check("call.completed" in notifications, "a notificacao registra a chamada concluida")
+            check("especialista" in notifications, "a notificacao identifica o alvo")
+            check(TEST_KEY not in notifications, "a notificacao nao contem a chave de API")
         no_secret_leak(out, "ex6")
     finally:
         cleanup(work, mock)

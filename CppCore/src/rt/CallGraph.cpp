@@ -1,6 +1,7 @@
 #include "rt/CallGraph.hpp"
 #include "rt/Interaction.hpp"
 #include "rt/NodeInput.hpp"
+#include "rt/Notification.hpp"
 #include "rt/Runtime.hpp"
 #include "sandbox/AgentTelemetryEmitter.hpp"
 #include "util/Json.hpp"
@@ -107,6 +108,7 @@ void setCallRegistry(const std::string& callablesJson, const std::string& caller
             target.timeoutSeconds = value.value("timeoutSeconds", 0);
             target.onError = value.value("onError", std::string("fail"));
             target.description = value.value("description", std::string());
+            target.notify = value.value("notify", true);
             targets.push_back(std::move(target));
         }
         parsedCallers[it.key()] = std::move(targets);
@@ -288,6 +290,13 @@ ToolResult invokeCallImpl(const std::string& callerId, const std::string& caller
             {"depth", callDepth}
         };
         sandbox::AgentTelemetryEmitter::emitEvent(callerId, "call_end", end);
+        if (target->notify) {
+            notify(callerId, "call.failed", "error",
+                   langPick(lang, "Chamada falhou", "Call failed"),
+                   callerId + " -> " + (target->label.empty() ? target->id : target->label) + ": " + message,
+                   Json{{"callId", callId}, {"target", targetId}, {"kind", target->kind},
+                        {"depth", callDepth}, {"status", "error"}});
+        }
         if (target->onError == "abort") throw;
         return ToolResult{errorResult(callId, *target, message).dump(), true};
     }
@@ -313,6 +322,13 @@ ToolResult invokeCallImpl(const std::string& callerId, const std::string& caller
         {"status", "ok"},
         {"depth", callDepth}
     });
+    if (target->notify) {
+        notify(callerId, "call.completed", "success",
+               langPick(lang, "Chamada concluída", "Call completed"),
+               callerId + " -> " + (target->label.empty() ? target->id : target->label) + " (" + target->kind + ")",
+               Json{{"callId", callId}, {"target", targetId}, {"kind", target->kind},
+                    {"depth", callDepth}, {"status", "ok"}});
+    }
     return ToolResult{result.dump(), false};
 }
 

@@ -35,10 +35,12 @@ export interface ICallSettings {
   onError?: 'fail' | 'abort';
   /** Texto injetado na descrição da ferramenta, para o modelo saber quando usar. */
   description?: string;
+  /** Emite uma notificação assíncrona quando a chamada conclui ou falha. */
+  notify?: boolean;
 }
 
 export function defaultCallSettings(): ICallSettings {
-  return { maxCalls: 1, timeoutSeconds: 0, onError: 'fail', description: '' };
+  return { maxCalls: 1, timeoutSeconds: 0, onError: 'fail', description: '', notify: true };
 }
 
 /**

@@ -40,6 +40,7 @@ struct CallSettings {
     int timeoutSeconds = 0;
     std::string onError = "fail";
     std::string description;
+    bool notify = true;
 };
 
 struct Port {
@@ -176,7 +177,8 @@ inline void to_json(json& j, const CallSettings& c) {
         {"maxCalls", c.maxCalls},
         {"timeoutSeconds", c.timeoutSeconds},
         {"onError", c.onError},
-        {"description", c.description}
+        {"description", c.description},
+        {"notify", c.notify}
     };
 }
 inline void from_json(const json& j, CallSettings& c) {
@@ -184,6 +186,7 @@ inline void from_json(const json& j, CallSettings& c) {
     c.timeoutSeconds = j.value("timeoutSeconds", 0);
     c.onError = j.value("onError", std::string("fail"));
     c.description = j.value("description", std::string());
+    c.notify = j.value("notify", true);
 }
 
 // Serialização manual de Port para lidar com campos opcionais seguros
