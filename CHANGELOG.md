@@ -88,6 +88,12 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   artifacts; the modal lists artifacts and masks sensitive text fields.
 - `examples/08-formulario-gerado` and the examples E2E cover a generated form, its audit, artifact
   context and the `free_text` fallback when the model returns an invalid schema.
+- **Parallel delegation (phase 4A):** when a model requests several `call_agent` calls in the same
+  turn, the Agent loop executes them concurrently and returns the tool results in the requested
+  order; depth and call budgets are inherited per thread. Mixed turns stay sequential and
+  `ARESTRIX_PARALLEL_CALLS=0` disables the parallel path.
+- `examples/09-chamadas-paralelas` and the E2E cover two specialists delegated in one turn, with the
+  call graph still closed to the declared targets.
 
 ## [1.5.0-beta.1] - 2026-10-19
 

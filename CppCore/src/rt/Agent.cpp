@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -419,26 +420,64 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
             chat.messages.push_back(std::move(reply));
             if (t.toolCalls.empty()) { finished = true; break; }
 
-            for (auto& call : t.toolCalls) {
-                AgentTelemetryEmitter::emitToolStart(nodeId, call.name, summarizeArgs(call.args));
-                ToolResult res;
-                if (call.name == "call_agent") {
-                    res = invokeCall(nodeId, runId, callTargets, call.args, lang);
-                } else if (mcpTools && mcpTools->owns(call.name)) {
-                    res = mcpTools->call(call.name, call.args);
-                } else {
-                    res = executeTool(tctx, call.name, call.args);
+            const char* parallelEnv = std::getenv("ARESTRIX_PARALLEL_CALLS");
+            const bool parallelAllowed = !(parallelEnv && std::string(parallelEnv) == "0");
+            const bool parallelBatch = parallelAllowed && t.toolCalls.size() > 1 &&
+                std::all_of(t.toolCalls.begin(), t.toolCalls.end(),
+                            [](const ChatToolCall& c) { return c.name == "call_agent"; });
+            if (parallelBatch) {
+                const int parentDepth = currentCallDepth();
+                std::vector<std::future<ToolResult>> futures;
+                futures.reserve(t.toolCalls.size());
+                for (const auto& call : t.toolCalls) {
+                    AgentTelemetryEmitter::emitToolStart(nodeId, call.name, summarizeArgs(call.args));
+                    auto work = [&, call, parentDepth]() {
+                        return invokeCallAtDepth(nodeId, runId, callTargets, call.args, lang, parentDepth);
+                    };
+                    try {
+                        futures.push_back(std::async(std::launch::async, work));
+                    } catch (...) {
+                        // Sem thread disponivel: executa sob demanda ao coletar o resultado.
+                        futures.push_back(std::async(std::launch::deferred, work));
+                    }
                 }
-                AgentTelemetryEmitter::emitToolEnd(nodeId, call.name, !res.isError);
-                if (res.isError) {
-                    AgentTelemetryEmitter::emitEvent(nodeId, "log", json{{"logLine", "[" + call.name + "] " + res.content.substr(0, 300)}});
+                for (size_t i = 0; i < futures.size(); ++i) {
+                    ToolResult res = futures[i].get();
+                    const auto& call = t.toolCalls[i];
+                    AgentTelemetryEmitter::emitToolEnd(nodeId, call.name, !res.isError);
+                    if (res.isError) {
+                        AgentTelemetryEmitter::emitEvent(nodeId, "log",
+                            json{{"logLine", "[" + call.name + "] " + res.content.substr(0, 300)}});
+                    }
+                    ChatMessage result;
+                    result.role = "tool";
+                    result.toolCallId = call.id;
+                    result.text = res.content;
+                    result.isError = res.isError;
+                    chat.messages.push_back(std::move(result));
                 }
-                ChatMessage result;
-                result.role = "tool";
-                result.toolCallId = call.id;
-                result.text = res.content;
-                result.isError = res.isError;
-                chat.messages.push_back(std::move(result));
+            } else {
+                for (auto& call : t.toolCalls) {
+                    AgentTelemetryEmitter::emitToolStart(nodeId, call.name, summarizeArgs(call.args));
+                    ToolResult res;
+                    if (call.name == "call_agent") {
+                        res = invokeCall(nodeId, runId, callTargets, call.args, lang);
+                    } else if (mcpTools && mcpTools->owns(call.name)) {
+                        res = mcpTools->call(call.name, call.args);
+                    } else {
+                        res = executeTool(tctx, call.name, call.args);
+                    }
+                    AgentTelemetryEmitter::emitToolEnd(nodeId, call.name, !res.isError);
+                    if (res.isError) {
+                        AgentTelemetryEmitter::emitEvent(nodeId, "log", json{{"logLine", "[" + call.name + "] " + res.content.substr(0, 300)}});
+                    }
+                    ChatMessage result;
+                    result.role = "tool";
+                    result.toolCallId = call.id;
+                    result.text = res.content;
+                    result.isError = res.isError;
+                    chat.messages.push_back(std::move(result));
+                }
             }
         }
 

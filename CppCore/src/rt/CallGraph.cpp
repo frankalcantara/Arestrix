@@ -65,6 +65,11 @@ struct DepthGuard {
     ~DepthGuard() { --depth; }
 };
 
+int& threadCallDepth() {
+    static thread_local int depth = 0;
+    return depth;
+}
+
 } // namespace
 
 void setCallRegistry(const std::string& callablesJson, const std::string& callersJson) {
@@ -125,9 +130,11 @@ std::vector<ToolDef> callToolDefinitions(const std::vector<CallTarget>& targets,
     std::ostringstream description;
     description << langPick(lang,
         "Chama um dos agentes ou interacoes humanas declarados no grafo. O alvo precisa estar na lista permitida. "
-        "A chamada e sincrona: voce recebe a resposta do alvo antes de continuar.",
+        "A chamada e sincrona: voce recebe a resposta do alvo antes de continuar. Voce pode pedir varias chamadas "
+        "call_agent no mesmo turno; elas rodam em paralelo e os resultados voltam na ordem pedida.",
         "Calls one of the agents or human interactions declared in the graph. The target must be in the allowed list. "
-        "The call is synchronous: you receive the target's answer before continuing.");
+        "The call is synchronous: you receive the target's answer before continuing. You may request several "
+        "call_agent calls in the same turn; they run in parallel and results return in the requested order.");
     for (const auto& target : targets) {
         allowed.push_back(target.id);
         description << "\n- " << target.id;
@@ -163,9 +170,9 @@ std::vector<ToolDef> callToolDefinitions(const std::vector<CallTarget>& targets,
     return {ToolDef{"call_agent", description.str(), schema}};
 }
 
-ToolResult invokeCall(const std::string& callerId, const std::string& callerRunId,
-                      const std::vector<CallTarget>& targets, const taskforge::Json& args,
-                      RuntimeLang lang) {
+ToolResult invokeCallImpl(const std::string& callerId, const std::string& callerRunId,
+                          const std::vector<CallTarget>& targets, const taskforge::Json& args,
+                          RuntimeLang lang, int startDepth) {
     if (!args.is_object()) return invokeError(langPick(lang, "Argumentos invalidos.", "Invalid arguments."));
 
     const std::string targetId = args.value("target", std::string());
@@ -186,7 +193,8 @@ ToolResult invokeCall(const std::string& callerId, const std::string& callerRunI
         return invokeError(langPick(lang, "Destino de chamada nao suportado: ", "Call target not supported: ") + target->kind);
     }
 
-    static thread_local int depth = 0;
+    int& depth = threadCallDepth();
+    depth = startDepth;
     const int maxDepth = envLimit("ARESTRIX_MAX_CALL_DEPTH", 3);
     if (maxDepth > 0 && depth + 1 > maxDepth) {
         return invokeError(langPick(lang, "Limite de profundidade de chamadas atingido.", "Call depth limit reached."));
@@ -284,6 +292,27 @@ ToolResult invokeCall(const std::string& callerId, const std::string& callerRunI
         {"depth", callDepth}
     });
     return ToolResult{result.dump(), false};
+}
+
+ToolResult invokeCall(const std::string& callerId, const std::string& callerRunId,
+                      const std::vector<CallTarget>& targets, const taskforge::Json& args,
+                      RuntimeLang lang) {
+    return invokeCallImpl(callerId, callerRunId, targets, args, lang, threadCallDepth());
+}
+
+ToolResult invokeCallAtDepth(const std::string& callerId, const std::string& callerRunId,
+                             const std::vector<CallTarget>& targets, const taskforge::Json& args,
+                             RuntimeLang lang, int parentDepth) {
+    struct RestoreDepth {
+        int& depth;
+        int previous;
+        ~RestoreDepth() { depth = previous; }
+    } restore{threadCallDepth(), threadCallDepth()};
+    return invokeCallImpl(callerId, callerRunId, targets, args, lang, parentDepth);
+}
+
+int currentCallDepth() {
+    return threadCallDepth();
 }
 
 } // namespace rt

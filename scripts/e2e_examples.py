@@ -448,6 +448,30 @@ def scenario_08_formulario_gerado():
         cleanup(work, mock)
 
 
+def scenario_09_chamadas_paralelas():
+    print("\n== Exemplo 9: chamadas paralelas ==")
+    out, project, events, code, work, mock = run_example("09-chamadas-paralelas")
+    try:
+        check(code == 0, "terminou com codigo 0")
+        exported = project / "exports" / "resposta.txt"
+        check(exported.exists(), "vertice de saida exportou a resposta")
+        if exported.exists():
+            content = exported.read_text(encoding="utf-8")
+            check("Parecer A: risco baixo." in content, "o parecer A chegou ao coordenador")
+            check("Parecer B: prazo compativel." in content, "o parecer B chegou ao coordenador")
+
+        chats = [e for e in events if e.get("event") == "chat"]
+        coord = [e for e in chats if "COORDENADOR PARALELO" in e.get("system", "")]
+        check(bool(coord), "o coordenador executou")
+        check(any(e.get("requested_tools") == ["call_agent", "call_agent"] for e in coord),
+              "o coordenador pediu duas chamadas no mesmo turno")
+        check(any("ESPECIALISTA A" in e.get("system", "") for e in chats), "o especialista A foi chamado")
+        check(any("ESPECIALISTA B" in e.get("system", "") for e in chats), "o especialista B foi chamado")
+        no_secret_leak(out, "ex9")
+    finally:
+        cleanup(work, mock)
+
+
 def scenario_secrets_guard():
     print("\n== Garantia de seguranca dos exemplos ==")
     node = shutil.which("node")
@@ -467,7 +491,7 @@ def main():
     for fn in (scenario_01, scenario_02_urgente, scenario_02_normal, scenario_02_duvida, scenario_02_sem_chave,
                scenario_03_duvida, scenario_03_urgente, scenario_04_memoria, scenario_05_matematica,
                scenario_06_chamada_agente, scenario_07_interacao, scenario_08_formulario_gerado,
-               scenario_secrets_guard):
+               scenario_09_chamadas_paralelas, scenario_secrets_guard):
         fn()
     if failures:
         print(f"\n{len(failures)} verificacao(oes) falharam:")

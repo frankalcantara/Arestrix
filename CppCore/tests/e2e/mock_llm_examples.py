@@ -49,6 +49,12 @@ def tool_call(call_id, name, args):
         {"id": call_id, "type": "function", "function": {"name": name, "arguments": json.dumps(args)}}]}
 
 
+def tool_calls(calls):
+    return {"role": "assistant", "content": None, "tool_calls": [
+        {"id": call_id, "type": "function", "function": {"name": name, "arguments": json.dumps(args)}}
+        for call_id, name, args in calls]}
+
+
 def text(content):
     return {"role": "assistant", "content": content}
 
@@ -238,6 +244,29 @@ def decide(body):
         }
         return text(json.dumps(schema, ensure_ascii=False))
 
+    if "COORDENADOR PARALELO" in system:
+        if step == 0:
+            return tool_calls([
+                ("c1", "call_agent", {"target": "especialista_a", "input": "avalie o risco"}),
+                ("c2", "call_agent", {"target": "especialista_b", "input": "avalie o prazo"})
+            ])
+        if step == 2:
+            def opinion(message):
+                try:
+                    parsed = json.loads(message["content"])
+                    return parsed.get("output", message["content"])
+                except Exception:
+                    return message["content"]
+            content = "Risco: " + opinion(tool_msgs[0]) + "\nPrazo: " + opinion(tool_msgs[1]) + "\n"
+            return tool_call("c3", "write", {"path": "workspace/resposta.txt", "content": content})
+        return text("Chamadas paralelas concluidas.")
+
+    if "ESPECIALISTA A" in system:
+        return text("Parecer A: risco baixo.")
+
+    if "ESPECIALISTA B" in system:
+        return text("Parecer B: prazo compativel.")
+
     return text("Sem roteiro para este agente.")
 
 
@@ -276,6 +305,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         log({"event": "chat", "model": body.get("model"), "tools": sorted(t["function"]["name"] for t in body.get("tools", [])),
              "system": messages[0].get("content", "") if messages else "",
              "user_has_acme": "ACME Ltda" in user_content,
+             "requested_tools": [t["function"]["name"] for t in msg.get("tool_calls", [])],
              "reply": "tool_call:" + msg["tool_calls"][0]["function"]["name"] if msg.get("tool_calls") else "text"})
         self._send(200, {"choices": [{"message": msg, "finish_reason": "tool_calls" if msg.get("tool_calls") else "stop"}],
                          "usage": {"prompt_tokens": 10, "completion_tokens": 10}})

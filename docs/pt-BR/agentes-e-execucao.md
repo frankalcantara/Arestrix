@@ -42,6 +42,9 @@ chamador; não é uma task agendada do Taskflow.
   `target`, `status`, `output` e `depth`.
 - O skill orienta quando chamar; o grafo autoriza; o runtime aplica `maxCalls` por aresta,
   `ARESTRIX_MAX_CALL_DEPTH` (padrão 3) e `ARESTRIX_MAX_TOTAL_CALLS` (padrão 50).
+- Se o modelo pedir várias chamadas `call_agent` no mesmo turno, o runtime as executa em paralelo e
+  devolve os resultados na ordem pedida. Um turno que mistura chamadas com outras ferramentas continua
+  sequencial. Use `ARESTRIX_PARALLEL_CALLS=0` para forçar a delegação sequencial.
 - Os eventos `call_start` / `call_end` levam o caminho da chamada; o texto final do alvo também é
   gravado em `.arestrix/out/<target>.txt`.
 - O alvo nunca recebe a conversa inteira do chamador: só o input explícito. Isso reduz custo e a

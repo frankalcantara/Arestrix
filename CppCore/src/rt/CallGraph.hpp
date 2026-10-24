@@ -48,5 +48,14 @@ ToolResult invokeCall(const std::string& callerId, const std::string& callerRunI
                       const std::vector<CallTarget>& targets, const taskforge::Json& args,
                       RuntimeLang lang);
 
+// Profundidade de chamadas da thread atual (0 fora de uma chamada).
+int currentCallDepth();
+
+// Variante usada por chamadas paralelas: o novo thread herda a profundidade do
+// chamador, para que maxDepth continue valendo.
+ToolResult invokeCallAtDepth(const std::string& callerId, const std::string& callerRunId,
+                             const std::vector<CallTarget>& targets, const taskforge::Json& args,
+                             RuntimeLang lang, int parentDepth);
+
 } // namespace rt
 } // namespace taskforge

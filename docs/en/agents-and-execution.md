@@ -43,6 +43,9 @@ scheduled Taskflow task.
   `target`, `status`, `output` and `depth`.
 - The skill guides when to call; the graph authorizes; the runtime enforces `maxCalls` per edge,
   `ARESTRIX_MAX_CALL_DEPTH` (default 3) and `ARESTRIX_MAX_TOTAL_CALLS` (default 50).
+- If the model requests several `call_agent` calls in the same turn, the runtime runs them in
+  parallel and returns the results in the requested order. A turn mixing calls with other tools stays
+  sequential. Set `ARESTRIX_PARALLEL_CALLS=0` to force sequential delegation.
 - `call_start` / `call_end` telemetry events carry the call path; the target's final text is also
   written to `.arestrix/out/<target>.txt`.
 - The target never receives the caller's full conversation: only the explicit input. This keeps

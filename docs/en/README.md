@@ -16,7 +16,7 @@
 ## Tutorials and examples
 
 - [SVG agent tutorial](../pt-BR/tutorials/svg-agent.md) — complete walkthrough in Portuguese.
-- [Examples](../../examples/README.md) - eight runnable projects (the web-research one uses Keenable).
+- [Examples](../../examples/README.md) - nine runnable projects (the web-research one uses Keenable).
 - [Feature showcase](../product/showcase.md) — screenshots of the Studio, compiler, runner and governance screens.
 - [Comparison](../product/comparison.md) — how Arestrix differs from other orchestration approaches.
 

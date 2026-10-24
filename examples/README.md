@@ -2,7 +2,7 @@
 
 [Português](README.pt-BR.md) · [Documentation](../docs/README.md)
 
-Eight ready-to-run projects, from simple to complex. Each one is a normal Arestrix project folder: open it in the Studio,
+Nine ready-to-run projects, from simple to complex. Each one is a normal Arestrix project folder: open it in the Studio,
 choose your model, set your API key, press **F5**.
 
 | # | Project | What it shows | Needs |
@@ -15,11 +15,12 @@ choose your model, set your API key, press **F5**.
 | 6 | [`06-chamada-agente`](06-chamada-agente) | A coordinator agent declares a **call** to a specialist agent (dashed edge) and receives its answer synchronously; the result is delivered as an artifact. | A model. |
 | 7 | [`07-interacao`](07-interacao) | A human **interaction** vertex with a safe form; `--answers` feeds a scripted response for CI/headless runs, and the answer is delivered as an artifact. | Nothing (scripted answers). |
 | 8 | [`08-formulario-gerado`](08-formulario-gerado) | A model generates the form schema at runtime from markdown context and an artifact; the runtime validates it and audits the generated schema. | A model (generator). |
+| 9 | [`09-chamadas-paralelas`](09-chamadas-paralelas) | A coordinator requests two declared specialists in the same turn; the Agent loop runs the `call_agent` calls in parallel and consolidates both answers. | A model. |
 
 Examples 3 and 5 are **generated** by `python scripts/build_examples.py`, so the shared pieces do not drift apart.
 Vertices cannot yet execute a nested graph, so the composition is flattened into a single pipeline.
 
-All eight end in **output vertices**: the produced file is copied to `exports/` and registered in the **Artifacts** tab,
+All nine end in **output vertices**: the produced file is copied to `exports/` and registered in the **Artifacts** tab,
 with a viewer per format (SVG, Markdown, spreadsheets, PDF and JSON).
 
 ## Run an example
