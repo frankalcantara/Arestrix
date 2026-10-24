@@ -162,6 +162,10 @@ export class OfficeRibbon {
               <span style="font-size: 13px;">🌿</span>
               <span id="qat-git-status-badge" style="font-size: 11px; font-weight: 700; color: #64748b;">Git</span>
             </button>
+            <button id="qat-btn-git-push" class="office-qat-btn" title="${t('git_sync.btn_push_tooltip', 'Sincronizar com GitHub agora (Commit & Push manual)')}" style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 4px; margin-left: 2px; font-size: 11px; font-weight: 600; color: #0f6cbd;">
+              <span style="font-size: 12px;">⬆️</span>
+              <span>Push</span>
+            </button>
 
             <button id="qat-btn-save" class="office-qat-btn" title="${t('ribbon.titlebar.save_now')}">💾</button>
             <button id="qat-btn-undo" class="office-qat-btn" title="${t('ribbon.titlebar.undo')}" disabled>↶</button>
@@ -616,6 +620,16 @@ export class OfficeRibbon {
       this.gitAccountModal.open();
     });
 
+    this.container.querySelector('#qat-btn-git-push')?.addEventListener('click', async () => {
+      const btn = this.container.querySelector('#qat-btn-git-push') as HTMLButtonElement | null;
+      if (btn) btn.disabled = true;
+      try {
+        await GitSyncManager.getInstance().triggerManualPush();
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+
     this.container.querySelector('#qat-btn-save')?.addEventListener('click', async () => {
       await this.saveNow();
     });
@@ -837,7 +851,7 @@ export class OfficeRibbon {
           // Usuário não autenticado: neutro, sem check e sem verde
           badge.textContent = 'Git';
           badge.style.color = '#64748b';
-        } else if (st.hasUncommittedChanges) {
+        } else if (st.hasUncommittedChanges || st.hasUnpushedCommits || (st.unpushedCommitsCount ?? 0) > 0) {
           badge.textContent = 'Git *';
           badge.style.color = '#d97706';
         } else {

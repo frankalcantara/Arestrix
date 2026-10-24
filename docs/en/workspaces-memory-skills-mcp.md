@@ -29,8 +29,10 @@ compressed `.arestrix` package.
 Each project in Arestrix maps to an **independent Git repository** on a configurable Git server (default: a **GitHub** account):
 
 1. **Auto-save inside the local clone:** Continuous real-time auto-save remains in effect inside the project folder on disk, which acts as the local Git clone/repository.
-2. **Automated Commit & Push:**
-   - **On every pipeline execution (`F5`):** A commit with contextual message is created and pushed immediately to the remote server prior to graph execution.
+2. **Smart Commit & On-Demand Push (GitHub Quota & Rate-Limit Protection):**
+   - **On every pipeline execution (`F5`):** A **local** commit with contextual message is created inside the local clone without triggering an immediate remote push. This eliminates GitHub API rate-limit risks and bandwidth abuse during rapid, iterative debugging cycles.
+   - **Automated Timed Push (default every 10 minutes):** If pending local modifications or unpushed commits exist, Arestrix automatically batches and pushes them periodically to the remote repository. Interval and toggle are configurable per project.
+   - **Manual Synchronization Button (Immediate Push):** Located on the Quick Access Toolbar (QAT) in the title bar and within the automation modal, allowing instant pushes to GitHub anytime with one click.
    - **On application shutdown:** Triggered natively by the C++ backend when closing the application or window, guaranteeing that no work remains unversioned on the remote server.
 3. **Absolute Security (Zero-Secrets in Arestrix):** No credentials, passwords, or Personal Access Tokens (PAT) are stored in Arestrix files, manifests, or databases. Identity registration and authentication workflows are guided by Arestrix but managed **exclusively by the Operating System** via **Git Credential Manager (GCM)** / Windows Credential Store.
 4. **Private Repositories by Default:** Repositories are created automatically with the project name and strictly enforced as **private** (`isPrivate: true`).

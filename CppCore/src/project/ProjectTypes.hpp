@@ -64,6 +64,8 @@ struct ProjectGitConfig {
     bool isPrivate = true;
     bool autoCommitOnRun = true;
     bool autoCommitOnShutdown = true;
+    bool timedPushEnabled = true;
+    int timedPushIntervalMinutes = 10;
     std::string lastSyncAt = "";
     std::string lastCommitHash = "";
 };
@@ -79,6 +81,8 @@ inline void to_json(taskforge::Json& j, const ProjectGitConfig& g) {
         {"isPrivate", g.isPrivate},
         {"autoCommitOnRun", g.autoCommitOnRun},
         {"autoCommitOnShutdown", g.autoCommitOnShutdown},
+        {"timedPushEnabled", g.timedPushEnabled},
+        {"timedPushIntervalMinutes", g.timedPushIntervalMinutes},
         {"lastSyncAt", g.lastSyncAt},
         {"lastCommitHash", g.lastCommitHash}
     };
@@ -94,6 +98,8 @@ inline void from_json(const taskforge::Json& j, ProjectGitConfig& g) {
     g.isPrivate = j.value("isPrivate", true);
     g.autoCommitOnRun = j.value("autoCommitOnRun", true);
     g.autoCommitOnShutdown = j.value("autoCommitOnShutdown", true);
+    g.timedPushEnabled = j.value("timedPushEnabled", true);
+    g.timedPushIntervalMinutes = j.value("timedPushIntervalMinutes", 10);
     g.lastSyncAt = j.value("lastSyncAt", "");
     g.lastCommitHash = j.value("lastCommitHash", "");
 }

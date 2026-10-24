@@ -186,7 +186,9 @@ export class ProjectManager {
         remoteUrl: '',
         isPrivate: true,
         autoCommitOnRun: true,
-        autoCommitOnShutdown: true
+        autoCommitOnShutdown: true,
+        timedPushEnabled: true,
+        timedPushIntervalMinutes: 10
       },
       runner: {
         enabled: true,

@@ -240,6 +240,34 @@ GitStatusResult GitSyncService::getStatus(const std::filesystem::path& projectRo
         }
     }
 
+    // Commits pendentes de push (unpushed)
+    {
+        platform::ProcessSpec s;
+        s.argv = {"git", "rev-list", "--count", "@{u}..HEAD"};
+        s.workingDir = projectRoot;
+        s.scrubSecrets = true;
+        auto r = platform::run(s, 3000);
+        if (r.ok()) {
+            try {
+                st.unpushedCommitsCount = std::stoi(trim(r.output));
+                st.hasUnpushedCommits = (st.unpushedCommitsCount > 0);
+            } catch (...) {}
+        } else if (!st.remoteUrl.empty()) {
+            std::string branch = !st.currentBranch.empty() ? st.currentBranch : "main";
+            platform::ProcessSpec s2;
+            s2.argv = {"git", "rev-list", "--count", "origin/" + branch + "..HEAD"};
+            s2.workingDir = projectRoot;
+            s2.scrubSecrets = true;
+            auto r2 = platform::run(s2, 3000);
+            if (r2.ok()) {
+                try {
+                    st.unpushedCommitsCount = std::stoi(trim(r2.output));
+                    st.hasUnpushedCommits = (st.unpushedCommitsCount > 0);
+                } catch (...) {}
+            }
+        }
+    }
+
     return st;
 }
 
@@ -401,11 +429,10 @@ bool GitSyncService::createRemoteRepo(const std::string& provider,
     return true;
 }
 
-bool GitSyncService::commitAndPush(const std::filesystem::path& projectRoot,
-                                  const std::string& commitMessage,
-                                  const std::string& branch,
-                                  std::string& output,
-                                  std::string& error) {
+bool GitSyncService::commitLocal(const std::filesystem::path& projectRoot,
+                                const std::string& commitMessage,
+                                std::string& output,
+                                std::string& error) {
     if (!platform::commandExists("git")) {
         error = "Git nao instalado.";
         return false;
@@ -416,7 +443,7 @@ bool GitSyncService::commitAndPush(const std::filesystem::path& projectRoot,
         return false;
     }
 
-    std::string targetBranch = !branch.empty() ? branch : "main";
+    ensureSafeGitignore(projectRoot);
 
     // 1. git add -A
     {
@@ -456,33 +483,68 @@ bool GitSyncService::commitAndPush(const std::filesystem::path& projectRoot,
             error = "Falha no git commit: " + r.error + " " + r.output;
             return false;
         }
-        output += "Commit realizado. ";
+        output += "Commit realizado com sucesso. ";
     } else {
         output += "Nenhuma alteracao local pendente. ";
     }
 
-    // 4. git push (usa o Git Credential Manager do SO de forma transparente)
-    {
-        platform::ProcessSpec s;
-        s.argv = {"git", "push", "-u", "origin", targetBranch};
-        s.workingDir = projectRoot;
-        s.scrubSecrets = true;
-        auto r = platform::run(s, 30000);
-        if (!r.ok()) {
-            // Tenta push simples sem -u se falhar
-            platform::ProcessSpec sFallback;
-            sFallback.argv = {"git", "push", "origin", targetBranch};
-            sFallback.workingDir = projectRoot;
-            sFallback.scrubSecrets = true;
-            auto rFallback = platform::run(sFallback, 30000);
-            if (!rFallback.ok()) {
-                error = "Falha no git push: " + rFallback.error + " " + rFallback.output;
-                return false;
-            }
-        }
-        output += "Push enviado para " + targetBranch + ".";
+    return true;
+}
+
+bool GitSyncService::pushRemote(const std::filesystem::path& projectRoot,
+                               const std::string& branch,
+                               std::string& output,
+                               std::string& error) {
+    if (!platform::commandExists("git")) {
+        error = "Git nao instalado.";
+        return false;
     }
 
+    if (!std::filesystem::exists(projectRoot / ".git")) {
+        error = "Pasta nao e um repositorio git.";
+        return false;
+    }
+
+    std::string targetBranch = !branch.empty() ? branch : "main";
+
+    platform::ProcessSpec s;
+    s.argv = {"git", "push", "-u", "origin", targetBranch};
+    s.workingDir = projectRoot;
+    s.scrubSecrets = true;
+    auto r = platform::run(s, 30000);
+    if (!r.ok()) {
+        platform::ProcessSpec sFallback;
+        sFallback.argv = {"git", "push", "origin", targetBranch};
+        sFallback.workingDir = projectRoot;
+        sFallback.scrubSecrets = true;
+        auto rFallback = platform::run(sFallback, 30000);
+        if (!rFallback.ok()) {
+            error = "Falha no git push: " + rFallback.error + " " + rFallback.output;
+            return false;
+        }
+    }
+    output += "Push enviado para " + targetBranch + ".";
+    return true;
+}
+
+bool GitSyncService::commitAndPush(const std::filesystem::path& projectRoot,
+                                  const std::string& commitMessage,
+                                  const std::string& branch,
+                                  std::string& output,
+                                  std::string& error) {
+    std::string commitOut, commitErr;
+    if (!commitLocal(projectRoot, commitMessage, commitOut, commitErr)) {
+        error = commitErr;
+        return false;
+    }
+    output += commitOut;
+
+    std::string pushOut, pushErr;
+    if (!pushRemote(projectRoot, branch, pushOut, pushErr)) {
+        error = pushErr;
+        return false;
+    }
+    output += pushOut;
     return true;
 }
 

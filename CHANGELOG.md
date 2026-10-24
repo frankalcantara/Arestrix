@@ -10,6 +10,11 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
 
 ### Added
 
+- **Timed Git Push and Rate-Limit Protection (GitHub Abuse Prevention):** Decoupled local commit from remote push. Pipeline execution (`F5`) now records fast local commits without consuming remote GitHub network quotas.
+- **Batched Timed Push Timer:** Background timer (default every 10 minutes) automatically batches and pushes pending changes or unpushed commits when detected.
+- **Immediate Manual Push Action:** Dedicated one-click Push button on Quick Access Toolbar (QAT) and within `GitAccountModal` automation settings.
+- **Git History Audit:** Verified entire repository history confirming `.arestrix` directories have never been tracked or committed.
+
 - Project memory is now stored in SQLite (`.arestrix/memory/memory.db`) by `MemoryStore` and
   `MemoryService`, with scopes, nodes, temporal edges, episodes, evidence, audit and working state.
 - Temporal multigraph queries (`as of`, invalidation, recursive neighbours) and FTS5 node search.

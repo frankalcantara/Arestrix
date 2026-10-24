@@ -550,8 +550,10 @@ export interface IProjectGitConfig {
   repositoryName: string; // nome do repositorio remoto (privado)
   remoteUrl: string; // URL do repositorio remoto
   isPrivate: boolean; // repositorios criados pelo Arestrix sao privados
-  autoCommitOnRun: boolean; // commit e push a cada execucao (F5)
+  autoCommitOnRun: boolean; // commit local a cada execucao (F5)
   autoCommitOnShutdown: boolean; // commit e push ao encerrar o sistema
+  timedPushEnabled?: boolean; // push temporizado automatico (padrao true)
+  timedPushIntervalMinutes?: number; // intervalo em minutos (padrao 10)
   lastSyncAt?: string;
   lastCommitHash?: string;
 }

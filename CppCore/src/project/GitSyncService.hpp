@@ -20,6 +20,8 @@ struct GitStatusResult {
     std::string currentBranch;
     std::string remoteUrl;
     bool hasUncommittedChanges = false;
+    bool hasUnpushedCommits = false;
+    int unpushedCommitsCount = 0;
     std::string lastCommitHash;
     std::string lastCommitMessage;
     std::string error;
@@ -37,6 +39,8 @@ inline void to_json(taskforge::Json& j, const GitStatusResult& r) {
         {"currentBranch", r.currentBranch},
         {"remoteUrl", r.remoteUrl},
         {"hasUncommittedChanges", r.hasUncommittedChanges},
+        {"hasUnpushedCommits", r.hasUnpushedCommits},
+        {"unpushedCommitsCount", r.unpushedCommitsCount},
         {"lastCommitHash", r.lastCommitHash},
         {"lastCommitMessage", r.lastCommitMessage},
         {"error", r.error}
@@ -80,6 +84,18 @@ public:
                                  const std::string& serverUrl,
                                  std::string& remoteUrl,
                                  std::string& error);
+
+    // Executa git add e commit local (sem enviar para o remote, ideal para F5 / syncOnRun)
+    static bool commitLocal(const std::filesystem::path& projectRoot,
+                            const std::string& commitMessage,
+                            std::string& output,
+                            std::string& error);
+
+    // Executa git push para o remote (utilizado pelo push temporizado e botao manual)
+    static bool pushRemote(const std::filesystem::path& projectRoot,
+                           const std::string& branch,
+                           std::string& output,
+                           std::string& error);
 
     // Executa git add, commit e push
     static bool commitAndPush(const std::filesystem::path& projectRoot,

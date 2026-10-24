@@ -26,6 +26,8 @@ export class GitAccountModal extends BaseModal {
   private remoteUrl: string = '';
   private autoCommitOnRun: boolean = true;
   private autoCommitOnShutdown: boolean = true;
+  private timedPushEnabled: boolean = true;
+  private timedPushIntervalMinutes: number = 10;
   private isProcessing: boolean = false;
   private feedbackMessage: string | null = null;
   private feedbackType: 'success' | 'error' | 'info' = 'info';
@@ -74,6 +76,8 @@ export class GitAccountModal extends BaseModal {
     this.remoteUrl = gitConfig.remoteUrl || '';
     this.autoCommitOnRun = gitConfig.autoCommitOnRun ?? true;
     this.autoCommitOnShutdown = gitConfig.autoCommitOnShutdown ?? true;
+    this.timedPushEnabled = gitConfig.timedPushEnabled ?? true;
+    this.timedPushIntervalMinutes = gitConfig.timedPushIntervalMinutes ?? 10;
 
     super.open();
     await this.loadData();
@@ -123,6 +127,10 @@ export class GitAccountModal extends BaseModal {
 
     const chkShutdown = this.dialog.querySelector('#git-chk-on-shutdown') as HTMLInputElement | null;
     if (chkShutdown) this.autoCommitOnShutdown = chkShutdown.checked;
+    const chkTimed = this.dialog.querySelector('#git-chk-timed-push') as HTMLInputElement | null;
+    if (chkTimed) this.timedPushEnabled = chkTimed.checked;
+    const inputInterval = this.dialog.querySelector('#git-input-timed-interval') as HTMLInputElement | null;
+    if (inputInterval) this.timedPushIntervalMinutes = Math.max(1, parseInt(inputInterval.value, 10) || 10);
   }
 
   protected override renderTabContent(tabId: string): string {
@@ -292,12 +300,36 @@ export class GitAccountModal extends BaseModal {
               </label>
               <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
                 <input type="checkbox" id="git-chk-on-run" ${this.autoCommitOnRun ? 'checked' : ''}>
-                <span>${t('git_sync.chk_auto_commit_run', 'Executar Commit & Push a cada execução do pipeline (F5)')}</span>
+                <span>${t('git_sync.chk_auto_commit_run', 'Executar Commit local a cada execução do pipeline (F5) - Não consome cotas de rede')}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
                 <input type="checkbox" id="git-chk-on-shutdown" ${this.autoCommitOnShutdown ? 'checked' : ''}>
                 <span>${t('git_sync.chk_auto_commit_shutdown', 'Executar Commit & Push ao encerrar o Arestrix')}</span>
               </label>
+
+              <!-- Push Temporizado -->
+              <div style="margin-top: 4px; padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; margin-bottom: 6px;">
+                  <input type="checkbox" id="git-chk-timed-push" ${this.timedPushEnabled ? 'checked' : ''}>
+                  <strong style="font-weight: 600; color: #1e293b;">${t('git_sync.chk_timed_push', 'Habilitar Push temporizado automático (se houver alterações)')}</strong>
+                </label>
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: #64748b; margin-left: 24px;">
+                  <span>${t('git_sync.timed_interval_label', 'Intervalo do push automático (minutos):')}</span>
+                  <input type="number" id="git-input-timed-interval" min="1" max="1440" value="${this.timedPushIntervalMinutes}" style="width: 65px; height: 26px; padding: 2px 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11.5px; font-weight: 600; box-sizing: border-box;" ${!this.timedPushEnabled ? 'disabled' : ''}>
+                </div>
+              </div>
+
+              <!-- Botão Manual Imediato -->
+              <div style="margin-top: 6px; padding-top: 10px; border-top: 1px solid #edebe9; display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                  <div style="font-size: 12px; font-weight: 600; color: #201f1e;">${t('git_sync.manual_push_title', 'Sincronização Manual Imediata')}</div>
+                  <div style="font-size: 11px; color: #64748b;">${t('git_sync.manual_push_desc', 'Envia todos os commits locais e alterações pendentes imediatamente para o repositório remoto.')}</div>
+                </div>
+                <button type="button" id="btn-modal-manual-push" class="office-btn" style="padding: 6px 14px; font-size: 11.5px; font-weight: 600; background: #0f6cbd; color: #ffffff; border: none; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                  <span>⬆️</span>
+                  <span>${t('git_sync.btn_manual_push', 'Sincronizar Agora')}</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -400,7 +432,33 @@ export class GitAccountModal extends BaseModal {
       this.render();
     });
 
-    // 4. Rodapé - Cancelar e Salvar & Sincronizar
+    // 4. Botão Manual de Push Imediato na Aba de Automação
+    const btnManualPush = this.dialog.querySelector('#btn-modal-manual-push') as HTMLButtonElement | null;
+    btnManualPush?.addEventListener('click', async () => {
+      if (btnManualPush) btnManualPush.disabled = true;
+      this.feedbackMessage = t('git_sync.push_in_progress', 'Sincronizando com GitHub...');
+      this.feedbackType = 'info';
+      this.render();
+
+      const res = await this.gitManager.triggerManualPush();
+      if (btnManualPush) btnManualPush.disabled = false;
+      if (res.ok) {
+        this.feedbackMessage = t('git_sync.push_completed', 'Sincronização concluída com sucesso!');
+        this.feedbackType = 'success';
+      } else {
+        this.feedbackMessage = res.error || t('git_sync.push_warning', 'Aviso no envio para o repositório remoto.');
+        this.feedbackType = 'error';
+      }
+      this.render();
+    });
+
+    const chkTimed = this.dialog.querySelector('#git-chk-timed-push') as HTMLInputElement | null;
+    chkTimed?.addEventListener('change', () => {
+      const inputInt = this.dialog.querySelector('#git-input-timed-interval') as HTMLInputElement | null;
+      if (inputInt) inputInt.disabled = !chkTimed.checked;
+    });
+
+    // 5. Rodapé - Cancelar e Salvar & Sincronizar
     const btnCancel = this.dialog.querySelector('#btn-git-cancel') as HTMLButtonElement | null;
     btnCancel?.addEventListener('click', () => this.hide());
 
@@ -462,10 +520,13 @@ export class GitAccountModal extends BaseModal {
         isPrivate: true,
         autoCommitOnRun: this.autoCommitOnRun,
         autoCommitOnShutdown: this.autoCommitOnShutdown,
+        timedPushEnabled: this.timedPushEnabled,
+        timedPushIntervalMinutes: this.timedPushIntervalMinutes,
         lastSyncAt: new Date().toISOString()
       };
       this.projectManager.updateProjectMetadata({ git: gitConfig });
       await this.projectManager.saveCurrentProject();
+      this.gitManager.startTimedPush();
 
       // 4. Executa primeiro commit & push
       const pushRes = await this.gitManager.commitAndPush(t('git_sync.initial_commit_msg', 'Configuração inicial do projeto Arestrix'));

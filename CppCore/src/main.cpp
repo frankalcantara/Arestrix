@@ -2004,6 +2004,38 @@ void ui_git_create_remote_repo(webui::window::event* e) {
     }
 }
 
+void ui_git_commit_local(webui::window::event* e) {
+    try {
+        auto j = taskforge::jsonutil::parse(e->get_string());
+        std::string root = j.value("rootPath", "");
+        if (root.empty()) root = taskforge::project::ProjectManager::getInstance().getCurrentProject().rootPath;
+        std::string msg = j.value("message", "");
+        std::string out, err;
+        bool ok = taskforge::project::GitSyncService::commitLocal(root, msg, out, err);
+        taskforge::Json res = {{"ok", ok}, {"output", out}, {"error", err}};
+        e->return_string(res.dump());
+    } catch (const std::exception& ex) {
+        taskforge::Json res = {{"ok", false}, {"error", ex.what()}};
+        e->return_string(res.dump());
+    }
+}
+
+void ui_git_push_remote(webui::window::event* e) {
+    try {
+        auto j = taskforge::jsonutil::parse(e->get_string());
+        std::string root = j.value("rootPath", "");
+        if (root.empty()) root = taskforge::project::ProjectManager::getInstance().getCurrentProject().rootPath;
+        std::string branch = j.value("branch", "main");
+        std::string out, err;
+        bool ok = taskforge::project::GitSyncService::pushRemote(root, branch, out, err);
+        taskforge::Json res = {{"ok", ok}, {"output", out}, {"error", err}};
+        e->return_string(res.dump());
+    } catch (const std::exception& ex) {
+        taskforge::Json res = {{"ok", false}, {"error", ex.what()}};
+        e->return_string(res.dump());
+    }
+}
+
 void ui_git_commit_push(webui::window::event* e) {
     try {
         auto j = taskforge::jsonutil::parse(e->get_string());
@@ -2531,6 +2563,8 @@ int main(int argc, char** argv) {
     win.bind("git_launch_login", ui_git_launch_login);
     win.bind("git_init_project", ui_git_init_project);
     win.bind("git_create_remote_repo", ui_git_create_remote_repo);
+    win.bind("git_commit_local", ui_git_commit_local);
+    win.bind("git_push_remote", ui_git_push_remote);
     win.bind("git_commit_push", ui_git_commit_push);
     win.bind("git_is_commercial", ui_git_is_commercial);
 

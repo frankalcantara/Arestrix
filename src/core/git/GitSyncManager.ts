@@ -15,6 +15,8 @@ export interface IGitStatusResult {
   currentBranch?: string;
   remoteUrl?: string;
   hasUncommittedChanges: boolean;
+  hasUnpushedCommits?: boolean;
+  unpushedCommitsCount?: number;
   lastCommitHash?: string;
   lastCommitMessage?: string;
   error?: string;
@@ -26,6 +28,7 @@ export class GitSyncManager {
   private bus: EventBus;
   private isSyncing = false;
   private lastStatus: IGitStatusResult | null = null;
+  private timedPushTimer: any = null;
 
   private constructor(bus: EventBus = globalEventBus) {
     this.bus = bus;
@@ -38,10 +41,13 @@ export class GitSyncManager {
       });
     }
 
-    // Atualiza status quando projeto é carregado ou salvo
+    // Atualiza status e inicia push temporizado quando projeto é carregado
     this.bus.on('project:loaded', () => {
       void this.refreshStatus();
+      this.startTimedPush();
     });
+
+    this.startTimedPush();
   }
 
   public static getInstance(bus: EventBus = globalEventBus): GitSyncManager {
@@ -106,6 +112,8 @@ export class GitSyncManager {
         gcmAccounts: [],
         isRepo: false,
         hasUncommittedChanges: false,
+        hasUnpushedCommits: false,
+        unpushedCommitsCount: 0,
         error: 'Backend nativo WebUI indisponível no navegador puro.'
       };
     }
@@ -127,7 +135,9 @@ export class GitSyncManager {
       isIdentityConfigured: false,
       gcmAccounts: [],
       isRepo: false,
-      hasUncommittedChanges: false
+      hasUncommittedChanges: false,
+      hasUnpushedCommits: false,
+      unpushedCommitsCount: 0
     };
   }
 
@@ -284,6 +294,77 @@ export class GitSyncManager {
   }
 
   /**
+   * Executa apenas commit local (sem push para o remote).
+   * Utilizado a cada execução (F5) para salvar snapshot sem onerar a rede ou cotas do GitHub.
+   */
+  public async commitLocal(message?: string): Promise<{ ok: boolean; output: string; error?: string }> {
+    if (!this.hasWebUI()) return { ok: false, output: '', error: 'Sem backend WebUI.' };
+    const proj = this.projectManager.getCurrentProject();
+
+    try {
+      const payload = {
+        rootPath: proj.rootPath,
+        message: message || `Auto-commit on run: ${new Date().toISOString()}`
+      };
+      const raw = await window.webui.call('git_commit_local', JSON.stringify(payload));
+      if (raw) {
+        const res = JSON.parse(raw);
+        if (res.ok) {
+          this.bus.emit('git:committed', { timestamp: new Date().toISOString() });
+        }
+        await this.refreshStatus();
+        return res;
+      }
+    } catch (e: any) {
+      return { ok: false, output: '', error: e?.message || String(e) };
+    }
+
+    return { ok: false, output: '', error: 'Falha desconhecida no commit local.' };
+  }
+
+  /**
+   * Executa envio (push) para o repositório remoto.
+   */
+  public async pushRemote(branch: string = 'main'): Promise<{ ok: boolean; output: string; error?: string }> {
+    if (!this.hasWebUI()) return { ok: false, output: '', error: 'Sem backend WebUI.' };
+    const proj = this.projectManager.getCurrentProject();
+
+    this.isSyncing = true;
+    this.bus.emit('git:syncing', { type: 'push' });
+
+    try {
+      const payload = {
+        rootPath: proj.rootPath,
+        branch
+      };
+      const raw = await window.webui.call('git_push_remote', JSON.stringify(payload));
+      this.isSyncing = false;
+
+      if (raw) {
+        const res = JSON.parse(raw);
+        if (res.ok) {
+          if (proj.git) {
+            proj.git.lastSyncAt = new Date().toISOString();
+            this.projectManager.updateProjectMetadata({ git: proj.git });
+          }
+          this.bus.emit('git:synced', { timestamp: new Date().toISOString() });
+        } else {
+          this.bus.emit('git:error', { error: res.error });
+        }
+        await this.refreshStatus();
+        return res;
+      }
+    } catch (e: any) {
+      this.isSyncing = false;
+      this.bus.emit('git:error', { error: e?.message || String(e) });
+      return { ok: false, output: '', error: e?.message || String(e) };
+    }
+
+    this.isSyncing = false;
+    return { ok: false, output: '', error: 'Falha desconhecida no push remoto.' };
+  }
+
+  /**
    * Executa commit e push para o repositório remoto
    */
   public async commitAndPush(message?: string, branch: string = 'main'): Promise<{ ok: boolean; output: string; error?: string }> {
@@ -327,7 +408,8 @@ export class GitSyncManager {
   }
 
   /**
-   * Gatilho disparado a cada execução do pipeline (F5)
+   * Gatilho disparado a cada execução do pipeline (F5).
+   * Realiza apenas commit local para salvar o histórico sem gerar tráfego de rede nem estourar cotas remotas.
    */
   public async syncOnRun(): Promise<boolean> {
     const proj = this.projectManager.getCurrentProject();
@@ -338,15 +420,79 @@ export class GitSyncManager {
     try {
       const time = new Date().toISOString();
       const msg = `Auto-commit on run: ${time}`;
-      const res = await this.commitAndPush(msg);
+      const res = await this.commitLocal(msg);
       if (!res.ok) {
-        console.warn('[GitSyncManager] Aviso no commit/push de execução:', res.error);
+        console.warn('[GitSyncManager] Aviso no commit local de execução:', res.error);
       }
       return res.ok;
     } catch (e) {
-      console.warn('[GitSyncManager] Exceção durante auto-sync on run:', e);
+      console.warn('[GitSyncManager] Exceção durante auto-commit on run:', e);
       return false;
     }
+  }
+
+  /**
+   * Inicia o timer de push temporizado se habilitado no projeto ativo.
+   * Padrão: a cada 10 minutos (600.000 ms), se houver qualquer alteração local ou unpushed commits.
+   */
+  public startTimedPush(): void {
+    this.stopTimedPush();
+
+    const proj = this.projectManager.getCurrentProject();
+    if (proj.git && proj.git.enabled === false) return;
+    if (proj.git && proj.git.timedPushEnabled === false) return;
+
+    const intervalMinutes = Math.max(1, proj.git?.timedPushIntervalMinutes ?? 10);
+    const intervalMs = intervalMinutes * 60 * 1000;
+
+    this.timedPushTimer = setInterval(() => {
+      void this.triggerTimedPush();
+    }, intervalMs);
+  }
+
+  /**
+   * Para o timer de push temporizado.
+   */
+  public stopTimedPush(): void {
+    if (this.timedPushTimer) {
+      clearInterval(this.timedPushTimer);
+      this.timedPushTimer = null;
+    }
+  }
+
+  /**
+   * Executa o push temporizado caso existam alterações locais ou commits pendentes de envio.
+   */
+  public async triggerTimedPush(): Promise<boolean> {
+    if (this.isSyncing) return false;
+
+    const proj = this.projectManager.getCurrentProject();
+    if (proj.git && proj.git.enabled === false) return false;
+    if (proj.git && proj.git.timedPushEnabled === false) return false;
+
+    const st = await this.getStatus();
+    if (!st.isRepo) return false;
+
+    const hasChanges = st.hasUncommittedChanges || !!st.hasUnpushedCommits || (st.unpushedCommitsCount ?? 0) > 0;
+    if (!hasChanges) {
+      return false;
+    }
+
+    console.log('[GitSyncManager] Push temporizado: alterações detectadas. Enviando para remote...');
+    const time = new Date().toISOString();
+    const res = await this.commitAndPush(`Arestrix Timed Auto-Save: ${time}`);
+    return res.ok;
+  }
+
+  /**
+   * Acionamento manual de sincronização (Commit & Push) via botão da interface.
+   */
+  public async triggerManualPush(): Promise<{ ok: boolean; output: string; error?: string }> {
+    if (this.isSyncing) {
+      return { ok: false, output: '', error: 'Sincronização já em andamento.' };
+    }
+    const time = new Date().toISOString();
+    return await this.commitAndPush(`Manual Sync: ${time}`);
   }
 
   /**

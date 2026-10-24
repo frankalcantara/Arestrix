@@ -29,8 +29,10 @@ comprimido `.arestrix`.
 Cada projeto no Arestrix é mapeado para um **repositório Git independente** em um servidor Git configurável (por padrão, uma conta do **GitHub**):
 
 1. **Auto-save no clone local:** O salvamento automático contínuo continua operando em tempo real na pasta local do projeto, que atua como o clone/repositório local do Git.
-2. **Commit e Push automáticos:**
-   - **A cada execução do pipeline (`F5`):** Um commit com mensagem contextual é gerado e enviado (`push`) imediatamente ao servidor remoto antes da inicialização do grafo.
+2. **Commit e Push inteligentes e sob demanda (Proteção de Cotas GitHub):**
+   - **A cada execução do pipeline (`F5`):** Um commit **local** com mensagem contextual é gerado no clone local sem disparar `push` remoto. Isso elimina o risco de *rate limiting* e abuso de API no GitHub durante sessões intensas de desenvolvimento e depuração interativa.
+   - **Push temporizado automático (padrão a cada 10 minutos):** Caso existam alterações locais pendentes ou commits não enviados, o Arestrix realiza o push batelada de forma transparente e periódica para o repositório remoto. O intervalo e a ativação podem ser configurados no manifesto e modal do projeto.
+   - **Botão de Sincronização Manual (Push Imediato):** Disponível diretamente na barra superior (Quick Access Toolbar) e na aba de automação do modal, permitindo enviar alterações ao GitHub a qualquer momento com um único clique.
    - **No encerramento do Arestrix:** Disparado nativamente pelo backend C++ ao fechar o aplicativo ou a janela, garantindo que nenhum trabalho fique não versionado no servidor remoto.
 3. **Segurança Absoluta (Zero-Secrets no Arestrix):** Nenhum dado de autenticação, senha ou Personal Access Token (PAT) é registrado nos arquivos, manifestos ou banco do Arestrix. O processo de registro de identidade e autenticação é orientado pelo Arestrix mas gerenciado **exclusivamente pelo Sistema Operacional** através do **Git Credential Manager (GCM)** / Cofre de Credenciais do Windows.
 4. **Repositórios Privados por Padrão:** Novos repositórios são criados de forma automática e transparente com o nome do projeto e marcados obrigatoriamente como **privados** (`isPrivate: true`).

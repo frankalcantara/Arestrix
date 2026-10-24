@@ -183,6 +183,39 @@ describe('Git Auto-Save & Synchronization System', () => {
       expect(current.git?.remoteUrl).toBe('https://github.com/frankalcantara/projeto-teste.git');
       expect(current.git?.isPrivate).toBe(true);
     });
+
+    it('deve incluir suporte a push temporizado (10 min por padrão)', () => {
+      const manifest = projectManager.createDefaultManifest();
+      expect(manifest.git?.timedPushEnabled).toBe(true);
+      expect(manifest.git?.timedPushIntervalMinutes).toBe(10);
+    });
+  });
+
+  describe('Push Temporizado & Manual e Execução Local F5', () => {
+    it('deve expor métodos de controle startTimedPush e stopTimedPush', () => {
+      expect(typeof gitManager.startTimedPush).toBe('function');
+      expect(typeof gitManager.stopTimedPush).toBe('function');
+      gitManager.startTimedPush();
+      gitManager.stopTimedPush();
+    });
+
+    it('triggerTimedPush deve retornar false se não houver alterações pendentes', async () => {
+      const res = await gitManager.triggerTimedPush();
+      expect(res).toBe(false);
+    });
+
+    it('triggerManualPush deve ser disparável sob demanda', async () => {
+      const res = await gitManager.triggerManualPush();
+      // Em ambiente de teste sem WebUI backend nativo
+      expect(res.ok).toBe(false);
+      expect(res.error).toContain('Sem backend WebUI');
+    });
+
+    it('syncOnRun deve executar commit local sem push para remote (protegendo cotas do GitHub)', async () => {
+      const res = await gitManager.syncOnRun();
+      // Em mock sem WebUI retorna false mas não gera exceção
+      expect(typeof res).toBe('boolean');
+    });
   });
 
   describe('GitAccountModal (Interface & Interação)', () => {

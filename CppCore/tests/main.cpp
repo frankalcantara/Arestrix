@@ -3046,6 +3046,8 @@ TEST(git_sync_service_and_project_manifest_config) {
     m.git.isPrivate = true;
     m.git.autoCommitOnRun = true;
     m.git.autoCommitOnShutdown = true;
+    m.git.timedPushEnabled = true;
+    m.git.timedPushIntervalMinutes = 10;
 
     taskforge::Json j = m;
     CHECK(j["git"]["enabled"] == true);
@@ -3060,6 +3062,8 @@ TEST(git_sync_service_and_project_manifest_config) {
     CHECK(m2.git.username == "frankalcantara");
     CHECK(m2.git.repositoryName == "projeto-git-teste");
     CHECK(m2.git.remoteUrl == "https://github.com/frankalcantara/projeto-git-teste.git");
+    CHECK(m2.git.timedPushEnabled == true);
+    CHECK(m2.git.timedPushIntervalMinutes == 10);
 
     // 3. Verificacao de presenca do Git na maquina
     std::string ver;
@@ -3070,6 +3074,28 @@ TEST(git_sync_service_and_project_manifest_config) {
     std::string uName, uEmail;
     bool hasId = GitSyncService::getSystemIdentity(uName, uEmail);
     CHECK(hasId && !uName.empty());
+
+    // 5. Teste de commitLocal em repositorio temporario
+    std::filesystem::path tempDir = std::filesystem::temp_directory_path() / ("arx_test_git_commit_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()));
+    std::filesystem::create_directories(tempDir);
+    std::string initErr;
+    bool initOk = GitSyncService::initProjectRepo(tempDir, "", initErr);
+    CHECK(initOk);
+
+    std::ofstream f(tempDir / "README.md");
+    f << "# Test Repo\n";
+    f.close();
+
+    std::string commitOut, commitErr;
+    bool cOk = GitSyncService::commitLocal(tempDir, "Initial local commit", commitOut, commitErr);
+    CHECK(cOk);
+
+    auto st = GitSyncService::getStatus(tempDir);
+    CHECK(st.isRepo == true);
+    CHECK(st.hasUncommittedChanges == false);
+
+    std::error_code ec;
+    std::filesystem::remove_all(tempDir, ec);
 }
 
 TEST(database_backup_service_dump_restore_and_safe_gitignore) {
