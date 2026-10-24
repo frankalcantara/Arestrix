@@ -716,7 +716,7 @@ export interface IGraphSchema {
 }
 
 export interface IValidationError {
-  type: 'cycle' | 'orphan' | 'invalid_port' | 'missing_branch' | 'invalid_call' | 'call_cycle' | 'invalid_interaction' | 'invalid_skill';
+  type: 'cycle' | 'orphan' | 'invalid_port' | 'missing_branch' | 'invalid_call' | 'call_cycle' | 'invalid_interaction' | 'invalid_skill' | 'invalid_mcp';
   message: string;
   nodeIds?: string[];
   edgeIds?: string[];

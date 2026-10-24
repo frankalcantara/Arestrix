@@ -2,6 +2,9 @@ import { Graph } from '../../core/Graph.ts';
 import { IMcpServerConfig, IMcpCallResult } from '../../core/types.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 import { t, translateMcpError } from '../../i18n/index.ts';
+import { McpHasher } from '../../core/skills/McpHasher.ts';
+import { McpLedgerService } from '../../core/skills/McpLedgerService.ts';
+import { WorkspaceMcpAuditorAgent } from '../../core/workspace/WorkspaceMcpAuditorAgent.ts';
 
 export class McpServersModal {
   private overlay: HTMLElement;
@@ -303,6 +306,8 @@ export class McpServersModal {
       `;
     }
 
+    const ledger = McpLedgerService.getInstance();
+
     return this.servers.map(s => {
       const tools = s.cachedTools || [];
       const isStdio = s.transport === 'stdio';
@@ -310,11 +315,38 @@ export class McpServersModal {
         ? `${s.command || ''} ${(s.args || []).join(' ')}`
         : `SSE: ${s.url || ''}`;
 
+      const hash = McpHasher.computeHash(s);
+      const isNative = ledger.isNativeCoreServer(s.id);
+      const entry = ledger.getEntry(hash);
+      const status = isNative ? 'APPROVE' : (entry ? entry.verdict : 'PENDING');
+
+      let statusBadgeHtml = '';
+      if (status === 'APPROVE') {
+        statusBadgeHtml = `<span style="display: inline-flex; align-items: center; gap: 4px; background: #e6f4ea; color: #137333; border: 1px solid #ceead6; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">🟢 HOMOLOGADO</span>`;
+      } else if (status === 'CAUTION') {
+        statusBadgeHtml = `<span style="display: inline-flex; align-items: center; gap: 4px; background: #fef7e0; color: #b06000; border: 1px solid #fce8b2; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">🟡 ALERTA</span>`;
+      } else if (status === 'REJECT') {
+        statusBadgeHtml = `<span style="display: inline-flex; align-items: center; gap: 4px; background: #fce8e6; color: #c5221f; border: 1px solid #fad2cf; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">🔴 REJEITADO</span>`;
+      } else {
+        statusBadgeHtml = `<span style="display: inline-flex; align-items: center; gap: 4px; background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">⚪ PENDENTE</span>`;
+      }
+
+      const alertBoxHtml = entry && (entry.verdict === 'REJECT' || entry.warnings.length > 0) ? `
+        <div style="margin-top: 10px; padding: 8px 12px; background: ${entry.verdict === 'REJECT' ? '#fdf2f2' : '#fffbeb'}; border: 1px solid ${entry.verdict === 'REJECT' ? '#f8b4b4' : '#fef08a'}; border-radius: 4px; font-size: 12px;">
+          <div style="font-weight: 700; color: ${entry.verdict === 'REJECT' ? '#991b1b' : '#92400e'}; margin-bottom: 4px;">
+            ${entry.verdict === 'REJECT' ? '⚠️ Servidor Bloqueado pelo SkillSpector (Auditor MCP):' : 'ℹ️ Alertas de Segurança:'}
+          </div>
+          <ul style="margin: 0; padding-left: 18px; color: ${entry.verdict === 'REJECT' ? '#7f1d1d' : '#78350f'};">
+            ${[...entry.findings, ...entry.warnings].map(item => `<li>${this.escapeHtml(item)}</li>`).join('')}
+          </ul>
+        </div>
+      ` : '';
+
       return `
         <div class="settings-section-card" data-server-id="${s.id}" style="border: 1px solid var(--border-color); padding: 14px;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
             <div>
-              <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <strong style="font-size: 15px; color: var(--text-primary); font-weight: 700;">${this.escapeHtml(s.name)}</strong>
                 <span class="inheritance-status-badge ${s.isEnabled ? 'badge-inherited' : 'badge-overridden'}" style="font-weight: 700; font-size: 11px;">
                   ${s.isEnabled ? t('mcp_servers.status_active') : t('mcp_servers.status_disabled')}
@@ -322,13 +354,20 @@ export class McpServersModal {
                 <span class="inheritance-status-badge badge-memory-persistent" style="font-weight: 700; font-size: 11px;">
                   ${s.transport.toUpperCase()}
                 </span>
+                ${statusBadgeHtml}
+                <span style="display: inline-flex; align-items: center; background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; padding: 2px 8px; border-radius: 4px; font-family: monospace; font-size: 11px; font-weight: 600;" title="Hash Canônico SHA-256: ${hash}">
+                  SHA-256: ${hash.slice(0, 10)}...${hash.slice(-6)}
+                </span>
               </div>
-              <div style="margin-top: 4px; font-family: monospace; font-size: 12px; color: var(--text-secondary);">
+              <div style="margin-top: 6px; font-family: monospace; font-size: 12px; color: var(--text-secondary);">
                 ID: <strong>${this.escapeHtml(s.id)}</strong> | Exec: <code>${this.escapeHtml(cmdInfo)}</code>
               </div>
             </div>
 
-            <div style="display: flex; gap: 6px;">
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <button class="btn-audit-server tool-btn btn-secondary" data-id="${s.id}" title="Auditar conformidade e integridade com o SkillSpector">
+                ⚡ Auditar
+              </button>
               <button class="btn-test-server tool-btn btn-action" data-id="${s.id}" title="${t('mcp_servers.btn_test_discover')}">
                 ${t('mcp_servers.btn_test_discover')}
               </button>
@@ -337,6 +376,8 @@ export class McpServersModal {
               </button>
             </div>
           </div>
+
+          ${alertBoxHtml}
 
           <!-- Tools tags -->
           <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06);">
@@ -462,7 +503,14 @@ export class McpServersModal {
       btnSave.addEventListener('click', () => this.handleSaveServer());
     }
 
-    // Botões de teste e delete em cada card
+    // Botões de auditoria, teste e delete em cada card
+    this.overlay.querySelectorAll('.btn-audit-server').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = (e.currentTarget as HTMLElement).getAttribute('data-id');
+        if (id) this.handleAuditServer(id);
+      });
+    });
+
     this.overlay.querySelectorAll('.btn-test-server').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const id = (e.currentTarget as HTMLElement).getAttribute('data-id');
@@ -605,6 +653,28 @@ export class McpServersModal {
     }
 
     await this.refreshServers();
+  }
+
+  private handleAuditServer(id: string): void {
+    const server = this.servers.find(s => s.id === id);
+    if (!server) return;
+
+    const auditor = WorkspaceMcpAuditorAgent.getInstance();
+    const verdict = auditor.auditMcpServer(server);
+
+    let msg = `[SkillSpector MCP] Auditoria concluída para "${verdict.serverName}":\n`;
+    msg += `Status: ${verdict.verdict || verdict.status.toUpperCase()} (Risco: ${verdict.riskScore}/100)\n`;
+    msg += `Hash SHA-256: ${verdict.hash}\n\n`;
+
+    if (verdict.findings.length > 0) {
+      msg += `Achados de Governança:\n- ${verdict.findings.join('\n- ')}\n\n`;
+    }
+    if (verdict.warnings.length > 0) {
+      msg += `Alertas:\n- ${verdict.warnings.join('\n- ')}\n`;
+    }
+
+    alert(msg);
+    this.render();
   }
 
   private async handleTestServer(id: string): Promise<void> {

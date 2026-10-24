@@ -67,6 +67,28 @@ export interface IWorkspaceSkillAuditVerdict {
   verdict?: 'APPROVE' | 'CAUTION' | 'REJECT';
 }
 
+export interface IWorkspaceMcpAuditVerdict {
+  serverId: string;
+  serverName: string;
+  verified: boolean;
+  status: 'approved' | 'warning' | 'rejected';
+  riskScore: number; // 0 (100% seguro) a 100 (risco crítico)
+  auditedBy: string;
+  timestamp: string;
+  checklist: Array<{
+    rule: string;
+    passed: boolean;
+    detail: string;
+  }>;
+  findings: string[];
+  warnings: string[];
+  toolCount: number;
+  toolNames: string[];
+  hash?: string;
+  verdict?: 'APPROVE' | 'CAUTION' | 'REJECT' | 'PENDING';
+  provenance?: 'native-embedded' | 'workspace-curated' | 'external-custom';
+}
+
 export interface IWorkspaceAgent {
   id: string;
   name: string;

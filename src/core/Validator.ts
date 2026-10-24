@@ -3,6 +3,7 @@ import { IValidationResult, IValidationError, IEdgeData, INodeData } from './typ
 import { t } from '../i18n/index.ts';
 import { SkillHasher } from './skills/SkillHasher.ts';
 import { SkillLedgerService } from './skills/SkillLedgerService.ts';
+import { McpLedgerService } from './skills/McpLedgerService.ts';
 
 export class GraphValidator {
   static validate(graph: Graph): IValidationResult {
@@ -75,6 +76,9 @@ export class GraphValidator {
 
     // 6. Governanca e Validacao de Skills: bloqueia execucao se houver skills nao auditadas ou rejeitadas.
     this.validateAgentSkills(nodes, errors);
+
+    // 7. Governanca e Validacao de Servidores MCP: bloqueia execucao se houver conectores nao homologados ou rejeitados.
+    this.validateMcpServers(nodes, errors);
 
     return {
       isValid: errors.filter(e => e.severity === 'error').length === 0,
@@ -380,6 +384,88 @@ export class GraphValidator {
           }),
           nodeIds: [node.id]
         });
+      }
+    }
+  }
+
+  private static validateMcpServers(nodes: INodeData[], errors: IValidationError[]): void {
+    const ledger = McpLedgerService.getInstance();
+
+    for (const node of nodes) {
+      // 1. Vértices do tipo 'mcp'
+      if (node.type === 'mcp') {
+        const serverId = node.mcpSettings?.server;
+        if (!serverId || serverId.trim() === '') {
+          errors.push({
+            type: 'invalid_mcp',
+            severity: 'warning',
+            message: t('validator.mcp_missing_server', {
+              node: node.label || node.id,
+              defaultValue: `O nó MCP "${node.label || node.id}" não possui nenhum servidor configurado.`
+            }),
+            nodeIds: [node.id]
+          });
+          continue;
+        }
+
+        const status = ledger.getStatusByServerId(serverId);
+        if (status === 'REJECT') {
+          errors.push({
+            type: 'invalid_mcp',
+            severity: 'error',
+            message: t('validator.mcp_rejected', {
+              node: node.label || node.id,
+              server: serverId,
+              defaultValue: `O nó MCP "${node.label || node.id}" utiliza o servidor "${serverId}" que foi REJEITADO pela governança de segurança do Studio. Corrija as vulnerabilidades antes de executar.`
+            }),
+            nodeIds: [node.id]
+          });
+        } else if (status === 'PENDING') {
+          errors.push({
+            type: 'invalid_mcp',
+            severity: 'error',
+            message: t('validator.mcp_unapproved', {
+              node: node.label || node.id,
+              server: serverId,
+              defaultValue: `O nó MCP "${node.label || node.id}" referencia o servidor "${serverId}" pendente de auditoria ou com definição modificada. Audite-o com o SkillSpector antes de executar.`
+            }),
+            nodeIds: [node.id]
+          });
+        }
+      }
+
+      // 2. Vértices do tipo 'agent' que utilizam servidores MCP em codeMode
+      if (node.type === 'agent') {
+        const mcpServers = node.agentSettings?.codeMode?.mcpServers;
+        if (Array.isArray(mcpServers) && mcpServers.length > 0) {
+          for (const serverId of mcpServers) {
+            if (!serverId || serverId.trim() === '') continue;
+            const status = ledger.getStatusByServerId(serverId);
+            if (status === 'REJECT') {
+              errors.push({
+                type: 'invalid_mcp',
+                severity: 'error',
+                message: t('validator.mcp_rejected', {
+                  node: node.label || node.id,
+                  server: serverId,
+                  defaultValue: `O nó de Agente "${node.label || node.id}" referencia o servidor MCP "${serverId}" que foi REJEITADO pela governança do Studio. Remova o servidor ou corrija as vulnerabilidades.`
+                }),
+                nodeIds: [node.id]
+              });
+            } else if (status === 'PENDING') {
+              errors.push({
+                type: 'invalid_mcp',
+                severity: 'error',
+                message: t('validator.mcp_unapproved', {
+                  node: node.label || node.id,
+                  server: serverId,
+                  defaultValue: `O nó de Agente "${node.label || node.id}" referencia o servidor MCP "${serverId}" pendente de homologação. Audite-o no Studio antes de executar.`
+                }),
+                nodeIds: [node.id]
+              });
+            }
+          }
+        }
       }
     }
   }

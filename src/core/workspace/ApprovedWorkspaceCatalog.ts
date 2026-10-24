@@ -299,6 +299,33 @@ export const APPROVED_WORKSPACE_MCPS: IWorkspaceApprovedMcp[] = [
       { name: 'verify_taskflow_syntax', description: 'Valida sintaxe de lambdas e tarefas C++20', riskLevel: 'safe' },
       { name: 'lint_dag_structure', description: 'Analisa o grafo contra deadlocks e ciclos inválidos', riskLevel: 'safe' }
     ]
+  },
+  {
+    id: 'clientes',
+    name: 'Cadastro de clientes (demo)',
+    description: 'Servidor MCP demonstrativo para consulta de cadastro fictício de clientes em projetos de exemplo.',
+    category: 'Exemplos & Demonstração',
+    transport: 'stdio',
+    command: 'python',
+    args: ['mcp/clientes_server.py'],
+    isPreApproved: true,
+    tools: [
+      { name: 'lookup_customer', description: 'Consulta dados do cliente por email', riskLevel: 'safe' },
+      { name: 'registrar_escalonamento', description: 'Registra chamado de suporte', riskLevel: 'safe' }
+    ]
+  },
+  {
+    id: 'keenable',
+    name: 'Keenable Web Search',
+    description: 'Busca semântica de páginas e fontes web via Keenable API.',
+    category: 'Rede & Pesquisa',
+    transport: 'stdio',
+    command: '',
+    args: [],
+    isPreApproved: true,
+    tools: [
+      { name: 'search_web_pages', description: 'Pesquisa páginas web para consulta factual', riskLevel: 'safe' }
+    ]
   }
 ];
 

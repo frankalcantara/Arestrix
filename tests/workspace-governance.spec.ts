@@ -202,7 +202,7 @@ describe('Workspace Governance, Execution & Pre-Approved Catalogs', () => {
   });
 
   describe('1. Catálogo Homologado e Provisionamento de Diretórios', () => {
-    it('deve inicializar com as 7 habilidades e 4 MCPs pré-aprovados do workspace', () => {
+    it('deve inicializar com as 7 habilidades e 6 MCPs pré-aprovados do workspace', () => {
       const skills = workspaceManager.getApprovedSkills();
       const mcps = workspaceManager.getApprovedMcps();
 
@@ -211,9 +211,11 @@ describe('Workspace Governance, Execution & Pre-Approved Catalogs', () => {
       expect(skills.map(s => s.id)).toContain('ilustracao-vetorial-svg');
       expect(skills.map(s => s.id)).toContain('auditoria-codigo-cpp20');
 
-      expect(mcps.length).toBe(4);
+      expect(mcps.length).toBe(6);
       expect(mcps.map(m => m.id)).toContain('workspace-filesystem');
       expect(mcps.map(m => m.id)).toContain('workspace-taskflow-compiler');
+      expect(mcps.map(m => m.id)).toContain('clientes');
+      expect(mcps.map(m => m.id)).toContain('keenable');
     });
 
     it('deve converter uma habilidade homologada em INodeSkill para anexar a vértices', () => {
@@ -444,7 +446,7 @@ describe('Workspace Governance, Execution & Pre-Approved Catalogs', () => {
       expect(overlay.innerHTML).toContain('btn-run-workspace-linter');
       expect(overlay.innerHTML).toContain('btn-run-workspace-project');
       expect(overlay.innerHTML).toContain('Habilidades Pré-Aprovadas (7)');
-      expect(overlay.innerHTML).toContain('Servidores MCP Pré-Aprovados (4)');
+      expect(overlay.innerHTML).toContain('Servidores MCP Pré-Aprovados (6)');
     });
   });
 });
