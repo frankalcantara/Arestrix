@@ -3,6 +3,7 @@
 #include "rt/Runtime.hpp"
 #include "rt/ModelClient.hpp"
 #include "rt/Tools.hpp"
+#include "rt/Trace.hpp"
 #include "platform/Process.hpp"
 #include "sandbox/AgentTelemetryEmitter.hpp"
 #include "util/Json.hpp"
@@ -816,6 +817,7 @@ std::string runInteraction(const std::string& nodeId, const std::string& label,
         {"fields", fields.size()},
         {"sensitive", sensitive}
     });
+    traceInteraction(requestId, nodeId, "requested");
 
     if (useHost && !haveAnswers) {
         std::lock_guard<std::mutex> hostLock(hostInteractionMutex());
@@ -854,6 +856,7 @@ std::string runInteraction(const std::string& nodeId, const std::string& label,
                                      "': o canal do host encerrou antes da resposta.");
         }
         if (reply.timedOut) {
+            traceInteraction(requestId, nodeId, "timeout");
             if (onTimeout == "abort") {
                 audit.error = "timeout com politica abort";
                 throw std::runtime_error("Vertice de interacao '" + label + "': timeout com politica abort.");
@@ -956,6 +959,7 @@ std::string runInteraction(const std::string& nodeId, const std::string& label,
     }
 
     audit.success(normalized, answeredBy);
+    traceInteraction(requestId, nodeId, "answered");
 
     std::ostringstream text;
     if (!inputContext.empty()) text << "Contexto do chamador:\n" << inputContext << "\n\n";

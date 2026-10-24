@@ -117,6 +117,11 @@ call input or output. Disable it per call edge in the Inspector (`notify`) or gl
 JSON. Async is opt-in per edge and can be disabled globally with `ARESTRIX_ASYNC_CALLS=0`. The
 generated `main` drains pending calls before exiting, so notifications/audit are not lost.
 
+**Open trace.** Each run writes `.arestrix/runs/<runId>/trace.json` with the tasks, calls and
+interactions that actually ran (IDs, labels, kind, depth, status and timing; never input/output).
+After the run, the Studio loads the latest trace and highlights on the canvas the dashed call edges
+that were traversed, while the console shows a short call tree.
+
 The result is a JSON tool message with `callId`, `target`, `status`, `output` and `depth`; an
 interaction target also carries `answers`. The target's final text is also written to
 `.arestrix/out/<target>.txt`.

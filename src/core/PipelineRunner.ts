@@ -135,7 +135,26 @@ export class PipelineRunner {
         } else {
           globalEventBus.emit('pipeline:error', { stage: 'run', error: ev.error || 'A execução falhou.' });
         }
+        void PipelineRunner.loadLastTrace();
         break;
+    }
+  }
+
+  /**
+   * Carrega o trace.json do ultimo run no projeto ativo. A leitura fica no backend
+   * (RPC get_last_trace); a UI apenas aplica o caminho realmente percorrido.
+   */
+  static async loadLastTrace(): Promise<void> {
+    try {
+      // @ts-ignore
+      if (typeof webui === 'undefined') return;
+      // @ts-ignore
+      const raw = await webui.call('get_last_trace', '');
+      if (raw == null || raw === '') return;
+      const trace = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (trace && typeof trace === 'object') globalEventBus.emit('trace:loaded', trace);
+    } catch (err) {
+      console.warn('[PipelineRunner] Nao foi possivel carregar o trace:', err);
     }
   }
 

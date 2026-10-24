@@ -562,6 +562,18 @@ def scenario_12_chamadas_assincronas():
         if notification_files:
             notifications = notification_files[0].read_text(encoding="utf-8")
             check("call.completed" in notifications, "a notificacao da chamada async foi registrada")
+
+        trace_files = list((project / ".arestrix" / "runs").glob("*/trace.json"))
+        check(bool(trace_files), "o run gerou trace.json")
+        if trace_files:
+            trace = json.loads(trace_files[0].read_text(encoding="utf-8"))
+            check(trace.get("status") == "success", "o trace registra o run como success")
+            calls = trace.get("calls", [])
+            check(any(c.get("targetId") == "especialista" for c in calls),
+                  "o trace registra a chamada ao especialista")
+            check(any(c.get("status") == "ok" for c in calls), "o trace registra a chamada concluida")
+            check(bool(trace.get("tasks")), "o trace registra as tasks executadas")
+            check(TEST_KEY not in json.dumps(trace), "o trace nao contem a chave de API")
         no_secret_leak(out, "ex12")
     finally:
         cleanup(work, mock)

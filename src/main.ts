@@ -2,6 +2,7 @@ import './style.css';
 import { Graph } from './core/Graph.ts';
 import { globalEventBus } from './core/EventBus.ts';
 import { Viewport } from './view/Viewport.ts';
+import { TraceOverlay } from './view/TraceOverlay.ts';
 import { Toolbar } from './ui/Toolbar.ts';
 import { Inspector } from './ui/Inspector.ts';
 import { AssistantPanel } from './ui/AssistantPanel.ts';
@@ -77,6 +78,7 @@ function bootstrap() {
 
   // 4. Inicializa Viewport WebGL (Three.js) com dimensões reais já computadas pelo DOM
   const viewport = new Viewport(viewportContainer, graph, globalEventBus);
+  new TraceOverlay(globalEventBus, graph, viewport);
 
   // Controles Flutuantes do Grafo / HUD do Diagrama
   new CanvasControls(viewportContainer, viewport, globalEventBus);

@@ -1,4 +1,5 @@
 #include "rt/Runtime.hpp"
+#include "rt/Trace.hpp"
 #include "memory/MemoryService.hpp"
 #include "platform/Process.hpp"
 
@@ -53,10 +54,12 @@ void nodeEvent(const std::string& nodeId, const std::string& status, const std::
 NodeScope::NodeScope(std::string nodeId, std::string label)
     : nodeId_(std::move(nodeId)), label_(std::move(label)), uncaughtAtEntry_(std::uncaught_exceptions()) {
     nodeEvent(nodeId_, "running", label_);
+    traceTaskStart(nodeId_, label_);
 }
 
 NodeScope::~NodeScope() {
     bool failed = std::uncaught_exceptions() > uncaughtAtEntry_;
+    traceTaskEnd(nodeId_, failed ? "error" : "ok");
     nodeEvent(nodeId_, failed ? "error" : "settled", failed ? "Falhou: " + label_ : label_);
 }
 

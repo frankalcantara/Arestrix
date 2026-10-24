@@ -121,6 +121,10 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   disabled with `ARESTRIX_ASYNC_CALLS=0`, and pending calls are drained before process exit.
 - `examples/12-chamadas-assincronas` and the E2E cover a coordinator starting, polling and delivering
   an async specialist result.
+- **Open trace (phase 4F):** every run writes `.arestrix/runs/<runId>/trace.json` with tasks, calls
+  (including parent/child call IDs), interactions, status and timing, never input/output. The Studio
+  loads the latest trace after the run, highlights traversed dashed call edges and prints a compact
+  call tree in the console. The E2E asserts the trace records the async specialist call.
 - **Database disaster recovery and Git sync safety:** binary SQLite databases are excluded from Git
   tracking in accordance with GitHub Acceptable Use Policies; `DatabaseBackupService` exports clean
   text SQL dumps (`storage/database.sql`) and cognitive memory snapshots (`storage/memory.dump.json`)

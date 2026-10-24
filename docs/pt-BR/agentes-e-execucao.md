@@ -56,6 +56,9 @@ chamador; não é uma task agendada do Taskflow.
   consultar com `call_result`. O resultado final é o mesmo de uma chamada síncrona.
   `ARESTRIX_ASYNC_CALLS=0` desliga o async globalmente. Chamadas pendentes são drenadas antes de o
   processo encerrar.
+- Cada execução grava `.arestrix/runs/<runId>/trace.json` (tasks, chamadas, interações, status e
+  tempos, sem payloads). O Studio aplica o trace mais recente no canvas e imprime uma árvore curta
+  de chamadas no console.
 - O alvo nunca recebe a conversa inteira do chamador: só o input explícito. Isso reduz custo e a
   superfície de prompt injection.
 - Um alvo **subflow** declarado com `childGraph` é compilado como uma função nativa no mesmo

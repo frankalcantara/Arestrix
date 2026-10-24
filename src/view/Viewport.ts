@@ -3,6 +3,7 @@ import { CameraController } from './CameraController.ts';
 import { InfiniteGrid } from './InfiniteGrid.ts';
 import { NodeView } from './NodeView.ts';
 import { ConnectionView, EdgeExecutionState } from './ConnectionView.ts';
+import { NodeExecutionState } from './SvgNodeView.ts';
 import { InteractionManager } from './InteractionManager.ts';
 import { Graph } from '../core/Graph.ts';
 import { INodeData, IEdgeData, IGraphSchema } from '../core/types.ts';
@@ -639,6 +640,11 @@ export class Viewport {
     group.appendChild(midHandle);
 
     this.svgEdgeHandlesLayer.appendChild(group);
+  }
+
+  public setNodeExecutionState(nodeId: string, state: NodeExecutionState, detail: string = ''): void {
+    const nodeView = this.nodeViews.get(nodeId);
+    if (nodeView) nodeView.setExecutionState(state, detail);
   }
 
   public setEdgeExecutionState(edgeId: string, state: EdgeExecutionState): void {

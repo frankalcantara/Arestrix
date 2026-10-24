@@ -480,6 +480,40 @@ void ui_get_pipeline_checkpoint(webui::window::event* e) {
     e->return_string(st.dump());
 }
 
+// Wrapper de comunicacao JS -> C++ (ultimo trace.json do projeto ativo).
+void ui_get_last_trace(webui::window::event* e) {
+    try {
+        std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+        if (root.empty()) root = std::filesystem::current_path().string();
+        std::filesystem::path runs = std::filesystem::path(root) / ".arestrix" / "runs";
+        std::filesystem::path latest;
+        std::filesystem::file_time_type latestTime{};
+        std::error_code ec;
+        if (std::filesystem::is_directory(runs, ec)) {
+            for (const auto& entry : std::filesystem::directory_iterator(runs, ec)) {
+                if (!entry.is_directory()) continue;
+                std::filesystem::path candidate = entry.path() / "trace.json";
+                if (!std::filesystem::is_regular_file(candidate, ec)) continue;
+                auto time = std::filesystem::last_write_time(candidate, ec);
+                if (latest.empty() || time > latestTime) {
+                    latest = candidate;
+                    latestTime = time;
+                }
+            }
+        }
+        if (latest.empty()) {
+            e->return_string("");
+            return;
+        }
+        std::ifstream in(latest, std::ios::binary);
+        std::ostringstream content;
+        content << in.rdbuf();
+        e->return_string(content.str());
+    } catch (...) {
+        e->return_string("");
+    }
+}
+
 // Wrapper de comunicação JS -> C++ (Resetar Checkpoint)
 void ui_reset_pipeline_checkpoint(webui::window::event* e) {
     std::string payload = e->get_string();
@@ -2482,6 +2516,7 @@ int main(int argc, char** argv) {
     win.bind("get_graph_state", ui_get_graph_state);
     win.bind("get_sandbox_status", ui_get_sandbox_status);
     win.bind("get_pipeline_checkpoint", ui_get_pipeline_checkpoint);
+    win.bind("get_last_trace", ui_get_last_trace);
     win.bind("reset_pipeline_checkpoint", ui_reset_pipeline_checkpoint);
     win.bind("get_memory_status", ui_get_memory_status);
     win.bind("set_memory_persistence", ui_set_memory_persistence);

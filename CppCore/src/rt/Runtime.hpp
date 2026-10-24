@@ -69,6 +69,9 @@ std::string runFlowCall(const std::string& nodeId, const std::string& label,
 // O main gerado chama isto; subflows nativos nao chamam (evita espera aninhada).
 void drainAsyncCalls();
 
+// Fecha o trace.json do run (success/failed). O main gerado chama depois do drain.
+void finishTrace(bool success);
+
 // Registro do grafo de chamadas (mundo fechado). O codigo gerado chama uma vez no inicio.
 // Ver rt/CallGraph.hpp para o formato e para a tool call_agent.
 void setCallRegistry(const std::string& callablesJson, const std::string& callersJson);

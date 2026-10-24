@@ -56,6 +56,9 @@ scheduled Taskflow task.
   The call returns `status: pending` and a `callId`; the model may continue and poll with
   `call_result`. The final result is the same as a synchronous call. `ARESTRIX_ASYNC_CALLS=0`
   disables async globally. Pending calls are drained before the process exits.
+- Every run writes `.arestrix/runs/<runId>/trace.json` (tasks, calls, interactions, status and
+  timing, without payloads). The Studio overlays the latest trace on the canvas and prints a compact
+  call tree in the console.
 - The target never receives the caller's full conversation: only the explicit input. This keeps
   cost and prompt-injection surface small.
 - A **subflow** target declared with a `childGraph` is compiled as a native function in the same

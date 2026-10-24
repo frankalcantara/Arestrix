@@ -3,6 +3,7 @@
 #include "rt/NodeInput.hpp"
 #include "rt/Notification.hpp"
 #include "rt/Runtime.hpp"
+#include "rt/Trace.hpp"
 #include "sandbox/AgentTelemetryEmitter.hpp"
 #include "util/Json.hpp"
 
@@ -261,6 +262,7 @@ ToolResult invokeCallImpl(const std::string& callerId, const std::string& caller
         {"depth", callDepth}
     };
     sandbox::AgentTelemetryEmitter::emitEvent(callerId, "call_start", start);
+    traceCallStart(callId, callerId, targetId, target->label, target->kind, callDepth);
 
     std::string output;
     try {
@@ -306,6 +308,7 @@ ToolResult invokeCallImpl(const std::string& callerId, const std::string& caller
             {"depth", callDepth}
         };
         sandbox::AgentTelemetryEmitter::emitEvent(callerId, "call_end", end);
+        traceCallEnd(callId, "error");
         if (target->notify) {
             notify(callerId, "call.failed", "error",
                    langPick(lang, "Chamada falhou", "Call failed"),
@@ -338,6 +341,7 @@ ToolResult invokeCallImpl(const std::string& callerId, const std::string& caller
         {"status", "ok"},
         {"depth", callDepth}
     });
+    traceCallEnd(callId, "ok");
     if (target->notify) {
         notify(callerId, "call.completed", "success",
                langPick(lang, "Chamada concluída", "Call completed"),

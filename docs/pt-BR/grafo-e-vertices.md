@@ -117,6 +117,11 @@ ou o output da chamada. Desligue por aresta no Inspetor (`notify`) ou globalment
 opt-in por aresta e pode ser desligado globalmente com `ARESTRIX_ASYNC_CALLS=0`. O `main` gerado
 espera chamadas pendentes antes de encerrar, para não perder notificações/auditoria.
 
+**Trace aberto.** Cada execução grava `.arestrix/runs/<runId>/trace.json` com as tasks, chamadas e
+interações que realmente rodaram (IDs, labels, tipo, profundidade, status e tempos; nunca
+input/output). Ao final, o Studio carrega o trace mais recente, destaca no canvas as arestas de
+chamada percorridas e mostra uma árvore curta de chamadas no console.
+
 O resultado é uma mensagem de ferramenta JSON com `callId`, `target`, `status`, `output` e `depth`;
 um destino de interação também traz `answers`. O texto final do alvo também é gravado em
 `.arestrix/out/<target>.txt`.

@@ -46,6 +46,7 @@
 #include "rt/McpVertex.hpp"
 #include "native/NativeTools.hpp"
 #include "rt/Runtime.hpp"
+#include "rt/Trace.hpp"
 #include "rt/Tools.hpp"
 #include "search/ProjectSearch.hpp"
 #include "search/SynonymAgent.hpp"
@@ -734,6 +735,41 @@ TEST(call_vertex_compiles_flow_call) {
         threw = true;
     }
     CHECK(threw);
+}
+
+TEST(trace_records_tasks_and_calls_without_payloads) {
+    using namespace taskforge::rt;
+    const fs::path oldCwd = fs::current_path();
+    const fs::path dir = makeTempDir("trace-run");
+    const std::string oldRunId = taskforge::platform::getEnv("ARESTRIX_RUN_ID");
+    taskforge::platform::setProcessEnv("ARESTRIX_RUN_ID", "run-test-trace");
+    fs::current_path(dir);
+
+    traceTaskStart("flow", "Flow");
+    traceTaskEnd("flow", "ok");
+    traceCallStart("flow/target#1", "flow", "target", "Target", "agent", 1);
+    traceTaskStart("target", "Target");
+    traceTaskEnd("target", "ok");
+    traceCallEnd("flow/target#1", "ok");
+    finishTrace(true);
+
+    const fs::path file = dir / ".arestrix" / "runs" / "run-test-trace" / "trace.json";
+    CHECK(fs::is_regular_file(file));
+    std::ifstream in(file);
+    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+    CHECK(content.find("\"runId\":\"run-test-trace\"") != std::string::npos ||
+          content.find("\"runId\": \"run-test-trace\"") != std::string::npos);
+    CHECK(content.find("\"status\":\"success\"") != std::string::npos ||
+          content.find("\"status\": \"success\"") != std::string::npos);
+    CHECK(content.find("\"nodeId\":\"flow\"") != std::string::npos);
+    CHECK(content.find("\"callId\":\"flow/target#1\"") != std::string::npos);
+    CHECK(content.find("\"targetId\":\"target\"") != std::string::npos);
+    CHECK(content.find("\"parentCallId\":\"flow/target#1\"") != std::string::npos);
+
+    fs::current_path(oldCwd);
+    taskforge::platform::setProcessEnv("ARESTRIX_RUN_ID", oldRunId);
+    fs::remove_all(dir);
 }
 
 TEST(async_call_returns_pending_then_result_via_call_result) {
