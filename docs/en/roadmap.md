@@ -33,7 +33,8 @@
 ### Distribution
 
 - The final code-signing certificate/HSM and the signed release execution are pending.
-- Installer packaging (MSI/WiX, MSIX or Inno Setup; Linux AppImage/deb/tarball) is not implemented.
+- The portable package (5B1) is implemented. Installer packaging (MSI/WiX, MSIX or Inno Setup; Linux
+  AppImage/deb/tarball) is pending in 5B2.
 - A signed remote catalog/manifest (Ed25519/minisign) is not implemented. The embedded catalog is
   protected by the signed application binary; remote updates need a key pair and hosting decision.
 - Runtime upgrades are tied to an application version because the manifest is embedded.
@@ -81,6 +82,23 @@ Still pending:
 - 14B quality/speed depends on GPU/VRAM; CPU-only execution is slow.
 - No automatic model update, deduplication or disk quota management yet.
 - Model weights are not redistributed; downloads depend on the upstream publisher and license.
+
+## Beta 2 (registered, not released)
+
+The next release is registered as **Beta 2**, with target version `2.0.0-beta.1`. The current product
+version remains `1.5.0-beta.1` until the Beta 2 gate passes.
+
+Already delivered for the Beta 2 line: closed call graph, interactions, generated forms, parallel
+calls, callable subflow, flow Call vertex, notifications, async `call_result`, open trace, release
+gate and the portable package.
+
+Pending before the Beta 2 bump:
+
+- MSI/MSIX (or Inno Setup) installer and a Linux package (5B2).
+- Code signing, Windows/Linux CI matrix and signed remote catalog (5C).
+- The full test matrix in [Beta 2 test plan](../quality/beta2-test-plan.md), including clean-machine
+  install/upgrade/uninstall and manual Studio homologation.
+- Published checksums, SBOM, notices and release notes.
 
 ## Next steps
 

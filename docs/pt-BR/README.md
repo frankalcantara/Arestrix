@@ -23,7 +23,8 @@
 
 ## Operação
 
-- [Roadmap e limitações conhecidas](roadmap.md) — escopo entregue, lacunas e próximos passos.
+- [Roadmap e limitações conhecidas](roadmap.md) - escopo entregue, lacunas e próximos passos.
+- [Plano de testes do Beta 2](../quality/beta2-test-plan.md) - escopo registrado, instalador/assinatura/CI pendentes e matriz obrigatória.
 - [Registro de auditoria de testes](../quality/test-audit-log.md)
 - [Modelo de segurança e governança](../security/governance.md)
 - [Avisos de dependências](../security/dependency-advisories.md)

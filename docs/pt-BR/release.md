@@ -117,7 +117,7 @@ Como alternativa, use `ARESTRIX_SIGN_THUMBPRINT` para um certificado instalado e
 
 ## 5. Fora da fase 5A
 
-- Empacotamento MSI/MSIX ou instalador Linux.
+- Instalador MSI/MSIX ou Inno Setup e pacote Linux (5B2; o pacote portátil 5B1 está implementado).
 - Provisionamento do certificado/HSM e assinatura dentro do CI.
 - Matriz automatizada Windows/Linux.
 - Catálogo remoto assinado (Ed25519/minisign) e hospedagem.

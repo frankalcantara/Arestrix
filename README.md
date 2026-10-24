@@ -140,6 +140,7 @@ python scripts/e2e_examples.py
 | [Examples](examples/README.md) | Twelve runnable projects, from a two-agent pipeline to callable subflows, flow Call vertices, asynchronous calls, parallel calls, generated forms, memory and web-research workflows. |
 | [Test audit log](docs/quality/test-audit-log.md) | Chronological test rounds and integrity audits. |
 | [Release gate](docs/en/release.md) | Reproducible validation, SHA-256 manifest and SBOM before distribution. |
+| [Beta 2 test plan](docs/quality/beta2-test-plan.md) | Registered Beta 2 scope, pending installer/signing/CI and acceptance tests (in Portuguese). |
 | [Changelog](CHANGELOG.md) | Release history, changes and known limitations. |
 
 ## Project status
@@ -147,6 +148,8 @@ python scripts/e2e_examples.py
 **Beta 1.5** is an early public release. The Studio runs on Windows and Linux; programs generated
 from a graph currently target Windows. Beta APIs, file formats and command-line flags may change
 before general availability. See the [changelog](CHANGELOG.md) for the current limitations.
+**Beta 2** is registered as the next milestone (target `2.0.0-beta.1`) but is not released yet; the
+pending work and test matrix are in the [Beta 2 test plan](docs/quality/beta2-test-plan.md).
 
 ## Security
 

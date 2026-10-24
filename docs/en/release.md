@@ -117,7 +117,7 @@ Alternatively use `ARESTRIX_SIGN_THUMBPRINT` for a certificate installed in `My`
 
 ## 5. Not in phase 5A
 
-- MSI/MSIX or Linux installer packaging.
+- MSI/MSIX or Inno Setup installer and Linux package (5B2; the portable package 5B1 is implemented).
 - Code-signing certificate/HSM provisioning and signing inside CI.
 - Automated Windows/Linux CI matrix.
 - Signed remote catalog (Ed25519/minisign) and hosting.

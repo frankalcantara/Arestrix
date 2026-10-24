@@ -8,6 +8,15 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
 
 ## [Unreleased]
 
+### Beta 2 planning
+
+- Beta 2 is registered with target version `2.0.0-beta.1`; the current product version remains
+  `1.5.0-beta.1` until the release gate passes.
+- The portable package (5B1) is complete. The MSI/MSIX (or Inno Setup) installer and Linux package
+  (5B2) are pending, followed by signing, CI/Linux and the signed remote catalog (5C).
+- The mandatory test matrix and acceptance criteria are tracked in
+  [docs/quality/beta2-test-plan.md](docs/quality/beta2-test-plan.md).
+
 ### Added
 
 - **Strictly Optional Git Synchronization (100% Local by Default):** Git/GitHub synchronization is now opt-in (`enabled: false` by default for new projects). If disabled, all project files, SQLite databases (`storage/database.sqlite`), and cognitive memory (`.arestrix/memory/memory.db`) reside exclusively on local disk with zero Git operations, zero network overhead, and zero dump exports.

@@ -141,6 +141,7 @@ python scripts/e2e_examples.py
 | [`arestrix-cli`](docs/pt-BR/arestrix-cli.md) | Execução headless, CI, códigos de saída e solução de problemas. |
 | [Exemplos](examples/README.pt-BR.md) | Cinco projetos executáveis, de um pipeline de dois agentes a fluxos compostos, de memória e de pesquisa web. |
 | [Registro de auditoria de testes](docs/quality/test-audit-log.md) | Rodadas cronológicas de testes e auditorias de integridade. |
+| [Plano de testes do Beta 2](docs/quality/beta2-test-plan.md) | Escopo registrado, instalador/assinatura/CI pendentes e critérios de aceite. |
 | [Changelog](CHANGELOG.md) | Histórico de releases, mudanças e limitações conhecidas. |
 
 ## Status do projeto
@@ -148,7 +149,9 @@ python scripts/e2e_examples.py
 A **Beta 1.5** é uma release pública inicial. O Studio roda no Windows e no Linux; programas gerados
 a partir de um grafo atualmente têm o Windows como alvo. APIs, formatos de arquivo e flags de linha
 de comando podem mudar antes da disponibilidade geral. Consulte o [changelog](CHANGELOG.md) para as
-limitações atuais.
+limitações atuais. O **Beta 2** está registrado como próximo marco (alvo `2.0.0-beta.1`), mas ainda
+não foi liberado; o trabalho pendente e a matriz de testes estão no
+[plano de testes do Beta 2](docs/quality/beta2-test-plan.md).
 
 ## Segurança
 

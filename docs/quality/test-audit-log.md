@@ -4,6 +4,9 @@
 
 Este documento registra o histórico cronológico das rodadas de testes automatizados, verificações de segurança e auditorias de integridade do **Arestrix**, organizadas da **mais recente para a mais antiga**.
 
+> O Beta 2 está registrado, mas ainda não foi liberado. O escopo pendente e a matriz obrigatória de
+> testes estão em [Plano de testes do Beta 2](beta2-test-plan.md).
+
 O Arestrix adota a filosofia de integridade estrita (*fail-closed*): nenhuma funcionalidade é considerada concluída ou pronta para ambiente corporativo sem aprovação completa em todas as categorias de validação.
 
 ---

@@ -33,8 +33,8 @@
 ### Distribuição
 
 - Certificado/HSM de assinatura de código e execução da assinatura dos artefatos finais estão pendentes.
-- Empacotamento de instalador (MSI/WiX, MSIX ou Inno Setup; AppImage/deb/tarball no Linux) não foi
-  implementado.
+- O pacote portátil (5B1) está implementado. O empacotamento de instalador (MSI/WiX, MSIX ou Inno
+  Setup; AppImage/deb/tarball no Linux) está pendente na 5B2.
 - Catálogo/manifesto remoto assinado (Ed25519/minisign) não foi implementado. O catálogo embutido é
   protegido pelo binário assinado; atualizações remotas exigem par de chaves e decisão de hospedagem.
 - Atualizações de runtime dependem de uma nova versão do aplicativo, porque o manifesto é embutido.
@@ -83,6 +83,23 @@ Ainda pendente:
 - Qualidade/velocidade do 14B depende de GPU/VRAM; execução somente em CPU é lenta.
 - Ainda não há atualização automática de modelos, deduplicação ou cota de disco.
 - Os pesos não são redistribuídos; o download depende do publicador upstream e da licença.
+
+## Beta 2 (registrado, não liberado)
+
+A próxima release está registrada como **Beta 2**, com versão alvo `2.0.0-beta.1`. A versão atual
+continua `1.5.0-beta.1` até o gate do Beta 2 passar.
+
+Já entregue para a linha Beta 2: grafo de chamadas fechado, interações, formulários gerados, chamadas
+paralelas, subflow chamável, vértice Call em fluxo, notificações, `call_result` assíncrono, trace
+aberto, gate de release e pacote portátil.
+
+Pendente antes do bump do Beta 2:
+
+- Instalador MSI/MSIX (ou Inno Setup) e pacote Linux (5B2).
+- Assinatura de código, matriz de CI Windows/Linux e catálogo remoto assinado (5C).
+- A matriz completa em [Plano de testes do Beta 2](../quality/beta2-test-plan.md), incluindo
+  instalação/upgrade/uninstall em máquina limpa e homologação manual do Studio.
+- Publicação de checksums, SBOM, notices e notas de release.
 
 ## Próximos passos
 
