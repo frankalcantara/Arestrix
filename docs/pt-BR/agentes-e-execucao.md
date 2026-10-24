@@ -50,7 +50,12 @@ chamador; não é uma task agendada do Taskflow.
 - Chamadas publicam uma **notificação** não bloqueante em sucesso/falha (salvo se desligada por
   aresta ou por `ARESTRIX_NOTIFICATIONS=0`). O runtime grava em
   `.arestrix/runs/<runId>/notifications.jsonl` e o Studio mostra um toast. A notificação nunca inclui
-  input ou output; a chamada continua síncrona.
+  input ou output.
+- Com **Permitir chamada assíncrona** na aresta, o modelo pode enviar `async: true` para
+  `call_agent`. A chamada devolve `status: pending` e um `callId`; o modelo pode continuar e
+  consultar com `call_result`. O resultado final é o mesmo de uma chamada síncrona.
+  `ARESTRIX_ASYNC_CALLS=0` desliga o async globalmente. Chamadas pendentes são drenadas antes de o
+  processo encerrar.
 - O alvo nunca recebe a conversa inteira do chamador: só o input explícito. Isso reduz custo e a
   superfície de prompt injection.
 - Um alvo **subflow** declarado com `childGraph` é compilado como uma função nativa no mesmo

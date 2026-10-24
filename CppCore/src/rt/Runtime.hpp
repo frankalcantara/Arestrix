@@ -65,6 +65,10 @@ std::string runInteraction(const std::string& nodeId, const std::string& label,
 std::string runFlowCall(const std::string& nodeId, const std::string& label,
                         const std::string& sourceJson, const std::string& fixedInput);
 
+// Espera as chamadas assincronas ainda pendentes antes de encerrar o processo.
+// O main gerado chama isto; subflows nativos nao chamam (evita espera aninhada).
+void drainAsyncCalls();
+
 // Registro do grafo de chamadas (mundo fechado). O codigo gerado chama uma vez no inicio.
 // Ver rt/CallGraph.hpp para o formato e para a tool call_agent.
 void setCallRegistry(const std::string& callablesJson, const std::string& callersJson);

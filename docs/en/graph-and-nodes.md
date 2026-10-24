@@ -110,6 +110,13 @@ Studio shows as a non-blocking toast. The notification carries IDs, status and m
 call input or output. Disable it per call edge in the Inspector (`notify`) or globally with
 `ARESTRIX_NOTIFICATIONS=0`.
 
+**Asynchronous calls.** If the call edge enables **Allow asynchronous call**, the model may pass
+`async: true` to `call_agent`. The runtime starts the target in the background and returns
+`{"status":"pending","callId":"..."}` immediately; the agent continues and checks it with the
+`call_result` tool. `call_result` returns `pending` until the target finishes, then the normal result
+JSON. Async is opt-in per edge and can be disabled globally with `ARESTRIX_ASYNC_CALLS=0`. The
+generated `main` drains pending calls before exiting, so notifications/audit are not lost.
+
 The result is a JSON tool message with `callId`, `target`, `status`, `output` and `depth`; an
 interaction target also carries `answers`. The target's final text is also written to
 `.arestrix/out/<target>.txt`.

@@ -5,8 +5,9 @@ import { EventBus } from '../src/core/EventBus.ts';
 import { defaultCallSettings } from '../src/core/types.ts';
 
 describe('Vértice Call (chamada em fluxo, Fase 4C)', () => {
-  it('notifica por padrão e permite desligar por aresta', () => {
+  it('notifica por padrão, permite desligar e não habilita async por padrão', () => {
     expect(defaultCallSettings().notify).toBe(true);
+    expect(defaultCallSettings().allowAsync).toBe(false);
     const graph = new Graph(new EventBus());
     const caller = graph.createNode('caller', 'Caller', 'agent', 0, 0);
     const target = graph.createNode('target', 'Target', 'agent', 200, 0);

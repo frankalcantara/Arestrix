@@ -267,6 +267,29 @@ def decide(body):
     if "ESPECIALISTA B" in system:
         return text("Parecer B: prazo compativel.")
 
+    if "COORDENADOR ASYNC" in system:
+        if step == 0:
+            return tool_call("a1", "call_agent", {
+                "target": "especialista", "input": "tarefa assincrona", "async": True
+            })
+        last = {}
+        try:
+            last = json.loads(tool_msgs[-1]["content"])
+        except Exception:
+            last = {}
+        if last.get("status") == "pending":
+            return tool_call("a2", "call_result", {"callId": last.get("callId", "")})
+        if last.get("status") == "ok":
+            output = last.get("output", "")
+            return tool_call("a3", "write", {
+                "path": "workspace/resposta.txt",
+                "content": "Async: " + str(output) + "\n"
+            })
+        return text("Chamada assincrona consultada.")
+
+    if "ALVO ASSINCRONO" in system:
+        return text("Resposta assincrona do especialista.")
+
     if "PREPARADOR CALL" in system:
         return text("Dados preparados para a chamada.")
 
@@ -328,6 +351,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
              "user_has_subflow_input": "processe os dados do cliente" in user_content,
              "user_has_call_input": "Dados preparados para a chamada." in user_content,
              "requested_tools": [t["function"]["name"] for t in msg.get("tool_calls", [])],
+             "async_requested": any(
+                 t["function"]["name"] == "call_agent" and
+                 json.loads(t["function"]["arguments"] or "{}").get("async") is True
+                 for t in msg.get("tool_calls", [])),
              "reply": "tool_call:" + msg["tool_calls"][0]["function"]["name"] if msg.get("tool_calls") else "text"})
         self._send(200, {"choices": [{"message": msg, "finish_reason": "tool_calls" if msg.get("tool_calls") else "stop"}],
                          "usage": {"prompt_tokens": 10, "completion_tokens": 10}})

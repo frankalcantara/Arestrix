@@ -534,6 +534,39 @@ def scenario_11_call_vertex():
         cleanup(work, mock)
 
 
+def scenario_12_chamadas_assincronas():
+    print("\n== Exemplo 12: chamadas assincronas ==")
+    out, project, events, code, work, mock = run_example("12-chamadas-assincronas")
+    try:
+        check(code == 0, "terminou com codigo 0")
+        exported = project / "exports" / "resposta.txt"
+        check(exported.exists(), "o vertice de saida exportou a resposta")
+        if exported.exists():
+            content = exported.read_text(encoding="utf-8")
+            check("Resposta assincrona do especialista." in content,
+                  "o resultado do call_result chegou ao coordenador")
+
+        chats = [e for e in events if e.get("event") == "chat"]
+        coord = [e for e in chats if "COORDENADOR ASYNC" in e.get("system", "")]
+        check(bool(coord), "o coordenador executou")
+        check(any(e.get("async_requested") for e in coord), "o coordenador pediu call_agent async")
+        check(any("call_result" in e.get("tools", []) for e in coord),
+              "o coordenador recebeu a tool call_result")
+        check(any("call_result" in e.get("requested_tools", []) for e in coord),
+              "o coordenador consultou o resultado")
+        check(any("ALVO ASSINCRONO" in e.get("system", "") for e in chats),
+              "o alvo assincrono executou")
+
+        notification_files = list((project / ".arestrix" / "runs").glob("*/notifications.jsonl"))
+        check(bool(notification_files), "a chamada async gerou notificacao de execucao")
+        if notification_files:
+            notifications = notification_files[0].read_text(encoding="utf-8")
+            check("call.completed" in notifications, "a notificacao da chamada async foi registrada")
+        no_secret_leak(out, "ex12")
+    finally:
+        cleanup(work, mock)
+
+
 def scenario_secrets_guard():
     print("\n== Garantia de seguranca dos exemplos ==")
     node = shutil.which("node")
@@ -554,7 +587,8 @@ def main():
                scenario_03_duvida, scenario_03_urgente, scenario_04_memoria, scenario_05_matematica,
                scenario_06_chamada_agente, scenario_07_interacao, scenario_08_formulario_gerado,
                scenario_09_chamadas_paralelas, scenario_10_subflow_chamavel,
-               scenario_11_call_vertex, scenario_secrets_guard):
+               scenario_11_call_vertex, scenario_12_chamadas_assincronas,
+               scenario_secrets_guard):
         fn()
     if failures:
         print(f"\n{len(failures)} verificacao(oes) falharam:")

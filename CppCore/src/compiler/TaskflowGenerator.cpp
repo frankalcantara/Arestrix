@@ -480,7 +480,8 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
                 {"timeoutSeconds", e->callSettings.timeoutSeconds},
                 {"onError", e->callSettings.onError},
                 {"description", e->callSettings.description},
-                {"notify", e->callSettings.notify}
+                {"notify", e->callSettings.notify},
+                {"allowAsync", e->callSettings.allowAsync}
             });
         }
         return out;
@@ -887,13 +888,16 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
 
     code += "\n  std::osyncstream(std::cout) << \">>> Disparando execucao no pool de threads...\\n\";\n";
     code += "  auto start = std::chrono::high_resolution_clock::now();\n\n";
-    code += "  executor.run(taskflow).get();\n\n";
+    code += "  executor.run(taskflow).get();\n";
+    if (inputContextExpr.empty()) code += "  taskforge::rt::drainAsyncCalls();\n";
+    code += "\n";
     code += "  auto end = std::chrono::high_resolution_clock::now();\n";
     code += "  auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();\n";
     code += "  arx_mem_flush();\n";
     code += "  std::cout << \">>> Pipeline concluido com sucesso em \" << elapsed_ms << \" ms.\\n\";\n";
     code += "  } catch (const std::exception& ex) {\n";
     code += "    arx_mem_flush();\n";
+    if (inputContextExpr.empty()) code += "    taskforge::rt::drainAsyncCalls();\n";
     code += "    std::cerr << \">>> [ERRO] Pipeline interrompido: \" << ex.what() << std::endl;\n";
     code += "    return 1;\n";
     code += "  }\n";

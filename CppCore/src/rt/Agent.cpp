@@ -17,6 +17,7 @@
 #include <thread>
 
 #include "rt/Http.hpp"
+#include "rt/AsyncCalls.hpp"
 #include "rt/CallGraph.hpp"
 #include "rt/McpTools.hpp"
 #include "rt/ModelClient.hpp"
@@ -309,6 +310,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     const std::vector<CallTarget> callTargets = callTargetsFor(nodeId);
     std::vector<ToolDef> tools = toolDefinitions(spec.tools, lang);
     for (const auto& def : callToolDefinitions(callTargets, lang)) tools.push_back(def);
+    for (const auto& def : asyncCallToolDefinitions(callTargets, lang)) tools.push_back(def);
     // Ferramentas MCP (servidores de .workspace/mcps): so as dos servidores que o agente declarou.
     std::unique_ptr<McpToolbox> mcpTools;
     if (!spec.mcpServers.empty()) {
@@ -424,7 +426,10 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
             const bool parallelAllowed = !(parallelEnv && std::string(parallelEnv) == "0");
             const bool parallelBatch = parallelAllowed && t.toolCalls.size() > 1 &&
                 std::all_of(t.toolCalls.begin(), t.toolCalls.end(),
-                            [](const ChatToolCall& c) { return c.name == "call_agent"; });
+                            [](const ChatToolCall& c) {
+                                return c.name == "call_agent" &&
+                                       (!c.args.is_object() || !c.args.value("async", false));
+                            });
             if (parallelBatch) {
                 const int parentDepth = currentCallDepth();
                 std::vector<std::future<ToolResult>> futures;
@@ -461,7 +466,11 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                     AgentTelemetryEmitter::emitToolStart(nodeId, call.name, summarizeArgs(call.args));
                     ToolResult res;
                     if (call.name == "call_agent") {
-                        res = invokeCall(nodeId, runId, callTargets, call.args, lang);
+                        res = (call.args.is_object() && call.args.value("async", false))
+                            ? invokeCallAsync(nodeId, runId, callTargets, call.args, lang)
+                            : invokeCall(nodeId, runId, callTargets, call.args, lang);
+                    } else if (call.name == "call_result") {
+                        res = fetchAsyncCallResult(nodeId, runId, call.args, lang);
                     } else if (mcpTools && mcpTools->owns(call.name)) {
                         res = mcpTools->call(call.name, call.args);
                     } else {

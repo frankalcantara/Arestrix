@@ -109,6 +109,7 @@ void setCallRegistry(const std::string& callablesJson, const std::string& caller
             target.onError = value.value("onError", std::string("fail"));
             target.description = value.value("description", std::string());
             target.notify = value.value("notify", true);
+            target.allowAsync = value.value("allowAsync", false);
             targets.push_back(std::move(target));
         }
         parsedCallers[it.key()] = std::move(targets);
@@ -147,12 +148,17 @@ std::vector<ToolDef> callToolDefinitions(const std::vector<CallTarget>& targets,
         "Calls one of the agents, human interactions or subflows declared in the graph. The target must be in the allowed list. "
         "The call is synchronous: you receive the target's answer before continuing. You may request several "
         "call_agent calls in the same turn; they run in parallel and results return in the requested order.");
+    bool hasAsync = false;
     for (const auto& target : targets) {
         allowed.push_back(target.id);
         description << "\n- " << target.id;
         if (!target.label.empty()) description << " (" << target.label << ")";
         if (!target.description.empty()) description << ": " << target.description;
         description << " [max " << target.maxCalls << "]";
+        if (target.allowAsync) {
+            hasAsync = true;
+            description << " [async]";
+        }
     }
 
     Json targetSchema = Json::object();
@@ -169,6 +175,16 @@ std::vector<ToolDef> callToolDefinitions(const std::vector<CallTarget>& targets,
     Json properties = Json::object();
     properties["target"] = targetSchema;
     properties["input"] = inputSchema;
+    if (hasAsync) {
+        Json asyncSchema = Json::object();
+        asyncSchema["type"] = "boolean";
+        asyncSchema["description"] = langPick(lang,
+            "Se true, inicia a chamada e devolve um callId pendente; consulte depois com call_result. "
+            "Somente alvos marcados [async] aceitam.",
+            "When true, starts the call and returns a pending callId; check it later with call_result. "
+            "Only targets marked [async] accept it.");
+        properties["async"] = asyncSchema;
+    }
 
     Json required = Json::array();
     required.push_back("target");

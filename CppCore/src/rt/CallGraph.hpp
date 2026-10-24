@@ -32,6 +32,7 @@ struct CallTarget {
     std::string onError = "fail";
     std::string description;
     bool notify = true;
+    bool allowAsync = false;
 };
 
 // Substitui o registro. O codigo gerado chama uma vez no inicio do pipeline.

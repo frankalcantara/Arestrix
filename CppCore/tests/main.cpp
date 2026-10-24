@@ -33,6 +33,7 @@
 #include "assistant/AssistantTools.hpp"
 #include "assistant/GraphDocument.hpp"
 #include "rt/ModelClient.hpp"
+#include "rt/AsyncCalls.hpp"
 #include "rt/CallGraph.hpp"
 #include "rt/Interaction.hpp"
 #include "rt/Notification.hpp"
@@ -733,6 +734,64 @@ TEST(call_vertex_compiles_flow_call) {
         threw = true;
     }
     CHECK(threw);
+}
+
+TEST(async_call_returns_pending_then_result_via_call_result) {
+    using namespace taskforge::rt;
+    const std::string oldNotifications = taskforge::platform::getEnv("ARESTRIX_NOTIFICATIONS");
+    taskforge::platform::setProcessEnv("ARESTRIX_NOTIFICATIONS", "0");
+
+    setCallRegistry(
+        R"({"slow":{"kind":"subflow","label":"Slow"}})",
+        R"({"caller":[{"target":"slow","label":"Slow","kind":"subflow","maxCalls":1,"allowAsync":true}]})");
+    registerSubflow("slow", [](const std::string& input) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(120));
+        return "eco:" + input;
+    });
+
+    auto targets = callTargetsFor("caller");
+    auto defs = asyncCallToolDefinitions(targets, RuntimeLang::Pt);
+    CHECK(defs.size() == 1);
+    CHECK(defs[0].name == "call_result");
+    auto callDefs = callToolDefinitions(targets, RuntimeLang::Pt);
+    CHECK(!callDefs.empty());
+    CHECK(callDefs[0].parameters.dump().find("\"async\"") != std::string::npos);
+
+    auto pending = invokeCallAsync("caller", "run", targets,
+                                   taskforge::Json{{"target", "slow"}, {"input", "x"}, {"async", true}},
+                                   RuntimeLang::Pt);
+    CHECK(!pending.isError);
+    auto p = taskforge::jsonutil::parse(pending.content);
+    const std::string callId = p.value("callId", std::string());
+    CHECK(!callId.empty());
+    CHECK(p.value("status", std::string()) == "pending");
+
+    auto early = fetchAsyncCallResult("caller", "run", taskforge::Json{{"callId", callId}}, RuntimeLang::Pt);
+    CHECK(!early.isError);
+    const std::string earlyText = early.content;
+    CHECK(earlyText.find("\"status\":\"pending\"") != std::string::npos ||
+          earlyText.find("\"status\": \"pending\"") != std::string::npos ||
+          earlyText.find("eco:x") != std::string::npos);
+
+    drainAsyncCalls();
+    auto done = fetchAsyncCallResult("caller", "run", taskforge::Json{{"callId", callId}}, RuntimeLang::Pt);
+    CHECK(!done.isError);
+    CHECK(done.content.find("eco:x") != std::string::npos);
+    CHECK(done.content.find(callId) != std::string::npos);
+
+    auto wrong = fetchAsyncCallResult("other", "run", taskforge::Json{{"callId", callId}}, RuntimeLang::Pt);
+    CHECK(wrong.isError);
+
+    const std::string oldAsync = taskforge::platform::getEnv("ARESTRIX_ASYNC_CALLS");
+    taskforge::platform::setProcessEnv("ARESTRIX_ASYNC_CALLS", "0");
+    auto disabled = invokeCallAsync("caller", "run", targets,
+                                    taskforge::Json{{"target", "slow"}, {"input", "x"}, {"async", true}},
+                                    RuntimeLang::Pt);
+    CHECK(disabled.isError);
+    taskforge::platform::setProcessEnv("ARESTRIX_ASYNC_CALLS", oldAsync);
+
+    setCallRegistry("{}", "{}");
+    taskforge::platform::setProcessEnv("ARESTRIX_NOTIFICATIONS", oldNotifications);
 }
 
 TEST(notification_channel_writes_jsonl_and_respects_opt_out) {

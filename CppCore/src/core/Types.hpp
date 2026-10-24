@@ -41,6 +41,7 @@ struct CallSettings {
     std::string onError = "fail";
     std::string description;
     bool notify = true;
+    bool allowAsync = false;
 };
 
 struct Port {
@@ -178,7 +179,8 @@ inline void to_json(json& j, const CallSettings& c) {
         {"timeoutSeconds", c.timeoutSeconds},
         {"onError", c.onError},
         {"description", c.description},
-        {"notify", c.notify}
+        {"notify", c.notify},
+        {"allowAsync", c.allowAsync}
     };
 }
 inline void from_json(const json& j, CallSettings& c) {
@@ -187,6 +189,7 @@ inline void from_json(const json& j, CallSettings& c) {
     c.onError = j.value("onError", std::string("fail"));
     c.description = j.value("description", std::string());
     c.notify = j.value("notify", true);
+    c.allowAsync = j.value("allowAsync", false);
 }
 
 // Serialização manual de Port para lidar com campos opcionais seguros

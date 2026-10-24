@@ -1491,6 +1491,11 @@ export class Inspector {
             <input type="checkbox" data-call-notify="${edge.id}" ${settings.notify !== false ? 'checked' : ''} />
             ${t('inspector.calls.notify', 'Notificar conclusão no Studio')}
           </label>
+          ${node.type === 'agent' ? `
+          <label style="font-size: 11px; display: inline-flex; gap: 6px; align-items: center; margin-top: 4px;">
+            <input type="checkbox" data-call-async="${edge.id}" ${settings.allowAsync === true ? 'checked' : ''} />
+            ${t('inspector.calls.allow_async', 'Permitir chamada assíncrona (call_result)')}
+          </label>` : ''}
           <div class="office-field-hint">${t('inspector.calls.max_hint', 'Máximo de chamadas por execução deste agente')}</div>
         </div>
       `;
@@ -1600,6 +1605,17 @@ export class Inspector {
         if (!edge) return;
         const settings = { ...(edge.callSettings ?? defaultCallSettings()) };
         settings.notify = input.checked;
+        this.graph.updateEdge(edge.id, { callSettings: settings });
+      });
+    });
+
+    this.container.querySelectorAll<HTMLInputElement>('[data-call-async]').forEach(input => {
+      input.addEventListener('change', () => {
+        const edgeId = input.getAttribute('data-call-async');
+        const edge = edgeId ? this.graph.getEdge(edgeId) : undefined;
+        if (!edge) return;
+        const settings = { ...(edge.callSettings ?? defaultCallSettings()) };
+        settings.allowAsync = input.checked;
         this.graph.updateEdge(edge.id, { callSettings: settings });
       });
     });

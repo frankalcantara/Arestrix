@@ -37,10 +37,12 @@ export interface ICallSettings {
   description?: string;
   /** Emite uma notificação assíncrona quando a chamada conclui ou falha. */
   notify?: boolean;
+  /** Permite que o modelo inicie esta chamada com async=true. */
+  allowAsync?: boolean;
 }
 
 export function defaultCallSettings(): ICallSettings {
-  return { maxCalls: 1, timeoutSeconds: 0, onError: 'fail', description: '', notify: true };
+  return { maxCalls: 1, timeoutSeconds: 0, onError: 'fail', description: '', notify: true, allowAsync: false };
 }
 
 /**

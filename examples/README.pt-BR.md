@@ -2,7 +2,7 @@
 
 [English](README.md) · [Documentação](../docs/README.md)
 
-Onze projetos prontos para executar, do simples ao complexo. Cada um é uma pasta de projeto Arestrix comum: abra no Studio,
+Doze projetos prontos para executar, do simples ao complexo. Cada um é uma pasta de projeto Arestrix comum: abra no Studio,
 escolha seu modelo, grave sua chave de API e pressione **F5**.
 
 | # | Projeto | O que mostra | Precisa de |
@@ -18,11 +18,12 @@ escolha seu modelo, grave sua chave de API e pressione **F5**.
 | 9 | [`09-chamadas-paralelas`](09-chamadas-paralelas) | Um coordenador pede dois especialistas declarados no mesmo turno; o loop do agente executa as chamadas `call_agent` em paralelo e consolida as respostas. | Um modelo. |
 | 10 | [`10-subflow-chamavel`](10-subflow-chamavel) | Um coordenador chama um **subflow** com grafo aninhado; o compilador gera uma função nativa e o runtime passa o input aos agentes internos. | Um modelo. |
 | 11 | [`11-call-vertex`](11-call-vertex) | Um vértice **Call** executa um alvo declarado dentro do fluxo, grava a resposta em `.arestrix/out` e entrega ao próximo vértice. | Um modelo. |
+| 12 | [`12-chamadas-assincronas`](12-chamadas-assincronas) | Um coordenador inicia `call_agent` com `async: true`, recebe um `callId` pendente e consulta com `call_result`. | Um modelo. |
 
 Os exemplos 3 e 5 são **gerados** por `python scripts/build_examples.py`, então as peças compartilhadas não ficam fora de
 sincronia. Os vértices ainda não executam um grafo aninhado, por isso a composição é achatada em um único pipeline.
 
-Todos os onze terminam em **vértices de saída** (`output`): o arquivo produzido é copiado para `exports/` e registrado na
+Todos os doze terminam em **vértices de saída** (`output`): o arquivo produzido é copiado para `exports/` e registrado na
 aba **Artefatos**, com visualização por formato (SVG, Markdown, planilhas, PDF e JSON).
 
 ## Executar um exemplo

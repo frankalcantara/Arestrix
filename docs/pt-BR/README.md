@@ -32,6 +32,6 @@
 ## Tutoriais e produtos
 
 - [Tutorial do agente SVG](tutorials/svg-agent.md) — passo a passo completo, do grafo à entrega.
-- [Exemplos](../../examples/README.pt-BR.md) - onze projetos executáveis (o de pesquisa web usa Keenable).
+- [Exemplos](../../examples/README.pt-BR.md) - doze projetos executáveis (o de pesquisa web usa Keenable).
 - [Galeria de recursos](../product/showcase.md) — capturas do Studio, compilador, runner e governança.
 - [Comparativo](../product/comparison.md) — diferenças em relação a outras abordagens de orquestração.

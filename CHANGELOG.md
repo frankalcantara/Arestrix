@@ -115,6 +115,12 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   `.arestrix/runs/<runId>/notifications.jsonl` and to the `notification` telemetry event; the Studio
   shows it as a toast. Notifications carry IDs/status/metadata, never input or output, and can be
   disabled per call edge or with `ARESTRIX_NOTIFICATIONS=0`. Calls remain synchronous in v1.
+- **Asynchronous calls (phase 4E):** when a call edge allows async, `call_agent` accepts
+  `async: true`, starts the target in the background and returns a pending `callId`; the agent polls
+  with `call_result`, which returns `pending` or the final JSON. Async is opt-in per edge, can be
+  disabled with `ARESTRIX_ASYNC_CALLS=0`, and pending calls are drained before process exit.
+- `examples/12-chamadas-assincronas` and the E2E cover a coordinator starting, polling and delivering
+  an async specialist result.
 - **Database disaster recovery and Git sync safety:** binary SQLite databases are excluded from Git
   tracking in accordance with GitHub Acceptable Use Policies; `DatabaseBackupService` exports clean
   text SQL dumps (`storage/database.sql`) and cognitive memory snapshots (`storage/memory.dump.json`)

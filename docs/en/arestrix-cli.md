@@ -342,6 +342,7 @@ For tests without real keys, the e2e scripts use fake LLMs and test MCPs; see
 | `ARESTRIX_MEMORY_DISABLE=1` | Disables the memory brief and tools at runtime. In the Studio, use **Measurement / A-B Mode**. |
 | `ARESTRIX_PYTHON` | Used only by examples that declare a Python stdio MCP. |
 | `ARESTRIX_NOTIFICATIONS=0` | Disables the non-blocking call notification channel and its JSONL audit. |
+| `ARESTRIX_ASYNC_CALLS=0` | Rejects `async: true` call requests, keeping all calls synchronous. |
 
 Never put keys in the graph, `arestrix.project.json` or `.workspace/mcps`. Use environment variables
 and `${NAME}` references.

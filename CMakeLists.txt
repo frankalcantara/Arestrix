@@ -197,6 +197,7 @@ add_library(arestrix_core STATIC
   ${SRC}/rt/Tools.cpp
   ${SRC}/rt/Agent.cpp
   ${SRC}/rt/CallGraph.cpp
+  ${SRC}/rt/AsyncCalls.cpp
   ${SRC}/rt/Interaction.cpp
   ${SRC}/rt/Notification.cpp
   ${SRC}/rt/ModelClient.cpp

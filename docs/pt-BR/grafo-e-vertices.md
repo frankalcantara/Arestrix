@@ -110,6 +110,13 @@ Studio mostra como toast não bloqueante. A notificação leva IDs, status e met
 ou o output da chamada. Desligue por aresta no Inspetor (`notify`) ou globalmente com
 `ARESTRIX_NOTIFICATIONS=0`.
 
+**Chamadas assíncronas.** Se a aresta marcar **Permitir chamada assíncrona**, o modelo pode passar
+`async: true` para `call_agent`. O runtime inicia o alvo em segundo plano e devolve
+`{"status":"pending","callId":"..."}` imediatamente; o agente continua e consulta com a ferramenta
+`call_result`. `call_result` devolve `pending` até o alvo concluir e depois o JSON normal. O async é
+opt-in por aresta e pode ser desligado globalmente com `ARESTRIX_ASYNC_CALLS=0`. O `main` gerado
+espera chamadas pendentes antes de encerrar, para não perder notificações/auditoria.
+
 O resultado é uma mensagem de ferramenta JSON com `callId`, `target`, `status`, `output` e `depth`;
 um destino de interação também traz `answers`. O texto final do alvo também é gravado em
 `.arestrix/out/<target>.txt`.
