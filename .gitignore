@@ -61,3 +61,40 @@ Output/
 
 # Notas de sessao do agente (dados pessoais de ambiente: nunca versionar)
 continue-aqui.mcp
+
+# Modelos e pesos de IA locais
+*.gguf
+*.safetensors
+*.bin
+*.onnx
+*.pt
+*.pth
+models/
+
+# Datasets e arquivos colunares pesados
+*.parquet
+*.arrow
+*.feather
+*.h5
+*.hdf5
+
+# Arquivos compactados e imagens de disco
+*.tar
+*.gz
+*.zip
+*.7z
+*.rar
+*.iso
+
+# Midias pesadas
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.wav
+
+# Caches e temporarios
+temp/
+cache/
+*.cache
+*.log

@@ -575,6 +575,7 @@ export interface IProjectGitConfig {
   autoCommitOnShutdown: boolean; // commit e push ao encerrar o sistema
   timedPushEnabled?: boolean; // push temporizado automatico (padrao true)
   timedPushIntervalMinutes?: number; // intervalo em minutos (padrao 10)
+  backupMode?: 'ddl_and_data' | 'schema_only'; // modo de backup do banco de dados (ddl_and_data ou schema_only)
   lastSyncAt?: string;
   lastCommitHash?: string;
 }

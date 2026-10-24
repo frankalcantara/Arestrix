@@ -298,8 +298,11 @@ export class GitSyncManager {
    * Utilizado a cada execução (F5) para salvar snapshot sem onerar a rede ou cotas do GitHub.
    */
   public async commitLocal(message?: string): Promise<{ ok: boolean; output: string; error?: string }> {
-    if (!this.hasWebUI()) return { ok: false, output: '', error: 'Sem backend WebUI.' };
     const proj = this.projectManager.getCurrentProject();
+    if (!proj.git || !proj.git.enabled) {
+      return { ok: true, output: 'Git desativado para este projeto (modo 100% local).' };
+    }
+    if (!this.hasWebUI()) return { ok: false, output: '', error: 'Sem backend WebUI.' };
 
     try {
       const payload = {
@@ -326,8 +329,11 @@ export class GitSyncManager {
    * Executa envio (push) para o repositório remoto.
    */
   public async pushRemote(branch: string = 'main'): Promise<{ ok: boolean; output: string; error?: string }> {
-    if (!this.hasWebUI()) return { ok: false, output: '', error: 'Sem backend WebUI.' };
     const proj = this.projectManager.getCurrentProject();
+    if (!proj.git || !proj.git.enabled) {
+      return { ok: false, output: '', error: 'Sincronização Git desativada para este projeto.' };
+    }
+    if (!this.hasWebUI()) return { ok: false, output: '', error: 'Sem backend WebUI.' };
 
     this.isSyncing = true;
     this.bus.emit('git:syncing', { type: 'push' });
@@ -368,8 +374,11 @@ export class GitSyncManager {
    * Executa commit e push para o repositório remoto
    */
   public async commitAndPush(message?: string, branch: string = 'main'): Promise<{ ok: boolean; output: string; error?: string }> {
-    if (!this.hasWebUI()) return { ok: false, output: '', error: 'Sem backend WebUI.' };
     const proj = this.projectManager.getCurrentProject();
+    if (!proj.git || !proj.git.enabled) {
+      return { ok: true, output: 'Git desativado para este projeto (modo 100% local).' };
+    }
+    if (!this.hasWebUI()) return { ok: false, output: '', error: 'Sem backend WebUI.' };
 
     this.isSyncing = true;
     this.bus.emit('git:syncing', { message });
@@ -488,6 +497,10 @@ export class GitSyncManager {
    * Acionamento manual de sincronização (Commit & Push) via botão da interface.
    */
   public async triggerManualPush(): Promise<{ ok: boolean; output: string; error?: string }> {
+    const proj = this.projectManager.getCurrentProject();
+    if (!proj.git || !proj.git.enabled) {
+      return { ok: false, output: '', error: 'Sincronização Git desativada para este projeto. Habilite nas configurações para sincronizar com o GitHub.' };
+    }
     if (this.isSyncing) {
       return { ok: false, output: '', error: 'Sincronização já em andamento.' };
     }

@@ -10,6 +10,12 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
 
 ### Added
 
+- **Strictly Optional Git Synchronization (100% Local by Default):** Git/GitHub synchronization is now opt-in (`enabled: false` by default for new projects). If disabled, all project files, SQLite databases (`storage/database.sqlite`), and cognitive memory (`.arestrix/memory/memory.db`) reside exclusively on local disk with zero Git operations, zero network overhead, and zero dump exports.
+- **Configurable Backup Mode (Privacy & LGPD/GDPR Compliance):** Projects support two backup modes: "DDL + Data" (full tabular export) and "DDL Only / Schema Only" (table structure without rows), preventing sensitive data and PII from reaching Git.
+- **Deterministic Plaintext Dumps & Ghost Commit Elimination:** Volatile timestamp headers were removed from SQL and JSON memory dumps. Files are only updated on disk if their actual contents have changed, preventing packfile bloat and delta churn.
+- **95 MB Dump Ceiling Protection (GitHub GH001 Hard Limit Safeguard):** `DatabaseBackupService` enforces a strict 95 MB size check to avoid pushing files exceeding GitHub's 100 MB hard limit.
+- **Native Pre-Commit Secret Scanning:** `GitSyncService` scans staged diffs for common API keys (`sk-...`, `AIza...`, `AKIA...`, `ghp_...`) and blocks commits with a clear error if exposed secrets are detected.
+- **Expanded `.gitignore` Rules:** Automatic exclusions for local AI model weights (`*.gguf`, `*.safetensors`, `*.bin`, `*.onnx`, `models/`), columnar datasets (`*.parquet`, `*.arrow`, `*.feather`, `*.h5`), media, and runtime caches.
 - **Timed Git Push and Rate-Limit Protection (GitHub Abuse Prevention):** Decoupled local commit from remote push. Pipeline execution (`F5`) now records fast local commits without consuming remote GitHub network quotas.
 - **Batched Timed Push Timer:** Background timer (default every 10 minutes) automatically batches and pushes pending changes or unpushed commits when detected.
 - **Immediate Manual Push Action:** Dedicated one-click Push button on Quick Access Toolbar (QAT) and within `GitAccountModal` automation settings.

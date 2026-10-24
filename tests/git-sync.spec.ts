@@ -142,10 +142,11 @@ describe('Git Auto-Save & Synchronization System', () => {
   });
 
   describe('Configuração do Manifesto do Projeto & Segurança de Dados', () => {
-    it('deve inicializar novo projeto com configuração Git privada e auto-commit habilitados por padrão', () => {
+    it('deve inicializar novo projeto com modo 100% local por padrão (Git desabilitado / opt-in) e backup DDL + dados', () => {
       const manifest = projectManager.createDefaultManifest();
       expect(manifest.git).toBeDefined();
-      expect(manifest.git?.enabled).toBe(true);
+      expect(manifest.git?.enabled).toBe(false);
+      expect(manifest.git?.backupMode).toBe('ddl_and_data');
       expect(manifest.git?.provider).toBe('github');
       expect(manifest.git?.isPrivate).toBe(true);
       expect(manifest.git?.autoCommitOnRun).toBe(true);
@@ -162,10 +163,11 @@ describe('Git Auto-Save & Synchronization System', () => {
       expect(keys).not.toContain('apiKey');
     });
 
-    it('deve persistir configurações Git não-sensíveis no projeto ativo', async () => {
+    it('deve persistir configurações Git e backupMode no projeto ativo', async () => {
       projectManager.updateProjectMetadata({
         git: {
           enabled: true,
+          backupMode: 'schema_only',
           provider: 'github',
           serverUrl: 'https://github.com',
           username: 'frankalcantara',
@@ -178,6 +180,8 @@ describe('Git Auto-Save & Synchronization System', () => {
       });
 
       const current = projectManager.getCurrentProject();
+      expect(current.git?.enabled).toBe(true);
+      expect(current.git?.backupMode).toBe('schema_only');
       expect(current.git?.username).toBe('frankalcantara');
       expect(current.git?.repositoryName).toBe('projeto-teste');
       expect(current.git?.remoteUrl).toBe('https://github.com/frankalcantara/projeto-teste.git');
@@ -199,22 +203,30 @@ describe('Git Auto-Save & Synchronization System', () => {
       gitManager.stopTimedPush();
     });
 
-    it('triggerTimedPush deve retornar false se não houver alterações pendentes', async () => {
+    it('triggerTimedPush deve retornar false se não houver alterações pendentes ou git desativado', async () => {
       const res = await gitManager.triggerTimedPush();
       expect(res).toBe(false);
     });
 
-    it('triggerManualPush deve ser disparável sob demanda', async () => {
+    it('triggerManualPush deve avisar quando Git estiver desativado (modo local)', async () => {
+      projectManager.updateProjectMetadata({ git: { enabled: false } });
+      const res = await gitManager.triggerManualPush();
+      expect(res.ok).toBe(false);
+      expect(res.error).toContain('Sincronização Git desativada para este projeto');
+    });
+
+    it('triggerManualPush deve tentar enviar quando Git estiver explicitamente habilitado', async () => {
+      projectManager.updateProjectMetadata({ git: { enabled: true, provider: 'github' } });
       const res = await gitManager.triggerManualPush();
       // Em ambiente de teste sem WebUI backend nativo
       expect(res.ok).toBe(false);
       expect(res.error).toContain('Sem backend WebUI');
     });
 
-    it('syncOnRun deve executar commit local sem push para remote (protegendo cotas do GitHub)', async () => {
+    it('syncOnRun deve retornar true imediatamente no modo local sem tocar no Git', async () => {
+      projectManager.updateProjectMetadata({ git: { enabled: false } });
       const res = await gitManager.syncOnRun();
-      // Em mock sem WebUI retorna false mas não gera exceção
-      expect(typeof res).toBe('boolean');
+      expect(res).toBe(true);
     });
   });
 

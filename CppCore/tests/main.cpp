@@ -3228,10 +3228,15 @@ TEST(git_sync_service_and_project_manifest_config) {
     CHECK(!GitSyncService::isCommercialService("https://git.empresa.com.br"));
 
     // 2. Serializacao do Manifesto com Git
+    ProjectGitConfig defaultGit;
+    CHECK(defaultGit.enabled == false); // Opcional por padrao
+    CHECK(defaultGit.backupMode == "ddl_and_data");
+
     ProjectManifest m;
     m.projectId = "test-git-proj";
     m.name = "Projeto Git Teste";
     m.git.enabled = true;
+    m.git.backupMode = "schema_only";
     m.git.provider = "github";
     m.git.serverUrl = "https://github.com";
     m.git.username = "frankalcantara";
@@ -3245,6 +3250,7 @@ TEST(git_sync_service_and_project_manifest_config) {
 
     taskforge::Json j = m;
     CHECK(j["git"]["enabled"] == true);
+    CHECK(j["git"]["backupMode"] == "schema_only");
     CHECK(j["git"]["isPrivate"] == true);
     CHECK(j["git"]["provider"] == "github");
     CHECK(j["git"]["repositoryName"] == "projeto-git-teste");
@@ -3252,6 +3258,7 @@ TEST(git_sync_service_and_project_manifest_config) {
     // Desserializacao
     auto m2 = j.get<ProjectManifest>();
     CHECK(m2.git.enabled == true);
+    CHECK(m2.git.backupMode == "schema_only");
     CHECK(m2.git.isPrivate == true);
     CHECK(m2.git.username == "frankalcantara");
     CHECK(m2.git.repositoryName == "projeto-git-teste");
@@ -3288,6 +3295,15 @@ TEST(git_sync_service_and_project_manifest_config) {
     CHECK(st.isRepo == true);
     CHECK(st.hasUncommittedChanges == false);
 
+    // 6. Teste de bloqueio de segredos (Secret Scanning)
+    std::ofstream secFile(tempDir / "secrets.env");
+    std::string dummySecret = std::string("s") + "k-proj-abcde1234567890abcdef1234567890abcdef";
+    secFile << "OPENAI_KEY=" << dummySecret << "\n";
+    secFile.close();
+    bool secCommitOk = GitSyncService::commitLocal(tempDir, "Commit with secret", commitOut, commitErr);
+    CHECK(!secCommitOk);
+    CHECK(commitErr.find("Secret scan guard") != std::string::npos);
+
     std::error_code ec;
     std::filesystem::remove_all(tempDir, ec);
 }
@@ -3311,6 +3327,8 @@ TEST(database_backup_service_dump_restore_and_safe_gitignore) {
     CHECK(igContent.find("*.sqlite") != std::string::npos);
     CHECK(igContent.find("output/") != std::string::npos);
     CHECK(igContent.find(".arestrix/") != std::string::npos);
+    CHECK(igContent.find("*.gguf") != std::string::npos);
+    CHECK(igContent.find("*.parquet") != std::string::npos);
 
     // 2. Criacao de banco de dados SQLite com dados variados
     fs::path dbPath = tempRoot / "storage" / "database.sqlite";
@@ -3340,6 +3358,20 @@ TEST(database_backup_service_dump_restore_and_safe_gitignore) {
     CHECK(sqlDumpContent.find("João D''Ávila") != std::string::npos);
     CHECK(sqlDumpContent.find("CREATE TABLE configuracoes") != std::string::npos);
     CHECK(sqlDumpContent.find("INSERT INTO \"clientes\"") != std::string::npos);
+    CHECK(sqlDumpContent.find("-- Gerado em:") == std::string::npos);
+
+    // 3.1 Exportacao de dump SQL no modo apenas esquema / DDL (Opcao B)
+    fs::path sqlPathSchema = tempRoot / "storage" / "database_schema.sql";
+    bool dumpSchemaOk = DatabaseBackupService::exportSqlDump(dbPath, sqlPathSchema, err, true);
+    CHECK(dumpSchemaOk);
+    CHECK(fs::exists(sqlPathSchema));
+
+    std::ifstream sqlSchemaIn(sqlPathSchema);
+    std::string sqlSchemaContent((std::istreambuf_iterator<char>(sqlSchemaIn)), std::istreambuf_iterator<char>());
+    sqlSchemaIn.close();
+    CHECK(sqlSchemaContent.find("CREATE TABLE clientes") != std::string::npos);
+    CHECK(sqlSchemaContent.find("CREATE TABLE configuracoes") != std::string::npos);
+    CHECK(sqlSchemaContent.find("INSERT INTO") == std::string::npos); // Sem INSERTs na opcao DDL Only
 
     // 4. Simulacao de desastre: exclui o arquivo binario .sqlite
     fs::remove(dbPath);

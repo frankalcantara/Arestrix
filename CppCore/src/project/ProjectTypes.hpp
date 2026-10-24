@@ -55,7 +55,7 @@ inline void from_json(const taskforge::Json& j, ProjectDatabaseConfig& d) {
 }
 
 struct ProjectGitConfig {
-    bool enabled = true;
+    bool enabled = false; // Opcional: modo 100% local por padrao
     std::string provider = "github"; // "github", "gitlab", "gitea", "custom"
     std::string serverUrl = "https://github.com";
     std::string username = ""; // Apenas identificador (sem tokens ou senhas)
@@ -66,6 +66,7 @@ struct ProjectGitConfig {
     bool autoCommitOnShutdown = true;
     bool timedPushEnabled = true;
     int timedPushIntervalMinutes = 10;
+    std::string backupMode = "ddl_and_data"; // "ddl_and_data" ou "schema_only"
     std::string lastSyncAt = "";
     std::string lastCommitHash = "";
 };
@@ -83,13 +84,14 @@ inline void to_json(taskforge::Json& j, const ProjectGitConfig& g) {
         {"autoCommitOnShutdown", g.autoCommitOnShutdown},
         {"timedPushEnabled", g.timedPushEnabled},
         {"timedPushIntervalMinutes", g.timedPushIntervalMinutes},
+        {"backupMode", g.backupMode},
         {"lastSyncAt", g.lastSyncAt},
         {"lastCommitHash", g.lastCommitHash}
     };
 }
 
 inline void from_json(const taskforge::Json& j, ProjectGitConfig& g) {
-    g.enabled = j.value("enabled", true);
+    g.enabled = j.value("enabled", false);
     g.provider = j.value("provider", "github");
     g.serverUrl = j.value("serverUrl", "https://github.com");
     g.username = j.value("username", "");
@@ -100,6 +102,7 @@ inline void from_json(const taskforge::Json& j, ProjectGitConfig& g) {
     g.autoCommitOnShutdown = j.value("autoCommitOnShutdown", true);
     g.timedPushEnabled = j.value("timedPushEnabled", true);
     g.timedPushIntervalMinutes = j.value("timedPushIntervalMinutes", 10);
+    g.backupMode = j.value("backupMode", "ddl_and_data");
     g.lastSyncAt = j.value("lastSyncAt", "");
     g.lastCommitHash = j.value("lastCommitHash", "");
 }

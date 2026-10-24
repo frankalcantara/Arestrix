@@ -61,7 +61,8 @@ std::string escapeIdent(const std::string& ident) {
 
 bool DatabaseBackupService::exportSqlDump(const std::filesystem::path& dbPath,
                                          const std::filesystem::path& sqlPath,
-                                         std::string& error) {
+                                         std::string& error,
+                                         bool schemaOnly) {
     if (!std::filesystem::exists(dbPath)) {
         return true; // Nada a exportar se o banco nao existir no disco
     }
@@ -79,21 +80,9 @@ bool DatabaseBackupService::exportSqlDump(const std::filesystem::path& dbPath,
         return false;
     }
 
-    std::filesystem::path parent = sqlPath.parent_path();
-    if (!parent.empty() && !std::filesystem::exists(parent)) {
-        std::filesystem::create_directories(parent, ec);
-    }
-
-    std::ofstream out(sqlPath, std::ios::trunc);
-    if (!out.is_open()) {
-        error = "Nao foi possivel criar o arquivo de dump SQL: " + sqlPath.string();
-        sqlite3_close(db);
-        return false;
-    }
-
-    out << "-- Arestrix Database Dump (Opcao A: DDL e Dados)\n"
-        << "-- Backup em texto plano versionavel e compativel com o GitHub\n"
-        << "-- Gerado em: " << getCurrentIsoTime() << "\n\n"
+    std::ostringstream out;
+    out << "-- Arestrix Database Dump (DDL e Dados)\n"
+        << "-- Backup em texto plano versionavel e compativel com o GitHub\n\n"
         << "PRAGMA foreign_keys=OFF;\n"
         << "BEGIN TRANSACTION;\n\n";
 
@@ -136,81 +125,130 @@ bool DatabaseBackupService::exportSqlDump(const std::filesystem::path& dbPath,
     }
     sqlite3_finalize(masterStmt);
 
-    // Exporta os dados linha a linha para cada tabela
-    for (const auto& tblName : tablesToDump) {
-        std::string selectSql = "SELECT * FROM \"" + escapeIdent(tblName) + "\";";
+    const size_t kMaxDumpBytes = 95 * 1024 * 1024; // 95 MB (evita limite rigido de 100 MB do GitHub GH001)
+    const size_t kWarnDumpBytes = 50 * 1024 * 1024; // 50 MB (alerta de arquivo volumoso)
+    bool truncated = false;
 
-        sqlite3_stmt* dataStmt = nullptr;
-        if (sqlite3_prepare_v2(db, selectSql.c_str(), -1, &dataStmt, nullptr) != SQLITE_OK) {
-            continue;
-        }
-
-        int colCount = sqlite3_column_count(dataStmt);
-        bool wroteHeader = false;
-
-        while (sqlite3_step(dataStmt) == SQLITE_ROW) {
-            if (!wroteHeader) {
-                out << "-- Dados para tabela: " << tblName << "\n";
-                wroteHeader = true;
+    // Exporta os dados linha a linha para cada tabela (se nao for schema_only)
+    if (!schemaOnly) {
+        for (const auto& tblName : tablesToDump) {
+            if (static_cast<size_t>(out.tellp()) >= kMaxDumpBytes) {
+                truncated = true;
+                break;
             }
-            out << "INSERT INTO \"" << escapeIdent(tblName) << "\" VALUES (";
-            for (int i = 0; i < colCount; ++i) {
-                if (i > 0) out << ", ";
-                int colType = sqlite3_column_type(dataStmt, i);
-                switch (colType) {
-                    case SQLITE_NULL:
-                        out << "NULL";
-                        break;
-                    case SQLITE_INTEGER:
-                        out << sqlite3_column_int64(dataStmt, i);
-                        break;
-                    case SQLITE_FLOAT: {
-                        double val = sqlite3_column_double(dataStmt, i);
-                        if (std::isnan(val)) {
+
+            std::string selectSql = "SELECT * FROM \"" + escapeIdent(tblName) + "\";";
+            sqlite3_stmt* dataStmt = nullptr;
+            if (sqlite3_prepare_v2(db, selectSql.c_str(), -1, &dataStmt, nullptr) != SQLITE_OK) {
+                continue;
+            }
+
+            int colCount = sqlite3_column_count(dataStmt);
+            bool wroteHeader = false;
+
+            while (sqlite3_step(dataStmt) == SQLITE_ROW) {
+                if (static_cast<size_t>(out.tellp()) >= kMaxDumpBytes) {
+                    truncated = true;
+                    break;
+                }
+
+                if (!wroteHeader) {
+                    out << "-- Dados para tabela: " << tblName << "\n";
+                    wroteHeader = true;
+                }
+                out << "INSERT INTO \"" << escapeIdent(tblName) << "\" VALUES (";
+                for (int i = 0; i < colCount; ++i) {
+                    if (i > 0) out << ", ";
+                    int colType = sqlite3_column_type(dataStmt, i);
+                    switch (colType) {
+                        case SQLITE_NULL:
                             out << "NULL";
-                        } else if (std::isinf(val)) {
-                            out << (val < 0 ? "-1e999" : "1e999");
-                        } else {
-                            char buf[64];
-                            snprintf(buf, sizeof(buf), "%.17g", val);
-                            out << buf;
-                            if (strchr(buf, '.') == nullptr && strchr(buf, 'e') == nullptr && strchr(buf, 'E') == nullptr) {
-                                out << ".0";
+                            break;
+                        case SQLITE_INTEGER:
+                            out << sqlite3_column_int64(dataStmt, i);
+                            break;
+                        case SQLITE_FLOAT: {
+                            double val = sqlite3_column_double(dataStmt, i);
+                            if (std::isnan(val)) {
+                                out << "NULL";
+                            } else if (std::isinf(val)) {
+                                out << (val < 0 ? "-1e999" : "1e999");
+                            } else {
+                                char buf[64];
+                                snprintf(buf, sizeof(buf), "%.17g", val);
+                                out << buf;
+                                if (strchr(buf, '.') == nullptr && strchr(buf, 'e') == nullptr && strchr(buf, 'E') == nullptr) {
+                                    out << ".0";
+                                }
                             }
+                            break;
                         }
-                        break;
-                    }
-                    case SQLITE_TEXT: {
-                        const unsigned char* txt = sqlite3_column_text(dataStmt, i);
-                        int bytes = sqlite3_column_bytes(dataStmt, i);
-                        std::string s(reinterpret_cast<const char*>(txt), bytes);
-                        out << "'" << escapeSqlString(s) << "'";
-                        break;
-                    }
-                    case SQLITE_BLOB: {
-                        const unsigned char* blob = static_cast<const unsigned char*>(sqlite3_column_blob(dataStmt, i));
-                        int bytes = sqlite3_column_bytes(dataStmt, i);
-                        out << "X'";
-                        static const char hexDigits[] = "0123456789ABCDEF";
-                        for (int b = 0; b < bytes; ++b) {
-                            out << hexDigits[(blob[b] >> 4) & 0x0F];
-                            out << hexDigits[blob[b] & 0x0F];
+                        case SQLITE_TEXT: {
+                            const unsigned char* txt = sqlite3_column_text(dataStmt, i);
+                            int bytes = sqlite3_column_bytes(dataStmt, i);
+                            std::string s(reinterpret_cast<const char*>(txt), bytes);
+                            out << "'" << escapeSqlString(s) << "'";
+                            break;
                         }
-                        out << "'";
-                        break;
+                        case SQLITE_BLOB: {
+                            const unsigned char* blob = static_cast<const unsigned char*>(sqlite3_column_blob(dataStmt, i));
+                            int bytes = sqlite3_column_bytes(dataStmt, i);
+                            out << "X'";
+                            static const char hexDigits[] = "0123456789ABCDEF";
+                            for (int b = 0; b < bytes; ++b) {
+                                out << hexDigits[(blob[b] >> 4) & 0x0F];
+                                out << hexDigits[blob[b] & 0x0F];
+                            }
+                            out << "'";
+                            break;
+                        }
                     }
                 }
+                out << ");\n";
             }
-            out << ");\n";
+            sqlite3_finalize(dataStmt);
+            if (wroteHeader) out << "\n";
         }
-        sqlite3_finalize(dataStmt);
-        if (wroteHeader) out << "\n";
+    }
+
+    if (truncated) {
+        out << "\n-- AVISO: Dados truncados automaticamente pelo Arestrix para proteger o repositorio do limite rigido de 100 MB do GitHub (GH001).\n";
+        error = "Aviso: Dados do banco SQLite truncados no dump SQL por excederem 95 MB (limite maximo do GitHub).";
+        std::cerr << "[DatabaseBackupService] " << error << "\n";
     }
 
     out << "COMMIT;\n"
         << "PRAGMA foreign_keys=ON;\n";
 
     sqlite3_close(db);
+
+    std::string newContent = out.str();
+    if (newContent.size() > kWarnDumpBytes && !truncated) {
+        std::cerr << "[DatabaseBackupService] Aviso: Dump SQL operacional atingiu " << (newContent.size() / 1024 / 1024) << " MB (> 50 MB).\n";
+    }
+
+    // Se o arquivo ja existe e o conteudo for identico, NAO regrava (evita timestamp falso e ghost commits no Git)
+    if (std::filesystem::exists(sqlPath)) {
+        std::ifstream in(sqlPath, std::ios::binary);
+        std::string existingContent((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        in.close();
+        if (existingContent == newContent) {
+            return true; // Conteudo 100% identico: preserva last_write_time e nao gera commit no Git
+        }
+    }
+
+    std::filesystem::path parent = sqlPath.parent_path();
+    if (!parent.empty() && !std::filesystem::exists(parent)) {
+        std::filesystem::create_directories(parent, ec);
+    }
+
+    std::ofstream fileOut(sqlPath, std::ios::binary | std::ios::trunc);
+    if (!fileOut.is_open()) {
+        error = "Nao foi possivel criar o arquivo de dump SQL: " + sqlPath.string();
+        return false;
+    }
+    fileOut << newContent;
+    fileOut.close();
     return true;
 }
 
@@ -272,7 +310,6 @@ bool DatabaseBackupService::exportMemorySnapshot(const std::string& projectId,
     snapshot["format"] = "arestrix-memory-snapshot";
     snapshot["version"] = "1.0.0";
     snapshot["projectId"] = pId;
-    snapshot["exportedAt"] = getCurrentIsoTime();
     snapshot["lessons"] = data.value("lessons", taskforge::Json::array());
     snapshot["working"] = data.value("working", taskforge::Json::object());
 
@@ -283,16 +320,28 @@ bool DatabaseBackupService::exportMemorySnapshot(const std::string& projectId,
         return true;
     }
 
+    std::string newJson = snapshot.dump(2);
+
+    // Se o arquivo ja existir e o JSON for identico, NAO regrava (evita ghost commits)
+    if (std::filesystem::exists(snapshotPath)) {
+        std::ifstream in(snapshotPath, std::ios::binary);
+        std::string existingContent((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        in.close();
+        if (existingContent == newJson) {
+            return true;
+        }
+    }
+
     std::error_code ec;
     std::filesystem::create_directories(snapshotPath.parent_path(), ec);
 
-    std::ofstream out(snapshotPath, std::ios::trunc);
+    std::ofstream out(snapshotPath, std::ios::binary | std::ios::trunc);
     if (!out.is_open()) {
         error = "Falha ao abrir arquivo para snapshot de memoria: " + snapshotPath.string();
         return false;
     }
 
-    out << snapshot.dump(2);
+    out << newJson;
     out.close();
     return true;
 }
@@ -365,6 +414,9 @@ bool DatabaseBackupService::performProjectShutdownBackup(const std::filesystem::
     std::filesystem::path dbPath = storageDir / "database.sqlite";
     std::filesystem::path sqlPath = storageDir / "database.sql";
 
+    bool gitEnabled = false;
+    std::string backupMode = "ddl_and_data";
+
     std::filesystem::path manifestPath = projectRoot / "arestrix.project.json";
     if (!std::filesystem::exists(manifestPath)) {
         manifestPath = projectRoot / "taskforge.project.json";
@@ -373,6 +425,10 @@ bool DatabaseBackupService::performProjectShutdownBackup(const std::filesystem::
         try {
             std::ifstream mf(manifestPath);
             auto j = taskforge::jsonutil::parseStream(mf);
+            if (j.contains("git")) {
+                gitEnabled = j["git"].value("enabled", false);
+                backupMode = j["git"].value("backupMode", "ddl_and_data");
+            }
             if (j.contains("database") && j["database"].contains("filePath")) {
                 std::string relPath = j["database"]["filePath"].str();
                 if (!relPath.empty()) {
@@ -384,9 +440,15 @@ bool DatabaseBackupService::performProjectShutdownBackup(const std::filesystem::
         } catch (...) {}
     }
 
+    // Se a sincronizacao Git estiver desativada (padrao), opera em modo 100% local e dispensa dumps
+    if (!gitEnabled) {
+        return true;
+    }
+
+    bool schemaOnly = (backupMode == "schema_only");
     std::string dumpErr;
     if (std::filesystem::exists(dbPath)) {
-        if (!exportSqlDump(dbPath, sqlPath, dumpErr)) {
+        if (!exportSqlDump(dbPath, sqlPath, dumpErr, schemaOnly)) {
             std::cerr << "[DatabaseBackupService] Erro ao exportar dump SQL operacional: " << dumpErr << "\n";
             error += dumpErr + " ";
         } else {

@@ -10,6 +10,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <regex>
 
 namespace taskforge {
 namespace project {
@@ -301,7 +302,34 @@ void GitSyncService::ensureSafeGitignore(const std::filesystem::path& projectRoo
         "workspace/",
         ".env",
         ".env.local",
-        "node_modules/"
+        "node_modules/",
+        "*.gguf",
+        "*.safetensors",
+        "*.bin",
+        "*.onnx",
+        "*.pt",
+        "*.pth",
+        "models/",
+        "*.parquet",
+        "*.arrow",
+        "*.feather",
+        "*.h5",
+        "*.hdf5",
+        "*.tar",
+        "*.gz",
+        "*.zip",
+        "*.7z",
+        "*.rar",
+        "*.iso",
+        "*.mp4",
+        "*.mov",
+        "*.avi",
+        "*.mkv",
+        "*.wav",
+        "temp/",
+        "cache/",
+        "*.cache",
+        "*.log"
     };
 
     if (!std::filesystem::exists(ignorePath)) {
@@ -471,7 +499,31 @@ bool GitSyncService::commitLocal(const std::filesystem::path& projectRoot,
         }
     }
 
-    // 3. git commit se houver alteracoes
+    // 3. Verificacao preventiva de segredos (Secret Scanning pre-commit)
+    if (hasChanges) {
+        platform::ProcessSpec diffSpec;
+        diffSpec.argv = {"git", "diff", "--cached", "-U0"};
+        diffSpec.workingDir = projectRoot;
+        diffSpec.scrubSecrets = false;
+        auto diffRes = platform::run(diffSpec, 5000);
+        if (diffRes.ok() && !diffRes.output.empty()) {
+            static const std::vector<std::regex> secretPatterns = {
+                std::regex(R"(\bsk-[A-Za-z0-9_-]{20,})"),
+                std::regex(R"(\bAIza[0-9A-Za-z_-]{30,})"),
+                std::regex(R"(\b(?:AKIA|ASIA)[0-9A-Z]{16}\b)"),
+                std::regex(R"(\b(?:ghp_|github_pat_)[A-Za-z0-9_]{30,})")
+            };
+            for (const auto& pat : secretPatterns) {
+                if (std::regex_search(diffRes.output, pat)) {
+                    error = "Secret scan guard: Commit bloqueado: detectada chave de API ou segredo em texto puro no projeto. Utilize referencias ${VAR} para variaveis de ambiente.";
+                    std::cerr << "[GitSyncService] " << error << "\n";
+                    return false;
+                }
+            }
+        }
+    }
+
+    // 4. git commit se houver alteracoes
     if (hasChanges) {
         std::string msg = !commitMessage.empty() ? commitMessage : ("Arestrix Auto-Save: " + getCurrentIsoTime());
         platform::ProcessSpec s;
@@ -551,11 +603,16 @@ bool GitSyncService::commitAndPush(const std::filesystem::path& projectRoot,
 void GitSyncService::onShutdown(const std::filesystem::path& projectRoot) {
     if (projectRoot.empty()) return;
 
+    auto cur = taskforge::project::ProjectManager::getInstance().getCurrentProject();
+    if (!cur.git.enabled) {
+        std::cout << "[GitSyncService] Sincronizacao Git desativada para este projeto. Operando em modo 100% local.\n";
+        return;
+    }
+
     std::cout << "[GitSyncService] Executando rotina de encerramento do projeto...\n";
 
     // 1. Executa backup e dump de bancos de dados para recuperacao de desastre
     std::string backupErr;
-    auto cur = taskforge::project::ProjectManager::getInstance().getCurrentProject();
     DatabaseBackupService::performProjectShutdownBackup(projectRoot, cur.projectId, backupErr);
     if (!backupErr.empty()) {
         std::cerr << "[GitSyncService] Aviso no backup de encerramento: " << backupErr << "\n";

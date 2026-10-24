@@ -626,6 +626,11 @@ export class OfficeRibbon {
     });
 
     this.container.querySelector('#qat-btn-git-push')?.addEventListener('click', async () => {
+      const proj = ProjectManager.getInstance().getCurrentProject();
+      if (!proj.git || !proj.git.enabled) {
+        this.gitAccountModal.open();
+        return;
+      }
       const btn = this.container.querySelector('#qat-btn-git-push') as HTMLButtonElement | null;
       if (btn) btn.disabled = true;
       try {
@@ -843,6 +848,27 @@ export class OfficeRibbon {
 
     globalEventBus.on('git:status-changed', (st: any) => {
       const badge = this.container.querySelector('#qat-git-status-badge') as HTMLElement;
+      const pushBtn = this.container.querySelector('#qat-btn-git-push') as HTMLButtonElement | null;
+      const proj = ProjectManager.getInstance().getCurrentProject();
+      const isGitEnabled = proj.git && proj.git.enabled !== false;
+
+      if (!isGitEnabled) {
+        if (badge) {
+          badge.textContent = 'Local';
+          badge.style.color = '#64748b';
+        }
+        if (pushBtn) {
+          pushBtn.style.opacity = '0.5';
+          pushBtn.title = t('git_sync.local_mode_tip', 'Modo Local: Sincronizao Git desativada (Opcional)');
+        }
+        return;
+      }
+
+      if (pushBtn) {
+        pushBtn.style.opacity = '1';
+        pushBtn.title = t('git_sync.btn_push_tooltip', 'Sincronizar com GitHub agora (Commit & Push manual)');
+      }
+
       if (badge) {
         const isLoggedIn = st && (
           (Array.isArray(st.gcmAccounts) && st.gcmAccounts.length > 0) ||

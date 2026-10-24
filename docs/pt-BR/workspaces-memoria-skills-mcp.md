@@ -17,7 +17,7 @@ Um projeto é descrito por `arestrix.project.json` na sua pasta:
 | `rootPath` | A pasta física do workspace. |
 | `pipelines` | Os grafos do projeto (`pipelines/main.json` é o principal). |
 | `database` | O arquivo SQLite, por padrão `storage/database.sqlite`. |
-| `git` | Sincronização com repositório Git dedicado (`provider`, `serverUrl`, `repositoryName`, `remoteUrl`, `isPrivate`, `autoCommitOnRun`, `autoCommitOnShutdown`, `lastSyncAt`). |
+| `git` | Sincronização opcional com repositório Git/GitHub (`enabled`, `backupMode`, `provider`, `serverUrl`, `repositoryName`, `remoteUrl`, `isPrivate`, `autoCommitOnRun`, `autoCommitOnShutdown`, `timedPushEnabled`, `timedPushIntervalMinutes`, `lastSyncAt`). |
 | `globalDefaults` | Padrões de `model`, `sandbox`, `codeMode` (ferramentas permitidas) e `memory` para os vértices. |
 | `environment` | Variáveis locais ao projeto (`.env`). |
 
@@ -26,18 +26,32 @@ comprimido `.arestrix`.
 
 ### Sincronização Git por projeto (GitHub e repositórios remotos)
 
-Cada projeto no Arestrix é mapeado para um **repositório Git independente** em um servidor Git configurável (por padrão, uma conta do **GitHub**):
+Cada projeto no Arestrix pode ser vinculado a um repositório Git independente em um servidor configurável (como GitHub, GitLab ou servidores privados):
 
-1. **Auto-save no clone local:** O salvamento automático contínuo continua operando em tempo real na pasta local do projeto, que atua como o clone/repositório local do Git.
-2. **Commit e Push inteligentes e sob demanda (Proteção de Cotas GitHub):**
-   - **A cada execução do pipeline (`F5`):** Um commit **local** com mensagem contextual é gerado no clone local sem disparar `push` remoto. Isso elimina o risco de *rate limiting* e abuso de API no GitHub durante sessões intensas de desenvolvimento e depuração interativa.
-   - **Push temporizado automático (padrão a cada 10 minutos):** Caso existam alterações locais pendentes ou commits não enviados, o Arestrix realiza o push batelada de forma transparente e periódica para o repositório remoto. O intervalo e a ativação podem ser configurados no manifesto e modal do projeto.
+1. **Uso do Git Estritamente Opcional (Opt-In por Padrão e Modo 100% Local):**
+   - Ao criar qualquer novo projeto no Arestrix, a sincronização com Git ou GitHub vem **desabilitada por padrão** (`enabled: false`).
+   - Se o usuário ou empresa optar por não utilizar o Git, o projeto opera em modo 100% local: todos os arquivos, pipelines, banco SQLite (`storage/database.sqlite`) e memória cognitiva (`.arestrix/memory/memory.db`) permanecem exclusivamente no disco rígido local. Nenhuma chamada de rede, comando do Git ou exportação de dump é executada. A governança, redundância e políticas de backup contra perda de dados passam a ser de inteira responsabilidade da empresa ou usuário.
+   - O recurso pode ser ativado a qualquer momento clicando no botão Git da barra superior (Quick Access Toolbar) ou no menu Arquivo, marcando a opção *"Habilitar Sincronização Git / GitHub"*.
+2. **Modo de Backup Configurável (Privacidade & Conformidade LGPD/GDPR):**
+   - **Estrutura e Dados (DDL + INSERTs) (`ddl_and_data`):** Exporta o esquema e todos os dados tabulares em texto determinístico. Indicado para ambientes de desenvolvimento com dados sintetizados ou projetos sem dados sensíveis.
+   - **Apenas Estrutura / DDL (Schema Only) (`schema_only`):** Exporta somente a definição das tabelas (`CREATE TABLE`, `CREATE INDEX`, `CREATE VIEW`), sem nenhum `INSERT INTO`. Indicado para conformidade estrita com LGPD/GDPR, proteção de dados pessoais (PII) e prevenção contra repositórios volumosos quando o banco local armazena grandes volumes de dados de negócio.
+3. **Commit e Push inteligentes e sob demanda (Proteção de Cotas GitHub):**
+   - **A cada execução do pipeline (`F5`):** Um commit **local** com mensagem contextual é gerado no clone local sem disparar `push` remoto. Isso elimina o risco de *rate limiting* e consumo desnecessário de cota de rede no GitHub durante sessões intensas de desenvolvimento e depuração interativa.
+   - **Push temporizado automático (padrão a cada 10 minutos):** Caso existam alterações locais pendentes ou commits não enviados, o Arestrix realiza o push em lote de forma transparente e periódica para o repositório remoto. O intervalo e a ativação podem ser configurados no manifesto e modal do projeto.
    - **Botão de Sincronização Manual (Push Imediato):** Disponível diretamente na barra superior (Quick Access Toolbar) e na aba de automação do modal, permitindo enviar alterações ao GitHub a qualquer momento com um único clique.
-   - **No encerramento do Arestrix:** Disparado nativamente pelo backend C++ ao fechar o aplicativo ou a janela, garantindo que nenhum trabalho fique não versionado no servidor remoto.
-3. **Segurança Absoluta (Zero-Secrets no Arestrix):** Nenhum dado de autenticação, senha ou Personal Access Token (PAT) é registrado nos arquivos, manifestos ou banco do Arestrix. O processo de registro de identidade e autenticação é orientado pelo Arestrix mas gerenciado **exclusivamente pelo Sistema Operacional** através do **Git Credential Manager (GCM)** / Cofre de Credenciais do Windows.
-4. **Repositórios Privados por Padrão:** Novos repositórios são criados de forma automática e transparente com o nome do projeto e marcados obrigatoriamente como **privados** (`isPrivate: true`).
-5. **Aviso de Governança para Serviços Comerciais:** Quando o servidor configurado for um serviço comercial externo (como `github.com` ou `gitlab.com`), o Arestrix exibe obrigatoriamente um aviso legal de que os dados do projeto (instruções de agentes, grafos e metadados) residirão em infraestrutura de terceiros fora do controle do software, exigindo consentimento explícito do usuário.
-6. **Conformidade com Políticas de Uso do GitHub e Exclusão Binária:** Em conformidade estrita com as Políticas de Uso Aceitável do GitHub (*Acceptable Use Policies* - combate a *Excessive Bandwidth Use* e proibição de uso do repositório como armazenamento geral de banco de dados ativo), **arquivos binários SQLite (`*.sqlite`, `*.db`, arquivos de lock e WAL) nunca são versionados no Git**. Em substituição, o Arestrix utiliza uma arquitetura de dumps em texto puro (`storage/database.sql`) e snapshots declarativos de memória (`storage/memory.dump.json`), gerenciados pelo `DatabaseBackupService`.
+   - **No encerramento do Arestrix (`onShutdown`):** Se o Git estiver habilitado, disparado nativamente pelo backend C++ ao fechar o aplicativo ou a janela, garantindo que nenhum trabalho fique não versionado no servidor remoto. Se o Git estiver desativado, o encerramento conclui imediatamente sem gerar dumps nem executar processos externos.
+4. **Dumps Determinísticos e Prevenção de Inflamento de Histórico (Packfiles):**
+   - Dumps SQL e snapshots de memória não incluem cabeçalhos voláteis de data/hora (`-- Gerado em: ...`). Caso o conteúdo dos dados e da memória não tenha sido alterado entre execuções, o arquivo em disco não é sobrescrito, eliminando "ghost commits" e mantendo o histórico do Git enxuto.
+5. **Proteção Rigorosa contra Limites de Arquivo do GitHub (Teto de 95 MB):**
+   - Para prevenir sumariamente a rejeição por erro de push `GH001` do GitHub (que bloqueia permanentemente arquivos superiores a 100 MB), o `DatabaseBackupService` impõe um teto estrito de segurança de 95 MB por dump. Caso o script SQL exceda esse limite, a exportação é abortada e o usuário é orientado a utilizar o modo *"Apenas Estrutura / DDL (Schema Only)"*.
+6. **Auditoria de Pré-Commit Nativa (Secret Scanning):**
+   - O `GitSyncService` audita automaticamente o *staged diff* antes de cada commit contra padrões de credenciais expostas (`sk-...`, `AIza...`, `AKIA...`, `ghp_...`). A operação é bloqueada sumariamente (*fail-closed*) caso qualquer segredo seja detectado.
+7. **Exclusões Robustas no `.gitignore` (`ensureSafeGitignore`):**
+   - Exclusão forçada e automática de bancos SQLite binários (`*.sqlite`, `*.db`), caches de runtime (`.arestrix/`), pesos de modelos locais de IA (`*.gguf`, `*.safetensors`, `*.bin`, `*.onnx`, `models/`), datasets colunares pesados (`*.parquet`, `*.arrow`, `*.feather`, `*.h5`), mídias e arquivos temporários.
+8. **Segurança Absoluta (Zero-Secrets no Arestrix):**
+   - Nenhum dado de autenticação, senha ou Personal Access Token (PAT) é registrado nos arquivos, manifestos ou banco do Arestrix. O registro de identidade e autenticação é gerenciado **exclusivamente pelo Sistema Operacional** através do **Git Credential Manager (GCM)** / Cofre de Credenciais do Windows.
+9. **Repositórios Privados por Padrão:** Novos repositórios criados via GitHub CLI (`gh`) são marcados obrigatoriamente como **privados** (`isPrivate: true`).
+10. **Aviso de Governança para Serviços Comerciais:** Quando o servidor configurado for um serviço comercial externo (como `github.com` ou `gitlab.com`), o Arestrix exibe obrigatoriamente um aviso legal de que os dados do projeto residirão em infraestrutura de terceiros fora do controle do software, exigindo consentimento explícito do usuário.
 
 ### Bancos de dados, versionamento seguro e recuperação de desastre
 
@@ -53,11 +67,11 @@ O Arestrix opera com dois bancos de dados SQLite no escopo de cada projeto:
 
 #### Ciclo de Dump em Texto e Restauração Transparente (`DatabaseBackupService`)
 
-Para manter conformidade total com o GitHub sem abrir mão da segurança dos dados do projeto, o Arestrix implementa um ciclo automatizado de **Dump em Texto e Auto-Recuperação**:
+Quando a sincronização Git está habilitada, o Arestrix implementa um ciclo automatizado de **Dump em Texto e Auto-Recuperação**:
 
 * **Exportação no Encerramento (`onShutdown`):**
-  * **Banco Operacional (`storage/database.sql`):** Exporta um script SQL em texto plano contendo o esquema DDL completo (`CREATE TABLE`, `CREATE INDEX`, `CREATE VIEW`) e todos os dados tabulares (`INSERT INTO` com escape seguro de caracteres e preservação de tipos numéricos e blobs).
-  * **Memória dos Agentes (`storage/memory.dump.json`):** Exporta um snapshot declarativo em JSON contendo os dados indispensáveis: as **lições aprendidas** (`lessons`) e o **Blackboard persistente** (`working`), descartando telemetrias efêmeras de contagem de tokens (`memory_usage`) e logs brutos de execuções passadas.
+  * **Banco Operacional (`storage/database.sql`):** Exporta um script SQL determinístico contendo o esquema DDL (`CREATE TABLE`, `CREATE INDEX`, `CREATE VIEW`) e, opcionalmente, os dados tabulares conforme o modo de backup selecionado.
+  * **Memória dos Agentes (`storage/memory.dump.json`):** Exporta um snapshot declarativo em JSON determinístico contendo os dados indispensáveis: as **lições aprendidas** (`lessons`) e o **Blackboard persistente** (`working`), descartando telemetrias efêmeras de contagem de tokens (`memory_usage`) e logs brutos de execuções passadas.
 * **Restauração Automática (*Disaster Recovery* / Clone limpo):**
   * Ao clonar o projeto em um novo computador ou caso o arquivo `.sqlite` seja corrompido ou apagado acidentalmente, o Arestrix detecta na abertura do projeto que os binários físicos estão ausentes.
   * O motor nativo C++ (`ProjectManager::loadProject`) executa a restauração automática do banco a partir de `storage/database.sql` e da memória a partir de `storage/memory.dump.json`, recriando as tabelas e o conhecimento dos agentes sem exigir comandos manuais do usuário.

@@ -28,6 +28,8 @@ export class GitAccountModal extends BaseModal {
   private autoCommitOnShutdown: boolean = true;
   private timedPushEnabled: boolean = true;
   private timedPushIntervalMinutes: number = 10;
+  private gitEnabled: boolean = false;
+  private backupMode: 'ddl_and_data' | 'schema_only' = 'ddl_and_data';
   private isProcessing: boolean = false;
   private feedbackMessage: string | null = null;
   private feedbackType: 'success' | 'error' | 'info' = 'info';
@@ -78,6 +80,8 @@ export class GitAccountModal extends BaseModal {
     this.autoCommitOnShutdown = gitConfig.autoCommitOnShutdown ?? true;
     this.timedPushEnabled = gitConfig.timedPushEnabled ?? true;
     this.timedPushIntervalMinutes = gitConfig.timedPushIntervalMinutes ?? 10;
+    this.gitEnabled = gitConfig.enabled ?? false;
+    this.backupMode = (gitConfig.backupMode as any) || 'ddl_and_data';
 
     super.open();
     await this.loadData();
@@ -127,10 +131,22 @@ export class GitAccountModal extends BaseModal {
 
     const chkShutdown = this.dialog.querySelector('#git-chk-on-shutdown') as HTMLInputElement | null;
     if (chkShutdown) this.autoCommitOnShutdown = chkShutdown.checked;
+    
+    const chkMaster = this.dialog.querySelector('#git-chk-master-enabled') as HTMLInputElement | null;
+    if (chkMaster) {
+      this.gitEnabled = chkMaster.checked;
+      chkMaster.addEventListener('change', () => {
+        this.gitEnabled = chkMaster.checked;
+        this.render();
+      });
+    }
+
     const chkTimed = this.dialog.querySelector('#git-chk-timed-push') as HTMLInputElement | null;
     if (chkTimed) this.timedPushEnabled = chkTimed.checked;
     const inputInterval = this.dialog.querySelector('#git-input-timed-interval') as HTMLInputElement | null;
     if (inputInterval) this.timedPushIntervalMinutes = Math.max(1, parseInt(inputInterval.value, 10) || 10);
+    const selBackup = this.dialog.querySelector('#git-select-backup-mode') as HTMLSelectElement | null;
+    if (selBackup) this.backupMode = selBackup.value as any;
   }
 
   protected override renderTabContent(tabId: string): string {
@@ -149,6 +165,24 @@ export class GitAccountModal extends BaseModal {
     if (tabId === 'identity') {
       return `
         <div style="padding: 16px 20px; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; color: #323130;">
+          
+          <!-- MASTER TOGGLE: MODO LOCAL VS SINCRONIZACAO GIT OPCIONAL -->
+          <div style="margin-bottom: 16px; background: ${this.gitEnabled ? '#f0fdf4' : '#f8fafc'}; border: 1px solid ${this.gitEnabled ? '#bbf7d0' : '#e2e8f0'}; border-radius: 6px; padding: 14px 16px;">
+            <label style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;">
+              <input type="checkbox" id="git-chk-master-enabled" ${this.gitEnabled ? 'checked' : ''} style="width: 18px; height: 18px; margin-top: 2px; cursor: pointer;">
+              <div>
+                <strong style="font-size: 13px; font-weight: 700; color: ${this.gitEnabled ? '#166534' : '#1e293b'};">
+                  ${t('git_sync.master_enable_label', 'Habilitar Sincronizacao Git / GitHub (Opcional)')}
+                </strong>
+                <p style="margin: 4px 0 0 0; font-size: 11.5px; color: ${this.gitEnabled ? '#15803d' : '#64748b'}; line-height: 1.45;">
+                  ${this.gitEnabled
+                    ? t('git_sync.master_enabled_desc', 'Sincronizacao ativa: o projeto sincroniza seus grafos, agentes e backups SQL com o repositorio remoto configurado.')
+                    : t('git_sync.master_disabled_desc', 'Modo 100% Local: o projeto e seus bancos residem exclusivamente nesta maquina. A retencao, seguranca e politicas de backup sao de responsabilidade da sua empresa ou usuario local.')}
+                </p>
+              </div>
+            </label>
+          </div>
+
           <!-- CALLOUT DE SEGURANÇA E PRIVACIDADE -->
           <div style="margin-bottom: 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 4px; padding: 12px 16px; display: flex; align-items: flex-start; gap: 12px;">
             <span style="font-size: 20px; line-height: 1;">🛡️</span>
@@ -306,6 +340,25 @@ export class GitAccountModal extends BaseModal {
                 <input type="checkbox" id="git-chk-on-shutdown" ${this.autoCommitOnShutdown ? 'checked' : ''}>
                 <span>${t('git_sync.chk_auto_commit_shutdown', 'Executar Commit & Push ao encerrar o Arestrix')}</span>
               </label>
+
+              
+              <!-- MODO DE BACKUP DO BANCO DE DADOS -->
+              <div style="margin-top: 8px; padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px;">
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #334155; margin-bottom: 4px;">
+                  ${t('git_sync.backup_mode_label', 'Modo de Backup dos Bancos SQLite no Git:')}
+                </label>
+                <select id="git-select-backup-mode" class="office-select" style="width: 100%; height: 30px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 6px;">
+                  <option value="ddl_and_data" ${this.backupMode === 'ddl_and_data' ? 'selected' : ''}>
+                    ${t('git_sync.backup_mode_full', 'Estrutura e Dados (DDL + INSERTs) - Recomendado para prototipos')}
+                  </option>
+                  <option value="schema_only" ${this.backupMode === 'schema_only' ? 'selected' : ''}>
+                    ${t('git_sync.backup_mode_schema_only', 'Apenas Estrutura / DDL (Sem dados) - Recomendado para producao e conformidade LGPD/GDPR')}
+                  </option>
+                </select>
+                <span style="display: block; font-size: 10.5px; color: #64748b; margin-top: 4px;">
+                  ${t('git_sync.backup_mode_hint', 'O modo Apenas Estrutura impede que tabelas com dados de clientes ou grandes volumes de dados sejam enviados ao GitHub.')}
+                </span>
+              </div>
 
               <!-- Push Temporizado -->
               <div style="margin-top: 4px; padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px;">
@@ -485,6 +538,33 @@ export class GitAccountModal extends BaseModal {
       if (chkAck) {
         this.gitManager.acknowledgeCommercialWarning(this.provider);
       }
+    }
+
+    
+    if (!this.gitEnabled) {
+      const gitConfig: IProjectGitConfig = {
+        enabled: false,
+        backupMode: this.backupMode,
+        provider: this.provider,
+        serverUrl: this.serverUrl,
+        username: this.username,
+        repositoryName: this.repositoryName,
+        remoteUrl: this.remoteUrl,
+        isPrivate: true,
+        autoCommitOnRun: this.autoCommitOnRun,
+        autoCommitOnShutdown: this.autoCommitOnShutdown,
+        timedPushEnabled: this.timedPushEnabled,
+        timedPushIntervalMinutes: this.timedPushIntervalMinutes
+      };
+      this.projectManager.updateProjectMetadata({ git: gitConfig });
+      await this.projectManager.saveCurrentProject();
+      this.gitManager.stopTimedPush();
+      await this.gitManager.refreshStatus();
+      this.feedbackMessage = t('git_sync.saved_local_only', 'Projeto configurado em modo 100% local. Sincronizacao Git desativada.');
+      this.feedbackType = 'success';
+      this.render();
+      setTimeout(() => this.hide(), 1200);
+      return;
     }
 
     this.isProcessing = true;
