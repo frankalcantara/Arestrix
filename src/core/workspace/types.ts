@@ -63,6 +63,8 @@ export interface IWorkspaceSkillAuditVerdict {
   authorizedTools: string[];
   hasTypographyShadowViolation: boolean;
   passedSvgZeroShadowRule: boolean;
+  hash?: string;
+  verdict?: 'APPROVE' | 'CAUTION' | 'REJECT';
 }
 
 export interface IWorkspaceAgent {

@@ -1751,7 +1751,9 @@
     "interaction_options": "Interaction vertex \"{{label}}\": field \"{{id}}\" needs at least two options.",
     "interaction_channel": "Interaction vertex \"{{label}}\" has an invalid channel.",
     "interaction_timeout": "Interaction vertex \"{{label}}\" has a negative timeout.",
-    "call_target_graph": "Call target \"{{label}}\" ({{id}}) is a subflow without a child graph."
+    "call_target_graph": "Call target \"{{label}}\" ({{id}}) is a subflow without a child graph.",
+    "skill_rejected": "Node \"{{node}}\" uses skill \"{{skill}}\" which was REJECTED by the Studio Auditor. Fix the vulnerabilities before running.",
+    "skill_unapproved": "Node \"{{node}}\" has skill \"{{skill}}\" which is modified or pending validation. Audit it with SkillSpector before running."
   },
   "local_models": {
     "title": "Local models",

@@ -1,6 +1,8 @@
 import { Graph } from './Graph.ts';
 import { IValidationResult, IValidationError, IEdgeData, INodeData } from './types.ts';
 import { t } from '../i18n/index.ts';
+import { SkillHasher } from './skills/SkillHasher.ts';
+import { SkillLedgerService } from './skills/SkillLedgerService.ts';
 
 export class GraphValidator {
   static validate(graph: Graph): IValidationResult {
@@ -70,6 +72,9 @@ export class GraphValidator {
 
     // 5. Interacao humana: formulario e politica de canal validos (autoria; execucao na Fase 2B).
     this.validateInteractions(nodes, errors);
+
+    // 6. Governanca e Validacao de Skills: bloqueia execucao se houver skills nao auditadas ou rejeitadas.
+    this.validateAgentSkills(nodes, errors);
 
     return {
       isValid: errors.filter(e => e.severity === 'error').length === 0,
@@ -337,5 +342,45 @@ export class GraphValidator {
     });
 
     return foundCycles;
+  }
+
+  private static validateAgentSkills(nodes: INodeData[], errors: IValidationError[]): void {
+    const ledger = SkillLedgerService.getInstance();
+
+    for (const node of nodes) {
+      if (node.type !== 'agent') continue;
+      const settings = node.agentSettings;
+      if (!settings || !Array.isArray(settings.skills) || settings.skills.length === 0) continue;
+
+      const activeSkill = settings.skills.find(s => s.id === settings.activeSkillId) || settings.skills[0];
+      if (!activeSkill) continue;
+
+      const hash = SkillHasher.computeHash(activeSkill);
+      const status = ledger.getStatus(hash);
+
+      if (status === 'REJECT') {
+        errors.push({
+          type: 'invalid_skill',
+          severity: 'error',
+          message: t('validator.skill_rejected', {
+            node: node.label || node.id,
+            skill: activeSkill.name || activeSkill.id,
+            defaultValue: `O nó "${node.label || node.id}" utiliza a habilidade "${activeSkill.name || activeSkill.id}" que foi REJEITADA pelo Agente Auditor do Studio. Corrija as vulnerabilidades antes de executar.`
+          }),
+          nodeIds: [node.id]
+        });
+      } else if (status === 'PENDING') {
+        errors.push({
+          type: 'invalid_skill',
+          severity: 'error',
+          message: t('validator.skill_unapproved', {
+            node: node.label || node.id,
+            skill: activeSkill.name || activeSkill.id,
+            defaultValue: `O nó "${node.label || node.id}" possui a habilidade "${activeSkill.name || activeSkill.id}" modificada ou pendente de validação. Audite-a com o SkillSpector antes de executar.`
+          }),
+          nodeIds: [node.id]
+        });
+      }
+    }
   }
 }
