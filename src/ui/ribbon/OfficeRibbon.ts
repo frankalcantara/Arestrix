@@ -280,6 +280,7 @@ export class OfficeRibbon {
                 <option value="switch">${t('ribbon.nodes.switch')}</option>
                 <option value="mcp">${t('ribbon.nodes.mcp')}</option>
                 <option value="interaction">${t('ribbon.nodes.interaction', 'Interação')}</option>
+                <option value="call">${t('ribbon.nodes.call', 'Chamada em fluxo')}</option>
                 <option value="subflow">${t('ribbon.nodes.subflow')}</option>
                 <option value="module">${t('ribbon.nodes.module')}</option>
                 <option value="critical">${t('ribbon.nodes.critical')}</option>
@@ -360,6 +361,10 @@ export class OfficeRibbon {
             <button class="ribbon-btn-large" data-add="output" style="border-color: #059669;" title="Vértice coletor de saída e entrega de artefatos">
               <span class="ribbon-btn-icon">📥</span>
               <span class="ribbon-btn-label">Saída / Artefato</span>
+            </button>
+            <button class="ribbon-btn-large" data-add="call" style="border-color: #7c3aed;" title="Chamada em fluxo: executa um alvo chamavel e devolve a resposta ao fluxo">
+              <span class="ribbon-btn-icon">&#128222;</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.call_vertex', 'Chamada em fluxo')}</span>
             </button>
             <button class="ribbon-btn-large" data-add="interaction" style="border-color: #db2777;" title="Interação humana: formulário, pergunta ou aprovação">
               <span class="ribbon-btn-icon">💬</span>
@@ -1135,6 +1140,7 @@ export class OfficeRibbon {
       switch: `Switch_${existingCount + 1}`,
       mcp: `MCP_${existingCount + 1}`,
       interaction: `Interacao_${existingCount + 1}`,
+      call: `Chamada_${existingCount + 1}`,
       output: `Entrega_Artefato_${existingCount + 1}`
     };
 

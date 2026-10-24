@@ -79,15 +79,20 @@ agendamento. Ela significa:
 
 No v1:
 
-- a origem é um **agente**; o destino é um **agente**, uma **interação** ou um **subflow**;
+- a origem é um **agente** ou um vértice **Call**; o destino é um **agente**, uma **interação** ou um
+  **subflow**;
 - o destino precisa ser **somente chamável**: não tem arestas de fluxo (entrada ou saída). Se ele
   também precisar rodar como etapa normal, duplique o vértice;
 - o destino **não** é uma task top-level do Taskflow; ele roda dentro da task do chamador. O
-  `childGraph` de um subflow chamável é compilado como uma função nativa no mesmo executável.
+  `childGraph` de um subflow chamável é compilado como uma função nativa no mesmo executável;
+- um vértice **Call** executa o alvo **dentro do fluxo** e grava a resposta em
+  `.arestrix/out/<id-do-call>.txt`, para o próximo vértice consumir. Ele tem exatamente uma aresta de
+  chamada de saída e não é exposto como `call_agent` a um modelo.
 
-Para criar uma chamada, arraste da porta **`call`** do agente (violeta) até a porta `in` do destino.
-Selecione o agente de origem e use a seção **Delegação** do Inspetor para definir `maxCalls` e a
-descrição que o modelo vê ao escolher o alvo.
+Para criar uma chamada, arraste da porta **`call`** do agente ou do vértice Call (violeta) até a
+porta `in` do destino. Selecione o vértice de origem e use a seção **Delegação** do Inspetor para
+definir `maxCalls` e a descrição que o modelo vê ao escolher o alvo. No vértice Call, escolha também
+um input fixo ou a origem `previous`/`file`/`none`.
 
 Em execução, o chamador recebe a ferramenta `call_agent` com um **enum de alvos declarados**. O
 skill orienta; o grafo autoriza; o runtime aplica:
@@ -104,8 +109,9 @@ um destino de interação também traz `answers`. O texto final do alvo também 
 
 Veja [`examples/06-chamada-agente`](../examples/06-chamada-agente) para um coordenador chamando um
 especialista, [`examples/09-chamadas-paralelas`](../examples/09-chamadas-paralelas) para duas
-delegações no mesmo turno e [`examples/10-subflow-chamavel`](../examples/10-subflow-chamavel) para um
-subflow nativo chamável.
+delegações no mesmo turno, [`examples/10-subflow-chamavel`](../examples/10-subflow-chamavel) para um
+subflow nativo chamável e [`examples/11-call-vertex`](../examples/11-call-vertex) para um vértice
+Call executando um alvo dentro do fluxo.
 
 ## Vértices de interação
 

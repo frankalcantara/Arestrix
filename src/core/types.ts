@@ -11,6 +11,7 @@ export type TaskflowNodeType =
   | 'switch'      // tf::Task (retorna int) - Seleção multivia: um caso por porta de saída; o último é o 'default'
   | 'mcp'         // tf::Task - Chama UMA ferramenta de um servidor MCP do projeto (cliente C++ nativo, sessão persistente)
   | 'interaction' // Interação humana: formulário seguro, canal Studio/Runner/CLI (Fase 2)
+  | 'call'        // Vértice Call: executa um alvo chamável dentro do fluxo (Fase 4C)
   | 'output';     // Vértice de Entrega / Coletor de Artefatos (SVG, planilha, PDF, Markdown, texto, JSON...)
 
 export type PortDirection = 'input' | 'output';
@@ -38,6 +39,21 @@ export interface ICallSettings {
 
 export function defaultCallSettings(): ICallSettings {
   return { maxCalls: 1, timeoutSeconds: 0, onError: 'fail', description: '' };
+}
+
+/**
+ * Configuração do vértice Call (chamada em fluxo, Fase 4C).
+ * O alvo vem da única aresta `call` que sai da porta CALL do vértice.
+ */
+export interface ICallVertexSettings {
+  /** Payload fixo. Quando vazio, o input é coletado conforme `source`. */
+  input?: string;
+  /** De onde vem o input quando `input` está vazio. */
+  source?: { kind: 'previous' | 'file' | 'none'; path?: string };
+}
+
+export function defaultCallVertexSettings(): ICallVertexSettings {
+  return { input: '', source: { kind: 'previous', path: '' } };
 }
 
 export interface ICallLimits {
@@ -484,6 +500,7 @@ export interface INodeData {
   mcpSettings?: IMcpVertexSettings; // só para vértices do tipo 'mcp'
   outputSettings?: IOutputSettings; // só para vértices do tipo 'output'
   interactionSettings?: IInteractionSettings; // só para vértices do tipo 'interaction'
+  callSettings?: ICallVertexSettings; // só para vértices do tipo 'call'
 }
 
 export interface IBreadcrumbItem {

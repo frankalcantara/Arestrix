@@ -1,5 +1,6 @@
 #include "rt/CallGraph.hpp"
 #include "rt/Interaction.hpp"
+#include "rt/NodeInput.hpp"
 #include "rt/Runtime.hpp"
 #include "sandbox/AgentTelemetryEmitter.hpp"
 #include "util/Json.hpp"
@@ -330,6 +331,50 @@ ToolResult invokeCallAtDepth(const std::string& callerId, const std::string& cal
         ~RestoreDepth() { depth = previous; }
     } restore{threadCallDepth(), threadCallDepth()};
     return invokeCallImpl(callerId, callerRunId, targets, args, lang, parentDepth);
+}
+
+std::string runFlowCall(const std::string& nodeId, const std::string& label,
+                        const std::string& sourceJson, const std::string& fixedInput) {
+    const std::vector<CallTarget> targets = callTargetsFor(nodeId);
+    if (targets.empty()) {
+        throw std::runtime_error("Vertice Call '" + label + "' sem alvo chamavel declarado.");
+    }
+    if (targets.size() > 1) {
+        throw std::runtime_error("Vertice Call '" + label + "' tem mais de um alvo; use uma unica aresta de chamada.");
+    }
+
+    std::string input = fixedInput;
+    if (input.empty()) {
+        auto source = jsonutil::tryParse(sourceJson);
+        if (!source || !source->is_object()) source = Json{{"kind", "none"}};
+        input = gatherNodeInput(*source, label);
+    }
+
+    static std::atomic<unsigned long long> flowCallSequence{0};
+    const std::string runKey = nodeId + "@" + std::to_string(++flowCallSequence);
+    const Json args{{"target", targets.front().id}, {"input", input}};
+    const ToolResult result = invokeCall(nodeId, runKey, targets, args, RuntimeLang::Pt);
+    if (result.isError) {
+        throw std::runtime_error(result.content);
+    }
+
+    auto parsed = jsonutil::tryParse(result.content);
+    std::string text = result.content;
+    std::string kind = "agent";
+    if (parsed && parsed->is_object()) {
+        kind = parsed->value("kind", std::string("agent"));
+        if (parsed->contains("output") && (*parsed)["output"].is_string()) {
+            text = (*parsed)["output"].str();
+        }
+    }
+    if (kind == "interaction") {
+        auto inner = jsonutil::tryParse(text);
+        if (inner && inner->is_object() && inner->contains("text") && (*inner)["text"].is_string()) {
+            text = (*inner)["text"].str();
+        }
+    }
+    writeNodeOutput(nodeId, text);
+    return text;
 }
 
 int currentCallDepth() {

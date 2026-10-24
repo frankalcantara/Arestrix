@@ -267,6 +267,12 @@ def decide(body):
     if "ESPECIALISTA B" in system:
         return text("Parecer B: prazo compativel.")
 
+    if "PREPARADOR CALL" in system:
+        return text("Dados preparados para a chamada.")
+
+    if "ESPECIALISTA CALL" in system:
+        return text("Especialista recebeu: Dados preparados para a chamada.")
+
     if "COORDENADOR SUBFLOW" in system:
         if step == 0:
             return tool_call("c1", "call_agent", {"target": "subflow_especialista", "input": "processe os dados do cliente"})
@@ -320,6 +326,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
              "system": messages[0].get("content", "") if messages else "",
              "user_has_acme": "ACME Ltda" in user_content,
              "user_has_subflow_input": "processe os dados do cliente" in user_content,
+             "user_has_call_input": "Dados preparados para a chamada." in user_content,
              "requested_tools": [t["function"]["name"] for t in msg.get("tool_calls", [])],
              "reply": "tool_call:" + msg["tool_calls"][0]["function"]["name"] if msg.get("tool_calls") else "text"})
         self._send(200, {"choices": [{"message": msg, "finish_reason": "tool_calls" if msg.get("tool_calls") else "stop"}],

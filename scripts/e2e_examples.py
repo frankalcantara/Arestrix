@@ -500,6 +500,32 @@ def scenario_10_subflow_chamavel():
         cleanup(work, mock)
 
 
+def scenario_11_call_vertex():
+    print("\n== Exemplo 11: vertice Call em fluxo ==")
+    out, project, events, code, work, mock = run_example("11-call-vertex")
+    try:
+        check(code == 0, "terminou com codigo 0")
+        exported = project / "exports" / "resposta.txt"
+        check(exported.exists(), "o vertice de saida exportou a resposta")
+        if exported.exists():
+            content = exported.read_text(encoding="utf-8")
+            check("Especialista recebeu: Dados preparados para a chamada." in content,
+                  "a resposta do alvo voltou ao fluxo")
+
+        check((project / ".arestrix" / "out" / "chamada.txt").exists(),
+              "o vertice Call gravou sua saida para o proximo vertice")
+
+        chats = [e for e in events if e.get("event") == "chat"]
+        check(any("PREPARADOR CALL" in e.get("system", "") for e in chats), "o preparador executou")
+        specialists = [e for e in chats if "ESPECIALISTA CALL" in e.get("system", "")]
+        check(bool(specialists), "o alvo chamado executou")
+        check(any(e.get("user_has_call_input") for e in specialists),
+              "o input do fluxo chegou ao alvo chamado")
+        no_secret_leak(out, "ex11")
+    finally:
+        cleanup(work, mock)
+
+
 def scenario_secrets_guard():
     print("\n== Garantia de seguranca dos exemplos ==")
     node = shutil.which("node")
@@ -519,7 +545,8 @@ def main():
     for fn in (scenario_01, scenario_02_urgente, scenario_02_normal, scenario_02_duvida, scenario_02_sem_chave,
                scenario_03_duvida, scenario_03_urgente, scenario_04_memoria, scenario_05_matematica,
                scenario_06_chamada_agente, scenario_07_interacao, scenario_08_formulario_gerado,
-               scenario_09_chamadas_paralelas, scenario_10_subflow_chamavel, scenario_secrets_guard):
+               scenario_09_chamadas_paralelas, scenario_10_subflow_chamavel,
+               scenario_11_call_vertex, scenario_secrets_guard):
         fn()
     if failures:
         print(f"\n{len(failures)} verificacao(oes) falharam:")

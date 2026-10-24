@@ -675,6 +675,64 @@ TEST(subflow_callable_emits_native_function) {
     }
 }
 
+TEST(call_vertex_compiles_flow_call) {
+    using taskforge::compiler::TaskflowGenerator;
+    auto port = [](const std::string& id, const std::string& dir, const std::string& type) {
+        return json{{"id", id}, {"name", id}, {"direction", dir}, {"type", type}};
+    };
+    json schema = {
+        {"version", "1.0.0"},
+        {"metadata", {{"graphName", "CallVertex"}, {"projectId", "test"}, {"targetStandard", "C++20"}}},
+        {"nodes", json::array({
+            json{{"id", "prep"}, {"label", "Prep"}, {"type", "agent"},
+                 {"position", {{"x", 0}, {"y", 0}}},
+                 {"inputs", json::array({port("prep_in", "input", "flow")})},
+                 {"outputs", json::array({port("prep_out", "output", "flow")})},
+                 {"parameters", json::object()}, {"customLambdaBody", ""}},
+            json{{"id", "invoke"}, {"label", "Invoke"}, {"type", "call"},
+                 {"position", {{"x", 300}, {"y", 0}}},
+                 {"inputs", json::array({port("invoke_in", "input", "flow")})},
+                 {"outputs", json::array({port("invoke_out", "output", "flow"),
+                                          port("invoke_call", "output", "call")})},
+                 {"parameters", json::object()}, {"customLambdaBody", ""},
+                 {"callSettings", {{"input", ""}, {"source", {{"kind", "previous"}}}}}},
+            json{{"id", "target"}, {"label", "Target"}, {"type", "agent"},
+                 {"position", {{"x", 600}, {"y", 0}}},
+                 {"inputs", json::array({port("target_in", "input", "flow")})},
+                 {"outputs", json::array({port("target_out", "output", "flow")})},
+                 {"parameters", json::object()}, {"customLambdaBody", ""}}
+        })},
+        {"edges", json::array({
+            json{{"id", "flow_prep_invoke"}, {"sourceNodeId", "prep"}, {"sourcePortId", "prep_out"},
+                 {"targetNodeId", "invoke"}, {"targetPortId", "invoke_in"}, {"kind", "flow"}},
+            json{{"id", "call_invoke_target"}, {"sourceNodeId", "invoke"}, {"sourcePortId", "invoke_call"},
+                 {"targetNodeId", "target"}, {"targetPortId", "target_in"}, {"kind", "call"},
+                 {"callSettings", {{"maxCalls", 1}, {"onError", "fail"}}}}
+        })}
+    };
+    taskforge::core::Graph graph;
+    graph.fromJson(schema);
+    std::string src = TaskflowGenerator::generateSource(graph);
+    CHECK(src.find("taskforge::rt::runFlowCall(\"invoke\"") != std::string::npos);
+    CHECK(src.find("task_invoke") != std::string::npos);
+    CHECK(src.find("task_prep.precede(task_invoke)") != std::string::npos);
+    CHECK(src.find("task_target") == std::string::npos);
+    CHECK(src.find("\"invoke\"") != std::string::npos);
+    CHECK(src.find("\"from\":[\"prep\"]") != std::string::npos);
+
+    // Sem a aresta de chamada, o vertice Call e invalido.
+    schema["edges"] = json::array({schema["edges"][0]});
+    taskforge::core::Graph bad;
+    bad.fromJson(schema);
+    bool threw = false;
+    try {
+        (void)TaskflowGenerator::generateSource(bad);
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    CHECK(threw);
+}
+
 TEST(interaction_runtime_reads_answers_file) {
     using namespace taskforge::rt;
     const fs::path oldCwd = fs::current_path();

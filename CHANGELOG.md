@@ -105,6 +105,12 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   call edges/subflows are rejected in v1.
 - `examples/10-subflow-chamavel` and the E2E cover a coordinator calling a subflow, the nested worker
   receiving the call input, the child artifact and the returned text.
+- **Flow Call vertex (phase 4C):** the new `call` vertex executes a declared callable target inside
+  the Taskflow flow. It has exactly one outgoing call edge, gathers a fixed/previous/file/none input,
+  invokes the closed-world runtime synchronously, writes `.arestrix/out/<call-id>.txt` and hands the
+  answer to the next vertex. It does not expose `call_agent` to a model.
+- `examples/11-call-vertex` and the E2E cover a preparer, the Call vertex and the called specialist,
+  including the input crossing the flow boundary and the exported answer.
 - **Database disaster recovery and Git sync safety:** binary SQLite databases are excluded from Git
   tracking in accordance with GitHub Acceptable Use Policies; `DatabaseBackupService` exports clean
   text SQL dumps (`storage/database.sql`) and cognitive memory snapshots (`storage/memory.dump.json`)

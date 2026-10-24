@@ -79,15 +79,20 @@ means:
 
 In v1:
 
-- the source is an **agent**; the target is an **agent**, an **interaction** or a **subflow**;
+- the source is an **agent** or a **Call** vertex; the target is an **agent**, an **interaction** or
+  a **subflow**;
 - the target must be **callable-only**: it has no flow edges (in or out). If it also needs to run as a
   normal step, duplicate the vertex;
 - the target is **not** a top-level Taskflow task; it runs inside the caller's task. A callable
-  subflow's `childGraph` is compiled as a native function in the same executable.
+  subflow's `childGraph` is compiled as a native function in the same executable;
+- a **Call** vertex executes its target **inside the flow** and writes the answer to
+  `.arestrix/out/<call-id>.txt`, so the next vertex can consume it. It has exactly one outgoing call
+  edge and is not exposed as `call_agent` to a model.
 
-To create a call, drag from the agent's **`call`** output port (violet) to the target's `in` port.
-Select the source agent and use the **Delegation** section of the Inspector to set `maxCalls` and a
-description that the model sees when choosing the target.
+To create a call, drag from the agent's or Call vertex's **`call`** output port (violet) to the
+target's `in` port. Select the source vertex and use the **Delegation** section of the Inspector to
+set `maxCalls` and a description that the model sees when choosing the target. For a Call vertex,
+also choose a fixed input or `previous`/`file`/`none` as the input source.
 
 At run time the caller receives the `call_agent` tool with an **enum of declared targets**. The
 skill guides the agent; the graph authorizes; the runtime enforces:
@@ -104,8 +109,9 @@ interaction target also carries `answers`. The target's final text is also writt
 
 See [`examples/06-chamada-agente`](../examples/06-chamada-agente) for a coordinator calling a
 specialist, [`examples/09-chamadas-paralelas`](../examples/09-chamadas-paralelas) for two
-delegations in one turn, and [`examples/10-subflow-chamavel`](../examples/10-subflow-chamavel) for a
-native callable subflow.
+delegations in one turn, [`examples/10-subflow-chamavel`](../examples/10-subflow-chamavel) for a
+native callable subflow, and [`examples/11-call-vertex`](../examples/11-call-vertex) for a Call
+vertex executing a target inside the flow.
 
 ## Interaction vertices
 

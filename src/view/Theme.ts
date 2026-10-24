@@ -129,6 +129,12 @@ export const THEME = {
       badgeBg: 0x9d174d,      // Rosa 800
       textColor: getContrastTextColor(0xdb2777),
       label: 'HUMAN INTERACTION'
+    },
+    call: {
+      color: 0x7c3aed,
+      badgeBg: 0x5b21b6,
+      textColor: getContrastTextColor(0x7c3aed),
+      label: 'CALL VERTEX'
     }
   } as Record<TaskflowNodeType, { color: number; badgeBg: number; textColor: string; label: string }>,
 

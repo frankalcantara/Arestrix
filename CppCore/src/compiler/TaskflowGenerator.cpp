@@ -429,8 +429,8 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
         }
         const auto& src = nodes.at(e->sourceNodeId);
         const auto& dst = nodes.at(e->targetNodeId);
-        if (src.type != core::TaskflowNodeType::Agent) {
-            throw std::runtime_error("Aresta de chamada deve sair de um vertice Agent: " + e->sourceNodeId);
+        if (src.type != core::TaskflowNodeType::Agent && src.type != core::TaskflowNodeType::Call) {
+            throw std::runtime_error("Aresta de chamada deve sair de um vertice Agent ou Call: " + e->sourceNodeId);
         }
         if (dst.type != core::TaskflowNodeType::Agent && dst.type != core::TaskflowNodeType::Interaction &&
             !isSubflowTarget(dst)) {
@@ -446,6 +446,15 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
         callsFrom[e->sourceNodeId].push_back(e);
         callTargets.insert(e->targetNodeId);
     }
+    // Vertice Call: exatamente uma aresta de chamada de saida (o alvo do fluxo).
+    for (const auto& pair : nodes) {
+        if (pair.second.type != core::TaskflowNodeType::Call) continue;
+        auto it = callsFrom.find(pair.first);
+        if (it == callsFrom.end() || it->second.size() != 1) {
+            throw std::runtime_error("Vertice Call '" + pair.first + "' precisa de exatamente uma aresta de chamada.");
+        }
+    }
+
     // v1: o alvo de uma chamada nao participa do fluxo (evita execucao dupla silenciosa).
     for (const auto& target : callTargets) {
         for (const auto* e : edges) {
@@ -740,6 +749,21 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
             body = "taskforge::rt::runInteraction(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +
                    rawLiteral(settings.dump()) +
                    (inputContextExpr.empty() ? ");" : ", " + inputContextExpr + ");");
+        } else if (node.type == core::TaskflowNodeType::Call) {
+            const json& cs = node.callSettings;
+            const std::string fixedInput = cs.is_object() ? cs.value("input", std::string()) : std::string();
+            json source = json::object();
+            const bool hasSource = cs.is_object() && cs.contains("source") && cs["source"].is_object();
+            source["kind"] = hasSource ? cs["source"].value("kind", std::string("previous")) : std::string("previous");
+            source["path"] = hasSource ? cs["source"].value("path", std::string()) : std::string();
+            json from = json::array();
+            for (const auto* e : edges) {
+                if (e->kind == core::EdgeKind::Call) continue;
+                if (e->targetNodeId == id) from.push_back(e->sourceNodeId);
+            }
+            source["from"] = from;
+            body = "taskforge::rt::runFlowCall(" + cppString(node.id) + ", " + cppString(label) + ",\n    " +
+                   rawLiteral(source.dump()) + ", " + cppString(fixedInput) + ");";
         } else if (node.type == core::TaskflowNodeType::Output) {
             std::string src = "";
             std::string dst = "";

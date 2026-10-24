@@ -1,5 +1,5 @@
 import { Graph } from '../core/Graph.ts';
-import { INodeData, IPort, ISwitchSettings, SwitchMode, defaultSwitchSettings, IMcpVertexSettings, defaultMcpSettings, IOutputSettings, defaultOutputSettings, OutputArtifactType, defaultCallSettings, IInteractionSettings, IFormField, FormFieldType, defaultInteractionSettings } from '../core/types.ts';
+import { INodeData, IPort, ISwitchSettings, SwitchMode, defaultSwitchSettings, IMcpVertexSettings, defaultMcpSettings, IOutputSettings, defaultOutputSettings, OutputArtifactType, defaultCallSettings, IInteractionSettings, IFormField, FormFieldType, defaultInteractionSettings, ICallVertexSettings, defaultCallVertexSettings } from '../core/types.ts';
 import { EventBus } from '../core/EventBus.ts';
 import { RemoveNodeCommand, RemoveEdgeCommand, UpdateNodeCommand, CompoundCommand } from '../core/history/GraphCommands.ts';
 import { AgentTemplateRegistry } from '../core/templates/AgentTemplateRegistry.ts';
@@ -507,6 +507,7 @@ export class Inspector {
               <option value="agent" ${node.type === 'agent' ? 'selected' : ''}>Agent (Code Mode IA)</option>
               <option value="output" ${node.type === 'output' ? 'selected' : ''}>Output / Artifact (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Entrega e Saída' : 'Delivery & Output'})</option>
               <option value="interaction" ${node.type === 'interaction' ? 'selected' : ''}>Interaction (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Pergunta ao usuário' : 'Ask the user'})</option>
+              <option value="call" ${node.type === 'call' ? 'selected' : ''}>Call (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Chamada em fluxo' : 'Flow call'})</option>
             </select>
           </div>
 
@@ -529,7 +530,8 @@ export class Inspector {
           ${node.type === 'switch' ? this.renderSwitchSection(node) : ''}
           ${node.type === 'mcp' ? this.renderMcpSection(node) : ''}
           ${node.type === 'output' ? this.renderOutputSection(node) : ''}
-          ${node.type === 'agent' ? this.renderCallSection(node) : ''}
+          ${(node.type === 'agent' || node.type === 'call') ? this.renderCallSection(node) : ''}
+          ${node.type === 'call' ? this.renderFlowCallSection(node) : ''}
           ${node.type === 'interaction' ? this.renderInteractionSection(node) : ''}
 
           <!-- Seção de Parâmetros do Template / Agente -->
@@ -716,11 +718,31 @@ export class Inspector {
             newProps.outputs = [{ id: `${node.id}_out_0`, name: 'out', direction: 'output', type: 'flow' }];
           }
         }
+        if ((newType === 'call') !== (oldType === 'call')) {
+          oldProps.callSettings = current.callSettings ? JSON.parse(JSON.stringify(current.callSettings)) : undefined;
+          newProps.callSettings = newType === 'call' ? defaultCallVertexSettings() : undefined;
+          oldProps.outputs = JSON.parse(JSON.stringify(current.outputs));
+          newProps.outputs = newType === 'call'
+            ? [
+                { id: `${node.id}_out_0`, name: 'out', direction: 'output', type: 'flow' },
+                { id: `${node.id}_out_call`, name: 'call', direction: 'output', type: 'call' }
+              ]
+            : [{ id: `${node.id}_out_0`, name: 'out', direction: 'output', type: 'flow' }];
+          if (newType === 'call') {
+            newProps.customLambdaBody = '';
+            newProps.inputs = [{ id: `${node.id}_in_0`, name: 'in', direction: 'input', type: 'flow' }];
+          }
+        }
         if (crossesSwitch) {
           oldProps.outputs = JSON.parse(JSON.stringify(current.outputs));
           newProps.outputs = newType === 'switch'
             ? Graph.switchOutputs(node.id, ['case 1', 'case 2'])
-            : [{ id: `${node.id}_out_0`, name: 'out', direction: 'output', type: 'flow' }];
+            : newType === 'call'
+              ? [
+                  { id: `${node.id}_out_0`, name: 'out', direction: 'output', type: 'flow' },
+                  { id: `${node.id}_out_call`, name: 'call', direction: 'output', type: 'call' }
+                ]
+              : [{ id: `${node.id}_out_0`, name: 'out', direction: 'output', type: 'flow' }];
           oldProps.switchSettings = current.switchSettings ? JSON.parse(JSON.stringify(current.switchSettings)) : undefined;
           newProps.switchSettings = newType === 'switch' ? defaultSwitchSettings('model') : undefined;
           if (newType === 'switch' && !current.agentSettings) {
@@ -773,7 +795,8 @@ export class Inspector {
     }
     if (node.type === 'mcp') this.bindMcpSettings(node);
     if (node.type === 'output') this.bindOutputSection(node);
-    if (node.type === 'agent') this.bindCallSection();
+    if (node.type === 'agent' || node.type === 'call') this.bindCallSection();
+    if (node.type === 'call') this.bindFlowCallSection(node);
     if (node.type === 'interaction') this.bindInteractionSection(node);
 
     // Sincronizar Lambda
@@ -1445,7 +1468,7 @@ export class Inspector {
       return `
         <div class="form-group">
           <label class="form-label">${t('inspector.calls.title', 'Delegação (chamadas)')}</label>
-          <div class="office-field-hint">${t('inspector.calls.empty', 'Arraste da porta CALL para um agente para declarar uma chamada.')}</div>
+          <div class="office-field-hint">${t('inspector.calls.empty', 'Arraste da porta CALL para um agente, interação ou subflow para declarar uma chamada.')}</div>
         </div>
       `;
     }
@@ -1475,6 +1498,72 @@ export class Inspector {
         ${rows}
       </div>
     `;
+  }
+
+  private renderFlowCallSection(node: INodeData): string {
+    const settings = node.callSettings ?? defaultCallVertexSettings();
+    const source = settings.source ?? { kind: 'previous', path: '' };
+    const callEdge = this.graph.getAllEdges().find(e => e.sourceNodeId === node.id && e.kind === 'call');
+    const target = callEdge ? this.graph.getNode(callEdge.targetNodeId) : undefined;
+    const targetText = target ? `${target.label} (${target.id})` : t('inspector.calls.no_target', 'Nenhum alvo declarado');
+    const sourceOptions = ['previous', 'file', 'none']
+      .map(kind => `<option value="${kind}" ${source.kind === kind ? 'selected' : ''}>${kind}</option>`)
+      .join('');
+
+    return `
+      <div class="form-group" style="border-left: 3px solid #7c3aed; padding-left: 8px;">
+        <label class="form-label">${t('inspector.calls.flow_title', 'Chamada em fluxo')}</label>
+        <div class="office-field-hint">
+          ${t('inspector.calls.flow_target', 'Alvo')}: <strong>${this.escapeHtml(targetText)}</strong>
+        </div>
+        <div class="office-field-hint">
+          ${t('inspector.calls.flow_hint', 'O vértice executa o alvo chamável no fluxo, grava .arestrix/out/<id>.txt e entrega a resposta ao próximo vértice.')}
+        </div>
+
+        <label class="form-label" for="call-fixed-input" style="margin-top: 8px;">${t('inspector.calls.fixed_input', 'Input fixo (opcional)')}</label>
+        <textarea id="call-fixed-input" class="form-textarea" rows="3" placeholder="${t('inspector.calls.fixed_input_placeholder', 'Se vazio, o input vem da origem abaixo')}">${this.escapeHtml(settings.input ?? '')}</textarea>
+
+        <label class="form-label" for="call-source-kind" style="margin-top: 8px;">${t('inspector.calls.source', 'Origem do input')}</label>
+        <select id="call-source-kind" class="form-select">${sourceOptions}</select>
+
+        <label class="form-label" for="call-source-path" style="margin-top: 8px;">${t('inspector.calls.source_path', 'Arquivo de entrada (quando origem = file)')}</label>
+        <input type="text" id="call-source-path" class="form-input code-font" value="${this.escapeHtml(source.path ?? '')}" placeholder="workspace/entrada.txt" />
+      </div>
+    `;
+  }
+
+  private bindFlowCallSection(node: INodeData): void {
+    const fixedInput = this.container.querySelector('#call-fixed-input') as HTMLTextAreaElement | null;
+    fixedInput?.addEventListener('change', () => {
+      this.updateCallVertexSettings(node, s => { s.input = fixedInput.value; }, 'Alterar input do vértice Call');
+    });
+
+    const kindSelect = this.container.querySelector('#call-source-kind') as HTMLSelectElement | null;
+    kindSelect?.addEventListener('change', () => {
+      this.updateCallVertexSettings(node, s => {
+        s.source = { ...(s.source ?? {}), kind: kindSelect.value as 'previous' | 'file' | 'none' };
+      }, 'Alterar origem do input do vértice Call');
+    });
+
+    const pathInput = this.container.querySelector('#call-source-path') as HTMLInputElement | null;
+    pathInput?.addEventListener('change', () => {
+      this.updateCallVertexSettings(node, s => {
+        s.source = { ...(s.source ?? { kind: 'previous' }), path: pathInput.value.trim() };
+      }, 'Alterar arquivo de entrada do vértice Call');
+    });
+  }
+
+  private updateCallVertexSettings(node: INodeData, mutate: (settings: ICallVertexSettings) => void, description: string): void {
+    const oldSettings = JSON.parse(JSON.stringify(node.callSettings ?? defaultCallVertexSettings())) as ICallVertexSettings;
+    const newSettings = JSON.parse(JSON.stringify(oldSettings)) as ICallVertexSettings;
+    mutate(newSettings);
+    this.graph.commandManager.execute(new UpdateNodeCommand(
+      this.graph,
+      node.id,
+      { callSettings: oldSettings },
+      { callSettings: newSettings },
+      description
+    ));
   }
 
   private bindCallSection(): void {
@@ -1829,6 +1918,8 @@ export class Inspector {
         return t('inspector.explanations.agent');
       case 'interaction':
         return t('inspector.explanations.interaction', 'Vértice de interação humana: formulário seguro com pergunta, opções e resposta. O Studio abre o formulário como modal; execuções headless usam --answers.');
+      case 'call':
+        return t('inspector.explanations.call', 'Vértice Call: executa um alvo chamável (agente, interação ou subflow) dentro do fluxo. O alvo vem da aresta de chamada; o input pode ser fixo ou vir do vértice anterior/arquivo.');
       case 'output':
         return t('inspector.explanations.output', 'Vértice coletor de saída e entrega de artefatos. Permite definir os arquivos gerados (SVGs, planilhas, relatórios Markdown, PDFs, JSONs) para inspeção visual interativa na aba Artefatos e cópia para diretórios finais.');
       default:

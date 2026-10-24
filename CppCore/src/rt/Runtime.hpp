@@ -58,6 +58,13 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
 std::string runInteraction(const std::string& nodeId, const std::string& label,
                            const std::string& specJson, const std::string& inputContext = "");
 
+// Executa um vertice Call no fluxo: o alvo vem da unica aresta `call` declarada para
+// este no. O input e fixo ou coletado de `sourceJson` ({"kind","path","from"}); a
+// resposta e gravada em .arestrix/out/<nodeId>.txt e devolvida ao fluxo.
+// Lanca std::runtime_error se a chamada falhar (nao ha agente para tratar o erro).
+std::string runFlowCall(const std::string& nodeId, const std::string& label,
+                        const std::string& sourceJson, const std::string& fixedInput);
+
 // Registro do grafo de chamadas (mundo fechado). O codigo gerado chama uma vez no inicio.
 // Ver rt/CallGraph.hpp para o formato e para a tool call_agent.
 void setCallRegistry(const std::string& callablesJson, const std::string& callersJson);

@@ -25,6 +25,7 @@ enum class TaskflowNodeType {
     Switch,
     Mcp,
     Interaction,
+    Call,
     Output
 };
 
@@ -76,6 +77,7 @@ struct NodeData {
     json switchSettings;   // vertice switch: modo de decisao (code | rules | model), origem do texto, palavras
     json outputSettings;   // vertice output: arquivos de entrega, origem/destino e formato
     json interactionSettings; // vertice interaction: formulario, canal, timeout e politica
+    json callSettings;     // vertice call: input fixo e origem do input na chamada em fluxo
     json childGraph;       // subflow/module: grafo filho aninhado
 };
 
@@ -133,6 +135,7 @@ ARX_JSON_ENUM(TaskflowNodeType, {
     {TaskflowNodeType::Switch, "switch"},
     {TaskflowNodeType::Mcp, "mcp"},
     {TaskflowNodeType::Interaction, "interaction"},
+    {TaskflowNodeType::Call, "call"},
     {TaskflowNodeType::Output, "output"}
 })
 
@@ -222,6 +225,7 @@ inline void to_json(json& j, const NodeData& n) {
         {"mcpSettings", n.mcpSettings},
         {"outputSettings", n.outputSettings},
         {"interactionSettings", n.interactionSettings},
+        {"callSettings", n.callSettings},
         {"childGraph", n.childGraph}
     };
 }
@@ -244,6 +248,7 @@ inline void from_json(const json& j, NodeData& n) {
     if(j.contains("mcpSettings")) j.at("mcpSettings").get_to(n.mcpSettings);
     if(j.contains("outputSettings")) j.at("outputSettings").get_to(n.outputSettings);
     if(j.contains("interactionSettings")) j.at("interactionSettings").get_to(n.interactionSettings);
+    if(j.contains("callSettings")) j.at("callSettings").get_to(n.callSettings);
     if(j.contains("childGraph")) j.at("childGraph").get_to(n.childGraph);
 }
 

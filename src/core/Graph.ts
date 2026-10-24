@@ -11,7 +11,7 @@ import {
   IPort,
   IEdgeControlPoints,
   IBreadcrumbItem, defaultSwitchSettings, defaultMcpSettings, defaultOutputSettings,
-  defaultInteractionSettings } from './types.ts';
+  defaultInteractionSettings, defaultCallVertexSettings } from './types.ts';
 import { globalEventBus, EventBus } from './EventBus.ts';
 import { CommandManager } from './history/CommandManager.ts';
 import { GraphLayout, IGraphLayoutOptions } from './GraphLayout.ts';
@@ -178,6 +178,11 @@ export class Graph {
       outputs = [
         { id: `${id}_out_0`, name: 'out', direction: 'output', type: 'flow' }
       ];
+    } else if (type === 'call') {
+      outputs = [
+        { id: `${id}_out_0`, name: 'out', direction: 'output', type: 'flow' },
+        { id: `${id}_out_call`, name: 'call', direction: 'output', type: 'call' }
+      ];
     } else {
       outputs = [
         { id: `${id}_out_0`, name: 'out', direction: 'output', type: 'flow' }
@@ -202,7 +207,8 @@ export class Graph {
       switchSettings: type === 'switch' ? defaultSwitchSettings('model') : undefined,
       mcpSettings: type === 'mcp' ? defaultMcpSettings() : undefined,
       outputSettings: type === 'output' ? defaultOutputSettings() : undefined,
-      interactionSettings: type === 'interaction' ? defaultInteractionSettings(label) : undefined
+      interactionSettings: type === 'interaction' ? defaultInteractionSettings(label) : undefined,
+      callSettings: type === 'call' ? defaultCallVertexSettings() : undefined
     };
   }
 
@@ -238,6 +244,8 @@ export class Graph {
         return `// Agente Autônomo Code Mode: ${label}\n// Invocação em sandbox/VM isolada com streaming de eventos\nstd::cout << "[Agent: ${label}] Disparando no sandbox isolado...\\n";`;
       case 'interaction':
         return '';   // sem código: o canal humano é tratado pelo gerador/runtime (Fase 2B)
+      case 'call':
+        return '';   // sem código: o gerador emite runFlowCall com o alvo da aresta call
       case 'output':
         return `// Coletor de Entrega / Artefato: ${label}\n// Em runtime, este vértice registra e disponibiliza o artefato produzido na aba Artefatos e na pasta de saída.\nstd::cout << "[OUTPUT: ${label}] Entregável registrado com sucesso!\\n";`;
       case 'static':

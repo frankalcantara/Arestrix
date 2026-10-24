@@ -83,6 +83,21 @@ export class GraphValidator {
     callEdges: IEdgeData[],
     errors: IValidationError[]
   ): void {
+    // Vértice Call: a chamada em fluxo precisa de exatamente um alvo declarado.
+    for (const node of graph.getAllNodes()) {
+      if (node.type !== 'call') continue;
+      const outgoing = callEdges.filter(e => e.sourceNodeId === node.id);
+      if (outgoing.length !== 1) {
+        errors.push({
+          type: 'invalid_call',
+          severity: 'error',
+          message: t('validator.call_vertex_one_target', { label: node.label, id: node.id }),
+          nodeIds: [node.id],
+          edgeIds: outgoing.map(e => e.id)
+        });
+      }
+    }
+
     for (const edge of callEdges) {
       const source = graph.getNode(edge.sourceNodeId);
       const target = graph.getNode(edge.targetNodeId);
@@ -97,7 +112,7 @@ export class GraphValidator {
         continue;
       }
 
-      if (source.type !== 'agent') {
+      if (source.type !== 'agent' && source.type !== 'call') {
         errors.push({
           type: 'invalid_call',
           severity: 'error',
