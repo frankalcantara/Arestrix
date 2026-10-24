@@ -144,7 +144,7 @@ graph = {
 }
 
 (OUT / "skills").mkdir(parents=True, exist_ok=True)
-(OUT / "graph.json").write_text(json.dumps(graph, indent=2, ensure_ascii=False), encoding="utf-8")
-(OUT / "skills" / "gerador.md").write_text(skill_gen + "\n", encoding="utf-8")
-(OUT / "skills" / "jev.md").write_text(skill_jev + "\n", encoding="utf-8")
+(OUT / "graph.json").write_text(json.dumps(graph, indent=2, ensure_ascii=False), encoding="utf-8", newline="\n")
+(OUT / "skills" / "gerador.md").write_text(skill_gen + "\n", encoding="utf-8", newline="\n")
+(OUT / "skills" / "jev.md").write_text(skill_jev + "\n", encoding="utf-8", newline="\n")
 print("Fixture gerado em", OUT)

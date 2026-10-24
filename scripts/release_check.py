@@ -122,6 +122,16 @@ def main() -> int:
         write_report(output, report)
         return 1
 
+    dirty_after = bool(git("status", "--porcelain"))
+    report["dirtyAfter"] = dirty_after
+    if dirty_after and not args.allow_dirty:
+        report["status"] = "failed"
+        report["error"] = "o gate deixou a arvore Git suja; um teste escreveu em arquivo versionado"
+        report["finishedAt"] = now_iso()
+        write_report(output, report)
+        print("[release] FALHOU: o gate deixou a arvore Git suja.", file=sys.stderr)
+        return 1
+
     manifest_command = [sys.executable, str(ROOT / "scripts" / "release_manifest.py"), "--output", str(output)]
     for artifact in args.artifact:
         manifest_command += ["--artifact", artifact]
