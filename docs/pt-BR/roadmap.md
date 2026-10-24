@@ -18,6 +18,7 @@
   rate limits, ledger de uso, métricas Prometheus e roteamento fail-closed.
 - Suporte ao provedor Mistral.
 - Validação de ativos locais e script de assinatura Authenticode no Windows.
+- Gate de release local reproduzível com manifesto SHA-256, `SHA256SUMS` e SBOM.
 
 ## Limitações conhecidas
 

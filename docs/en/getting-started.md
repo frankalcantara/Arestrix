@@ -214,6 +214,15 @@ on not distributing provider keys to runners and restricting their egress to the
 
 ### Distribution and signing
 
+Run the reproducible release gate (build, tests, checks, smoke and E2E) from a clean tree:
+
+```bash
+python scripts/release_check.py
+```
+
+It writes `release/release-manifest.json`, `SHA256SUMS`, `SBOM.json` and `release-report.json`. See
+[Release gate and artifacts](release.md).
+
 Validate the catalog and manifest before releasing:
 
 ```bash

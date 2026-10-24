@@ -131,6 +131,11 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   (including parent/child call IDs), interactions, status and timing, never input/output. The Studio
   loads the latest trace after the run, highlights traversed dashed call edges and prints a compact
   call tree in the console. The E2E asserts the trace records the async specialist call.
+- **Release gate (phase 5A):** `scripts/release_check.py` runs the canonical `dev.py --full --e2e`
+  gate from a clean tree and generates `release/release-manifest.json`, `SHA256SUMS`, `SBOM.json` and
+  `release-report.json`. `release_manifest.py` hashes the actual binaries/dist/runtime files and
+  inventories native submodules and npm components. The Windows signing script now includes
+  `arestrix-gateway.exe`.
 - **Database disaster recovery and Git sync safety:** binary SQLite databases are excluded from Git
   tracking in accordance with GitHub Acceptable Use Policies; `DatabaseBackupService` exports clean
   text SQL dumps (`storage/database.sql`) and cognitive memory snapshots (`storage/memory.dump.json`)

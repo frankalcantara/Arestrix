@@ -23,6 +23,8 @@
     "check:secrets": "node scripts/check-secrets.mjs",
     "check:local-assets": "node scripts/check-local-assets.mjs",
     "check:version": "node scripts/check-version.mjs",
+    "release:manifest": "python scripts/release_manifest.py",
+    "release:check": "python scripts/release_check.py",
     "capture:screenshots": "node scripts/capture-screenshots.mjs",
     "hooks:install": "node scripts/install-hooks.mjs"
   },

@@ -166,6 +166,18 @@ npm run submodule:update   # move to the latest upstream
 - Edits to the graph go through `ICommand` implementations so they stay undoable.
 - JSON in the C++ backend goes through `Json` (simdjson), not another parser.
 
+## Release gate
+
+Before packaging or signing a release, run the reproducible gate from a clean tree:
+
+```bash
+python scripts/release_check.py
+```
+
+It wraps `CppCore/dev.py --full --e2e` and generates `release/release-manifest.json`,
+`release/SHA256SUMS`, `release/SBOM.json` and `release/release-report.json`. The folder is ignored by
+Git. See [Release gate and artifacts](release.md).
+
 ## Known pending items
 
 - Linux end-to-end validation, CI matrix and final distribution/signing: see the

@@ -14,6 +14,15 @@ The workflows were enabled before the repository settings, branch protection and
 matrix were validated. The resulting failures created noise while the project was still stabilizing
 the Beta 1.0 documentation and release process.
 
+Until CI is re-enabled, the local release gate is the canonical automation:
+
+```bash
+python scripts/release_check.py
+```
+
+It runs `dev.py --full --e2e` and writes the release manifest, `SHA256SUMS` and SBOM under
+`release/` (ignored by Git).
+
 ## Before re-enabling
 
 1. Validate the CI jobs locally with the commands in `.github/workflows/ci.yml.disabled`.

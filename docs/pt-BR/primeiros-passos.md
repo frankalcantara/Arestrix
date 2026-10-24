@@ -216,6 +216,16 @@ reais aos runners e de restringir a saída de rede deles ao gateway.
 
 ### Distribuição e assinatura
 
+Rode o gate de release reproduzível (build, testes, verificações, smoke e E2E) a partir de uma árvore
+limpa:
+
+```bash
+python scripts/release_check.py
+```
+
+Ele grava `release/release-manifest.json`, `SHA256SUMS`, `SBOM.json` e `release-report.json`. Veja
+[Gate de release e artefatos](release.md).
+
 Antes de publicar, valide o catálogo e o manifesto:
 
 ```bash

@@ -18,6 +18,7 @@
   usage ledger, Prometheus metrics and fail-closed routing.
 - Mistral provider support.
 - Local asset validation and a Windows Authenticode signing script.
+- Reproducible local release gate with SHA-256 manifest, `SHA256SUMS` and SBOM.
 
 ## Known limitations
 

@@ -139,6 +139,7 @@ python scripts/e2e_examples.py
 | [`arestrix-cli`](docs/en/arestrix-cli.md) | Headless execution, CI usage, exit codes and troubleshooting. |
 | [Examples](examples/README.md) | Twelve runnable projects, from a two-agent pipeline to callable subflows, flow Call vertices, asynchronous calls, parallel calls, generated forms, memory and web-research workflows. |
 | [Test audit log](docs/quality/test-audit-log.md) | Chronological test rounds and integrity audits. |
+| [Release gate](docs/en/release.md) | Reproducible validation, SHA-256 manifest and SBOM before distribution. |
 | [Changelog](CHANGELOG.md) | Release history, changes and known limitations. |
 
 ## Project status

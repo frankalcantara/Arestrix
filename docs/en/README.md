@@ -23,7 +23,8 @@
 ## Reference
 
 - [`arestrix-cli`](arestrix-cli.md) — headless execution for CI, servers and scripts.
-- [Development](development.md) — repository layout, build hardening, tests and third-party policy.
+- [Development](development.md) - repository layout, build hardening, tests and third-party policy.
+- [Release gate and artifacts](release.md) - reproducible validation, SHA-256 manifest and SBOM.
 - [Brand](brand.md) — logo usage, palette and typography.
 - [Portuguese documentation](../pt-BR/README.md) — the same guides in Portuguese.
 

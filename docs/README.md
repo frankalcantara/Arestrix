@@ -36,6 +36,7 @@
 | [Test audit log](quality/test-audit-log.md) | Chronological test rounds, category breakdown and integrity audits (in Portuguese). |
 | [Security and governance model](security/governance.md) | Credential handling, integrity verification, sandboxing and deployment boundaries. |
 | [Dependency advisories](security/dependency-advisories.md) | Known npm advisories, exposure analysis and mitigation status. |
+| [Release gate and artifacts](en/release.md) · [Gate de release](pt-BR/release.md) | Reproducible validation, SHA-256 manifest and SBOM before distribution. |
 | [Roadmap and known limitations](en/roadmap.md) · [Roadmap e limitações](pt-BR/roadmap.md) | Delivered scope, known gaps and the next planned steps. |
 | [Security policy](../SECURITY.md) | Supported versions and private vulnerability reporting. |
 | [Contributing](../CONTRIBUTING.md) | Development setup, tests, commit conventions and pull request checklist. |

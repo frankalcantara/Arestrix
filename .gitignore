@@ -98,3 +98,6 @@ temp/
 cache/
 *.cache
 *.log
+
+# Artefatos de release (gerados localmente; nunca versionar)
+/release/

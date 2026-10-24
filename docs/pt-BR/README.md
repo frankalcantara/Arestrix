@@ -17,6 +17,7 @@
 
 - [`arestrix-cli`](arestrix-cli.md) — execução sem interface para CI, servidores e scripts.
 - [Desenvolvimento](desenvolvimento.md) — mapa do repositório, hardening, testes e política de terceiros.
+- [Gate de release e artefatos](release.md) — validação reproduzível, manifesto SHA-256 e SBOM.
 - [Marca](marca.md) — uso do logotipo, paleta e tipografia.
 - [Documentation in English](../en/README.md) — os mesmos guias em inglês.
 
