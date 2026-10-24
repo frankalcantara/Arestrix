@@ -335,6 +335,26 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
     return spec;
 }
 
+json TaskflowGenerator::buildInteractionSpec(const core::Graph& graph, const core::NodeData& node) {
+    json spec = node.interactionSettings.is_object() ? node.interactionSettings : json::object();
+    const json model = objectOrEmpty(graph.getMetadata().globalDefaults, "model");
+    json generator = objectOrEmpty(spec, "generator");
+    if (spec.value("schemaSource", std::string("static")) == "vertex") {
+        if (generator.value("provider", std::string()).empty()) {
+            generator["provider"] = model.value("provider", std::string("deepseek"));
+        }
+        if (generator.value("model", std::string()).empty()) {
+            generator["model"] = model.value("model", std::string());
+        }
+        if (!generator.contains("temperature") && model.contains("temperature") && model["temperature"].is_number()) {
+            generator["temperature"] = model["temperature"];
+        }
+        if (!generator.contains("fallback")) generator["fallback"] = "fail";
+    }
+    spec["generator"] = generator;
+    return spec;
+}
+
 std::map<std::string, std::string> TaskflowGenerator::collectSkillAssets(const core::Graph& graph) {
     std::map<std::string, std::string> assets;
     for (const auto& p : graph.getNodes()) {
@@ -428,7 +448,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
         entry["label"] = node.label.empty() ? node.id : node.label;
         if (node.type == core::TaskflowNodeType::Interaction) {
             entry["kind"] = "interaction";
-            entry["spec"] = node.interactionSettings.is_object() ? node.interactionSettings : json::object();
+            entry["spec"] = buildInteractionSpec(graph, node);
         } else {
             entry["kind"] = "agent";
             entry["spec"] = buildAgentSpec(graph, node);
@@ -651,7 +671,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph) {
                        rawLiteral(buildAgentSpec(graph, node).dump()) + ");";
             }
         } else if (node.type == core::TaskflowNodeType::Interaction) {
-            const json settings = node.interactionSettings.is_object() ? node.interactionSettings : json::object();
+            const json settings = buildInteractionSpec(graph, node);
             body = "taskforge::rt::runInteraction(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +
                    rawLiteral(settings.dump()) + ");";
         } else if (node.type == core::TaskflowNodeType::Output) {

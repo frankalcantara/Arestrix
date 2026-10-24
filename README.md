@@ -137,7 +137,7 @@ python scripts/e2e_examples.py
 | [Getting started](docs/en/getting-started.md) | Requirements, build, model configuration and first execution. |
 | [Architecture](docs/en/architecture.md) | Studio, engine, WebUI and the graph-to-C++ pipeline. |
 | [`arestrix-cli`](docs/en/arestrix-cli.md) | Headless execution, CI usage, exit codes and troubleshooting. |
-| [Examples](examples/README.md) | Five runnable projects, from a two-agent pipeline to composed, memory and web-research workflows. |
+| [Examples](examples/README.md) | Eight runnable projects, from a two-agent pipeline to generated forms, memory and web-research workflows. |
 | [Test audit log](docs/quality/test-audit-log.md) | Chronological test rounds and integrity audits. |
 | [Changelog](CHANGELOG.md) | Release history, changes and known limitations. |
 

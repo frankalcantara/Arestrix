@@ -1501,7 +1501,7 @@ export class Inspector {
     });
   }
 
-  // --- Interação humana (autoria; execução na Fase 2B) -----------------------------------
+  // --- Interação humana (autoria e formulário gerado) ------------------------------------
   private renderInteractionSection(node: INodeData): string {
     const settings = node.interactionSettings ?? defaultInteractionSettings(node.label);
     const fields = settings.form?.fields ?? [];
@@ -1530,6 +1530,26 @@ export class Inspector {
       .map(value => `<option value="${value}" ${settings.onTimeout === value ? 'selected' : ''}>${value}</option>`).join('');
     const whoOptions = ['any', 'operator', 'end_user']
       .map(value => `<option value="${value}" ${settings.who === value ? 'selected' : ''}>${value}</option>`).join('');
+    const schemaSource = settings.schemaSource ?? 'static';
+    const globalModel = this.graph.getGlobalDefaults().model;
+    const generator = settings.generator ?? {
+      provider: globalModel.provider,
+      model: globalModel.model,
+      temperature: globalModel.temperature,
+      fallback: 'fail' as const
+    };
+    const artifactsText = (settings.form?.context?.artifacts ?? [])
+      .map(a => [a.path, a.type, a.label].filter(Boolean).join(' | '))
+      .join('\n');
+    const fieldsBlock = schemaSource === 'static' ? `
+        <div style="margin-top: 8px;"><strong style="font-size: 12px;">${t('inspector.interaction.fields', 'Campos')}</strong></div>
+        ${fieldRows || `<div class="office-field-hint">${t('inspector.interaction.no_fields', 'Nenhum campo; adicione um.')}</div>`}
+        <button class="btn btn-small" id="btn-add-interaction-field" style="margin-top: 6px;">+ ${t('inspector.interaction.add_field', 'Campo')}</button>
+      ` : `
+        <div class="office-field-hint" style="background:#fdf2f8; border:1px solid #fbcfe8; padding:8px; margin-top:8px; color:#9d174d;">
+          ${t('inspector.interaction.generated_notice', 'Os campos serão gerados pelo modelo em tempo de execução a partir do contexto e dos artefatos; o runtime valida o schema antes de exibir.')}
+        </div>
+      `;
 
     return `
       <div class="form-group">
@@ -1539,10 +1559,41 @@ export class Inspector {
         <input class="form-input" id="interaction-title" value="${this.escapeHtml(settings.form?.title ?? node.label)}" placeholder="${t('inspector.interaction.form_title', 'Título do formulário')}" />
         <textarea class="form-textarea" id="interaction-description" rows="2" placeholder="${t('inspector.interaction.form_description', 'Descrição/ajuda')}">${this.escapeHtml(settings.form?.description ?? '')}</textarea>
         <textarea class="form-textarea" id="interaction-context" rows="3" placeholder="${t('inspector.interaction.context', 'Contexto em Markdown exibido junto às perguntas')}">${this.escapeHtml(settings.form?.context?.markdown ?? '')}</textarea>
+        <textarea class="form-textarea" id="interaction-artifacts" rows="2" placeholder="${t('inspector.interaction.artifacts_placeholder', 'Artefatos: caminho | tipo | rótulo (um por linha)')}">${this.escapeHtml(artifactsText)}</textarea>
 
-        <div style="margin-top: 8px;"><strong style="font-size: 12px;">${t('inspector.interaction.fields', 'Campos')}</strong></div>
-        ${fieldRows || `<div class="office-field-hint">${t('inspector.interaction.no_fields', 'Nenhum campo; adicione um.')}</div>`}
-        <button class="btn btn-small" id="btn-add-interaction-field" style="margin-top: 6px;">+ ${t('inspector.interaction.add_field', 'Campo')}</button>
+        <div style="display: flex; gap: 6px; margin-top: 8px; align-items: center;">
+          <label style="font-size: 11px; white-space: nowrap;">${t('inspector.interaction.schema_source', 'Origem do formulário')}</label>
+          <select class="form-select" id="interaction-schema-source">
+            <option value="static" ${schemaSource === 'static' ? 'selected' : ''}>${t('inspector.interaction.schema_static', 'Estático (campos abaixo)')}</option>
+            <option value="vertex" ${schemaSource === 'vertex' ? 'selected' : ''}>${t('inspector.interaction.schema_vertex', 'Gerado pelo vértice (modelo)')}</option>
+          </select>
+        </div>
+
+        ${schemaSource === 'vertex' ? `
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">${t('inspector.interaction.generator_provider', 'Provedor do gerador')}</label>
+              <input class="form-input" id="interaction-gen-provider" value="${this.escapeHtml(generator.provider ?? '')}" placeholder="deepseek" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">${t('inspector.interaction.generator_model', 'Modelo do gerador')}</label>
+              <input class="form-input" id="interaction-gen-model" value="${this.escapeHtml(generator.model ?? '')}" placeholder="${this.escapeHtml(globalModel.model)}" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">${t('inspector.interaction.generator_temperature', 'Temperatura')}</label>
+              <input type="number" min="0" max="2" step="0.1" class="form-input" id="interaction-gen-temperature" value="${generator.temperature ?? ''}" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">${t('inspector.interaction.generator_fallback', 'Se a geração falhar')}</label>
+              <select class="form-select" id="interaction-gen-fallback">
+                <option value="fail" ${(generator.fallback ?? 'fail') === 'fail' ? 'selected' : ''}>fail</option>
+                <option value="free_text" ${generator.fallback === 'free_text' ? 'selected' : ''}>free_text</option>
+              </select>
+            </div>
+          </div>
+        ` : ''}
+
+        ${fieldsBlock}
 
         <div style="display: flex; gap: 6px; margin-top: 8px; align-items: center;">
           <label style="font-size: 11px; white-space: nowrap;">${t('inspector.interaction.channel', 'Canal')}</label>
@@ -1599,6 +1650,62 @@ export class Inspector {
       this.updateInteractionSettings(node, s => {
         s.form.context = { ...(s.form.context ?? {}), markdown: context.value };
       }, 'Alterar contexto da interação');
+    });
+    const artifacts = this.container.querySelector<HTMLTextAreaElement>('#interaction-artifacts');
+    artifacts?.addEventListener('change', () => {
+      const parsed = artifacts.value.split(/\r?\n/).map(line => {
+        const parts = line.split('|').map(part => part.trim());
+        if (!parts[0]) return null;
+        return { path: parts[0], type: parts[1] || 'text', label: parts[2] || parts[0] };
+      }).filter((a): a is { path: string; type: string; label: string } => !!a);
+      this.updateInteractionSettings(node, s => {
+        s.form.context = { ...(s.form.context ?? {}), artifacts: parsed };
+      }, 'Alterar artefatos do contexto');
+    });
+    const schemaSource = this.container.querySelector<HTMLSelectElement>('#interaction-schema-source');
+    schemaSource?.addEventListener('change', () => {
+      this.updateInteractionSettings(node, s => {
+        s.schemaSource = schemaSource.value as IInteractionSettings['schemaSource'];
+        if (s.schemaSource === 'vertex') {
+          const globalModel = this.graph.getGlobalDefaults().model;
+          s.generator = {
+            provider: s.generator?.provider || globalModel.provider,
+            model: s.generator?.model || globalModel.model,
+            temperature: s.generator?.temperature ?? globalModel.temperature,
+            fallback: s.generator?.fallback ?? 'fail'
+          };
+        }
+      }, 'Alterar origem do formulário');
+    });
+    const genProvider = this.container.querySelector<HTMLInputElement>('#interaction-gen-provider');
+    genProvider?.addEventListener('change', () => {
+      this.updateInteractionSettings(node, s => {
+        s.generator = { ...(s.generator ?? { provider: 'deepseek', model: '' }), provider: genProvider.value.trim() || 'deepseek' };
+      }, 'Alterar provedor do gerador');
+    });
+    const genModel = this.container.querySelector<HTMLInputElement>('#interaction-gen-model');
+    genModel?.addEventListener('change', () => {
+      this.updateInteractionSettings(node, s => {
+        s.generator = { ...(s.generator ?? { provider: 'deepseek', model: '' }), model: genModel.value.trim() };
+      }, 'Alterar modelo do gerador');
+    });
+    const genTemperature = this.container.querySelector<HTMLInputElement>('#interaction-gen-temperature');
+    genTemperature?.addEventListener('change', () => {
+      this.updateInteractionSettings(node, s => {
+        const value = parseFloat(genTemperature.value);
+        s.generator = { ...(s.generator ?? { provider: 'deepseek', model: '' }) };
+        if (Number.isFinite(value)) s.generator.temperature = value;
+        else delete s.generator.temperature;
+      }, 'Alterar temperatura do gerador');
+    });
+    const genFallback = this.container.querySelector<HTMLSelectElement>('#interaction-gen-fallback');
+    genFallback?.addEventListener('change', () => {
+      this.updateInteractionSettings(node, s => {
+        s.generator = {
+          ...(s.generator ?? { provider: 'deepseek', model: '' }),
+          fallback: genFallback.value as 'fail' | 'free_text'
+        };
+      }, 'Alterar fallback do gerador');
     });
 
     const channel = this.container.querySelector<HTMLSelectElement>('#interaction-channel');

@@ -22,7 +22,7 @@
 
 ## Exemplos e segredos
 
-Os cinco projetos de [`examples/`](../../examples/README.pt-BR.md) são gerados por `python scripts/build_examples.py` (nunca edite o
+Os cinco primeiros projetos de [`examples/`](../../examples/README.pt-BR.md) (01–05) são gerados por `python scripts/build_examples.py` (nunca edite o
 `pipelines/main.json` deles à mão) e testados com `python scripts/e2e_examples.py` (um LLM falso roteirizado; sem chaves, sem custo).
 O cenário do exemplo 05 só acessa a rede quando `KEENABLE_API` está definida.
 A memória de projeto tem um teste próprio de duas execuções: `python scripts/e2e_memory.py`.

@@ -9,7 +9,7 @@ export interface IInteractionRequest {
   form?: {
     title?: string;
     description?: string;
-    context?: { markdown?: string };
+    context?: { markdown?: string; artifacts?: Array<{ path: string; type: string; label?: string }> };
     fields?: IFormField[];
     submitLabel?: string;
     cancelLabel?: string;
@@ -133,10 +133,28 @@ export class InteractionModal {
     if (!subtitle.textContent) subtitle.hidden = true;
 
     const contextText = form.context?.markdown || request.inputContext || '';
-    if (contextText) {
+    const artifacts = Array.isArray(form.context?.artifacts) ? form.context!.artifacts! : [];
+    if (contextText || artifacts.length > 0) {
       const context = this.q<HTMLElement>('.interaction-modal-context')!;
       context.hidden = false;
-      context.textContent = contextText;
+      if (contextText) context.textContent = contextText;
+      if (artifacts.length > 0) {
+        const heading = document.createElement('div');
+        heading.className = 'interaction-artifacts-title';
+        heading.textContent = t('interaction_modal.artifacts', 'Artefatos');
+        context.appendChild(heading);
+        const list = document.createElement('div');
+        list.className = 'interaction-artifacts';
+        for (const artifact of artifacts) {
+          if (!artifact || typeof artifact !== 'object') continue;
+          const item = document.createElement('div');
+          item.className = 'interaction-artifact-item';
+          const label = artifact.label || artifact.path || '';
+          item.textContent = `[${artifact.type || 'file'}] ${label}${artifact.path && artifact.label ? ` — ${artifact.path}` : ''}`;
+          list.appendChild(item);
+        }
+        context.appendChild(list);
+      }
     }
 
     if (request.sensitive) {

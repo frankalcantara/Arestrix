@@ -217,7 +217,9 @@ cancela); um stdin por pipe/sem TTY e sem `--answers` continua falhando fechado.
 
 Cada tentativa é auditada em `.arestrix/runs/<runId>/interactions/<requestId>.json` com o formulário,
 as respostas, o canal, os horários e `answeredBy`. Respostas sensíveis não vão para telemetria/logs, e
-o Studio mascara os campos de texto sensíveis.
+o Studio mascara os campos de texto sensíveis. Com `schemaSource: "vertex"` o runtime chama o modelo
+gerador mesmo em CLI/CI (configure provedor/modelo/chave); schemas inválidos usam
+`generator.fallback` (`fail` ou `free_text`).
 
 Manifesto de lote:
 

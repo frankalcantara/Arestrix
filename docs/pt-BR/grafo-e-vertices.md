@@ -111,6 +111,12 @@ Um vértice **interaction** pergunta algo a uma pessoa. Ele aceita um schema de 
 `cli`, `any`), timeout, quem responde e flag de resposta sensível. Pode rodar no fluxo ou ser
 chamado por um agente por uma aresta de chamada.
 
+O formulário é **estático** (campos definidos no Inspetor) ou **gerado pelo vértice**
+(`schemaSource: "vertex"`). No modo gerado, o runtime envia o contexto Markdown e os artefatos
+configurados ao modelo gerador, valida o schema JSON devolvido contra os tipos/limites permitidos e
+nunca executa HTML ou JavaScript. Schema inválido ou falha do modelo aplica `generator.fallback`
+(`fail` ou `free_text`). Os artefatos aparecem no modal e seu texto entra no contexto do gerador.
+
 Execuções headless usam `--answers` (veja [`arestrix-cli`](arestrix-cli.md#interação-humana-headless));
 as respostas são validadas e gravadas em `.arestrix/out/<nodeId>.txt`/`.json`. No Studio, o mesmo
 formulário seguro abre como modal e devolve as respostas validadas ao fluxo ou ao agente chamador.

@@ -66,13 +66,17 @@ date) and never executes HTML or JavaScript produced by a model.
 - The runtime validates required fields, types and declared choices again before returning the
   answers. The result is written to `.arestrix/out/<nodeId>.txt`/`.json` and can feed the flow or a
   calling agent.
+- With `schemaSource: "vertex"`, a model generates the form from the markdown context and artifacts;
+  the runtime validates the JSON schema and applies `generator.fallback` (`fail`/`free_text`) when
+  generation fails. Model-generated HTML/JavaScript is never rendered.
 - Every attempt is audited at `.arestrix/runs/<runId>/interactions/<requestId>.json` (form, answers,
-  channel, timestamps, `answeredBy`). Sensitive values stay out of telemetry/logs and sensitive text
-  fields are masked in the Studio.
+  channel, timestamps, `answeredBy`, generator metadata). Sensitive values stay out of telemetry/logs
+  and sensitive text fields are masked in the Studio.
 - Timeout, cancel and `fail`/`default`/`abort` policies are enforced; without a channel the vertex
   fails closed.
 
-See [`examples/07-interacao`](../examples/07-interacao) and
+See [`examples/07-interacao`](../examples/07-interacao) (static form) and
+[`examples/08-formulario-gerado`](../examples/08-formulario-gerado) (generated form), plus
 [Graph and nodes](graph-and-nodes.md#interaction-vertices).
 
 **Agent language.** At run time the agent is configured in the language of its own constitution: the skill and the prompt

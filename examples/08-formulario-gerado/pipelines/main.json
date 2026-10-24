@@ -1,0 +1,205 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "projectId": "exemplo-formulario-gerado",
+    "graphName": "Formulario_Gerado",
+    "description": "Formulario gerado pelo modelo a partir de contexto e artefatos",
+    "targetStandard": "C++20",
+    "compilerConfig": {
+      "compiler": "msvc",
+      "cppStandard": "C++20",
+      "buildSystem": "cmake",
+      "taskflowIncludePath": "third_party/taskflow",
+      "outputBinaryName": "exemplo_formulario_gerado",
+      "enableOpenMP": false,
+      "enableCuda": false,
+      "extraFlags": []
+    },
+    "version": "1.0.0",
+    "globalDefaults": {
+      "model": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "skillPath": "",
+        "promptTemplate": ""
+      },
+      "sandbox": {
+        "isolationLevel": "host_direct",
+        "network": "egress_llm_only",
+        "maxMemoryMB": 512,
+        "timeoutSeconds": 180,
+        "readOnlyMounts": [],
+        "readWriteMounts": []
+      },
+      "codeMode": {
+        "allowedTools": [
+          "read",
+          "write"
+        ],
+        "customScripts": []
+      },
+      "memory": {
+        "enabled": false,
+        "persistent": false,
+        "readBlackboard": false,
+        "writeBlackboard": false,
+        "semanticLessons": false,
+        "recordLessons": false,
+        "allowedKeys": [],
+        "domains": []
+      }
+    }
+  },
+  "nodes": [
+    {
+      "id": "inicio",
+      "label": "Preparar_Dados",
+      "type": "static",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "inicio_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "inicio_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "std::ofstream(\"workspace/dados.md\") << \"# Dados do cliente\\n\\nNome: ACME Ltda\\nSegmento: industria\\nContato: setor de compras\\n\"; std::cout << \"[Dados] artefato criado\\n\";"
+    },
+    {
+      "id": "pergunta",
+      "label": "Formulario_Gerado",
+      "type": "interaction",
+      "position": {
+        "x": 360,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "pergunta_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "pergunta_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "interactionSettings": {
+        "mode": "form",
+        "schemaSource": "vertex",
+        "form": {
+          "title": "Confirme os dados",
+          "description": "O formulario abaixo e gerado a partir do artefato do cliente.",
+          "context": {
+            "markdown": "Confira o cadastro antes de continuar.",
+            "artifacts": [
+              {
+                "path": "workspace/dados.md",
+                "type": "text/markdown",
+                "label": "Dados do cliente"
+              }
+            ]
+          },
+          "fields": []
+        },
+        "generator": {
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "temperature": 0.2,
+          "fallback": "fail"
+        },
+        "channel": "any",
+        "wait": true,
+        "timeoutSeconds": 300,
+        "onTimeout": "fail",
+        "who": "any",
+        "sensitive": false
+      }
+    },
+    {
+      "id": "entrega",
+      "label": "Entrega_da_Resposta",
+      "type": "output",
+      "position": {
+        "x": 720,
+        "y": 0,
+        "z": 0
+      },
+      "inputs": [
+        {
+          "id": "entrega_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        },
+        {
+          "id": "entrega_in_data",
+          "name": "data_in",
+          "direction": "input",
+          "type": "data",
+          "dataType": "std::string"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "entrega_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "outputSettings": {
+        "sourcePath": ".arestrix/out/pergunta.txt",
+        "destinationPath": "exports/resposta.txt",
+        "artifactType": "text",
+        "displayName": "Resposta do formulario gerado",
+        "autoOpenPreview": true,
+        "description": "Resposta registrada pelo formulario gerado"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "sourceNodeId": "inicio",
+      "sourcePortId": "inicio_out_0",
+      "targetNodeId": "pergunta",
+      "targetPortId": "pergunta_in_0",
+      "kind": "flow",
+      "isFeedbackLoop": false
+    },
+    {
+      "id": "e2",
+      "sourceNodeId": "pergunta",
+      "sourcePortId": "pergunta_out_0",
+      "targetNodeId": "entrega",
+      "targetPortId": "entrega_in_0",
+      "kind": "flow",
+      "isFeedbackLoop": false
+    }
+  ]
+}

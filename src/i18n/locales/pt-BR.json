@@ -711,7 +711,16 @@
       "disabled": "desabilitado"
     },
     "interaction": {
-      "pending": "Execução: modal seguro no Studio ou respostas headless com --answers."
+      "pending": "Execução: modal seguro no Studio ou respostas headless com --answers.",
+      "schema_source": "Origem do formulário",
+      "schema_static": "Estático (campos abaixo)",
+      "schema_vertex": "Gerado pelo vértice (modelo)",
+      "artifacts_placeholder": "Artefatos: caminho | tipo | rótulo (um por linha)",
+      "generator_provider": "Provedor do gerador",
+      "generator_model": "Modelo do gerador",
+      "generator_temperature": "Temperatura",
+      "generator_fallback": "Se a geração falhar",
+      "generated_notice": "Os campos serão gerados pelo modelo em tempo de execução a partir do contexto e dos artefatos; o runtime valida o schema antes de exibir."
     },
     "explanations": {
       "interaction": "Vértice de interação humana: formulário seguro com pergunta, opções e resposta. O Studio abre o formulário como modal; execuções headless usam --answers.",
@@ -1734,6 +1743,8 @@
     "call_cycle": "Ciclo de chamadas sem limite de profundidade detectado: {{cycle}}.",
     "interaction_missing": "O vértice de interação \"{{label}}\" ({{id}}) não tem configuração.",
     "interaction_empty_form": "O vértice de interação \"{{label}}\" precisa de pelo menos um campo.",
+    "interaction_schema_source": "O vértice de interação \"{{label}}\" tem uma origem de schema inválida (use static ou vertex).",
+    "interaction_fallback": "O vértice de interação \"{{label}}\" tem um fallback inválido (use fail ou free_text).",
     "interaction_field_id": "O vértice de interação \"{{label}}\" tem um campo com id vazio ou duplicado.",
     "interaction_field_label": "Vértice de interação \"{{label}}\": o campo \"{{id}}\" precisa de rótulo.",
     "interaction_options": "Vértice de interação \"{{label}}\": o campo \"{{id}}\" precisa de pelo menos duas opções.",
@@ -1976,6 +1987,7 @@
   "interaction_modal": {
     "title": "Interação necessária",
     "subtitle": "O pipeline aguarda uma resposta humana.",
+    "artifacts": "Artefatos",
     "sensitive": "Resposta sensível: evite exibir a tela para terceiros.",
     "yes": "Sim",
     "select": "Selecione...",

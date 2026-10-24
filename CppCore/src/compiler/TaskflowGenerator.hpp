@@ -38,6 +38,10 @@ public:
     // consumido por taskforge::rt::runAgent.
     static taskforge::Json buildAgentSpec(const core::Graph& graph, const core::NodeData& node);
 
+    // Configuracao efetiva de um no de interacao; em schemaSource=vertex preenche
+    // provider/model/temperature/fallback a partir dos Padroes Globais quando vazios.
+    static taskforge::Json buildInteractionSpec(const core::Graph& graph, const core::NodeData& node);
+
     // Utilitarios (publicos para teste).
     static std::string sanitizeIdentifier(const std::string& id);
     static std::string cppString(const std::string& text);   // literal C++ entre aspas, com escapes

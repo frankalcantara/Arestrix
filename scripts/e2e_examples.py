@@ -43,11 +43,13 @@ def free_port():
         return s.getsockname()[1]
 
 
-def run_example(name, ticket=None, with_key=True, timeout=1500, answers=None):
+def run_example(name, ticket=None, with_key=True, timeout=1500, answers=None, mutate=None):
     """Roda um exemplo numa copia temporaria. Devolve (saida, pasta-do-projeto, eventos-do-mock, codigo)."""
     work = pathlib.Path(tempfile.mkdtemp(prefix="arestrix-ex-"))
     project = work / "projeto"
     shutil.copytree(EXAMPLES / name, project)
+    if mutate:
+        mutate(project)
     log_file = work / "mock.log"
     port = free_port()
     mock = subprocess.Popen([sys.executable, str(MOCK), str(port), str(log_file)], stdout=subprocess.PIPE, text=True)
@@ -369,6 +371,83 @@ def scenario_07_interacao():
         cleanup(work, mock)
 
 
+def scenario_08_formulario_gerado():
+    print("\n== Exemplo 8: formulario gerado pelo modelo ==")
+    out, project, events, code, work, mock = run_example("08-formulario-gerado", answers="answers.json")
+    try:
+        check(code == 0, "terminou com codigo 0")
+        chats = [e for e in events if e.get("event") == "chat"]
+        generator_chats = [e for e in chats if "FORM SCHEMA GENERATOR" in e.get("system", "")]
+        check(bool(generator_chats), "o modelo gerador de formulario foi chamado")
+        check(any(e.get("user_has_acme") for e in generator_chats),
+              "o conteudo do artefato chegou ao modelo gerador")
+
+        exported = project / "exports" / "resposta.txt"
+        check(exported.exists(), "vertice de saida exportou a resposta")
+        if exported.exists():
+            content = exported.read_text(encoding="utf-8")
+            check("Tipo de cadastro: pj" in content, "a escolha gerada chegou ao fluxo")
+            check("Observacao: ACME Ltda" in content, "o texto chegou ao fluxo")
+
+        audit_files = list((project / ".arestrix" / "runs").glob("*/interactions/*.json"))
+        check(bool(audit_files), "auditoria do formulario gerado foi gravada")
+        if audit_files:
+            audit = json.loads(audit_files[0].read_text(encoding="utf-8"))
+            check(audit.get("status") == "ok", "auditoria registrou status ok")
+            check(audit.get("generated") is True, "auditoria registrou formulario gerado")
+            check((audit.get("generator") or {}).get("model") == "deepseek-flash",
+                  "auditoria registrou o modelo gerador")
+            ids = [f.get("id") for f in (audit.get("form") or {}).get("fields", [])]
+            check("tipo" in ids and "obs" in ids, "o schema gerado foi validado e auditado")
+        no_secret_leak(out, "ex8")
+    finally:
+        cleanup(work, mock)
+
+    print("  -- schema invalido: fallback free_text --")
+    def configure_fallback(project: pathlib.Path) -> None:
+        graph_path = project / "pipelines" / "main.json"
+        graph = json.loads(graph_path.read_text(encoding="utf-8"))
+        for node in graph.get("nodes", []):
+            if node.get("type") != "interaction":
+                continue
+            settings = node.setdefault("interactionSettings", {})
+            settings.setdefault("form", {}).setdefault("context", {})["markdown"] = "INVALID_FORM"
+            settings.setdefault("generator", {})["fallback"] = "free_text"
+        graph_path.write_text(json.dumps(graph, ensure_ascii=False, indent=2), encoding="utf-8")
+        (project / "fallback-answers.json").write_text(
+            json.dumps({"pergunta": {"resposta": "Fallback ok"}}), encoding="utf-8")
+
+    out, project, events, code, work, mock = run_example(
+        "08-formulario-gerado", answers="fallback-answers.json", mutate=configure_fallback)
+    try:
+        check(code == 0, "fallback free_text terminou com codigo 0")
+        exported = project / "exports" / "resposta.txt"
+        check(exported.exists(), "fallback exportou a resposta")
+        if exported.exists():
+            check("Resposta: Fallback ok" in exported.read_text(encoding="utf-8"),
+                  "a pergunta livre recebeu a resposta")
+        audit_files = list((project / ".arestrix" / "runs").glob("*/interactions/*.json"))
+        if audit_files:
+            audit = json.loads(audit_files[0].read_text(encoding="utf-8"))
+            check(audit.get("generated") is False, "auditoria marca o fallback como nao gerado")
+            check((audit.get("generator") or {}).get("usedFallback") is True,
+                  "auditoria registra o fallback usado")
+            ids = [f.get("id") for f in (audit.get("form") or {}).get("fields", [])]
+            check(ids == ["resposta"], "fallback gera a pergunta livre")
+    finally:
+        cleanup(work, mock)
+
+    print("  -- sem canal: falha fechado antes de chamar o modelo --")
+    out, project, events, code, work, mock = run_example("08-formulario-gerado")
+    try:
+        check(code != 0, "sem canal o pipeline falha")
+        check("nenhum canal de respostas" in out, "a mensagem explica que falta o canal")
+        check(not any("FORM SCHEMA GENERATOR" in e.get("system", "") for e in events if e.get("event") == "chat"),
+              "o modelo gerador nao foi chamado sem canal")
+    finally:
+        cleanup(work, mock)
+
+
 def scenario_secrets_guard():
     print("\n== Garantia de seguranca dos exemplos ==")
     node = shutil.which("node")
@@ -387,7 +466,8 @@ def scenario_secrets_guard():
 def main():
     for fn in (scenario_01, scenario_02_urgente, scenario_02_normal, scenario_02_duvida, scenario_02_sem_chave,
                scenario_03_duvida, scenario_03_urgente, scenario_04_memoria, scenario_05_matematica,
-               scenario_06_chamada_agente, scenario_07_interacao, scenario_secrets_guard):
+               scenario_06_chamada_agente, scenario_07_interacao, scenario_08_formulario_gerado,
+               scenario_secrets_guard):
         fn()
     if failures:
         print(f"\n{len(failures)} verificacao(oes) falharam:")

@@ -217,7 +217,9 @@ the `answer_interaction` RPC. In an interactive terminal, `arestrix-cli run` pro
 
 Every attempt is audited at `.arestrix/runs/<runId>/interactions/<requestId>.json` with the form,
 answers, channel, timestamps and `answeredBy`. Sensitive answers stay out of telemetry and logs, and
-the Studio masks sensitive text fields.
+the Studio masks sensitive text fields. For `schemaSource: "vertex"` the runtime calls the generator
+model even in CLI/CI (configure provider/model/API key); invalid schemas use `generator.fallback`
+(`fail` or `free_text`).
 
 Batch manifest:
 

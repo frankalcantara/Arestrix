@@ -38,6 +38,22 @@ describe('Vértice de interação humana (autoria 2A)', () => {
     expect(result.errors.some(e => e.type === 'invalid_interaction' && e.severity === 'error')).toBe(true);
   });
 
+  it('aceita formulário gerado pelo vértice sem campos estáticos', () => {
+    const graph = new Graph(new EventBus());
+    const ask = graph.createNode('ask', 'Pergunta', 'interaction', 0, 0);
+    if (ask.interactionSettings) {
+      ask.interactionSettings.schemaSource = 'vertex';
+      ask.interactionSettings.form.fields = [];
+      ask.interactionSettings.generator = { provider: 'deepseek', model: 'deepseek-flash', fallback: 'free_text' };
+    }
+    const result = GraphValidator.validate(graph);
+    expect(result.errors.filter(e => e.severity === 'error')).toEqual([]);
+
+    if (ask.interactionSettings?.generator) ask.interactionSettings.generator.fallback = 'invalid' as any;
+    const invalid = GraphValidator.validate(graph);
+    expect(invalid.errors.some(e => e.type === 'invalid_interaction')).toBe(true);
+  });
+
   it('rejeita campo choice com menos de duas opções', () => {
     const graph = new Graph(new EventBus());
     const ask = graph.createNode('ask', 'Pergunta', 'interaction', 0, 0);

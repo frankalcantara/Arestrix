@@ -65,13 +65,17 @@ booleano, escolha, múltipla escolha, data) e nunca executa HTML ou JavaScript g
 - O runtime valida de novo campos obrigatórios, tipos e escolhas declaradas antes de devolver as
   respostas. O resultado é gravado em `.arestrix/out/<nodeId>.txt`/`.json` e pode alimentar o fluxo
   ou um agente chamador.
+- Com `schemaSource: "vertex"`, um modelo gera o formulário a partir do contexto Markdown e dos
+  artefatos; o runtime valida o schema JSON e aplica `generator.fallback` (`fail`/`free_text`) quando
+  a geração falha. HTML/JavaScript gerado por modelo nunca é renderizado.
 - Cada tentativa é auditada em `.arestrix/runs/<runId>/interactions/<requestId>.json` (formulário,
-  respostas, canal, horários, `answeredBy`). Valores sensíveis ficam fora da telemetria/logs e campos
-  de texto sensíveis são mascarados no Studio.
+  respostas, canal, horários, `answeredBy`, metadados do gerador). Valores sensíveis ficam fora da
+  telemetria/logs e campos de texto sensíveis são mascarados no Studio.
 - Timeout, cancelamento e as políticas `fail`/`default`/`abort` são aplicados; sem canal, o vértice
   falha fechado.
 
-Veja [`examples/07-interacao`](../examples/07-interacao) e
+Veja [`examples/07-interacao`](../examples/07-interacao) (formulário estático) e
+[`examples/08-formulario-gerado`](../examples/08-formulario-gerado) (formulário gerado), além de
 [Grafo e vértices](grafo-e-vertices.md#vértices-de-interação).
 
 **Idioma do agente.** Em tempo de execução o agente é configurado no idioma da sua própria constituição: a skill e o template

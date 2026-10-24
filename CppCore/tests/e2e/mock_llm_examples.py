@@ -210,6 +210,34 @@ def decide(body):
     if "ESPECIALISTA DE CHAMADAS" in system:
         return text("Parecer do especialista: aprovado.")
 
+    if "FORM SCHEMA GENERATOR" in system:
+        if "INVALID_FORM" in user:
+            return text("isto nao e um schema JSON")
+        schema = {
+            "title": "Confirme os dados do cliente",
+            "description": "Confira as informacoes e escolha o tipo de cadastro.",
+            "fields": [
+                {
+                    "id": "tipo",
+                    "type": "choice",
+                    "label": "Tipo de cadastro",
+                    "required": True,
+                    "options": [
+                        {"value": "pf", "label": "Pessoa fisica"},
+                        {"value": "pj", "label": "Pessoa juridica"}
+                    ]
+                },
+                {
+                    "id": "obs",
+                    "type": "textarea",
+                    "label": "Observacao",
+                    "required": False,
+                    "maxLength": 500
+                }
+            ]
+        }
+        return text(json.dumps(schema, ensure_ascii=False))
+
     return text("Sem roteiro para este agente.")
 
 
@@ -243,8 +271,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(429, {"error": {"message": "Rate limit reached"}}, {"Retry-After": "1"})
 
         msg = decide(body)
+        messages = body.get("messages", [])
+        user_content = messages[1].get("content", "") if len(messages) > 1 else ""
         log({"event": "chat", "model": body.get("model"), "tools": sorted(t["function"]["name"] for t in body.get("tools", [])),
-             "system": body.get("messages", [{}])[0].get("content", ""),
+             "system": messages[0].get("content", "") if messages else "",
+             "user_has_acme": "ACME Ltda" in user_content,
              "reply": "tool_call:" + msg["tool_calls"][0]["function"]["name"] if msg.get("tool_calls") else "text"})
         self._send(200, {"choices": [{"message": msg, "finish_reason": "tool_calls" if msg.get("tool_calls") else "stop"}],
                          "usage": {"prompt_tokens": 10, "completion_tokens": 10}})

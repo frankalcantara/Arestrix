@@ -104,6 +104,8 @@ export interface IInteractionSettings {
     provider: string;
     model: string;
     temperature?: number;
+    /** fail: aborta se o modelo/chave/schema falhar; free_text: cai para uma pergunta livre. */
+    fallback?: 'fail' | 'free_text';
   };
   channel: InteractionChannel;
   /** v1: sempre true. O campo existe para o v2. */

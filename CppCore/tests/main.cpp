@@ -589,6 +589,40 @@ TEST(interaction_node_is_authored_and_compiles) {
     CHECK(src.find("taskforge::rt::runInteraction(\"ask\"") != std::string::npos);
 }
 
+TEST(interaction_generator_inherits_global_model) {
+    using taskforge::compiler::TaskflowGenerator;
+    json schema = {
+        {"version", "1.0.0"},
+        {"metadata", {
+            {"graphName", "GeneratedForm"}, {"description", ""}, {"targetStandard", "C++20"},
+            {"version", "1"}, {"projectId", "test"},
+            {"globalDefaults", {{"model", {{"provider", "deepseek"}, {"model", "deepseek-flash"}}}}}
+        }},
+        {"nodes", json::array({
+            json{{"id", "ask"}, {"label", "Pergunta"}, {"type", "interaction"},
+                 {"position", {{"x", 0}, {"y", 0}}},
+                 {"inputs", json::array()}, {"outputs", json::array()},
+                 {"parameters", json::object()}, {"customLambdaBody", ""},
+                 {"interactionSettings", json{
+                     {"schemaSource", "vertex"},
+                     {"form", json{{"title", "Pergunta"}, {"fields", json::array()}}},
+                     {"generator", json::object()},
+                     {"channel", "any"}, {"onTimeout", "fail"}, {"timeoutSeconds", 300}
+                 }}}
+        })},
+        {"edges", json::array()}
+    };
+    taskforge::core::Graph graph;
+    graph.fromJson(schema);
+    const auto* ask = graph.getNode("ask");
+    CHECK(ask != nullptr);
+    if (!ask) return;
+    json spec = TaskflowGenerator::buildInteractionSpec(graph, *ask);
+    CHECK(spec["generator"]["provider"] == "deepseek");
+    CHECK(spec["generator"]["model"] == "deepseek-flash");
+    CHECK(spec["generator"]["fallback"] == "fail");
+}
+
 TEST(interaction_runtime_reads_answers_file) {
     using namespace taskforge::rt;
     const fs::path oldCwd = fs::current_path();

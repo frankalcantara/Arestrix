@@ -186,7 +186,24 @@ export class GraphValidator {
       }
 
       const fields = Array.isArray(settings.form.fields) ? settings.form.fields : [];
-      if (fields.length === 0) {
+      const schemaSource = settings.schemaSource ?? 'static';
+      if (schemaSource !== 'static' && schemaSource !== 'vertex') {
+        errors.push({
+          type: 'invalid_interaction',
+          severity: 'error',
+          message: t('validator.interaction_schema_source', { label: node.label }),
+          nodeIds: [node.id]
+        });
+      }
+      if (settings.generator?.fallback && !['fail', 'free_text'].includes(settings.generator.fallback)) {
+        errors.push({
+          type: 'invalid_interaction',
+          severity: 'error',
+          message: t('validator.interaction_fallback', { label: node.label }),
+          nodeIds: [node.id]
+        });
+      }
+      if (schemaSource === 'static' && fields.length === 0) {
         errors.push({
           type: 'invalid_interaction',
           severity: 'error',
@@ -196,7 +213,8 @@ export class GraphValidator {
       }
 
       const seen = new Set<string>();
-      for (const field of fields) {
+      const fieldsToValidate = schemaSource === 'static' ? fields : [];
+      for (const field of fieldsToValidate) {
         if (!field.id || seen.has(field.id)) {
           errors.push({
             type: 'invalid_interaction',

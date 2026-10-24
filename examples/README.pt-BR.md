@@ -2,7 +2,7 @@
 
 [English](README.md) · [Documentação](../docs/README.md)
 
-Sete projetos prontos para executar, do simples ao complexo. Cada um é uma pasta de projeto Arestrix comum: abra no Studio,
+Oito projetos prontos para executar, do simples ao complexo. Cada um é uma pasta de projeto Arestrix comum: abra no Studio,
 escolha seu modelo, grave sua chave de API e pressione **F5**.
 
 | # | Projeto | O que mostra | Precisa de |
@@ -14,11 +14,12 @@ escolha seu modelo, grave sua chave de API e pressione **F5**.
 | 5 | [`05-matematica-com-memoria`](05-matematica-com-memoria) | Pesquisa web pelo vértice MCP Keenable, seguida de um texto de matemática escrito com memória do projeto e entregue em Markdown. | Um modelo, `KEENABLE_API`. |
 | 6 | [`06-chamada-agente`](06-chamada-agente) | Um agente coordenador declara uma **chamada** a um agente especialista (aresta tracejada) e recebe a resposta de forma síncrona; o resultado é entregue como artefato. | Um modelo. |
 | 7 | [`07-interacao`](07-interacao) | Um vértice de **interação humana** com formulário seguro; `--answers` fornece uma resposta roteirizada para CI/headless, e a resposta é entregue como artefato. | Nada (respostas roteirizadas). |
+| 8 | [`08-formulario-gerado`](08-formulario-gerado) | Um modelo gera o schema do formulário em runtime a partir de contexto Markdown e de um artefato; o runtime valida e audita o schema gerado. | Um modelo (gerador). |
 
 Os exemplos 3 e 5 são **gerados** por `python scripts/build_examples.py`, então as peças compartilhadas não ficam fora de
 sincronia. Os vértices ainda não executam um grafo aninhado, por isso a composição é achatada em um único pipeline.
 
-Todos os sete terminam em **vértices de saída** (`output`): o arquivo produzido é copiado para `exports/` e registrado na
+Todos os oito terminam em **vértices de saída** (`output`): o arquivo produzido é copiado para `exports/` e registrado na
 aba **Artefatos**, com visualização por formato (SVG, Markdown, planilhas, PDF e JSON).
 
 ## Executar um exemplo
