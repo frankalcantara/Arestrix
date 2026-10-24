@@ -2,7 +2,7 @@
 
 [English](README.md) · [Documentação](../docs/README.md)
 
-Nove projetos prontos para executar, do simples ao complexo. Cada um é uma pasta de projeto Arestrix comum: abra no Studio,
+Dez projetos prontos para executar, do simples ao complexo. Cada um é uma pasta de projeto Arestrix comum: abra no Studio,
 escolha seu modelo, grave sua chave de API e pressione **F5**.
 
 | # | Projeto | O que mostra | Precisa de |
@@ -16,11 +16,12 @@ escolha seu modelo, grave sua chave de API e pressione **F5**.
 | 7 | [`07-interacao`](07-interacao) | Um vértice de **interação humana** com formulário seguro; `--answers` fornece uma resposta roteirizada para CI/headless, e a resposta é entregue como artefato. | Nada (respostas roteirizadas). |
 | 8 | [`08-formulario-gerado`](08-formulario-gerado) | Um modelo gera o schema do formulário em runtime a partir de contexto Markdown e de um artefato; o runtime valida e audita o schema gerado. | Um modelo (gerador). |
 | 9 | [`09-chamadas-paralelas`](09-chamadas-paralelas) | Um coordenador pede dois especialistas declarados no mesmo turno; o loop do agente executa as chamadas `call_agent` em paralelo e consolida as respostas. | Um modelo. |
+| 10 | [`10-subflow-chamavel`](10-subflow-chamavel) | Um coordenador chama um **subflow** com grafo aninhado; o compilador gera uma função nativa e o runtime passa o input aos agentes internos. | Um modelo. |
 
 Os exemplos 3 e 5 são **gerados** por `python scripts/build_examples.py`, então as peças compartilhadas não ficam fora de
 sincronia. Os vértices ainda não executam um grafo aninhado, por isso a composição é achatada em um único pipeline.
 
-Todos os nove terminam em **vértices de saída** (`output`): o arquivo produzido é copiado para `exports/` e registrado na
+Todos os dez terminam em **vértices de saída** (`output`): o arquivo produzido é copiado para `exports/` e registrado na
 aba **Artefatos**, com visualização por formato (SVG, Markdown, planilhas, PDF e JSON).
 
 ## Executar um exemplo

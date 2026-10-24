@@ -12,6 +12,7 @@
 // os alvos declarados. invokeCall() executa o alvo de forma sincrona, aplica os
 // limites e devolve um JSON como resultado da tool.
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -41,6 +42,10 @@ std::vector<CallTarget> callTargetsFor(const std::string& callerId);
 
 // Definicoes da tool call_agent. Vazio quando targets esta vazio.
 std::vector<ToolDef> callToolDefinitions(const std::vector<CallTarget>& targets, RuntimeLang lang);
+
+// Registra a funcao nativa de um subflow chamavel (gerada no mesmo executavel).
+// O codigo gerado chama isto depois de setCallRegistry().
+void registerSubflow(const std::string& id, std::function<std::string(const std::string&)> runner);
 
 // Executa uma chamada declarada. `callerRunId` identifica a execucao do chamador
 // para o orcamento de maxCalls. Devolve o resultado JSON no conteudo da tool.

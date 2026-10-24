@@ -1,0 +1,257 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "projectId": "exemplo-subflow-chamavel",
+    "graphName": "Subflow_Chamavel",
+    "description": "Coordenador chama um subflow nativo",
+    "targetStandard": "C++20",
+    "compilerConfig": {
+      "compiler": "msvc",
+      "cppStandard": "C++20",
+      "buildSystem": "cmake",
+      "taskflowIncludePath": "third_party/taskflow",
+      "outputBinaryName": "exemplo_subflow_chamavel",
+      "enableOpenMP": false,
+      "enableCuda": false,
+      "extraFlags": []
+    },
+    "version": "1.0.0",
+    "globalDefaults": {
+      "model": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "skillPath": "",
+        "promptTemplate": ""
+      },
+      "sandbox": {
+        "isolationLevel": "host_direct",
+        "network": "egress_llm_only",
+        "maxMemoryMB": 512,
+        "timeoutSeconds": 180,
+        "readOnlyMounts": [],
+        "readWriteMounts": []
+      },
+      "codeMode": {
+        "allowedTools": [
+          "read",
+          "write"
+        ],
+        "customScripts": []
+      },
+      "memory": {
+        "enabled": false,
+        "persistent": false,
+        "readBlackboard": false,
+        "writeBlackboard": false,
+        "semanticLessons": false,
+        "recordLessons": false,
+        "allowedKeys": [],
+        "domains": []
+      }
+    },
+    "callLimits": {
+      "maxDepth": 3,
+      "maxTotalCalls": 50
+    }
+  },
+  "nodes": [
+    {
+      "id": "coordenador",
+      "label": "Coordenador_Subflow",
+      "type": "agent",
+      "position": { "x": 0, "y": 0, "z": 0 },
+      "inputs": [
+        { "id": "coordenador_in_0", "name": "in", "direction": "input", "type": "flow" },
+        { "id": "coordenador_in_prompt", "name": "prompt_in", "direction": "input", "type": "data", "dataType": "std::string" }
+      ],
+      "outputs": [
+        { "id": "coordenador_out_0", "name": "out", "direction": "output", "type": "flow" },
+        { "id": "coordenador_out_data", "name": "artifact_out", "direction": "output", "type": "data", "dataType": "std::string" },
+        { "id": "coordenador_out_call", "name": "call", "direction": "output", "type": "call" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": { "skillPath": "skills/coordenador.md" },
+        "inheritCodeMode": true,
+        "inheritMemory": true
+      }
+    },
+    {
+      "id": "subflow_especialista",
+      "label": "Subflow_Especialista",
+      "type": "subflow",
+      "position": { "x": 360, "y": 180, "z": 0 },
+      "inputs": [
+        { "id": "subflow_especialista_in_0", "name": "in", "direction": "input", "type": "flow" }
+      ],
+      "outputs": [
+        { "id": "subflow_especialista_out_0", "name": "out", "direction": "output", "type": "flow" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "childGraph": {
+        "version": "1.0.0",
+        "metadata": {
+          "projectId": "exemplo-subflow-chamavel",
+          "graphName": "Subflow_Especialista",
+          "description": "Grafo interno executado quando o subflow e chamado",
+          "targetStandard": "C++20",
+          "compilerConfig": {
+            "compiler": "msvc",
+            "cppStandard": "C++20",
+            "buildSystem": "cmake",
+            "taskflowIncludePath": "third_party/taskflow",
+            "outputBinaryName": "subflow_especialista",
+            "enableOpenMP": false,
+            "enableCuda": false,
+            "extraFlags": []
+          },
+          "version": "1.0.0",
+          "globalDefaults": {
+            "model": {
+              "provider": "deepseek",
+              "model": "deepseek-flash",
+              "skillPath": "",
+              "promptTemplate": ""
+            },
+            "sandbox": {
+              "isolationLevel": "host_direct",
+              "network": "egress_llm_only",
+              "maxMemoryMB": 512,
+              "timeoutSeconds": 180,
+              "readOnlyMounts": [],
+              "readWriteMounts": []
+            },
+            "codeMode": {
+              "allowedTools": [
+                "read",
+                "write"
+              ],
+              "customScripts": []
+            },
+            "memory": {
+              "enabled": false,
+              "persistent": false,
+              "readBlackboard": false,
+              "writeBlackboard": false,
+              "semanticLessons": false,
+              "recordLessons": false,
+              "allowedKeys": [],
+              "domains": []
+            }
+          }
+        },
+        "nodes": [
+          {
+            "id": "worker",
+            "label": "Especialista_Interno",
+            "type": "agent",
+            "position": { "x": 0, "y": 0, "z": 0 },
+            "inputs": [
+              { "id": "worker_in_0", "name": "in", "direction": "input", "type": "flow" },
+              { "id": "worker_in_prompt", "name": "prompt_in", "direction": "input", "type": "data", "dataType": "std::string" }
+            ],
+            "outputs": [
+              { "id": "worker_out_0", "name": "out", "direction": "output", "type": "flow" },
+              { "id": "worker_out_data", "name": "artifact_out", "direction": "output", "type": "data", "dataType": "std::string" },
+              { "id": "worker_out_call", "name": "call", "direction": "output", "type": "call" }
+            ],
+            "parameters": {},
+            "customLambdaBody": "",
+            "agentSettings": {
+              "inheritSandbox": true,
+              "inheritModel": false,
+              "model": { "skillPath": "skills/worker.md" },
+              "inheritCodeMode": true,
+              "inheritMemory": true
+            }
+          },
+          {
+            "id": "resultado",
+            "label": "Resultado_do_Subflow",
+            "type": "output",
+            "position": { "x": 360, "y": 0, "z": 0 },
+            "inputs": [
+              { "id": "resultado_in_0", "name": "in", "direction": "input", "type": "flow" },
+              { "id": "resultado_in_data", "name": "data_in", "direction": "input", "type": "data", "dataType": "std::string" }
+            ],
+            "outputs": [
+              { "id": "resultado_out_0", "name": "out", "direction": "output", "type": "flow" }
+            ],
+            "parameters": {},
+            "customLambdaBody": "",
+            "outputSettings": {
+              "sourcePath": ".arestrix/out/worker.txt",
+              "destinationPath": "exports/subflow_result.txt",
+              "artifactType": "text",
+              "displayName": "Resultado interno do subflow",
+              "autoOpenPreview": false,
+              "description": "Artefato produzido dentro do subflow"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "child_e1",
+            "sourceNodeId": "worker",
+            "sourcePortId": "worker_out_0",
+            "targetNodeId": "resultado",
+            "targetPortId": "resultado_in_0",
+            "kind": "flow",
+            "isFeedbackLoop": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "entrega",
+      "label": "Entrega_da_Resposta",
+      "type": "output",
+      "position": { "x": 720, "y": 0, "z": 0 },
+      "inputs": [
+        { "id": "entrega_in_0", "name": "in", "direction": "input", "type": "flow" },
+        { "id": "entrega_in_data", "name": "data_in", "direction": "input", "type": "data", "dataType": "std::string" }
+      ],
+      "outputs": [
+        { "id": "entrega_out_0", "name": "out", "direction": "output", "type": "flow" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "outputSettings": {
+        "sourcePath": "workspace/resposta.txt",
+        "destinationPath": "exports/resposta.txt",
+        "artifactType": "text",
+        "displayName": "Resposta do subflow",
+        "autoOpenPreview": true,
+        "description": "Resultado consolidado pelo coordenador"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_fluxo",
+      "sourceNodeId": "coordenador",
+      "sourcePortId": "coordenador_out_0",
+      "targetNodeId": "entrega",
+      "targetPortId": "entrega_in_0",
+      "kind": "flow",
+      "isFeedbackLoop": false
+    },
+    {
+      "id": "e_call_subflow",
+      "sourceNodeId": "coordenador",
+      "sourcePortId": "coordenador_out_call",
+      "targetNodeId": "subflow_especialista",
+      "targetPortId": "subflow_especialista_in_0",
+      "kind": "call",
+      "callSettings": {
+        "maxCalls": 1,
+        "onError": "fail",
+        "description": "Executar o subflow especialista"
+      }
+    }
+  ]
+}

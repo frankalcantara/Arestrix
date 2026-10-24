@@ -79,10 +79,11 @@ means:
 
 In v1:
 
-- the source is an **agent**; the target is an **agent** or an **interaction**;
+- the source is an **agent**; the target is an **agent**, an **interaction** or a **subflow**;
 - the target must be **callable-only**: it has no flow edges (in or out). If it also needs to run as a
   normal step, duplicate the vertex;
-- the target is **not** a top-level Taskflow task; it runs inside the caller's task.
+- the target is **not** a top-level Taskflow task; it runs inside the caller's task. A callable
+  subflow's `childGraph` is compiled as a native function in the same executable.
 
 To create a call, drag from the agent's **`call`** output port (violet) to the target's `in` port.
 Select the source agent and use the **Delegation** section of the Inspector to set `maxCalls` and a

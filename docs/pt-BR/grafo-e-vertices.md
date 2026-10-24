@@ -79,10 +79,11 @@ agendamento. Ela significa:
 
 No v1:
 
-- a origem é um **agente**; o destino é um **agente** ou uma **interação**;
+- a origem é um **agente**; o destino é um **agente**, uma **interação** ou um **subflow**;
 - o destino precisa ser **somente chamável**: não tem arestas de fluxo (entrada ou saída). Se ele
   também precisar rodar como etapa normal, duplique o vértice;
-- o destino **não** é uma task top-level do Taskflow; ele roda dentro da task do chamador.
+- o destino **não** é uma task top-level do Taskflow; ele roda dentro da task do chamador. O
+  `childGraph` de um subflow chamável é compilado como uma função nativa no mesmo executável.
 
 Para criar uma chamada, arraste da porta **`call`** do agente (violeta) até a porta `in` do destino.
 Selecione o agente de origem e use a seção **Delegação** do Inspetor para definir `maxCalls` e a

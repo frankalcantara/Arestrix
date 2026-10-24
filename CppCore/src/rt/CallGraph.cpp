@@ -26,6 +26,7 @@ struct Registry {
     std::mutex mutex;
     std::map<std::string, Callable> callables;
     std::map<std::string, std::vector<CallTarget>> callers;
+    std::map<std::string, std::function<std::string(const std::string&)>> subflows;
 };
 
 Registry& registry() {
@@ -114,6 +115,14 @@ void setCallRegistry(const std::string& callablesJson, const std::string& caller
     std::lock_guard<std::mutex> lock(r.mutex);
     r.callables = std::move(parsedCallables);
     r.callers = std::move(parsedCallers);
+    r.subflows.clear();
+}
+
+void registerSubflow(const std::string& id, std::function<std::string(const std::string&)> runner) {
+    if (id.empty() || !runner) return;
+    Registry& r = registry();
+    std::lock_guard<std::mutex> lock(r.mutex);
+    r.subflows[id] = std::move(runner);
 }
 
 std::vector<CallTarget> callTargetsFor(const std::string& callerId) {
@@ -129,10 +138,10 @@ std::vector<ToolDef> callToolDefinitions(const std::vector<CallTarget>& targets,
     Json allowed = Json::array();
     std::ostringstream description;
     description << langPick(lang,
-        "Chama um dos agentes ou interacoes humanas declarados no grafo. O alvo precisa estar na lista permitida. "
+        "Chama um dos agentes, interacoes humanas ou subflows declarados no grafo. O alvo precisa estar na lista permitida. "
         "A chamada e sincrona: voce recebe a resposta do alvo antes de continuar. Voce pode pedir varias chamadas "
         "call_agent no mesmo turno; elas rodam em paralelo e os resultados voltam na ordem pedida.",
-        "Calls one of the agents or human interactions declared in the graph. The target must be in the allowed list. "
+        "Calls one of the agents, human interactions or subflows declared in the graph. The target must be in the allowed list. "
         "The call is synchronous: you receive the target's answer before continuing. You may request several "
         "call_agent calls in the same turn; they run in parallel and results return in the requested order.");
     for (const auto& target : targets) {
@@ -146,7 +155,7 @@ std::vector<ToolDef> callToolDefinitions(const std::vector<CallTarget>& targets,
     Json targetSchema = Json::object();
     targetSchema["type"] = "string";
     targetSchema["enum"] = allowed;
-    targetSchema["description"] = langPick(lang, "Id do agente a chamar.", "Id of the agent to call.");
+    targetSchema["description"] = langPick(lang, "Id do alvo a chamar.", "Id of the target to call.");
 
     Json inputSchema = Json::object();
     inputSchema["type"] = "string";
@@ -189,7 +198,7 @@ ToolResult invokeCallImpl(const std::string& callerId, const std::string& caller
     if (!target) {
         return invokeError(langPick(lang, "Alvo nao declarado no grafo: ", "Target not declared in the graph: ") + targetId);
     }
-    if (target->kind != "agent" && target->kind != "interaction") {
+    if (target->kind != "agent" && target->kind != "interaction" && target->kind != "subflow") {
         return invokeError(langPick(lang, "Destino de chamada nao suportado: ", "Call target not supported: ") + target->kind);
     }
 
@@ -252,6 +261,18 @@ ToolResult invokeCallImpl(const std::string& callerId, const std::string& caller
         if (callable.kind == "interaction") {
             output = runInteraction(targetId, target->label.empty() ? targetId : target->label,
                                     callable.specJson, input);
+        } else if (callable.kind == "subflow") {
+            std::function<std::string(const std::string&)> runner;
+            {
+                Registry& r = registry();
+                std::lock_guard<std::mutex> lock(r.mutex);
+                auto it = r.subflows.find(targetId);
+                if (it != r.subflows.end()) runner = it->second;
+            }
+            if (!runner) {
+                throw std::runtime_error(langPick(lang, "Subflow chamado nao registrado: ", "Called subflow not registered: ") + targetId);
+            }
+            output = runner(input);
         } else {
             output = runAgent(targetId, target->label.empty() ? targetId : target->label,
                               callable.specJson, runKey, "", input);

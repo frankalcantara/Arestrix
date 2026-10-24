@@ -267,6 +267,20 @@ def decide(body):
     if "ESPECIALISTA B" in system:
         return text("Parecer B: prazo compativel.")
 
+    if "COORDENADOR SUBFLOW" in system:
+        if step == 0:
+            return tool_call("c1", "call_agent", {"target": "subflow_especialista", "input": "processe os dados do cliente"})
+        if step == 1:
+            try:
+                output = json.loads(tool_msgs[0]["content"]).get("output", "")
+            except Exception:
+                output = tool_msgs[0]["content"]
+            return tool_call("c2", "write", {"path": "workspace/resposta.txt", "content": "Subflow: " + output + "\n"})
+        return text("Subflow chamado e resultado entregue.")
+
+    if "WORKER SUBFLOW" in system:
+        return text("Subflow processou: dados do cliente.")
+
     return text("Sem roteiro para este agente.")
 
 
@@ -305,6 +319,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         log({"event": "chat", "model": body.get("model"), "tools": sorted(t["function"]["name"] for t in body.get("tools", [])),
              "system": messages[0].get("content", "") if messages else "",
              "user_has_acme": "ACME Ltda" in user_content,
+             "user_has_subflow_input": "processe os dados do cliente" in user_content,
              "requested_tools": [t["function"]["name"] for t in msg.get("tool_calls", [])],
              "reply": "tool_call:" + msg["tool_calls"][0]["function"]["name"] if msg.get("tool_calls") else "text"})
         self._send(200, {"choices": [{"message": msg, "finish_reason": "tool_calls" if msg.get("tool_calls") else "stop"}],

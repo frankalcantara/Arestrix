@@ -76,6 +76,7 @@ struct NodeData {
     json switchSettings;   // vertice switch: modo de decisao (code | rules | model), origem do texto, palavras
     json outputSettings;   // vertice output: arquivos de entrega, origem/destino e formato
     json interactionSettings; // vertice interaction: formulario, canal, timeout e politica
+    json childGraph;       // subflow/module: grafo filho aninhado
 };
 
 struct EdgeData {
@@ -220,7 +221,8 @@ inline void to_json(json& j, const NodeData& n) {
         {"switchSettings", n.switchSettings},
         {"mcpSettings", n.mcpSettings},
         {"outputSettings", n.outputSettings},
-        {"interactionSettings", n.interactionSettings}
+        {"interactionSettings", n.interactionSettings},
+        {"childGraph", n.childGraph}
     };
 }
 inline void from_json(const json& j, NodeData& n) {
@@ -242,6 +244,7 @@ inline void from_json(const json& j, NodeData& n) {
     if(j.contains("mcpSettings")) j.at("mcpSettings").get_to(n.mcpSettings);
     if(j.contains("outputSettings")) j.at("outputSettings").get_to(n.outputSettings);
     if(j.contains("interactionSettings")) j.at("interactionSettings").get_to(n.interactionSettings);
+    if(j.contains("childGraph")) j.at("childGraph").get_to(n.childGraph);
 }
 
 // Serialização manual de EdgeData para campos opcionais

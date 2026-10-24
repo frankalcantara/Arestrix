@@ -1749,7 +1749,8 @@
     "interaction_field_label": "Vértice de interação \"{{label}}\": o campo \"{{id}}\" precisa de rótulo.",
     "interaction_options": "Vértice de interação \"{{label}}\": o campo \"{{id}}\" precisa de pelo menos duas opções.",
     "interaction_channel": "O vértice de interação \"{{label}}\" tem um canal inválido.",
-    "interaction_timeout": "O vértice de interação \"{{label}}\" tem timeout negativo."
+    "interaction_timeout": "O vértice de interação \"{{label}}\" tem timeout negativo.",
+    "call_target_graph": "O alvo de chamada \"{{label}}\" ({{id}}) é um subflow sem grafo interno."
   },
   "local_models": {
     "title": "Modelos locais",

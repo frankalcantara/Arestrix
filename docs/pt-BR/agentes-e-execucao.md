@@ -49,6 +49,10 @@ chamador; não é uma task agendada do Taskflow.
   gravado em `.arestrix/out/<target>.txt`.
 - O alvo nunca recebe a conversa inteira do chamador: só o input explícito. Isso reduz custo e a
   superfície de prompt injection.
+- Um alvo **subflow** declarado com `childGraph` é compilado como uma função nativa no mesmo
+  executável. O grafo filho roda em um executor Taskflow aninhado; o input da chamada é passado como
+  `inputContext` aos agentes/interações e o artefato de saída do filho é devolvido ao chamador.
+  Arestas de chamada e subflows aninhados são rejeitados no v1.
 
 Veja [`examples/06-chamada-agente`](../examples/06-chamada-agente) e
 [Grafo e vértices](grafo-e-vertices.md#arestas-de-chamada-delegação).

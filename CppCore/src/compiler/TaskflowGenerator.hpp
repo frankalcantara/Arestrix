@@ -12,7 +12,12 @@ class TaskflowGenerator {
 public:
     // Gera o main.cpp C++20/Taskflow equivalente ao grafo. Nos "Agent" chamam o runtime
     // (rt/Runtime.hpp) em vez de apenas imprimir mensagens.
-    static std::string generateSource(const core::Graph& graph);
+    // `inputContextExpr` e usado pelo gerador de subflow para injetar o payload do chamador
+    // como inputContext dos agentes/interacoes; vazio mantem o fluxo normal.
+    static std::string generateSource(const core::Graph& graph, const std::string& inputContextExpr = "");
+
+    // Fontes das funcoes nativas dos subflows chamaveis (arquivo logico -> conteudo C++).
+    static std::map<std::string, std::string> generateSubflowSources(const core::Graph& graph);
 
     static std::string generateBatchSource(
         const core::Graph& graph,

@@ -10,8 +10,8 @@ const dirs = readdirSync(EXAMPLES, { withFileTypes: true }).filter(d => d.isDire
 const read = (...p: string[]) => JSON.parse(readFileSync(join(EXAMPLES, ...p), 'utf8'));
 
 describe('projetos de exemplo (examples/)', () => {
-  it('existem os nove projetos, do simples ao complexo', () => {
-    expect(dirs).toEqual(['01-svg-agente', '02-triagem-de-suporte', '03-atendimento-ilustrado', '04-memoria', '05-matematica-com-memoria', '06-chamada-agente', '07-interacao', '08-formulario-gerado', '09-chamadas-paralelas']);
+  it('existem os dez projetos, do simples ao complexo', () => {
+    expect(dirs).toEqual(['01-svg-agente', '02-triagem-de-suporte', '03-atendimento-ilustrado', '04-memoria', '05-matematica-com-memoria', '06-chamada-agente', '07-interacao', '08-formulario-gerado', '09-chamadas-paralelas', '10-subflow-chamavel']);
   });
 
   for (const name of dirs) {

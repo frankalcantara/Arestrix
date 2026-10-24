@@ -198,9 +198,22 @@ BuildResult buildAndRun(const core::Graph& graph,
     }
     writeIfChanged(buildDir / "main.cpp", source);
 
+    std::string subflowSource;
+    {
+        auto subflowSources = compiler::TaskflowGenerator::generateSubflowSources(graph);
+        auto it = subflowSources.find("subflows.cpp");
+        fs::path subflowPath = buildDir / "subflows.cpp";
+        if (it != subflowSources.end()) {
+            subflowSource = it->second;
+            writeIfChanged(subflowPath, subflowSource);
+        } else {
+            fs::remove(subflowPath, ec);
+        }
+    }
+
     fs::path exePath = buildDir / exeName("pipeline_app");
     fs::path hashFile = buildDir / "main.hash";
-    std::string hash = std::to_string(fnv1a(source)) + "|" + rt.coreLib.string() + "|" +
+    std::string hash = std::to_string(fnv1a(source)) + "|" + std::to_string(fnv1a(subflowSource)) + "|" + rt.coreLib.string() + "|" +
                        std::to_string(fs::exists(rt.coreLib, ec) ? fs::last_write_time(rt.coreLib, ec).time_since_epoch().count() : 0);
     bool upToDate = false;
     if (fs::exists(exePath, ec) && fs::exists(hashFile, ec)) {
@@ -217,6 +230,7 @@ BuildResult buildAndRun(const core::Graph& graph,
         phase("compiling", "Compilando com " + tc.description + " (C++20, Taskflow)...");
         platform::ProcessSpec spec;
         spec.workingDir = buildDir;
+        const bool hasSubflows = !subflowSource.empty();
 
         if (tc.kind == Toolchain::Kind::Msvc) {
             std::ostringstream cmd;
@@ -225,14 +239,19 @@ BuildResult buildAndRun(const core::Graph& graph,
             cmd << "cl /nologo /std:c++20 /EHsc /O2 /MD /utf-8 /permissive- /Zc:__cplusplus /W3 "
                 << "/I\"" << rt.taskflowInclude.string() << "\" /I\"" << rt.srcInclude.string() << "\" "
                 << "/I\"" << rt.simdjsonInclude.string() << "\" "
-                << "main.cpp /Fe:\"" << exePath.filename().string() << "\" "
+                << "main.cpp " << (hasSubflows ? "subflows.cpp " : "")
+                << "/Fe:\"" << exePath.filename().string() << "\" "
                 << "/link /nologo \"" << rt.coreLib.string() << "\" winhttp.lib advapi32.lib ole32.lib shell32.lib user32.lib";
             spec.shellCommand = cmd.str();
         } else {
             spec.argv = {tc.compiler, "-std=c++20", "-O2", "-pthread",
                          "-I" + rt.taskflowInclude.string(), "-I" + rt.srcInclude.string(),
                          "-I" + rt.simdjsonInclude.string(),
-                         "main.cpp", rt.coreLib.string(), "-o", exePath.filename().string()};
+                         "main.cpp"};
+            if (hasSubflows) spec.argv.push_back("subflows.cpp");
+            spec.argv.push_back(rt.coreLib.string());
+            spec.argv.push_back("-o");
+            spec.argv.push_back(exePath.filename().string());
         }
 
         auto cr = platform::run(spec, 15 * 60 * 1000, [&](const std::string& line) {

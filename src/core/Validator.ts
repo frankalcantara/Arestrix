@@ -108,11 +108,23 @@ export class GraphValidator {
         continue;
       }
 
-      if (target.type !== 'agent' && target.type !== 'interaction') {
+      if (target.type !== 'agent' && target.type !== 'interaction' &&
+          target.type !== 'subflow' && target.type !== 'module') {
         errors.push({
           type: 'invalid_call',
           severity: 'error',
           message: t('validator.call_target', { label: target.label, id: target.id }),
+          nodeIds: [target.id],
+          edgeIds: [edge.id]
+        });
+        continue;
+      }
+      if ((target.type === 'subflow' || target.type === 'module') &&
+          (!target.childGraph || !Array.isArray(target.childGraph.nodes) || target.childGraph.nodes.length === 0)) {
+        errors.push({
+          type: 'invalid_call',
+          severity: 'error',
+          message: t('validator.call_target_graph', { label: target.label, id: target.id }),
           nodeIds: [target.id],
           edgeIds: [edge.id]
         });

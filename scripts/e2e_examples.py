@@ -472,6 +472,34 @@ def scenario_09_chamadas_paralelas():
         cleanup(work, mock)
 
 
+def scenario_10_subflow_chamavel():
+    print("\n== Exemplo 10: subflow chamavel ==")
+    out, project, events, code, work, mock = run_example("10-subflow-chamavel")
+    try:
+        check(code == 0, "terminou com codigo 0")
+        exported = project / "exports" / "resposta.txt"
+        check(exported.exists(), "vertice de saida do pai exportou a resposta")
+        if exported.exists():
+            content = exported.read_text(encoding="utf-8")
+            check("Subflow processou: dados do cliente." in content,
+                  "o texto do subflow chegou ao coordenador")
+
+        child_export = project / "exports" / "subflow_result.txt"
+        check(child_export.exists(), "o grafo interno do subflow entregou seu artefato")
+        check((project / ".arestrix" / "build" / "subflows.cpp").exists(),
+              "o compilador gerou a funcao nativa do subflow")
+
+        chats = [e for e in events if e.get("event") == "chat"]
+        check(any("COORDENADOR SUBFLOW" in e.get("system", "") for e in chats), "o coordenador executou")
+        worker_chats = [e for e in chats if "WORKER SUBFLOW" in e.get("system", "")]
+        check(bool(worker_chats), "o agente interno do subflow executou")
+        check(any(e.get("user_has_subflow_input") for e in worker_chats),
+              "o input da chamada chegou ao agente interno do subflow")
+        no_secret_leak(out, "ex10")
+    finally:
+        cleanup(work, mock)
+
+
 def scenario_secrets_guard():
     print("\n== Garantia de seguranca dos exemplos ==")
     node = shutil.which("node")
@@ -491,7 +519,7 @@ def main():
     for fn in (scenario_01, scenario_02_urgente, scenario_02_normal, scenario_02_duvida, scenario_02_sem_chave,
                scenario_03_duvida, scenario_03_urgente, scenario_04_memoria, scenario_05_matematica,
                scenario_06_chamada_agente, scenario_07_interacao, scenario_08_formulario_gerado,
-               scenario_09_chamadas_paralelas, scenario_secrets_guard):
+               scenario_09_chamadas_paralelas, scenario_10_subflow_chamavel, scenario_secrets_guard):
         fn()
     if failures:
         print(f"\n{len(failures)} verificacao(oes) falharam:")

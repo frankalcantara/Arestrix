@@ -1749,7 +1749,8 @@
     "interaction_field_label": "Interaction vertex \"{{label}}\": field \"{{id}}\" needs a label.",
     "interaction_options": "Interaction vertex \"{{label}}\": field \"{{id}}\" needs at least two options.",
     "interaction_channel": "Interaction vertex \"{{label}}\" has an invalid channel.",
-    "interaction_timeout": "Interaction vertex \"{{label}}\" has a negative timeout."
+    "interaction_timeout": "Interaction vertex \"{{label}}\" has a negative timeout.",
+    "call_target_graph": "Call target \"{{label}}\" ({{id}}) is a subflow without a child graph."
   },
   "local_models": {
     "title": "Local models",

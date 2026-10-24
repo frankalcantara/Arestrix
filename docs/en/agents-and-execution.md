@@ -50,6 +50,10 @@ scheduled Taskflow task.
   written to `.arestrix/out/<target>.txt`.
 - The target never receives the caller's full conversation: only the explicit input. This keeps
   cost and prompt-injection surface small.
+- A **subflow** target declared with a `childGraph` is compiled as a native function in the same
+  executable. Its child graph runs in a nested Taskflow executor; the call input is passed as
+  `inputContext` to its agents/interactions and the child output artifact is returned to the caller.
+  Nested call edges and nested subflows are rejected in v1.
 
 See [`examples/06-chamada-agente`](../examples/06-chamada-agente) and
 [Graph and nodes](graph-and-nodes.md#call-edges-delegation).
