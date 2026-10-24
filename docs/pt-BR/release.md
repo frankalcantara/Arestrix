@@ -66,6 +66,42 @@ sha256sum -c release/SHA256SUMS
 O manifesto é gerado a partir dos arquivos reais em disco. Ele nunca lê chaves de API, segredos de
 projeto ou dados de usuário.
 
+## 3.1 Pacote portátil (fase 5B1)
+
+Depois que o manifesto de release existir, gere a distribuição portátil:
+
+```powershell
+py scripts/package_release.py
+```
+
+```bash
+python3 scripts/package_release.py
+```
+
+O script monta exatamente o layout esperado pelo Studio e pelo compilador de pipelines:
+
+```text
+arestrix(.exe), arestrix-cli(.exe), arestrix-gateway(.exe)
+dist/                         UI compilada do Studio
+CppCore/src/                  headers/fontes usados pelos pipelines gerados
+CppCore/runtime/              catálogo e manifesto do runtime local
+runtime/lib/                  biblioteca arestrix_core
+third_party/taskflow/         headers do Taskflow
+third_party/simdjson/         headers do simdjson
+examples/, docs/              exemplos e documentação
+package-manifest.json         hashes dos arquivos
+SHA256SUMS                    checksums do pacote
+SBOM.json                     inventário de componentes
+```
+
+Ele executa `arestrix-cli version` e `arestrix-cli project validate` em um exemplo antes de arquivar.
+Árvore limpa é exigida por padrão.
+
+O arquivo gerado é `release/arestrix-<version>-<platform>-<arch>.zip` no Windows ou `.tar.gz` no
+Linux/macOS; `--format both` cria os dois. O pacote portátil **não** inclui MSVC/GCC. Para compilar
+pipelines no destino ainda é necessário um compilador C++20 e o Visual C++ Redistributable no
+Windows.
+
 ## 4. Assine os binários do Windows
 
 Depois do gate aprovado, assine os executáveis com o certificado corporativo:

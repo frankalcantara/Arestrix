@@ -19,6 +19,7 @@
 - Mistral provider support.
 - Local asset validation and a Windows Authenticode signing script.
 - Reproducible local release gate with SHA-256 manifest, `SHA256SUMS` and SBOM.
+- Portable package with the Studio, CLI, gateway, UI, runtime library and compiler headers.
 
 ## Known limitations
 

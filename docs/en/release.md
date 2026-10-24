@@ -66,6 +66,42 @@ sha256sum -c release/SHA256SUMS
 The manifest is generated from the actual files on disk. It never reads API keys, project secrets or
 user data.
 
+## 3.1 Portable package (phase 5B1)
+
+After the release manifest exists, build the portable distribution:
+
+```powershell
+py scripts/package_release.py
+```
+
+```bash
+python3 scripts/package_release.py
+```
+
+The script stages the exact layout expected by the Studio and the C++ pipeline compiler:
+
+```text
+arestrix(.exe), arestrix-cli(.exe), arestrix-gateway(.exe)
+dist/                         compiled Studio UI
+CppCore/src/                  headers/sources used by generated pipelines
+CppCore/runtime/              local runtime catalog and manifest
+runtime/lib/                  arestrix_core library
+third_party/taskflow/         Taskflow headers
+third_party/simdjson/         simdjson headers
+examples/, docs/              examples and documentation
+package-manifest.json         file hashes
+SHA256SUMS                    package checksums
+SBOM.json                     component inventory
+```
+
+It runs `arestrix-cli version` and `arestrix-cli project validate` against an example before
+archiving the package. A clean tree is required by default.
+
+The generated archive is `release/arestrix-<version>-<platform>-<arch>.zip` on Windows or
+`.tar.gz` on Linux/macOS; `--format both` creates both. The portable package does **not** include
+MSVC/GCC. Compiling pipelines on the target still requires a C++20 compiler and the Visual C++
+Redistributable on Windows.
+
 ## 4. Sign the Windows binaries
 
 After the gate passes, sign the executables with the corporate certificate:

@@ -136,6 +136,11 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   `release-report.json`. `release_manifest.py` hashes the actual binaries/dist/runtime files and
   inventories native submodules and npm components. The Windows signing script now includes
   `arestrix-gateway.exe`.
+- **Portable package (phase 5B1):** `scripts/package_release.py` stages the Studio binaries, UI,
+  CppCore sources, runtime library, Taskflow/simdjson headers, examples and documentation in the
+  layout expected by `locateRuntime`/`BuildService`. It runs a CLI smoke test, writes
+  `package-manifest.json` and package-local `SHA256SUMS`, copies the SBOM and creates a ZIP or
+  `.tar.gz`. MSI/MSIX installers remain for 5B2.
 - **Database disaster recovery and Git sync safety:** binary SQLite databases are excluded from Git
   tracking in accordance with GitHub Acceptable Use Policies; `DatabaseBackupService` exports clean
   text SQL dumps (`storage/database.sql`) and cognitive memory snapshots (`storage/memory.dump.json`)

@@ -19,6 +19,7 @@
 - Suporte ao provedor Mistral.
 - Validação de ativos locais e script de assinatura Authenticode no Windows.
 - Gate de release local reproduzível com manifesto SHA-256, `SHA256SUMS` e SBOM.
+- Pacote portátil com Studio, CLI, gateway, UI, biblioteca do runtime e headers de compilação.
 
 ## Limitações conhecidas
 
