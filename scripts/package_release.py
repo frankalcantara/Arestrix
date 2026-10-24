@@ -265,6 +265,15 @@ def main() -> int:
     sbom = release_dir / "SBOM.json"
     if not sbom.is_file():
         raise SystemExit(f"[package] {sbom} ausente; rode scripts/release_check.py ou release_manifest.py primeiro.")
+    try:
+        sbom_commit = json.loads(sbom.read_text(encoding="utf-8")).get("commit", "")
+    except (OSError, json.JSONDecodeError) as error:
+        raise SystemExit(f"[package] SBOM invalido: {error}")
+    if sbom_commit != commit:
+        raise SystemExit(
+            "[package] o SBOM nao corresponde ao HEAD "
+            f"({sbom_commit or 'ausente'} != {commit}); rode scripts/release_check.py no commit atual."
+        )
 
     dist = ROOT / "dist"
     if not (dist / "index.html").is_file():
