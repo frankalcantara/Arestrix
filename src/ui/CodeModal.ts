@@ -213,6 +213,10 @@ export class CodeModal {
     const nodes = this.graph.getAllNodes();
     const edges = this.graph.getAllEdges();
     const graphName = (meta.graphName || 'TaskflowPipeline').replace(/[^a-zA-Z0-9_]/g, '_');
+    const hasSubflow = nodes.some(n =>
+      (n.type === 'subflow' || n.type === 'module') &&
+      edges.some(e => e.kind === 'call' && e.targetNodeId === n.id));
+    const sources = hasSubflow ? 'main.cpp subflows.cpp' : 'main.cpp';
 
     if (!this.codeCache.cpp || !this.codeCache.cpp.trim()) {
       let code = `// =========================================================================\n`;
@@ -283,7 +287,7 @@ export class CodeModal {
       ps1 += `$Output = "/Fe:Output/${graphName}.exe"\n\n`;
       ps1 += `if (-not (Test-Path "Output")) { New-Item -ItemType Directory -Path "Output" | Out-Null }\n\n`;
       ps1 += `Write-Host "Invocando cl.exe..." -ForegroundColor Yellow\n`;
-      ps1 += `& cl.exe $Flags main.cpp $Output /link /nologo\n\n`;
+      ps1 += `& cl.exe $Flags ${sources} $Output /link /nologo\n\n`;
       ps1 += `if ($LASTEXITCODE -eq 0) {\n`;
       ps1 += `    Write-Host "✅ Compilado com sucesso: Output/${graphName}.exe" -ForegroundColor Green\n`;
       ps1 += `} else {\n`;
@@ -299,7 +303,7 @@ export class CodeModal {
       cmake += `set(CMAKE_CXX_STANDARD_REQUIRED ON)\n\n`;
       cmake += `# Procura Taskflow moderno\n`;
       cmake += `find_package(Taskflow REQUIRED)\n\n`;
-      cmake += `add_executable(${graphName} main.cpp)\n`;
+      cmake += `add_executable(${graphName} ${sources})\n`;
       cmake += `target_link_libraries(${graphName} PRIVATE Taskflow::Taskflow)\n`;
       this.codeCache.cmake = cmake;
     }
@@ -309,9 +313,9 @@ export class CodeModal {
       make += `CXXFLAGS = /std:c++20 /O2 /EHsc /utf-8 /I include\n`;
       make += `TARGET = Output/${graphName}.exe\n\n`;
       make += `all: $(TARGET)\n\n`;
-      make += `$(TARGET): main.cpp\n`;
+      make += `$(TARGET): ${sources}\n`;
       make += `\t@if not exist Output mkdir Output\n`;
-      make += `\t$(CXX) $(CXXFLAGS) main.cpp /Fe:$@ /link /nologo\n\n`;
+      make += `\t$(CXX) $(CXXFLAGS) ${sources} /Fe:$@ /link /nologo\n\n`;
       make += `clean:\n`;
       make += `\t@if exist Output rd /s /q Output\n`;
       this.codeCache.make = make;

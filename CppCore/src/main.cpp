@@ -235,6 +235,9 @@ void ui_generate_cpp_code(webui::window::event* e) {
             f << content;
         };
         writeFile("main.cpp", taskforge::compiler::TaskflowGenerator::generateSource(graph));
+        auto subflowSources = taskforge::compiler::TaskflowGenerator::generateSubflowSources(graph);
+        auto subflowIt = subflowSources.find("subflows.cpp");
+        if (subflowIt != subflowSources.end()) writeFile("subflows.cpp", subflowIt->second);
         writeFile("CMakeLists.txt", taskforge::compiler::TaskflowGenerator::generateCMakeLists(graph));
         writeFile("Makefile", taskforge::compiler::TaskflowGenerator::generateMakefile(graph));
         auto msvcScripts = taskforge::compiler::TaskflowGenerator::generateMsvcBuildScript(graph);
