@@ -103,8 +103,9 @@ um destino de interação também traz `answers`. O texto final do alvo também 
 `.arestrix/out/<target>.txt`.
 
 Veja [`examples/06-chamada-agente`](../examples/06-chamada-agente) para um coordenador chamando um
-especialista e [`examples/09-chamadas-paralelas`](../examples/09-chamadas-paralelas) para duas
-delegações no mesmo turno.
+especialista, [`examples/09-chamadas-paralelas`](../examples/09-chamadas-paralelas) para duas
+delegações no mesmo turno e [`examples/10-subflow-chamavel`](../examples/10-subflow-chamavel) para um
+subflow nativo chamável.
 
 ## Vértices de interação
 

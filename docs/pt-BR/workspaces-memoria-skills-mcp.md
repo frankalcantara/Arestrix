@@ -35,6 +35,30 @@ Cada projeto no Arestrix é mapeado para um **repositório Git independente** em
 3. **Segurança Absoluta (Zero-Secrets no Arestrix):** Nenhum dado de autenticação, senha ou Personal Access Token (PAT) é registrado nos arquivos, manifestos ou banco do Arestrix. O processo de registro de identidade e autenticação é orientado pelo Arestrix mas gerenciado **exclusivamente pelo Sistema Operacional** através do **Git Credential Manager (GCM)** / Cofre de Credenciais do Windows.
 4. **Repositórios Privados por Padrão:** Novos repositórios são criados de forma automática e transparente com o nome do projeto e marcados obrigatoriamente como **privados** (`isPrivate: true`).
 5. **Aviso de Governança para Serviços Comerciais:** Quando o servidor configurado for um serviço comercial externo (como `github.com` ou `gitlab.com`), o Arestrix exibe obrigatoriamente um aviso legal de que os dados do projeto (instruções de agentes, grafos e metadados) residirão em infraestrutura de terceiros fora do controle do software, exigindo consentimento explícito do usuário.
+6. **Conformidade com Políticas de Uso do GitHub e Exclusão Binária:** Em conformidade estrita com as Políticas de Uso Aceitável do GitHub (*Acceptable Use Policies* - combate a *Excessive Bandwidth Use* e proibição de uso do repositório como armazenamento geral de banco de dados ativo), **arquivos binários SQLite (`*.sqlite`, `*.db`, arquivos de lock e WAL) nunca são versionados no Git**. Em substituição, o Arestrix utiliza uma arquitetura de dumps em texto puro (`storage/database.sql`) e snapshots declarativos de memória (`storage/memory.dump.json`), gerenciados pelo `DatabaseBackupService`.
+
+### Bancos de dados, versionamento seguro e recuperação de desastre
+
+O Arestrix opera com dois bancos de dados SQLite no escopo de cada projeto:
+
+1. **Banco Operacional / Analítico do Projeto (`storage/database.sqlite`):** Armazena tabelas manipuladas pelos agentes e nós do pipeline via MCP `workspace-sqlite` ou ferramentas nativas (`sql_query`, `sql_execute`), além de tabelas importadas (ex: planilhas Excel via `ImportExcelModal`).
+2. **Banco de Memória Cognitiva AMG (`.arestrix/memory/memory.db`):** Armazena o multigrafo temporal de aprendizado dos agentes (lições aprendidas, relações conceituais, Blackboard compartilhado e telemetria de tokens).
+
+#### Por que o banco binário não é enviado ao GitHub?
+* **Limites de Repositório do GitHub:** O GitHub recomenda manter repositórios com menos de 1 GB (com teto recomendado de 5 GB a 10 GB) e bloqueia sumariamente arquivos individuais acima de 100 MB.
+* **Inflamento Rápido do Histórico (Packfiles):** Bancos SQLite são arquivos binários mutáveis. Cada execução do pipeline altera páginas no arquivo; como o Git não calcula diffs de texto em binários, uma cópia inteira do arquivo seria adicionada ao histórico a cada commit, inflando o repositório em poucos dias.
+* **Políticas de Uso Aceitável:** O GitHub proíbe expressamente o uso de repositórios como serviço de backup automatizado em nuvem ou hospedagem de banco de dados ativo.
+
+#### Ciclo de Dump em Texto e Restauração Transparente (`DatabaseBackupService`)
+
+Para manter conformidade total com o GitHub sem abrir mão da segurança dos dados do projeto, o Arestrix implementa um ciclo automatizado de **Dump em Texto e Auto-Recuperação**:
+
+* **Exportação no Encerramento (`onShutdown`):**
+  * **Banco Operacional (`storage/database.sql`):** Exporta um script SQL em texto plano contendo o esquema DDL completo (`CREATE TABLE`, `CREATE INDEX`, `CREATE VIEW`) e todos os dados tabulares (`INSERT INTO` com escape seguro de caracteres e preservação de tipos numéricos e blobs).
+  * **Memória dos Agentes (`storage/memory.dump.json`):** Exporta um snapshot declarativo em JSON contendo os dados indispensáveis: as **lições aprendidas** (`lessons`) e o **Blackboard persistente** (`working`), descartando telemetrias efêmeras de contagem de tokens (`memory_usage`) e logs brutos de execuções passadas.
+* **Restauração Automática (*Disaster Recovery* / Clone limpo):**
+  * Ao clonar o projeto em um novo computador ou caso o arquivo `.sqlite` seja corrompido ou apagado acidentalmente, o Arestrix detecta na abertura do projeto que os binários físicos estão ausentes.
+  * O motor nativo C++ (`ProjectManager::loadProject`) executa a restauração automática do banco a partir de `storage/database.sql` e da memória a partir de `storage/memory.dump.json`, recriando as tabelas e o conhecimento dos agentes sem exigir comandos manuais do usuário.
 
 
 ## Padrões globais e herança
@@ -60,9 +84,10 @@ declara quais chaves pode ler ou escrever.
 ### O que existe hoje
 
 - Banco SQLite em `.arestrix/memory/memory.db` por projeto.
-- Esquema: `memory_scope`/`memory_scope_closure`, `memory_node`, `memory_edge`, `memory_episode`,
-  `memory_evidence`, `memory_audit`, `memory_working`, `memory_usage`, `memory_hit` e
-  `memory_node_fts` (FTS5).
+- Esquema estruturado em duas camadas:
+  * **Dados Indispensáveis (Cognitivos):** `memory_scope`/`memory_scope_closure` (hierarquia), `memory_node` (conceitos), `memory_edge` (lições aprendidas e relações semânticas com confiança/validade) e `memory_working` (Blackboard compartilhado de projeto).
+  * **Dados Efêmeros e Telemetria:** `memory_usage` (contagem de tokens, chamadas e latência), `memory_hit` (estatísticas de injeção em prompts para benchmark A/B), `memory_episode`/`memory_evidence` (logs brutos de execuções passadas) e `memory_node_fts` (índice virtual FTS5).
+- **Snapshot e Resiliência:** No encerramento da aplicação, o `DatabaseBackupService` exporta os dados indispensáveis para `storage/memory.dump.json`. Se o arquivo binário `.db` for excluído ou o projeto for clonado sem histórico local, a memória é reconstruída automaticamente a partir desse snapshot.
 - O runtime grava episódios sanitizados de sucesso e falha por agente, com tokens, retries,
   ferramentas e artefatos; não grava prompt/resposta brutos.
 - Escopo atual: **projeto** (`project:<projectId>`). Workspace e instituição entram nas próximas

@@ -103,8 +103,9 @@ interaction target also carries `answers`. The target's final text is also writt
 `.arestrix/out/<target>.txt`.
 
 See [`examples/06-chamada-agente`](../examples/06-chamada-agente) for a coordinator calling a
-specialist and [`examples/09-chamadas-paralelas`](../examples/09-chamadas-paralelas) for two
-delegations in one turn.
+specialist, [`examples/09-chamadas-paralelas`](../examples/09-chamadas-paralelas) for two
+delegations in one turn, and [`examples/10-subflow-chamavel`](../examples/10-subflow-chamavel) for a
+native callable subflow.
 
 ## Interaction vertices
 

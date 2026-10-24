@@ -35,6 +35,30 @@ Each project in Arestrix maps to an **independent Git repository** on a configur
 3. **Absolute Security (Zero-Secrets in Arestrix):** No credentials, passwords, or Personal Access Tokens (PAT) are stored in Arestrix files, manifests, or databases. Identity registration and authentication workflows are guided by Arestrix but managed **exclusively by the Operating System** via **Git Credential Manager (GCM)** / Windows Credential Store.
 4. **Private Repositories by Default:** Repositories are created automatically with the project name and strictly enforced as **private** (`isPrivate: true`).
 5. **Commercial Service Governance Warning:** When pointing to an external commercial Git host (e.g., `github.com` or `gitlab.com`), Arestrix displays a mandatory governance disclaimer reminding the user that project data (prompts, agent instructions, graphs, and metadata) will reside on third-party infrastructure outside Arestrix's custody, requiring explicit user consent.
+6. **GitHub Storage Compliance & Binary Database Exclusion:** In strict adherence to GitHub's Acceptable Use Policies (preventing Excessive Bandwidth Use and disallowing repositories from serving as active database hosts or general cloud drives), **binary SQLite files (`*.sqlite`, `*.db`, lock and WAL files) are never committed to Git**. Instead, Arestrix employs a declarative text dump architecture (`storage/database.sql`) and cognitive memory snapshots (`storage/memory.dump.json`) orchestrated by `DatabaseBackupService`.
+
+### Databases, Safe Versioning, and Disaster Recovery
+
+Arestrix manages two SQLite database files in each project's scope:
+
+1. **Operational / Analytical Project Database (`storage/database.sqlite`):** Stores structured business data manipulated by agents and pipeline nodes through the `workspace-sqlite` MCP or native tools (`sql_query`, `sql_execute`), as well as imported datasets (e.g., Excel workbooks via `ImportExcelModal`).
+2. **AMG Cognitive Memory Database (`.arestrix/memory/memory.db`):** Stores the temporal multigraph powering agent memory (learned lessons, semantic relations, shared project Blackboard, and token telemetry).
+
+#### Why Binary Databases are Excluded from GitHub
+* **GitHub Repository Size Limits:** GitHub recommends keeping repositories below 1 GB (with a practical ceiling of 5 GB to 10 GB) and strictly blocks pushes containing individual files larger than 100 MB.
+* **Packfile History Bloat:** SQLite files are mutable binaries. Every pipeline run mutates pages on disk; because Git cannot compute text-based line diffs on binaries, each commit would append a full binary blob, quickly causing repository bloat.
+* **Acceptable Use Policies:** GitHub explicitly prohibits using repositories primarily as an active database backend or general cloud storage backup service.
+
+#### Plaintext Dump & Self-Healing Restoration Cycle (`DatabaseBackupService`)
+
+To maintain complete compliance with GitHub while guaranteeing zero data loss, Arestrix features an automated **Plaintext Dump and Self-Healing Restoration** cycle:
+
+* **Export on Application Shutdown (`onShutdown`):**
+  * **Operational Database (`storage/database.sql`):** Generates a complete plaintext SQL script containing both DDL definitions (`CREATE TABLE`, `CREATE INDEX`, `CREATE VIEW`) and row-by-row data (`INSERT INTO` statements with robust character escaping and type preservation for numbers and blobs).
+  * **Agent Memory (`storage/memory.dump.json`):** Generates a formatted JSON snapshot of indispensable cognitive knowledge: **learned lessons** (`lessons`) and the **shared Blackboard** (`working`), excluding disposable telemetry (`memory_usage`) and raw execution logs.
+* **Automatic Disaster Recovery / Clean Clone:**
+  * When cloning the project onto a fresh machine or if a local `.sqlite` file is deleted or corrupted, Arestrix detects the missing physical database upon project load.
+  * The native C++ engine (`ProjectManager::loadProject`) automatically rebuilds the operational database from `storage/database.sql` and rehydrates agent memory from `storage/memory.dump.json` without requiring any manual terminal commands.
 
 
 ## Global defaults and inheritance
@@ -60,9 +84,10 @@ which keys it may read or write.
 ### What exists today
 
 - SQLite database at `.arestrix/memory/memory.db` per project.
-- Schema: `memory_scope`/`memory_scope_closure`, `memory_node`, `memory_edge`, `memory_episode`,
-  `memory_evidence`, `memory_audit`, `memory_working`, `memory_usage`, `memory_hit` and
-  `memory_node_fts` (FTS5).
+- Dual-tier schema architecture:
+  * **Indispensable (Cognitive Data):** `memory_scope`/`memory_scope_closure` (hierarchy), `memory_node` (concepts), `memory_edge` (learned lessons and semantic relations with confidence and temporal validity) and `memory_working` (shared project Blackboard).
+  * **Disposable Telemetry & Cache:** `memory_usage` (prompt/completion tokens, calls, and latency), `memory_hit` (prompt injection hit statistics for A/B evaluations), `memory_episode`/`memory_evidence` (raw logs of previous runs) and `memory_node_fts` (FTS5 virtual index).
+- **Snapshot & Resilience:** On application shutdown, `DatabaseBackupService` exports all indispensable memory into `storage/memory.dump.json`. If the physical `.db` file is lost or cloned clean, memory is automatically rehydrated from this snapshot.
 - The runtime records sanitized success/failure episodes per agent with tokens, retries, tools and
   artifacts; it does not store raw prompts/responses.
 - Current scope: **project** (`project:<projectId>`). Workspace and institution arrive in later
