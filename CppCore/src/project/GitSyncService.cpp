@@ -1,4 +1,6 @@
 #include "GitSyncService.hpp"
+#include "DatabaseBackupService.hpp"
+#include "ProjectManager.hpp"
 #include "platform/Process.hpp"
 #include <algorithm>
 #include <cctype>
@@ -241,6 +243,72 @@ GitStatusResult GitSyncService::getStatus(const std::filesystem::path& projectRo
     return st;
 }
 
+void GitSyncService::ensureSafeGitignore(const std::filesystem::path& projectRoot) {
+    if (projectRoot.empty() || !std::filesystem::exists(projectRoot)) return;
+    std::filesystem::path ignorePath = projectRoot / ".gitignore";
+
+    const std::vector<std::string> requiredRules = {
+        "build/",
+        "dist/",
+        "*.exe",
+        "*.obj",
+        "*.o",
+        "*.pdb",
+        "*.ilk",
+        "*.tmp",
+        "storage/*.sqlite",
+        "storage/*.sqlite3",
+        "storage/*.db",
+        "storage/*.sqlite-journal",
+        "storage/*.sqlite-wal",
+        "storage/*.sqlite-shm",
+        "*.sqlite",
+        "*.sqlite3",
+        "*.db",
+        "*.sqlite-journal",
+        "*.sqlite-wal",
+        "*.sqlite-shm",
+        "output/",
+        ".arestrix/",
+        "workspace/",
+        ".env",
+        ".env.local",
+        "node_modules/"
+    };
+
+    if (!std::filesystem::exists(ignorePath)) {
+        std::ofstream ig(ignorePath);
+        if (ig.is_open()) {
+            ig << "# Arestrix Project Gitignore\n";
+            for (const auto& r : requiredRules) {
+                ig << r << "\n";
+            }
+        }
+        return;
+    }
+
+    std::ifstream in(ignorePath);
+    std::string existingContent((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+
+    std::vector<std::string> toAppend;
+    for (const auto& r : requiredRules) {
+        if (existingContent.find(r) == std::string::npos) {
+            toAppend.push_back(r);
+        }
+    }
+
+    if (!toAppend.empty()) {
+        std::ofstream out(ignorePath, std::ios::app);
+        if (out.is_open()) {
+            out << "\n# Regras de seguranca de dados Arestrix (exclusao de bancos binarios)\n";
+            for (const auto& r : toAppend) {
+                out << r << "\n";
+            }
+        }
+    }
+}
+
 bool GitSyncService::initProjectRepo(const std::filesystem::path& projectRoot, const std::string& remoteUrl, std::string& error) {
     if (!platform::commandExists("git")) {
         error = "Git nao encontrado no sistema.";
@@ -273,28 +341,8 @@ bool GitSyncService::initProjectRepo(const std::filesystem::path& projectRoot, c
         }
     }
 
-    // Garante .gitignore seguro na pasta do projeto
-    std::filesystem::path ignorePath = projectRoot / ".gitignore";
-    if (!std::filesystem::exists(ignorePath)) {
-        std::ofstream ig(ignorePath);
-        if (ig.is_open()) {
-            ig << "# Arestrix Project Gitignore\n"
-               << "build/\n"
-               << "dist/\n"
-               << "*.exe\n"
-               << "*.obj\n"
-               << "*.o\n"
-               << "*.pdb\n"
-               << "*.ilk\n"
-               << "*.tmp\n"
-               << "storage/*.sqlite-journal\n"
-               << "storage/*.sqlite-wal\n"
-               << "storage/*.sqlite-shm\n"
-               << ".env\n"
-               << ".env.local\n"
-               << "node_modules/\n";
-        }
-    }
+    // Garante .gitignore seguro na pasta do projeto com exclusao de bancos binarios
+    ensureSafeGitignore(projectRoot);
 
     // Configura o remote se fornecido
     if (!remoteUrl.empty()) {
@@ -439,8 +487,30 @@ bool GitSyncService::commitAndPush(const std::filesystem::path& projectRoot,
 }
 
 void GitSyncService::onShutdown(const std::filesystem::path& projectRoot) {
-    if (projectRoot.empty() || !std::filesystem::exists(projectRoot / ".git")) return;
+    if (projectRoot.empty()) return;
 
+    std::cout << "[GitSyncService] Executando rotina de encerramento do projeto...\n";
+
+    // 1. Executa backup e dump de bancos de dados para recuperacao de desastre
+    std::string backupErr;
+    auto cur = taskforge::project::ProjectManager::getInstance().getCurrentProject();
+    DatabaseBackupService::performProjectShutdownBackup(projectRoot, cur.projectId, backupErr);
+    if (!backupErr.empty()) {
+        std::cerr << "[GitSyncService] Aviso no backup de encerramento: " << backupErr << "\n";
+    }
+
+    if (!std::filesystem::exists(projectRoot / ".git")) return;
+
+    // 2. Remove arquivos binarios SQLite do rastreamento do Git caso tenham sido commitados anteriormente
+    {
+        platform::ProcessSpec rmSpec;
+        rmSpec.argv = {"git", "rm", "--cached", "--ignore-unmatch", "storage/*.sqlite", "storage/*.sqlite3", "storage/*.db", "*.sqlite", "*.db"};
+        rmSpec.workingDir = projectRoot;
+        rmSpec.scrubSecrets = true;
+        platform::run(rmSpec, 5000);
+    }
+
+    // 3. Executa commit e push de encerramento
     std::cout << "[GitSyncService] Executando sincronizacao Git de encerramento do sistema...\n";
     std::string out, err;
     std::string msg = "Auto-commit on shutdown: " + getCurrentIsoTime();

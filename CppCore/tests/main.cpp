@@ -23,6 +23,8 @@
 #include "platform/Process.hpp"
 #include "project/OpenableFiles.hpp"
 #include "project/GitSyncService.hpp"
+#include "project/DatabaseBackupService.hpp"
+#include "sqlite3.h"
 #include "project/RunnerService.hpp"
 #include "project/CorporateVault.hpp"
 #include "project/RunnerSecurity.hpp"
@@ -621,6 +623,56 @@ TEST(interaction_generator_inherits_global_model) {
     CHECK(spec["generator"]["provider"] == "deepseek");
     CHECK(spec["generator"]["model"] == "deepseek-flash");
     CHECK(spec["generator"]["fallback"] == "fail");
+}
+
+TEST(subflow_callable_emits_native_function) {
+    using taskforge::compiler::TaskflowGenerator;
+    json childSchema = {
+        {"version", "1.0.0"},
+        {"metadata", {{"graphName", "Child"}, {"projectId", "test"}, {"targetStandard", "C++20"}}},
+        {"nodes", json::array({
+            json{{"id", "child_task"}, {"label", "ChildTask"}, {"type", "static"},
+                 {"position", {{"x", 0}, {"y", 0}}},
+                 {"inputs", json::array()}, {"outputs", json::array()},
+                 {"parameters", json::object()}, {"customLambdaBody", "std::cout << \"child\\n\";"}}
+        })},
+        {"edges", json::array()}
+    };
+    json schema = {
+        {"version", "1.0.0"},
+        {"metadata", {{"graphName", "Parent"}, {"projectId", "test"}, {"targetStandard", "C++20"}}},
+        {"nodes", json::array({
+            json{{"id", "caller"}, {"label", "Caller"}, {"type", "agent"},
+                 {"position", {{"x", 0}, {"y", 0}}},
+                 {"inputs", json::array()},
+                 {"outputs", json::array({json{{"id", "caller_out_call"}, {"name", "call"}, {"direction", "output"}, {"type", "call"}}})},
+                 {"parameters", json::object()}, {"customLambdaBody", ""}},
+            json{{"id", "child"}, {"label", "Child"}, {"type", "subflow"},
+                 {"position", {{"x", 300}, {"y", 0}}},
+                 {"inputs", json::array()}, {"outputs", json::array()},
+                 {"parameters", json::object()}, {"customLambdaBody", ""},
+                 {"childGraph", childSchema}}
+        })},
+        {"edges", json::array({
+            json{{"id", "call_child"}, {"sourceNodeId", "caller"}, {"sourcePortId", "caller_out_call"},
+                 {"targetNodeId", "child"}, {"targetPortId", "child_in"}, {"kind", "call"},
+                 {"callSettings", {{"maxCalls", 1}, {"onError", "fail"}}}}
+        })}
+    };
+    taskforge::core::Graph graph;
+    graph.fromJson(schema);
+    std::string parentSource = TaskflowGenerator::generateSource(graph);
+    CHECK(parentSource.find("registerSubflow(\"child\"") != std::string::npos);
+    CHECK(parentSource.find("arx_subflow_0_child_run") != std::string::npos);
+    auto sources = TaskflowGenerator::generateSubflowSources(graph);
+    CHECK(sources.count("subflows.cpp") == 1);
+    if (sources.count("subflows.cpp")) {
+        CHECK(sources["subflows.cpp"].find("namespace arx_subflow_0_child") != std::string::npos);
+        CHECK(sources["subflows.cpp"].find("int arx_main(") != std::string::npos);
+        CHECK(sources["subflows.cpp"].find("arx_subflow_0_child_run") != std::string::npos);
+        CHECK(sources["subflows.cpp"].find("const std::string& arx_subflow_input") != std::string::npos);
+        CHECK(sources["subflows.cpp"].find("&arx_subflow_input") != std::string::npos);
+    }
 }
 
 TEST(interaction_runtime_reads_answers_file) {
@@ -3018,6 +3070,105 @@ TEST(git_sync_service_and_project_manifest_config) {
     std::string uName, uEmail;
     bool hasId = GitSyncService::getSystemIdentity(uName, uEmail);
     CHECK(hasId && !uName.empty());
+}
+
+TEST(database_backup_service_dump_restore_and_safe_gitignore) {
+    using namespace taskforge::project;
+    namespace fs = std::filesystem;
+
+    fs::path tempRoot = fs::temp_directory_path() / ("arx_test_db_backup_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()));
+    fs::create_directories(tempRoot / "storage");
+
+    // 1. Validacao do .gitignore seguro
+    GitSyncService::ensureSafeGitignore(tempRoot);
+    fs::path gitignorePath = tempRoot / ".gitignore";
+    CHECK(fs::exists(gitignorePath));
+    std::ifstream ig(gitignorePath);
+    std::string igContent((std::istreambuf_iterator<char>(ig)), std::istreambuf_iterator<char>());
+    ig.close();
+    CHECK(igContent.find("storage/*.sqlite") != std::string::npos);
+    CHECK(igContent.find("storage/*.db") != std::string::npos);
+    CHECK(igContent.find("*.sqlite") != std::string::npos);
+    CHECK(igContent.find("output/") != std::string::npos);
+    CHECK(igContent.find(".arestrix/") != std::string::npos);
+
+    // 2. Criacao de banco de dados SQLite com dados variados
+    fs::path dbPath = tempRoot / "storage" / "database.sqlite";
+    fs::path sqlPath = tempRoot / "storage" / "database.sql";
+
+    sqlite3* db = nullptr;
+    CHECK(sqlite3_open_v2(dbPath.string().c_str(), &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr) == SQLITE_OK);
+    const char* setupSql =
+        "CREATE TABLE clientes (id INTEGER PRIMARY KEY, nome TEXT, saldo REAL, nota TEXT);"
+        "INSERT INTO clientes VALUES (1, 'João D''Ávila', 1500.50, 'Nota com aspas simples');"
+        "INSERT INTO clientes VALUES (2, 'Maria Santos', 3200.00, NULL);"
+        "CREATE TABLE configuracoes (chave TEXT PRIMARY KEY, valor TEXT);"
+        "INSERT INTO configuracoes VALUES ('tema', 'dark');";
+    CHECK(sqlite3_exec(db, setupSql, nullptr, nullptr, nullptr) == SQLITE_OK);
+    sqlite3_close(db);
+
+    // 3. Exportacao de dump SQL (Opcao A: DDL + Dados)
+    std::string err;
+    bool dumpOk = DatabaseBackupService::exportSqlDump(dbPath, sqlPath, err);
+    CHECK(dumpOk);
+    CHECK(fs::exists(sqlPath));
+
+    std::ifstream sqlIn(sqlPath);
+    std::string sqlDumpContent((std::istreambuf_iterator<char>(sqlIn)), std::istreambuf_iterator<char>());
+    sqlIn.close();
+    CHECK(sqlDumpContent.find("CREATE TABLE clientes") != std::string::npos);
+    CHECK(sqlDumpContent.find("João D''Ávila") != std::string::npos);
+    CHECK(sqlDumpContent.find("CREATE TABLE configuracoes") != std::string::npos);
+    CHECK(sqlDumpContent.find("INSERT INTO \"clientes\"") != std::string::npos);
+
+    // 4. Simulacao de desastre: exclui o arquivo binario .sqlite
+    fs::remove(dbPath);
+    CHECK(!fs::exists(dbPath));
+
+    // 5. Restauracao do banco a partir do dump SQL em texto puro
+    bool restoreOk = DatabaseBackupService::restoreFromSqlDump(sqlPath, dbPath, false, err);
+    CHECK(restoreOk);
+    CHECK(fs::exists(dbPath));
+
+    // Valida que os dados foram recuperados perfeitamente no novo .sqlite
+    sqlite3* dbRestored = nullptr;
+    CHECK(sqlite3_open_v2(dbPath.string().c_str(), &dbRestored, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK);
+    sqlite3_stmt* stmt = nullptr;
+    CHECK(sqlite3_prepare_v2(dbRestored, "SELECT nome, saldo FROM clientes WHERE id = 1;", -1, &stmt, nullptr) == SQLITE_OK);
+    CHECK(sqlite3_step(stmt) == SQLITE_ROW);
+    std::string nomeRec = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+    double saldoRec = sqlite3_column_double(stmt, 1);
+    CHECK(nomeRec == "João D'Ávila");
+    CHECK(std::abs(saldoRec - 1500.50) < 0.001);
+    sqlite3_finalize(stmt);
+    sqlite3_close(dbRestored);
+
+    // 6. Teste de Snapshot de Memoria Cognitiva (Lições e Blackboard)
+    std::string testProjId = "test_snap_proj";
+    auto& mem = taskforge::memory::MemoryService::getInstance();
+    mem.configure(testProjId, true);
+    mem.recordLesson(testProjId, "compilacao", "MSVC C2065", "Sempre incluir headers C++20 necessarios", "node_build", "teste");
+    mem.setWorking(testProjId, "item_42", "status_tarefa", "concluido_sucesso");
+
+    fs::path snapPath = tempRoot / "storage" / "memory.dump.json";
+    bool snapExportOk = DatabaseBackupService::exportMemorySnapshot(testProjId, snapPath, err);
+    CHECK(snapExportOk);
+    CHECK(fs::exists(snapPath));
+
+    // Limpa memoria e restaura a partir do JSON
+    mem.clearProject(testProjId);
+    bool snapRestoreOk = DatabaseBackupService::restoreMemorySnapshot(testProjId, snapPath, err);
+    CHECK(snapRestoreOk);
+
+    auto lessonsRestored = mem.getLessons(testProjId);
+    CHECK(!lessonsRestored.empty());
+    CHECK(lessonsRestored[0].lessonRule == "Sempre incluir headers C++20 necessarios");
+    auto workingRestored = mem.getWorking(testProjId, "item_42", "status_tarefa");
+    CHECK(workingRestored.is_string() && workingRestored.str() == "concluido_sucesso");
+
+    // Limpeza
+    std::error_code removeEc;
+    fs::remove_all(tempRoot, removeEc);
 }
 
 TEST(standalone_runner_service_and_manifest_config) {

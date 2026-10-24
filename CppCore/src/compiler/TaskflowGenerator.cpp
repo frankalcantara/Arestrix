@@ -279,6 +279,15 @@ bool isSubflowTarget(const core::NodeData& node) {
     return node.type == core::TaskflowNodeType::Subflow || node.type == core::TaskflowNodeType::Module;
 }
 
+bool graphHasCallableSubflow(const core::Graph& graph) {
+    for (const auto* edge : sortedEdges(graph)) {
+        if (edge->kind != core::EdgeKind::Call) continue;
+        auto it = graph.getNodes().find(edge->targetNodeId);
+        if (it != graph.getNodes().end() && isSubflowTarget(it->second)) return true;
+    }
+    return false;
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -1185,6 +1194,7 @@ std::string TaskflowGenerator::generateCMakeLists(const core::Graph& graph) {
     const auto& meta = graph.getMetadata();
     std::string binName = meta.compilerConfig.outputBinaryName.empty() ? "pipeline_app" : meta.compilerConfig.outputBinaryName;
     std::string proj = sanitizeIdentifier(meta.graphName.empty() ? "pipeline" : meta.graphName);
+    const std::string sources = graphHasCallableSubflow(graph) ? "main.cpp subflows.cpp" : "main.cpp";
 
     return "cmake_minimum_required(VERSION 3.20)\n"
            "project(" + proj + " CXX)\n\n"
@@ -1202,7 +1212,7 @@ std::string TaskflowGenerator::generateCMakeLists(const core::Graph& graph) {
            "  add_compile_options(-Wall -Wextra -O3 -pthread)\n"
            "endif()\n\n"
            "find_library(ARESTRIX_CORE arestrix_core PATHS \"${ARESTRIX_HOME}/runtime/lib\" NO_DEFAULT_PATH REQUIRED)\n"
-           "add_executable(" + binName + " main.cpp)\n"
+           "add_executable(" + binName + " " + sources + ")\n"
            "target_include_directories(" + binName + " PRIVATE\n"
            "  \"${ARESTRIX_HOME}/third_party/taskflow\"\n"
            "  \"${ARESTRIX_HOME}/CppCore/src\"\n"
@@ -1217,6 +1227,7 @@ std::string TaskflowGenerator::generateCMakeLists(const core::Graph& graph) {
 std::string TaskflowGenerator::generateMakefile(const core::Graph& graph) {
     const auto& meta = graph.getMetadata();
     std::string binName = meta.compilerConfig.outputBinaryName.empty() ? "pipeline_app" : meta.compilerConfig.outputBinaryName;
+    const std::string sources = graphHasCallableSubflow(graph) ? "main.cpp subflows.cpp" : "main.cpp";
 
     return "# Makefile para " + commentSafe(meta.graphName) + " (C++20)\n"
            "# Use: make ARESTRIX_HOME=/caminho/do/arestrix\n"
@@ -1227,8 +1238,8 @@ std::string TaskflowGenerator::generateMakefile(const core::Graph& graph) {
            "  -I$(ARESTRIX_HOME)/third_party/simdjson/singleheader\n"
            "TARGET = " + binName + "\n\n"
            "all: $(TARGET)\n\n"
-           "$(TARGET): main.cpp\n"
-           "\t$(CXX) $(CXXFLAGS) main.cpp $(ARESTRIX_HOME)/runtime/lib/libarestrix_core.a -o $(TARGET)\n\n"
+           "$(TARGET): " + sources + "\n"
+           "\t$(CXX) $(CXXFLAGS) " + sources + " $(ARESTRIX_HOME)/runtime/lib/libarestrix_core.a -o $(TARGET)\n\n"
            "clean:\n"
            "\trm -f $(TARGET) $(TARGET).exe\n";
 }
@@ -1241,7 +1252,8 @@ TaskflowGenerator::MsvcScripts TaskflowGenerator::generateMsvcBuildScript(const 
         "/nologo /std:c++20 /EHsc /O2 /MD /utf-8 /permissive- /Zc:__cplusplus "
         "/I\"%ARESTRIX_HOME%\\third_party\\taskflow\" /I\"%ARESTRIX_HOME%\\CppCore\\src\" "
         "/I\"%ARESTRIX_HOME%\\third_party\\simdjson\\singleheader\" "
-        "main.cpp /Fe:\"" + binName + ".exe\" "
+        + std::string(graphHasCallableSubflow(graph) ? "main.cpp subflows.cpp /Fe:\"" : "main.cpp /Fe:\"") +
+        binName + ".exe\" "
         "/link \"%ARESTRIX_HOME%\\runtime\\lib\\arestrix_core.lib\" winhttp.lib ws2_32.lib advapi32.lib ole32.lib shell32.lib user32.lib";
 
     MsvcScripts scripts;

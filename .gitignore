@@ -43,6 +43,9 @@ taskforge-recent-projects.json
 *.sqlite
 *.sqlite3
 *.db
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
 /arestrix-blackboard-*.json
 /arestrix-memory-*.json
 

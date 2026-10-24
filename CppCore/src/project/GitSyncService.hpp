@@ -66,6 +66,9 @@ public:
     // Status completo do Git para a pasta do projeto
     static GitStatusResult getStatus(const std::filesystem::path& projectRoot);
 
+    // Garante que o .gitignore na pasta do projeto contenha regras estritas de exclusao de bancos SQLite e artefatos
+    static void ensureSafeGitignore(const std::filesystem::path& projectRoot);
+
     // Inicializa o repositorio local (git init) e define o remote se necessario
     static bool initProjectRepo(const std::filesystem::path& projectRoot, const std::string& remoteUrl, std::string& error);
 

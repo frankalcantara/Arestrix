@@ -180,6 +180,7 @@ add_library(arestrix_core STATIC
   ${SRC}/memory/MemoryService.cpp
   ${SRC}/project/OpenableFiles.cpp
   ${SRC}/project/GitSyncService.cpp
+  ${SRC}/project/DatabaseBackupService.cpp
   ${SRC}/project/RunnerService.cpp
   ${SRC}/project/CorporateVault.cpp
   ${SRC}/project/RunnerSecurity.cpp
@@ -338,7 +339,8 @@ if(ARESTRIX_BUILD_TESTS)
     ${CMAKE_SOURCE_DIR}/CppCore/tests/main.cpp
     ${SRC}/core/Graph.cpp
     ${SRC}/compiler/TaskflowGenerator.cpp
-    ${SRC}/build/BuildService.cpp)
+    ${SRC}/build/BuildService.cpp
+    ${SRC}/project/ProjectManager.cpp)
   target_link_libraries(arestrix_tests PRIVATE arestrix_gateway_core arestrix_core arestrix_security_flags)
   add_test(NAME arestrix_tests COMMAND arestrix_tests WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endif()

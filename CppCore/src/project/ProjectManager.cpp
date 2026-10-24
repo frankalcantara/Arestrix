@@ -1,4 +1,5 @@
 #include "ProjectManager.hpp"
+#include "DatabaseBackupService.hpp"
 #include "util/Json.hpp"
 #include "../memory/AgentBlackboard.hpp"
 #include "../memory/SemanticMemoryEngine.hpp"
@@ -158,6 +159,9 @@ bool ProjectManager::createProject(ProjectManifest manifest) {
     // Sincroniza escopo nos motores de memória
     taskforge::memory::AgentBlackboard::getInstance().clearSession(manifest.projectId);
 
+    std::string restoreErr;
+    DatabaseBackupService::restoreProjectIfNeeded(manifest.rootPath, manifest.projectId, restoreErr);
+
     std::cout << "[ProjectManager] Projeto '" << manifest.name << "' (" << manifest.projectId << ") criado em: " << manifest.rootPath << "\n";
     return true;
 }
@@ -209,6 +213,9 @@ bool ProjectManager::loadProject(const std::string& pathOrDir) {
         item.manifestPath = manifestPath.string();
         item.lastOpened = manifest.updatedAt;
         addRecentProject(item);
+
+        std::string restoreErr;
+        DatabaseBackupService::restoreProjectIfNeeded(manifest.rootPath, manifest.projectId, restoreErr);
 
         std::cout << "[ProjectManager] Projeto '" << manifest.name << "' carregado com sucesso.\n";
         return true;

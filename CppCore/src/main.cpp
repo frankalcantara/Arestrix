@@ -11,6 +11,7 @@
 #include "mcp/McpRegistry.hpp"
 #include "project/ProjectManager.hpp"
 #include "project/GitSyncService.hpp"
+#include "project/DatabaseBackupService.hpp"
 #include "project/RunnerService.hpp"
 #include "project/OpenableFiles.hpp"
 #include "assistant/AssistantSession.hpp"
@@ -2007,6 +2008,11 @@ void ui_git_commit_push(webui::window::event* e) {
         if (root.empty()) root = taskforge::project::ProjectManager::getInstance().getCurrentProject().rootPath;
         std::string msg = j.value("message", "");
         std::string branch = j.value("branch", "main");
+        if (msg.find("shutdown") != std::string::npos || msg.find("Shutdown") != std::string::npos) {
+            std::string bErr;
+            auto cur = taskforge::project::ProjectManager::getInstance().getCurrentProject();
+            taskforge::project::DatabaseBackupService::performProjectShutdownBackup(root, cur.projectId, bErr);
+        }
         std::string out, err;
         bool ok = taskforge::project::GitSyncService::commitAndPush(root, msg, branch, out, err);
         taskforge::Json res = {{"ok", ok}, {"output", out}, {"error", err}};
@@ -2099,8 +2105,12 @@ void exit_app(webui::window::event* e) {
     std::cout << "[C++] Comando de encerramento recebido." << std::endl;
     taskforge::local::LocalRuntime::instance().stopServer();
     auto cur = taskforge::project::ProjectManager::getInstance().getCurrentProject();
-    if (cur.git.enabled && cur.git.autoCommitOnShutdown && !cur.rootPath.empty()) {
-        taskforge::project::GitSyncService::onShutdown(cur.rootPath);
+    if (!cur.rootPath.empty()) {
+        std::string bErr;
+        taskforge::project::DatabaseBackupService::performProjectShutdownBackup(cur.rootPath, cur.projectId, bErr);
+        if (cur.git.enabled && cur.git.autoCommitOnShutdown) {
+            taskforge::project::GitSyncService::onShutdown(cur.rootPath);
+        }
     }
     webui::exit();
 }
@@ -2564,8 +2574,12 @@ int main(int argc, char** argv) {
     webui::wait();
     taskforge::local::LocalRuntime::instance().stopServer();
     auto curProj = taskforge::project::ProjectManager::getInstance().getCurrentProject();
-    if (curProj.git.enabled && curProj.git.autoCommitOnShutdown && !curProj.rootPath.empty()) {
-        taskforge::project::GitSyncService::onShutdown(curProj.rootPath);
+    if (!curProj.rootPath.empty()) {
+        std::string bErr;
+        taskforge::project::DatabaseBackupService::performProjectShutdownBackup(curProj.rootPath, curProj.projectId, bErr);
+        if (curProj.git.enabled && curProj.git.autoCommitOnShutdown) {
+            taskforge::project::GitSyncService::onShutdown(curProj.rootPath);
+        }
     }
     taskforge::mcp::McpClient::shutdownSessions();   // encerra os servidores MCP que ficaram abertos
     return 0;

@@ -94,6 +94,16 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   `ARESTRIX_PARALLEL_CALLS=0` disables the parallel path.
 - `examples/09-chamadas-paralelas` and the E2E cover two specialists delegated in one turn, with the
   call graph still closed to the declared targets.
+- **Callable subflow (phase 4B):** a `subflow` target with a `childGraph` is compiled into a native
+  function in the same executable. The runtime registers it, passes the call input as `inputContext`
+  to child agents/interactions, runs the nested graph and returns the child output artifact. Nested
+  call edges/subflows are rejected in v1.
+- `examples/10-subflow-chamavel` and the E2E cover a coordinator calling a subflow, the nested worker
+  receiving the call input, the child artifact and the returned text.
+- **Database disaster recovery and Git sync safety:** binary SQLite databases are excluded from Git
+  tracking in accordance with GitHub Acceptable Use Policies; `DatabaseBackupService` exports clean
+  text SQL dumps (`storage/database.sql`) and cognitive memory snapshots (`storage/memory.dump.json`)
+  on shutdown, and automatically restores them upon loading projects or cloning repositories.
 
 ## [1.5.0-beta.1] - 2026-10-19
 
