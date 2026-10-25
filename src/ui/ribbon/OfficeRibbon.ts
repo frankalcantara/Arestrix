@@ -2,7 +2,7 @@ import { Graph } from '../../core/Graph.ts';
 import { GraphValidator } from '../../core/Validator.ts';
 import { Viewport } from '../../view/Viewport.ts';
 import { CodeModal } from '../CodeModal.ts';
-import { TaskflowNodeType, INodeData } from '../../core/types.ts';
+import { TaskflowNodeType, INodeData, INodeAgentSettings, IOutputSettings, ISwitchSettings, defaultOutputSettings, defaultSwitchSettings } from '../../core/types.ts';
 import { PipelineRunner } from '../../core/PipelineRunner.ts';
 import { AddNodeCommand, RemoveNodeCommand, UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
 import { cloneNodeData } from '../../core/NodeClipboard.ts';
@@ -1391,7 +1391,7 @@ export class OfficeRibbon {
         const modelName = this.selectedNode.agentSettings?.model?.model || 'gpt-4o';
         const isolation = this.selectedNode.agentSettings?.sandbox?.isolationLevel || 'process';
         const temp = this.selectedNode.agentSettings?.model?.temperature ?? 0.7;
-        const timeoutSec = Math.round((this.selectedNode.agentSettings?.sandbox?.timeoutMs || 30000) / 1000);
+        const timeoutSec = Math.round(this.selectedNode.agentSettings?.sandbox?.timeoutSeconds ?? 30);
 
         typeSpecificGroups = `
           <!-- Grupo 1: Cérebro & LLM -->
@@ -1645,7 +1645,7 @@ export class OfficeRibbon {
       }
 
       case 'call': {
-        const srcKind = this.selectedNode.callVertexSettings?.source?.kind || 'previous';
+        const srcKind = this.selectedNode.callSettings?.source?.kind || 'previous';
         typeSpecificGroups = `
           <!-- Grupo 1: Chamada de Fluxo -->
           <div class="office-ribbon-group">
@@ -1851,10 +1851,15 @@ export class OfficeRibbon {
     if (input !== null) {
       const val = parseFloat(input);
       if (!isNaN(val) && val >= 0 && val <= 2) {
-        const nextSettings = {
-          ...this.selectedNode.agentSettings,
+        const baseSettings: INodeAgentSettings = this.selectedNode.agentSettings ?? {
+          inheritSandbox: true,
+          inheritModel: true,
+          inheritCodeMode: true
+        };
+        const nextSettings: INodeAgentSettings = {
+          ...baseSettings,
           model: {
-            ...(this.selectedNode.agentSettings?.model ?? { provider: 'openai', model: 'gpt-4o' }),
+            ...(baseSettings.model ?? { provider: 'openai', model: 'gpt-4o' }),
             temperature: val
           }
         };
@@ -1868,16 +1873,21 @@ export class OfficeRibbon {
 
   public promptChangeTimeout(): void {
     if (!this.selectedNode) return;
-    const current = (this.selectedNode.agentSettings?.sandbox?.timeoutMs ?? 30000) / 1000;
+    const current = this.selectedNode.agentSettings?.sandbox?.timeoutSeconds ?? 30;
     const input = prompt('Defina o tempo limite (timeout) em segundos:', current.toString());
     if (input !== null) {
       const val = parseInt(input, 10);
       if (!isNaN(val) && val > 0) {
-        const nextSettings = {
-          ...this.selectedNode.agentSettings,
+        const baseSettings: INodeAgentSettings = this.selectedNode.agentSettings ?? {
+          inheritSandbox: true,
+          inheritModel: true,
+          inheritCodeMode: true
+        };
+        const nextSettings: INodeAgentSettings = {
+          ...baseSettings,
           sandbox: {
-            ...(this.selectedNode.agentSettings?.sandbox ?? { isolationLevel: 'process' }),
-            timeoutMs: val * 1000
+            ...(baseSettings.sandbox ?? { isolationLevel: 'host_direct' }),
+            timeoutSeconds: val
           }
         };
         const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { agentSettings: this.selectedNode.agentSettings }, { agentSettings: nextSettings }, 'Alterar timeout');
@@ -1949,7 +1959,7 @@ export class OfficeRibbon {
     const newPortId = `${this.selectedNode.id}_case_${caseIndex}`;
     this.selectedNode.outputs.push({
       id: newPortId,
-      label: `Caso ${caseIndex}`,
+      name: `Caso ${caseIndex}`,
       type: 'flow',
       direction: 'output'
     });
@@ -1959,10 +1969,11 @@ export class OfficeRibbon {
 
   public promptChangeSwitchVar(): void {
     if (!this.selectedNode) return;
-    const current = this.selectedNode.switchSettings?.variableName ?? 'status';
+    const baseSwitch = this.selectedNode.switchSettings ?? defaultSwitchSettings();
+    const current = baseSwitch.variableName ?? 'status';
     const input = prompt('Nome da variável avaliada no Switch:', current);
     if (input !== null && input.trim()) {
-      const nextSettings = { ...this.selectedNode.switchSettings, variableName: input.trim() };
+      const nextSettings: ISwitchSettings = { ...baseSwitch, variableName: input.trim() };
       const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { switchSettings: this.selectedNode.switchSettings }, { switchSettings: nextSettings }, 'Alterar variável de switch');
       this.graph.commandManager.execute(cmd);
       this.selectedNode.switchSettings = nextSettings;
@@ -2061,25 +2072,25 @@ export class OfficeRibbon {
 
   public toggleCallSource(): void {
     if (!this.selectedNode) return;
-    const currentSource = this.selectedNode.callVertexSettings?.source?.kind ?? 'previous';
+    const currentSource = this.selectedNode.callSettings?.source?.kind ?? 'previous';
     const kinds: Array<'previous' | 'file' | 'none'> = ['previous', 'file', 'none'];
     const nextKind = kinds[(kinds.indexOf(currentSource) + 1) % kinds.length];
     const nextSettings = {
-      ...this.selectedNode.callVertexSettings,
+      ...this.selectedNode.callSettings,
       source: { kind: nextKind, path: '' }
     };
-    const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { callVertexSettings: this.selectedNode.callVertexSettings }, { callVertexSettings: nextSettings }, 'Alterar origem do input');
+    const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { callSettings: this.selectedNode.callSettings }, { callSettings: nextSettings }, 'Alterar origem do input');
     this.graph.commandManager.execute(cmd);
-    this.selectedNode.callVertexSettings = nextSettings;
+    this.selectedNode.callSettings = nextSettings;
     this.render();
   }
 
   public promptChangeOutputPattern(): void {
     if (!this.selectedNode) return;
-    const current = this.selectedNode.outputSettings?.pattern ?? '*.svg, *.xlsx, *.md, *.json';
-    const input = prompt('Padrão de arquivos de artefatos coletados:', current);
+    const currentOutput = this.selectedNode.outputSettings ?? defaultOutputSettings();
+    const input = prompt('Padrão de arquivos de artefatos coletados:', currentOutput.pattern ?? '*.svg, *.xlsx, *.md, *.json');
     if (input !== null && input.trim()) {
-      const nextSettings = { ...this.selectedNode.outputSettings, pattern: input.trim() };
+      const nextSettings: IOutputSettings = { ...currentOutput, pattern: input.trim() };
       const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { outputSettings: this.selectedNode.outputSettings }, { outputSettings: nextSettings }, 'Alterar padrão de artefatos');
       this.graph.commandManager.execute(cmd);
       this.selectedNode.outputSettings = nextSettings;
