@@ -630,6 +630,156 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
         expect(ribbon.getContainer().querySelector('#tab-btn-contextual')).toBeNull();
         expect(ribbon.getSelectedNode()).toBeNull();
       });
+
+      it('deve voltar para a última aba normal escolhida ao deselecionar um vértice', async () => {
+        const { globalEventBus } = await import('../src/core/EventBus.ts');
+        const agentNode = graph.createNode('node_tab_restore', 'Agente_Abas', 'agent', 10, 10);
+
+        globalEventBus.emit('node:selected', agentNode);
+        expect((ribbon as any).activeTab).toBe('contextual');
+
+        (ribbon as any).switchTab('insert');
+        expect((ribbon as any).activeTab).toBe('insert');
+
+        globalEventBus.emit('node:deselected');
+        expect(ribbon.getSelectedNode()).toBeNull();
+        expect((ribbon as any).activeTab).toBe('insert');
+      });
+
+      it('deve adicionar caso de switch antes do default, com undo e evento de grafo', async () => {
+        const { globalEventBus } = await import('../src/core/EventBus.ts');
+        const switchNode = graph.createNode('node_switch_add', 'Switch_Add', 'switch', 20, 20);
+        globalEventBus.emit('node:selected', switchNode);
+
+        const before = graph.getNode('node_switch_add')!;
+        const oldLength = before.outputs.length;
+        const oldDefault = before.outputs[before.outputs.length - 1];
+        let graphChanged = 0;
+        bus.on('graph:changed', () => { graphChanged += 1; });
+
+        expect(ribbon.addSwitchCase()).toBe(true);
+
+        const after = graph.getNode('node_switch_add')!;
+        expect(after.outputs.length).toBe(oldLength + 1);
+        expect(after.outputs[after.outputs.length - 1].id).toBe(oldDefault.id);
+        const newCase = after.outputs[after.outputs.length - 2];
+        expect(newCase.id).toContain('_case_');
+        expect(newCase.name).toContain('Caso');
+        expect(after.outputs.map(port => port.conditionBranchIndex)).toEqual(after.outputs.map((_, index) => index));
+        expect(after.switchSettings?.rules?.[newCase.id]).toBe('');
+        expect(graphChanged).toBeGreaterThan(0);
+
+        graph.undo();
+        const restored = graph.getNode('node_switch_add')!;
+        expect(restored.outputs.length).toBe(oldLength);
+        expect(restored.outputs[restored.outputs.length - 1].id).toBe(oldDefault.id);
+        expect(restored.outputs[restored.outputs.length - 1].conditionBranchIndex).toBe(oldLength - 1);
+      });
+
+      it('deve ajustar a probabilidade do decisor sem sobrescrever código personalizado', async () => {
+        const { globalEventBus } = await import('../src/core/EventBus.ts');
+        const conditionNode = graph.createNode('node_cond_prob', 'Decisor_Prob', 'condition', 30, 30);
+        globalEventBus.emit('node:selected', conditionNode);
+
+        expect(ribbon.applyConditionProbability(25)).toBe(true);
+        let current = graph.getNode('node_cond_prob')!;
+        expect(current.customLambdaBody).toContain('< 25 ? 0 : 1');
+        expect(ribbon.conditionProbability(current)).toBe(25);
+
+        graph.updateNode('node_cond_prob', { customLambdaBody: 'return 1;' });
+        current = graph.getNode('node_cond_prob')!;
+        expect(ribbon.conditionProbability(current)).toBeNull();
+        expect(ribbon.applyConditionProbability(10)).toBe(false);
+        expect(graph.getNode('node_cond_prob')!.customLambdaBody).toBe('return 1;');
+      });
+
+      it('deve gravar chave e concorrência da seção crítica em campos reais do gerador', async () => {
+        const { globalEventBus } = await import('../src/core/EventBus.ts');
+        const criticalNode = graph.createNode('node_critical_real', 'Critical_Real', 'critical', 40, 40);
+        globalEventBus.emit('node:selected', criticalNode);
+
+        expect(ribbon.applyCriticalSectionKey('recurso_io')).toBe(true);
+        expect(ribbon.applyCriticalConcurrency(3)).toBe(true);
+
+        const updated = graph.getNode('node_critical_real')!;
+        expect(updated.criticalSectionId).toBe('recurso_io');
+        expect(updated.parameters.maxConcurrency).toBe(3);
+        expect(ribbon.criticalConcurrency(updated)).toBe(3);
+      });
+
+      it('deve materializar temperatura e timeout herdados ao editar no vértice', async () => {
+        const { globalEventBus } = await import('../src/core/EventBus.ts');
+        const agentNode = graph.createNode('node_agent_effective', 'Agente_Efetivo', 'agent', 50, 50);
+        globalEventBus.emit('node:selected', agentNode);
+
+        const defaults = graph.getGlobalDefaults();
+        expect(ribbon.applyAgentTemperature(0.2)).toBe(true);
+        let updated = graph.getNode('node_agent_effective')!;
+        expect(updated.agentSettings?.inheritModel).toBe(false);
+        expect(updated.agentSettings?.model?.model).toBe(defaults.model.model);
+        expect(updated.agentSettings?.model?.temperature).toBe(0.2);
+
+        expect(ribbon.applyAgentTimeout(45)).toBe(true);
+        updated = graph.getNode('node_agent_effective')!;
+        expect(updated.agentSettings?.inheritSandbox).toBe(false);
+        expect(updated.agentSettings?.sandbox?.isolationLevel).toBe(defaults.sandbox.isolationLevel);
+        expect(updated.agentSettings?.sandbox?.timeoutSeconds).toBe(45);
+      });
+
+      it('deve editar origem, destino e tipo do vértice de saída', async () => {
+        const { globalEventBus } = await import('../src/core/EventBus.ts');
+        const outputNode = graph.createNode('node_output_real', 'Entrega_Real', 'output', 60, 60);
+        globalEventBus.emit('node:selected', outputNode);
+
+        expect(ribbon.applyOutputSource('workspace/scene.svg')).toBe(true);
+        expect(ribbon.applyOutputDestination('exports/scene.svg')).toBe(true);
+        expect(ribbon.applyOutputType('svg')).toBe(true);
+
+        const updated = graph.getNode('node_output_real')!;
+        expect(updated.outputSettings?.sourcePath).toBe('workspace/scene.svg');
+        expect(updated.outputSettings?.destinationPath).toBe('exports/scene.svg');
+        expect(updated.outputSettings?.artifactType).toBe('svg');
+      });
+
+      it('deve editar a origem e o input fixo do vértice de chamada', async () => {
+        const { globalEventBus } = await import('../src/core/EventBus.ts');
+        const callNode = graph.createNode('node_call_real', 'Chamada_Real', 'call', 70, 70);
+        globalEventBus.emit('node:selected', callNode);
+
+        expect(ribbon.applyCallSource('file', 'workspace/entrada.md')).toBe(true);
+        expect(ribbon.applyCallSource('file', '')).toBe(false);
+        expect(ribbon.applyCallInput('texto fixo')).toBe(true);
+
+        const updated = graph.getNode('node_call_real')!;
+        expect(updated.callSettings?.source?.kind).toBe('file');
+        expect(updated.callSettings?.source?.path).toBe('workspace/entrada.md');
+        expect(updated.callSettings?.input).toBe('texto fixo');
+      });
+
+      it('deve entrar no subflow real e limpar a seleção contextual', async () => {
+        const { globalEventBus } = await import('../src/core/EventBus.ts');
+        const subflowNode = graph.createNode('node_subflow_real', 'Subflow_Real', 'subflow', 80, 80);
+        globalEventBus.emit('node:selected', subflowNode);
+        expect(graph.isAtRoot()).toBe(true);
+
+        ribbon.enterSubflow();
+
+        expect(graph.isAtRoot()).toBe(false);
+        expect(ribbon.getSelectedNode()).toBeNull();
+        expect((ribbon as any).activeTab).not.toBe('contextual');
+      });
+
+      it('deve renomear pelo caminho de comando e permitir undo', async () => {
+        const { globalEventBus } = await import('../src/core/EventBus.ts');
+        const node = graph.createNode('node_rename_real', 'Nome_Antigo', 'static', 90, 90);
+        globalEventBus.emit('node:selected', node);
+
+        expect(ribbon.applyRename('node_rename_real', 'Nome_Novo')).toBe(true);
+        expect(graph.getNode('node_rename_real')?.label).toBe('Nome_Novo');
+
+        graph.undo();
+        expect(graph.getNode('node_rename_real')?.label).toBe('Nome_Antigo');
+      });
     });
   });
 });

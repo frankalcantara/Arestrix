@@ -35,6 +35,12 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
 - Removed the dead `generateBatchSource` path and the legacy `AgentBlackboard`/
   `SemanticMemoryEngine` usage from active generation. The classes remain only for old-data
   compatibility and are marked as legacy. Documentation now reflects the real memory behavior.
+- The contextual ribbon now edits only fields the C++ generator consumes. Inherited agent
+  temperature/timeout are materialized when overridden, Switch cases are inserted before the
+  `default` and participate in undo/autosave, critical sections generate one `tf::Semaphore` per
+  `criticalSectionId` (with `parameters.maxConcurrency`), Subflow navigation uses the real graph
+  stack, MCP testing executes the configured tool, and ribbon dialogs replace `prompt`/`confirm`.
+  The ribbon body grows with its content and respects the window width.
 
 ### Added
 

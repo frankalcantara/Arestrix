@@ -21,6 +21,18 @@ O Studio segue o layout do Microsoft Office, porque a maioria das pessoas já o 
 Outras comodidades: a **Barra de Acesso Rápido** (Salvar, Desfazer, Refazer, Executar e o botão de **Sincronização Git** com indicador de status em tempo real), uma chave de
 salvamento automático, a caixa de busca no projeto (abaixo) e `Ctrl+F1` para recolher o ribbon.
 
+### Aba contextual do vértice
+
+Ao selecionar um vértice, a ribbon ganha uma **aba contextual** com os comandos daquele tipo
+(agente, decisor, switch, MCP, subfluxo, seção crítica, chamada, saída etc.). A aba volta para a
+última aba normal usada quando o vértice é deselecionado.
+
+Os comandos gravam nos campos que o gerador C++ realmente consome: modelo/sandbox, memória,
+`switchSettings`, `outputSettings`, `callSettings`, `customLambdaBody`, `criticalSectionId` e
+`parameters`. Edições entram no desfazer/refazer e no salvamento automático. O Switch insere novos
+casos **antes** do `default`; seções críticas geram um `tf::Semaphore` por chave; e os diálogos da
+ribbon são próprios do Studio, sem depender de `window.prompt`/`window.confirm` do WebView.
+
 ### Busca no projeto
 
 A caixa no canto superior direito busca no **projeto aberto**: todos os vértices (inclusive os dentro de

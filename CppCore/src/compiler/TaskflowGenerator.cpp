@@ -521,11 +521,35 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
         registry[target] = entry;
     }
 
-    bool hasCritical = false;
+    // Seccoes criticas: uma chave estavel por no (criticalSectionId) e um
+    // semaforo por chave. A concorrencia vem de parameters.maxConcurrency.
+    // Antes existia um unico critical_sec(1) global, o que anulava a distincao
+    // entre recursos compartilhados independentes.
     bool hasCuda = false;
+    std::map<std::string, int> criticalConcurrency;
     for (const auto& pair : nodes) {
-        if (pair.second.type == core::TaskflowNodeType::Critical) hasCritical = true;
-        if (pair.second.type == core::TaskflowNodeType::Cuda) hasCuda = true;
+        const auto& node = pair.second;
+        if (node.type == core::TaskflowNodeType::Cuda) hasCuda = true;
+        if (node.type != core::TaskflowNodeType::Critical) continue;
+        const std::string key = node.criticalSectionId.empty() ? "default" : node.criticalSectionId;
+        int concurrency = 1;
+        auto param = node.parameters.find("maxConcurrency");
+        if (param != node.parameters.end() && param->second.is_number_integer()) {
+            concurrency = param->second.get<int>();
+        }
+        concurrency = std::max(1, std::min(64, concurrency));
+        auto found = criticalConcurrency.find(key);
+        if (found == criticalConcurrency.end()) {
+            criticalConcurrency[key] = concurrency;
+        } else {
+            found->second = std::max(found->second, concurrency);
+        }
+    }
+    std::map<std::string, std::string> criticalVars;
+    int criticalIndex = 0;
+    for (const auto& entry : criticalConcurrency) {
+        criticalVars[entry.first] = "critical_sec_" + sanitizeIdentifier(entry.first) + "_" +
+                                    std::to_string(criticalIndex++);
     }
 
     std::vector<std::string> subflowTargets;
@@ -628,7 +652,11 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
         code += "  });\n";
     }
     if (!subflowTargets.empty()) code += "\n";
-    if (hasCritical) code += "  tf::Semaphore critical_sec(1);\n\n";
+    for (const auto& entry : criticalConcurrency) {
+        code += "  tf::Semaphore " + criticalVars.at(entry.first) + "(" +
+                std::to_string(entry.second) + ");\n";
+    }
+    if (!criticalConcurrency.empty()) code += "\n";
 
     code += "  auto task_bootstrap = taskflow.emplace([&ctx]() {\n";
     code += "    std::osyncstream(std::cout) << \">>> [Pipeline \" << ctx.pipeline_name << \"] Ambiente ativado.\\n\";\n";
@@ -856,7 +884,12 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
         code += indent(body, 4) + "\n";
         code += "  }).name(" + cppString(label) + ");\n";
         if (node.type == core::TaskflowNodeType::Critical) {
-            code += "  " + var + ".acquire(critical_sec);\n  " + var + ".release(critical_sec);\n";
+            const std::string key = node.criticalSectionId.empty() ? "default" : node.criticalSectionId;
+            auto section = criticalVars.find(key);
+            if (section != criticalVars.end()) {
+                code += "  " + var + ".acquire(" + section->second + ");\n  " +
+                        var + ".release(" + section->second + ");\n";
+            }
         }
         code += "\n";
     }

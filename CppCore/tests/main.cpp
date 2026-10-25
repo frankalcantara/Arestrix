@@ -1208,6 +1208,36 @@ TEST(generator_interaction_as_callable) {
     CHECK(src.find("task_ask") == std::string::npos);   // chamavel puro nao vira task de fluxo
 }
 
+TEST(generator_critical_sections_use_key_and_concurrency) {
+    auto base = tutorialGraph();
+    json schema = base.toJson();
+    for (auto& node : schema["nodes"]) {
+        if (node["id"] == "a") {
+            node["type"] = "critical";
+            node["criticalSectionId"] = "alpha";
+            node["parameters"] = json{{"maxConcurrency", 2}};
+        } else if (node["id"] == "b") {
+            node["type"] = "critical";
+            node["criticalSectionId"] = "beta";
+            node["parameters"] = json{{"maxConcurrency", 3}};
+        }
+    }
+
+    taskforge::core::Graph g;
+    g.fromJson(schema);
+    const std::string src = taskforge::compiler::TaskflowGenerator::generateSource(g);
+
+    // Uma secao por chave, com a concorrencia vinda de parameters.maxConcurrency.
+    CHECK(src.find("tf::Semaphore critical_sec_alpha_0(2);") != std::string::npos);
+    CHECK(src.find("tf::Semaphore critical_sec_beta_1(3);") != std::string::npos);
+    CHECK(src.find("task_a.acquire(critical_sec_alpha_0);") != std::string::npos);
+    CHECK(src.find("task_a.release(critical_sec_alpha_0);") != std::string::npos);
+    CHECK(src.find("task_b.acquire(critical_sec_beta_1);") != std::string::npos);
+    CHECK(src.find("task_b.release(critical_sec_beta_1);") != std::string::npos);
+    // O semaforo global antigo nao existe mais.
+    CHECK(src.find("critical_sec(1)") == std::string::npos);
+}
+
 TEST(generator_condition_with_gap_uses_noop) {
     auto g = tutorialGraph();
     // remove o ramo 0 (entrega): o ramo 1 deve continuar sendo o indice 1

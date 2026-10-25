@@ -461,8 +461,6 @@ export interface ISwitchSettings {
   rules: Record<string, string>;
   /** Modo 'model': orientação extra para o modelo ("escolha alto se houver dados pessoais..."). */
   instruction?: string;
-  /** Campo legado da ribbon contextual; o gerador C++ usa source/rules. */
-  variableName?: string;
 }
 
 export function defaultSwitchSettings(mode: SwitchMode = 'model'): ISwitchSettings {
@@ -496,8 +494,6 @@ export interface IOutputSettings {
   displayName?: string;             // Nome amigável exibido no painel de Artefatos
   autoOpenPreview?: boolean;        // Se deve abrir automaticamente a visualização ao concluir
   description?: string;             // Descrição do entregável
-  /** Campo legado da ribbon para padrões de coleta; o gerador C++ usa sourcePath/destinationPath. */
-  pattern?: string;
 }
 
 export function defaultOutputSettings(): IOutputSettings {
@@ -524,30 +520,6 @@ export interface IArtifactItem {
   description?: string;
 }
 
-/** Configurações de execução usadas pela ribbon contextual (algumas ainda não são lidas pelo gerador C++). */
-export interface IRetryPolicy {
-  maxRetries: number;
-  backoffMs?: number;
-}
-
-export interface IConditionSettings {
-  expression?: string;
-  stochasticProbability?: number;
-}
-
-export interface ICudaSettings {
-  asyncStream?: boolean;
-}
-
-export interface ISubflowSettings {
-  maxRecursionDepth?: number;
-}
-
-export interface ICriticalSettings {
-  mutexKey?: string;
-  maxConcurrency?: number;
-}
-
 export interface INodeData {
   id: string;
   label: string;
@@ -567,13 +539,6 @@ export interface INodeData {
   outputSettings?: IOutputSettings; // só para vértices do tipo 'output'
   interactionSettings?: IInteractionSettings; // só para vértices do tipo 'interaction'
   callSettings?: ICallVertexSettings; // só para vértices do tipo 'call'
-  // Campos da ribbon contextual. Permanecem opcionais para compatibilidade com
-  // grafos antigos; nem todos são consumidos pelo gerador C++ atual.
-  retryPolicy?: IRetryPolicy;
-  conditionSettings?: IConditionSettings;
-  cudaSettings?: ICudaSettings;
-  subflowSettings?: ISubflowSettings;
-  criticalSettings?: ICriticalSettings;
 }
 
 export interface IBreadcrumbItem {

@@ -104,7 +104,10 @@ function bootstrap() {
 
   // Escuta eventos dos botoes de acao rapida nos nós e no inspetor
   globalEventBus.on('node:open-sandbox-modal', (nodeId: string) => nodeSandboxModal.open(nodeId));
-  globalEventBus.on('node:open-model-modal', (nodeId: string) => nodeModelModal.open(nodeId));
+  globalEventBus.on('node:open-model-modal', (payload: string | { nodeId: string; tab?: 'provider' | 'prompt' }) => {
+    if (typeof payload === 'string') nodeModelModal.open(payload);
+    else nodeModelModal.open(payload.nodeId, payload.tab);
+  });
   globalEventBus.on('node:open-tools-modal', (nodeId: string) => nodeToolsModal.open(nodeId));
   globalEventBus.on('node:open-memory-modal', (nodeId: string) => nodeMemoryModal.open(nodeId));
   globalEventBus.on('node:open-skills-modal', (nodeId: string, initialTab?: any) => nodeSkillsModal.open(nodeId, initialTab));

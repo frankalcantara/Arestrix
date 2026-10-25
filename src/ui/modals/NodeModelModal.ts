@@ -32,11 +32,11 @@ export class NodeModelModal {
     this.bindEvents();
   }
 
-  public open(nodeId: string): void {
+  public open(nodeId: string, initialTab?: 'provider' | 'prompt' | 'parameters'): void {
     const node = this.graph.getNode(nodeId);
     if (!node) return;
 
-    this.activeTab = 'provider';
+    this.activeTab = initialTab || 'provider';
     this.render(node);
     this.overlay.classList.remove('hidden');
     this.windowController?.bringToFront();

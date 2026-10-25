@@ -2,7 +2,7 @@ import { Graph } from '../../core/Graph.ts';
 import { GraphValidator } from '../../core/Validator.ts';
 import { Viewport } from '../../view/Viewport.ts';
 import { CodeModal } from '../CodeModal.ts';
-import { TaskflowNodeType, INodeData, INodeAgentSettings, IOutputSettings, ISwitchSettings, defaultOutputSettings, defaultSwitchSettings } from '../../core/types.ts';
+import { TaskflowNodeType, INodeData, INodeAgentSettings, IOutputSettings, ISwitchSettings, ICallVertexSettings, IModelConfig, ISandboxPolicy, IMcpCallResult, defaultOutputSettings, defaultSwitchSettings, defaultCallVertexSettings } from '../../core/types.ts';
 import { PipelineRunner } from '../../core/PipelineRunner.ts';
 import { AddNodeCommand, RemoveNodeCommand, UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
 import { cloneNodeData } from '../../core/NodeClipboard.ts';
@@ -18,6 +18,7 @@ import { McpServersModal } from '../modals/McpServersModal.ts';
 import { ProjectManagerModal } from '../modals/ProjectManagerModal.ts';
 
 import { BackstageView } from './BackstageView.ts';
+import { RibbonDialog } from './RibbonDialog.ts';
 import { ImportPiModal } from '../modals/ImportPiModal.ts';
 import { ImportClaudeModal } from '../modals/ImportClaudeModal.ts';
 import { ImportOpenAiModal } from '../modals/ImportOpenAiModal.ts';
@@ -43,6 +44,7 @@ export class OfficeRibbon {
   private mcpServersModal: McpServersModal;
   private projectManagerModal: ProjectManagerModal;
   private graphvizExportModal: GraphvizExportModal;
+  private ribbonDialog: RibbonDialog;
 
   // Backstage View & Modais de Importação
   private backstageView: BackstageView;
@@ -108,6 +110,7 @@ export class OfficeRibbon {
     this.standaloneRunnerModal = new StandaloneRunnerModal(this.graph);
 
     if (typeof document !== 'undefined') {
+      this.ribbonDialog = new RibbonDialog();
       this.container = document.createElement('header');
       this.container.className = 'office-ribbon-container';
       if (parent && parent.appendChild) {
@@ -117,6 +120,12 @@ export class OfficeRibbon {
       this.bindKeyboardShortcuts();
       this.bindBusEvents();
     } else {
+      this.ribbonDialog = {
+        openInput: () => {},
+        openConfirm: () => {},
+        close: () => {},
+        isVisible: () => false
+      } as unknown as RibbonDialog;
       this.container = { querySelector: () => null, querySelectorAll: () => [] } as any;
     }
   }
@@ -679,9 +688,13 @@ export class OfficeRibbon {
     this.container.querySelector('#ribbon-btn-zoom-fit')?.addEventListener('click', () => this.viewport.zoomToFit());
     this.container.querySelector('#ribbon-btn-auto-layout')?.addEventListener('click', () => this.graph.autoLayout(true));
     this.container.querySelector('#ribbon-btn-clear')?.addEventListener('click', () => {
-      if (confirm(t('ribbon.alerts.clear_confirm'))) {
-        this.graph.clear();
-      }
+      this.ribbonDialog.openConfirm({
+        title: t('ribbon.panes.clear_graph'),
+        message: t('ribbon.alerts.clear_confirm'),
+        confirmLabel: t('ribbon.panes.clear_graph'),
+        danger: true,
+        onConfirm: () => this.applyClearGraph()
+      });
     });
 
     this.container.querySelector('#ribbon-btn-quick-agent')?.addEventListener('click', () => this.createNewNode('agent'));
@@ -749,6 +762,12 @@ export class OfficeRibbon {
   }
 
   private switchTab(tab: 'home' | 'insert' | 'agents' | 'connectors' | 'data' | 'run' | 'contextual'): void {
+    if (tab !== 'contextual') {
+      // Lembra a última aba normal escolhida pelo usuário. Ao deselecionar um
+      // vértice, a ribbon volta para ela em vez de saltar para a aba anterior
+      // à primeira seleção.
+      this.previousActiveTab = tab;
+    }
     this.activeTab = tab;
     if (this.isCollapsed) {
       this.isCollapsed = false;
@@ -974,6 +993,18 @@ export class OfficeRibbon {
       }
       this.render();
     });
+
+    // Abrir outro projeto ou entrar num subflow troca o grafo ativo. O vértice
+    // selecionado pode não existir mais; a aba contextual não deve sobreviver a ele.
+    globalEventBus.on('graph:loaded', () => {
+      if (this.selectedNode && !this.graph.getNode(this.selectedNode.id)) {
+        this.selectedNode = null;
+        if (this.activeTab === 'contextual') {
+          this.activeTab = this.previousActiveTab || 'home';
+        }
+        this.render();
+      }
+    });
   }
 
   public getAutoSaveEnabled(): boolean {
@@ -1174,10 +1205,10 @@ export class OfficeRibbon {
   public validateGraph(): void {
     const res = GraphValidator.validate(this.graph);
     if (res.isValid) {
-      if (typeof alert !== 'undefined') alert(t('ribbon.alerts.graph_valid'));
+      this.notify(t('ribbon.panes.validate_dag'), t('ribbon.alerts.graph_valid'), 'success');
     } else {
-      const msg = res.errors.map(err => `[${err.severity.toUpperCase()}] ${err.message}`).join('\n\n');
-      if (typeof alert !== 'undefined') alert(t('ribbon.alerts.validation_report', { msg }));
+      const msg = res.errors.map(err => `[${err.severity.toUpperCase()}] ${err.message}`).join('\n');
+      this.notify(t('ribbon.panes.validate_dag'), t('ribbon.alerts.validation_report', { msg }), 'error');
     }
   }
 
@@ -1388,10 +1419,11 @@ export class OfficeRibbon {
 
     switch (type) {
       case 'agent': {
-        const modelName = this.selectedNode.agentSettings?.model?.model || 'gpt-4o';
-        const isolation = this.selectedNode.agentSettings?.sandbox?.isolationLevel || 'process';
-        const temp = this.selectedNode.agentSettings?.model?.temperature ?? 0.7;
-        const timeoutSec = Math.round(this.selectedNode.agentSettings?.sandbox?.timeoutSeconds ?? 30);
+        const effective = this.effectiveAgentSettings(this.selectedNode);
+        const modelName = effective.model.model || '—';
+        const isolation = effective.sandbox.isolationLevel;
+        const temp = effective.model.temperature ?? 0.7;
+        const timeoutSec = Math.round(effective.sandbox.timeoutSeconds ?? 300);
 
         typeSpecificGroups = `
           <!-- Grupo 1: Cérebro & LLM -->
@@ -1402,10 +1434,10 @@ export class OfficeRibbon {
                 <span class="ribbon-btn-label">Modelo LLM</span>
               </button>
               <div class="ribbon-col-stack">
-                <button class="ribbon-btn-small" id="btn-ctx-agent-prompt" title="Abrir editor de instruções e system prompt">
+                <button class="ribbon-btn-small" id="btn-ctx-agent-prompt" title="Abrir instruções e system prompt">
                   <span class="ribbon-sm-icon">💬</span> Prompt
                 </button>
-                <button class="ribbon-btn-small" id="btn-ctx-agent-temp" title="Ajustar temperatura do modelo (${temp})">
+                <button class="ribbon-btn-small" id="btn-ctx-agent-temp" title="Ajustar temperatura efetiva do modelo (${temp})">
                   <span class="ribbon-sm-icon">🌡️</span> Temp: ${temp}
                 </button>
               </div>
@@ -1421,10 +1453,10 @@ export class OfficeRibbon {
                 <span class="ribbon-btn-label">Sandbox VM</span>
               </button>
               <div class="ribbon-col-stack">
-                <span class="ribbon-badge-info" title="Isolamento ativo">
-                  ${this.escapeHtml(isolation)}
+                <span class="ribbon-badge-info" title="Isolamento efetivo (${this.isAgentSandboxInherited(this.selectedNode) ? 'herdado dos padrões globais' : 'definido no vértice'})">
+                  ${this.escapeHtml(this.getIsolationLabel(isolation))}
                 </span>
-                <button class="ribbon-btn-small" id="btn-ctx-agent-timeout" title="Tempo limite em segundos">
+                <button class="ribbon-btn-small" id="btn-ctx-agent-timeout" title="Tempo limite efetivo em segundos">
                   <span class="ribbon-sm-icon">⏱️</span> ${timeoutSec}s
                 </button>
               </div>
@@ -1474,14 +1506,6 @@ export class OfficeRibbon {
                 <span class="ribbon-btn-icon">💻</span>
                 <span class="ribbon-btn-label">Ver Código</span>
               </button>
-              <div class="ribbon-col-stack">
-                <button class="ribbon-btn-small" id="btn-ctx-static-timeout" title="Configurar tempo limite">
-                  <span class="ribbon-sm-icon">⏱️</span> Timeout
-                </button>
-                <button class="ribbon-btn-small" id="btn-ctx-static-retry" title="Configurar política de retentativas">
-                  <span class="ribbon-sm-icon">🔄</span> Retry: ${this.selectedNode.retryPolicy?.maxRetries ?? 0}
-                </button>
-              </div>
             </div>
             <div class="office-ribbon-group-title">Execução</div>
           </div>
@@ -1490,22 +1514,19 @@ export class OfficeRibbon {
       }
 
       case 'condition': {
-        const prob = this.selectedNode.conditionSettings?.stochasticProbability ?? 0.5;
+        const prob = this.conditionProbability(this.selectedNode);
+        const probLabel = prob === null ? 'Código' : `P0: ${prob}%`;
         typeSpecificGroups = `
           <!-- Grupo 1: Regras & Decisão -->
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
-              <button class="ribbon-btn-large" id="btn-ctx-cond-expr" title="Configurar expressão de branch">
+              <button class="ribbon-btn-large" id="btn-ctx-cond-expr" title="Abrir o corpo C++ que decide o ramo">
                 <span class="ribbon-btn-icon">📐</span>
-                <span class="ribbon-btn-label">Expressão</span>
+                <span class="ribbon-btn-label">Decisão</span>
               </button>
-              <button class="ribbon-btn-large" id="btn-ctx-cond-prob" title="Ajustar limiar de probabilidade estocástica">
+              <button class="ribbon-btn-large" id="btn-ctx-cond-prob" title="Ajustar a probabilidade do ramo 0 no corpo padrão">
                 <span class="ribbon-btn-icon">🎲</span>
-                <span class="ribbon-btn-label">Prob: ${prob}</span>
-              </button>
-              <button class="ribbon-btn-large" id="btn-ctx-cond-invert" title="Inverter ramos de sucesso e fallback">
-                <span class="ribbon-btn-icon">🔄</span>
-                <span class="ribbon-btn-label">Inverter</span>
+                <span class="ribbon-btn-label">${probLabel}</span>
               </button>
             </div>
             <div class="office-ribbon-group-title">Lógica Decisória</div>
@@ -1515,21 +1536,37 @@ export class OfficeRibbon {
       }
 
       case 'switch': {
-        const varName = this.selectedNode.switchSettings?.variableName || 'status';
+        const switchSettings = this.selectedNode.switchSettings ?? defaultSwitchSettings();
+        const mode = this.switchModeLabel(switchSettings.mode || 'code');
+        const sourceKind = this.switchSourceLabel(switchSettings.source?.kind || 'previous');
+        const caseCount = Math.max(0, this.selectedNode.outputs.length - 1);
         typeSpecificGroups = `
           <!-- Grupo 1: Roteamento Multivia -->
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
-              <button class="ribbon-btn-large" id="btn-ctx-switch-add-case" title="Adicionar um novo caso de roteamento">
+              <button class="ribbon-btn-large" id="btn-ctx-switch-add-case" title="Adicionar um novo caso antes do default">
                 <span class="ribbon-btn-icon">➕</span>
-                <span class="ribbon-btn-label">+ Caso</span>
+                <span class="ribbon-btn-label">+ Caso (${caseCount})</span>
               </button>
-              <button class="ribbon-btn-large" id="btn-ctx-switch-var" title="Nome da variável a ser testada">
-                <span class="ribbon-btn-icon">🔍</span>
-                <span class="ribbon-btn-label">Var: ${this.escapeHtml(varName)}</span>
+              <button class="ribbon-btn-large" id="btn-ctx-switch-mode" title="Alternar entre código, palavras e modelo">
+                <span class="ribbon-btn-icon">🎛️</span>
+                <span class="ribbon-btn-label">Modo: ${this.escapeHtml(mode)}</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-switch-source" title="Escolher a origem do texto avaliado">
+                <span class="ribbon-btn-icon">📥</span>
+                <span class="ribbon-btn-label">Fonte: ${this.escapeHtml(sourceKind)}</span>
               </button>
             </div>
             <div class="office-ribbon-group-title">Casos &amp; Rotas</div>
+          </div>
+          <div class="office-ribbon-group">
+            <div class="office-ribbon-group-tools">
+              <button class="ribbon-btn-large" id="btn-ctx-switch-rules" title="Editar as palavras de cada caso no Inspetor">
+                <span class="ribbon-btn-icon">📝</span>
+                <span class="ribbon-btn-label">Regras</span>
+              </button>
+            </div>
+            <div class="office-ribbon-group-title">Palavras-chave</div>
           </div>
         `;
         break;
@@ -1544,11 +1581,11 @@ export class OfficeRibbon {
                 <span class="ribbon-btn-icon">🔌</span>
                 <span class="ribbon-btn-label">Servidores</span>
               </button>
-              <button class="ribbon-btn-large" id="btn-ctx-mcp-tool" title="Configurar ferramenta e argumentos do MCP">
+              <button class="ribbon-btn-large" id="btn-ctx-mcp-tool" title="Configurar ferramenta e argumentos no Inspetor">
                 <span class="ribbon-btn-icon">🔧</span>
                 <span class="ribbon-btn-label">Ferramenta</span>
               </button>
-              <button class="ribbon-btn-large" id="btn-ctx-mcp-test" title="Testar chamada da ferramenta MCP">
+              <button class="ribbon-btn-large" id="btn-ctx-mcp-test" title="Executar a chamada MCP configurada agora">
                 <span class="ribbon-btn-icon">🧪</span>
                 <span class="ribbon-btn-label">Testar</span>
               </button>
@@ -1560,7 +1597,6 @@ export class OfficeRibbon {
       }
 
       case 'cuda': {
-        const isAsync = !!this.selectedNode.cudaSettings?.asyncStream;
         typeSpecificGroups = `
           <!-- Grupo 1: Kernel & GPU -->
           <div class="office-ribbon-group">
@@ -1568,10 +1604,6 @@ export class OfficeRibbon {
               <button class="ribbon-btn-large" id="btn-ctx-cuda-code" title="Visualizar kernel C++20 com Taskflow CUDA Flow">
                 <span class="ribbon-btn-icon">⚡</span>
                 <span class="ribbon-btn-label">Kernel CUDA</span>
-              </button>
-              <button class="ribbon-btn-large" id="btn-ctx-cuda-stream" title="Alternar streams assíncronas concorrentes">
-                <span class="ribbon-btn-icon">🌊</span>
-                <span class="ribbon-btn-label">${isAsync ? 'Stream: ON' : 'Stream: OFF'}</span>
               </button>
             </div>
             <div class="office-ribbon-group-title">Aceleração GPU</div>
@@ -1591,10 +1623,6 @@ export class OfficeRibbon {
                 <span class="ribbon-btn-icon">🔍</span>
                 <span class="ribbon-btn-label">${isMod ? 'Abrir Módulo' : 'Entrar Subfluxo'}</span>
               </button>
-              <button class="ribbon-btn-large" id="btn-ctx-subflow-recursion" title="Ajustar limite de profundidade de recursão">
-                <span class="ribbon-btn-icon">🔁</span>
-                <span class="ribbon-btn-label">Recursão</span>
-              </button>
             </div>
             <div class="office-ribbon-group-title">Estrutura Hierárquica</div>
           </div>
@@ -1603,17 +1631,17 @@ export class OfficeRibbon {
       }
 
       case 'critical': {
-        const key = this.selectedNode.criticalSettings?.mutexKey || 'global_mutex';
-        const conc = this.selectedNode.criticalSettings?.maxConcurrency ?? 1;
+        const key = this.selectedNode.criticalSectionId || 'default';
+        const conc = this.criticalConcurrency(this.selectedNode);
         typeSpecificGroups = `
           <!-- Grupo 1: Mutex & Concorrência -->
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
-              <button class="ribbon-btn-large" id="btn-ctx-crit-key" title="Identificador da chave do Mutex">
+              <button class="ribbon-btn-large" id="btn-ctx-crit-key" title="Identificador da seção crítica no C++ gerado">
                 <span class="ribbon-btn-icon">🔑</span>
                 <span class="ribbon-btn-label">Chave Mutex</span>
               </button>
-              <button class="ribbon-btn-large" id="btn-ctx-crit-concurrency" title="Concorrência máxima de workers simultâneos">
+              <button class="ribbon-btn-large" id="btn-ctx-crit-concurrency" title="Semáforos simultâneos permitidos nesta seção">
                 <span class="ribbon-btn-icon">👥</span>
                 <span class="ribbon-btn-label">Max: ${conc}</span>
               </button>
@@ -1645,14 +1673,20 @@ export class OfficeRibbon {
       }
 
       case 'call': {
-        const srcKind = this.selectedNode.callSettings?.source?.kind || 'previous';
+        const callSettings = this.selectedNode.callSettings ?? defaultCallVertexSettings();
+        const srcKind = this.switchSourceLabel(callSettings.source?.kind || 'previous');
+        const hasFixedInput = !!callSettings.input?.trim();
         typeSpecificGroups = `
           <!-- Grupo 1: Chamada de Fluxo -->
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
-              <button class="ribbon-btn-large" id="btn-ctx-call-source" title="Alternar origem do input (previous -> file -> none)">
+              <button class="ribbon-btn-large" id="btn-ctx-call-source" title="Escolher origem do input (anterior, arquivo ou nenhum)">
                 <span class="ribbon-btn-icon">📥</span>
-                <span class="ribbon-btn-label">Input: ${srcKind}</span>
+                <span class="ribbon-btn-label">Fonte: ${srcKind}</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-call-input" title="Definir um input fixo para a chamada">
+                <span class="ribbon-btn-icon">⌨️</span>
+                <span class="ribbon-btn-label">${hasFixedInput ? 'Input fixo ✓' : 'Input fixo'}</span>
               </button>
               <button class="ribbon-btn-large" id="btn-ctx-call-target" title="Inspecionar vértice chamável de destino">
                 <span class="ribbon-btn-icon">🎯</span>
@@ -1666,6 +1700,7 @@ export class OfficeRibbon {
       }
 
       case 'output': {
+        const output = this.selectedNode.outputSettings ?? defaultOutputSettings();
         typeSpecificGroups = `
           <!-- Grupo 1: Entrega & Artefatos -->
           <div class="office-ribbon-group">
@@ -1674,9 +1709,17 @@ export class OfficeRibbon {
                 <span class="ribbon-btn-icon">📂</span>
                 <span class="ribbon-btn-label">Ver Artefatos</span>
               </button>
-              <button class="ribbon-btn-large" id="btn-ctx-out-pattern" title="Padrão de arquivos entregáveis">
+              <button class="ribbon-btn-large" id="btn-ctx-out-source" title="Arquivo de origem copiado para a entrega">
                 <span class="ribbon-btn-icon">📄</span>
-                <span class="ribbon-btn-label">Padrão Arquivos</span>
+                <span class="ribbon-btn-label">Origem</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-out-destination" title="Arquivo de destino da entrega">
+                <span class="ribbon-btn-icon">📥</span>
+                <span class="ribbon-btn-label">Destino</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-out-type" title="Formato usado na visualização do artefato">
+                <span class="ribbon-btn-icon">🏷️</span>
+                <span class="ribbon-btn-label">${this.escapeHtml(output.artifactType)}</span>
               </button>
             </div>
             <div class="office-ribbon-group-title">Entrega de Artefatos</div>
@@ -1743,6 +1786,9 @@ export class OfficeRibbon {
     this.container.querySelector('#btn-ctx-agent-model')?.addEventListener('click', () => {
       if (this.selectedNode) globalEventBus.emit('node:open-model-modal', this.selectedNode.id);
     });
+    this.container.querySelector('#btn-ctx-agent-prompt')?.addEventListener('click', () => {
+      if (this.selectedNode) globalEventBus.emit('node:open-model-modal', { nodeId: this.selectedNode.id, tab: 'prompt' });
+    });
     this.container.querySelector('#btn-ctx-agent-sandbox')?.addEventListener('click', () => {
       if (this.selectedNode) globalEventBus.emit('node:open-sandbox-modal', this.selectedNode.id);
     });
@@ -1758,36 +1804,32 @@ export class OfficeRibbon {
     this.container.querySelector('#btn-ctx-agent-memory')?.addEventListener('click', () => {
       if (this.selectedNode) globalEventBus.emit('node:open-memory-modal', this.selectedNode.id);
     });
-    this.container.querySelector('#btn-ctx-agent-prompt')?.addEventListener('click', () => this.inspectSelectedNode());
     this.container.querySelector('#btn-ctx-agent-temp')?.addEventListener('click', () => this.promptChangeTemperature());
     this.container.querySelector('#btn-ctx-agent-timeout')?.addEventListener('click', () => this.promptChangeTimeout());
 
     // Ações de Static
     this.container.querySelector('#btn-ctx-static-code')?.addEventListener('click', () => this.codeModal.show());
-    this.container.querySelector('#btn-ctx-static-timeout')?.addEventListener('click', () => this.promptChangeTimeout());
-    this.container.querySelector('#btn-ctx-static-retry')?.addEventListener('click', () => this.promptChangeRetry());
 
     // Ações de Condition
-    this.container.querySelector('#btn-ctx-cond-expr')?.addEventListener('click', () => this.promptChangeConditionExpr());
+    this.container.querySelector('#btn-ctx-cond-expr')?.addEventListener('click', () => this.codeModal.show());
     this.container.querySelector('#btn-ctx-cond-prob')?.addEventListener('click', () => this.promptChangeConditionProb());
-    this.container.querySelector('#btn-ctx-cond-invert')?.addEventListener('click', () => this.invertConditionBranches());
 
     // Ações de Switch
     this.container.querySelector('#btn-ctx-switch-add-case')?.addEventListener('click', () => this.addSwitchCase());
-    this.container.querySelector('#btn-ctx-switch-var')?.addEventListener('click', () => this.promptChangeSwitchVar());
+    this.container.querySelector('#btn-ctx-switch-mode')?.addEventListener('click', () => this.promptChangeSwitchMode());
+    this.container.querySelector('#btn-ctx-switch-source')?.addEventListener('click', () => this.promptChangeSwitchSource());
+    this.container.querySelector('#btn-ctx-switch-rules')?.addEventListener('click', () => this.inspectSelectedNode());
 
     // Ações de MCP
     this.container.querySelector('#btn-ctx-mcp-servers')?.addEventListener('click', () => this.mcpServersModal.show());
     this.container.querySelector('#btn-ctx-mcp-tool')?.addEventListener('click', () => this.inspectSelectedNode());
-    this.container.querySelector('#btn-ctx-mcp-test')?.addEventListener('click', () => this.testMcpTool());
+    this.container.querySelector('#btn-ctx-mcp-test')?.addEventListener('click', () => void this.testMcpTool());
 
     // Ações de CUDA
     this.container.querySelector('#btn-ctx-cuda-code')?.addEventListener('click', () => this.codeModal.show());
-    this.container.querySelector('#btn-ctx-cuda-stream')?.addEventListener('click', () => this.toggleCudaStream());
 
     // Ações de Subflow / Module
     this.container.querySelector('#btn-ctx-subflow-enter')?.addEventListener('click', () => this.enterSubflow());
-    this.container.querySelector('#btn-ctx-subflow-recursion')?.addEventListener('click', () => this.promptChangeRecursion());
 
     // Ações de Critical
     this.container.querySelector('#btn-ctx-crit-key')?.addEventListener('click', () => this.promptChangeCriticalKey());
@@ -1798,270 +1840,475 @@ export class OfficeRibbon {
     this.container.querySelector('#btn-ctx-inter-fields')?.addEventListener('click', () => this.inspectSelectedNode());
 
     // Ações de Call
-    this.container.querySelector('#btn-ctx-call-source')?.addEventListener('click', () => this.toggleCallSource());
+    this.container.querySelector('#btn-ctx-call-source')?.addEventListener('click', () => this.promptChangeCallSource());
+    this.container.querySelector('#btn-ctx-call-input')?.addEventListener('click', () => this.promptChangeCallInput());
     this.container.querySelector('#btn-ctx-call-target')?.addEventListener('click', () => this.inspectSelectedNode());
 
     // Ações de Output
     this.container.querySelector('#btn-ctx-out-artifacts')?.addEventListener('click', () => globalEventBus.emit('console:open-artifacts'));
-    this.container.querySelector('#btn-ctx-out-pattern')?.addEventListener('click', () => this.promptChangeOutputPattern());
+    this.container.querySelector('#btn-ctx-out-source')?.addEventListener('click', () => this.promptChangeOutputSource());
+    this.container.querySelector('#btn-ctx-out-destination')?.addEventListener('click', () => this.promptChangeOutputDestination());
+    this.container.querySelector('#btn-ctx-out-type')?.addEventListener('click', () => this.promptChangeOutputType());
   }
 
   public renameSelectedNode(): void {
-    if (!this.selectedNode) return;
-    const current = this.selectedNode.label;
-    const newName = prompt(t('ribbon.contextual.rename_prompt', 'Novo nome para o vértice:'), current);
-    if (newName && newName.trim() && newName.trim() !== current) {
-      const oldLabel = current;
-      const nextLabel = newName.trim();
-      const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { label: oldLabel }, { label: nextLabel }, `Renomear para "${nextLabel}"`);
-      this.graph.commandManager.execute(cmd);
-      this.selectedNode.label = nextLabel;
-      this.render();
-    }
+    const node = this.currentNode();
+    if (!node) return;
+    this.ribbonDialog.openInput({
+      title: 'Renomear vértice',
+      fields: [{ id: 'name', label: 'Nome do vértice', type: 'text', value: node.label }],
+      validate: values => values.name.trim() ? null : 'Informe um nome.',
+      onConfirm: values => this.applyRename(node.id, values.name)
+    });
+  }
+
+  public applyRename(nodeId: string, name: string): boolean {
+    const node = this.graph.getNode(nodeId);
+    const clean = name.trim();
+    if (!node || !clean) return false;
+    this.commitNodePatch(node, { label: clean }, `Renomear para "${clean}"`);
+    return true;
   }
 
   public duplicateSelectedNode(): void {
-    if (!this.selectedNode) return;
-    const copy = cloneNodeData(this.graph, this.selectedNode, t('context_menu.copy_suffix', '(cópia)'));
+    const node = this.currentNode();
+    if (!node) return;
+    const copy = cloneNodeData(this.graph, node, t('context_menu.copy_suffix', '(cópia)'));
     this.graph.commandManager.execute(new AddNodeCommand(this.graph, copy));
     this.viewport.selectNode(copy.id);
   }
 
   public deleteSelectedNode(): void {
-    if (!this.selectedNode) return;
-    const id = this.selectedNode.id;
-    const label = this.selectedNode.label;
-    if (confirm(t('ribbon.contextual.delete_confirm', `Deseja realmente excluir o vértice "${label}"?`))) {
-      this.graph.commandManager.execute(new RemoveNodeCommand(this.graph, id));
-      this.selectedNode = null;
-      this.activeTab = this.previousActiveTab || 'home';
-      this.render();
-    }
+    const node = this.currentNode();
+    if (!node) return;
+    this.ribbonDialog.openConfirm({
+      title: 'Excluir vértice',
+      message: t('ribbon.contextual.delete_confirm', `Deseja realmente excluir o vértice "${node.label}"?`),
+      confirmLabel: 'Excluir',
+      danger: true,
+      onConfirm: () => this.applyDeleteSelectedNode(node.id)
+    });
+  }
+
+  public applyDeleteSelectedNode(nodeId?: string): void {
+    const id = nodeId || this.selectedNode?.id;
+    if (!id || !this.graph.getNode(id)) return;
+    this.graph.commandManager.execute(new RemoveNodeCommand(this.graph, id));
+    this.selectedNode = null;
+    this.activeTab = this.previousActiveTab || 'home';
+    this.render();
+  }
+
+  public applyClearGraph(): void {
+    this.graph.clear();
+    this.selectedNode = null;
+    this.activeTab = 'home';
+    this.render();
   }
 
   public inspectSelectedNode(): void {
-    if (!this.selectedNode) return;
-    globalEventBus.emit('node:selected', this.selectedNode);
+    const node = this.currentNode();
+    if (!node) return;
+    globalEventBus.emit('node:selected', node);
   }
 
   public promptChangeTemperature(): void {
-    if (!this.selectedNode) return;
-    const current = this.selectedNode.agentSettings?.model?.temperature ?? 0.7;
-    const input = prompt('Defina a temperatura do modelo (0.0 a 2.0):', current.toString());
-    if (input !== null) {
-      const val = parseFloat(input);
-      if (!isNaN(val) && val >= 0 && val <= 2) {
-        const baseSettings: INodeAgentSettings = this.selectedNode.agentSettings ?? {
-          inheritSandbox: true,
-          inheritModel: true,
-          inheritCodeMode: true
-        };
-        const nextSettings: INodeAgentSettings = {
-          ...baseSettings,
-          model: {
-            ...(baseSettings.model ?? { provider: 'openai', model: 'gpt-4o' }),
-            temperature: val
-          }
-        };
-        const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { agentSettings: this.selectedNode.agentSettings }, { agentSettings: nextSettings }, 'Alterar temperatura');
-        this.graph.commandManager.execute(cmd);
-        this.selectedNode.agentSettings = nextSettings;
-        this.render();
-      }
-    }
+    const node = this.currentNode();
+    if (!node) return;
+    const effective = this.effectiveAgentSettings(node);
+    this.ribbonDialog.openInput({
+      title: 'Temperatura do modelo',
+      message: 'Ao alterar no vértice, o modelo deixa de herdar os padrões globais para esta propriedade.',
+      fields: [{
+        id: 'temperature',
+        label: 'Temperatura (0 a 2)',
+        type: 'number',
+        value: effective.model.temperature ?? 0.7,
+        min: 0,
+        max: 2,
+        step: 0.05
+      }],
+      validate: values => {
+        const value = Number(values.temperature);
+        return Number.isFinite(value) && value >= 0 && value <= 2 ? null : 'Use um valor entre 0 e 2.';
+      },
+      onConfirm: values => this.applyAgentTemperature(Number(values.temperature))
+    });
+  }
+
+  public applyAgentTemperature(value: number): boolean {
+    const node = this.currentNode();
+    if (!node) return false;
+    if (!Number.isFinite(value) || value < 0 || value > 2) return false;
+    const base = this.agentSettingsBase(node);
+    const effective = this.effectiveAgentSettings(node);
+    const next: INodeAgentSettings = {
+      ...base,
+      inheritModel: false,
+      model: { ...effective.model, temperature: value }
+    };
+    this.commitNodePatch(node, { agentSettings: next }, 'Alterar temperatura');
+    return true;
   }
 
   public promptChangeTimeout(): void {
-    if (!this.selectedNode) return;
-    const current = this.selectedNode.agentSettings?.sandbox?.timeoutSeconds ?? 30;
-    const input = prompt('Defina o tempo limite (timeout) em segundos:', current.toString());
-    if (input !== null) {
-      const val = parseInt(input, 10);
-      if (!isNaN(val) && val > 0) {
-        const baseSettings: INodeAgentSettings = this.selectedNode.agentSettings ?? {
-          inheritSandbox: true,
-          inheritModel: true,
-          inheritCodeMode: true
-        };
-        const nextSettings: INodeAgentSettings = {
-          ...baseSettings,
-          sandbox: {
-            ...(baseSettings.sandbox ?? { isolationLevel: 'host_direct' }),
-            timeoutSeconds: val
-          }
-        };
-        const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { agentSettings: this.selectedNode.agentSettings }, { agentSettings: nextSettings }, 'Alterar timeout');
-        this.graph.commandManager.execute(cmd);
-        this.selectedNode.agentSettings = nextSettings;
-        this.render();
-      }
-    }
+    const node = this.currentNode();
+    if (!node) return;
+    const effective = this.effectiveAgentSettings(node);
+    this.ribbonDialog.openInput({
+      title: 'Timeout do sandbox',
+      message: 'Ao alterar no vértice, o sandbox deixa de herdar os padrões globais para esta propriedade.',
+      fields: [{
+        id: 'timeout',
+        label: 'Tempo limite (segundos)',
+        type: 'number',
+        value: Math.round(effective.sandbox.timeoutSeconds ?? 300),
+        min: 1,
+        max: 86400,
+        step: 1
+      }],
+      validate: values => {
+        const value = Number(values.timeout);
+        return Number.isInteger(value) && value > 0 ? null : 'Use um inteiro maior que zero.';
+      },
+      onConfirm: values => this.applyAgentTimeout(Number(values.timeout))
+    });
   }
 
-  public promptChangeRetry(): void {
-    if (!this.selectedNode) return;
-    const current = this.selectedNode.retryPolicy?.maxRetries ?? 0;
-    const input = prompt('Número máximo de retentativas (0 a 10):', current.toString());
-    if (input !== null) {
-      const val = parseInt(input, 10);
-      if (!isNaN(val) && val >= 0) {
-        const nextPolicy = { maxRetries: val, backoffMs: 1000 };
-        const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { retryPolicy: this.selectedNode.retryPolicy }, { retryPolicy: nextPolicy }, 'Alterar política de retry');
-        this.graph.commandManager.execute(cmd);
-        this.selectedNode.retryPolicy = nextPolicy;
-        this.render();
-      }
-    }
+  public applyAgentTimeout(value: number): boolean {
+    const node = this.currentNode();
+    if (!node) return false;
+    if (!Number.isInteger(value) || value < 1 || value > 86400) return false;
+    const base = this.agentSettingsBase(node);
+    const effective = this.effectiveAgentSettings(node);
+    const next: INodeAgentSettings = {
+      ...base,
+      inheritSandbox: false,
+      sandbox: { ...effective.sandbox, timeoutSeconds: value }
+    };
+    this.commitNodePatch(node, { agentSettings: next }, 'Alterar timeout');
+    return true;
   }
 
-  public promptChangeConditionExpr(): void {
-    if (!this.selectedNode) return;
-    const current = this.selectedNode.conditionSettings?.expression ?? 'x > 0';
-    const input = prompt('Expressão ou regra lógica de decisão (retorna 0 para True ou 1 para False):', current);
-    if (input !== null && input.trim()) {
-      const nextSettings = { ...this.selectedNode.conditionSettings, expression: input.trim() };
-      const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { conditionSettings: this.selectedNode.conditionSettings }, { conditionSettings: nextSettings }, 'Alterar expressão de decisão');
-      this.graph.commandManager.execute(cmd);
-      this.selectedNode.conditionSettings = nextSettings;
-      this.render();
+  public conditionProbability(node?: INodeData): number | null {
+    const current = node ?? this.currentNode();
+    if (!current) return null;
+    const body = (current.customLambdaBody || '').trim();
+    if (!body) return 50;
+    const explicit = body.match(/\(\s*std::rand\(\)\s*%\s*100\s*\)\s*<\s*(\d{1,3})\s*\?/);
+    if (explicit) {
+      const value = Number(explicit[1]);
+      return value >= 0 && value <= 100 ? value : null;
     }
+    if (/rand\(\)\s*%\s*2/.test(body)) return 50;
+    return null;
   }
 
   public promptChangeConditionProb(): void {
-    if (!this.selectedNode) return;
-    const current = this.selectedNode.conditionSettings?.stochasticProbability ?? 0.5;
-    const input = prompt('Probabilidade de sucesso estocástica (0.0 a 1.0):', current.toString());
-    if (input !== null) {
-      const val = parseFloat(input);
-      if (!isNaN(val) && val >= 0 && val <= 1) {
-        const nextSettings = { ...this.selectedNode.conditionSettings, stochasticProbability: val };
-        const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { conditionSettings: this.selectedNode.conditionSettings }, { conditionSettings: nextSettings }, 'Alterar probabilidade');
-        this.graph.commandManager.execute(cmd);
-        this.selectedNode.conditionSettings = nextSettings;
-        this.render();
-      }
+    const node = this.currentNode();
+    if (!node) return;
+    const current = this.conditionProbability(node);
+    if (current === null) {
+      this.notify(
+        'Probabilidade do ramo 0',
+        'O corpo deste decisor já tem código personalizado. Ajuste a probabilidade no editor de código.',
+        'warning'
+      );
+      this.codeModal.show();
+      return;
     }
-  }
-
-  public invertConditionBranches(): void {
-    if (!this.selectedNode) return;
-    globalEventBus.emit('notification:show', {
-      title: 'Ramos Invertidos',
-      message: `Ramos de decisão do nó "${this.selectedNode.label}" invertidos.`,
-      type: 'info'
+    this.ribbonDialog.openInput({
+      title: 'Probabilidade do ramo 0',
+      message: 'O corpo C++ será gerado como um sorteio determinístico de 0 a 99.',
+      fields: [{
+        id: 'probability',
+        label: 'Chance do ramo 0 (%)',
+        type: 'number',
+        value: current,
+        min: 0,
+        max: 100,
+        step: 1
+      }],
+      validate: values => {
+        const value = Number(values.probability);
+        return Number.isInteger(value) && value >= 0 && value <= 100 ? null : 'Use um inteiro entre 0 e 100.';
+      },
+      onConfirm: values => this.applyConditionProbability(Number(values.probability))
     });
   }
 
-  public addSwitchCase(): void {
-    if (!this.selectedNode) return;
-    const currentOutputs = this.selectedNode.outputs.length;
-    const caseIndex = currentOutputs;
-    const newPortId = `${this.selectedNode.id}_case_${caseIndex}`;
-    this.selectedNode.outputs.push({
+  public applyConditionProbability(value: number): boolean {
+    const node = this.currentNode();
+    if (!node) return false;
+    if (!Number.isInteger(value) || value < 0 || value > 100) return false;
+    if (this.conditionProbability(node) === null) {
+      this.notify(
+        'Probabilidade do ramo 0',
+        'O corpo deste decisor já tem código personalizado e não foi sobrescrito.',
+        'warning'
+      );
+      return false;
+    }
+    const body = `// Decisão estocástica: ${value}% de chance para o ramo 0.\nreturn (std::rand() % 100) < ${value} ? 0 : 1;`;
+    this.commitNodePatch(node, { customLambdaBody: body }, 'Alterar probabilidade do decisor');
+    return true;
+  }
+
+  public addSwitchCase(): boolean {
+    const node = this.currentNode();
+    if (!node || node.type !== 'switch') return false;
+
+    const outputs = deepClone(node.outputs);
+    if (outputs.length === 0) return false;
+    let defaultIndex = outputs.findIndex(port => port.name === 'default' || port.id.endsWith('_out_default'));
+    if (defaultIndex < 0) defaultIndex = outputs.length - 1;
+    const defaultPort = outputs[defaultIndex];
+    const newBranchIndex = Number.isFinite(defaultPort.conditionBranchIndex)
+      ? defaultPort.conditionBranchIndex
+      : defaultIndex;
+
+    let caseNumber = Math.max(1, outputs.length - 1);
+    let newPortId = `${node.id}_case_${caseNumber}`;
+    while (outputs.some(port => port.id === newPortId)) {
+      caseNumber += 1;
+      newPortId = `${node.id}_case_${caseNumber}`;
+    }
+
+    const newPort = {
       id: newPortId,
-      name: `Caso ${caseIndex}`,
-      type: 'flow',
-      direction: 'output'
-    });
-    globalEventBus.emit('node:updated', this.selectedNode.id);
-    this.render();
-  }
-
-  public promptChangeSwitchVar(): void {
-    if (!this.selectedNode) return;
-    const baseSwitch = this.selectedNode.switchSettings ?? defaultSwitchSettings();
-    const current = baseSwitch.variableName ?? 'status';
-    const input = prompt('Nome da variável avaliada no Switch:', current);
-    if (input !== null && input.trim()) {
-      const nextSettings: ISwitchSettings = { ...baseSwitch, variableName: input.trim() };
-      const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { switchSettings: this.selectedNode.switchSettings }, { switchSettings: nextSettings }, 'Alterar variável de switch');
-      this.graph.commandManager.execute(cmd);
-      this.selectedNode.switchSettings = nextSettings;
-      this.render();
-    }
-  }
-
-  public testMcpTool(): void {
-    if (!this.selectedNode) return;
-    globalEventBus.emit('notification:show', {
-      title: 'Teste MCP',
-      message: `Testando ferramenta MCP do vértice "${this.selectedNode.label}"...`,
-      type: 'info'
-    });
-  }
-
-  public toggleCudaStream(): void {
-    if (!this.selectedNode) return;
-    const currentStream = !!this.selectedNode.cudaSettings?.asyncStream;
-    const nextSettings = {
-      ...this.selectedNode.cudaSettings,
-      asyncStream: !currentStream
+      name: `Caso ${caseNumber}`,
+      direction: 'output' as const,
+      type: 'flow' as const,
+      conditionBranchIndex: newBranchIndex
     };
-    const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { cudaSettings: this.selectedNode.cudaSettings }, { cudaSettings: nextSettings }, 'Alternar Stream CUDA');
-    this.graph.commandManager.execute(cmd);
-    this.selectedNode.cudaSettings = nextSettings;
-    this.render();
+    const nextOutputs = [
+      ...outputs.slice(0, defaultIndex),
+      newPort,
+      ...outputs.slice(defaultIndex)
+    ].map((port, index) => ({ ...port, conditionBranchIndex: index }));
+
+    const baseSwitch = node.switchSettings ?? defaultSwitchSettings();
+    const nextSettings: ISwitchSettings = {
+      ...baseSwitch,
+      rules: { ...(baseSwitch.rules || {}), [newPortId]: '' }
+    };
+
+    this.commitNodePatch(node, { outputs: nextOutputs, switchSettings: nextSettings }, 'Adicionar caso ao switch');
+    return true;
+  }
+
+  public promptChangeSwitchMode(): void {
+    const node = this.currentNode();
+    if (!node) return;
+    const baseSwitch = node.switchSettings ?? defaultSwitchSettings();
+    this.ribbonDialog.openInput({
+      title: 'Modo de decisão do Switch',
+      message: 'Código usa o corpo C++; palavras usa as regras por caso; modelo consulta a IA local/remota.',
+      fields: [{
+        id: 'mode',
+        label: 'Modo',
+        type: 'select',
+        value: baseSwitch.mode || 'code',
+        options: [
+          { value: 'code', label: 'Código C++' },
+          { value: 'rules', label: 'Palavras-chave' },
+          { value: 'model', label: 'Modelo de IA' }
+        ]
+      }],
+      onConfirm: values => this.applySwitchMode(values.mode as ISwitchSettings['mode'])
+    });
+  }
+
+  public applySwitchMode(mode: ISwitchSettings['mode']): boolean {
+    const node = this.currentNode();
+    if (!node) return false;
+    if (!['code', 'rules', 'model'].includes(mode)) return false;
+    const base = node.switchSettings ?? defaultSwitchSettings();
+    this.commitNodePatch(node, { switchSettings: { ...base, mode } }, 'Alterar modo do switch');
+    return true;
+  }
+
+  public promptChangeSwitchSource(): void {
+    const node = this.currentNode();
+    if (!node) return;
+    const baseSwitch = node.switchSettings ?? defaultSwitchSettings();
+    const source = baseSwitch.source ?? { kind: 'previous' as const, path: '' };
+    this.ribbonDialog.openInput({
+      title: 'Origem do texto do Switch',
+      message: 'A origem alimenta as palavras-chave ou o modelo que escolhe o caso.',
+      fields: [
+        {
+          id: 'kind',
+          label: 'Origem',
+          type: 'select',
+          value: source.kind || 'previous',
+          options: [
+            { value: 'previous', label: 'Saída do vértice anterior' },
+            { value: 'file', label: 'Arquivo do projeto' }
+          ]
+        },
+        {
+          id: 'path',
+          label: 'Caminho do arquivo',
+          type: 'text',
+          value: source.path || '',
+          placeholder: 'workspace/resultado.md',
+          help: 'Obrigatório quando a origem é um arquivo.'
+        }
+      ],
+      validate: values => values.kind === 'file' && !values.path.trim() ? 'Informe o arquivo de origem.' : null,
+      onConfirm: values => this.applySwitchSource(values.kind as 'previous' | 'file', values.path)
+    });
+  }
+
+  public applySwitchSource(kind: 'previous' | 'file', path: string = ''): boolean {
+    const node = this.currentNode();
+    if (!node) return false;
+    if (kind !== 'previous' && kind !== 'file') return false;
+    const cleanPath = path.trim();
+    if (kind === 'file' && !cleanPath) return false;
+    const base = node.switchSettings ?? defaultSwitchSettings();
+    this.commitNodePatch(
+      node,
+      { switchSettings: { ...base, source: { kind, path: kind === 'file' ? cleanPath : '' } } },
+      'Alterar origem do switch'
+    );
+    return true;
+  }
+
+  public async testMcpTool(): Promise<boolean> {
+    const node = this.currentNode();
+    if (!node) return false;
+    const settings = node.mcpSettings;
+    if (!settings?.server || !settings?.tool) {
+      this.notify('Teste MCP', 'Configure o servidor e a ferramenta no Inspetor antes de testar.', 'warning');
+      this.inspectSelectedNode();
+      return false;
+    }
+
+    const webui = typeof window !== 'undefined' ? (window as any).webui : undefined;
+    if (!webui || typeof webui.call !== 'function') {
+      this.notify('Teste MCP', 'A execução real está disponível apenas no aplicativo desktop.', 'warning');
+      return false;
+    }
+
+    this.notify('Teste MCP', `Executando ${settings.server}/${settings.tool}...`, 'info');
+    try {
+      const payload = JSON.stringify({
+        serverId: settings.server,
+        toolName: settings.tool,
+        arguments: settings.arguments || {}
+      });
+      const raw = await webui.call('call_mcp_tool', payload);
+      if (!raw) return false;
+      const result = JSON.parse(raw) as IMcpCallResult;
+      if (result.isError) {
+        this.notify(
+          'Teste MCP',
+          result.errorMessage || result.errorCode || 'A ferramenta retornou erro.',
+          'error'
+        );
+        return false;
+      }
+      const preview = (result.content || '').slice(0, 280);
+      this.notify('Teste MCP', preview || 'Chamada concluída.', 'success');
+      return true;
+    } catch (error) {
+      this.notify('Teste MCP', `Falha na chamada: ${String(error)}`, 'error');
+      return false;
+    }
   }
 
   public enterSubflow(): void {
-    if (!this.selectedNode) return;
-    globalEventBus.emit('subflow:enter', this.selectedNode.id);
-    this.inspectSelectedNode();
+    const node = this.currentNode();
+    if (!node) return;
+    if (!this.graph.diveIntoSubflow(node.id)) {
+      this.notify('Subfluxo', 'Este vértice não é um subfluxo ou módulo navegável.', 'warning');
+      return;
+    }
+    this.selectedNode = null;
+    this.activeTab = this.previousActiveTab || 'home';
+    this.render();
+    try {
+      this.viewport.zoomToFit();
+    } catch (_) {
+      // O viewport pode não existir em testes de unidade.
+    }
   }
 
-  public promptChangeRecursion(): void {
-    if (!this.selectedNode) return;
-    const current = this.selectedNode.subflowSettings?.maxRecursionDepth ?? 5;
-    const input = prompt('Profundidade máxima de recursão do subfluxo (1 a 50):', current.toString());
-    if (input !== null) {
-      const val = parseInt(input, 10);
-      if (!isNaN(val) && val > 0) {
-        const nextSettings = { ...this.selectedNode.subflowSettings, maxRecursionDepth: val };
-        const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { subflowSettings: this.selectedNode.subflowSettings }, { subflowSettings: nextSettings }, 'Alterar recursão');
-        this.graph.commandManager.execute(cmd);
-        this.selectedNode.subflowSettings = nextSettings;
-        this.render();
-      }
-    }
+  public criticalConcurrency(node?: INodeData): number {
+    const current = node ?? this.currentNode();
+    const raw = current?.parameters?.maxConcurrency;
+    const value = typeof raw === 'number' ? raw : Number(raw);
+    return Number.isInteger(value) && value >= 1 && value <= 64 ? value : 1;
   }
 
   public promptChangeCriticalKey(): void {
-    if (!this.selectedNode) return;
-    const current = this.selectedNode.criticalSettings?.mutexKey ?? 'global_mutex';
-    const input = prompt('Nome da chave do Mutex / Recurso Compartilhado:', current);
-    if (input !== null && input.trim()) {
-      const nextSettings = { ...this.selectedNode.criticalSettings, mutexKey: input.trim() };
-      const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { criticalSettings: this.selectedNode.criticalSettings }, { criticalSettings: nextSettings }, 'Alterar chave do mutex');
-      this.graph.commandManager.execute(cmd);
-      this.selectedNode.criticalSettings = nextSettings;
-      this.render();
-    }
+    const node = this.currentNode();
+    if (!node) return;
+    this.ribbonDialog.openInput({
+      title: 'Chave da seção crítica',
+      message: 'Vértices com a mesma chave compartilham o mesmo semáforo no C++ gerado.',
+      fields: [{
+        id: 'key',
+        label: 'Chave (vazia = default)',
+        type: 'text',
+        value: node.criticalSectionId || 'default',
+        placeholder: 'default'
+      }],
+      onConfirm: values => this.applyCriticalSectionKey(values.key)
+    });
+  }
+
+  public applyCriticalSectionKey(key: string): boolean {
+    const node = this.currentNode();
+    if (!node) return false;
+    const clean = key.trim() || 'default';
+    this.commitNodePatch(node, { criticalSectionId: clean }, 'Alterar chave da seção crítica');
+    return true;
   }
 
   public promptChangeCriticalConcurrency(): void {
-    if (!this.selectedNode) return;
-    const current = this.selectedNode.criticalSettings?.maxConcurrency ?? 1;
-    const input = prompt('Concorrência máxima permitida (1 = exclusão mútua / Mutex estrito):', current.toString());
-    if (input !== null) {
-      const val = parseInt(input, 10);
-      if (!isNaN(val) && val >= 1) {
-        const nextSettings = { ...this.selectedNode.criticalSettings, maxConcurrency: val };
-        const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { criticalSettings: this.selectedNode.criticalSettings }, { criticalSettings: nextSettings }, 'Alterar concorrência');
-        this.graph.commandManager.execute(cmd);
-        this.selectedNode.criticalSettings = nextSettings;
-        this.render();
-      }
-    }
+    const node = this.currentNode();
+    if (!node) return;
+    this.ribbonDialog.openInput({
+      title: 'Concorrência da seção crítica',
+      message: 'O gerador cria um tf::Semaphore por chave. 1 equivale a exclusão mútua.',
+      fields: [{
+        id: 'concurrency',
+        label: 'Aquisições simultâneas (1 a 64)',
+        type: 'number',
+        value: this.criticalConcurrency(node),
+        min: 1,
+        max: 64,
+        step: 1
+      }],
+      validate: values => {
+        const value = Number(values.concurrency);
+        return Number.isInteger(value) && value >= 1 && value <= 64 ? null : 'Use um inteiro entre 1 e 64.';
+      },
+      onConfirm: values => this.applyCriticalConcurrency(Number(values.concurrency))
+    });
+  }
+
+  public applyCriticalConcurrency(value: number): boolean {
+    const node = this.currentNode();
+    if (!node) return false;
+    if (!Number.isInteger(value) || value < 1 || value > 64) return false;
+    const parameters = { ...(node.parameters || {}), maxConcurrency: value };
+    this.commitNodePatch(node, { parameters }, 'Alterar concorrência da seção crítica');
+    return true;
   }
 
   public previewInteraction(): void {
-    if (!this.selectedNode) return;
+    const node = this.currentNode();
+    if (!node) return;
     globalEventBus.emit('pipeline:interaction', {
       requestId: `preview_${Date.now()}`,
-      nodeId: this.selectedNode.id,
-      nodeLabel: this.selectedNode.label,
-      form: this.selectedNode.interactionSettings?.form ?? {
-        title: this.selectedNode.label,
+      nodeId: node.id,
+      nodeLabel: node.label,
+      form: node.interactionSettings?.form ?? {
+        title: node.label,
         description: 'Pré-visualização do formulário de interação humana.',
         fields: [
           { id: 'f1', type: 'text', label: 'Resposta do Operador', required: true }
@@ -2070,32 +2317,228 @@ export class OfficeRibbon {
     });
   }
 
-  public toggleCallSource(): void {
-    if (!this.selectedNode) return;
-    const currentSource = this.selectedNode.callSettings?.source?.kind ?? 'previous';
-    const kinds: Array<'previous' | 'file' | 'none'> = ['previous', 'file', 'none'];
-    const nextKind = kinds[(kinds.indexOf(currentSource) + 1) % kinds.length];
-    const nextSettings = {
-      ...this.selectedNode.callSettings,
-      source: { kind: nextKind, path: '' }
+  public promptChangeCallSource(): void {
+    const node = this.currentNode();
+    if (!node) return;
+    const current: ICallVertexSettings = node.callSettings ?? defaultCallVertexSettings();
+    const source = current.source ?? { kind: 'previous' as const, path: '' };
+    this.ribbonDialog.openInput({
+      title: 'Origem do input da chamada',
+      message: 'O input fixo, quando preenchido, tem prioridade sobre a origem.',
+      fields: [
+        {
+          id: 'kind',
+          label: 'Origem',
+          type: 'select',
+          value: source.kind || 'previous',
+          options: [
+            { value: 'previous', label: 'Saída do vértice anterior' },
+            { value: 'file', label: 'Arquivo do projeto' },
+            { value: 'none', label: 'Nenhuma' }
+          ]
+        },
+        {
+          id: 'path',
+          label: 'Caminho do arquivo',
+          type: 'text',
+          value: source.path || '',
+          placeholder: 'workspace/entrada.md',
+          help: 'Obrigatório quando a origem é um arquivo.'
+        }
+      ],
+      validate: values => values.kind === 'file' && !values.path.trim() ? 'Informe o arquivo de origem.' : null,
+      onConfirm: values => this.applyCallSource(values.kind as 'previous' | 'file' | 'none', values.path)
+    });
+  }
+
+  public applyCallSource(kind: 'previous' | 'file' | 'none', path: string = ''): boolean {
+    const node = this.currentNode();
+    if (!node) return false;
+    if (!['previous', 'file', 'none'].includes(kind)) return false;
+    const cleanPath = path.trim();
+    if (kind === 'file' && !cleanPath) return false;
+    const current: ICallVertexSettings = node.callSettings ?? defaultCallVertexSettings();
+    this.commitNodePatch(
+      node,
+      { callSettings: { ...current, source: { kind, path: kind === 'file' ? cleanPath : '' } } },
+      'Alterar origem do input da chamada'
+    );
+    return true;
+  }
+
+  public promptChangeCallInput(): void {
+    const node = this.currentNode();
+    if (!node) return;
+    const current: ICallVertexSettings = node.callSettings ?? defaultCallVertexSettings();
+    this.ribbonDialog.openInput({
+      title: 'Input fixo da chamada',
+      message: 'Quando preenchido, este texto é enviado ao alvo em vez de coletar a origem.',
+      fields: [{ id: 'input', label: 'Input fixo', type: 'textarea', value: current.input || '' }],
+      onConfirm: values => this.applyCallInput(values.input)
+    });
+  }
+
+  public applyCallInput(input: string): boolean {
+    const node = this.currentNode();
+    if (!node) return false;
+    const current: ICallVertexSettings = node.callSettings ?? defaultCallVertexSettings();
+    this.commitNodePatch(node, { callSettings: { ...current, input } }, 'Alterar input fixo da chamada');
+    return true;
+  }
+
+  public promptChangeOutputSource(): void {
+    const node = this.currentNode();
+    if (!node) return;
+    const current: IOutputSettings = node.outputSettings ?? defaultOutputSettings();
+    this.ribbonDialog.openInput({
+      title: 'Arquivo de origem da entrega',
+      message: 'O coletor copia este arquivo para o destino quando ele existir.',
+      fields: [{
+        id: 'path',
+        label: 'Origem',
+        type: 'text',
+        value: current.sourcePath || '',
+        placeholder: 'workspace/scene.svg'
+      }],
+      onConfirm: values => this.applyOutputSource(values.path)
+    });
+  }
+
+  public applyOutputSource(path: string): boolean {
+    const node = this.currentNode();
+    if (!node) return false;
+    const current: IOutputSettings = node.outputSettings ?? defaultOutputSettings();
+    this.commitNodePatch(node, { outputSettings: { ...current, sourcePath: path.trim() } }, 'Alterar origem da entrega');
+    return true;
+  }
+
+  public promptChangeOutputDestination(): void {
+    const node = this.currentNode();
+    if (!node) return;
+    const current: IOutputSettings = node.outputSettings ?? defaultOutputSettings();
+    this.ribbonDialog.openInput({
+      title: 'Arquivo de destino da entrega',
+      message: 'O destino é criado e recebe uma cópia do artefato de origem.',
+      fields: [{
+        id: 'path',
+        label: 'Destino',
+        type: 'text',
+        value: current.destinationPath || '',
+        placeholder: 'exports/scene.svg'
+      }],
+      onConfirm: values => this.applyOutputDestination(values.path)
+    });
+  }
+
+  public applyOutputDestination(path: string): boolean {
+    const node = this.currentNode();
+    if (!node) return false;
+    const current: IOutputSettings = node.outputSettings ?? defaultOutputSettings();
+    this.commitNodePatch(node, { outputSettings: { ...current, destinationPath: path.trim() } }, 'Alterar destino da entrega');
+    return true;
+  }
+
+  public promptChangeOutputType(): void {
+    const node = this.currentNode();
+    if (!node) return;
+    const current: IOutputSettings = node.outputSettings ?? defaultOutputSettings();
+    this.ribbonDialog.openInput({
+      title: 'Tipo do artefato',
+      message: 'O tipo orienta a visualização no painel de artefatos.',
+      fields: [{
+        id: 'type',
+        label: 'Formato',
+        type: 'select',
+        value: current.artifactType || 'auto',
+        options: ['auto', 'svg', 'sheet', 'pdf', 'markdown', 'text', 'json', 'image', 'binary']
+          .map(value => ({ value, label: value }))
+      }],
+      onConfirm: values => this.applyOutputType(values.type as IOutputSettings['artifactType'])
+    });
+  }
+
+  public applyOutputType(type: IOutputSettings['artifactType']): boolean {
+    const node = this.currentNode();
+    if (!node) return false;
+    const allowed: IOutputSettings['artifactType'][] = ['auto', 'svg', 'sheet', 'pdf', 'markdown', 'text', 'json', 'image', 'binary'];
+    if (!allowed.includes(type)) return false;
+    const current: IOutputSettings = node.outputSettings ?? defaultOutputSettings();
+    this.commitNodePatch(node, { outputSettings: { ...current, artifactType: type } }, 'Alterar tipo da entrega');
+    return true;
+  }
+
+  private currentNode(): INodeData | null {
+    if (!this.selectedNode) return null;
+    return this.graph.getNode(this.selectedNode.id) ?? null;
+  }
+
+  private agentSettingsBase(node: INodeData): INodeAgentSettings {
+    return node.agentSettings ?? {
+      inheritSandbox: true,
+      inheritModel: true,
+      inheritCodeMode: true,
+      inheritMemory: true
     };
-    const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { callSettings: this.selectedNode.callSettings }, { callSettings: nextSettings }, 'Alterar origem do input');
-    this.graph.commandManager.execute(cmd);
-    this.selectedNode.callSettings = nextSettings;
+  }
+
+  private isAgentSandboxInherited(node: INodeData): boolean {
+    return this.agentSettingsBase(node).inheritSandbox !== false;
+  }
+
+  private effectiveAgentSettings(node: INodeData): { model: IModelConfig; sandbox: ISandboxPolicy } {
+    const defaults = this.graph.getGlobalDefaults();
+    const settings = this.agentSettingsBase(node);
+    const model: IModelConfig = settings.inheritModel === false
+      ? { ...defaults.model, ...(settings.model ?? {}) }
+      : { ...defaults.model };
+    const sandbox: ISandboxPolicy = settings.inheritSandbox === false
+      ? { ...defaults.sandbox, ...(settings.sandbox ?? {}) }
+      : { ...defaults.sandbox };
+    return { model, sandbox };
+  }
+
+  private getIsolationLabel(level: string): string {
+    switch (level) {
+      case 'container': return 'Container';
+      case 'microvm': return 'MicroVM';
+      case 'host_direct': return 'Host';
+      default: return level || '—';
+    }
+  }
+
+  private switchModeLabel(mode: string): string {
+    switch (mode) {
+      case 'code': return 'Código';
+      case 'rules': return 'Palavras';
+      case 'model': return 'Modelo';
+      default: return mode || '—';
+    }
+  }
+
+  private switchSourceLabel(kind: string): string {
+    switch (kind) {
+      case 'previous': return 'Anterior';
+      case 'file': return 'Arquivo';
+      case 'none': return 'Nenhuma';
+      default: return kind || '—';
+    }
+  }
+
+  private commitNodePatch(node: INodeData, patch: Partial<INodeData>, description: string): void {
+    const current = this.graph.getNode(node.id);
+    if (!current) return;
+    const oldProps: Partial<INodeData> = {};
+    for (const key of Object.keys(patch) as (keyof INodeData)[]) {
+      const value = current[key];
+      oldProps[key] = (value === undefined ? undefined : deepClone(value)) as never;
+    }
+    this.graph.commandManager.execute(new UpdateNodeCommand(this.graph, node.id, oldProps, patch, description));
+    this.selectedNode = this.graph.getNode(node.id) ?? null;
     this.render();
   }
 
-  public promptChangeOutputPattern(): void {
-    if (!this.selectedNode) return;
-    const currentOutput = this.selectedNode.outputSettings ?? defaultOutputSettings();
-    const input = prompt('Padrão de arquivos de artefatos coletados:', currentOutput.pattern ?? '*.svg, *.xlsx, *.md, *.json');
-    if (input !== null && input.trim()) {
-      const nextSettings: IOutputSettings = { ...currentOutput, pattern: input.trim() };
-      const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { outputSettings: this.selectedNode.outputSettings }, { outputSettings: nextSettings }, 'Alterar padrão de artefatos');
-      this.graph.commandManager.execute(cmd);
-      this.selectedNode.outputSettings = nextSettings;
-      this.render();
-    }
+  private notify(title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info'): void {
+    globalEventBus.emit('notification:show', { title, message, severity: type });
   }
 
   private escapeHtml(str: string): string {
@@ -2106,4 +2549,9 @@ export class OfficeRibbon {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
   }
+}
+
+function deepClone<T>(value: T): T {
+  if (value === undefined) return value;
+  return JSON.parse(JSON.stringify(value)) as T;
 }

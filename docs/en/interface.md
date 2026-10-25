@@ -21,6 +21,18 @@ The Studio follows the Microsoft Office layout, because most people already know
 Other conveniences: the **Quick Access Toolbar** (Save, Undo, Redo, Run, and the **Git Sync** button with real-time status badge), an autosave switch, the
 project search box (below), and `Ctrl+F1` to collapse the ribbon.
 
+### Vertex contextual tab
+
+Selecting a vertex adds a **contextual tab** with commands for that type (agent, decision, switch,
+MCP, subflow, critical section, call, output, and so on). The ribbon returns to the last normal tab
+when the vertex is deselected.
+
+Commands write the fields that the C++ generator actually consumes: model/sandbox, memory,
+`switchSettings`, `outputSettings`, `callSettings`, `customLambdaBody`, `criticalSectionId`, and
+`parameters`. Edits participate in undo/redo and autosave. The Switch inserts new cases **before**
+the `default`; critical sections generate one `tf::Semaphore` per key; and ribbon dialogs are native
+to the Studio instead of relying on the WebView's `window.prompt`/`window.confirm`.
+
 ### Project search
 
 The box at the top right searches the **open project**: every vertex (including those inside subflows and

@@ -417,7 +417,10 @@
 /* --- Corpo da Ribbon (Grupos e Comandos) - Altura Reduzida em ~30% --- */
 .office-ribbon-body {
   background-color: #f8fafc;
-  height: 64px;
+  /* A altura acompanha o conteúdo: em telas com zoom alto ou fontes maiores os
+     rótulos não podem ser cortados por um height fixo. */
+  min-height: 64px;
+  height: auto;
   overflow-x: auto;
   overflow-y: hidden;
   display: flex;
@@ -425,11 +428,22 @@
   padding: 3px 8px;
   gap: 4px;
   scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
   transition: max-height 0.2s ease, opacity 0.2s ease, padding 0.2s ease;
+}
+
+.office-ribbon-body::-webkit-scrollbar {
+  height: 6px;
+}
+
+.office-ribbon-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
 }
 
 .office-ribbon-body.collapsed {
   height: 0;
+  min-height: 0;
   padding: 0 8px;
   overflow: hidden;
   border-bottom: none;
@@ -439,7 +453,8 @@
   display: none;
   align-items: stretch;
   gap: 6px;
-  height: 100%;
+  min-height: 100%;
+  flex: 0 0 auto;
 }
 
 .office-ribbon-pane.active {
@@ -454,6 +469,7 @@
   padding: 1px 6px 2px 6px;
   border-right: 1px solid #cbd5e1;
   min-width: fit-content;
+  flex: 0 0 auto;
 }
 
 .office-ribbon-group:last-child {
@@ -1646,3 +1662,160 @@
 }
 
 .project-search-status { border-top: 1px solid #e2e8f0; }
+
+/* ==========================================================================
+   Responsividade do titlebar e da faixa contextual
+   ========================================================================== */
+
+.office-titlebar-left,
+.office-titlebar-right,
+.office-titlebar-center {
+  min-width: 0;
+}
+
+.office-tellme-box {
+  flex: 0 1 180px;
+  min-width: 120px;
+}
+
+@media (max-width: 1180px) {
+  .office-autosave-label,
+  .office-brand-badge > span {
+    display: none;
+  }
+
+  .office-tellme-box {
+    flex-basis: 140px;
+  }
+}
+
+@media (max-width: 900px) {
+  .office-titlebar-center {
+    display: none;
+  }
+
+  .contextual-tab-title {
+    max-width: 104px;
+  }
+
+  .office-tab-btn {
+    padding: 0 7px;
+  }
+}
+
+/* ==========================================================================
+   Diálogo leve da Ribbon (substitui prompt/confirm nativos)
+   ========================================================================== */
+
+.ribbon-dialog-overlay {
+  z-index: 1250;
+}
+
+.ribbon-dialog {
+  width: min(460px, calc(100vw - 32px));
+  min-height: 0;
+}
+
+.ribbon-dialog .office-modal-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.ribbon-dialog .office-modal-titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ribbon-dialog .office-modal-titlebar-text {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ribbon-dialog .office-modal-close-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #64748b;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.ribbon-dialog .office-modal-close-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.ribbon-dialog-body {
+  padding: 14px;
+}
+
+.ribbon-dialog-message {
+  margin: 0 0 12px 0;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ribbon-dialog .form-group {
+  margin-bottom: 12px;
+}
+
+.ribbon-dialog .form-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.ribbon-dialog .form-input,
+.ribbon-dialog .form-select,
+.ribbon-dialog .form-textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ribbon-dialog-error.hidden {
+  display: none;
+}
+
+.ribbon-dialog-error {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ribbon-dialog .modal-footer {
+  padding: 10px 14px;
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ribbon-dialog .btn-danger-office {
+  background: #dc2626;
+  border: 1px solid #b91c1c;
+  color: #ffffff;
+}
+
+.ribbon-dialog .btn-danger-office:hover {
+  background: #b91c1c;
+}
