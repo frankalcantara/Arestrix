@@ -23,6 +23,7 @@ python scripts/check_third_party_licenses.py
 | `i18next/` | https://github.com/i18next/i18next | `v26.4.4-2-g15d0b9d9` | MIT |
 | `monaco-editor/` | https://github.com/microsoft/monaco-editor | `473775c` | MIT |
 | `SkillSpector/` | https://github.com/NVIDIA/SkillSpector | `v2.12.0-630-g69d7d059` | Apache-2.0 |
+| `security-audit-skill/` | https://github.com/cloudflare/security-audit-skill | `c1c8a8c` | MIT |
 
 Vendored (not submodules):
 
@@ -41,6 +42,12 @@ npm run submodule:update   # move submodules to their latest upstream commit
 Submodule updates are dependency changes: run the license check, the frontend tests, the C++
 tests and the build before opening a pull request. Dependabot also opens monthly submodule pull
 requests.
+
+`SkillSpector/` and `security-audit-skill/` are **reference skills** used by the Arestrix Skill
+Guard. Updating either one requires the review process in
+[`docs/quality/skill-reference-review.md`](../docs/quality/skill-reference-review.md), including
+a lock update and `npm run check:skill-references`. A green build with an outdated lock is not
+enough.
 
 ## Adding a new dependency
 

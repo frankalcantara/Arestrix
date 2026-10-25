@@ -9,6 +9,8 @@
 | Caminho | Conteúdo |
 | :--- | :--- |
 | `src/` | Frontend em TypeScript (core, view, ui, i18n). |
+| `src/core/skills/` | Skill Guard: hashing, ledger, regras NVIDIA e fronteira Cloudflare, lock de referências. |
+| `.agents/skills/` | Skills usados pelos agentes de desenvolvimento deste repositório; inclui `arestrix-skill-guard`. |
 | `CppCore/` | Backend C++20, o runtime e a CLI. `dev.py` é o ponto de entrada do build. |
 | `CppCore/src/cli/` | O executor headless `arestrix-cli` (`run` e `gen`). |
 | `CppCore/src/local/` | Runtime local gerenciado: catálogo GGUF, downloads, processo llama.cpp e router nativo. |
@@ -48,7 +50,7 @@ O script `CppCore/dev.py` automatiza o ciclo completo de build local (TypeScript
 | `python CppCore/dev.py` | Compila frontend, compila backend nativo C++20 com hardening e abre o Studio. |
 | `python CppCore/dev.py --no-run` | Apenas compila (frontend e backend) sem abrir a interface gráfica. |
 | `python CppCore/dev.py --no-frontend` | Pula a compilação do TypeScript/Vite (útil durante iterações puras de C++). |
-| `python CppCore/dev.py --test` | Compila frontend + todos os alvos nativos (incluindo `arestrix-gateway`) e executa a suíte **C++** via `ctest`. Não roda Vitest; use `npm test` para o frontend. |
+| `python CppCore/dev.py --test` | Compila frontend + todos os alvos nativos (incluindo `arestrix-gateway` e `arestrix-memory`) e executa a suíte **C++** via `ctest`. Não roda Vitest; use `npm test` para o frontend. |
 | `python CppCore/dev.py --test-all` | Build + CTest + Vitest. |
 | `python CppCore/dev.py --check` | Versão, ativos locais, segredos e licenças de terceiros; sem build. |
 | `python CppCore/dev.py --gateway-smoke` | Smoke test HTTP do `arestrix-gateway` com upstream falso e bloqueio de budget. |
@@ -95,8 +97,10 @@ python CppCore/dev.py --no-run --test   # build do frontend + alvos nativos + CT
 npm run check:version                   # version.txt, package.json, package-lock.json, CHANGELOG
 npm run check:local-assets              # catálogo GGUF + manifesto do llama.cpp
 npm run check:secrets                   # segredos e dados pessoais
+npm run check:skill-references          # commits, trees e hashes das referências de skills
 python scripts/check_third_party_licenses.py
 node scripts/gateway-smoke.mjs          # smoke do proxy/budget do gateway
+python scripts/e2e_memory_institution.py # HTTP + MCP do arestrix-memory
 ```
 
 A suíte do frontend cobre validação de grafo e ciclos, desfazer/refazer, subfluxos, templates, herança de

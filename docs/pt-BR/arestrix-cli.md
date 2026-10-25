@@ -26,14 +26,16 @@ agentes, MCPs, memória, outputs e telemetria no terminal
 
 ## Onde ele fica
 
-O CMake gera dois executáveis:
+O CMake gera quatro executáveis:
 
 | Binário | O que é |
 | :--- | :--- |
 | `arestrix` / `arestrix.exe` | O Studio completo: WebUI, canvas, editores, memória e MCP. |
 | `arestrix-cli` / `arestrix-cli.exe` | O executor sem interface, para CI, servidores e scripts. |
+| `arestrix-gateway` / `arestrix-gateway.exe` | O AI Gateway on-prem com chaves virtuais e budgets. |
+| `arestrix-memory` / `arestrix-memory.exe` | O serviço institucional de memória (HTTP autenticado e MCP). |
 
-No Windows, o build copia o CLI para a raiz do repositório:
+No Windows, o build copia os binários para a raiz do repositório:
 
 ```text
 build\arestrix-cli.exe

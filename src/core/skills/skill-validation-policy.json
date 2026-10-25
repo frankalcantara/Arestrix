@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "ruleSetVersion": "3",
+  "policyVersion": "6d9584ac80f88ce35829af27f7539e6b852ac3aea2702671b2fc82ae2cad02fb",
+  "reviewedAt": "2026-10-25",
+  "reviewedBy": "Arestrix maintainers",
+  "reviewProcess": "docs/quality/skill-reference-review.md",
+  "guardSkill": {
+    "path": ".agents/skills/arestrix-skill-guard/SKILL.md",
+    "sha256": "637288356da22602c05ec9e160b4aa8ba9a940359673d4d28bcee421c6bbf2d2"
+  },
+  "ruleSources": [
+    {
+      "path": "src/core/skills/SkillSpectorRunner.ts",
+      "sha256": "830d8fbfba267a6ac6cdc792e10ac25f9e80aebc0cb9608576622b9eb8ba1ff4"
+    },
+    {
+      "path": "src/core/skills/CloudflareSkillAudit.ts",
+      "sha256": "c50077f6d22956883c57c85f0944d8f06f564e2d30e99e9219c4758c42e1d393"
+    }
+  ],
+  "references": [
+    {
+      "id": "nvidia-skillspector",
+      "role": "static-evidence",
+      "repo": "https://github.com/NVIDIA/SkillSpector",
+      "path": "third_party/SkillSpector",
+      "commit": "69d7d059da38160296b2311320ed4c72a9c3fdb6",
+      "tree": "18f7f8fef7d13bbcbc04495393f2e10688ddfb93",
+      "version": "v2.12.0-630-g69d7d059",
+      "license": "Apache-2.0",
+      "skillPath": "skills/skill-inspector/SKILL.md",
+      "skillSha256": "655d3a69020552c8ec3d64b7b64d22f3f3b6d85f1a5ed107ef44c7e8e98b1daa",
+      "reviewedAt": "2026-10-25"
+    },
+    {
+      "id": "cloudflare-security-audit",
+      "role": "boundary-methodology",
+      "repo": "https://github.com/cloudflare/security-audit-skill",
+      "path": "third_party/security-audit-skill",
+      "commit": "c1c8a8c1471069fb0e188eeaff69b8e8db6564a8",
+      "tree": "8cd03bb3941496e441d6248aaae2429a35b93cc3",
+      "version": "c1c8a8c",
+      "license": "MIT",
+      "skillPath": "skills/security-audit/SKILL.md",
+      "skillSha256": "2a68ab5531dfccedac2b054e0814f2b6517daae9887b3ee40afcc5d8a7063c3a",
+      "reviewedAt": "2026-10-25"
+    }
+  ]
+}

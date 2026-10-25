@@ -2,6 +2,12 @@ import { SkillHasher } from './SkillHasher.ts';
 import { INodeSkill } from '../types.ts';
 import { APPROVED_WORKSPACE_SKILLS } from '../workspace/ApprovedWorkspaceCatalog.ts';
 import { EventBus } from '../EventBus.ts';
+import {
+  CURRENT_SKILL_AUDIT_CYCLES,
+  CURRENT_SKILL_POLICY_VERSION,
+  SKILL_AUDIT_ENGINE_VERSION,
+  referenceVersionLabels
+} from './SkillValidationPolicy.ts';
 
 export type SkillAuditVerdict = 'APPROVE' | 'CAUTION' | 'REJECT' | 'PENDING';
 
@@ -27,6 +33,10 @@ export interface ISkillLedgerEntry {
   checklist: ISkillLedgerChecklistItem[];
   tools: string[];
   provenance?: 'workspace-curated' | 'community' | 'custom';
+  /** Política de validação usada; entradas antigas são reauditadas. */
+  policyVersion?: string;
+  referenceVersions?: string[];
+  auditCycles?: string[];
 }
 
 export interface ISkillLedgerStore {
@@ -79,7 +89,8 @@ export class SkillLedgerService {
 
     for (const skill of APPROVED_WORKSPACE_SKILLS) {
       const hash = SkillHasher.computeHash(skill);
-      if (!this.entries.has(hash)) {
+      const existing = this.entries.get(hash);
+      if (!existing || existing.policyVersion !== CURRENT_SKILL_POLICY_VERSION) {
         this.entries.set(hash, {
           hash,
           skillId: skill.id,
@@ -98,7 +109,10 @@ export class SkillLedgerService {
             { rule: 'Conformidade de Estilo', passed: true, detail: 'Respeito estrito às regras visuais e tipográficas.' }
           ],
           tools: SkillHasher.normalizeTools(skill.tools),
-          provenance: 'workspace-curated'
+          provenance: 'workspace-curated',
+          policyVersion: CURRENT_SKILL_POLICY_VERSION,
+          referenceVersions: referenceVersionLabels(),
+          auditCycles: [...CURRENT_SKILL_AUDIT_CYCLES]
         });
       }
     }
@@ -152,28 +166,32 @@ export class SkillLedgerService {
   }
 
   /**
-   * Consulta a entrada de auditoria associada a um determinado hash.
+   * Consulta a entrada de auditoria associada a um hash **na política atual**.
+   * Uma aprovação emitida sob outra política é tratada como PENDING: novas
+   * regras ou uma atualização das referências exigem nova auditoria.
    */
-  public getEntry(hash: string): ISkillLedgerEntry | undefined {
+  public getEntry(hash: string, policyVersion: string = CURRENT_SKILL_POLICY_VERSION): ISkillLedgerEntry | undefined {
     if (!hash) return undefined;
-    return this.entries.get(hash.toLowerCase());
+    const entry = this.entries.get(hash.toLowerCase());
+    if (!entry || !entry.policyVersion || entry.policyVersion !== policyVersion) return undefined;
+    return entry;
   }
 
   /**
-   * Verifica se a skill correspondente ao hash está liberada para uso no grafo.
-   * Retorna true apenas para vereditos 'APPROVE' ou 'CAUTION'.
+   * Verifica se a skill correspondente ao hash está liberada para uso no grafo
+   * sob a política de validação atual.
    */
-  public isApproved(hash: string): boolean {
-    const entry = this.getEntry(hash);
+  public isApproved(hash: string, policyVersion: string = CURRENT_SKILL_POLICY_VERSION): boolean {
+    const entry = this.getEntry(hash, policyVersion);
     if (!entry) return false;
     return entry.verdict === 'APPROVE' || entry.verdict === 'CAUTION';
   }
 
   /**
-   * Obtém o status de aprovação de um determinado hash.
+   * Obtém o status de aprovação de um hash sob a política atual.
    */
-  public getStatus(hash: string): SkillAuditVerdict {
-    const entry = this.getEntry(hash);
+  public getStatus(hash: string, policyVersion: string = CURRENT_SKILL_POLICY_VERSION): SkillAuditVerdict {
+    const entry = this.getEntry(hash, policyVersion);
     return entry ? entry.verdict : 'PENDING';
   }
 
@@ -188,7 +206,10 @@ export class SkillLedgerService {
       ...entry,
       hash: cleanHash,
       tools: SkillHasher.normalizeTools(entry.tools),
-      auditedAt: entry.auditedAt || new Date().toISOString()
+      auditedAt: entry.auditedAt || new Date().toISOString(),
+      policyVersion: entry.policyVersion || CURRENT_SKILL_POLICY_VERSION,
+      referenceVersions: entry.referenceVersions || referenceVersionLabels(),
+      auditCycles: entry.auditCycles || [...CURRENT_SKILL_AUDIT_CYCLES]
     };
 
     this.entries.set(cleanHash, finalEntry);
@@ -216,8 +237,8 @@ export class SkillLedgerService {
       verdict: auditMeta.verdict || 'APPROVE',
       riskScore: auditMeta.riskScore ?? 0,
       auditedAt: new Date().toISOString(),
-      auditedBy: auditMeta.auditedBy || 'StudioSkillAuditor',
-      scannerVersion: auditMeta.scannerVersion || 'SkillSpector-2.12.0',
+      auditedBy: auditMeta.auditedBy || 'StudioSkillAuditor (Arestrix Skill Guard)',
+      scannerVersion: auditMeta.scannerVersion || SKILL_AUDIT_ENGINE_VERSION,
       findingsCount: auditMeta.findings?.length || 0,
       findings: auditMeta.findings || ['Aprovada pelo Agente Auditor do Studio.'],
       warnings: auditMeta.warnings || [],
@@ -226,7 +247,10 @@ export class SkillLedgerService {
         { rule: 'Filtro Anti-Esteganografia', passed: true, detail: 'Texto limpo sem caracteres ocultos.' }
       ],
       tools: SkillHasher.normalizeTools(skill.tools),
-      provenance: auditMeta.provenance || 'custom'
+      provenance: auditMeta.provenance || 'custom',
+      policyVersion: auditMeta.policyVersion || CURRENT_SKILL_POLICY_VERSION,
+      referenceVersions: auditMeta.referenceVersions || referenceVersionLabels(),
+      auditCycles: auditMeta.auditCycles || [...CURRENT_SKILL_AUDIT_CYCLES]
     };
 
     this.recordAudit(entry);
@@ -250,8 +274,8 @@ export class SkillLedgerService {
       verdict: 'REJECT',
       riskScore: 90,
       auditedAt: new Date().toISOString(),
-      auditedBy: 'StudioSkillAuditor',
-      scannerVersion: 'SkillSpector-2.12.0',
+      auditedBy: 'StudioSkillAuditor (Arestrix Skill Guard)',
+      scannerVersion: SKILL_AUDIT_ENGINE_VERSION,
       findingsCount: findings.length + 1,
       findings: [reason, ...findings],
       warnings: ['Uso bloqueado no grafo de execução.'],
@@ -259,7 +283,10 @@ export class SkillLedgerService {
         { rule: 'Auditoria de Segurança', passed: false, detail: reason }
       ],
       tools: SkillHasher.normalizeTools(skill.tools),
-      provenance: 'custom'
+      provenance: 'custom',
+      policyVersion: CURRENT_SKILL_POLICY_VERSION,
+      referenceVersions: referenceVersionLabels(),
+      auditCycles: [...CURRENT_SKILL_AUDIT_CYCLES]
     };
 
     this.recordAudit(entry);

@@ -81,7 +81,7 @@ python3 scripts/package_release.py
 O script monta exatamente o layout esperado pelo Studio e pelo compilador de pipelines:
 
 ```text
-arestrix(.exe), arestrix-cli(.exe), arestrix-gateway(.exe)
+arestrix(.exe), arestrix-cli(.exe), arestrix-gateway(.exe), arestrix-memory(.exe)
 dist/                         UI compilada do Studio
 CppCore/src/                  headers/fontes usados pelos pipelines gerados
 CppCore/runtime/              catálogo e manifesto do runtime local
@@ -89,6 +89,7 @@ runtime/lib/                  biblioteca arestrix_core
 third_party/taskflow/         headers do Taskflow
 third_party/simdjson/         headers do simdjson
 examples/, docs/              exemplos e documentação
+.agents/skills/               skills de desenvolvimento (Arestrix Skill Guard)
 package-manifest.json         hashes dos arquivos
 SHA256SUMS                    checksums do pacote
 SBOM.json                     inventário de componentes
@@ -113,7 +114,7 @@ pwsh scripts/sign-windows.ps1
 ```
 
 Como alternativa, use `ARESTRIX_SIGN_THUMBPRINT` para um certificado instalado em `My`. O script cobre
-`arestrix.exe`, `arestrix-cli.exe`, `arestrix-gateway.exe` e um `-RuntimePath` opcional.
+`arestrix.exe`, `arestrix-cli.exe`, `arestrix-gateway.exe`, `arestrix-memory.exe` e um `-RuntimePath` opcional.
 
 ## 5. Fora da fase 5A
 

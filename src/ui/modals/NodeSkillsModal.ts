@@ -257,16 +257,17 @@ export class NodeSkillsModal extends BaseModal {
             <div style="display: flex; align-items: center; gap: 10px;">
               <span style="font-size: 18px;">${currentAudit.status === 'approved' ? '🛡️' : currentAudit.status === 'rejected' ? '🚫' : '⚠️'}</span>
               <div style="font-size: 12px; line-height: 1.4; ${currentAudit.status === 'approved' ? 'color: #166534;' : currentAudit.status === 'rejected' ? 'color: #991b1b;' : 'color: #92400e;'}">
-                <strong>${t('node_skills.audit_title', 'Auditoria do Studio (SkillSpector):')} ${currentAudit.status === 'approved' ? t('node_skills.audit_approved', 'APROVADA E HOMOLOGADA') : currentAudit.status === 'rejected' ? t('node_skills.audit_rejected', 'REJEITADA POR RISCO') : t('node_skills.audit_alert', 'ALERTA DE CONFORMIDADE')}</strong> (${t('node_skills.audit_risk_score', 'Pontuação de Risco: {{score}}/100', { score: currentAudit.riskScore })})<br>
+                <strong>${t('node_skills.audit_title', 'Auditoria do Studio (Arestrix Skill Guard):')} ${currentAudit.status === 'approved' ? t('node_skills.audit_approved', 'APROVADA E HOMOLOGADA') : currentAudit.status === 'rejected' ? t('node_skills.audit_rejected', 'REJEITADA POR RISCO') : t('node_skills.audit_alert', 'ALERTA DE CONFORMIDADE')}</strong> (${t('node_skills.audit_risk_score', 'Pontuação de Risco: {{score}}/100', { score: currentAudit.riskScore })})<br>
                 <span style="font-size: 11px; ${currentAudit.status === 'approved' ? 'color: #15803d;' : currentAudit.status === 'rejected' ? 'color: #b91c1c;' : 'color: #b45309;'}">
                   ${currentAudit.warnings.length > 0 ? currentAudit.warnings.join(' &bull; ') : t('node_skills.audit_ok_text', '✓ Habilidade cumpre a regra de Zero Sombras em Fontes e lista de ferramentas autorizadas.')}
                 </span>
                 ${currentAudit.hash ? `<div style="font-size: 10px; font-family: monospace; color: #64748b; margin-top: 2px;">HASH SHA-256: ${currentAudit.hash}</div>` : ''}
+                ${currentAudit.policyVersion ? `<div style="font-size: 10px; font-family: monospace; color: #64748b; margin-top: 1px;">POLÍTICA: ${currentAudit.policyVersion.slice(0, 12)}${currentAudit.referenceVersions?.length ? ' · ' + currentAudit.referenceVersions.join(' · ') : ''}</div>` : ''}
               </div>
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
-              <button id="btn-run-skillspector-audit" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 3px 8px;" title="Reauditar esta skill com o SkillSpector">
-                ⚡ Auditar com SkillSpector
+              <button id="btn-run-skillspector-audit" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 3px 8px;" title="Reauditar com as regras NVIDIA SkillSpector e a metodologia Cloudflare">
+                ⚡ Auditar com Skill Guard
               </button>
               <span style="font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; white-space: nowrap; ${currentAudit.status === 'approved' ? 'background: #dcfce7; color: #15803d; border: 1px solid #86efac;' : currentAudit.status === 'rejected' ? 'background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5;' : 'background: #fef3c7; color: #b45309; border: 1px solid #fcd34d;'}">
                 ${currentAudit.status === 'approved' ? t('node_skills.badge_audit_ok', 'AUDITADA: OK') : currentAudit.status === 'rejected' ? t('node_skills.badge_rejected', 'REJEITADA') : t('node_skills.badge_requires_attention', 'REQUER ATENÇÃO')}
@@ -558,7 +559,7 @@ export class NodeSkillsModal extends BaseModal {
     this.dialog.querySelector('#btn-run-skillspector-audit')?.addEventListener('click', () => {
       const verdict = this.workspaceAuditor.auditSkill(currentSkill);
       const isOk = verdict.status === 'approved';
-      this.notificationMessage = `🛡️ Auditoria concluída pelo Agente do Studio (SkillSpector)! Veredito: ${verdict.verdict || verdict.status.toUpperCase()} (Risco: ${verdict.riskScore}/100, Hash: ${verdict.hash?.slice(0, 10)}...)`;
+      this.notificationMessage = `🛡️ Auditoria concluída pelo Arestrix Skill Guard (NVIDIA + Cloudflare)! Veredito: ${verdict.verdict || verdict.status.toUpperCase()} (Risco: ${verdict.riskScore}/100, Hash: ${verdict.hash?.slice(0, 10)}...)`;
       this.notificationType = isOk ? 'success' : 'warning';
       this.render();
     });
@@ -641,7 +642,7 @@ export class NodeSkillsModal extends BaseModal {
       const isOk = verdict.status === 'approved';
       this.notificationMessage = isOk
         ? t('node_skills.msg_saved_success', 'Habilidade "{{name}}" salva e auditada com sucesso! (Hash: {{hash}})', { name: currentSkill.name, hash: verdict.hash?.slice(0, 10) || '' })
-        : `⚠️ Habilidade salva, mas classificada como ${verdict.verdict || verdict.status.toUpperCase()} pelo SkillSpector (Risco: ${verdict.riskScore}/100). Verifique os alertas.`;
+        : `⚠️ Habilidade salva, mas classificada como ${verdict.verdict || verdict.status.toUpperCase()} pelo Arestrix Skill Guard (Risco: ${verdict.riskScore}/100). Verifique os alertas.`;
       this.notificationType = isOk ? 'success' : 'warning';
       this.render();
     });

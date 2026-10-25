@@ -65,6 +65,9 @@ export interface IWorkspaceSkillAuditVerdict {
   passedSvgZeroShadowRule: boolean;
   hash?: string;
   verdict?: 'APPROVE' | 'CAUTION' | 'REJECT';
+  policyVersion?: string;
+  referenceVersions?: string[];
+  auditCycles?: string[];
 }
 
 export interface IWorkspaceMcpAuditVerdict {

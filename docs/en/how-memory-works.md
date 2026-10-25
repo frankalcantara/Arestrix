@@ -291,7 +291,8 @@ arestrix-cli memory promote --project .\my-project --workspace-id team `
 
 ## 12. Institution
 
-The core provides `MemoryInstitutionService`:
+The core provides `MemoryInstitutionService` and the `arestrix-memory` executable, which exposes
+the institution contract over HTTP and MCP:
 
 - tokens kept in memory only;
 - `viewer`, `editor`, `admin` roles;
@@ -300,8 +301,90 @@ The core provides `MemoryInstitutionService`:
 - policies require `admin`;
 - `memory_policy` allows an immutable ancestor policy; children cannot override it.
 
-Authenticated HTTP/MCP exposure is still an operations step. No institution server is exposed
-in this version.
+### Start the service
+
+```powershell
+arestrix-memory token --principal ana --role viewer
+arestrix-memory init --db C:\memory\institution.db --institution acme
+arestrix-memory serve --db C:\memory\institution.db --institution acme `
+  --host 127.0.0.1 --port 8790 --tokens-file C:\memory\tokens.txt
+```
+
+The token file has one line per principal:
+
+```text
+# token principal role
+<ana-token> ana viewer
+<bruno-token> bruno editor
+<carla-token> carla admin
+```
+
+You can also use `--tokens-json` or `ARESTRIX_INSTITUTION_TOKENS` with an array:
+
+```json
+[{"token":"<token>","principal":"ana","role":"viewer"}]
+```
+
+Without tokens the service starts fail-closed: every authenticated route returns `401`. Tokens are
+never persisted; restarting requires reloading the file or environment variable. Keep the token file
+outside the repository and restrict its operating-system permissions.
+
+### HTTP API
+
+| Method | Route | Role | Effect |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/health` | — | liveness, no authentication |
+| `GET` | `/v1/status` | `viewer` | institution, principal, role and lessons |
+| `POST` | `/v1/context` | `viewer` | search `{ "query", "limit", "domains" }` |
+| `POST` | `/v1/lessons` | `editor` | write `{ "domain", "triggerError", "lessonRule" }` |
+| `POST` | `/v1/policies` | `admin` | write `{ "key", "value", "immutable" }` |
+| `POST` | `/mcp` | bearer | MCP JSON-RPC 2.0 |
+
+Example:
+
+```powershell
+curl.exe -H "Authorization: Bearer $env:ARESTRIX_INSTITUTION_TOKEN" `
+  -H "Content-Type: application/json" `
+  -d '{"query":"style convention","limit":5}' `
+  http://127.0.0.1:8790/v1/context
+```
+
+### MCP
+
+`mcp` mode uses newline-delimited JSON-RPC on stdin/stdout:
+
+```powershell
+$env:ARESTRIX_INSTITUTION_TOKEN = "<token>"
+arestrix-memory mcp --db C:\memory\institution.db --institution acme --role editor
+```
+
+Tools:
+
+- `memory_institution_context` (`viewer`);
+- `memory_institution_write_lesson` (`editor`);
+- `memory_institution_status` (`viewer`);
+- `memory_institution_set_policy` (`admin`).
+
+In the Studio, configure a stdio MCP server pointing to the binary:
+
+```json
+{
+  "id": "arestrix-memory",
+  "transport": "stdio",
+  "command": "C:\\Arestrix\\arestrix-memory.exe",
+  "args": ["mcp", "--db", "C:\\memory\\institution.db", "--institution", "acme", "--role", "editor"],
+  "env": { "ARESTRIX_INSTITUTION_TOKEN": "${ARESTRIX_INSTITUTION_TOKEN}" }
+}
+```
+
+The HTTP `/mcp` endpoint accepts the same JSON-RPC with `Authorization: Bearer ...`.
+
+### Operations
+
+- listen on `127.0.0.1` and put a **TLS reverse proxy** in front for network exposure;
+- the database is single-node SQLite; there is no multi-machine sync in this version;
+- the service has no built-in rate limit; use the proxy/gateway for that;
+- logs do not contain tokens, lesson bodies or memory content.
 
 ## 13. Snapshot, retention and purge
 
@@ -363,6 +446,13 @@ arestrix-cli memory reindex --project .\my-project
 arestrix-cli memory workspace init --project .\my-project --workspace-id team
 arestrix-cli memory prune --project .\my-project --days 180
 arestrix-cli memory purge --project .\my-project
+
+# Institution service (separate binary)
+arestrix-memory token --principal ana --role viewer
+arestrix-memory init --db C:\memory\institution.db --institution acme
+arestrix-memory serve --db C:\memory\institution.db --institution acme `
+  --port 8790 --tokens-file C:\memory\tokens.txt
+arestrix-memory mcp --db C:\memory\institution.db --institution acme --role editor
 ```
 
 ## 16. Metrics and health
@@ -374,7 +464,8 @@ the pull command.
 
 ## 17. Known limitations
 
-- institution HTTP/MCP exposure does not exist yet;
+- the institution server has no built-in TLS or rate limiting; use a reverse proxy;
+- institution tokens do not persist across restarts;
 - background consolidation is still manual;
 - LLM generalization is not part of this core;
 - snapshots do not carry vectors; reindex after restore;

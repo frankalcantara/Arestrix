@@ -81,7 +81,7 @@ python3 scripts/package_release.py
 The script stages the exact layout expected by the Studio and the C++ pipeline compiler:
 
 ```text
-arestrix(.exe), arestrix-cli(.exe), arestrix-gateway(.exe)
+arestrix(.exe), arestrix-cli(.exe), arestrix-gateway(.exe), arestrix-memory(.exe)
 dist/                         compiled Studio UI
 CppCore/src/                  headers/sources used by generated pipelines
 CppCore/runtime/              local runtime catalog and manifest
@@ -89,6 +89,7 @@ runtime/lib/                  arestrix_core library
 third_party/taskflow/         Taskflow headers
 third_party/simdjson/         simdjson headers
 examples/, docs/              examples and documentation
+.agents/skills/               development skills (Arestrix Skill Guard)
 package-manifest.json         file hashes
 SHA256SUMS                    package checksums
 SBOM.json                     component inventory
@@ -113,7 +114,7 @@ pwsh scripts/sign-windows.ps1
 ```
 
 Alternatively use `ARESTRIX_SIGN_THUMBPRINT` for a certificate installed in `My`. The script covers
-`arestrix.exe`, `arestrix-cli.exe`, `arestrix-gateway.exe` and an optional `-RuntimePath`.
+`arestrix.exe`, `arestrix-cli.exe`, `arestrix-gateway.exe`, `arestrix-memory.exe` and an optional `-RuntimePath`.
 
 ## 5. Not in phase 5A
 

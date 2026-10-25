@@ -34,6 +34,7 @@
 - [Roadmap and known limitations](roadmap.md) - delivered scope, gaps and next steps.
 - [Beta 2 test plan](../quality/beta2-test-plan.md) - registered scope, pending installer/signing/CI and the mandatory test matrix (in Portuguese).
 - [Test audit log](../quality/test-audit-log.md)
+- [Skill reference review](../quality/skill-reference-review.md)
 - [Security and governance model](../security/governance.md)
 - [Dependency advisories](../security/dependency-advisories.md)
 - [Security policy](../../SECURITY.md)

@@ -44,6 +44,19 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
 
 ### Added
 
+- Arestrix Skill Guard: the `security-audit-skill` (Cloudflare) submodule, a project skill at
+  `.agents/skills/arestrix-skill-guard/`, and a second deterministic audit layer for supply chain,
+  persistence, credential access, tool abuse, data isolation and resource exhaustion. Skill
+  approvals now carry a `policyVersion`; changing the NVIDIA/Cloudflare references or the local rule
+  set invalidates old ledger entries and requires re-audit (existing custom skills appear as
+  `PENDING` after this upgrade). `npm run check:skill-references` pins
+  commits, trees and `SKILL.md` hashes; the review runbook is in
+  `docs/quality/skill-reference-review.md`.
+- Institution memory service: the new `arestrix-memory` executable exposes the
+  `MemoryInstitutionService` contract over authenticated HTTP (`/v1/status`, `/v1/context`,
+  `/v1/lessons`, `/v1/policies`) and MCP (`tools/list`, `tools/call`, stdio and `/mcp`). Tokens come
+  from `--tokens-file`, `--tokens-json` or `ARESTRIX_INSTITUTION_TOKENS`, stay in memory only and
+  fail closed when absent. `scripts/e2e_memory_institution.py` covers roles, HTTP and MCP.
 - Per-vertex memory write governance: `writeKeys`, `maxLessonsPerRun` (default 20),
   `maxLessonChars` (default 4000) and a global 5000-active-lesson cap. The limits are
   configurable both on the vertex and in **Global Defaults → Memory**.

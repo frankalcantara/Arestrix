@@ -26,14 +26,16 @@ agents, MCPs, memory, outputs and telemetry in the terminal
 
 ## Where it lives
 
-CMake produces two executables:
+CMake produces four executables:
 
 | Binary | What it is |
 | :--- | :--- |
 | `arestrix` / `arestrix.exe` | The full Studio: WebUI, canvas, editors, memory and MCP. |
 | `arestrix-cli` / `arestrix-cli.exe` | The headless runner for CI, servers and scripts. |
+| `arestrix-gateway` / `arestrix-gateway.exe` | The on-prem AI Gateway with virtual keys and budgets. |
+| `arestrix-memory` / `arestrix-memory.exe` | The institution memory service (authenticated HTTP and MCP). |
 
-On Windows the build copies the CLI to the repository root:
+On Windows the build copies the binaries to the repository root:
 
 ```text
 build\arestrix-cli.exe

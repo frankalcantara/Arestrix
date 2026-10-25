@@ -9,7 +9,7 @@ têm o Windows como alvo.
 
 ## Requisitos
 
-1. **Git com submódulos.** Taskflow, simdjson, WebUI, i18next, Monaco e SkillSpector ficam em `third_party/`.
+1. **Git com submódulos.** Taskflow, simdjson, WebUI, i18next, Monaco, SkillSpector (NVIDIA) e security-audit-skill (Cloudflare) ficam em `third_party/`.
 2. **Node.js 20+ e npm** (Vite, TypeScript, Three.js, Vitest).
 3. **Python 3.10+**, que conduz o script de build (`CppCore/dev.py`) e o teste ponta a ponta.
 4. **Um compilador C++20 e CMake 3.20+.**

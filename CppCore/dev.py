@@ -213,6 +213,8 @@ def run_repository_checks() -> list[str]:
         failed.append("local assets")
     if not verify_step("secrets", "npm run check:secrets", shell=True):
         failed.append("secrets")
+    if not verify_step("skill references", "npm run check:skill-references", shell=True):
+        failed.append("skill references")
     licenses = ROOT / "scripts" / "check_third_party_licenses.py"
     if licenses.exists():
         if not verify_step("third-party licenses", [sys.executable, str(licenses)]):

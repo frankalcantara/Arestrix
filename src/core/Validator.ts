@@ -380,7 +380,7 @@ export class GraphValidator {
           message: t('validator.skill_unapproved', {
             node: node.label || node.id,
             skill: activeSkill.name || activeSkill.id,
-            defaultValue: `O nó "${node.label || node.id}" possui a habilidade "${activeSkill.name || activeSkill.id}" modificada ou pendente de validação. Audite-a com o SkillSpector antes de executar.`
+            defaultValue: `O nó "${node.label || node.id}" possui a habilidade "${activeSkill.name || activeSkill.id}" modificada ou pendente de validação. Audite-a com o Arestrix Skill Guard antes de executar.`
           }),
           nodeIds: [node.id]
         });

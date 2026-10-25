@@ -4,6 +4,13 @@ import { APPROVED_WORKSPACE_SKILLS } from './ApprovedWorkspaceCatalog.ts';
 import { SkillHasher } from '../skills/SkillHasher.ts';
 import { SkillLedgerService, SkillAuditVerdict } from '../skills/SkillLedgerService.ts';
 import { SkillSpectorRunner } from '../skills/SkillSpectorRunner.ts';
+import { CloudflareSkillAudit } from '../skills/CloudflareSkillAudit.ts';
+import {
+  CURRENT_SKILL_AUDIT_CYCLES,
+  CURRENT_SKILL_POLICY_VERSION,
+  SKILL_AUDIT_ENGINE_VERSION,
+  referenceVersionLabels
+} from '../skills/SkillValidationPolicy.ts';
 
 /**
  * Arestrix Studio - Agente de Workspace para Auditoria e Verificação de Skills
@@ -11,10 +18,12 @@ import { SkillSpectorRunner } from '../skills/SkillSpectorRunner.ts';
  * Sentinela de governança do Studio operando com base na meta-skill canônica
  * `third_party/SkillSpector/skills/skill-inspector/SKILL.md`.
  * 
- * Executa duas linhas de defesa:
- * 1. Linha Estática e Determinística: via SkillSpectorRunner (regras estáticas,
- *    filtro anti-esteganografia, checagem da Trifeta Letal e regras de projeto);
- * 2. Linha de Governança Semântica: coerência entre propósito declarado e ferramentas.
+ * Executa três linhas de defesa:
+ * 1. Integridade: hash, licença, frontmatter e proveniência;
+ * 2. Evidência estática NVIDIA: SkillSpectorRunner (esteganografia, injeção,
+ *    exfiltração, trifeta letal e regras de projeto);
+ * 3. Fronteira Cloudflare: CloudflareSkillAudit (supply chain, persistência,
+ *    credenciais, tool abuse, isolamento e exaustão de recursos).
  * 
  * Toda validação é atrelada a um hash SHA-256 e gravada no SkillLedgerService;
  * skills idênticas (mesmo hash) são liberadas instantaneamente (0 ms).
@@ -59,7 +68,10 @@ export class WorkspaceSkillAuditorAgent {
         hasTypographyShadowViolation: false,
         passedSvgZeroShadowRule: true,
         hash,
-        verdict: existingEntry.verdict
+        verdict: existingEntry.verdict,
+        policyVersion: existingEntry.policyVersion,
+        referenceVersions: existingEntry.referenceVersions,
+        auditCycles: existingEntry.auditCycles
       };
     }
 
@@ -91,14 +103,20 @@ export class WorkspaceSkillAuditorAgent {
         hasTypographyShadowViolation: false,
         passedSvgZeroShadowRule: true,
         hash,
-        verdict: 'APPROVE'
+        verdict: 'APPROVE',
+        policyVersion: CURRENT_SKILL_POLICY_VERSION,
+        referenceVersions: referenceVersionLabels(),
+        auditCycles: [...CURRENT_SKILL_AUDIT_CYCLES]
       };
 
       ledger.recordApproval(skill, {
         auditedBy: 'WorkspaceApprovedCatalog',
         provenance: 'workspace-curated',
         findings: verdict.findings,
-        checklist: verdict.checklist
+        checklist: verdict.checklist,
+        policyVersion: CURRENT_SKILL_POLICY_VERSION,
+        referenceVersions: referenceVersionLabels(),
+        auditCycles: [...CURRENT_SKILL_AUDIT_CYCLES]
       });
 
       return verdict;
@@ -144,7 +162,7 @@ export class WorkspaceSkillAuditorAgent {
       riskScore += 10;
     }
 
-    // 3.4 Varredura Estática SkillSpector
+    // 3.4 Varredura Estática SkillSpector (NVIDIA)
     const scanResult = SkillSpectorRunner.scanSync(skill);
     riskScore += scanResult.riskScore;
 
@@ -161,7 +179,25 @@ export class WorkspaceSkillAuditorAgent {
       }
     }
 
-    // 3.5 Verificação de Ferramentas de Alto Privilégio / Terminal
+    // 3.5 Revisão de fronteira Cloudflare (supply chain, persistência,
+    // credenciais, isolamento, tool abuse e exaustão de recursos).
+    const cloudflareResult = CloudflareSkillAudit.scan(skill);
+    riskScore += cloudflareResult.riskScore;
+
+    for (const f of cloudflareResult.findings) {
+      checklist.push({
+        rule: `Cloudflare: ${f.ruleId}`,
+        passed: f.severity === 'LOW' || f.severity === 'INFO',
+        detail: f.message
+      });
+      if (f.severity === 'CRITICAL' || f.severity === 'HIGH') {
+        warnings.push(f.message);
+      } else {
+        findings.push(f.message);
+      }
+    }
+
+    // 3.6 Verificação de Ferramentas de Alto Privilégio / Terminal
     const tools = skill.tools || [];
     const highRiskTools = ['bash', 'terminal', 'exec', 'system', 'root'];
     const detectedHighRisk = tools.filter(t => highRiskTools.includes(t.toLowerCase()));
@@ -174,7 +210,7 @@ export class WorkspaceSkillAuditorAgent {
       findings.push('Ferramentas declaradas respeitam o perímetro de segurança padrão.');
     }
 
-    // 3.6 Diretriz de Tipografia Nítida
+    // 3.7 Diretriz de Tipografia Nítida
     const hasShadowViolation = scanResult.findings.some(f => f.ruleId === 'STYLE-TYPOGRAPHY-ZERO-SHADOW');
     if (!hasShadowViolation) {
       checklist.push({
@@ -185,12 +221,14 @@ export class WorkspaceSkillAuditorAgent {
       findings.push('Conforme com a regra global de tipografia e contraste visual nítido.');
     }
 
-    // 3.7 Determinação do Veredito e Gravação no Ledger
+    // 3.8 Determinação do Veredito e Gravação no Ledger
     const finalRiskScore = Math.min(100, Math.max(0, riskScore));
     let status: 'approved' | 'warning' | 'rejected' = 'approved';
     let verdict: SkillAuditVerdict = 'APPROVE';
 
-    const hasCriticalFinding = scanResult.findings.some(f => f.severity === 'CRITICAL');
+    const hasCriticalFinding =
+      scanResult.findings.some(f => f.severity === 'CRITICAL') ||
+      cloudflareResult.findings.some(f => f.severity === 'CRITICAL');
     if (finalRiskScore >= 70 || hasCriticalFinding) {
       status = 'rejected';
       verdict = 'REJECT';
@@ -207,7 +245,7 @@ export class WorkspaceSkillAuditorAgent {
       verified,
       status,
       riskScore: finalRiskScore,
-      auditedBy: 'StudioSkillAuditor (SkillSpector)',
+      auditedBy: 'StudioSkillAuditor (Arestrix Skill Guard)',
       timestamp,
       checklist,
       findings,
@@ -217,7 +255,10 @@ export class WorkspaceSkillAuditorAgent {
       hasTypographyShadowViolation: hasShadowViolation,
       passedSvgZeroShadowRule: !hasShadowViolation,
       hash,
-      verdict
+      verdict,
+      policyVersion: CURRENT_SKILL_POLICY_VERSION,
+      referenceVersions: referenceVersionLabels(),
+      auditCycles: [...CURRENT_SKILL_AUDIT_CYCLES]
     };
 
     // Grava no Ledger deterministicamente
@@ -228,14 +269,17 @@ export class WorkspaceSkillAuditorAgent {
       verdict,
       riskScore: finalRiskScore,
       auditedAt: timestamp,
-      auditedBy: 'StudioSkillAuditor (SkillSpector)',
-      scannerVersion: 'SkillSpector-2.12.0',
+      auditedBy: 'StudioSkillAuditor (Arestrix Skill Guard)',
+      scannerVersion: SKILL_AUDIT_ENGINE_VERSION,
       findingsCount: findings.length,
       findings,
       warnings,
       checklist,
       tools,
-      provenance: 'custom'
+      provenance: 'custom',
+      policyVersion: CURRENT_SKILL_POLICY_VERSION,
+      referenceVersions: referenceVersionLabels(),
+      auditCycles: [...CURRENT_SKILL_AUDIT_CYCLES]
     });
 
     return resultVerdict;

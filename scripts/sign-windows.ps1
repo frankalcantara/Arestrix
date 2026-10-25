@@ -15,7 +15,7 @@
 # Assinar o llama-server.exe extraído é opcional e não altera essa verificação.
 
 param(
-    [string[]]$Path = @("build\arestrix.exe", "build\arestrix-cli.exe", "build\arestrix-gateway.exe"),
+    [string[]]$Path = @("build\arestrix.exe", "build\arestrix-cli.exe", "build\arestrix-gateway.exe", "build\arestrix-memory.exe"),
     [string]$RuntimePath = "",
     [string]$PfxPath = $env:ARESTRIX_SIGN_PFX,
     [string]$PfxPassword = $env:ARESTRIX_SIGN_PFX_PASSWORD,

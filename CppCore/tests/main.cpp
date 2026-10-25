@@ -26,6 +26,7 @@
 #include "memory/EmbeddingProvider.hpp"
 #include "memory/MemoryConsolidator.hpp"
 #include "memory/MemoryIndexer.hpp"
+#include "memory/MemoryInstitutionApi.hpp"
 #include "memory/MemoryInstitutionService.hpp"
 #include "memory/MemoryPlaybookCompiler.hpp"
 #include "memory/MemoryRanker.hpp"
@@ -2982,6 +2983,201 @@ TEST(memory_institution_auth_policy_and_isolation) {
     CHECK(effective.value("scopeId", std::string()) == "institution:acme");
     CHECK(effective["value"].get<int>() == 30);
     store.close();
+
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_institution_http_contract_roles_and_health) {
+    using taskforge::memory::handleInstitutionRest;
+    using taskforge::memory::MemoryInstitutionService;
+    const fs::path dir = makeTempDir("memory-institution-http");
+    const fs::path db = dir / "institution.db";
+    MemoryInstitutionService service;
+    std::string error;
+    CHECK(service.configure("acme", db.string(), error));
+    CHECK(service.addToken("viewer-token", "ana", "viewer"));
+    CHECK(service.addToken("editor-token", "bruno", "editor"));
+    CHECK(service.addToken("admin-token", "carla", "admin"));
+
+    auto health = handleInstitutionRest(service, "GET", "/health", "", "");
+    CHECK(health.status == 200);
+    auto healthJson = taskforge::jsonutil::parse(health.body);
+    CHECK(healthJson.value("service", std::string()) == "arestrix-memory");
+    CHECK(healthJson.value("authRequired", false));
+
+    auto unauthorized = handleInstitutionRest(service, "GET", "/v1/status", "", "");
+    CHECK(unauthorized.status == 401);
+    CHECK(unauthorized.body.find("autenticado") != std::string::npos);
+
+    auto viewerStatus = handleInstitutionRest(service, "GET", "/v1/status", "viewer-token", "");
+    CHECK(viewerStatus.status == 200);
+    auto viewerJson = taskforge::jsonutil::parse(viewerStatus.body);
+    CHECK(viewerJson.value("role", std::string()) == "viewer");
+    CHECK(viewerJson.value("institutionId", std::string()) == "acme");
+
+    auto viewerWrite = handleInstitutionRest(
+        service, "POST", "/v1/lessons", "viewer-token",
+        R"({"domain":"geral","triggerError":"manual","lessonRule":"REGRA-HTTP"})");
+    CHECK(viewerWrite.status == 403);
+
+    auto editorWrite = handleInstitutionRest(
+        service, "POST", "/v1/lessons", "editor-token",
+        R"({"domain":"geral","triggerError":"manual","lessonRule":"REGRA-HTTP"})");
+    CHECK(editorWrite.status == 200);
+    auto editorJson = taskforge::jsonutil::parse(editorWrite.body);
+    CHECK(editorJson.value("ok", false));
+    CHECK(!editorJson.value("id", std::string()).empty());
+
+    auto context = handleInstitutionRest(
+        service, "POST", "/v1/context", "viewer-token",
+        R"({"query":"REGRA-HTTP","limit":5})");
+    CHECK(context.status == 200);
+    CHECK(context.body.find("REGRA-HTTP") != std::string::npos);
+
+    auto editorPolicy = handleInstitutionRest(
+        service, "POST", "/v1/policies", "editor-token",
+        R"({"key":"retention_days","value":30,"immutable":true})");
+    CHECK(editorPolicy.status == 403);
+
+    auto adminPolicy = handleInstitutionRest(
+        service, "POST", "/v1/policies", "admin-token",
+        R"({"key":"retention_days","value":30,"immutable":true})");
+    CHECK(adminPolicy.status == 200);
+
+    auto badBody = handleInstitutionRest(service, "POST", "/v1/lessons", "editor-token", "{}");
+    CHECK(badBody.status == 400);
+
+    auto badLimit = handleInstitutionRest(
+        service, "POST", "/v1/context", "viewer-token",
+        R"({"query":"REGRA-HTTP","limit":"dez"})");
+    CHECK(badLimit.status == 400);
+
+    auto missingRoute = handleInstitutionRest(service, "GET", "/v1/nope", "viewer-token", "");
+    CHECK(missingRoute.status == 404);
+
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_institution_mcp_tools_and_auth) {
+    using taskforge::memory::handleInstitutionMcp;
+    using taskforge::memory::MemoryInstitutionService;
+    const fs::path dir = makeTempDir("memory-institution-mcp");
+    const fs::path db = dir / "institution.db";
+    MemoryInstitutionService service;
+    std::string error;
+    CHECK(service.configure("acme", db.string(), error));
+    CHECK(service.addToken("viewer-token", "ana", "viewer"));
+    CHECK(service.addToken("editor-token", "bruno", "editor"));
+
+    auto unauthorizedInit = handleInstitutionMcp(
+        service, "", taskforge::Json{{"jsonrpc", "2.0"}, {"id", 0}, {"method", "initialize"}});
+    CHECK(unauthorizedInit.hasResponse);
+    CHECK(unauthorizedInit.httpStatus == 401);
+
+    auto initialize = handleInstitutionMcp(
+        service, "viewer-token",
+        taskforge::Json{{"jsonrpc", "2.0"}, {"id", 1}, {"method", "initialize"}});
+    CHECK(initialize.hasResponse);
+    CHECK(initialize.response["result"]["serverInfo"]["name"].str() == "arestrix-memory");
+
+    auto tools = handleInstitutionMcp(
+        service, "viewer-token",
+        taskforge::Json{{"jsonrpc", "2.0"}, {"id", 2}, {"method", "tools/list"}});
+    CHECK(tools.hasResponse);
+    const std::string toolsDump = tools.response["result"]["tools"].dump();
+    CHECK(toolsDump.find("memory_institution_context") != std::string::npos);
+    CHECK(toolsDump.find("memory_institution_write_lesson") != std::string::npos);
+    CHECK(toolsDump.find("memory_institution_set_policy") != std::string::npos);
+
+    auto viewerWrite = handleInstitutionMcp(
+        service, "viewer-token",
+        taskforge::Json{{"jsonrpc", "2.0"},
+                        {"id", 3},
+                        {"method", "tools/call"},
+                        {"params", taskforge::Json{{"name", "memory_institution_write_lesson"},
+                                                   {"arguments", taskforge::Json{{"domain", "geral"},
+                                                                                 {"triggerError", "manual"},
+                                                                                 {"lessonRule", "REGRA-MCP"}}}}}});
+    CHECK(viewerWrite.hasResponse);
+    CHECK(viewerWrite.response["result"]["isError"].get<bool>());
+
+    auto editorWrite = handleInstitutionMcp(
+        service, "editor-token",
+        taskforge::Json{{"jsonrpc", "2.0"},
+                        {"id", 4},
+                        {"method", "tools/call"},
+                        {"params", taskforge::Json{{"name", "memory_institution_write_lesson"},
+                                                   {"arguments", taskforge::Json{{"domain", "geral"},
+                                                                                 {"triggerError", "manual"},
+                                                                                 {"lessonRule", "REGRA-MCP"}}}}}});
+    CHECK(editorWrite.hasResponse);
+    CHECK(!editorWrite.response["result"]["isError"].get<bool>());
+
+    auto context = handleInstitutionMcp(
+        service, "viewer-token",
+        taskforge::Json{{"jsonrpc", "2.0"},
+                        {"id", 5},
+                        {"method", "tools/call"},
+                        {"params", taskforge::Json{{"name", "memory_institution_context"},
+                                                   {"arguments", taskforge::Json{{"query", "REGRA-MCP"}}}}}});
+    CHECK(context.hasResponse);
+    CHECK(!context.response["result"]["isError"].get<bool>());
+    CHECK(context.response["result"]["content"][0]["text"].str().find("REGRA-MCP") != std::string::npos);
+
+    auto unauthorized = handleInstitutionMcp(
+        service, "bad-token",
+        taskforge::Json{{"jsonrpc", "2.0"},
+                        {"id", 6},
+                        {"method", "tools/call"},
+                        {"params", taskforge::Json{{"name", "memory_institution_status"},
+                                                   {"arguments", taskforge::Json::object()}}}});
+    CHECK(unauthorized.hasResponse);
+    CHECK(unauthorized.httpStatus == 401);
+    CHECK(unauthorized.response["error"]["code"].get<int>() == -32001);
+
+    auto notification = handleInstitutionMcp(
+        service, "viewer-token",
+        taskforge::Json{{"jsonrpc", "2.0"}, {"method", "notifications/initialized"}});
+    CHECK(!notification.hasResponse);
+
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_institution_token_loader) {
+    using taskforge::memory::loadInstitutionTokens;
+    using taskforge::memory::MemoryInstitutionService;
+    const fs::path dir = makeTempDir("memory-institution-tokens");
+    const fs::path db = dir / "institution.db";
+    const fs::path tokens = dir / "tokens.txt";
+    std::ofstream(tokens) << "# token principal role\n"
+                          << "file-token ana viewer\n"
+                          << "editor-token bruno editor\n";
+    MemoryInstitutionService service;
+    std::string error;
+    CHECK(service.configure("acme", db.string(), error));
+    CHECK(loadInstitutionTokens(service, tokens.string(), "", error));
+
+    taskforge::memory::MemoryPrincipal principal;
+    CHECK(service.authenticate("file-token", principal));
+    CHECK(principal.id == "ana");
+    CHECK(principal.role == taskforge::memory::MemoryRole::Viewer);
+    CHECK(service.authenticate("editor-token", principal));
+    CHECK(principal.role == taskforge::memory::MemoryRole::Editor);
+    CHECK(!service.authenticate("missing", principal));
+
+    MemoryInstitutionService jsonService;
+    CHECK(jsonService.configure("acme", (dir / "json.db").string(), error));
+    CHECK(loadInstitutionTokens(
+        jsonService, "",
+        R"([{"token":"admin-token","principal":"carla","role":"admin"}])", error));
+    CHECK(jsonService.authenticate("admin-token", principal));
+    CHECK(principal.role == taskforge::memory::MemoryRole::Admin);
+
+    CHECK(!loadInstitutionTokens(jsonService, "", R"({"token":"x"})", error));
+    CHECK(error.find("array") != std::string::npos);
 
     std::error_code ec;
     fs::remove_all(dir, ec);

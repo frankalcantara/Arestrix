@@ -22,6 +22,7 @@
     "submodule:update": "node scripts/update-submodules.mjs --update",
     "check:secrets": "node scripts/check-secrets.mjs",
     "check:local-assets": "node scripts/check-local-assets.mjs",
+    "check:skill-references": "node scripts/check-skill-references.mjs",
     "check:version": "node scripts/check-version.mjs",
     "release:manifest": "python scripts/release_manifest.py",
     "release:check": "python scripts/release_check.py",

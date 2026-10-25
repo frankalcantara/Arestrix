@@ -185,6 +185,7 @@ add_library(arestrix_core STATIC
   ${SRC}/memory/MemoryConsolidator.cpp
   ${SRC}/memory/MemoryPlaybookCompiler.cpp
   ${SRC}/memory/MemoryInstitutionService.cpp
+  ${SRC}/memory/MemoryInstitutionApi.cpp
   ${SRC}/memory/MemoryStore.cpp
   ${SRC}/memory/MemoryService.cpp
   ${SRC}/project/OpenableFiles.cpp
@@ -247,6 +248,7 @@ else()
 endif()
 
 find_package(Threads REQUIRED)
+target_compile_definitions(arestrix_core PRIVATE ARESTRIX_MEMORY_VERSION="${ARESTRIX_VERSION}")
 target_link_libraries(arestrix_core PUBLIC arestrix_security_flags Threads::Threads)
 if(WIN32)
   target_link_libraries(arestrix_core PUBLIC winhttp ws2_32 advapi32 ole32 shell32 user32)
@@ -284,6 +286,19 @@ target_compile_definitions(arestrix-gateway PRIVATE ARESTRIX_GATEWAY_VERSION="${
 target_link_libraries(arestrix-gateway PRIVATE arestrix_gateway_core arestrix_core arestrix_security_flags)
 add_custom_command(TARGET arestrix-gateway POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:arestrix-gateway>" "${CMAKE_SOURCE_DIR}/"
+  VERBATIM)
+
+# Servico institucional de memoria: API HTTP autenticada + MCP stdio.
+add_executable(arestrix-memory
+  ${SRC}/memory/institution_main.cpp
+  ${SRC}/memory/MemoryInstitutionServer.cpp)
+target_include_directories(arestrix-memory PRIVATE
+  ${SRC}
+  ${TP}/httplib)
+target_compile_definitions(arestrix-memory PRIVATE ARESTRIX_MEMORY_VERSION="${ARESTRIX_VERSION}")
+target_link_libraries(arestrix-memory PRIVATE arestrix_core arestrix_security_flags)
+add_custom_command(TARGET arestrix-memory POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:arestrix-memory>" "${CMAKE_SOURCE_DIR}/"
   VERBATIM)
 
 # ---------------------------------------------------------------------------

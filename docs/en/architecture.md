@@ -54,7 +54,7 @@ redo work for everything, including paste, duplicate and delete.
 | `sandbox/` | Isolation drivers (host process, Docker, MicroVM), telemetry emitter, resume engine. |
 | `native/` | The native tool servers (files, HTTP, data, memory, time, Git, SQLite): C++ that runs inside the program, with project confinement. |
 | `mcp/` | Native Model Context Protocol client with persistent sessions (stdio and HTTP) and the server registry. |
-| `memory/` | Blackboard, semantic lessons and the temporal multigraph in SQLite (`MemoryStore`/`MemoryService`). |
+| `memory/` | Blackboard, semantic lessons and the temporal multigraph in SQLite (`MemoryStore`/`MemoryService`), plus the institution HTTP/MCP service (`arestrix-memory`). |
 | `project/` | Projects and workspaces (`arestrix.project.json`), native Git synchronization service (`GitSyncService`), SQL dumps and memory snapshots for Git disaster recovery (`DatabaseBackupService`), Standalone Runner export service (`RunnerService`) with fail-closed zero-secrets auditing, auto-commit/push, and private repository creation. |
 | `search/` | Project search: lexical ranking (BM25 + character trigrams) over every pipeline, subflow and skill, with a content-hash index. |
 | `pi/` | Scanner for importing existing Pi agent projects. |

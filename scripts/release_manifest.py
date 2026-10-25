@@ -28,6 +28,7 @@ NATIVE_COMPONENTS = {
     "third_party/i18next": ("i18next", "MIT"),
     "third_party/monaco-editor": ("monaco-editor", "MIT"),
     "third_party/SkillSpector": ("SkillSpector", "Apache-2.0"),
+    "third_party/security-audit-skill": ("Cloudflare security-audit-skill", "MIT"),
     "third_party/fonts/inter": ("Inter font", "OFL-1.1"),
     "third_party/sqlite": ("SQLite", "blessing"),
     "third_party/httplib": ("cpp-httplib", "MIT"),
@@ -40,6 +41,8 @@ DEFAULT_ARTIFACTS = [
     "build/arestrix-cli",
     "build/arestrix-gateway.exe",
     "build/arestrix-gateway",
+    "build/arestrix-memory.exe",
+    "build/arestrix-memory",
     "build/arestrix_core.lib",
     "build/libarestrix_core.a",
 ]

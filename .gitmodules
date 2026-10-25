@@ -17,3 +17,6 @@
 [submodule "third_party/FastWebUI"]
 	path = third_party/FastWebUI
 	url = https://github.com/frankalcantara/FastWebUI
+[submodule "third_party/security-audit-skill"]
+	path = third_party/security-audit-skill
+	url = https://github.com/cloudflare/security-audit-skill

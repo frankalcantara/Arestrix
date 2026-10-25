@@ -6,6 +6,8 @@ export interface ISkillSpectorFinding {
   message: string;
   location?: { file?: string; line?: number };
   category?: string;
+  /** Regra equivalente no relatório do NVIDIA SkillSpector, quando houver. */
+  referenceRule?: string;
 }
 
 export interface ISkillSpectorScanResult {
@@ -21,16 +23,20 @@ export interface ISkillSpectorScanResult {
 }
 
 /**
- * Arestrix Studio - Runner de Análise de Segurança de Skills (SkillSpector)
- * 
- * Executa a inspeção estática determinística de vulnerabilidades.
- * Integra o scanner SkillSpector da NVIDIA via CLI/subprocesso e fornece
- * um analisador de regras nativo de alta velocidade com proteções contra:
- * 1. Caracteres invisíveis e esteganografia (Zero-Width Unicode / BiDi overrides);
- * 2. Injeções de prompt diretas e indiretas;
- * 3. Tentativas de exfiltração de variáveis de ambiente e segredos;
- * 4. Trifeta Letal (leitura de dados + escrita/execução + rede externa);
- * 5. Violações tipográficas de sombras em fontes SVG.
+ * Arestrix Studio - Regras estáticas derivadas do NVIDIA SkillSpector
+ *
+ * Este runner é uma reimplementação TypeScript determinística de um
+ * subconjunto das regras do `third_party/SkillSpector`; ele não invoca o CLI
+ * Python no caminho de execução. A revisão semântica adversarial fica no
+ * skill `.agents/skills/arestrix-skill-guard/SKILL.md` e a camada de fronteira
+ * no `CloudflareSkillAudit`.
+ *
+ * Cobre:
+ * 1. Caracteres invisíveis e esteganografia (TP1/TP2);
+ * 2. Injeções de prompt diretas e indiretas (AR3);
+ * 3. Tentativas de exfiltração de variáveis de ambiente e segredos (TT3/TT4);
+ * 4. Trifeta Letal (EA1);
+ * 5. Violações tipográficas de sombras em fontes SVG (regra do projeto).
  */
 export class SkillSpectorRunner {
   // Regex para caracteres invisíveis de largura zero e overrides bidirecionais
@@ -64,6 +70,7 @@ export class SkillSpectorRunner {
     if (this.INVISIBLE_CHARS_REGEX.test(content)) {
       nativeFindings.push({
         ruleId: 'SEC-ZERO-WIDTH-CHARS',
+        referenceRule: 'TP1/TP2',
         category: 'obfuscation',
         severity: 'CRITICAL',
         message: 'Caracteres invisíveis de largura zero ou overrides de texto Unicode detectados no texto da skill.'
@@ -75,6 +82,7 @@ export class SkillSpectorRunner {
     if (this.SUSPICIOUS_HTML_COMMENT_REGEX.test(content)) {
       nativeFindings.push({
         ruleId: 'SEC-HIDDEN-HTML-DIRECTIVE',
+        referenceRule: 'TP1',
         category: 'prompt_injection',
         severity: 'HIGH',
         message: 'Comentário HTML oculto contendo palavras-chave de override ou acesso a credenciais.'
@@ -86,6 +94,7 @@ export class SkillSpectorRunner {
     if (this.PROMPT_INJECTION_REGEX.test(content)) {
       nativeFindings.push({
         ruleId: 'SEC-PROMPT-INJECTION-OVERRIDE',
+        referenceRule: 'AR3',
         category: 'prompt_injection',
         severity: 'CRITICAL',
         message: 'Padrão explícito de injeção de prompt ou tentativa de desativação de salvaguardas (ex: "ignore previous instructions").'
@@ -97,6 +106,7 @@ export class SkillSpectorRunner {
     if (this.EXFILTRATION_REGEX.test(content)) {
       nativeFindings.push({
         ruleId: 'SEC-DATA-EXFILTRATION-EXTERNAL',
+        referenceRule: 'TT3/TT4',
         category: 'data_exfiltration',
         severity: 'CRITICAL',
         message: 'Diretiva potencial de exfiltração de variáveis de ambiente (.env) ou tokens para URLs externas.'
@@ -112,6 +122,7 @@ export class SkillSpectorRunner {
     if (hasRead && hasExecOrWrite && hasNetwork) {
       nativeFindings.push({
         ruleId: 'SEC-LETHAL-TRIFECTA',
+        referenceRule: 'EA1',
         category: 'excessive_agency',
         severity: 'HIGH',
         message: 'Lethal Trifecta detectada: a skill solicita simultaneamente leitura de arquivos, execução/escrita e acesso à internet sem isolamento.'
@@ -123,6 +134,7 @@ export class SkillSpectorRunner {
     if (this.SHADOW_ON_FONT_REGEX.test(content)) {
       nativeFindings.push({
         ruleId: 'STYLE-TYPOGRAPHY-ZERO-SHADOW',
+        referenceRule: 'arestrix-style',
         category: 'code_quality',
         severity: 'HIGH',
         message: 'Violação da diretriz estrita do projeto: uso proibido de sombra ou brilho (drop-shadow/text-shadow/feDropShadow) em fontes.'

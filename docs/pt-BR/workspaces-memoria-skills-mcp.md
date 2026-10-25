@@ -138,9 +138,9 @@ quantas lições pode gravar por execução; `memory_search` respeita esses dom�
   auditada. Use **Workspace → Inicializar** e **Promover ao workspace** no Studio, ou
   `arestrix-cli memory workspace init|status` / `memory promote`.
 - Instituição: contrato nativo com tokens, papéis `viewer`/`editor`/`admin` e políticas
-  invariantes de escopo. A exposição HTTP/MCP autenticada fica para a etapa de operação.
-- Escopo atual: **projeto** (`project:<projectId>`). Workspace e instituição entram nas próximas
-  fases.
+  invariantes de escopo. O binário `arestrix-memory` expõe o contrato por HTTP autenticado e MCP
+  (stdio e `/mcp`); detalhes em [Como funciona a memória](como-funciona-a-memoria.md#12-instituição).
+- Escopos atuais: **projeto** (`project:<projectId>`), **workspace** e **instituição**.
 - Lições e Blackboard são lidos no início de cada nó de agente; a lição de falha é gravada ao final
   da execução e o Blackboard é gravado quando o vértice tem `writeBlackboard`.
 - O agente pode consultar a memória com `memory_search` e, quando `recordLessons` está ligado,
@@ -254,8 +254,8 @@ inteiramente em C++: nenhum Python ou processo JS participa da execução do gra
 
 - A visualização dedicada do grafo e dos conflitos ainda não está na UI.
 - A extração determinística, as propostas, a busca híbrida opcional, a consolidação, os
-  playbooks e o workspace já existem no núcleo. Ainda faltam generalização por LLM,
-  consolidação automática em background e a exposição HTTP/MCP autenticada da instituição.
+  playbooks, o workspace e a exposição HTTP/MCP da instituição já existem no núcleo. Ainda faltam
+  generalização por LLM e consolidação automática em background.
 - `memory_handoff` e consolidação por LLM ficam para as próximas fases.
 
 ## Skills
@@ -269,9 +269,33 @@ Uma **skill** é um arquivo `SKILL.md` (front matter YAML mais instruções) que
 
 ### Governança
 
-Quando uma skill é importada, o **Auditor de Skills do Workspace** inspeciona seu front matter, as permissões
-solicitadas, as dependências de script e a segurança de sandbox antes que ela possa ser usada em um pipeline. O
-repositório também inclui o scanner **SkillSpector** da NVIDIA em `third_party/`.
+Quando uma skill é importada ou alterada, o **Auditor de Skills do Workspace** aplica três camadas antes de
+liberá-la em um pipeline:
+
+1. **Integridade e proveniência:** front matter, licença, ferramentas declaradas, hash SHA-256 e ledger.
+2. **Evidência estática NVIDIA SkillSpector:** regras determinísticas de injeção, esteganografia, exfiltração,
+   trifeta letal e permissões excessivas. O catálogo de referência fica em `third_party/SkillSpector/`.
+3. **Metodologia de fronteira Cloudflare:** a skill `third_party/security-audit-skill/` orienta a revisão
+   adversarial de supply chain, persistência, isolamento de dados, exaustão de recursos e IPC local.
+
+O Arestrix mantém o skill próprio **`arestrix-skill-guard`** em
+[`.agents/skills/arestrix-skill-guard/SKILL.md`](../../.agents/skills/arestrix-skill-guard/SKILL.md), que
+combina as duas referências e define o contrato de veredito. A política efetiva é versionada por
+`policyVersion`; o cache do ledger só vale enquanto a skill, as referências e as regras forem as mesmas.
+Atualizou uma referência ou uma regra, a skill volta a `PENDING` e precisa ser reauditada.
+
+O scanner local enxerga o `SKILL.md`, o prompt e as ferramentas declaradas; scripts e anexos de um
+repositório de skills continuam exigindo revisão manual pelo `arestrix-skill-guard`.
+
+O lock `src/core/skills/skill-validation-policy.json` fixa commit, tree e hash do `SKILL.md` de cada
+referência. O gate é:
+
+```bash
+npm run check:skill-references
+```
+
+O processo de revisão está em
+[`docs/quality/skill-reference-review.md`](../quality/skill-reference-review.md).
 
 ## Ferramentas nativas (sem instalação, sem processo)
 

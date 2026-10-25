@@ -139,6 +139,8 @@ python scripts/e2e_examples.py
 | [Primeiros passos](docs/pt-BR/primeiros-passos.md) | Requisitos, build, configuração de modelo e primeira execução. |
 | [Arquitetura](docs/pt-BR/arquitetura.md) | Studio, engine, WebUI e o caminho do grafo ao C++. |
 | [`arestrix-cli`](docs/pt-BR/arestrix-cli.md) | Execução headless, CI, códigos de saída e solução de problemas. |
+| [Memória institucional](docs/pt-BR/como-funciona-a-memoria.md#12-instituição) | `arestrix-memory`: API HTTP autenticada e MCP (stdio e `/mcp`). |
+| [Validação de skills](docs/quality/skill-reference-review.md) | Arestrix Skill Guard: NVIDIA SkillSpector + Cloudflare security-audit, lock e revisão de referências. |
 | [Exemplos](examples/README.pt-BR.md) | Cinco projetos executáveis, de um pipeline de dois agentes a fluxos compostos, de memória e de pesquisa web. |
 | [Registro de auditoria de testes](docs/quality/test-audit-log.md) | Rodadas cronológicas de testes e auditorias de integridade. |
 | [Plano de testes do Beta 2](docs/quality/beta2-test-plan.md) | Escopo registrado, instalador/assinatura/CI pendentes e critérios de aceite. |

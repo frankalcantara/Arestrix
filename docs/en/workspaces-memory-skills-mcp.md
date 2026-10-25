@@ -138,9 +138,9 @@ it may record per run; `memory_search` enforces those domains.
   **Promote to workspace** in the Studio, or `arestrix-cli memory workspace init|status` /
   `memory promote`.
 - Institution: native contract with tokens, `viewer`/`editor`/`admin` roles and immutable
-  scope policies. Authenticated HTTP/MCP exposure is pending for the operations phase.
-- Current scope: **project** (`project:<projectId>`). Workspace and institution arrive in later
-  phases.
+  scope policies. The `arestrix-memory` binary exposes the contract over authenticated HTTP and MCP
+  (stdio and `/mcp`); see [How memory works](how-memory-works.md#12-institution).
+- Current scopes: **project** (`project:<projectId>`), **workspace** and **institution**.
 - Lessons and Blackboard are read at the start of each agent node; failure lessons are recorded at
   the end of the run, and the Blackboard is written when the vertex has `writeBlackboard`.
 - The agent can query memory with `memory_search` and, when `recordLessons` is on, record a lesson
@@ -253,9 +253,9 @@ Python or JS process participates in graph execution.
 ### Current limitations
 
 - A dedicated graph/conflict visualization is not in the UI yet.
-- Deterministic extraction, proposals, optional hybrid search, consolidation, playbooks and
-  workspace memory already exist in the core. LLM generalization, automatic background
-  consolidation and authenticated HTTP/MCP institution exposure are still pending.
+- Deterministic extraction, proposals, optional hybrid search, consolidation, playbooks,
+  workspace memory and authenticated HTTP/MCP institution exposure already exist in the core.
+  LLM generalization and automatic background consolidation are still pending.
 - `memory_handoff` and LLM consolidation are future phases.
 
 ## Skills
@@ -269,9 +269,33 @@ A **skill** is a `SKILL.md` file (YAML front matter plus instructions) that beco
 
 ### Governance
 
-When a skill is imported, the **Workspace Skill Auditor** inspects its front matter, requested permissions,
-script dependencies and sandbox safety before it can be used in a pipeline. The repository also vendors
-NVIDIA's **SkillSpector** scanner in `third_party/`.
+When a skill is imported or changed, the **Workspace Skill Auditor** applies three layers before allowing it
+into a pipeline:
+
+1. **Integrity and provenance:** front matter, license, declared tools, SHA-256 hash and ledger.
+2. **NVIDIA SkillSpector static evidence:** deterministic rules for injection, steganography, exfiltration,
+   lethal trifecta and excessive permissions. The reference catalog lives in `third_party/SkillSpector/`.
+3. **Cloudflare boundary methodology:** `third_party/security-audit-skill/` guides adversarial review of
+   supply chain, persistence, data isolation, resource exhaustion and local IPC.
+
+Arestrix keeps its own **`arestrix-skill-guard`** skill at
+[`.agents/skills/arestrix-skill-guard/SKILL.md`](../../.agents/skills/arestrix-skill-guard/SKILL.md),
+combining both references and defining the verdict contract. The effective policy is versioned by
+`policyVersion`; the ledger cache is valid only while the skill, references and rules are the same.
+When a reference or rule changes, the skill returns to `PENDING` and must be re-audited.
+
+The local scanner sees the `SKILL.md`, the prompt and declared tools; scripts and attachments in a
+skill repository still require manual review by `arestrix-skill-guard`.
+
+The lock `src/core/skills/skill-validation-policy.json` pins each reference commit, tree and `SKILL.md`
+hash. The gate is:
+
+```bash
+npm run check:skill-references
+```
+
+The review process is in
+[`docs/quality/skill-reference-review.md`](../quality/skill-reference-review.md).
 
 ## Native tools (no install, no process)
 

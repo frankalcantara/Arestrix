@@ -3,7 +3,7 @@
 
 O pacote preserva o layout esperado pelo Studio e pelo BuildService:
 
-  arestrix(.exe), arestrix-cli(.exe), arestrix-gateway(.exe)
+  arestrix(.exe), arestrix-cli(.exe), arestrix-gateway(.exe), arestrix-memory(.exe)
   dist/                         UI compilada
   CppCore/src/                  headers/fontes usados ao compilar pipelines
   CppCore/runtime/              catalogo e manifesto do runtime local
@@ -11,6 +11,7 @@ O pacote preserva o layout esperado pelo Studio e pelo BuildService:
   third_party/taskflow/         headers do Taskflow
   third_party/simdjson/         headers do simdjson
   examples/, docs/              exemplos e documentacao
+  .agents/skills/               skills de desenvolvimento, incluindo arestrix-skill-guard
   package-manifest.json, SHA256SUMS, SBOM.json
 
 Requer que o gate de release (ou ao menos release_manifest.py) tenha gerado
@@ -218,9 +219,11 @@ def write_manifests(stage: Path, product_version: str, commit: str, dirty: bool,
 
 def smoke_test(stage: Path, system: str) -> None:
     binary = stage / ("arestrix-cli.exe" if system == "windows" else "arestrix-cli")
+    memory = stage / ("arestrix-memory.exe" if system == "windows" else "arestrix-memory")
     for command in (
         [str(binary), "version"],
         [str(binary), "project", "validate", "--project", str(stage / "examples" / "01-svg-agente"), "--json"],
+        [str(memory), "version"],
     ):
         result = subprocess.run(command, cwd=stage, capture_output=True, text=True, timeout=120)
         if result.returncode != 0:
@@ -283,7 +286,7 @@ def main() -> int:
     stage = stage_parent / f"arestrix-{version}-{system}-{arch}"
     stage.mkdir(parents=True)
     try:
-        for base in ("arestrix", "arestrix-cli", "arestrix-gateway"):
+        for base in ("arestrix", "arestrix-cli", "arestrix-gateway", "arestrix-memory"):
             shutil.copy2(find_binary(base), stage / find_binary(base).name)
 
         copy_tree(dist, stage / "dist")
@@ -296,6 +299,7 @@ def main() -> int:
             if license_path.is_file():
                 shutil.copy2(license_path, stage / "third_party" / "simdjson" / license_name)
         copy_tree(ROOT / "examples", stage / "examples")
+        copy_tree(ROOT / ".agents", stage / ".agents")
         copy_tree(ROOT / "docs" / "en", stage / "docs" / "en")
         copy_tree(ROOT / "docs" / "pt-BR", stage / "docs" / "pt-BR")
 

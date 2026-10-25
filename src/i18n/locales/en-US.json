@@ -1840,7 +1840,7 @@
     "interaction_timeout": "Interaction vertex \"{{label}}\" has a negative timeout.",
     "call_target_graph": "Call target \"{{label}}\" ({{id}}) is a subflow without a child graph.",
     "skill_rejected": "Node \"{{node}}\" uses skill \"{{skill}}\" which was REJECTED by the Studio Auditor. Fix the vulnerabilities before running.",
-    "skill_unapproved": "Node \"{{node}}\" has skill \"{{skill}}\" which is modified or pending validation. Audit it with SkillSpector before running.",
+    "skill_unapproved": "Node \"{{node}}\" has skill \"{{skill}}\" which is modified or pending validation. Audit it with the Arestrix Skill Guard before running.",
     "mcp_missing_server": "MCP node \"{{node}}\" does not have any server configured.",
     "mcp_rejected": "Node \"{{node}}\" references MCP server \"{{server}}\" which was REJECTED by Studio security governance. Fix the vulnerabilities before running.",
     "mcp_unapproved": "Node \"{{node}}\" references MCP server \"{{server}}\" which is pending audit or has a modified definition. Audit it with SkillSpector before running."

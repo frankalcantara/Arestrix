@@ -49,6 +49,7 @@ bump de versão, tag, assinatura e publicação. O Beta 2 ainda não é uma rele
 - [ ] `npm run check:version`.
 - [ ] `npm run check:local-assets`.
 - [ ] `npm run check:secrets`.
+- [ ] `npm run check:skill-references`.
 - [ ] `python scripts/check_third_party_licenses.py`.
 - [ ] `npx tsc --noEmit`.
 - [ ] `npm run build`.
@@ -73,6 +74,7 @@ bump de versão, tag, assinatura e publicação. O Beta 2 ainda não é uma rele
 
 - [ ] `py scripts/e2e_tutorial.py`.
 - [ ] `py scripts/e2e_examples.py` — 12 exemplos.
+- [ ] `py scripts/e2e_memory_institution.py` — HTTP/MCP, papéis e fail-closed.
 - [ ] Exemplo 06: chamada síncrona, notificação e ausência de chave.
 - [ ] Exemplo 07: interação com `--answers` e falha fechada.
 - [ ] Exemplo 08: formulário gerado e fallback `free_text`.
