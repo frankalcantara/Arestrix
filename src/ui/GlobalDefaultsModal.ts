@@ -506,6 +506,74 @@ export class GlobalDefaultsModal {
                   </div>
                 </label>
               </div>
+
+              <div class="form-group" style="margin-top: 14px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                <label class="form-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" id="def-memory-embedding-enabled" ${defaults.memory?.embeddingEnabled ? 'checked' : ''} />
+                  <span>${t('global_defaults.memory_embedding_enable_label')}</span>
+                </label>
+                <div class="form-hint">${t('global_defaults.memory_embedding_hint')}</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+                  <div>
+                    <label class="form-label" for="def-memory-embedding-model">${t('global_defaults.memory_embedding_model_label')}</label>
+                    <input type="text" id="def-memory-embedding-model" class="form-input" style="font-family: monospace;"
+                           value="${this.escapeHtml(defaults.memory?.embeddingModel || 'embeddinggemma-2')}" />
+                  </div>
+                  <div>
+                    <label class="form-label" for="def-memory-embedding-base-url">${t('global_defaults.memory_embedding_base_url_label')}</label>
+                    <input type="text" id="def-memory-embedding-base-url" class="form-input" style="font-family: monospace;"
+                           value="${this.escapeHtml(defaults.memory?.embeddingBaseUrl || '')}"
+                           placeholder="http://127.0.0.1:11434/v1" />
+                  </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 10px;">
+                  <div>
+                    <label class="form-label" for="def-memory-embedding-batch">${t('global_defaults.memory_embedding_batch_label')}</label>
+                    <input type="number" id="def-memory-embedding-batch" class="form-input" min="1" max="128" step="1"
+                           value="${defaults.memory?.embeddingBatchSize ?? 8}" />
+                  </div>
+                  <div>
+                    <label class="form-label" for="def-memory-embedding-max-chars">${t('global_defaults.memory_embedding_max_chars_label')}</label>
+                    <input type="number" id="def-memory-embedding-max-chars" class="form-input" min="64" max="32000" step="100"
+                           value="${defaults.memory?.embeddingMaxChars ?? 8000}" />
+                  </div>
+                  <div>
+                    <label class="form-label" for="def-memory-embedding-dim">${t('global_defaults.memory_embedding_dimensions_label')}</label>
+                    <input type="number" id="def-memory-embedding-dim" class="form-input" min="0" max="8192" step="1"
+                           value="${defaults.memory?.embeddingDimensions ?? 768}" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top: 14px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                <label class="form-label" for="def-memory-write-keys">${t('global_defaults.memory_write_keys_label')}</label>
+                <input type="text" id="def-memory-write-keys" class="form-input"
+                       value="${this.escapeHtml((defaults.memory?.writeKeys || []).join(', '))}"
+                       placeholder="${t('global_defaults.memory_write_keys_placeholder')}" />
+                <div class="form-hint">${t('global_defaults.memory_write_keys_hint')}</div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+                  <div>
+                    <label class="form-label" for="def-memory-max-lessons">${t('global_defaults.memory_max_lessons_label')}</label>
+                    <input type="number" id="def-memory-max-lessons" class="form-input" min="1" max="500" step="1"
+                           value="${defaults.memory?.maxLessonsPerRun ?? 20}" />
+                    <div class="form-hint">${t('global_defaults.memory_max_lessons_hint')}</div>
+                  </div>
+                  <div>
+                    <label class="form-label" for="def-memory-max-lesson-chars">${t('global_defaults.memory_max_lesson_chars_label')}</label>
+                    <input type="number" id="def-memory-max-lesson-chars" class="form-input" min="100" max="20000" step="100"
+                           value="${defaults.memory?.maxLessonChars ?? 4000}" />
+                    <div class="form-hint">${t('global_defaults.memory_max_lesson_chars_hint')}</div>
+                  </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 10px;">
+                  <label class="form-label" for="def-memory-retention-days">${t('global_defaults.memory_retention_label')}</label>
+                  <input type="number" id="def-memory-retention-days" class="form-input" min="0" max="3650" step="30"
+                         value="${defaults.memory?.retentionDays ?? 180}" />
+                  <div class="form-hint">${t('global_defaults.memory_retention_hint')}</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1522,6 +1590,26 @@ export class GlobalDefaultsModal {
     const memWriteLessons = (this.overlay.querySelector('#def-mem-write-lessons') as HTMLInputElement)?.checked || false;
     const memMeasurement = ((this.overlay.querySelector('#def-memory-measurement') as HTMLSelectElement)?.value || 'normal') as 'normal' | 'memory_off';
     const memRecordMetrics = (this.overlay.querySelector('#def-memory-record-metrics') as HTMLInputElement)?.checked || false;
+    const memWriteKeysRaw = (this.overlay.querySelector('#def-memory-write-keys') as HTMLInputElement)?.value || '';
+    const memWriteKeys = memWriteKeysRaw.split(',').map(s => s.trim()).filter(Boolean);
+    const memMaxLessons = Math.max(1, Math.min(500,
+      Math.floor(Number((this.overlay.querySelector('#def-memory-max-lessons') as HTMLInputElement)?.value) || 20)));
+    const memMaxLessonChars = Math.max(100, Math.min(20000,
+      Math.floor(Number((this.overlay.querySelector('#def-memory-max-lesson-chars') as HTMLInputElement)?.value) || 4000)));
+    const retentionRaw = Number((this.overlay.querySelector('#def-memory-retention-days') as HTMLInputElement)?.value);
+    const memRetentionDays = Number.isFinite(retentionRaw)
+      ? Math.max(0, Math.min(3650, Math.floor(retentionRaw)))
+      : 180;
+    const memEmbeddingEnabled = (this.overlay.querySelector('#def-memory-embedding-enabled') as HTMLInputElement)?.checked || false;
+    const memEmbeddingModel = (this.overlay.querySelector('#def-memory-embedding-model') as HTMLInputElement)?.value.trim()
+      || 'embeddinggemma-2';
+    const memEmbeddingBaseUrl = (this.overlay.querySelector('#def-memory-embedding-base-url') as HTMLInputElement)?.value.trim() || '';
+    const memEmbeddingBatch = Math.max(1, Math.min(128,
+      Math.floor(Number((this.overlay.querySelector('#def-memory-embedding-batch') as HTMLInputElement)?.value) || 8)));
+    const memEmbeddingMaxChars = Math.max(64, Math.min(32000,
+      Math.floor(Number((this.overlay.querySelector('#def-memory-embedding-max-chars') as HTMLInputElement)?.value) || 8000)));
+    const memEmbeddingDim = Math.max(0, Math.min(8192,
+      Math.floor(Number((this.overlay.querySelector('#def-memory-embedding-dim') as HTMLInputElement)?.value) || 768)));
 
     const newDefaults: IGlobalPipelineDefaults = {
       sandbox: {
@@ -1552,9 +1640,21 @@ export class GlobalDefaultsModal {
         semanticLessons: memReadLessons,
         recordLessons: memWriteLessons,
         allowedKeys: [],
+        writeKeys: memWriteKeys,
         domains: [],
+        maxLessonsPerRun: memMaxLessons,
+        maxLessonChars: memMaxLessonChars,
+        retentionDays: memRetentionDays,
         measurementMode: memMeasurement,
-        recordMetrics: memRecordMetrics
+        recordMetrics: memRecordMetrics,
+        embeddingEnabled: memEmbeddingEnabled,
+        embeddingProvider: 'local',
+        embeddingModel: memEmbeddingModel,
+        embeddingBaseUrl: memEmbeddingBaseUrl,
+        embeddingTimeoutSeconds: 60,
+        embeddingBatchSize: memEmbeddingBatch,
+        embeddingMaxChars: memEmbeddingMaxChars,
+        embeddingDimensions: memEmbeddingDim
       }
     };
 

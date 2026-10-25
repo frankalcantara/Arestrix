@@ -176,6 +176,15 @@ add_library(arestrix_core STATIC
   ${SRC}/sandbox/PipelineResumeEngine.cpp
   ${SRC}/memory/AgentBlackboard.cpp
   ${SRC}/memory/SemanticMemoryEngine.cpp
+  ${SRC}/memory/MemorySanitizer.cpp
+  ${SRC}/memory/MemoryExtractor.cpp
+  ${SRC}/memory/EmbeddingProvider.cpp
+  ${SRC}/memory/MemoryVectorIndex.cpp
+  ${SRC}/memory/MemoryIndexer.cpp
+  ${SRC}/memory/MemoryRanker.cpp
+  ${SRC}/memory/MemoryConsolidator.cpp
+  ${SRC}/memory/MemoryPlaybookCompiler.cpp
+  ${SRC}/memory/MemoryInstitutionService.cpp
   ${SRC}/memory/MemoryStore.cpp
   ${SRC}/memory/MemoryService.cpp
   ${SRC}/project/OpenableFiles.cpp

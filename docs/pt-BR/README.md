@@ -2,7 +2,7 @@
 
 [English](../en/README.md) · [Toda a documentação](../README.md)
 
-> **Aplica-se a:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Última revisão: 2026-10-21
+> **Aplica-se a:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Última revisão: 2026-10-25
 
 ## Trilha de aprendizado
 
@@ -10,8 +10,9 @@
 2. [Arquitetura](arquitetura.md) — Studio, engine, WebUI e o caminho do grafo ao C++.
 3. [Grafo e vértices](grafo-e-vertices.md) — tipos de vértice, arestas, validação e ciclos de feedback.
 4. [Agentes e execução](agentes-e-execucao.md) — laço de ferramentas, sandboxes, telemetria e execução em lote.
-5. [Workspaces, memória, skills e MCP](workspaces-memoria-skills-mcp.md) — contexto persistente e integrações.
-6. [Interface](interface.md) — ribbon, backstage, controles do canvas e atalhos.
+5. [Workspaces, memória, skills e MCP](workspaces-memoria-skills-mcp.md) - contexto persistente e integrações.
+6. [Como funciona a memória](como-funciona-a-memoria.md) - ciclo completo, embeddings, consolidação, playbooks, workspace e instituição.
+7. [Interface](interface.md) - ribbon, backstage, controles do canvas e atalhos.
 
 ## Referência
 

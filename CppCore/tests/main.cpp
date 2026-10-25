@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
@@ -20,6 +21,15 @@
 #include "core/Graph.hpp"
 #include "memory/MemoryStore.hpp"
 #include "memory/MemoryService.hpp"
+#include "memory/MemorySanitizer.hpp"
+#include "memory/MemoryExtractor.hpp"
+#include "memory/EmbeddingProvider.hpp"
+#include "memory/MemoryConsolidator.hpp"
+#include "memory/MemoryIndexer.hpp"
+#include "memory/MemoryInstitutionService.hpp"
+#include "memory/MemoryPlaybookCompiler.hpp"
+#include "memory/MemoryRanker.hpp"
+#include "memory/MemoryVectorIndex.hpp"
 #include "platform/Process.hpp"
 #include "project/OpenableFiles.hpp"
 #include "project/GitSyncService.hpp"
@@ -60,6 +70,44 @@ using json = taskforge::Json;
 
 static int g_failed = 0;
 static int g_total = 0;
+
+// Provider deterministico para testar o caminho hibrido sem rede/modelo real.
+class TopicTestEmbeddingProvider : public taskforge::memory::IEmbeddingProvider {
+public:
+    bool available() const override { return true; }
+    std::string modelId() const override { return "test-topic-3"; }
+    int dim() const override { return 3; }
+
+    bool embed(const std::vector<std::string>& texts, bool,
+               std::vector<taskforge::memory::Embedding>& out, std::string& error) override {
+        ++calls;
+        out.clear();
+        for (const auto& original : texts) {
+            std::string text = original;
+            std::transform(text.begin(), text.end(), text.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            auto has = [&](const char* needle) { return text.find(needle) != std::string::npos; };
+            float design = (has("fonte") || has("font") || has("tipografia") ||
+                            has("legibilidade") || has("contraste") || has("kerning") ||
+                            has("design")) ? 1.0f : 0.0f;
+            float failure = (has("erro") || has("falha") || has("rede") || has("error")) ? 1.0f : 0.0f;
+            float drawing = (has("svg") || has("desenho") || has("vetor")) ? 1.0f : 0.0f;
+            if (design == 0.0f && failure == 0.0f && drawing == 0.0f) design = 0.1f;
+            taskforge::memory::Embedding embedding;
+            embedding.model = modelId();
+            embedding.values = {design, failure, drawing};
+            embedding.dim = 3;
+            out.push_back(std::move(embedding));
+        }
+        if (out.size() != texts.size()) {
+            error = "quantidade incorreta";
+            return false;
+        }
+        return true;
+    }
+
+    int calls = 0;
+};
 
 #define CHECK(cond)                                                                   \
     do {                                                                              \
@@ -229,6 +277,57 @@ TEST(tools_read_write_edit) {
     CHECK(taskforge::rt::executeTool(ctx, "write", {{"path", "../escape.txt"}, {"content", "x"}}).isError);
     CHECK(taskforge::rt::executeTool(ctx, "bash", {{"command", "echo oi"}}).isError);   // nao autorizada
     fs::remove_all(root);
+}
+
+TEST(memory_tool_enforces_quota_and_charset) {
+    using taskforge::memory::MemoryService;
+    const fs::path dir = makeTempDir("memory-tool-quota");
+    const fs::path db = dir / "memory.db";
+    const std::string pId = "memory-tool-quota";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, db.string()));
+
+    taskforge::rt::ToolContext ctx;
+    ctx.projectId = pId;
+    ctx.agentId = "agente";
+    ctx.runId = "run-quota";
+    ctx.memoryWriteEnabled = true;
+    ctx.memoryDomains = {"teste"};
+    ctx.memoryMaxLessonsPerRun = 2;
+    ctx.memoryMaxLessonChars = 100;
+    ctx.allowed = {"memory_record_lesson"};
+
+    // Dominio nao autorizado continua bloqueado.
+    auto domainErr = taskforge::rt::executeTool(ctx, "memory_record_lesson",
+        {{"domain", "outro"}, {"rule", "curta"}, {"trigger", "manual"}});
+    CHECK(domainErr.isError);
+    CHECK(ctx.memoryLessonsWritten == 0);
+
+    // Regra acima do limite de caracteres.
+    ctx.memoryMaxLessonsPerRun = 5;
+    auto longErr = taskforge::rt::executeTool(ctx, "memory_record_lesson",
+        {{"domain", "teste"}, {"rule", std::string(130, 'x')}, {"trigger", "manual"}});
+    CHECK(longErr.isError);
+    CHECK(ctx.memoryLessonsWritten == 0);
+
+    // Duas licoes passam; a terceira e bloqueada pelo limite por execucao.
+    ctx.memoryMaxLessonChars = 1000;
+    ctx.memoryMaxLessonsPerRun = 2;
+    CHECK(!taskforge::rt::executeTool(ctx, "memory_record_lesson",
+        {{"domain", "teste"}, {"rule", "regra-um"}, {"trigger", "manual"}}).isError);
+    CHECK(!taskforge::rt::executeTool(ctx, "memory_record_lesson",
+        {{"domain", "teste"}, {"rule", "regra-dois"}, {"trigger", "manual"}}).isError);
+    CHECK(ctx.memoryLessonsWritten == 2);
+    auto limitErr = taskforge::rt::executeTool(ctx, "memory_record_lesson",
+        {{"domain", "teste"}, {"rule", "regra-tres"}, {"trigger", "manual"}});
+    CHECK(limitErr.isError);
+    CHECK(limitErr.content.find("Limite de licoes") != std::string::npos);
+    CHECK(memory.activeLessonCount(pId) == 2);
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(dir, ec);
 }
 
 TEST(tool_bash_host) {
@@ -1218,7 +1317,11 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
                       {"compilerConfig", {{"compiler", "msvc"}, {"cppStandard", "C++20"}, {"buildSystem", "cmake"},
                                           {"taskflowIncludePath", "third_party/taskflow"}, {"outputBinaryName", "m"},
                                           {"enableOpenMP", false}, {"enableCuda", false}, {"extraFlags", json::array()}}},
-                      {"version", "1"}, {"projectId", "proj-memoria"}}},
+                      {"version", "1"}, {"projectId", "proj-memoria"},
+                       {"globalDefaults", {{"memory", {{"embeddingEnabled", true},
+                                                       {"embeddingModel", "test/multilingual-embed"},
+                                                       {"embeddingBaseUrl", "http://127.0.0.1:9999/v1"},
+                                                       {"embeddingBatchSize", 8}}}}}}},
         {"nodes", json::array({
             json{{"id", "origem"}, {"label", "Origem"}, {"type", "static"}, {"position", {{"x", 0}, {"y", 0}}},
                  {"inputs", json::array()}, {"outputs", json::array({port("origem_out", "out", "output", "flow")})},
@@ -1232,6 +1335,8 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
                                                 {"readBlackboard", true}, {"writeBlackboard", true},
                                                 {"semanticLessons", true}, {"recordLessons", true},
                                                 {"allowedKeys", json::array({"resumo"})},
+                                                {"writeKeys", json::array({"resumo", "last_stage"})},
+                                                {"maxLessonsPerRun", 5}, {"maxLessonChars", 1234},
                                                 {"domains", json::array({"svg_typography"})}}}}}}
                  })},
         {"edges", json::array({json{{"id", "e1"}, {"sourceNodeId", "origem"}, {"sourcePortId", "origem_out"},
@@ -1241,12 +1346,22 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     std::string src = TaskflowGenerator::generateSource(g);
 
     CHECK(src.find("#include \"memory/MemoryService.hpp\"") != std::string::npos);
-    CHECK(src.find("memory.configure(projectId, arx_mem_persistent)") != std::string::npos);
+    CHECK(src.find("memory.configure(projectId, arx_mem_persistent, arx_mem_db)") != std::string::npos);
+    CHECK(src.find("memory.configureEmbeddings(projectId, arx_embedding_config)") != std::string::npos);
+    CHECK(src.find("arx_embedding_config.enabled = true;") != std::string::npos);
+    CHECK(src.find("arx_embedding_config.model = \"test/multilingual-embed\";") != std::string::npos);
+    CHECK(src.find("arx_embedding_config.baseUrl = \"http://127.0.0.1:9999/v1\";") != std::string::npos);
+    CHECK(src.find("arx_embedding_config.batchSize = 8;") != std::string::npos);
+    CHECK(src.find("ARESTRIX_PROJECT_ROOT") != std::string::npos);
+    CHECK(src.find("ARESTRIX_MEMORY_DB") != std::string::npos);
     CHECK(src.find("memory.buildBrief(projectId, \"pipeline\", std::vector<std::string>{\"svg_typography\"}, "
                    "std::vector<std::string>{\"resumo\"}, 800, true, true, &arx_brief_info)") != std::string::npos);
     CHECK(src.find("ARESTRIX_MEMORY_DISABLE") != std::string::npos);
-    CHECK(src.find("recordBriefHits(projectId, \"agente\", \"agente\", arx_brief_info)") != std::string::npos);
+    CHECK(src.find("recordBriefHits(projectId, taskforge::rt::currentRunId(\"agente\"), \"agente\", arx_brief_info)") != std::string::npos);
     CHECK(src.find("\"memoryEnabled\":true") != std::string::npos);
+    CHECK(src.find("\"memoryMaxLessonsPerRun\":5") != std::string::npos);
+    CHECK(src.find("\"memoryMaxLessonChars\":1234") != std::string::npos);
+    CHECK(src.find("\"memoryWriteKeys\":[\"resumo\",\"last_stage\"]") != std::string::npos);
     CHECK(src.find("\"memory_search\"") != std::string::npos);
     CHECK(src.find("\"memory_record_lesson\"") != std::string::npos);
     CHECK(src.find("runAgent(\"agente\", \"Agente\"") != std::string::npos);
@@ -1268,6 +1383,19 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(offSrc.find("\"memory_search\"") == std::string::npos);
     CHECK(offSrc.find("memory.buildBrief(") == std::string::npos);
     CHECK(offSrc.find("|| true || std::getenv") != std::string::npos);
+
+    // writeKeys sem last_stage impede a escrita automatica do Blackboard.
+    json noLastSchema = schema;
+    for (auto& node : noLastSchema["nodes"]) {
+        if (node.value("id", std::string()) == "agente") {
+            node["agentSettings"]["memory"]["writeKeys"] = json::array({"resumo"});
+        }
+    }
+    taskforge::core::Graph noLastGraph;
+    noLastGraph.fromJson(noLastSchema);
+    std::string noLastSrc = TaskflowGenerator::generateSource(noLastGraph);
+    CHECK(noLastSrc.find("setWorking(projectId, \"pipeline\", \"last_stage\"") == std::string::npos);
+    CHECK(noLastSrc.find("\"memoryWriteKeys\":[\"resumo\"]") != std::string::npos);
 }
 
 TEST(memory_store_working_lessons_temporal_and_usage) {
@@ -1353,6 +1481,1482 @@ TEST(memory_store_working_lessons_temporal_and_usage) {
     fs::remove_all(dir);
 }
 
+TEST(memory_store_enforces_project_lesson_cap) {
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-lesson-cap");
+    MemoryStore store((dir / "memory.db").string(), 2);
+    std::string error;
+    CHECK(store.open(error));
+    CHECK(store.ensureScope("project:cap", "project", "", "cap"));
+
+    CHECK(!store.recordLesson("project:cap", "cap", "manual", "REGRA-CAP-1", "seed").empty());
+    CHECK(!store.recordLesson("project:cap", "cap", "manual", "REGRA-CAP-2", "seed").empty());
+    CHECK(store.recordLesson("project:cap", "cap", "manual", "REGRA-CAP-3", "seed").empty());
+    CHECK(store.activeLessonCount("project:cap") == 2);
+
+    // Restauracao/migracao pode reconstruir um projeto acima do teto de agentes.
+    CHECK(!store.recordLesson("project:cap", "cap", "manual", "REGRA-CAP-RESTORE", "seed",
+                              "snapshot_restore").empty());
+    CHECK(store.activeLessonCount("project:cap") == 3);
+
+    store.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_sanitizer_redacts_known_secrets) {
+    using taskforge::memory::sanitizeJsonInPlace;
+    using taskforge::memory::sanitizeText;
+
+    const std::string secret = "sk-proj-" + std::string(40, 'a');
+    const std::string awsKey = "AKIA" + std::string("ABCDEFGHIJKLMNOP");
+    auto result = sanitizeText("chave " + secret + " e Bearer abcdefgh12345678 e AIza" + std::string(35, 'b') +
+                               " e " + awsKey + " e ghp_" + std::string(30, 'c'));
+    CHECK(result.redacted);
+    CHECK(result.text.find("sk-proj-") == std::string::npos);
+    CHECK(result.text.find("Bearer abc") == std::string::npos);
+    CHECK(result.text.find("AIza") == std::string::npos);
+    CHECK(result.text.find("AKIA") == std::string::npos);
+    CHECK(result.text.find("ghp_") == std::string::npos);
+    CHECK(result.text.find("[REDACTED]") != std::string::npos);
+
+    auto assignment = sanitizeText("api_key=" + secret + " token: " + secret + " ?token=" + secret);
+    CHECK(assignment.text.find(secret) == std::string::npos);
+    CHECK(assignment.text.find("api_key=[REDACTED]") != std::string::npos);
+    CHECK(assignment.text.find("?token=[REDACTED]") != std::string::npos);
+
+    const std::string privateKeyText = "-----BEGIN " + std::string("RSA PRIVATE KEY") +
+        "-----\nMIIEow\n-----END " + std::string("RSA PRIVATE KEY") + "-----";
+    auto privateKey = sanitizeText(privateKeyText);
+    CHECK(privateKey.text.find("MIIEow") == std::string::npos);
+    CHECK(privateKey.text.find("[REDACTED PRIVATE KEY]") != std::string::npos);
+
+    auto normal = sanitizeText("texto normal, sem segredo");
+    CHECK(!normal.redacted);
+    CHECK(normal.text == "texto normal, sem segredo");
+
+    auto truncated = sanitizeText(std::string(50, 'x'), 10);
+    CHECK(truncated.truncated);
+    CHECK(truncated.text.size() == 10);
+
+    taskforge::Json nested = taskforge::Json::object();
+    nested["error"] = "Bearer " + std::string(30, 'z');
+    nested["items"] = taskforge::Json::array({taskforge::Json("chave " + secret)});
+    CHECK(sanitizeJsonInPlace(nested) >= 2);
+    CHECK(nested.dump().find(secret) == std::string::npos);
+    CHECK(nested.dump().find("Bearer " + std::string(30, 'z')) == std::string::npos);
+}
+
+TEST(memory_store_sanitizes_secrets) {
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-sanitize");
+    MemoryStore store((dir / "memory.db").string());
+    std::string error;
+    CHECK(store.open(error));
+    CHECK(store.ensureScope("project:sanitize", "project", "", "sanitize"));
+
+    const std::string secret = "sk-proj-" + std::string(40, 'a');
+    CHECK(!store.recordLesson("project:sanitize", "seguranca", "Bearer " + secret,
+                              "Nunca gravar " + secret, "seed").empty());
+    auto lessons = store.getLessons("project:sanitize", "seguranca");
+    CHECK(lessons.size() == 1);
+    CHECK(lessons[0].lessonRule.find(secret) == std::string::npos);
+    CHECK(lessons[0].lessonRule.find("[REDACTED]") != std::string::npos);
+    CHECK(lessons[0].triggerError.find(secret) == std::string::npos);
+
+    CHECK(store.setWorking("project:sanitize", "pipeline", "token", taskforge::Json("valor " + secret)));
+    auto working = store.getWorking("project:sanitize", "pipeline", "token");
+    CHECK(working.is_string());
+    CHECK(working.str().find(secret) == std::string::npos);
+    CHECK(working.str().find("[REDACTED]") != std::string::npos);
+
+    const std::string a = store.ensureNode("project:sanitize", "node-sanitize-a", "project", "Alpha");
+    const std::string b = store.ensureNode("project:sanitize", "node-sanitize-b", "library",
+                                           "Biblioteca " + secret);
+    CHECK(!a.empty() && !b.empty());
+    taskforge::Json value = taskforge::Json("Bearer " + secret);
+    taskforge::Json meta = taskforge::Json::object();
+    meta["note"] = "api_key=" + secret;
+    CHECK(!store.recordEdge("project:sanitize", a, b, "USES", value, "2020-01-01T00:00:00Z", "",
+                            0.9, "active", "test", "", meta).empty());
+    auto edges = store.neighbors("project:sanitize", a, 1);
+    CHECK(edges.size() == 1);
+    CHECK(edges[0].valueJson.find(secret) == std::string::npos);
+    CHECK(edges[0].metadata.find(secret) == std::string::npos);
+
+    store.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_snapshot_sanitizes_secrets_from_legacy_rows) {
+    using taskforge::project::DatabaseBackupService;
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_mem_sanitize_" + stamp);
+    fs::create_directories(root / ".arestrix" / "memory");
+    fs::create_directories(root / "storage");
+    const std::string pId = "snapshot-sanitize-test";
+    const fs::path dbPath = root / ".arestrix" / "memory" / "memory.db";
+    const fs::path snapPath = root / "storage" / "memory.dump.json";
+    const std::string secret = "sk-proj-" + std::string(40, 'a');
+
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, dbPath.string()));
+    CHECK(!memory.recordLesson(pId, "seguranca", "manual", "REGRA-SEGURA", "seed").empty());
+    memory.closeProject(pId);
+
+    // Simula uma linha antiga/legada gravada antes da sanitizacao.
+    sqlite3* db = nullptr;
+    CHECK(sqlite3_open_v2(dbPath.string().c_str(), &db, SQLITE_OPEN_READWRITE, nullptr) == SQLITE_OK);
+    CHECK(sqlite3_exec(db, ("UPDATE memory_node SET canonical_name='" + secret + "' WHERE kind='rule';").c_str(),
+                       nullptr, nullptr, nullptr) == SQLITE_OK);
+    sqlite3_close(db);
+
+    std::string error;
+    CHECK(DatabaseBackupService::exportMemorySnapshot(pId, root, snapPath, error));
+    std::ifstream in(snapPath, std::ios::binary);
+    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+    CHECK(content.find(secret) == std::string::npos);
+    CHECK(content.find("[REDACTED]") != std::string::npos);
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_store_purge_removes_all_cognitive_and_telemetry_data) {
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryUsageRecord;
+    const fs::path dir = makeTempDir("memory-purge");
+    MemoryStore store((dir / "memory.db").string());
+    std::string error;
+    CHECK(store.open(error));
+    CHECK(store.ensureScope("project:purge", "project", "", "purge"));
+
+    const std::string lesson = store.recordLesson("project:purge", "purge", "manual", "REGRA-PURGE", "seed");
+    CHECK(!lesson.empty());
+    CHECK(store.setWorking("project:purge", "pipeline", "resumo", taskforge::Json("valor")));
+    const std::string a = store.ensureNode("project:purge", "node-purge-a", "project", "Alpha");
+    const std::string b = store.ensureNode("project:purge", "node-purge-b", "library", "Beta");
+    CHECK(!a.empty() && !b.empty());
+    CHECK(!store.recordEdge("project:purge", a, b, "USES", taskforge::Json("x"),
+                            "2020-01-01T00:00:00Z", "", 0.8, "active", "test").empty());
+    CHECK(!store.recordEpisode("project:purge", "run-purge", "node", "pipeline", "test", "episodio").empty());
+    CHECK(store.recordHit("project:purge", "run-purge", "node", lesson, "lesson", true, false));
+    MemoryUsageRecord usage;
+    usage.scopeId = "project:purge";
+    usage.runId = "run-purge";
+    usage.nodeId = "node";
+    usage.provider = "test";
+    usage.model = "test";
+    usage.totalTokens = 10;
+    usage.outcome = "success";
+    CHECK(store.recordUsage(usage));
+
+    CHECK(store.purge("project:purge", taskforge::memory::MemoryPurgeOptions{false, true}));
+    CHECK(store.activeLessonCount("project:purge") == 0);
+    CHECK(store.getWorking("project:purge", "pipeline", "resumo").is_null());
+    CHECK(store.usageSummary("project:purge")["runs"] == 0);
+    CHECK(store.hitSummary("project:purge")["hits"] == 0);
+    CHECK(store.neighbors("project:purge", a, 1).empty());
+
+    // O escopo continua utilizavel depois do expurgo.
+    CHECK(!store.recordLesson("project:purge", "purge", "manual", "REGRA-POS-PURGE", "seed").empty());
+
+    store.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_store_prune_removes_only_old_telemetry) {
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryUsageRecord;
+    const fs::path dir = makeTempDir("memory-prune");
+    const fs::path db = dir / "memory.db";
+    const std::string scope = "project:prune";
+
+    {
+        MemoryStore store(db.string());
+        std::string error;
+        CHECK(store.open(error));
+        CHECK(store.ensureScope(scope, "project", "", "prune"));
+        CHECK(!store.recordEpisode(scope, "run-old", "node", "pipeline", "test", "episodio antigo").empty());
+        CHECK(store.recordHit(scope, "run-old", "node", "mem-old", "lesson", true, false));
+        MemoryUsageRecord usage;
+        usage.scopeId = scope;
+        usage.runId = "run-old";
+        usage.nodeId = "node";
+        usage.provider = "test";
+        usage.model = "test";
+        usage.totalTokens = 10;
+        usage.outcome = "success";
+        CHECK(store.recordUsage(usage));
+        store.close();
+    }
+
+    sqlite3* raw = nullptr;
+    CHECK(sqlite3_open_v2(db.string().c_str(), &raw, SQLITE_OPEN_READWRITE, nullptr) == SQLITE_OK);
+    CHECK(sqlite3_exec(raw,
+        "UPDATE memory_episode SET created_at='2000-01-01T00:00:00Z' WHERE scope_id='project:prune';"
+        "UPDATE memory_hit SET created_at='2000-01-01T00:00:00Z' WHERE scope_id='project:prune';"
+        "UPDATE memory_usage SET created_at='2000-01-01T00:00:00Z' WHERE scope_id='project:prune';",
+        nullptr, nullptr, nullptr) == SQLITE_OK);
+    sqlite3_close(raw);
+
+    {
+        MemoryStore store(db.string());
+        std::string error;
+        CHECK(store.open(error));
+        auto pruned = store.prune(scope, 30);
+        CHECK(pruned.episodes == 1);
+        CHECK(pruned.hits == 1);
+        CHECK(pruned.usage == 1);
+        CHECK(store.usageSummary(scope)["runs"] == 0);
+        CHECK(store.hitSummary(scope)["hits"] == 0);
+
+        CHECK(!store.recordEpisode(scope, "run-new", "node", "pipeline", "test", "episodio novo").empty());
+        auto again = store.prune(scope, 30);
+        CHECK(again.episodes == 0 && again.hits == 0 && again.usage == 0);
+        store.close();
+    }
+
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_service_clear_session_resets_ephemeral_store) {
+    using taskforge::memory::MemoryService;
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject("ephemeral-reset");
+    CHECK(memory.configure("ephemeral-reset", false, ""));
+    CHECK(!memory.isPersistent("ephemeral-reset"));
+    CHECK(memory.setWorking("ephemeral-reset", "pipeline", "resumo", taskforge::Json("valor")));
+    CHECK(memory.getWorking("ephemeral-reset", "pipeline", "resumo") == taskforge::Json("valor"));
+    CHECK(memory.clearSession("ephemeral-reset"));
+    CHECK(memory.getWorking("ephemeral-reset", "pipeline", "resumo").is_null());
+    memory.closeProject("ephemeral-reset");
+}
+
+TEST(database_backup_prunes_memory_on_shutdown_using_manifest) {
+    using taskforge::project::DatabaseBackupService;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryUsageRecord;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_mem_retention_" + stamp);
+    fs::create_directories(root / ".arestrix" / "memory");
+    fs::create_directories(root / "storage");
+    const std::string pId = "retention-shutdown-test";
+    const fs::path dbPath = root / ".arestrix" / "memory" / "memory.db";
+
+    {
+        std::ofstream manifest(root / "arestrix.project.json");
+        manifest << taskforge::Json{{"projectId", pId},
+                                    {"globalDefaults", taskforge::Json{{"memory", taskforge::Json{{"retentionDays", 1}}}}}}
+                        .dump(2);
+    }
+
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, dbPath.string()));
+    CHECK(!memory.recordEpisode(pId, "run-old", "node", "pipeline", "test", "episodio antigo").empty());
+    taskforge::memory::MemoryBriefInfo brief;
+    brief.lessonIds = {"mem-old"};
+    CHECK(memory.recordBriefHits(pId, "run-old", "node", brief));
+    MemoryUsageRecord usage;
+    usage.scopeId = pId;
+    usage.runId = "run-old";
+    usage.nodeId = "node";
+    usage.provider = "test";
+    usage.model = "test";
+    usage.totalTokens = 10;
+    usage.outcome = "success";
+    CHECK(memory.recordUsage(usage));
+    memory.closeProject(pId);
+
+    sqlite3* raw = nullptr;
+    CHECK(sqlite3_open_v2(dbPath.string().c_str(), &raw, SQLITE_OPEN_READWRITE, nullptr) == SQLITE_OK);
+    CHECK(sqlite3_exec(raw,
+        "UPDATE memory_episode SET created_at='2000-01-01T00:00:00Z';"
+        "UPDATE memory_hit SET created_at='2000-01-01T00:00:00Z';"
+        "UPDATE memory_usage SET created_at='2000-01-01T00:00:00Z';",
+        nullptr, nullptr, nullptr) == SQLITE_OK);
+    sqlite3_close(raw);
+
+    std::string error;
+    CHECK(DatabaseBackupService::pruneMemoryOnShutdown(root, pId, error));
+    CHECK(error.empty());
+    CHECK(memory.usageSummary(pId)["runs"] == 0);
+    CHECK(memory.hitSummary(pId)["hits"] == 0);
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_snapshot_v2_roundtrip_preserves_full_graph) {
+    using namespace taskforge::project;
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_mem_v2_" + stamp);
+    fs::create_directories(root / ".arestrix" / "memory");
+    fs::create_directories(root / "storage");
+    const std::string pId = "snapshot-v2-test";
+    const std::string scope = "project:" + pId;
+    const fs::path dbPath = root / ".arestrix" / "memory" / "memory.db";
+    const fs::path snapPath = root / "storage" / "memory.dump.json";
+
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, dbPath.string()));
+    auto* store = memory.store(pId);
+    CHECK(store != nullptr);
+    const std::string a = store->ensureNode(scope, "node-v2-a", "library", "Biblioteca A");
+    const std::string b = store->ensureNode(scope, "node-v2-b", "library", "Biblioteca B");
+    CHECK(!a.empty() && !b.empty());
+
+    taskforge::Json meta = taskforge::Json::object();
+    meta["domain"] = "v2";
+    meta["note"] = "metadata preservada";
+    const std::string currentEdge = store->recordEdge(
+        scope, a, b, "USES", taskforge::Json("atual"), "2024-01-01T00:00:00Z", "",
+        0.77, "active", "test", "ref-v2", meta);
+    const std::string oldEdge = store->recordEdge(
+        scope, a, b, "USES", taskforge::Json("antigo"), "2020-01-01T00:00:00Z",
+        "2021-01-01T00:00:00Z", 0.33, "active", "test", "ref-old", meta);
+    CHECK(!currentEdge.empty() && !oldEdge.empty());
+    CHECK(store->invalidateEdge(oldEdge, "2021-01-01T00:00:00Z", "substituida", "test"));
+    CHECK(!store->recordLesson(scope, "v2", "manual", "REGRA-V2", "seed").empty());
+    taskforge::Json working = taskforge::Json::object();
+    working["resumo"] = "valor-v2";
+    working["objeto"]["campo"] = 42;
+    CHECK(store->setWorking(scope, "pipeline", "estado", working));
+
+    std::string error;
+    CHECK(DatabaseBackupService::exportMemorySnapshot(pId, root, snapPath, error));
+    const std::string firstDump = taskforge::jsonutil::readFile(snapPath);
+    auto parsed = taskforge::jsonutil::tryParse(firstDump);
+    CHECK(parsed && parsed->is_object());
+    CHECK(parsed->value("version", std::string()) == "2.0.0");
+    CHECK(parsed->contains("nodes") && (*parsed)["nodes"].size() >= 4);
+    CHECK(parsed->contains("edges") && (*parsed)["edges"].size() == 3);
+    CHECK(parsed->contains("closure") && !(*parsed)["closure"].empty());
+
+    // Determinismo: sem timestamp volatil, duas exportacoes sao identicas.
+    CHECK(DatabaseBackupService::exportMemorySnapshot(pId, root, snapPath, error));
+    CHECK(taskforge::jsonutil::readFile(snapPath) == firstDump);
+
+    // Destroi o banco cognitivo e restaura o grafo completo.
+    memory.clearProject(pId);
+    CHECK(memory.getLessons(pId).empty());
+    CHECK(DatabaseBackupService::restoreMemorySnapshot(pId, root, snapPath, error));
+    auto lessons = memory.getLessons(pId, "v2");
+    CHECK(lessons.size() == 1 && lessons[0].lessonRule == "REGRA-V2");
+    auto restoredWorking = memory.getWorking(pId, "pipeline", "estado");
+    CHECK(restoredWorking.is_object() && restoredWorking["resumo"] == taskforge::Json("valor-v2"));
+    CHECK(restoredWorking["objeto"]["campo"] == taskforge::Json(42));
+
+    store = memory.store(pId);
+    CHECK(store != nullptr);
+    auto active = store->neighbors(scope, a, 1);
+    CHECK(active.size() == 1 && active[0].id == currentEdge);
+    CHECK(active[0].confidence > 0.76 && active[0].confidence < 0.78);
+    CHECK(active[0].sourceRef == "ref-v2");
+
+    std::vector<taskforge::memory::MemoryHitRef> searchHits;
+    const std::string found = store->searchContext(scope, "Biblioteca", 10, {}, &searchHits);
+    CHECK(found.find("Biblioteca A") != std::string::npos);
+    CHECK(!searchHits.empty());
+
+    memory.closeProject(pId);
+    sqlite3* raw = nullptr;
+    CHECK(sqlite3_open_v2(dbPath.string().c_str(), &raw, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK);
+    sqlite3_stmt* st = nullptr;
+    CHECK(sqlite3_prepare_v2(raw, "SELECT status, valid_to, source_ref, metadata FROM memory_edge WHERE id=?;",
+                             -1, &st, nullptr) == SQLITE_OK);
+    sqlite3_bind_text(st, 1, oldEdge.c_str(), -1, SQLITE_TRANSIENT);
+    CHECK(sqlite3_step(st) == SQLITE_ROW);
+    CHECK(std::string(reinterpret_cast<const char*>(sqlite3_column_text(st, 0))) == "superseded");
+    CHECK(std::string(reinterpret_cast<const char*>(sqlite3_column_text(st, 1))) == "2021-01-01T00:00:00Z");
+    CHECK(std::string(reinterpret_cast<const char*>(sqlite3_column_text(st, 2))) == "ref-old");
+    CHECK(std::string(reinterpret_cast<const char*>(sqlite3_column_text(st, 3))).find("metadata preservada") != std::string::npos);
+    sqlite3_finalize(st);
+    sqlite3_close(raw);
+
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_snapshot_v1_remains_importable) {
+    using namespace taskforge::project;
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_mem_v1_" + stamp);
+    fs::create_directories(root / "storage");
+    const std::string pId = "snapshot-v1-test";
+    const fs::path snapPath = root / "storage" / "memory.dump.json";
+    taskforge::Json snapshot = taskforge::Json::object();
+    snapshot["format"] = "arestrix-memory-snapshot";
+    snapshot["version"] = "1.0.0";
+    snapshot["projectId"] = pId;
+    snapshot["lessons"] = taskforge::Json::array({taskforge::Json{
+        {"id", "lesson-v1"}, {"domain", "v1"}, {"triggerError", "legado"},
+        {"lessonRule", "REGRA-V1"}, {"sourceItem", "seed"}}});
+    snapshot["working"] = taskforge::Json{{"pipeline", taskforge::Json{{"resumo", "valor-v1"}}}};
+    {
+        std::ofstream out(snapPath, std::ios::binary | std::ios::trunc);
+        out << snapshot.dump(2);
+    }
+
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    std::string error;
+    CHECK(DatabaseBackupService::restoreMemorySnapshot(pId, root, snapPath, error));
+    auto lessons = memory.getLessons(pId, "v1");
+    CHECK(lessons.size() == 1 && lessons[0].lessonRule == "REGRA-V1");
+    CHECK(memory.getWorking(pId, "pipeline", "resumo") == taskforge::Json("valor-v1"));
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_snapshot_v2_import_is_atomic_on_failure) {
+    using namespace taskforge::project;
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_mem_atomic_" + stamp);
+    fs::create_directories(root / ".arestrix" / "memory");
+    fs::create_directories(root / "storage");
+    const std::string pId = "snapshot-atomic-test";
+    const fs::path dbPath = root / ".arestrix" / "memory" / "memory.db";
+    const fs::path snapPath = root / "storage" / "memory.dump.json";
+
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, dbPath.string()));
+    CHECK(!memory.recordLesson(pId, "atomic", "manual", "REGRA-ANTES", "seed").empty());
+    std::string error;
+    CHECK(DatabaseBackupService::exportMemorySnapshot(pId, root, snapPath, error));
+
+    auto parsed = taskforge::jsonutil::tryParse(taskforge::jsonutil::readFile(snapPath));
+    CHECK(parsed && parsed->is_object());
+    CHECK((*parsed)["edges"].is_array() && !(*parsed)["edges"].empty());
+    (*parsed)["edges"][0]["srcId"] = "missing-node-for-atomic-test";
+    {
+        std::ofstream out(snapPath, std::ios::binary | std::ios::trunc);
+        out << parsed->dump(2);
+    }
+
+    CHECK(!DatabaseBackupService::restoreMemorySnapshot(pId, root, snapPath, error));
+    auto lessons = memory.getLessons(pId, "atomic");
+    CHECK(lessons.size() == 1 && lessons[0].lessonRule == "REGRA-ANTES");
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+TEST(runtime_current_run_id_prefers_environment) {
+    const std::string old = taskforge::platform::getEnv("ARESTRIX_RUN_ID");
+    taskforge::platform::setProcessEnv("ARESTRIX_RUN_ID", "run-pipeline-xyz");
+    CHECK(taskforge::rt::currentRunId("fallback-node") == "run-pipeline-xyz");
+    taskforge::platform::setProcessEnv("ARESTRIX_RUN_ID", "");
+    CHECK(taskforge::rt::currentRunId("fallback-node") == "fallback-node");
+    taskforge::platform::setProcessEnv("ARESTRIX_RUN_ID", old);
+}
+
+TEST(memory_hit_unique_key_upserts_instead_of_duplicating) {
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryHitRef;
+    MemoryStore store(":memory:");
+    std::string error;
+    CHECK(store.open(error));
+    CHECK(store.ensureScope("project:hit-unique", "project", "", "hit-unique"));
+
+    CHECK(store.recordHit("project:hit-unique", "run-1", "node-a", "mem-1", "lesson", true, false));
+    CHECK(store.recordHit("project:hit-unique", "run-1", "node-a", "mem-1", "lesson", false, true));
+    auto summary = store.hitSummary("project:hit-unique");
+    CHECK(summary["hits"] == 1);
+    CHECK(summary["injected"] == 1);
+    CHECK(summary["used"] == 1);
+
+    CHECK(store.recordConsultedHits("project:hit-unique", "run-2", "node-b",
+                                    {MemoryHitRef{"mem-2", "fact"}}) == 1);
+    CHECK(store.recordConsultedHits("project:hit-unique", "run-2", "node-b",
+                                    {MemoryHitRef{"mem-2", "fact"}}) == 1);
+    summary = store.hitSummary("project:hit-unique");
+    CHECK(summary["hits"] == 2);
+    CHECK(summary["consulted"] == 1);
+
+    store.close();
+}
+
+TEST(memory_hit_unique_migration_deduplicates_existing_rows) {
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-hit-migration");
+    const fs::path db = dir / "memory.db";
+    {
+        MemoryStore store(db.string());
+        std::string error;
+        CHECK(store.open(error));
+        CHECK(store.ensureScope("project:hit-migration", "project", "", "hit-migration"));
+        store.close();
+    }
+
+    sqlite3* raw = nullptr;
+    CHECK(sqlite3_open_v2(db.string().c_str(), &raw, SQLITE_OPEN_READWRITE, nullptr) == SQLITE_OK);
+    CHECK(sqlite3_exec(raw,
+        "DROP INDEX IF EXISTS idx_memory_hit_unique;"
+        "INSERT INTO memory_hit(id,scope_id,run_id,node_id,memory_id,kind,injected,used,outcome,created_at) "
+        "VALUES('h1','project:hit-migration','r','n','m','lesson',1,0,'','2026-01-01T00:00:00Z');"
+        "INSERT INTO memory_hit(id,scope_id,run_id,node_id,memory_id,kind,injected,used,outcome,created_at) "
+        "VALUES('h2','project:hit-migration','r','n','m','lesson',0,1,'success','2026-01-02T00:00:00Z');",
+        nullptr, nullptr, nullptr) == SQLITE_OK);
+    sqlite3_close(raw);
+
+    {
+        MemoryStore store(db.string());
+        std::string error;
+        CHECK(store.open(error));
+        auto summary = store.hitSummary("project:hit-migration");
+        CHECK(summary["hits"] == 1);
+        CHECK(summary["used"] == 1);
+        CHECK(summary["injected"] == 1);
+        CHECK(store.recordHit("project:hit-migration", "r", "n", "m", "lesson", true, false));
+        summary = store.hitSummary("project:hit-migration");
+        CHECK(summary["hits"] == 1);
+        store.close();
+    }
+
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_schema_migrates_previous_version_database) {
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-old-schema");
+    const fs::path db = dir / "memory.db";
+    const std::string scope = "project:old-schema";
+
+    sqlite3* raw = nullptr;
+    CHECK(sqlite3_open_v2(db.string().c_str(), &raw, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr) == SQLITE_OK);
+    CHECK(sqlite3_exec(raw,
+        "CREATE TABLE memory_usage ("
+        " id TEXT PRIMARY KEY, scope_id TEXT NOT NULL, run_id TEXT, node_id TEXT, provider TEXT, model TEXT,"
+        " prompt_tokens INTEGER NOT NULL DEFAULT 0, completion_tokens INTEGER NOT NULL DEFAULT 0,"
+        " total_tokens INTEGER NOT NULL DEFAULT 0, calls INTEGER NOT NULL DEFAULT 0,"
+        " latency_ms INTEGER NOT NULL DEFAULT 0, memory_context_chars INTEGER NOT NULL DEFAULT 0,"
+        " memory_enabled INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);"
+        "CREATE TABLE memory_hit ("
+        " id TEXT PRIMARY KEY, scope_id TEXT NOT NULL, run_id TEXT, node_id TEXT, memory_id TEXT NOT NULL,"
+        " kind TEXT NOT NULL, injected INTEGER NOT NULL DEFAULT 0, used INTEGER NOT NULL DEFAULT 0,"
+        " outcome TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);"
+        "CREATE TABLE memory_episode ("
+        " id TEXT PRIMARY KEY, scope_id TEXT NOT NULL, run_id TEXT NOT NULL, node_id TEXT, item_id TEXT,"
+        " kind TEXT NOT NULL, content TEXT NOT NULL, sanitized INTEGER NOT NULL DEFAULT 1,"
+        " created_at TEXT NOT NULL, metadata TEXT NOT NULL DEFAULT '{}');"
+        "INSERT INTO memory_usage(id,scope_id,run_id,node_id,provider,model,total_tokens,created_at)"
+        " VALUES('u1','project:old-schema','r','n','p','m',10,'2026-01-01T00:00:00Z');"
+        "INSERT INTO memory_hit(id,scope_id,run_id,node_id,memory_id,kind,injected,used,outcome,created_at)"
+        " VALUES('h1','project:old-schema','r','n','mem','lesson',1,0,'','2026-01-01T00:00:00Z');"
+        "INSERT INTO memory_hit(id,scope_id,run_id,node_id,memory_id,kind,injected,used,outcome,created_at)"
+        " VALUES('h2','project:old-schema','r','n','mem','lesson',0,1,'success','2026-01-02T00:00:00Z');"
+        "INSERT INTO memory_episode(id,scope_id,run_id,node_id,item_id,kind,content,created_at,metadata)"
+        " VALUES('old-ep','project:old-schema','r','n','pipeline','agent_success','ok','2026-01-01T00:00:00Z','{}');",
+        nullptr, nullptr, nullptr) == SQLITE_OK);
+    sqlite3_close(raw);
+
+    {
+        MemoryStore store(db.string());
+        std::string error;
+        CHECK(store.open(error));
+        auto usage = store.usageSummary(scope);
+        CHECK(usage["runs"] == 1);
+        CHECK(usage["totalTokens"] == 10);
+        CHECK(usage["retries"] == 0);
+        auto hits = store.hitSummary(scope);
+        CHECK(hits["hits"] == 1);
+        CHECK(hits["injected"] == 1);
+        CHECK(hits["used"] == 1);
+        CHECK(store.recordHit(scope, "r", "n", "mem", "lesson", true, false));
+        CHECK(store.hitSummary(scope)["hits"] == 1);
+        auto oldEpisode = store.getEpisode(scope, "old-ep");
+        CHECK(oldEpisode.value("id", std::string()) == "old-ep");
+        CHECK(oldEpisode.value("taskType", std::string()).empty());
+        CHECK(oldEpisode["toolCalls"].is_array() && oldEpisode["toolCalls"].empty());
+        store.close();
+    }
+
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_l2_schema_and_enriched_episode) {
+    using taskforge::memory::MemoryEpisodeRecord;
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-l2-episode");
+    const fs::path dbPath = dir / "memory.db";
+    const std::string scope = "project:l2-episode";
+
+    {
+        MemoryStore store(dbPath.string());
+        std::string error;
+        CHECK(store.open(error));
+        CHECK(store.ensureScope(scope, "project", "", "l2-episode"));
+
+        MemoryEpisodeRecord episode;
+        episode.scopeId = scope;
+        episode.runId = "run-l2";
+        episode.nodeId = "agent-l2";
+        episode.itemId = "pipeline";
+        episode.kind = "agent_success";
+        episode.content = "agent completed";
+        episode.taskType = "svg_typography";
+        episode.outcome = "success";
+        episode.errorClass = "";
+        episode.inputHash = "hash-123";
+        episode.toolCalls = taskforge::Json::array({
+            taskforge::Json{{"name", "read"}, {"ok", true}},
+            taskforge::Json{{"name", "write"}, {"ok", true}}});
+        episode.filesTouched = taskforge::Json::array({taskforge::Json("workspace/scene.svg")});
+        episode.artifacts = taskforge::Json::array({taskforge::Json("exports/scene.svg")});
+        episode.evidence = taskforge::Json::array({taskforge::Json{{"kind", "artifact"}, {"ok", true}}});
+        episode.successSignals = taskforge::Json{{"outputNonEmpty", true}, {"success", true}};
+        episode.metadata = taskforge::Json{{"domain", "svg"}, {"note", "api_key=sk-proj-" + std::string(40, 'x')}};
+
+        const std::string id = store.recordEpisode(episode);
+        CHECK(!id.empty());
+        auto saved = store.getEpisode(scope, id);
+        CHECK(saved.value("id", std::string()) == id);
+        CHECK(saved.value("taskType", std::string()) == "svg_typography");
+        CHECK(saved.value("outcome", std::string()) == "success");
+        CHECK(saved["toolCalls"].size() == 2);
+        CHECK(saved["filesTouched"].size() == 1);
+        CHECK(saved["artifacts"].size() == 1);
+        CHECK(saved["evidence"].size() == 1);
+        CHECK(saved["successSignals"].value("outputNonEmpty", false));
+        CHECK(saved["redactions"].get<long long>() > 0);
+        CHECK(saved.dump().find("sk-proj-") == std::string::npos);
+        store.close();
+    }
+
+    sqlite3* raw = nullptr;
+    CHECK(sqlite3_open_v2(dbPath.string().c_str(), &raw, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK);
+    const char* tables[] = {"memory_proposal", "memory_embedding", "memory_playbook", "memory_alias"};
+    for (const char* table : tables) {
+        sqlite3_stmt* st = nullptr;
+        CHECK(sqlite3_prepare_v2(raw,
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?;", -1, &st, nullptr) == SQLITE_OK);
+        sqlite3_bind_text(st, 1, table, -1, SQLITE_TRANSIENT);
+        CHECK(sqlite3_step(st) == SQLITE_ROW);
+        sqlite3_finalize(st);
+    }
+    {
+        sqlite3_stmt* st = nullptr;
+        CHECK(sqlite3_prepare_v2(raw,
+            "SELECT COUNT(*) FROM pragma_table_info('memory_embedding') WHERE name='domain';",
+            -1, &st, nullptr) == SQLITE_OK);
+        CHECK(sqlite3_step(st) == SQLITE_ROW && sqlite3_column_int(st, 0) == 1);
+        sqlite3_finalize(st);
+    }
+    sqlite3_close(raw);
+
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_extractor_generates_proposals_and_promotes) {
+    using taskforge::memory::MemoryEpisodeRecord;
+    using taskforge::memory::MemoryExtractor;
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-extractor");
+    const fs::path dbPath = dir / "memory.db";
+    const std::string scope = "project:extractor";
+
+    {
+        MemoryStore store(dbPath.string());
+        std::string error;
+        CHECK(store.open(error));
+        CHECK(store.ensureScope(scope, "project", "", "extractor"));
+
+        MemoryEpisodeRecord success;
+        success.scopeId = scope;
+        success.runId = "run-extract";
+        success.nodeId = "agent-extract";
+        success.kind = "agent_success";
+        success.content = "agent completed";
+        success.taskType = "svg_typography";
+        success.outcome = "success";
+        success.toolCalls = taskforge::Json::array({
+            taskforge::Json{{"name", "read"}, {"ok", true}},
+            taskforge::Json{{"name", "write"}, {"ok", true}}});
+        success.filesTouched = taskforge::Json::array({taskforge::Json("workspace/scene.svg")});
+        success.artifacts = taskforge::Json::array({taskforge::Json("exports/scene.svg")});
+        success.successSignals = taskforge::Json{{"outputNonEmpty", true}, {"success", true}};
+        const std::string successId = store.recordEpisode(success);
+        CHECK(!successId.empty());
+        CHECK(MemoryExtractor::extractAndStore(store, scope, successId) > 0);
+        auto pending = store.listProposals(scope, "pending", 100);
+        CHECK(!pending.empty());
+        const size_t pendingCount = pending.size();
+        CHECK(MemoryExtractor::extractAndStore(store, scope, successId) > 0);
+        CHECK(store.listProposals(scope, "pending", 100).size() == pendingCount);
+
+        std::string factId;
+        std::string playbookId;
+        std::string entityId;
+        for (const auto& proposal : pending) {
+            if (proposal.kind == "fact" && factId.empty()) {
+                const auto payload = taskforge::jsonutil::parse(proposal.payloadJson);
+                if (payload.value("predicate", std::string()) == "USES_TOOL" &&
+                    payload.value("object", std::string()) == "read") {
+                    factId = proposal.id;
+                }
+            }
+            if (proposal.kind == "playbook" && playbookId.empty()) playbookId = proposal.id;
+            if (proposal.kind == "entity" && entityId.empty()) entityId = proposal.id;
+        }
+        CHECK(!factId.empty() && !playbookId.empty() && !entityId.empty());
+
+        std::string promoted;
+        std::string promoteError;
+        CHECK(store.promoteProposal(scope, factId, "test", promoteError, &promoted));
+        CHECK(!promoted.empty());
+        const std::string factPromoted = promoted;
+        CHECK(store.searchContext(scope, "svg_typography", 10).find("USES_TOOL") != std::string::npos);
+        CHECK(store.promoteProposal(scope, playbookId, "test", promoteError, &promoted));
+        CHECK(!promoted.empty());
+        CHECK(store.promoteProposal(scope, entityId, "test", promoteError, &promoted));
+        CHECK(!promoted.empty());
+
+        std::string rejectError;
+        std::string summaryId;
+        for (const auto& proposal : pending) {
+            if (proposal.kind == "summary") { summaryId = proposal.id; break; }
+        }
+        CHECK(!summaryId.empty());
+        CHECK(store.rejectProposal(scope, summaryId, "test", "nao relevante", rejectError));
+        CHECK(store.searchContext(scope, "svg_typography success", 10).empty());
+
+        // Regerar e aceitar o mesmo fato nao duplica a aresta.
+        taskforge::Json duplicateFact = taskforge::Json{
+            {"subject", "svg_typography"}, {"predicate", "USES_TOOL"}, {"object", "read"}};
+        taskforge::Json duplicateEvidence = taskforge::Json::array(
+            {taskforge::Json{{"kind", "test"}, {"episodeId", successId}}});
+        const std::string duplicateId = store.recordProposal(
+            scope, "fact", duplicateFact, successId, duplicateEvidence, 0.9);
+        CHECK(!duplicateId.empty());
+        std::string duplicatePromoted;
+        CHECK(store.promoteProposal(scope, duplicateId, "test", promoteError, &duplicatePromoted));
+        CHECK(duplicatePromoted == factPromoted);
+
+        MemoryEpisodeRecord failure;
+        failure.scopeId = scope;
+        failure.runId = "run-fail";
+        failure.nodeId = "agent-fail";
+        failure.kind = "agent_failure";
+        failure.content = "agent failed";
+        failure.taskType = "svg_typography";
+        failure.outcome = "failure";
+        failure.errorClass = "validation_error";
+        const std::string failureId = store.recordEpisode(failure);
+        CHECK(!failureId.empty());
+        CHECK(MemoryExtractor::extractAndStore(store, scope, failureId) == 1);
+        auto failureProposals = store.listProposals(scope, "pending", 100);
+        std::string lessonId;
+        for (const auto& proposal : failureProposals) {
+            if (proposal.kind == "lesson") { lessonId = proposal.id; break; }
+        }
+        CHECK(!lessonId.empty());
+        CHECK(store.promoteProposal(scope, lessonId, "test", promoteError, &promoted));
+        CHECK(store.getLessons(scope, "svg_typography").size() >= 1);
+
+        // Fato sem evidencia nao pode ser promovido.
+        taskforge::Json noEvidence = taskforge::Json{{"subject", "a"}, {"predicate", "USES_TOOL"}, {"object", "b"}};
+        const std::string unsafe = store.recordProposal(scope, "fact", noEvidence, "", taskforge::Json::array(), 0.5);
+        CHECK(!unsafe.empty());
+        std::string unsafeError;
+        CHECK(!store.promoteProposal(scope, unsafe, "test", unsafeError));
+        CHECK(unsafeError.find("evidencia") != std::string::npos);
+
+        store.close();
+    }
+
+    sqlite3* raw = nullptr;
+    CHECK(sqlite3_open_v2(dbPath.string().c_str(), &raw, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK);
+    sqlite3_stmt* st = nullptr;
+    CHECK(sqlite3_prepare_v2(raw, "SELECT COUNT(*) FROM memory_playbook WHERE scope_id=?;",
+                             -1, &st, nullptr) == SQLITE_OK);
+    sqlite3_bind_text(st, 1, scope.c_str(), -1, SQLITE_TRANSIENT);
+    CHECK(sqlite3_step(st) == SQLITE_ROW && sqlite3_column_int64(st, 0) >= 1);
+    sqlite3_finalize(st);
+    st = nullptr;
+    CHECK(sqlite3_prepare_v2(raw, "SELECT COUNT(*) FROM memory_audit WHERE action='promote_proposal';",
+                             -1, &st, nullptr) == SQLITE_OK);
+    CHECK(sqlite3_step(st) == SQLITE_ROW && sqlite3_column_int64(st, 0) >= 4);
+    sqlite3_finalize(st);
+    sqlite3_close(raw);
+
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_embedding_defaults_use_embeddinggemma2) {
+    using taskforge::memory::defaultEmbeddingConfig;
+    using taskforge::memory::embeddingConfigFromJson;
+    const auto config = defaultEmbeddingConfig();
+    CHECK(config.model == "embeddinggemma-2");
+    CHECK(config.dim == 768);
+    CHECK(config.maxChars == 8000);
+    CHECK(config.batchSize == 8);
+    CHECK(!config.enabled);
+
+    const auto parsed = embeddingConfigFromJson(taskforge::Json{
+        {"embeddingModel", "custom-embed"},
+        {"embeddingDimensions", 512},
+        {"embeddingEnabled", true}});
+    CHECK(parsed.model == "custom-embed");
+    CHECK(parsed.dim == 512);
+    CHECK(parsed.enabled);
+}
+
+TEST(memory_vector_index_serialization_and_rrf) {
+    using taskforge::memory::MemoryRanker;
+    using taskforge::memory::MemorySearchCandidate;
+    using taskforge::memory::MemoryVectorHit;
+    using taskforge::memory::MemoryVectorIndex;
+
+    const auto bytes = MemoryVectorIndex::serialize({1.0f, -2.5f, 0.0f});
+    const auto values = MemoryVectorIndex::deserialize(bytes, 3);
+    CHECK(values.size() == 3);
+    CHECK(std::abs(values[0] - 1.0f) < 1e-6f);
+    CHECK(std::abs(values[1] + 2.5f) < 1e-6f);
+    CHECK(std::abs(values[2]) < 1e-6f);
+    CHECK(MemoryVectorIndex::cosine({1, 0}, {1, 0}) > 0.999);
+    CHECK(std::abs(MemoryVectorIndex::cosine({1, 0}, {0, 1})) < 1e-6);
+
+    MemorySearchCandidate lexical;
+    lexical.id = "mem-1";
+    lexical.kind = "fact";
+    lexical.text = "fontes --USES_TOOL--> contraste";
+    lexical.confidence = 0.9;
+    MemoryVectorHit vector;
+    vector.objectType = "edge";
+    vector.objectId = "mem-1";
+    vector.text = lexical.text;
+    vector.score = 0.95;
+    const auto fused = MemoryRanker::fuse({lexical}, {vector}, 5);
+    CHECK(fused.size() == 1);
+    CHECK(fused[0].sources == "lexical+vector");
+    CHECK(fused[0].score > 0.0);
+}
+
+TEST(memory_service_hybrid_search_and_reindex) {
+    using taskforge::memory::EmbeddingConfig;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::defaultEmbeddingConfig;
+
+    const fs::path dir = makeTempDir("memory-hybrid");
+    const fs::path db = dir / "memory.db";
+    const std::string pId = "memory-hybrid-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, db.string()));
+
+    EmbeddingConfig config = defaultEmbeddingConfig();
+    config.enabled = true;
+    config.provider = "local";
+    config.model = "test-topic-3";
+    config.dim = 3;
+    config.baseUrl = "http://127.0.0.1:1/v1";
+    config.batchSize = 4;
+    CHECK(memory.configureEmbeddings(pId, config));
+    auto provider = std::make_shared<TopicTestEmbeddingProvider>();
+    memory.setEmbeddingProvider(pId, provider);
+
+    const std::string designLesson = memory.recordLesson(
+        pId, "design", "manual", "fontes precisam de contraste minimo", "seed");
+    const std::string networkLesson = memory.recordLesson(
+        pId, "rede", "manual", "erro de rede deve ser repetido", "seed");
+    CHECK(!designLesson.empty() && !networkLesson.empty());
+
+    // "legibilidade" nao existe no texto lexical da licao; so o vetor liga os dois.
+    std::vector<taskforge::memory::MemoryHitRef> hits;
+    std::string result = memory.searchContext(pId, "legibilidade", 5, {}, &hits);
+    CHECK(result.find("fontes precisam de contraste minimo") != std::string::npos);
+    CHECK(result.find("[LICAO]") != std::string::npos);
+    CHECK(!hits.empty());
+
+    // Filtro de dominio vale tambem para candidatos vetoriais.
+    result = memory.searchContext(pId, "legibilidade", 5, {"rede"});
+    CHECK(result.find("fontes precisam de contraste minimo") == std::string::npos);
+
+    // Reabre o projeto para provar que o indice persiste no SQLite.
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, db.string()));
+    memory.configureEmbeddings(pId, config);
+    memory.setEmbeddingProvider(pId, provider);
+
+    // Sem embeddings, a busca lexical continua funcionando e nao chama o provider.
+    const int callsBeforeDisabled = provider->calls;
+    EmbeddingConfig disabled = config;
+    disabled.enabled = false;
+    memory.configureEmbeddings(pId, disabled);
+    memory.setEmbeddingProvider(pId, provider);
+    result = memory.searchContext(pId, "fontes", 5, {});
+    CHECK(result.find("fontes precisam de contraste minimo") != std::string::npos);
+    CHECK(provider->calls == callsBeforeDisabled);
+
+    // Reindexacao completa e idempotente.
+    memory.configureEmbeddings(pId, config);
+    memory.setEmbeddingProvider(pId, provider);
+    std::string indexError;
+    auto first = memory.reindexEmbeddings(pId, true, indexError);
+    CHECK(indexError.empty());
+    CHECK(first["ok"] == taskforge::Json(true));
+    CHECK(first["indexed"].get<long long>() >= 2);
+    auto second = memory.reindexEmbeddings(pId, false, indexError);
+    CHECK(indexError.empty());
+    CHECK(second["indexed"].get<long long>() == 0);
+    CHECK(second["skipped"].get<long long>() >= 2);
+
+    auto status = memory.embeddingStatus(pId);
+    CHECK(status["active"] == taskforge::Json(true));
+    CHECK(status["indexed"].get<long long>() >= 2);
+
+    // Um fato/aresta entra no bloco de fatos relevantes do brief.
+    auto* store = memory.store(pId);
+    const std::string scope = "project:" + pId;
+    const std::string rootNode = store->ensureNode(scope, "node-hybrid-root-2", "project", "Projeto");
+    const std::string fontNode = store->ensureNode(scope, "node-hybrid-font", "entity", "Fontes");
+    CHECK(!rootNode.empty() && !fontNode.empty());
+    taskforge::Json edgeMetadata = taskforge::Json{{"domain", "design"}};
+    CHECK(!store->recordEdge(scope, rootNode, fontNode, "USES", taskforge::Json(),
+                             "2020-01-01T00:00:00Z", "", 0.9, "active", "test", "", edgeMetadata).empty());
+
+    taskforge::memory::MemoryBriefInfo info;
+    const std::string brief = memory.buildBrief(pId, "pipeline", {"design"}, {}, 2000, true, false, &info);
+    CHECK(brief.find("[FATO]") != std::string::npos);
+    CHECK(brief.find("FATOS RELEVANTES") != std::string::npos);
+    CHECK(!info.factIds.empty());
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_hybrid_latency_benchmark) {
+    using taskforge::memory::EmbeddingConfig;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::defaultEmbeddingConfig;
+
+    const fs::path dir = makeTempDir("memory-hybrid-bench");
+    const fs::path db = dir / "memory.db";
+    const std::string pId = "memory-hybrid-bench";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, db.string()));
+
+    EmbeddingConfig config = defaultEmbeddingConfig();
+    config.enabled = true;
+    config.provider = "local";
+    config.model = "test-topic-3";
+    config.dim = 3;
+    config.baseUrl = "http://127.0.0.1:1/v1";
+    config.batchSize = 16;
+    memory.configureEmbeddings(pId, config);
+    auto provider = std::make_shared<TopicTestEmbeddingProvider>();
+    memory.setEmbeddingProvider(pId, provider);
+
+    for (int i = 0; i < 120; ++i) {
+        const std::string domain = (i % 2 == 0) ? "design" : "rede";
+        const std::string rule = (i % 2 == 0)
+            ? "fontes e contraste para legibilidade " + std::to_string(i)
+            : "erro de rede deve ser repetido " + std::to_string(i);
+        CHECK(!memory.recordLesson(pId, domain, "bench", rule, "bench").empty());
+    }
+
+    auto p95 = [](std::vector<double> samples) {
+        if (samples.empty()) return 0.0;
+        std::sort(samples.begin(), samples.end());
+        size_t index = static_cast<size_t>(samples.size() * 95 / 100);
+        if (index >= samples.size()) index = samples.size() - 1;
+        return samples[index];
+    };
+    auto measure = [&](const std::string& query) {
+        std::vector<double> samples;
+        for (int i = 0; i < 60; ++i) {
+            const auto start = std::chrono::steady_clock::now();
+            (void)memory.searchContext(pId, query, 5, {});
+            const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - start).count();
+            samples.push_back(static_cast<double>(elapsed) / 1000.0);
+        }
+        return p95(std::move(samples));
+    };
+
+    EmbeddingConfig disabled = config;
+    disabled.enabled = false;
+    memory.configureEmbeddings(pId, disabled);
+    memory.setEmbeddingProvider(pId, provider);
+    const double lexicalP95 = measure("fontes");
+
+    memory.configureEmbeddings(pId, config);
+    memory.setEmbeddingProvider(pId, provider);
+    std::string indexError;
+    auto indexed = memory.reindexEmbeddings(pId, true, indexError);
+    CHECK(indexError.empty());
+    CHECK(indexed["indexed"].get<long long>() >= 120);
+    const double hybridP95 = measure("legibilidade");
+    std::cout << "  [benchmark] lexical p95=" << lexicalP95
+              << "ms hybrid p95=" << hybridP95 << "ms (120 licoes)\n";
+    CHECK(lexicalP95 < 100.0);
+    CHECK(hybridP95 < 100.0);
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_consolidator_dedup_conflicts_decay_and_generalize) {
+    using taskforge::memory::ConsolidationOptions;
+    using taskforge::memory::ConsolidationReport;
+    using taskforge::memory::MemoryConsolidator;
+    using taskforge::memory::MemoryStore;
+
+    const fs::path dir = makeTempDir("memory-consolidator");
+    const fs::path dbPath = dir / "memory.db";
+    const std::string scope = "project:consolidator";
+    MemoryStore store(dbPath.string());
+    std::string error;
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "consolidator"));
+
+    // Aliases: mesmo nome normalizado resolve para o mesmo node.
+    const std::string library = store.resolveNode(scope, "Biblioteca", "entity");
+    CHECK(!library.empty());
+    CHECK(store.resolveNode(scope, "biblioteca", "entity") == library);
+    CHECK(store.nodeByAlias(scope, "BIBLIOTECA") == library);
+
+    const std::string designA = store.recordLesson(scope, "design", "manual",
+        "Use contraste mínimo em textos pequenos", "seed");
+    const std::string designB = store.recordLesson(scope, "design", "manual",
+        "Use contraste minimo em textos pequenos", "seed");
+    CHECK(!designA.empty() && !designB.empty());
+
+    const std::string root = store.ensureNode(scope, "node-c-root", "project", "Projeto");
+    const std::string fontsA = store.ensureNode(scope, "node-c-font-a", "entity", "Fontes");
+    const std::string fontsB = store.ensureNode(scope, "node-c-font-b", "entity", "fontes");
+    CHECK(!root.empty() && !fontsA.empty() && !fontsB.empty());
+    taskforge::Json designMeta = taskforge::Json{{"domain", "design"}};
+    CHECK(!store.recordEdge(scope, root, fontsA, "USES", taskforge::Json(), "", "",
+                            0.8, "active", "test", "", designMeta).empty());
+    CHECK(!store.recordEdge(scope, root, fontsB, "USES", taskforge::Json(), "", "",
+                            0.6, "active", "test", "", designMeta).empty());
+
+    const std::string root2 = store.ensureNode(scope, "node-c-root2", "project", "Projeto 2");
+    const std::string arial = store.ensureNode(scope, "node-c-arial", "entity", "Arial");
+    const std::string helvetica = store.ensureNode(scope, "node-c-helvetica", "entity", "Helvetica");
+    CHECK(!store.recordEdge(scope, root2, arial, "USES_FONT", taskforge::Json(), "", "",
+                            0.9, "active", "test", "", designMeta).empty());
+    CHECK(!store.recordEdge(scope, root2, helvetica, "USES_FONT", taskforge::Json(), "", "",
+                            0.7, "active", "test", "", designMeta).empty());
+
+    const std::string oldNode = store.ensureNode(scope, "node-c-old", "entity", "Fato Expirado");
+    const std::string expiredEdge = store.recordEdge(scope, root, oldNode, "OLD_FACT",
+        taskforge::Json(), "2020-01-01T00:00:00Z", "2020-01-02T00:00:00Z",
+        0.5, "active", "test", "", designMeta);
+    CHECK(!expiredEdge.empty());
+
+    const std::string rareNode = store.ensureNode(scope, "node-c-rare", "entity", "Recurso Raro");
+    const std::string rareEdge = store.recordEdge(scope, root, rareNode, "RARE",
+        taskforge::Json(), "", "", 0.8, "active", "test", "", designMeta);
+    CHECK(!rareEdge.empty());
+    taskforge::memory::MemoryEdgeRecord rareRecord;
+    CHECK(store.getEdge(scope, rareEdge, rareRecord));
+    CHECK(store.updateEdgeState(scope, rareEdge, "active", rareRecord.supersededBy,
+                                rareRecord.confidence, taskforge::Json::object(), "",
+                                "", "2020-01-01T00:00:00Z", error));
+
+    CHECK(!store.recordLesson(scope, "seguranca", "manual",
+        "Sempre validar a entrada", "seed").empty());
+    CHECK(!store.recordLesson(scope, "seguranca", "manual",
+        "Nunca validar a entrada", "seed").empty());
+
+    for (int i = 0; i < 3; ++i) {
+        CHECK(!store.recordLesson(scope, "svg", "manual",
+            "Regra distinta de svg numero " + std::to_string(i), "seed").empty());
+    }
+
+    ConsolidationOptions options;
+    options.dormantAfterDays = 30;
+    options.generalizeMinSources = 3;
+    auto report = MemoryConsolidator::run(store, scope, options, error);
+    CHECK(error.empty());
+    CHECK(report.ok());
+    CHECK(report.duplicates >= 2);
+    CHECK(report.contradictions >= 2);
+    CHECK(report.expired >= 1);
+    CHECK(report.dormant >= 1);
+    CHECK(report.generalizations >= 3);
+
+    CHECK(store.getLessons(scope, "design").size() == 1);
+    CHECK(store.getLessons(scope, "seguranca").size() == 1);
+    const auto edges = store.listEdges(scope, "", 20000);
+    size_t supersedes = 0;
+    size_t contradicts = 0;
+    size_t generalizes = 0;
+    size_t candidates = 0;
+    for (const auto& edge : edges) {
+        if (edge.relation == "SUPERSEDES") ++supersedes;
+        if (edge.relation == "CONTRADICTS") ++contradicts;
+        if (edge.relation == "GENERALIZES") ++generalizes;
+        if (edge.status == "candidate" && edge.relation == "USES_FONT") ++candidates;
+    }
+    CHECK(supersedes >= 1);
+    CHECK(contradicts >= 4);
+    CHECK(generalizes >= 3);
+    CHECK(candidates == 1);
+
+    taskforge::memory::MemoryEdgeRecord expiredRecord;
+    CHECK(store.getEdge(scope, expiredEdge, expiredRecord));
+    CHECK(expiredRecord.status == "superseded");
+    CHECK(expiredRecord.metadata.find("expired") != std::string::npos);
+
+    taskforge::memory::MemoryEdgeRecord rareDormant;
+    CHECK(store.getEdge(scope, rareEdge, rareDormant));
+    CHECK(!rareDormant.dormantAt.empty());
+    CHECK(store.searchContext(scope, "Recurso Raro", 10).empty());
+
+    auto summary = store.consolidationSummary(scope);
+    CHECK(summary["candidate"].get<long long>() >= 1);
+    CHECK(summary["superseded"].get<long long>() >= 2);
+    CHECK(summary["dormant"].get<long long>() >= 1);
+    CHECK(summary["conflicts"].get<long long>() >= 4);
+    CHECK(summary["aliases"].get<long long>() >= 1);
+
+    // Segunda passagem e idempotente.
+    auto report2 = MemoryConsolidator::run(store, scope, options, error);
+    CHECK(error.empty());
+    CHECK(report2.ok());
+    CHECK(report2.duplicates == 0);
+    CHECK(report2.contradictions == 0);
+    CHECK(report2.expired == 0);
+    CHECK(report2.dormant == 0);
+    CHECK(report2.generalizations == 0);
+
+    store.close();
+
+    sqlite3* raw = nullptr;
+    CHECK(sqlite3_open_v2(dbPath.string().c_str(), &raw, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK);
+    sqlite3_stmt* st = nullptr;
+    CHECK(sqlite3_prepare_v2(raw, "SELECT COUNT(*) FROM memory_audit WHERE action IN "
+                                  "('dedup_supersede','detect_contradiction','decay_dormant','generalize_domain');",
+                             -1, &st, nullptr) == SQLITE_OK);
+    CHECK(sqlite3_step(st) == SQLITE_ROW && sqlite3_column_int(st, 0) >= 4);
+    sqlite3_finalize(st);
+    sqlite3_close(raw);
+
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_hits_reinforce_and_clear_dormant) {
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-hits-reinforce");
+    MemoryStore store((dir / "memory.db").string());
+    std::string error;
+    CHECK(store.open(error));
+    const std::string scope = "project:hits-reinforce";
+    CHECK(store.ensureScope(scope, "project", "", "hits"));
+    const std::string root = store.ensureNode(scope, "node-r-root", "project", "Projeto");
+    const std::string leaf = store.ensureNode(scope, "node-r-leaf", "entity", "Folha");
+    const std::string edgeId = store.recordEdge(scope, root, leaf, "USES", taskforge::Json(),
+                                                "", "", 0.7, "active", "test");
+    CHECK(!edgeId.empty());
+    taskforge::memory::MemoryEdgeRecord record;
+    CHECK(store.getEdge(scope, edgeId, record));
+    CHECK(store.updateEdgeState(scope, edgeId, "active", "", record.confidence,
+                                taskforge::Json::object(), "", "2020-01-01T00:00:00Z",
+                                "", error));
+
+    CHECK(store.recordHit(scope, "run-r1", "agent-r", edgeId, "fact", true, false));
+    CHECK(store.markHitsUsed(scope, "run-r1", "agent-r", {edgeId}) == 1);
+    CHECK(store.finishHits(scope, "run-r1", "agent-r", "success"));
+    CHECK(store.getEdge(scope, edgeId, record));
+    CHECK(record.successCount == 1);
+    CHECK(!record.lastUsed.empty());
+    CHECK(record.dormantAt.empty());
+
+    CHECK(store.recordHit(scope, "run-r2", "agent-r", edgeId, "fact", true, false));
+    CHECK(store.markHitsUsed(scope, "run-r2", "agent-r", {edgeId}) == 1);
+    CHECK(store.finishHits(scope, "run-r2", "agent-r", "failure"));
+    CHECK(store.getEdge(scope, edgeId, record));
+    CHECK(record.failureCount == 1);
+    CHECK(record.confidence < 0.72);
+
+    store.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_snapshot_preserves_decay_fields) {
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-snapshot-decay");
+    MemoryStore store((dir / "memory.db").string());
+    std::string error;
+    CHECK(store.open(error));
+    const std::string scope = "project:snapshot-decay";
+    CHECK(store.ensureScope(scope, "project", "", "snapshot"));
+    const std::string root = store.ensureNode(scope, "node-s-root", "project", "Projeto");
+    const std::string leaf = store.ensureNode(scope, "node-s-leaf", "entity", "Folha");
+    const std::string edgeId = store.recordEdge(scope, root, leaf, "USES", taskforge::Json(),
+                                                "", "", 0.7, "active", "test");
+    CHECK(!edgeId.empty());
+    CHECK(store.updateEdgeState(scope, edgeId, "active", "", 0.6, taskforge::Json::object(),
+                                "", "2020-02-02T00:00:00Z", "2020-01-01T00:00:00Z", error));
+    CHECK(store.addAlias(scope, "folha", leaf, "test"));
+    const std::string playbookId = store.recordPlaybook(
+        scope, "snapshot_task", "Snapshot playbook",
+        taskforge::Json::array({taskforge::Json{{"tool", "read"}},
+                                taskforge::Json{{"tool", "write"}}}),
+        taskforge::Json::object(), 0.7, "active", "ep-snapshot",
+        taskforge::Json::array({taskforge::Json{{"kind", "episode"}, {"id", "ep-snapshot"}}}),
+        2, 1);
+    CHECK(!playbookId.empty());
+    auto snapshot = store.toCognitiveJson(scope);
+    CHECK(snapshot["edges"].is_array());
+    CHECK(snapshot["aliases"].is_array());
+
+    CHECK(store.purge(scope, taskforge::memory::MemoryPurgeOptions{false, false}));
+    CHECK(store.importCognitiveJson(scope, snapshot, error));
+    taskforge::memory::MemoryEdgeRecord restored;
+    CHECK(store.getEdge(scope, edgeId, restored));
+    CHECK(restored.dormantAt == "2020-02-02T00:00:00Z");
+    CHECK(restored.lastUsed == "2020-01-01T00:00:00Z");
+    CHECK(store.nodeByAlias(scope, "folha") == leaf);
+    taskforge::memory::MemoryPlaybookRecord restoredPlaybook;
+    CHECK(store.getPlaybook(scope, playbookId, restoredPlaybook));
+    CHECK(restoredPlaybook.successCount == 2);
+    CHECK(restoredPlaybook.failureCount == 1);
+    CHECK(restoredPlaybook.status == "active");
+    CHECK(restoredPlaybook.stepsJson.find("read") != std::string::npos);
+    store.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_playbook_compiler_and_brief) {
+    using taskforge::memory::MemoryEpisodeRecord;
+    using taskforge::memory::MemoryService;
+    const fs::path dir = makeTempDir("memory-playbook");
+    const fs::path db = dir / "memory.db";
+    const std::string pId = "memory-playbook-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, db.string()));
+
+    auto makeEpisode = [&](const std::string& id, const std::string& outcome,
+                           const std::string& taskType) {
+        MemoryEpisodeRecord episode;
+        episode.scopeId = "project:" + pId;
+        episode.runId = "run-" + id;
+        episode.nodeId = "agent-" + id;
+        episode.kind = outcome == "success" ? "agent_success" : "agent_failure";
+        episode.content = "episode " + id;
+        episode.taskType = taskType;
+        episode.outcome = outcome;
+        episode.toolCalls = taskforge::Json::array({
+            taskforge::Json{{"name", "read"}, {"ok", true}},
+            taskforge::Json{{"name", "write"}, {"ok", true}}});
+        episode.evidence = taskforge::Json::array(
+            {taskforge::Json{{"kind", "artifact"}, {"id", id}}});
+        return memory.recordEpisode(pId, episode);
+    };
+
+    const std::string success1 = makeEpisode("p1", "success", "svg_playbook");
+    const std::string success2 = makeEpisode("p2", "success", "svg_playbook");
+    const std::string failure1 = makeEpisode("p3", "failure", "svg_playbook");
+    const std::string failureOnly = makeEpisode("p4", "failure", "sem_sucesso");
+    CHECK(!success1.empty() && !success2.empty() && !failure1.empty() && !failureOnly.empty());
+
+    CHECK(memory.extractProposals(pId, success1) >= 1);
+    auto playbooks = memory.listPlaybooks(pId, "svg_playbook", "", 10);
+    CHECK(playbooks.size() == 1);
+    CHECK(playbooks[0].value("status", std::string()) == "candidate");
+    CHECK(playbooks[0].value("successCount", 0LL) == 1);
+
+    CHECK(memory.extractProposals(pId, success2) >= 1);
+    playbooks = memory.listPlaybooks(pId, "svg_playbook", "", 10);
+    CHECK(playbooks.size() == 1);
+    CHECK(playbooks[0].value("status", std::string()) == "active");
+    CHECK(playbooks[0].value("successCount", 0LL) == 2);
+    const double confidenceBefore = playbooks[0].value("confidence", 0.0);
+
+    CHECK(memory.extractProposals(pId, failure1) >= 1);
+    playbooks = memory.listPlaybooks(pId, "svg_playbook", "", 10);
+    CHECK(playbooks.size() == 1);
+    CHECK(playbooks[0].value("failureCount", 0LL) == 1);
+    CHECK(playbooks[0].value("confidence", 0.0) < confidenceBefore);
+
+    CHECK(memory.extractProposals(pId, failureOnly) >= 1);
+    CHECK(memory.listPlaybooks(pId, "sem_sucesso", "", 10).empty());
+
+    taskforge::memory::MemoryBriefInfo info;
+    const std::string brief = memory.buildBrief(pId, "pipeline", {"svg_playbook"}, {},
+                                                2000, true, false, &info);
+    CHECK(brief.find("ARESTRIX MEMORIA: PLAYBOOKS") != std::string::npos);
+    CHECK(brief.find("[PLAYBOOK] svg_playbook") != std::string::npos);
+    CHECK(brief.find("read -> write") != std::string::npos);
+    CHECK(!info.playbookIds.empty());
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_workspace_promotion_and_isolation) {
+    using taskforge::memory::MemoryService;
+    const fs::path dir = makeTempDir("memory-workspace");
+    const fs::path projectDb = dir / "projeto" / ".arestrix" / "memory" / "memory.db";
+    const fs::path workspaceDb = dir / "projeto" / ".workspace" / "memory" / "memory.db";
+    const fs::path siblingDb = dir / "irmao" / ".workspace" / "memory" / "memory.db";
+    const std::string pA = "workspace-project-a";
+    const std::string pB = "workspace-project-b";
+    const std::string wsA = "workspace-a";
+    const std::string wsB = "workspace-b";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pA);
+    memory.closeProject(pB);
+    CHECK(memory.configure(pA, true, projectDb.string()));
+    CHECK(memory.configureProjectWorkspace(pA, wsA, workspaceDb.string()));
+    CHECK(memory.configure(pB, true, (dir / "irmao" / ".arestrix" / "memory" / "memory.db").string()));
+    CHECK(memory.configureProjectWorkspace(pB, wsB, siblingDb.string()));
+
+    const std::string privateLesson = memory.recordLesson(pA, "privado", "manual",
+                                                          "REGRA-PRIVADA-PROJETO", "seed");
+    CHECK(!privateLesson.empty());
+    auto* workspaceA = memory.workspaceStore(wsA);
+    CHECK(workspaceA != nullptr);
+    CHECK(!workspaceA->recordLesson("workspace:" + wsA, "compartilhado", "manual",
+                                    "REGRA-WORKSPACE", "seed").empty());
+    auto* workspaceB = memory.workspaceStore(wsB);
+    CHECK(workspaceB != nullptr);
+
+    // Projeto le o workspace; workspace nao le o projeto privado.
+    auto result = memory.searchContext(pA, "REGRA-WORKSPACE", 10, {});
+    CHECK(result.find("REGRA-WORKSPACE") != std::string::npos);
+    CHECK(result.find("ARESTRIX WORKSPACE MEMORY") != std::string::npos);
+    CHECK(workspaceA->searchContext("workspace:" + wsA, "REGRA-PRIVADA-PROJETO", 10, {}).empty());
+
+    // Promocao exige evidencia.
+    std::string error;
+    CHECK(!memory.promoteToWorkspace(pA, "lesson", privateLesson,
+                                     taskforge::Json::array(), "test", error));
+    CHECK(error.find("evidencia") != std::string::npos);
+
+    taskforge::Json evidence = taskforge::Json::array(
+        {taskforge::Json{{"kind", "manual"}, {"note", "revisado"}}});
+    CHECK(memory.promoteToWorkspace(pA, "lesson", privateLesson, evidence, "test", error));
+    CHECK(workspaceA->getLessons("workspace:" + wsA, "privado").size() == 1);
+    result = memory.searchContext(pA, "REGRA-PRIVADA-PROJETO", 10, {});
+    CHECK(result.find("REGRA-PRIVADA-PROJETO") != std::string::npos);
+
+    // Promocao de fato.
+    auto* projectStore = memory.store(pA);
+    const std::string scopeA = "project:" + pA;
+    const std::string rootNode = projectStore->ensureNode(scopeA, "node-w-root", "project", "Projeto");
+    const std::string leafNode = projectStore->ensureNode(scopeA, "node-w-leaf", "entity", "Folha");
+    CHECK(!rootNode.empty() && !leafNode.empty());
+    const std::string factId = projectStore->recordEdge(
+        scopeA, rootNode, leafNode, "USES", taskforge::Json(), "", "", 0.8, "active", "test");
+    CHECK(!factId.empty());
+    CHECK(memory.promoteToWorkspace(pA, "fact", factId, evidence, "test", error));
+    bool foundFact = false;
+    for (const auto& edge : workspaceA->listEdges("workspace:" + wsA, "active", 100)) {
+        if (edge.relation == "USES") foundFact = true;
+    }
+    CHECK(foundFact);
+
+    // Irmão não enxerga o promovido.
+    CHECK(workspaceB->searchContext("workspace:" + wsB, "REGRA-PRIVADA-PROJETO", 10, {}).empty());
+    CHECK(memory.workspaceStatus(pA).value("configured", false));
+    CHECK(memory.workspaceStatus(pA).value("lessons", 0LL) >= 2);
+
+    memory.closeProject(pA);
+    memory.closeProject(pB);
+    memory.closeWorkspace(wsA);
+    memory.closeWorkspace(wsB);
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_institution_auth_policy_and_isolation) {
+    using taskforge::memory::MemoryInstitutionService;
+    using taskforge::memory::MemoryRole;
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-institution");
+    const fs::path db = dir / "institution.db";
+    MemoryInstitutionService service;
+    std::string error;
+    CHECK(service.configure("acme", db.string(), error));
+    CHECK(service.addToken("viewer-token", "ana", MemoryRole::Viewer));
+    CHECK(service.addToken("editor-token", "bruno", MemoryRole::Editor));
+    CHECK(service.addToken("admin-token", "carla", "admin"));
+
+    CHECK(service.writeLesson("viewer-token", "geral", "manual", "REGRA-INSTITUCIONAL", error).empty());
+    CHECK(error.find("permissao") != std::string::npos);
+    const std::string lessonId = service.writeLesson("editor-token", "geral", "manual",
+                                                     "REGRA-INSTITUCIONAL", error);
+    CHECK(!lessonId.empty());
+    const std::string found = service.readContext("viewer-token", "REGRA-INSTITUCIONAL", 10, {}, error);
+    CHECK(found.find("REGRA-INSTITUCIONAL") != std::string::npos);
+    CHECK(service.readContext("token-invalido", "REGRA-INSTITUCIONAL", 10, {}, error).empty());
+    CHECK(error.find("autenticado") != std::string::npos);
+    auto status = service.status("admin-token", error);
+    CHECK(status.value("ok", false));
+    CHECK(status.value("role", std::string()) == "admin");
+    CHECK(status.value("lessons", 0LL) >= 1);
+
+    CHECK(service.setPolicy("admin-token", "retention_days", taskforge::Json(30), true, error));
+    CHECK(!service.setPolicy("editor-token", "retention_days", taskforge::Json(10), false, error));
+    CHECK(error.find("permissao") != std::string::npos);
+
+    // Invariante de escopo: filho nao sobrescreve politica imutavel do ancestral.
+    const fs::path policyDb = dir / "policy.db";
+    MemoryStore store(policyDb.string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope("institution:acme", "institution", "", "acme"));
+    CHECK(store.ensureScope("workspace:child", "workspace", "institution:acme", "child"));
+    CHECK(store.setPolicy("institution:acme", "retention_days", taskforge::Json(30), true,
+                          "admin", error));
+    CHECK(!store.setPolicy("workspace:child", "retention_days", taskforge::Json(10), false,
+                           "child", error));
+    CHECK(error.find("imutavel") != std::string::npos);
+    CHECK(store.setPolicy("workspace:child", "allow_external_models", taskforge::Json(false),
+                          false, "child", error));
+    auto effective = store.effectivePolicy("workspace:child", "retention_days");
+    CHECK(effective.value("scopeId", std::string()) == "institution:acme");
+    CHECK(effective["value"].get<int>() == 30);
+    store.close();
+
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
 TEST(memory_service_imports_legacy_json) {
     using taskforge::memory::MemoryService;
     const fs::path dir = makeTempDir("memory-legacy");
@@ -1406,7 +3010,94 @@ TEST(memory_service_brief_respects_budget) {
     CHECK(fullBrief.find("\"resumo\"") != std::string::npos);
     CHECK(fullInfo.lessonIds.size() == 1 && fullInfo.workingKeys.size() == 1);
     CHECK(!fullInfo.truncated);
+    taskforge::memory::MemoryBriefInfo zeroInfo;
+    std::string zeroBrief = memory.buildBrief("brief-test", "pipeline", {"memoria"}, {"resumo"}, 0, true, true, &zeroInfo);
+    CHECK(zeroBrief.empty());
+    CHECK(zeroInfo.chars == 0 && zeroInfo.estimatedTokens == 0 && !zeroInfo.truncated);
+    CHECK(zeroInfo.lessonIds.empty() && zeroInfo.workingKeys.empty());
     memory.closeProject("brief-test");
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_search_respects_domains_limit_and_records_consulted_hits) {
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryHitRef;
+    const fs::path dir = makeTempDir("memory-search");
+    MemoryStore store((dir / "memory.db").string());
+    std::string error;
+    CHECK(store.open(error));
+    CHECK(store.ensureScope("project:busca", "project", "", "busca"));
+
+    const std::string alpha = store.recordLesson("project:busca", "alpha", "manual", "REGRA-ALPHA", "seed");
+    const std::string beta = store.recordLesson("project:busca", "beta", "manual", "REGRA-BETA", "seed");
+    CHECK(!alpha.empty() && !beta.empty());
+
+    const std::string root = store.ensureNode("project:busca", "node-search-root", "project", "Projeto Busca");
+    const std::string a = store.ensureNode("project:busca", "node-search-a", "library", "Biblioteca Alfa");
+    const std::string b = store.ensureNode("project:busca", "node-search-b", "library", "Biblioteca Beta");
+    const std::string expired = store.ensureNode("project:busca", "node-search-exp", "library", "Biblioteca Expirada");
+    CHECK(!root.empty() && !a.empty() && !b.empty() && !expired.empty());
+
+    taskforge::Json metaA = taskforge::Json::object();
+    metaA["domain"] = "alpha";
+    taskforge::Json metaB = taskforge::Json::object();
+    metaB["domain"] = "beta";
+    CHECK(!store.recordEdge("project:busca", root, a, "USES", taskforge::Json(),
+                            "2020-01-01T00:00:00Z", "", 0.8, "active", "test", "", metaA).empty());
+    CHECK(!store.recordEdge("project:busca", root, b, "USES", taskforge::Json(),
+                            "2020-01-01T00:00:00Z", "", 0.8, "active", "test", "", metaB).empty());
+    CHECK(!store.recordEdge("project:busca", root, expired, "USES", taskforge::Json(),
+                            "2020-01-01T00:00:00Z", "2020-01-02T00:00:00Z", 0.8, "active", "test", "", metaA).empty());
+
+    // 1. Dominio restrito: so a licao de alpha aparece.
+    std::vector<MemoryHitRef> hits;
+    std::string result = store.searchContext("project:busca", "REGRA", 10, {"alpha"}, &hits);
+    CHECK(result.find("REGRA-ALPHA") != std::string::npos);
+    CHECK(result.find("REGRA-BETA") == std::string::npos);
+    CHECK(hits.size() == 1 && hits[0].kind == "lesson");
+
+    // 2. Limite total: uma licao, mesmo com duas correspondencias.
+    hits.clear();
+    result = store.searchContext("project:busca", "REGRA", 1, {}, &hits);
+    const size_t firstLesson = result.find("[LICAO]");
+    CHECK(firstLesson != std::string::npos);
+    CHECK(result.find("[LICAO]", firstLesson + 1) == std::string::npos);
+    CHECK(hits.size() == 1);
+
+    // 3. Fato com metadata.domain autorizado; fato de outro dominio e fato expirado ficam de fora.
+    hits.clear();
+    result = store.searchContext("project:busca", "Biblioteca", 10, {"alpha"}, &hits);
+    CHECK(result.find("Biblioteca Alfa") != std::string::npos);
+    CHECK(result.find("Biblioteca Beta") == std::string::npos);
+    CHECK(result.find("Biblioteca Expirada") == std::string::npos);
+    CHECK(hits.size() == 1 && hits[0].kind == "fact");
+
+    // 4. Agente sem restricao continua vendo os dois fatos validos.
+    result = store.searchContext("project:busca", "Biblioteca", 10, {});
+    CHECK(result.find("Biblioteca Alfa") != std::string::npos);
+    CHECK(result.find("Biblioteca Beta") != std::string::npos);
+    CHECK(result.find("Biblioteca Expirada") == std::string::npos);
+
+    // 5. Memoria descoberta por busca e nao injetada vira hit consultado.
+    CHECK(store.recordConsultedHits("project:busca", "run-search", "node-x",
+                                    {MemoryHitRef{alpha, "lesson"}}) == 1);
+    auto summary = store.hitSummary("project:busca");
+    CHECK(summary["injected"] == 0);
+    CHECK(summary["consulted"] == 1);
+    CHECK(summary["usedInjected"] == 0);
+
+    // 6. Memoria injetada e depois consultada atualiza a mesma linha, sem duplicar.
+    CHECK(store.recordHit("project:busca", "run-2", "node-y", alpha, "lesson", true, false));
+    CHECK(store.recordConsultedHits("project:busca", "run-2", "node-y",
+                                    {MemoryHitRef{alpha, "lesson"}}) == 1);
+    summary = store.hitSummary("project:busca");
+    CHECK(summary["injected"] == 1);
+    CHECK(summary["usedInjected"] == 1);
+    CHECK(summary["consulted"] == 1);
+    CHECK(summary["used"] == 2);
+
+    store.close();
     std::error_code ec;
     fs::remove_all(dir, ec);
 }
@@ -3397,19 +5088,21 @@ TEST(database_backup_service_dump_restore_and_safe_gitignore) {
 
     // 6. Teste de Snapshot de Memoria Cognitiva (Lições e Blackboard)
     std::string testProjId = "test_snap_proj";
+    fs::path memDbPath = tempRoot / ".arestrix" / "memory" / "memory.db";
     auto& mem = taskforge::memory::MemoryService::getInstance();
-    mem.configure(testProjId, true);
+    mem.closeProject(testProjId);
+    mem.configure(testProjId, true, memDbPath.string());
     mem.recordLesson(testProjId, "compilacao", "MSVC C2065", "Sempre incluir headers C++20 necessarios", "node_build", "teste");
     mem.setWorking(testProjId, "item_42", "status_tarefa", "concluido_sucesso");
 
     fs::path snapPath = tempRoot / "storage" / "memory.dump.json";
-    bool snapExportOk = DatabaseBackupService::exportMemorySnapshot(testProjId, snapPath, err);
+    bool snapExportOk = DatabaseBackupService::exportMemorySnapshot(testProjId, tempRoot, snapPath, err);
     CHECK(snapExportOk);
     CHECK(fs::exists(snapPath));
 
     // Limpa memoria e restaura a partir do JSON
     mem.clearProject(testProjId);
-    bool snapRestoreOk = DatabaseBackupService::restoreMemorySnapshot(testProjId, snapPath, err);
+    bool snapRestoreOk = DatabaseBackupService::restoreMemorySnapshot(testProjId, tempRoot, snapPath, err);
     CHECK(snapRestoreOk);
 
     auto lessonsRestored = mem.getLessons(testProjId);
@@ -3419,8 +5112,96 @@ TEST(database_backup_service_dump_restore_and_safe_gitignore) {
     CHECK(workingRestored.is_string() && workingRestored.str() == "concluido_sucesso");
 
     // Limpeza
+    mem.closeProject(testProjId);
     std::error_code removeEc;
     fs::remove_all(tempRoot, removeEc);
+}
+
+TEST(memory_snapshot_is_project_rooted_and_restores_after_corruption) {
+    using namespace taskforge::project;
+    namespace fs = std::filesystem;
+    using taskforge::memory::MemoryService;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path tempRoot = fs::temp_directory_path() / ("arx_test_mem_snapshot_" + stamp);
+    fs::path studioCwd = fs::temp_directory_path() / ("arx_test_mem_cwd_" + stamp);
+    fs::create_directories(tempRoot / ".arestrix" / "memory");
+    fs::create_directories(tempRoot / "storage");
+    fs::create_directories(studioCwd);
+
+    const std::string pId = "snapshot_rooted_test";
+    const fs::path dbPath = tempRoot / ".arestrix" / "memory" / "memory.db";
+    const fs::path snapPath = tempRoot / "storage" / "memory.dump.json";
+
+    auto& mem = MemoryService::getInstance();
+    mem.closeProject(pId);
+
+    const fs::path oldCwd = fs::current_path();
+    std::error_code cwdEc;
+    fs::current_path(studioCwd, cwdEc);
+    CHECK(!cwdEc);
+
+    // 1. Exportacao com CWD diferente da raiz do projeto: o banco lido e o do projeto.
+    CHECK(mem.configure(pId, true, dbPath.string()));
+    CHECK(!mem.recordLesson(pId, "snap", "manual", "REGRA-SNAPSHOT-ROOT", "seed").empty());
+    CHECK(mem.setWorking(pId, "pipeline", "resumo", taskforge::Json("valor-snapshot")));
+
+    std::string err;
+    CHECK(DatabaseBackupService::exportMemorySnapshot(pId, tempRoot, snapPath, err));
+    CHECK(fs::exists(snapPath));
+    CHECK(fs::exists(dbPath));
+    CHECK(!fs::exists(studioCwd / ".arestrix" / "memory" / "memory.db"));
+
+    std::ifstream snapIn(snapPath);
+    std::string snapshotContent((std::istreambuf_iterator<char>(snapIn)), std::istreambuf_iterator<char>());
+    snapIn.close();
+    CHECK(snapshotContent.find("REGRA-SNAPSHOT-ROOT") != std::string::npos);
+
+    // 2. Banco ausente: exportacao nao cria banco e nao toca no snapshot existente.
+    mem.closeProject(pId);
+    fs::remove(dbPath);
+    CHECK(DatabaseBackupService::exportMemorySnapshot(pId, tempRoot, snapPath, err));
+    CHECK(!fs::exists(dbPath));
+
+    std::ifstream snapAgain(snapPath);
+    std::string preserved((std::istreambuf_iterator<char>(snapAgain)), std::istreambuf_iterator<char>());
+    snapAgain.close();
+    CHECK(preserved == snapshotContent);
+
+    // 3. Restauracao com CWD diferente: o banco de destino e o do projeto.
+    CHECK(DatabaseBackupService::restoreMemorySnapshot(pId, tempRoot, snapPath, err));
+    CHECK(fs::exists(dbPath));
+    CHECK(!fs::exists(studioCwd / ".arestrix" / "memory" / "memory.db"));
+    CHECK(mem.getWorking(pId, "pipeline", "resumo") == taskforge::Json("valor-snapshot"));
+    auto restoredLessons = mem.getLessons(pId, "snap");
+    CHECK(restoredLessons.size() == 1 && restoredLessons[0].lessonRule == "REGRA-SNAPSHOT-ROOT");
+
+    // 4. Banco corrompido: quarentena + restauracao a partir do snapshot.
+    mem.closeProject(pId);
+    {
+        std::ofstream corrupt(dbPath, std::ios::binary | std::ios::trunc);
+        corrupt << "isto nao e um banco sqlite";
+    }
+    std::string restoreErr;
+    CHECK(DatabaseBackupService::restoreProjectIfNeeded(tempRoot, pId, restoreErr));
+    CHECK(restoreErr.empty());
+    auto afterCorruption = mem.getLessons(pId, "snap");
+    CHECK(afterCorruption.size() == 1 && afterCorruption[0].lessonRule == "REGRA-SNAPSHOT-ROOT");
+
+    bool quarantined = false;
+    for (const auto& entry : fs::directory_iterator(tempRoot / ".arestrix" / "memory")) {
+        if (entry.path().filename().string().find(".corrupt-") != std::string::npos) {
+            quarantined = true;
+            break;
+        }
+    }
+    CHECK(quarantined);
+
+    mem.closeProject(pId);
+    fs::current_path(oldCwd, cwdEc);
+    std::error_code cleanup;
+    fs::remove_all(tempRoot, cleanup);
+    fs::remove_all(studioCwd, cleanup);
 }
 
 TEST(standalone_runner_service_and_manifest_config) {

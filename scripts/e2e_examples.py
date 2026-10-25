@@ -243,6 +243,8 @@ def scenario_04_memoria():
                                        "WHERE e.relation='HAS_LESSON' AND e.status='active'").fetchall()
                 working = conn.execute("SELECT value_json FROM memory_working WHERE item_id='pipeline' AND key='resumo'").fetchall()
                 usage = conn.execute("SELECT COUNT(*), COALESCE(SUM(calls),0) FROM memory_usage").fetchone()
+                proposals = conn.execute("SELECT kind, status FROM memory_proposal").fetchall()
+                playbooks = conn.execute("SELECT task_type, status, success_count FROM memory_playbook").fetchall()
             check(any("A resposta deve citar a regra aprendida" in row[0] for row in lessons),
                   "a licao foi persistida no banco")
             check(any("Licao registrada pelo agente no teste" in row[0] for row in lessons),
@@ -250,6 +252,10 @@ def scenario_04_memoria():
             check(any("chamado de exemplo" in row[0] for row in working),
                   "o Blackboard foi persistido no banco")
             check(usage and usage[0] >= 1 and usage[1] >= 1, "o consumo de API foi registrado no banco")
+            check(len(proposals) >= 1, "propostas L2 foram geradas a partir do episodio")
+            check(any(row[1] == "pending" for row in proposals), "propostas ficam pendentes para revisao")
+            check(len(playbooks) >= 1, "um playbook candidato foi compilado da trajetoria")
+            check(any(row[2] >= 1 for row in playbooks), "o playbook registrou a evidencia de sucesso")
         else:
             check(False, "a licao foi persistida no banco")
             check(False, "o Blackboard foi persistido no banco")

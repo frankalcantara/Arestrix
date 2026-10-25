@@ -47,6 +47,11 @@ fs::path workspaceRoot() {
     return fs::current_path(ec);
 }
 
+std::string currentRunId(const std::string& fallback) {
+    const std::string value = platform::getEnv("ARESTRIX_RUN_ID");
+    return value.empty() ? fallback : value;
+}
+
 void nodeEvent(const std::string& nodeId, const std::string& status, const std::string& detail) {
     AgentTelemetryEmitter::emitStatus(nodeId, status, detail);
 }
@@ -87,6 +92,9 @@ struct AgentSpec {
     bool memoryWriteEnabled = false;
     bool memoryForceDisabled = false;
     std::vector<std::string> memoryDomains;
+    std::vector<std::string> memoryWriteKeys;
+    int memoryMaxLessonsPerRun = 20;
+    int memoryMaxLessonChars = 4000;
     std::vector<std::string> tools;
     std::vector<std::string> mcpServers;   // ids em .workspace/mcps
     std::vector<std::string> mcpAllowed;   // nomes de ferramentas MCP permitidas (vazio = todas do servidor)
@@ -127,6 +135,11 @@ AgentSpec parseSpec(const json& j, const std::string& nodeId, const std::string&
     if (j.contains("memoryDomains") && j["memoryDomains"].is_array()) {
         for (const auto& d : j["memoryDomains"]) if (d.is_string()) s.memoryDomains.push_back(d.get<std::string>());
     }
+    if (j.contains("memoryWriteKeys") && j["memoryWriteKeys"].is_array()) {
+        for (const auto& k : j["memoryWriteKeys"]) if (k.is_string()) s.memoryWriteKeys.push_back(k.get<std::string>());
+    }
+    s.memoryMaxLessonsPerRun = std::max(1, std::min(500, j.value("memoryMaxLessonsPerRun", 20)));
+    s.memoryMaxLessonChars = std::max(100, std::min(20000, j.value("memoryMaxLessonChars", 4000)));
     if (j.contains("tools") && j["tools"].is_array()) {
         for (const auto& t : j["tools"]) if (t.is_string()) s.tools.push_back(t.get<std::string>());
     }
@@ -224,8 +237,9 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         spec.tools.erase(std::remove(spec.tools.begin(), spec.tools.end(), "memory_search"), spec.tools.end());
         spec.tools.erase(std::remove(spec.tools.begin(), spec.tools.end(), "memory_record_lesson"), spec.tools.end());
     }
-    const std::string runId = runKey.empty() ? nodeId : runKey;
-    int iteration = registerRun(runId, spec.maxRuns);
+    const std::string loopKey = runKey.empty() ? nodeId : runKey;
+    const std::string runId = currentRunId(nodeId);
+    int iteration = registerRun(loopKey, spec.maxRuns);
 
     if (spec.model.empty()) throw std::runtime_error("Agente '" + label + "': modelo nao configurado.");
 
@@ -356,6 +370,9 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     tctx.memoryItemId = "pipeline";
     tctx.memoryWriteEnabled = spec.memoryWriteEnabled;
     tctx.memoryDomains = spec.memoryDomains;
+    tctx.memoryWriteKeys = spec.memoryWriteKeys;
+    tctx.memoryMaxLessonsPerRun = spec.memoryMaxLessonsPerRun;
+    tctx.memoryMaxLessonChars = spec.memoryMaxLessonChars;
     tctx.allowed = spec.tools;
     tctx.lang = lang;
 
@@ -366,6 +383,24 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     long long inTokens = 0, outTokens = 0;
     int turns = 0;
     int retries = 0;
+    const std::string taskType = !spec.memoryDomains.empty() ? spec.memoryDomains.front()
+                                                             : (label.empty() ? nodeId : label);
+    json runToolCalls = json::array();
+    std::vector<std::string> runFiles;
+    std::vector<std::string> runArtifacts;
+    auto recordToolCall = [&](const ChatToolCall& call, bool ok) {
+        runToolCalls.push_back(json{{"name", call.name}, {"ok", ok}});
+        if (!call.args.is_object()) return;
+        const std::string path = call.args.value("path", std::string());
+        if (path.empty()) return;
+        if (std::find(runFiles.begin(), runFiles.end(), path) == runFiles.end()) {
+            runFiles.push_back(path);
+        }
+        if (ok && call.name == "write" &&
+            std::find(runArtifacts.begin(), runArtifacts.end(), path) == runArtifacts.end()) {
+            runArtifacts.push_back(path);
+        }
+    };
     const auto runStart = std::chrono::steady_clock::now();
     auto recordUsage = [&](bool success, const std::string& error = "") {
         if (spec.memoryProjectId.empty()) return;
@@ -394,9 +429,26 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                   {"tokens", usage.totalTokens}, {"calls", usage.calls}, {"retries", usage.retries},
                   {"memoryEnabled", spec.memoryEnabled}, {"memoryContextChars", usage.memoryContextChars}};
         if (!success && !error.empty()) meta["error"] = error.substr(0, 500);
-        memory.recordEpisode(spec.memoryProjectId, runId, nodeId, "pipeline",
-                             success ? "agent_success" : "agent_failure",
-                             success ? "agent completed" : "agent failed", meta);
+
+        memory::MemoryEpisodeRecord episode;
+        episode.runId = runId;
+        episode.nodeId = nodeId;
+        episode.itemId = "pipeline";
+        episode.kind = success ? "agent_success" : "agent_failure";
+        episode.content = success ? "agent completed" : "agent failed";
+        episode.taskType = taskType;
+        episode.outcome = usage.outcome;
+        episode.errorClass = success ? "" : "agent_exception";
+        episode.toolCalls = runToolCalls;
+        episode.successSignals = json{{"outputNonEmpty", !finalText.empty()}, {"success", success}};
+        episode.evidence = json::array({json{{"kind", "agent_outcome"}, {"success", success}}});
+        episode.metadata = meta;
+        for (const auto& file : runFiles) episode.filesTouched.push_back(json(file));
+        for (const auto& artifact : runArtifacts) episode.artifacts.push_back(json(artifact));
+        const std::string episodeId = memory.recordEpisode(spec.memoryProjectId, episode);
+        if (spec.memoryWriteEnabled && !episodeId.empty()) {
+            memory.extractProposals(spec.memoryProjectId, episodeId);
+        }
     };
 
     try {
@@ -452,6 +504,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                 for (size_t i = 0; i < futures.size(); ++i) {
                     ToolResult res = futures[i].get();
                     const auto& call = t.toolCalls[i];
+                    recordToolCall(call, !res.isError);
                     AgentTelemetryEmitter::emitToolEnd(nodeId, call.name, !res.isError);
                     if (res.isError) {
                         AgentTelemetryEmitter::emitEvent(nodeId, "log",
@@ -479,6 +532,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                     } else {
                         res = executeTool(tctx, call.name, call.args);
                     }
+                    recordToolCall(call, !res.isError);
                     AgentTelemetryEmitter::emitToolEnd(nodeId, call.name, !res.isError);
                     if (res.isError) {
                         AgentTelemetryEmitter::emitEvent(nodeId, "log", json{{"logLine", "[" + call.name + "] " + res.content.substr(0, 300)}});

@@ -241,8 +241,12 @@ bool anyMemoryPersistent(const core::Graph& graph) {
     return persistent;
 }
 
+json globalMemory(const core::Graph& graph) {
+    return objectOrEmpty(graph.getMetadata().globalDefaults, "memory");
+}
+
 bool memoryMeasurementOff(const core::Graph& graph) {
-    json global = objectOrEmpty(graph.getMetadata().globalDefaults, "memory");
+    json global = globalMemory(graph);
     return global.value("measurementMode", std::string("normal")) == "memory_off";
 }
 
@@ -322,6 +326,13 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
     spec["memoryProjectId"] = graph.getMetadata().projectId;
     spec["memoryWriteEnabled"] = effectiveMemoryEnabled && memory.value("recordLessons", false);
     if (memory.contains("domains") && memory["domains"].is_array()) spec["memoryDomains"] = memory["domains"];
+    spec["memoryMaxLessonsPerRun"] = std::max(1, std::min(500, memory.value("maxLessonsPerRun", 20)));
+    spec["memoryMaxLessonChars"] = std::max(100, std::min(20000, memory.value("maxLessonChars", 4000)));
+    if (memory.contains("writeKeys") && memory["writeKeys"].is_array()) {
+        spec["memoryWriteKeys"] = memory["writeKeys"];
+    } else {
+        spec["memoryWriteKeys"] = json::array();
+    }
 
     json tools = json::array();
     if (codeMode.contains("allowedTools") && codeMode["allowedTools"].is_array()) tools = codeMode["allowedTools"];
@@ -566,9 +577,37 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
     code += "  const bool arx_mem_persistent = " + std::string(anyMemoryPersistent(graph) ? "true" : "false") +
             " || " + std::string(memoryRecordMetrics(graph) ? "true" : "false") +
             " || std::getenv(\"ARESTRIX_MEMORY_METRICS\") != nullptr;\n";
-    code += "  if (!memory.configure(projectId, arx_mem_persistent)) {\n";
+    code += "  const char* arx_memory_root_env = std::getenv(\"ARESTRIX_PROJECT_ROOT\");\n";
+    code += "  const std::string arx_memory_root = (arx_memory_root_env && *arx_memory_root_env)\n";
+    code += "      ? std::string(arx_memory_root_env) : std::string(\".\");\n";
+    code += "  const char* arx_mem_db_env = std::getenv(\"ARESTRIX_MEMORY_DB\");\n";
+    code += "  const std::string arx_mem_db = (arx_mem_db_env && *arx_mem_db_env)\n";
+    code += "      ? std::string(arx_mem_db_env)\n";
+    code += "      : (std::filesystem::path(arx_memory_root) / \".arestrix\" / \"memory\" / \"memory.db\").string();\n";
+    code += "  if (!memory.configure(projectId, arx_mem_persistent, arx_mem_db)) {\n";
     code += "    std::cerr << \"[MEMORIA] nao foi possivel abrir o banco do projeto\\n\";\n";
     code += "  }\n";
+    {
+        const json embedding = globalMemory(graph);
+        code += "  taskforge::memory::EmbeddingConfig arx_embedding_config;\n";
+        code += "  arx_embedding_config.enabled = " +
+                std::string(embedding.value("embeddingEnabled", false) ? "true" : "false") + ";\n";
+        code += "  arx_embedding_config.provider = " +
+                cppString(embedding.value("embeddingProvider", std::string("local"))) + ";\n";
+        code += "  arx_embedding_config.model = " +
+                cppString(embedding.value("embeddingModel", std::string("embeddinggemma-2"))) + ";\n";
+        code += "  arx_embedding_config.baseUrl = " +
+                cppString(embedding.value("embeddingBaseUrl", std::string())) + ";\n";
+        code += "  arx_embedding_config.timeoutSeconds = " +
+                std::to_string(std::max(1, std::min(600, embedding.value("embeddingTimeoutSeconds", 60)))) + ";\n";
+        code += "  arx_embedding_config.batchSize = " +
+                std::to_string(std::max(1, std::min(128, embedding.value("embeddingBatchSize", 8)))) + ";\n";
+        code += "  arx_embedding_config.maxChars = " +
+                std::to_string(std::max(64, std::min(32000, embedding.value("embeddingMaxChars", 8000)))) + ";\n";
+        code += "  arx_embedding_config.dim = " +
+                std::to_string(std::max(0, std::min(8192, embedding.value("embeddingDimensions", 768)))) + ";\n";
+        code += "  memory.configureEmbeddings(projectId, arx_embedding_config);\n";
+    }
     code += "  auto arx_mem_flush = [&]() {\n";
     code += "    if (!arx_mem_persistent) memory.clearSession(projectId);\n";
     code += "  };\n";
@@ -718,8 +757,8 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
                         std::to_string(std::max(0, budget)) + ", " +
                         (mem.value("semanticLessons", false) ? "true" : "false") + ", " +
                         (mem.value("readBlackboard", false) ? "true" : "false") + ", &arx_brief_info);\n";
-                body += "      memory.recordBriefHits(projectId, " + cppString(node.id) + ", " +
-                        cppString(node.id) + ", arx_brief_info);\n";
+                body += "      memory.recordBriefHits(projectId, taskforge::rt::currentRunId(" +
+                        cppString(node.id) + "), " + cppString(node.id) + ", arx_brief_info);\n";
                 body += "    }\n";
                 body += "    if (!arx_mem_ctx.empty()) std::osyncstream(std::cout) << \"[MEMORIA] contexto injetado em \" << " + cppString(label) + " << \"\\n\";\n";
                 std::string runCall = "taskforge::rt::runAgent(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +
@@ -739,7 +778,19 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
                     body += "    " + runCall + "\n";
                 }
                 if (mem.value("writeBlackboard", false)) {
-                    body += "    memory.setWorking(projectId, \"pipeline\", \"last_stage\", taskforge::Json(" + cppString(node.id) + "));\n";
+                    bool canWriteLastStage = true;
+                    if (mem.contains("writeKeys") && mem["writeKeys"].is_array() && !mem["writeKeys"].empty()) {
+                        canWriteLastStage = false;
+                        for (const auto& key : mem["writeKeys"]) {
+                            if (key.is_string() && key.get<std::string>() == "last_stage") {
+                                canWriteLastStage = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (canWriteLastStage) {
+                        body += "    memory.setWorking(projectId, \"pipeline\", \"last_stage\", taskforge::Json(" + cppString(node.id) + "));\n";
+                    }
                 }
             } else {
                 body = "taskforge::rt::runAgent(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +
@@ -1029,198 +1080,6 @@ std::map<std::string, std::string> TaskflowGenerator::generateSubflowSources(con
     return sources;
 }
 
-// ---------------------------------------------------------------------------
-// Pipeline em lote (Resume Engine)
-// ---------------------------------------------------------------------------
-std::string TaskflowGenerator::generateBatchSource(
-    const core::Graph& graph,
-    const std::vector<std::string>& batchItems,
-    const std::vector<std::string>& serializedStages,
-    const std::string& stateFilePath
-) {
-    const auto& meta = graph.getMetadata();
-    const auto& nodes = graph.getNodes();
-    const auto ids = sortedNodeIds(graph);
-    const auto loopEdges = computeLoopEdges(graph, ids);
-    const auto edges = sortedEdges(graph);
-
-    for (const auto* e : edges) {
-        if (e->kind == core::EdgeKind::Call) {
-            throw std::runtime_error("Pipeline em lote ainda nao suporta arestas de chamada no v1.");
-        }
-    }
-    for (const auto& pair : nodes) {
-        if (pair.second.type == core::TaskflowNodeType::Interaction) {
-            throw std::runtime_error("Pipeline em lote nao suporta vertices de interacao no v1.");
-        }
-    }
-
-    std::string code = "// ============================================================================\n";
-    code += "// Gerado por Arestrix (Batch DAG & Resume Engine)\n";
-    code += "// Pipeline: " + commentSafe(meta.graphName) + " (Lote de " + std::to_string(batchItems.size()) + " itens)\n";
-    code += "// Arquivo de Checkpoint: " + commentSafe(stateFilePath) + "\n";
-    code += "// ============================================================================\n\n";
-
-    code += kStandardIncludes;
-    code += "#include \"rt/Runtime.hpp\"\n";
-    code += "#include \"sandbox/PipelineResumeEngine.hpp\"\n";
-    code += "#include \"sandbox/AgentTelemetryEmitter.hpp\"\n";
-    code += "#include \"memory/AgentBlackboard.hpp\"\n";
-    code += "#include \"memory/SemanticMemoryEngine.hpp\"\n";
-    code += "#include \"mcp/McpRegistry.hpp\"\n\n";
-
-    std::string projId = meta.projectId.empty() ? "default" : meta.projectId;
-
-    code += "static std::string arx_subst(std::string s, const std::string& item) {\n";
-    code += "  const std::string key = \"{{itemId}}\";\n";
-    code += "  size_t p = 0;\n";
-    code += "  while ((p = s.find(key, p)) != std::string::npos) { s.replace(p, key.size(), item); p += item.size(); }\n";
-    code += "  return s;\n";
-    code += "}\n\n";
-
-    code += "int main() {\n";
-    code += "  taskforge::rt::init();\n";
-    code += "  try {\n";
-    code += "  std::cout << \">>> Inicializando Pipeline em Lote Arestrix...\\n\";\n";
-    code += "  tf::Executor executor;\n";
-    code += "  tf::Taskflow taskflow(\"BatchMultiAgentPipeline\");\n\n";
-    code += "  auto& resumeEngine = taskforge::sandbox::PipelineResumeEngine::getInstance();\n";
-    code += "  resumeEngine.setStateFilePath(" + cppString(stateFilePath) + ");\n\n";
-    code += "  const std::string projectId = " + cppString(projId) + ";\n";
-    code += "  auto& blackboard = taskforge::memory::AgentBlackboard::getInstance();\n";
-    code += "  auto& semanticMemory = taskforge::memory::SemanticMemoryEngine::getInstance();\n\n";
-
-    auto itemVar = [&](size_t idx, const std::string& nodeId) {
-        return "task_i" + std::to_string(idx) + "_" + sanitizeIdentifier(nodeId);
-    };
-
-    for (size_t itemIdx = 0; itemIdx < batchItems.size(); ++itemIdx) {
-        const std::string& itemId = batchItems[itemIdx];
-        code += "  // --- Tarefas para o Item: " + commentSafe(itemId) + " ---\n";
-        for (const auto& id : ids) {
-            const auto& node = nodes.at(id);
-            std::string label = node.label.empty() ? node.id : node.label;
-            std::string taskVar = itemVar(itemIdx, node.id);
-
-            code += "  auto " + taskVar + " = taskflow.emplace([&resumeEngine, &blackboard, &semanticMemory, &projectId, itemId = std::string(" +
-                    cppString(itemId) + ")]() {\n";
-
-            std::string ruleTargetPattern = "aulas/{itemId}.md";
-            int ruleMinBytes = 200;
-            std::string ruleContentPattern;
-            bool ruleCheckExitCode = true;
-            if (node.agentSettings.is_object() && node.agentSettings.contains("validationRules") &&
-                node.agentSettings["validationRules"].is_array() && !node.agentSettings["validationRules"].empty()) {
-                const auto& vr = node.agentSettings["validationRules"][0];
-                ruleTargetPattern = vr.value("targetPathPattern", "aulas/{itemId}.md");
-                ruleMinBytes = vr.value("minSizeBytes", 200);
-                ruleContentPattern = vr.value("contentPattern", "");
-                ruleCheckExitCode = vr.value("checkLogExitCode", true);
-            }
-
-            code += "    taskforge::rt::NodeScope arx_scope(" + cppString(node.id) + ", " + cppString(label) + ");\n";
-            code += "    taskforge::sandbox::ArtifactValidationRule rule;\n";
-            code += "    rule.targetPathPattern = " + cppString(ruleTargetPattern) + ";\n";
-            code += "    rule.minSizeBytes = " + std::to_string(ruleMinBytes) + ";\n";
-            if (!ruleContentPattern.empty()) code += "    rule.contentPattern = " + cppString(ruleContentPattern) + ";\n";
-            code += "    rule.checkLogExitCode = " + std::string(ruleCheckExitCode ? "true" : "false") + ";\n\n";
-            code += "    if (resumeEngine.isStageCompleted(itemId, " + cppString(node.id) + ", rule)) {\n";
-            code += "      std::cout << \"[CHECKPOINT:RESUME] \" << itemId << \" :: \" << " + cppString(label) + " << \" ja concluido. Reaproveitando artefato.\\n\";\n";
-            code += "      return;\n";
-            code += "    }\n";
-            code += "    resumeEngine.markStageStarted(itemId, " + cppString(node.id) + ");\n";
-            code += "    std::cout << \"[EXECUTANDO] \" << itemId << \" :: \" << " + cppString(label) + " << \"\\n\";\n";
-
-            // Memoria heterogenea (opt-in por agente)
-            bool memEnabled = false, memReadBb = false, memWriteBb = false, memSemLessons = false;
-            if (node.agentSettings.is_object()) {
-                bool inherit = node.agentSettings.value("inheritMemory", true);
-                json m = json::object();
-                if (!inherit && node.agentSettings.contains("memory") && node.agentSettings["memory"].is_object()) {
-                    m = node.agentSettings["memory"];
-                } else if (meta.globalDefaults.is_object() && meta.globalDefaults.contains("memory")) {
-                    m = meta.globalDefaults["memory"];
-                }
-                memEnabled = m.value("enabled", false);
-                memReadBb = m.value("readBlackboard", false);
-                memWriteBb = m.value("writeBlackboard", false);
-                memSemLessons = m.value("semanticLessons", false);
-            }
-            if (memEnabled && memSemLessons) {
-                code += "    auto semCtx = semanticMemory.formatPromptContext(projectId);\n";
-                code += "    if (!semCtx.empty()) { std::cout << \"[MEMORIA:SEMANTICA] Contexto injetado para \" << itemId << \"\\n\"; }\n";
-            }
-            if (memEnabled && memReadBb) {
-                code += "    auto bbSnap = blackboard.exportSnapshot(projectId, itemId);\n";
-                code += "    if (!bbSnap.empty()) { std::cout << \"[MEMORIA:BLACKBOARD] Snapshot carregado para \" << itemId << \"\\n\"; }\n";
-            }
-
-            if (!node.customLambdaBody.empty()) {
-                code += indent(node.customLambdaBody, 4) + "\n";
-            } else if (node.type == core::TaskflowNodeType::Agent) {
-                json spec = buildAgentSpec(graph, node);
-                code += "    taskforge::rt::runAgent(" + cppString(node.id) + ", " + cppString(label) + ",\n      arx_subst(" +
-                        rawLiteral(spec.dump()) + ", itemId), " + cppString(node.id) + " + \"#\" + itemId);\n";
-            } else if (node.type == core::TaskflowNodeType::Static &&
-                       node.parameters.find("action") != node.parameters.end() &&
-                       node.parameters.at("action").is_string() &&
-                       node.parameters.at("action").get<std::string>() == "publish_jekyll_post") {
-                std::string destDir = "../matematica/_posts/matematica";
-                auto itDest = node.parameters.find("destinationDir");
-                if (itDest != node.parameters.end() && itDest->second.is_string()) destDir = itDest->second.get<std::string>();
-                code += "    std::error_code ec;\n";
-                code += "    std::filesystem::create_directories(" + cppString(destDir) + ", ec);\n";
-                code += "    std::string srcFile = \"aulas/\" + itemId + \".md\";\n";
-                code += "    std::string dstFile = " + cppString(destDir + "/") + " + itemId + \".md\";\n";
-                code += "    if (std::filesystem::exists(srcFile)) {\n";
-                code += "      std::filesystem::copy_file(srcFile, dstFile, std::filesystem::copy_options::overwrite_existing, ec);\n";
-                code += "    }\n";
-                code += "    std::cout << \"[PUBLICAR] Artigo \" << itemId << \" enviado para \" << " + cppString(destDir) + " << \"\\n\";\n";
-            }
-
-            if (memEnabled && memWriteBb) {
-                code += "    blackboard.set(projectId, itemId, \"last_stage\", " + cppString(node.id) + ");\n";
-            }
-            code += "    resumeEngine.markStageSuccess(itemId, " + cppString(node.id) + ", rule.targetPathPattern);\n";
-            code += "  }).name(" + cppString(itemId + " :: " + label) + ");\n\n";
-        }
-
-        code += "  // Dependencias internas do Item: " + commentSafe(itemId) + "\n";
-        for (const auto* e : edges) {
-            if (loopEdges.count(e->id)) continue;
-            code += "  " + itemVar(itemIdx, e->sourceNodeId) + ".precede(" + itemVar(itemIdx, e->targetNodeId) + ");\n";
-        }
-        code += "\n";
-    }
-
-    if (!serializedStages.empty() && batchItems.size() > 1) {
-        code += "  // --- Encadeamento serial entre itens (etapas pesadas) ---\n";
-        for (const auto& stageId : serializedStages) {
-            if (!nodes.count(stageId)) continue;
-            for (size_t i = 0; i + 1 < batchItems.size(); ++i) {
-                code += "  " + itemVar(i, stageId) + ".precede(" + itemVar(i + 1, stageId) + ");\n";
-            }
-        }
-        code += "\n";
-    }
-
-    code += "  auto start = std::chrono::high_resolution_clock::now();\n";
-    code += "  executor.run(taskflow).get();\n";
-    code += "  auto end = std::chrono::high_resolution_clock::now();\n";
-    code += "  auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();\n";
-    code += "  std::cout << \">>> Lote de " + std::to_string(batchItems.size()) + " itens finalizado em \" << elapsed_ms << \" ms.\\n\";\n\n";
-    code += "  blackboard.saveToDisk(projectId);\n";
-    code += "  semanticMemory.saveToDisk(projectId);\n";
-    code += "  blackboard.clearSession(projectId);\n";
-    code += "  semanticMemory.clearSession(projectId);\n";
-    code += "  } catch (const std::exception& ex) {\n";
-    code += "    std::cerr << \">>> [ERRO] Lote interrompido: \" << ex.what() << std::endl;\n";
-    code += "    return 1;\n";
-    code += "  }\n";
-    code += "  return 0;\n";
-    code += "}\n";
-    return code;
-}
 
 // ---------------------------------------------------------------------------
 // Exportacao (CMake / Makefile / scripts MSVC)

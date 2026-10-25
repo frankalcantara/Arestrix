@@ -19,13 +19,6 @@ public:
     // Fontes das funcoes nativas dos subflows chamaveis (arquivo logico -> conteudo C++).
     static std::map<std::string, std::string> generateSubflowSources(const core::Graph& graph);
 
-    static std::string generateBatchSource(
-        const core::Graph& graph,
-        const std::vector<std::string>& batchItems,
-        const std::vector<std::string>& serializedStages,
-        const std::string& stateFilePath = "pipeline-state.json"
-    );
-
     // Skills embutidas nos nos (sem arquivo .md) precisam virar arquivos no workspace
     // para o runtime le-las: devolve caminho relativo -> conteudo Markdown.
     static std::map<std::string, std::string> collectSkillAssets(const core::Graph& graph);

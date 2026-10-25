@@ -33,12 +33,18 @@ public:
 
     // Exporta o snapshot da memoria cognitiva dos agentes (AMG: licoes aprendidas, blackboard)
     // para um arquivo JSON estruturado e versionavel.
+    //
+    // projectRoot ancora o banco em <projectRoot>/.arestrix/memory/memory.db; nunca usa o CWD.
+    // Se o banco ainda nao existir, retorna true sem criar banco e sem tocar no snapshot.
     static bool exportMemorySnapshot(const std::string& projectId,
+                                    const std::filesystem::path& projectRoot,
                                     const std::filesystem::path& snapshotPath,
                                     std::string& error);
 
     // Restaura o snapshot da memoria cognitiva dos agentes a partir do arquivo JSON.
+    // O banco de destino e sempre <projectRoot>/.arestrix/memory/memory.db.
     static bool restoreMemorySnapshot(const std::string& projectId,
+                                     const std::filesystem::path& projectRoot,
                                      const std::filesystem::path& snapshotPath,
                                      std::string& error);
 
@@ -47,6 +53,12 @@ public:
     static bool performProjectShutdownBackup(const std::filesystem::path& projectRoot,
                                             const std::string& projectId,
                                             std::string& error);
+
+    // Aplica a retencao de telemetria configurada no manifesto do projeto.
+    // Roda independentemente de o Git estar habilitado. 0 = manter tudo.
+    static bool pruneMemoryOnShutdown(const std::filesystem::path& projectRoot,
+                                     const std::string& projectId,
+                                     std::string& error);
 
     // Rotina de restauracao automatica executada ao abrir o projeto (Disaster Recovery / Clone limpo).
     // Se os bancos SQLite binarios estiverem ausentes, restaura a partir dos dumps SQL/JSON.

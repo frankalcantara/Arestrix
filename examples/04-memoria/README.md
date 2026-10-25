@@ -38,7 +38,7 @@ Run it **twice**:
 
 - the first run creates the lesson and the Blackboard value;
 - the second run loads them from `.arestrix/memory/memory.db` and injects them again. The seed node
-  deduplicates the lesson, but the load happens before the graph starts.
+  deduplicates the lesson, but loading happens at the start of each agent node.
 
 The database lives at `.arestrix/memory/memory.db` and is ignored by Git. The `memory_usage` table
 records input/output tokens, calls and memory context size for each agent.

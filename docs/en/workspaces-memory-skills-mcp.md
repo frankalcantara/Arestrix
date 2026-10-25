@@ -1,11 +1,14 @@
 # Workspaces, memory, skills and MCP
 
-> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-21
+> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-25
 
 [Português](../pt-BR/workspaces-memoria-skills-mcp.md) · [Index](../README.md)
 
 This page covers the parts of Arestrix that live outside a single graph. For the Studio / Workspace /
 Project split itself, see [Architecture](architecture.md#studio-workspace-and-project).
+
+For the full memory lifecycle — capture, proposals, embeddings, consolidation, playbooks and
+workspace — see [How memory works](how-memory-works.md).
 
 ## Projects and workspaces
 
@@ -71,7 +74,7 @@ When Git synchronization is enabled, Arestrix features an automated **Plaintext 
 
 * **Export on Application Shutdown (`onShutdown`):**
   * **Operational Database (`storage/database.sql`):** Generates a deterministic plaintext SQL script containing DDL definitions (`CREATE TABLE`, `CREATE INDEX`, `CREATE VIEW`) and optionally row-by-row data according to the selected backup mode.
-  * **Agent Memory (`storage/memory.dump.json`):** Generates a deterministic formatted JSON snapshot of indispensable cognitive knowledge: **learned lessons** (`lessons`) and the **shared Blackboard** (`working`), excluding disposable telemetry (`memory_usage`) and raw execution logs.
+  * **Agent Memory (`storage/memory.dump.json`):** Generates a deterministic v2 snapshot with the full cognitive graph: scopes, closure, nodes, temporal edges (validity, confidence, status and provenance) and the Blackboard. It keeps `lessons` and `working` for v1 readers. Telemetry (`memory_usage`, hits, episodes) is excluded. The database is anchored at the project root, and an empty payload never overwrites a snapshot that contains knowledge.
 * **Automatic Disaster Recovery / Clean Clone:**
   * When cloning the project onto a fresh machine or if a local `.sqlite` file is deleted or corrupted, Arestrix detects the missing physical database upon project load.
   * The native C++ engine (`ProjectManager::loadProject`) automatically rebuilds the operational database from `storage/database.sql` and rehydrates agent memory from `storage/memory.dump.json` without requiring any manual terminal commands.
@@ -95,7 +98,8 @@ Graph)**, a temporal SQLite multigraph written natively in C++20.
 | **API consumption** | Project | Tokens, calls, latency and injected context size. |
 
 Memory is partitioned by `projectId`, so two projects never read each other's data. Each vertex declares
-which keys it may read or write.
+which Blackboard keys it may read and write, which semantic domains it may query, and how many lessons
+it may record per run; `memory_search` enforces those domains.
 
 ### What exists today
 
@@ -103,19 +107,66 @@ which keys it may read or write.
 - Dual-tier schema architecture:
   * **Indispensable (Cognitive Data):** `memory_scope`/`memory_scope_closure` (hierarchy), `memory_node` (concepts), `memory_edge` (learned lessons and semantic relations with confidence and temporal validity) and `memory_working` (shared project Blackboard).
   * **Disposable Telemetry & Cache:** `memory_usage` (prompt/completion tokens, calls, and latency), `memory_hit` (prompt injection hit statistics for A/B evaluations), `memory_episode`/`memory_evidence` (raw logs of previous runs) and `memory_node_fts` (FTS5 virtual index).
-- **Snapshot & Resilience:** On application shutdown, `DatabaseBackupService` exports all indispensable memory into `storage/memory.dump.json`. If the physical `.db` file is lost or cloned clean, memory is automatically rehydrated from this snapshot.
-- The runtime records sanitized success/failure episodes per agent with tokens, retries, tools and
-  artifacts; it does not store raw prompts/responses.
+- **Snapshot & Resilience:** On application shutdown, `DatabaseBackupService` exports the full cognitive graph (scopes, closure, nodes, temporal edges and Blackboard) to `storage/memory.dump.json` in the v2 format, while keeping `lessons`/`working` for v1 compatibility. The database is always anchored at the project root, never at the process working directory. A missing database does not create an empty snapshot, and a corrupt `.db` is quarantined (`memory.db.corrupt-*`) before restore. The v2 import is transactional: either the whole graph returns, or nothing changes; v1 snapshots are also imported in a transaction. If the physical `.db` file is lost or cloned clean, memory is automatically rehydrated from this snapshot.
+- The runtime records sanitized success/failure episodes per agent with tokens, retries,
+  duration, outcome, tool sequence (name/success), touched files, artifacts and a truncated error
+  message; it does not store raw prompts/responses or tool arguments.
+- The L2 schema already contains `memory_proposal`, `memory_embedding`, `memory_playbook` and
+  `memory_alias`, and `memory_episode` records `task_type`, outcome, tools, files, artifacts,
+  evidence, success signals and redaction count.
+- When lesson writing is enabled (`recordLessons`), the runtime extracts deterministic proposals
+  from the episode (lesson, fact, entity, playbook and summary). They stay `pending` and can be
+  accepted/rejected in the Memory Center or via `arestrix-cli memory proposals`. Promotion is
+  manual.
+- Hybrid search (FTS + graph + embeddings) is optional and **off by default**. The
+  preconfigured model is `embeddinggemma-2` (768 dimensions). To enable it, use
+  an existing OpenAI-compatible `/v1/embeddings` endpoint (Ollama, llama.cpp, LM Studio, vLLM)
+  in Global Defaults → Memory. With Ollama: `ollama pull embeddinggemma-2` and endpoint
+  `http://127.0.0.1:11434/v1`. Without a provider the system remains 100% lexical.
+  When enabled, indexed texts (sanitized lessons, facts and summaries) are sent to the
+  configured endpoint; use a local server to keep everything on the machine.
+- On-demand deterministic consolidation: duplicate lesson/fact merge, entity aliases,
+  conflicts (`CONTRADICTS`), expiration, decay into `dormant` and generalization
+  (`GENERALIZES`). Nothing is deleted; duplicates/conflicts are demoted and audited. Use
+  **Consolidate memory** in the Studio or `arestrix-cli memory consolidate`.
+- Procedural playbooks: successful trajectories become reusable steps by `task_type`. The
+  first evidence creates a `candidate`; the second activates it. Failures update counters and
+  reduce confidence; the brief injects active playbooks within budget.
+- Workspace: a separate database at `.workspace/memory/memory.db`. The project reads the
+  workspace, but the workspace does not read the project's private memory. Promotion is
+  explicit, requires evidence and is audited. Use **Workspace → Initialize** and
+  **Promote to workspace** in the Studio, or `arestrix-cli memory workspace init|status` /
+  `memory promote`.
+- Institution: native contract with tokens, `viewer`/`editor`/`admin` roles and immutable
+  scope policies. Authenticated HTTP/MCP exposure is pending for the operations phase.
 - Current scope: **project** (`project:<projectId>`). Workspace and institution arrive in later
   phases.
-- Lessons and Blackboard can be read at the start of a run and written at the end.
+- Lessons and Blackboard are read at the start of each agent node; failure lessons are recorded at
+  the end of the run, and the Blackboard is written when the vertex has `writeBlackboard`.
 - The agent can query memory with `memory_search` and, when `recordLessons` is on, record a lesson
   with `memory_record_lesson`.
+- Writes are governed per vertex: `allowedKeys` restricts Blackboard reads, `writeKeys` restricts
+  automatic writes, `maxLessonsPerRun` (default 20) caps lessons per run and `maxLessonChars`
+  (default 4000) caps each lesson/trigger. A global cap of 5000 active lessons per project also
+  applies. These fields are configurable on the vertex and in **Global Defaults → Memory**.
+- Before persisting, lessons, episodes, edges and the Blackboard are sanitized for known secrets
+  (OpenAI/Stripe, Google, AWS, GitHub, Slack, Bearer, URL parameters and PEM private keys). The
+  snapshot is sanitized before going to Git, covering rows written before this layer existed.
+- Project purge removes working state, lessons/edges, episodes, evidence, nodes, usage, hits and
+  audit rows, then compacts SQLite with `VACUUM`; the database opens with `secure_delete=ON`.
+  Telemetry retention is configurable in **Global Defaults → Memory** (`retentionDays`, default
+  180; `0` = keep) and runs on shutdown and via `arestrix-cli memory prune`. `memory purge` also
+  removes the snapshot unless `--keep-snapshot` is passed.
+- The generated binary resolves the database from `ARESTRIX_PROJECT_ROOT` (fallback: current
+  directory); `ARESTRIX_MEMORY_DB` has explicit priority. `memory_hit`/`memory_usage` use
+  `ARESTRIX_RUN_ID`, and the unique key `(scope, run, node, memory)` prevents duplicate hits.
+  SQLite writes retry briefly on `SQLITE_BUSY`/`SQLITE_LOCKED`.
 - The brief is compiled in sections, with newer/higher-confidence lessons first and the Blackboard
   either complete or omitted (never partial JSON). `contextBudgetTokens` limits the brief; the
-  default is roughly 800 tokens (about 4 characters per token).
-- `memory_hit` records which lessons/keys were injected, which were consulted via `memory_search`,
-  and the run outcome.
+  default is roughly 800 tokens (about 4 characters per token). **0 disables the brief** for that
+  vertex.
+- `memory_hit` records which lessons/keys were injected, which were consulted via `memory_search`
+  (including those that were not in the brief), and the run outcome.
 - `memory_usage` records tokens, calls, retries, latency, context and success/failure.
 - Legacy JSON (`arestrix-blackboard-*.json`, `arestrix-memory-*.json`) is imported once and marked
   `legacy_imported`.
@@ -131,7 +182,8 @@ In the generated pipeline, the runtime:
 2. compiles a sectioned brief with lessons ordered by confidence/recency and the authorized key
    snapshot;
 3. injects that brief into the system prompt as **untrusted historical data**;
-4. records `memory_hit` for each injected lesson/key and marks those consulted via `memory_search`;
+4. records `memory_hit` for each injected lesson/key and, when the agent uses `memory_search`,
+   records the consulted memories that were not in the brief as well;
 5. saves the lesson, Blackboard, episode and outcome at the end of the run;
 6. automatically records a lesson when an agent fails and `recordLessons` is on.
 
@@ -182,7 +234,8 @@ ARESTRIX_MEMORY_METRICS=1 ARESTRIX_MEMORY_DISABLE=1 \
 arestrix-cli memory report --project <project>
 ```
 
-The report shows success/failure, retries, injected memories and used/consulted memories.
+The report shows success/failure, retries, injected memories, used memories and memories consulted
+through search.
 `memory_report.py` remains optional for development; the runtime does not depend on Python. See also
 [`arestrix-cli`](arestrix-cli.md).
 
@@ -200,9 +253,10 @@ Python or JS process participates in graph execution.
 ### Current limitations
 
 - A dedicated graph/conflict visualization is not in the UI yet.
-- There is no semantic extraction, embeddings, hybrid ranking, dedup, contradiction, decay or
-  playbooks yet.
-- Workspace/institution scopes, `memory_handoff`, proposals and LLM consolidation are future phases.
+- Deterministic extraction, proposals, optional hybrid search, consolidation, playbooks and
+  workspace memory already exist in the core. LLM generalization, automatic background
+  consolidation and authenticated HTTP/MCP institution exposure are still pending.
+- `memory_handoff` and LLM consolidation are future phases.
 
 ## Skills
 

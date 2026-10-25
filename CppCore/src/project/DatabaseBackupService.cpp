@@ -1,6 +1,7 @@
 #include "DatabaseBackupService.hpp"
 #include "GitSyncService.hpp"
 #include "ProjectManager.hpp"
+#include "memory/MemorySanitizer.hpp"
 #include "memory/MemoryService.hpp"
 #include "util/Json.hpp"
 #include "sqlite3.h"
@@ -55,6 +56,139 @@ std::string escapeIdent(const std::string& ident) {
         }
     }
     return out;
+}
+
+std::filesystem::path memoryDatabasePath(const std::filesystem::path& projectRoot) {
+    return projectRoot / ".arestrix" / "memory" / "memory.db";
+}
+
+bool snapshotHasCognitiveContent(const std::filesystem::path& snapshotPath) {
+    std::error_code ec;
+    if (!std::filesystem::exists(snapshotPath, ec)) return false;
+
+    std::ifstream in(snapshotPath, std::ios::binary);
+    if (!in.is_open()) return true;   // conservador: nao sobrescrever o que nao conseguimos ler
+    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+
+    auto parsed = taskforge::jsonutil::tryParse(content);
+    if (!parsed || !parsed->is_object()) return true;   // snapshot invalido: preservar
+    if (parsed->contains("lessons") && (*parsed)["lessons"].is_array() && !(*parsed)["lessons"].empty()) {
+        return true;
+    }
+    if (parsed->contains("working") && (*parsed)["working"].is_object() && !(*parsed)["working"].empty()) {
+        return true;
+    }
+    for (const char* key : {"nodes", "edges", "workingRows"}) {
+        if (parsed->contains(key) && (*parsed)[key].is_array() && !(*parsed)[key].empty()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Verifica se o arquivo e um SQLite saudavel e se o schema de memoria esta presente.
+// Um arquivo de zero bytes e tratado como invalido para que o snapshot possa restaurar.
+bool sqliteMemoryFileHealthy(const std::filesystem::path& path, std::string& detail) {
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec)) {
+        detail = "arquivo ausente";
+        return false;
+    }
+    if (std::filesystem::file_size(path, ec) == 0) {
+        detail = "arquivo vazio";
+        return false;
+    }
+
+    sqlite3* db = nullptr;
+    const std::string dbPath = path.string();
+    if (sqlite3_open_v2(dbPath.c_str(), &db, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK) {
+        detail = db ? sqlite3_errmsg(db) : "falha ao abrir o banco";
+        if (db) sqlite3_close(db);
+        return false;
+    }
+
+    bool ok = false;
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, "PRAGMA quick_check;", -1, &stmt, nullptr) == SQLITE_OK &&
+        sqlite3_step(stmt) == SQLITE_ROW) {
+        const unsigned char* text = sqlite3_column_text(stmt, 0);
+        ok = text && std::string(reinterpret_cast<const char*>(text)) == "ok";
+        if (!ok) detail = text ? reinterpret_cast<const char*>(text) : "quick_check falhou";
+    } else {
+        detail = sqlite3_errmsg(db);
+    }
+    if (stmt) sqlite3_finalize(stmt);
+    stmt = nullptr;
+
+    if (ok) {
+        if (sqlite3_prepare_v2(db, "SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_scope' LIMIT 1;",
+                               -1, &stmt, nullptr) == SQLITE_OK) {
+            ok = sqlite3_step(stmt) == SQLITE_ROW;
+            if (!ok) detail = "schema de memoria ausente";
+        } else {
+            ok = false;
+            detail = sqlite3_errmsg(db);
+        }
+    }
+
+    if (stmt) sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return ok;
+}
+
+bool quarantineFile(const std::filesystem::path& path, std::string& error) {
+    const auto stamp = std::to_string(
+        std::chrono::system_clock::now().time_since_epoch().count());
+    std::filesystem::path target = path;
+    target += ".corrupt-" + stamp;
+    std::error_code ec;
+    std::filesystem::rename(path, target, ec);
+    if (ec) {
+        error = "Falha ao colocar banco corrompido em quarentena (" + target.string() + "): " + ec.message();
+        return false;
+    }
+    return true;
+}
+
+bool writeSnapshotFile(const std::filesystem::path& snapshotPath, const std::string& content,
+                       std::string& error) {
+    std::error_code ec;
+    if (!snapshotPath.parent_path().empty()) {
+        std::filesystem::create_directories(snapshotPath.parent_path(), ec);
+    }
+    std::filesystem::path tmp = snapshotPath;
+    tmp += ".tmp";
+    {
+        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+        if (!out.is_open()) {
+            error = "Falha ao abrir arquivo temporario de snapshot: " + tmp.string();
+            return false;
+        }
+        out << content;
+        out.flush();
+        if (!out) {
+            error = "Falha ao gravar snapshot temporario: " + tmp.string();
+            return false;
+        }
+    }
+    // POSIX substitui atomicamente. No Windows, o rename falha se o alvo existir;
+    // nesse caso removemos o alvo e tentamos novamente.
+    std::error_code renameEc;
+    std::filesystem::rename(tmp, snapshotPath, renameEc);
+    if (renameEc) {
+        std::error_code removeEc;
+        std::filesystem::remove(snapshotPath, removeEc);
+        renameEc.clear();
+        std::filesystem::rename(tmp, snapshotPath, renameEc);
+    }
+    if (renameEc) {
+        error = "Falha ao publicar snapshot de memoria: " + renameEc.message();
+        std::error_code cleanup;
+        std::filesystem::remove(tmp, cleanup);
+        return false;
+    }
+    return true;
 }
 
 } // namespace
@@ -301,22 +435,50 @@ bool DatabaseBackupService::restoreFromSqlDump(const std::filesystem::path& sqlP
 }
 
 bool DatabaseBackupService::exportMemorySnapshot(const std::string& projectId,
+                                                const std::filesystem::path& projectRoot,
                                                 const std::filesystem::path& snapshotPath,
                                                 std::string& error) {
     const std::string pId = projectId.empty() ? "default" : projectId;
-    auto data = taskforge::memory::MemoryService::getInstance().toJson(pId);
+    if (projectRoot.empty()) {
+        error = "Raiz do projeto vazia ao exportar snapshot de memoria.";
+        return false;
+    }
 
-    taskforge::Json snapshot = taskforge::Json::object();
+    // O banco de memoria e ancorado na raiz do projeto, nunca no CWD do processo.
+    // Se ainda nao existe, nao criamos um banco vazio nem tocamos no snapshot.
+    const std::filesystem::path memDbPath = memoryDatabasePath(projectRoot);
+    std::error_code existsEc;
+    if (!std::filesystem::exists(memDbPath, existsEc)) {
+        return true;
+    }
+
+    auto& memoryService = taskforge::memory::MemoryService::getInstance();
+    if (!memoryService.configure(pId, true, memDbPath.string())) {
+        error = "Nao foi possivel abrir o banco de memoria para exportacao: " + memDbPath.string();
+        return false;
+    }
+
+    auto data = memoryService.toCognitiveJson(pId);
+
+    taskforge::Json snapshot = data;
     snapshot["format"] = "arestrix-memory-snapshot";
-    snapshot["version"] = "1.0.0";
+    snapshot["version"] = "2.0.0";
     snapshot["projectId"] = pId;
     snapshot["lessons"] = data.value("lessons", taskforge::Json::array());
     snapshot["working"] = data.value("working", taskforge::Json::object());
+    taskforge::memory::sanitizeJsonInPlace(snapshot);
 
-    // Se nao houver licoes e nem working, nao grava se o arquivo de snapshot nao existir
-    auto lessons = snapshot["lessons"];
-    auto working = snapshot["working"];
-    if (lessons.empty() && working.empty() && !std::filesystem::exists(snapshotPath)) {
+    const bool emptyCognitive =
+        (!snapshot.contains("lessons") || snapshot["lessons"].empty()) &&
+        (!snapshot.contains("working") || snapshot["working"].empty()) &&
+        (!snapshot.contains("nodes") || snapshot["nodes"].empty()) &&
+        (!snapshot.contains("edges") || snapshot["edges"].empty()) &&
+        (!snapshot.contains("workingRows") || snapshot["workingRows"].empty());
+    if (emptyCognitive && snapshotHasCognitiveContent(snapshotPath)) {
+        // Um banco recem-criado/vazio nao pode apagar um snapshot com conhecimento.
+        // A limpeza explicita de memoria remove o snapshot em ui_clear_memory.
+        std::cout << "[DatabaseBackupService] Snapshot vazio ignorado para preservar memoria existente: "
+                  << snapshotPath.string() << "\n";
         return true;
     }
 
@@ -332,23 +494,17 @@ bool DatabaseBackupService::exportMemorySnapshot(const std::string& projectId,
         }
     }
 
-    std::error_code ec;
-    std::filesystem::create_directories(snapshotPath.parent_path(), ec);
-
-    std::ofstream out(snapshotPath, std::ios::binary | std::ios::trunc);
-    if (!out.is_open()) {
-        error = "Falha ao abrir arquivo para snapshot de memoria: " + snapshotPath.string();
-        return false;
-    }
-
-    out << newJson;
-    out.close();
-    return true;
+    return writeSnapshotFile(snapshotPath, newJson, error);
 }
 
 bool DatabaseBackupService::restoreMemorySnapshot(const std::string& projectId,
+                                                 const std::filesystem::path& projectRoot,
                                                  const std::filesystem::path& snapshotPath,
                                                  std::string& error) {
+    if (projectRoot.empty()) {
+        error = "Raiz do projeto vazia ao restaurar snapshot de memoria.";
+        return false;
+    }
     if (!std::filesystem::exists(snapshotPath)) {
         return false;
     }
@@ -364,33 +520,31 @@ bool DatabaseBackupService::restoreMemorySnapshot(const std::string& projectId,
         in.close();
 
         const std::string pId = projectId.empty() ? snapshot.value("projectId", "default") : projectId;
-        taskforge::memory::MemoryService::getInstance().configure(pId, true);
-
-        // 1. Restaura licoes aprendidas
-        if (snapshot.contains("lessons") && snapshot["lessons"].is_array()) {
-            for (const auto& lesson : snapshot["lessons"]) {
-                std::string domain = lesson.value("domain", "geral");
-                std::string triggerError = lesson.value("triggerError", "");
-                std::string lessonRule = lesson.value("lessonRule", "");
-                std::string sourceItem = lesson.value("sourceItem", "");
-                if (!lessonRule.empty()) {
-                    taskforge::memory::MemoryService::getInstance().recordLesson(
-                        pId, domain, triggerError, lessonRule, sourceItem, "snapshot_restore");
-                }
-            }
+        const std::filesystem::path memDbPath = memoryDatabasePath(projectRoot);
+        auto& memoryService = taskforge::memory::MemoryService::getInstance();
+        if (!memoryService.configure(pId, true, memDbPath.string())) {
+            error = "Nao foi possivel abrir o banco de memoria para restauracao: " + memDbPath.string();
+            return false;
         }
 
-        // 2. Restaura working memory (Blackboard compartilhado)
-        if (snapshot.contains("working") && snapshot["working"].is_object()) {
-            auto working = snapshot["working"];
-            for (auto item = working.begin(); item != working.end(); ++item) {
-                if (item.value().is_object()) {
-                    for (auto key = item.value().begin(); key != item.value().end(); ++key) {
-                        taskforge::memory::MemoryService::getInstance().setWorking(
-                            pId, item.key(), key.key(), key.value());
-                    }
-                }
+        const bool isV2 = (snapshot.contains("nodes") && snapshot["nodes"].is_array()) ||
+                          (snapshot.contains("edges") && snapshot["edges"].is_array());
+        if (isV2) {
+            std::string importError;
+            if (!memoryService.importCognitiveJson(pId, snapshot, importError)) {
+                error = "Restauracao do snapshot v2 falhou: " + importError;
+                return false;
             }
+            std::cout << "[DatabaseBackupService] Memoria de agentes restaurada (snapshot v2) a partir de: "
+                      << snapshotPath.string() << "\n";
+            return true;
+        }
+
+        // Fallback v1: importacao transacional de licoes e Blackboard.
+        std::string legacyError;
+        if (!memoryService.importLegacySnapshot(pId, snapshot, legacyError)) {
+            error = "Restauracao do snapshot v1 falhou: " + legacyError;
+            return false;
         }
 
         std::cout << "[DatabaseBackupService] Memoria de agentes restaurada com sucesso a partir de: " << snapshotPath.string() << "\n";
@@ -399,6 +553,48 @@ bool DatabaseBackupService::restoreMemorySnapshot(const std::string& projectId,
         error = "Erro ao processar snapshot de memoria: " + std::string(e.what());
         return false;
     }
+}
+
+bool DatabaseBackupService::pruneMemoryOnShutdown(const std::filesystem::path& projectRoot,
+                                                 const std::string& projectId,
+                                                 std::string& error) {
+    if (projectRoot.empty() || !std::filesystem::exists(projectRoot)) return true;
+
+    std::filesystem::path manifestPath = projectRoot / "arestrix.project.json";
+    if (!std::filesystem::exists(manifestPath)) {
+        manifestPath = projectRoot / "taskforge.project.json";
+    }
+    if (!std::filesystem::exists(manifestPath)) return true;
+
+    int retentionDays = 180;
+    try {
+        std::ifstream mf(manifestPath);
+        auto j = taskforge::jsonutil::parseStream(mf);
+        if (j.contains("globalDefaults") && j["globalDefaults"].is_object() &&
+            j["globalDefaults"].contains("memory") && j["globalDefaults"]["memory"].is_object()) {
+            retentionDays = j["globalDefaults"]["memory"].value("retentionDays", 180);
+        }
+    } catch (...) {
+        return true;   // manifesto ilegivel: nao apaga telemetria por engano
+    }
+    if (retentionDays <= 0) return true;
+
+    const std::filesystem::path memDbPath = memoryDatabasePath(projectRoot);
+    std::error_code ec;
+    if (!std::filesystem::exists(memDbPath, ec)) return true;
+
+    auto& memoryService = taskforge::memory::MemoryService::getInstance();
+    if (!memoryService.configure(projectId, true, memDbPath.string())) {
+        error = "Nao foi possivel abrir o banco de memoria para retencao: " + memDbPath.string();
+        return false;
+    }
+    const auto pruned = memoryService.prune(projectId, retentionDays);
+    if (pruned.episodes > 0 || pruned.hits > 0 || pruned.usage > 0) {
+        std::cout << "[DatabaseBackupService] Retencao de memoria (" << retentionDays
+                  << " dias): " << pruned.episodes << " episodio(s), "
+                  << pruned.hits << " hit(s), " << pruned.usage << " usage removidos.\n";
+    }
+    return true;
 }
 
 bool DatabaseBackupService::performProjectShutdownBackup(const std::filesystem::path& projectRoot,
@@ -459,7 +655,7 @@ bool DatabaseBackupService::performProjectShutdownBackup(const std::filesystem::
     // 3. Exporta snapshot da memoria cognitiva dos agentes
     std::filesystem::path snapshotPath = storageDir / "memory.dump.json";
     std::string memErr;
-    if (!exportMemorySnapshot(projectId, snapshotPath, memErr)) {
+    if (!exportMemorySnapshot(projectId, projectRoot, snapshotPath, memErr)) {
         std::cerr << "[DatabaseBackupService] Erro ao exportar snapshot de memoria: " << memErr << "\n";
         error += memErr;
     } else {
@@ -504,13 +700,28 @@ bool DatabaseBackupService::restoreProjectIfNeeded(const std::filesystem::path& 
         if (!restoreErr.empty()) error += restoreErr + " ";
     }
 
-    // 2. Restaura memoria se o .db nao existir mas o snapshot existir
-    std::filesystem::path memDbPath = projectRoot / ".arestrix" / "memory" / "memory.db";
+    // 2. Restaura memoria se o .db estiver ausente ou corrompido e o snapshot existir
+    std::filesystem::path memDbPath = memoryDatabasePath(projectRoot);
     std::filesystem::path snapshotPath = storageDir / "memory.dump.json";
+
+    if (std::filesystem::exists(memDbPath)) {
+        std::string healthDetail;
+        if (!sqliteMemoryFileHealthy(memDbPath, healthDetail)) {
+            std::string quarantineErr;
+            if (quarantineFile(memDbPath, quarantineErr)) {
+                std::cout << "[DatabaseBackupService] Banco de memoria invalido (" << healthDetail
+                          << ") colocado em quarentena.\n";
+            } else {
+                error += quarantineErr + " ";
+            }
+        }
+    }
+
     if (!std::filesystem::exists(memDbPath) && std::filesystem::exists(snapshotPath)) {
         std::string memErr;
-        restoreMemorySnapshot(projectId, snapshotPath, memErr);
-        if (!memErr.empty()) error += memErr;
+        if (!restoreMemorySnapshot(projectId, projectRoot, snapshotPath, memErr)) {
+            error += memErr;
+        }
     }
 
     return true;

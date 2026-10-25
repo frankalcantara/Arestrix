@@ -1,8 +1,6 @@
 #include "ProjectManager.hpp"
 #include "DatabaseBackupService.hpp"
 #include "util/Json.hpp"
-#include "../memory/AgentBlackboard.hpp"
-#include "../memory/SemanticMemoryEngine.hpp"
 #include <fstream>
 #include <iostream>
 #include <chrono>
@@ -155,9 +153,6 @@ bool ProjectManager::createProject(ProjectManifest manifest) {
     item.manifestPath = manifestPath.string();
     item.lastOpened = nowStr;
     addRecentProject(item);
-
-    // Sincroniza escopo nos motores de memória
-    taskforge::memory::AgentBlackboard::getInstance().clearSession(manifest.projectId);
 
     std::string restoreErr;
     DatabaseBackupService::restoreProjectIfNeeded(manifest.rootPath, manifest.projectId, restoreErr);

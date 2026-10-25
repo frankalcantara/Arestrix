@@ -2,7 +2,7 @@
 
 **English** · [Português](pt-BR/README.md)
 
-> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-21
+> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-25
 >
 > Beta APIs, file formats and command-line flags may change before general availability.
 > See the [changelog](../CHANGELOG.md) for user-visible changes.
@@ -17,6 +17,7 @@
 | Run agents, sandboxes and telemetry | [Agents and execution](en/agents-and-execution.md) | [Agentes e execução](pt-BR/agentes-e-execucao.md) |
 | Run without the UI (CI, servers) | [`arestrix-cli`](en/arestrix-cli.md) | [`arestrix-cli`](pt-BR/arestrix-cli.md) |
 | Workspaces, memory, skills and MCP | [Workspaces, memory and MCP](en/workspaces-memory-skills-mcp.md) | [Workspaces, memória e MCP](pt-BR/workspaces-memoria-skills-mcp.md) |
+| How memory works in detail | [How memory works](en/how-memory-works.md) | [Como funciona a memória](pt-BR/como-funciona-a-memoria.md) |
 | Tour the interface | [Interface](en/interface.md) | [Interface](pt-BR/interface.md) |
 | Build, test and contribute | [Development](en/development.md) | [Desenvolvimento](pt-BR/desenvolvimento.md) |
 | Visual identity | [Brand](en/brand.md) | [Marca](pt-BR/marca.md) |

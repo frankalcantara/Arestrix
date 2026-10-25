@@ -289,6 +289,67 @@ def main():
                                "FROM memory_usage WHERE memory_enabled=0")
         check(off and off[0][0] >= 1, "o consumo da execucao sem memoria foi registrado")
         check(off and off[0][1] > 0 and off[0][2] == 0, "a execucao sem memoria tem tokens e memoria_enabled=0")
+
+        print("\n== Embeddings desligados por padrao ==")
+        (project / "arestrix.project.json").write_text(
+            json.dumps({"projectId": "memoria-teste"}), encoding="utf-8")
+        p_emb = subprocess.run(
+            [str(EXE), "memory", "embeddings", "status", "--root", str(project), "--json"],
+            capture_output=True, text=True, timeout=60)
+        check(p_emb.returncode == 0, "memory embeddings status terminou com codigo 0")
+        try:
+            emb_status = json.loads(p_emb.stdout)
+        except Exception:
+            emb_status = {}
+        check(emb_status.get("model") == "embeddinggemma-2",
+              "o modelo de embeddings pre-configurado e o EmbeddingGemma 2")
+        check(int(emb_status.get("dim", 0)) == 768,
+              "o EmbeddingGemma 2 usa 768 dimensoes")
+        check(emb_status.get("active") is False, "embeddings continuam desligados por padrao")
+        check(int(emb_status.get("indexed", 0)) == 0, "nenhum vetor foi indexado com embeddings desligados")
+
+        print("\n== Consolidacao deterministica ==")
+        p_cons = subprocess.run(
+            [str(EXE), "memory", "consolidate", "--root", str(project), "--json"],
+            capture_output=True, text=True, timeout=60)
+        check(p_cons.returncode == 0, "memory consolidate terminou com codigo 0")
+        try:
+            cons = json.loads(p_cons.stdout)
+        except Exception:
+            cons = {}
+        check(cons.get("ok") is True, "a consolidacao reportou ok")
+        check("duplicates" in cons and "contradictions" in cons and "dormant" in cons,
+              "o relatorio de consolidacao trouxe os contadores")
+
+        print("\n== Workspace e promocao explicita ==")
+        workspace_id = "e2e-workspace"
+        p_ws = subprocess.run(
+            [str(EXE), "memory", "workspace", "init", "--root", str(project),
+             "--workspace-id", workspace_id, "--json"],
+            capture_output=True, text=True, timeout=60)
+        check(p_ws.returncode == 0, "memory workspace init terminou com codigo 0")
+        lessons_for_ws = db_rows(
+            project,
+            "SELECT id FROM memory_edge WHERE relation='HAS_LESSON' AND status='active' LIMIT 1")
+        check(bool(lessons_for_ws), "ha uma licao ativa para promover")
+        if lessons_for_ws:
+            p_prom = subprocess.run(
+                [str(EXE), "memory", "promote", "--root", str(project),
+                 "--workspace-id", workspace_id, "--kind", "lesson",
+                 "--id", lessons_for_ws[0][0], "--evidence", "e2e promocao", "--json"],
+                capture_output=True, text=True, timeout=60)
+            check(p_prom.returncode == 0, "memory promote terminou com codigo 0")
+        p_ws_status = subprocess.run(
+            [str(EXE), "memory", "workspace", "status", "--root", str(project),
+             "--workspace-id", workspace_id, "--json"],
+            capture_output=True, text=True, timeout=60)
+        try:
+            ws_status = json.loads(p_ws_status.stdout)
+        except Exception:
+            ws_status = {}
+        check(p_ws_status.returncode == 0, "memory workspace status terminou com codigo 0")
+        check(ws_status.get("configured") is True, "o workspace ficou configurado")
+        check(int(ws_status.get("lessons", 0)) >= 1, "a licao foi promovida ao workspace")
     finally:
         server.shutdown()
         shutil.rmtree(work, ignore_errors=True)

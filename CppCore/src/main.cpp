@@ -5,8 +5,6 @@
 #include "sandbox/SandboxManager.hpp"
 #include "sandbox/AgentTelemetryEmitter.hpp"
 #include "sandbox/PipelineResumeEngine.hpp"
-#include "memory/AgentBlackboard.hpp"
-#include "memory/SemanticMemoryEngine.hpp"
 #include "memory/MemoryService.hpp"
 #include "mcp/McpRegistry.hpp"
 #include "project/ProjectManager.hpp"
@@ -30,6 +28,7 @@
 #include "search/ProjectSearch.hpp"
 #include "search/SynonymAgent.hpp"
 #include <atomic>
+#include <cstdlib>
 #include <condition_variable>
 #include <thread>
 #include <algorithm>
@@ -560,6 +559,23 @@ bool configureProjectMemory(const std::string& projectId, bool persistent) {
         (std::filesystem::path(root) / ("arestrix-blackboard-" + safe + ".json")).string(),
         (std::filesystem::path(root) / ("arestrix-memory-" + safe + ".json")).string());
 }
+
+std::string workspaceIdForRoot() {
+    if (const char* env = std::getenv("ARESTRIX_WORKSPACE_ID"); env && *env) return env;
+    std::string id = std::filesystem::path(activeMemoryRoot()).filename().string();
+    return id.empty() ? "default" : id;
+}
+
+std::filesystem::path workspaceDbForRoot() {
+    return std::filesystem::path(activeMemoryRoot()) / ".workspace" / "memory" / "memory.db";
+}
+
+void configureEmbeddingsFromPayload(const std::string& projectId, const taskforge::Json& payload) {
+    if (payload.is_object() && payload.contains("embedding")) {
+        taskforge::memory::MemoryService::getInstance().configureEmbeddings(
+            projectId, taskforge::memory::embeddingConfigFromJson(payload["embedding"]));
+    }
+}
 } // namespace
 
 void ui_get_memory_status(webui::window::event* e) {
@@ -569,6 +585,8 @@ void ui_get_memory_status(webui::window::event* e) {
         if (!payload.empty() && payload[0] == '{') {
             auto j = taskforge::jsonutil::parse(payload);
             projectId = j.value("projectId", "default");
+            configureProjectMemory(projectId, true);
+            configureEmbeddingsFromPayload(projectId, j);
         } else if (!payload.empty()) {
             projectId = payload;
         }
@@ -585,6 +603,11 @@ void ui_get_memory_status(webui::window::event* e) {
     res["semantic"]["lessons"] = data.contains("lessons") ? data["lessons"] : taskforge::Json::array();
     res["isBlackboardPersistent"] = true;
     res["isSemanticPersistent"] = true;
+    res["proposals"] = taskforge::memory::MemoryService::getInstance().listProposals(projectId, "pending", 100);
+    res["embedding"] = taskforge::memory::MemoryService::getInstance().embeddingStatus(projectId);
+    res["consolidation"] = taskforge::memory::MemoryService::getInstance().consolidationStatus(projectId);
+    res["playbooks"] = taskforge::memory::MemoryService::getInstance().listPlaybooks(projectId, "", "", 100);
+    res["workspace"] = taskforge::memory::MemoryService::getInstance().workspaceStatus(projectId);
 
     e->return_string(res.dump());
 }
@@ -622,9 +645,209 @@ void ui_clear_memory(webui::window::event* e) {
 
     configureProjectMemory(projectId, true);
     auto& memory = taskforge::memory::MemoryService::getInstance();
-    if (sessionOnly) memory.clearSession(projectId);
-    else memory.clearProject(projectId);
+    if (sessionOnly) {
+        memory.clearSession(projectId);
+    } else {
+        memory.clearProject(projectId);
+        // O snapshot e a fonte de recuperacao: se a memoria persistente foi apagada,
+        // ele tambem precisa sair para nao ressuscitar dados no proximo projeto aberto.
+        std::error_code ec;
+        std::filesystem::remove(
+            std::filesystem::path(activeMemoryRoot()) / "storage" / "memory.dump.json", ec);
+    }
     e->return_bool(true);
+}
+
+// Wrapper de comunicação JS -> C++ (Aplicar Retenção de Memória)
+void ui_prune_memory(webui::window::event* e) {
+    std::string payload = e->get_string();
+    std::string projectId = "default";
+    int days = 180;
+    try {
+        if (!payload.empty() && payload[0] == '{') {
+            auto j = taskforge::jsonutil::parse(payload);
+            projectId = j.value("projectId", "default");
+            days = j.value("days", 180);
+        }
+    } catch (...) {}
+    if (days < 0) days = 0;
+    if (days > 3650) days = 3650;
+
+    configureProjectMemory(projectId, true);
+    auto result = taskforge::memory::MemoryService::getInstance().prune(projectId, days);
+    taskforge::Json out = taskforge::Json::object();
+    out["episodes"] = result.episodes;
+    out["hits"] = result.hits;
+    out["usage"] = result.usage;
+    e->return_string(out.dump());
+}
+
+// Wrapper de comunicação JS -> C++ (Aceitar Proposta L2)
+void ui_accept_memory_proposal(webui::window::event* e) {
+    std::string payload = e->get_string();
+    std::string projectId = "default";
+    std::string proposalId;
+    try {
+        if (!payload.empty() && payload[0] == '{') {
+            auto j = taskforge::jsonutil::parse(payload);
+            projectId = j.value("projectId", "default");
+            proposalId = j.value("proposalId", "");
+        }
+    } catch (...) {}
+    configureProjectMemory(projectId, true);
+    std::string error;
+    std::string promotedId;
+    const bool ok = taskforge::memory::MemoryService::getInstance().promoteProposal(
+        projectId, proposalId, "studio", error, &promotedId);
+    taskforge::Json out = taskforge::Json::object();
+    out["ok"] = ok;
+    out["error"] = error;
+    out["promotedId"] = promotedId;
+    e->return_string(out.dump());
+}
+
+// Wrapper de comunicação JS -> C++ (Rejeitar Proposta L2)
+void ui_reject_memory_proposal(webui::window::event* e) {
+    std::string payload = e->get_string();
+    std::string projectId = "default";
+    std::string proposalId;
+    std::string reason = "rejeitada no Studio";
+    try {
+        if (!payload.empty() && payload[0] == '{') {
+            auto j = taskforge::jsonutil::parse(payload);
+            projectId = j.value("projectId", "default");
+            proposalId = j.value("proposalId", "");
+            reason = j.value("reason", reason);
+        }
+    } catch (...) {}
+    configureProjectMemory(projectId, true);
+    std::string error;
+    const bool ok = taskforge::memory::MemoryService::getInstance().rejectProposal(
+        projectId, proposalId, "studio", reason, error);
+    taskforge::Json out = taskforge::Json::object();
+    out["ok"] = ok;
+    out["error"] = error;
+    e->return_string(out.dump());
+}
+
+// Wrapper de comunicação JS -> C++ (Testar Embeddings L2)
+void ui_test_memory_embeddings(webui::window::event* e) {
+    const std::string payload = e->get_string();
+    std::string projectId = "default";
+    taskforge::Json request = taskforge::Json::object();
+    try {
+        if (!payload.empty() && payload[0] == '{') {
+            request = taskforge::jsonutil::parse(payload);
+            projectId = request.value("projectId", "default");
+        }
+    } catch (...) {}
+    configureProjectMemory(projectId, true);
+    configureEmbeddingsFromPayload(projectId, request);
+    const auto out = taskforge::memory::MemoryService::getInstance().testEmbeddings(projectId);
+    e->return_string(out.dump());
+}
+
+// Wrapper de comunicação JS -> C++ (Reindexar Embeddings L2)
+void ui_reindex_memory_embeddings(webui::window::event* e) {
+    const std::string payload = e->get_string();
+    std::string projectId = "default";
+    bool force = true;
+    taskforge::Json request = taskforge::Json::object();
+    try {
+        if (!payload.empty() && payload[0] == '{') {
+            request = taskforge::jsonutil::parse(payload);
+            projectId = request.value("projectId", "default");
+            force = request.value("force", true);
+        }
+    } catch (...) {}
+    configureProjectMemory(projectId, true);
+    configureEmbeddingsFromPayload(projectId, request);
+    std::string error;
+    auto out = taskforge::memory::MemoryService::getInstance().reindexEmbeddings(projectId, force, error);
+    out["projectId"] = projectId;
+    e->return_string(out.dump());
+}
+
+// Wrapper de comunicação JS -> C++ (Inicializar Workspace de Memória)
+void ui_init_workspace(webui::window::event* e) {
+    const std::string payload = e->get_string();
+    std::string projectId = "default";
+    std::string workspaceId;
+    try {
+        if (!payload.empty() && payload[0] == '{') {
+            auto j = taskforge::jsonutil::parse(payload);
+            projectId = j.value("projectId", "default");
+            workspaceId = j.value("workspaceId", std::string());
+        }
+    } catch (...) {}
+    configureProjectMemory(projectId, true);
+    if (workspaceId.empty()) workspaceId = workspaceIdForRoot();
+    const auto db = workspaceDbForRoot();
+    const bool ok = taskforge::memory::MemoryService::getInstance().configureProjectWorkspace(
+        projectId, workspaceId, db.string());
+    auto out = taskforge::memory::MemoryService::getInstance().workspaceStatus(projectId);
+    out["ok"] = ok;
+    out["database"] = db.string();
+    e->return_string(out.dump());
+}
+
+// Wrapper de comunicação JS -> C++ (Promover Memória ao Workspace)
+void ui_promote_to_workspace(webui::window::event* e) {
+    const std::string payload = e->get_string();
+    std::string projectId = "default";
+    std::string kind;
+    std::string memoryId;
+    std::string note;
+    try {
+        if (!payload.empty() && payload[0] == '{') {
+            auto j = taskforge::jsonutil::parse(payload);
+            projectId = j.value("projectId", "default");
+            kind = j.value("kind", std::string());
+            memoryId = j.value("id", std::string());
+            note = j.value("evidence", std::string());
+        }
+    } catch (...) {}
+    configureProjectMemory(projectId, true);
+    const auto db = workspaceDbForRoot();
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(db, ec)) {
+        e->return_string(taskforge::Json{{"ok", false},
+                                         {"error", "workspace nao configurado"}}.dump());
+        return;
+    }
+    taskforge::memory::MemoryService::getInstance().configureProjectWorkspace(
+        projectId, workspaceIdForRoot(), db.string());
+    taskforge::Json evidence = taskforge::Json::array(
+        {taskforge::Json{{"kind", "manual"},
+                         {"note", note.empty() ? "promocao manual no Studio" : note},
+                         {"actor", "studio"}}});
+    std::string error;
+    const bool ok = taskforge::memory::MemoryService::getInstance().promoteToWorkspace(
+        projectId, kind, memoryId, evidence, "studio", error);
+    e->return_string(taskforge::Json{{"ok", ok}, {"error", error}}.dump());
+}
+
+// Wrapper de comunicação JS -> C++ (Consolidar Memória L2/M3)
+void ui_consolidate_memory(webui::window::event* e) {
+    const std::string payload = e->get_string();
+    std::string projectId = "default";
+    taskforge::Json request = taskforge::Json::object();
+    try {
+        if (!payload.empty() && payload[0] == '{') {
+            request = taskforge::jsonutil::parse(payload);
+            projectId = request.value("projectId", "default");
+        }
+    } catch (...) {}
+    configureProjectMemory(projectId, true);
+    taskforge::Json optionsJson = request.contains("consolidation")
+        ? request["consolidation"] : taskforge::Json::object();
+    const auto options = taskforge::memory::consolidationOptionsFromJson(optionsJson);
+    std::string error;
+    auto out = taskforge::memory::MemoryService::getInstance().consolidate(
+        projectId, options, error);
+    out["projectId"] = projectId;
+    if (!error.empty()) out["error"] = error;
+    e->return_string(out.dump());
 }
 
 // Wrapper de comunicação JS -> C++ (Registrar Lição Semântica)
@@ -2521,6 +2744,14 @@ int main(int argc, char** argv) {
     win.bind("get_memory_status", ui_get_memory_status);
     win.bind("set_memory_persistence", ui_set_memory_persistence);
     win.bind("clear_memory", ui_clear_memory);
+    win.bind("prune_memory", ui_prune_memory);
+    win.bind("accept_memory_proposal", ui_accept_memory_proposal);
+    win.bind("reject_memory_proposal", ui_reject_memory_proposal);
+    win.bind("test_memory_embeddings", ui_test_memory_embeddings);
+    win.bind("reindex_memory_embeddings", ui_reindex_memory_embeddings);
+    win.bind("consolidate_memory", ui_consolidate_memory);
+    win.bind("init_workspace", ui_init_workspace);
+    win.bind("promote_to_workspace", ui_promote_to_workspace);
     win.bind("record_semantic_lesson", ui_record_semantic_lesson);
     win.bind("get_mcp_servers", ui_get_mcp_servers);
     win.bind("save_mcp_server", ui_save_mcp_server);

@@ -22,6 +22,10 @@ void init();
 // Raiz do workspace (diretorio de trabalho do pipeline).
 std::filesystem::path workspaceRoot();
 
+// Run ID da execucao atual (ARESTRIX_RUN_ID) ou o fallback informado.
+// Usado para correlacionar memory_hit/usage entre processos do mesmo pipeline.
+std::string currentRunId(const std::string& fallback);
+
 // Emite um evento de status de no no canal de telemetria.
 void nodeEvent(const std::string& nodeId, const std::string& status, const std::string& detail = "");
 

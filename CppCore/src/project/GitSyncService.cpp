@@ -604,6 +604,14 @@ void GitSyncService::onShutdown(const std::filesystem::path& projectRoot) {
     if (projectRoot.empty()) return;
 
     auto cur = taskforge::project::ProjectManager::getInstance().getCurrentProject();
+
+    // Retencao de telemetria e housekeeping local: independe de Git estar habilitado.
+    std::string retentionErr;
+    DatabaseBackupService::pruneMemoryOnShutdown(projectRoot, cur.projectId, retentionErr);
+    if (!retentionErr.empty()) {
+        std::cerr << "[GitSyncService] Aviso na retencao de memoria: " << retentionErr << "\n";
+    }
+
     if (!cur.git.enabled) {
         std::cout << "[GitSyncService] Sincronizacao Git desativada para este projeto. Operando em modo 100% local.\n";
         return;

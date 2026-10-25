@@ -308,7 +308,7 @@ std::vector<std::string> validateSvg(const std::string& svg, RuntimeLang lang) {
 // ---------------------------------------------------------------------------
 // Execucao
 // ---------------------------------------------------------------------------
-ToolResult executeTool(const ToolContext& ctx, const std::string& name, const json& args) {
+ToolResult executeTool(ToolContext& ctx, const std::string& name, const json& args) {
     const RuntimeLang lang = ctx.lang;
     auto T = [&](const char* pt, const char* en) { return langPick(lang, pt, en); };
 
@@ -384,11 +384,12 @@ ToolResult executeTool(const ToolContext& ctx, const std::string& name, const js
             int limit = 10;
             if (args.contains("limit") && args["limit"].is_number()) limit = static_cast<int>(args["limit"].get<double>());
             limit = std::max(1, std::min(20, limit));
-            std::vector<std::string> hitIds;
+            std::vector<taskforge::memory::MemoryHitRef> hits;
             auto& memory = taskforge::memory::MemoryService::getInstance();
-            std::string result = memory.searchContext(ctx.projectId, query, static_cast<size_t>(limit), &hitIds);
-            if (!hitIds.empty() && !ctx.runId.empty()) {
-                memory.markHitsUsed(ctx.projectId, ctx.runId, ctx.agentId, hitIds);
+            std::string result = memory.searchContext(ctx.projectId, query, static_cast<size_t>(limit),
+                                                      ctx.memoryDomains, &hits);
+            if (!hits.empty() && !ctx.runId.empty()) {
+                memory.recordConsultedHits(ctx.projectId, ctx.runId, ctx.agentId, hits);
             }
             if (result.empty()) return ToolResult{T("Nenhuma memoria encontrada para: ", "No memory found for: ") + query, false};
             return ToolResult{result, false};
@@ -397,17 +398,36 @@ ToolResult executeTool(const ToolContext& ctx, const std::string& name, const js
         if (name == "memory_record_lesson") {
             if (ctx.projectId.empty()) return err(T("Memoria nao configurada para este projeto.", "Memory is not configured for this project."));
             if (!ctx.memoryWriteEnabled) return err(T("Escrita de licoes nao autorizada para este agente.", "Lesson recording is not authorized for this agent."));
+            const int maxLessons = std::max(1, ctx.memoryMaxLessonsPerRun);
+            if (ctx.memoryLessonsWritten >= maxLessons) {
+                return err(T("Limite de licoes por execucao atingido (", "Lesson limit per run reached (") +
+                           std::to_string(maxLessons) + ").");
+            }
             std::string domain = stringArg(args, "domain");
             std::string rule = stringArg(args, "rule");
             std::string trigger = stringArg(args, "trigger");
             if (rule.empty()) return err(T("Parametro 'rule' ausente.", "Missing parameter 'rule'."));
+            const int maxChars = std::max(100, ctx.memoryMaxLessonChars);
+            if (static_cast<int>(rule.size()) > maxChars) {
+                return err(T("Licao acima do limite de caracteres (", "Lesson exceeds the character limit (") +
+                           std::to_string(maxChars) + ").");
+            }
+            if (static_cast<int>(trigger.size()) > maxChars) {
+                return err(T("Gatilho acima do limite de caracteres (", "Trigger exceeds the character limit (") +
+                           std::to_string(maxChars) + ").");
+            }
             if (!ctx.memoryDomains.empty() &&
                 std::find(ctx.memoryDomains.begin(), ctx.memoryDomains.end(), domain.empty() ? "geral" : domain) == ctx.memoryDomains.end()) {
                 return err(T("Dominio nao autorizado para este agente: ", "Domain not authorized for this agent: ") + domain);
             }
-            std::string id = taskforge::memory::MemoryService::getInstance().recordLesson(
+            auto& memory = taskforge::memory::MemoryService::getInstance();
+            if (memory.activeLessonCount(ctx.projectId) >= taskforge::memory::MemoryStore::kMaxActiveLessons) {
+                return err(T("Limite global de licoes ativas do projeto atingido.", "Project active lesson limit reached."));
+            }
+            std::string id = memory.recordLesson(
                 ctx.projectId, domain.empty() ? "geral" : domain, trigger, rule, ctx.agentId);
             if (id.empty()) return err(T("Nao foi possivel registrar a licao.", "Could not record the lesson."));
+            ++ctx.memoryLessonsWritten;
             return ToolResult{T("OK: licao registrada (", "OK: lesson recorded (") + id + ")", false};
         }
 

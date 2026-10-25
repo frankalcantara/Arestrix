@@ -49,7 +49,7 @@ export class NodeMemoryModal {
     const nodeMemory = settings.memory || {};
 
     const effectiveMemory: INodeMemoryConfig = isInherited
-      ? { ...globalMemory, projectId }
+      ? { ...DEFAULT_NODE_MEMORY_CONFIG, ...globalMemory, projectId }
       : { ...DEFAULT_NODE_MEMORY_CONFIG, ...globalMemory, ...nodeMemory, projectId: nodeMemory.projectId || projectId };
 
     const isEnabled = !!effectiveMemory.enabled;
@@ -152,9 +152,15 @@ export class NodeMemoryModal {
                 </div>
 
                 <div class="form-group" style="margin-top: 14px;">
-                  <label class="form-label" for="node-memory-keys">Chaves Autorizadas no Blackboard (Opcional)</label>
-                  <input type="text" id="node-memory-keys" class="form-input" value="${this.escapeHtml((effectiveMemory.allowedKeys || []).join(', '))}" placeholder="ex: resumo, schema, svg_specs (vazio = todas)" ${isInherited || !isEnabled ? 'disabled' : ''} />
-                  <div class="form-hint">Restringe o agente a ler/escrever apenas nestas chaves estruturadas.</div>
+                  <label class="form-label" for="node-memory-keys">${t('node_modals.read_keys_label')}</label>
+                  <input type="text" id="node-memory-keys" class="form-input" value="${this.escapeHtml((effectiveMemory.allowedKeys || []).join(', '))}" placeholder="${t('node_modals.keys_placeholder')}" ${isInherited || !isEnabled ? 'disabled' : ''} />
+                  <div class="form-hint">${t('node_modals.read_keys_hint')}</div>
+                </div>
+
+                <div class="form-group" style="margin-top: 12px;">
+                  <label class="form-label" for="node-memory-write-keys">${t('node_modals.write_keys_label')}</label>
+                  <input type="text" id="node-memory-write-keys" class="form-input" value="${this.escapeHtml((effectiveMemory.writeKeys || []).join(', '))}" placeholder="${t('node_modals.keys_placeholder')}" ${isInherited || !isEnabled ? 'disabled' : ''} />
+                  <div class="form-hint">${t('node_modals.write_keys_hint')}</div>
                 </div>
               </div>
             </div>
@@ -192,6 +198,18 @@ export class NodeMemoryModal {
                   <label class="form-label" for="node-memory-domains">Domínios Semânticos Filtrados (Opcional)</label>
                   <input type="text" id="node-memory-domains" class="form-input" value="${this.escapeHtml((effectiveMemory.domains || []).join(', '))}" placeholder="ex: svg_typography, validation (vazio = todos)" ${isInherited || !isEnabled ? 'disabled' : ''} />
                   <div class="form-hint">Filtra as lições semânticas apenas pelas categorias e domínios relevantes.</div>
+                </div>
+
+                <div class="form-group" style="margin-top: 12px;">
+                  <label class="form-label" for="node-memory-max-lessons">${t('node_modals.max_lessons_label')}</label>
+                  <input type="number" id="node-memory-max-lessons" class="form-input" min="1" max="500" step="1" value="${effectiveMemory.maxLessonsPerRun ?? 20}" ${isInherited || !isEnabled ? 'disabled' : ''} />
+                  <div class="form-hint">${t('node_modals.max_lessons_hint')}</div>
+                </div>
+
+                <div class="form-group" style="margin-top: 12px;">
+                  <label class="form-label" for="node-memory-max-lesson-chars">${t('node_modals.max_lesson_chars_label')}</label>
+                  <input type="number" id="node-memory-max-lesson-chars" class="form-input" min="100" max="20000" step="100" value="${effectiveMemory.maxLessonChars ?? 4000}" ${isInherited || !isEnabled ? 'disabled' : ''} />
+                  <div class="form-hint">${t('node_modals.max_lesson_chars_hint')}</div>
                 </div>
               </div>
             </div>
@@ -256,7 +274,7 @@ export class NodeMemoryModal {
                 <div class="form-group" style="margin-top: 12px;">
                   <label class="form-label" for="node-memory-budget">Orçamento de contexto (tokens)</label>
                   <input type="number" id="node-memory-budget" class="form-input" min="0" max="32000" step="100" value="${effectiveMemory.contextBudgetTokens ?? 800}" ${isInherited || !isEnabled ? 'disabled' : ''} />
-                  <div class="form-hint">Limite aproximado do brief de memória injetado no prompt. 0 = sem limite.</div>
+                  <div class="form-hint">Limite aproximado do brief de memória injetado no prompt. 0 = desativar o brief.</div>
                 </div>
               </div>
             </div>
@@ -351,11 +369,21 @@ export class NodeMemoryModal {
     const chkReadLessons = this.overlay.querySelector<HTMLInputElement>('#mem-perm-read-lessons');
     const chkWriteLessons = this.overlay.querySelector<HTMLInputElement>('#mem-perm-write-lessons');
     const txtKeys = this.overlay.querySelector<HTMLInputElement>('#node-memory-keys');
+    const txtWriteKeys = this.overlay.querySelector<HTMLInputElement>('#node-memory-write-keys');
     const txtDomains = this.overlay.querySelector<HTMLInputElement>('#node-memory-domains');
     const txtBudget = this.overlay.querySelector<HTMLInputElement>('#node-memory-budget');
+    const txtMaxLessons = this.overlay.querySelector<HTMLInputElement>('#node-memory-max-lessons');
+    const txtMaxLessonChars = this.overlay.querySelector<HTMLInputElement>('#node-memory-max-lesson-chars');
 
     const allowedKeys = txtKeys ? txtKeys.value.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const writeKeys = txtWriteKeys ? txtWriteKeys.value.split(',').map(s => s.trim()).filter(Boolean) : [];
     const domains = txtDomains ? txtDomains.value.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const maxLessonsPerRun = txtMaxLessons
+      ? Math.max(1, Math.min(500, Math.floor(Number(txtMaxLessons.value) || 20)))
+      : 20;
+    const maxLessonChars = txtMaxLessonChars
+      ? Math.max(100, Math.min(20000, Math.floor(Number(txtMaxLessonChars.value) || 4000)))
+      : 4000;
 
     const memoryConfig: INodeMemoryConfig = {
       enabled: chkEnabled ? chkEnabled.checked : false,
@@ -366,8 +394,11 @@ export class NodeMemoryModal {
       semanticLessons: chkReadLessons ? chkReadLessons.checked : false,
       recordLessons: chkWriteLessons ? chkWriteLessons.checked : false,
       allowedKeys,
+      writeKeys,
       domains,
-      contextBudgetTokens: txtBudget ? Math.max(0, Number(txtBudget.value) || 0) : 800
+      contextBudgetTokens: txtBudget ? Math.max(0, Number(txtBudget.value) || 0) : 800,
+      maxLessonsPerRun,
+      maxLessonChars
     };
 
     const currentSettings = node.agentSettings || {

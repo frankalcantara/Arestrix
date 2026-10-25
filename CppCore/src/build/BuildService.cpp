@@ -274,6 +274,7 @@ BuildResult buildAndRun(const core::Graph& graph,
     runSpec.workingDir = projectRoot;
     const std::string runId = newRunId();
     runSpec.env["ARESTRIX_RUN_ID"] = runId;
+    runSpec.env["ARESTRIX_PROJECT_ROOT"] = projectRoot.string();
 
     // Sem host interativo (CLI, Runner headless, testes): caminho antigo, sem stdin.
     if (!ev.onInteraction) {

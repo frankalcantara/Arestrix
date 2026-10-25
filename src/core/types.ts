@@ -261,13 +261,35 @@ export interface INodeMemoryConfig {
   writeBlackboard: boolean;  // Escrita de deltas no Blackboard
   semanticLessons: boolean;  // Consulta de lições aprendidas (semântica)
   recordLessons: boolean;    // Registro de novas lições derivadas de falhas/auditorias
-  allowedKeys?: string[];    // Chaves específicas do Blackboard (vazio = todas autorizadas)
+  allowedKeys?: string[];    // Chaves específicas do Blackboard (vazio = todas autorizadas para leitura)
+  writeKeys?: string[];      // Chaves que o vértice pode escrever (vazio = todas)
   domains?: string[];        // Domínios semânticos (ex: ["svg_typography", "validation"])
-  contextBudgetTokens?: number; // Orçamento aproximado do brief injetado (padrão 800)
+  contextBudgetTokens?: number; // Orçamento aproximado do brief injetado (padrão 800; 0 = desativado)
+  /** Máximo de lições que o agente pode gravar em uma execução (padrão 20). */
+  maxLessonsPerRun?: number;
+  /** Tamanho máximo, em caracteres, de uma lição/trigger (padrão 4000). */
+  maxLessonChars?: number;
+  /** Retenção de telemetria (episódios/hits/usage) em dias; 0 = manter. Nível de projeto. */
+  retentionDays?: number;
   /** normal = usa a configuração dos vértices; memory_off = força OFF no projeto (A/B). */
   measurementMode?: 'normal' | 'memory_off';
   /** Mantém a gravação de memory_usage mesmo quando a memória está OFF. */
   recordMetrics?: boolean;
+  /**
+   * Embeddings L2/M2 (nível de projeto; ignorado em configurações de vértice).
+   * Desligados por padrão: a recuperação continua 100% lexical.
+   */
+  embeddingEnabled?: boolean;
+  embeddingProvider?: 'local' | 'none';
+  /** Modelo OpenAI-compatible de embeddings. Padrão: EmbeddingGemma 2 (768d). */
+  embeddingModel?: string;
+  /** Endpoint base, ex.: http://127.0.0.1:11434/v1. Vazio usa ARESTRIX_EMBEDDING_BASE_URL/LOCAL_LLM_BASE_URL. */
+  embeddingBaseUrl?: string;
+  embeddingTimeoutSeconds?: number;
+  embeddingBatchSize?: number;
+  embeddingMaxChars?: number;
+  /** 0 = descobre a dimensão na primeira resposta. */
+  embeddingDimensions?: number;
 }
 
 export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {
@@ -278,10 +300,22 @@ export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {
   semanticLessons: false,
   recordLessons: false,
   allowedKeys: [],
+  writeKeys: [],
   domains: [],
   contextBudgetTokens: 800,
+  maxLessonsPerRun: 20,
+  maxLessonChars: 4000,
+  retentionDays: 180,
   measurementMode: 'normal',
-  recordMetrics: false
+  recordMetrics: false,
+  embeddingEnabled: false,
+  embeddingProvider: 'local',
+  embeddingModel: 'embeddinggemma-2',
+  embeddingBaseUrl: '',
+  embeddingTimeoutSeconds: 60,
+  embeddingBatchSize: 8,
+  embeddingMaxChars: 8000,
+  embeddingDimensions: 768
 };
 
 export interface IGlobalPipelineDefaults {
@@ -427,6 +461,8 @@ export interface ISwitchSettings {
   rules: Record<string, string>;
   /** Modo 'model': orientação extra para o modelo ("escolha alto se houver dados pessoais..."). */
   instruction?: string;
+  /** Campo legado da ribbon contextual; o gerador C++ usa source/rules. */
+  variableName?: string;
 }
 
 export function defaultSwitchSettings(mode: SwitchMode = 'model'): ISwitchSettings {
@@ -460,6 +496,8 @@ export interface IOutputSettings {
   displayName?: string;             // Nome amigável exibido no painel de Artefatos
   autoOpenPreview?: boolean;        // Se deve abrir automaticamente a visualização ao concluir
   description?: string;             // Descrição do entregável
+  /** Campo legado da ribbon para padrões de coleta; o gerador C++ usa sourcePath/destinationPath. */
+  pattern?: string;
 }
 
 export function defaultOutputSettings(): IOutputSettings {
@@ -486,6 +524,30 @@ export interface IArtifactItem {
   description?: string;
 }
 
+/** Configurações de execução usadas pela ribbon contextual (algumas ainda não são lidas pelo gerador C++). */
+export interface IRetryPolicy {
+  maxRetries: number;
+  backoffMs?: number;
+}
+
+export interface IConditionSettings {
+  expression?: string;
+  stochasticProbability?: number;
+}
+
+export interface ICudaSettings {
+  asyncStream?: boolean;
+}
+
+export interface ISubflowSettings {
+  maxRecursionDepth?: number;
+}
+
+export interface ICriticalSettings {
+  mutexKey?: string;
+  maxConcurrency?: number;
+}
+
 export interface INodeData {
   id: string;
   label: string;
@@ -505,6 +567,13 @@ export interface INodeData {
   outputSettings?: IOutputSettings; // só para vértices do tipo 'output'
   interactionSettings?: IInteractionSettings; // só para vértices do tipo 'interaction'
   callSettings?: ICallVertexSettings; // só para vértices do tipo 'call'
+  // Campos da ribbon contextual. Permanecem opcionais para compatibilidade com
+  // grafos antigos; nem todos são consumidos pelo gerador C++ atual.
+  retryPolicy?: IRetryPolicy;
+  conditionSettings?: IConditionSettings;
+  cudaSettings?: ICudaSettings;
+  subflowSettings?: ISubflowSettings;
+  criticalSettings?: ICriticalSettings;
 }
 
 export interface IBreadcrumbItem {

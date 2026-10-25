@@ -53,10 +53,18 @@ def fetch(db: pathlib.Path):
         ).fetchall()
         hits = conn.execute(
             "SELECT COUNT(*), COALESCE(SUM(injected),0), COALESCE(SUM(used),0), "
+            "COALESCE(SUM(CASE WHEN used=1 AND injected=0 THEN 1 ELSE 0 END),0), "
+            "COALESCE(SUM(CASE WHEN used=1 AND injected=1 THEN 1 ELSE 0 END),0), "
             "COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
             "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0) FROM memory_hit"
         ).fetchone()
-    return total, per_node, per_mode, hits
+        try:
+            embeddings = conn.execute(
+                "SELECT COUNT(*), COUNT(DISTINCT model), COALESCE(SUM(dim),0) FROM memory_embedding"
+            ).fetchone()
+        except sqlite3.OperationalError:
+            embeddings = (0, 0, 0)
+    return total, per_node, per_mode, hits, embeddings
 
 
 def main():
@@ -67,7 +75,7 @@ def main():
 
     root = pathlib.Path(args.root).resolve()
     db = root if root.suffix == ".db" else open_db(root)
-    total, per_node, per_mode, hits = fetch(db)
+    total, per_node, per_mode, hits, embeddings = fetch(db)
 
     data = {
         "database": str(db),
@@ -84,7 +92,11 @@ def main():
         "failureRuns": total[10],
         "hits": {
             "total": hits[0], "injected": hits[1], "used": hits[2],
-            "success": hits[3], "failure": hits[4],
+            "consulted": hits[3], "usedInjected": hits[4],
+            "success": hits[5], "failure": hits[6],
+        },
+        "embeddings": {
+            "vectors": embeddings[0], "models": embeddings[1], "dimensions": embeddings[2],
         },
         "modes": [
             {
@@ -116,8 +128,11 @@ def main():
     print(f"Tokens: {data['totalTokens']} (prompt {data['promptTokens']} / saída {data['completionTokens']})")
     print(f"Contexto de memória: {data['memoryContextChars']} caracteres | "
           f"execuções com memória: {data['memoryEnabledRuns']} | latência média: {data['avgLatencyMs']:.0f} ms")
-    print(f"Memória injetada: {data['hits']['injected']} | usada/consultada: {data['hits']['used']} | "
+    print(f"Memória injetada: {data['hits']['injected']} | usada do brief: {data['hits']['usedInjected']} | "
+          f"consultada via busca: {data['hits']['consulted']} | "
           f"em sucesso: {data['hits']['success']} | em falha: {data['hits']['failure']}")
+    print(f"Embeddings: {data['embeddings']['vectors']} vetores | "
+          f"{data['embeddings']['models']} modelo(s) | soma de dimensões: {data['embeddings']['dimensions']}")
     print()
     print("Por modo:")
     for m in data["modes"]:

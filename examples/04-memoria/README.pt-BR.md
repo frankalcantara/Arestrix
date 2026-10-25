@@ -38,8 +38,8 @@ Rode **duas vezes**:
 
 - na primeira, o nó `Semear_Licao` cria a lição e o Blackboard;
 - na segunda, a lição e o resumo são carregados de `.arestrix/memory/memory.db` e injetados
-  novamente no agente. O nó de semeadura deduplica a lição, mas a carga acontece antes de o grafo
-  começar.
+  novamente no agente. O nó de semeadura deduplica a lição, mas a carga acontece no início de
+  cada nó de agente.
 
 O banco fica em `.arestrix/memory/memory.db` e é ignorado pelo Git. A tabela `memory_usage`
 registra tokens de entrada/saída, chamadas e tamanho do contexto de memória de cada agente.

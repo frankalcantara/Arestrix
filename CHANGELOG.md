@@ -17,8 +17,62 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
 - The mandatory test matrix and acceptance criteria are tracked in
   [docs/quality/beta2-test-plan.md](docs/quality/beta2-test-plan.md).
 
+### Fixed
+
+- Memory snapshots now resolve `.arestrix/memory/memory.db` from the project root, never from the
+  process working directory. Export refuses to create an empty database and preserves an existing
+  snapshot; startup quarantines a corrupt memory database after `PRAGMA quick_check` before
+  restoring it.
+- `memory_search` now enforces the vertex `domains` and the requested result limit. Generic facts
+  without an explicit domain are hidden from restricted agents, and expired temporal edges are no
+  longer returned.
+- Consulted memories are recorded in `memory_hit` even when they were discovered by `memory_search`
+  and were not injected in the brief. Hit summaries now expose `consulted` and `usedInjected`.
+- `contextBudgetTokens = 0` now disables the memory brief instead of meaning "unlimited budget".
+- Memory writes are sanitized before persistence: lessons, episodes, edges and the Blackboard
+  redact known secrets (OpenAI/Stripe, Google, AWS, GitHub, Slack, Bearer, URL parameters and PEM
+  private keys). Snapshots are sanitized before Git export, including legacy rows.
+- Removed the dead `generateBatchSource` path and the legacy `AgentBlackboard`/
+  `SemanticMemoryEngine` usage from active generation. The classes remain only for old-data
+  compatibility and are marked as legacy. Documentation now reflects the real memory behavior.
+
 ### Added
 
+- Per-vertex memory write governance: `writeKeys`, `maxLessonsPerRun` (default 20),
+  `maxLessonChars` (default 4000) and a global 5000-active-lesson cap. The limits are
+  configurable both on the vertex and in **Global Defaults → Memory**.
+- Project memory purge and retention: `retentionDays` (default 180; 0 = keep) in
+  **Global Defaults → Memory**, shutdown pruning, `arestrix-cli memory prune|purge`,
+  `secure_delete=ON`, full purge of hits/evidence/audit and `VACUUM`.
+- Memory snapshot v2 exports the full cognitive graph (scopes, closure, nodes, temporal edges
+  and working rows), imports transactionally, preserves IDs/timestamps/confidence/status and
+  rebuilds FTS5. Snapshot v1 remains importable and is also restored in a transaction.
+- Generated pipelines resolve the memory database from `ARESTRIX_PROJECT_ROOT` (honoring
+  `ARESTRIX_MEMORY_DB` first), use `ARESTRIX_RUN_ID` for hits/usage, retry short SQLite
+  `SQLITE_BUSY`/`SQLITE_LOCKED` races, and enforce a unique key on `memory_hit`.
+- L2 schema foundation: `memory_proposal`, `memory_embedding`, `memory_playbook` and
+  `memory_alias`; `memory_episode` now stores task type, outcome, tool sequence, files,
+  artifacts, evidence, success signals and redaction count.
+- Deterministic L2 extractor turns successful/failed episodes into pending proposals (lesson,
+  fact, entity, playbook, summary). Promotion is manual with evidence checks and audit, exposed
+  in the Studio Memory Center and via `arestrix-cli memory proposals list|accept|reject`.
+- Optional hybrid retrieval: OpenAI-compatible `/v1/embeddings` provider (default
+  `embeddinggemma-2`, 768d, asymmetric search/document prefixes, off), SQLite BLOB vector
+  index, incremental reindex and reciprocal-rank fusion of lexical, graph and vector
+  candidates. Lexical fallback is always preserved; `memory embeddings status|test` and
+  `memory reindex` are available in the CLI, with configuration/test/reindex in the Studio.
+- Deterministic memory consolidation: alias-based entity resolution, duplicate lesson/fact
+  merge with evidence preservation, `SUPERSEDES`/`CONTRADICTS`/`GENERALIZES`, fact expiration,
+  decay into `dormant_at`, and hit-based reinforcement. Conflicts and decay are visible in the
+  Studio; `memory consolidate` runs the same pipeline from the CLI.
+- Procedural playbooks: successful trajectories compile by `task_type`, become `candidate` on
+  the first evidence and `active` on the second, track success/failure counts and evidence,
+  are recovered into the memory brief within budget, appear in the Studio and persist in
+  snapshot v2. Failures never create a new playbook.
+- Workspace memory: separate `.workspace/memory/memory.db`, project-reads-workspace
+  inheritance, explicit evidence-backed promotion of lessons/facts/playbooks with audit, CLI
+  and Studio flows, and sibling isolation. Institution contract adds in-memory tokens,
+  viewer/editor/admin roles and immutable ancestor policies; HTTP/MCP exposure is pending.
 - **Strictly Optional Git Synchronization (100% Local by Default):** Git/GitHub synchronization is now opt-in (`enabled: false` by default for new projects). If disabled, all project files, SQLite databases (`storage/database.sqlite`), and cognitive memory (`.arestrix/memory/memory.db`) reside exclusively on local disk with zero Git operations, zero network overhead, and zero dump exports.
 - **Configurable Backup Mode (Privacy & LGPD/GDPR Compliance):** Projects support two backup modes: "DDL + Data" (full tabular export) and "DDL Only / Schema Only" (table structure without rows), preventing sensitive data and PII from reaching Git.
 - **Deterministic Plaintext Dumps & Ghost Commit Elimination:** Volatile timestamp headers were removed from SQL and JSON memory dumps. Files are only updated on disk if their actual contents have changed, preventing packfile bloat and delta churn.

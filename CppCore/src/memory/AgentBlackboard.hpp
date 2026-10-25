@@ -1,5 +1,9 @@
 #pragma once
 
+// LEGADO (Fase 0): mantido apenas para compatibilidade de API e leitura de dados
+// antigos. O caminho ativo usa MemoryService/MemoryStore (SQLite AMG).
+// Nao adicione novos usos deste motor.
+
 #include <string>
 #include <vector>
 #include <unordered_map>

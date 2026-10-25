@@ -31,6 +31,7 @@
 #include "core/Graph.hpp"
 #include "mcp/McpClient.hpp"
 #include "mcp/McpErrors.hpp"
+#include "memory/MemoryService.hpp"
 #include "native/NativeTools.hpp"
 #include "platform/Process.hpp"
 #include "rt/McpTools.hpp"
@@ -76,6 +77,7 @@ struct ProjectPaths {
     std::string error;
     fs::path root;
     fs::path graph;
+    std::string projectId;
 };
 
 std::string version() {
@@ -108,7 +110,7 @@ void printHelp() {
         "  arestrix-cli env list [--json]\n"
         "  arestrix-cli env check <NOME>... [--json]\n"
         "  arestrix-cli doctor [--project <pasta>] [--json]\n"
-        "  arestrix-cli memory report [--project <pasta>] [--json]\n"
+        "  arestrix-cli memory report|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote [--project <pasta>] [opcoes]\n"
         "  arestrix-cli mcp list|test|tools [id] [--project <pasta>] [--json]\n"
         "  arestrix-cli project info|validate|graphs [--project <pasta>] [--json]\n"
         "  arestrix-cli completion powershell|bash|zsh\n"
@@ -192,6 +194,7 @@ ProjectPaths resolveProject(const fs::path& projectInput) {
         out.error = "manifesto invalido: " + out.error;
         return out;
     }
+    out.projectId = j.value("projectId", std::string("default"));
     fs::path pipeline;
     if (j.contains("pipelines") && j["pipelines"].is_array()) {
         for (const auto& item : j["pipelines"]) {
@@ -465,20 +468,159 @@ std::string sqliteText(sqlite3_stmt* stmt, int index) {
 
 int runMemory(const std::vector<std::string>& args) {
     if (args.size() < 2 || args[1] == "--help" || args[1] == "-h") {
-        std::cout << "arestrix-cli memory report [--project <pasta>] [--root <pasta>] [--db <arquivo>] [--json]\n";
+        std::cout << "arestrix-cli memory report [--project <pasta>] [--root <pasta>] [--db <arquivo>] [--json]\n"
+                     "arestrix-cli memory prune  --project <pasta> [--days N] [--db <arquivo>] [--json]\n"
+                     "arestrix-cli memory purge  --project <pasta> [--keep-audit] [--keep-snapshot] [--db <arquivo>] [--json]\n"
+                     "arestrix-cli memory proposals list|accept|reject [id] --project <pasta> [--status pending|all] [--reason texto] [--json]\n"
+                     "arestrix-cli memory embeddings status|test --project <pasta> [--model M] [--base-url URL] [--enable] [--sample texto] [--json]\n"
+                     "arestrix-cli memory reindex --project <pasta> [--model M] [--base-url URL] [--force] [--json]\n"
+                     "arestrix-cli memory consolidate --project <pasta> [--dormant-days N] [--no-decay] [--no-dedup] [--no-generalize] [--json]\n"
+                     "arestrix-cli memory workspace init|status --project <pasta> [--workspace-id ID] [--json]\n"
+                     "arestrix-cli memory promote --project <pasta> --kind lesson|fact|playbook --id ID --evidence texto [--workspace-id ID] [--json]\n";
         return args.size() < 2 ? kExitUsage : 0;
     }
-    if (args[1] != "report") {
-        std::cerr << "arestrix-cli memory: comando desconhecido: " << args[1] << "\n";
+    const std::string command = args[1];
+    if (command != "report" && command != "prune" && command != "purge" && command != "proposals" &&
+        command != "embeddings" && command != "reindex" && command != "consolidate" &&
+        command != "workspace" && command != "promote") {
+        std::cerr << "arestrix-cli memory: comando desconhecido: " << command << "\n";
         return kExitUsage;
+    }
+
+    std::string proposalAction;
+    std::string proposalId;
+    std::string embeddingAction;
+    size_t optionStart = 2;
+    if (command == "proposals") {
+        if (args.size() < 3) {
+            std::cerr << "arestrix-cli memory proposals: informe list|accept|reject\n";
+            return kExitUsage;
+        }
+        proposalAction = args[2];
+        optionStart = 3;
+        if (proposalAction == "accept" || proposalAction == "reject") {
+            if (args.size() < 4) {
+                std::cerr << "arestrix-cli memory proposals " << proposalAction << ": informe o id\n";
+                return kExitUsage;
+            }
+            proposalId = args[3];
+            optionStart = 4;
+        } else if (proposalAction != "list") {
+            std::cerr << "arestrix-cli memory proposals: acao desconhecida: " << proposalAction << "\n";
+            return kExitUsage;
+        }
+    } else if (command == "embeddings") {
+        if (args.size() < 3) {
+            std::cerr << "arestrix-cli memory embeddings: informe status|test\n";
+            return kExitUsage;
+        }
+        embeddingAction = args[2];
+        if (embeddingAction != "status" && embeddingAction != "test") {
+            std::cerr << "arestrix-cli memory embeddings: acao desconhecida: " << embeddingAction << "\n";
+            return kExitUsage;
+        }
+        optionStart = 3;
+    } else if (command == "workspace") {
+        if (args.size() < 3) {
+            std::cerr << "arestrix-cli memory workspace: informe init|status\n";
+            return kExitUsage;
+        }
+        embeddingAction = args[2];
+        if (embeddingAction != "init" && embeddingAction != "status") {
+            std::cerr << "arestrix-cli memory workspace: acao desconhecida: " << embeddingAction << "\n";
+            return kExitUsage;
+        }
+        optionStart = 3;
     }
 
     Options opt;
     fs::path dbPath;
     std::string parseError;
-    for (size_t i = 2; i < args.size(); ++i) {
+    int days = -1;
+    bool keepAudit = false;
+    bool keepSnapshot = false;
+    std::string status = "pending";
+    std::string reason;
+    std::string embeddingModel;
+    std::string embeddingBaseUrl;
+    std::string embeddingSample;
+    bool forceEmbeddings = false;
+    bool embeddingEnabled = false;
+    int dormantDays = -1;
+    bool noDecay = false;
+    bool noDedup = false;
+    bool noGeneralize = false;
+    bool noConflicts = false;
+    bool noExpire = false;
+    std::string workspaceId;
+    std::string promoteKind;
+    std::string promoteId;
+    std::string promoteEvidence;
+    for (size_t i = optionStart; i < args.size(); ++i) {
         const std::string& a = args[i];
         if (a == "--json") opt.json = true;
+        else if (a == "--keep-audit") keepAudit = true;
+        else if (a == "--keep-snapshot") keepSnapshot = true;
+        else if (a == "--days") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --days\n"; return kExitUsage; }
+            try { days = std::stoi(args[++i]); } catch (...) { std::cerr << "--days invalido\n"; return kExitUsage; }
+        }
+        else if (a == "--dormant-days") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --dormant-days\n"; return kExitUsage; }
+            try { dormantDays = std::stoi(args[++i]); } catch (...) { std::cerr << "--dormant-days invalido\n"; return kExitUsage; }
+        }
+        else if (a == "--no-decay") {
+            noDecay = true;
+        }
+        else if (a == "--no-dedup") {
+            noDedup = true;
+        }
+        else if (a == "--no-generalize") {
+            noGeneralize = true;
+        }
+        else if (a == "--no-conflicts") {
+            noConflicts = true;
+        }
+        else if (a == "--no-expire") {
+            noExpire = true;
+        }
+        else if (a == "--workspace-id") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --workspace-id\n"; return kExitUsage; }
+            workspaceId = args[++i];
+        }
+        else if (a == "--kind") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --kind\n"; return kExitUsage; }
+            promoteKind = args[++i];
+        }
+        else if (a == "--id") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --id\n"; return kExitUsage; }
+            promoteId = args[++i];
+        }
+        else if (a == "--evidence") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --evidence\n"; return kExitUsage; }
+            promoteEvidence = args[++i];
+        }
+        else if (a == "--status") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --status\n"; return kExitUsage; }
+            status = args[++i];
+            if (status == "all") status.clear();
+        } else if (a == "--reason") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --reason\n"; return kExitUsage; }
+            reason = args[++i];
+        } else if (a == "--model") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --model\n"; return kExitUsage; }
+            embeddingModel = args[++i];
+        } else if (a == "--base-url") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --base-url\n"; return kExitUsage; }
+            embeddingBaseUrl = args[++i];
+        } else if (a == "--sample") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --sample\n"; return kExitUsage; }
+            embeddingSample = args[++i];
+        } else if (a == "--force") {
+            forceEmbeddings = true;
+        } else if (a == "--enable") {
+            embeddingEnabled = true;
+        }
         else if (a == "--project") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --project\n"; return kExitUsage; }
             opt.project = args[++i];
@@ -498,6 +640,7 @@ int runMemory(const std::vector<std::string>& args) {
     }
 
     fs::path root = opt.root.empty() ? fs::current_path() : fs::absolute(opt.root);
+    std::string projectId = "default";
     if (!opt.project.empty()) {
         ProjectPaths project = resolveProject(opt.project);
         if (!project.ok) {
@@ -505,8 +648,292 @@ int runMemory(const std::vector<std::string>& args) {
             return kExitConfig;
         }
         root = project.root;
+        projectId = project.projectId;
+    } else {
+        const fs::path manifest = root / "arestrix.project.json";
+        std::error_code manifestEc;
+        if (fs::is_regular_file(manifest, manifestEc)) {
+            json manifestJson;
+            std::string manifestError;
+            if (readJsonFile(manifest, manifestJson, manifestError)) {
+                projectId = manifestJson.value("projectId", std::string("default"));
+                if (days < 0 && manifestJson.contains("globalDefaults") &&
+                    manifestJson["globalDefaults"].is_object() &&
+                    manifestJson["globalDefaults"].contains("memory") &&
+                    manifestJson["globalDefaults"]["memory"].is_object()) {
+                    days = manifestJson["globalDefaults"]["memory"].value("retentionDays", 180);
+                }
+            }
+        }
+    }
+    if (command != "report" && opt.project.empty() && projectId == "default") {
+        std::cerr << "arestrix-cli memory " << command
+                  << ": informe --project ou --root com arestrix.project.json\n";
+        return kExitConfig;
+    }
+    if (days < 0) {
+        const fs::path manifest = root / "arestrix.project.json";
+        std::error_code manifestEc;
+        if (fs::is_regular_file(manifest, manifestEc)) {
+            json manifestJson;
+            std::string manifestError;
+            if (readJsonFile(manifest, manifestJson, manifestError) &&
+                manifestJson.contains("globalDefaults") && manifestJson["globalDefaults"].is_object() &&
+                manifestJson["globalDefaults"].contains("memory") &&
+                manifestJson["globalDefaults"]["memory"].is_object()) {
+                days = manifestJson["globalDefaults"]["memory"].value("retentionDays", 180);
+            }
+        }
+    }
+    json memorySettings = json::object();
+    {
+        const fs::path manifest = root / "arestrix.project.json";
+        std::error_code manifestEc;
+        if (fs::is_regular_file(manifest, manifestEc)) {
+            json manifestJson;
+            std::string manifestError;
+            if (readJsonFile(manifest, manifestJson, manifestError) &&
+                manifestJson.contains("globalDefaults") && manifestJson["globalDefaults"].is_object() &&
+                manifestJson["globalDefaults"].contains("memory") &&
+                manifestJson["globalDefaults"]["memory"].is_object()) {
+                memorySettings = manifestJson["globalDefaults"]["memory"];
+            }
+        }
     }
     if (dbPath.empty()) dbPath = root / ".arestrix" / "memory" / "memory.db";
+
+    if (command != "report") {
+        std::error_code ec;
+        if (!fs::is_regular_file(dbPath, ec)) {
+            std::cerr << "Banco de memoria nao encontrado: " << dbPath.string() << "\n";
+            return kExitConfig;
+        }
+        auto& memory = taskforge::memory::MemoryService::getInstance();
+        memory.closeProject(projectId);
+        if (!memory.configure(projectId, true, dbPath.string())) {
+            std::cerr << "Falha ao abrir o banco de memoria: " << dbPath.string() << "\n";
+            return kExitConfig;
+        }
+
+        if (command == "consolidate") {
+            taskforge::memory::ConsolidationOptions consolidation;
+            if (dormantDays >= 0) consolidation.dormantAfterDays = dormantDays;
+            consolidation.applyDecay = !noDecay;
+            consolidation.deduplicate = !noDedup;
+            consolidation.generalize = !noGeneralize;
+            consolidation.detectContradictions = !noConflicts;
+            consolidation.expireFacts = !noExpire;
+            std::string consolidateError;
+            auto report = memory.consolidate(projectId, consolidation, consolidateError);
+            if (opt.json) {
+                std::cout << report.dump(2) << "\n";
+            } else {
+                std::cout << "Consolidacao: duplicatas=" << report.value("duplicates", 0LL)
+                          << " conflitos=" << report.value("contradictions", 0LL)
+                          << " expirados=" << report.value("expired", 0LL)
+                          << " dormant=" << report.value("dormant", 0LL)
+                          << " generalizacoes=" << report.value("generalizations", 0LL)
+                          << " erros=" << report.value("errors", 0LL) << "\n";
+                if (!consolidateError.empty()) std::cerr << "Erro: " << consolidateError << "\n";
+            }
+            return report.value("ok", false) ? 0 : kExitConfig;
+        }
+
+        if (command == "workspace" || command == "promote") {
+            std::string resolvedWorkspace = workspaceId;
+            if (resolvedWorkspace.empty()) {
+                if (const char* env = std::getenv("ARESTRIX_WORKSPACE_ID"); env && *env) {
+                    resolvedWorkspace = env;
+                } else {
+                    resolvedWorkspace = root.filename().string();
+                    if (resolvedWorkspace.empty()) resolvedWorkspace = "default";
+                }
+            }
+            const fs::path workspaceDb = root / ".workspace" / "memory" / "memory.db";
+
+            if (command == "workspace" && embeddingAction == "status") {
+                std::error_code ec;
+                if (!fs::is_regular_file(workspaceDb, ec)) {
+                    json out{{"configured", false}, {"projectId", projectId},
+                             {"workspaceId", resolvedWorkspace},
+                             {"database", workspaceDb.string()}};
+                    std::cout << (opt.json ? out.dump(2) : "Workspace nao configurado: " + workspaceDb.string())
+                              << "\n";
+                    return 0;
+                }
+                memory.configureProjectWorkspace(projectId, resolvedWorkspace, workspaceDb.string());
+                auto out = memory.workspaceStatus(projectId);
+                if (opt.json) {
+                    std::cout << out.dump(2) << "\n";
+                } else {
+                    std::cout << "Workspace: " << out.value("workspaceId", std::string())
+                              << " | licoes=" << out.value("lessons", 0LL)
+                              << " | playbooks=" << out.value("playbooks", 0LL)
+                              << " | arestas=" << out.value("activeEdges", 0LL) << "\n";
+                }
+                return 0;
+            }
+
+            if (command == "workspace") {
+                if (!memory.configureProjectWorkspace(projectId, resolvedWorkspace, workspaceDb.string())) {
+                    std::cerr << "Falha ao criar workspace: " << workspaceDb.string() << "\n";
+                    return kExitConfig;
+                }
+                auto out = memory.workspaceStatus(projectId);
+                if (opt.json) {
+                    std::cout << out.dump(2) << "\n";
+                } else {
+                    std::cout << "Workspace criado: " << workspaceDb.string() << "\n";
+                }
+                return 0;
+            }
+
+            if (promoteKind.empty() || promoteId.empty() || promoteEvidence.empty()) {
+                std::cerr << "arestrix-cli memory promote: informe --kind, --id e --evidence\n";
+                return kExitUsage;
+            }
+            std::error_code ec;
+            if (!fs::is_regular_file(workspaceDb, ec)) {
+                std::cerr << "Workspace nao configurado: " << workspaceDb.string()
+                          << " (use memory workspace init)\n";
+                return kExitConfig;
+            }
+            memory.configureProjectWorkspace(projectId, resolvedWorkspace, workspaceDb.string());
+            taskforge::Json evidence = taskforge::Json::array(
+                {taskforge::Json{{"kind", "manual"}, {"note", promoteEvidence}, {"actor", "cli"}}});
+            std::string promoteError;
+            const bool ok = memory.promoteToWorkspace(projectId, promoteKind, promoteId,
+                                                      evidence, "cli", promoteError);
+            if (opt.json) {
+                std::cout << json{{"command", "promote-workspace"}, {"projectId", projectId},
+                                  {"workspaceId", resolvedWorkspace}, {"kind", promoteKind},
+                                  {"id", promoteId}, {"ok", ok}, {"error", promoteError}}.dump(2)
+                          << "\n";
+            } else if (ok) {
+                std::cout << "Memoria " << promoteId << " promovida ao workspace "
+                          << resolvedWorkspace << ".\n";
+            } else {
+                std::cerr << "Falha na promocao: " << promoteError << "\n";
+            }
+            return ok ? 0 : kExitConfig;
+        }
+
+        if (command == "embeddings" || command == "reindex") {
+            auto config = memorySettings.is_object()
+                ? taskforge::memory::embeddingConfigFromJson(memorySettings)
+                : taskforge::memory::defaultEmbeddingConfig();
+            config.enabled = config.enabled || embeddingEnabled;
+            if (!embeddingModel.empty()) config.model = embeddingModel;
+            if (!embeddingBaseUrl.empty()) config.baseUrl = embeddingBaseUrl;
+            memory.configureEmbeddings(projectId, config);
+
+            taskforge::Json out = taskforge::Json::object();
+            if (command == "embeddings" && embeddingAction == "status") {
+                out = memory.embeddingStatus(projectId);
+            } else if (command == "embeddings" && embeddingAction == "test") {
+                out = memory.testEmbeddings(projectId, embeddingSample);
+            } else {
+                std::string indexError;
+                out = memory.reindexEmbeddings(projectId, forceEmbeddings, indexError);
+            }
+            const bool ok = out.value("ok", true);
+            if (opt.json) {
+                std::cout << out.dump(2) << "\n";
+            } else if (command == "embeddings" && embeddingAction == "status") {
+                std::cout << "Embeddings: " << (out.value("active", false) ? "ativo" : "inativo")
+                          << " | modelo " << out.value("model", std::string())
+                          << " | endpoint " << out.value("localBaseUrl", std::string()) << "\n"
+                          << "Indexados: " << out.value("indexed", 0LL) << " / "
+                          << out.value("candidates", 0LL) << " candidatos\n";
+            } else if (command == "embeddings") {
+                if (ok) {
+                    std::cout << "Embeddings OK: " << out.value("model", std::string())
+                              << " (" << out.value("dim", 0) << "d) em "
+                              << out.value("latencyMs", 0LL) << " ms.\n";
+                } else {
+                    std::cerr << "Falha nos embeddings: " << out.value("error", std::string()) << "\n";
+                }
+            } else if (ok) {
+                std::cout << "Reindexacao concluida: " << out.value("indexed", 0LL)
+                          << " indexados, " << out.value("skipped", 0LL)
+                          << " inalterados, " << out.value("failed", 0LL) << " falhas.\n";
+            } else {
+                std::cerr << "Falha na reindexacao: " << out.value("error", std::string()) << "\n";
+            }
+            return ok ? 0 : kExitConfig;
+        }
+
+        if (command == "proposals") {
+            std::string proposalError;
+            if (proposalAction == "list") {
+                auto list = memory.listProposals(projectId, status, 100);
+                if (opt.json) {
+                    std::cout << json{{"command", "proposals-list"}, {"projectId", projectId}, {"proposals", list}}.dump(2) << "\n";
+                } else if (list.empty()) {
+                    std::cout << "Nenhuma proposta " << (status.empty() ? "registrada" : status) << ".\n";
+                } else {
+                    for (const auto& proposal : list) {
+                        std::cout << proposal.value("id", std::string()) << " | "
+                                  << proposal.value("kind", std::string()) << " | "
+                                  << proposal.value("status", std::string()) << " | confianca "
+                                  << proposal.value("confidence", 0.0) << " | "
+                                  << proposal.value("payloadJson", std::string()) << "\n";
+                    }
+                }
+                return 0;
+            }
+            std::string promotedId;
+            bool ok = proposalAction == "accept"
+                ? memory.promoteProposal(projectId, proposalId, "cli", proposalError, &promotedId)
+                : memory.rejectProposal(projectId, proposalId, "cli", reason, proposalError);
+            if (opt.json) {
+                std::cout << json{{"command", "proposals-" + proposalAction}, {"projectId", projectId},
+                                  {"id", proposalId}, {"ok", ok}, {"promotedId", promotedId},
+                                  {"error", proposalError}}.dump(2) << "\n";
+            } else if (ok) {
+                std::cout << "Proposta " << proposalId << " " << (proposalAction == "accept" ? "aceita" : "rejeitada") << ".\n";
+                if (!promotedId.empty()) std::cout << "Destino: " << promotedId << "\n";
+            } else {
+                std::cerr << "Falha ao processar proposta: " << proposalError << "\n";
+            }
+            return ok ? 0 : kExitConfig;
+        }
+
+        if (command == "prune") {
+            if (days < 0) days = 180;
+            if (days > 3650) days = 3650;
+            auto pruned = memory.prune(projectId, days);
+            if (opt.json) {
+                std::cout << json{{"command", "prune"}, {"database", dbPath.string()}, {"projectId", projectId},
+                                  {"days", days}, {"episodes", pruned.episodes}, {"hits", pruned.hits},
+                                  {"usage", pruned.usage}}.dump(2) << "\n";
+            } else {
+                std::cout << "Retencao aplicada (" << days << " dias): "
+                          << pruned.episodes << " episodio(s), " << pruned.hits << " hit(s), "
+                          << pruned.usage << " usage removidos.\n";
+            }
+        } else {
+            const bool ok = memory.purgeProject(projectId, keepAudit, true);
+            bool snapshotRemoved = false;
+            if (!keepSnapshot) {
+                const fs::path snapshot = root / "storage" / "memory.dump.json";
+                std::error_code rmEc;
+                snapshotRemoved = fs::remove(snapshot, rmEc);
+            }
+            if (opt.json) {
+                std::cout << json{{"command", "purge"}, {"database", dbPath.string()}, {"projectId", projectId},
+                                  {"ok", ok}, {"keepAudit", keepAudit}, {"snapshotRemoved", snapshotRemoved}}.dump(2) << "\n";
+            } else {
+                std::cout << (ok ? "Expurgo concluido" : "Expurgo incompleto")
+                          << " | auditoria: " << (keepAudit ? "preservada" : "removida")
+                          << " | snapshot: " << (snapshotRemoved ? "removido" : (keepSnapshot ? "preservado" : "ausente"))
+                          << "\n";
+            }
+            return ok ? 0 : kExitConfig;
+        }
+        return 0;
+    }
+
     std::error_code ec;
     if (!fs::is_regular_file(dbPath, ec)) {
         std::cerr << "Banco de memoria nao encontrado: " << dbPath.string() << "\n";
@@ -527,7 +954,8 @@ int runMemory(const std::vector<std::string>& args) {
     json out{{"database", dbPath.string()}, {"runs", 0}, {"successRuns", 0}, {"failureRuns", 0},
              {"retries", 0}, {"promptTokens", 0}, {"completionTokens", 0}, {"totalTokens", 0},
              {"calls", 0}, {"avgLatencyMs", 0.0}, {"memoryContextChars", 0}, {"memoryEnabledRuns", 0},
-             {"hits", json{{"total", 0}, {"injected", 0}, {"used", 0}, {"success", 0}, {"failure", 0}}},
+             {"hits", json{{"total", 0}, {"injected", 0}, {"used", 0}, {"consulted", 0},
+                           {"usedInjected", 0}, {"success", 0}, {"failure", 0}}},
              {"modes", json::array()}, {"nodes", json::array()}};
 
     sqlite3_stmt* st = nullptr;
@@ -600,14 +1028,28 @@ int runMemory(const std::vector<std::string>& args) {
     }
 
     if (prepare("SELECT COUNT(*), COALESCE(SUM(injected),0), COALESCE(SUM(used),0), "
+                "COALESCE(SUM(CASE WHEN used=1 AND injected=0 THEN 1 ELSE 0 END),0), "
+                "COALESCE(SUM(CASE WHEN used=1 AND injected=1 THEN 1 ELSE 0 END),0), "
                 "COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
                 "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0) FROM memory_hit", &st)) {
         if (sqlite3_step(st) == SQLITE_ROW) {
             out["hits"] = json{{"total", sqlite3_column_int64(st, 0)},
                                {"injected", sqlite3_column_int64(st, 1)},
                                {"used", sqlite3_column_int64(st, 2)},
-                               {"success", sqlite3_column_int64(st, 3)},
-                               {"failure", sqlite3_column_int64(st, 4)}};
+                               {"consulted", sqlite3_column_int64(st, 3)},
+                               {"usedInjected", sqlite3_column_int64(st, 4)},
+                               {"success", sqlite3_column_int64(st, 5)},
+                               {"failure", sqlite3_column_int64(st, 6)}};
+        }
+        sqlite3_finalize(st);
+        st = nullptr;
+    }
+
+    if (prepare("SELECT COUNT(*), COUNT(DISTINCT model), COALESCE(SUM(dim),0) FROM memory_embedding", &st)) {
+        if (sqlite3_step(st) == SQLITE_ROW) {
+            out["embeddings"] = json{{"vectors", sqlite3_column_int64(st, 0)},
+                                     {"models", sqlite3_column_int64(st, 1)},
+                                     {"dimensions", sqlite3_column_int64(st, 2)}};
         }
         sqlite3_finalize(st);
         st = nullptr;
@@ -630,7 +1072,12 @@ int runMemory(const std::vector<std::string>& args) {
         std::cout << "Contexto: " << out["memoryContextChars"].get<long long>()
                   << " caracteres | runs com memoria: " << out["memoryEnabledRuns"].get<long long>() << "\n";
         std::cout << "Memorias injetadas: " << out["hits"]["injected"].get<long long>()
-                  << " | usadas: " << out["hits"]["used"].get<long long>() << "\n";
+                  << " | usadas do brief: " << out["hits"]["usedInjected"].get<long long>()
+                  << " | consultadas via busca: " << out["hits"]["consulted"].get<long long>() << "\n";
+        if (out.contains("embeddings")) {
+            std::cout << "Embeddings: " << out["embeddings"]["vectors"].get<long long>()
+                      << " vetores | " << out["embeddings"]["models"].get<long long>() << " modelo(s)\n";
+        }
         for (const auto& mode : out["modes"]) {
             std::cout << "  " << (mode.value("memoryEnabled", false) ? "memoria ON " : "memoria OFF")
                       << ": runs=" << mode["runs"].get<long long>()

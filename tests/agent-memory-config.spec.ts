@@ -26,6 +26,33 @@ describe('Fase 12: Arquitetura de Memória Heterogênea (Opt-in, Persistência e
       expect(defaults.memory?.writeBlackboard).toBe(false);
       expect(defaults.memory?.semanticLessons).toBe(false);
       expect(defaults.memory?.recordLessons).toBe(false);
+      expect(defaults.memory?.writeKeys).toEqual([]);
+      expect(defaults.memory?.maxLessonsPerRun).toBe(20);
+      expect(defaults.memory?.maxLessonChars).toBe(4000);
+      expect(defaults.memory?.retentionDays).toBe(180);
+      expect(defaults.memory?.embeddingEnabled).toBe(false);
+      expect(defaults.memory?.embeddingProvider).toBe('local');
+      expect(defaults.memory?.embeddingModel).toBe('embeddinggemma-2');
+      expect(defaults.memory?.embeddingBaseUrl).toBe('');
+      expect(defaults.memory?.embeddingBatchSize).toBe(8);
+      expect(defaults.memory?.embeddingMaxChars).toBe(8000);
+      expect(defaults.memory?.embeddingDimensions).toBe(768);
+    });
+
+    it('deve manter embeddings desativados mesmo quando a memória é ativada', () => {
+      const node = graph.buildNode('agente_embedding', 'Agente', 'agent', 0, 0);
+      node.agentSettings = {
+        ...node.agentSettings!,
+        inheritMemory: false,
+        memory: {
+          ...DEFAULT_NODE_MEMORY_CONFIG,
+          enabled: true,
+          persistent: true,
+          embeddingEnabled: false
+        }
+      };
+      graph.addNode(node);
+      expect(graph.getNode('agente_embedding')!.agentSettings?.memory?.embeddingEnabled).toBe(false);
     });
 
     it('ao criar um nó do tipo agent, deve herdar memória desativada por padrão', () => {

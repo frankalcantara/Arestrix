@@ -1,6 +1,6 @@
 # `arestrix-cli` — headless execution
 
-> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-21
+> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-25
 
 [Português](../pt-BR/arestrix-cli.md) · [Index](README.md)
 
@@ -56,7 +56,7 @@ arestrix-cli gen <graph.json>
 arestrix-cli check [--project <folder> | <graph.json>] [--require-env NAME]
 arestrix-cli doctor [--project <folder>]
 arestrix-cli env set|reset|list|check
-arestrix-cli memory report [--project <folder>]
+arestrix-cli memory report|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote [--project <folder>]
 arestrix-cli mcp list|test|tools [id]
 arestrix-cli project info|graphs|validate
 arestrix-cli completion powershell|bash|zsh
@@ -123,6 +123,80 @@ values are never printed.
 Reads SQLite natively and shows tokens, calls, retries, success/failure, context and
 injected/used memories. It replaces `memory_report.py` in automation; the Python script remains
 optional for development.
+
+### `memory prune`
+
+```powershell
+.\arestrix-cli.exe memory prune --project .\examples\04-memoria
+.\arestrix-cli.exe memory prune --project .\examples\04-memoria --days 90 --json
+```
+
+Removes episodes, hits and `memory_usage` older than `--days` (default: the manifest
+`retentionDays`, or 180). It does not touch lessons, the Blackboard or the snapshot.
+
+### `memory purge`
+
+```powershell
+.\arestrix-cli.exe memory purge --project .\examples\04-memoria --json
+.\arestrix-cli.exe memory purge --project .\examples\04-memoria --keep-audit --keep-snapshot
+```
+
+Purges all cognitive memory and telemetry for the project and compacts SQLite. By default it also
+removes `storage/memory.dump.json`, so the snapshot cannot resurrect deleted memory.
+
+### `memory proposals`
+
+```powershell
+.\arestrix-cli.exe memory proposals list --project .\examples\04-memoria
+.\arestrix-cli.exe memory proposals list --project .\examples\04-memoria --status all --json
+.\arestrix-cli.exe memory proposals accept <id> --project .\examples\04-memoria
+.\arestrix-cli.exe memory proposals reject <id> --project .\examples\04-memoria --reason "duplicate"
+```
+
+Lists, accepts (promotes with audit) or rejects L2 proposals. Only `pending` proposals can be
+reviewed; facts/playbooks require evidence.
+
+### `memory embeddings` and `memory reindex`
+
+```powershell
+.\\arestrix-cli.exe memory embeddings status --project .\\examples\\04-memoria --json
+.\\arestrix-cli.exe memory embeddings test --project .\\examples\\04-memoria `
+  --base-url http://127.0.0.1:11434/v1 --model embeddinggemma-2
+.\\arestrix-cli.exe memory reindex --project .\\examples\\04-memoria --force
+```
+
+`status` shows the model, effective endpoint, state, indexed vectors and pending objects. `test`
+performs a real embedding call; `reindex` rebuilds the vector index. Embeddings are optional and
+off by default; without a provider search remains lexical. Environment variables:
+`ARESTRIX_EMBEDDINGS_ENABLED`, `ARESTRIX_EMBEDDING_BASE_URL`, `ARESTRIX_EMBEDDING_MODEL`,
+`ARESTRIX_EMBEDDING_BATCH`, `ARESTRIX_EMBEDDING_TIMEOUT`, `ARESTRIX_EMBEDDING_MAX_CHARS` and
+`ARESTRIX_EMBEDDING_DIM`.
+
+### `memory consolidate`
+
+```powershell
+.\\arestrix-cli.exe memory consolidate --project .\\examples\\04-memoria
+.\\arestrix-cli.exe memory consolidate --project .\\examples\\04-memoria `
+  --dormant-days 180 --no-generalize --json
+```
+
+Runs dedup, conflict detection, expiration, decay and generalization. Nothing is deleted:
+duplicates become `superseded`, conflict losers become `candidate` and unused memory becomes
+`dormant`. The report includes counters and actions; use `--json` for automation.
+
+### `memory workspace` and `memory promote`
+
+```powershell
+.\\arestrix-cli.exe memory workspace init --project .\\examples\\04-memoria --workspace-id team
+.\\arestrix-cli.exe memory workspace status --project .\\examples\\04-memoria --workspace-id team
+.\\arestrix-cli.exe memory promote --project .\\examples\\04-memoria --workspace-id team `
+  --kind lesson --id <lesson-id> --evidence "reviewed by two people"
+```
+
+The workspace uses `.workspace/memory/memory.db`. The project reads the workspace; the
+workspace does not read the project's private memory. `promote` accepts `lesson`, `fact` and
+`playbook`, requires evidence and writes audit entries in both databases. Promotion never
+deletes the original.
 
 ### `mcp`
 

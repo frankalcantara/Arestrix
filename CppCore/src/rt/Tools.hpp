@@ -57,11 +57,15 @@ struct ToolContext {
     std::string memoryItemId = "pipeline";
     bool memoryWriteEnabled = false;
     std::vector<std::string> memoryDomains;
+    std::vector<std::string> memoryWriteKeys;   // vazio = todas as chaves do Blackboard
+    int memoryMaxLessonsPerRun = 20;
+    int memoryMaxLessonChars = 4000;
+    int memoryLessonsWritten = 0;               // contador por execução do agente
     std::vector<std::string> allowed;
     RuntimeLang lang = RuntimeLang::Pt;   // idioma do agente (skill + prompt)
 };
 
-ToolResult executeTool(const ToolContext& ctx, const std::string& name, const taskforge::Json& args);
+ToolResult executeTool(ToolContext& ctx, const std::string& name, const taskforge::Json& args);
 
 } // namespace rt
 } // namespace taskforge
