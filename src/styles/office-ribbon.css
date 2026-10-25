@@ -24,48 +24,48 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 38px;
+  height: 30px;
   background-color: #f8fafc;
   border-bottom: 1px solid #e2e8f0;
-  padding: 0 16px;
-  gap: 12px;
+  padding: 0 12px;
+  gap: 8px;
 }
 
 .office-titlebar-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .office-brand-badge {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-weight: 800;
-  font-size: 13px;
+  font-size: 12px;
   color: #0f172a;
   letter-spacing: -0.2px;
 }
 
 .office-brand-icon {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   background: #0f6cbd;
   color: #ffffff;
-  border-radius: 6px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 900;
 }
 
 .office-qat-buttons {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-left: 8px;
-  padding-left: 8px;
+  gap: 2px;
+  margin-left: 6px;
+  padding-left: 6px;
   border-left: 1px solid #cbd5e1;
 }
 
@@ -73,8 +73,8 @@
   background: transparent;
   border: 1px solid transparent;
   color: #334155;
-  font-size: 13px;
-  padding: 4px 8px;
+  font-size: 11px;
+  padding: 2px 6px;
   border-radius: 4px;
   cursor: pointer;
   display: inline-flex;
@@ -100,16 +100,16 @@
 .office-autosave-group {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 3px 8px 3px 6px;
+  gap: 5px;
+  padding: 2px 6px 2px 5px;
   background-color: #f1f5f9;
   border: 1px solid #cbd5e1;
-  border-radius: 14px;
+  border-radius: 12px;
   user-select: none;
   cursor: pointer;
   transition: all 0.15s ease-in-out;
-  margin-right: 6px;
-  height: 26px;
+  margin-right: 4px;
+  height: 22px;
   box-sizing: border-box;
 }
 
@@ -121,8 +121,8 @@
 .office-autosave-switch {
   position: relative;
   display: inline-block;
-  width: 28px;
-  height: 16px;
+  width: 22px;
+  height: 12px;
   margin: 0;
   cursor: pointer;
 }
@@ -142,15 +142,15 @@
   right: 0;
   bottom: 0;
   background-color: #94a3b8;
-  border-radius: 16px;
+  border-radius: 12px;
   transition: background-color 0.2s ease;
 }
 
 .office-autosave-slider:before {
   position: absolute;
   content: "";
-  height: 12px;
-  width: 12px;
+  height: 8px;
+  width: 8px;
   left: 2px;
   bottom: 2px;
   background-color: #ffffff;
@@ -163,20 +163,20 @@
 }
 
 .office-autosave-switch input:checked + .office-autosave-slider:before {
-  transform: translateX(12px);
+  transform: translateX(10px);
 }
 
 .office-autosave-label {
-  font-size: 11.5px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 600;
   color: #334155;
   white-space: nowrap;
-  letter-spacing: -0.2px;
+  letter-spacing: -0.1px;
   text-shadow: none !important;
 }
 
 .office-autosave-badge {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   color: #059669;
   display: inline-flex;
@@ -200,19 +200,19 @@
 .office-titlebar-center {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .office-project-indicator {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   background: #ffffff;
   border: 1px solid #cbd5e1;
-  padding: 3px 12px;
+  padding: 2px 8px;
   border-radius: 9999px;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   color: #1e293b;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -228,7 +228,7 @@
 .office-titlebar-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .office-tellme-box {
@@ -236,9 +236,10 @@
   align-items: center;
   background: #ffffff;
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  padding: 2px 8px;
-  width: 220px;
+  border-radius: 4px;
+  padding: 1px 6px;
+  width: 180px;
+  height: 22px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -251,10 +252,10 @@
   border: none;
   outline: none;
   background: transparent;
-  font-size: 12px;
+  font-size: 11px;
   color: #1e293b;
   width: 100%;
-  padding: 2px 4px;
+  padding: 1px 4px;
 }
 
 .office-tellme-box input::placeholder {
@@ -268,8 +269,8 @@
   justify-content: space-between;
   background-color: #ffffff;
   border-bottom: 1px solid #e2e8f0;
-  padding: 0 12px;
-  height: 36px;
+  padding: 0 8px;
+  height: 28px;
 }
 
 .office-tabs-nav {
@@ -282,15 +283,15 @@
 .office-tab-btn {
   background: transparent;
   border: none;
-  padding: 0 14px;
-  font-size: 12.5px;
+  padding: 0 10px;
+  font-size: 11.5px;
   font-weight: 600;
   color: #475569;
   cursor: pointer;
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   transition: color 0.15s ease, background-color 0.15s ease;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
@@ -315,9 +316,9 @@
   color: #ffffff;
   font-weight: 700;
   border-radius: 4px 4px 0 0;
-  margin-right: 6px;
+  margin-right: 4px;
   border-bottom: none;
-  padding: 0 18px;
+  padding: 0 14px;
 }
 
 .office-tab-btn.file-tab:hover {
@@ -325,10 +326,73 @@
   color: #ffffff;
 }
 
+/* Aba Contextual de Vértice / Componente (Estilo Microsoft Office) */
+.office-tab-btn.contextual-tab {
+  background-color: #eff6ff;
+  border-top: 2.5px solid #0f6cbd;
+  color: #0f6cbd;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.office-tab-btn.contextual-tab:hover {
+  background-color: #dbeafe;
+  color: #0c4a6e;
+}
+
+.office-tab-btn.contextual-tab.active {
+  background-color: #f8fafc;
+  border-bottom: 2px solid #0f6cbd;
+  border-top: 2.5px solid #0f6cbd;
+  color: #0f6cbd;
+}
+
+.contextual-tab-pill {
+  background-color: #0f6cbd;
+  color: #ffffff;
+  font-size: 7.5px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  line-height: 1.1;
+  text-shadow: none !important;
+}
+
+.contextual-tab-title {
+  font-size: 11px;
+  font-weight: 700;
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: none !important;
+}
+
+.ribbon-badge-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: #0f766e;
+  background-color: #f0fdfa;
+  border: 1px solid #ccfbf1;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-shadow: none !important;
+}
+
 .office-tabs-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .office-ribbon-collapse-btn {
@@ -336,9 +400,9 @@
   border: none;
   color: #64748b;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 2px 6px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -350,23 +414,23 @@
   color: #0f172a;
 }
 
-/* --- Corpo da Ribbon (Grupos e Comandos) --- */
+/* --- Corpo da Ribbon (Grupos e Comandos) - Altura Reduzida em ~30% --- */
 .office-ribbon-body {
   background-color: #f8fafc;
-  height: 94px;
+  height: 64px;
   overflow-x: auto;
   overflow-y: hidden;
   display: flex;
   align-items: stretch;
-  padding: 6px 12px;
-  gap: 6px;
+  padding: 3px 8px;
+  gap: 4px;
   scrollbar-width: thin;
   transition: max-height 0.2s ease, opacity 0.2s ease, padding 0.2s ease;
 }
 
 .office-ribbon-body.collapsed {
   height: 0;
-  padding: 0 12px;
+  padding: 0 8px;
   overflow: hidden;
   border-bottom: none;
 }
@@ -374,7 +438,7 @@
 .office-ribbon-pane {
   display: none;
   align-items: stretch;
-  gap: 8px;
+  gap: 6px;
   height: 100%;
 }
 
@@ -387,7 +451,7 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 2px 8px 4px 8px;
+  padding: 1px 6px 2px 6px;
   border-right: 1px solid #cbd5e1;
   min-width: fit-content;
 }
@@ -399,18 +463,18 @@
 .office-ribbon-group-tools {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   flex: 1;
 }
 
 .office-ribbon-group-title {
   text-align: center;
-  font-size: 10.5px;
+  font-size: 9px;
   font-weight: 700;
   color: #64748b;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
-  margin-top: 2px;
+  letter-spacing: 0.2px;
+  margin-top: 1px;
   user-select: none;
   text-shadow: none !important;
 }
@@ -423,10 +487,10 @@
   justify-content: center;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 4px 10px;
-  min-width: 62px;
-  height: 64px;
+  border-radius: 4px;
+  padding: 2px 6px;
+  min-width: 48px;
+  height: 44px;
   cursor: pointer;
   transition: all 0.15s ease;
   color: #1e293b;
@@ -437,7 +501,7 @@
 .ribbon-btn-large:hover {
   background-color: #ffffff;
   border-color: #cbd5e1;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .ribbon-btn-large:active {
@@ -445,99 +509,100 @@
 }
 
 .ribbon-btn-large .ribbon-btn-icon {
-  font-size: 22px;
-  margin-bottom: 3px;
+  font-size: 16px;
+  margin-bottom: 2px;
   line-height: 1;
 }
 
 .ribbon-btn-large .ribbon-btn-label {
-  font-size: 11px;
+  font-size: 9.5px;
   font-weight: 600;
   text-align: center;
-  line-height: 1.15;
+  line-height: 1.1;
   white-space: normal;
 }
 
-/* Botão de Destaque Especial (Executar Build F5) */
+/* Botão de Destaque Especial (Executar Build F5) - Microsoft Fluent Blue Calmo */
 .ribbon-btn-large.primary-action {
-  background: var(--gradient-blue, linear-gradient(135deg, #0f6cbd 0%, #2563eb 100%));
+  background: #0f6cbd;
   color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 4px 12px rgba(15, 108, 189, 0.3);
+  border: 1px solid #005a9e;
+  box-shadow: 0 1px 3px rgba(15, 108, 189, 0.25);
 }
 
 .ribbon-btn-large.primary-action:hover {
-  filter: brightness(1.08);
+  background: #115ea3;
 }
 
 .ribbon-btn-large.primary-action .ribbon-btn-label {
   color: #ffffff;
-  font-weight: 800;
+  font-weight: 700;
 }
 
-/* Botão Parar Execução (Estado Rodando / Stop) - Vermelho com alto contraste */
+/* Botão Parar Execução (Estado Rodando / Stop) - Vermelho Refinado */
 .ribbon-btn-large.is-running-stop {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
+  background: #dc2626 !important;
   color: #ffffff !important;
-  border: 1px solid #ef4444 !important;
-  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35) !important;
+  border: 1px solid #b91c1c !important;
+  box-shadow: 0 1px 3px rgba(220, 38, 38, 0.25) !important;
 }
 
 .ribbon-btn-large.is-running-stop:hover {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
-  filter: brightness(1.06);
+  background: #b91c1c !important;
 }
 
 .ribbon-btn-large.is-running-stop .ribbon-btn-icon {
   color: #ffffff !important;
-  transform: scale(1.08);
+  transform: scale(1.05);
 }
 
 .ribbon-btn-large.is-running-stop .ribbon-btn-label {
   color: #ffffff !important;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 /* Botão Parar no QAT (Barra de Acesso Rápido) */
 .office-qat-btn.is-running-stop {
   color: #dc2626 !important;
   font-weight: 800 !important;
-  transform: scale(1.15);
+  transform: scale(1.1);
 }
 
-/* Botão de Destaque Pi.ai (Fase 16 Prioritária) */
+/* Botão de Destaque Pi.ai */
 .ribbon-btn-large.highlight-pi {
   background-color: #ffffff;
-  border: 1.5px solid #0d9488;
+  border: 1px solid #cbd5e1;
 }
 
 .ribbon-btn-large.highlight-pi:hover {
-  background-color: #f0fdfa;
-  border-color: #0f766e;
+  background-color: #f8fafc;
+  border-color: #94a3b8;
 }
 
 /* Badge de Pílula Limpa em Botões */
 .ribbon-pill-tag {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  background-color: #0d9488;
-  color: #ffffff;
-  font-size: 8px;
-  font-weight: 800;
-  padding: 1px 4px;
-  border-radius: 9999px;
+  top: 1px;
+  right: 1px;
+  background-color: #e2e8f0;
+  color: #334155;
+  font-size: 7.5px;
+  font-weight: 700;
+  padding: 1px 3px;
+  border-radius: 3px;
   line-height: 1;
   text-transform: uppercase;
   text-shadow: none !important;
 }
 
 .ribbon-pill-tag.tag-orange {
-  background-color: #ea580c;
+  background-color: #fed7aa;
+  color: #9a3412;
 }
 
 .ribbon-pill-tag.tag-blue {
-  background-color: #2563eb;
+  background-color: #dbeafe;
+  color: #1e40af;
 }
 
 /* --- Coluna de Botões Pequenos / Empilhados --- */
@@ -545,22 +610,22 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 3px;
-  height: 64px;
+  gap: 2px;
+  height: 44px;
 }
 
 .ribbon-btn-small {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 4px;
-  padding: 2px 8px;
-  height: 28px;
+  border-radius: 3px;
+  padding: 1px 6px;
+  height: 20px;
   cursor: pointer;
   color: #334155;
-  font-size: 11.5px;
+  font-size: 10px;
   font-weight: 600;
   transition: all 0.15s ease;
   white-space: nowrap;
@@ -579,7 +644,7 @@
 }
 
 .ribbon-btn-small .ribbon-sm-icon {
-  font-size: 14px;
+  font-size: 11px;
   line-height: 1;
 }
 
@@ -587,14 +652,14 @@
 .ribbon-select {
   background-color: #ffffff;
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  padding: 4px 8px;
-  font-size: 11.5px;
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 10px;
   font-weight: 600;
   color: #1e293b;
   outline: none;
   cursor: pointer;
-  height: 30px;
+  height: 20px;
 }
 
 .ribbon-select:focus {

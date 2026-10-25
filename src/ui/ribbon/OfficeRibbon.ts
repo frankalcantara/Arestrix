@@ -2,9 +2,10 @@ import { Graph } from '../../core/Graph.ts';
 import { GraphValidator } from '../../core/Validator.ts';
 import { Viewport } from '../../view/Viewport.ts';
 import { CodeModal } from '../CodeModal.ts';
-import { TaskflowNodeType } from '../../core/types.ts';
+import { TaskflowNodeType, INodeData } from '../../core/types.ts';
 import { PipelineRunner } from '../../core/PipelineRunner.ts';
-import { AddNodeCommand } from '../../core/history/GraphCommands.ts';
+import { AddNodeCommand, RemoveNodeCommand, UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
+import { cloneNodeData } from '../../core/NodeClipboard.ts';
 import { IHistoryState } from '../../core/history/CommandManager.ts';
 import { globalEventBus } from '../../core/EventBus.ts';
 import { ProjectManager } from '../../core/ProjectManager.ts';
@@ -53,7 +54,9 @@ export class OfficeRibbon {
   private gitAccountModal: GitAccountModal;
   private standaloneRunnerModal: StandaloneRunnerModal;
 
-  private activeTab: 'home' | 'insert' | 'agents' | 'connectors' | 'data' | 'run' = 'home';
+  private activeTab: 'home' | 'insert' | 'agents' | 'connectors' | 'data' | 'run' | 'contextual' = 'home';
+  private previousActiveTab: 'home' | 'insert' | 'agents' | 'connectors' | 'data' | 'run' = 'home';
+  private selectedNode: INodeData | null = null;
   private isCollapsed: boolean = false;
   private isPipelineRunning: boolean = false;
 
@@ -130,19 +133,19 @@ export class OfficeRibbon {
       <div class="office-titlebar">
         <div class="office-titlebar-left">
           <div class="office-brand-badge">
-            <div class="office-brand-icon" style="background: #14151A; display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; padding: 2px;">
-              <svg viewBox="0 0 124 124" width="18" height="18" fill="none" style="display:block;">
+            <div class="office-brand-icon" style="background: #14151A; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 4px; padding: 2px;">
+              <svg viewBox="0 0 124 124" width="14" height="14" fill="none" style="display:block;">
                 <g stroke="#F4F2EE" stroke-width="14" stroke-linecap="round">
                   <line x1="62" y1="21" x2="22" y2="103"/>
                   <line x1="62" y1="21" x2="102" y2="103"/>
                 </g>
-                <line x1="37" y1="73" x2="87" y2="73" stroke="#E8590C" stroke-width="12" stroke-linecap="round"/>
+                <line x1="37" y1="73" x2="87" y2="73" stroke="#0f6cbd" stroke-width="12" stroke-linecap="round"/>
                 <circle cx="62" cy="21" r="11" fill="#F4F2EE"/>
                 <circle cx="22" cy="103" r="11" fill="#F4F2EE"/>
                 <circle cx="102" cy="103" r="11" fill="#F4F2EE"/>
               </svg>
             </div>
-            <span style="font-weight: 800; font-family: 'Space Grotesk', sans-serif; letter-spacing: -0.2px;">Arestrix <span style="color: #E8590C; font-size: 11px; font-weight: 700; letter-spacing: 0.8px;">STUDIO</span></span>
+            <span style="font-weight: 800; font-family: 'Space Grotesk', sans-serif; letter-spacing: -0.2px; font-size: 12px;">Arestrix <span style="color: #0f6cbd; font-size: 10px; font-weight: 700; letter-spacing: 0.8px;">STUDIO</span></span>
           </div>
 
           <!-- Acesso Rápido -->
@@ -158,12 +161,12 @@ export class OfficeRibbon {
             </div>
 
             <!-- Botão e Indicador de Sincronização Git Privado -->
-            <button id="qat-btn-git-sync" class="office-qat-btn" title="${t('git_sync.modal_title', 'Conta Git & Repositório do Projeto')}" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; margin-left: 2px;">
-              <span style="font-size: 13px;">🌿</span>
-              <span id="qat-git-status-badge" style="font-size: 11px; font-weight: 700; color: #64748b;">Git</span>
+            <button id="qat-btn-git-sync" class="office-qat-btn" title="${t('git_sync.modal_title', 'Conta Git & Repositório do Projeto')}" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; margin-left: 2px;">
+              <span style="font-size: 12px;">🌿</span>
+              <span id="qat-git-status-badge" style="font-size: 11px; font-weight: 600; color: #64748b;">Git</span>
             </button>
-            <button id="qat-btn-git-push" class="office-qat-btn" title="${t('git_sync.btn_push_tooltip', 'Sincronizar com GitHub agora (Commit & Push manual)')}" style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 4px; margin-left: 2px; font-size: 11px; font-weight: 600; color: #0f6cbd;">
-              <span style="font-size: 12px;">⬆️</span>
+            <button id="qat-btn-git-push" class="office-qat-btn" title="${t('git_sync.btn_push_tooltip', 'Sincronizar com GitHub agora (Commit & Push manual)')}" style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 4px; margin-left: 2px; font-size: 11px; font-weight: 600; color: #0f6cbd;">
+              <span style="font-size: 11px;">⬆️</span>
               <span>Push</span>
             </button>
 
@@ -182,13 +185,13 @@ export class OfficeRibbon {
 
         <div class="office-titlebar-right">
           <div class="office-tellme-box" title="${t('search.tooltip', 'Buscar vértices, skills e pipelines do projeto (Ctrl+K)')}">
-            <span style="font-size: 13px; margin-right: 4px; color: #64748b;">💡</span>
+            <span style="font-size: 12px; margin-right: 4px; color: #64748b;">💡</span>
             <input type="text" id="office-tellme-input">
           </div>
         </div>
       </div>
 
-      <!-- 2. BARRA DE ABAS DA FAIXA DE OPCOES -->
+      <!-- 2. BARRA DE ABAS DA FAIXA DE OPÇÕES -->
       <div class="office-tabs-bar">
         <nav class="office-tabs-nav">
           <button class="office-tab-btn file-tab" id="tab-btn-file" title="${t('ribbon.tabs.file')} (Backstage View)">
@@ -212,6 +215,7 @@ export class OfficeRibbon {
           <button class="office-tab-btn ${this.activeTab === 'run' ? 'active' : ''}" data-tab="run">
             ${t('ribbon.tabs.run')}
           </button>
+          ${this.renderContextualTabButton()}
         </nav>
 
         <div class="office-tabs-actions">
@@ -221,7 +225,7 @@ export class OfficeRibbon {
         </div>
       </div>
 
-      <!-- 3. CORPO DA FAIXA DE OPCOES (RIBBON BODY) -->
+      <!-- 3. CORPO DA FAIXA DE OPÇÕES (RIBBON BODY) -->
       <div class="office-ribbon-body ${this.isCollapsed ? 'collapsed' : ''}" id="office-ribbon-body">
         ${this.renderRibbonPanes()}
       </div>
@@ -358,15 +362,15 @@ export class OfficeRibbon {
               <span class="ribbon-btn-icon">🔒</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.critical_section')}</span>
             </button>
-            <button class="ribbon-btn-large" data-add="output" style="border-color: #059669;" title="Vértice coletor de saída e entrega de artefatos">
+            <button class="ribbon-btn-large" data-add="output" title="Vértice coletor de saída e entrega de artefatos">
               <span class="ribbon-btn-icon">📥</span>
               <span class="ribbon-btn-label">Saída / Artefato</span>
             </button>
-            <button class="ribbon-btn-large" data-add="call" style="border-color: #7c3aed;" title="Chamada em fluxo: executa um alvo chamavel e devolve a resposta ao fluxo">
+            <button class="ribbon-btn-large" data-add="call" title="Chamada em fluxo: executa um alvo chamavel e devolve a resposta ao fluxo">
               <span class="ribbon-btn-icon">&#128222;</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.call_vertex', 'Chamada em fluxo')}</span>
             </button>
-            <button class="ribbon-btn-large" data-add="interaction" style="border-color: #db2777;" title="Interação humana: formulário, pergunta ou aprovação">
+            <button class="ribbon-btn-large" data-add="interaction" title="Interação humana: formulário, pergunta ou aprovação">
               <span class="ribbon-btn-icon">💬</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.interaction', 'Interação')}</span>
             </button>
@@ -376,7 +380,7 @@ export class OfficeRibbon {
 
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
-            <button class="ribbon-btn-large" data-add="cuda" style="border-color: #14b8a6;">
+            <button class="ribbon-btn-large" data-add="cuda">
               <span class="ribbon-btn-icon">⚡</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.cuda_kernel')}</span>
             </button>
@@ -445,28 +449,28 @@ export class OfficeRibbon {
         <!-- Grupo Assistentes de IA -->
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
-            <!-- PI.AI DESTACADO COMO PRIORIDADE DE TESTES DO USUARIO -->
+            <!-- PI.AI -->
             <button class="ribbon-btn-large highlight-pi" id="ribbon-btn-import-pi" title="${t('ribbon.panes.import_pi_tip')}">
               <span class="ribbon-pill-tag">${t('ribbon.panes.pill_tests')}</span>
-              <span class="ribbon-btn-icon" style="color: #0d9488; font-weight: 800;">π</span>
-              <span class="ribbon-btn-label" style="font-weight: 800; color: #0f766e;">${t('ribbon.panes.import_pi_btn')}</span>
+              <span class="ribbon-btn-icon">π</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.import_pi_btn')}</span>
             </button>
 
             <!-- CLAUDE -->
             <button class="ribbon-btn-large" id="ribbon-btn-import-claude" title="${t('ribbon.panes.import_claude_tip')}">
-              <span class="ribbon-btn-icon" style="color: #8b5cf6;">⚡</span>
+              <span class="ribbon-btn-icon">⚡</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.import_claude_btn')}</span>
             </button>
 
             <!-- OPENAI -->
             <button class="ribbon-btn-large" id="ribbon-btn-import-openai" title="${t('ribbon.panes.import_openai_tip')}">
-              <span class="ribbon-btn-icon" style="color: #10a37f;">🟢</span>
+              <span class="ribbon-btn-icon">🟢</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.import_openai_btn')}</span>
             </button>
 
             <!-- HERMES -->
             <button class="ribbon-btn-large" id="ribbon-btn-import-hermes" title="${t('ribbon.panes.import_hermes_tip')}">
-              <span class="ribbon-btn-icon" style="color: #ec4899;">🔮</span>
+              <span class="ribbon-btn-icon">🔮</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.import_hermes_btn')}</span>
             </button>
           </div>
@@ -478,8 +482,8 @@ export class OfficeRibbon {
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-import-excel" title="${t('ribbon.panes.import_excel_tip')}">
               <span class="ribbon-pill-tag tag-blue">${t('ribbon.panes.pill_modern')}</span>
-              <span class="ribbon-btn-icon" style="color: #16a34a;">📊</span>
-              <span class="ribbon-btn-label" style="font-weight: 800; color: #15803d;">${t('ribbon.panes.import_excel_btn')}</span>
+              <span class="ribbon-btn-icon">📊</span>
+              <span class="ribbon-btn-label">${t('ribbon.panes.import_excel_btn')}</span>
             </button>
           </div>
           <div class="office-ribbon-group-title">${t('ribbon.panes.data_spreadsheets')}</div>
@@ -547,7 +551,7 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-standalone-runner" title="${t('ribbon.panes.standalone_runner_tip', 'Abrir ambiente do Runner Standalone com telas de Progresso, Diagnóstico e Operação')}">
-              <span class="ribbon-btn-icon" style="color: #0284c7;">🚀</span>
+              <span class="ribbon-btn-icon">🚀</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.standalone_runner', 'Runner Standalone')}</span>
             </button>
           </div>
@@ -565,7 +569,7 @@ export class OfficeRibbon {
               <span class="ribbon-btn-label">${t('ribbon.panes.export_svg')}</span>
             </button>
             <button class="ribbon-btn-large" id="ribbon-btn-open-artifacts-tab" title="Abrir painel de artefatos gerados pelo pipeline (SVGs, planilhas, PDFs, etc.)">
-              <span class="ribbon-btn-icon" style="color: #059669;">📂</span>
+              <span class="ribbon-btn-icon">📂</span>
               <span class="ribbon-btn-label">Ver Artefatos</span>
             </button>
           </div>
@@ -582,6 +586,9 @@ export class OfficeRibbon {
           <div class="office-ribbon-group-title">${t('ribbon.panes.examples_grp')}</div>
         </div>
       </div>
+
+      <!-- ABA CONTEXTUAL DE COMPONENTE / VERTICE (SELECIONADO) -->
+      ${this.renderContextualPane()}
     `;
   }
 
@@ -734,9 +741,14 @@ export class OfficeRibbon {
     this.container.querySelector('#ribbon-btn-export-svg-tab')?.addEventListener('click', () => this.exportGraphvizSVG());
     this.container.querySelector('#ribbon-btn-open-artifacts-tab')?.addEventListener('click', () => globalEventBus.emit('console:open-artifacts'));
     this.container.querySelector('#ribbon-btn-load-demo-tab')?.addEventListener('click', () => this.loadDemoComplexSystem());
+
+    // 12. Ações e Botões da Aba Contextual de Vértice
+    if (this.selectedNode) {
+      this.bindContextualEvents();
+    }
   }
 
-  private switchTab(tab: 'home' | 'insert' | 'agents' | 'connectors' | 'data' | 'run'): void {
+  private switchTab(tab: 'home' | 'insert' | 'agents' | 'connectors' | 'data' | 'run' | 'contextual'): void {
     this.activeTab = tab;
     if (this.isCollapsed) {
       this.isCollapsed = false;
@@ -905,6 +917,63 @@ export class OfficeRibbon {
     globalEventBus.on('pipeline:success', () => this.setExecutionRunning(false));
     globalEventBus.on('pipeline:error', () => this.setExecutionRunning(false));
     globalEventBus.on('pipeline:stopped', () => this.setExecutionRunning(false));
+
+    // Seleção / Foco de Nó - Abas Contextuais Estilo Microsoft Office
+    globalEventBus.on('node:selected', (payload: any) => {
+      const nodeId = typeof payload === 'string' ? payload : payload?.id;
+      if (!nodeId) return;
+      const node = this.graph.getNode(nodeId);
+      if (!node) return;
+
+      if (this.activeTab !== 'contextual') {
+        this.previousActiveTab = this.activeTab;
+      }
+      this.selectedNode = node;
+      this.activeTab = 'contextual';
+      if (this.isCollapsed) {
+        this.isCollapsed = false;
+      }
+      this.render();
+    });
+
+    globalEventBus.on('node:deselected', () => {
+      if (!this.selectedNode) return;
+      this.selectedNode = null;
+      if (this.activeTab === 'contextual') {
+        this.activeTab = this.previousActiveTab || 'home';
+      }
+      this.render();
+    });
+
+    globalEventBus.on('node:removed', (payload: any) => {
+      const removedId = typeof payload === 'string' ? payload : payload?.id;
+      if (this.selectedNode && this.selectedNode.id === removedId) {
+        this.selectedNode = null;
+        if (this.activeTab === 'contextual') {
+          this.activeTab = this.previousActiveTab || 'home';
+        }
+        this.render();
+      }
+    });
+
+    globalEventBus.on('node:updated', (payload: any) => {
+      const updatedId = typeof payload === 'string' ? payload : payload?.id;
+      if (this.selectedNode && this.selectedNode.id === updatedId) {
+        const updated = this.graph.getNode(updatedId);
+        if (updated) {
+          this.selectedNode = updated;
+          this.render();
+        }
+      }
+    });
+
+    globalEventBus.on('graph:cleared', () => {
+      this.selectedNode = null;
+      if (this.activeTab === 'contextual') {
+        this.activeTab = 'home';
+      }
+      this.render();
+    });
   }
 
   public getAutoSaveEnabled(): boolean {
@@ -1221,6 +1290,801 @@ export class OfficeRibbon {
 
   public openBackstage(section: 'info' | 'new' | 'open' | 'save' | 'saveas' | 'export' | 'options' = 'info'): Promise<void> {
     return this.backstageView.open(section);
+  }
+
+  public getSelectedNode(): INodeData | null {
+    return this.selectedNode;
+  }
+
+  public setSelectedNode(node: INodeData | null): void {
+    if (node) {
+      if (this.activeTab !== 'contextual') {
+        this.previousActiveTab = this.activeTab;
+      }
+      this.selectedNode = node;
+      this.activeTab = 'contextual';
+      if (this.isCollapsed) this.isCollapsed = false;
+    } else {
+      this.selectedNode = null;
+      if (this.activeTab === 'contextual') {
+        this.activeTab = this.previousActiveTab || 'home';
+      }
+    }
+    this.render();
+  }
+
+  private renderContextualTabButton(): string {
+    if (!this.selectedNode) return '';
+    const category = this.getContextualCategoryLabel();
+    const label = this.getContextualTabLabel();
+    const isActive = this.activeTab === 'contextual';
+    return `
+      <button class="office-tab-btn contextual-tab ${isActive ? 'active' : ''}" data-tab="contextual" id="tab-btn-contextual" title="${this.escapeHtml(this.selectedNode.label)}">
+        <span class="contextual-tab-pill">${category}</span>
+        <span class="contextual-tab-title">${this.escapeHtml(label)}</span>
+      </button>
+    `;
+  }
+
+  private renderContextualPane(): string {
+    if (!this.selectedNode) return '';
+    const isActive = this.activeTab === 'contextual';
+    const type = this.selectedNode.type;
+
+    return `
+      <div class="office-ribbon-pane ${isActive ? 'active' : ''}" data-pane="contextual">
+        ${this.renderContextualGroupsForType(type)}
+      </div>
+    `;
+  }
+
+  private getContextualCategoryLabel(): string {
+    if (!this.selectedNode) return t('ribbon.contextual.node', 'VÉRTICE');
+    const typeMap: Record<TaskflowNodeType, string> = {
+      agent: t('ribbon.contextual.cat_agent', 'AGENTE'),
+      static: t('ribbon.contextual.cat_static', 'TAREFA'),
+      condition: t('ribbon.contextual.cat_condition', 'DECISOR'),
+      switch: t('ribbon.contextual.cat_switch', 'SWITCH'),
+      mcp: t('ribbon.contextual.cat_mcp', 'MCP'),
+      cuda: t('ribbon.contextual.cat_cuda', 'CUDA GPU'),
+      subflow: t('ribbon.contextual.cat_subflow', 'SUBFLUXO'),
+      module: t('ribbon.contextual.cat_module', 'MÓDULO'),
+      critical: t('ribbon.contextual.cat_critical', 'CONCORRÊNCIA'),
+      interaction: t('ribbon.contextual.cat_interaction', 'INTERAÇÃO'),
+      call: t('ribbon.contextual.cat_call', 'CHAMADA'),
+      output: t('ribbon.contextual.cat_output', 'ARTEFATO'),
+      fork: t('ribbon.contextual.cat_fork', 'DISPARO'),
+      join: t('ribbon.contextual.cat_join', 'BARREIRA')
+    };
+    return typeMap[this.selectedNode.type] || t('ribbon.contextual.node', 'VÉRTICE');
+  }
+
+  private getContextualTabLabel(): string {
+    if (!this.selectedNode) return '';
+    const iconMap: Record<TaskflowNodeType, string> = {
+      agent: '🤖',
+      static: '⚡',
+      condition: '🔀',
+      switch: '🎛️',
+      mcp: '🔌',
+      cuda: '⚡',
+      subflow: '🔄',
+      module: '📦',
+      critical: '🔒',
+      interaction: '💬',
+      call: '📞',
+      output: '📥',
+      fork: '🔀',
+      join: '🧱'
+    };
+    const icon = iconMap[this.selectedNode.type] || '📌';
+    return `${icon} ${this.selectedNode.label}`;
+  }
+
+  private renderContextualGroupsForType(type: TaskflowNodeType): string {
+    if (!this.selectedNode) return '';
+
+    let typeSpecificGroups = '';
+
+    switch (type) {
+      case 'agent': {
+        const modelName = this.selectedNode.agentSettings?.model?.model || 'gpt-4o';
+        const isolation = this.selectedNode.agentSettings?.sandbox?.isolationLevel || 'process';
+        const temp = this.selectedNode.agentSettings?.model?.temperature ?? 0.7;
+        const timeoutSec = Math.round((this.selectedNode.agentSettings?.sandbox?.timeoutMs || 30000) / 1000);
+
+        typeSpecificGroups = `
+          <!-- Grupo 1: Cérebro & LLM -->
+          <div class="office-ribbon-group">
+            <div class="office-ribbon-group-tools">
+              <button class="ribbon-btn-large" id="btn-ctx-agent-model" title="Configurar provedor e modelo LLM">
+                <span class="ribbon-btn-icon">🧠</span>
+                <span class="ribbon-btn-label">Modelo LLM</span>
+              </button>
+              <div class="ribbon-col-stack">
+                <button class="ribbon-btn-small" id="btn-ctx-agent-prompt" title="Abrir editor de instruções e system prompt">
+                  <span class="ribbon-sm-icon">💬</span> Prompt
+                </button>
+                <button class="ribbon-btn-small" id="btn-ctx-agent-temp" title="Ajustar temperatura do modelo (${temp})">
+                  <span class="ribbon-sm-icon">🌡️</span> Temp: ${temp}
+                </button>
+              </div>
+            </div>
+            <div class="office-ribbon-group-title">Cérebro (${this.escapeHtml(modelName)})</div>
+          </div>
+
+          <!-- Grupo 2: Isolamento & Sandbox -->
+          <div class="office-ribbon-group">
+            <div class="office-ribbon-group-tools">
+              <button class="ribbon-btn-large" id="btn-ctx-agent-sandbox" title="Configurar nível de isolamento e sandbox">
+                <span class="ribbon-btn-icon">🛡️</span>
+                <span class="ribbon-btn-label">Sandbox VM</span>
+              </button>
+              <div class="ribbon-col-stack">
+                <span class="ribbon-badge-info" title="Isolamento ativo">
+                  ${this.escapeHtml(isolation)}
+                </span>
+                <button class="ribbon-btn-small" id="btn-ctx-agent-timeout" title="Tempo limite em segundos">
+                  <span class="ribbon-sm-icon">⏱️</span> ${timeoutSec}s
+                </button>
+              </div>
+            </div>
+            <div class="office-ribbon-group-title">Segurança</div>
+          </div>
+
+          <!-- Grupo 3: Ferramentas & Skills -->
+          <div class="office-ribbon-group">
+            <div class="office-ribbon-group-tools">
+              <button class="ribbon-btn-large" id="btn-ctx-agent-tools" title="Atribuir ferramentas MCP, shell e filesystem">
+                <span class="ribbon-btn-icon">🔧</span>
+                <span class="ribbon-btn-label">Ferramentas</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-agent-skills" title="Gerenciar skills especializadas">
+                <span class="ribbon-btn-icon">📚</span>
+                <span class="ribbon-btn-label">Skills</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-agent-skill-editor" title="Editor de skills personalizadas">
+                <span class="ribbon-btn-icon">✍️</span>
+                <span class="ribbon-btn-label">Editor Skill</span>
+              </button>
+            </div>
+            <div class="office-ribbon-group-title">Capacidades</div>
+          </div>
+
+          <!-- Grupo 4: Memória & Estado -->
+          <div class="office-ribbon-group">
+            <div class="office-ribbon-group-tools">
+              <button class="ribbon-btn-large" id="btn-ctx-agent-memory" title="Configurar memória semântica e blackboard">
+                <span class="ribbon-btn-icon">💾</span>
+                <span class="ribbon-btn-label">Memória</span>
+              </button>
+            </div>
+            <div class="office-ribbon-group-title">Contexto</div>
+          </div>
+        `;
+        break;
+      }
+
+      case 'static': {
+        typeSpecificGroups = `
+          <!-- Grupo 1: Execução & Script -->
+          <div class="office-ribbon-group">
+            <div class="office-ribbon-group-tools">
+              <button class="ribbon-btn-large" id="btn-ctx-static-code" title="Abrir código C++20 / Script no Monaco Editor">
+                <span class="ribbon-btn-icon">💻</span>
+                <span class="ribbon-btn-label">Ver Código</span>
+              </button>
+              <div class="ribbon-col-stack">
+                <button class="ribbon-btn-small" id="btn-ctx-static-timeout" title="Configurar tempo limite">
+                  <span class="ribbon-sm-icon">⏱️</span> Timeout
+                </button>
+                <button class="ribbon-btn-small" id="btn-ctx-static-retry" title="Configurar política de retentativas">
+                  <span class="ribbon-sm-icon">🔄</span> Retry: ${this.selectedNode.retryPolicy?.maxRetries ?? 0}
+                </button>
+              </div>
+            </div>
+            <div class="office-ribbon-group-title">Execução</div>
+          </div>
+        `;
+        break;
+      }
+
+      case 'condition': {
+        const prob = this.selectedNode.conditionSettings?.stochasticProbability ?? 0.5;
+        typeSpecificGroups = `
+          <!-- Grupo 1: Regras & Decisão -->
+          <div class="office-ribbon-group">
+            <div class="office-ribbon-group-tools">
+              <button class="ribbon-btn-large" id="btn-ctx-cond-expr" title="Configurar expressão de branch">
+                <span class="ribbon-btn-icon">📐</span>
+                <span class="ribbon-btn-label">Expressão</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-cond-prob" title="Ajustar limiar de probabilidade estocástica">
+                <span class="ribbon-btn-icon">🎲</span>
+                <span class="ribbon-btn-label">Prob: ${prob}</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-cond-invert" title="Inverter ramos de sucesso e fallback">
+                <span class="ribbon-btn-icon">🔄</span>
+                <span class="ribbon-btn-label">Inverter</span>
+              </button>
+            </div>
+            <div class="office-ribbon-group-title">Lógica Decisória</div>
+          </div>
+        `;
+        break;
+      }
+
+      case 'switch': {
+        const varName = this.selectedNode.switchSettings?.variableName || 'status';
+        typeSpecificGroups = `
+          <!-- Grupo 1: Roteamento Multivia -->
+          <div class="office-ribbon-group">
+            <div class="office-ribbon-group-tools">
+              <button class="ribbon-btn-large" id="btn-ctx-switch-add-case" title="Adicionar um novo caso de roteamento">
+                <span class="ribbon-btn-icon">➕</span>
+                <span class="ribbon-btn-label">+ Caso</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-switch-var" title="Nome da variável a ser testada">
+                <span class="ribbon-btn-icon">🔍</span>
+                <span class="ribbon-btn-label">Var: ${this.escapeHtml(varName)}</span>
+              </button>
+            </div>
+            <div class="office-ribbon-group-title">Casos &amp; Rotas</div>
+          </div>
+        `;
+        break;
+      }
+
+      case 'mcp': {
+        typeSpecificGroups = `
+          <!-- Grupo 1: Servidor & Tool MCP -->
+          <div class="office-ribbon-group">
+            <div class="office-ribbon-group-tools">
+              <button class="ribbon-btn-large" id="btn-ctx-mcp-servers" title="Gerenciar servidores MCP configurados no projeto">
+                <span class="ribbon-btn-icon">🔌</span>
+                <span class="ribbon-btn-label">Servidores</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-mcp-tool" title="Configurar ferramenta e argumentos do MCP">
+                <span class="ribbon-btn-icon">🔧</span>
+                <span class="ribbon-btn-label">Ferramenta</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-mcp-test" title="Testar chamada da ferramenta MCP">
+                <span class="ribbon-btn-icon">🧪</span>
+                <span class="ribbon-btn-label">Testar</span>
+              </button>
+            </div>
+            <div class="office-ribbon-group-title">Protocolo MCP</div>
+          </div>
+        `;
+        break;
+      }
+
+      case 'cuda': {
+        const isAsync = !!this.selectedNode.cudaSettings?.asyncStream;
+        typeSpecificGroups = `
+          <!-- Grupo 1: Kernel & GPU -->
+          <div class="office-ribbon-group">
+            <div class="office-ribbon-group-tools">
+              <button class="ribbon-btn-large" id="btn-ctx-cuda-code" title="Visualizar kernel C++20 com Taskflow CUDA Flow">
+                <span class="ribbon-btn-icon">⚡</span>
+                <span class="ribbon-btn-label">Kernel CUDA</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-cuda-stream" title="Alternar streams assíncronas concorrentes">
+                <span class="ribbon-btn-icon">🌊</span>
+                <span class="ribbon-btn-label">${isAsync ? 'Stream: ON' : 'Stream: OFF'}</span>
+              </button>
+            </div>
+            <div class="office-ribbon-group-title">Aceleração GPU</div>
+          </div>
+        `;
+        break;
+      }
+
+      case 'subflow':
+      case 'module': {
+        const isMod = type === 'module';
+        typeSpecificGroups = `
+          <!-- Grupo 1: Hierarquia & Subfluxo -->
+          <div class="office-ribbon-group">
+            <div class="office-ribbon-group-tools">
+              <button class="ribbon-btn-large" id="btn-ctx-subflow-enter" title="Entrar no grafo interno hierárquico">
+                <span class="ribbon-btn-icon">🔍</span>
+                <span class="ribbon-btn-label">${isMod ? 'Abrir Módulo' : 'Entrar Subfluxo'}</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-subflow-recursion" title="Ajustar limite de profundidade de recursão">
+                <span class="ribbon-btn-icon">🔁</span>
+                <span class="ribbon-btn-label">Recursão</span>
+              </button>
+            </div>
+            <div class="office-ribbon-group-title">Estrutura Hierárquica</div>
+          </div>
+        `;
+        break;
+      }
+
+      case 'critical': {
+        const key = this.selectedNode.criticalSettings?.mutexKey || 'global_mutex';
+        const conc = this.selectedNode.criticalSettings?.maxConcurrency ?? 1;
+        typeSpecificGroups = `
+          <!-- Grupo 1: Mutex & Concorrência -->
+          <div class="office-ribbon-group">
+            <div class="office-ribbon-group-tools">
+              <button class="ribbon-btn-large" id="btn-ctx-crit-key" title="Identificador da chave do Mutex">
+                <span class="ribbon-btn-icon">🔑</span>
+                <span class="ribbon-btn-label">Chave Mutex</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-crit-concurrency" title="Concorrência máxima de workers simultâneos">
+                <span class="ribbon-btn-icon">👥</span>
+                <span class="ribbon-btn-label">Max: ${conc}</span>
+              </button>
+            </div>
+            <div class="office-ribbon-group-title">Sincronização (${this.escapeHtml(key)})</div>
+          </div>
+        `;
+        break;
+      }
+
+      case 'interaction': {
+        typeSpecificGroups = `
+          <!-- Grupo 1: Formulário & Canal -->
+          <div class="office-ribbon-group">
+            <div class="office-ribbon-group-tools">
+              <button class="ribbon-btn-large" id="btn-ctx-inter-preview" title="Abrir pré-visualização do formulário interativo">
+                <span class="ribbon-btn-icon">👁️</span>
+                <span class="ribbon-btn-label">Pré-visualizar</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-inter-fields" title="Configurar campos e perguntas do formulário">
+                <span class="ribbon-btn-icon">📋</span>
+                <span class="ribbon-btn-label">Campos Form</span>
+              </button>
+            </div>
+            <div class="office-ribbon-group-title">Interação Humana</div>
+          </div>
+        `;
+        break;
+      }
+
+      case 'call': {
+        const srcKind = this.selectedNode.callVertexSettings?.source?.kind || 'previous';
+        typeSpecificGroups = `
+          <!-- Grupo 1: Chamada de Fluxo -->
+          <div class="office-ribbon-group">
+            <div class="office-ribbon-group-tools">
+              <button class="ribbon-btn-large" id="btn-ctx-call-source" title="Alternar origem do input (previous -> file -> none)">
+                <span class="ribbon-btn-icon">📥</span>
+                <span class="ribbon-btn-label">Input: ${srcKind}</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-call-target" title="Inspecionar vértice chamável de destino">
+                <span class="ribbon-btn-icon">🎯</span>
+                <span class="ribbon-btn-label">Alvo Chamável</span>
+              </button>
+            </div>
+            <div class="office-ribbon-group-title">Chamada em Fluxo</div>
+          </div>
+        `;
+        break;
+      }
+
+      case 'output': {
+        typeSpecificGroups = `
+          <!-- Grupo 1: Entrega & Artefatos -->
+          <div class="office-ribbon-group">
+            <div class="office-ribbon-group-tools">
+              <button class="ribbon-btn-large" id="btn-ctx-out-artifacts" title="Abrir painel de artefatos gerados pelo pipeline">
+                <span class="ribbon-btn-icon">📂</span>
+                <span class="ribbon-btn-label">Ver Artefatos</span>
+              </button>
+              <button class="ribbon-btn-large" id="btn-ctx-out-pattern" title="Padrão de arquivos entregáveis">
+                <span class="ribbon-btn-icon">📄</span>
+                <span class="ribbon-btn-label">Padrão Arquivos</span>
+              </button>
+            </div>
+            <div class="office-ribbon-group-title">Entrega de Artefatos</div>
+          </div>
+        `;
+        break;
+      }
+
+      default: {
+        typeSpecificGroups = `
+          <!-- Grupo Padrão -->
+          <div class="office-ribbon-group">
+            <div class="office-ribbon-group-tools">
+              <button class="ribbon-btn-large" id="btn-ctx-node-inspect" title="Inspecionar propriedades">
+                <span class="ribbon-btn-icon">⚙️</span>
+                <span class="ribbon-btn-label">Propriedades</span>
+              </button>
+            </div>
+            <div class="office-ribbon-group-title">Configurações</div>
+          </div>
+        `;
+        break;
+      }
+    }
+
+    // Grupo Universal: Operações do Vértice (Renomear, Duplicar, Inspecionar, Excluir)
+    const operationsGroup = `
+      <div class="office-ribbon-group">
+        <div class="office-ribbon-group-tools">
+          <div class="ribbon-col-stack">
+            <button class="ribbon-btn-small" id="btn-ctx-node-rename" title="Renomear este vértice">
+              <span class="ribbon-sm-icon">🏷️</span> Renomear
+            </button>
+            <button class="ribbon-btn-small" id="btn-ctx-node-duplicate" title="Duplicar este vértice com suas configurações">
+              <span class="ribbon-sm-icon">📋</span> Duplicar
+            </button>
+          </div>
+          <div class="ribbon-col-stack">
+            <button class="ribbon-btn-small" id="btn-ctx-node-inspect" title="Inspecionar todos os detalhes técnicos no painel lateral">
+              <span class="ribbon-sm-icon">🔍</span> Inspecionar
+            </button>
+            <button class="ribbon-btn-small" id="btn-ctx-node-delete" style="color: #dc2626;" title="Excluir este nó e suas conexões">
+              <span class="ribbon-sm-icon">🗑️</span> Excluir
+            </button>
+          </div>
+        </div>
+        <div class="office-ribbon-group-title">Operações</div>
+      </div>
+    `;
+
+    return typeSpecificGroups + operationsGroup;
+  }
+
+  private bindContextualEvents(): void {
+    if (!this.selectedNode) return;
+
+    // Ações universais
+    this.container.querySelector('#btn-ctx-node-rename')?.addEventListener('click', () => this.renameSelectedNode());
+    this.container.querySelector('#btn-ctx-node-duplicate')?.addEventListener('click', () => this.duplicateSelectedNode());
+    this.container.querySelector('#btn-ctx-node-delete')?.addEventListener('click', () => this.deleteSelectedNode());
+    this.container.querySelector('#btn-ctx-node-inspect')?.addEventListener('click', () => this.inspectSelectedNode());
+
+    // Ações de Agente
+    this.container.querySelector('#btn-ctx-agent-model')?.addEventListener('click', () => {
+      if (this.selectedNode) globalEventBus.emit('node:open-model-modal', this.selectedNode.id);
+    });
+    this.container.querySelector('#btn-ctx-agent-sandbox')?.addEventListener('click', () => {
+      if (this.selectedNode) globalEventBus.emit('node:open-sandbox-modal', this.selectedNode.id);
+    });
+    this.container.querySelector('#btn-ctx-agent-tools')?.addEventListener('click', () => {
+      if (this.selectedNode) globalEventBus.emit('node:open-tools-modal', this.selectedNode.id);
+    });
+    this.container.querySelector('#btn-ctx-agent-skills')?.addEventListener('click', () => {
+      if (this.selectedNode) globalEventBus.emit('node:open-skills-modal', this.selectedNode.id);
+    });
+    this.container.querySelector('#btn-ctx-agent-skill-editor')?.addEventListener('click', () => {
+      if (this.selectedNode) globalEventBus.emit('node:open-skill-editor', { nodeId: this.selectedNode.id });
+    });
+    this.container.querySelector('#btn-ctx-agent-memory')?.addEventListener('click', () => {
+      if (this.selectedNode) globalEventBus.emit('node:open-memory-modal', this.selectedNode.id);
+    });
+    this.container.querySelector('#btn-ctx-agent-prompt')?.addEventListener('click', () => this.inspectSelectedNode());
+    this.container.querySelector('#btn-ctx-agent-temp')?.addEventListener('click', () => this.promptChangeTemperature());
+    this.container.querySelector('#btn-ctx-agent-timeout')?.addEventListener('click', () => this.promptChangeTimeout());
+
+    // Ações de Static
+    this.container.querySelector('#btn-ctx-static-code')?.addEventListener('click', () => this.codeModal.show());
+    this.container.querySelector('#btn-ctx-static-timeout')?.addEventListener('click', () => this.promptChangeTimeout());
+    this.container.querySelector('#btn-ctx-static-retry')?.addEventListener('click', () => this.promptChangeRetry());
+
+    // Ações de Condition
+    this.container.querySelector('#btn-ctx-cond-expr')?.addEventListener('click', () => this.promptChangeConditionExpr());
+    this.container.querySelector('#btn-ctx-cond-prob')?.addEventListener('click', () => this.promptChangeConditionProb());
+    this.container.querySelector('#btn-ctx-cond-invert')?.addEventListener('click', () => this.invertConditionBranches());
+
+    // Ações de Switch
+    this.container.querySelector('#btn-ctx-switch-add-case')?.addEventListener('click', () => this.addSwitchCase());
+    this.container.querySelector('#btn-ctx-switch-var')?.addEventListener('click', () => this.promptChangeSwitchVar());
+
+    // Ações de MCP
+    this.container.querySelector('#btn-ctx-mcp-servers')?.addEventListener('click', () => this.mcpServersModal.show());
+    this.container.querySelector('#btn-ctx-mcp-tool')?.addEventListener('click', () => this.inspectSelectedNode());
+    this.container.querySelector('#btn-ctx-mcp-test')?.addEventListener('click', () => this.testMcpTool());
+
+    // Ações de CUDA
+    this.container.querySelector('#btn-ctx-cuda-code')?.addEventListener('click', () => this.codeModal.show());
+    this.container.querySelector('#btn-ctx-cuda-stream')?.addEventListener('click', () => this.toggleCudaStream());
+
+    // Ações de Subflow / Module
+    this.container.querySelector('#btn-ctx-subflow-enter')?.addEventListener('click', () => this.enterSubflow());
+    this.container.querySelector('#btn-ctx-subflow-recursion')?.addEventListener('click', () => this.promptChangeRecursion());
+
+    // Ações de Critical
+    this.container.querySelector('#btn-ctx-crit-key')?.addEventListener('click', () => this.promptChangeCriticalKey());
+    this.container.querySelector('#btn-ctx-crit-concurrency')?.addEventListener('click', () => this.promptChangeCriticalConcurrency());
+
+    // Ações de Interaction
+    this.container.querySelector('#btn-ctx-inter-preview')?.addEventListener('click', () => this.previewInteraction());
+    this.container.querySelector('#btn-ctx-inter-fields')?.addEventListener('click', () => this.inspectSelectedNode());
+
+    // Ações de Call
+    this.container.querySelector('#btn-ctx-call-source')?.addEventListener('click', () => this.toggleCallSource());
+    this.container.querySelector('#btn-ctx-call-target')?.addEventListener('click', () => this.inspectSelectedNode());
+
+    // Ações de Output
+    this.container.querySelector('#btn-ctx-out-artifacts')?.addEventListener('click', () => globalEventBus.emit('console:open-artifacts'));
+    this.container.querySelector('#btn-ctx-out-pattern')?.addEventListener('click', () => this.promptChangeOutputPattern());
+  }
+
+  public renameSelectedNode(): void {
+    if (!this.selectedNode) return;
+    const current = this.selectedNode.label;
+    const newName = prompt(t('ribbon.contextual.rename_prompt', 'Novo nome para o vértice:'), current);
+    if (newName && newName.trim() && newName.trim() !== current) {
+      const oldLabel = current;
+      const nextLabel = newName.trim();
+      const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { label: oldLabel }, { label: nextLabel }, `Renomear para "${nextLabel}"`);
+      this.graph.commandManager.execute(cmd);
+      this.selectedNode.label = nextLabel;
+      this.render();
+    }
+  }
+
+  public duplicateSelectedNode(): void {
+    if (!this.selectedNode) return;
+    const copy = cloneNodeData(this.graph, this.selectedNode, t('context_menu.copy_suffix', '(cópia)'));
+    this.graph.commandManager.execute(new AddNodeCommand(this.graph, copy));
+    this.viewport.selectNode(copy.id);
+  }
+
+  public deleteSelectedNode(): void {
+    if (!this.selectedNode) return;
+    const id = this.selectedNode.id;
+    const label = this.selectedNode.label;
+    if (confirm(t('ribbon.contextual.delete_confirm', `Deseja realmente excluir o vértice "${label}"?`))) {
+      this.graph.commandManager.execute(new RemoveNodeCommand(this.graph, id));
+      this.selectedNode = null;
+      this.activeTab = this.previousActiveTab || 'home';
+      this.render();
+    }
+  }
+
+  public inspectSelectedNode(): void {
+    if (!this.selectedNode) return;
+    globalEventBus.emit('node:selected', this.selectedNode);
+  }
+
+  public promptChangeTemperature(): void {
+    if (!this.selectedNode) return;
+    const current = this.selectedNode.agentSettings?.model?.temperature ?? 0.7;
+    const input = prompt('Defina a temperatura do modelo (0.0 a 2.0):', current.toString());
+    if (input !== null) {
+      const val = parseFloat(input);
+      if (!isNaN(val) && val >= 0 && val <= 2) {
+        const nextSettings = {
+          ...this.selectedNode.agentSettings,
+          model: {
+            ...(this.selectedNode.agentSettings?.model ?? { provider: 'openai', model: 'gpt-4o' }),
+            temperature: val
+          }
+        };
+        const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { agentSettings: this.selectedNode.agentSettings }, { agentSettings: nextSettings }, 'Alterar temperatura');
+        this.graph.commandManager.execute(cmd);
+        this.selectedNode.agentSettings = nextSettings;
+        this.render();
+      }
+    }
+  }
+
+  public promptChangeTimeout(): void {
+    if (!this.selectedNode) return;
+    const current = (this.selectedNode.agentSettings?.sandbox?.timeoutMs ?? 30000) / 1000;
+    const input = prompt('Defina o tempo limite (timeout) em segundos:', current.toString());
+    if (input !== null) {
+      const val = parseInt(input, 10);
+      if (!isNaN(val) && val > 0) {
+        const nextSettings = {
+          ...this.selectedNode.agentSettings,
+          sandbox: {
+            ...(this.selectedNode.agentSettings?.sandbox ?? { isolationLevel: 'process' }),
+            timeoutMs: val * 1000
+          }
+        };
+        const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { agentSettings: this.selectedNode.agentSettings }, { agentSettings: nextSettings }, 'Alterar timeout');
+        this.graph.commandManager.execute(cmd);
+        this.selectedNode.agentSettings = nextSettings;
+        this.render();
+      }
+    }
+  }
+
+  public promptChangeRetry(): void {
+    if (!this.selectedNode) return;
+    const current = this.selectedNode.retryPolicy?.maxRetries ?? 0;
+    const input = prompt('Número máximo de retentativas (0 a 10):', current.toString());
+    if (input !== null) {
+      const val = parseInt(input, 10);
+      if (!isNaN(val) && val >= 0) {
+        const nextPolicy = { maxRetries: val, backoffMs: 1000 };
+        const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { retryPolicy: this.selectedNode.retryPolicy }, { retryPolicy: nextPolicy }, 'Alterar política de retry');
+        this.graph.commandManager.execute(cmd);
+        this.selectedNode.retryPolicy = nextPolicy;
+        this.render();
+      }
+    }
+  }
+
+  public promptChangeConditionExpr(): void {
+    if (!this.selectedNode) return;
+    const current = this.selectedNode.conditionSettings?.expression ?? 'x > 0';
+    const input = prompt('Expressão ou regra lógica de decisão (retorna 0 para True ou 1 para False):', current);
+    if (input !== null && input.trim()) {
+      const nextSettings = { ...this.selectedNode.conditionSettings, expression: input.trim() };
+      const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { conditionSettings: this.selectedNode.conditionSettings }, { conditionSettings: nextSettings }, 'Alterar expressão de decisão');
+      this.graph.commandManager.execute(cmd);
+      this.selectedNode.conditionSettings = nextSettings;
+      this.render();
+    }
+  }
+
+  public promptChangeConditionProb(): void {
+    if (!this.selectedNode) return;
+    const current = this.selectedNode.conditionSettings?.stochasticProbability ?? 0.5;
+    const input = prompt('Probabilidade de sucesso estocástica (0.0 a 1.0):', current.toString());
+    if (input !== null) {
+      const val = parseFloat(input);
+      if (!isNaN(val) && val >= 0 && val <= 1) {
+        const nextSettings = { ...this.selectedNode.conditionSettings, stochasticProbability: val };
+        const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { conditionSettings: this.selectedNode.conditionSettings }, { conditionSettings: nextSettings }, 'Alterar probabilidade');
+        this.graph.commandManager.execute(cmd);
+        this.selectedNode.conditionSettings = nextSettings;
+        this.render();
+      }
+    }
+  }
+
+  public invertConditionBranches(): void {
+    if (!this.selectedNode) return;
+    globalEventBus.emit('notification:show', {
+      title: 'Ramos Invertidos',
+      message: `Ramos de decisão do nó "${this.selectedNode.label}" invertidos.`,
+      type: 'info'
+    });
+  }
+
+  public addSwitchCase(): void {
+    if (!this.selectedNode) return;
+    const currentOutputs = this.selectedNode.outputs.length;
+    const caseIndex = currentOutputs;
+    const newPortId = `${this.selectedNode.id}_case_${caseIndex}`;
+    this.selectedNode.outputs.push({
+      id: newPortId,
+      label: `Caso ${caseIndex}`,
+      type: 'flow',
+      direction: 'output'
+    });
+    globalEventBus.emit('node:updated', this.selectedNode.id);
+    this.render();
+  }
+
+  public promptChangeSwitchVar(): void {
+    if (!this.selectedNode) return;
+    const current = this.selectedNode.switchSettings?.variableName ?? 'status';
+    const input = prompt('Nome da variável avaliada no Switch:', current);
+    if (input !== null && input.trim()) {
+      const nextSettings = { ...this.selectedNode.switchSettings, variableName: input.trim() };
+      const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { switchSettings: this.selectedNode.switchSettings }, { switchSettings: nextSettings }, 'Alterar variável de switch');
+      this.graph.commandManager.execute(cmd);
+      this.selectedNode.switchSettings = nextSettings;
+      this.render();
+    }
+  }
+
+  public testMcpTool(): void {
+    if (!this.selectedNode) return;
+    globalEventBus.emit('notification:show', {
+      title: 'Teste MCP',
+      message: `Testando ferramenta MCP do vértice "${this.selectedNode.label}"...`,
+      type: 'info'
+    });
+  }
+
+  public toggleCudaStream(): void {
+    if (!this.selectedNode) return;
+    const currentStream = !!this.selectedNode.cudaSettings?.asyncStream;
+    const nextSettings = {
+      ...this.selectedNode.cudaSettings,
+      asyncStream: !currentStream
+    };
+    const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { cudaSettings: this.selectedNode.cudaSettings }, { cudaSettings: nextSettings }, 'Alternar Stream CUDA');
+    this.graph.commandManager.execute(cmd);
+    this.selectedNode.cudaSettings = nextSettings;
+    this.render();
+  }
+
+  public enterSubflow(): void {
+    if (!this.selectedNode) return;
+    globalEventBus.emit('subflow:enter', this.selectedNode.id);
+    this.inspectSelectedNode();
+  }
+
+  public promptChangeRecursion(): void {
+    if (!this.selectedNode) return;
+    const current = this.selectedNode.subflowSettings?.maxRecursionDepth ?? 5;
+    const input = prompt('Profundidade máxima de recursão do subfluxo (1 a 50):', current.toString());
+    if (input !== null) {
+      const val = parseInt(input, 10);
+      if (!isNaN(val) && val > 0) {
+        const nextSettings = { ...this.selectedNode.subflowSettings, maxRecursionDepth: val };
+        const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { subflowSettings: this.selectedNode.subflowSettings }, { subflowSettings: nextSettings }, 'Alterar recursão');
+        this.graph.commandManager.execute(cmd);
+        this.selectedNode.subflowSettings = nextSettings;
+        this.render();
+      }
+    }
+  }
+
+  public promptChangeCriticalKey(): void {
+    if (!this.selectedNode) return;
+    const current = this.selectedNode.criticalSettings?.mutexKey ?? 'global_mutex';
+    const input = prompt('Nome da chave do Mutex / Recurso Compartilhado:', current);
+    if (input !== null && input.trim()) {
+      const nextSettings = { ...this.selectedNode.criticalSettings, mutexKey: input.trim() };
+      const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { criticalSettings: this.selectedNode.criticalSettings }, { criticalSettings: nextSettings }, 'Alterar chave do mutex');
+      this.graph.commandManager.execute(cmd);
+      this.selectedNode.criticalSettings = nextSettings;
+      this.render();
+    }
+  }
+
+  public promptChangeCriticalConcurrency(): void {
+    if (!this.selectedNode) return;
+    const current = this.selectedNode.criticalSettings?.maxConcurrency ?? 1;
+    const input = prompt('Concorrência máxima permitida (1 = exclusão mútua / Mutex estrito):', current.toString());
+    if (input !== null) {
+      const val = parseInt(input, 10);
+      if (!isNaN(val) && val >= 1) {
+        const nextSettings = { ...this.selectedNode.criticalSettings, maxConcurrency: val };
+        const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { criticalSettings: this.selectedNode.criticalSettings }, { criticalSettings: nextSettings }, 'Alterar concorrência');
+        this.graph.commandManager.execute(cmd);
+        this.selectedNode.criticalSettings = nextSettings;
+        this.render();
+      }
+    }
+  }
+
+  public previewInteraction(): void {
+    if (!this.selectedNode) return;
+    globalEventBus.emit('pipeline:interaction', {
+      requestId: `preview_${Date.now()}`,
+      nodeId: this.selectedNode.id,
+      nodeLabel: this.selectedNode.label,
+      form: this.selectedNode.interactionSettings?.form ?? {
+        title: this.selectedNode.label,
+        description: 'Pré-visualização do formulário de interação humana.',
+        fields: [
+          { id: 'f1', type: 'text', label: 'Resposta do Operador', required: true }
+        ]
+      }
+    });
+  }
+
+  public toggleCallSource(): void {
+    if (!this.selectedNode) return;
+    const currentSource = this.selectedNode.callVertexSettings?.source?.kind ?? 'previous';
+    const kinds: Array<'previous' | 'file' | 'none'> = ['previous', 'file', 'none'];
+    const nextKind = kinds[(kinds.indexOf(currentSource) + 1) % kinds.length];
+    const nextSettings = {
+      ...this.selectedNode.callVertexSettings,
+      source: { kind: nextKind, path: '' }
+    };
+    const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { callVertexSettings: this.selectedNode.callVertexSettings }, { callVertexSettings: nextSettings }, 'Alterar origem do input');
+    this.graph.commandManager.execute(cmd);
+    this.selectedNode.callVertexSettings = nextSettings;
+    this.render();
+  }
+
+  public promptChangeOutputPattern(): void {
+    if (!this.selectedNode) return;
+    const current = this.selectedNode.outputSettings?.pattern ?? '*.svg, *.xlsx, *.md, *.json';
+    const input = prompt('Padrão de arquivos de artefatos coletados:', current);
+    if (input !== null && input.trim()) {
+      const nextSettings = { ...this.selectedNode.outputSettings, pattern: input.trim() };
+      const cmd = new UpdateNodeCommand(this.graph, this.selectedNode.id, { outputSettings: this.selectedNode.outputSettings }, { outputSettings: nextSettings }, 'Alterar padrão de artefatos');
+      this.graph.commandManager.execute(cmd);
+      this.selectedNode.outputSettings = nextSettings;
+      this.render();
+    }
   }
 
   private escapeHtml(str: string): string {

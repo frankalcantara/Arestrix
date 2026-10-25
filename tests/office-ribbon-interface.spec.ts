@@ -16,7 +16,19 @@ class MockElement {
   type: string = '';
   title: string = '';
   checked: boolean = false;
-  textContent: string = '';
+  private _textContent: string = '';
+
+  get textContent(): string {
+    if (this._textContent) return this._textContent;
+    if (this.children.length > 0) {
+      return this.children.map(c => c.textContent).filter(Boolean).join(' ').trim();
+    }
+    return '';
+  }
+
+  set textContent(val: string) {
+    this._textContent = val;
+  }
   style: Record<string, string> = {};
   children: MockElement[] = [];
   parentNode: MockElement | null = null;
@@ -521,6 +533,103 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
       expect(btnRun.querySelector('.ribbon-btn-label')?.textContent).toContain('Build & Run');
       expect(btnQat.classList.contains('is-running-stop')).toBe(false);
       expect(btnQat.textContent).toBe('▶');
+    });
+
+    describe('Abas Contextuais de Componentes / Vértices (Estilo Microsoft Office)', () => {
+      it('não deve exibir a aba contextual quando nenhum nó estiver selecionado', () => {
+        const container = ribbon.getContainer();
+        const contextualTabBtn = container.querySelector('#tab-btn-contextual');
+        const contextualPane = container.querySelector('.office-ribbon-pane[data-pane="contextual"]');
+
+        expect(contextualTabBtn).toBeNull();
+        expect(contextualPane).toBeNull();
+        expect(ribbon.getSelectedNode()).toBeNull();
+      });
+
+      it('deve exibir a aba contextual com opções especializadas ao selecionar um nó Agente', async () => {
+        const { globalEventBus } = await import('../src/core/EventBus.ts');
+        const agentNode = graph.createNode('node_agent_test', 'Agente_Auditor_Senior', 'agent', 100, 100);
+
+        globalEventBus.emit('node:selected', agentNode);
+
+        const container = ribbon.getContainer();
+        const contextualTabBtn = container.querySelector('#tab-btn-contextual');
+        expect(contextualTabBtn).toBeDefined();
+        expect(contextualTabBtn?.className).toContain('contextual-tab');
+        expect(contextualTabBtn?.textContent).toContain('AGENTE');
+        expect(contextualTabBtn?.textContent).toContain('Agente_Auditor_Senior');
+
+        // Painel contextual deve estar presente com as ferramentas do agente
+        expect(container.querySelector('#btn-ctx-agent-model')).toBeDefined();
+        expect(container.querySelector('#btn-ctx-agent-sandbox')).toBeDefined();
+        expect(container.querySelector('#btn-ctx-agent-tools')).toBeDefined();
+        expect(container.querySelector('#btn-ctx-agent-skills')).toBeDefined();
+        expect(container.querySelector('#btn-ctx-agent-memory')).toBeDefined();
+        expect(container.querySelector('#btn-ctx-node-rename')).toBeDefined();
+        expect(container.querySelector('#btn-ctx-node-duplicate')).toBeDefined();
+        expect(container.querySelector('#btn-ctx-node-delete')).toBeDefined();
+      });
+
+      it('deve alternar as opções contextuais conforme o tipo do nó selecionado (condition, cuda, mcp)', async () => {
+        const { globalEventBus } = await import('../src/core/EventBus.ts');
+
+        // 1. Nó Condicional
+        const condNode = graph.createNode('node_cond_test', 'Decisor_Risco', 'condition', 200, 100);
+        globalEventBus.emit('node:selected', condNode);
+
+        let container = ribbon.getContainer();
+        let contextualTabBtn = container.querySelector('#tab-btn-contextual');
+        expect(contextualTabBtn?.textContent).toContain('DECISOR');
+        expect(container.querySelector('#btn-ctx-cond-expr')).toBeDefined();
+        expect(container.querySelector('#btn-ctx-cond-prob')).toBeDefined();
+
+        // 2. Nó CUDA GPU
+        const cudaNode = graph.createNode('node_cuda_test', 'Kernel_Matmul', 'cuda', 300, 100);
+        globalEventBus.emit('node:selected', cudaNode);
+
+        container = ribbon.getContainer();
+        contextualTabBtn = container.querySelector('#tab-btn-contextual');
+        expect(contextualTabBtn?.textContent).toContain('CUDA GPU');
+        expect(container.querySelector('#btn-ctx-cuda-code')).toBeDefined();
+        expect(container.querySelector('#btn-ctx-cuda-stream')).toBeDefined();
+
+        // 3. Nó MCP
+        const mcpNode = graph.createNode('node_mcp_test', 'MCP_FetchTool', 'mcp', 400, 100);
+        globalEventBus.emit('node:selected', mcpNode);
+
+        container = ribbon.getContainer();
+        contextualTabBtn = container.querySelector('#tab-btn-contextual');
+        expect(contextualTabBtn?.textContent).toContain('MCP');
+        expect(container.querySelector('#btn-ctx-mcp-servers')).toBeDefined();
+        expect(container.querySelector('#btn-ctx-mcp-test')).toBeDefined();
+      });
+
+      it('deve remover a aba contextual e retornar à aba inicial quando o nó perde o foco (deseleção)', async () => {
+        const { globalEventBus } = await import('../src/core/EventBus.ts');
+        const agentNode = graph.createNode('node_agent_focus', 'Agente_Foco', 'agent', 50, 50);
+
+        // Seleciona o nó: aba contextual surge
+        globalEventBus.emit('node:selected', agentNode);
+        expect(ribbon.getContainer().querySelector('#tab-btn-contextual')).toBeDefined();
+        expect(ribbon.getSelectedNode()?.id).toBe('node_agent_focus');
+
+        // Deseleciona o nó: aba contextual some e ribbon volta para home
+        globalEventBus.emit('node:deselected');
+        expect(ribbon.getContainer().querySelector('#tab-btn-contextual')).toBeNull();
+        expect(ribbon.getSelectedNode()).toBeNull();
+      });
+
+      it('deve remover a aba contextual se o nó selecionado for removido do grafo', async () => {
+        const { globalEventBus } = await import('../src/core/EventBus.ts');
+        const agentNode = graph.createNode('node_agent_to_remove', 'Agente_Temporario', 'agent', 80, 80);
+
+        globalEventBus.emit('node:selected', agentNode);
+        expect(ribbon.getContainer().querySelector('#tab-btn-contextual')).toBeDefined();
+
+        globalEventBus.emit('node:removed', { id: 'node_agent_to_remove' });
+        expect(ribbon.getContainer().querySelector('#tab-btn-contextual')).toBeNull();
+        expect(ribbon.getSelectedNode()).toBeNull();
+      });
     });
   });
 });
