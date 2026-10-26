@@ -2,8 +2,8 @@
   "version": "1.0.0",
   "metadata": {
     "projectId": "exemplo-subflow-chamavel",
-    "graphName": "Subflow_Chamavel",
-    "description": "Coordenador chama um subflow nativo",
+    "graphName": "Exemplo 10 - Subflow Chamável",
+    "description": "Um agente chama um subflow nativo declarado no grafo; o subflow executa seu próprio grafo e devolve o resultado",
     "targetStandard": "C++20",
     "compilerConfig": {
       "compiler": "msvc",
@@ -59,22 +59,55 @@
       "id": "coordenador",
       "label": "Coordenador_Subflow",
       "type": "agent",
-      "position": { "x": 0, "y": 0, "z": 0 },
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
       "inputs": [
-        { "id": "coordenador_in_0", "name": "in", "direction": "input", "type": "flow" },
-        { "id": "coordenador_in_prompt", "name": "prompt_in", "direction": "input", "type": "data", "dataType": "std::string" }
+        {
+          "id": "coordenador_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        },
+        {
+          "id": "coordenador_in_prompt",
+          "name": "prompt_in",
+          "direction": "input",
+          "type": "data",
+          "dataType": "std::string"
+        }
       ],
       "outputs": [
-        { "id": "coordenador_out_0", "name": "out", "direction": "output", "type": "flow" },
-        { "id": "coordenador_out_data", "name": "artifact_out", "direction": "output", "type": "data", "dataType": "std::string" },
-        { "id": "coordenador_out_call", "name": "call", "direction": "output", "type": "call" }
+        {
+          "id": "coordenador_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        },
+        {
+          "id": "coordenador_out_data",
+          "name": "artifact_out",
+          "direction": "output",
+          "type": "data",
+          "dataType": "std::string"
+        },
+        {
+          "id": "coordenador_out_call",
+          "name": "call",
+          "direction": "output",
+          "type": "call"
+        }
       ],
       "parameters": {},
       "customLambdaBody": "",
       "agentSettings": {
         "inheritSandbox": true,
         "inheritModel": false,
-        "model": { "skillPath": "skills/coordenador.md" },
+        "model": {
+          "skillPath": "skills/coordenador.md"
+        },
         "inheritCodeMode": true,
         "inheritMemory": true
       }
@@ -83,12 +116,26 @@
       "id": "subflow_especialista",
       "label": "Subflow_Especialista",
       "type": "subflow",
-      "position": { "x": 360, "y": 180, "z": 0 },
+      "position": {
+        "x": 650,
+        "y": 280,
+        "z": 0
+      },
       "inputs": [
-        { "id": "subflow_especialista_in_0", "name": "in", "direction": "input", "type": "flow" }
+        {
+          "id": "subflow_especialista_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        }
       ],
       "outputs": [
-        { "id": "subflow_especialista_out_0", "name": "out", "direction": "output", "type": "flow" }
+        {
+          "id": "subflow_especialista_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
       ],
       "parameters": {},
       "customLambdaBody": "",
@@ -149,22 +196,55 @@
             "id": "worker",
             "label": "Especialista_Interno",
             "type": "agent",
-            "position": { "x": 0, "y": 0, "z": 0 },
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
             "inputs": [
-              { "id": "worker_in_0", "name": "in", "direction": "input", "type": "flow" },
-              { "id": "worker_in_prompt", "name": "prompt_in", "direction": "input", "type": "data", "dataType": "std::string" }
+              {
+                "id": "worker_in_0",
+                "name": "in",
+                "direction": "input",
+                "type": "flow"
+              },
+              {
+                "id": "worker_in_prompt",
+                "name": "prompt_in",
+                "direction": "input",
+                "type": "data",
+                "dataType": "std::string"
+              }
             ],
             "outputs": [
-              { "id": "worker_out_0", "name": "out", "direction": "output", "type": "flow" },
-              { "id": "worker_out_data", "name": "artifact_out", "direction": "output", "type": "data", "dataType": "std::string" },
-              { "id": "worker_out_call", "name": "call", "direction": "output", "type": "call" }
+              {
+                "id": "worker_out_0",
+                "name": "out",
+                "direction": "output",
+                "type": "flow"
+              },
+              {
+                "id": "worker_out_data",
+                "name": "artifact_out",
+                "direction": "output",
+                "type": "data",
+                "dataType": "std::string"
+              },
+              {
+                "id": "worker_out_call",
+                "name": "call",
+                "direction": "output",
+                "type": "call"
+              }
             ],
             "parameters": {},
             "customLambdaBody": "",
             "agentSettings": {
               "inheritSandbox": true,
               "inheritModel": false,
-              "model": { "skillPath": "skills/worker.md" },
+              "model": {
+                "skillPath": "skills/worker.md"
+              },
               "inheritCodeMode": true,
               "inheritMemory": true
             }
@@ -173,13 +253,33 @@
             "id": "resultado",
             "label": "Resultado_do_Subflow",
             "type": "output",
-            "position": { "x": 360, "y": 0, "z": 0 },
+            "position": {
+              "x": 360,
+              "y": 0,
+              "z": 0
+            },
             "inputs": [
-              { "id": "resultado_in_0", "name": "in", "direction": "input", "type": "flow" },
-              { "id": "resultado_in_data", "name": "data_in", "direction": "input", "type": "data", "dataType": "std::string" }
+              {
+                "id": "resultado_in_0",
+                "name": "in",
+                "direction": "input",
+                "type": "flow"
+              },
+              {
+                "id": "resultado_in_data",
+                "name": "data_in",
+                "direction": "input",
+                "type": "data",
+                "dataType": "std::string"
+              }
             ],
             "outputs": [
-              { "id": "resultado_out_0", "name": "out", "direction": "output", "type": "flow" }
+              {
+                "id": "resultado_out_0",
+                "name": "out",
+                "direction": "output",
+                "type": "flow"
+              }
             ],
             "parameters": {},
             "customLambdaBody": "",
@@ -210,13 +310,33 @@
       "id": "entrega",
       "label": "Entrega_da_Resposta",
       "type": "output",
-      "position": { "x": 720, "y": 0, "z": 0 },
+      "position": {
+        "x": 720,
+        "y": 0,
+        "z": 0
+      },
       "inputs": [
-        { "id": "entrega_in_0", "name": "in", "direction": "input", "type": "flow" },
-        { "id": "entrega_in_data", "name": "data_in", "direction": "input", "type": "data", "dataType": "std::string" }
+        {
+          "id": "entrega_in_0",
+          "name": "in",
+          "direction": "input",
+          "type": "flow"
+        },
+        {
+          "id": "entrega_in_data",
+          "name": "data_in",
+          "direction": "input",
+          "type": "data",
+          "dataType": "std::string"
+        }
       ],
       "outputs": [
-        { "id": "entrega_out_0", "name": "out", "direction": "output", "type": "flow" }
+        {
+          "id": "entrega_out_0",
+          "name": "out",
+          "direction": "output",
+          "type": "flow"
+        }
       ],
       "parameters": {},
       "customLambdaBody": "",

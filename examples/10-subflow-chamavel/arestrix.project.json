@@ -1,32 +1,29 @@
 {
-  "projectId": "exemplo-subflow-chamavel",
-  "name": "Exemplo 10 - Subflow Chamável",
-  "description": "Um agente chama um subflow nativo declarado no grafo; o subflow executa seu próprio grafo e devolve o resultado",
-  "version": "1.0.0",
   "createdAt": "2026-10-24T00:00:00Z",
-  "updatedAt": "2026-10-24T00:00:00Z",
-  "rootPath": ".",
   "database": {
-    "type": "sqlite",
     "filePath": "storage/database.sqlite",
+    "type": "sqlite",
     "url": ""
   },
+  "description": "Um agente chama um subflow nativo declarado no grafo; o subflow executa seu próprio grafo e devolve o resultado",
   "environment": {},
+  "git": {
+    "autoCommitOnRun": true,
+    "autoCommitOnShutdown": true,
+    "backupMode": "ddl_and_data",
+    "enabled": false,
+    "isPrivate": true,
+    "lastCommitHash": "",
+    "lastSyncAt": "",
+    "provider": "github",
+    "remoteUrl": "",
+    "repositoryName": "",
+    "serverUrl": "https://github.com",
+    "timedPushEnabled": true,
+    "timedPushIntervalMinutes": 10,
+    "username": ""
+  },
   "globalDefaults": {
-    "model": {
-      "provider": "deepseek",
-      "model": "deepseek-flash",
-      "skillPath": "",
-      "promptTemplate": ""
-    },
-    "sandbox": {
-      "isolationLevel": "host_direct",
-      "network": "egress_llm_only",
-      "maxMemoryMB": 512,
-      "timeoutSeconds": 180,
-      "readOnlyMounts": [],
-      "readWriteMounts": []
-    },
     "codeMode": {
       "allowedTools": [
         "read",
@@ -35,23 +32,83 @@
       "customScripts": []
     },
     "memory": {
+      "allowedKeys": [],
+      "domains": [],
       "enabled": false,
       "persistent": false,
       "readBlackboard": false,
-      "writeBlackboard": false,
-      "semanticLessons": false,
       "recordLessons": false,
-      "allowedKeys": [],
-      "domains": []
+      "semanticLessons": false,
+      "writeBlackboard": false
+    },
+    "model": {
+      "model": "deepseek-flash",
+      "promptTemplate": "",
+      "provider": "deepseek",
+      "skillPath": ""
+    },
+    "sandbox": {
+      "isolationLevel": "host_direct",
+      "maxMemoryMB": 512,
+      "network": "egress_llm_only",
+      "readOnlyMounts": [],
+      "readWriteMounts": [],
+      "timeoutSeconds": 180
     }
   },
+  "name": "Exemplo 10 - Subflow Chamável",
   "pipelines": [
     {
-      "id": "main",
-      "name": "Pipeline Principal",
+      "description": "Coordenador chama um subflow nativo",
       "file": "pipelines/main.json",
+      "id": "main",
       "isPrimary": true,
-      "description": "Coordenador chama um subflow nativo"
+      "name": "Pipeline Principal"
     }
-  ]
+  ],
+  "projectId": "exemplo-subflow-chamavel",
+  "rootPath": ".",
+  "runner": {
+    "allowRestart": true,
+    "autoStart": false,
+    "defaultTab": "progress",
+    "description": "",
+    "enabled": false,
+    "outputDir": "dist/runner",
+    "outputName": "",
+    "packaging": {
+      "appId": "Arestrix.Company.PipelineRunner",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "format": "standalone-folder",
+      "publisher": "CN=Corporate, O=Enterprise, C=BR",
+      "silentInstallArgs": "/qn ALLUSERS=1",
+      "upgradeCode": ""
+    },
+    "parameters": [],
+    "signature": {
+      "algorithm": "ed25519",
+      "enabled": false,
+      "issuer": "",
+      "keyId": "",
+      "publicKey": "",
+      "requiredForExecution": false,
+      "signature": "",
+      "signedAt": ""
+    },
+    "title": "",
+    "vault": {
+      "autoPurgeMemory": true,
+      "azureAuthMethod": "managed-identity",
+      "azureClientId": "",
+      "azureKeyVaultUrl": "",
+      "azureTenantId": "",
+      "fallbackToEnvironment": true,
+      "provider": "windows-credential-vault",
+      "secretPrefix": "Arestrix_"
+    },
+    "version": "1.0.0"
+  },
+  "updatedAt": "2026-10-26T00:10:46Z",
+  "version": "1.0.0"
 }

@@ -315,6 +315,7 @@ void GitSyncService::ensureSafeGitignore(const std::filesystem::path& projectRoo
         "*.sqlite-shm",
         "output/",
         ".arestrix/",
+        ".workspace/",
         "workspace/",
         ".env",
         ".env.local",
