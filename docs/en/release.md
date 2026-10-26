@@ -103,6 +103,23 @@ The generated archive is `release/arestrix-<version>-<platform>-<arch>.zip` on W
 MSVC/GCC. Compiling pipelines on the target still requires a C++20 compiler and the Visual C++
 Redistributable on Windows.
 
+## 3.2 Automated portable deploy (Windows)
+
+`.github/workflows/deploy.yml` builds and publishes the portable package from GitHub Actions:
+
+- a push to `main` updates the rolling
+  [`latest`](https://github.com/frankalcantara/Arestrix/releases/tag/latest) pre-release;
+- pushing a `v*` tag publishes or updates the release for that tag;
+- a manual dispatch follows the selected branch/tag.
+
+The workflow runs the canonical gate (`release_check.py --skip-e2e`), creates the ZIP with
+`package_release.py` and attaches the archive, `.zip.sha256`, `SHA256SUMS`, `SBOM.json`,
+`release-manifest.json` and `release-report.json` to the release. The portable folder is ready to
+run from any directory (`start-arestrix.bat`); no development checkout is needed.
+
+E2E remains a promotion requirement: run the full `release_check.py` (with E2E) from a clean tree
+before tagging an official release.
+
 ## 4. Sign the Windows binaries
 
 After the gate passes, sign the executables with the corporate certificate:
@@ -120,8 +137,7 @@ Alternatively use `ARESTRIX_SIGN_THUMBPRINT` for a certificate installed in `My`
 
 - MSI/MSIX or Inno Setup installer and Linux package (5B2; the portable package 5B1 is implemented).
 - Code-signing certificate/HSM provisioning and signing inside CI.
-- Automated Windows/Linux CI matrix.
+- Automated Linux CI matrix (the Windows portable deploy is implemented).
 - Signed remote catalog (Ed25519/minisign) and hosting.
-- Publishing checksums/SBOM to a release page.
 
 Those are the next phase-5 slices.

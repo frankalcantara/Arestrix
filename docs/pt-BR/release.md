@@ -103,6 +103,23 @@ Linux/macOS; `--format both` cria os dois. O pacote portátil **não** inclui MS
 pipelines no destino ainda é necessário um compilador C++20 e o Visual C++ Redistributable no
 Windows.
 
+## 3.2 Deploy portátil automatizado (Windows)
+
+O `.github/workflows/deploy.yml` compila e publica o pacote portátil pelo GitHub Actions:
+
+- um push para a `main` atualiza o pré-release contínuo
+  [`latest`](https://github.com/frankalcantara/Arestrix/releases/tag/latest);
+- o push de uma tag `v*` publica ou atualiza o release daquela tag;
+- a execução manual segue a branch/tag selecionada.
+
+O workflow roda o gate canônico (`release_check.py --skip-e2e`), gera o ZIP com
+`package_release.py` e anexa ao release o arquivo, `.zip.sha256`, `SHA256SUMS`, `SBOM.json`,
+`release-manifest.json` e `release-report.json`. A pasta extraída roda em qualquer diretório
+(`start-arestrix.bat`); não é necessário um checkout de desenvolvimento.
+
+O E2E continua sendo requisito de promoção: rode o `release_check.py` completo (com E2E) em uma
+árvore limpa antes de taguear um release oficial.
+
 ## 4. Assine os binários do Windows
 
 Depois do gate aprovado, assine os executáveis com o certificado corporativo:
@@ -120,8 +137,7 @@ Como alternativa, use `ARESTRIX_SIGN_THUMBPRINT` para um certificado instalado e
 
 - Instalador MSI/MSIX ou Inno Setup e pacote Linux (5B2; o pacote portátil 5B1 está implementado).
 - Provisionamento do certificado/HSM e assinatura dentro do CI.
-- Matriz automatizada Windows/Linux.
+- Matriz automatizada Linux (o deploy portátil Windows está implementado).
 - Catálogo remoto assinado (Ed25519/minisign) e hospedagem.
-- Publicação de checksums/SBOM em uma release.
 
 Essas são as próximas fatias da fase 5.

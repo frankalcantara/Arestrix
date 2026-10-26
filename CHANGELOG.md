@@ -55,9 +55,18 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   listeners are removed on disposal. Vertex titles now wrap into up to two lines instead of
   overflowing the card (the shared text helper never inserted line breaks), and a truncated title
   exposes the full label through a native SVG tooltip.
+- `.workspace/` directories are now ignored by Git and excluded from portable packages. They hold
+  workspace assets with machine-specific absolute paths (for example
+  `C:/Projetos/.../.workspace/workspace.config.json`) and must never be published in a release.
 
 ### Added
 
+- Automated Windows x64 portable deploy: `.github/workflows/deploy.yml` runs the release gate,
+  builds the portable ZIP with `package_release.py` and publishes it to GitHub Releases. Pushes to
+  `main` update the rolling `latest` pre-release; `v*` tags publish/update their own release. The
+  release carries the ZIP, `.zip.sha256`, `SHA256SUMS`, `SBOM.json`, `release-manifest.json` and
+  `release-report.json`, so testers can run the Studio from any folder without a development
+  checkout. Both READMEs now point to the `latest` build.
 - Arestrix Skill Guard: the `security-audit-skill` (Cloudflare) submodule, a project skill at
   `.agents/skills/arestrix-skill-guard/`, and a second deterministic audit layer for supply chain,
   persistence, credential access, tool abuse, data isolation and resource exhaustion. Skill

@@ -1,0 +1,128 @@
+name: Deploy portable build
+
+# Builds the real Arestrix binary (native C++ + Studio UI), runs the quality
+# gate and publishes a ready-to-run Windows x64 portable package.
+#
+# - push to main  -> updates the rolling `latest` pre-release
+# - tag v*        -> publishes/updates the release for that tag
+# - manual run    -> same rules, based on the selected branch/tag
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-portable:
+    name: Windows x64 portable package
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    env:
+      PYTHONUTF8: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Canonical gate: frontend build, native C++20 build (MSVC, hardening),
+      # CTest, Vitest, version/assets/secrets/licenses checks, gateway smoke,
+      # then release-manifest + SHA256SUMS + SBOM.
+      - name: Run release gate
+        run: python scripts/release_check.py --skip-e2e
+
+      # Stages the portable folder, runs the CLI smoke tests and writes the
+      # ZIP + SHA-256 sidecar. Requires release/SBOM.json from the gate.
+      - name: Build portable package
+        run: python scripts/package_release.py
+
+      - name: Read product version
+        id: product
+        shell: bash
+        run: echo "version=$(cat version.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve release target
+        id: target
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "name=Arestrix ${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+            echo "name=Arestrix latest build (Windows x64)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.target.outputs.tag }}
+          name: ${{ steps.target.outputs.name }}
+          prerelease: true
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          body: |
+            Ready-to-run **Windows x64** portable build of Arestrix
+            `${{ steps.product.outputs.version }}` (commit `${{ github.sha }}`).
+
+            ## Run the Studio
+
+            1. Download `arestrix-${{ steps.product.outputs.version }}-windows-x64.zip`.
+            2. Extract it to any folder (that folder becomes `ARESTRIX_HOME`).
+            3. Run `start-arestrix.bat`.
+
+            The CLI is in the same folder:
+
+            ```bat
+            arestrix-cli.exe version
+            arestrix-cli.exe project validate --project examples\01-svg-agente
+            ```
+
+            ## Requirements
+
+            - Windows 10/11 x64.
+            - To **compile/run pipelines**, install the MSVC Build Tools
+              ("Desktop development with C++") and the Visual C++ Redistributable.
+              The package does not bundle MSVC/GCC.
+
+            ## Integrity
+
+            - `*.zip.sha256`, `SHA256SUMS`, `SBOM.json` and `release-manifest.json`
+              are attached to this release.
+            - No API keys or user data are included.
+
+            This is a rolling pre-release built from the latest `main`; the
+            manifest records the exact commit. For a fully validated build, run
+            `python scripts/release_check.py` (with E2E) from a clean tree.
+          files: |
+            release/*.zip
+            release/*.zip.sha256
+            release/SHA256SUMS
+            release/SBOM.json
+            release/release-manifest.json
+            release/release-report.json

@@ -31,6 +31,18 @@
 
 ---
 
+## Try it without building
+
+Download the ready-to-run **Windows x64** portable build from
+[**Releases → latest**](https://github.com/frankalcantara/Arestrix/releases/tag/latest), extract the
+ZIP to any folder and run `start-arestrix.bat`.
+
+- The extracted folder becomes `ARESTRIX_HOME`; the CLI is `arestrix-cli.exe`.
+- Compiling pipelines additionally requires the MSVC Build Tools ("Desktop development with C++")
+  and the Visual C++ Redistributable; the package does not bundle a compiler.
+- Every build ships `SHA256SUMS`, `SBOM.json` and a per-file `package-manifest.json`.
+- `latest` is a rolling pre-release built from `main`; version tags publish their own release.
+
 ## What is Arestrix?
 
 Arestrix is a desktop studio and native compiler for AI agent workflows. You draw a pipeline on a

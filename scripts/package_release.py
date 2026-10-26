@@ -60,7 +60,7 @@ def sha256(path: Path) -> str:
 
 
 def ignore_generated(directory: str, names: list[str]) -> set[str]:
-    ignored = {"__pycache__", ".git", "node_modules", "build", ".arestrix"}
+    ignored = {"__pycache__", ".git", "node_modules", "build", ".arestrix", ".workspace"}
     return {name for name in names if name in ignored or name.endswith((".pyc", ".obj", ".pdb", ".log"))}
 
 
