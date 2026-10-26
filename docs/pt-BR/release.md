@@ -163,8 +163,8 @@ A validação local em Windows 11 x64 cobriu o preflight do ambiente (todos os i
 detectados), instalação silenciosa com relatório no log do setup, atalho de desktop padrão e sua
 exclusão com `/MERGETASKS="!desktopicon"`, atalhos do Menu Iniciar, registro em `App Paths`, upgrade
 sobre a instalação anterior preservando arquivos/projetos do usuário e desinstalação completa.
-Instalação em máquina limpa, assinatura e Intune/SCCM ainda fazem parte do gate Beta 2; o instalador
-ainda não é um artefato de release validado.
+Instalação em máquina limpa, assinatura e Intune/SCCM ainda estão pendentes; o instalador é incluído
+na pré-release, mas ainda não é um artefato de release totalmente validado.
 
 ## 4. Assinatura com SignPath Foundation
 

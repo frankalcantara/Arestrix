@@ -1,6 +1,6 @@
 # How Arestrix memory works
 
-> **Applies to:** Arestrix Beta 2 (`2.0.0-beta.1`) — last reviewed: 2026-10-25
+> **Applies to:** Arestrix Beta 2.1 (`2.1.0-beta.1`) — last reviewed: 2026-10-25
 >
 > This guide describes the memory implemented in the C++20 + SQLite core. It covers the full
 > cycle: capture, proposal, promotion, consolidation, retrieval, embeddings, playbooks,

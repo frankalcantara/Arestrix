@@ -4,9 +4,9 @@ All notable changes to Arestrix are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-Pre-release identifiers follow SemVer (`2.0.0-beta.1`); the marketing name is **Beta 2**.
+Pre-release identifiers follow SemVer (`2.1.0-beta.1`); the marketing name is **Beta 2.1**.
 
-## [Unreleased]
+## [2.1.0-beta.1] - 2026-10-26
 
 ### Added
 
@@ -27,15 +27,33 @@ Pre-release identifiers follow SemVer (`2.0.0-beta.1`); the marketing name is **
   alongside the portable ZIP. Upgrades reuse the same `AppId` and previous install
   directory/tasks, replacing only application files so user projects are preserved. The deploy
   workflow installs Inno Setup and uploads the setup plus its SHA-256 sidecar. Clean-machine
-  install/upgrade/uninstall, silent install and Intune/SCCM validation remain part of the Beta 2
-  gate.
+  install/upgrade/uninstall, silent install and Intune/SCCM validation remain pending for a future
+  validation gate.
+- Canvas background preference: the floating canvas HUD can switch the graph canvas between the
+  default light background and a pure black background with a slate grid. The choice is persisted
+  in `localStorage` (`arestrix_canvas_background`) and reapplied on startup without modifying the
+  graph or project files.
 
-### Beta 2 gate
+### Changed
 
-- `2.0.0-beta.1` is the Beta 2 development release. The MSI/MSIX (or Inno Setup) installer and Linux
-  package (5B2), code signing and the CI/Linux matrix (5C), the signed remote catalog and the
-  mandatory test matrix in [docs/quality/beta2-test-plan.md](docs/quality/beta2-test-plan.md) remain
-  pending. Do not tag or publish Beta 2 until the release gate passes.
+- Running a pipeline no longer expands the console automatically. A collapsed terminal stays
+  collapsed for the whole run; the user opens it explicitly when needed.
+- The floating graph visualization controls (layout, follow, clear, fit, zoom and grid) are hidden
+  while a pipeline is compiling or executing and return when it succeeds or fails.
+- Ribbon visual refresh (stages 1–2): the title bar, tab strip and every ribbon tab (Home, Insert,
+  Agents, Connectors, Data, Run and contextual tabs) now use the Office 365 visual language
+  (neutral chrome, elevated white panel, 34px tabs, Segoe UI typography, larger command buttons,
+  compact labels and a unified vector SVG icon set). Emoji command icons were removed from the
+  ribbon; the remaining status glyphs are limited to autosave/Git state and validation feedback.
+
+### Known limitations
+
+- `2.1.0-beta.1` is a development pre-release. The Windows installer and SignPath integration are
+  included, but clean-machine install/upgrade/uninstall, silent install and Intune/SCCM validation
+  remain pending. Linux packages, the signed remote catalog and the full acceptance matrix in
+  [docs/quality/beta2-test-plan.md](docs/quality/beta2-test-plan.md) also remain pending.
+- Tagged releases are signed when `SIGNPATH_ENABLED=true` and the SignPath variables/secrets are
+  configured; otherwise the workflow publishes unsigned artifacts.
 
 ## [2.0.0-beta.1] - 2026-10-26
 
@@ -413,6 +431,7 @@ First public beta of Arestrix Studio and the native C++20 pipeline compiler.
 - The `braces` advisory documented in `docs/security/dependency-advisories.md` affects the build chain only;
   no fixed release is available upstream yet.
 
+[2.1.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v2.1.0-beta.1
 [2.0.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v2.0.0-beta.1
 [1.5.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v1.5.0-beta.1
 [1.0.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v1.0.0-beta.1

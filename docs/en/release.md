@@ -163,8 +163,8 @@ Local validation on Windows 11 x64 covered the environment preflight (all option
 silent install with the report written to the setup log, the desktop shortcut default and its
 `/MERGETASKS="!desktopicon"` opt-out, Start menu shortcuts, `App Paths` registration, an in-place
 upgrade preserving user files/projects and a complete uninstall. Clean-machine install, signing and
-Intune/SCCM validation remain part of the Beta 2 gate; the installer is not yet a validated release
-artifact.
+Intune/SCCM validation remain pending; the installer is included in the pre-release but is not yet a
+fully validated release artifact.
 
 ## 4. Code signing with SignPath Foundation
 

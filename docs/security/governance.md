@@ -1,6 +1,6 @@
 # Security and governance model
 
-> **Applies to:** Arestrix Beta 2 (`2.0.0-beta.1`) · Last reviewed: 2026-10-19
+> **Applies to:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Last reviewed: 2026-10-19
 
 Arestrix uses defense in depth. The controls below are implemented in the product, but their
 effectiveness depends on how a pipeline is configured and deployed. Validate them against your own

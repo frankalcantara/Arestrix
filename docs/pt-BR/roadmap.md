@@ -1,6 +1,6 @@
 # Roadmap e limitações conhecidas
 
-> **Aplica-se a:** Arestrix Beta 2 (`2.0.0-beta.1`) · Última revisão: 2026-10-21
+> **Aplica-se a:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Última revisão: 2026-10-21
 >
 > Esta página registra o que está intencionalmente incompleto e a ordem planejada para resolver. Não é
 > um compromisso de datas.
@@ -100,26 +100,27 @@ Limitações do serviço institucional e do background:
 - Ainda não há atualização automática de modelos, deduplicação ou cota de disco.
 - Os pesos não são redistribuídos; o download depende do publicador upstream e da licença.
 
-## Beta 2 (em desenvolvimento)
+## Beta 2.1 (pré-release)
 
-A linha Beta 2 está versionada como `2.0.0-beta.1`. O bump foi feito, mas a tag e a publicação
-continuam bloqueadas até o gate do Beta 2 passar.
+A linha Beta 2.1 está versionada como `2.1.0-beta.1` e é publicada como pré-release de
+desenvolvimento pelo workflow de deploy.
 
-Já entregue para a linha Beta 2: grafo de chamadas fechado, interações, formulários gerados, chamadas
-paralelas, subflow chamável, vértice Call em fluxo, notificações, `call_result` assíncrono, trace
-aberto, gate de release, pacote portátil e a consolidação da camada visual SVG com o novo registro de
-execução por vértice.
+Já entregue para a linha Beta 2.1: grafo de chamadas fechado, interações, formulários gerados,
+chamadas paralelas, subflow chamável, vértice Call em fluxo, notificações, `call_result` assíncrono,
+trace aberto, gate de release, pacote portátil, instalador Windows Inno Setup, integração SignPath
+Foundation, preferência de aparência do canvas, comportamento de console/HUD durante execução, a
+consolidação da camada visual SVG com o novo registro de execução por vértice e o refresh do ribbon
+no padrão Office 365 em todas as abas.
 
-Pendente antes de publicar o Beta 2:
+Pendente após a pré-release `2.1.0-beta.1`:
 
-- Instalador Windows Inno Setup implementado; faltam instalação/upgrade/uninstall em máquina limpa,
-  instalação silenciosa e validação em Intune/SCCM, além do pacote Linux (5B2).
-- Integração SignPath Foundation implementada; faltam aprovação da conta/projeto, primeira release
-  assinada e assinatura do desinstalador do Inno. Migração para certificado de empresa fica para depois.
-- Assinatura de código, matriz de CI Windows/Linux e catálogo remoto assinado (5C).
-- A matriz completa em [Plano de testes do Beta 2](../quality/beta2-test-plan.md), incluindo
-  instalação/upgrade/uninstall em máquina limpa e homologação manual do Studio.
-- Publicação de checksums, SBOM, notices e notas de release.
+- Instalação/upgrade/uninstall em máquina limpa, instalação silenciosa e validação em Intune/SCCM,
+  além do pacote Linux (5B2).
+- Aprovação da conta/projeto SignPath, primeira release assinada e assinatura do desinstalador do
+  Inno. Migração para certificado de empresa fica para depois.
+- Matriz de CI Windows/Linux, catálogo remoto assinado (5C) e a matriz completa em
+  [Plano de testes do Beta 2.1](../quality/beta2-test-plan.md).
+- Homologação manual do Studio e publicação de checksums, SBOM, notices e notas de release.
 
 ## Próximos passos
 

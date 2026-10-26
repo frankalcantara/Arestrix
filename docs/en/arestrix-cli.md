@@ -1,6 +1,6 @@
 # `arestrix-cli` — headless execution
 
-> **Applies to:** Arestrix Beta 2 (`2.0.0-beta.1`) · Last reviewed: 2026-10-25
+> **Applies to:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Last reviewed: 2026-10-25
 
 [Português](../pt-BR/arestrix-cli.md) · [Index](README.md)
 

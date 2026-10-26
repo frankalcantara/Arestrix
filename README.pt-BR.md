@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <b>Beta 2</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentação</a>
+  <b>Beta 2.1</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentação</a>
 </p>
 
 <p align="center">
@@ -160,19 +160,19 @@ python scripts/e2e_examples.py
 | [Validação de skills](docs/quality/skill-reference-review.md) | Arestrix Skill Guard: NVIDIA SkillSpector + Cloudflare security-audit, lock e revisão de referências. |
 | [Exemplos](examples/README.pt-BR.md) | Cinco projetos executáveis, de um pipeline de dois agentes a fluxos compostos, de memória e de pesquisa web. |
 | [Registro de auditoria de testes](docs/quality/test-audit-log.md) | Rodadas cronológicas de testes e auditorias de integridade. |
-| [Plano de testes do Beta 2](docs/quality/beta2-test-plan.md) | Escopo registrado, instalador/assinatura/CI pendentes e critérios de aceite. |
+| [Plano de testes do Beta 2.1](docs/quality/beta2-test-plan.md) | Escopo registrado e critérios de aceite pendentes. |
 | [Changelog](CHANGELOG.md) | Histórico de releases, mudanças e limitações conhecidas. |
 
 ## Status do projeto
 
-A **Beta 2** (`2.0.0-beta.1`) é um pré-release de desenvolvimento. O Studio roda no Windows e no
+A **Beta 2.1** (`2.1.0-beta.1`) é um pré-release de desenvolvimento. O Studio roda no Windows e no
 Linux; programas gerados a partir de um grafo atualmente têm o Windows como alvo. APIs, formatos de
 arquivo e flags de linha de comando podem mudar antes da disponibilidade geral. Consulte o
-[changelog](CHANGELOG.md) para as limitações atuais. Instalador, assinatura de código, pacote Linux e
-a matriz completa de testes ainda estão pendentes; acompanhe no
-[plano de testes do Beta 2](docs/quality/beta2-test-plan.md). Os artefatos Windows são assinados
-pela [SignPath Foundation](https://signpath.org) quando a assinatura está habilitada; consulte a
-[política de assinatura de código](CODE_SIGNING.md).
+[changelog](CHANGELOG.md) para as limitações atuais. O instalador Windows e a assinatura de código
+estão incluídos; validação em máquina limpa, pacote Linux e a matriz completa de testes ainda estão
+pendentes. Acompanhe no [plano de testes do Beta 2.1](docs/quality/beta2-test-plan.md). Os artefatos
+Windows são assinados pela [SignPath Foundation](https://signpath.org) quando a assinatura está
+habilitada; consulte a [política de assinatura de código](CODE_SIGNING.md).
 
 ## Segurança
 

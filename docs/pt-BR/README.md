@@ -2,7 +2,7 @@
 
 [English](../en/README.md) · [Toda a documentação](../README.md)
 
-> **Aplica-se a:** Arestrix Beta 2 (`2.0.0-beta.1`) · Última revisão: 2026-10-25
+> **Aplica-se a:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Última revisão: 2026-10-25
 
 ## Trilha de aprendizado
 

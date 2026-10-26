@@ -1,6 +1,6 @@
 # Roadmap and known limitations
 
-> **Applies to:** Arestrix Beta 2 (`2.0.0-beta.1`) · Last reviewed: 2026-10-21
+> **Applies to:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Last reviewed: 2026-10-21
 >
 > This page records what is intentionally incomplete and the order we plan to address it. It is not a
 > commitment to dates.
@@ -100,25 +100,26 @@ Limitations of the institution service and background worker:
 - No automatic model update, deduplication or disk quota management yet.
 - Model weights are not redistributed; downloads depend on the upstream publisher and license.
 
-## Beta 2 (in development)
+## Beta 2.1 (pre-release)
 
-The Beta 2 line is versioned as `2.0.0-beta.1`. The version bump is in place, but tagging and
-publishing remain blocked until the Beta 2 gate passes.
+The Beta 2.1 line is versioned as `2.1.0-beta.1` and is published as a development pre-release
+through the deploy workflow.
 
-Already delivered for the Beta 2 line: closed call graph, interactions, generated forms, parallel
+Already delivered for the Beta 2.1 line: closed call graph, interactions, generated forms, parallel
 calls, callable subflow, flow Call vertex, notifications, async `call_result`, open trace, release
-gate, portable package and the consolidated SVG visual layer with per-vertex run records.
+gate, portable package, Windows Inno Setup installer, SignPath Foundation integration, canvas
+appearance preferences, execution-focused console/HUD behavior, the consolidated SVG visual layer
+with per-vertex run records, and the Office 365 ribbon refresh across all tabs.
 
-Pending before publishing Beta 2:
+Pending after the `2.1.0-beta.1` pre-release:
 
-- Windows Inno Setup installer implemented; clean-machine install/upgrade/uninstall, silent install
-  and Intune/SCCM validation plus the Linux package (5B2) remain.
-- SignPath Foundation integration implemented; account/project approval, first signed release and
-  signing of the Inno uninstaller remain. Company certificate migration is a later step.
-- Code signing, Windows/Linux CI matrix and signed remote catalog (5C).
-- The full test matrix in [Beta 2 test plan](../quality/beta2-test-plan.md), including clean-machine
-  install/upgrade/uninstall and manual Studio homologation.
-- Published checksums, SBOM, notices and release notes.
+- Clean-machine install/upgrade/uninstall, silent install and Intune/SCCM validation, plus the Linux
+  package (5B2).
+- SignPath account/project approval, first signed release and signing of the Inno uninstaller.
+  Company certificate migration is a later step.
+- Windows/Linux CI matrix, signed remote catalog (5C) and the full test matrix in
+  [Beta 2.1 test plan](../quality/beta2-test-plan.md).
+- Manual Studio homologation and publication of checksums, SBOM, notices and release notes.
 
 ## Next steps
 
