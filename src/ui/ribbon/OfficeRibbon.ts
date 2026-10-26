@@ -18,6 +18,8 @@ import { McpServersModal } from '../modals/McpServersModal.ts';
 import { ProjectManagerModal } from '../modals/ProjectManagerModal.ts';
 
 import { BackstageView } from './BackstageView.ts';
+import { ribbonIcon } from './RibbonIcons.ts';
+import type { RibbonIconName } from './RibbonIcons.ts';
 import { RibbonDialog } from './RibbonDialog.ts';
 import { ImportPiModal } from '../modals/ImportPiModal.ts';
 import { ImportClaudeModal } from '../modals/ImportClaudeModal.ts';
@@ -142,8 +144,8 @@ export class OfficeRibbon {
       <div class="office-titlebar">
         <div class="office-titlebar-left">
           <div class="office-brand-badge">
-            <div class="office-brand-icon" style="background: #14151A; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 4px; padding: 2px;">
-              <svg viewBox="0 0 124 124" width="14" height="14" fill="none" style="display:block;">
+            <div class="office-brand-icon">
+              <svg viewBox="0 0 124 124" width="15" height="15" fill="none" aria-hidden="true" focusable="false">
                 <g stroke="#F4F2EE" stroke-width="14" stroke-linecap="round">
                   <line x1="62" y1="21" x2="22" y2="103"/>
                   <line x1="62" y1="21" x2="102" y2="103"/>
@@ -154,7 +156,7 @@ export class OfficeRibbon {
                 <circle cx="102" cy="103" r="11" fill="#F4F2EE"/>
               </svg>
             </div>
-            <span style="font-weight: 800; font-family: 'Space Grotesk', sans-serif; letter-spacing: -0.2px; font-size: 12px;">Arestrix <span style="color: #0f6cbd; font-size: 10px; font-weight: 700; letter-spacing: 0.8px;">STUDIO</span></span>
+            <span class="office-brand-name">Arestrix <span class="office-brand-edition">STUDIO</span></span>
           </div>
 
           <!-- Acesso Rápido -->
@@ -170,31 +172,40 @@ export class OfficeRibbon {
             </div>
 
             <!-- Botão e Indicador de Sincronização Git Privado -->
-            <button id="qat-btn-git-sync" class="office-qat-btn" title="${t('git_sync.modal_title', 'Conta Git & Repositório do Projeto')}" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; margin-left: 2px;">
-              <span style="font-size: 12px;">🌿</span>
-              <span id="qat-git-status-badge" style="font-size: 11px; font-weight: 600; color: #64748b;">Git</span>
+            <button id="qat-btn-git-sync" class="office-qat-btn office-qat-label" title="${t('git_sync.modal_title', 'Conta Git & Repositório do Projeto')}">
+              ${ribbonIcon('git', 17)}
+              <span id="qat-git-status-badge">Git</span>
             </button>
-            <button id="qat-btn-git-push" class="office-qat-btn" title="${t('git_sync.btn_push_tooltip', 'Sincronizar com GitHub agora (Commit & Push manual)')}" style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 4px; margin-left: 2px; font-size: 11px; font-weight: 600; color: #0f6cbd;">
-              <span style="font-size: 11px;">⬆️</span>
+            <button id="qat-btn-git-push" class="office-qat-btn office-qat-label" title="${t('git_sync.btn_push_tooltip', 'Sincronizar com GitHub agora (Commit & Push manual)')}">
+              ${ribbonIcon('upload', 17)}
               <span>Push</span>
             </button>
 
-            <button id="qat-btn-save" class="office-qat-btn" title="${t('ribbon.titlebar.save_now')}">💾</button>
-            <button id="qat-btn-undo" class="office-qat-btn" title="${t('ribbon.titlebar.undo')}" disabled>↶</button>
-            <button id="qat-btn-redo" class="office-qat-btn" title="${t('ribbon.titlebar.redo')}" disabled>↷</button>
-            <button id="qat-btn-run" class="office-qat-btn ${this.isPipelineRunning ? 'is-running-stop' : ''}" style="${this.isPipelineRunning ? 'color: #dc2626 !important; font-weight: 800;' : 'color: #0f6cbd;'}" title="${this.isPipelineRunning ? t('ribbon.titlebar.stop') : t('ribbon.titlebar.run')}">${this.isPipelineRunning ? '⏹' : '▶'}</button>
+            <button id="qat-btn-save" class="office-qat-btn" title="${t('ribbon.titlebar.save_now')}" aria-label="${t('ribbon.titlebar.save_now')}">
+              ${ribbonIcon('save', 18)}
+            </button>
+            <button id="qat-btn-undo" class="office-qat-btn" title="${t('ribbon.titlebar.undo')}" aria-label="${t('ribbon.titlebar.undo')}" disabled>
+              ${ribbonIcon('undo', 18)}
+            </button>
+            <button id="qat-btn-redo" class="office-qat-btn" title="${t('ribbon.titlebar.redo')}" aria-label="${t('ribbon.titlebar.redo')}" disabled>
+              ${ribbonIcon('redo', 18)}
+            </button>
+            <button id="qat-btn-run" class="office-qat-btn ${this.isPipelineRunning ? 'is-running-stop' : ''}" data-icon="${this.isPipelineRunning ? 'stop' : 'play'}" title="${this.isPipelineRunning ? t('ribbon.titlebar.stop') : t('ribbon.titlebar.run')}" aria-label="${this.isPipelineRunning ? t('ribbon.titlebar.stop') : t('ribbon.titlebar.run')}">
+              ${ribbonIcon(this.isPipelineRunning ? 'stop' : 'play', 18)}
+            </button>
           </div>
         </div>
 
         <div class="office-titlebar-center">
           <button id="qat-btn-project" class="office-project-indicator" title="${t('ribbon.buttons.project_manager_tip')}">
-            📁 <span id="office-active-project-name">${this.escapeHtml(projectName)}</span>
+            ${ribbonIcon('folder', 16)}
+            <span id="office-active-project-name">${this.escapeHtml(projectName)}</span>
           </button>
         </div>
 
         <div class="office-titlebar-right">
           <div class="office-tellme-box" title="${t('search.tooltip', 'Buscar vértices, skills e pipelines do projeto (Ctrl+K)')}">
-            <span style="font-size: 12px; margin-right: 4px; color: #64748b;">💡</span>
+            ${ribbonIcon('search', 16)}
             <input type="text" id="office-tellme-input">
           </div>
         </div>
@@ -247,45 +258,49 @@ export class OfficeRibbon {
     return `
       <!-- ABA 1: PAGINA INICIAL (HOME) -->
       <div class="office-ribbon-pane ${this.activeTab === 'home' ? 'active' : ''}" data-pane="home">
-        <!-- Grupo Área de Transferência & Visão -->
+        <!-- Grupo Edição & Visão -->
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <div class="ribbon-col-stack">
               <button class="ribbon-btn-small" id="ribbon-btn-undo" disabled>
-                <span class="ribbon-sm-icon">↶</span> ${t('ribbon.panes.undo')}
+                <span class="ribbon-sm-icon" data-icon="undo">${ribbonIcon('undo', 16)}</span>
+                <span>${t('ribbon.panes.undo')}</span>
               </button>
               <button class="ribbon-btn-small" id="ribbon-btn-redo" disabled>
-                <span class="ribbon-sm-icon">↷</span> ${t('ribbon.panes.redo')}
+                <span class="ribbon-sm-icon" data-icon="redo">${ribbonIcon('redo', 16)}</span>
+                <span>${t('ribbon.panes.redo')}</span>
               </button>
             </div>
             <div class="ribbon-col-stack">
               <button class="ribbon-btn-small" id="ribbon-btn-zoom-fit">
-                <span class="ribbon-sm-icon">🎯</span> ${t('ribbon.panes.zoom_fit')}
+                <span class="ribbon-sm-icon" data-icon="fit">${ribbonIcon('fit', 16)}</span>
+                <span>${t('ribbon.panes.zoom_fit')}</span>
               </button>
-              <button class="ribbon-btn-small" id="ribbon-btn-clear" style="color: #ef4444;">
-                <span class="ribbon-sm-icon">🗑️</span> ${t('ribbon.panes.clear_graph')}
+              <button class="ribbon-btn-small" id="ribbon-btn-clear">
+                <span class="ribbon-sm-icon ribbon-icon-danger" data-icon="trash">${ribbonIcon('trash', 16)}</span>
+                <span>${t('ribbon.panes.clear_graph')}</span>
               </button>
             </div>
             <button class="ribbon-btn-large" id="ribbon-btn-auto-layout" title="${t('ribbon.panes.auto_layout_tip')}">
-              <span class="ribbon-btn-icon">✨</span>
+              <span class="ribbon-btn-icon" data-icon="layout">${ribbonIcon('layout', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.auto_layout')}</span>
             </button>
           </div>
           <div class="office-ribbon-group-title">${t('ribbon.panes.edit_view')}</div>
         </div>
 
-        <!-- Grupo Criação Rápida -->
+        <!-- Grupo Vértices do Grafo -->
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-quick-agent" title="${t('ribbon.panes.quick_agent_tip')}">
-              <span class="ribbon-btn-icon">🤖</span>
+              <span class="ribbon-btn-icon" data-icon="agent">${ribbonIcon('agent', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.quick_agent')}</span>
             </button>
             <button class="ribbon-btn-large" id="ribbon-btn-quick-task" title="${t('ribbon.panes.quick_task_tip')}">
-              <span class="ribbon-btn-icon">⚡</span>
+              <span class="ribbon-btn-icon" data-icon="task">${ribbonIcon('task', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.quick_task')}</span>
             </button>
-            <div class="ribbon-col-stack">
+            <div class="ribbon-col-stack ribbon-col-stack-wide">
               <select id="ribbon-select-add-node" class="ribbon-select" title="${t('ribbon.buttons.static_node_tip')}">
                 <option value="" disabled selected>${t('ribbon.panes.more_vertices')}</option>
                 <option value="static">${t('ribbon.nodes.static')}</option>
@@ -301,7 +316,8 @@ export class OfficeRibbon {
                 <option value="cuda">${t('ribbon.nodes.cuda')}</option>
               </select>
               <button class="ribbon-btn-small" id="ribbon-btn-quick-templates">
-                <span class="ribbon-sm-icon">🧩</span> ${t('ribbon.panes.catalog')}
+                <span class="ribbon-sm-icon" data-icon="catalog">${ribbonIcon('catalog', 16)}</span>
+                <span>${t('ribbon.panes.catalog')}</span>
               </button>
             </div>
           </div>
@@ -312,11 +328,11 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large primary-action ${this.isPipelineRunning ? 'is-running-stop' : ''}" id="ribbon-btn-run" title="${this.isPipelineRunning ? t('ribbon.panes.stop_run_tip') : t('ribbon.panes.build_run_tip')}">
-              <span class="ribbon-btn-icon">${this.isPipelineRunning ? '⏹' : '▶'}</span>
+              <span class="ribbon-btn-icon" data-icon="${this.isPipelineRunning ? 'stop' : 'play'}">${ribbonIcon(this.isPipelineRunning ? 'stop' : 'play', 30)}</span>
               <span class="ribbon-btn-label">${this.isPipelineRunning ? t('ribbon.panes.stop_run') : t('ribbon.panes.build_run')}</span>
             </button>
             <button class="ribbon-btn-large" id="ribbon-btn-validate" title="${t('ribbon.panes.validate_dag_tip')}">
-              <span class="ribbon-btn-icon">🔍</span>
+              <span class="ribbon-btn-icon" data-icon="validate">${ribbonIcon('validate', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.validate_dag')}</span>
             </button>
           </div>
@@ -327,11 +343,11 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-pipeline-defaults" title="${t('ribbon.panes.global_defaults_tip')}">
-              <span class="ribbon-btn-icon">⚙️</span>
+              <span class="ribbon-btn-icon" data-icon="settings">${ribbonIcon('settings', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.global_defaults')}</span>
             </button>
             <button class="ribbon-btn-large" id="ribbon-btn-project-hub" title="${t('ribbon.panes.project_hub_tip')}">
-              <span class="ribbon-btn-icon">📁</span>
+              <span class="ribbon-btn-icon" data-icon="hub">${ribbonIcon('hub', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.project_hub')}</span>
             </button>
           </div>
@@ -344,43 +360,43 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" data-add="static">
-              <span class="ribbon-btn-icon">⏹️</span>
+              <span class="ribbon-btn-icon" data-icon="file">${ribbonIcon('file', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.static_task')}</span>
             </button>
             <button class="ribbon-btn-large" data-add="condition">
-              <span class="ribbon-btn-icon">🔀</span>
+              <span class="ribbon-btn-icon" data-icon="branch">${ribbonIcon('branch', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.condition_branch')}</span>
             </button>
             <button class="ribbon-btn-large" data-add="switch">
-              <span class="ribbon-btn-icon">🎛️</span>
+              <span class="ribbon-btn-icon" data-icon="switch">${ribbonIcon('switch', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.switch_cases')}</span>
             </button>
             <button class="ribbon-btn-large" data-add="mcp">
-              <span class="ribbon-btn-icon">🔌</span>
+              <span class="ribbon-btn-icon" data-icon="plug">${ribbonIcon('plug', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.mcp_tool')}</span>
             </button>
             <button class="ribbon-btn-large" data-add="subflow">
-              <span class="ribbon-btn-icon">🔄</span>
+              <span class="ribbon-btn-icon" data-icon="subflow">${ribbonIcon('subflow', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.subflow_nested')}</span>
             </button>
             <button class="ribbon-btn-large" data-add="module">
-              <span class="ribbon-btn-icon">📦</span>
+              <span class="ribbon-btn-icon" data-icon="box">${ribbonIcon('box', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.module_encapsulated')}</span>
             </button>
             <button class="ribbon-btn-large" data-add="critical">
-              <span class="ribbon-btn-icon">🔒</span>
+              <span class="ribbon-btn-icon" data-icon="lock">${ribbonIcon('lock', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.critical_section')}</span>
             </button>
             <button class="ribbon-btn-large" data-add="output" title="Vértice coletor de saída e entrega de artefatos">
-              <span class="ribbon-btn-icon">📥</span>
+              <span class="ribbon-btn-icon" data-icon="output">${ribbonIcon('output', 30)}</span>
               <span class="ribbon-btn-label">Saída / Artefato</span>
             </button>
             <button class="ribbon-btn-large" data-add="call" title="Chamada em fluxo: executa um alvo chamavel e devolve a resposta ao fluxo">
-              <span class="ribbon-btn-icon">&#128222;</span>
+              <span class="ribbon-btn-icon" data-icon="phone">${ribbonIcon('phone', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.call_vertex', 'Chamada em fluxo')}</span>
             </button>
             <button class="ribbon-btn-large" data-add="interaction" title="Interação humana: formulário, pergunta ou aprovação">
-              <span class="ribbon-btn-icon">💬</span>
+              <span class="ribbon-btn-icon" data-icon="chat">${ribbonIcon('chat', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.interaction', 'Interação')}</span>
             </button>
           </div>
@@ -390,7 +406,7 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" data-add="cuda">
-              <span class="ribbon-btn-icon">⚡</span>
+              <span class="ribbon-btn-icon" data-icon="bolt">${ribbonIcon('bolt', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.cuda_kernel')}</span>
             </button>
           </div>
@@ -400,11 +416,11 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" data-add="agent">
-              <span class="ribbon-btn-icon">🤖</span>
+              <span class="ribbon-btn-icon" data-icon="agent">${ribbonIcon('agent', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.agent_code_mode')}</span>
             </button>
             <button class="ribbon-btn-large" id="ribbon-btn-insert-templates">
-              <span class="ribbon-btn-icon">🧩</span>
+              <span class="ribbon-btn-icon" data-icon="catalog">${ribbonIcon('catalog', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.agent_templates')}</span>
             </button>
           </div>
@@ -417,11 +433,11 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-tools-defaults">
-              <span class="ribbon-btn-icon">🛡️</span>
+              <span class="ribbon-btn-icon" data-icon="shield">${ribbonIcon('shield', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.sandboxes_iso')}</span>
             </button>
             <button class="ribbon-btn-large" id="ribbon-btn-tools-code">
-              <span class="ribbon-btn-icon">🔧</span>
+              <span class="ribbon-btn-icon" data-icon="wrench">${ribbonIcon('wrench', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.tools_code_mode')}</span>
             </button>
           </div>
@@ -431,7 +447,7 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-mcp-mgr">
-              <span class="ribbon-btn-icon">🔌</span>
+              <span class="ribbon-btn-icon" data-icon="plug">${ribbonIcon('plug', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.servers_mcp')}</span>
             </button>
           </div>
@@ -441,11 +457,11 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-open-templates-tab">
-              <span class="ribbon-btn-icon">📚</span>
+              <span class="ribbon-btn-icon" data-icon="book">${ribbonIcon('book', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.template_library')}</span>
             </button>
             <button class="ribbon-btn-large" id="ribbon-btn-github-repos" title="${t('ribbon.panes.github_repos_tip')}">
-              <span class="ribbon-btn-icon">🌐</span>
+              <span class="ribbon-btn-icon" data-icon="globe">${ribbonIcon('globe', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.github_repos')}</span>
             </button>
           </div>
@@ -461,25 +477,25 @@ export class OfficeRibbon {
             <!-- PI.AI -->
             <button class="ribbon-btn-large highlight-pi" id="ribbon-btn-import-pi" title="${t('ribbon.panes.import_pi_tip')}">
               <span class="ribbon-pill-tag">${t('ribbon.panes.pill_tests')}</span>
-              <span class="ribbon-btn-icon">π</span>
+              <span class="ribbon-btn-icon" data-icon="spark">${ribbonIcon('spark', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.import_pi_btn')}</span>
             </button>
 
             <!-- CLAUDE -->
             <button class="ribbon-btn-large" id="ribbon-btn-import-claude" title="${t('ribbon.panes.import_claude_tip')}">
-              <span class="ribbon-btn-icon">⚡</span>
+              <span class="ribbon-btn-icon" data-icon="bolt">${ribbonIcon('bolt', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.import_claude_btn')}</span>
             </button>
 
             <!-- OPENAI -->
             <button class="ribbon-btn-large" id="ribbon-btn-import-openai" title="${t('ribbon.panes.import_openai_tip')}">
-              <span class="ribbon-btn-icon">🟢</span>
+              <span class="ribbon-btn-icon" data-icon="circle">${ribbonIcon('circle', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.import_openai_btn')}</span>
             </button>
 
             <!-- HERMES -->
             <button class="ribbon-btn-large" id="ribbon-btn-import-hermes" title="${t('ribbon.panes.import_hermes_tip')}">
-              <span class="ribbon-btn-icon">🔮</span>
+              <span class="ribbon-btn-icon" data-icon="orbit">${ribbonIcon('orbit', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.import_hermes_btn')}</span>
             </button>
           </div>
@@ -491,7 +507,7 @@ export class OfficeRibbon {
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-import-excel" title="${t('ribbon.panes.import_excel_tip')}">
               <span class="ribbon-pill-tag tag-blue">${t('ribbon.panes.pill_modern')}</span>
-              <span class="ribbon-btn-icon">📊</span>
+              <span class="ribbon-btn-icon" data-icon="sheet">${ribbonIcon('sheet', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.import_excel_btn')}</span>
             </button>
           </div>
@@ -502,7 +518,7 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-mcp-conn">
-              <span class="ribbon-btn-icon">🔌</span>
+              <span class="ribbon-btn-icon" data-icon="plug">${ribbonIcon('plug', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.mcp_connectors')}</span>
             </button>
           </div>
@@ -515,15 +531,17 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-memory-hub">
-              <span class="ribbon-btn-icon">💾</span>
+              <span class="ribbon-btn-icon" data-icon="database">${ribbonIcon('database', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.memory_hub')}</span>
             </button>
             <div class="ribbon-col-stack">
               <button class="ribbon-btn-small" id="ribbon-btn-mem-blackboard">
-                <span class="ribbon-sm-icon">📋</span> ${t('ribbon.panes.blackboard')}
+                <span class="ribbon-sm-icon" data-icon="board">${ribbonIcon('board', 16)}</span>
+                <span>${t('ribbon.panes.blackboard')}</span>
               </button>
               <button class="ribbon-btn-small" id="ribbon-btn-mem-lessons">
-                <span class="ribbon-sm-icon">🧠</span> ${t('ribbon.panes.lessons_learned')}
+                <span class="ribbon-sm-icon" data-icon="brain">${ribbonIcon('brain', 16)}</span>
+                <span>${t('ribbon.panes.lessons_learned')}</span>
               </button>
             </div>
           </div>
@@ -533,7 +551,7 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-sqlite-db">
-              <span class="ribbon-btn-icon">🗄️</span>
+              <span class="ribbon-btn-icon" data-icon="database">${ribbonIcon('database', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.sqlite_db')}</span>
             </button>
           </div>
@@ -546,11 +564,11 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large primary-action ${this.isPipelineRunning ? 'is-running-stop' : ''}" id="ribbon-btn-run-tab" title="${this.isPipelineRunning ? t('ribbon.panes.stop_run_tip') : t('ribbon.panes.build_run_tip')}">
-              <span class="ribbon-btn-icon">${this.isPipelineRunning ? '⏹' : '▶'}</span>
+              <span class="ribbon-btn-icon" data-icon="${this.isPipelineRunning ? 'stop' : 'play'}">${ribbonIcon(this.isPipelineRunning ? 'stop' : 'play', 30)}</span>
               <span class="ribbon-btn-label">${this.isPipelineRunning ? t('ribbon.panes.stop_run') : t('ribbon.panes.compile_run')}</span>
             </button>
             <button class="ribbon-btn-large" id="ribbon-btn-batch-modal">
-              <span class="ribbon-btn-icon">📦</span>
+              <span class="ribbon-btn-icon" data-icon="box">${ribbonIcon('box', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.batch_resume')}</span>
             </button>
           </div>
@@ -560,7 +578,7 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-standalone-runner" title="${t('ribbon.panes.standalone_runner_tip', 'Abrir ambiente do Runner Standalone com telas de Progresso, Diagnóstico e Operação')}">
-              <span class="ribbon-btn-icon">🚀</span>
+              <span class="ribbon-btn-icon" data-icon="rocket">${ribbonIcon('rocket', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.standalone_runner', 'Runner Standalone')}</span>
             </button>
           </div>
@@ -570,15 +588,15 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-export-code-tab">
-              <span class="ribbon-btn-icon">⚙️</span>
+              <span class="ribbon-btn-icon" data-icon="code">${ribbonIcon('code', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.export_code')}</span>
             </button>
             <button class="ribbon-btn-large" id="ribbon-btn-export-svg-tab">
-              <span class="ribbon-btn-icon">🖼️</span>
+              <span class="ribbon-btn-icon" data-icon="image">${ribbonIcon('image', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.export_svg')}</span>
             </button>
             <button class="ribbon-btn-large" id="ribbon-btn-open-artifacts-tab" title="Abrir painel de artefatos gerados pelo pipeline (SVGs, planilhas, PDFs, etc.)">
-              <span class="ribbon-btn-icon">📂</span>
+              <span class="ribbon-btn-icon" data-icon="folderOpen">${ribbonIcon('folderOpen', 30)}</span>
               <span class="ribbon-btn-label">Ver Artefatos</span>
             </button>
           </div>
@@ -588,7 +606,7 @@ export class OfficeRibbon {
         <div class="office-ribbon-group">
           <div class="office-ribbon-group-tools">
             <button class="ribbon-btn-large" id="ribbon-btn-load-demo-tab">
-              <span class="ribbon-btn-icon">💡</span>
+              <span class="ribbon-btn-icon" data-icon="bulb">${ribbonIcon('bulb', 30)}</span>
               <span class="ribbon-btn-label">${t('ribbon.panes.load_demo')}</span>
             </button>
           </div>
@@ -1134,51 +1152,31 @@ export class OfficeRibbon {
     const rRun = this.container.querySelector('#ribbon-btn-run') as HTMLButtonElement | null;
     const rRunTab = this.container.querySelector('#ribbon-btn-run-tab') as HTMLButtonElement | null;
     const qatRun = this.container.querySelector('#qat-btn-run') as HTMLButtonElement | null;
+    const iconName = running ? 'stop' : 'play';
 
-    if (running) {
-      if (rRun) {
-        rRun.classList.add('is-running-stop');
-        const icon = rRun.querySelector('.ribbon-btn-icon');
-        const label = rRun.querySelector('.ribbon-btn-label');
-        if (icon) icon.textContent = '⏹';
-        if (label) label.innerHTML = t('ribbon.panes.stop_run');
-        rRun.title = t('ribbon.panes.stop_run_tip');
+    const updateLargeRunButton = (button: HTMLButtonElement | null, labelKey: string): void => {
+      if (!button) return;
+      button.classList.toggle('is-running-stop', running);
+      const icon = button.querySelector('.ribbon-btn-icon') as HTMLElement | null;
+      const label = button.querySelector('.ribbon-btn-label');
+      if (icon) {
+        icon.innerHTML = ribbonIcon(iconName, 30);
+        icon.setAttribute('data-icon', iconName);
       }
-      if (rRunTab) {
-        rRunTab.classList.add('is-running-stop');
-        const icon = rRunTab.querySelector('.ribbon-btn-icon');
-        const label = rRunTab.querySelector('.ribbon-btn-label');
-        if (icon) icon.textContent = '⏹';
-        if (label) label.innerHTML = t('ribbon.panes.stop_run');
-        rRunTab.title = t('ribbon.panes.stop_run_tip');
-      }
-      if (qatRun) {
-        qatRun.classList.add('is-running-stop');
-        qatRun.textContent = '⏹';
-        qatRun.title = t('ribbon.titlebar.stop');
-      }
-    } else {
-      if (rRun) {
-        rRun.classList.remove('is-running-stop');
-        const icon = rRun.querySelector('.ribbon-btn-icon');
-        const label = rRun.querySelector('.ribbon-btn-label');
-        if (icon) icon.textContent = '▶';
-        if (label) label.innerHTML = t('ribbon.panes.build_run');
-        rRun.title = t('ribbon.panes.build_run_tip');
-      }
-      if (rRunTab) {
-        rRunTab.classList.remove('is-running-stop');
-        const icon = rRunTab.querySelector('.ribbon-btn-icon');
-        const label = rRunTab.querySelector('.ribbon-btn-label');
-        if (icon) icon.textContent = '▶';
-        if (label) label.innerHTML = t('ribbon.panes.compile_run');
-        rRunTab.title = t('ribbon.panes.build_run_tip');
-      }
-      if (qatRun) {
-        qatRun.classList.remove('is-running-stop');
-        qatRun.textContent = '▶';
-        qatRun.title = t('ribbon.titlebar.run');
-      }
+      if (label) label.innerHTML = t(labelKey);
+      button.title = t(running ? 'ribbon.panes.stop_run_tip' : 'ribbon.panes.build_run_tip');
+    };
+
+    updateLargeRunButton(rRun, running ? 'ribbon.panes.stop_run' : 'ribbon.panes.build_run');
+    updateLargeRunButton(rRunTab, running ? 'ribbon.panes.stop_run' : 'ribbon.panes.compile_run');
+
+    if (qatRun) {
+      qatRun.classList.toggle('is-running-stop', running);
+      qatRun.innerHTML = ribbonIcon(iconName, 18);
+      qatRun.setAttribute('data-icon', iconName);
+      const title = t(running ? 'ribbon.titlebar.stop' : 'ribbon.titlebar.run');
+      qatRun.title = title;
+      qatRun.setAttribute('aria-label', title);
     }
   }
 
@@ -1352,6 +1350,7 @@ export class OfficeRibbon {
     return `
       <button class="office-tab-btn contextual-tab ${isActive ? 'active' : ''}" data-tab="contextual" id="tab-btn-contextual" title="${this.escapeHtml(this.selectedNode.label)}">
         <span class="contextual-tab-pill">${category}</span>
+        <span class="contextual-tab-icon">${ribbonIcon(this.getContextualIconName(this.selectedNode.type), 16)}</span>
         <span class="contextual-tab-title">${this.escapeHtml(label)}</span>
       </button>
     `;
@@ -1390,26 +1389,29 @@ export class OfficeRibbon {
     return typeMap[this.selectedNode.type] || t('ribbon.contextual.node', 'VÉRTICE');
   }
 
+  private getContextualIconName(type: TaskflowNodeType): RibbonIconName {
+    const iconMap: Record<TaskflowNodeType, RibbonIconName> = {
+      agent: 'agent',
+      static: 'task',
+      condition: 'branch',
+      switch: 'switch',
+      mcp: 'plug',
+      cuda: 'bolt',
+      subflow: 'subflow',
+      module: 'box',
+      critical: 'lock',
+      interaction: 'chat',
+      call: 'phone',
+      output: 'output',
+      fork: 'branch',
+      join: 'users'
+    };
+    return iconMap[type] || 'task';
+  }
+
   private getContextualTabLabel(): string {
     if (!this.selectedNode) return '';
-    const iconMap: Record<TaskflowNodeType, string> = {
-      agent: '🤖',
-      static: '⚡',
-      condition: '🔀',
-      switch: '🎛️',
-      mcp: '🔌',
-      cuda: '⚡',
-      subflow: '🔄',
-      module: '📦',
-      critical: '🔒',
-      interaction: '💬',
-      call: '📞',
-      output: '📥',
-      fork: '🔀',
-      join: '🧱'
-    };
-    const icon = iconMap[this.selectedNode.type] || '📌';
-    return `${icon} ${this.selectedNode.label}`;
+    return this.selectedNode.label;
   }
 
   private renderContextualGroupsForType(type: TaskflowNodeType): string {
@@ -1430,15 +1432,17 @@ export class OfficeRibbon {
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
               <button class="ribbon-btn-large" id="btn-ctx-agent-model" title="Configurar provedor e modelo LLM">
-                <span class="ribbon-btn-icon">🧠</span>
+                <span class="ribbon-btn-icon" data-icon="brain">${ribbonIcon('brain', 30)}</span>
                 <span class="ribbon-btn-label">Modelo LLM</span>
               </button>
               <div class="ribbon-col-stack">
                 <button class="ribbon-btn-small" id="btn-ctx-agent-prompt" title="Abrir instruções e system prompt">
-                  <span class="ribbon-sm-icon">💬</span> Prompt
+                  <span class="ribbon-sm-icon" data-icon="chat">${ribbonIcon('chat', 16)}</span>
+                  <span>Prompt</span>
                 </button>
                 <button class="ribbon-btn-small" id="btn-ctx-agent-temp" title="Ajustar temperatura efetiva do modelo (${temp})">
-                  <span class="ribbon-sm-icon">🌡️</span> Temp: ${temp}
+                  <span class="ribbon-sm-icon" data-icon="thermometer">${ribbonIcon('thermometer', 16)}</span>
+                  <span>Temp: ${temp}</span>
                 </button>
               </div>
             </div>
@@ -1449,7 +1453,7 @@ export class OfficeRibbon {
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
               <button class="ribbon-btn-large" id="btn-ctx-agent-sandbox" title="Configurar nível de isolamento e sandbox">
-                <span class="ribbon-btn-icon">🛡️</span>
+                <span class="ribbon-btn-icon" data-icon="shield">${ribbonIcon('shield', 30)}</span>
                 <span class="ribbon-btn-label">Sandbox VM</span>
               </button>
               <div class="ribbon-col-stack">
@@ -1457,7 +1461,8 @@ export class OfficeRibbon {
                   ${this.escapeHtml(this.getIsolationLabel(isolation))}
                 </span>
                 <button class="ribbon-btn-small" id="btn-ctx-agent-timeout" title="Tempo limite efetivo em segundos">
-                  <span class="ribbon-sm-icon">⏱️</span> ${timeoutSec}s
+                  <span class="ribbon-sm-icon" data-icon="clock">${ribbonIcon('clock', 16)}</span>
+                  <span>${timeoutSec}s</span>
                 </button>
               </div>
             </div>
@@ -1468,15 +1473,15 @@ export class OfficeRibbon {
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
               <button class="ribbon-btn-large" id="btn-ctx-agent-tools" title="Atribuir ferramentas MCP, shell e filesystem">
-                <span class="ribbon-btn-icon">🔧</span>
+                <span class="ribbon-btn-icon" data-icon="wrench">${ribbonIcon('wrench', 30)}</span>
                 <span class="ribbon-btn-label">Ferramentas</span>
               </button>
               <button class="ribbon-btn-large" id="btn-ctx-agent-skills" title="Gerenciar skills especializadas">
-                <span class="ribbon-btn-icon">📚</span>
+                <span class="ribbon-btn-icon" data-icon="book">${ribbonIcon('book', 30)}</span>
                 <span class="ribbon-btn-label">Skills</span>
               </button>
               <button class="ribbon-btn-large" id="btn-ctx-agent-skill-editor" title="Editor de skills personalizadas">
-                <span class="ribbon-btn-icon">✍️</span>
+                <span class="ribbon-btn-icon" data-icon="pencil">${ribbonIcon('pencil', 30)}</span>
                 <span class="ribbon-btn-label">Editor Skill</span>
               </button>
             </div>
@@ -1487,7 +1492,7 @@ export class OfficeRibbon {
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
               <button class="ribbon-btn-large" id="btn-ctx-agent-memory" title="Configurar memória semântica e blackboard">
-                <span class="ribbon-btn-icon">💾</span>
+                <span class="ribbon-btn-icon" data-icon="database">${ribbonIcon('database', 30)}</span>
                 <span class="ribbon-btn-label">Memória</span>
               </button>
             </div>
@@ -1503,7 +1508,7 @@ export class OfficeRibbon {
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
               <button class="ribbon-btn-large" id="btn-ctx-static-code" title="Abrir código C++20 / Script no Monaco Editor">
-                <span class="ribbon-btn-icon">💻</span>
+                <span class="ribbon-btn-icon" data-icon="code">${ribbonIcon('code', 30)}</span>
                 <span class="ribbon-btn-label">Ver Código</span>
               </button>
             </div>
@@ -1521,11 +1526,11 @@ export class OfficeRibbon {
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
               <button class="ribbon-btn-large" id="btn-ctx-cond-expr" title="Abrir o corpo C++ que decide o ramo">
-                <span class="ribbon-btn-icon">📐</span>
+                <span class="ribbon-btn-icon" data-icon="branch">${ribbonIcon('branch', 30)}</span>
                 <span class="ribbon-btn-label">Decisão</span>
               </button>
               <button class="ribbon-btn-large" id="btn-ctx-cond-prob" title="Ajustar a probabilidade do ramo 0 no corpo padrão">
-                <span class="ribbon-btn-icon">🎲</span>
+                <span class="ribbon-btn-icon" data-icon="dice">${ribbonIcon('dice', 30)}</span>
                 <span class="ribbon-btn-label">${probLabel}</span>
               </button>
             </div>
@@ -1545,15 +1550,15 @@ export class OfficeRibbon {
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
               <button class="ribbon-btn-large" id="btn-ctx-switch-add-case" title="Adicionar um novo caso antes do default">
-                <span class="ribbon-btn-icon">➕</span>
-                <span class="ribbon-btn-label">+ Caso (${caseCount})</span>
+                <span class="ribbon-btn-icon" data-icon="plus">${ribbonIcon('plus', 30)}</span>
+                <span class="ribbon-btn-label">Caso (${caseCount})</span>
               </button>
               <button class="ribbon-btn-large" id="btn-ctx-switch-mode" title="Alternar entre código, palavras e modelo">
-                <span class="ribbon-btn-icon">🎛️</span>
+                <span class="ribbon-btn-icon" data-icon="switch">${ribbonIcon('switch', 30)}</span>
                 <span class="ribbon-btn-label">Modo: ${this.escapeHtml(mode)}</span>
               </button>
               <button class="ribbon-btn-large" id="btn-ctx-switch-source" title="Escolher a origem do texto avaliado">
-                <span class="ribbon-btn-icon">📥</span>
+                <span class="ribbon-btn-icon" data-icon="input">${ribbonIcon('input', 30)}</span>
                 <span class="ribbon-btn-label">Fonte: ${this.escapeHtml(sourceKind)}</span>
               </button>
             </div>
@@ -1562,7 +1567,7 @@ export class OfficeRibbon {
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
               <button class="ribbon-btn-large" id="btn-ctx-switch-rules" title="Editar as palavras de cada caso no Inspetor">
-                <span class="ribbon-btn-icon">📝</span>
+                <span class="ribbon-btn-icon" data-icon="list">${ribbonIcon('list', 30)}</span>
                 <span class="ribbon-btn-label">Regras</span>
               </button>
             </div>
@@ -1578,15 +1583,15 @@ export class OfficeRibbon {
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
               <button class="ribbon-btn-large" id="btn-ctx-mcp-servers" title="Gerenciar servidores MCP configurados no projeto">
-                <span class="ribbon-btn-icon">🔌</span>
+                <span class="ribbon-btn-icon" data-icon="plug">${ribbonIcon('plug', 30)}</span>
                 <span class="ribbon-btn-label">Servidores</span>
               </button>
               <button class="ribbon-btn-large" id="btn-ctx-mcp-tool" title="Configurar ferramenta e argumentos no Inspetor">
-                <span class="ribbon-btn-icon">🔧</span>
+                <span class="ribbon-btn-icon" data-icon="wrench">${ribbonIcon('wrench', 30)}</span>
                 <span class="ribbon-btn-label">Ferramenta</span>
               </button>
               <button class="ribbon-btn-large" id="btn-ctx-mcp-test" title="Executar a chamada MCP configurada agora">
-                <span class="ribbon-btn-icon">🧪</span>
+                <span class="ribbon-btn-icon" data-icon="test">${ribbonIcon('test', 30)}</span>
                 <span class="ribbon-btn-label">Testar</span>
               </button>
             </div>
@@ -1602,7 +1607,7 @@ export class OfficeRibbon {
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
               <button class="ribbon-btn-large" id="btn-ctx-cuda-code" title="Visualizar kernel C++20 com Taskflow CUDA Flow">
-                <span class="ribbon-btn-icon">⚡</span>
+                <span class="ribbon-btn-icon" data-icon="bolt">${ribbonIcon('bolt', 30)}</span>
                 <span class="ribbon-btn-label">Kernel CUDA</span>
               </button>
             </div>
@@ -1620,7 +1625,7 @@ export class OfficeRibbon {
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
               <button class="ribbon-btn-large" id="btn-ctx-subflow-enter" title="Entrar no grafo interno hierárquico">
-                <span class="ribbon-btn-icon">🔍</span>
+                <span class="ribbon-btn-icon" data-icon="enter">${ribbonIcon('enter', 30)}</span>
                 <span class="ribbon-btn-label">${isMod ? 'Abrir Módulo' : 'Entrar Subfluxo'}</span>
               </button>
             </div>
@@ -1638,11 +1643,11 @@ export class OfficeRibbon {
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
               <button class="ribbon-btn-large" id="btn-ctx-crit-key" title="Identificador da seção crítica no C++ gerado">
-                <span class="ribbon-btn-icon">🔑</span>
+                <span class="ribbon-btn-icon" data-icon="key">${ribbonIcon('key', 30)}</span>
                 <span class="ribbon-btn-label">Chave Mutex</span>
               </button>
               <button class="ribbon-btn-large" id="btn-ctx-crit-concurrency" title="Semáforos simultâneos permitidos nesta seção">
-                <span class="ribbon-btn-icon">👥</span>
+                <span class="ribbon-btn-icon" data-icon="users">${ribbonIcon('users', 30)}</span>
                 <span class="ribbon-btn-label">Max: ${conc}</span>
               </button>
             </div>
@@ -1658,11 +1663,11 @@ export class OfficeRibbon {
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
               <button class="ribbon-btn-large" id="btn-ctx-inter-preview" title="Abrir pré-visualização do formulário interativo">
-                <span class="ribbon-btn-icon">👁️</span>
+                <span class="ribbon-btn-icon" data-icon="eye">${ribbonIcon('eye', 30)}</span>
                 <span class="ribbon-btn-label">Pré-visualizar</span>
               </button>
               <button class="ribbon-btn-large" id="btn-ctx-inter-fields" title="Configurar campos e perguntas do formulário">
-                <span class="ribbon-btn-icon">📋</span>
+                <span class="ribbon-btn-icon" data-icon="clipboard">${ribbonIcon('clipboard', 30)}</span>
                 <span class="ribbon-btn-label">Campos Form</span>
               </button>
             </div>
@@ -1681,15 +1686,15 @@ export class OfficeRibbon {
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
               <button class="ribbon-btn-large" id="btn-ctx-call-source" title="Escolher origem do input (anterior, arquivo ou nenhum)">
-                <span class="ribbon-btn-icon">📥</span>
+                <span class="ribbon-btn-icon" data-icon="input">${ribbonIcon('input', 30)}</span>
                 <span class="ribbon-btn-label">Fonte: ${srcKind}</span>
               </button>
               <button class="ribbon-btn-large" id="btn-ctx-call-input" title="Definir um input fixo para a chamada">
-                <span class="ribbon-btn-icon">⌨️</span>
+                <span class="ribbon-btn-icon" data-icon="keyboard">${ribbonIcon('keyboard', 30)}</span>
                 <span class="ribbon-btn-label">${hasFixedInput ? 'Input fixo ✓' : 'Input fixo'}</span>
               </button>
               <button class="ribbon-btn-large" id="btn-ctx-call-target" title="Inspecionar vértice chamável de destino">
-                <span class="ribbon-btn-icon">🎯</span>
+                <span class="ribbon-btn-icon" data-icon="target">${ribbonIcon('target', 30)}</span>
                 <span class="ribbon-btn-label">Alvo Chamável</span>
               </button>
             </div>
@@ -1706,19 +1711,19 @@ export class OfficeRibbon {
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
               <button class="ribbon-btn-large" id="btn-ctx-out-artifacts" title="Abrir painel de artefatos gerados pelo pipeline">
-                <span class="ribbon-btn-icon">📂</span>
+                <span class="ribbon-btn-icon" data-icon="folderOpen">${ribbonIcon('folderOpen', 30)}</span>
                 <span class="ribbon-btn-label">Ver Artefatos</span>
               </button>
               <button class="ribbon-btn-large" id="btn-ctx-out-source" title="Arquivo de origem copiado para a entrega">
-                <span class="ribbon-btn-icon">📄</span>
+                <span class="ribbon-btn-icon" data-icon="file">${ribbonIcon('file', 30)}</span>
                 <span class="ribbon-btn-label">Origem</span>
               </button>
               <button class="ribbon-btn-large" id="btn-ctx-out-destination" title="Arquivo de destino da entrega">
-                <span class="ribbon-btn-icon">📥</span>
+                <span class="ribbon-btn-icon" data-icon="output">${ribbonIcon('output', 30)}</span>
                 <span class="ribbon-btn-label">Destino</span>
               </button>
               <button class="ribbon-btn-large" id="btn-ctx-out-type" title="Formato usado na visualização do artefato">
-                <span class="ribbon-btn-icon">🏷️</span>
+                <span class="ribbon-btn-icon" data-icon="tag">${ribbonIcon('tag', 30)}</span>
                 <span class="ribbon-btn-label">${this.escapeHtml(output.artifactType)}</span>
               </button>
             </div>
@@ -1734,7 +1739,7 @@ export class OfficeRibbon {
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
               <button class="ribbon-btn-large" id="btn-ctx-node-inspect" title="Inspecionar propriedades">
-                <span class="ribbon-btn-icon">⚙️</span>
+                <span class="ribbon-btn-icon" data-icon="settings">${ribbonIcon('settings', 30)}</span>
                 <span class="ribbon-btn-label">Propriedades</span>
               </button>
             </div>
@@ -1751,18 +1756,22 @@ export class OfficeRibbon {
         <div class="office-ribbon-group-tools">
           <div class="ribbon-col-stack">
             <button class="ribbon-btn-small" id="btn-ctx-node-rename" title="Renomear este vértice">
-              <span class="ribbon-sm-icon">🏷️</span> Renomear
+              <span class="ribbon-sm-icon" data-icon="tag">${ribbonIcon('tag', 16)}</span>
+              <span>Renomear</span>
             </button>
             <button class="ribbon-btn-small" id="btn-ctx-node-duplicate" title="Duplicar este vértice com suas configurações">
-              <span class="ribbon-sm-icon">📋</span> Duplicar
+              <span class="ribbon-sm-icon" data-icon="copy">${ribbonIcon('copy', 16)}</span>
+              <span>Duplicar</span>
             </button>
           </div>
           <div class="ribbon-col-stack">
             <button class="ribbon-btn-small" id="btn-ctx-node-inspect" title="Inspecionar todos os detalhes técnicos no painel lateral">
-              <span class="ribbon-sm-icon">🔍</span> Inspecionar
+              <span class="ribbon-sm-icon" data-icon="search">${ribbonIcon('search', 16)}</span>
+              <span>Inspecionar</span>
             </button>
             <button class="ribbon-btn-small" id="btn-ctx-node-delete" style="color: #dc2626;" title="Excluir este nó e suas conexões">
-              <span class="ribbon-sm-icon">🗑️</span> Excluir
+              <span class="ribbon-sm-icon ribbon-icon-danger" data-icon="trash">${ribbonIcon('trash', 16)}</span>
+              <span>Excluir</span>
             </button>
           </div>
         </div>

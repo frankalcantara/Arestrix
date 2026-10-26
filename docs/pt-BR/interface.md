@@ -1,6 +1,6 @@
 # Tour pela interface
 
-> **Aplica-se a:** Arestrix Beta 2 (`2.0.0-beta.1`) · Última revisão: 2026-10-19
+> **Aplica-se a:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Última revisão: 2026-10-19
 
 [English](../en/interface.md) · [Índice](../README.md)
 
@@ -133,6 +133,7 @@ O cálculo de projeção ortográfica do Viewport opera em escala métrica 1:1 b
 - **Preservação de Escala:** Ao redimensionar a área lateral (horizontalmente) ou a área inferior do console (verticalmente), o nível de zoom dos cartões, nós e arestas **não sofre qualquer alteração**. A área do diagrama apenas expande ou contrai sua janela visível de corte (clipping), sem comprimir ou distorcer os elementos.
 - **Tipografia Nítida:** Proibição estrita de sombras, borrões ou halos luminosos (`text-shadow`, `drop-shadow`) em textos, números e rótulos. As fontes permanecem com contornos 100% nítidos em qualquer resolução. Passar o mouse sobre portas e botões exibe dicas contextuais.
 - **Feedback em Execução:** Durante uma execução, selos e badges limpos exibem `thinking`, chamadas de ferramenta ativas, retentativas de limite de taxa `429 retry` e conclusão.
+- **Aparência do Canvas:** Os controles flutuantes incluem um botão de fundo que alterna entre o canvas claro e o canvas preto puro. A escolha fica salva localmente e é reaplicada ao iniciar. Os controles flutuantes ficam ocultos enquanto o pipeline compila ou executa e voltam quando ele termina.
 
 ## Inspetor
 
@@ -195,6 +196,7 @@ O modal do **Runner Standalone** (acionado na aba **Executar** > grupo **Distrib
 Uma gaveta acoplada na base da tela (redimensionável por splitter e minimizável) centraliza a observabilidade e os produtos da execução. Sua barra de abas adota o padrão visual corporativo **Microsoft Office / Excel**:
 - **Fita de Abas Fluent:** Abas conectadas de 34px de altura, fonte 'Segoe UI' 12px / 600, fundo `#ffffff` na aba ativa e linha de realce azul `#0f6cbd`.
 - **Ícones Vetoriais e Badges Nítidos:** Sem emojis soltos ou sombras em fontes; contagem de artefatos com badge em pílula de alto contraste e ações compactas de cópia, limpeza e alternância de estado.
+- **Estado Recolhido Estável:** Rodar um pipeline nunca expande o console recolhido; abra-o explicitamente quando precisar dos logs.
 - **Três Abas Especializadas:**
   1. **Terminal MSVC C++20:** Registra a geração do código-fonte, a compilação nativa pelo compilador e os logs brutos da execução da engine Taskflow.
   2. **Telemetria em Tempo Real:** Monitora as etapas cognitivas dos agentes (início e término de raciocínio *thinking*, invocação de ferramentas, parâmetros e retries de *rate limit* 429).

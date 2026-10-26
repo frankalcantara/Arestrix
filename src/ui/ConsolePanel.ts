@@ -208,7 +208,6 @@ export class ConsolePanel {
     globalEventBus.on('pipeline:compiling', (msg: string) => {
       this.setStatus(t('console.status_compiling_msvc', '● COMPILANDO'), 'status-compiling');
       this.addLine(`[BUILD] ${msg}`, 'line-warning');
-      this.ensureVisible();
     });
 
     globalEventBus.on('pipeline:running', (msg: string) => {

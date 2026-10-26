@@ -1,6 +1,6 @@
 # Interface tour
 
-> **Applies to:** Arestrix Beta 2 (`2.0.0-beta.1`) · Last reviewed: 2026-10-19
+> **Applies to:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Last reviewed: 2026-10-19
 
 [Português](../pt-BR/interface.md) · [Index](../README.md)
 
@@ -133,6 +133,7 @@ The Viewport's orthographic projection operates on a 1:1 metric scale anchored s
 - **Scale Preservation:** Resizing the side pane (horizontally) or the bottom console (vertically) **never changes diagram zoom**. The canvas merely expands or contracts its visible clipping window, without compressing or distorting graph elements.
 - **Crisp Typography:** Strict prohibition of shadows, blurs, or glow effects (`text-shadow`, `drop-shadow`) on fonts, numbers, and labels. Text outlines remain 100% sharp across any display scale. Hovering ports and buttons displays contextual tooltips.
 - **Live Run Feedback:** Clean badges and pills indicate `thinking`, active tool calls, `429 retry` rate limit retries, and step completion.
+- **Canvas Appearance:** The floating controls include a background toggle that switches between the light canvas and a pure black canvas. The choice is stored locally and reapplied on startup. The floating controls are hidden while a pipeline is compiling or running and return when it finishes.
 
 ## Inspector
 
@@ -195,6 +196,7 @@ The **Standalone Runner** modal (opened via the **Run** tab > **Distribution** g
 A docked drawer at the bottom of the screen (resizable with a splitter and collapsible) centralizes observability and pipeline deliverables. Its tab strip follows the **Microsoft Office / Excel** corporate design:
 - **Fluent Tab Strip:** Connected 34px-high tabs, 'Segoe UI' 12px / 600 typography, `#ffffff` active background, and `#0f6cbd` blue accent line.
 - **Vector Icons and Sharp Badges:** Clean SVG iconography without loose emojis or text shadows; high-contrast artifact count badge and compact actions for copy, clear, and minimize/maximize.
+- **Stable Collapse State:** Running a pipeline never expands a collapsed console; open it explicitly when you need the logs.
 - **Three Specialized Tabs:**
   1. **MSVC C++20 Terminal:** Displays generated C++20 source code, native compiler invocations, and raw execution logs from the Taskflow engine.
   2. **Real-Time Telemetry:** Monitors cognitive agent execution steps (thinking reasoning progress, tool calls, parameters, and 429 rate limit retries).

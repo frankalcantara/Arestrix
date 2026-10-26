@@ -50,6 +50,14 @@ class MockElement {
       },
       contains: (cls: string) => {
         return this.className.split(/\s+/).includes(cls);
+      },
+      toggle: (cls: string, force?: boolean) => {
+        const set = new Set(this.className.split(/\s+/).filter(Boolean));
+        const shouldHave = force === undefined ? !set.has(cls) : force;
+        if (shouldHave) set.add(cls);
+        else set.delete(cls);
+        this.className = Array.from(set).join(' ');
+        return shouldHave;
       }
     };
   }
@@ -77,6 +85,14 @@ class MockElement {
   addEventListener(event: string, fn: Function) {
     this._listeners[event] = this._listeners[event] || [];
     this._listeners[event].push(fn);
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes[name] ?? null;
+  }
+
+  setAttribute(name: string, value: string) {
+    this.attributes[name] = value;
   }
 
   click() {
@@ -149,6 +165,10 @@ function parseHTMLToMock(html: string, root: MockElement) {
         if (typeMatch) el.type = typeMatch[1];
 
         if (attrs.includes('checked')) el.checked = true;
+
+        for (const dataMatch of attrs.matchAll(/data-([a-zA-Z0-9-]+)=["']([^"']*)["']/g)) {
+          el.attributes[`data-${dataMatch[1]}`] = dataMatch[2];
+        }
       }
       stack[stack.length - 1].appendChild(el);
 
@@ -514,25 +534,31 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
 
       expect(ribbon.isRunning()).toBe(false);
       expect(btnRun.classList.contains('is-running-stop')).toBe(false);
-      expect(btnRun.querySelector('.ribbon-btn-icon')?.textContent).toBe('▶');
+      const runIcon = btnRun.querySelector('.ribbon-btn-icon') as any;
+      expect(runIcon?.getAttribute('data-icon')).toBe('play');
+      expect(runIcon?.querySelector('svg')).not.toBeNull();
 
       // 1. Inicia execução
       globalEventBus.emit('pipeline:running', 'Executando pipeline...');
       expect(ribbon.isRunning()).toBe(true);
       expect(btnRun.classList.contains('is-running-stop')).toBe(true);
-      expect(btnRun.querySelector('.ribbon-btn-icon')?.textContent).toBe('⏹');
+      expect(runIcon?.getAttribute('data-icon')).toBe('stop');
+      expect(runIcon?.querySelector('svg')).not.toBeNull();
       expect(btnRun.querySelector('.ribbon-btn-label')?.textContent).toContain('Parar');
       expect(btnQat.classList.contains('is-running-stop')).toBe(true);
-      expect(btnQat.textContent).toBe('⏹');
+      expect(btnQat.getAttribute('data-icon')).toBe('stop');
+      expect(btnQat.querySelector('svg')).not.toBeNull();
 
       // 2. Finaliza ou interrompe execução
       globalEventBus.emit('pipeline:stopped');
       expect(ribbon.isRunning()).toBe(false);
       expect(btnRun.classList.contains('is-running-stop')).toBe(false);
-      expect(btnRun.querySelector('.ribbon-btn-icon')?.textContent).toBe('▶');
-      expect(btnRun.querySelector('.ribbon-btn-label')?.textContent).toContain('Build & Run');
+      expect(runIcon?.getAttribute('data-icon')).toBe('play');
+      expect(runIcon?.querySelector('svg')).not.toBeNull();
+      expect(btnRun.querySelector('.ribbon-btn-label')?.textContent).toContain('Executar');
       expect(btnQat.classList.contains('is-running-stop')).toBe(false);
-      expect(btnQat.textContent).toBe('▶');
+      expect(btnQat.getAttribute('data-icon')).toBe('play');
+      expect(btnQat.querySelector('svg')).not.toBeNull();
     });
 
     describe('Abas Contextuais de Componentes / Vértices (Estilo Microsoft Office)', () => {

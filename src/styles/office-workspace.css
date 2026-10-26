@@ -146,6 +146,10 @@ body, html {
   touch-action: none;
 }
 
+.viewport-container.canvas-bg-dark {
+  background-color: #000000;
+}
+
 .viewport-container canvas {
   display: block;
   user-select: none;

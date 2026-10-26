@@ -10,6 +10,7 @@ import { INodeData, IEdgeData, IGraphSchema } from '../core/types.ts';
 import { EventBus } from '../core/EventBus.ts';
 import { THEME } from './Theme.ts';
 import { IBezierCurvePoints, IObstacleBox } from './BezierEdgeRouter.ts';
+import { CanvasBackground, CANVAS_PALETTES, loadCanvasBackground, saveCanvasBackground } from './CanvasPreferences.ts';
 
 function sanitizeId(id: string): string {
   return id.replace(/[^a-zA-Z0-9]/g, '_');
@@ -52,6 +53,7 @@ export class Viewport {
   private edgeAnimPhase: number = 0;
   /** Evita que telemetria atrasada reative o modo de execução após o pipeline terminar. */
   private executionActive: boolean = false;
+  private canvasBackground: CanvasBackground = 'light';
 
   constructor(container: HTMLElement, graph: Graph, bus: EventBus) {
     this.container = container;
@@ -88,6 +90,7 @@ export class Viewport {
 
     // 4. Grid Infinito e Controlador de Câmera
     this.grid = new InfiniteGrid(this.scene);
+    this.applyCanvasBackground(loadCanvasBackground());
     this.cameraController = new CameraController(this.camera, this.renderer.domElement, this.frustumSize);
 
     // 5. Observador de Redimensionamento do DOM para sincronizar automaticamente
@@ -1183,6 +1186,36 @@ export class Viewport {
 
   public isGridVisible(): boolean {
     return this.grid.isVisible();
+  }
+
+  /** Fundo atual do canvas: claro (padrão) ou preto. */
+  public getCanvasBackground(): CanvasBackground {
+    return this.canvasBackground;
+  }
+
+  /**
+   * Configuração persistida do canvas. O valor fica em localStorage e é
+   * reaplicado ao iniciar o Studio; não altera o grafo/projeto.
+   */
+  public setCanvasBackground(background: CanvasBackground): void {
+    this.applyCanvasBackground(background);
+    saveCanvasBackground(background);
+    this.bus.emit('canvas:background-changed', background);
+  }
+
+  public toggleCanvasBackground(): CanvasBackground {
+    const next: CanvasBackground = this.canvasBackground === 'dark' ? 'light' : 'dark';
+    this.setCanvasBackground(next);
+    return next;
+  }
+
+  private applyCanvasBackground(background: CanvasBackground): void {
+    const palette = CANVAS_PALETTES[background];
+    this.canvasBackground = background;
+    this.scene.background = new THREE.Color(palette.background);
+    this.grid.setTheme(palette.background, palette.gridMajor, palette.gridMinor);
+    this.container.classList.toggle('canvas-bg-dark', background === 'dark');
+    this.container.style.backgroundColor = palette.containerCss;
   }
 
   public getCameraCenter(): THREE.Vector2 {

@@ -1819,3 +1819,656 @@
 .ribbon-dialog .btn-danger-office:hover {
   background: #b91c1c;
 }
+
+/* ==========================================================================
+   Office 365 Visual Refresh - Etapa 1 (shell + Home)
+   Chrome cinza, painel branco elevado, botoes maiores e icones SVG.
+   ========================================================================== */
+
+.office-ribbon-container {
+  --ribbon-chrome: #f3f3f3;
+  --ribbon-surface: #ffffff;
+  --ribbon-ink: #242424;
+  --ribbon-ink-2: #4f4e4b;
+  --ribbon-ink-3: #6b6964;
+  --ribbon-line: rgba(11, 11, 11, 0.12);
+  --ribbon-line-strong: rgba(11, 11, 11, 0.18);
+  --ribbon-hover: rgba(11, 11, 11, 0.06);
+  --ribbon-pressed: rgba(11, 11, 11, 0.09);
+  --ribbon-accent: #0f6cbd;
+  --ribbon-accent-wash: rgba(15, 108, 189, 0.1);
+  --ribbon-radius: 8px;
+  background: var(--ribbon-chrome);
+  border-bottom: 0;
+  box-shadow: none;
+  font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+}
+
+.office-ribbon-container .office-titlebar {
+  height: 40px;
+  padding: 0 10px 0 8px;
+  gap: 4px;
+  background: transparent;
+  border-bottom: 0;
+}
+
+.office-ribbon-container .office-titlebar-left {
+  gap: 6px;
+}
+
+.office-ribbon-container .office-brand-badge {
+  gap: 8px;
+  color: var(--ribbon-ink);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.office-ribbon-container .office-brand-icon {
+  width: 22px;
+  height: 22px;
+  padding: 3px;
+  border-radius: 6px;
+  background: #1f2328;
+  display: grid;
+  place-items: center;
+}
+
+.office-ribbon-container .office-brand-name {
+  white-space: nowrap;
+}
+
+.office-ribbon-container .office-brand-edition {
+  color: var(--ribbon-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+}
+
+.office-ribbon-container .office-qat-buttons {
+  gap: 2px;
+  margin-left: 6px;
+  padding-left: 8px;
+  border-left: 1px solid var(--ribbon-line);
+}
+
+.office-ribbon-container .office-qat-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ribbon-ink-2);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.office-ribbon-container .office-qat-btn:hover:not(:disabled) {
+  background: var(--ribbon-hover);
+  border-color: transparent;
+  color: var(--ribbon-ink);
+}
+
+.office-ribbon-container .office-qat-btn:active:not(:disabled) {
+  background: var(--ribbon-pressed);
+}
+
+.office-ribbon-container .office-qat-btn.office-qat-label {
+  width: auto;
+  min-width: 30px;
+  padding: 0 8px;
+  display: inline-flex;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.office-ribbon-container #qat-btn-git-push {
+  color: var(--ribbon-accent);
+}
+
+.office-ribbon-container #qat-btn-run {
+  color: var(--ribbon-accent);
+}
+
+.office-ribbon-container #qat-git-status-badge {
+  color: var(--ribbon-ink-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.office-ribbon-container .office-qat-btn.is-running-stop {
+  color: #b42318 !important;
+  background: #fdecec;
+  font-weight: 600 !important;
+  transform: none;
+}
+
+.office-ribbon-container .office-autosave-group {
+  height: 28px;
+  margin-right: 2px;
+  padding: 0 8px 0 6px;
+  gap: 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+}
+
+.office-ribbon-container .office-autosave-group:hover {
+  background: var(--ribbon-hover);
+  border-color: transparent;
+}
+
+.office-ribbon-container .office-autosave-switch {
+  width: 28px;
+  height: 16px;
+}
+
+.office-ribbon-container .office-autosave-slider {
+  border-radius: 999px;
+  background: #8c8a84;
+}
+
+.office-ribbon-container .office-autosave-slider:before {
+  width: 12px;
+  height: 12px;
+}
+
+.office-ribbon-container .office-autosave-switch input:checked + .office-autosave-slider {
+  background: var(--ribbon-accent);
+}
+
+.office-ribbon-container .office-autosave-switch input:checked + .office-autosave-slider:before {
+  transform: translateX(12px);
+}
+
+.office-ribbon-container .office-autosave-label {
+  color: var(--ribbon-ink-2);
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.office-ribbon-container .office-autosave-badge {
+  font-size: 11px;
+}
+
+.office-ribbon-container .office-project-indicator {
+  height: 28px;
+  padding: 0 10px;
+  gap: 7px;
+  border: 1px solid var(--ribbon-line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ribbon-ink-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.office-ribbon-container .office-project-indicator:hover {
+  background: var(--ribbon-hover);
+  border-color: var(--ribbon-line-strong);
+  color: var(--ribbon-ink);
+}
+
+.office-ribbon-container .office-tellme-box {
+  width: 220px;
+  height: 30px;
+  padding: 0 8px;
+  gap: 6px;
+  border: 1px solid var(--ribbon-line);
+  border-radius: 5px;
+  background: var(--ribbon-surface);
+  color: var(--ribbon-ink-3);
+}
+
+.office-ribbon-container .office-tellme-box:focus-within {
+  border-color: var(--ribbon-accent);
+  box-shadow: 0 0 0 2px var(--ribbon-accent-wash);
+}
+
+.office-ribbon-container .office-tellme-box input {
+  color: var(--ribbon-ink);
+  font-size: 12.5px;
+  padding: 0;
+}
+
+.office-ribbon-container .office-tabs-bar {
+  height: 34px;
+  padding: 0 10px;
+  background: transparent;
+  border-bottom: 0;
+}
+
+.office-ribbon-container .office-tabs-nav {
+  gap: 0;
+}
+
+.office-ribbon-container .office-tab-btn {
+  height: 34px;
+  padding: 0 11px;
+  border: 0;
+  border-bottom: 0;
+  border-radius: 5px 5px 0 0;
+  margin-bottom: 0;
+  background: transparent;
+  color: var(--ribbon-ink-2);
+  font-size: 13px;
+  font-weight: 400;
+  gap: 5px;
+}
+
+.office-ribbon-container .office-tab-btn:hover {
+  background: var(--ribbon-hover);
+  color: var(--ribbon-ink);
+}
+
+.office-ribbon-container .office-tab-btn.active {
+  background: transparent;
+  color: var(--ribbon-ink);
+  border-bottom: 0;
+  font-weight: 600;
+}
+
+.office-ribbon-container .office-tab-btn.active::after {
+  content: "";
+  position: absolute;
+  left: 11px;
+  right: 11px;
+  bottom: 3px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ribbon-accent);
+}
+
+.office-ribbon-container .office-tab-btn.file-tab {
+  padding: 0 14px;
+  margin-right: 4px;
+  border-radius: 5px 5px 0 0;
+  background: var(--ribbon-accent);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.office-ribbon-container .office-tab-btn.file-tab:hover {
+  background: #115ea3;
+  color: #ffffff;
+}
+
+.office-ribbon-container .office-tab-btn.contextual-tab {
+  padding: 0 11px;
+  border-top: 2px solid var(--ribbon-accent);
+  background: var(--ribbon-accent-wash);
+  color: var(--ribbon-accent);
+  font-weight: 600;
+}
+
+.office-ribbon-container .office-tab-btn.contextual-tab:hover {
+  background: rgba(15, 108, 189, 0.16);
+  color: #0c4a6e;
+}
+
+.office-ribbon-container .contextual-tab-icon {
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.office-ribbon-container .office-tab-btn.contextual-tab.active {
+  background: transparent;
+  color: var(--ribbon-accent);
+  border-top: 2px solid var(--ribbon-accent);
+}
+
+.office-ribbon-container .office-tabs-actions {
+  gap: 2px;
+}
+
+.office-ribbon-container .office-ribbon-collapse-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 5px;
+  color: var(--ribbon-ink-2);
+  font-size: 10px;
+}
+
+.office-ribbon-container .office-ribbon-collapse-btn:hover {
+  background: var(--ribbon-hover);
+  color: var(--ribbon-ink);
+}
+
+.office-ribbon-container .office-ribbon-body {
+  min-height: 94px;
+  height: auto;
+  margin: 0 8px 6px;
+  padding: 5px 8px 3px;
+  gap: 0;
+  background: var(--ribbon-surface);
+  border: 0;
+  border-radius: var(--ribbon-radius);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  scrollbar-color: var(--ribbon-line) transparent;
+}
+
+.office-ribbon-container .office-ribbon-body.collapsed {
+  height: 0;
+  min-height: 0;
+  margin: 0 8px;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.office-ribbon-container .office-ribbon-pane {
+  gap: 0;
+  min-height: 100%;
+}
+
+.office-ribbon-container .office-ribbon-group {
+  padding: 0 8px;
+  gap: 2px;
+  border-right: 1px solid var(--ribbon-line);
+}
+
+.office-ribbon-container .office-ribbon-group:last-child {
+  border-right: 0;
+}
+
+.office-ribbon-container .office-ribbon-group-tools {
+  min-height: 70px;
+  gap: 4px;
+  align-items: center;
+}
+
+.office-ribbon-container .office-ribbon-group-title {
+  color: var(--ribbon-ink-3);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px;
+  letter-spacing: 0;
+  text-transform: none;
+  margin: 2px 0 0;
+}
+
+.office-ribbon-container .ribbon-btn-large {
+  height: 70px;
+  min-width: 64px;
+  max-width: 82px;
+  padding: 4px 6px;
+  gap: 3px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ribbon-ink);
+}
+
+.office-ribbon-container .ribbon-btn-large:hover {
+  background: var(--ribbon-hover);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.office-ribbon-container .ribbon-btn-large:active {
+  background: var(--ribbon-pressed);
+}
+
+.office-ribbon-container .ribbon-btn-large .ribbon-btn-icon,
+.office-ribbon-container .ribbon-btn-large .ribbon-btn-icon svg {
+  width: 30px;
+  height: 30px;
+}
+
+.office-ribbon-container .ribbon-btn-large .ribbon-btn-icon {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  font-size: 22px;
+  color: currentColor;
+}
+
+.office-ribbon-container .ribbon-btn-large .ribbon-btn-label {
+  max-width: 78px;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 15px;
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.office-ribbon-container .ribbon-btn-large.primary-action {
+  background: transparent;
+  color: var(--ribbon-ink);
+  border: 0;
+  box-shadow: none;
+}
+
+.office-ribbon-container .ribbon-btn-large.primary-action .ribbon-btn-icon {
+  color: var(--ribbon-accent);
+}
+
+.office-ribbon-container .ribbon-btn-large.primary-action .ribbon-btn-label {
+  color: var(--ribbon-accent);
+  font-weight: 600;
+}
+
+.office-ribbon-container .ribbon-btn-large.primary-action:hover {
+  background: var(--ribbon-accent-wash);
+}
+
+.office-ribbon-container .ribbon-btn-large.is-running-stop {
+  background: #fdecec !important;
+  color: #b42318 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.office-ribbon-container .ribbon-btn-large.is-running-stop:hover {
+  background: #fbd5d5 !important;
+}
+
+.office-ribbon-container .ribbon-btn-large.is-running-stop .ribbon-btn-icon {
+  color: #b42318 !important;
+  transform: none;
+}
+
+.office-ribbon-container .ribbon-btn-large.is-running-stop .ribbon-btn-label {
+  color: #b42318 !important;
+  font-weight: 600;
+}
+
+.office-ribbon-container .ribbon-col-stack {
+  height: auto;
+  justify-content: center;
+  gap: 2px;
+}
+
+.office-ribbon-container .ribbon-col-stack-wide {
+  min-width: 112px;
+}
+
+.office-ribbon-container .ribbon-btn-small {
+  height: 24px;
+  padding: 0 6px;
+  gap: 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ribbon-ink-2);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.office-ribbon-container .ribbon-btn-small:hover:not(:disabled) {
+  background: var(--ribbon-hover);
+  border-color: transparent;
+  color: var(--ribbon-ink);
+}
+
+.office-ribbon-container .ribbon-btn-small:active:not(:disabled) {
+  background: var(--ribbon-pressed);
+}
+
+.office-ribbon-container .ribbon-sm-icon,
+.office-ribbon-container .ribbon-sm-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.office-ribbon-container .ribbon-sm-icon {
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  flex: none;
+}
+
+.office-ribbon-container .ribbon-sm-icon.ribbon-icon-danger {
+  color: #b42318;
+}
+
+.office-ribbon-container .ribbon-select {
+  height: 24px;
+  max-width: 140px;
+  padding: 0 6px;
+  border: 1px solid var(--ribbon-line);
+  border-radius: 4px;
+  background: var(--ribbon-surface);
+  color: var(--ribbon-ink);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.office-ribbon-container .ribbon-select:hover {
+  border-color: var(--ribbon-line-strong);
+}
+
+.office-ribbon-container .ribbon-select:focus {
+  border-color: var(--ribbon-accent);
+  box-shadow: 0 0 0 2px var(--ribbon-accent-wash);
+}
+
+.office-ribbon-container .ribbon-glyph {
+  display: block;
+  flex: none;
+}
+
+/* Acentos de cor dos ícones, no espírito dos ícones multicoloridos do Office. */
+.office-ribbon-container #qat-btn-save {
+  color: var(--ribbon-accent);
+}
+
+.office-ribbon-container .ribbon-btn-icon[data-icon="plug"],
+.office-ribbon-container .ribbon-sm-icon[data-icon="plug"] {
+  color: #6d5bd0;
+}
+
+.office-ribbon-container .ribbon-btn-icon[data-icon="database"] {
+  color: #0f766e;
+}
+
+.office-ribbon-container .ribbon-btn-icon[data-icon="brain"] {
+  color: #7c3aed;
+}
+
+.office-ribbon-container .ribbon-btn-icon[data-icon="spark"] {
+  color: #5b5bd6;
+}
+
+.office-ribbon-container .ribbon-btn-icon[data-icon="circle"] {
+  color: #10a37f;
+}
+
+.office-ribbon-container .ribbon-btn-icon[data-icon="orbit"] {
+  color: #8b5cf6;
+}
+
+.office-ribbon-container .ribbon-btn-icon[data-icon="sheet"] {
+  color: #217346;
+}
+
+.office-ribbon-container .ribbon-btn-icon[data-icon="globe"] {
+  color: #24292f;
+}
+
+.office-ribbon-container .ribbon-btn-icon[data-icon="code"] {
+  color: #2563eb;
+}
+
+.office-ribbon-container .ribbon-btn-icon[data-icon="image"] {
+  color: #0f766e;
+}
+
+.office-ribbon-container .ribbon-btn-icon[data-icon="tag"] {
+  color: #b45309;
+}
+
+.office-ribbon-container .ribbon-btn-icon[data-icon="validate"] {
+  color: #0f766e;
+}
+
+.office-ribbon-container #ribbon-btn-import-claude .ribbon-btn-icon {
+  color: #d97757;
+}
+
+.office-ribbon-container [data-add="cuda"] .ribbon-btn-icon,
+.office-ribbon-container #btn-ctx-cuda-code .ribbon-btn-icon {
+  color: #76b900;
+}
+
+@media (max-width: 1280px) {
+  .office-ribbon-container .office-ribbon-body {
+    min-height: 78px;
+  }
+
+  .office-ribbon-container .office-ribbon-group-title {
+    display: none;
+  }
+
+  .office-ribbon-container .office-ribbon-group {
+    padding: 0 4px;
+  }
+
+  .office-ribbon-container .office-ribbon-group-tools {
+    min-height: 64px;
+  }
+
+  .office-ribbon-container .ribbon-btn-large {
+    height: 64px;
+    min-width: 58px;
+  }
+
+  .office-ribbon-container .ribbon-btn-large .ribbon-btn-icon,
+  .office-ribbon-container .ribbon-btn-large .ribbon-btn-icon svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .office-ribbon-container .ribbon-btn-large .ribbon-btn-label {
+    font-size: 11px;
+    line-height: 14px;
+  }
+}
+
+@media (max-width: 900px) {
+  .office-ribbon-container .office-tab-btn {
+    padding: 0 8px;
+    font-size: 12.5px;
+  }
+
+  .office-ribbon-container .office-tellme-box {
+    width: 160px;
+  }
+}

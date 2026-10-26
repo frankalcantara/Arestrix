@@ -70,6 +70,14 @@ export class InfiniteGrid {
     mat.uniforms.uZoom.value = camera.zoom;
   }
 
+  /** Atualiza as cores do fundo/grade sem recriar a geometria. */
+  setTheme(background: number, gridMajor: number, gridMinor: number): void {
+    const mat = this.mesh.material as THREE.ShaderMaterial;
+    mat.uniforms.uBgColor.value.set(background);
+    mat.uniforms.uGridMajor.value.set(gridMajor);
+    mat.uniforms.uGridMinor.value.set(gridMinor);
+  }
+
   toggleVisible(): boolean {
     this.mesh.visible = !this.mesh.visible;
     return this.mesh.visible;

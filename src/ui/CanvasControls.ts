@@ -10,6 +10,7 @@ export class CanvasControls {
   private container: HTMLElement;
   private viewport: Viewport;
   private bus: EventBus;
+  private executionRunning: boolean = false;
 
   constructor(parent: HTMLElement, viewport: Viewport, bus: EventBus) {
     this.viewport = viewport;
@@ -26,6 +27,7 @@ export class CanvasControls {
 
   private render(): void {
     const isFollow = this.viewport.isFollowingExecution();
+    const isDark = this.viewport.getCanvasBackground() === 'dark';
     this.container.innerHTML = `
       <button id="canvas-ctrl-layout" class="canvas-hud-btn" title="${t('canvas_controls.auto_layout_tip')}">
         <span>✨</span>
@@ -50,8 +52,11 @@ export class CanvasControls {
         <span>1:1</span>
       </button>
       <div class="canvas-hud-sep"></div>
-      <button id="canvas-ctrl-grid" class="canvas-hud-btn active" title="${t('canvas_controls.grid_tip')}">
+      <button id="canvas-ctrl-grid" class="canvas-hud-btn ${this.viewport.isGridVisible() ? 'active' : ''}" title="${t('canvas_controls.grid_tip')}">
         <span>⊞</span>
+      </button>
+      <button id="canvas-ctrl-bg" class="canvas-hud-btn ${isDark ? 'active' : ''}" title="${t('canvas_controls.background_tip')}">
+        <span>${isDark ? '☀️' : '🌙'}</span>
       </button>
     `;
   }
@@ -92,12 +97,36 @@ export class CanvasControls {
       const isVisible = this.viewport.toggleGrid();
       gridBtn.classList.toggle('active', isVisible);
     });
+
+    this.container.querySelector('#canvas-ctrl-bg')?.addEventListener('click', () => {
+      this.viewport.toggleCanvasBackground();
+    });
+  }
+
+  private updateBackgroundButton(): void {
+    const button = this.container.querySelector('#canvas-ctrl-bg') as HTMLElement | null;
+    if (!button) return;
+    const isDark = this.viewport.getCanvasBackground() === 'dark';
+    button.classList.toggle('active', isDark);
+    const glyph = button.querySelector('span');
+    if (glyph) glyph.textContent = isDark ? '☀️' : '🌙';
+  }
+
+  private setExecutionRunning(running: boolean): void {
+    this.executionRunning = running;
+    this.container.style.display = running ? 'none' : 'flex';
+    this.container.setAttribute('aria-hidden', running ? 'true' : 'false');
   }
 
   private bindBusEvents(): void {
     this.bus.on('graph:loaded', () => {
       const gridBtn = this.container.querySelector('#canvas-ctrl-grid') as HTMLElement;
-      gridBtn?.classList.add('active');
+      gridBtn?.classList.toggle('active', this.viewport.isGridVisible());
+      this.updateBackgroundButton();
+    });
+
+    this.bus.on('canvas:background-changed', () => {
+      this.updateBackgroundButton();
     });
 
     this.bus.on('canvas:follow-execution', (enabled: boolean) => {
@@ -105,9 +134,15 @@ export class CanvasControls {
       followBtn?.classList.toggle('active', enabled);
     });
 
+    this.bus.on('pipeline:compiling', () => this.setExecutionRunning(true));
+    this.bus.on('pipeline:running', () => this.setExecutionRunning(true));
+    this.bus.on('pipeline:success', () => this.setExecutionRunning(false));
+    this.bus.on('pipeline:error', () => this.setExecutionRunning(false));
+
     this.bus.on('locale:changed', () => {
       this.render();
       this.bindDomEvents();
+      this.setExecutionRunning(this.executionRunning);
     });
   }
 }
