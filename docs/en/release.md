@@ -117,6 +117,10 @@ The workflow runs the canonical gate (`release_check.py --skip-e2e`), creates th
 `release-manifest.json` and `release-report.json` to the release. The portable folder is ready to
 run from any directory (`start-arestrix.bat`); no development checkout is needed.
 
+Pull requests run the pre-merge gate in `.github/workflows/ci.yml`: quality/static checks, Vitest +
+Studio build, native Windows CTest and native Linux CTest. The four jobs are required status checks
+on `main`, and Dependabot keeps npm, GitHub Actions and Git submodules current.
+
 E2E remains a promotion requirement: run the full `release_check.py` (with E2E) from a clean tree
 before tagging an official release.
 
@@ -137,7 +141,7 @@ Alternatively use `ARESTRIX_SIGN_THUMBPRINT` for a certificate installed in `My`
 
 - MSI/MSIX or Inno Setup installer and Linux package (5B2; the portable package 5B1 is implemented).
 - Code-signing certificate/HSM provisioning and signing inside CI.
-- Automated Linux CI matrix (the Windows portable deploy is implemented).
+- E2E in the automated release path and a macOS CI matrix.
 - Signed remote catalog (Ed25519/minisign) and hosting.
 
 Those are the next phase-5 slices.

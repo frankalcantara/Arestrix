@@ -18,6 +18,15 @@ import { CloudflareSkillAudit } from '../src/core/skills/CloudflareSkillAudit.ts
 import { WorkspaceSkillAuditorAgent } from '../src/core/workspace/WorkspaceSkillAuditorAgent.ts';
 import { SkillHasher } from '../src/core/skills/SkillHasher.ts';
 
+/**
+ * Hash canônico de arquivos de referência: normaliza CRLF/CR para LF para que
+ * Windows e Linux produzam o mesmo digest (o lock é portátil).
+ */
+function canonicalFileSha256(file: string): string {
+  const canonical = readFileSync(file, 'utf8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  return createHash('sha256').update(canonical, 'utf8').digest('hex');
+}
+
 const CLEAN_SKILL: Partial<INodeSkill> = {
   id: 'skill-policy-clean',
   name: 'Formatador de Texto',
@@ -55,19 +64,19 @@ describe('Política de validação de skills e referências', () => {
     const root = process.cwd();
     for (const reference of SKILL_VALIDATION_POLICY.references) {
       const file = path.join(root, reference.path, reference.skillPath);
-      const hash = createHash('sha256').update(readFileSync(file)).digest('hex');
+      const hash = canonicalFileSha256(file);
       expect(hash, `${reference.id} mudou sem atualizar o lock`).toBe(reference.skillSha256);
     }
 
     const guardFile = path.join(root, SKILL_VALIDATION_POLICY.guardSkill.path);
-    const guardHash = createHash('sha256').update(readFileSync(guardFile)).digest('hex');
+    const guardHash = canonicalFileSha256(guardFile);
     expect(guardHash, 'arestrix-skill-guard mudou sem atualizar o lock').toBe(
       SKILL_VALIDATION_POLICY.guardSkill.sha256
     );
 
     for (const source of SKILL_VALIDATION_POLICY.ruleSources) {
       const file = path.join(root, source.path);
-      const hash = createHash('sha256').update(readFileSync(file)).digest('hex');
+      const hash = canonicalFileSha256(file);
       expect(hash, `${source.path} mudou sem atualizar o lock`).toBe(source.sha256);
     }
   });

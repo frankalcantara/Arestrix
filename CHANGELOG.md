@@ -66,6 +66,13 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
 - `DefaultIntelligenceService` now honors an injected API caller even when the provider key is not
   set. Tests and embedders no longer silently fall back to the static 80/85 heuristic on clean
   environments; the HTTP path still requires a real key.
+- Cross-platform CI hardening: skill-reference SHA-256 hashes now normalize CRLF before hashing
+  (Windows CRLF checkouts and Linux LF checkouts agree; the policy lock was regenerated), Vitest
+  forces the canonical `pt-BR` locale instead of relying on `navigator.language`, and the native test
+  translation unit includes `<cstring>` so `std::memset` compiles with GCC.
+- The interaction host stdin reader is now intentionally kept for the process lifetime. Destroying
+  its mutex/condition variable at shutdown while the detached reader thread was still blocked made
+  successful host interactions exit non-zero on POSIX (the Linux CTest job exposed it).
 
 ### Added
 
@@ -75,6 +82,11 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   release carries the ZIP, `.zip.sha256`, `SHA256SUMS`, `SBOM.json`, `release-manifest.json` and
   `release-report.json`, so testers can run the Studio from any folder without a development
   checkout. Both READMEs now point to the `latest` build.
+- Pull-request CI: `.github/workflows/ci.yml` runs quality/static checks, Vitest + Studio build,
+  native Windows CTest and native Linux CTest. The four jobs are required status checks on `main`;
+  the repository owner keeps an `always` bypass for urgent direct pushes. Dependabot is enabled for
+  npm, GitHub Actions and Git submodules, and both workflows now use Node 24 with `checkout@v7`,
+  `setup-node@v7`, `setup-python@v7` and `action-gh-release@v3`.
 - Arestrix Skill Guard: the `security-audit-skill` (Cloudflare) submodule, a project skill at
   `.agents/skills/arestrix-skill-guard/`, and a second deterministic audit layer for supply chain,
   persistence, credential access, tool abuse, data isolation and resource exhaustion. Skill
