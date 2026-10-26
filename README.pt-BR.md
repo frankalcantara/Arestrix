@@ -170,12 +170,15 @@ Linux; programas gerados a partir de um grafo atualmente têm o Windows como alv
 arquivo e flags de linha de comando podem mudar antes da disponibilidade geral. Consulte o
 [changelog](CHANGELOG.md) para as limitações atuais. Instalador, assinatura de código, pacote Linux e
 a matriz completa de testes ainda estão pendentes; acompanhe no
-[plano de testes do Beta 2](docs/quality/beta2-test-plan.md).
+[plano de testes do Beta 2](docs/quality/beta2-test-plan.md). Os artefatos Windows são assinados
+pela [SignPath Foundation](https://signpath.org) quando a assinatura está habilitada; consulte a
+[política de assinatura de código](CODE_SIGNING.md).
 
 ## Segurança
 
 - Reporte vulnerabilidades em canal privado, conforme o [SECURITY.md](SECURITY.md).
 - Leia o [modelo de segurança e governança](docs/security/governance.md).
+- Leia a [política de assinatura de código](CODE_SIGNING.md) e a [política de privacidade](PRIVACY.md).
 - Consulte os [avisos de dependências](docs/security/dependency-advisories.md) antes de atualizar
   pacotes npm.
 - Componentes e licenças de terceiros estão em [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

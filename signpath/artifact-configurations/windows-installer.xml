@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration for the Inno Setup installer.
+
+  The setup is built with VersionInfoVersion/ProductVersion set to the
+  four-part numeric version (for example 2.0.0.0), so the metadata
+  restrictions use the versionNumeric parameter.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="versionNumeric" required="true" />
+  </parameters>
+  <pe-file
+    path="*.exe"
+    product-name="Arestrix"
+    product-version="${versionNumeric}"
+    company-name="Arestrix">
+    <authenticode-sign />
+  </pe-file>
+</artifact-configuration>

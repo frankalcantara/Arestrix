@@ -30,10 +30,13 @@ release publicada.
 - [ ] **5B2 — instalador Windows:** Inno Setup implementado; faltam instalação limpa, upgrade,
       uninstall, atalhos, modo silencioso e validação em Intune/SCCM.
 - [ ] **5B2 — pacote Linux:** AppImage, `.deb` ou tarball instalável, com dependências documentadas.
-- [ ] **5C — assinatura:** certificado/HSM, Authenticode no Windows, assinatura dos artefatos no CI.
+- [ ] **5C — assinatura:** SignPath Foundation integrado no workflow (binários + instalador); faltam
+      aprovação da conta/projeto, secrets e primeira release assinada. Certificado/HSM próprio e
+      assinatura do desinstalador ficam para depois.
 - [ ] **5C — CI:** matriz Windows/Linux, build nativo, CTest, Vitest, E2E, gateway smoke e release gate.
   - [x] Matriz Windows/Linux com CTest, Vitest e checks no `ci.yml`; gate e gateway smoke no `deploy.yml`.
-  - [ ] E2E no CI e promoção automatizada por tag.
+  - [x] Assinatura SignPath Foundation integrada ao `deploy.yml` (binários, instalador, verificação e hashes).
+  - [ ] Aprovação SignPath, primeira release assinada, E2E no CI e promoção automatizada por tag.
 - [ ] **5C — catálogo remoto assinado:** par de chaves, custódia, rotação e hospedagem.
 - [ ] **Distribuição:** publicar checksums, SBOM, notices e notas de release.
 - [ ] **Testes e homologação** da matriz abaixo.

@@ -10,6 +10,14 @@ Pre-release identifiers follow SemVer (`2.0.0-beta.1`); the marketing name is **
 
 ### Added
 
+- SignPath Foundation code-signing integration: artifact configurations for the four Windows
+  executables and the Inno Setup installer, optional signing steps in the deploy workflow (skipped
+  until `SIGNPATH_ENABLED=true`), signature verification, signed-artifact reinstall and post-signing
+  hash refresh. The certificate is issued to SignPath Foundation, not to the maintainer; the policy is
+  in `CODE_SIGNING.md` and the account setup in `signpath/README.md`. The generated uninstaller
+  remains unsigned until synchronous Inno signing is available.
+- Windows PE version metadata (`ProductName`, `ProductVersion`, `FileVersion`, `CompanyName`) for all
+  shipped executables, required by SignPath metadata restrictions.
 - Windows Inno Setup installer (5B2, work in progress): `scripts/package_release.py --installer`
   builds a per-user setup from the validated staging tree and runs an environment preflight:
   WebView2/VC++ are hard requirements; Git, Git identity, GitHub credential, MSVC Build Tools and

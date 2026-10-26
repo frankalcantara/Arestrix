@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration for the Arestrix Windows binaries.
+
+  The workflow uploads a ZIP containing:
+    arestrix.exe
+    arestrix-cli.exe
+    arestrix-gateway.exe
+    arestrix-memory.exe
+
+  Metadata restrictions are mandatory for SignPath Foundation:
+  ProductName/ProductVersion/FileVersion/CompanyName must match the PE
+  VERSIONINFO generated from CppCore/resources/version.rc.in.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file-set
+      product-name="Arestrix"
+      product-version="${version}"
+      company-name="Arestrix">
+      <include path="*.exe" max-matches="unbounded" />
+      <for-each>
+        <authenticode-sign />
+      </for-each>
+    </pe-file-set>
+  </zip-file>
+</artifact-configuration>

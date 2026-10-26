@@ -170,12 +170,15 @@ python scripts/e2e_examples.py
 programs generated from a graph currently target Windows. Beta APIs, file formats and command-line
 flags may change before general availability. See the [changelog](CHANGELOG.md) for the current
 limitations. The installer, code signing, Linux package and the full test matrix are still pending;
-track them in the [Beta 2 test plan](docs/quality/beta2-test-plan.md).
+track them in the [Beta 2 test plan](docs/quality/beta2-test-plan.md). Windows artifacts are signed
+by [SignPath Foundation](https://signpath.org) when signing is enabled; see the
+[code signing policy](CODE_SIGNING.md).
 
 ## Security
 
 - Report vulnerabilities privately according to [SECURITY.md](SECURITY.md).
 - Read the [security and governance model](docs/security/governance.md).
+- Read the [code signing policy](CODE_SIGNING.md) and [privacy policy](PRIVACY.md).
 - Check [dependency advisories](docs/security/dependency-advisories.md) before upgrading npm
   packages.
 - Third-party components and licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

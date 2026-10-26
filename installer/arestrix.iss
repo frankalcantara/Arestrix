@@ -74,7 +74,7 @@ SetupLogging=yes
 VersionInfoVersion={#AppVersionNumeric}
 VersionInfoProductName={#AppName}
 VersionInfoProductVersion={#AppVersionNumeric}
-VersionInfoCompany={#AppPublisher}
+VersionInfoCompany=Arestrix
 VersionInfoDescription={#AppName} Studio installer
 
 [Languages]

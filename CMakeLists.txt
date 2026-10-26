@@ -8,6 +8,29 @@ project(Arestrix VERSION ${ARESTRIX_VERSION_NUMERIC} LANGUAGES C CXX)
 message(STATUS "Arestrix ${ARESTRIX_VERSION}")
 
 # ---------------------------------------------------------------------------
+# Metadados de versao dos executaveis Windows (ProductName/ProductVersion/
+# FileVersion). A SignPath Foundation exige esses atributos nos binarios
+# assinados; o Inno Setup tambem usa o mesmo esquema.
+# ---------------------------------------------------------------------------
+if(WIN32)
+  set(ARESTRIX_VERSION_RC_COMMA
+    "${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH},0")
+  function(arestrix_add_version_info target description original_name internal_name)
+    set(ARESTRIX_FILE_DESCRIPTION "${description}")
+    set(ARESTRIX_ORIGINAL_FILENAME "${original_name}")
+    set(ARESTRIX_INTERNAL_NAME "${internal_name}")
+    set(version_rc "${CMAKE_CURRENT_BINARY_DIR}/generated/${target}-version.rc")
+    configure_file(
+      "${CMAKE_CURRENT_SOURCE_DIR}/CppCore/resources/version.rc.in"
+      "${version_rc}"
+      @ONLY
+    )
+    target_sources(${target} PRIVATE "${version_rc}")
+  endfunction()
+endif()
+
+
+# ---------------------------------------------------------------------------
 # Runtime local: catalogo de modelos e manifesto de binarios embutidos no binario.
 # Os JSONs ficam em CppCore/runtime e sao a fonte de verdade; o header gerado evita
 # depender do diretorio de trabalho no aplicativo empacotado.
@@ -271,6 +294,9 @@ add_executable(arestrix-cli
   ${SRC}/build/BuildService.cpp)
 target_link_libraries(arestrix-cli PRIVATE arestrix_core arestrix_security_flags)
 target_compile_definitions(arestrix-cli PRIVATE ARESTRIX_CLI_VERSION="${ARESTRIX_VERSION}")
+if(WIN32)
+  arestrix_add_version_info(arestrix-cli "Arestrix CLI" "arestrix-cli.exe" "arestrix-cli")
+endif()
 add_custom_command(TARGET arestrix-cli POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:arestrix-cli>" "${CMAKE_SOURCE_DIR}/"
   VERBATIM)
@@ -283,6 +309,9 @@ target_include_directories(arestrix-gateway PRIVATE
   ${SRC}
   ${TP}/httplib)
 target_compile_definitions(arestrix-gateway PRIVATE ARESTRIX_GATEWAY_VERSION="${ARESTRIX_VERSION}")
+if(WIN32)
+  arestrix_add_version_info(arestrix-gateway "Arestrix AI Gateway" "arestrix-gateway.exe" "arestrix-gateway")
+endif()
 target_link_libraries(arestrix-gateway PRIVATE arestrix_gateway_core arestrix_core arestrix_security_flags)
 add_custom_command(TARGET arestrix-gateway POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:arestrix-gateway>" "${CMAKE_SOURCE_DIR}/"
@@ -296,6 +325,9 @@ target_include_directories(arestrix-memory PRIVATE
   ${SRC}
   ${TP}/httplib)
 target_compile_definitions(arestrix-memory PRIVATE ARESTRIX_MEMORY_VERSION="${ARESTRIX_VERSION}")
+if(WIN32)
+  arestrix_add_version_info(arestrix-memory "Arestrix Memory Service" "arestrix-memory.exe" "arestrix-memory")
+endif()
 target_link_libraries(arestrix-memory PRIVATE arestrix_core arestrix_security_flags)
 add_custom_command(TARGET arestrix-memory POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:arestrix-memory>" "${CMAKE_SOURCE_DIR}/"
@@ -345,6 +377,9 @@ if(ARESTRIX_BUILD_STUDIO)
     ${SRC}/platform/StudioConsole.cpp)
   target_link_libraries(arestrix PRIVATE arestrix_core arestrix_security_flags webui)
   target_compile_definitions(arestrix PRIVATE ARESTRIX_STUDIO_VERSION="${ARESTRIX_VERSION}")
+  if(WIN32)
+    arestrix_add_version_info(arestrix "Arestrix Studio" "arestrix.exe" "arestrix")
+  endif()
   # O Studio continua como aplicativo de console porque o FastWebUI/WebUI usa o console
   # do processo. Quando iniciado fora de um terminal, platform/StudioConsole.cpp oculta
   # a janela de console e espelha os logs em %LOCALAPPDATA%/Arestrix/logs.

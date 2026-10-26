@@ -1,9 +1,9 @@
 # Gate de release e artefatos
 
 > **Fase 5A.** Esta é a camada de validação reproduzível antes do empacotamento e da assinatura.
-> O instalador Windows em Inno Setup está implementado (5B2); validação em máquina limpa,
-> assinatura, pacote Linux, CI Linux e catálogo remoto assinado continuam pendentes; veja o
-> [roadmap](roadmap.md).
+> O instalador Windows em Inno Setup e o workflow SignPath Foundation estão implementados; aprovação
+> da conta SignPath, validação em máquina limpa, pacote Linux, CI Linux e catálogo remoto assinado
+> continuam pendentes; veja o [roadmap](roadmap.md).
 
 ## 1. Prepare uma árvore limpa
 
@@ -166,9 +166,33 @@ sobre a instalação anterior preservando arquivos/projetos do usuário e desins
 Instalação em máquina limpa, assinatura e Intune/SCCM ainda fazem parte do gate Beta 2; o instalador
 ainda não é um artefato de release validado.
 
-## 4. Assine os binários do Windows
+## 4. Assinatura com SignPath Foundation
 
-Depois do gate aprovado, assine os executáveis com o certificado corporativo:
+O Arestrix está configurado para assinatura de código via [SignPath Foundation](https://signpath.org).
+O certificado é emitido para a **SignPath Foundation**, então o Windows exibe `SignPath Foundation`
+como publisher. Os critérios e a política estão em [CODE_SIGNING.md](../CODE_SIGNING.md); a
+configuração da conta e do repositório está em [signpath/README.md](../signpath/README.md).
+
+O workflow de deploy possui etapas opcionais controladas por `SIGNPATH_ENABLED=true` e por uma tag
+`v*`. Pushes na `main` continuam publicando o pré-release `latest` sem assinatura, então a aprovação
+manual só é necessária em releases tagueadas. As etapas:
+
+1. enviam os quatro executáveis sem assinatura e solicitam a assinatura;
+2. aguardam a aprovação manual no SignPath, baixam e verificam os binários assinados;
+3. regeneram o manifesto de release com os hashes assinados;
+4. geram o ZIP portátil e o instalador a partir dos binários assinados;
+5. enviam o setup para uma segunda solicitação de assinatura, verificam e reescrevem o sidecar `.sha256`.
+
+Variáveis necessárias: `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`,
+`SIGNPATH_SIGNING_POLICY_SLUG`, `SIGNPATH_BINARIES_ARTIFACT_CONFIG_SLUG` e
+`SIGNPATH_INSTALLER_ARTIFACT_CONFIG_SLUG`. O token fica no secret `SIGNPATH_API_TOKEN`.
+
+O desinstalador gerado pelo Inno continua sem assinatura por enquanto, porque a GitHub Action da
+SignPath é assíncrona; isso está documentado em [signpath/README.md](../signpath/README.md).
+
+## 4.1 Alternativa: assinatura local com PFX/thumbprint
+
+Depois do gate aprovado, assine os executáveis com um certificado corporativo local:
 
 ```powershell
 $env:ARESTRIX_SIGN_PFX = "C:\secrets\arestrix.pfx"
@@ -181,9 +205,10 @@ Como alternativa, use `ARESTRIX_SIGN_THUMBPRINT` para um certificado instalado e
 
 ## 5. Fora da fase 5A
 
+- Aprovação da conta/projeto SignPath Foundation e primeira release assinada (workflow implementado).
 - Instalador Windows Inno Setup implementado (5B2 parcial; validação em máquina limpa, upgrade,
   uninstall, instalação silenciosa e Intune/SCCM ainda pendentes) e pacote Linux (5B2).
-- Provisionamento do certificado/HSM e assinatura dentro do CI.
+- Certificado/HSM próprio da empresa e assinatura do desinstalador do Inno.
 - E2E no caminho automatizado de release e matriz de CI no macOS.
 - Catálogo remoto assinado (Ed25519/minisign) e hospedagem.
 

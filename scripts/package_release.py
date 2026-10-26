@@ -401,7 +401,7 @@ def main() -> int:
         (stage / "runtime" / "lib").mkdir(parents=True)
         shutil.copy2(core_library(), stage / "runtime" / "lib" / core_library().name)
         shutil.copy2(sbom, stage / "SBOM.json")
-        for name in ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "version.txt"):
+        for name in ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "CODE_SIGNING.md", "PRIVACY.md", "version.txt"):
             shutil.copy2(ROOT / name, stage / name)
 
         write_portable_readme(stage, version, system)

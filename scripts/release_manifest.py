@@ -110,7 +110,7 @@ def discover_artifacts(extra: list[str]) -> list[dict]:
         for path in sorted(p for p in runtime.glob("*.json") if p.is_file()):
             add_artifact(path, artifacts)
 
-    for name in ("version.txt", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md"):
+    for name in ("version.txt", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "CODE_SIGNING.md", "PRIVACY.md"):
         add_artifact(ROOT / name, artifacts)
 
     if not artifacts:

@@ -1,0 +1,36 @@
+// Version metadata for Arestrix Windows executables.
+// Configured by CMake from version.txt; enforced by the SignPath artifact configuration.
+#include <windows.h>
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION @ARESTRIX_VERSION_RC_COMMA@
+ PRODUCTVERSION @ARESTRIX_VERSION_RC_COMMA@
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS VS_FF_DEBUG
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE 0x0L
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904b0"
+    BEGIN
+      VALUE "CompanyName", "Arestrix"
+      VALUE "FileDescription", "@ARESTRIX_FILE_DESCRIPTION@"
+      VALUE "FileVersion", "@ARESTRIX_VERSION@"
+      VALUE "InternalName", "@ARESTRIX_INTERNAL_NAME@"
+      VALUE "LegalCopyright", "Copyright (c) 2026 Frank de Alcantara"
+      VALUE "OriginalFilename", "@ARESTRIX_ORIGINAL_FILENAME@"
+      VALUE "ProductName", "Arestrix"
+      VALUE "ProductVersion", "@ARESTRIX_VERSION@"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

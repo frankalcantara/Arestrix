@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: deploy-${{ github.ref }}
@@ -56,6 +57,87 @@ jobs:
       - name: Run release gate
         run: python scripts/release_check.py --skip-e2e
 
+      - name: Read product version
+        id: product
+        shell: bash
+        run: |
+          version=$(cat version.txt)
+          numeric=$(echo "$version" | sed -E 's/^([0-9]+)\.([0-9]+)\.([0-9]+).*/\1.\2.\3.0/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "numeric=$numeric" >> "$GITHUB_OUTPUT"
+
+      # Optional SignPath Foundation signing. Set the repository variable
+      # SIGNPATH_ENABLED=true and configure the vars/secrets documented in
+      # signpath/README.md. Without it, the unsigned release flow remains.
+      - name: Verify Windows metadata for SignPath
+        if: vars.SIGNPATH_ENABLED == 'true' && startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $expected = '${{ steps.product.outputs.version }}'
+          foreach ($name in @('arestrix.exe','arestrix-cli.exe','arestrix-gateway.exe','arestrix-memory.exe')) {
+            $v = (Get-Item (Join-Path 'build' $name)).VersionInfo
+            if ($v.ProductName -ne 'Arestrix' -or $v.CompanyName -ne 'Arestrix' -or $v.ProductVersion -ne $expected -or $v.FileVersion -ne $expected) {
+              throw "$name metadata mismatch: ProductName=$($v.ProductName) ProductVersion=$($v.ProductVersion) FileVersion=$($v.FileVersion) CompanyName=$($v.CompanyName)"
+            }
+          }
+
+      - name: Package unsigned binaries
+        if: vars.SIGNPATH_ENABLED == 'true' && startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $binaries = @('arestrix.exe','arestrix-cli.exe','arestrix-gateway.exe','arestrix-memory.exe')
+          foreach ($name in $binaries) {
+            if (-not (Test-Path (Join-Path 'build' $name))) { throw "missing build/$name" }
+          }
+          Compress-Archive -Path ($binaries | ForEach-Object { Join-Path 'build' $_ }) `
+            -DestinationPath unsigned-binaries.zip -Force
+
+      - name: Upload unsigned binaries
+        id: upload_unsigned_binaries
+        if: vars.SIGNPATH_ENABLED == 'true' && startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: arestrix-unsigned-binaries
+          path: unsigned-binaries.zip
+          archive: false
+          if-no-files-found: error
+
+      - name: Sign binaries with SignPath Foundation
+        if: vars.SIGNPATH_ENABLED == 'true' && startsWith(github.ref, 'refs/tags/v')
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_BINARIES_ARTIFACT_CONFIG_SLUG }}
+          github-artifact-id: ${{ steps.upload_unsigned_binaries.outputs.artifact-id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 1800
+          output-artifact-directory: signed-binaries
+          parameters: |
+            version: "${{ steps.product.outputs.version }}"
+
+      - name: Install signed binaries
+        if: vars.SIGNPATH_ENABLED == 'true' && startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $requireTrusted = '${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}' -ne 'test-signing'
+          $signed = @(Get-ChildItem signed-binaries -Filter *.exe -Recurse)
+          if ($signed.Count -lt 4) { throw "expected 4 signed binaries, found $($signed.Count)" }
+          foreach ($file in $signed) {
+            $sig = Get-AuthenticodeSignature $file.FullName
+            if (-not $sig.SignerCertificate) { throw "$($file.Name): no Authenticode signer" }
+            if ($requireTrusted -and $sig.Status -ne 'Valid') { throw "$($file.Name): signature status $($sig.Status)" }
+            Write-Host "$($file.Name): $($sig.Status) / $($sig.SignerCertificate.Subject)"
+            Copy-Item $file.FullName (Join-Path 'build' $file.Name) -Force
+          }
+
+      - name: Refresh release manifest after signing
+        if: vars.SIGNPATH_ENABLED == 'true' && startsWith(github.ref, 'refs/tags/v')
+        run: python scripts/release_manifest.py
+
       # Stages the portable folder, runs the CLI smoke tests, writes the
       # ZIP + SHA-256 sidecar and compiles the Inno Setup installer from the
       # same staging tree. Requires release/SBOM.json from the gate.
@@ -64,6 +146,48 @@ jobs:
 
       - name: Build portable package and installer
         run: python scripts/package_release.py --installer
+
+      - name: Upload unsigned installer
+        id: upload_unsigned_installer
+        if: vars.SIGNPATH_ENABLED == 'true' && startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: arestrix-unsigned-installer
+          path: release/*-setup.exe
+          archive: false
+          if-no-files-found: error
+
+      - name: Sign installer with SignPath Foundation
+        if: vars.SIGNPATH_ENABLED == 'true' && startsWith(github.ref, 'refs/tags/v')
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_INSTALLER_ARTIFACT_CONFIG_SLUG }}
+          github-artifact-id: ${{ steps.upload_unsigned_installer.outputs.artifact-id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 1800
+          output-artifact-directory: signed-installer
+          parameters: |
+            versionNumeric: "${{ steps.product.outputs.numeric }}"
+
+      - name: Install signed installer
+        if: vars.SIGNPATH_ENABLED == 'true' && startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $requireTrusted = '${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}' -ne 'test-signing'
+          $setup = Get-ChildItem signed-installer -Filter *-setup.exe -Recurse | Select-Object -First 1
+          if (-not $setup) { throw "signed installer not found" }
+          $sig = Get-AuthenticodeSignature $setup.FullName
+          if (-not $sig.SignerCertificate) { throw "$($setup.Name): no Authenticode signer" }
+          if ($requireTrusted -and $sig.Status -ne 'Valid') { throw "$($setup.Name): signature status $($sig.Status)" }
+          Write-Host "$($setup.Name): $($sig.Status) / $($sig.SignerCertificate.Subject)"
+          Copy-Item $setup.FullName (Join-Path 'release' $setup.Name) -Force
+          $hash = (Get-FileHash (Join-Path 'release' $setup.Name) -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($setup.Name)" | Set-Content -Path (Join-Path 'release' "$($setup.Name).sha256") -Encoding ascii
 
       - name: Smoke-test installer
         shell: pwsh
@@ -95,11 +219,6 @@ jobs:
           Start-Sleep -Milliseconds 500
           if (Test-Path $dir) { throw "install directory was not removed" }
           if (Test-Path $desktopShortcut) { throw "desktop shortcut was not removed" }
-
-      - name: Read product version
-        id: product
-        shell: bash
-        run: echo "version=$(cat version.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Resolve release target
         id: target
@@ -158,6 +277,10 @@ jobs:
 
             - `*.zip.sha256`, `*-setup.exe.sha256`, `SHA256SUMS`, `SBOM.json` and
               `release-manifest.json` are attached to this release.
+            - Tagged releases are Authenticode-signed by SignPath Foundation when signing is
+              enabled. See the
+              [code signing policy](https://github.com/frankalcantara/Arestrix/blob/main/CODE_SIGNING.md)
+              and [privacy policy](https://github.com/frankalcantara/Arestrix/blob/main/PRIVACY.md).
             - No API keys or user data are included.
 
             This is a rolling pre-release built from the latest `main`; the
