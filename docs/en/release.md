@@ -1,7 +1,8 @@
 # Release gate and artifacts
 
 > **Phase 5A.** This is the reproducible validation layer before installer packaging and signing.
-> The final certificate/HSM, installers, Linux CI and signed remote catalog remain pending; see the
+> The Windows Inno Setup installer is implemented (5B2); clean-machine validation, signing, the
+> Linux package, Linux CI and the signed remote catalog remain pending. See the
 > [roadmap](roadmap.md).
 
 ## 1. Prepare a clean tree
@@ -112,10 +113,11 @@ Redistributable on Windows.
 - pushing a `v*` tag publishes or updates the release for that tag;
 - a manual dispatch follows the selected branch/tag.
 
-The workflow runs the canonical gate (`release_check.py --skip-e2e`), creates the ZIP with
-`package_release.py` and attaches the archive, `.zip.sha256`, `SHA256SUMS`, `SBOM.json`,
-`release-manifest.json` and `release-report.json` to the release. The portable folder is ready to
-run from any directory (`start-arestrix.bat`); no development checkout is needed.
+The workflow runs the canonical gate (`release_check.py --skip-e2e`), creates the ZIP and the Inno
+Setup installer with `package_release.py --installer`, and attaches the archive, `.zip.sha256`,
+`*-setup.exe`, `*-setup.exe.sha256`, `SHA256SUMS`, `SBOM.json`, `release-manifest.json` and
+`release-report.json` to the release. The portable folder is ready to run from any directory
+(`start-arestrix.bat`); no development checkout is needed.
 
 Pull requests run the pre-merge gate in `.github/workflows/ci.yml`: quality/static checks, Vitest +
 Studio build, native Windows CTest and native Linux CTest. The four jobs are required status checks
@@ -123,6 +125,35 @@ on `main`, and Dependabot keeps npm, GitHub Actions and Git submodules current.
 
 E2E remains a promotion requirement: run the full `release_check.py` (with E2E) from a clean tree
 before tagging an official release.
+
+## 3.3 Windows installer (phase 5B2, Inno Setup)
+
+The Windows installer is built from the same staging folder as the portable package:
+
+```powershell
+py scripts/package_release.py --installer
+```
+
+Inno Setup 6 must be installed (`ISCC.exe` on `PATH`, `ISCC` pointing to it, or a standard
+`Program Files\Inno Setup 6` installation). The output is
+`release/arestrix-<version>-windows-x64-setup.exe` with a `.sha256` sidecar.
+
+The installer:
+
+- installs per user under `%LOCALAPPDATA%\Programs\Arestrix`, so no administrator rights are needed;
+- uses a stable `AppId` for upgrades and registers the app in **Apps & Features**;
+- creates Start menu/optional desktop shortcuts and an `arestrix.exe` App Paths entry;
+- checks for Microsoft Edge WebView2 Runtime and the Visual C++ Redistributable x64, aborting with
+  the official download links when either is missing;
+- includes the same binaries, UI, runtime library, examples, documentation and manifests as the
+  portable package;
+- is signed automatically when `ARESTRIX_SIGN_PFX`/`ARESTRIX_SIGN_PFX_PASSWORD` or
+  `ARESTRIX_SIGN_THUMBPRINT` are set (the same variables used by `sign-windows.ps1`).
+
+Local validation on Windows 11 x64 covered the silent install, Start menu shortcuts, `App Paths`
+registration and complete uninstall. Upgrade over a previous version, the optional desktop shortcut,
+clean-machine install, signing and Intune/SCCM validation remain part of the Beta 2 gate; the
+installer is not yet a validated release artifact.
 
 ## 4. Sign the Windows binaries
 
@@ -139,7 +170,8 @@ Alternatively use `ARESTRIX_SIGN_THUMBPRINT` for a certificate installed in `My`
 
 ## 5. Not in phase 5A
 
-- MSI/MSIX or Inno Setup installer and Linux package (5B2; the portable package 5B1 is implemented).
+- Windows Inno Setup installer implemented (5B2 partial; clean-machine install, upgrade, uninstall,
+  silent install and Intune/SCCM validation still pending) and the Linux package (5B2).
 - Code-signing certificate/HSM provisioning and signing inside CI.
 - E2E in the automated release path and a macOS CI matrix.
 - Signed remote catalog (Ed25519/minisign) and hosting.

@@ -20,8 +20,12 @@ pipelines; o pacote nao inclui MSVC/GCC.
 
 Uso:
   python scripts/package_release.py
+  python scripts/package_release.py --installer
   python scripts/package_release.py --format both --allow-dirty
   python scripts/package_release.py --skip-smoke --keep-stage
+
+O instalador Windows (--installer) usa o Inno Setup 6 e e gerado a partir do
+mesmo staging do pacote portatil; requer ISCC.exe no PATH (ou variavel ISCC).
 """
 from __future__ import annotations
 
@@ -30,6 +34,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -97,6 +102,94 @@ def platform_slug() -> tuple[str, str]:
     machine = platform.machine().lower()
     arch = "x64" if machine in ("amd64", "x86_64") else ("arm64" if machine in ("arm64", "aarch64") else machine)
     return name, arch
+
+
+def find_iscc() -> Path:
+    """Localiza o compilador do Inno Setup 6 (ISCC.exe)."""
+    env_path = os.environ.get("ISCC") or os.environ.get("INNO_SETUP_ISCC")
+    if env_path and Path(env_path).is_file():
+        return Path(env_path)
+
+    for executable in ("ISCC", "iscc"):
+        found = shutil.which(executable)
+        if found:
+            return Path(found)
+
+    roots = [
+        os.environ.get("ProgramFiles"),
+        os.environ.get("ProgramFiles(x86)"),
+        os.environ.get("LOCALAPPDATA") and str(Path(os.environ["LOCALAPPDATA"]) / "Programs"),
+    ]
+    for root in roots:
+        if not root:
+            continue
+        candidate = Path(root) / "Inno Setup 6" / "ISCC.exe"
+        if candidate.is_file():
+            return candidate
+
+    raise SystemExit(
+        "[installer] Inno Setup 6 nao encontrado. Instale o Inno Setup 6 ou defina ISCC "
+        "(caminho completo para ISCC.exe)."
+    )
+
+
+def numeric_version(version: str) -> str:
+    """Converte SemVer em uma versao numerica de 4 partes para o metadata do setup."""
+    match = re.match(r"^(\d+)\.(\d+)\.(\d+)", version)
+    if not match:
+        raise SystemExit(f"[installer] versao invalida para o Inno Setup: {version}")
+    return f"{match.group(1)}.{match.group(2)}.{match.group(3)}.0"
+
+
+def build_windows_installer(stage: Path, release_dir: Path, version: str, arch: str) -> Path:
+    """Compila o instalador Inno Setup a partir do staging ja validado."""
+    if os.name != "nt":
+        raise SystemExit("[installer] o instalador Inno Setup so pode ser gerado no Windows.")
+
+    script = ROOT / "installer" / "arestrix.iss"
+    icon = ROOT / "installer" / "arestrix.ico"
+    for required in (script, icon):
+        if not required.is_file():
+            raise SystemExit(f"[installer] arquivo ausente: {required}")
+
+    output_base = f"arestrix-{version}-windows-{arch}-setup"
+    iscc = find_iscc()
+    command = [
+        str(iscc),
+        f"/DAppVersion={version}",
+        f"/DAppVersionNumeric={numeric_version(version)}",
+        f"/DAppArch={arch}",
+        f"/DStageDir={stage}",
+        f"/DOutputDir={release_dir}",
+        f"/DOutputBaseFilename={output_base}",
+        f"/DIconFile={icon}",
+        str(script),
+    ]
+    print("[installer]", " ".join(command), flush=True)
+    result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+    if result.stdout:
+        print(result.stdout, end="")
+    if result.returncode != 0:
+        print(result.stderr[-5000:], file=sys.stderr)
+        raise SystemExit(f"[installer] ISCC falhou (codigo {result.returncode}).")
+
+    target = release_dir / f"{output_base}.exe"
+    if not target.is_file():
+        raise SystemExit(f"[installer] saida esperada nao encontrada: {target}")
+
+    if os.environ.get("ARESTRIX_SIGN_PFX") or os.environ.get("ARESTRIX_SIGN_THUMBPRINT"):
+        sign_script = ROOT / "scripts" / "sign-windows.ps1"
+        shell = shutil.which("pwsh") or shutil.which("powershell")
+        if not shell:
+            raise SystemExit("[installer] assinatura solicitada, mas pwsh/powershell nao encontrado.")
+        subprocess.run(
+            [shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(sign_script), "-Path", str(target)],
+            cwd=ROOT,
+            check=True,
+        )
+
+    print(f"[installer] {target} ({target.stat().st_size} bytes)")
+    return target
 
 
 def write_portable_readme(stage: Path, product_version: str, system: str) -> None:
@@ -252,6 +345,8 @@ def main() -> int:
     parser.add_argument("--output", default="release", help="diretorio de saida (padrao: release)")
     parser.add_argument("--format", choices=["zip", "tar.gz", "both"], default=None,
                         help="formato do arquivo (padrao: zip no Windows, tar.gz nos demais)")
+    parser.add_argument("--installer", action="store_true",
+                        help="gera o instalador Windows com Inno Setup a partir do mesmo staging")
     parser.add_argument("--allow-dirty", action="store_true", help="permite arvore Git suja (uso local)")
     parser.add_argument("--skip-smoke", action="store_true", help="pula o smoke test dos binarios")
     parser.add_argument("--keep-stage", action="store_true", help="mantem a pasta staging para inspecao")
@@ -317,6 +412,8 @@ def main() -> int:
             shutil.rmtree(stage / "workspace", ignore_errors=True)
         write_manifests(stage, version, commit, dirty, system, arch)
 
+        installer = build_windows_installer(stage, release_dir, version, arch) if args.installer else None
+
         formats = [args.format] if args.format and args.format != "both" else (
             ["zip", "tar.gz"] if args.format == "both" else (["zip"] if system == "windows" else ["tar.gz"])
         )
@@ -329,6 +426,12 @@ def main() -> int:
             )
             print(f"[package] {archive} ({archive.stat().st_size} bytes, sha256={digest})")
         print(f"[package] {len((stage / 'SHA256SUMS').read_text(encoding='utf-8').splitlines())} arquivo(s) no pacote")
+        if installer:
+            digest = sha256(installer)
+            Path(str(installer) + ".sha256").write_text(
+                f"{digest}  {installer.name}\n", encoding="utf-8", newline="\n"
+            )
+            print(f"[installer] {installer} (sha256={digest})")
         return 0
     finally:
         if not args.keep_stage:

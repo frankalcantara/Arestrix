@@ -8,6 +8,15 @@ Pre-release identifiers follow SemVer (`2.0.0-beta.1`); the marketing name is **
 
 ## [Unreleased]
 
+### Added
+
+- Windows Inno Setup installer (5B2, work in progress): `scripts/package_release.py --installer`
+  builds a per-user setup from the validated staging tree, checks WebView2/VC++ prerequisites,
+  creates Start menu/desktop shortcuts, registers an `App Paths` entry and is published alongside
+  the portable ZIP. The deploy workflow installs Inno Setup and uploads the setup plus its SHA-256
+  sidecar. Clean-machine install/upgrade/uninstall, silent install and Intune/SCCM validation remain
+  part of the Beta 2 gate.
+
 ### Beta 2 gate
 
 - `2.0.0-beta.1` is the Beta 2 development release. The MSI/MSIX (or Inno Setup) installer and Linux

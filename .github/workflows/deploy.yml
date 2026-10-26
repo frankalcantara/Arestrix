@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   windows-portable:
-    name: Windows x64 portable package
+    name: Windows x64 package + Inno installer
     runs-on: windows-latest
     timeout-minutes: 90
 
@@ -56,10 +56,34 @@ jobs:
       - name: Run release gate
         run: python scripts/release_check.py --skip-e2e
 
-      # Stages the portable folder, runs the CLI smoke tests and writes the
-      # ZIP + SHA-256 sidecar. Requires release/SBOM.json from the gate.
-      - name: Build portable package
-        run: python scripts/package_release.py
+      # Stages the portable folder, runs the CLI smoke tests, writes the
+      # ZIP + SHA-256 sidecar and compiles the Inno Setup installer from the
+      # same staging tree. Requires release/SBOM.json from the gate.
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build portable package and installer
+        run: python scripts/package_release.py --installer
+
+      - name: Smoke-test installer
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem release/*-setup.exe | Select-Object -First 1
+          if (-not $setup) { throw "installer not found" }
+          $dir = Join-Path $env:RUNNER_TEMP "ArestrixInstallerSmoke"
+          if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+          $install = Start-Process -FilePath $setup.FullName `
+            -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/NOICONS',"/DIR=$dir") `
+            -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "installer exited with $($install.ExitCode)" }
+          & (Join-Path $dir 'arestrix-cli.exe') version
+          if ($LASTEXITCODE -ne 0) { throw "installed CLI failed" }
+          $uninstall = Start-Process -FilePath (Join-Path $dir 'unins000.exe') `
+            -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') `
+            -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "uninstaller exited with $($uninstall.ExitCode)" }
+          Start-Sleep -Milliseconds 500
+          if (Test-Path $dir) { throw "install directory was not removed" }
 
       - name: Read product version
         id: product
@@ -87,16 +111,21 @@ jobs:
           overwrite_files: true
           fail_on_unmatched_files: true
           body: |
-            Ready-to-run **Windows x64** portable build of Arestrix
+            Ready-to-run **Windows x64** build of Arestrix
             `${{ steps.product.outputs.version }}` (commit `${{ github.sha }}`).
 
             ## Run the Studio
 
-            1. Download `arestrix-${{ steps.product.outputs.version }}-windows-x64.zip`.
-            2. Extract it to any folder (that folder becomes `ARESTRIX_HOME`).
-            3. Run `start-arestrix.bat`.
+            **Installer (recommended):** download
+            `arestrix-${{ steps.product.outputs.version }}-windows-x64-setup.exe`, run it, and
+            open Arestrix from the Start menu. It installs per user in
+            `%LOCALAPPDATA%\Programs\Arestrix` and requires no administrator rights.
 
-            The CLI is in the same folder:
+            **Portable:** download `arestrix-${{ steps.product.outputs.version }}-windows-x64.zip`,
+            extract it to any folder (that folder becomes `ARESTRIX_HOME`) and run
+            `start-arestrix.bat`.
+
+            The CLI is installed with the Studio:
 
             ```bat
             arestrix-cli.exe version
@@ -106,14 +135,15 @@ jobs:
             ## Requirements
 
             - Windows 10/11 x64.
+            - Microsoft Edge WebView2 Runtime and the Visual C++ Redistributable.
+              The installer detects both and offers the official download links when missing.
             - To **compile/run pipelines**, install the MSVC Build Tools
-              ("Desktop development with C++") and the Visual C++ Redistributable.
-              The package does not bundle MSVC/GCC.
+              ("Desktop development with C++"). The package does not bundle MSVC/GCC.
 
             ## Integrity
 
-            - `*.zip.sha256`, `SHA256SUMS`, `SBOM.json` and `release-manifest.json`
-              are attached to this release.
+            - `*.zip.sha256`, `*-setup.exe.sha256`, `SHA256SUMS`, `SBOM.json` and
+              `release-manifest.json` are attached to this release.
             - No API keys or user data are included.
 
             This is a rolling pre-release built from the latest `main`; the
@@ -122,6 +152,8 @@ jobs:
           files: |
             release/*.zip
             release/*.zip.sha256
+            release/*-setup.exe
+            release/*-setup.exe.sha256
             release/SHA256SUMS
             release/SBOM.json
             release/release-manifest.json

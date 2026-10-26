@@ -111,7 +111,8 @@ gate, portable package and the consolidated SVG visual layer with per-vertex run
 
 Pending before publishing Beta 2:
 
-- MSI/MSIX (or Inno Setup) installer and a Linux package (5B2).
+- Windows Inno Setup installer implemented; clean-machine install/upgrade/uninstall, silent install
+  and Intune/SCCM validation plus the Linux package (5B2) remain.
 - Code signing, Windows/Linux CI matrix and signed remote catalog (5C).
 - The full test matrix in [Beta 2 test plan](../quality/beta2-test-plan.md), including clean-machine
   install/upgrade/uninstall and manual Studio homologation.

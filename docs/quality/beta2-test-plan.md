@@ -27,8 +27,8 @@ release publicada.
 
 ### Pendente no Beta 2
 
-- [ ] **5B2 — instalador Windows:** MSI (WiX/Inno) ou MSIX, instalação limpa, upgrade, uninstall,
-      atalhos, modo silencioso e validação em Intune/SCCM.
+- [ ] **5B2 — instalador Windows:** Inno Setup implementado; faltam instalação limpa, upgrade,
+      uninstall, atalhos, modo silencioso e validação em Intune/SCCM.
 - [ ] **5B2 — pacote Linux:** AppImage, `.deb` ou tarball instalável, com dependências documentadas.
 - [ ] **5C — assinatura:** certificado/HSM, Authenticode no Windows, assinatura dos artefatos no CI.
 - [ ] **5C — CI:** matriz Windows/Linux, build nativo, CTest, Vitest, E2E, gateway smoke e release gate.
@@ -99,16 +99,23 @@ release publicada.
 - [ ] `arestrix-cli project validate --project examples/01-svg-agente`.
 - [ ] Abrir o Studio extraído e confirmar que a UI e os projetos carregam.
 
-### 2.7 Instalador 5B2 (quando implementado)
+### 2.7 Instalador 5B2 (Inno Setup implementado; validação pendente)
 
+- [x] Build do instalador Inno Setup (`py scripts/package_release.py --installer`) e publicação no CI.
 - [ ] Instalação limpa em Windows x64 sem dependências ocultas.
 - [ ] Atalhos (Menu Iniciar/Desktop) e desinstalação completa.
 - [ ] Upgrade sobre a versão anterior preservando projetos/configuração do usuário.
-- [ ] Instalação silenciosa e códigos de saída documentados.
+- [ ] Instalação silenciosa e códigos de saída documentados (`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`).
 - [ ] Assinatura Authenticode de todos os executáveis.
-- [ ] Teste de instalação em perfil sem privilégios administrativos, quando aplicável.
+- [ ] Teste de instalação em perfil sem privilégios administrativos (instalação per-user em
+      `%LOCALAPPDATA%\Programs\Arestrix`).
 - [ ] Teste em máquina limpa com apenas o runtime VC++ exigido.
 - [ ] Linux: pacote equivalente com dependências e caminhos de dados documentados.
+
+> **Validação local (2026-10-26, Windows 11 x64):** build do instalador, instalação silenciosa,
+> atalhos do Menu Iniciar, entrada `App Paths` e desinstalação completa validados (códigos de saída
+> 0 e diretório removido). Upgrade sobre versão anterior, atalho de desktop, máquina limpa,
+> assinatura e Intune/SCCM continuam pendentes.
 
 ### 2.8 Segurança e integridade
 

@@ -33,16 +33,19 @@
 
 ## Teste sem compilar
 
-Baixe o pacote portátil **Windows x64** pronto em
-[**Releases → latest**](https://github.com/frankalcantara/Arestrix/releases/tag/latest), extraia o
-ZIP em qualquer pasta e execute `start-arestrix.bat`.
+Baixe o build **Windows x64** pronto em
+[**Releases → latest**](https://github.com/frankalcantara/Arestrix/releases/tag/latest):
 
-- A pasta extraída vira o `ARESTRIX_HOME`; o CLI é o `arestrix-cli.exe`.
-- Para compilar pipelines, instale também o MSVC Build Tools ("Desenvolvimento para Desktop com
-  C++") e o Visual C++ Redistributable; o pacote não inclui compilador.
-- Cada build publica `SHA256SUMS`, `SBOM.json` e `package-manifest.json` com hash por arquivo.
-- `latest` é um pré-release contínuo gerado a partir da `main`; tags de versão publicam releases
-  próprios.
+- **Instalador (recomendado):** execute `arestrix-<versão>-windows-x64-setup.exe`. Ele instala por
+  usuário em `%LOCALAPPDATA%\Programs\Arestrix`, sem privilégios administrativos, e verifica WebView2
+  e o Visual C++ Redistributable.
+- **Portátil:** extraia o ZIP em qualquer pasta e execute `start-arestrix.bat`. A pasta extraída vira
+  o `ARESTRIX_HOME`.
+
+O CLI é instalado junto com o Studio (`arestrix-cli.exe`). Para compilar pipelines, instale também o
+MSVC Build Tools ("Desenvolvimento para Desktop com C++"); o pacote não inclui compilador. Cada build
+publica `SHA256SUMS`, `SBOM.json` e `package-manifest.json` com hash por arquivo. `latest` é um
+pré-release contínuo gerado a partir da `main`; tags de versão publicam releases próprios.
 
 ## O que é o Arestrix?
 

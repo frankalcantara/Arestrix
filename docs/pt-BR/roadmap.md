@@ -112,7 +112,8 @@ execução por vértice.
 
 Pendente antes de publicar o Beta 2:
 
-- Instalador MSI/MSIX (ou Inno Setup) e pacote Linux (5B2).
+- Instalador Windows Inno Setup implementado; faltam instalação/upgrade/uninstall em máquina limpa,
+  instalação silenciosa e validação em Intune/SCCM, além do pacote Linux (5B2).
 - Assinatura de código, matriz de CI Windows/Linux e catálogo remoto assinado (5C).
 - A matriz completa em [Plano de testes do Beta 2](../quality/beta2-test-plan.md), incluindo
   instalação/upgrade/uninstall em máquina limpa e homologação manual do Studio.
