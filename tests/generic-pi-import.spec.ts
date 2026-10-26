@@ -147,6 +147,49 @@ describe('Importação Genérica de Projetos Pi & Modelo Padrão de Inteligênci
       expect(result.verifiedStages[0].label).toContain('Verificação Estática');
       expect(result.verifiedEdges.length).toBe(1);
     });
+
+    it('deve usar o caller injetado mesmo sem chave de API no ambiente', async () => {
+      const previousKey = process.env['DEEPSEEK_API_KEY'];
+      delete process.env['DEEPSEEK_API_KEY'];
+
+      try {
+        intelligenceService.setCustomApiCaller(async () => JSON.stringify({
+          confidenceScore: 77,
+          summary: 'Caller injetado sem chave',
+          verifiedStages: [
+            {
+              id: 's1',
+              label: 'Etapa única',
+              nodeType: 'agent',
+              role: 'Executor',
+              promptTemplate: 'Execute'
+            }
+          ],
+          verifiedEdges: [],
+          auditFindings: []
+        }));
+
+        const result = await intelligenceService.analyzeAndValidatePiImport({
+          isValid: true,
+          rootPath: 'C:/tmp/pi-sem-chave',
+          projectName: 'Sem chave',
+          defaultProvider: 'deepseek',
+          defaultModel: 'deepseek-chat',
+          defaultTools: [],
+          skills: [],
+          stages: [{ id: 's1', name: 'Etapa', model: 'deepseek-chat', prompt: 'execute' }],
+          mcpTools: [],
+          orchestrationType: 'script'
+        });
+
+        expect(result.isSuccess).toBe(true);
+        expect(result.confidenceScore).toBe(77);
+        expect(result.verifiedStages).toHaveLength(1);
+      } finally {
+        if (previousKey !== undefined) process.env['DEEPSEEK_API_KEY'] = previousKey;
+        intelligenceService.setCustomApiCaller(undefined);
+      }
+    });
   });
 
   describe('3. Importação Genérica de Qualquer Projeto Pi no Arestrix Studio', () => {

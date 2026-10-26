@@ -197,17 +197,20 @@ INSTRUÇÕES OBRIGATÓRIAS:
       return this.buildFallbackResultWithStaticData(scan);
     }
 
-    // Se a chave não estiver no ambiente, devolve resultado estruturado com aviso de chave ausente
-    if (!apiKey) {
+    // Se a chave não estiver no ambiente, devolve resultado estruturado com aviso de chave ausente.
+    // Um caller injetado (testes/embeddings) não depende da chave real e deve ser respeitado.
+    if (!apiKey && !this.customApiCaller) {
       return this.buildFallbackResultWithStaticData(scan, this.envKeyName);
     }
 
     const prompt = this.buildPiAnalysisPrompt(scan);
 
     try {
+      // O caller injetado pode operar sem chave; a chamada HTTP real exige a chave
+      // (garantida pelo guard acima quando customApiCaller não está definido).
       const rawResponse = this.customApiCaller
-        ? await this.customApiCaller(apiKey, prompt)
-        : await this.callDeepSeekApi(apiKey, prompt);
+        ? await this.customApiCaller(apiKey ?? '', prompt)
+        : await this.callDeepSeekApi(apiKey!, prompt);
 
       const parsed = this.cleanAndParseJsonResponse(rawResponse);
 

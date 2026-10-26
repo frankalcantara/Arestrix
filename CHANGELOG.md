@@ -63,6 +63,9 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   `Arestrix <arestrix@localhost>` fallback via `git -c ... commit` instead of failing with
   "Author identity unknown". No local config is persisted, so a global identity configured later
   still applies; the native test no longer requires a pre-configured OS identity.
+- `DefaultIntelligenceService` now honors an injected API caller even when the provider key is not
+  set. Tests and embedders no longer silently fall back to the static 80/85 heuristic on clean
+  environments; the HTTP path still requires a real key.
 
 ### Added
 
