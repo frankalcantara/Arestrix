@@ -1,6 +1,6 @@
 # Interface tour
 
-> **Applies to:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Last reviewed: 2026-10-19
+> **Applies to:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Last reviewed: 2026-10-26
 
 [Português](../pt-BR/interface.md) · [Index](../README.md)
 
@@ -146,9 +146,11 @@ Each action button carries its scope tag: `[Project]` for Model, Memory and Tool
 
 All Studio dialogs adhere to the **Microsoft Office 365 (Fluent 2)** corporate design system:
 - **Floating Windows:** Draggable by title bar, resizable, and stackable with automated z-index and focus management.
+- **Shared Modal Shell:** Every dialog uses the same neutral 46px title bar, elevated surface, SVG window controls, 10px corner radius and Arestrix mark instead of ad-hoc emoji icons.
 - **Tabbed Structure:** Complex forms are partitioned into structured 34px-high tabs with a `#0f6cbd` active indicator.
 - **State Preservation:** Switching between tabs keeps all entered form values intact without unmounting data.
-- **Standardized Footer:** 44px action bar with Fluent primary buttons (`#0f6cbd`), cancel, and contextual help shortcuts.
+- **Standardized Footer:** 58px action bar with Fluent primary buttons (`#0f6cbd`), cancel, and contextual help shortcuts.
+- **Theme-ready Tokens:** Modal chrome, surfaces, text, borders, inputs, badges, callouts and footers share light/dark tokens. The dark palette is applied through `html[data-theme="dark"]` and is ready for the future global appearance switch; the Studio still starts in light mode.
 
 | Modal | Office 365 Tabs | Scope |
 | :--- | :--- | :--- |

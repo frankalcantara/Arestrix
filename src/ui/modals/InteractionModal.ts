@@ -1,6 +1,7 @@
 import { t } from '../../i18n/index.ts';
 import type { IFormField } from '../../core/types.ts';
 import { validateInteractionAnswers } from './interactionForm.ts';
+import { ModalWindowManager } from './ModalWindowManager.ts';
 
 export interface IInteractionRequest {
   requestId: string;
@@ -99,16 +100,18 @@ export class InteractionModal {
 
     this.overlay.innerHTML = `
       <div class="modal-dialog interaction-modal-dialog" role="dialog" aria-modal="true" tabindex="-1">
-        <div class="modal-header interaction-modal-header">
-          <div class="modal-title-group">
-            <div class="modal-header-icon">💬</div>
-            <div>
-              <h2 class="modal-title interaction-modal-title"></h2>
+        <div class="modal-header office-modal-titlebar interaction-modal-header">
+          <div class="modal-title-group office-modal-title-group">
+            <div class="modal-header-icon office-modal-app-icon">${ModalWindowManager.dialogIcon()}</div>
+            <div class="office-modal-title-text">
+              <div class="office-modal-title-line">
+                <h2 class="modal-title interaction-modal-title"></h2>
+              </div>
               <div class="modal-subtitle interaction-modal-subtitle"></div>
             </div>
           </div>
           <div class="window-controls">
-            <button type="button" class="modal-close-btn window-control-btn interaction-modal-x" title="${t('common.close', 'Fechar')}">&times;</button>
+            <button type="button" class="modal-close-btn window-control-btn interaction-modal-x" title="${t('common.close', 'Fechar')}" aria-label="${t('common.close', 'Fechar')}">${ModalWindowManager.closeIcon()}</button>
           </div>
         </div>
         <div class="modal-body-scrollable interaction-modal-body">

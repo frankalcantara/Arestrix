@@ -177,7 +177,10 @@ function parseHTMLToMock(html: string, root: MockElement) {
       }
       const parent = stack[stack.length - 1];
       parent.appendChild(el);
-      const selfClosing = ['input', 'img', 'br', 'hr'].includes(tagName.toLowerCase());
+      const selfClosing = [
+        'input', 'img', 'br', 'hr',
+        'rect', 'path', 'circle', 'line', 'polyline', 'polygon', 'ellipse', 'stop', 'use'
+      ].includes(tagName.toLowerCase());
       if (!selfClosing) stack.push(el);
     }
   }

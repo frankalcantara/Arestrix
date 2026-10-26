@@ -71,7 +71,7 @@ export class ProjectManagerModal {
         <!-- Abas de Navegação Estilo Office -->
         <div class="modal-tabs">
           <button class="tab-btn ${this.activeTab === 'recents' ? 'active' : ''}" id="tab-btn-recents">
-            ${t('project_manager_modal.tab_recents_count', { count: recents.length })}
+            ${t('project_manager_modal.tab_recents', { count: recents.length })}
           </button>
           <button class="tab-btn ${this.activeTab === 'create' ? 'active' : ''}" id="tab-btn-create">
             ${t('project_manager_modal.tab_create')}

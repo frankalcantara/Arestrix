@@ -1,4 +1,5 @@
 import './style.css';
+import './styles/office-modals.css';
 import { Graph } from './core/Graph.ts';
 import { globalEventBus } from './core/EventBus.ts';
 import { Viewport } from './view/Viewport.ts';

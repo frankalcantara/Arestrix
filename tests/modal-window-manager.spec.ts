@@ -344,7 +344,8 @@ describe('ModalWindowManager & BaseModal (Fase 15.1 - Window Management Engine)'
 
       expect(html).toContain('Configurações de IA');
       expect(html).toContain('Nó: Redator (ID: n1)');
-      expect(html).toContain('🧠');
+      expect(html).toContain('office-modal-app-icon');
+      expect(html).toContain('<svg');
       expect(html).toContain('window-btn-maximize');
       expect(html).toContain('id="btn-close-custom"');
       expect(html).toContain('fluent-header-draggable');

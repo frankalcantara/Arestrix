@@ -41,6 +41,9 @@ export class GraphvizExportModal {
   public async show(): Promise<void> {
     if (!this.modal) return;
     this.modal.style.display = 'flex';
+    // O diálogo foi montado oculto; mede novamente depois de exibi-lo para
+    // centralizar com as dimensões reais (largura/altura em % do viewport).
+    this.windowController?.center();
     this.windowController?.bringToFront();
     await this.refreshRender();
   }

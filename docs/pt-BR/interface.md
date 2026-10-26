@@ -1,6 +1,6 @@
 # Tour pela interface
 
-> **Aplica-se a:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Última revisão: 2026-10-19
+> **Aplica-se a:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Última revisão: 2026-10-26
 
 [English](../en/interface.md) · [Índice](../README.md)
 
@@ -146,9 +146,11 @@ Sandbox, `[Workspace / Projeto]` para Skills.
 
 Todos os modais do Studio seguem o padrão de design corporativo **Microsoft Office 365 (Fluent 2)**:
 - **Janelas Flutuantes:** Arrastáveis pela barra de título, redimensionáveis, empilháveis com controle de foco e z-index automático.
+- **Shell de Modal Compartilhado:** Todos os diálogos usam a mesma barra de título neutra de 46px, superfície elevada, controles de janela em SVG, raio de 10px e a marca Arestrix no lugar de ícones emoji avulsos.
 - **Estrutura em Abas:** Formulários complexos são organizados em abas temáticas de 34px de altura com indicador ativo `#0f6cbd` e transição suave.
 - **Preservação de Estado:** Alternar entre abas mantém todos os valores preenchidos nos formulários intactos, evitando perda de dados antes da confirmação.
-- **Rodapé Padronizado:** Barra de ações de 44px com botões primários Fluent (`#0f6cbd`), cancelamento e atalhos de ajuda.
+- **Rodapé Padronizado:** Barra de ações de 58px com botões primários Fluent (`#0f6cbd`), cancelamento e atalhos de ajuda.
+- **Tokens Prontos para Tema:** Chrome, superfícies, textos, bordas, campos, badges, callouts e rodapés compartilham tokens claro/escuro. A paleta escura é aplicada por `html[data-theme="dark"]` e está pronta para o futuro seletor global de aparência; o Studio ainda inicia no modo claro.
 
 | Modal | Abas Office 365 | Escopo |
 | :--- | :--- | :--- |

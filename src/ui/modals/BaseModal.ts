@@ -62,13 +62,16 @@ export abstract class BaseModal {
     }
 
     this.overlay = document.createElement('div');
-    this.overlay.className = 'modal-overlay hidden';
+    this.overlay.className = 'modal-overlay office-modal-overlay hidden';
     if (this.config.id) {
       this.overlay.id = `${this.config.id}-overlay`;
     }
 
     this.dialog = document.createElement('div');
-    this.dialog.className = `modal-dialog ${this.config.dialogClass || ''}`;
+    this.dialog.className = `modal-dialog office-modal-dialog ${this.config.dialogClass || ''}`;
+    this.dialog.setAttribute?.('role', 'dialog');
+    this.dialog.setAttribute?.('aria-modal', 'true');
+    this.dialog.setAttribute?.('aria-label', this.config.title);
     if (this.config.id) {
       this.dialog.id = this.config.id;
     }
@@ -103,7 +106,7 @@ export abstract class BaseModal {
   protected renderTabsStripHtml(): string {
     if (this.tabs.length === 0) return '';
     return `
-      <div class="office-modal-tab-strip" role="tablist">
+      <div class="office-modal-tab-strip office-modal-tabs" role="tablist">
         ${this.tabs.map(tab => {
           const isActive = tab.id === this.activeTabId;
           return `
@@ -137,7 +140,7 @@ export abstract class BaseModal {
     this.dialog.innerHTML = `
       ${titleBarHtml}
       ${tabsBarHtml}
-      <div class="modal-body-scrollable">
+      <div class="modal-body-scrollable office-modal-body">
         ${bodyHtml}
       </div>
       ${footerHtml}

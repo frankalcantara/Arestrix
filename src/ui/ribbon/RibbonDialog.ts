@@ -7,6 +7,8 @@
  * modais do Studio, sem depender de APIs bloqueadas pelo host.
  */
 
+import { ModalWindowManager } from '../modals/ModalWindowManager.ts';
+
 export interface IRibbonDialogOption {
   value: string;
   label: string;
@@ -74,10 +76,10 @@ export class RibbonDialog {
       <div class="modal-dialog ribbon-dialog" role="dialog" aria-modal="true" aria-labelledby="ribbon-dialog-title">
         <div class="office-modal-titlebar">
           <div class="office-modal-titlebar-left">
-            <span class="office-modal-titlebar-icon">⚙️</span>
+            <span class="office-modal-titlebar-icon office-modal-app-icon">${ModalWindowManager.dialogIcon()}</span>
             <span class="office-modal-titlebar-text" id="ribbon-dialog-title">${this.escapeHtml(options.title)}</span>
           </div>
-          <button type="button" class="office-modal-close-btn" id="btn-ribbon-dialog-close" title="Fechar">✕</button>
+          <button type="button" class="office-modal-close-btn" id="btn-ribbon-dialog-close" title="Fechar" aria-label="Fechar">${ModalWindowManager.closeIcon()}</button>
         </div>
         <div class="modal-body-scrollable ribbon-dialog-body">
           ${options.message ? `<p class="ribbon-dialog-message">${this.escapeHtml(options.message)}</p>` : ''}
@@ -117,10 +119,10 @@ export class RibbonDialog {
       <div class="modal-dialog ribbon-dialog ribbon-dialog-confirm" role="dialog" aria-modal="true" aria-labelledby="ribbon-dialog-title">
         <div class="office-modal-titlebar">
           <div class="office-modal-titlebar-left">
-            <span class="office-modal-titlebar-icon">${options.danger ? '⚠️' : '❓'}</span>
+            <span class="office-modal-titlebar-icon office-modal-app-icon">${ModalWindowManager.dialogIcon()}</span>
             <span class="office-modal-titlebar-text" id="ribbon-dialog-title">${this.escapeHtml(options.title)}</span>
           </div>
-          <button type="button" class="office-modal-close-btn" id="btn-ribbon-dialog-close" title="Fechar">✕</button>
+          <button type="button" class="office-modal-close-btn" id="btn-ribbon-dialog-close" title="Fechar" aria-label="Fechar">${ModalWindowManager.closeIcon()}</button>
         </div>
         <div class="modal-body-scrollable ribbon-dialog-body">
           <p class="ribbon-dialog-message">${this.escapeHtml(options.message)}</p>

@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-release identifiers follow SemVer (`2.1.0-beta.1`); the marketing name is **Beta 2.1**.
 
+## [Unreleased]
+
+### Added
+
+- Unified light/dark modal design tokens (`office-modals.css`) covering overlay, title bar, tabs,
+  surfaces, text, borders, inputs, buttons, cards, tables, code panels and scrollbars.
+
+### Changed
+
+- All Studio dialogs now share the Office 365 modal shell: neutral title bar, elevated surface,
+  10px radius, 34px tabs, 32px form controls, right-aligned 58px footer and compact Fluent buttons.
+- Modal title bars now use the Arestrix SVG mark and SVG window controls instead of emoji/ad-hoc
+  glyphs.
+- Legacy inline modal colors are remapped to the shared tokens in dark mode, including MCP cards,
+  template cards, Graphviz viewport, importers and runner surfaces.
+
+### Fixed
+
+- Graphviz export dialog recenters after being shown, using its real percentage-based dimensions.
+- Project Manager recent-projects tab now resolves the existing `project_manager_modal.tab_recents`
+  translation instead of displaying the raw i18n key.
+
 ## [2.1.0-beta.1] - 2026-10-26
 
 ### Added

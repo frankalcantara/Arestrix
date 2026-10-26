@@ -102,7 +102,8 @@ export class ModalWindowManager {
           maximizeBtn.setAttribute('type', 'button');
           maximizeBtn.className = 'window-control-btn window-btn-maximize';
           maximizeBtn.title = 'Maximizar (Duplo clique na barra)';
-          maximizeBtn.innerHTML = '🗖';
+          maximizeBtn.setAttribute('aria-label', maximizeBtn.title);
+          maximizeBtn.innerHTML = ModalWindowManager.maximizeIcon();
           controlsGroup.appendChild(maximizeBtn);
 
           // Move o botão de fechar para o grupo de controles
@@ -120,7 +121,7 @@ export class ModalWindowManager {
       resizeHandle.className = 'window-resize-handle';
       resizeHandle.title = t('window.resize_tip');
       resizeHandle.innerHTML = `
-        <svg viewBox="0 0 10 10" width="10" height="10" style="display:block; fill:#8a8886;">
+        <svg viewBox="0 0 10 10" width="10" height="10" style="display:block; fill:currentColor;">
           <circle cx="8" cy="8" r="1"></circle>
           <circle cx="8" cy="4" r="1"></circle>
           <circle cx="4" cy="8" r="1"></circle>
@@ -308,8 +309,9 @@ export class ModalWindowManager {
           isMaximized = false;
           dialog.classList.remove('is-maximized');
           if (maximizeBtn) {
-            maximizeBtn.innerHTML = '🗖';
+            maximizeBtn.innerHTML = ModalWindowManager.maximizeIcon();
             maximizeBtn.title = 'Maximizar (Duplo clique na barra)';
+            maximizeBtn.setAttribute('aria-label', maximizeBtn.title);
           }
         }
 
@@ -371,8 +373,9 @@ export class ModalWindowManager {
       }
 
       if (maximizeBtn) {
-        maximizeBtn.innerHTML = '🗗';
+        maximizeBtn.innerHTML = ModalWindowManager.restoreIcon();
         maximizeBtn.title = t('window.restore_tip');
+        maximizeBtn.setAttribute('aria-label', maximizeBtn.title);
       }
 
       if (options.onMaximize) {
@@ -396,8 +399,9 @@ export class ModalWindowManager {
       }
 
       if (maximizeBtn) {
-        maximizeBtn.innerHTML = '🗖';
+        maximizeBtn.innerHTML = ModalWindowManager.maximizeIcon();
         maximizeBtn.title = t('window.maximize_tip');
+        maximizeBtn.setAttribute('aria-label', maximizeBtn.title);
       }
 
       if (options.onMaximize) {
@@ -474,7 +478,7 @@ export class ModalWindowManager {
     badgeText?: string;
     badgeClass?: string;
   }): string {
-    const iconHtml = params.icon ? `<div class="modal-header-icon">${params.icon}</div>` : '';
+    const iconHtml = `<div class="modal-header-icon office-modal-app-icon">${params.icon && params.icon.trim().startsWith('<svg') ? params.icon : ModalWindowManager.dialogIcon()}</div>`;
     const subtitleHtml = params.subtitle ? `<div class="modal-subtitle">${params.subtitle}</div>` : '';
     const badgeHtml = params.badgeText 
       ? `<span class="modal-title-badge ${params.badgeClass || ''}">${params.badgeText}</span>` 
@@ -482,11 +486,11 @@ export class ModalWindowManager {
     const closeId = params.closeBtnId || 'btn-close-modal';
 
     return `
-      <div class="modal-header fluent-window-header fluent-header-draggable">
-        <div class="modal-title-group">
+      <div class="modal-header office-modal-titlebar fluent-window-header fluent-header-draggable">
+        <div class="modal-title-group office-modal-title-group">
           ${iconHtml}
-          <div>
-            <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="office-modal-title-text">
+            <div class="office-modal-title-line">
               <h2 class="modal-title">${params.title}</h2>
               ${badgeHtml}
             </div>
@@ -494,10 +498,26 @@ export class ModalWindowManager {
           </div>
         </div>
         <div class="window-controls">
-          <button type="button" class="window-control-btn window-btn-maximize" title="${t('window.maximize_tip')}">🗖</button>
-          <button type="button" class="modal-close-btn window-control-btn window-btn-close" id="${closeId}" title="${t('window.close_tip')}">&times;</button>
+          <button type="button" class="window-control-btn window-btn-maximize" title="${t('window.maximize_tip')}" aria-label="${t('window.maximize_tip')}">${ModalWindowManager.maximizeIcon()}</button>
+          <button type="button" class="modal-close-btn window-control-btn window-btn-close" id="${closeId}" title="${t('window.close_tip')}" aria-label="${t('window.close_tip')}">${ModalWindowManager.closeIcon()}</button>
         </div>
       </div>
     `;
+  }
+
+  public static dialogIcon(): string {
+    return `<svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true" focusable="false"><path d="M4.5 6.4 10 3.6l5.5 2.8v7.2L10 16.4l-5.5-2.8Z"/><circle cx="4.5" cy="6.4" r="1.45" fill="currentColor" stroke="none"/><circle cx="15.5" cy="6.4" r="1.45" fill="currentColor" stroke="none"/><circle cx="10" cy="13.6" r="1.45" fill="currentColor" stroke="none"/></svg>`;
+  }
+
+  private static maximizeIcon(): string {
+    return `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" focusable="false"><rect x="2.75" y="2.75" width="10.5" height="10.5" rx="1.25"/></svg>`;
+  }
+
+  private static restoreIcon(): string {
+    return `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" focusable="false"><rect x="2.75" y="4.75" width="8.5" height="8.5" rx="1.25"/><path d="M5.25 4.75V3.5A1.25 1.25 0 0 1 6.5 2.25h6A1.25 1.25 0 0 1 13.75 3.5v6a1.25 1.25 0 0 1-1.25 1.25h-1.25"/></svg>`;
+  }
+
+  public static closeIcon(): string {
+    return `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="m4 4 8 8M12 4l-8 8"/></svg>`;
   }
 }

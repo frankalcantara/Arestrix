@@ -1,0 +1,1327 @@
+/* ==========================================================================
+   Arestrix Studio - Office 365 Modal Design System
+   Superfície branca/elevada, chrome neutro, tipografia Segoe UI, controles
+   compactos e tokens preparados para os temas claro e escuro.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  --modal-chrome: #f3f3f3;
+  --modal-surface: #ffffff;
+  --modal-surface-2: #faf9f8;
+  --modal-surface-3: #f3f2f1;
+  --modal-surface-4: #edebe9;
+  --modal-ink: #242424;
+  --modal-ink-2: #4f4e4b;
+  --modal-ink-3: #6b6964;
+  --modal-on-accent: #ffffff;
+  --modal-line: rgba(11, 11, 11, 0.12);
+  --modal-line-strong: rgba(11, 11, 11, 0.2);
+  --modal-hover: rgba(11, 11, 11, 0.06);
+  --modal-pressed: rgba(11, 11, 11, 0.1);
+  --modal-accent: #0f6cbd;
+  --modal-accent-hover: #115ea3;
+  --modal-accent-wash: rgba(15, 108, 189, 0.1);
+  --modal-accent-soft: #eff6fc;
+  --modal-danger: #b42318;
+  --modal-danger-hover: #912018;
+  --modal-danger-wash: #fdecec;
+  --modal-danger-line: #f5c2c2;
+  --modal-success: #0f766e;
+  --modal-success-wash: #ecfdf5;
+  --modal-success-line: #bbf7d0;
+  --modal-warning: #8a5a00;
+  --modal-warning-wash: #fffbeb;
+  --modal-warning-line: #fde68a;
+  --modal-info: #0f6cbd;
+  --modal-info-wash: #f0f7ff;
+  --modal-info-line: #c7e0f4;
+  --modal-code-bg: #0f172a;
+  --modal-code-ink: #f8fafc;
+  --modal-code-line: #334155;
+  --modal-scrim: rgba(15, 23, 42, 0.36);
+  --modal-shadow: 0 12px 32px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  --modal-shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --modal-focus-ring: 0 0 0 2px var(--modal-accent-wash);
+  --modal-radius: 10px;
+  --modal-radius-sm: 4px;
+  --modal-font: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  --modal-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b6964' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  --modal-chrome: #2b2b2b;
+  --modal-surface: #1f1f1f;
+  --modal-surface-2: #262626;
+  --modal-surface-3: #303030;
+  --modal-surface-4: #383838;
+  --modal-ink: #f5f5f2;
+  --modal-ink-2: #c3c2b7;
+  --modal-ink-3: #918f88;
+  --modal-on-accent: #ffffff;
+  --modal-line: rgba(255, 255, 255, 0.12);
+  --modal-line-strong: rgba(255, 255, 255, 0.2);
+  --modal-hover: rgba(255, 255, 255, 0.08);
+  --modal-pressed: rgba(255, 255, 255, 0.13);
+  --modal-accent: #4ea1ff;
+  --modal-accent-hover: #6fb4ff;
+  --modal-accent-wash: rgba(78, 161, 255, 0.16);
+  --modal-accent-soft: #1b2d42;
+  --modal-danger: #ff8077;
+  --modal-danger-hover: #ff9a93;
+  --modal-danger-wash: #3b1d1b;
+  --modal-danger-line: #7f2d28;
+  --modal-success: #5fe285;
+  --modal-success-wash: #183122;
+  --modal-success-line: #2f6b41;
+  --modal-warning: #ffd166;
+  --modal-warning-wash: #3b3118;
+  --modal-warning-line: #7a6324;
+  --modal-info: #6fb4ff;
+  --modal-info-wash: #182a3f;
+  --modal-info-line: #315b84;
+  --modal-code-bg: #121212;
+  --modal-code-ink: #e5e5ea;
+  --modal-code-line: #3f3f46;
+  --modal-scrim: rgba(0, 0, 0, 0.64);
+  --modal-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --modal-shadow-soft: 0 2px 10px rgba(0, 0, 0, 0.35);
+  --modal-focus-ring: 0 0 0 2px var(--modal-accent-wash);
+  --modal-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23918f88' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+/* --- Overlay e janela ---------------------------------------------------- */
+
+.modal-overlay,
+.modal-backdrop,
+.office-modal-overlay {
+  background: var(--modal-scrim) !important;
+  backdrop-filter: blur(4px);
+  padding: 24px;
+  box-sizing: border-box;
+  font-family: var(--modal-font);
+}
+
+.modal-overlay.hidden,
+.modal-backdrop.hidden {
+  display: none !important;
+}
+
+.modal-dialog,
+.modal-window,
+.fluent-window {
+  background: var(--modal-surface) !important;
+  color: var(--modal-ink) !important;
+  border: 1px solid var(--modal-line-strong) !important;
+  border-radius: var(--modal-radius) !important;
+  box-shadow: var(--modal-shadow) !important;
+  font-family: var(--modal-font) !important;
+  overflow: hidden;
+}
+
+.modal-dialog,
+.modal-window {
+  display: flex;
+  flex-direction: column;
+
+  /* Reaproveita os tokens globais dentro de qualquer modal, inclusive nos
+     componentes legados que ainda usam as variáveis antigas do Studio. */
+  --text-primary: var(--modal-ink);
+  --text-secondary: var(--modal-ink-2);
+  --text-muted: var(--modal-ink-3);
+  --surface-card: var(--modal-surface);
+  --surface-sidebar: var(--modal-surface);
+  --surface-pill: var(--modal-surface-2);
+  --surface-track: var(--modal-surface-3);
+  --accent-color: var(--modal-accent);
+  --border-color: var(--modal-line);
+  --slate-line: var(--modal-line-strong);
+  --radius-card: 6px;
+  --radius-button: 4px;
+}
+
+.modal-dialog:not(.code-modal-fullscreen-dialog),
+.modal-window {
+  max-height: calc(100vh - 48px);
+}
+
+.modal-dialog.fluent-window {
+  position: absolute !important;
+  margin: 0;
+}
+
+.modal-dialog.window-is-dragging,
+.modal-window.window-is-dragging {
+  transition: none !important;
+}
+
+/* --- Barra de título ----------------------------------------------------- */
+
+.modal-header,
+.window-titlebar,
+.office-modal-titlebar,
+.interaction-modal-header {
+  min-height: 46px !important;
+  padding: 6px 8px 6px 14px !important;
+  background: var(--modal-chrome) !important;
+  border-bottom: 1px solid var(--modal-line) !important;
+  color: var(--modal-ink) !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-sizing: border-box;
+}
+
+.modal-header.fluent-header-draggable,
+.office-modal-titlebar.fluent-header-draggable {
+  cursor: move;
+}
+
+.modal-title-group,
+.office-modal-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.office-modal-title-text {
+  min-width: 0;
+}
+
+.office-modal-title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.modal-header-icon {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--modal-accent-wash);
+  color: var(--modal-accent);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.office-modal-app-icon svg {
+  width: 17px;
+  height: 17px;
+  display: block;
+}
+
+.modal-title {
+  margin: 0;
+  color: var(--modal-ink) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  line-height: 1.3;
+}
+
+.modal-subtitle {
+  margin-top: 1px;
+  color: var(--modal-ink-3) !important;
+  font-size: 11.5px !important;
+  line-height: 1.3;
+}
+
+.modal-title-badge,
+.ribbon-badge-info {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 1px 7px;
+  border: 1px solid var(--modal-line);
+  border-radius: 999px;
+  background: var(--modal-surface);
+  color: var(--modal-ink-2);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.window-controls {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.window-control-btn,
+.modal-close-btn {
+  width: 42px !important;
+  min-width: 42px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 !important;
+  display: grid;
+  place-items: center;
+  border: 0 !important;
+  border-radius: var(--modal-radius-sm) !important;
+  background: transparent !important;
+  color: var(--modal-ink-2) !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.window-control-btn:hover,
+.modal-close-btn:hover {
+  background: var(--modal-hover) !important;
+  color: var(--modal-ink) !important;
+}
+
+.window-btn-close:hover,
+.modal-close-btn:hover {
+  background: #c42b1c !important;
+  color: #ffffff !important;
+}
+
+.window-control-btn svg,
+.modal-close-btn svg,
+.office-modal-close-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Diálogos leves da Ribbon reutilizam o mesmo chrome, sem maximizar. */
+.ribbon-dialog .office-modal-titlebar {
+  min-height: 46px;
+  padding: 6px 8px 6px 14px;
+  background: var(--modal-chrome);
+  border-bottom: 1px solid var(--modal-line);
+}
+
+.ribbon-dialog .office-modal-titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ribbon-dialog .office-modal-titlebar-icon {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--modal-accent-wash);
+  color: var(--modal-accent);
+}
+
+.ribbon-dialog .office-modal-titlebar-text {
+  color: var(--modal-ink);
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ribbon-dialog .office-modal-close-btn {
+  width: 42px;
+  height: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--modal-ink-2);
+  cursor: pointer;
+}
+
+.ribbon-dialog .office-modal-close-btn:hover {
+  background: #c42b1c;
+  color: #ffffff;
+}
+
+.ribbon-dialog .modal-footer {
+  min-height: 58px;
+  padding: 10px 18px;
+  background: var(--modal-surface);
+  border-top: 1px solid var(--modal-line);
+}
+
+.ribbon-dialog-error {
+  border: 1px solid var(--modal-danger-line) !important;
+  background: var(--modal-danger-wash) !important;
+  color: var(--modal-danger) !important;
+}
+
+.window-resize-handle {
+  color: var(--modal-ink-3);
+}
+
+/* --- Abas ---------------------------------------------------------------- */
+
+.office-modal-tab-strip,
+.office-modal-tab-bar,
+.modal-tabs,
+.modal-tabs-bar {
+  min-height: 34px !important;
+  height: 34px !important;
+  padding: 0 8px !important;
+  gap: 0 !important;
+  display: flex;
+  align-items: stretch;
+  background: var(--modal-surface) !important;
+  border-bottom: 1px solid var(--modal-line) !important;
+  box-sizing: border-box;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.office-modal-tab-btn,
+.modal-tabs .tab-btn,
+.modal-tabs-bar .tab-btn,
+.code-tab-btn,
+.office-subtab-btn {
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 12px !important;
+  border: 0 !important;
+  border-bottom: 3px solid transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--modal-ink-2) !important;
+  font-size: 12.5px !important;
+  font-weight: 400 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: none !important;
+}
+
+.office-modal-tab-btn:hover,
+.modal-tabs .tab-btn:hover,
+.modal-tabs-bar .tab-btn:hover,
+.code-tab-btn:hover,
+.office-subtab-btn:hover {
+  background: var(--modal-hover) !important;
+  color: var(--modal-ink) !important;
+}
+
+.office-modal-tab-btn.active,
+.modal-tabs .tab-btn.active,
+.modal-tabs-bar .tab-btn.active,
+.code-tab-btn.active,
+.office-subtab-btn.active {
+  background: transparent !important;
+  color: var(--modal-ink) !important;
+  border-bottom-color: var(--modal-accent) !important;
+  font-weight: 600 !important;
+}
+
+.office-modal-tab-badge,
+.tab-badge,
+.pill-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--modal-surface-4);
+  color: var(--modal-ink-2);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.office-modal-tab-btn.active .office-modal-tab-badge {
+  background: var(--modal-accent);
+  color: var(--modal-on-accent);
+}
+
+/* --- Corpo e rodapé ------------------------------------------------------ */
+
+.modal-body,
+.modal-body-scrollable,
+.interaction-modal-body,
+.template-modal-body {
+  background: var(--modal-surface) !important;
+  color: var(--modal-ink) !important;
+  box-sizing: border-box;
+}
+
+.modal-body-scrollable,
+.modal-body,
+.interaction-modal-body {
+  padding: 18px 20px !important;
+}
+
+.modal-body-scrollable {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.modal-footer,
+.office-modal-footer,
+.interaction-modal-footer {
+  min-height: 58px;
+  padding: 10px 18px !important;
+  background: var(--modal-surface) !important;
+  border-top: 1px solid var(--modal-line) !important;
+  color: var(--modal-ink-2) !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.modal-footer-right,
+.modal-footer-actions,
+.interaction-modal-actions,
+.footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.modal-footer > button:only-child,
+.office-modal-footer > button:only-child,
+.interaction-modal-footer > button:only-child {
+  margin-left: auto;
+}
+
+.footer-info,
+.modal-footer-left,
+.footer-left-group {
+  color: var(--modal-ink-3) !important;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+/* --- Botões -------------------------------------------------------------- */
+
+:is(.modal-dialog, .modal-window) :is(
+  .btn,
+  .tool-btn,
+  .office-btn,
+  .btn-primary,
+  .btn-secondary,
+  .btn-secondary-pill,
+  .btn-action,
+  .btn-preset-action,
+  .btn-secondary-office,
+  .btn-primary-office,
+  .btn-danger,
+  .btn-danger-pill,
+  .btn-sec,
+  .btn-clean-primary,
+  .btn-clean-secondary,
+  .btn-action-pill,
+  .btn-preset-mcp,
+  .btn-toggle-code,
+  .btn-copy-code
+) {
+  min-height: 30px;
+  border: 1px solid var(--modal-line) !important;
+  border-radius: var(--modal-radius-sm) !important;
+  background: var(--modal-surface) !important;
+  color: var(--modal-ink) !important;
+  box-shadow: none !important;
+  font-family: var(--modal-font) !important;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+:is(.modal-dialog, .modal-window) :is(
+  .btn,
+  .tool-btn,
+  .office-btn,
+  .btn-secondary,
+  .btn-secondary-pill,
+  .btn-secondary-office,
+  .btn-sec,
+  .btn-clean-secondary,
+  .btn-preset-mcp
+):hover:not(:disabled) {
+  background: var(--modal-surface-3) !important;
+}
+
+:is(.modal-dialog, .modal-window) :is(
+  .btn-primary,
+  .btn-action,
+  .btn-preset-action,
+  .btn-primary-office,
+  .btn-clean-primary,
+  .btn-action-pill
+) {
+  background: var(--modal-accent) !important;
+  border-color: var(--modal-accent) !important;
+  color: var(--modal-on-accent) !important;
+}
+
+:is(.modal-dialog, .modal-window) :is(
+  .btn-primary,
+  .btn-action,
+  .btn-preset-action,
+  .btn-primary-office,
+  .btn-clean-primary,
+  .btn-action-pill
+):hover:not(:disabled) {
+  background: var(--modal-accent-hover) !important;
+  border-color: var(--modal-accent-hover) !important;
+}
+
+:is(.modal-dialog, .modal-window) :is(
+  .btn-danger,
+  .btn-danger-pill,
+  .btn-danger-office,
+  .btn-clean-danger,
+  .btn-global-remove-repo,
+  .btn-delete-server,
+  .btn-remove-tool
+) {
+  background: transparent !important;
+  border-color: var(--modal-danger-line) !important;
+  color: var(--modal-danger) !important;
+}
+
+:is(.modal-dialog, .modal-window) :is(
+  .btn-danger,
+  .btn-danger-pill,
+  .btn-danger-office,
+  .btn-clean-danger,
+  .btn-global-remove-repo,
+  .btn-delete-server,
+  .btn-remove-tool
+):hover:not(:disabled) {
+  background: var(--modal-danger-wash) !important;
+}
+
+:is(.modal-dialog, .modal-window) :is(.btn-sm, .btn-sec, .btn-clean-secondary) {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+:is(.modal-dialog, .modal-window) button:disabled,
+:is(.modal-dialog, .modal-window) .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+:is(.modal-dialog, .modal-window) :is(.btn, .tool-btn, .office-btn, .window-control-btn, .modal-close-btn):focus-visible {
+  outline: 2px solid var(--modal-accent);
+  outline-offset: 1px;
+}
+
+/* --- Formulários --------------------------------------------------------- */
+
+:is(.modal-dialog, .modal-window) :is(.form-label, .office-label) {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--modal-ink-2) !important;
+  font-family: var(--modal-font) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+:is(.modal-dialog, .modal-window) :is(.form-hint, .form-help, .field-hint) {
+  color: var(--modal-ink-3) !important;
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+:is(.modal-dialog, .modal-window) .form-group {
+  margin-bottom: 12px;
+}
+
+:is(.modal-dialog, .modal-window) .form-row-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+:is(.modal-dialog, .modal-window) :is(
+  input[type="text"],
+  input[type="password"],
+  input[type="number"],
+  input[type="search"],
+  input[type="url"],
+  input[type="email"],
+  input:not([type]),
+  select,
+  textarea,
+  .form-input,
+  .form-select,
+  .form-textarea,
+  .form-input-sm,
+  .office-input,
+  .office-select,
+  .office-textarea,
+  .runner-param-input,
+  .input,
+  .select
+) {
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 8px !important;
+  box-sizing: border-box;
+  border: 1px solid var(--modal-line-strong) !important;
+  border-radius: var(--modal-radius-sm) !important;
+  background-color: var(--modal-surface) !important;
+  color: var(--modal-ink) !important;
+  font-family: var(--modal-font) !important;
+  font-size: 13px !important;
+  box-shadow: none !important;
+  outline: none;
+}
+
+:is(.modal-dialog, .modal-window) textarea,
+:is(.modal-dialog, .modal-window) .form-textarea,
+:is(.modal-dialog, .modal-window) .office-textarea {
+  min-height: 80px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+:is(.modal-dialog, .modal-window) select,
+:is(.modal-dialog, .modal-window) .form-select,
+:is(.modal-dialog, .modal-window) .office-select {
+  appearance: none;
+  padding-right: 30px !important;
+  background-image: var(--modal-select-arrow) !important;
+  background-repeat: no-repeat !important;
+  background-position: right 8px center !important;
+  background-size: 16px 16px !important;
+}
+
+:is(.modal-dialog, .modal-window) :is(
+  input[type="text"],
+  input[type="password"],
+  input[type="number"],
+  input[type="search"],
+  input[type="url"],
+  input[type="email"],
+  input:not([type]),
+  select,
+  textarea,
+  .form-input,
+  .form-select,
+  .form-textarea,
+  .office-input,
+  .office-select,
+  .office-textarea,
+  .runner-param-input,
+  .input,
+  .select
+):focus {
+  border-color: var(--modal-accent) !important;
+  box-shadow: var(--modal-focus-ring) !important;
+}
+
+:is(.modal-dialog, .modal-window) input::placeholder,
+:is(.modal-dialog, .modal-window) textarea::placeholder {
+  color: var(--modal-ink-3) !important;
+}
+
+:is(.modal-dialog, .modal-window) :is(input[type="checkbox"], input[type="radio"]) {
+  accent-color: var(--modal-accent);
+}
+
+:is(.modal-dialog, .modal-window) :is(input, select, textarea):disabled {
+  background: var(--modal-surface-3) !important;
+  color: var(--modal-ink-3) !important;
+  opacity: 0.75;
+}
+
+/* --- Cards, grupos e badges --------------------------------------------- */
+
+:is(.modal-dialog, .modal-window) :is(
+  .settings-section-card,
+  .office-section-card,
+  .office-group,
+  .inheritance-toggle-card,
+  .persistence-radio-card,
+  .template-choice-card,
+  .workspace-skill-card,
+  .github-skill-card,
+  .memory-perm-item,
+  .project-memory-card,
+  .recent-project-card,
+  .batch-matrix-wrapper,
+  .tool-checkbox-pill,
+  .tool-pill,
+  .settings-form-wrapper
+) {
+  background: var(--modal-surface-2) !important;
+  border: 1px solid var(--modal-line) !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  color: var(--modal-ink) !important;
+}
+
+:is(.modal-dialog, .modal-window) :is(.settings-section-card, .template-card) {
+  background: var(--modal-surface) !important;
+  border-radius: 6px !important;
+  box-shadow: var(--modal-shadow-soft) !important;
+}
+
+:is(.modal-dialog, .modal-window) .office-group {
+  padding: 12px 14px !important;
+}
+
+:is(.modal-dialog, .modal-window) :is(.section-card-header, .office-group-title) {
+  color: var(--modal-ink) !important;
+}
+
+:is(.modal-dialog, .modal-window) .section-card-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--modal-accent-wash);
+  color: var(--modal-accent);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+:is(.modal-dialog, .modal-window) .section-card-title {
+  color: var(--modal-ink) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+:is(.modal-dialog, .modal-window) .section-card-desc {
+  color: var(--modal-ink-3) !important;
+  font-size: 12px !important;
+  line-height: 1.4;
+}
+
+:is(.modal-dialog, .modal-window) :is(.badge-inherited, .badge-overridden, .inheritance-status-badge, .office-license-badge) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px 8px;
+  border: 1px solid var(--modal-success-line) !important;
+  border-radius: 999px !important;
+  background: var(--modal-success-wash) !important;
+  color: var(--modal-success) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0;
+}
+
+:is(.modal-dialog, .modal-window) .badge-overridden {
+  border-color: var(--modal-warning-line) !important;
+  background: var(--modal-warning-wash) !important;
+  color: var(--modal-warning) !important;
+}
+
+:is(.modal-dialog, .modal-window) .badge-memory-persistent {
+  border-color: var(--modal-line) !important;
+  background: var(--modal-surface-3) !important;
+  color: var(--modal-ink-2) !important;
+}
+
+:is(.modal-dialog, .modal-window) .tool-checkbox-pill.checked {
+  border-color: var(--modal-accent) !important;
+  background: var(--modal-accent-wash) !important;
+  color: var(--modal-accent) !important;
+}
+
+:is(.modal-dialog, .modal-window) :is(.office-info-callout, .office-callout) {
+  border: 1px solid var(--modal-line) !important;
+  border-left: 3px solid var(--modal-accent) !important;
+  border-radius: 4px !important;
+  background: var(--modal-info-wash) !important;
+  color: var(--modal-ink-2) !important;
+}
+
+:is(.modal-dialog, .modal-window) :is(.memory-status-banner, .skill-status-banner) {
+  border-radius: 6px !important;
+}
+
+/* --- Tabelas ------------------------------------------------------------- */
+
+:is(.modal-dialog, .modal-window) table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--modal-ink) !important;
+  font-size: 12.5px;
+}
+
+:is(.modal-dialog, .modal-window) th {
+  background: var(--modal-surface-2) !important;
+  color: var(--modal-ink-2) !important;
+  font-weight: 600;
+  text-align: left;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--modal-line) !important;
+}
+
+:is(.modal-dialog, .modal-window) td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--modal-line) !important;
+  color: var(--modal-ink) !important;
+}
+
+:is(.modal-dialog, .modal-window) tr:last-child td {
+  border-bottom: 0 !important;
+}
+
+/* --- Código, logs e previews -------------------------------------------- */
+
+:is(.modal-dialog, .modal-window) :is(
+  .code-font,
+  .skill-textarea,
+  .md-code-block,
+  .md-inline-code,
+  .blackboard-viewer,
+  .playground-result-container,
+  .sp-output,
+  .runtime-log
+) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Cascadia Code', monospace !important;
+}
+
+:is(.modal-dialog, .modal-window) :is(.md-code-block, .blackboard-viewer, .playground-result-container) {
+  background: var(--modal-code-bg) !important;
+  color: var(--modal-code-ink) !important;
+  border: 1px solid var(--modal-code-line) !important;
+  border-radius: 6px !important;
+}
+
+:is(.modal-dialog, .modal-window) .office-markdown-preview {
+  background: var(--modal-surface) !important;
+  border: 1px solid var(--modal-line) !important;
+  border-radius: 6px !important;
+  color: var(--modal-ink) !important;
+}
+
+:is(.modal-dialog, .modal-window) :is(.skill-toolbar, .code-editor-header, .template-action-bar, .template-category-tabs) {
+  background: var(--modal-surface-2) !important;
+  border-color: var(--modal-line) !important;
+}
+
+:is(.modal-dialog, .modal-window) .category-pill {
+  border: 1px solid transparent !important;
+  background: var(--modal-surface-3) !important;
+  color: var(--modal-ink-2) !important;
+  border-radius: 999px !important;
+  min-height: 28px;
+  padding: 0 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+:is(.modal-dialog, .modal-window) .category-pill:hover {
+  background: var(--modal-hover) !important;
+  color: var(--modal-ink) !important;
+}
+
+:is(.modal-dialog, .modal-window) .category-pill.active {
+  background: var(--modal-accent) !important;
+  border-color: var(--modal-accent) !important;
+  color: var(--modal-on-accent) !important;
+}
+
+:is(.modal-dialog, .modal-window) .template-card {
+  border-color: var(--modal-line) !important;
+  box-shadow: none !important;
+}
+
+:is(.modal-dialog, .modal-window) .template-card:hover {
+  border-color: var(--modal-accent) !important;
+  box-shadow: var(--modal-shadow-soft) !important;
+  transform: none !important;
+}
+
+:is(.modal-dialog, .modal-window) .template-name {
+  color: var(--modal-ink) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+:is(.modal-dialog, .modal-window) .template-desc {
+  color: var(--modal-ink-2) !important;
+}
+
+:is(.modal-dialog, .modal-window) .template-icon-badge {
+  border: 1px solid var(--modal-line) !important;
+  border-radius: 6px !important;
+  background: var(--modal-surface-3) !important;
+}
+
+:is(.modal-dialog, .modal-window) .template-meta-row {
+  border: 1px solid var(--modal-line) !important;
+  border-radius: 6px !important;
+  background: var(--modal-surface-2) !important;
+}
+
+:is(.modal-dialog, .modal-window) .meta-label {
+  color: var(--modal-ink-3) !important;
+}
+
+:is(.modal-dialog, .modal-window) .meta-value {
+  color: var(--modal-ink) !important;
+}
+
+:is(.modal-dialog, .modal-window) .plugin-custom-badge {
+  border: 1px solid var(--modal-accent) !important;
+  background: var(--modal-accent-wash) !important;
+  color: var(--modal-accent) !important;
+}
+
+/* --- Interação ----------------------------------------------------------- */
+
+.interaction-modal-context {
+  background: var(--modal-info-wash) !important;
+  border: 1px solid var(--modal-info-line) !important;
+  border-left: 3px solid var(--modal-accent) !important;
+  color: var(--modal-ink-2) !important;
+  border-radius: 4px !important;
+}
+
+.interaction-modal-meta,
+.interaction-artifacts-title {
+  color: var(--modal-ink-3) !important;
+}
+
+.interaction-artifact-item {
+  background: var(--modal-surface) !important;
+  border: 1px solid var(--modal-line) !important;
+  color: var(--modal-ink) !important;
+  border-radius: 4px !important;
+}
+
+.interaction-modal-error {
+  border: 1px solid var(--modal-danger-line) !important;
+  background: var(--modal-danger-wash) !important;
+  color: var(--modal-danger) !important;
+}
+
+/* --- Scrollbars ---------------------------------------------------------- */
+
+:is(.modal-dialog, .modal-window) * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--modal-line-strong) transparent;
+}
+
+:is(.modal-dialog, .modal-window) *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+:is(.modal-dialog, .modal-window) *::-webkit-scrollbar-thumb {
+  background: var(--modal-line-strong);
+  border-radius: 999px;
+}
+
+:is(.modal-dialog, .modal-window) *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* --- Ajustes de tema escuro para estilos inline legados ------------------ */
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="background: #ffffff"],
+  [style*="background:#ffffff"],
+  [style*="background-color: #ffffff"],
+  [style*="background-color:#ffffff"],
+  [style*="background: #fff"],
+  [style*="background:#fff"]
+) {
+  background-color: var(--modal-surface) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="background: #faf9f8"],
+  [style*="background:#faf9f8"],
+  [style*="background: #f8fafc"],
+  [style*="background:#f8fafc"],
+  [style*="background: #f1f5f9"],
+  [style*="background:#f1f5f9"],
+  [style*="background: #f3f2f1"],
+  [style*="background:#f3f2f1"],
+  [style*="background: #f3f4f6"],
+  [style*="background:#f3f4f6"],
+  [style*="background: #fafafa"],
+  [style*="background:#fafafa"]
+) {
+  background-color: var(--modal-surface-2) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="color: #242424"],
+  [style*="color:#242424"],
+  [style*="color: #201f1e"],
+  [style*="color:#201f1e"],
+  [style*="color: #0f172a"],
+  [style*="color:#0f172a"],
+  [style*="color: #1e293b"],
+  [style*="color:#1e293b"]
+) {
+  color: var(--modal-ink) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="color: #323130"],
+  [style*="color:#323130"],
+  [style*="color: #334155"],
+  [style*="color:#334155"],
+  [style*="color: #424242"],
+  [style*="color:#424242"],
+  [style*="color: #475569"],
+  [style*="color:#475569"],
+  [style*="color: #020617"],
+  [style*="color:#020617"]
+) {
+  color: var(--modal-ink-2) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="color: #616161"],
+  [style*="color:#616161"],
+  [style*="color: #64748b"],
+  [style*="color:#64748b"],
+  [style*="color: #605e5c"],
+  [style*="color:#605e5c"],
+  [style*="color: #5c5c5c"],
+  [style*="color:#5c5c5c"],
+  [style*="color: #94a3b8"],
+  [style*="color:#94a3b8"]
+) {
+  color: var(--modal-ink-3) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="background: #f0f7ff"],
+  [style*="background:#f0f7ff"],
+  [style*="background: #eef6fc"],
+  [style*="background:#eef6fc"],
+  [style*="background: #f3f9fd"],
+  [style*="background:#f3f9fd"]
+) {
+  background-color: var(--modal-info-wash) !important;
+  border-color: var(--modal-info-line) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="background: #f0fdf4"],
+  [style*="background:#f0fdf4"],
+  [style*="background: #f1fbf4"],
+  [style*="background:#f1fbf4"],
+  [style*="background: #e8f5e9"],
+  [style*="background:#e8f5e9"],
+  [style*="background: #dff6dd"],
+  [style*="background:#dff6dd"],
+  [style*="background: #e6f4ea"],
+  [style*="background:#e6f4ea"]
+) {
+  background-color: var(--modal-success-wash) !important;
+  border-color: var(--modal-success-line) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="background: #fef7e0"],
+  [style*="background:#fef7e0"],
+  [style*="background: #fffbeb"],
+  [style*="background:#fffbeb"],
+  [style*="background: #fff7ed"],
+  [style*="background:#fff7ed"],
+  [style*="background: #fff4ce"],
+  [style*="background:#fff4ce"]
+) {
+  background-color: var(--modal-warning-wash) !important;
+  border-color: var(--modal-warning-line) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="background: #fdf2f2"],
+  [style*="background:#fdf2f2"],
+  [style*="background: #fce8e6"],
+  [style*="background:#fce8e6"],
+  [style*="background: #fef2f2"],
+  [style*="background:#fef2f2"]
+) {
+  background-color: var(--modal-danger-wash) !important;
+  border-color: var(--modal-danger-line) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="background: #0f172a"],
+  [style*="background:#0f172a"],
+  [style*="background: #1e1e1e"],
+  [style*="background:#1e1e1e"]
+) {
+  background-color: var(--modal-code-bg) !important;
+  color: var(--modal-code-ink) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="color: #0f6cbd"],
+  [style*="color:#0f6cbd"],
+  [style*="color: #2563eb"],
+  [style*="color:#2563eb"],
+  [style*="color: #1d4ed8"],
+  [style*="color:#1d4ed8"]
+) {
+  color: var(--modal-accent) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="color: #107c41"],
+  [style*="color:#107c41"],
+  [style*="color: #0e700e"],
+  [style*="color:#0e700e"],
+  [style*="color: #15803d"],
+  [style*="color:#15803d"],
+  [style*="color: #137333"],
+  [style*="color:#137333"],
+  [style*="color: #1e7e34"],
+  [style*="color:#1e7e34"]
+) {
+  color: var(--modal-success) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="color: #a80000"],
+  [style*="color:#a80000"],
+  [style*="color: #c5221f"],
+  [style*="color:#c5221f"],
+  [style*="color: #b91c1c"],
+  [style*="color:#b91c1c"],
+  [style*="color: #991b1b"],
+  [style*="color:#991b1b"],
+  [style*="color: #dc2626"],
+  [style*="color:#dc2626"]
+) {
+  color: var(--modal-danger) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="color: #b06000"],
+  [style*="color:#b06000"],
+  [style*="color: #92400e"],
+  [style*="color:#92400e"],
+  [style*="color: #b45309"],
+  [style*="color:#b45309"]
+) {
+  color: var(--modal-warning) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="border: 1px solid #e2e8f0"],
+  [style*="border:1px solid #e2e8f0"],
+  [style*="border: 1px solid #cbd5e1"],
+  [style*="border:1px solid #cbd5e1"],
+  [style*="border: 1px solid #edebe9"],
+  [style*="border:1px solid #edebe9"],
+  [style*="border: 1px solid #d1d1d1"],
+  [style*="border:1px solid #d1d1d1"]
+) {
+  border-color: var(--modal-line) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="background: #f1f3f4"],
+  [style*="background:#f1f3f4"],
+  [style*="background: #f5f3ff"],
+  [style*="background:#f5f3ff"]
+) {
+  background-color: var(--modal-surface-3) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="color: #5f6368"],
+  [style*="color:#5f6368"],
+  [style*="color: #6d28d9"],
+  [style*="color:#6d28d9"]
+) {
+  color: var(--modal-ink-3) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="border: 1px solid #dadce0"],
+  [style*="border:1px solid #dadce0"],
+  [style*="border: 1px solid #f8b4b4"],
+  [style*="border:1px solid #f8b4b4"],
+  [style*="border: 1px solid #fef08a"],
+  [style*="border:1px solid #fef08a"],
+  [style*="border: 1px solid #fad2cf"],
+  [style*="border:1px solid #fad2cf"],
+  [style*="border: 1px solid #fce8b2"],
+  [style*="border:1px solid #fce8b2"],
+  [style*="border: 1px solid #ceead6"],
+  [style*="border:1px solid #ceead6"],
+  [style*="border: 1px solid #ddd6fe"],
+  [style*="border:1px solid #ddd6fe"]
+) {
+  border-color: var(--modal-line) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="color: #7f1d1d"],
+  [style*="color:#7f1d1d"]
+) {
+  color: var(--modal-danger) !important;
+}
+
+html[data-theme="dark"] :is(.modal-dialog, .modal-window) :is(
+  [style*="color: #78350f"],
+  [style*="color:#78350f"]
+) {
+  color: var(--modal-warning) !important;
+}
+
+/* --- Responsividade ------------------------------------------------------ */
+
+@media (max-width: 720px) {
+  .modal-overlay,
+  .modal-backdrop {
+    padding: 12px;
+  }
+
+  .modal-dialog,
+  .modal-window {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: calc(100vh - 24px) !important;
+  }
+
+  .modal-body-scrollable,
+  .modal-body,
+  .interaction-modal-body {
+    padding: 14px !important;
+  }
+
+  .modal-footer,
+  .office-modal-footer,
+  .interaction-modal-footer {
+    padding: 8px 12px !important;
+  }
+
+  :is(.modal-dialog, .modal-window) .form-row-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
