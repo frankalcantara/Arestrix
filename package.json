@@ -31,18 +31,18 @@
     "hooks:install": "node scripts/install-hooks.mjs"
   },
   "dependencies": {
-    "@hpcc-js/wasm": "^2.35.3",
+    "@hpcc-js/wasm": "^2.36.0",
     "lucide": "^0.453.0",
     "monaco-editor": "^0.57.0",
-    "three": "^0.169.0",
-    "troika-three-text": "^0.50.1"
+    "three": "^0.186.1",
+    "troika-three-text": "^0.52.5"
   },
   "devDependencies": {
-    "@types/three": "^0.169.0",
-    "puppeteer-core": "^25.14.0",
+    "@types/three": "^0.186.0",
+    "puppeteer-core": "^25.16.0",
     "typescript": "^5.6.3",
     "vite": "^6.4.4",
-    "vite-plugin-singlefile": "^2.3.3",
+    "vite-plugin-singlefile": "^2.3.4",
     "vitest": "^4.1.12"
   },
   "overrides": {
