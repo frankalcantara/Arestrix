@@ -4,21 +4,41 @@ All notable changes to Arestrix are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **Beta 1.5**.
+Pre-release identifiers follow SemVer (`2.0.0-beta.1`); the marketing name is **Beta 2**.
 
 ## [Unreleased]
 
-### Beta 2 planning
+### Beta 2 gate
 
-- Beta 2 is registered with target version `2.0.0-beta.1`; the current product version remains
-  `1.5.0-beta.1` until the release gate passes.
-- The portable package (5B1) is complete. The MSI/MSIX (or Inno Setup) installer and Linux package
-  (5B2) are pending, followed by signing, CI/Linux and the signed remote catalog (5C).
-- The mandatory test matrix and acceptance criteria are tracked in
-  [docs/quality/beta2-test-plan.md](docs/quality/beta2-test-plan.md).
+- `2.0.0-beta.1` is the Beta 2 development release. The MSI/MSIX (or Inno Setup) installer and Linux
+  package (5B2), code signing and the CI/Linux matrix (5C), the signed remote catalog and the
+  mandatory test matrix in [docs/quality/beta2-test-plan.md](docs/quality/beta2-test-plan.md) remain
+  pending. Do not tag or publish Beta 2 until the release gate passes.
+
+## [2.0.0-beta.1] - 2026-10-26
+
+Beta 2 focuses on a single SVG graph layer, a cleaner post-run editing experience and console
+usability.
+
+### Changed
+
+- The graph now has a single visual layer. `NodeView` and `ConnectionView` keep logic, geometry and
+  state only; the duplicate Three.js vertex/edge meshes, raycasts, text SDF factories and the
+  `troika-three-text` dependency were removed. WebGL remains only for the grid and rubber-band.
+- Finishing a run returns every vertex to edit mode (opaque, selectable, draggable). The result is
+  preserved as a compact header badge (`✓ duration`, `✕ duration` or `—`), with status, duration and
+  time in its tooltip. Starting a new run or the canvas broom clears the badges.
+- The console collapse button now uses the same `ᐱ`/`ᐯ` glyph as the ribbon, including when the panel
+  is collapsed by the splitter or reopened automatically.
+- Terminal and telemetry lines are selectable and copyable again; the global `user-select: none`
+  rule no longer blocks marking text in `.console-line`.
+- The virtual `webui.js` runtime script is injected after Vite HTML processing, removing the
+  `can't be bundled without type="module"` build warning while preserving the tag in the final HTML.
 
 ### Fixed
 
+- Late telemetry can no longer re-enable execution visuals after a pipeline finishes; vertices stay
+  in edit mode and the trace overlay only reapplies results.
 - Memory snapshots now resolve `.arestrix/memory/memory.db` from the project root, never from the
   process working directory. Export refuses to create an empty database and preserves an existing
   snapshot; startup quarantines a corrupt memory database after `PRAGMA quick_check` before
@@ -371,5 +391,6 @@ First public beta of Arestrix Studio and the native C++20 pipeline compiler.
 - The `braces` advisory documented in `docs/security/dependency-advisories.md` affects the build chain only;
   no fixed release is available upstream yet.
 
+[2.0.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v2.0.0-beta.1
 [1.5.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v1.5.0-beta.1
 [1.0.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v1.0.0-beta.1

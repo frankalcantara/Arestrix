@@ -1,6 +1,6 @@
 # Registro de Auditoria e Integridade de Testes (Test Audit Log)
 
-> **Aplica-se a:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Última revisão: 2026-10-19
+> **Aplica-se a:** Arestrix Beta 2 (`2.0.0-beta.1`) · Última revisão: 2026-10-19
 
 Este documento registra o histórico cronológico das rodadas de testes automatizados, verificações de segurança e auditorias de integridade do **Arestrix**, organizadas da **mais recente para a mais antiga**.
 

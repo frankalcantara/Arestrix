@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <b>Beta 1.5</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentação</a>
+  <b>Beta 2</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentação</a>
 </p>
 
 <p align="center">
@@ -161,11 +161,11 @@ python scripts/e2e_examples.py
 
 ## Status do projeto
 
-A **Beta 1.5** é uma release pública inicial. O Studio roda no Windows e no Linux; programas gerados
-a partir de um grafo atualmente têm o Windows como alvo. APIs, formatos de arquivo e flags de linha
-de comando podem mudar antes da disponibilidade geral. Consulte o [changelog](CHANGELOG.md) para as
-limitações atuais. O **Beta 2** está registrado como próximo marco (alvo `2.0.0-beta.1`), mas ainda
-não foi liberado; o trabalho pendente e a matriz de testes estão no
+A **Beta 2** (`2.0.0-beta.1`) é um pré-release de desenvolvimento. O Studio roda no Windows e no
+Linux; programas gerados a partir de um grafo atualmente têm o Windows como alvo. APIs, formatos de
+arquivo e flags de linha de comando podem mudar antes da disponibilidade geral. Consulte o
+[changelog](CHANGELOG.md) para as limitações atuais. Instalador, assinatura de código, pacote Linux e
+a matriz completa de testes ainda estão pendentes; acompanhe no
 [plano de testes do Beta 2](docs/quality/beta2-test-plan.md).
 
 ## Segurança

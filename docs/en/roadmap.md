@@ -1,6 +1,6 @@
 # Roadmap and known limitations
 
-> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-21
+> **Applies to:** Arestrix Beta 2 (`2.0.0-beta.1`) · Last reviewed: 2026-10-21
 >
 > This page records what is intentionally incomplete and the order we plan to address it. It is not a
 > commitment to dates.
@@ -100,16 +100,16 @@ Limitations of the institution service and background worker:
 - No automatic model update, deduplication or disk quota management yet.
 - Model weights are not redistributed; downloads depend on the upstream publisher and license.
 
-## Beta 2 (registered, not released)
+## Beta 2 (in development)
 
-The next release is registered as **Beta 2**, with target version `2.0.0-beta.1`. The current product
-version remains `1.5.0-beta.1` until the Beta 2 gate passes.
+The Beta 2 line is versioned as `2.0.0-beta.1`. The version bump is in place, but tagging and
+publishing remain blocked until the Beta 2 gate passes.
 
 Already delivered for the Beta 2 line: closed call graph, interactions, generated forms, parallel
 calls, callable subflow, flow Call vertex, notifications, async `call_result`, open trace, release
-gate and the portable package.
+gate, portable package and the consolidated SVG visual layer with per-vertex run records.
 
-Pending before the Beta 2 bump:
+Pending before publishing Beta 2:
 
 - MSI/MSIX (or Inno Setup) installer and a Linux package (5B2).
 - Code signing, Windows/Linux CI matrix and signed remote catalog (5C).

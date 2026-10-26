@@ -1,6 +1,6 @@
 # Roadmap e limitações conhecidas
 
-> **Aplica-se a:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Última revisão: 2026-10-21
+> **Aplica-se a:** Arestrix Beta 2 (`2.0.0-beta.1`) · Última revisão: 2026-10-21
 >
 > Esta página registra o que está intencionalmente incompleto e a ordem planejada para resolver. Não é
 > um compromisso de datas.
@@ -100,16 +100,17 @@ Limitações do serviço institucional e do background:
 - Ainda não há atualização automática de modelos, deduplicação ou cota de disco.
 - Os pesos não são redistribuídos; o download depende do publicador upstream e da licença.
 
-## Beta 2 (registrado, não liberado)
+## Beta 2 (em desenvolvimento)
 
-A próxima release está registrada como **Beta 2**, com versão alvo `2.0.0-beta.1`. A versão atual
-continua `1.5.0-beta.1` até o gate do Beta 2 passar.
+A linha Beta 2 está versionada como `2.0.0-beta.1`. O bump foi feito, mas a tag e a publicação
+continuam bloqueadas até o gate do Beta 2 passar.
 
 Já entregue para a linha Beta 2: grafo de chamadas fechado, interações, formulários gerados, chamadas
 paralelas, subflow chamável, vértice Call em fluxo, notificações, `call_result` assíncrono, trace
-aberto, gate de release e pacote portátil.
+aberto, gate de release, pacote portátil e a consolidação da camada visual SVG com o novo registro de
+execução por vértice.
 
-Pendente antes do bump do Beta 2:
+Pendente antes de publicar o Beta 2:
 
 - Instalador MSI/MSIX (ou Inno Setup) e pacote Linux (5B2).
 - Assinatura de código, matriz de CI Windows/Linux e catálogo remoto assinado (5C).

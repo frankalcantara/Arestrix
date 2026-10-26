@@ -1,15 +1,17 @@
 # Beta 2 — Registro de pendências e plano de testes
 
-> **Status:** registrado, não liberado.
+> **Status:** em desenvolvimento, não liberado.
 >
-> **Versão atual:** `1.5.0-beta.1` (Beta 1.5).
+> **Versão atual:** `2.0.0-beta.1` (Beta 2).
 >
-> **Versão alvo do Beta 2:** `2.0.0-beta.1`, somente após o gate completo e o aceite abaixo.
+> **Gate:** instalador 5B2, assinatura/CI 5C e a matriz completa 2.1–2.9 ainda pendentes. Tag e
+> publicação somente após o aceite abaixo.
 >
-> **Última revisão:** 2026-10-24.
+> **Última revisão:** 2026-10-26.
 
 Este documento registra o escopo do Beta 2 e a matriz de testes que precisa ser concluída antes de
-bump de versão, tag, assinatura e publicação. O Beta 2 ainda não é uma release.
+tag, assinatura e publicação. A versão `2.0.0-beta.1` já está no código, mas o Beta 2 ainda não é uma
+release publicada.
 
 ## 1. Escopo registrado
 

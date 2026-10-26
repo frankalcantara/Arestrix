@@ -1,6 +1,6 @@
 # Getting started
 
-> **Applies to:** Arestrix Beta 1.5 (`1.5.0-beta.1`) · Last reviewed: 2026-10-21
+> **Applies to:** Arestrix Beta 2 (`2.0.0-beta.1`) · Last reviewed: 2026-10-21
 
 [Português](../pt-BR/primeiros-passos.md) · [Index](../README.md)
 

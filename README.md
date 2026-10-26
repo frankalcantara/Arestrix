@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <b>Beta 1.5</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentation</a>
+  <b>Beta 2</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentation</a>
 </p>
 
 <p align="center">
@@ -161,11 +161,11 @@ python scripts/e2e_examples.py
 
 ## Project status
 
-**Beta 1.5** is an early public release. The Studio runs on Windows and Linux; programs generated
-from a graph currently target Windows. Beta APIs, file formats and command-line flags may change
-before general availability. See the [changelog](CHANGELOG.md) for the current limitations.
-**Beta 2** is registered as the next milestone (target `2.0.0-beta.1`) but is not released yet; the
-pending work and test matrix are in the [Beta 2 test plan](docs/quality/beta2-test-plan.md).
+**Beta 2** (`2.0.0-beta.1`) is a development pre-release. The Studio runs on Windows and Linux;
+programs generated from a graph currently target Windows. Beta APIs, file formats and command-line
+flags may change before general availability. See the [changelog](CHANGELOG.md) for the current
+limitations. The installer, code signing, Linux package and the full test matrix are still pending;
+track them in the [Beta 2 test plan](docs/quality/beta2-test-plan.md).
 
 ## Security
 
