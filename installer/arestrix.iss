@@ -217,8 +217,8 @@ begin
 
   if not Result then
     Result :=
-      FileExists(ExpandConstant('{userprofile}\.ssh\id_ed25519')) or
-      FileExists(ExpandConstant('{userprofile}\.ssh\id_rsa'));
+      FileExists(GetEnv('USERPROFILE') + '\.ssh\id_ed25519') or
+      FileExists(GetEnv('USERPROFILE') + '\.ssh\id_rsa');
 
   if not Result then
     Result := RunAndCapture('gh auth status', Output);
