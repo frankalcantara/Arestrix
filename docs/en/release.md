@@ -149,12 +149,18 @@ The installer:
 - registers the app in **Apps & Features** and adds an `arestrix.exe` App Paths entry;
 - checks for Microsoft Edge WebView2 Runtime and the Visual C++ Redistributable x64, aborting with
   the official download links when either is missing;
+- runs an environment preflight and reports (without exposing values) whether Git, the Git identity,
+  a GitHub credential (HTTPS/SSH/`gh`), MSVC Build Tools and at least one provider API key are
+  available; missing optional items produce a warning with the installer continuing only after the
+  user confirms, and silent installs write the report to the setup log instead of blocking;
+- accepts `/PREFLIGHT=1` to force the environment report even when everything is configured;
 - includes the same binaries, UI, runtime library, examples, documentation and manifests as the
   portable package;
 - is signed automatically when `ARESTRIX_SIGN_PFX`/`ARESTRIX_SIGN_PFX_PASSWORD` or
   `ARESTRIX_SIGN_THUMBPRINT` are set (the same variables used by `sign-windows.ps1`).
 
-Local validation on Windows 11 x64 covered the silent install, the desktop shortcut default and its
+Local validation on Windows 11 x64 covered the environment preflight (all optional items detected),
+silent install with the report written to the setup log, the desktop shortcut default and its
 `/MERGETASKS="!desktopicon"` opt-out, Start menu shortcuts, `App Paths` registration, an in-place
 upgrade preserving user files/projects and a complete uninstall. Clean-machine install, signing and
 Intune/SCCM validation remain part of the Beta 2 gate; the installer is not yet a validated release

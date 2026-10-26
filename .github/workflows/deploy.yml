@@ -71,11 +71,19 @@ jobs:
           $setup = Get-ChildItem release/*-setup.exe | Select-Object -First 1
           if (-not $setup) { throw "installer not found" }
           $dir = Join-Path $env:RUNNER_TEMP "ArestrixInstallerSmoke"
+          $log = Join-Path $env:RUNNER_TEMP "arestrix-installer-smoke.log"
           if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
           $install = Start-Process -FilePath $setup.FullName `
-            -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$dir") `
+            -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$dir","/LOG=$log") `
             -Wait -PassThru
-          if ($install.ExitCode -ne 0) { throw "installer exited with $($install.ExitCode)" }
+          if ($install.ExitCode -ne 0) {
+            if (Test-Path $log) { Get-Content $log -Tail 80 }
+            throw "installer exited with $($install.ExitCode)"
+          }
+          $logText = Get-Content $log -Raw
+          if ($logText -notmatch 'Preflight report') { throw "preflight report missing from setup log" }
+          if ($logText -notmatch '\[OK\] Microsoft Edge WebView2 Runtime') { throw "WebView2 check failed" }
+          if ($logText -notmatch '\[OK\] Microsoft Visual C\+\+ Redistributable x64') { throw "VC++ check failed" }
           $desktopShortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Arestrix.lnk'
           if (-not (Test-Path $desktopShortcut)) { throw "desktop shortcut was not created" }
           & (Join-Path $dir 'arestrix-cli.exe') version
@@ -140,6 +148,9 @@ jobs:
             - Windows 10/11 x64.
             - Microsoft Edge WebView2 Runtime and the Visual C++ Redistributable.
               The installer detects both and offers the official download links when missing.
+            - The installer also reports (without exposing values) whether Git, a GitHub credential,
+              MSVC Build Tools and provider API keys are configured; missing optional items can be
+              completed later in the Studio.
             - To **compile/run pipelines**, install the MSVC Build Tools
               ("Desktop development with C++"). The package does not bundle MSVC/GCC.
 

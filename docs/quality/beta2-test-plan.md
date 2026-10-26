@@ -102,6 +102,8 @@ release publicada.
 ### 2.7 Instalador 5B2 (Inno Setup implementado; validação pendente)
 
 - [x] Build do instalador Inno Setup (`py scripts/package_release.py --installer`) e publicação no CI.
+- [x] Preflight do ambiente: WebView2/VC++ obrigatórios; Git, identidade Git, credencial GitHub,
+      MSVC Build Tools e chaves de API reportados sem expor valores.
 - [ ] Instalação limpa em Windows x64 sem dependências ocultas.
 - [x] Atalhos (Menu Iniciar/Desktop padrão, com opção de desmarcar) e desinstalação completa validadas localmente.
 - [x] Upgrade sobre a versão anterior preservando projetos/configuração do usuário validado localmente.
@@ -111,9 +113,10 @@ release publicada.
 - [ ] Teste em máquina limpa com apenas o runtime VC++ exigido.
 - [ ] Linux: pacote equivalente com dependências e caminhos de dados documentados.
 
-> **Validação local (2026-10-26, Windows 11 x64):** build do instalador, instalação silenciosa,
-> atalho de desktop padrão e exclusão opcional, atalhos do Menu Iniciar, entrada `App Paths`, upgrade
-> in-place preservando arquivos/projetos do usuário e desinstalação completa validados (códigos 0).
+> **Validação local (2026-10-26, Windows 11 x64):** build do instalador, preflight do ambiente
+> (incluindo detecção de chave de API ausente sem bloquear), instalação silenciosa, atalho de desktop
+> padrão e exclusão opcional, atalhos do Menu Iniciar, entrada `App Paths`, upgrade in-place
+> preservando arquivos/projetos do usuário e desinstalação completa validados (códigos 0).
 > Instalação em máquina limpa, assinatura, Intune/SCCM e pacote Linux continuam pendentes.
 
 ### 2.8 Segurança e integridade

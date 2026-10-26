@@ -90,6 +90,22 @@ brazilianportuguese.WebView2Name=Microsoft Edge WebView2 Runtime
 english.WebView2Name=Microsoft Edge WebView2 Runtime
 brazilianportuguese.VCRedistName=Microsoft Visual C++ Redistributable x64
 english.VCRedistName=Microsoft Visual C++ Redistributable x64
+brazilianportuguese.PreflightTitle=Verificação do ambiente
+english.PreflightTitle=Environment check
+brazilianportuguese.PreflightContinue=Itens marcados com [--] são opcionais ou podem ser configurados depois no Studio. Deseja continuar com a instalação?
+english.PreflightContinue=Items marked [--] are optional or can be configured later in Studio. Continue with the installation?
+brazilianportuguese.GitName=Git instalado (sincronização de projetos)
+english.GitName=Git installed (project sync)
+brazilianportuguese.GitIdentityName=Identidade Git (user.name/user.email)
+english.GitIdentityName=Git identity (user.name/user.email)
+brazilianportuguese.GitHubCredentialName=Credencial do GitHub (HTTPS, SSH ou gh)
+english.GitHubCredentialName=GitHub credential (HTTPS, SSH or gh)
+brazilianportuguese.MSVCName=MSVC Build Tools (compilar pipelines)
+english.MSVCName=MSVC Build Tools (compile pipelines)
+brazilianportuguese.ApiKeyName=Chave de API de provedor
+english.ApiKeyName=Provider API key
+brazilianportuguese.DownloadHint=Download:
+english.DownloadHint=Download:
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
@@ -117,6 +133,8 @@ const
   WebView2Client = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
   WebView2Url = 'https://go.microsoft.com/fwlink/p/?LinkId=2124703';
   VCRedistUrl = 'https://aka.ms/vs/17/release/vc_redist.x64.exe';
+  MSVCUrl = 'https://visualstudio.microsoft.com/visual-cpp-build-tools/';
+  GitUrl = 'https://git-scm.com/download/win';
 
 function HasRegString(Root: Integer; const SubKey, ValueName: string): Boolean;
 var
@@ -147,10 +165,157 @@ begin
     HasRegDwordOne(HKLM32, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Installed');
 end;
 
+function RunAndCapture(const CommandLine: string; var Output: string): Boolean;
+var
+  TempFile, TempScript: string;
+  ResultCode: Integer;
+  Lines: TArrayOfString;
+  Index: Integer;
+begin
+  TempFile := ExpandConstant('{tmp}\arestrix-preflight.txt');
+  TempScript := ExpandConstant('{tmp}\arestrix-preflight.cmd');
+  DeleteFile(TempFile);
+  DeleteFile(TempScript);
+  Output := '';
+  SaveStringToFile(TempScript,
+    '@echo off' + #13#10 + CommandLine + ' > "' + TempFile + '" 2>&1' + #13#10, False);
+  Result := Exec(ExpandConstant('{cmd}'), '/c "' + TempScript + '"',
+                 '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if LoadStringsFromFile(TempFile, Lines) then
+    for Index := 0 to GetArrayLength(Lines) - 1 do
+      Output := Output + Lines[Index] + #13#10;
+  DeleteFile(TempFile);
+  DeleteFile(TempScript);
+  Result := Result and (ResultCode = 0);
+end;
+
+function GitInstalled(): Boolean;
+var
+  Output: string;
+begin
+  Result := RunAndCapture('git --version', Output) and (Trim(Output) <> '');
+end;
+
+function GitIdentityConfigured(): Boolean;
+var
+  Name, Email: string;
+begin
+  Result :=
+    RunAndCapture('git config --global --get user.name', Name) and (Trim(Name) <> '') and
+    RunAndCapture('git config --global --get user.email', Email) and (Trim(Email) <> '');
+end;
+
+function GitHubCredentialPresent(): Boolean;
+var
+  Output: string;
+begin
+  Result := (GetEnv('GH_TOKEN') <> '') or (GetEnv('GITHUB_TOKEN') <> '');
+
+  if not Result then
+    if RunAndCapture('cmdkey /list', Output) then
+      Result := Pos('github.com', Lowercase(Output)) > 0;
+
+  if not Result then
+    Result :=
+      FileExists(ExpandConstant('{userprofile}\.ssh\id_ed25519')) or
+      FileExists(ExpandConstant('{userprofile}\.ssh\id_rsa'));
+
+  if not Result then
+    Result := RunAndCapture('gh auth status', Output);
+end;
+
+function MSVCInstalled(): Boolean;
+var
+  Vswhere, Output: string;
+begin
+  Vswhere := GetEnv('ProgramFiles(x86)') + '\Microsoft Visual Studio\Installer\vswhere.exe';
+  if not FileExists(Vswhere) then
+    Vswhere := GetEnv('ProgramFiles') + '\Microsoft Visual Studio\Installer\vswhere.exe';
+  if not FileExists(Vswhere) then
+  begin
+    Result := False;
+    Exit;
+  end;
+
+  Result :=
+    RunAndCapture('"' + Vswhere + '" -latest -products * -requires ' +
+                  'Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath', Output) and
+    (Trim(Output) <> '');
+
+  if not Result then
+    Result := RunAndCapture('where cl', Output) and (Trim(Output) <> '');
+end;
+
+function AddApiKeyIfPresent(const EnvName, LabelName: string; var Names: string): Boolean;
+begin
+  Result := GetEnv(EnvName) <> '';
+  if Result then
+  begin
+    if Names <> '' then Names := Names + ', ';
+    Names := Names + LabelName;
+  end;
+end;
+
+function CollectApiKeys(var Names: string): Boolean;
+begin
+  Names := '';
+  Result := False;
+  if AddApiKeyIfPresent('DEEPSEEK_API_KEY', 'DeepSeek', Names) then Result := True;
+  if AddApiKeyIfPresent('OPENAI_API_KEY', 'OpenAI', Names) then Result := True;
+  if AddApiKeyIfPresent('ANTHROPIC_API_KEY', 'Anthropic', Names) then Result := True;
+  if AddApiKeyIfPresent('GEMINI_API_KEY', 'Gemini', Names) then Result := True;
+  if AddApiKeyIfPresent('MISTRAL_API_KEY', 'Mistral', Names) then Result := True;
+  if AddApiKeyIfPresent('JEV_API_KEY', 'JEV', Names) then Result := True;
+  if AddApiKeyIfPresent('LOCAL_LLM_API_KEY', 'Local', Names) then Result := True;
+  if AddApiKeyIfPresent('ARESTRIX_AI_GATEWAY_KEY', 'Gateway', Names) then Result := True;
+end;
+
+function StatusLine(Ok: Boolean; const LabelText: string): string;
+begin
+  if Ok then
+    Result := '  [OK] ' + LabelText + #13#10
+  else
+    Result := '  [--] ' + LabelText + #13#10;
+end;
+
+function BuildPreflightReport(var NeedsAttention: Boolean): string;
+var
+  Report, ApiLabel, ApiNames: string;
+  GitOk, GitIdOk, GitHubOk, MsvcOk, ApiOk: Boolean;
+begin
+  GitOk := GitInstalled();
+  GitIdOk := GitIdentityConfigured();
+  GitHubOk := GitHubCredentialPresent();
+  MsvcOk := MSVCInstalled();
+  ApiOk := CollectApiKeys(ApiNames);
+
+  ApiLabel := CustomMessage('ApiKeyName');
+  if ApiOk then ApiLabel := ApiLabel + ' (' + ApiNames + ')';
+
+  Report :=
+    '  [OK] ' + CustomMessage('WebView2Name') + #13#10 +
+    '  [OK] ' + CustomMessage('VCRedistName') + #13#10 +
+    StatusLine(GitOk, CustomMessage('GitName')) +
+    StatusLine(GitIdOk, CustomMessage('GitIdentityName')) +
+    StatusLine(GitHubOk, CustomMessage('GitHubCredentialName')) +
+    StatusLine(MsvcOk, CustomMessage('MSVCName')) +
+    StatusLine(ApiOk, ApiLabel);
+
+  if not MsvcOk then
+    Report := Report + '       ' + CustomMessage('DownloadHint') + ' ' + MSVCUrl + #13#10;
+  if not GitOk then
+    Report := Report + '       ' + CustomMessage('DownloadHint') + ' ' + GitUrl + #13#10;
+
+  NeedsAttention := not (GitOk and GitIdOk and GitHubOk and MsvcOk and ApiOk);
+  Result := Report;
+  Log('Preflight report:' + #13#10 + Report);
+end;
+
 function InitializeSetup(): Boolean;
 var
-  Missing: string;
+  Missing, Report: string;
   ResultCode: Integer;
+  NeedsAttention, ForcePreflight: Boolean;
 begin
   Missing := '';
   if not WebView2Installed() then
@@ -158,21 +323,39 @@ begin
   if not VCRedistInstalled() then
     Missing := Missing + '- ' + CustomMessage('VCRedistName') + #13#10;
 
-  if Missing = '' then
+  if Missing <> '' then
   begin
-    Result := True;
+    Log('Missing required prerequisites: ' + Missing);
+    if not WizardSilent then
+    begin
+      if MsgBox(CustomMessage('MissingDependencies') + #13#10#13#10 + Missing + #13#10 +
+                CustomMessage('OpenDownloads'),
+                mbError, MB_YESNO) = IDYES then
+      begin
+        if not WebView2Installed() then
+          ShellExec('open', WebView2Url, '', '', SW_SHOWNORMAL, ewNoWait, ResultCode);
+        if not VCRedistInstalled() then
+          ShellExec('open', VCRedistUrl, '', '', SW_SHOWNORMAL, ewNoWait, ResultCode);
+      end;
+    end;
+    Result := False;
     Exit;
   end;
 
-  if MsgBox(CustomMessage('MissingDependencies') + #13#10#13#10 + Missing + #13#10 +
-            CustomMessage('OpenDownloads'),
-            mbError, MB_YESNO) = IDYES then
+  Report := BuildPreflightReport(NeedsAttention);
+  ForcePreflight := ExpandConstant('{param:preflight|0}') = '1';
+
+  if not WizardSilent and (NeedsAttention or ForcePreflight) then
   begin
-    if not WebView2Installed() then
-      ShellExec('open', WebView2Url, '', '', SW_SHOWNORMAL, ewNoWait, ResultCode);
-    if not VCRedistInstalled() then
-      ShellExec('open', VCRedistUrl, '', '', SW_SHOWNORMAL, ewNoWait, ResultCode);
+    if MsgBox(CustomMessage('PreflightTitle') + #13#10#13#10 + Report + #13#10 +
+              CustomMessage('PreflightContinue'),
+              mbInformation, MB_YESNO) = IDNO then
+    begin
+      Result := False;
+      Exit;
+    end;
   end;
 
-  Result := False;
+  Result := True;
 end;
+

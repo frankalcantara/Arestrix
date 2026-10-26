@@ -37,8 +37,9 @@ Baixe o build **Windows x64** pronto em
 [**Releases → latest**](https://github.com/frankalcantara/Arestrix/releases/tag/latest):
 
 - **Instalador (recomendado):** execute `arestrix-<versão>-windows-x64-setup.exe`. Ele instala por
-  usuário em `%LOCALAPPDATA%\Programs\Arestrix`, sem privilégios administrativos, e verifica WebView2
-  e o Visual C++ Redistributable.
+  usuário em `%LOCALAPPDATA%\Programs\Arestrix`, sem privilégios administrativos, e verifica WebView2,
+  Visual C++ Redistributable, Git/credencial GitHub, MSVC Build Tools e chaves de API sem expor os
+  valores.
 - **Portátil:** extraia o ZIP em qualquer pasta e execute `start-arestrix.bat`. A pasta extraída vira
   o `ARESTRIX_HOME`.
 
