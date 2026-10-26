@@ -34,7 +34,11 @@ function sha256(text) {
 }
 
 function fileSha256(file) {
-  return createHash('sha256').update(readFileSync(file)).digest('hex');
+  // Hash the canonical text (LF line endings): submodule worktrees may be
+  // checked out with CRLF on Windows or LF on Linux, but the reviewed content
+  // is the committed blob. Normalizing keeps the lock portable.
+  const canonical = readFileSync(file, 'utf8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  return createHash('sha256').update(canonical, 'utf8').digest('hex');
 }
 
 function git(cwd, gitArgs) {

@@ -66,6 +66,10 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
 - `DefaultIntelligenceService` now honors an injected API caller even when the provider key is not
   set. Tests and embedders no longer silently fall back to the static 80/85 heuristic on clean
   environments; the HTTP path still requires a real key.
+- Cross-platform CI hardening: skill-reference SHA-256 hashes now normalize CRLF before hashing
+  (Windows CRLF checkouts and Linux LF checkouts agree; the policy lock was regenerated), Vitest
+  forces the canonical `pt-BR` locale instead of relying on `navigator.language`, and the native test
+  translation unit includes `<cstring>` so `std::memset` compiles with GCC.
 
 ### Added
 

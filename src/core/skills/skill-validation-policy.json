@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "ruleSetVersion": "3",
-  "policyVersion": "6d9584ac80f88ce35829af27f7539e6b852ac3aea2702671b2fc82ae2cad02fb",
+  "policyVersion": "f3d1bfef4488c59e7621c73c5ae78fde2be638411e3429757804a371399ce7be",
   "reviewedAt": "2026-10-25",
   "reviewedBy": "Arestrix maintainers",
   "reviewProcess": "docs/quality/skill-reference-review.md",
@@ -30,7 +30,7 @@
       "version": "v2.12.0-630-g69d7d059",
       "license": "Apache-2.0",
       "skillPath": "skills/skill-inspector/SKILL.md",
-      "skillSha256": "655d3a69020552c8ec3d64b7b64d22f3f3b6d85f1a5ed107ef44c7e8e98b1daa",
+      "skillSha256": "89ab1550769752ffbad782ee63fee3c345d546bded672adaac5fd03d2941aa84",
       "reviewedAt": "2026-10-25"
     },
     {
@@ -43,7 +43,7 @@
       "version": "c1c8a8c",
       "license": "MIT",
       "skillPath": "skills/security-audit/SKILL.md",
-      "skillSha256": "2a68ab5531dfccedac2b054e0814f2b6517daae9887b3ee40afcc5d8a7063c3a",
+      "skillSha256": "5e3e96a1e438d8f35fef0a1e38f02d4f00e2bdf910401b7dfe00e6779c6dac85",
       "reviewedAt": "2026-10-25"
     }
   ]

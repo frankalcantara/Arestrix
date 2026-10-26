@@ -17,6 +17,7 @@ export default defineConfig({
     target: 'esnext'
   },
   test: {
+    setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.spec.ts', 'tests/**/*.test.ts']
   }
 } as any);
