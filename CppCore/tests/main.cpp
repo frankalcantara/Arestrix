@@ -1116,8 +1116,12 @@ TEST(interaction_host_protocol_roundtrip) {
                         json answer{{"requestId", request->value("requestId", std::string())},
                                     {"answers", json{{"tipo", "pj"}, {"obs", "host"}}}};
                         sentAnswer = proc->writeStdin("[ARX_ANSWER] " + answer.dump() + "\n");
+                        if (sentAnswer) proc->closeStdin();
                         gotRequest = true;
                     }
+                } else if (!line.empty()) {
+                    // Diagnóstico: erros/saídas do processo filho chegam pelo mesmo pipe.
+                    std::cout << "  [host child] " << line << std::endl;
                 }
             }
         }
@@ -1127,6 +1131,7 @@ TEST(interaction_host_protocol_roundtrip) {
     proc->wait(5000, code);
     CHECK(gotRequest);
     CHECK(sentAnswer);
+    std::cout << "  host child exit code: " << code << std::endl;
     CHECK(code == 0);
     CHECK(fs::is_regular_file(dir / ".arestrix" / "out" / "ask.txt"));
     fs::remove_all(dir);
