@@ -176,9 +176,6 @@ export class PipelineRunner {
           : (parsed && parsed.nodeId && parsed.type ? parsed : null);
         if (ev) {
           globalEventBus.emit('agent:telemetry', ev);
-          if (ev.nodeId) {
-            globalEventBus.emit(`agent:telemetry:${ev.nodeId}`, ev);
-          }
         }
       } catch (_) {}
       return;

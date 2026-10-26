@@ -34,6 +34,16 @@ const TELEMETRY_ICONS: Record<string, { name: string; icon: LucideIconNode }> = 
 export type NodeExecutionState = 'idle' | 'queued' | 'running' | 'completed' | 'error';
 export type NodeActivityKind = 'running' | 'thinking' | 'tool_call' | 'rate_limit';
 
+/** Resultado persistente (até a próxima execução/limpeza) de um vértice. */
+export type NodeRunOutcome = 'success' | 'error' | 'skipped';
+
+export interface NodeRunRecord {
+  outcome: NodeRunOutcome;
+  durationMs: number;
+  /** Epoch ms do término da execução, usado no tooltip do badge. */
+  finishedAt: number;
+}
+
 export class SvgNodeView {
   public nodeData: INodeData;
   public group: SVGGElement;
@@ -62,7 +72,8 @@ export class SvgNodeView {
   private execStatusGroup: SVGGElement | null = null;
   private execStatusLabel: SVGTextElement | null = null;
   private telemetryGroup: SVGGElement | null = null;
-  private telemetryHandler?: (ev: any) => void;
+  private runRecord: NodeRunRecord | null = null;
+  private runBadgeGroup: SVGGElement | null = null;
 
   private tooltip: CanvasTooltip;
   private bus: EventBus;
@@ -82,10 +93,6 @@ export class SvgNodeView {
 
     this.buildSvgNode();
     parentSvgGroup.appendChild(this.group);
-
-    // Telemetria em tempo real
-    this.telemetryHandler = (ev: any) => this.handleTelemetry(ev);
-    this.bus.on(`agent:telemetry:${nodeData.id}`, this.telemetryHandler);
   }
 
   static computeHeight(nodeData: Pick<INodeData, 'inputs' | 'outputs'>): number {
@@ -270,8 +277,7 @@ export class SvgNodeView {
     const fitted = fitTextToLines(this.nodeData.label, t.titleSize, titleMaxWidth, b.titleMaxLines);
     const lines = fitted.text.split('\n');
 
-    // Texto completo em tooltip nativo quando o título foi truncado (o SVG não
-    // participa do raycast do canvas, então o tooltip 3D do NodeView nunca aparece).
+    // Texto completo em tooltip nativo quando o título foi truncado.
     if (fitted.truncated) {
       const titleTooltip = document.createElementNS(SVG_NS, 'title');
       titleTooltip.textContent = this.nodeData.label;
@@ -409,9 +415,10 @@ export class SvgNodeView {
     hitbox.addEventListener('pointerleave', () => this.tooltip.hide());
 
     if (isInput) {
-      hitbox.addEventListener('pointerup', () => {
-        // Não interrompe a propagação: o InteractionManager escuta o pointerup na janela
-        // para encerrar um arraste de vértice que termine sobre esta porta.
+      hitbox.addEventListener('pointerup', (e: PointerEvent) => {
+        // Apenas o botão primário conclui a conexão; não interrompe a propagação:
+        // o InteractionManager escuta o pointerup na janela para encerrar arrastes.
+        if (e.button !== 0) return;
         this.bus.emit('node:complete-connecting', { nodeId: this.nodeData.id, portId: port.id });
       });
     } else {
@@ -654,6 +661,102 @@ export class SvgNodeView {
 
   public getActivityDetail(): string {
     return this.activityDetail;
+  }
+
+  // --- Registro da última execução (independente do estado de edição) ---
+
+  /**
+   * Registra o resultado da última execução do vértice. O nó permanece em modo
+   * de edição (estado idle/opaco); o resultado é exibido como um selo compacto
+   * no header e persiste até a próxima execução ou limpeza explícita.
+   */
+  public setRunRecord(record: NodeRunRecord | null): void {
+    this.runRecord = record;
+    this.renderRunBadge();
+  }
+
+  public getRunRecord(): NodeRunRecord | null {
+    return this.runRecord;
+  }
+
+  private clearRunBadge(): void {
+    if (this.runBadgeGroup && this.runBadgeGroup.parentNode) {
+      this.runBadgeGroup.parentNode.removeChild(this.runBadgeGroup);
+    }
+    this.runBadgeGroup = null;
+  }
+
+  private renderRunBadge(): void {
+    this.clearRunBadge();
+    if (!this.runRecord) return;
+
+    const record = this.runRecord;
+    const dur = this.formatDuration(record.durationMs);
+    let text = '—';
+    let bg = '#F8FAFC';
+    let border = '#CBD5E1';
+    let textCol = '#64748B';
+    let title = 'Não executado na última execução';
+
+    if (record.outcome === 'success') {
+      text = dur ? `✓ ${dur}` : '✓';
+      bg = '#ECFDF5';
+      border = '#34D399';
+      textCol = '#047857';
+      title = `Última execução: sucesso${dur ? ` · ${dur}` : ''}`;
+    } else if (record.outcome === 'error') {
+      text = dur ? `✕ ${dur}` : '✕ falhou';
+      bg = '#FEF2F2';
+      border = '#F87171';
+      textCol = '#B91C1C';
+      title = `Última execução: falhou${dur ? ` · ${dur}` : ''}`;
+    }
+
+    const finishedLabel = new Date(record.finishedAt).toLocaleTimeString();
+    title += ` · ${finishedLabel}`;
+
+    const badgeH = 18;
+    const badgeW = Math.max(34, 16 + text.length * 6.4);
+    const headerCenterY = -this.height / 2 + THEME.nodeBody.headerHeight / 2;
+    const rightX = this.width / 2 - 12;
+
+    const group = document.createElementNS(SVG_NS, 'g');
+    group.setAttribute('class', 'vertex-run-badge');
+    group.setAttribute('data-run-outcome', record.outcome);
+    group.setAttribute('role', 'img');
+    group.setAttribute('aria-label', title);
+    group.setAttribute('transform', `translate(${(rightX - badgeW).toFixed(1)}, ${(headerCenterY - badgeH / 2).toFixed(1)})`);
+
+    const titleEl = document.createElementNS(SVG_NS, 'title');
+    titleEl.textContent = title;
+    group.appendChild(titleEl);
+
+    const rect = document.createElementNS(SVG_NS, 'rect');
+    rect.setAttribute('width', badgeW.toFixed(1));
+    rect.setAttribute('height', String(badgeH));
+    rect.setAttribute('rx', String(badgeH / 2));
+    rect.setAttribute('ry', String(badgeH / 2));
+    rect.setAttribute('fill', bg);
+    rect.setAttribute('stroke', border);
+    rect.setAttribute('stroke-width', '1.1');
+    group.appendChild(rect);
+
+    const label = document.createElementNS(SVG_NS, 'text');
+    label.setAttribute('x', String(badgeW / 2));
+    label.setAttribute('y', String(badgeH / 2));
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('dominant-baseline', 'central');
+    label.setAttribute('fill', textCol);
+    label.setAttribute('font-size', '10');
+    label.setAttribute('font-weight', '700');
+    label.style.textShadow = 'none';
+    label.style.filter = 'none';
+    label.style.fontFamily = THEME.typography.fontFamily;
+    label.textContent = text;
+    group.appendChild(label);
+
+    this.runBadgeGroup = group;
+    this.group.appendChild(group);
   }
 
   private formatRunningStatusText(): string {
@@ -1076,11 +1179,21 @@ export class SvgNodeView {
     this.group.appendChild(group);
   }
 
+  /**
+   * Posição local da porta no sistema do SVG (Y para baixo), usada pelo
+   * NodeView para derivar a âncora mundial das arestas.
+   */
+  public getPortPosition(portId: string): { x: number; y: number } | null {
+    const port = this.portElements.get(portId);
+    if (!port) return null;
+    const x = Number(port.circle.getAttribute('cx'));
+    const y = Number(port.circle.getAttribute('cy'));
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return { x, y };
+  }
+
   public dispose(): void {
     this.stopExecTimer();
-    if (this.telemetryHandler) {
-      this.bus.off(`agent:telemetry:${this.nodeData.id}`, this.telemetryHandler);
-    }
     if (this.group.parentNode) {
       this.group.parentNode.removeChild(this.group);
     }

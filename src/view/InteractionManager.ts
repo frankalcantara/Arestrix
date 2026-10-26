@@ -16,7 +16,6 @@ import {
   RemoveEdgeCommand,
   UpdateEdgeCommand
 } from '../core/history/GraphCommands.ts';
-import { getNodeAction, NodeActionType } from './NodeActions.ts';
 import { CanvasTooltip } from '../ui/CanvasTooltip.ts';
 import {
   computeControlOffsetsFromCurveDrag,
@@ -43,7 +42,6 @@ interface IBezierDragState {
 const DRAG_THRESHOLD_PX = 4;
 
 export class InteractionManager {
-  private camera: THREE.OrthographicCamera;
   private cameraController: CameraController;
   private domElement: HTMLElement;
   private scene: THREE.Scene;
@@ -51,9 +49,6 @@ export class InteractionManager {
 
   private nodeViews: Map<string, NodeView>;
   private connectionViews: Map<string, ConnectionView>;
-
-  private raycaster: THREE.Raycaster = new THREE.Raycaster();
-  private pointer: THREE.Vector2 = new THREE.Vector2();
 
   // Estados de Interacao
   private draggedNodeView: NodeView | null = null;
@@ -74,12 +69,10 @@ export class InteractionManager {
   private connectingSourcePortId: string | null = null;
   private rubberBandLine: Line2 | null = null;
 
-  // Fase 15.2: hover com tooltip e destaque de botões de ação
+  // Fase 15.2: hover com tooltip (a camada vetorial fornece os alvos)
   private tooltip: CanvasTooltip = new CanvasTooltip(120);
-  private hoveredActionNode: NodeView | null = null;
 
   constructor(
-    camera: THREE.OrthographicCamera,
     cameraController: CameraController,
     domElement: HTMLElement,
     scene: THREE.Scene,
@@ -87,7 +80,6 @@ export class InteractionManager {
     nodeViews: Map<string, NodeView>,
     connectionViews: Map<string, ConnectionView>
   ) {
-    this.camera = camera;
     this.cameraController = cameraController;
     this.domElement = domElement;
     this.scene = scene;
@@ -121,8 +113,7 @@ export class InteractionManager {
 
   private bindEvents(): void {
     this.listen(this.domElement, 'pointerdown', (e: PointerEvent) => this.onPointerDown(e));
-    this.listen(this.domElement, 'dblclick', (e: MouseEvent) => this.onDoubleClick(e));
-    this.listen(window, 'pointercancel', () => {
+    this.listen(this.domElement, 'pointercancel', () => {
       if (this.cameraController.getIsPanning()) {
         this.cameraController.stopPan();
       }
@@ -200,94 +191,14 @@ export class InteractionManager {
     this.disposers.push(globalEventBus.on(event, handler));
   }
 
-  private updatePointer(e: PointerEvent): void {
-    const rect = this.domElement.getBoundingClientRect();
-    this.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-  }
-
+  /**
+   * O canvas WebGL só recebe pointerdown em área vazia: vértices, portas, botões
+   * de ação e arestas são interceptados pela camada vetorial SVG, que publica os
+   * eventos de alto nível no EventBus (node:start-drag, node:start-connecting...).
+   */
   private onPointerDown(e: PointerEvent): void {
     if (e.button !== 0 || this.cameraController.getIsPanning() || e.altKey) return;
 
-    this.updatePointer(e);
-    this.raycaster.setFromCamera(this.pointer, this.camera);
-
-    const worldCursor = this.cameraController.screenToWorld(e.clientX, e.clientY);
-
-    // 0. Checa clique em Botões de Ação do Nó (Fase 15.2: catálogo com 5 ações)
-    const actionTargets: THREE.Object3D[] = [];
-    this.nodeViews.forEach(nv => {
-      if (nv.group.visible && nv.isDetailVisible()) {
-        nv.group.traverseVisible(obj => {
-          if (obj.userData?.isActionHitbox) {
-            actionTargets.push(obj);
-          }
-        });
-      }
-    });
-
-    const actionIntersects = this.raycaster.intersectObjects(actionTargets, false);
-    if (actionIntersects.length > 0) {
-      const hit = actionIntersects[0].object;
-      const { nodeId, actionType } = hit.userData;
-      this.clearHover();
-      this.selectNode(nodeId);
-      const actionDef = getNodeAction(actionType);
-      if (actionDef) {
-        globalEventBus.emit(actionDef.event, nodeId);
-      }
-      return;
-    }
-
-    // 1. Checa clique em Portas (Sockets)
-    const portTargets: THREE.Object3D[] = [];
-    this.nodeViews.forEach(nv => {
-      nv.group.traverse(obj => {
-        if (obj.userData?.isPortHitbox) {
-          portTargets.push(obj);
-        }
-      });
-    });
-
-    const portIntersects = this.raycaster.intersectObjects(portTargets, false);
-    if (portIntersects.length > 0) {
-      const hit = portIntersects[0].object;
-      const { nodeId, portId, direction } = hit.userData;
-
-      if (direction === 'output') {
-        // Inicia rubber-banding a partir da porta de saida
-        this.isConnecting = true;
-        this.connectingSourceNodeId = nodeId;
-        this.connectingSourcePortId = portId;
-        this.rubberBandLine!.visible = true;
-
-        const startPos = this.nodeViews.get(nodeId)!.getPortWorldPosition(portId);
-        this.updateRubberBand(startPos, worldCursor);
-        return;
-      }
-    }
-
-    // 2. Checa clique no Corpo de Nós
-    const nodeTargets: THREE.Object3D[] = [];
-    this.nodeViews.forEach(nv => {
-      nv.group.traverse(obj => {
-        if (obj.userData?.isBody) {
-          nodeTargets.push(obj);
-        }
-      });
-    });
-
-    const nodeIntersects = this.raycaster.intersectObjects(nodeTargets, false);
-    if (nodeIntersects.length > 0) {
-      const hitNodeId = nodeIntersects[0].object.userData.nodeId;
-      const nv = this.nodeViews.get(hitNodeId);
-      if (nv) {
-        this.beginNodeDrag(nv, e.clientX, e.clientY);
-        return;
-      }
-    }
-
-    // 3. Clique no vazio -> desselecionar e iniciar Pan do Canvas
     e.preventDefault();
     this.selectNode(null);
     this.selectEdge(null);
@@ -302,7 +213,6 @@ export class InteractionManager {
   private onPointerMove(e: PointerEvent): void {
     if (this.cameraController.getIsPanning()) return;
 
-    this.updatePointer(e);
     const worldCursor = this.cameraController.screenToWorld(e.clientX, e.clientY);
 
     // 0. Drag de Alça / Curva de Bézier Estilo Inkscape
@@ -377,8 +287,8 @@ export class InteractionManager {
         // Reancora o offset no ponto em que o arraste realmente começou,
         // evitando o "salto" do vértice ao cruzar o limiar.
         this.dragOffset.set(
-          this.draggedNodeView.group.position.x - worldCursor.x,
-          this.draggedNodeView.group.position.y - worldCursor.y,
+          this.draggedNodeView.nodeData.position.x - worldCursor.x,
+          this.draggedNodeView.nodeData.position.y - worldCursor.y,
           0
         );
       }
@@ -405,75 +315,9 @@ export class InteractionManager {
       }
       return;
     }
-
-    // C. Cursor Hover feedback & Tooltip (Fase 15.2)
-    // Se o cursor estiver sobre a camada SVG (botões de ação, portas ou vértices), não interfere com o hover
-    const targetEl = e.target as HTMLElement | null;
-    if (targetEl && targetEl.closest?.('.arestrix-svg-vertex, .arestrix-canvas-svg-layer')) {
-      return;
-    }
-
-    this.raycaster.setFromCamera(this.pointer, this.camera);
-    const interactiveTargets: THREE.Object3D[] = [];
-    this.nodeViews.forEach(nv => {
-      if (nv.group.visible) {
-        nv.group.traverseVisible(obj => {
-          if (
-            obj.userData?.isActionHitbox ||
-            obj.userData?.isPortHitbox ||
-            (obj.userData?.isBody && obj.userData?.tooltip)
-          ) {
-            interactiveTargets.push(obj);
-          }
-        });
-      }
-    });
-
-    const hits = this.raycaster.intersectObjects(interactiveTargets, false);
-    if (hits.length > 0) {
-      this.domElement.style.cursor = 'pointer';
-      const hit = hits[0].object;
-      const u = hit.userData;
-
-      // Se for ação da barra, destaca o botão
-      if (u.isActionHitbox) {
-        const nv = this.nodeViews.get(u.nodeId);
-        if (nv && this.hoveredActionNode !== nv) {
-          if (this.hoveredActionNode) this.hoveredActionNode.setHoveredAction(null);
-          this.hoveredActionNode = nv;
-        }
-        nv?.setHoveredAction(u.actionType as NodeActionType);
-      } else if (this.hoveredActionNode) {
-        this.hoveredActionNode.setHoveredAction(null);
-        this.hoveredActionNode = null;
-      }
-
-      // Exibe tooltip com rótulo e descrição
-      if (u.tooltip) {
-        const worldPos = new THREE.Vector3();
-        hit.getWorldPosition(worldPos);
-        const screenPos = this.cameraController.worldToScreen(worldPos);
-        const key = `${u.nodeId || ''}_${u.actionType || u.portId || 'body'}`;
-        this.tooltip.show(
-          key,
-          { title: u.tooltip, description: u.tooltipDescription },
-          screenPos.x,
-          screenPos.y
-        );
-      } else {
-        this.tooltip.hide();
-      }
-    } else {
-      this.domElement.style.cursor = 'default';
-      this.clearHover();
-    }
   }
 
   private clearHover(): void {
-    if (this.hoveredActionNode) {
-      this.hoveredActionNode.setHoveredAction(null);
-      this.hoveredActionNode = null;
-    }
     this.tooltip.hide();
   }
 
@@ -491,33 +335,9 @@ export class InteractionManager {
 
     this.finishNodeDrag();
 
+    // A conclusão sobre uma porta de entrada chega via SVG (node:complete-connecting).
+    // Aqui apenas encerramos o gesto caso o ponteiro tenha sido solto no vazio.
     if (this.isConnecting) {
-      // Apenas o botão primário conecta; um botão secundário cancela o gesto.
-      if (e.button === 0) {
-        this.updatePointer(e);
-        this.raycaster.setFromCamera(this.pointer, this.camera);
-
-        const portTargets: THREE.Object3D[] = [];
-        this.nodeViews.forEach(nv => {
-          nv.group.traverse(obj => {
-            if (obj.userData?.isPortHitbox) {
-              portTargets.push(obj);
-            }
-          });
-        });
-
-        const portIntersects = this.raycaster.intersectObjects(portTargets, false);
-        if (portIntersects.length > 0) {
-          const hit = portIntersects[0].object;
-          const { nodeId: targetNodeId, portId: targetPortId, direction } = hit.userData;
-
-          // Conectar apenas se o destino for porta de entrada e nó diferente (ou loopback suportado)
-          if (direction === 'input') {
-            this.connectToPort(targetNodeId, targetPortId);
-          }
-        }
-      }
-
       this.cancelConnecting();
     }
   }
@@ -695,27 +515,7 @@ export class InteractionManager {
     }
   }
 
-  private onDoubleClick(e: MouseEvent): void {
-    if (e.button !== 0) return;
-    this.updatePointer(e as any);
-    this.raycaster.setFromCamera(this.pointer, this.camera);
-
-    const nodeTargets: THREE.Object3D[] = [];
-    this.nodeViews.forEach(nv => {
-      nv.group.traverse(obj => {
-        if (obj.userData?.isBody) {
-          nodeTargets.push(obj);
-        }
-      });
-    });
-
-    const intersects = this.raycaster.intersectObjects(nodeTargets, false);
-    if (intersects.length > 0) {
-      this.diveIntoNode(intersects[0].object.userData.nodeId);
-    }
-  }
-
-  /** Entra no subflow/módulo clicado duas vezes (canvas 3D ou vértice SVG). */
+  /** Entra no subflow/módulo clicado duas vezes (evento emitido pelo vértice SVG). */
   private diveIntoNode(nodeId: string): void {
     const nodeData = this.graph.getNode(nodeId);
     if (nodeData && (nodeData.type === 'subflow' || nodeData.type === 'module')) {
@@ -741,8 +541,8 @@ export class InteractionManager {
     this.dragStartClient = { x: clientX, y: clientY };
     this.dragActive = false;
     this.dragOffset.set(
-      nv.group.position.x - worldCursor.x,
-      nv.group.position.y - worldCursor.y,
+      nv.nodeData.position.x - worldCursor.x,
+      nv.nodeData.position.y - worldCursor.y,
       0
     );
   }

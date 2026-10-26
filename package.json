@@ -34,8 +34,7 @@
     "@hpcc-js/wasm": "^2.35.3",
     "lucide": "^0.453.0",
     "monaco-editor": "^0.57.0",
-    "three": "^0.169.0",
-    "troika-three-text": "^0.50.1"
+    "three": "^0.169.0"
   },
   "devDependencies": {
     "@types/three": "^0.169.0",

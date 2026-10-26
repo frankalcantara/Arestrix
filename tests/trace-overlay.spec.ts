@@ -20,7 +20,7 @@ describe('TraceOverlay (Fase 4F)', () => {
     });
 
     const viewport = {
-      setNodeExecutionState: vi.fn(),
+      setNodeRunRecord: vi.fn(),
       setEdgeExecutionState: vi.fn()
     };
     new TraceOverlay(bus, graph, viewport as any);
@@ -41,8 +41,14 @@ describe('TraceOverlay (Fase 4F)', () => {
       interactions: []
     });
 
-    expect(viewport.setNodeExecutionState).toHaveBeenCalledWith('caller', 'completed');
-    expect(viewport.setNodeExecutionState).toHaveBeenCalledWith('target', 'completed');
+    expect(viewport.setNodeRunRecord).toHaveBeenCalledWith(
+      'caller',
+      expect.objectContaining({ outcome: 'success' })
+    );
+    expect(viewport.setNodeRunRecord).toHaveBeenCalledWith(
+      'target',
+      expect.objectContaining({ outcome: 'success' })
+    );
     expect(viewport.setEdgeExecutionState).toHaveBeenCalledWith('call_target', 'completed');
     expect(summaries).toHaveLength(1);
     expect(summaries[0].calls).toBe(1);
@@ -65,7 +71,7 @@ describe('TraceOverlay (Fase 4F)', () => {
     });
 
     const viewport = {
-      setNodeExecutionState: vi.fn(),
+      setNodeRunRecord: vi.fn(),
       setEdgeExecutionState: vi.fn()
     };
     new TraceOverlay(bus, graph, viewport as any);
@@ -77,7 +83,10 @@ describe('TraceOverlay (Fase 4F)', () => {
       interactions: []
     });
 
-    expect(viewport.setNodeExecutionState).toHaveBeenCalledWith('target', 'error');
+    expect(viewport.setNodeRunRecord).toHaveBeenCalledWith(
+      'target',
+      expect.objectContaining({ outcome: 'error' })
+    );
     expect(viewport.setEdgeExecutionState).toHaveBeenCalledWith('call_target', 'error');
   });
 });

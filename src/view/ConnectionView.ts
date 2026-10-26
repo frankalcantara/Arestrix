@@ -1,52 +1,57 @@
 import * as THREE from 'three';
-import { Line2 } from 'three/examples/jsm/lines/Line2.js';
-import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
-import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { IEdgeData } from '../core/types.ts';
 import { THEME } from './Theme.ts';
 import { computeEdgeBezier, IBezierCurvePoints, IObstacleBox } from './BezierEdgeRouter.ts';
 
 export type EdgeExecutionState = 'idle' | 'queued' | 'active' | 'completed' | 'error';
 
+export interface IEdgeBaseStyle {
+  /** Cor base da aresta em repouso (CSS hex). */
+  stroke: string;
+  /** Padrão de tracejado, ou null para linha sólida. */
+  dashArray: string | null;
+}
+
+function cssColor(hex: number): string {
+  return `#${hex.toString(16).padStart(6, '0').toUpperCase()}`;
+}
+
+/**
+ * Aparência base de uma aresta, derivada exclusivamente do modelo (edgeData).
+ * Fonte única para a criação/renderização SVG e para os testes.
+ */
+export function getEdgeBaseStyle(edgeData: IEdgeData): IEdgeBaseStyle {
+  const isCall = edgeData.kind === 'call';
+  const isFeedback = !isCall && !!edgeData.isFeedbackLoop;
+
+  if (isCall) {
+    return { stroke: cssColor(THEME.edge.callColor), dashArray: '7 4' };
+  }
+  if (isFeedback) {
+    return { stroke: cssColor(THEME.edge.feedbackColor), dashArray: '8 4' };
+  }
+  return { stroke: cssColor(THEME.edge.defaultColor), dashArray: null };
+}
+
+/**
+ * Arestrix - Estado lógico de uma aresta.
+ *
+ * A pintura é feita pela camada vetorial SVG no Viewport. Esta classe mantém
+ * apenas o modelo (edgeData), seleção, estado de execução e a última curva
+ * calculada — sem malhas Three.js duplicadas.
+ */
 export class ConnectionView {
   public edgeData: IEdgeData;
-  public line: Line2;
-  private geometry: LineGeometry;
-  private material: LineMaterial;
   public isSelected: boolean = false;
   public executionState: EdgeExecutionState = 'idle';
   public currentBezier: IBezierCurvePoints | null = null;
 
-  constructor(edgeData: IEdgeData, screenWidth: number, screenHeight: number) {
+  constructor(edgeData: IEdgeData) {
     this.edgeData = edgeData;
-
-    const isCall = edgeData.kind === 'call';
-    const isFeedback = !isCall && !!edgeData.isFeedbackLoop;
-    const color = isCall
-      ? THEME.edge.callColor
-      : (isFeedback ? THEME.edge.feedbackColor : THEME.edge.defaultColor);
-
-    this.material = new LineMaterial({
-      color,
-      linewidth: THEME.edge.lineWidth,
-      resolution: new THREE.Vector2(screenWidth, screenHeight),
-      dashed: isCall || isFeedback,
-      dashScale: 0.1,
-      dashSize: isCall ? 7 : 10,
-      gapSize: isCall ? 4 : 5
-    });
-
-    this.geometry = new LineGeometry();
-    // Posições iniciais placeholder
-    this.geometry.setPositions([0, 0, 0, 10, 0, 0]);
-
-    this.line = new Line2(this.geometry, this.material);
-    this.line.computeLineDistances();
-    this.line.userData = { edgeId: edgeData.id, isEdge: true };
   }
 
   /**
-   * Atualiza os pontos da curva Bézier cúbica entre as duas portas,
+   * Calcula os pontos da curva Bézier cúbica entre as duas portas,
    * respeitando alças editadas (estilo Inkscape) e desvio automático de obstáculos.
    */
   updateCurve(
@@ -56,61 +61,18 @@ export class ConnectionView {
   ): IBezierCurvePoints {
     const bezier = computeEdgeBezier(startWorld, endWorld, this.edgeData, obstacles);
     this.currentBezier = bezier;
-
-    const curve = new THREE.CubicBezierCurve3(bezier.start, bezier.cp1, bezier.cp2, bezier.end);
-    const points = curve.getPoints(36);
-    const positions: number[] = [];
-
-    points.forEach(p => {
-      positions.push(p.x, p.y, p.z);
-    });
-
-    this.geometry.setPositions(positions);
-    this.line.computeLineDistances();
     return bezier;
   }
 
-  setResolution(width: number, height: number): void {
-    this.material.resolution.set(width, height);
+  getBaseStyle(): IEdgeBaseStyle {
+    return getEdgeBaseStyle(this.edgeData);
   }
 
   setSelected(selected: boolean): void {
     this.isSelected = selected;
-    this.refreshAppearance();
   }
 
   setExecutionState(state: EdgeExecutionState): void {
     this.executionState = state;
-    this.refreshAppearance();
-  }
-
-  private refreshAppearance(): void {
-    if (this.isSelected) {
-      this.material.color.setHex(THEME.edge.selectedColor);
-      this.material.linewidth = THEME.edge.lineWidth + 2;
-      return;
-    }
-
-    if (this.executionState === 'active') {
-      this.material.color.setHex(0x10b981);
-      this.material.linewidth = THEME.edge.lineWidth + 1.5;
-    } else if (this.executionState === 'completed') {
-      this.material.color.setHex(0x059669);
-      this.material.linewidth = THEME.edge.lineWidth + 0.5;
-    } else if (this.executionState === 'error') {
-      this.material.color.setHex(0xef4444);
-      this.material.linewidth = THEME.edge.lineWidth + 1;
-    } else {
-      const idleColor = this.edgeData.kind === 'call'
-        ? THEME.edge.callColor
-        : (this.edgeData.isFeedbackLoop ? THEME.edge.feedbackColor : THEME.edge.defaultColor);
-      this.material.color.setHex(idleColor);
-      this.material.linewidth = THEME.edge.lineWidth;
-    }
-  }
-
-  dispose(): void {
-    this.geometry.dispose();
-    this.material.dispose();
   }
 }

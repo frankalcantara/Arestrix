@@ -186,7 +186,6 @@ function bootstrap() {
   const onTelemetryHandler = (data: any) => {
     if (data && data.event) {
       globalEventBus.emit('agent:telemetry', data.event);
-      globalEventBus.emit(`agent:telemetry:${data.event.nodeId}`, data.event);
       if (data.event.type === 'notification') {
         globalEventBus.emit('notification:show', data.event.payload || {});
       }

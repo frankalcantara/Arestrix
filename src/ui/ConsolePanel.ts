@@ -62,8 +62,8 @@ export class ConsolePanel {
           <button id="btn-clear-console" class="btn-console-office" title="${t('console.clear_tip', 'Limpar')}">
             <span>${t('console.clear', 'Limpar')}</span>
           </button>
-          <button id="btn-toggle-console" class="btn-console-office" title="${t('console.toggle_tip', 'Minimizar/Restaurar')}">
-            <span>${t('console.minmax', 'Min/Max')}</span>
+          <button id="btn-toggle-console" class="btn-console-office console-collapse-btn" title="${t('console.toggle_tip', 'Minimizar/Restaurar')}" aria-label="${t('console.toggle_tip', 'Minimizar/Restaurar')}">
+            <span class="console-collapse-glyph" aria-hidden="true">${this.isCollapsed ? 'ᐯ' : 'ᐱ'}</span>
           </button>
         </div>
       </div>
@@ -149,6 +149,7 @@ export class ConsolePanel {
         this.container.classList.remove('collapsed');
         this.defaultHeight = newHeight;
       }
+      this.updateCollapseGlyph();
     };
 
     const onPointerUp = () => {
@@ -930,6 +931,13 @@ export class ConsolePanel {
       this.container.classList.remove('collapsed');
       this.container.style.height = `${this.defaultHeight}px`;
     }
+    this.updateCollapseGlyph();
+  }
+
+  /** Mantém o mesmo símbolo/estado do botão de abrir/fechar a Ribbon. */
+  private updateCollapseGlyph(): void {
+    const glyph = this.container.querySelector('#btn-toggle-console .console-collapse-glyph');
+    if (glyph) glyph.textContent = this.isCollapsed ? 'ᐯ' : 'ᐱ';
   }
 
   ensureVisible(): void {

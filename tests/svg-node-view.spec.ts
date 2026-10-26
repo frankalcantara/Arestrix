@@ -496,5 +496,40 @@ describe('SvgNodeView - Vértices Vetoriais SVG e Contraste WCAG 2.1', () => {
 
       svgView.dispose();
     });
+
+    it('deve registrar o resultado da última execução sem manter o vértice em modo de execução', () => {
+      const svgView = new SvgNodeView(sampleNode, testSvgRoot, tooltip, bus);
+
+      svgView.setExecutionState('running');
+      svgView.setRunRecord({ outcome: 'success', durationMs: 3900, finishedAt: Date.now() });
+      svgView.setExecutionState('idle');
+
+      // O vértice volta ao modo de edição: opaco, state-idle e sem a pílula de execução.
+      expect(svgView.getExecutionState()).toBe('idle');
+      expect(svgView.group.getAttribute('class')).toContain('state-idle');
+      expect(svgView.group.style.opacity).toBe('1');
+      expect(svgView.group.querySelector('.vertex-exec-status-pill')).toBeNull();
+
+      // O resultado permanece como um selo compacto no header.
+      const badge = svgView.group.querySelector('.vertex-run-badge') as any;
+      expect(badge).not.toBeNull();
+      expect(badge.getAttribute('data-run-outcome')).toBe('success');
+      const badgeText = badge.querySelector('text') as any;
+      expect(badgeText.textContent).toContain('3.9s');
+      expect(badgeText.style.textShadow).toBe('none');
+
+      // Uma nova execução substitui o selo anterior (nunca empilha).
+      svgView.setRunRecord({ outcome: 'error', durationMs: 1200, finishedAt: Date.now() });
+      const badges = svgView.group.querySelectorAll('.vertex-run-badge');
+      expect(badges).toHaveLength(1);
+      expect(badges[0].getAttribute('data-run-outcome')).toBe('error');
+      expect(badges[0].querySelector('text')?.textContent).toContain('1.2s');
+
+      // Limpeza explícita remove o registro.
+      svgView.setRunRecord(null);
+      expect(svgView.group.querySelector('.vertex-run-badge')).toBeNull();
+
+      svgView.dispose();
+    });
   });
 });

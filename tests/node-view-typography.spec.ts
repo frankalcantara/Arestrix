@@ -1,74 +1,28 @@
 import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
-import * as THREE from 'three';
 import { NodeView } from '../src/view/NodeView.ts';
 import { THEME } from '../src/view/Theme.ts';
 import { INodeData } from '../src/core/types.ts';
+import { CanvasTooltip } from '../src/ui/CanvasTooltip.ts';
+import { MockSvgElement, installMockSvgDocument } from './helpers/mockSvgDom.ts';
 
-describe('NodeView - Tipografia Vetorial SDF e Geometria Nítida (Fase 15.2)', () => {
+describe('NodeView - Vértice lógico com camada vetorial única', () => {
   let sampleNode: INodeData;
-  let origDoc: any;
-  let origWin: any;
+  let testSvgRoot: MockSvgElement;
+  let tooltip: CanvasTooltip;
+  let restoreDocument: () => void;
 
   beforeAll(() => {
-    origDoc = (globalThis as any).document;
-    origWin = (globalThis as any).window;
-
-    if (typeof (globalThis as any).document === 'undefined') {
-      (globalThis as any).document = {
-        createElement: (tag: string) => ({
-          tagName: tag.toUpperCase(),
-          getContext: () => ({
-            fillRect: () => {},
-            clearRect: () => {},
-            getImageData: () => ({ data: new Uint8Array(4) }),
-            putImageData: () => {},
-            createImageData: () => ({ data: new Uint8Array(4) }),
-            setTransform: () => {},
-            drawImage: () => {},
-            save: () => {},
-            fillText: () => {},
-            restore: () => {},
-            beginPath: () => {},
-            moveTo: () => {},
-            lineTo: () => {},
-            closePath: () => {},
-            stroke: () => {},
-            translate: () => {},
-            scale: () => {},
-            rotate: () => {},
-            arc: () => {},
-            fill: () => {},
-            measureText: () => ({ width: 10 })
-          }),
-          style: {},
-          width: 256,
-          height: 256,
-          addEventListener: () => {},
-          removeEventListener: () => {},
-          setAttribute: () => {},
-          getAttribute: () => null
-        }),
-        body: { appendChild: () => {}, removeChild: () => {} }
-      };
-    }
-
-    if (typeof (globalThis as any).window === 'undefined') {
-      (globalThis as any).window = {
-        innerWidth: 1280,
-        innerHeight: 800,
-        devicePixelRatio: 1,
-        addEventListener: () => {},
-        removeEventListener: () => {}
-      };
-    }
+    restoreDocument = installMockSvgDocument();
   });
 
   afterAll(() => {
-    (globalThis as any).document = origDoc;
-    (globalThis as any).window = origWin;
+    restoreDocument();
   });
 
   beforeEach(() => {
+    testSvgRoot = new MockSvgElement('svg');
+    tooltip = new CanvasTooltip();
+
     sampleNode = {
       id: 'node-test-1',
       type: 'agent',
@@ -94,52 +48,94 @@ describe('NodeView - Tipografia Vetorial SDF e Geometria Nítida (Fase 15.2)', (
     expect(THEME.typography.titleColor).toBe('#0F172A');
   });
 
-  it('deve instanciar o nó com tipografia vetorial sem recorrer a CanvasTexture rasterizado', () => {
-    const nv = new NodeView(sampleNode);
-    expect(nv.group).toBeDefined();
+  it('deve delegar todo o desenho do vértice ao SvgNodeView, sem malhas Three.js duplicadas', () => {
+    const nv = new NodeView(sampleNode, testSvgRoot as any, tooltip);
+    const group = nv.svgNodeView.group;
 
-    // Varre todos os objetos e materiais da cena do nó
-    let canvasTextureCount = 0;
-    let vectorTextCount = 0;
-    let hasOutlineOrBlur = false;
+    expect(group.getAttribute('class')).toContain('arestrix-svg-vertex');
+    expect(group.querySelector('.vertex-body')).not.toBeNull();
+    expect(group.querySelector('.vertex-header')).not.toBeNull();
+    expect(group.querySelector('.vertex-header-label')).not.toBeNull();
+    expect(group.querySelectorAll('.vertex-title-line').length).toBeGreaterThan(0);
+    expect(group.querySelectorAll('.vertex-port').length).toBe(4);
+    expect(group.querySelectorAll('.vertex-action-btn').length).toBe(5);
 
-    nv.group.traverse((obj: any) => {
-      if (obj.material?.map instanceof THREE.CanvasTexture) {
-        canvasTextureCount++;
-      }
-      if (obj.userData?.isVectorText) {
-        vectorTextCount++;
-        // Garante estrita conformidade com a regra: zero sombras/glows em texto
-        if (obj.outlineWidth > 0 || obj.outlineBlur > 0 || obj.strokeWidth > 0) {
-          hasOutlineOrBlur = true;
-        }
-      }
+    // Não existe mais um segundo grupo visual (Three.js) para o mesmo vértice.
+    expect((nv as any).group).toBeUndefined();
+
+    nv.dispose();
+  });
+
+  it('deve encaminhar a telemetria para o SvgNodeView e atualizar uma única pílula de status', () => {
+    const nv = new NodeView(sampleNode, testSvgRoot as any, tooltip);
+
+    nv.handleTelemetry({
+      nodeId: sampleNode.id,
+      type: 'status',
+      timestamp: Date.now(),
+      payload: { status: 'running' }
     });
+    expect(nv.getExecutionState()).toBe('running');
+    expect(nv.svgNodeView.group.querySelector('.vertex-exec-status-pill')).not.toBeNull();
+    expect(nv.svgNodeView.group.querySelector('.vertex-telemetry-badge')).not.toBeNull();
 
-    // Zero texturas de canvas geradas (antigos sprites raster eliminados)
-    expect(canvasTextureCount).toBe(0);
-    // Presença de rótulos vetoriais SDF (tipo, título e 4 portas)
-    expect(vectorTextCount).toBeGreaterThanOrEqual(6);
-    // Nenhuma sombra, blur ou contorno em tipografia
-    expect(hasOutlineOrBlur).toBe(false);
+    nv.handleTelemetry({
+      nodeId: sampleNode.id,
+      type: 'status',
+      timestamp: Date.now(),
+      payload: { status: 'settled' }
+    });
+    expect(nv.getExecutionState()).toBe('completed');
+
+    const statusText = nv.svgNodeView.group.querySelector('.vertex-exec-status-text');
+    expect(statusText?.textContent).toContain('✓ Concluído');
+
+    // A mudança de status substitui a área anterior; nunca empilha uma segunda.
+    expect(nv.svgNodeView.group.querySelectorAll('.vertex-telemetry-badge')).toHaveLength(1);
+    expect(nv.svgNodeView.group.querySelectorAll('.vertex-exec-status-pill')).toHaveLength(1);
 
     nv.dispose();
   });
 
   it('deve controlar o nível de detalhe (LOD) de acordo com o nível de zoom da câmera', () => {
-    const nv = new NodeView(sampleNode);
+    const nv = new NodeView(sampleNode, testSvgRoot as any, tooltip);
+    const actionBar = nv.svgNodeView.group.querySelector('.vertex-action-bar') as any;
 
     // Zoom normal (1.0) -> detalhes completos visíveis
     nv.setDetailLevel(1.0);
     expect(nv.isDetailVisible()).toBe(true);
+    expect(actionBar.style.display).not.toBe('none');
 
     // Zoom muito afastado (0.3 < limiar 0.45) -> oculta portas secundárias e barra de ações
     nv.setDetailLevel(0.3);
     expect(nv.isDetailVisible()).toBe(false);
+    expect(actionBar.style.display).toBe('none');
 
     // Zoom aproximado novamente (0.8) -> restaura detalhes
     nv.setDetailLevel(0.8);
     expect(nv.isDetailVisible()).toBe(true);
+    expect(actionBar.style.display).toBe('block');
+
+    nv.dispose();
+  });
+
+  it('deve derivar a âncora mundial das portas a partir da geometria do SvgNodeView', () => {
+    const nv = new NodeView(sampleNode, testSvgRoot as any, tooltip);
+    const h = NodeView.computeHeight(sampleNode);
+    const b = THEME.nodeBody;
+    const t = THEME.typography;
+
+    // Y do SVG é invertido em relação ao mundo (para cima).
+    const svgTop = -h / 2 + b.headerHeight + b.titleGap + t.titleSize * 1.25 * b.titleMaxLines + 12;
+    const firstInputY = svgTop + 0.5 * b.portSpacing;
+
+    const input = nv.getPortWorldPosition('p_in_1');
+    expect(input.x).toBeCloseTo(sampleNode.position.x - b.width / 2, 5);
+    expect(input.y).toBeCloseTo(sampleNode.position.y - firstInputY, 5);
+
+    const output = nv.getPortWorldPosition('p_out_1');
+    expect(output.x).toBeCloseTo(sampleNode.position.x + b.width / 2, 5);
+    expect(output.y).toBeCloseTo(sampleNode.position.y - firstInputY, 5);
 
     nv.dispose();
   });

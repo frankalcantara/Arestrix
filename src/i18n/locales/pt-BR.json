@@ -808,7 +808,6 @@
     "status_error": "● ERRO",
     "copy": "Copiar",
     "clear": "Limpar",
-    "minmax": "Min/Max",
     "copy_tip": "Copiar logs para a Área de Transferência",
     "clear_tip": "Limpar Console",
     "toggle_tip": "Recolher / Expandir Painel",
@@ -831,7 +830,7 @@
   "canvas_controls": {
     "auto_layout_tip": "Auto-Organizar Layout (Distribuir Vértices em 2D)",
     "follow_exec_tip": "Seguir Execução no Grafo (Auto-Focus no Vértice Ativo)",
-    "clear_exec_tip": "Limpar Estado Visual de Execução no Grafo",
+    "clear_exec_tip": "Limpar resultado da última execução e estados visuais do grafo",
     "fit_tip": "Ajustar ao Conteúdo (Ctrl+0)",
     "zoom_in_tip": "Aumentar Zoom (Ctrl +)",
     "zoom_out_tip": "Diminuir Zoom (Ctrl -)",

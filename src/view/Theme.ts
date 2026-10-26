@@ -179,7 +179,7 @@ export const THEME = {
   },
 
   // Regras Estritas de Tipografia Nítida (Zero sombras/glows em textos)
-  // Fase 15.2: tamanhos em unidades de mundo, renderizados como SDF vetorial (troika-three-text).
+  // Fase 15.2: tamanhos em unidades de mundo, renderizados como texto SVG vetorial.
   typography: {
     fontFamily: 'Segoe UI, Inter, -apple-system, BlinkMacSystemFont, sans-serif',
     titleSize: 18,

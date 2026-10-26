@@ -60,9 +60,9 @@ export interface ITraceSummary {
 }
 
 /**
- * Overlay do ultimo trace: reaplica no canvas as tasks concluidas/com erro e
- * destaca as arestas de chamada que realmente foram percorridas. A fonte e o
- * trace.json do runtime; a UI nao inventa caminhos.
+ * Overlay do ultimo trace: reaplica no canvas o RESULTADO das tasks (sem deixar
+ * os vértices em modo de execução) e destaca as arestas de chamada que realmente
+ * foram percorridas. A fonte e o trace.json do runtime; a UI nao inventa caminhos.
  */
 export class TraceOverlay {
   private bus: EventBus;
@@ -83,15 +83,19 @@ export class TraceOverlay {
     const calls = Array.isArray(trace.calls) ? trace.calls : [];
     const interactions = Array.isArray(trace.interactions) ? trace.interactions : [];
 
-    const nodeState = new Map<string, 'completed' | 'error'>();
+    const nodeResults = new Map<string, { outcome: 'success' | 'error'; durationMs: number }>();
     for (const task of tasks) {
       if (!task.nodeId) continue;
       const failed = task.status === 'error' || task.status === 'aborted';
-      if (failed) nodeState.set(task.nodeId, 'error');
-      else if (!nodeState.has(task.nodeId)) nodeState.set(task.nodeId, 'completed');
+      if (failed) {
+        nodeResults.set(task.nodeId, { outcome: 'error', durationMs: task.durationMs ?? 0 });
+      } else if (!nodeResults.has(task.nodeId)) {
+        nodeResults.set(task.nodeId, { outcome: 'success', durationMs: task.durationMs ?? 0 });
+      }
     }
-    nodeState.forEach((state, nodeId) => {
-      this.viewport.setNodeExecutionState(nodeId, state);
+    const finishedAt = Date.now();
+    nodeResults.forEach((result, nodeId) => {
+      this.viewport.setNodeRunRecord(nodeId, { ...result, finishedAt });
     });
 
     const edgeState = new Map<string, 'completed' | 'error'>();

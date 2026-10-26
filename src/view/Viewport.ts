@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { CameraController } from './CameraController.ts';
 import { InfiniteGrid } from './InfiniteGrid.ts';
 import { NodeView } from './NodeView.ts';
-import { ConnectionView, EdgeExecutionState } from './ConnectionView.ts';
-import { NodeExecutionState } from './SvgNodeView.ts';
+import { ConnectionView, EdgeExecutionState, getEdgeBaseStyle } from './ConnectionView.ts';
+import { NodeExecutionState, NodeRunOutcome, NodeRunRecord } from './SvgNodeView.ts';
 import { InteractionManager } from './InteractionManager.ts';
 import { Graph } from '../core/Graph.ts';
 import { INodeData, IEdgeData, IGraphSchema } from '../core/types.ts';
@@ -50,6 +50,8 @@ export class Viewport {
   private selectedEdgeId: string | null = null;
   private followExecution: boolean = false;
   private edgeAnimPhase: number = 0;
+  /** Evita que telemetria atrasada reative o modo de execução após o pipeline terminar. */
+  private executionActive: boolean = false;
 
   constructor(container: HTMLElement, graph: Graph, bus: EventBus) {
     this.container = container;
@@ -96,9 +98,8 @@ export class Viewport {
       this.resizeObserver.observe(this.container);
     }
 
-    // 5. Gerenciador de Interações e Raycasting
+    // 5. Gerenciador de Interações (eventos SVG + pan/zoom + rubber-band)
     this.interactionManager = new InteractionManager(
-      this.camera,
       this.cameraController,
       this.renderer.domElement,
       this.scene,
@@ -134,10 +135,15 @@ export class Viewport {
     this.bus.on('graph:loaded', () => this.syncFromGraph());
     this.bus.on('graph:hierarchy-changed', () => this.zoomToFit());
     this.bus.on('pipeline:compiling', () => {
+      this.executionActive = false;
       this.onTelemetryReset();
+      this.executionActive = true;
       this.onPipelineRunning();
     });
-    this.bus.on('pipeline:running', () => this.onPipelineRunning());
+    this.bus.on('pipeline:running', () => {
+      this.executionActive = true;
+      this.onPipelineRunning();
+    });
     this.bus.on('pipeline:success', () => this.onPipelineFinished(true));
     this.bus.on('pipeline:error', () => this.onPipelineFinished(false));
     this.bus.on('agent:telemetry', (ev: any) => this.onAgentTelemetry(ev));
@@ -151,6 +157,8 @@ export class Viewport {
 
   private onPipelineRunning(): void {
     this.nodeViews.forEach(nv => {
+      // Um novo run invalida o registro visual do run anterior.
+      nv.setRunRecord(null);
       if (nv.getExecutionState() === 'idle') {
         nv.setExecutionState('queued');
       }
@@ -162,15 +170,34 @@ export class Viewport {
     });
   }
 
+  /**
+   * Encerra a execução devolvendo todos os vértices ao modo de edição.
+   * O resultado de cada vértice é preservado como um selo compacto no header
+   * (sucesso/erro/não executado + duração), sem manter o vértice "apagado".
+   */
   private onPipelineFinished(success: boolean): void {
+    this.executionActive = false;
+    const finishedAt = Date.now();
+
     this.nodeViews.forEach(nv => {
       const st = nv.getExecutionState();
+      const durationMs = nv.getElapsedMs();
+
+      let outcome: NodeRunOutcome | null = null;
       if (st === 'running') {
-        nv.setExecutionState(success ? 'completed' : 'error');
+        outcome = success ? 'success' : 'error';
+      } else if (st === 'completed') {
+        outcome = 'success';
+      } else if (st === 'error') {
+        outcome = 'error';
       } else if (st === 'queued') {
-        nv.setExecutionState('idle');
+        outcome = 'skipped';
       }
+
+      nv.setRunRecord(outcome ? { outcome, durationMs, finishedAt } : null);
+      nv.setExecutionState('idle');
     });
+
     this.connectionViews.forEach((conn, edgeId) => {
       if (conn.executionState === 'active') {
         this.setEdgeExecutionState(edgeId, success ? 'completed' : 'error');
@@ -205,13 +232,12 @@ export class Viewport {
   }
 
   private onAgentTelemetry(ev: any): void {
-    if (!ev || !ev.nodeId) return;
+    if (!this.executionActive || !ev || !ev.nodeId) return;
     const nv = this.findNodeView(ev.nodeId);
     if (!nv) return;
 
-    // Propaga o evento para o SvgNodeView e NodeView (idempotente)
+    // NodeView encaminha a telemetria para o SvgNodeView (camada visual única).
     nv.handleTelemetry(ev);
-    nv.svgNodeView?.handleTelemetry(ev);
 
     const p = ev.payload || {};
     if (
@@ -237,6 +263,7 @@ export class Viewport {
   }
 
   private onTelemetryEnter(data: { taskId: string; worker?: number }): void {
+    if (!this.executionActive) return;
     const nv = this.findNodeView(data.taskId);
     if (nv) {
       nv.setExecutionState('running');
@@ -245,6 +272,7 @@ export class Viewport {
   }
 
   private onTelemetryExit(data: { taskId: string; worker?: number; failed?: boolean }): void {
+    if (!this.executionActive) return;
     const nv = this.findNodeView(data.taskId);
     if (nv) {
       if (data.failed) {
@@ -421,7 +449,10 @@ export class Viewport {
   }
 
   private onTelemetryReset(): void {
-    this.nodeViews.forEach(nv => nv.setExecutionState('idle'));
+    this.nodeViews.forEach(nv => {
+      nv.setExecutionState('idle');
+      nv.setRunRecord(null);
+    });
     this.connectionViews.forEach((_conn, edgeId) => this.setEdgeExecutionState(edgeId, 'idle'));
   }
 
@@ -430,7 +461,6 @@ export class Viewport {
 
     const nodeView = new NodeView(nodeData, this.svgNodesLayer, this.interactionManager.getTooltip());
     nodeView.setDetailLevel(this.cameraController.getZoom());
-    this.scene.add(nodeView.group);
     this.nodeViews.set(nodeData.id, nodeView);
     this.refreshAllEdges();
   }
@@ -438,7 +468,6 @@ export class Viewport {
   private onNodeRemoved(nodeId: string): void {
     const nodeView = this.nodeViews.get(nodeId);
     if (nodeView) {
-      this.scene.remove(nodeView.group);
       nodeView.dispose();
       this.nodeViews.delete(nodeId);
       this.refreshAllEdges();
@@ -649,6 +678,11 @@ export class Viewport {
     if (nodeView) nodeView.setExecutionState(state, detail);
   }
 
+  /** Aplica/limpa o registro da última execução sem alterar o estado de edição do vértice. */
+  public setNodeRunRecord(nodeId: string, record: NodeRunRecord | null): void {
+    this.nodeViews.get(nodeId)?.setRunRecord(record);
+  }
+
   public setEdgeExecutionState(edgeId: string, state: EdgeExecutionState): void {
     const conn = this.connectionViews.get(edgeId);
     if (!conn) return;
@@ -744,8 +778,8 @@ export class Viewport {
     const group = this.svgEdgeGroups.get(edgeId);
     if (!path) return;
 
-    const isFeedback = !!edgeData.isFeedbackLoop;
     const activeInfo = execState === 'active' ? this.getActiveEdgeAccentAndLabel(edgeData) : null;
+    const baseStyle = getEdgeBaseStyle(edgeData);
 
     if (isSelected) {
       path.setAttribute('stroke', '#2563EB');
@@ -768,9 +802,16 @@ export class Viewport {
       path.setAttribute('stroke-width', '2.5');
       path.setAttribute('opacity', '0.45');
     } else {
-      path.setAttribute('stroke', isFeedback ? '#D97706' : '#64748B');
+      path.setAttribute('stroke', baseStyle.stroke);
       path.setAttribute('stroke-width', '3');
       path.setAttribute('opacity', '1');
+    }
+
+    // O tracejado acompanha o modelo (call/feedback), inclusive sob seleção/execução.
+    if (baseStyle.dashArray) {
+      path.setAttribute('stroke-dasharray', baseStyle.dashArray);
+    } else {
+      path.removeAttribute('stroke-dasharray');
     }
 
     if (flowPath) {
@@ -900,15 +941,7 @@ export class Viewport {
   private onEdgeAdded(edgeData: IEdgeData): void {
     if (this.connectionViews.has(edgeData.id)) return;
 
-    const connView = new ConnectionView(
-      edgeData,
-      this.container.clientWidth,
-      this.container.clientHeight
-    );
-    if (this.svgEdgesLayer) {
-      connView.line.visible = false;
-    }
-    this.scene.add(connView.line);
+    const connView = new ConnectionView(edgeData);
     this.connectionViews.set(edgeData.id, connView);
 
     // Conecta aresta no SVG com área de clique expandida e suporte a alças estilo Inkscape
@@ -947,13 +980,13 @@ export class Viewport {
       const path = document.createElementNS(SVG_NS, 'path');
       path.setAttribute('class', 'arestrix-svg-edge');
       path.setAttribute('id', `svg-edge-${edgeData.id}`);
-      const isFeedback = !!edgeData.isFeedbackLoop;
-      path.setAttribute('stroke', isFeedback ? '#D97706' : '#64748B');
+      const baseStyle = getEdgeBaseStyle(edgeData);
+      path.setAttribute('stroke', baseStyle.stroke);
       path.setAttribute('stroke-width', '3');
       path.setAttribute('stroke-linecap', 'round');
       path.setAttribute('fill', 'none');
       path.style.pointerEvents = 'none';
-      if (isFeedback) path.setAttribute('stroke-dasharray', '8 4');
+      if (baseStyle.dashArray) path.setAttribute('stroke-dasharray', baseStyle.dashArray);
 
       // Camada de pulso de fluxo animado ao longo da curva Bézier
       const flowPath = document.createElementNS(SVG_NS, 'path');
@@ -1059,8 +1092,6 @@ export class Viewport {
 
     const connView = this.connectionViews.get(edgeId);
     if (connView) {
-      this.scene.remove(connView.line);
-      connView.dispose();
       this.connectionViews.delete(edgeId);
     }
 
@@ -1080,10 +1111,6 @@ export class Viewport {
     this.selectedEdgeId = null;
     this.clearEdgeHandles();
 
-    this.connectionViews.forEach(cv => {
-      this.scene.remove(cv.line);
-      cv.dispose();
-    });
     this.connectionViews.clear();
 
     this.svgEdgeGroups.forEach(g => {
@@ -1097,7 +1124,6 @@ export class Viewport {
     this.svgEdgeBadges.clear();
 
     this.nodeViews.forEach(nv => {
-      this.scene.remove(nv.group);
       nv.dispose();
     });
     this.nodeViews.clear();
@@ -1178,8 +1204,7 @@ export class Viewport {
 
     this.renderer.setSize(width, height);
 
-    // Atualiza resolucao de todos os materiais Line2
-    this.connectionViews.forEach(cv => cv.setResolution(width, height));
+    // O rubber-band (única linha Three.js restante) precisa da nova resolução.
     this.interactionManager.setResolution(width, height);
   }
 

@@ -808,7 +808,6 @@
     "status_error": "● ERROR",
     "copy": "Copy",
     "clear": "Clear",
-    "minmax": "Min/Max",
     "copy_tip": "Copy logs to Clipboard",
     "clear_tip": "Clear Console",
     "toggle_tip": "Collapse / Expand Panel",
@@ -831,7 +830,7 @@
   "canvas_controls": {
     "auto_layout_tip": "Auto-Arrange Layout (Distribute Vertices in 2D)",
     "follow_exec_tip": "Follow Execution on Graph (Auto-Focus Active Vertex)",
-    "clear_exec_tip": "Clear Visual Execution State on Graph",
+    "clear_exec_tip": "Clear last run result and visual execution state on the graph",
     "fit_tip": "Fit to Content (Ctrl+0)",
     "zoom_in_tip": "Zoom In (Ctrl +)",
     "zoom_out_tip": "Zoom Out (Ctrl -)",

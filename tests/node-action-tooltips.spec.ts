@@ -3,6 +3,7 @@ import { NodeView } from '../src/view/NodeView.ts';
 import { NODE_ACTIONS, getNodeAction } from '../src/view/NodeActions.ts';
 import { CanvasTooltip, renderTooltipHtml } from '../src/ui/CanvasTooltip.ts';
 import { INodeData } from '../src/core/types.ts';
+import { MockSvgElement, installMockSvgDocument } from './helpers/mockSvgDom.ts';
 
 describe('Ações do Nó e Tooltips Informativos (Fase 15.2)', () => {
   let sampleNode: INodeData;
@@ -100,33 +101,27 @@ describe('Ações do Nó e Tooltips Informativos (Fase 15.2)', () => {
     expect(skillsAction?.event).toBe('node:open-skills-modal');
   });
 
-  it('deve equipar todo hitbox de ação e de porta do nó com metadados de tooltip', () => {
-    const nv = new NodeView(sampleNode);
+  it('deve equipar todo botão de ação e porta do nó com tooltip acessível na camada SVG', () => {
+    const restoreDocument = installMockSvgDocument();
+    try {
+      const root = new MockSvgElement('svg');
+      const nv = new NodeView(sampleNode, root as any, new CanvasTooltip());
 
-    const hitboxesWithTooltip: any[] = [];
-    nv.group.traverse((obj: any) => {
-      if (obj.userData?.isActionHitbox || obj.userData?.isPortHitbox) {
-        if (obj.userData?.tooltip) {
-          hitboxesWithTooltip.push(obj.userData);
-        }
-      }
-    });
+      expect(nv.svgNodeView.group.querySelectorAll('.vertex-action-btn')).toHaveLength(5);
+      expect(nv.svgNodeView.group.querySelectorAll('.vertex-port-hitbox')).toHaveLength(2);
 
-    // 5 botões de ação + 2 portas = 7 alvos com tooltip
-    expect(hitboxesWithTooltip.length).toBe(7);
+      // 5 botões de ação + 2 portas = 7 tooltips nativos (<title>) na única camada visual.
+      const titles = nv.svgNodeView.group.querySelectorAll('title');
+      expect(titles).toHaveLength(7);
+      titles.forEach(title => {
+        expect(typeof title.textContent).toBe('string');
+        expect((title.textContent ?? '').length).toBeGreaterThan(0);
+      });
 
-    const actionTooltips = hitboxesWithTooltip.filter(u => u.isActionHitbox);
-    expect(actionTooltips.length).toBe(5);
-    actionTooltips.forEach(u => {
-      expect(typeof u.tooltip).toBe('string');
-      expect(u.tooltip.length).toBeGreaterThan(0);
-      expect(typeof u.tooltipDescription).toBe('string');
-    });
-
-    const portTooltips = hitboxesWithTooltip.filter(u => u.isPortHitbox);
-    expect(portTooltips.length).toBe(2);
-
-    nv.dispose();
+      nv.dispose();
+    } finally {
+      restoreDocument();
+    }
   });
 
   it('deve formatar marcação HTML do tooltip com escape seguro de caracteres', () => {

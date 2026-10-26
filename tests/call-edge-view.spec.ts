@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { ConnectionView } from '../src/view/ConnectionView.ts';
+import { ConnectionView, getEdgeBaseStyle } from '../src/view/ConnectionView.ts';
 import { THEME } from '../src/view/Theme.ts';
 import { IEdgeData } from '../src/core/types.ts';
+
+function css(hex: number): string {
+  return `#${hex.toString(16).padStart(6, '0').toUpperCase()}`;
+}
 
 describe('Aresta de chamada (kind = call)', () => {
   it('é desenhada tracejada em violeta, sem virar feedback', () => {
@@ -15,11 +19,12 @@ describe('Aresta de chamada (kind = call)', () => {
       callSettings: { maxCalls: 1, onError: 'fail' }
     };
 
-    const view = new ConnectionView(edge, 800, 600);
-    expect(view.line.material.dashed).toBe(true);
-    expect(view.line.material.color.getHex()).toBe(THEME.edge.callColor);
+    const view = new ConnectionView(edge);
+    const style = view.getBaseStyle();
+    expect(style.dashArray).not.toBeNull();
+    expect(style.stroke).toBe(css(THEME.edge.callColor));
     expect(view.edgeData.isFeedbackLoop).toBeFalsy();
-    view.dispose();
+    expect(getEdgeBaseStyle(edge)).toEqual(style);
   });
 
   it('uma aresta de fluxo comum continua sólida e neutra', () => {
@@ -31,9 +36,24 @@ describe('Aresta de chamada (kind = call)', () => {
       targetPortId: 'b_in_0'
     };
 
-    const view = new ConnectionView(edge, 800, 600);
-    expect(view.line.material.dashed).toBe(false);
-    expect(view.line.material.color.getHex()).toBe(THEME.edge.defaultColor);
-    view.dispose();
+    const view = new ConnectionView(edge);
+    const style = view.getBaseStyle();
+    expect(style.dashArray).toBeNull();
+    expect(style.stroke).toBe(css(THEME.edge.defaultColor));
+  });
+
+  it('uma aresta de feedback usa o tracejado âmbar mesmo sem kind = call', () => {
+    const edge: IEdgeData = {
+      id: 'e_feedback',
+      sourceNodeId: 'b',
+      sourcePortId: 'b_out_0',
+      targetNodeId: 'a',
+      targetPortId: 'a_in_0',
+      isFeedbackLoop: true
+    };
+
+    const style = getEdgeBaseStyle(edge);
+    expect(style.stroke).toBe(css(THEME.edge.feedbackColor));
+    expect(style.dashArray).not.toBeNull();
   });
 });

@@ -91,7 +91,6 @@ describe('InteractionManager - arraste e duplo clique', () => {
     };
 
     manager = new InteractionManager(
-      new THREE.OrthographicCamera(),
       cameraController,
       domElement,
       new THREE.Scene(),

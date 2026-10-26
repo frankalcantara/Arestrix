@@ -50,7 +50,6 @@ describe('Conexao entre vertices pelas portas SVG', () => {
     };
     const cameraController: any = { screenToWorld: () => new THREE.Vector3(), getIsPanning: () => false };
     manager = new InteractionManager(
-      new THREE.OrthographicCamera(),
       cameraController,
       domElement,
       new THREE.Scene(),

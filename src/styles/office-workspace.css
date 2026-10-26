@@ -499,6 +499,17 @@ body, html {
   background-color: #e1dfdd;
 }
 
+.console-collapse-btn {
+  min-width: 26px;
+  padding: 0 6px;
+  justify-content: center;
+}
+
+.console-collapse-glyph {
+  font-size: 11px;
+  line-height: 1;
+}
+
 .console-views-wrapper {
   flex: 1;
   display: flex;
@@ -517,6 +528,18 @@ body, html {
   background-color: #ffffff;
   color: #1e293b;
   user-select: text;
+  -webkit-user-select: text;
+}
+
+/*
+ * A regra universal `* { user-select: none }` atinge cada linha individualmente.
+ * Reabilitar explicitamente no body não basta: cada .console-line precisa permitir
+ * seleção para que o texto do terminal/telemetria possa ser marcado e copiado.
+ */
+.office-console-body .console-line {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }
 
 .console-status-badge {
