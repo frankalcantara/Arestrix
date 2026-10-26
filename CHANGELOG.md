@@ -70,6 +70,9 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   (Windows CRLF checkouts and Linux LF checkouts agree; the policy lock was regenerated), Vitest
   forces the canonical `pt-BR` locale instead of relying on `navigator.language`, and the native test
   translation unit includes `<cstring>` so `std::memset` compiles with GCC.
+- The interaction host stdin reader is now intentionally kept for the process lifetime. Destroying
+  its mutex/condition variable at shutdown while the detached reader thread was still blocked made
+  successful host interactions exit non-zero on POSIX (the Linux CTest job exposed it).
 
 ### Added
 

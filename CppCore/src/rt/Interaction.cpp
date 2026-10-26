@@ -92,8 +92,13 @@ enum class HostReadStatus { Data, Timeout, Eof };
 class HostLineReader {
 public:
     static HostLineReader& instance() {
-        static HostLineReader reader;
-        return reader;
+        // Intencionalmente nunca destruido: a thread de leitura de stdin fica
+        // bloqueada em getline() e pode estar viva quando o processo retorna de
+        // main(). Destruir mutex/condition_variable nesse shutdown causa corrida
+        // no POSIX (o processo sairia com código != 0). O singleton vive ate o
+        // fim do processo; o SO encerra a thread.
+        static HostLineReader* reader = new HostLineReader();
+        return *reader;
     }
 
     HostReadStatus next(std::string& line, int timeoutMs) {
