@@ -67,13 +67,30 @@ Implemented in the core:
 - One-time legacy JSON import and automatic agent-failure lessons.
 - API-consumption panel in the UI, native `arestrix-cli memory report`, AI Gateway memory impact,
   Studio A/B and examples 04 and 05. `memory_report.py` remains optional for development.
+- Workspace and institution scopes. `arestrix-memory` exposes authenticated REST, MCP HTTP `/mcp`,
+  MCP stdio and memory-only tokens, fail-closed without tokens.
+- Hybrid ranking with embeddings (EmbeddingGemma 2) and idempotent L2/M3 consolidation.
+- Opt-in background consolidation per project (`off`, `idle` or `after_episodes`), with observable
+  state in the panel and deterministic shutdown.
+- Authenticated `/metrics` in `arestrix-memory`, with REST/MCP counters, 401 failures, response
+  classes, uptime and version.
+- Conflict list and consolidation state in the project memory panel.
 
 Still pending:
 
-- Workspace and institution scopes.
-- Dedicated graph/conflict visualization in the UI.
-- Full hybrid ranking, embeddings and LLM consolidation.
-- `memory_handoff` and recursive learning.
+- Full cognitive graph visualization and conflict editing in the UI (the conflict list already
+  exists).
+- LLM consolidation, `memory_handoff` and recursive learning.
+- Consolidation coordination across multiple service processes/instances.
+
+Limitations of the institution service and background worker:
+
+- Single-node SQLite; no HA, multi-machine sync or coordination between instances.
+- The service does not terminate TLS or enforce rate limits; both depend on a reverse
+  proxy/gateway.
+- Tokens load from file/JSON/env and live only in memory; restarting requires reloading.
+- The consolidation worker runs inside the project process, only for persistent memory, and does not
+  survive process shutdown.
 
 ### Models
 

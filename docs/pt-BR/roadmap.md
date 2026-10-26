@@ -68,13 +68,29 @@ Implementado no núcleo:
 - Importação única dos JSONs legados e registro automático de falhas de agente.
 - Painel de consumo na UI, relatório nativo `arestrix-cli memory report`, impacto no AI Gateway,
   A/B no Studio e exemplos 04 e 05. `memory_report.py` permanece opcional para desenvolvimento.
+- Escopos de workspace e instituição. O `arestrix-memory` expõe REST autenticado, MCP HTTP `/mcp`,
+  MCP stdio e tokens apenas em memória, com fail-closed sem tokens.
+- Ranking híbrido com embeddings (EmbeddingGemma 2) e consolidação L2/M3 idempotente.
+- Consolidação em background opt-in por projeto (`off`, `idle` ou `after_episodes`), com estado
+  observável no painel e shutdown determinístico.
+- `/metrics` autenticado no `arestrix-memory`, com contadores REST/MCP, falhas 401, respostas por
+  classe, uptime e versão.
+- Lista de conflitos e estado de consolidação no painel de memória do projeto.
 
 Ainda pendente:
 
-- Escopos de workspace e instituição.
-- Visualização dedicada do grafo e dos conflitos na UI.
-- Ranking híbrido completo, embeddings e consolidação por LLM.
-- `memory_handoff` e aprendizagem recursiva.
+- Visualização completa do grafo cognitivo e edição dos conflitos na UI (a lista de conflitos já
+  existe).
+- Consolidação por LLM, `memory_handoff` e aprendizagem recursiva.
+- Coordenação de consolidação entre múltiplos processos/instâncias do serviço institucional.
+
+Limitações do serviço institucional e do background:
+
+- SQLite single-node; não há HA, sincronização multi-máquina ou coordenação entre instâncias.
+- O serviço não termina TLS nem aplica rate limit; ambos dependem de reverse proxy/gateway.
+- Tokens são carregados do arquivo/JSON/env e vivem apenas em memória; reiniciar exige recarregar.
+- O worker de consolidação roda dentro do processo do projeto, só em memória persistente, e não
+  sobrevive ao encerramento do processo.
 
 ### Modelos
 

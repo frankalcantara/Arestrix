@@ -125,10 +125,15 @@ it may record per run; `memory_search` enforces those domains.
   `http://127.0.0.1:11434/v1`. Without a provider the system remains 100% lexical.
   When enabled, indexed texts (sanitized lessons, facts and summaries) are sent to the
   configured endpoint; use a local server to keep everything on the machine.
-- On-demand deterministic consolidation: duplicate lesson/fact merge, entity aliases,
+- Deterministic consolidation: duplicate lesson/fact merge, entity aliases,
   conflicts (`CONTRADICTS`), expiration, decay into `dormant` and generalization
   (`GENERALIZES`). Nothing is deleted; duplicates/conflicts are demoted and audited. Use
   **Consolidate memory** in the Studio or `arestrix-cli memory consolidate`.
+- Opt-in background consolidation per project (`consolidationMode=off|idle|after_episodes`),
+  only for persistent memory. It runs off the recall path, exposes runs/last run/next trigger in
+  `consolidationStatus` in the worker process and stops deterministically with the project/process.
+- The `arestrix-memory` service exposes authenticated `/metrics` with REST/MCP counters,
+  notifications, 401 failures, response classes, uptime and version.
 - Procedural playbooks: successful trajectories become reusable steps by `task_type`. The
   first evidence creates a `candidate`; the second activates it. Failures update counters and
   reduce confidence; the brief injects active playbooks within budget.
@@ -170,9 +175,8 @@ it may record per run; `memory_search` enforces those domains.
 - `memory_usage` records tokens, calls, retries, latency, context and success/failure.
 - Legacy JSON (`arestrix-blackboard-*.json`, `arestrix-memory-*.json`) is imported once and marked
   `legacy_imported`.
-- No LLM is used to extract or consolidate memory by default. There is no proposal queue or
-  consolidation yet: the agent writes lessons directly, and automatic fact/entity promotion does not
-  exist yet.
+- No LLM is used to extract or consolidate memory by default. Extraction, proposals and
+  consolidation are deterministic; fact/entity promotion remains manual.
 
 ### How memory reaches the agent
 
@@ -252,10 +256,13 @@ Python or JS process participates in graph execution.
 
 ### Current limitations
 
-- A dedicated graph/conflict visualization is not in the UI yet.
-- Deterministic extraction, proposals, optional hybrid search, consolidation, playbooks,
-  workspace memory and authenticated HTTP/MCP institution exposure already exist in the core.
-  LLM generalization and automatic background consolidation are still pending.
+- Full cognitive graph visualization and conflict editing are not in the UI yet; the conflict list
+  and consolidation state already appear in the panel.
+- Deterministic extraction, proposals, optional hybrid search, consolidation (manual and
+  background), playbooks, workspace memory and authenticated HTTP/MCP institution exposure already
+  exist in the core.
+- LLM generalization/consolidation and background coordination across multiple
+  processes/instances are still pending.
 - `memory_handoff` and LLM consolidation are future phases.
 
 ## Skills

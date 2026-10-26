@@ -425,13 +425,41 @@ export class ProjectMemoryModal {
 
         if (consolidationStatus) {
           const c = data.consolidation || {};
+          const maintenance = c.maintenance || {};
+          const configuredMode = this.graph.getGlobalDefaults().memory?.consolidationMode || 'off';
+          let maintenanceLines: string[];
+          if (maintenance.enabled) {
+            maintenanceLines = [
+              `${t('project_memory.consolidation_background')}: ${maintenance.mode || 'off'}${maintenance.busy ? ` (${t('project_memory.consolidation_background_running')})` : ''}`,
+              `${t('project_memory.consolidation_background_runs')}: ${Number(maintenance.runs || 0)}`,
+              `${t('project_memory.consolidation_background_last')}: ${maintenance.lastRunAt || '-'}`
+            ];
+          } else if (configuredMode !== 'off') {
+            maintenanceLines = [
+              `${t('project_memory.consolidation_background')}: ${t('project_memory.consolidation_background_configured', { mode: configuredMode })}`
+            ];
+          } else {
+            maintenanceLines = [
+              `${t('project_memory.consolidation_background')}: ${t('project_memory.consolidation_background_off')}`
+            ];
+          }
+          if (maintenance.enabled && maintenance.nextInEpisodes !== undefined) {
+            maintenanceLines.push(`${t('project_memory.consolidation_background_next_episodes')}: ${Number(maintenance.nextInEpisodes)}`);
+          }
+          if (maintenance.enabled && maintenance.nextInSeconds !== undefined) {
+            maintenanceLines.push(`${t('project_memory.consolidation_background_next_seconds')}: ${Number(maintenance.nextInSeconds)}`);
+          }
+          if (maintenance.lastError) {
+            maintenanceLines.push(`${t('project_memory.consolidation_background_error')}: ${maintenance.lastError}`);
+          }
           consolidationStatus.textContent = [
             `${t('project_memory.consolidation_active')}: ${Number(c.active || 0)}`,
             `${t('project_memory.consolidation_candidate')}: ${Number(c.candidate || 0)}`,
             `${t('project_memory.consolidation_superseded')}: ${Number(c.superseded || 0)}`,
             `${t('project_memory.consolidation_dormant')}: ${Number(c.dormant || 0)}`,
             `${t('project_memory.consolidation_conflicts')}: ${Number(c.conflicts || 0)}`,
-            `${t('project_memory.consolidation_aliases')}: ${Number(c.aliases || 0)}`
+            `${t('project_memory.consolidation_aliases')}: ${Number(c.aliases || 0)}`,
+            ...maintenanceLines
           ].join('\n');
         }
         if (conflictsList) {

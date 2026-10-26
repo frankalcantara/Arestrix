@@ -61,6 +61,18 @@ def request(url, method="GET", token=None, body=None):
             return error.code, {"raw": raw}
 
 
+def request_text(url, token=None):
+    headers = {}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            return response.status, response.read().decode("utf-8")
+    except urllib.error.HTTPError as error:
+        return error.code, error.read().decode("utf-8")
+
+
 def wait_health(base):
     for _ in range(40):
         try:
@@ -162,6 +174,18 @@ def main():
         check({"memory_institution_context", "memory_institution_write_lesson",
                "memory_institution_status", "memory_institution_set_policy"} <= names,
               "MCP HTTP expoe contexto, licao, status e politica")
+
+        status, metrics_text = request_text(base + "/metrics")
+        check(status == 401, "metricas exigem token")
+        status, metrics_text = request_text(base + "/metrics", "viewer-token")
+        check(status == 200, "viewer le metricas")
+        check("arestrix_memory_http_requests_total" in metrics_text and
+              "arestrix_memory_rest_requests_total" in metrics_text and
+              "arestrix_memory_mcp_requests_total" in metrics_text and
+              "arestrix_memory_auth_failures_total" in metrics_text,
+              "metricas expoem contadores REST, MCP e falhas de autenticacao")
+        check("arestrix_memory_info{version=" in metrics_text,
+              "metricas identificam a versao do servico")
 
         lines = [
             json.dumps({"jsonrpc": "2.0", "id": 10, "method": "initialize"}),

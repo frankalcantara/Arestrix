@@ -271,6 +271,14 @@ export interface INodeMemoryConfig {
   maxLessonChars?: number;
   /** Retenção de telemetria (episódios/hits/usage) em dias; 0 = manter. Nível de projeto. */
   retentionDays?: number;
+  /** Consolidação em background: off (manual), idle (após ociosidade) ou after_episodes. */
+  consolidationMode?: 'off' | 'idle' | 'after_episodes';
+  /** Segundos sem novos episódios antes de consolidar no modo idle. */
+  consolidationIdleSeconds?: number;
+  /** Número de episódios que dispara a consolidação no modo after_episodes. */
+  consolidationEpisodeThreshold?: number;
+  /** Idade, em dias, para marcar fatos sem uso como dormant durante a consolidação. */
+  consolidationDormantDays?: number;
   /** normal = usa a configuração dos vértices; memory_off = força OFF no projeto (A/B). */
   measurementMode?: 'normal' | 'memory_off';
   /** Mantém a gravação de memory_usage mesmo quando a memória está OFF. */
@@ -306,6 +314,10 @@ export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {
   maxLessonsPerRun: 20,
   maxLessonChars: 4000,
   retentionDays: 180,
+  consolidationMode: 'off',
+  consolidationIdleSeconds: 300,
+  consolidationEpisodeThreshold: 20,
+  consolidationDormantDays: 180,
   measurementMode: 'normal',
   recordMetrics: false,
   embeddingEnabled: false,

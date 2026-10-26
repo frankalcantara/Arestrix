@@ -632,6 +632,12 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
                 std::to_string(std::max(0, std::min(8192, embedding.value("embeddingDimensions", 768)))) + ";\n";
         code += "  memory.configureEmbeddings(projectId, arx_embedding_config);\n";
     }
+    {
+        const json memorySettings = globalMemory(graph);
+        code += "  memory.configureMaintenance(projectId, taskforge::memory::maintenanceConfigFromJson("
+                "taskforge::Json::parse(" +
+                rawLiteral(memorySettings.dump()) + ")));\n";
+    }
     code += "  auto arx_mem_flush = [&]() {\n";
     code += "    if (!arx_mem_persistent) memory.clearSession(projectId);\n";
     code += "  };\n";

@@ -574,6 +574,34 @@ export class GlobalDefaultsModal {
                   <div class="form-hint">${t('global_defaults.memory_retention_hint')}</div>
                 </div>
               </div>
+
+              <div class="form-group" style="margin-top: 14px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+                <label class="form-label" for="def-memory-consolidation-mode">${t('global_defaults.memory_consolidation_title')}</label>
+                <div class="form-hint" style="margin-bottom: 8px;">${t('global_defaults.memory_consolidation_desc')}</div>
+                <select id="def-memory-consolidation-mode" class="form-select">
+                  <option value="off" ${(defaults.memory?.consolidationMode || 'off') === 'off' ? 'selected' : ''}>${t('global_defaults.memory_consolidation_off')}</option>
+                  <option value="idle" ${defaults.memory?.consolidationMode === 'idle' ? 'selected' : ''}>${t('global_defaults.memory_consolidation_idle')}</option>
+                  <option value="after_episodes" ${defaults.memory?.consolidationMode === 'after_episodes' ? 'selected' : ''}>${t('global_defaults.memory_consolidation_after_episodes')}</option>
+                </select>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 10px;">
+                  <div>
+                    <label class="form-label" for="def-memory-consolidation-idle">${t('global_defaults.memory_consolidation_idle_label')}</label>
+                    <input type="number" id="def-memory-consolidation-idle" class="form-input" min="5" max="86400" step="30"
+                           value="${defaults.memory?.consolidationIdleSeconds ?? 300}" />
+                  </div>
+                  <div>
+                    <label class="form-label" for="def-memory-consolidation-episodes">${t('global_defaults.memory_consolidation_episodes_label')}</label>
+                    <input type="number" id="def-memory-consolidation-episodes" class="form-input" min="1" max="100000" step="1"
+                           value="${defaults.memory?.consolidationEpisodeThreshold ?? 20}" />
+                  </div>
+                  <div>
+                    <label class="form-label" for="def-memory-consolidation-dormant">${t('global_defaults.memory_consolidation_dormant_label')}</label>
+                    <input type="number" id="def-memory-consolidation-dormant" class="form-input" min="0" max="3650" step="30"
+                           value="${defaults.memory?.consolidationDormantDays ?? 180}" />
+                  </div>
+                </div>
+                <div class="form-hint">${t('global_defaults.memory_consolidation_hint')}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -1600,6 +1628,16 @@ export class GlobalDefaultsModal {
     const memRetentionDays = Number.isFinite(retentionRaw)
       ? Math.max(0, Math.min(3650, Math.floor(retentionRaw)))
       : 180;
+    const memConsolidationMode = ((this.overlay.querySelector('#def-memory-consolidation-mode') as HTMLSelectElement)?.value
+      || 'off') as 'off' | 'idle' | 'after_episodes';
+    const memConsolidationIdle = Math.max(5, Math.min(86400,
+      Math.floor(Number((this.overlay.querySelector('#def-memory-consolidation-idle') as HTMLInputElement)?.value) || 300)));
+    const memConsolidationEpisodes = Math.max(1, Math.min(100000,
+      Math.floor(Number((this.overlay.querySelector('#def-memory-consolidation-episodes') as HTMLInputElement)?.value) || 20)));
+    const memConsolidationDormantRaw = Number((this.overlay.querySelector('#def-memory-consolidation-dormant') as HTMLInputElement)?.value);
+    const memConsolidationDormant = Number.isFinite(memConsolidationDormantRaw)
+      ? Math.max(0, Math.min(3650, Math.floor(memConsolidationDormantRaw)))
+      : 180;
     const memEmbeddingEnabled = (this.overlay.querySelector('#def-memory-embedding-enabled') as HTMLInputElement)?.checked || false;
     const memEmbeddingModel = (this.overlay.querySelector('#def-memory-embedding-model') as HTMLInputElement)?.value.trim()
       || 'embeddinggemma-2';
@@ -1645,6 +1683,10 @@ export class GlobalDefaultsModal {
         maxLessonsPerRun: memMaxLessons,
         maxLessonChars: memMaxLessonChars,
         retentionDays: memRetentionDays,
+        consolidationMode: memConsolidationMode,
+        consolidationIdleSeconds: memConsolidationIdle,
+        consolidationEpisodeThreshold: memConsolidationEpisodes,
+        consolidationDormantDays: memConsolidationDormant,
         measurementMode: memMeasurement,
         recordMetrics: memRecordMetrics,
         embeddingEnabled: memEmbeddingEnabled,

@@ -125,10 +125,16 @@ quantas lições pode gravar por execução; `memory_search` respeita esses dom�
   `http://127.0.0.1:11434/v1`. Sem provider, o sistema continua 100% lexical.
   Ao ativar, os textos indexados (lições, fatos e sumários sanitizados) são enviados ao
   endpoint configurado; use um servidor local se quiser manter tudo na máquina.
-- Consolidação determinística sob demanda: dedup de lições/fatos, aliases de entidades,
+- Consolidação determinística: dedup de lições/fatos, aliases de entidades,
   conflitos (`CONTRADICTS`), expiração, decay para `dormant` e generalização (`GENERALIZES`).
   Nada é apagado; duplicados/conflitos são rebaixados e auditados. Use **Consolidar memória**
   no Studio ou `arestrix-cli memory consolidate`.
+- Consolidação em background opt-in por projeto (`consolidationMode=off|idle|after_episodes`),
+  apenas em memória persistente. Roda fora do caminho de busca, expõe rodadas/última
+  execução/próximo gatilho em `consolidationStatus` no processo do worker e encerra de forma
+  determinística com o projeto/processo.
+- O serviço `arestrix-memory` expõe `/metrics` autenticado com contadores REST/MCP, notificações,
+  falhas 401, classes de resposta, uptime e versão.
 - Playbooks procedurais: trajetórias bem-sucedidas viram passos reutilizáveis por
   `task_type`. A primeira evidência cria um `candidate`; a segunda ativa o playbook. Falhas
   atualizam os contadores e reduzem a confiança; o brief injeta playbooks ativos dentro do
@@ -171,9 +177,8 @@ quantas lições pode gravar por execução; `memory_search` respeita esses dom�
 - `memory_usage` registra tokens, chamadas, retries, latência, contexto e sucesso/falha.
 - O JSON legado (`arestrix-blackboard-*.json`, `arestrix-memory-*.json`) é importado uma única vez
   e marcado como `legacy_imported`.
-- Nenhum LLM é usado para extrair ou consolidar memória por padrão. Ainda não há fila de propostas
-  nem consolidação: o agente grava lições diretamente, e a promoção automática de fatos/entidades
-  ainda não existe.
+- Nenhum LLM é usado para extrair ou consolidar memória por padrão. Extração, propostas e
+  consolidação são determinísticas; a promoção de fatos/entidades continua manual.
 
 ### Como a memória chega ao agente
 
@@ -252,10 +257,12 @@ inteiramente em C++: nenhum Python ou processo JS participa da execução do gra
 
 ### Limitações atuais
 
-- A visualização dedicada do grafo e dos conflitos ainda não está na UI.
-- A extração determinística, as propostas, a busca híbrida opcional, a consolidação, os
-  playbooks, o workspace e a exposição HTTP/MCP da instituição já existem no núcleo. Ainda faltam
-  generalização por LLM e consolidação automática em background.
+- A visualização completa do grafo cognitivo e a edição de conflitos ainda não estão na UI;
+  a lista de conflitos e o estado de consolidação já aparecem no painel.
+- A extração determinística, as propostas, a busca híbrida opcional, a consolidação (manual e em
+  background), os playbooks, o workspace e a exposição HTTP/MCP da instituição já existem no núcleo.
+- Ainda faltam generalização/consolidação por LLM e coordenação de background entre múltiplos
+  processos/instâncias.
 - `memory_handoff` e consolidação por LLM ficam para as próximas fases.
 
 ## Skills

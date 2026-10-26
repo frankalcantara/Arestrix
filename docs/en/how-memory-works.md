@@ -258,6 +258,23 @@ Run on demand through `memory consolidate` or **Consolidate memory**.
 
 Consolidation is idempotent and audited. It does not run in the graph hot path.
 
+### Background consolidation
+
+`MemoryService` keeps an opt-in, in-process worker that only consumes already persisted episodes. It
+does not participate in retrieval and does not block an episode write.
+
+- `consolidationMode=off`: manual only (default);
+- `consolidationMode=idle`: consolidate after `consolidationIdleSeconds` without new episodes;
+- `consolidationMode=after_episodes`: consolidate every `consolidationEpisodeThreshold` episodes;
+- `consolidationDormantDays` controls the decay applied by the run.
+
+The worker starts only for persistent projects. When the project closes or the process exits, the
+thread is signalled and joined outside the service mutex, so no background work is left orphaned.
+`consolidationStatus` exposes `runs`, `lastRunAt`, `lastReason`, `lastError`, `lastReport`,
+`nextInEpisodes` and `nextInSeconds` in the process hosting the worker. The Studio panel shows the
+mode configured in the graph; because the generated pipeline runs in another process, live counters
+belong to the process running the worker.
+
 ## 10. Playbooks
 
 `MemoryPlaybookCompiler` observes episodes when `recordLessons` is enabled.
@@ -339,6 +356,7 @@ outside the repository and restrict its operating-system permissions.
 | `POST` | `/v1/lessons` | `editor` | write `{ "domain", "triggerError", "lessonRule" }` |
 | `POST` | `/v1/policies` | `admin` | write `{ "key", "value", "immutable" }` |
 | `POST` | `/mcp` | bearer | MCP JSON-RPC 2.0 |
+| `GET` | `/metrics` | `viewer` | process Prometheus counters |
 
 Example:
 
@@ -384,7 +402,11 @@ The HTTP `/mcp` endpoint accepts the same JSON-RPC with `Authorization: Bearer .
 - listen on `127.0.0.1` and put a **TLS reverse proxy** in front for network exposure;
 - the database is single-node SQLite; there is no multi-machine sync in this version;
 - the service has no built-in rate limit; use the proxy/gateway for that;
-- logs do not contain tokens, lesson bodies or memory content.
+- logs do not contain tokens, lesson bodies or memory content;
+- `/metrics` also requires a Bearer token (`viewer` is enough) and exposes only aggregate counters:
+  REST/MCP requests, notifications, 401 failures, 2xx/4xx/5xx responses, uptime and version;
+- background consolidation is per process. Two `arestrix-memory` instances do not coordinate the
+  same run; for multi-instance operation, keep consolidation manual or external.
 
 ## 13. Snapshot, retention and purge
 
@@ -412,6 +434,10 @@ Fields in **Global Defaults → Memory**:
 | `maxLessonsPerRun` | `20` |
 | `maxLessonChars` | `4000` |
 | `retentionDays` | `180` |
+| `consolidationMode` | `off` |
+| `consolidationIdleSeconds` | `300` |
+| `consolidationEpisodeThreshold` | `20` |
+| `consolidationDormantDays` | `180` |
 | `contextBudgetTokens` | `800` |
 | `embeddingEnabled` | `false` |
 | `embeddingModel` | `embeddinggemma-2` |

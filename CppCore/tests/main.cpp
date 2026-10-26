@@ -1352,7 +1352,10 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
                        {"globalDefaults", {{"memory", {{"embeddingEnabled", true},
                                                        {"embeddingModel", "test/multilingual-embed"},
                                                        {"embeddingBaseUrl", "http://127.0.0.1:9999/v1"},
-                                                       {"embeddingBatchSize", 8}}}}}}},
+                                                       {"embeddingBatchSize", 8},
+                                                       {"consolidationMode", "idle"},
+                                                       {"consolidationIdleSeconds", 60},
+                                                       {"consolidationDormantDays", 90}}}}}}},
         {"nodes", json::array({
             json{{"id", "origem"}, {"label", "Origem"}, {"type", "static"}, {"position", {{"x", 0}, {"y", 0}}},
                  {"inputs", json::array()}, {"outputs", json::array({port("origem_out", "out", "output", "flow")})},
@@ -1379,6 +1382,11 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(src.find("#include \"memory/MemoryService.hpp\"") != std::string::npos);
     CHECK(src.find("memory.configure(projectId, arx_mem_persistent, arx_mem_db)") != std::string::npos);
     CHECK(src.find("memory.configureEmbeddings(projectId, arx_embedding_config)") != std::string::npos);
+    CHECK(src.find("memory.configureMaintenance(projectId, taskforge::memory::maintenanceConfigFromJson("
+                   "taskforge::Json::parse(") != std::string::npos);
+    CHECK(src.find("\"consolidationMode\":\"idle\"") != std::string::npos);
+    CHECK(src.find("\"consolidationIdleSeconds\":60") != std::string::npos);
+    CHECK(src.find("\"consolidationDormantDays\":90") != std::string::npos);
     CHECK(src.find("arx_embedding_config.enabled = true;") != std::string::npos);
     CHECK(src.find("arx_embedding_config.model = \"test/multilingual-embed\";") != std::string::npos);
     CHECK(src.find("arx_embedding_config.baseUrl = \"http://127.0.0.1:9999/v1\";") != std::string::npos);
@@ -3242,6 +3250,91 @@ TEST(memory_service_brief_respects_budget) {
     CHECK(zeroInfo.chars == 0 && zeroInfo.estimatedTokens == 0 && !zeroInfo.truncated);
     CHECK(zeroInfo.lessonIds.empty() && zeroInfo.workingKeys.empty());
     memory.closeProject("brief-test");
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_maintenance_config_and_background_run) {
+    using taskforge::memory::MemoryEpisodeRecord;
+    using taskforge::memory::MemoryMaintenanceConfig;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::maintenanceConfigFromJson;
+
+    taskforge::Json raw = taskforge::Json::object();
+    raw["consolidationMode"] = "idle";
+    raw["consolidationIdleSeconds"] = 15;
+    raw["consolidationEpisodeThreshold"] = 7;
+    raw["consolidationDormantDays"] = 42;
+    raw["deduplicate"] = false;
+    const MemoryMaintenanceConfig parsed = maintenanceConfigFromJson(raw);
+    CHECK(parsed.enabled);
+    CHECK(parsed.mode == "idle");
+    CHECK(parsed.idleSeconds == 15);
+    CHECK(parsed.episodeThreshold == 7);
+    CHECK(parsed.options.dormantAfterDays == 42);
+    CHECK(!parsed.options.deduplicate);
+
+    taskforge::Json legacy = taskforge::Json::object();
+    legacy["consolidationEnabled"] = true;
+    CHECK(maintenanceConfigFromJson(legacy).mode == "idle");
+    taskforge::Json invalid = taskforge::Json::object();
+    invalid["consolidationMode"] = "always";
+    const MemoryMaintenanceConfig invalidParsed = maintenanceConfigFromJson(invalid);
+    CHECK(!invalidParsed.enabled && invalidParsed.mode == "off");
+
+    const fs::path dir = makeTempDir("memory-maintenance");
+    const fs::path db = dir / "memory.db";
+    const std::string pId = "memory-maintenance-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, db.string()));
+
+    MemoryMaintenanceConfig config;
+    config.enabled = true;
+    config.mode = "after_episodes";
+    config.episodeThreshold = 1;
+    config.options.dormantAfterDays = 30;
+    CHECK(memory.configureMaintenance(pId, config));
+    auto status = memory.maintenanceStatus(pId);
+    CHECK(status.value("enabled", false));
+    CHECK(status.value("mode", std::string()) == "after_episodes");
+    CHECK(status.value("runs", 0LL) == 0);
+
+    MemoryEpisodeRecord episode;
+    episode.scopeId = "project:" + pId;
+    episode.runId = "run-maintenance";
+    episode.nodeId = "agent-maintenance";
+    episode.kind = "agent_success";
+    episode.content = "episodio de manutencao";
+    episode.outcome = "success";
+    CHECK(!memory.recordEpisode(pId, episode).empty());
+
+    bool ran = false;
+    for (int i = 0; i < 200; ++i) {
+        status = memory.maintenanceStatus(pId);
+        if (status.value("runs", 0LL) >= 1) {
+            ran = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    CHECK(ran);
+    status = memory.maintenanceStatus(pId);
+    CHECK(status.value("runs", 0LL) >= 1);
+    CHECK(status.value("lastReason", std::string()) == "after_episodes");
+    CHECK(status.contains("lastReport"));
+    CHECK(status["lastReport"].is_object());
+
+    // A rodada manual tambem atualiza o mesmo estado observavel.
+    std::string error;
+    const taskforge::Json report = memory.runMaintenanceOnce(pId, "manual-test", error);
+    CHECK(error.empty());
+    CHECK(report.is_object());
+    status = memory.maintenanceStatus(pId);
+    CHECK(status.value("runs", 0LL) >= 2);
+    CHECK(status.value("lastReason", std::string()) == "manual-test");
+
+    memory.closeProject(pId);
     std::error_code ec;
     fs::remove_all(dir, ec);
 }

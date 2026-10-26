@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <condition_variable>
 #include <cstdlib>
 #include <cctype>
 #include <ctime>
@@ -15,6 +16,7 @@
 #include <fstream>
 #include <set>
 #include <sstream>
+#include <thread>
 
 #include "util/Json.hpp"
 
@@ -81,6 +83,62 @@ std::string formatRanked(const std::vector<RankedMemory>& ranked, size_t limit,
 }
 
 } // namespace
+
+struct MemoryService::MaintenanceRuntime {
+    std::mutex mutex;
+    std::condition_variable cv;
+    std::thread thread;
+    bool stop = false;
+    bool busy = false;
+    MemoryMaintenanceConfig config;
+    long long episodes = 0;
+    long long triggers = 0;
+    long long runs = 0;
+    long long failures = 0;
+    long long actions = 0;
+    std::string lastRunAt;
+    std::string lastReason;
+    std::string lastError;
+    std::chrono::steady_clock::time_point idleDeadline{};
+    taskforge::Json lastReport = taskforge::Json::object();
+};
+
+MemoryMaintenanceConfig maintenanceConfigFromJson(const taskforge::Json& value) {
+    MemoryMaintenanceConfig config;
+    if (!value.is_object()) return config;
+
+    config.mode = value.value("consolidationMode", config.mode);
+    if (config.mode != "idle" && config.mode != "after_episodes" && config.mode != "off") {
+        config.mode = "off";
+    }
+    if (config.mode == "off" && value.value("consolidationEnabled", false)) {
+        config.mode = "idle";
+    }
+    config.enabled = config.mode != "off";
+    config.idleSeconds = std::max(5, std::min(86400,
+        value.value("consolidationIdleSeconds", config.idleSeconds)));
+    config.episodeThreshold = std::max(1, std::min(100000,
+        value.value("consolidationEpisodeThreshold", config.episodeThreshold)));
+    config.options = consolidationOptionsFromJson(value);
+    if (value.contains("consolidationDormantDays")) {
+        config.options.dormantAfterDays = std::max(0, std::min(3650,
+            value.value("consolidationDormantDays", config.options.dormantAfterDays)));
+    }
+    return config;
+}
+
+taskforge::Json maintenanceConfigToJson(const MemoryMaintenanceConfig& config) {
+    return taskforge::Json{
+        {"enabled", config.enabled},
+        {"mode", config.mode},
+        {"idleSeconds", config.idleSeconds},
+        {"episodeThreshold", config.episodeThreshold},
+        {"options", consolidationOptionsToJson(config.options)}};
+}
+
+MemoryService::~MemoryService() {
+    stopAllMaintenance();
+}
 
 MemoryService& MemoryService::getInstance() {
     static MemoryService instance;
@@ -714,8 +772,11 @@ std::string MemoryService::recordEpisode(const std::string& projectId, const std
                                          const std::string& kind, const std::string& content,
                                          const taskforge::Json& metadata) {
     auto* s = ensureStore(projectId);
-    return s ? s->recordEpisode(scopeId(projectId), runId, nodeId, itemId, kind, content, metadata)
-             : std::string();
+    const std::string id = s
+        ? s->recordEpisode(scopeId(projectId), runId, nodeId, itemId, kind, content, metadata)
+        : std::string();
+    if (!id.empty()) noteMaintenanceEpisode(projectId);
+    return id;
 }
 
 std::string MemoryService::recordEpisode(const std::string& projectId, const MemoryEpisodeRecord& episode) {
@@ -723,7 +784,9 @@ std::string MemoryService::recordEpisode(const std::string& projectId, const Mem
     if (!s) return std::string();
     MemoryEpisodeRecord copy = episode;
     copy.scopeId = scopeId(projectId);
-    return s->recordEpisode(copy);
+    const std::string id = s->recordEpisode(copy);
+    if (!id.empty()) noteMaintenanceEpisode(projectId);
+    return id;
 }
 
 taskforge::Json MemoryService::getEpisode(const std::string& projectId, const std::string& episodeId) {
@@ -991,12 +1054,209 @@ taskforge::Json MemoryService::consolidate(const std::string& projectId,
     return out;
 }
 
+bool MemoryService::configureMaintenance(const std::string& projectId,
+                                         const MemoryMaintenanceConfig& config) {
+    const std::string id = projectKey(projectId);
+    stopMaintenance(id);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!ensureStore(id)) return false;
+    auto persistentIt = persistent_.find(id);
+    if (persistentIt == persistent_.end() || !persistentIt->second ||
+        !config.enabled || config.mode == "off") {
+        return true;
+    }
+    try {
+        startMaintenanceLocked(id, config);
+    } catch (const std::exception&) {
+        maintenance_.erase(id);
+        return false;
+    }
+    return true;
+}
+
+MemoryMaintenanceConfig MemoryService::maintenanceConfig(const std::string& projectId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    auto it = maintenance_.find(projectKey(projectId));
+    if (it == maintenance_.end() || !it->second) return MemoryMaintenanceConfig{};
+    std::lock_guard<std::mutex> runtimeLock(it->second->mutex);
+    return it->second->config;
+}
+
+void MemoryService::noteMaintenanceEpisode(const std::string& projectId) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    auto it = maintenance_.find(projectKey(projectId));
+    if (it == maintenance_.end() || !it->second) return;
+    auto* runtime = it->second.get();
+    std::lock_guard<std::mutex> runtimeLock(runtime->mutex);
+    if (runtime->config.mode == "off") return;
+    ++runtime->episodes;
+    if (runtime->config.mode == "idle") {
+        runtime->idleDeadline = std::chrono::steady_clock::now() +
+                                std::chrono::seconds(runtime->config.idleSeconds);
+    }
+    runtime->cv.notify_all();
+}
+
+void MemoryService::startMaintenanceLocked(const std::string& projectId,
+                                           const MemoryMaintenanceConfig& config) {
+    auto runtime = std::make_unique<MaintenanceRuntime>();
+    runtime->config = config;
+    MaintenanceRuntime* raw = runtime.get();
+    maintenance_[projectId] = std::move(runtime);
+    raw->thread = std::thread([this, projectId, raw]() {
+        maintenanceLoop(projectId, raw);
+    });
+}
+
+void MemoryService::stopMaintenance(const std::string& projectId) {
+    std::unique_ptr<MaintenanceRuntime> runtime;
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        auto it = maintenance_.find(projectKey(projectId));
+        if (it == maintenance_.end()) return;
+        runtime = std::move(it->second);
+        maintenance_.erase(it);
+    }
+    if (!runtime) return;
+    {
+        std::lock_guard<std::mutex> runtimeLock(runtime->mutex);
+        runtime->stop = true;
+    }
+    runtime->cv.notify_all();
+    if (runtime->thread.joinable()) runtime->thread.join();
+}
+
+void MemoryService::stopAllMaintenance() {
+    std::vector<std::string> ids;
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        for (const auto& entry : maintenance_) ids.push_back(entry.first);
+    }
+    for (const auto& id : ids) stopMaintenance(id);
+}
+
+void MemoryService::maintenanceLoop(const std::string& projectId,
+                                    MaintenanceRuntime* runtime) {
+    std::unique_lock<std::mutex> lock(runtime->mutex);
+    while (!runtime->stop) {
+        const MemoryMaintenanceConfig config = runtime->config;
+        if (config.mode == "after_episodes") {
+            runtime->cv.wait(lock, [&]() {
+                return runtime->stop || runtime->episodes >= config.episodeThreshold;
+            });
+            if (runtime->stop) break;
+        } else if (config.mode == "idle") {
+            runtime->cv.wait(lock, [&]() {
+                return runtime->stop || runtime->episodes > 0;
+            });
+            if (runtime->stop) break;
+            auto deadline = runtime->idleDeadline;
+            while (!runtime->stop && runtime->episodes > 0) {
+                const auto state = runtime->cv.wait_until(lock, deadline);
+                if (state == std::cv_status::timeout) break;
+                if (runtime->stop) break;
+                deadline = runtime->idleDeadline;
+            }
+            if (runtime->stop || runtime->episodes == 0) continue;
+        } else {
+            break;
+        }
+
+        runtime->busy = true;
+        ++runtime->triggers;
+        runtime->episodes = 0;
+        const MemoryMaintenanceConfig runConfig = runtime->config;
+        lock.unlock();
+
+        std::string error;
+        taskforge::Json report = consolidate(projectId, runConfig.options, error);
+
+        lock.lock();
+        runtime->busy = false;
+        ++runtime->runs;
+        runtime->lastRunAt = isoNow();
+        runtime->lastReason = runConfig.mode;
+        if (error.empty()) {
+            runtime->lastError.clear();
+        } else {
+            ++runtime->failures;
+            runtime->lastError = error;
+        }
+        runtime->lastReport = report;
+        runtime->cv.notify_all();
+    }
+}
+
+taskforge::Json MemoryService::maintenanceStatus(const std::string& projectId) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    auto it = maintenance_.find(projectKey(projectId));
+    if (it == maintenance_.end() || !it->second) {
+        return taskforge::Json{{"enabled", false}, {"mode", "off"}};
+    }
+    MaintenanceRuntime* runtime = it->second.get();
+    std::lock_guard<std::mutex> runtimeLock(runtime->mutex);
+    taskforge::Json out = maintenanceConfigToJson(runtime->config);
+    out["busy"] = runtime->busy;
+    out["episodesSinceRun"] = runtime->episodes;
+    out["triggers"] = runtime->triggers;
+    out["runs"] = runtime->runs;
+    out["failures"] = runtime->failures;
+    out["lastRunAt"] = runtime->lastRunAt;
+    out["lastReason"] = runtime->lastReason;
+    out["lastError"] = runtime->lastError;
+    out["lastReport"] = runtime->lastReport;
+    if (runtime->config.mode == "after_episodes") {
+        out["nextInEpisodes"] = std::max<long long>(
+            0, runtime->config.episodeThreshold - runtime->episodes);
+    }
+    if (runtime->config.mode == "idle" && runtime->episodes > 0) {
+        const auto remaining = std::chrono::duration_cast<std::chrono::seconds>(
+            runtime->idleDeadline - std::chrono::steady_clock::now()).count();
+        out["nextInSeconds"] = std::max<long long>(0, remaining);
+    }
+    return out;
+}
+
+taskforge::Json MemoryService::runMaintenanceOnce(const std::string& projectId,
+                                                  const std::string& reason,
+                                                  std::string& error) {
+    MemoryMaintenanceConfig config;
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        auto it = maintenance_.find(projectKey(projectId));
+        if (it != maintenance_.end() && it->second) {
+            std::lock_guard<std::mutex> runtimeLock(it->second->mutex);
+            config = it->second->config;
+        }
+    }
+    const taskforge::Json report = consolidate(projectId, config.options, error);
+
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    auto it = maintenance_.find(projectKey(projectId));
+    if (it != maintenance_.end() && it->second) {
+        MaintenanceRuntime* runtime = it->second.get();
+        std::lock_guard<std::mutex> runtimeLock(runtime->mutex);
+        ++runtime->runs;
+        runtime->lastRunAt = isoNow();
+        runtime->lastReason = reason;
+        runtime->lastReport = report;
+        if (error.empty()) {
+            runtime->lastError.clear();
+        } else {
+            ++runtime->failures;
+            runtime->lastError = error;
+        }
+    }
+    return report;
+}
+
 taskforge::Json MemoryService::consolidationStatus(const std::string& projectId) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     auto* s = ensureStore(projectId);
     if (!s) return taskforge::Json::object();
     const std::string scope = scopeId(projectId);
     taskforge::Json out = s->consolidationSummary(scope);
+    out["maintenance"] = maintenanceStatus(projectId);
     taskforge::Json edges = taskforge::Json::array();
     const auto names = s->nodeNames(scope);
     for (const auto& edge : s->listEdges(scope, "", 20000)) {
@@ -1130,6 +1390,7 @@ taskforge::Json MemoryService::toJson(const std::string& projectId) {
     out["projectId"] = projectId;
     out["persistent"] = isPersistent(projectId);
     out["database"] = databasePath(projectId);
+    out["maintenance"] = maintenanceStatus(projectId);
     return out;
 }
 
@@ -1162,8 +1423,9 @@ bool MemoryService::importLegacySnapshot(const std::string& projectId, const tas
 }
 
 bool MemoryService::clearSession(const std::string& projectId) {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (isPersistent(projectId)) return true;
+    stopMaintenance(projectId);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (auto* s = ensureStore(projectId)) {
         if (s->resetInMemory()) return true;
         s->clearScopeData(scopeId(projectId));
@@ -1173,6 +1435,7 @@ bool MemoryService::clearSession(const std::string& projectId) {
 }
 
 void MemoryService::closeProject(const std::string& projectId) {
+    stopMaintenance(projectId);
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     stores_.erase(projectId);
     persistent_.erase(projectId);

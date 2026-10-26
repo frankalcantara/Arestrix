@@ -257,6 +257,23 @@ Executada sob demanda por `memory consolidate` ou pelo botão **Consolidar memó
 
 A consolidação é idempotente e auditada. Ela não roda no hot path do grafo.
 
+### Consolidação em background
+
+O `MemoryService` mantém um worker in-process, opt-in e desligado por padrão, que consome apenas
+episódios já persistidos. Ele não participa da busca nem bloqueia a gravação de um episódio.
+
+- `consolidationMode=off`: somente manual (padrão);
+- `consolidationMode=idle`: consolida após `consolidationIdleSeconds` sem novos episódios;
+- `consolidationMode=after_episodes`: consolida a cada `consolidationEpisodeThreshold` episódios;
+- `consolidationDormantDays` controla o decay aplicado na rodada.
+
+O worker só é iniciado para projetos persistentes. Ao fechar o projeto ou encerrar o processo, a
+thread é sinalizada e aguardada fora do mutex do serviço, sem deixar trabalho em segundo plano
+órfão. `consolidationStatus` expõe `runs`, `lastRunAt`, `lastReason`, `lastError`, `lastReport`,
+`nextInEpisodes` e `nextInSeconds` no processo que hospeda o worker. O painel do Studio mostra o
+modo configurado no grafo; como o pipeline gerado roda em outro processo, os contadores ao vivo
+pertencem ao processo que está executando o worker.
+
 ## 10. Playbooks
 
 O `MemoryPlaybookCompiler` observa episódios quando `recordLessons` está habilitado.
@@ -338,6 +355,7 @@ arquivo de tokens fora do repositório e restrinja as permissões do sistema ope
 | `POST` | `/v1/lessons` | `editor` | grava `{ "domain", "triggerError", "lessonRule" }` |
 | `POST` | `/v1/policies` | `admin` | grava `{ "key", "value", "immutable" }` |
 | `POST` | `/mcp` | bearer | JSON-RPC 2.0 do MCP |
+| `GET` | `/metrics` | `viewer` | contadores Prometheus do processo |
 
 Exemplo:
 
@@ -383,7 +401,11 @@ O endpoint HTTP `/mcp` aceita o mesmo JSON-RPC com `Authorization: Bearer ...`.
 - escute em `127.0.0.1` e coloque um **reverse proxy TLS** na frente para exposição em rede;
 - o banco é SQLite single-node; não há sincronização multi-máquina nesta versão;
 - o serviço não implementa rate limit próprio; use o proxy/gateway para isso;
-- logs não incluem tokens, corpos de lições ou conteúdo de memória.
+- logs não incluem tokens, corpos de lições ou conteúdo de memória;
+- `/metrics` também exige Bearer token (`viewer` suficiente) e expõe apenas contadores agregados:
+  requisições REST/MCP, notificações, falhas 401, respostas 2xx/4xx/5xx, uptime e versão;
+- o worker de consolidação é por processo. Duas instâncias do `arestrix-memory` não coordenam a
+  mesma rodada; para operação multi-instância, mantenha a consolidação manual ou externa.
 
 ## 13. Snapshot, retenção e expurgo
 
@@ -410,6 +432,10 @@ Campos em **Global Defaults → Memória**:
 | `maxLessonsPerRun` | `20` |
 | `maxLessonChars` | `4000` |
 | `retentionDays` | `180` |
+| `consolidationMode` | `off` |
+| `consolidationIdleSeconds` | `300` |
+| `consolidationEpisodeThreshold` | `20` |
+| `consolidationDormantDays` | `180` |
 | `contextBudgetTokens` | `800` |
 | `embeddingEnabled` | `false` |
 | `embeddingModel` | `embeddinggemma-2` |

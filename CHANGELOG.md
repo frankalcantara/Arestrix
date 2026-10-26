@@ -84,6 +84,13 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   merge with evidence preservation, `SUPERSEDES`/`CONTRADICTS`/`GENERALIZES`, fact expiration,
   decay into `dormant_at`, and hit-based reinforcement. Conflicts and decay are visible in the
   Studio; `memory consolidate` runs the same pipeline from the CLI.
+- Opt-in background consolidation per project (`consolidationMode=off|idle|after_episodes`,
+  idle/episode thresholds, dormant days), only for persistent memory. The worker runs outside the
+  recall path, exposes runs/last run/next trigger/error in the Studio, and stops deterministically
+  when the project or process closes.
+- Authenticated `GET /metrics` on `arestrix-memory`, with Prometheus counters for REST/MCP requests,
+  MCP notifications, 401 failures, response classes, uptime and version. `/metrics` requires a
+  `viewer` bearer token and adds no high-cardinality labels.
 - Procedural playbooks: successful trajectories compile by `task_type`, become `candidate` on
   the first evidence and `active` on the second, track success/failure counts and evidence,
   are recovered into the memory brief within budget, appear in the Studio and persist in
@@ -91,7 +98,8 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
 - Workspace memory: separate `.workspace/memory/memory.db`, project-reads-workspace
   inheritance, explicit evidence-backed promotion of lessons/facts/playbooks with audit, CLI
   and Studio flows, and sibling isolation. Institution contract adds in-memory tokens,
-  viewer/editor/admin roles and immutable ancestor policies; HTTP/MCP exposure is pending.
+  viewer/editor/admin roles and immutable ancestor policies; `arestrix-memory` exposes it over
+  authenticated HTTP, `/mcp` and MCP stdio.
 - **Strictly Optional Git Synchronization (100% Local by Default):** Git/GitHub synchronization is now opt-in (`enabled: false` by default for new projects). If disabled, all project files, SQLite databases (`storage/database.sqlite`), and cognitive memory (`.arestrix/memory/memory.db`) reside exclusively on local disk with zero Git operations, zero network overhead, and zero dump exports.
 - **Configurable Backup Mode (Privacy & LGPD/GDPR Compliance):** Projects support two backup modes: "DDL + Data" (full tabular export) and "DDL Only / Schema Only" (table structure without rows), preventing sensitive data and PII from reaching Git.
 - **Deterministic Plaintext Dumps & Ghost Commit Elimination:** Volatile timestamp headers were removed from SQL and JSON memory dumps. Files are only updated on disk if their actual contents have changed, preventing packfile bloat and delta churn.

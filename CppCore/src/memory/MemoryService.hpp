@@ -22,8 +22,22 @@
 namespace taskforge {
 namespace memory {
 
+// Consolidacao em background, opt-in. O worker e deterministico e nunca roda no
+// hot path de uma busca; ele apenas consome episodios ja persistidos.
+struct MemoryMaintenanceConfig {
+    bool enabled = false;
+    std::string mode = "off";   // off | idle | after_episodes
+    int idleSeconds = 300;
+    int episodeThreshold = 20;
+    ConsolidationOptions options;
+};
+
+MemoryMaintenanceConfig maintenanceConfigFromJson(const taskforge::Json& value);
+taskforge::Json maintenanceConfigToJson(const MemoryMaintenanceConfig& config);
+
 class MemoryService {
 public:
+    ~MemoryService();
     static MemoryService& getInstance();
 
     // Abre (ou reabre) o store do projeto. persistent=false usa SQLite :memory:.
@@ -118,6 +132,16 @@ public:
                                 const ConsolidationOptions& options,
                                 std::string& error);
     taskforge::Json consolidationStatus(const std::string& projectId);
+
+    // Consolidacao em background: configuravel por projeto e desligada por padrao.
+    bool configureMaintenance(const std::string& projectId,
+                              const MemoryMaintenanceConfig& config);
+    MemoryMaintenanceConfig maintenanceConfig(const std::string& projectId) const;
+    taskforge::Json maintenanceStatus(const std::string& projectId);
+    // Executa uma rodada agora no chamador (usado por CLI/testes e pelo worker).
+    taskforge::Json runMaintenanceOnce(const std::string& projectId,
+                                       const std::string& reason,
+                                       std::string& error);
     taskforge::Json listPlaybooks(const std::string& projectId,
                                   const std::string& taskType = "",
                                   const std::string& status = "",
@@ -173,7 +197,6 @@ public:
 
 private:
     MemoryService() = default;
-    ~MemoryService() = default;
     MemoryService(const MemoryService&) = delete;
     MemoryService& operator=(const MemoryService&) = delete;
 
@@ -184,6 +207,8 @@ private:
         // agente/busca. Test/reindex explicitos ignoram e resetam o cooldown.
         std::chrono::steady_clock::time_point cooldownUntil{};
     };
+
+    struct MaintenanceRuntime;
 
     MemoryStore* ensureStore(const std::string& projectId);
     std::string scopeId(const std::string& projectId) const;
@@ -202,6 +227,15 @@ private:
                       const std::vector<std::string>& domains,
                       std::vector<RankedMemory>& output);
 
+    // Worker de manutencao: o stop ocorre fora de mutex_ para evitar deadlock
+    // com uma rodada de consolidacao em andamento.
+    void startMaintenanceLocked(const std::string& projectId,
+                                const MemoryMaintenanceConfig& config);
+    void stopMaintenance(const std::string& projectId);
+    void stopAllMaintenance();
+    void maintenanceLoop(const std::string& projectId, MaintenanceRuntime* runtime);
+    void noteMaintenanceEpisode(const std::string& projectId);
+
     mutable std::recursive_mutex mutex_;
     std::map<std::string, std::unique_ptr<MemoryStore>> stores_;
     std::map<std::string, bool> persistent_;
@@ -210,6 +244,7 @@ private:
     std::map<std::string, std::unique_ptr<MemoryStore>> workspaceStores_;
     std::map<std::string, std::string> workspacePaths_;
     std::map<std::string, std::string> projectWorkspace_;
+    std::map<std::string, std::unique_ptr<MaintenanceRuntime>> maintenance_;
 };
 
 } // namespace memory
