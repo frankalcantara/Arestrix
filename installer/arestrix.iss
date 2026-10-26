@@ -69,6 +69,7 @@ UninstallDisplayIcon={app}\arestrix.ico
 CloseApplications=yes
 RestartApplications=no
 UsePreviousAppDir=yes
+UsePreviousTasks=yes
 SetupLogging=yes
 VersionInfoVersion={#AppVersionNumeric}
 VersionInfoProductName={#AppName}
@@ -91,7 +92,7 @@ brazilianportuguese.VCRedistName=Microsoft Visual C++ Redistributable x64
 english.VCRedistName=Microsoft Visual C++ Redistributable x64
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
 Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

@@ -103,19 +103,18 @@ release publicada.
 
 - [x] Build do instalador Inno Setup (`py scripts/package_release.py --installer`) e publicação no CI.
 - [ ] Instalação limpa em Windows x64 sem dependências ocultas.
-- [ ] Atalhos (Menu Iniciar/Desktop) e desinstalação completa.
-- [ ] Upgrade sobre a versão anterior preservando projetos/configuração do usuário.
-- [ ] Instalação silenciosa e códigos de saída documentados (`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`).
+- [x] Atalhos (Menu Iniciar/Desktop padrão, com opção de desmarcar) e desinstalação completa validadas localmente.
+- [x] Upgrade sobre a versão anterior preservando projetos/configuração do usuário validado localmente.
+- [x] Instalação silenciosa e códigos de saída documentados (`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`; `/MERGETASKS="!desktopicon"` para pular o atalho).
 - [ ] Assinatura Authenticode de todos os executáveis.
-- [ ] Teste de instalação em perfil sem privilégios administrativos (instalação per-user em
-      `%LOCALAPPDATA%\Programs\Arestrix`).
+- [x] Instalação em perfil sem privilégios administrativos (per-user em `%LOCALAPPDATA%\Programs\Arestrix`).
 - [ ] Teste em máquina limpa com apenas o runtime VC++ exigido.
 - [ ] Linux: pacote equivalente com dependências e caminhos de dados documentados.
 
 > **Validação local (2026-10-26, Windows 11 x64):** build do instalador, instalação silenciosa,
-> atalhos do Menu Iniciar, entrada `App Paths` e desinstalação completa validados (códigos de saída
-> 0 e diretório removido). Upgrade sobre versão anterior, atalho de desktop, máquina limpa,
-> assinatura e Intune/SCCM continuam pendentes.
+> atalho de desktop padrão e exclusão opcional, atalhos do Menu Iniciar, entrada `App Paths`, upgrade
+> in-place preservando arquivos/projetos do usuário e desinstalação completa validados (códigos 0).
+> Instalação em máquina limpa, assinatura, Intune/SCCM e pacote Linux continuam pendentes.
 
 ### 2.8 Segurança e integridade
 

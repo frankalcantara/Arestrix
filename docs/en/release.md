@@ -140,9 +140,13 @@ Inno Setup 6 must be installed (`ISCC.exe` on `PATH`, `ISCC` pointing to it, or 
 
 The installer:
 
-- installs per user under `%LOCALAPPDATA%\Programs\Arestrix`, so no administrator rights are needed;
-- uses a stable `AppId` for upgrades and registers the app in **Apps & Features**;
-- creates Start menu/optional desktop shortcuts and an `arestrix.exe` App Paths entry;
+- installs per user under `%LOCALAPPDATA%\Programs\Arestrix`, but an existing installation keeps its
+  previous directory/tasks on upgrade (stable `AppId`, `UsePreviousAppDir`, `UsePreviousTasks`);
+- creates Start menu and **desktop shortcuts by default**; the desktop shortcut can be unchecked in
+  the wizard, and silent installs can skip it with `/MERGETASKS="!desktopicon"`;
+- never writes to or deletes user project folders; upgrades replace only application files and
+  preserve projects, workspaces, logs, models and runtime downloads;
+- registers the app in **Apps & Features** and adds an `arestrix.exe` App Paths entry;
 - checks for Microsoft Edge WebView2 Runtime and the Visual C++ Redistributable x64, aborting with
   the official download links when either is missing;
 - includes the same binaries, UI, runtime library, examples, documentation and manifests as the
@@ -150,10 +154,11 @@ The installer:
 - is signed automatically when `ARESTRIX_SIGN_PFX`/`ARESTRIX_SIGN_PFX_PASSWORD` or
   `ARESTRIX_SIGN_THUMBPRINT` are set (the same variables used by `sign-windows.ps1`).
 
-Local validation on Windows 11 x64 covered the silent install, Start menu shortcuts, `App Paths`
-registration and complete uninstall. Upgrade over a previous version, the optional desktop shortcut,
-clean-machine install, signing and Intune/SCCM validation remain part of the Beta 2 gate; the
-installer is not yet a validated release artifact.
+Local validation on Windows 11 x64 covered the silent install, the desktop shortcut default and its
+`/MERGETASKS="!desktopicon"` opt-out, Start menu shortcuts, `App Paths` registration, an in-place
+upgrade preserving user files/projects and a complete uninstall. Clean-machine install, signing and
+Intune/SCCM validation remain part of the Beta 2 gate; the installer is not yet a validated release
+artifact.
 
 ## 4. Sign the Windows binaries
 

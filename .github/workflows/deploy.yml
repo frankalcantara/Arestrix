@@ -73,9 +73,11 @@ jobs:
           $dir = Join-Path $env:RUNNER_TEMP "ArestrixInstallerSmoke"
           if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
           $install = Start-Process -FilePath $setup.FullName `
-            -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/NOICONS',"/DIR=$dir") `
+            -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$dir") `
             -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "installer exited with $($install.ExitCode)" }
+          $desktopShortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Arestrix.lnk'
+          if (-not (Test-Path $desktopShortcut)) { throw "desktop shortcut was not created" }
           & (Join-Path $dir 'arestrix-cli.exe') version
           if ($LASTEXITCODE -ne 0) { throw "installed CLI failed" }
           $uninstall = Start-Process -FilePath (Join-Path $dir 'unins000.exe') `
@@ -84,6 +86,7 @@ jobs:
           if ($uninstall.ExitCode -ne 0) { throw "uninstaller exited with $($uninstall.ExitCode)" }
           Start-Sleep -Milliseconds 500
           if (Test-Path $dir) { throw "install directory was not removed" }
+          if (Test-Path $desktopShortcut) { throw "desktop shortcut was not removed" }
 
       - name: Read product version
         id: product

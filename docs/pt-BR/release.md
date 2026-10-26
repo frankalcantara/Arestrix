@@ -141,19 +141,23 @@ ou instalação padrão em `Program Files\Inno Setup 6`). A saída é
 
 O instalador:
 
-- instala por usuário em `%LOCALAPPDATA%\Programs\Arestrix`, sem exigir privilégios administrativos;
-- usa um `AppId` estável para upgrades e aparece em **Aplicativos e recursos**;
-- cria atalhos no Menu Iniciar/Área de Trabalho (opcional) e uma entrada `App Paths` para o
-  `arestrix.exe`;
+- instala por usuário em `%LOCALAPPDATA%\Programs\Arestrix`, mas uma instalação existente mantém o
+  diretório/tarefas anteriores no upgrade (`AppId` estável, `UsePreviousAppDir`, `UsePreviousTasks`);
+- cria atalhos no Menu Iniciar e **na Área de Trabalho por padrão**; o atalho de desktop pode ser
+  desmarcado no assistente e instalações silenciosas podem ignorá-lo com `/MERGETASKS="!desktopicon"`;
+- nunca grava nem apaga as pastas de projetos do usuário; o upgrade substitui apenas arquivos da
+  aplicação e preserva projetos, workspaces, logs, modelos e runtimes baixados;
+- aparece em **Aplicativos e recursos** e registra uma entrada `App Paths` para o `arestrix.exe`;
 - verifica o Microsoft Edge WebView2 Runtime e o Visual C++ Redistributable x64, abortando com os
   links oficiais de download quando algum estiver ausente;
 - inclui os mesmos binários, UI, runtime, exemplos, documentação e manifestos do pacote portátil;
 - é assinado automaticamente quando `ARESTRIX_SIGN_PFX`/`ARESTRIX_SIGN_PFX_PASSWORD` ou
   `ARESTRIX_SIGN_THUMBPRINT` estiverem definidos (as mesmas variáveis do `sign-windows.ps1`).
 
-A validação local em Windows 11 x64 cobriu instalação silenciosa, atalhos do Menu Iniciar, registro
-em `App Paths` e desinstalação completa. Upgrade sobre versão anterior, atalho opcional de desktop,
-instalação em máquina limpa, assinatura e Intune/SCCM ainda fazem parte do gate Beta 2; o instalador
+A validação local em Windows 11 x64 cobriu instalação silenciosa, atalho de desktop padrão e sua
+exclusão com `/MERGETASKS="!desktopicon"`, atalhos do Menu Iniciar, registro em `App Paths`, upgrade
+sobre a instalação anterior preservando arquivos/projetos do usuário e desinstalação completa.
+Instalação em máquina limpa, assinatura e Intune/SCCM ainda fazem parte do gate Beta 2; o instalador
 ainda não é um artefato de release validado.
 
 ## 4. Assine os binários do Windows
