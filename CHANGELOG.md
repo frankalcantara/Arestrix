@@ -58,6 +58,11 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
 - `.workspace/` directories are now ignored by Git and excluded from portable packages. They hold
   workspace assets with machine-specific absolute paths (for example
   `C:/Projetos/.../.workspace/workspace.config.json`) and must never be published in a release.
+- Project auto-commit no longer depends on a machine-wide Git identity. When `user.name`/`user.email`
+  are absent (clean machines and CI runners), the commit uses a one-shot
+  `Arestrix <arestrix@localhost>` fallback via `git -c ... commit` instead of failing with
+  "Author identity unknown". No local config is persisted, so a global identity configured later
+  still applies; the native test no longer requires a pre-configured OS identity.
 
 ### Added
 

@@ -5281,10 +5281,13 @@ TEST(git_sync_service_and_project_manifest_config) {
     bool installed = GitSyncService::checkGitInstalled(ver);
     CHECK(installed && !ver.empty());
 
-    // 4. Identidade do SO
+    // 4. Identidade do SO (opcional): o servico aplica fallback local no repositorio
     std::string uName, uEmail;
     bool hasId = GitSyncService::getSystemIdentity(uName, uEmail);
-    CHECK(hasId && !uName.empty());
+    if (hasId) {
+        CHECK(!uName.empty());
+        CHECK(!uEmail.empty());
+    }
 
     // 5. Teste de commitLocal em repositorio temporario
     std::filesystem::path tempDir = std::filesystem::temp_directory_path() / ("arx_test_git_commit_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()));

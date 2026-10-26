@@ -52,6 +52,22 @@ std::string sanitizeRepoName(const std::string& name) {
     return clean;
 }
 
+/**
+ * Verifica se o repositório tem user.name/user.email efetivos (local ou global).
+ * Usado para decidir se o commit precisa de uma identidade de fallback pontual.
+ */
+bool hasGitIdentity(const std::filesystem::path& projectRoot) {
+    for (const char* key : {"user.name", "user.email"}) {
+        platform::ProcessSpec get;
+        get.argv = {"git", "config", "--get", key};
+        get.workingDir = projectRoot;
+        get.scrubSecrets = true;
+        auto current = platform::run(get, 3000);
+        if (!current.ok() || trim(current.output).empty()) return false;
+    }
+    return true;
+}
+
 } // namespace
 
 bool GitSyncService::isCommercialService(const std::string& serverOrProvider) {
@@ -527,7 +543,13 @@ bool GitSyncService::commitLocal(const std::filesystem::path& projectRoot,
     if (hasChanges) {
         std::string msg = !commitMessage.empty() ? commitMessage : ("Arestrix Auto-Save: " + getCurrentIsoTime());
         platform::ProcessSpec s;
-        s.argv = {"git", "commit", "-m", msg};
+        if (hasGitIdentity(projectRoot)) {
+            s.argv = {"git", "commit", "-m", msg};
+        } else {
+            // Fallback pontual para maquinas sem user.name/user.email (CI, instalação limpa).
+            // Nao grava config local: uma identidade global configurada depois continua valendo.
+            s.argv = {"git", "-c", "user.name=Arestrix", "-c", "user.email=arestrix@localhost", "commit", "-m", msg};
+        }
         s.workingDir = projectRoot;
         s.scrubSecrets = true;
         auto r = platform::run(s, 10000);
