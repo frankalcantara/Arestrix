@@ -30,6 +30,8 @@ bump de versão, tag, assinatura e publicação. O Beta 2 ainda não é uma rele
 - [ ] **5B2 — pacote Linux:** AppImage, `.deb` ou tarball instalável, com dependências documentadas.
 - [ ] **5C — assinatura:** certificado/HSM, Authenticode no Windows, assinatura dos artefatos no CI.
 - [ ] **5C — CI:** matriz Windows/Linux, build nativo, CTest, Vitest, E2E, gateway smoke e release gate.
+  - [x] Matriz Windows/Linux com CTest, Vitest e checks no `ci.yml`; gate e gateway smoke no `deploy.yml`.
+  - [ ] E2E no CI e promoção automatizada por tag.
 - [ ] **5C — catálogo remoto assinado:** par de chaves, custódia, rotação e hospedagem.
 - [ ] **Distribuição:** publicar checksums, SBOM, notices e notas de release.
 - [ ] **Testes e homologação** da matriz abaixo.

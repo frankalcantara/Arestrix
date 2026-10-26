@@ -1,5 +1,4 @@
-# DISABLED during the beta. Rename to dependabot.yml to re-enable dependency
-# update pull requests. See .github/DISABLED_AUTOMATION.md.
+# Dependency update pull requests. See .github/AUTOMATION.md.
 version: 2
 updates:
   - package-ecosystem: npm

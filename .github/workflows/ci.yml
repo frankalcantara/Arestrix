@@ -1,0 +1,136 @@
+name: CI
+
+# Pull-request validation. The Windows portable release pipeline lives in
+# deploy.yml; this workflow is the pre-merge gate (quality, frontend, native
+# Windows and native Linux). The four job names are required status checks on
+# main, so keep them stable.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUTF8: "1"
+
+jobs:
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Check version consistency
+        run: npm run check:version
+
+      - name: Validate local assets
+        run: npm run check:local-assets
+
+      - name: Scan for secrets
+        run: npm run check:secrets
+
+      - name: Check skill references
+        run: npm run check:skill-references
+
+      - name: Check third-party licenses
+        run: python scripts/check_third_party_licenses.py
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Run Vitest
+        run: npm test
+
+      - name: Build Studio
+        run: npm run build
+
+  native-windows:
+    name: native-windows
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      # Builds the native C++20 targets with MSVC hardening and runs CTest.
+      # No frontend is built here; the frontend job covers TypeScript/Vite.
+      - name: Build and test native backend
+        run: python CppCore/dev.py --test --no-frontend
+
+  native-linux:
+    name: native-linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Install native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      # Same C++20 build and CTest suite as Windows, using GCC/Clang on Linux.
+      - name: Build and test native backend
+        run: python CppCore/dev.py --test --no-frontend

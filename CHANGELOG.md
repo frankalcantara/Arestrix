@@ -75,6 +75,11 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   release carries the ZIP, `.zip.sha256`, `SHA256SUMS`, `SBOM.json`, `release-manifest.json` and
   `release-report.json`, so testers can run the Studio from any folder without a development
   checkout. Both READMEs now point to the `latest` build.
+- Pull-request CI: `.github/workflows/ci.yml` runs quality/static checks, Vitest + Studio build,
+  native Windows CTest and native Linux CTest. The four jobs are required status checks on `main`;
+  the repository owner keeps an `always` bypass for urgent direct pushes. Dependabot is enabled for
+  npm, GitHub Actions and Git submodules, and both workflows now use Node 24 with `checkout@v7`,
+  `setup-node@v7`, `setup-python@v7` and `action-gh-release@v3`.
 - Arestrix Skill Guard: the `security-audit-skill` (Cloudflare) submodule, a project skill at
   `.agents/skills/arestrix-skill-guard/`, and a second deterministic audit layer for supply chain,
   persistence, credential access, tool abuse, data isolation and resource exhaustion. Skill
