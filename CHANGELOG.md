@@ -41,6 +41,20 @@ Pre-release identifiers follow SemVer (`1.5.0-beta.1`); the marketing name is **
   `criticalSectionId` (with `parameters.maxConcurrency`), Subflow navigation uses the real graph
   stack, MCP testing executes the configured tool, and ribbon dialogs replace `prompt`/`confirm`.
   The ribbon body grows with its content and respects the window width.
+- SVG vertices now capture pointerdown on the whole visual surface. Text titles, the type label, the
+  header icon and the status pills were painted above the body and swallowed the click, so selecting
+  a vertex sometimes required two or three attempts; ports and action-bar buttons keep their own
+  interactions. Selection events also carry the node data consistently, and quick-action buttons now
+  route selection through the canvas so the selection ring and Delete/Backspace stay in sync.
+- Double-clicking a Subflow/Module on the SVG layer now dives into it (the SVG overlay previously
+  swallowed the canvas `dblclick`), and entering/leaving a hierarchy level fits the new level in the
+  viewport. A vertex drag now starts only after a 4px threshold, so a click with hand jitter no
+  longer moves the vertex or creates spurious undo entries, and the drag is finalized when the
+  pointer is released over an input port or the `pointerup` is lost. Wheel zoom again anchors on the
+  real cursor position when the canvas is offset by the ribbon/breadcrumbs, and interaction/camera
+  listeners are removed on disposal. Vertex titles now wrap into up to two lines instead of
+  overflowing the card (the shared text helper never inserted line breaks), and a truncated title
+  exposes the full label through a native SVG tooltip.
 
 ### Added
 

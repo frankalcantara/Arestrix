@@ -104,12 +104,17 @@ export function disposeNodeLabel(label: Text | undefined | null): void {
 /**
  * Estimativa de largura média de glifo da Inter (em fração do tamanho da fonte).
  * Usada para truncamento determinístico antes da tipografia assíncrona do troika.
+ * 0.6 dá margem de segurança para maiúsculas e acentos sem estourar a largura do cartão.
  */
-const INTER_AVG_CHAR_WIDTH = 0.56;
+const INTER_AVG_CHAR_WIDTH = 0.6;
 
 /**
  * Trunca um texto para caber em `maxLines` linhas de largura `maxWidth` com reticências.
- * Retorna o texto final e se houve truncamento (para exibir o texto completo em tooltip).
+ * Retorna o texto final (com `\n` entre as linhas) e se houve truncamento
+ * (para exibir o texto completo em tooltip).
+ *
+ * O SVG não quebra texto automaticamente, e o troika também respeita as quebras
+ * explícitas: por isso a quebra é feita aqui, preferindo espaços para não cortar palavras.
  */
 export function fitTextToLines(
   text: string,
@@ -119,11 +124,34 @@ export function fitTextToLines(
 ): { text: string; truncated: boolean } {
   const clean = (text ?? '').replace(/\s+/g, ' ').trim();
   const charsPerLine = Math.max(4, Math.floor(maxWidth / (fontSize * INTER_AVG_CHAR_WIDTH)));
-  const maxChars = charsPerLine * Math.max(1, maxLines);
-  if (clean.length <= maxChars) {
-    return { text: clean, truncated: false };
+  const lineLimit = Math.max(1, maxLines);
+
+  const lines: string[] = [];
+  let rest = clean;
+
+  while (rest.length > 0 && lines.length < lineLimit) {
+    if (rest.length <= charsPerLine) {
+      lines.push(rest);
+      rest = '';
+      break;
+    }
+
+    // Prefere o último espaço da faixa; se ele estiver muito no começo, corta no limite.
+    const candidate = rest.slice(0, charsPerLine + 1);
+    const spaceIndex = candidate.lastIndexOf(' ');
+    const cut = spaceIndex > charsPerLine * 0.5 ? spaceIndex : charsPerLine;
+
+    lines.push(rest.slice(0, cut).trimEnd());
+    rest = rest.slice(cut).trimStart();
   }
-  return { text: clean.slice(0, Math.max(1, maxChars - 1)).trimEnd() + '…', truncated: true };
+
+  const truncated = rest.length > 0;
+  if (truncated && lines.length > 0) {
+    const lastIndex = lines.length - 1;
+    lines[lastIndex] = lines[lastIndex].slice(0, Math.max(1, charsPerLine - 1)).trimEnd() + '…';
+  }
+
+  return { text: lines.join('\n'), truncated };
 }
 
 /**

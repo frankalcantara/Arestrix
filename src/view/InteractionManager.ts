@@ -35,6 +35,13 @@ interface IBezierDragState {
   hasMoved: boolean;
 }
 
+/**
+ * Distância mínima (em pixels de tela) que o ponteiro precisa percorrer para um
+ * pointerdown virar arraste. Abaixo disso o gesto é tratado como clique, evitando
+ * que o tremor natural da mão mova o vértice e crie entradas de undo acidentais.
+ */
+const DRAG_THRESHOLD_PX = 4;
+
 export class InteractionManager {
   private camera: THREE.OrthographicCamera;
   private cameraController: CameraController;
@@ -51,10 +58,15 @@ export class InteractionManager {
   // Estados de Interacao
   private draggedNodeView: NodeView | null = null;
   private dragStartPos: { x: number; y: number } | null = null;
+  private dragStartClient: { x: number; y: number } | null = null;
+  private dragActive: boolean = false;
   private dragOffset: THREE.Vector3 = new THREE.Vector3();
   private selectedNodeId: string | null = null;
   private selectedEdgeId: string | null = null;
   private bezierDragState: IBezierDragState | null = null;
+
+  // Canceladores de listeners registrados (evita handlers órfãos após dispose)
+  private disposers: Array<() => void> = [];
 
   // Estado de Criacao de Conexao (Rubber-band)
   private isConnecting: boolean = false;
@@ -108,58 +120,84 @@ export class InteractionManager {
   }
 
   private bindEvents(): void {
-    this.domElement.addEventListener('pointerdown', this.onPointerDown.bind(this));
-    this.domElement.addEventListener('dblclick', this.onDoubleClick.bind(this));
-    this.domElement.addEventListener('pointercancel', () => {
+    this.listen(this.domElement, 'pointerdown', (e: PointerEvent) => this.onPointerDown(e));
+    this.listen(this.domElement, 'dblclick', (e: MouseEvent) => this.onDoubleClick(e));
+    this.listen(window, 'pointercancel', () => {
       if (this.cameraController.getIsPanning()) {
         this.cameraController.stopPan();
       }
+      this.finishNodeDrag();
+      this.finishBezierDrag();
+      this.cancelConnecting();
     });
-    window.addEventListener('pointermove', this.onPointerMove.bind(this));
-    window.addEventListener('pointerup', this.onPointerUp.bind(this));
-    window.addEventListener('keydown', this.onKeyDown.bind(this));
+    this.listen(window, 'pointermove', (e: PointerEvent) => this.onPointerMove(e));
+    this.listen(window, 'pointerup', (e: PointerEvent) => this.onPointerUp(e));
+    this.listen(window, 'keydown', (e: KeyboardEvent) => this.onKeyDown(e));
 
     // Tooltip: oculta em zoom (wheel) e ao sair do canvas
-    this.domElement.addEventListener('wheel', () => this.clearHover(), { passive: true });
-    this.domElement.addEventListener('pointerleave', () => this.clearHover());
+    this.listen(this.domElement, 'wheel', () => this.clearHover(), { passive: true });
+    this.listen(this.domElement, 'pointerleave', () => this.clearHover());
 
-    globalEventBus.on('node:removed', ({ id }: { id: string }) => {
+    this.busOn('node:removed', ({ id }: { id: string }) => {
       if (this.selectedNodeId === id) {
         this.selectNode(null);
       }
     });
 
-    globalEventBus.on('edge:removed', (edge: { id: string }) => {
+    this.busOn('edge:removed', (edge: { id: string }) => {
       if (this.selectedEdgeId === edge.id) {
         this.selectEdge(null);
       }
     });
 
-    globalEventBus.on('graph:cleared', () => {
+    this.busOn('graph:cleared', () => {
       this.selectNode(null);
       this.selectEdge(null);
     });
 
     // Ponte de Eventos da Camada Vetorial SVG
-    globalEventBus.on('node:context-menu', ({ nodeId }: { nodeId: string }) => {
+    this.busOn('node:context-menu', ({ nodeId }: { nodeId: string }) => {
       this.clearHover();
       this.selectNode(nodeId);
     });
 
-    globalEventBus.on('node:start-drag', ({ nodeId, clientX, clientY }: any) => this.startDragNode(nodeId, clientX, clientY));
-    globalEventBus.on('node:start-connecting', ({ nodeId, portId, clientX, clientY }: any) => this.startConnectingPort(nodeId, portId, clientX, clientY));
-    globalEventBus.on('node:complete-connecting', ({ nodeId, portId }: any) => this.completeConnectingPort(nodeId, portId));
+    this.busOn('node:select-request', ({ nodeId }: { nodeId: string }) => this.selectNode(nodeId));
+    this.busOn('node:double-click', ({ nodeId }: { nodeId: string }) => this.diveIntoNode(nodeId));
+
+    this.busOn('node:start-drag', ({ nodeId, clientX, clientY }: any) => this.startDragNode(nodeId, clientX, clientY));
+    this.busOn('node:start-connecting', ({ nodeId, portId, clientX, clientY }: any) => this.startConnectingPort(nodeId, portId, clientX, clientY));
+    this.busOn('node:complete-connecting', ({ nodeId, portId }: any) => this.completeConnectingPort(nodeId, portId));
 
     // Eventos de Edição de Curva de Bézier Estilo Inkscape
-    globalEventBus.on('edge:start-curve-drag', ({ edgeId, clientX, clientY }: any) =>
+    this.busOn('edge:start-curve-drag', ({ edgeId, clientX, clientY }: any) =>
       this.startEdgeCurveDrag(edgeId, clientX, clientY)
     );
-    globalEventBus.on('edge:start-handle-drag', ({ edgeId, handle, clientX, clientY }: any) =>
+    this.busOn('edge:start-handle-drag', ({ edgeId, handle, clientX, clientY }: any) =>
       this.startEdgeHandleDrag(edgeId, handle, clientX, clientY)
     );
-    globalEventBus.on('edge:reset-control-points', ({ edgeId }: { edgeId: string }) =>
+    this.busOn('edge:reset-control-points', ({ edgeId }: { edgeId: string }) =>
       this.resetEdgeControlPoints(edgeId)
     );
+  }
+
+  /** Registra um listener de DOM e guarda o cancelamento para o dispose. */
+  private listen(
+    target: EventTarget,
+    type: string,
+    handler: (e: any) => void,
+    options?: AddEventListenerOptions
+  ): void {
+    target.addEventListener(type, handler, options);
+    this.disposers.push(() => {
+      if (typeof (target as EventTarget).removeEventListener === 'function') {
+        target.removeEventListener(type, handler, options);
+      }
+    });
+  }
+
+  /** Registra um listener do EventBus e guarda o cancelamento para o dispose. */
+  private busOn(event: string, handler: (data: any) => void): void {
+    this.disposers.push(globalEventBus.on(event, handler));
   }
 
   private updatePointer(e: PointerEvent): void {
@@ -244,14 +282,7 @@ export class InteractionManager {
       const hitNodeId = nodeIntersects[0].object.userData.nodeId;
       const nv = this.nodeViews.get(hitNodeId);
       if (nv) {
-        this.selectNode(hitNodeId);
-        this.draggedNodeView = nv;
-        this.dragStartPos = { x: nv.nodeData.position.x, y: nv.nodeData.position.y };
-        this.dragOffset.set(
-          nv.group.position.x - worldCursor.x,
-          nv.group.position.y - worldCursor.y,
-          0
-        );
+        this.beginNodeDrag(nv, e.clientX, e.clientY);
         return;
       }
     }
@@ -276,6 +307,13 @@ export class InteractionManager {
 
     // 0. Drag de Alça / Curva de Bézier Estilo Inkscape
     if (this.bezierDragState) {
+      // Mesma rede de segurança do arraste de vértice: não continua editando a
+      // curva se o botão já foi solto e o pointerup se perdeu.
+      if (typeof e.buttons === 'number' && e.buttons === 0) {
+        this.finishBezierDrag();
+        return;
+      }
+
       const dist = Math.hypot(
         worldCursor.x - this.bezierDragState.startWorld.x,
         worldCursor.y - this.bezierDragState.startWorld.y
@@ -320,6 +358,31 @@ export class InteractionManager {
 
     // A. Drag do Nó
     if (this.draggedNodeView) {
+      // Rede de segurança: se o pointerup se perdeu (ex.: consumido por outra camada
+      // ou solto fora da janela), encerra o arraste em vez de deixar o vértice colado
+      // ao cursor para sempre.
+      if (typeof e.buttons === 'number' && e.buttons === 0) {
+        this.finishNodeDrag();
+        return;
+      }
+
+      // Só inicia o movimento após vencer o limiar de arraste: um clique com
+      // pequeno tremor não deve deslocar o vértice nem gerar undo acidental.
+      if (!this.dragActive) {
+        const start = this.dragStartClient;
+        if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) < DRAG_THRESHOLD_PX) {
+          return;
+        }
+        this.dragActive = true;
+        // Reancora o offset no ponto em que o arraste realmente começou,
+        // evitando o "salto" do vértice ao cruzar o limiar.
+        this.dragOffset.set(
+          this.draggedNodeView.group.position.x - worldCursor.x,
+          this.draggedNodeView.group.position.y - worldCursor.y,
+          0
+        );
+      }
+
       const newX = worldCursor.x + this.dragOffset.x;
       const newY = worldCursor.y + this.dragOffset.y;
 
@@ -424,69 +487,82 @@ export class InteractionManager {
       }
     }
 
-    if (this.bezierDragState) {
-      const { edgeId, initialControlPoints, hasMoved } = this.bezierDragState;
-      this.bezierDragState = null;
-      if (hasMoved) {
-        const currentEdge = this.graph.getEdge(edgeId);
-        if (currentEdge) {
-          const cmd = new UpdateEdgeCommand(
-            this.graph,
-            edgeId,
-            initialControlPoints,
-            currentEdge.controlPoints
-          );
-          this.graph.commandManager.record(cmd);
-        }
-      }
-    }
+    this.finishBezierDrag();
 
-    if (this.draggedNodeView) {
-      const finalX = this.draggedNodeView.nodeData.position.x;
-      const finalY = this.draggedNodeView.nodeData.position.y;
-      if (this.dragStartPos && (finalX !== this.dragStartPos.x || finalY !== this.dragStartPos.y)) {
-        const cmd = new MoveNodeCommand(
-          this.graph,
-          this.draggedNodeView.nodeData.id,
-          this.dragStartPos,
-          { x: finalX, y: finalY }
-        );
-        this.graph.commandManager.record(cmd);
-      }
-      this.draggedNodeView = null;
-      this.dragStartPos = null;
-    }
+    this.finishNodeDrag();
 
     if (this.isConnecting) {
-      this.updatePointer(e);
-      this.raycaster.setFromCamera(this.pointer, this.camera);
+      // Apenas o botão primário conecta; um botão secundário cancela o gesto.
+      if (e.button === 0) {
+        this.updatePointer(e);
+        this.raycaster.setFromCamera(this.pointer, this.camera);
 
-      const portTargets: THREE.Object3D[] = [];
-      this.nodeViews.forEach(nv => {
-        nv.group.traverse(obj => {
-          if (obj.userData?.isPortHitbox) {
-            portTargets.push(obj);
-          }
+        const portTargets: THREE.Object3D[] = [];
+        this.nodeViews.forEach(nv => {
+          nv.group.traverse(obj => {
+            if (obj.userData?.isPortHitbox) {
+              portTargets.push(obj);
+            }
+          });
         });
-      });
 
-      const portIntersects = this.raycaster.intersectObjects(portTargets, false);
-      if (portIntersects.length > 0) {
-        const hit = portIntersects[0].object;
-        const { nodeId: targetNodeId, portId: targetPortId, direction } = hit.userData;
+        const portIntersects = this.raycaster.intersectObjects(portTargets, false);
+        if (portIntersects.length > 0) {
+          const hit = portIntersects[0].object;
+          const { nodeId: targetNodeId, portId: targetPortId, direction } = hit.userData;
 
-        // Conectar apenas se o destino for porta de entrada e nó diferente (ou loopback suportado)
-        if (direction === 'input') {
-          this.connectToPort(targetNodeId, targetPortId);
+          // Conectar apenas se o destino for porta de entrada e nó diferente (ou loopback suportado)
+          if (direction === 'input') {
+            this.connectToPort(targetNodeId, targetPortId);
+          }
         }
       }
 
-      // Finaliza estado de conexao
-      this.isConnecting = false;
-      this.connectingSourceNodeId = null;
-      this.connectingSourcePortId = null;
-      this.rubberBandLine!.visible = false;
+      this.cancelConnecting();
     }
+  }
+
+  /** Finaliza a edição de curva Bézier, registrando um único UpdateEdgeCommand no undo. */
+  private finishBezierDrag(): void {
+    if (!this.bezierDragState) return;
+    const { edgeId, initialControlPoints, hasMoved } = this.bezierDragState;
+    this.bezierDragState = null;
+    if (!hasMoved) return;
+
+    const currentEdge = this.graph.getEdge(edgeId);
+    if (!currentEdge) return;
+    const cmd = new UpdateEdgeCommand(
+      this.graph,
+      edgeId,
+      initialControlPoints,
+      currentEdge.controlPoints
+    );
+    this.graph.commandManager.record(cmd);
+  }
+
+  /**
+   * Finaliza o arraste do vértice, registrando um único MoveNodeCommand no undo.
+   * Idempotente: pode ser chamado no pointerup e também na guarda de "botão solto"
+   * de onPointerMove, caso o pointerup tenha sido consumido/stopPropagation em outro alvo.
+   */
+  private finishNodeDrag(): void {
+    if (!this.draggedNodeView) return;
+
+    const finalX = this.draggedNodeView.nodeData.position.x;
+    const finalY = this.draggedNodeView.nodeData.position.y;
+    if (this.dragActive && this.dragStartPos && (finalX !== this.dragStartPos.x || finalY !== this.dragStartPos.y)) {
+      const cmd = new MoveNodeCommand(
+        this.graph,
+        this.draggedNodeView.nodeData.id,
+        this.dragStartPos,
+        { x: finalX, y: finalY }
+      );
+      this.graph.commandManager.record(cmd);
+    }
+    this.draggedNodeView = null;
+    this.dragStartPos = null;
+    this.dragStartClient = null;
+    this.dragActive = false;
   }
 
   private updateRubberBand(start: THREE.Vector3, end: THREE.Vector3): void {
@@ -572,6 +648,10 @@ export class InteractionManager {
     return this.selectedEdgeId;
   }
 
+  public getSelectedNodeId(): string | null {
+    return this.selectedNodeId;
+  }
+
   private onKeyDown(e: KeyboardEvent): void {
     const isEditingText = ['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName);
 
@@ -631,21 +711,35 @@ export class InteractionManager {
 
     const intersects = this.raycaster.intersectObjects(nodeTargets, false);
     if (intersects.length > 0) {
-      const hitNodeId = intersects[0].object.userData.nodeId;
-      const nodeData = this.graph.getNode(hitNodeId);
-      if (nodeData && (nodeData.type === 'subflow' || nodeData.type === 'module')) {
-        this.graph.diveIntoSubflow(hitNodeId);
-      }
+      this.diveIntoNode(intersects[0].object.userData.nodeId);
+    }
+  }
+
+  /** Entra no subflow/módulo clicado duas vezes (canvas 3D ou vértice SVG). */
+  private diveIntoNode(nodeId: string): void {
+    const nodeData = this.graph.getNode(nodeId);
+    if (nodeData && (nodeData.type === 'subflow' || nodeData.type === 'module')) {
+      this.graph.diveIntoSubflow(nodeId);
     }
   }
 
   public startDragNode(nodeId: string, clientX: number, clientY: number): void {
     const nv = this.nodeViews.get(nodeId);
     if (!nv) return;
+    this.beginNodeDrag(nv, clientX, clientY);
+  }
+
+  /**
+   * Prepara o arraste de um vértice. O movimento só é aplicado em onPointerMove
+   * depois de vencer DRAG_THRESHOLD_PX, mantendo o clique puro como seleção.
+   */
+  private beginNodeDrag(nv: NodeView, clientX: number, clientY: number): void {
     const worldCursor = this.cameraController.screenToWorld(clientX, clientY);
-    this.selectNode(nodeId);
+    this.selectNode(nv.nodeData.id);
     this.draggedNodeView = nv;
     this.dragStartPos = { x: nv.nodeData.position.x, y: nv.nodeData.position.y };
+    this.dragStartClient = { x: clientX, y: clientY };
+    this.dragActive = false;
     this.dragOffset.set(
       nv.group.position.x - worldCursor.x,
       nv.group.position.y - worldCursor.y,
@@ -800,5 +894,7 @@ export class InteractionManager {
   dispose(): void {
     this.clearHover();
     this.tooltip.dispose();
+    this.disposers.forEach(off => off());
+    this.disposers = [];
   }
 }

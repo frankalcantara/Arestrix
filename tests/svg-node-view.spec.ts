@@ -231,6 +231,27 @@ describe('SvgNodeView - Vértices Vetoriais SVG e Contraste WCAG 2.1', () => {
       svgView.dispose();
     });
 
+    it('deve quebrar títulos longos em até 2 linhas e truncar com reticências + tooltip', () => {
+      const wrapped = new SvgNodeView(sampleNode, testSvgRoot, tooltip, bus);
+      const wrappedLines = wrapped.group.querySelectorAll('.vertex-title-line');
+      expect(wrappedLines.length).toBe(2);
+      expect(wrappedLines[1].textContent).not.toContain('…');
+      // Um título que cabe em 2 linhas não deve ganhar tooltip redundante.
+      expect(wrapped.group.querySelector('.vertex-title-group')!.querySelector('title')).toBeNull();
+      wrapped.dispose();
+
+      const longLabel = 'Agente Code Mode Autônomo com Raciocínio Profundo e Ferramentas Externas de Longa Execução';
+      const longNode: INodeData = { ...sampleNode, id: 'node-svg-test-long', label: longLabel };
+      const truncated = new SvgNodeView(longNode, testSvgRoot, tooltip, bus);
+      const truncatedLines = truncated.group.querySelectorAll('.vertex-title-line');
+
+      expect(truncatedLines.length).toBe(2);
+      expect(truncatedLines[1].textContent).toContain('…');
+      const titleTooltip = truncated.group.querySelector('.vertex-title-group')!.querySelector('title');
+      expect(titleTooltip?.textContent).toBe(longLabel);
+      truncated.dispose();
+    });
+
     it('deve refletir estados de execução (idle, running, completed) com anéis vetoriais coloridos', () => {
       const svgView = new SvgNodeView(sampleNode, testSvgRoot, tooltip, bus);
       const ring = svgView.group.querySelector('.vertex-selection-ring') as any;
@@ -265,6 +286,114 @@ describe('SvgNodeView - Vértices Vetoriais SVG e Contraste WCAG 2.1', () => {
 
       const actionTypes = Array.from(actionButtons).map(b => b.getAttribute('data-action'));
       expect(actionTypes).toEqual(['sandbox', 'model', 'tools', 'memory', 'skills']);
+
+      svgView.dispose();
+    });
+
+    it('deve selecionar e iniciar arraste ao clicar em qualquer elemento visual do vértice', () => {
+      const svgView = new SvgNodeView(sampleNode, testSvgRoot, tooltip, bus);
+      const events: string[] = [];
+      bus.on('node:selected', () => events.push('selected'));
+      bus.on('node:start-drag', () => events.push('drag'));
+
+      // Alvos pintados por cima do corpo: antes só o rect do corpo e o path do header
+      // respondiam ao ponteiro, então clicar no texto/ícone exigia repetir o clique.
+      const targets = [
+        svgView.group.querySelector('.vertex-title-line'),
+        svgView.group.querySelector('.vertex-header-label'),
+        svgView.group.querySelector('.arestrix-lucide-icon'),
+        svgView.group.querySelector('.vertex-header'),
+        svgView.group.querySelector('.vertex-body')
+      ];
+      targets.forEach(target => expect(target).not.toBeNull());
+
+      targets.forEach(target => {
+        svgView.group.dispatchEvent({
+          type: 'pointerdown',
+          button: 0,
+          altKey: false,
+          target,
+          clientX: 10,
+          clientY: 20,
+          stopPropagation() {}
+        });
+      });
+
+      expect(events.filter(e => e === 'selected').length).toBe(targets.length);
+      expect(events.filter(e => e === 'drag').length).toBe(targets.length);
+
+      svgView.dispose();
+    });
+
+    it('deve manter portas e botões de ação isolados da seleção/arraste do vértice', () => {
+      const svgView = new SvgNodeView(sampleNode, testSvgRoot, tooltip, bus);
+      const events: string[] = [];
+      bus.on('node:selected', () => events.push('selected'));
+      bus.on('node:start-drag', () => events.push('drag'));
+
+      const portHitbox = svgView.group.querySelector('.vertex-port-hitbox');
+      const actionButton = svgView.group.querySelector('.vertex-action-btn');
+      const actionIcon = actionButton?.querySelector('.arestrix-lucide-icon');
+
+      [portHitbox, actionButton, actionIcon].forEach(target => {
+        svgView.group.dispatchEvent({
+          type: 'pointerdown',
+          button: 0,
+          altKey: false,
+          target,
+          clientX: 10,
+          clientY: 20,
+          stopPropagation() {}
+        });
+      });
+
+      expect(events).toEqual([]);
+
+      svgView.dispose();
+    });
+
+    it('deve encaminhar o duplo clique sobre o vértice (inclusive no texto) para entrar em Subflow', () => {
+      const svgView = new SvgNodeView(sampleNode, testSvgRoot, tooltip, bus);
+      const payloads: any[] = [];
+      bus.on('node:double-click', (payload: any) => payloads.push(payload));
+
+      const titleLine = svgView.group.querySelector('.vertex-title-line');
+      const actionButton = svgView.group.querySelector('.vertex-action-btn');
+
+      [titleLine, svgView.group.querySelector('.vertex-body')].forEach(target => {
+        svgView.group.dispatchEvent({
+          type: 'dblclick',
+          button: 0,
+          altKey: false,
+          target,
+          stopPropagation() {}
+        });
+      });
+      expect(payloads).toEqual([{ nodeId: sampleNode.id }, { nodeId: sampleNode.id }]);
+
+      // Botões da barra de ações não devem navegar para o subflow.
+      svgView.group.dispatchEvent({
+        type: 'dblclick',
+        button: 0,
+        altKey: false,
+        target: actionButton,
+        stopPropagation() {}
+      });
+      expect(payloads).toHaveLength(2);
+
+      svgView.dispose();
+    });
+
+    it('deve pedir seleção sincronizada ao clicar em um botão da barra de ações', () => {
+      const svgView = new SvgNodeView(sampleNode, testSvgRoot, tooltip, bus);
+      const selections: string[] = [];
+      bus.on('node:select-request', ({ nodeId }: { nodeId: string }) => selections.push(nodeId));
+
+      const actionButton = svgView.group.querySelector('.vertex-action-btn')!;
+      const hitbox = actionButton.children[actionButton.children.length - 1];
+      hitbox.dispatchEvent({ type: 'click', stopPropagation() {} });
+
+      expect(selections).toEqual([sampleNode.id]);
 
       svgView.dispose();
     });

@@ -14,6 +14,9 @@ export class CameraController {
   private minZoom: number = 0.2;
   private maxZoom: number = 3.5;
 
+  // Canceladores de listeners para descarte limpo da câmera
+  private disposers: Array<() => void> = [];
+
   constructor(camera: THREE.OrthographicCamera, domElement: HTMLElement, frustumSize: number = 850) {
     this.camera = camera;
     this.domElement = domElement;
@@ -28,15 +31,12 @@ export class CameraController {
 
   private initEvents(): void {
     // Zoom centrado na posicao do cursor do mouse
-    this.domElement.addEventListener('wheel', (e: WheelEvent) => {
+    this.listen(this.domElement, 'wheel', (e: WheelEvent) => {
       e.preventDefault();
 
-      const rect = this.domElement.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-
-      // Ponto no espaco de mundo antes do zoom
-      const worldBefore = this.screenToWorld(mouseX, mouseY);
+      // screenToWorld espera coordenadas de cliente e desconta o offset do elemento;
+      // passar coordenadas já relativas ao canvas deslocava a âncora do zoom (rect.left/top).
+      const worldBefore = this.screenToWorld(e.clientX, e.clientY);
 
       // Fator de zoom exponencial suave
       const zoomFactor = e.deltaY < 0 ? 1.1 : 0.909;
@@ -45,7 +45,7 @@ export class CameraController {
       this.camera.updateProjectionMatrix();
 
       // Ponto no espaco de mundo apos o zoom
-      const worldAfter = this.screenToWorld(mouseX, mouseY);
+      const worldAfter = this.screenToWorld(e.clientX, e.clientY);
 
       // Desloca a camera para manter o ponto sob o mouse estavel
       this.camera.position.x += (worldBefore.x - worldAfter.x);
@@ -55,7 +55,7 @@ export class CameraController {
     }, { passive: false });
 
     // Inicio de Pan com botao do meio (wheel) ou botao direito
-    this.domElement.addEventListener('pointerdown', (e: PointerEvent) => {
+    this.listen(this.domElement, 'pointerdown', (e: PointerEvent) => {
       if (e.button === 1 || e.button === 2 || (e.button === 0 && e.altKey)) {
         e.preventDefault();
         this.startPan(e.clientX, e.clientY);
@@ -63,7 +63,7 @@ export class CameraController {
     });
 
     if (typeof window !== 'undefined') {
-      window.addEventListener('pointermove', (e: PointerEvent) => {
+      this.listen(window, 'pointermove', (e: PointerEvent) => {
         if (this.isPanning) {
           const dx = e.clientX - this.lastClientPos.x;
           const dy = e.clientY - this.lastClientPos.y;
@@ -72,13 +72,13 @@ export class CameraController {
         }
       });
 
-      window.addEventListener('pointerup', (e: PointerEvent) => {
+      this.listen(window, 'pointerup', (e: PointerEvent) => {
         if (this.isPanning && (e.button === 1 || e.button === 2 || e.button === 0)) {
           this.stopPan();
         }
       });
 
-      window.addEventListener('pointercancel', () => {
+      this.listen(window, 'pointercancel', () => {
         if (this.isPanning) {
           this.stopPan();
         }
@@ -86,7 +86,24 @@ export class CameraController {
     }
 
     // Impede menu de contexto do botao direito para uso no pan
-    this.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+    this.listen(this.domElement, 'contextmenu', (e: Event) => e.preventDefault());
+  }
+
+  /** Registra um listener e guarda o cancelamento para o dispose. */
+  private listen(target: EventTarget, type: string, handler: (e: any) => void, options?: AddEventListenerOptions): void {
+    target.addEventListener(type, handler, options);
+    this.disposers.push(() => {
+      if (typeof (target as EventTarget).removeEventListener === 'function') {
+        target.removeEventListener(type, handler, options);
+      }
+    });
+  }
+
+  /** Remove os listeners do canvas/janela e limpa o estado de pan. */
+  public dispose(): void {
+    this.stopPan();
+    this.disposers.forEach(off => off());
+    this.disposers = [];
   }
 
   /**

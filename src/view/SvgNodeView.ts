@@ -144,15 +144,28 @@ export class SvgNodeView {
     this.headerPath.setAttribute('fill', headerHex);
     this.group.appendChild(this.headerPath);
 
-    // Eventos de seleção e arraste pelo corpo ou cabeçalho do vértice
+    // Seleção e arraste por toda a superfície do vértice.
+    // O listener fica no grupo (e não só no corpo/cabeçalho) porque textos, ícones e
+    // pílulas ficam pintados por cima do corpo e recebem o ponteiro: sem isso o clique
+    // "sumia" ao acertar o título, o rótulo do tipo ou o ícone, exigindo repetir o clique.
     const onNodePointerDown = (e: PointerEvent) => {
       if (e.button !== 0 || e.altKey) return;
+      if (this.resolvePointerRegion(e.target) !== 'node') return;
       e.stopPropagation();
-      this.bus.emit('node:selected', this.nodeData.id);
+      this.bus.emit('node:selected', this.nodeData);
       this.bus.emit('node:start-drag', { nodeId: this.nodeData.id, clientX: e.clientX, clientY: e.clientY });
     };
-    this.bodyRect.addEventListener('pointerdown', onNodePointerDown);
-    this.headerPath.addEventListener('pointerdown', onNodePointerDown);
+    this.group.addEventListener('pointerdown', onNodePointerDown);
+
+    // Duplo clique entra em Subflow/Módulo. O handler fica no vértice SVG porque a
+    // camada vetorial cobre o canvas e o dblclick do InteractionManager (que fica no
+    // canvas WebGL) nunca recebe o evento quando o alvo é o vértice.
+    this.group.addEventListener('dblclick', (e: MouseEvent) => {
+      if (e.button !== 0 || e.altKey) return;
+      if (this.resolvePointerRegion(e.target) !== 'node') return;
+      e.stopPropagation();
+      this.bus.emit('node:double-click', { nodeId: this.nodeData.id });
+    });
 
     // Menu de contexto (botão direito) do vértice
     this.group.addEventListener('contextmenu', (e: MouseEvent) => {
@@ -173,6 +186,26 @@ export class SvgNodeView {
 
     // 7. Barra de Ações Rápidas Flutuante
     this.buildActionBar();
+  }
+
+  /**
+   * Classifica o alvo do ponteiro dentro do vértice.
+   *
+   * Textos, ícones, anel de seleção e pílulas de status são pintados sobre o corpo e
+   * capturam o evento, por isso contam como superfície do vértice. Portas e a barra de
+   * ações têm interações próprias e devem continuar isoladas.
+   */
+  private resolvePointerRegion(target: EventTarget | null): 'node' | 'port' | 'action' {
+    let el = target as Element | null;
+    while (el && el !== this.group) {
+      const className = typeof (el as Element).getAttribute === 'function'
+        ? (el as Element).getAttribute('class') || ''
+        : '';
+      if (className.includes('vertex-port')) return 'port';
+      if (className.includes('vertex-action-bar') || className.includes('vertex-action-btn')) return 'action';
+      el = (el as Node).parentNode as Element | null;
+    }
+    return 'node';
   }
 
   private createHeaderPathD(w: number, h: number, headerH: number, r: number): string {
@@ -236,6 +269,14 @@ export class SvgNodeView {
 
     const fitted = fitTextToLines(this.nodeData.label, t.titleSize, titleMaxWidth, b.titleMaxLines);
     const lines = fitted.text.split('\n');
+
+    // Texto completo em tooltip nativo quando o título foi truncado (o SVG não
+    // participa do raycast do canvas, então o tooltip 3D do NodeView nunca aparece).
+    if (fitted.truncated) {
+      const titleTooltip = document.createElementNS(SVG_NS, 'title');
+      titleTooltip.textContent = this.nodeData.label;
+      this.titleGroup.appendChild(titleTooltip);
+    }
 
     lines.forEach((line, idx) => {
       const textEl = document.createElementNS(SVG_NS, 'text');
@@ -368,8 +409,9 @@ export class SvgNodeView {
     hitbox.addEventListener('pointerleave', () => this.tooltip.hide());
 
     if (isInput) {
-      hitbox.addEventListener('pointerup', (e: PointerEvent) => {
-        e.stopPropagation();
+      hitbox.addEventListener('pointerup', () => {
+        // Não interrompe a propagação: o InteractionManager escuta o pointerup na janela
+        // para encerrar um arraste de vértice que termine sobre esta porta.
         this.bus.emit('node:complete-connecting', { nodeId: this.nodeData.id, portId: port.id });
       });
     } else {
@@ -483,7 +525,9 @@ export class SvgNodeView {
       hit.addEventListener('click', (e: MouseEvent) => {
         e.stopPropagation();
         this.tooltip.hide();
-        this.bus.emit('node:selected', this.nodeData.id);
+        // Pede a seleção ao InteractionManager para manter o estado do canvas
+        // (anel de seleção, Delete/Backspace, teclado) sincronizado com o Inspector.
+        this.bus.emit('node:select-request', { nodeId: this.nodeData.id });
         this.bus.emit(action.event, this.nodeData.id);
       });
 

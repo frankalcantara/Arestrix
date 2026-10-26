@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import * as THREE from 'three';
 import { Graph } from '../src/core/Graph.ts';
 import { EventBus, globalEventBus } from '../src/core/EventBus.ts';
@@ -9,6 +9,7 @@ import { InteractionManager } from '../src/view/InteractionManager.ts';
 describe('Conexao entre vertices pelas portas SVG', () => {
   let originalWindow: any;
   let graph: Graph;
+  let manager: InteractionManager;
 
   function addNode(id: string): void {
     graph.addNode({
@@ -48,7 +49,7 @@ describe('Conexao entre vertices pelas portas SVG', () => {
       getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 })
     };
     const cameraController: any = { screenToWorld: () => new THREE.Vector3(), getIsPanning: () => false };
-    new InteractionManager(
+    manager = new InteractionManager(
       new THREE.OrthographicCamera(),
       cameraController,
       domElement,
@@ -57,6 +58,10 @@ describe('Conexao entre vertices pelas portas SVG', () => {
       new Map([['a', fakeView], ['b', fakeView]]) as any,
       new Map()
     );
+  });
+
+  afterEach(() => {
+    manager.dispose();
   });
 
   it('soltar na porta de entrada cria a aresta no grafo e ela pode ser desfeita e refeita', () => {

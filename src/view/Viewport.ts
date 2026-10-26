@@ -33,6 +33,7 @@ export class Viewport {
   private isRunning: boolean = true;
   private frustumSize: number = 850;
   private resizeObserver!: ResizeObserver;
+  private onWindowResize = (): void => this.onResize();
 
   // Camada Vetorial SVG Nativa para Vértices, Conexões e Alças Bézier (Inkscape-style)
   private svgLayer!: SVGSVGElement;
@@ -110,7 +111,7 @@ export class Viewport {
     this.bindGraphEvents();
 
     // 7. Eventos de Janela e Resize
-    window.addEventListener('resize', this.onResize.bind(this));
+    window.addEventListener('resize', this.onWindowResize);
 
     // 8. Inicia loop de renderização
     this.animate();
@@ -131,6 +132,7 @@ export class Viewport {
     });
     this.bus.on('graph:cleared', () => this.clearAllViews());
     this.bus.on('graph:loaded', () => this.syncFromGraph());
+    this.bus.on('graph:hierarchy-changed', () => this.zoomToFit());
     this.bus.on('pipeline:compiling', () => {
       this.onTelemetryReset();
       this.onPipelineRunning();
@@ -1243,10 +1245,11 @@ export class Viewport {
 
   dispose(): void {
     this.isRunning = false;
-    window.removeEventListener('resize', this.onResize);
+    window.removeEventListener('resize', this.onWindowResize);
     this.resizeObserver?.disconnect();
     this.clearAllViews();
     this.interactionManager.dispose();
+    this.cameraController.dispose();
     if (this.svgLayer?.parentNode) {
       this.svgLayer.parentNode.removeChild(this.svgLayer);
     }
