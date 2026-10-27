@@ -1,42 +1,52 @@
+import { BaseModal } from './BaseModal.ts';
 import { Graph } from '../../core/Graph.ts';
 import { INodeData, ICodeModeConfig, CodeModeTool } from '../../core/types.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
-import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 import { t } from '../../i18n/index.ts';
 import { McpToolPicker } from '../McpToolPicker.ts';
 
-export class NodeToolsModal {
-  private overlay: HTMLElement;
+export class NodeToolsModal extends BaseModal {
   private graph: Graph;
-  private windowController?: IModalWindowController;
   private mcpPicker?: McpToolPicker;
+  private activeNodeId: string | null = null;
   private activeTab: 'native' | 'mcp' | 'governance' = 'native';
 
   constructor(graph: Graph) {
+    super({
+      id: 'node-tools-modal',
+      title: t('node_modals.tools_title'),
+      icon: '🔧',
+      minWidth: 720,
+      minHeight: 520,
+      dialogClass: 'node-settings-modal-dialog',
+      closeOnBackdropClick: true
+    });
     this.graph = graph;
-
-    this.overlay = document.createElement('div');
-    this.overlay.className = 'modal-overlay hidden';
-    document.body.appendChild(this.overlay);
-
-    this.bindEvents();
   }
 
-  public open(nodeId: string): void {
+  public override open(nodeId: string): void {
     const node = this.graph.getNode(nodeId);
     if (!node) return;
 
+    this.activeNodeId = nodeId;
     this.activeTab = 'native';
-    this.render(node);
-    this.overlay.classList.remove('hidden');
-    this.windowController?.bringToFront();
+    this.config.subtitle = t('node_modals.tools_subtitle', {
+      label: this.escapeHtml(node.label),
+      id: node.id
+    });
+    super.open();
   }
 
-  public hide(): void {
-    this.overlay.classList.add('hidden');
+  public override hide(): void {
+    super.hide();
+    this.activeNodeId = null;
   }
 
-  private render(node: INodeData): void {
+  protected override renderBody(): string {
+    const node = this.activeNodeId ? this.graph.getNode(this.activeNodeId) : null;
+    if (!node) {
+      return `<div class="properties-empty">${t('node_modals.no_active_vertex', 'Nenhum vértice ativo selecionado.')}</div>`;
+    }
     const globalDefaults = this.graph.getGlobalDefaults();
     const settings = node.agentSettings || {
       inheritSandbox: true,
@@ -54,18 +64,7 @@ export class NodeToolsModal {
 
     const allowed = effectiveTools.allowedTools || [];
 
-    const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: t('node_modals.tools_title'),
-      subtitle: t('node_modals.tools_subtitle', { label: this.escapeHtml(node.label), id: node.id }),
-      icon: '🔧',
-      closeBtnId: 'btn-close-tools-modal'
-    });
-
-    this.overlay.innerHTML = `
-      <div class="modal-dialog node-settings-modal-dialog">
-        ${titleBarHtml}
-
-        <!-- Abas Fluent / Office 365 -->
+    return `
         <div class="modal-tabs" role="tablist">
           <button type="button" class="tab-btn ${this.activeTab === 'native' ? 'active' : ''}" data-tab="native">
             <span>🛠️</span> ${t('node_modals.tab_native_tools', '1. Ferramentas Nativas')}
@@ -78,7 +77,6 @@ export class NodeToolsModal {
           </button>
         </div>
 
-        <div class="modal-body-scrollable">
           <!-- Toggle de Herança -->
           <div class="inheritance-toggle-card">
             <label class="inheritance-checkbox-label">
@@ -184,44 +182,44 @@ export class NodeToolsModal {
               </div>
             </div>
           </div>
-        </div>
-
-        <div class="modal-footer office-modal-footer">
-          <button class="btn btn-secondary-pill btn-secondary-office" id="btn-cancel-tools-modal">${t('global_defaults.btn_cancel')}</button>
-          <button class="btn btn-primary btn-primary-office" id="btn-save-tools-modal">${t('node_modals.btn_save_agent_settings')}</button>
-        </div>
-      </div>
     `;
+  }
 
-    const dialog = this.overlay.querySelector('.modal-dialog') as HTMLElement;
-    if (dialog) {
-      this.windowController = ModalWindowManager.attach({
-        dialog,
-        onClose: () => this.hide()
-      });
-    }
+  protected override renderFooter(): string {
+    return this.renderStandardFooter({
+      secondaryId: 'btn-cancel-tools-modal',
+      primaryId: 'btn-save-tools-modal',
+      secondaryLabel: t('global_defaults.btn_cancel'),
+      primaryLabel: t('node_modals.btn_save_agent_settings')
+    });
+  }
 
-    const pickerRoot = this.overlay.querySelector('#node-mcp-picker') as HTMLElement | null;
+  protected override bindEvents(): void {
+    super.bindEvents();
+    const node = this.activeNodeId ? this.graph.getNode(this.activeNodeId) : null;
+    if (!node) return;
+
+    const globalDefaults = this.graph.getGlobalDefaults();
+    const settings = node.agentSettings || {
+      inheritSandbox: true,
+      inheritModel: true,
+      inheritCodeMode: true
+    };
+    const isInherited = settings.inheritCodeMode !== false;
+    const effectiveTools: ICodeModeConfig = isInherited
+      ? globalDefaults.codeMode
+      : { ...globalDefaults.codeMode, ...(settings.codeMode || {}) };
+
+    const pickerRoot = this.dialog.querySelector('#node-mcp-picker') as HTMLElement | null;
     if (pickerRoot) {
       this.mcpPicker = new McpToolPicker(pickerRoot);
       void this.mcpPicker.load({ servers: effectiveTools.mcpServers || [], tools: effectiveTools.allowedMcpTools || [] }, isInherited);
     }
 
-    this.bindDialogEvents(node);
-  }
-
-  private bindEvents(): void {
-    this.overlay.addEventListener('click', (e) => {
-      if (e.target === this.overlay) this.hide();
-    });
-  }
-
-  private bindDialogEvents(node: INodeData): void {
-    this.overlay.querySelector('#btn-close-tools-modal')?.addEventListener('click', () => this.hide());
-    this.overlay.querySelector('#btn-cancel-tools-modal')?.addEventListener('click', () => this.hide());
+    this.dialog.querySelector('#btn-cancel-tools-modal')?.addEventListener('click', () => this.hide());
 
     // Manipulador de abas
-    const tabButtons = this.overlay.querySelectorAll<HTMLButtonElement>('.modal-tabs .tab-btn');
+    const tabButtons = this.dialog.querySelectorAll<HTMLButtonElement>('.modal-tabs .tab-btn');
     tabButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = (btn.dataset?.tab || btn.getAttribute('data-tab')) as 'native' | 'mcp' | 'governance';
@@ -233,15 +231,15 @@ export class NodeToolsModal {
             b.classList.toggle('active', bTab === tab);
           }
         });
-        const panes = this.overlay.querySelectorAll<HTMLElement>('.tab-pane');
+        const panes = this.dialog.querySelectorAll<HTMLElement>('.tab-pane');
         panes.forEach(p => {
           p.style.display = p.id === `pane-tab-${tab}` ? '' : 'none';
         });
       });
     });
 
-    const inheritCheck = this.overlay.querySelector('#chk-inherit-tools') as HTMLInputElement;
-    const formWrapper = this.overlay.querySelector('#tools-form-wrapper') as HTMLElement;
+    const inheritCheck = this.dialog.querySelector('#chk-inherit-tools') as HTMLInputElement;
+    const formWrapper = this.dialog.querySelector('#tools-form-wrapper') as HTMLElement;
 
     inheritCheck?.addEventListener('change', () => {
       const isInherited = inheritCheck.checked;
@@ -259,7 +257,7 @@ export class NodeToolsModal {
       }
     });
 
-    this.overlay.querySelectorAll('.node-tool-check').forEach(chk => {
+    this.dialog.querySelectorAll('.node-tool-check').forEach(chk => {
       chk.addEventListener('change', (e) => {
         const input = e.target as HTMLInputElement;
         const pill = input.closest('.tool-checkbox-pill');
@@ -270,7 +268,7 @@ export class NodeToolsModal {
       });
     });
 
-    this.overlay.querySelector('#btn-save-tools-modal')?.addEventListener('click', () => {
+    this.dialog.querySelector('#btn-save-tools-modal')?.addEventListener('click', () => {
       this.saveNodeTools(node, inheritCheck.checked);
       this.hide();
     });
@@ -287,13 +285,13 @@ export class NodeToolsModal {
 
     if (!inherit) {
       const allowedTools: CodeModeTool[] = [];
-      this.overlay.querySelectorAll<HTMLInputElement>('.node-tool-check:checked').forEach(chk => {
+      this.dialog.querySelectorAll<HTMLInputElement>('.node-tool-check:checked').forEach(chk => {
         allowedTools.push(chk.value as CodeModeTool);
       });
 
       const mcp = this.mcpPicker?.getValue() ?? { servers: [], tools: [] };
 
-      const scriptsRaw = (this.overlay.querySelector('#node-custom-scripts') as HTMLInputElement)?.value || '';
+      const scriptsRaw = (this.dialog.querySelector('#node-custom-scripts') as HTMLInputElement)?.value || '';
       const customScripts = scriptsRaw.split(',').map(s => s.trim()).filter(Boolean);
 
       newToolsData = {
@@ -305,10 +303,10 @@ export class NodeToolsModal {
     }
 
     // Regras de validação de artefato e encadeamento em lote
-    const artPattern = (this.overlay.querySelector('#node-artifact-pattern') as HTMLInputElement)?.value.trim() || '';
-    const minBytes = parseInt((this.overlay.querySelector('#node-artifact-min-size') as HTMLInputElement)?.value, 10) || 0;
-    const artRegex = (this.overlay.querySelector('#node-artifact-regex') as HTMLInputElement)?.value.trim() || '';
-    const isSerial = (this.overlay.querySelector('#chk-node-serial-batch') as HTMLInputElement)?.checked || false;
+    const artPattern = (this.dialog.querySelector('#node-artifact-pattern') as HTMLInputElement)?.value.trim() || '';
+    const minBytes = parseInt((this.dialog.querySelector('#node-artifact-min-size') as HTMLInputElement)?.value, 10) || 0;
+    const artRegex = (this.dialog.querySelector('#node-artifact-regex') as HTMLInputElement)?.value.trim() || '';
+    const isSerial = (this.dialog.querySelector('#chk-node-serial-batch') as HTMLInputElement)?.checked || false;
 
     const validationRules = artPattern ? [{
       targetPathPattern: artPattern,
@@ -333,13 +331,5 @@ export class NodeToolsModal {
       t('node_modals.cmd_change_tools', { label: node.label })
     );
     this.graph.commandManager.execute(cmd);
-  }
-
-  private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
   }
 }

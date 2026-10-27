@@ -1,5 +1,6 @@
 import { Graph } from '../../core/Graph.ts';
 import { ProjectManager } from '../../core/ProjectManager.ts';
+import { Viewport } from '../../view/Viewport.ts';
 import { globalEventBus } from '../../core/EventBus.ts';
 import {
   IProjectManifest,
@@ -15,7 +16,9 @@ import { dirName, joinPath, pathCrumbs, stripExtension } from '../../core/paths.
 import { CodeModal } from '../CodeModal.ts';
 import { GlobalDefaultsModal } from '../GlobalDefaultsModal.ts';
 import { WorkspaceManager } from '../../core/workspace/WorkspaceManager.ts';
-import { t, getLocale, setLocale } from '../../i18n/index.ts';
+import { t, getLocale } from '../../i18n/index.ts';
+import { PropertiesController } from '../properties/PropertiesController.ts';
+import { ribbonIcon } from './RibbonIcons.ts';
 
 type OpenPlace = 'recent' | 'computer';
 type OpenRecentTab = 'projects' | 'graphs';
@@ -50,10 +53,11 @@ export function recencyGroup(iso: string | undefined, now: Date = new Date()): R
 export class BackstageView {
   private overlay?: HTMLElement;
   private graph: Graph;
+  private viewport: Viewport;
   private projectManager: ProjectManager;
   private codeModal: CodeModal;
-  private globalDefaultsModal: GlobalDefaultsModal;
-  private activeSection: 'info' | 'new' | 'open' | 'saveas' | 'export' | 'options' = 'info';
+  private propertiesController: PropertiesController;
+  private activeSection: 'info' | 'new' | 'open' | 'saveas' | 'export' | 'options' | 'properties' = 'info';
 
   // Estado da Tela "Salvar" unificada (Estilo Office: Projeto Completo vs Apenas um Grafo + Navegação de Pastas)
   private saveAsPlace: SavePlace = 'computer';
@@ -74,11 +78,22 @@ export class BackstageView {
   private openListing: IOpenableListing | null = null;
   private openDrives: string[] = [];
 
-  constructor(graph: Graph, codeModal: CodeModal, globalDefaultsModal: GlobalDefaultsModal) {
+  constructor(
+    graph: Graph,
+    viewport: Viewport,
+    codeModal: CodeModal,
+    _legacyGlobalDefaultsModal?: GlobalDefaultsModal
+  ) {
     this.graph = graph;
+    this.viewport = viewport;
     this.codeModal = codeModal;
-    this.globalDefaultsModal = globalDefaultsModal;
     this.projectManager = ProjectManager.getInstance(globalEventBus);
+    this.propertiesController = new PropertiesController(
+      this.graph,
+      this.projectManager,
+      WorkspaceManager.getInstance(),
+      this.viewport
+    );
 
     if (typeof document !== 'undefined') {
       this.overlay = document.createElement('div');
@@ -106,6 +121,12 @@ export class BackstageView {
       globalEventBus.on('locale:changed', () => {
         if (this.isOpen()) {
           this.render();
+        }
+      });
+      globalEventBus.on('properties:open', (payload: { scope?: string; section?: string }) => {
+        const scope = payload?.scope;
+        if (scope === 'studio' || scope === 'workspace' || scope === 'project') {
+          void this.openProperties(scope, payload.section);
         }
       });
     }
@@ -177,11 +198,13 @@ export class BackstageView {
     }
   }
 
-  public async open(section: 'info' | 'new' | 'open' | 'save' | 'saveas' | 'export' | 'options' = 'info'): Promise<void> {
+  public async open(section: 'info' | 'new' | 'open' | 'save' | 'saveas' | 'export' | 'options' | 'properties' = 'info'): Promise<void> {
     this.activeSection = section === 'save' ? 'saveas' : section;
     try {
-      await this.projectManager.init(true);
-      await this.prepareSection();
+      if (this.activeSection !== 'properties') {
+        await this.projectManager.init(true);
+        await this.prepareSection();
+      }
     } catch (_) {}
     if (this.overlay) {
       this.render();
@@ -193,6 +216,14 @@ export class BackstageView {
     if (this.overlay) {
       this.overlay.classList.remove('open');
     }
+  }
+
+  public async openProperties(
+    scope: 'studio' | 'workspace' | 'project',
+    sectionId?: string
+  ): Promise<void> {
+    this.close();
+    await this.propertiesController.show(scope, sectionId);
   }
 
   public isOpen(): boolean {
@@ -254,6 +285,9 @@ export class BackstageView {
             </li>
             <li class="backstage-nav-item" id="btn-backstage-github-repos">
               <span>🌐</span> ${t('github_repos.title')}
+            </li>
+            <li class="backstage-nav-item ${this.activeSection === 'properties' ? 'active' : ''}" data-section="properties">
+              <span class="backstage-nav-svg">${ribbonIcon('settings', 18)}</span> ${t('properties_window.hub.nav', 'Propriedades')}
             </li>
             <li class="backstage-nav-item ${this.activeSection === 'options' ? 'active' : ''}" data-section="options">
               <span>⚙️</span> ${t('backstage.sidebar.options')}
@@ -946,12 +980,46 @@ export class BackstageView {
           </div>
         `;
 
+      case 'properties': {
+        return `
+          <h2 class="backstage-header-title">${t('properties_window.hub.title', 'Propriedades')}</h2>
+          <p class="backstage-header-sub">${t('properties_window.hub.subtitle', 'Concentre as configurações de cada escopo em uma única tela no padrão Office.')}</p>
+          <div class="backstage-cards-grid properties-hub-grid">
+            <div class="backstage-info-card properties-hub-card">
+              <div class="properties-hub-card-heading">
+                <span class="properties-hub-card-icon">${ribbonIcon('settings', 22)}</span>
+                <span class="properties-badge properties-badge--accent">${t('properties_window.scope.studio', 'Studio')}</span>
+              </div>
+              <h3>${t('properties_window.scope.studio_title', 'Propriedades do Studio')}</h3>
+              <p>${t('properties_window.hub.studio_desc', 'Preferências globais, credenciais, gateway, modelo padrão e integrações desta instalação.')}</p>
+              <button type="button" class="btn btn-primary-office" data-open-properties="studio">${t('properties_window.hub.open', 'Abrir propriedades')}</button>
+            </div>
+            <div class="backstage-info-card properties-hub-card">
+              <div class="properties-hub-card-heading">
+                <span class="properties-hub-card-icon">${ribbonIcon('folder', 22)}</span>
+                <span class="properties-badge properties-badge--accent">${t('properties_window.scope.workspace', 'Workspace')}</span>
+              </div>
+              <h3>${t('properties_window.scope.workspace_title', 'Propriedades do Workspace')}</h3>
+              <p>${t('properties_window.hub.workspace_desc', 'Pastas, catálogos aprovados, governança, sandbox padrão e memória compartilhada.')}</p>
+              <button type="button" class="btn btn-primary-office" data-open-properties="workspace">${t('properties_window.hub.open', 'Abrir propriedades')}</button>
+            </div>
+            <div class="backstage-info-card properties-hub-card">
+              <div class="properties-hub-card-heading">
+                <span class="properties-hub-card-icon">${ribbonIcon('file', 22)}</span>
+                <span class="properties-badge properties-badge--accent">${t('properties_window.scope.project', 'Projeto')}</span>
+              </div>
+              <h3>${t('properties_window.scope.project_title', 'Propriedades do Projeto')}</h3>
+              <p>${t('properties_window.hub.project_desc', 'Metadados, pipelines, modelo, ferramentas, memória, ambiente, Git e distribuição.')}</p>
+              <button type="button" class="btn btn-primary-office" data-open-properties="project">${t('properties_window.hub.open', 'Abrir propriedades')}</button>
+            </div>
+          </div>
+        `;
+      }
       case 'options': {
         const wm = WorkspaceManager.getInstance();
         const dirs = wm.getWorkspaceDirectories();
         const approvedSkills = wm.getApprovedSkills();
         const approvedMcps = wm.getApprovedMcps();
-        const currentLocale = getLocale();
 
         return `
           <h2 class="backstage-header-title">${t('backstage.options.title')}</h2>
@@ -965,13 +1033,14 @@ export class BackstageView {
                 <span style="font-size: 14.5px; font-weight: 700; color: #0f172a; line-height: 1; display: inline-flex; align-items: center;">${t('backstage.options.language_group')}</span>
               </div>
               <div style="display: flex; align-items: center; gap: 12px; line-height: 1;">
-                <span style="font-size: 12.5px; color: #64748b; font-weight: 600; line-height: 1; display: inline-flex; align-items: center;">${t('backstage.options.current_lang_label')}</span>
-                <select id="backstage-language-select" class="backstage-language-dropdown" style="min-width: 220px; height: 34px; padding: 4px 10px; font-size: 12.5px; font-weight: 600; color: #1e293b; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; outline: none;">
-                  <option value="pt-BR" ${currentLocale === 'pt-BR' ? 'selected' : ''}>BR Português (Brasil)</option>
-                  <option value="en-US" ${currentLocale === 'en-US' ? 'selected' : ''}>US English (United States)</option>
-                </select>
+                <button type="button" class="tool-btn btn-secondary" id="btn-open-studio-properties" data-open-properties="studio" data-properties-section="general" style="font-weight: 700; padding: 8px 16px; font-size: 12px;">
+                  ${t('properties_window.hub.open', 'Abrir propriedades')}
+                </button>
               </div>
             </div>
+            <p style="margin: 10px 0 0 30px; font-size: 12px; color: #64748b;">
+              ${t('backstage.options.language_redirect_hint', 'O idioma agora é definido nas Propriedades do Studio.')}
+            </p>
           </div>
 
           <!-- 1. IDENTIFICAÇÃO E PASTAS FÍSICAS DO WORKSPACE NA MÁQUINA DO USUÁRIO -->
@@ -1001,8 +1070,8 @@ export class BackstageView {
               <p><strong>${t('backstage.options.typo_design_label')}</strong> <span style="color: #0f766e; font-weight: 700;">${t('backstage.options.typo_design_val')}</span></p>
               <p><strong>${t('backstage.options.iso_mode_label')}</strong> ${t('backstage.options.iso_mode_val')}</p>
               <div style="margin-top: 14px;">
-                <button class="tool-btn btn-secondary" id="btn-open-global-defaults-modal" style="font-weight: 700; padding: 8px 16px; font-size: 12px;">
-                  ${t('backstage.options.btn_adv_pref')}
+                <button class="tool-btn btn-secondary" id="btn-open-workspace-security" data-open-properties="workspace" data-properties-section="security" style="font-weight: 700; padding: 8px 16px; font-size: 12px;">
+                  ${t('backstage.options.open_workspace_security', 'Abrir propriedades de segurança')}
                 </button>
               </div>
             </div>
@@ -1147,22 +1216,25 @@ export class BackstageView {
         if (sec) {
           this.activeSection = sec;
           try {
-            await this.projectManager.init(true);
-            await this.prepareSection();
+            // A tela de propriedades lê o estado atual e não precisa aguardar
+            // o handshake completo do ProjectManager para abrir.
+            if (sec !== 'properties') {
+              await this.projectManager.init(true);
+              await this.prepareSection();
+            }
           } catch (_) {}
           this.render();
         }
       });
     });
 
-    // Seletor de Idioma nas Opções do Studio (Dropdown Select)
-    const langSelect = this.overlay.querySelector('#backstage-language-select') as HTMLSelectElement;
-    langSelect?.addEventListener('change', async (e) => {
-      e.stopPropagation();
-      const val = langSelect.value as any;
-      if (val === 'pt-BR' || val === 'en-US') {
-        await setLocale(val);
-      }
+    this.overlay.querySelectorAll<HTMLElement>('[data-open-properties]').forEach(button => {
+      button.addEventListener('click', () => {
+        const scope = button.dataset.openProperties;
+        if (scope === 'studio' || scope === 'workspace' || scope === 'project') {
+          void this.openProperties(scope, button.dataset.propertiesSection);
+        }
+      });
     });
 
     // Controles da Tela "Salvar" Unificada (Estilo Office)
@@ -1443,10 +1515,6 @@ export class BackstageView {
           </div>
         `;
       }
-    });
-
-    this.overlay.querySelector('#btn-open-global-defaults-modal')?.addEventListener('click', () => {
-      this.globalDefaultsModal.show();
     });
 
     // Repositórios do GitHub (Abre diretamente sobre a BackstageView)

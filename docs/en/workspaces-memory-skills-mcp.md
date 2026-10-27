@@ -1,6 +1,6 @@
 # Workspaces, memory, skills and MCP
 
-> **Applies to:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Last reviewed: 2026-10-25
+> **Applies to:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Last reviewed: 2026-10-25
 
 [Português](../pt-BR/workspaces-memoria-skills-mcp.md) · [Index](../README.md)
 
@@ -121,7 +121,7 @@ it may record per run; `memory_search` enforces those domains.
 - Hybrid search (FTS + graph + embeddings) is optional and **off by default**. The
   preconfigured model is `embeddinggemma-2` (768 dimensions). To enable it, use
   an existing OpenAI-compatible `/v1/embeddings` endpoint (Ollama, llama.cpp, LM Studio, vLLM)
-  in Global Defaults → Memory. With Ollama: `ollama pull embeddinggemma-2` and endpoint
+  in File → Properties → Project → Model & tools → Manage advanced memory. With Ollama: `ollama pull embeddinggemma-2` and endpoint
   `http://127.0.0.1:11434/v1`. Without a provider the system remains 100% lexical.
   When enabled, indexed texts (sanitized lessons, facts and summaries) are sent to the
   configured endpoint; use a local server to keep everything on the machine.
@@ -153,13 +153,13 @@ it may record per run; `memory_search` enforces those domains.
 - Writes are governed per vertex: `allowedKeys` restricts Blackboard reads, `writeKeys` restricts
   automatic writes, `maxLessonsPerRun` (default 20) caps lessons per run and `maxLessonChars`
   (default 4000) caps each lesson/trigger. A global cap of 5000 active lessons per project also
-  applies. These fields are configurable on the vertex and in **Global Defaults → Memory**.
+  applies. These fields are configurable on the vertex and in **File → Properties → Project → Model & tools → Manage advanced memory**.
 - Before persisting, lessons, episodes, edges and the Blackboard are sanitized for known secrets
   (OpenAI/Stripe, Google, AWS, GitHub, Slack, Bearer, URL parameters and PEM private keys). The
   snapshot is sanitized before going to Git, covering rows written before this layer existed.
 - Project purge removes working state, lessons/edges, episodes, evidence, nodes, usage, hits and
   audit rows, then compacts SQLite with `VACUUM`; the database opens with `secure_delete=ON`.
-  Telemetry retention is configurable in **Global Defaults → Memory** (`retentionDays`, default
+  Telemetry retention is configurable in **File → Properties → Project → Model & tools → Manage advanced memory** (`retentionDays`, default
   180; `0` = keep) and runs on shutdown and via `arestrix-cli memory prune`. `memory purge` also
   removes the snapshot unless `--keep-snapshot` is passed.
 - The generated binary resolves the database from `ARESTRIX_PROJECT_ROOT` (fallback: current
@@ -216,7 +216,7 @@ These are different things:
 Each agent run records tokens, calls, latency and memory context size in the `memory_usage` table.
 To compare consumption with memory on/off:
 
-In the **Studio**, open **Global Defaults → Memory** and use **Measurement / A-B Mode**:
+In the **Studio**, open **File → Properties → Project → Model & tools → Manage advanced memory** and use **Measurement / A-B Mode**:
 
 - **Normal**: use the vertices' memory configuration.
 - **A/B: memory OFF in this project**: disables the brief and memory tools at runtime without
@@ -250,7 +250,7 @@ Python/JS process during graph execution.
 When a project uses the **AI Gateway**, memory impact is recorded there too. The runtime sends
 `X-Arestrix-Memory-Enabled`, `X-Arestrix-Memory-Context-Chars`, `X-Arestrix-Agent` and
 `X-Arestrix-Run-Id`; the gateway stores `memory_enabled`, `memory_context_chars` and `memory_tokens`
-(estimated as characters / 4) in `usage_events`. **Global Defaults → AI Gateway** and `/v1/usage`
+(estimated as characters / 4) in `usage_events`. **File → Properties → Studio → Credentials & Gateway** and `/v1/usage`
 show the share of input tokens and the memory ON/OFF comparison. Collection is entirely C++: no
 Python or JS process participates in graph execution.
 
@@ -324,7 +324,7 @@ function call.
 - Everything stays inside the project folder. `.git` cannot be read. **Pipelines, project configuration, `.workspace`, `.arestrix` and `.githooks`
   can never be written** by these tools, nor by the agents' own `write` and `edit` tools: writing there would inject C++ code or MCP
   servers that run on the next execution.
-- **HTTP never decides by itself where data goes.** List the allowed sites in the Studio (**Global Defaults → Tools → Internet access**,
+- **HTTP never decides by itself where data goes.** List the allowed sites in the Studio (**File → Properties → Project → Model & tools → Manage HTTP allowlist**,
   one per line, like `api.example.com` or `*.example.org`), which saves them to `.workspace/native/http.json`; without any site nothing
   is sent, and the error message tells you what to do. Wildcards need a full domain (`*.com` is refused).
   Local and private addresses are refused even if listed, redirects are **not** followed (each destination must be authorized), and
@@ -346,7 +346,7 @@ the file, runs **one** command and closes it. The file must be inside the projec
 **read-only** and only runs `SELECT`; `sql_execute` alters data and schema. The engine refuses `ATTACH`, `PRAGMA`, virtual tables, triggers,
 transactions and extension loading, a command is interrupted after 5 seconds, and the database is limited to 200 MB.
 
-**Choosing the tools of an agent.** In the **Tools** window of an agent (and in Global Defaults) every server, native or not, appears with a
+**Choosing the tools of an agent.** In the **Tools** window of an agent (and in Properties → Model & tools) every server, native or not, appears with a
 box, and "Choose tools" lets you switch its tools on and off one by one. Nothing is stored except server and tool names.
 
 **Speed.** On the development machine a native call took about 4 microseconds; an external MCP server, with a persistent session,

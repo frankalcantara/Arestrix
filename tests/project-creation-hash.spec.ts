@@ -289,6 +289,21 @@ describe('Geração de ID Único com Hash e Ajuste do Formulário de Criação d
       expect(html).toContain('Procurar...');
     });
 
+    it('deve redirecionar as configurações do projeto para a tela de Propriedades', () => {
+      const modal = new ProjectManagerModal(graph);
+      const html = (modal as any).renderSettingsTab({
+        name: 'Projeto Teste',
+        version: '1.0.0',
+        rootPath: 'C:/Projetos/Teste',
+        database: { type: 'sqlite', filePath: 'storage/database.sqlite' }
+      });
+
+      expect(html).toContain('id="btn-open-project-properties"');
+      expect(html).toContain('Abrir Propriedades do Projeto');
+      expect(html).not.toContain('id="edit-proj-name"');
+      expect(html).not.toContain('id="btn-save-proj-settings"');
+    });
+
     it('deve equipar a lista de projetos recentes com dropdown de ações (Opções ▾) contendo Abrir, Gerenciar e Apagar', () => {
       const modal = new ProjectManagerModal(graph);
       const recents = [

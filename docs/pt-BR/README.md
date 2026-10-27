@@ -2,7 +2,7 @@
 
 [English](../en/README.md) · [Toda a documentação](../README.md)
 
-> **Aplica-se a:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Última revisão: 2026-10-25
+> **Aplica-se a:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Última revisão: 2026-10-27
 
 ## Trilha de aprendizado
 
@@ -25,7 +25,7 @@
 ## Operação
 
 - [Roadmap e limitações conhecidas](roadmap.md) - escopo entregue, lacunas e próximos passos.
-- [Plano de testes do Beta 2](../quality/beta2-test-plan.md) - escopo registrado, instalador/assinatura/CI pendentes e matriz obrigatória.
+- [Plano de testes do Beta 2](../quality/beta2.2-test-plan.md) - escopo registrado, instalador/assinatura/CI pendentes e matriz obrigatória.
 - [Registro de auditoria de testes](../quality/test-audit-log.md)
 - [Revisão das referências de skills](../quality/skill-reference-review.md)
 - [Modelo de segurança e governança](../security/governance.md)

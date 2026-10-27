@@ -101,7 +101,7 @@ export class OfficeRibbon {
     }
 
     // Inicializa modais específicos
-    this.backstageView = new BackstageView(this.graph, this.codeModal, this.globalDefaultsModal);
+    this.backstageView = new BackstageView(this.graph, this.viewport, this.codeModal, this.globalDefaultsModal);
     this.importPiModal = new ImportPiModal(this.graph, this.viewport);
     this.importClaudeModal = new ImportClaudeModal(this.graph, this.viewport);
     this.importOpenAiModal = new ImportOpenAiModal(this.graph, this.viewport);
@@ -729,7 +729,9 @@ export class OfficeRibbon {
 
     this.container.querySelector('#ribbon-btn-run')?.addEventListener('click', () => this.toggleExecuteOrStop());
     this.container.querySelector('#ribbon-btn-validate')?.addEventListener('click', () => this.validateGraph());
-    this.container.querySelector('#ribbon-btn-pipeline-defaults')?.addEventListener('click', () => this.globalDefaultsModal.show());
+    this.container.querySelector('#ribbon-btn-pipeline-defaults')?.addEventListener('click', () => {
+      globalEventBus.emit('properties:open', { scope: 'project', section: 'defaults' });
+    });
     this.container.querySelector('#ribbon-btn-project-hub')?.addEventListener('click', () => this.projectManagerModal.show());
 
     // 7. Botões da Aba Inserir
@@ -742,8 +744,12 @@ export class OfficeRibbon {
     this.container.querySelector('#ribbon-btn-insert-templates')?.addEventListener('click', () => this.templateModal.show());
 
     // 8. Botões da Aba Agentes & Tools
-    this.container.querySelector('#ribbon-btn-tools-defaults')?.addEventListener('click', () => this.globalDefaultsModal.show());
-    this.container.querySelector('#ribbon-btn-tools-code')?.addEventListener('click', () => this.globalDefaultsModal.show());
+    this.container.querySelector('#ribbon-btn-tools-defaults')?.addEventListener('click', () => {
+      globalEventBus.emit('properties:open', { scope: 'project', section: 'defaults' });
+    });
+    this.container.querySelector('#ribbon-btn-tools-code')?.addEventListener('click', () => {
+      globalEventBus.emit('properties:open', { scope: 'project', section: 'defaults' });
+    });
     this.container.querySelector('#ribbon-btn-mcp-mgr')?.addEventListener('click', () => this.mcpServersModal.show());
     this.container.querySelector('#ribbon-btn-open-templates-tab')?.addEventListener('click', () => this.templateModal.show());
     this.container.querySelector('#ribbon-btn-github-repos')?.addEventListener('click', () => globalEventBus.emit('modal:open-github-repos'));
@@ -858,6 +864,14 @@ export class OfficeRibbon {
     // Abertura do Modal de Conta Git
     globalEventBus.on('modal:open-git-account', () => {
       this.gitAccountModal.open();
+    });
+
+    // Atalhos de gerenciamento usados pelas telas de propriedades
+    globalEventBus.on('modal:open-mcp-servers', () => {
+      this.mcpServersModal.show();
+    });
+    globalEventBus.on('modal:open-project-memory', () => {
+      this.projectMemoryModal.show();
     });
 
     // Atualização de status do Git no QAT
@@ -1317,7 +1331,7 @@ export class OfficeRibbon {
     return this.backstageView;
   }
 
-  public openBackstage(section: 'info' | 'new' | 'open' | 'save' | 'saveas' | 'export' | 'options' = 'info'): Promise<void> {
+  public openBackstage(section: 'info' | 'new' | 'open' | 'save' | 'saveas' | 'export' | 'options' | 'properties' = 'info'): Promise<void> {
     return this.backstageView.open(section);
   }
 

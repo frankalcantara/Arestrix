@@ -510,19 +510,24 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
       expect(backstage.isOpen()).toBe(true);
     });
 
-    it('deve renderizar o dropdown select de idioma com opções pt-BR e en-US nas Opções do Backstage', async () => {
+    it('deve encaminhar idioma e governança das Opções para as Propriedades', async () => {
       await ribbon.openBackstage('options');
       const backstage = ribbon.getBackstageView();
       expect(backstage.isOpen()).toBe(true);
 
       const overlay = backstage.getOverlay();
-      const selectEl = overlay?.querySelector('#backstage-language-select') as any;
-      expect(selectEl).toBeDefined();
-      expect(selectEl?.tagName).toBe('SELECT');
+      const studioBtn = overlay?.querySelector('#btn-open-studio-properties') as any;
+      expect(studioBtn).toBeDefined();
+      expect(studioBtn?.getAttribute('data-open-properties')).toBe('studio');
+      expect(studioBtn?.getAttribute('data-properties-section')).toBe('general');
+
+      const securityBtn = overlay?.querySelector('#btn-open-workspace-security') as any;
+      expect(securityBtn).toBeDefined();
+      expect(securityBtn?.getAttribute('data-open-properties')).toBe('workspace');
+      expect(securityBtn?.getAttribute('data-properties-section')).toBe('security');
 
       const html = overlay?.innerHTML || '';
-      expect(html).toContain('BR Português (Brasil)');
-      expect(html).toContain('US English');
+      expect(html).not.toContain('backstage-language-select');
     });
 
     it('deve transformar o botão Build & Run em botão vermelho Stop ao rodar, e voltar a Build & Run ao finalizar', async () => {

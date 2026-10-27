@@ -1,6 +1,6 @@
 # Tour pela interface
 
-> **Aplica-se a:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Última revisão: 2026-10-26
+> **Aplica-se a:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Última revisão: 2026-10-27
 
 [English](../en/interface.md) · [Índice](../README.md)
 
@@ -73,8 +73,9 @@ subfluxos e módulos), as skills do workspace e os pipelines. Pressione `Ctrl+K`
 ## Backstage
 
 Aberta por **Arquivo**. Traz as informações do projeto (quatro cartões: o projeto ativo, a sincronização do repositório Git, o workspace
-físico e o **Runner Standalone**), a tela **Abrir**, a tela unificada **Salvar** e as **Opções**
-(padrões do Studio, governança do workspace e o seletor de **idioma**).
+físico e o **Runner Standalone**), o hub de **Propriedades**, a tela **Abrir**, a tela unificada
+**Salvar** e as **Opções** (atalhos de execução e governança do workspace). Idioma, tema e as
+configurações editáveis agora ficam em **Propriedades**.
 
 A tela **Abrir** segue o Abrir do Office. À esquerda ficam os locais:
 
@@ -99,10 +100,60 @@ A tela **Salvar** unifica o salvamento rápido e o *Salvar Como* no estilo do Of
   `pipelines/` do projeto ativo, além de registro automático do grafo no manifesto quando salvo dentro do
   projeto aberto.
 
+## Propriedades
+
+**Arquivo > Propriedades** abre o hub compartilhado no padrão Office para os três escopos. Cada
+escopo usa a mesma barra de título, navegação lateral, cartões de conteúdo e rodapé Cancelar/Salvar.
+
+![Hub de Propriedades para Studio, Workspace e Projeto](../assets/screenshots/properties-hub.webp)
+
+| Escopo | É dono de | Exemplos |
+| :--- | :--- | :--- |
+| **Studio** | Preferências da instalação | Idioma, tema, canvas, modelo padrão, chaves de provedores, AI Gateway, integrações, reset do arquivo de configuração |
+| **Workspace** | O workspace físico do projeto ativo | Sandbox padrão, política de auditoria/segurança, reconstrução de `.workspace`, restauração de padrões |
+| **Projeto** | O manifesto do projeto ativo | Nome, versão, descrição, saída, caminho SQLite, defaults de modelo/ferramentas, ambiente, resumos de Git/Runner, pipelines |
+
+### Propriedades do Studio
+
+Idioma, tema (Claro / Escuro / Seguir o sistema) e canvas são aplicados ao salvar. As seções de
+modelo e gateway gravam apenas no ambiente protegido; as chaves dos provedores são campos write-only
+com status.
+
+![Propriedades do Studio](../assets/screenshots/studio-properties.webp)
+
+![Propriedades do Studio no tema escuro](../assets/screenshots/studio-properties-dark.webp)
+
+### Propriedades do Workspace
+
+O Workspace é dono da política padrão de sandbox e auditoria. Reconstruir `.workspace` regrava as
+skills e MCPs aprovados preservando as propriedades editadas.
+
+![Propriedades de sandbox do Workspace](../assets/screenshots/workspace-properties.webp)
+
+### Propriedades do Projeto
+
+A tela do Projeto edita o manifesto, defaults de modelo/ferramentas, referências de ambiente
+sanitizadas e o caminho SQLite. Git e Runner continuam em diálogos especializados abertos pelos
+respectivos resumos.
+
+![Propriedades do Projeto](../assets/screenshots/project-properties.webp)
+
+![Defaults de modelo e ferramentas do Projeto](../assets/screenshots/project-defaults.webp)
+
+### Herança explícita
+
+Os valores resolvidos seguem **Studio → Workspace → Projeto → Vértice**. A tela mostra a origem
+atual, e salvar um valor no Projeto cria um override explícito. Os diálogos de vértice mantêm o
+próprio toggle de herança.
+
+![Diálogo de sandbox do vértice usando o shell Office compartilhado](../assets/screenshots/vertex-sandbox.webp)
+
+![Diálogo de modelo do vértice usando o shell Office compartilhado](../assets/screenshots/vertex-model.webp)
+
 ## Assistente
 
 O painel lateral tem duas abas: **Propriedades** e **Assistente**. O Assistente é um chat com a IA padrão do
-Studio (Padrões Globais > Modelo padrão do Studio) que ajuda a **operar** e a **aprender** o Studio:
+Studio (Propriedades > Modelo padrão do Studio) que ajuda a **operar** e a **aprender** o Studio:
 
 - Responde dúvidas consultando esta documentação (no idioma do Studio).
 - Cria projetos e monta ou altera grafos: adiciona, liga, altera, move e remove vértices, valida o grafo.
@@ -150,21 +201,21 @@ Todos os modais do Studio seguem o padrão de design corporativo **Microsoft Off
 - **Estrutura em Abas:** Formulários complexos são organizados em abas temáticas de 34px de altura com indicador ativo `#0f6cbd` e transição suave.
 - **Preservação de Estado:** Alternar entre abas mantém todos os valores preenchidos nos formulários intactos, evitando perda de dados antes da confirmação.
 - **Rodapé Padronizado:** Barra de ações de 58px com botões primários Fluent (`#0f6cbd`), cancelamento e atalhos de ajuda.
-- **Tokens Prontos para Tema:** Chrome, superfícies, textos, bordas, campos, badges, callouts e rodapés compartilham tokens claro/escuro. A paleta escura é aplicada por `html[data-theme="dark"]` e está pronta para o futuro seletor global de aparência; o Studio ainda inicia no modo claro.
+- **Tokens Claro e Escuro:** Chrome, superfícies, textos, bordas, campos, badges, callouts e rodapés compartilham tokens claro/escuro. O seletor global **Studio > Propriedades > Geral > Tema** aplica `html[data-theme="dark"]` na ribbon, task pane, console, Backstage e diálogos. O padrão continua claro, e o fundo do canvas é uma preferência independente.
 
 | Modal | Abas Office 365 | Escopo |
 | :--- | :--- | :--- |
-| **Padrões Globais** | Modelo Studio \| Sandbox & Rede \| Ferramentas & MCP \| Memória Blackboard | Studio / Workspace / Projeto |
+| **Propriedades (Studio / Workspace / Projeto)** | Categorias por escopo com shell Office compartilhado | Studio / Workspace / Projeto |
 | **Biblioteca de Vértices** | Catálogo de Modelos \| Presets de Pipeline \| Importar / Exportar Plugins | Studio |
-| **Modelo do Nó** | Provedor & Modelo \| Parâmetros Cognitivos \| Conectividade & Chaves | Por vértice |
-| **Ferramentas do Nó** | Ferramentas Nativas \| Servidores MCP \| Políticas de Execução | Por vértice |
-| **Sandbox do Nó** | Nível de Isolamento \| Rede & DNS Guard \| Cotas & Limites | Por vértice |
-| **Memória do Nó** | Blackboard do Vértice \| Lições Semânticas \| Regime & Escopo | Por vértice |
+| **Modelo do Nó** | Provedor & Modelo \| Instruções & Skills \| Parâmetros | Por vértice |
+| **Ferramentas do Nó** | Ferramentas Nativas \| Servidores MCP \| Validação & Lote | Por vértice |
+| **Sandbox do Nó** | Isolamento & Recursos \| Rede & Confinamento \| Pastas & Volumes | Por vértice |
+| **Memória do Nó** | Blackboard \| Lições Cognitivas \| Regime & Escopo | Por vértice |
 | **Skills do Nó** | Skills Habilitadas \| Catálogo do Workspace \| Importar Nova Skill | Por vértice |
 | **Editor de Skill** | Editor Markdown \| Pré-visualização Renderizada \| Metadados & Teste | Por vértice / Workspace |
 | **Repositórios GitHub** | Repositórios Autorizados \| Cadastrar Novo Repositório | Catálogo Studio |
 | **Servidores MCP** | Servidores Ativos \| Conectar Novo Servidor \| Inspeção & Logs | Workspace |
-| **Gerenciador de Projetos** | Metadados Gerais \| Variáveis de Ambiente (.env) \| Estrutura de Pastas | Projeto |
+| **Gerenciador de Projetos** | Projetos Recentes \| Novo Projeto \| Configurações (link para Propriedades) | Projeto |
 | **Sincronização Git** | Conta & Identidade no SO \| Repositório Remoto \| Automação & Governança | Projeto / SO |
 | **Runner Standalone** | Progresso \| Diagnóstico \| Operação \| Exportação | Projeto / Distribuição |
 | **Execução em Lote** | Dados de Entrada \| Concorrência & Gargalos \| Matriz de Checkpoints | Executar |
@@ -211,8 +262,9 @@ Uma gaveta acoplada na base da tela (redimensionável por splitter e minimizáve
 
 ## Idioma
 
-Escolha o idioma em **Backstage → Opções**: Português (Brasil) ou Inglês (EUA). Para adicionar outro,
-veja [Desenvolvimento](desenvolvimento.md#adicionando-um-idioma).
+Escolha o idioma em **Arquivo → Propriedades → Studio → Geral**: Português (Brasil) ou Inglês
+(EUA). Para adicionar outro, veja
+[Desenvolvimento](desenvolvimento.md#adicionando-um-idioma).
 
 ## Relacionados
 

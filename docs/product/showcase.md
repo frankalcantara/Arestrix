@@ -1,6 +1,6 @@
 # Feature showcase
 
-> **Applies to:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Last reviewed: 2026-10-19
+> **Applies to:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Last reviewed: 2026-10-27
 
 ## 1. Studio canvas and agent swarm
 
@@ -38,6 +38,51 @@ The export flow configures credential vaults (Windows DPAPI or Azure Key Vault),
 integrity manifest and prepares MSI/MSIX packaging for managed Windows deployment.
 
 ![Standalone runner export and governance](../assets/screenshots/runner-export-governance.webp)
+
+## 6. Office Properties hub
+
+The Backstage **Properties** hub brings the three configuration scopes into one Office-style
+surface. Each scope opens the same shared shell with left navigation, content cards and a fixed
+Cancel/Save footer.
+
+![Properties hub for Studio, Workspace and Project](../assets/screenshots/properties-hub.webp)
+
+### Studio Properties
+
+Language, theme, canvas, default model, credentials, AI Gateway and advanced reset live in the
+Studio scope. Provider keys remain write-only status fields.
+
+![Studio Properties](../assets/screenshots/studio-properties.webp)
+
+## 7. Workspace and Project Properties
+
+The Workspace owns the default sandbox and audit policy. The Project owns the manifest, model/tools
+defaults, sanitized environment references and SQLite path.
+
+![Workspace sandbox properties](../assets/screenshots/workspace-properties.webp)
+
+![Project Properties](../assets/screenshots/project-properties.webp)
+
+![Project model and tools defaults](../assets/screenshots/project-defaults.webp)
+
+## 8. Light and dark themes
+
+Choose **Light**, **Dark** or **Follow system** in Studio Properties. The theme applies to the
+ribbon, task pane, console, Backstage and Office dialogs; the canvas background remains an
+independent preference.
+
+![Arestrix Studio in dark mode](../assets/screenshots/studio-dark.webp)
+
+![Studio Properties in dark mode](../assets/screenshots/studio-properties-dark.webp)
+
+## 9. Vertex dialogs in the shared Office shell
+
+Sandbox, model, tools and memory dialogs for a vertex now use the same `BaseModal` shell as the
+Properties screens, while keeping explicit inheritance and per-vertex overrides.
+
+![Vertex sandbox dialog](../assets/screenshots/vertex-sandbox.webp)
+
+![Vertex model dialog](../assets/screenshots/vertex-model.webp)
 
 > Screenshots are captured from the development build. Interface details may change during the
 > beta. Regenerate them with `npm run capture:screenshots`.

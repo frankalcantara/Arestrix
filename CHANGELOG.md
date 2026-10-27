@@ -4,14 +4,52 @@ All notable changes to Arestrix are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-Pre-release identifiers follow SemVer (`2.1.0-beta.1`); the marketing name is **Beta 2.1**.
+Pre-release identifiers follow SemVer (`2.2.0-beta.1`); the marketing name is **Beta 2.2**.
 
-## [Unreleased]
+## [2.2.0-beta.1] - 2026-10-27
 
 ### Added
 
 - Unified light/dark modal design tokens (`office-modals.css`) covering overlay, title bar, tabs,
   surfaces, text, borders, inputs, buttons, cards, tables, code panels and scrollbars.
+- Office-style Properties hub in Backstage with shared screens for Studio, Workspace and Project,
+  scope navigation, editable sections, origin badges and shortcuts to the existing specialist editors.
+- Settings foundation for the Properties screens: Studio, Workspace and Project stores,
+  `SettingsResolver` with Studio → Workspace → Project → Vertex precedence, secure
+  `studio.config.json`/`workspace.config.json` read-write endpoints with local fallback, and
+  origin badges on resolved values. No secret value is persisted in either configuration file.
+- Studio Properties editing (stage 3): language, canvas background and the Studio/Assistant default
+  model can now be changed with dirty-state tracking, Cancel/Save and immediate persistence. The
+  default model is written to the same `ARESTRIX_DEFAULT_*` environment variables used by the native
+  backend. Credentials and the AI Gateway are editable with write-only key fields.
+- Project Properties editing (start of stage 5): project name, version, description and output folder
+  can now be edited with the shared draft/save flow. Saving updates the manifest, the graph metadata
+  and the active-project indicator.
+- Studio credentials and AI Gateway editing: provider keys are write-only (status only, never displayed),
+  the AI Gateway URL/virtual key/fail-closed flag can be updated, and corporate locked policies remain
+  read-only. Secrets continue to live only in the OS environment/vault, never in JSON or localStorage.
+- Project defaults and environment editing: provider/model, sandbox limits, allowed tools and memory
+  flags can be overridden in the project; `.env` entries are sanitized so only `${VAR}` references are
+  persisted and literal secrets are never shown or written to `arestrix.project.json`.
+- Workspace sandbox and audit editing: isolation, network, memory and timeout defaults plus
+  auto-verification and strict mode are editable. `workspace.config.json` is now read/written inside
+  `.workspace/`, matching the manifest produced by `WorkspaceManager`. Rebuilding `.workspace` preserves
+  edited properties, and “Restaurar padrões” resets only sandbox and audit settings.
+- Legacy settings entries now deep-link to the new Properties screens: Backstage Options language and
+  governance, Ribbon pipeline/tools defaults and the Assistant defaults alias open the owning scope and
+  category instead of the old monolithic modal.
+- Vertex Sandbox, Model, Code Mode/Tools and Memory dialogs now extend the shared `BaseModal` Office
+  shell, with the same title bar, resizable window and standard footer while keeping explicit
+  inheritance and per-vertex overrides.
+- Studio Advanced now documents the Windows/Linux `studio.config.json` paths and can restore visual
+  preferences without touching language, model or credentials. Fixed explicit light-canvas persistence
+  when the previous fallback preference was dark.
+- Project General now edits the SQLite database path alongside name, version, description and output
+  folder. The Project Manager settings tab is now a read-only summary that deep-links to Project
+  Properties, removing the duplicated editor.
+- Global theme preference (Light / Dark / Follow system) is available in Studio Properties. The dark
+  theme now covers the ribbon, task pane, console, status bar, Backstage and Office modals, while the
+  canvas background remains an independent preference.
 
 ### Changed
 
@@ -27,6 +65,14 @@ Pre-release identifiers follow SemVer (`2.1.0-beta.1`); the marketing name is **
 - Graphviz export dialog recenters after being shown, using its real percentage-based dimensions.
 - Project Manager recent-projects tab now resolves the existing `project_manager_modal.tab_recents`
   translation instead of displaying the raw i18n key.
+- Explicit light-canvas persistence no longer falls back to a previous dark preference.
+
+### Known limitations
+
+- The dark theme was validated at 1600×1000 and 1024×768 on the main shell and Properties screens;
+  secondary legacy editors may still need contrast polish.
+- Clean-machine install/upgrade/uninstall, Linux packaging, signed remote catalog and the full
+  acceptance matrix remain pending.
 
 ## [2.1.0-beta.1] - 2026-10-26
 
@@ -453,6 +499,7 @@ First public beta of Arestrix Studio and the native C++20 pipeline compiler.
 - The `braces` advisory documented in `docs/security/dependency-advisories.md` affects the build chain only;
   no fixed release is available upstream yet.
 
+[2.2.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v2.2.0-beta.1
 [2.1.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v2.1.0-beta.1
 [2.0.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v2.0.0-beta.1
 [1.5.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v1.5.0-beta.1

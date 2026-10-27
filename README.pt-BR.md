@@ -22,11 +22,16 @@
 </p>
 
 <p align="center">
-  <b>Beta 2.1</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentação</a>
+  <b>Beta 2.2</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentação</a>
 </p>
 
 <p align="center">
   <img src="docs/assets/screenshots/studio-main.webp" alt="Arestrix Studio: pipeline multiagente em execução no canvas" width="960">
+</p>
+
+<p align="center">
+  <img src="docs/assets/screenshots/properties-hub.webp" alt="Hub de Propriedades no padrão Office para Studio, Workspace e Projeto" width="470">
+  <img src="docs/assets/screenshots/studio-dark.webp" alt="Arestrix Studio no tema escuro com um grafo multiagente" width="470">
 </p>
 
 ---
@@ -77,8 +82,12 @@ um pipeline em um canvas de grafo; o Arestrix valida, gera código C++20 e compi
 
 ## Recursos em destaque
 
-- **Editor visual de grafos** — ribbon inspirada no Office, templates, vértices de decisão, ciclos
+- **Editor visual de grafos** - ribbon inspirada no Office, templates, vértices de decisão, ciclos
   de feedback, undo/redo e validação do grafo.
+- **Hub de Propriedades Office** - Studio, Workspace e Projeto em uma única superfície no padrão
+  Office, com herança explícita, badges de origem e editores especializados de credenciais, Git e memória.
+- **Temas claro e escuro** - Claro, escuro ou seguir o sistema na ribbon, task pane, console,
+  Backstage e todos os diálogos Office. O canvas permanece uma preferência independente.
 - **Compilador C++20 nativo** — inspecione o código Taskflow gerado no Monaco, compile com MSVC ou
   GCC/Clang e reutilize builds inalterados.
 - **Runtime de agentes** — laço de ferramentas, sandboxes, modelo por vértice, telemetria ao vivo e
@@ -128,8 +137,8 @@ Opcional: ative o hook de verificação de segredos uma vez por clone com
 Dentro do Studio:
 
 1. Abra um dos [exemplos](examples/README.pt-BR.md) ou crie um projeto.
-2. Escolha provedor e modelo em **Padrões Globais**; as chaves vêm de variáveis de ambiente ou do
-   seu cofre de credenciais.
+2. Escolha provedor e modelo em **Arquivo > Propriedades > Projeto > Modelo e ferramentas**; as
+   chaves vêm de variáveis de ambiente ou do seu cofre de credenciais.
 3. Pressione **F5** para compilar e executar o grafo com telemetria ao vivo.
 4. Use **Exportar Runner Independente** para empacotar o pipeline para entrega.
 
@@ -160,17 +169,17 @@ python scripts/e2e_examples.py
 | [Validação de skills](docs/quality/skill-reference-review.md) | Arestrix Skill Guard: NVIDIA SkillSpector + Cloudflare security-audit, lock e revisão de referências. |
 | [Exemplos](examples/README.pt-BR.md) | Cinco projetos executáveis, de um pipeline de dois agentes a fluxos compostos, de memória e de pesquisa web. |
 | [Registro de auditoria de testes](docs/quality/test-audit-log.md) | Rodadas cronológicas de testes e auditorias de integridade. |
-| [Plano de testes do Beta 2.1](docs/quality/beta2-test-plan.md) | Escopo registrado e critérios de aceite pendentes. |
+| [Plano de testes do Beta 2.2](docs/quality/beta2.2-test-plan.md) | Escopo registrado e critérios de aceite pendentes. |
 | [Changelog](CHANGELOG.md) | Histórico de releases, mudanças e limitações conhecidas. |
 
 ## Status do projeto
 
-A **Beta 2.1** (`2.1.0-beta.1`) é um pré-release de desenvolvimento. O Studio roda no Windows e no
+A **Beta 2.2** (`2.2.0-beta.1`) é um pré-release de desenvolvimento. O Studio roda no Windows e no
 Linux; programas gerados a partir de um grafo atualmente têm o Windows como alvo. APIs, formatos de
 arquivo e flags de linha de comando podem mudar antes da disponibilidade geral. Consulte o
 [changelog](CHANGELOG.md) para as limitações atuais. O instalador Windows e a assinatura de código
 estão incluídos; validação em máquina limpa, pacote Linux e a matriz completa de testes ainda estão
-pendentes. Acompanhe no [plano de testes do Beta 2.1](docs/quality/beta2-test-plan.md). Os artefatos
+pendentes. Acompanhe no [plano de testes do Beta 2.2](docs/quality/beta2.2-test-plan.md). Os artefatos
 Windows são assinados pela [SignPath Foundation](https://signpath.org) quando a assinatura está
 habilitada; consulte a [política de assinatura de código](CODE_SIGNING.md).
 

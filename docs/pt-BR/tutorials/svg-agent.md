@@ -1,6 +1,6 @@
 # ⚡ Tutorial Arestrix: Agente Auditor e Criador de SVGs Animados
 
-> **Aplica-se a:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Última revisão: 2026-10-19
+> **Aplica-se a:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Última revisão: 2026-10-19
 
 ## Guia Didático para Iniciantes: Orquestração Cognitiva e Concorrência C++20 com Taskflow
 
@@ -81,12 +81,12 @@ Suponha que você acabou de abrir o Arestrix pela primeira vez. Não se preocupe
 Para o **Build & Run (F5)** funcionar de ponta a ponta (veja também o README):
 
 1. **Compilador C++20**: Visual Studio com a carga "Desenvolvimento para Desktop com C++" (Windows) ou `g++`/`clang++` (Linux). O Arestrix gera o `main.cpp`, compila e executa dentro da **pasta do projeto ativo**.
-2. **Chaves de API** (variáveis de ambiente do usuário, gravadas pelo modal *Padrões Globais*):
+2. **Chaves de API** (variáveis de ambiente do usuário, gravadas em *Propriedades → Studio → Credenciais e Gateway*):
    * `DEEPSEEK_API_KEY` para o `Agente_Gerador_DeepSeek`.
    * `JEV_BASE_URL` (endereço do servidor compatível com a API OpenAI que serve o JEV) e, se ele exigir, `JEV_API_KEY` para o `Agente_Auditor_JEV`.
    * Modelo local em vez de API paga? Use o provedor `local` (`LOCAL_LLM_BASE_URL`, padrão `http://localhost:11434/v1`).
 3. **Caminhos relativos**: `workspace/scene.svg` e os demais arquivos do tutorial ficam dentro da pasta do projeto; as ferramentas `read`/`write` dos agentes **não conseguem sair dela**.
-4. **Ferramentas vêm da configuração do nó**: a lista `tools:` no cabeçalho do `SKILL.md` é apenas informativa. Quem autoriza `write`, `read` e `validate_svg` é o modal *Ferramentas* / *Padrões Globais*. O auditor JEV precisa de `write`, pois grava `audit_decision.txt`.
+4. **Ferramentas vêm da configuração do nó**: a lista `tools:` no cabeçalho do `SKILL.md` é apenas informativa. Quem autoriza `write`, `read` e `validate_svg` é o modal *Ferramentas* do vértice ou *Propriedades → Projeto → Modelo e ferramentas*. O auditor JEV precisa de `write`, pois grava `audit_decision.txt`.
 5. **Limite de segurança do laço**: cada agente roda no máximo 10 vezes por execução (`ARESTRIX_MAX_AGENT_RUNS`), para que um laço de auto-correção que não converge não gaste dinheiro indefinidamente. `Shift+F5` interrompe a execução.
 6. **Sem internet ou sem chaves?** O teste automatizado `python scripts/e2e_tutorial.py` executa este mesmo grafo contra um servidor LLM de mentira.
 
@@ -98,16 +98,16 @@ Ao abrir o **Arestrix Studio**, você verá:
 
 ---
 
-### Passo 1: Limpar o Canvas e Configurar os Padrões Globais
+### Passo 1: Limpar o Canvas e Configurar os Padrões do Projeto
 
 1. Na aba **Página Inicial** da Ribbon, clique no botão **Limpar Grafo** (ícone de lixeira) para começar com uma folha limpa.
-2. Clique no botão **Padrões Globais** (ícone `⚙️`).
-3. No modal que abrir:
-   * **Provedor Padrão**: Selecione `DeepSeek`.
+2. Abra **Arquivo → Propriedades → Projeto → Modelo e ferramentas**.
+3. Na tela de Propriedades:
+   * **Provedor**: Selecione `DeepSeek`.
    * **Modelo**: Digite `deepseek-flash`.
-   * **Isolamento de Sandbox**: Escolha `Processo do Sistema (Host)` para prototipagem rápida.
-   * **Ferramentas Habilitadas**: Marque `write`, `read` e `validate_svg`.
-4. Clique em **Salvar Configurações Globais**.
+   * **Isolamento**: Escolha `host_direct` para prototipagem rápida.
+   * **Ferramentas permitidas**: Marque `write`, `read` e `validate_svg`.
+4. Clique em **Salvar**.
 
 ---
 

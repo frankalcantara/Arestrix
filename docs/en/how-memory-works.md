@@ -1,6 +1,6 @@
 # How Arestrix memory works
 
-> **Applies to:** Arestrix Beta 2.1 (`2.1.0-beta.1`) — last reviewed: 2026-10-25
+> **Applies to:** Arestrix Beta 2.2 (`2.2.0-beta.1`) — last reviewed: 2026-10-25
 >
 > This guide describes the memory implemented in the C++20 + SQLite core. It covers the full
 > cycle: capture, proposal, promotion, consolidation, retrieval, embeddings, playbooks,
@@ -227,7 +227,7 @@ ollama pull embeddinggemma-2
 
 In the Studio:
 
-- **Global Defaults → Memory**;
+- **File → Properties → Project → Model & tools → Manage advanced memory**;
 - enable semantic search;
 - endpoint `http://127.0.0.1:11434/v1`;
 - model `embeddinggemma-2`;
@@ -422,7 +422,7 @@ The HTTP `/mcp` endpoint accepts the same JSON-RPC with `Authorization: Bearer .
 
 ## 14. Configuration
 
-Fields in **Global Defaults → Memory**:
+Fields in **File → Properties → Project → Model & tools → Manage advanced memory**:
 
 | Field | Default |
 | :--- | :--- |

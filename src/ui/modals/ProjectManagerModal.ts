@@ -2,6 +2,7 @@ import { Graph } from '../../core/Graph.ts';
 import { ProjectManager } from '../../core/ProjectManager.ts';
 import { IProjectManifest } from '../../core/types.ts';
 import { hashProjectName } from '../../core/hash.ts';
+import { globalEventBus } from '../../core/EventBus.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 import { t } from '../../i18n/index.ts';
 
@@ -99,7 +100,7 @@ export class ProjectManagerModal {
       });
     }
 
-    this.bindInternalEvents(cur);
+    this.bindInternalEvents();
   }
 
   private renderRecentsTab(recents: any[], current: IProjectManifest): string {
@@ -223,63 +224,38 @@ export class ProjectManagerModal {
   }
 
   private renderSettingsTab(current: IProjectManifest): string {
-    const envEntries = Object.entries(current.environment || {}).map(([k, v]) => `${k}=${v}`).join('\n');
-
     return `
-      <div class="settings-section-card" style="padding: 16px;">
+      <div class="settings-section-card" style="padding: 20px;">
         <div class="section-card-header">
           <span class="section-card-icon">⚙️</span>
           <div class="section-card-titles">
-            <h3 class="section-card-title">${t('project_manager_modal.settings_header_title')} <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">${t('project_manager_modal.badge_project_scope')}</span></h3>
+            <h3 class="section-card-title">${t('project_manager_modal.settings_properties_title')} <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">${t('project_manager_modal.badge_project_scope')}</span></h3>
             <p class="section-card-desc" style="word-break: break-all; overflow-wrap: anywhere;">${t('project_manager_modal.settings_manifest_desc', { path: this.escapeHtml(current.rootPath) })}</p>
           </div>
         </div>
 
-        <div class="form-row-grid" style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-top: 14px;">
-          <div class="form-group">
-            <label class="form-label" for="edit-proj-name">${t('project_manager_modal.settings_name_label')}</label>
-            <input type="text" id="edit-proj-name" class="form-input" value="${this.escapeHtml(current.name)}" />
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="edit-proj-ver">${t('project_manager_modal.settings_ver_label')}</label>
-            <input type="text" id="edit-proj-ver" class="form-input" value="${this.escapeHtml(current.version)}" />
-          </div>
+        <div class="properties-note properties-note--info" style="margin: 16px 0;">
+          ${t('project_manager_modal.settings_properties_desc')}
         </div>
 
-        <div class="form-group" style="margin-top: 12px;">
-          <label class="form-label" for="edit-proj-desc">${t('project_manager_modal.settings_desc_label')}</label>
-          <textarea id="edit-proj-desc" class="form-input" style="height: 60px;">${this.escapeHtml(current.description)}</textarea>
-        </div>
-
-        <div class="form-row-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
-          <div class="form-group">
-            <label class="form-label" for="edit-proj-output-dir">${t('project_manager_modal.settings_output_dir_label')} <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px;">${t('project_manager_modal.badge_project_scope')}</span></label>
-            <input type="text" id="edit-proj-output-dir" class="form-input" value="${this.escapeHtml(current.outputDir || 'Output')}" placeholder="Output" />
-            <div class="form-hint">${t('project_manager_modal.settings_output_dir_hint')}</div>
+        <div class="properties-grid" style="margin-bottom: 16px;">
+          <div class="properties-row">
+            <span class="properties-row-label">${t('project_manager_modal.settings_name_label')}</span>
+            <span class="properties-row-value"><strong>${this.escapeHtml(current.name)}</strong></span>
           </div>
-          <div class="form-group">
-            <label class="form-label" for="edit-proj-db-path">${t('project_manager_modal.settings_db_path_label')} <span style="font-size: 10px; color: #0f6cbd;">${t('project_manager_modal.badge_workspace_scope')}</span></label>
-            <input type="text" id="edit-proj-db-path" class="form-input" value="${this.escapeHtml(current.database?.filePath || 'storage/database.sqlite')}" />
-            <div class="form-hint">${t('project_manager_modal.settings_db_path_hint')}</div>
+          <div class="properties-row">
+            <span class="properties-row-label">${t('project_manager_modal.settings_ver_label')}</span>
+            <span class="properties-row-value"><code class="properties-code">${this.escapeHtml(current.version)}</code></span>
+          </div>
+          <div class="properties-row">
+            <span class="properties-row-label">${t('project_manager_modal.settings_db_path_label')}</span>
+            <span class="properties-row-value"><code class="properties-code">${this.escapeHtml(current.database?.filePath || current.database?.url || '-')}</code></span>
           </div>
         </div>
 
-        <div class="form-group" style="margin-top: 12px;">
-          <label class="form-label">${t('project_manager_modal.settings_pipelines_label')}</label>
-          <div style="background: rgba(0,0,0,0.05); padding: 8px 12px; border-radius: 6px; font-family: monospace; font-size: 12px;">
-            ${(current.pipelines || []).map(p => `<div>• <strong>${this.escapeHtml(p.name)}</strong> (${this.escapeHtml(p.file)}) ${p.isPrimary ? `<span class="badge-inherited" style="font-size: 9px; padding: 1px 4px;">${t('project_manager_modal.settings_badge_primary')}</span>` : ''}</div>`).join('')}
-          </div>
-        </div>
-
-        <div class="form-group" style="margin-top: 12px;">
-          <label class="form-label" for="edit-proj-env">${t('project_manager_modal.settings_env_label')}</label>
-          <textarea id="edit-proj-env" class="form-input" style="height: 70px; font-family: monospace; font-size: 12px;" placeholder="${t('project_manager_modal.settings_env_placeholder')}">${this.escapeHtml(envEntries)}</textarea>
-          <div class="form-hint">${t('project_manager_modal.settings_env_hint')}</div>
-        </div>
-
-        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
-          <button id="btn-save-proj-settings" class="btn-action-pill" style="background: var(--gradient-blue); color: white;">
-            ${t('project_manager_modal.btn_save_changes')}
+        <div style="display: flex; justify-content: flex-end;">
+          <button id="btn-open-project-properties" class="btn btn-primary-office">
+            ${t('project_manager_modal.btn_open_properties')}
           </button>
         </div>
       </div>
@@ -293,7 +269,7 @@ export class ProjectManagerModal {
     });
   }
 
-  private bindInternalEvents(current: IProjectManifest): void {
+  private bindInternalEvents(): void {
     if (!this.overlay || typeof this.overlay.querySelector !== 'function') return;
     this.overlay.querySelector('#btn-close-proj-manager')?.addEventListener('click', () => this.hide());
 
@@ -310,6 +286,11 @@ export class ProjectManagerModal {
     this.overlay.querySelector('#tab-btn-settings')?.addEventListener('click', () => {
       this.activeTab = 'settings';
       this.render();
+    });
+
+    this.overlay.querySelector('#btn-open-project-properties')?.addEventListener('click', () => {
+      this.hide();
+      globalEventBus.emit('properties:open', { scope: 'project', section: 'general' });
     });
 
     this.overlay.querySelector('#btn-go-to-create')?.addEventListener('click', () => {
@@ -451,40 +432,6 @@ export class ProjectManagerModal {
       } else {
         alert(t('project_manager_modal.alert_create_fail'));
       }
-    });
-
-    // Salvar configurações do projeto ativo
-    this.overlay.querySelector('#btn-save-proj-settings')?.addEventListener('click', async () => {
-      const name = (this.overlay.querySelector('#edit-proj-name') as HTMLInputElement)?.value.trim() || current.name;
-      const ver = (this.overlay.querySelector('#edit-proj-ver') as HTMLInputElement)?.value.trim() || current.version;
-      const desc = (this.overlay.querySelector('#edit-proj-desc') as HTMLTextAreaElement)?.value.trim() || current.description;
-      const outputDir = (this.overlay.querySelector('#edit-proj-output-dir') as HTMLInputElement)?.value.trim() || 'Output';
-      const dbPath = (this.overlay.querySelector('#edit-proj-db-path') as HTMLInputElement)?.value.trim() || 'storage/database.sqlite';
-      const envRaw = (this.overlay.querySelector('#edit-proj-env') as HTMLTextAreaElement)?.value || '';
-
-      const envMap: Record<string, string> = {};
-      envRaw.split('\n').forEach(line => {
-        const trimmed = line.trim();
-        if (trimmed && !trimmed.startsWith('#')) {
-          const eqIdx = trimmed.indexOf('=');
-          if (eqIdx > 0) {
-            envMap[trimmed.substring(0, eqIdx).trim()] = trimmed.substring(eqIdx + 1).trim();
-          }
-        }
-      });
-
-      this.projectManager.updateProjectMetadata({
-        name,
-        version: ver,
-        description: desc,
-        outputDir,
-        database: { type: 'sqlite', filePath: dbPath },
-        environment: envMap
-      }, this.graph);
-
-      await this.projectManager.saveCurrentProject();
-      alert(t('project_manager_modal.alert_settings_saved'));
-      this.hide();
     });
   }
 

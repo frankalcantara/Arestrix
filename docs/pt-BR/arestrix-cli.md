@@ -1,6 +1,6 @@
 # `arestrix-cli` — execução sem interface
 
-> **Aplica-se a:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Última revisão: 2026-10-25
+> **Aplica-se a:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Última revisão: 2026-10-25
 
 [English](../en/arestrix-cli.md) · [Índice](README.md)
 
@@ -415,7 +415,7 @@ Para testes sem chave real, os scripts de e2e usam LLMs falsos e MCPs de teste; 
 | :--- | :--- |
 | `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`, etc. | Chave do provedor usado pelos agentes. |
 | `KEENABLE_API` | Chave do MCP Keenable no exemplo 05. |
-| `ARESTRIX_MEMORY_METRICS=1` | Grava métricas mesmo com a memória desligada. No Studio, use **Padrões Globais → Memória → Registrar métricas**. |
+| `ARESTRIX_MEMORY_METRICS=1` | Grava métricas mesmo com a memória desligada. No Studio, use **Arquivo → Propriedades → Projeto → Modelo e ferramentas → Gerenciar memória avançada → Registrar métricas**. |
 | `ARESTRIX_MEMORY_DISABLE=1` | Desliga brief e ferramentas de memória em runtime. No Studio, use **Modo de Medição / A-B**. |
 | `ARESTRIX_PYTHON` | Usada apenas por exemplos que declaram um MCP stdio em Python. |
 | `ARESTRIX_NOTIFICATIONS=0` | Desliga o canal de notificações não bloqueantes de chamadas e seu registro JSONL. |

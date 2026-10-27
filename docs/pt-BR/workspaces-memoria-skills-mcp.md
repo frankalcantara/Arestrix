@@ -1,6 +1,6 @@
 # Workspaces, memória, skills e MCP
 
-> **Aplica-se a:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Última revisão: 2026-10-25
+> **Aplica-se a:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Última revisão: 2026-10-25
 
 [English](../en/workspaces-memory-skills-mcp.md) · [Índice](../README.md)
 
@@ -121,7 +121,7 @@ quantas lições pode gravar por execução; `memory_search` respeita esses dom�
 - A busca híbrida (FTS + grafo + embeddings) é opcional e **desligada por padrão**. O modelo
   pré-configurado é `embeddinggemma-2` (768 dimensões). Para ativar, use um
   endpoint OpenAI-compatible `/v1/embeddings` já existente (Ollama, llama.cpp, LM Studio,
-  vLLM) em Global Defaults → Memória. Com Ollama: `ollama pull embeddinggemma-2` e endpoint
+  vLLM) em File → Properties → Memória. Com Ollama: `ollama pull embeddinggemma-2` e endpoint
   `http://127.0.0.1:11434/v1`. Sem provider, o sistema continua 100% lexical.
   Ao ativar, os textos indexados (lições, fatos e sumários sanitizados) são enviados ao
   endpoint configurado; use um servidor local se quiser manter tudo na máquina.
@@ -155,14 +155,14 @@ quantas lições pode gravar por execução; `memory_search` respeita esses dom�
   limita a escrita automática, `maxLessonsPerRun` (padrão 20) limita lições por execução e
   `maxLessonChars` (padrão 4000) limita o tamanho de cada lição/gatilho. Há ainda um teto global
   de 5000 lições ativas por projeto. Esses campos são configuráveis no vértice e em
-  **Padrões Globais → Memória**.
+  **Arquivo → Propriedades → Projeto → Modelo e ferramentas → Gerenciar memória avançada**.
 - Antes de persistir, lições, episódios, arestas e Blackboard passam por sanitização de segredos
   conhecidos (OpenAI/Stripe, Google, AWS, GitHub, Slack, Bearer, parâmetros de URL e chaves
   privadas PEM). O snapshot também é sanitizado antes de ir para o Git, cobrindo linhas antigas
   gravadas antes desta camada.
 - O expurgo do projeto remove working, lições/arestas, episódios, evidências, nós, usage, hits e
   auditoria, e compacta o SQLite com `VACUUM`; o banco abre com `secure_delete=ON`. A retenção de
-  telemetria é configurável em **Padrões Globais → Memória** (`retentionDays`, padrão 180;
+  telemetria é configurável em **Arquivo → Propriedades → Projeto → Modelo e ferramentas → Gerenciar memória avançada** (`retentionDays`, padrão 180;
   `0` = manter) e roda no encerramento e via `arestrix-cli memory prune`. `memory purge` também
   remove o snapshot, salvo `--keep-snapshot`.
 - O binário gerado resolve o banco a partir de `ARESTRIX_PROJECT_ROOT` (fallback: diretório atual);
@@ -218,7 +218,7 @@ São coisas diferentes:
 Cada execução de agente registra tokens, chamadas, latência e tamanho do contexto de memória na
 tabela `memory_usage`. Para comparar o consumo com a memória ligada/desligada:
 
-No **Studio**, abra **Padrões Globais → Memória** e use **Modo de Medição / A-B**:
+No **Studio**, abra **Arquivo → Propriedades → Projeto → Modelo e ferramentas → Gerenciar memória avançada** e use **Modo de Medição / A-B**:
 
 - **Normal**: usa a configuração de memória dos vértices.
 - **A/B: memória OFF neste projeto**: desliga brief e ferramentas de memória em runtime, sem editar
@@ -251,7 +251,7 @@ Python/JS auxiliar durante a execução do grafo.
 Se o projeto usar o **AI Gateway**, o impacto da memória também é registrado no gateway. O runtime
 envia `X-Arestrix-Memory-Enabled`, `X-Arestrix-Memory-Context-Chars`, `X-Arestrix-Agent` e
 `X-Arestrix-Run-Id`; o gateway grava `memory_enabled`, `memory_context_chars` e `memory_tokens`
-(estimativa de caracteres / 4) em `usage_events`. A tela **Padrões Globais → AI Gateway** e
+(estimativa de caracteres / 4) em `usage_events`. A tela **Arquivo → Propriedades → Studio → Credenciais e Gateway** e
 `/v1/usage` mostram a proporção sobre a entrada e o comparativo memória ON/OFF. A coleta é feita
 inteiramente em C++: nenhum Python ou processo JS participa da execução do grafo.
 
@@ -324,7 +324,7 @@ sem processo filho e sem código de terceiros. Elas aparecem no vértice MCP e n
 - Tudo fica dentro da pasta do projeto. A pasta `.git` não pode ser lida. **Pipelines, configuração do projeto, `.workspace`, `.arestrix` e
   `.githooks` nunca podem ser gravados** por estas ferramentas, nem pelas ferramentas `write` e `edit` dos próprios agentes: gravar ali
   injetaria código C++ ou servidores MCP que rodariam na próxima execução.
-- **O HTTP nunca decide sozinho para onde os dados vão.** Liste os sites permitidos no Studio (**Padrões Globais → Ferramentas → Acesso à
+- **O HTTP nunca decide sozinho para onde os dados vão.** Liste os sites permitidos no Studio (**Arquivo → Propriedades → Projeto → Modelo e ferramentas → Gerenciar allowlist HTTP
   internet**, um por linha, como `api.exemplo.com` ou `*.exemplo.org`), que os grava em `.workspace/native/http.json`; sem nenhum site nada é
   enviado, e a mensagem de erro diz o que fazer. Curingas exigem um domínio completo (`*.com` é recusado).
   Endereços locais e privados são recusados mesmo se listados, redirecionamentos **não** são seguidos (cada destino precisa ser
@@ -347,7 +347,7 @@ chamada abre o arquivo, executa **um** comando e o fecha. O arquivo precisa esta
 abre o arquivo **somente para leitura** e só executa `SELECT`; o `sql_execute` altera dados e esquema. O motor recusa `ATTACH`, `PRAGMA`,
 tabelas virtuais, gatilhos, transações e carga de extensões, um comando é interrompido após 5 segundos e o banco é limitado a 200 MB.
 
-**Escolher as ferramentas de um agente.** Na janela **Ferramentas** de um agente (e nos Padrões Globais) todo servidor, nativo ou não, aparece com
+**Escolher as ferramentas de um agente.** Na janela **Ferramentas** de um agente (e nas Propriedades → Modelo e ferramentas) todo servidor, nativo ou não, aparece com
 uma caixa, e "Escolher ferramentas" liga e desliga cada ferramenta. Só os nomes do servidor e das ferramentas são gravados.
 
 **Velocidade.** Na máquina de desenvolvimento, uma chamada nativa levou cerca de 4 microssegundos; um servidor MCP externo, com sessão

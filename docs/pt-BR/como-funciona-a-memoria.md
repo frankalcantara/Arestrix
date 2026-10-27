@@ -1,6 +1,6 @@
 # Como funciona a memória do Arestrix
 
-> **Aplica-se a:** Arestrix Beta 2.1 (`2.1.0-beta.1`) — última revisão: 2026-10-25
+> **Aplica-se a:** Arestrix Beta 2.2 (`2.2.0-beta.1`) — última revisão: 2026-10-25
 >
 > Este guia descreve a memória implementada no núcleo C++20 + SQLite. Ele cobre o ciclo
 > completo: captura, proposta, promoção, consolidação, recuperação, embeddings, playbooks,
@@ -227,7 +227,7 @@ ollama pull embeddinggemma-2
 
 No Studio:
 
-- **Global Defaults → Memória**;
+- **File → Properties → Memória**;
 - habilitar busca semântica;
 - endpoint `http://127.0.0.1:11434/v1`;
 - modelo `embeddinggemma-2`;
@@ -420,7 +420,7 @@ O endpoint HTTP `/mcp` aceita o mesmo JSON-RPC com `Authorization: Bearer ...`.
 
 ## 14. Configuração
 
-Campos em **Global Defaults → Memória**:
+Campos em **File → Properties → Memória**:
 
 | Campo | Padrão |
 | :--- | :--- |

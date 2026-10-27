@@ -2,7 +2,7 @@
 
 [Português](../pt-BR/README.md) · [All documentation](../README.md)
 
-> **Applies to:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Last reviewed: 2026-10-25
+> **Applies to:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Last reviewed: 2026-10-27
 
 ## Learning path
 
@@ -32,7 +32,7 @@
 ## Operations
 
 - [Roadmap and known limitations](roadmap.md) - delivered scope, gaps and next steps.
-- [Beta 2 test plan](../quality/beta2-test-plan.md) - registered scope, pending installer/signing/CI and the mandatory test matrix (in Portuguese).
+- [Beta 2.2 test plan](../quality/beta2.2-test-plan.md) - registered scope, pending installer/signing/CI and the mandatory test matrix (in Portuguese).
 - [Test audit log](../quality/test-audit-log.md)
 - [Skill reference review](../quality/skill-reference-review.md)
 - [Security and governance model](../security/governance.md)

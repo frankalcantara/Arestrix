@@ -1,11 +1,11 @@
 # Registro de Auditoria e Integridade de Testes (Test Audit Log)
 
-> **Aplica-se a:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Última revisão: 2026-10-19
+> **Aplica-se a:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Última revisão: 2026-10-19
 
 Este documento registra o histórico cronológico das rodadas de testes automatizados, verificações de segurança e auditorias de integridade do **Arestrix**, organizadas da **mais recente para a mais antiga**.
 
-> O Beta 2.1 está registrado como pré-release. Instalador e assinatura foram implementados; a matriz
-> obrigatória e as validações pendentes estão em [Plano de testes do Beta 2.1](beta2-test-plan.md).
+> O Beta 2.2 está registrado como pré-release. Instalador e assinatura foram implementados; a matriz
+> obrigatória e as validações pendentes estão em [Plano de testes do Beta 2.2](beta2.2-test-plan.md).
 
 O Arestrix adota a filosofia de integridade estrita (*fail-closed*): nenhuma funcionalidade é considerada concluída ou pronta para ambiente corporativo sem aprovação completa em todas as categorias de validação.
 
@@ -27,6 +27,29 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 ---
 
 ## Histórico Cronológico de Auditorias
+
+### Rodada #002 — 2026-10-27 (release 2.2.0-beta.1)
+- **Commit:** árvore de release `2.2.0-beta.1` (hash registrado no GitHub após o push)
+- **Status Geral:** `APROVADO`
+- **Ambiente de Teste:** Windows 11 (x64) | Node.js v24 | Vitest v4.1.12 | Visual Studio 2026 / MSVC C++20
+- **Métricas Globais:** 64 arquivos de teste | 507 testes aprovados | 0 falhas
+
+#### Cobertura desta rodada
+
+| Área | Evidência |
+| :--- | :--- |
+| **Propriedades Studio/Workspace/Projeto** | `properties-data.spec.ts`, `settings-stores.spec.ts`, `settings-resolver.spec.ts` |
+| **Preferências e tema global** | `app-theme.spec.ts`, `settings-stores.spec.ts` |
+| **Projeto e migração de telas** | `project-creation-hash.spec.ts`, `office-ribbon-interface.spec.ts` |
+| **Workspace e provisionamento** | `workspace-governance.spec.ts` |
+| **Modais de vértice** | `skill-editor-modal.spec.ts`, `workspace-governance.spec.ts` |
+
+#### Verificações complementares
+- `npx tsc --noEmit`: 0 erros.
+- `npm run build`: concluído.
+- Build nativo C++20 (`arestrix`) verificado sem trabalho pendente.
+- Capturas de tela geradas por `npm run capture:screenshots` para o hub de Propriedades, escopos Studio/Workspace/Projeto, defaults, tema escuro e modais de vértice.
+- Revisão visual em 1600×1000 e 1024×768.
 
 ### Rodada #001 — 2026-10-18 22:30 UTC-3
 - **Commit:** `cf0e9b8` (Branch: `main`)

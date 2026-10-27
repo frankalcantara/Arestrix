@@ -200,21 +200,42 @@ export class WorkspaceManager {
           }));
         }
 
-        // 3. Grava manifesto geral do workspace
-        const workspaceManifest: IWorkspaceConfig = {
+        // 3. Grava manifesto geral do workspace preservando as propriedades
+        // editadas na tela de Propriedades (sandbox, segurança, etc.).
+        const configFile = `${targetDirs.root}/workspace.config.json`;
+        let existingProperties: Record<string, any> | undefined;
+        let existingSecurity: Record<string, any> | undefined;
+        try {
+          const raw = await glob.webui.call('read_workspace_asset', JSON.stringify({ filePath: configFile }));
+          if (raw) {
+            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            const content = parsed?.content
+              ? (typeof parsed.content === 'string' ? JSON.parse(parsed.content) : parsed.content)
+              : parsed;
+            existingProperties = content?.properties && typeof content.properties === 'object'
+              ? content.properties
+              : undefined;
+            existingSecurity = existingProperties?.security || content?.security;
+          }
+        } catch {
+          // Configuração existente é opcional; segue com os defaults.
+        }
+
+        const workspaceManifest: IWorkspaceConfig & { properties?: Record<string, any> } = {
           workspaceRoot: targetDirs.root,
           skillsDir: targetDirs.skills,
           mcpsDir: targetDirs.mcps,
           agentsDir: targetDirs.agents,
           graphsDir: `${targetDirs.root}/graphs`,
-          autoVerifySkills: this.autoVerifySkills,
-          strictSecurityMode: true,
-          installedAssetsVersion: '2.0.0',
-          lastSyncTimestamp: new Date().toISOString()
+          autoVerifySkills: existingSecurity?.autoVerifySkills ?? this.autoVerifySkills,
+          strictSecurityMode: existingSecurity?.strictSecurityMode ?? true,
+          installedAssetsVersion: existingProperties ? '3.0.0' : '2.0.0',
+          lastSyncTimestamp: new Date().toISOString(),
+          ...(existingProperties ? { properties: existingProperties } : {})
         };
 
         await glob.webui.call('write_workspace_asset', JSON.stringify({
-          filePath: `${targetDirs.root}/workspace.config.json`,
+          filePath: configFile,
           content: JSON.stringify(workspaceManifest, null, 2)
         }));
 

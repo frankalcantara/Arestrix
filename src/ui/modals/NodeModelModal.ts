@@ -1,7 +1,7 @@
+import { BaseModal } from './BaseModal.ts';
 import { Graph } from '../../core/Graph.ts';
 import { INodeData, IModelConfig, LLMProvider } from '../../core/types.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
-import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 import { SkillEditorModal } from './SkillEditorModal.ts';
 import { t } from '../../i18n/index.ts';
 import {
@@ -14,39 +14,49 @@ import {
 } from '../LocalModelField.ts';
 import { EnvironmentManager } from '../../core/env/EnvironmentManager.ts';
 
-export class NodeModelModal {
-  private overlay: HTMLElement;
+export class NodeModelModal extends BaseModal {
   private graph: Graph;
-  private windowController?: IModalWindowController;
   private skillEditorModal: SkillEditorModal;
+  private activeNodeId: string | null = null;
   private activeTab: 'provider' | 'prompt' | 'parameters' = 'provider';
 
   constructor(graph: Graph) {
+    super({
+      id: 'node-model-modal',
+      title: t('node_modals.model_title'),
+      icon: '🧠',
+      minWidth: 720,
+      minHeight: 520,
+      dialogClass: 'node-settings-modal-dialog',
+      closeOnBackdropClick: true
+    });
     this.graph = graph;
     this.skillEditorModal = new SkillEditorModal(this.graph);
-
-    this.overlay = document.createElement('div');
-    this.overlay.className = 'modal-overlay hidden';
-    document.body.appendChild(this.overlay);
-
-    this.bindEvents();
   }
 
-  public open(nodeId: string, initialTab?: 'provider' | 'prompt' | 'parameters'): void {
+  public override open(nodeId: string, initialTab?: 'provider' | 'prompt' | 'parameters'): void {
     const node = this.graph.getNode(nodeId);
     if (!node) return;
 
+    this.activeNodeId = nodeId;
     this.activeTab = initialTab || 'provider';
-    this.render(node);
-    this.overlay.classList.remove('hidden');
-    this.windowController?.bringToFront();
+    this.config.subtitle = t('node_modals.model_subtitle', {
+      label: this.escapeHtml(node.label),
+      id: node.id
+    });
+    super.open();
   }
 
-  public hide(): void {
-    this.overlay.classList.add('hidden');
+  public override hide(): void {
+    super.hide();
+    this.activeNodeId = null;
   }
 
-  private render(node: INodeData): void {
+  protected override renderBody(): string {
+    const node = this.activeNodeId ? this.graph.getNode(this.activeNodeId) : null;
+    if (!node) {
+      return `<div class="properties-empty">${t('node_modals.no_active_vertex', 'Nenhum vértice ativo selecionado.')}</div>`;
+    }
     const globalDefaults = this.graph.getGlobalDefaults();
     const settings = node.agentSettings || {
       inheritSandbox: true,
@@ -62,18 +72,7 @@ export class NodeModelModal {
           ...(settings.model || {})
         };
 
-    const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: t('node_modals.model_title'),
-      subtitle: t('node_modals.model_subtitle', { label: this.escapeHtml(node.label), id: node.id }),
-      icon: '🧠',
-      closeBtnId: 'btn-close-model-modal'
-    });
-
-    this.overlay.innerHTML = `
-      <div class="modal-dialog node-settings-modal-dialog">
-        ${titleBarHtml}
-
-        <!-- Abas Fluent / Office 365 -->
+    return `
         <div class="modal-tabs" role="tablist">
           <button type="button" class="tab-btn ${this.activeTab === 'provider' ? 'active' : ''}" data-tab="provider">
             <span>🧠</span> ${t('node_modals.tab_provider', '1. Provedor & Modelo')}
@@ -86,7 +85,6 @@ export class NodeModelModal {
           </button>
         </div>
 
-        <div class="modal-body-scrollable">
           <!-- Toggle de Herança do Projeto -->
           <div class="inheritance-toggle-card">
             <label class="inheritance-checkbox-label">
@@ -167,38 +165,27 @@ export class NodeModelModal {
               </div>
             </div>
           </div>
-        </div>
-
-        <div class="modal-footer office-modal-footer">
-          <button class="btn btn-secondary-pill btn-secondary-office" id="btn-cancel-model-modal">${t('global_defaults.btn_cancel')}</button>
-          <button class="btn btn-primary btn-primary-office" id="btn-save-model-modal">${t('node_modals.btn_save_agent_settings')}</button>
-        </div>
-      </div>
     `;
-
-    const dialog = this.overlay.querySelector('.modal-dialog') as HTMLElement;
-    if (dialog) {
-      this.windowController = ModalWindowManager.attach({
-        dialog,
-        onClose: () => this.hide()
-      });
-    }
-
-    this.bindDialogEvents(node);
   }
 
-  private bindEvents(): void {
-    this.overlay.addEventListener('click', (e) => {
-      if (e.target === this.overlay) this.hide();
+  protected override renderFooter(): string {
+    return this.renderStandardFooter({
+      secondaryId: 'btn-cancel-model-modal',
+      primaryId: 'btn-save-model-modal',
+      secondaryLabel: t('global_defaults.btn_cancel'),
+      primaryLabel: t('node_modals.btn_save_agent_settings')
     });
   }
 
-  private bindDialogEvents(node: INodeData): void {
-    this.overlay.querySelector('#btn-close-model-modal')?.addEventListener('click', () => this.hide());
-    this.overlay.querySelector('#btn-cancel-model-modal')?.addEventListener('click', () => this.hide());
+  protected override bindEvents(): void {
+    super.bindEvents();
+    const node = this.activeNodeId ? this.graph.getNode(this.activeNodeId) : null;
+    if (!node) return;
+
+    this.dialog.querySelector('#btn-cancel-model-modal')?.addEventListener('click', () => this.hide());
 
     // Manipulador de abas
-    const tabButtons = this.overlay.querySelectorAll<HTMLButtonElement>('.modal-tabs .tab-btn');
+    const tabButtons = this.dialog.querySelectorAll<HTMLButtonElement>('.modal-tabs .tab-btn');
     tabButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = (btn.dataset?.tab || btn.getAttribute('data-tab')) as 'provider' | 'prompt' | 'parameters';
@@ -210,17 +197,17 @@ export class NodeModelModal {
             b.classList.toggle('active', bTab === tab);
           }
         });
-        const panes = this.overlay.querySelectorAll<HTMLElement>('.tab-pane');
+        const panes = this.dialog.querySelectorAll<HTMLElement>('.tab-pane');
         panes.forEach(p => {
           p.style.display = p.id === `pane-tab-${tab}` ? '' : 'none';
         });
       });
     });
 
-    const inheritCheck = this.overlay.querySelector('#chk-inherit-model') as HTMLInputElement;
-    const formWrapper = this.overlay.querySelector('#model-form-wrapper') as HTMLElement;
-    const providerSelect = this.overlay.querySelector('#node-model-provider') as HTMLSelectElement;
-    const modelInput = this.overlay.querySelector('#node-model-name') as HTMLInputElement;
+    const inheritCheck = this.dialog.querySelector('#chk-inherit-model') as HTMLInputElement;
+    const formWrapper = this.dialog.querySelector('#model-form-wrapper') as HTMLElement;
+    const providerSelect = this.dialog.querySelector('#node-model-provider') as HTMLSelectElement;
+    const modelInput = this.dialog.querySelector('#node-model-name') as HTMLInputElement;
 
     inheritCheck?.addEventListener('change', () => {
       const isInherited = inheritCheck.checked;
@@ -248,17 +235,17 @@ export class NodeModelModal {
       else if (val === 'jev') modelInput.value = 'jev-svg-validator';
       this.syncLocalEndpointField();
       void this.loadNodeEndpoint();
-      const status = this.overlay.querySelector('#node-local-model-status') as HTMLElement | null;
+      const status = this.dialog.querySelector('#node-local-model-status') as HTMLElement | null;
       if (status) status.style.display = 'none';
     });
 
-    this.overlay.querySelector('#btn-node-discover-models')?.addEventListener('click', () => {
+    this.dialog.querySelector('#btn-node-discover-models')?.addEventListener('click', () => {
       void this.discoverNodeModels();
     });
 
-    const skillPathInput = this.overlay.querySelector('#node-skill-path') as HTMLInputElement;
+    const skillPathInput = this.dialog.querySelector('#node-skill-path') as HTMLInputElement;
 
-    this.overlay.querySelector('#btn-edit-skill-modal')?.addEventListener('click', () => {
+    this.dialog.querySelector('#btn-edit-skill-modal')?.addEventListener('click', () => {
       const isInherited = inheritCheck.checked;
       const path = skillPathInput?.value.trim() || `.agents/${(node.label || 'agent').toLowerCase().replace(/[^a-z0-9_-]/g, '-')}/SKILL.md`;
       this.skillEditorModal.openSkill({
@@ -274,7 +261,7 @@ export class NodeModelModal {
       });
     });
 
-    this.overlay.querySelector('#btn-new-skill-modal')?.addEventListener('click', () => {
+    this.dialog.querySelector('#btn-new-skill-modal')?.addEventListener('click', () => {
       const isInherited = inheritCheck.checked;
       const suggestedSlug = (node.label || 'agent').toLowerCase().replace(/[^a-z0-9_-]/g, '-');
       const suggestedPath = `.agents/${suggestedSlug}/SKILL.md`;
@@ -291,7 +278,7 @@ export class NodeModelModal {
       });
     });
 
-    this.overlay.querySelector('#btn-save-model-modal')?.addEventListener('click', () => {
+    this.dialog.querySelector('#btn-save-model-modal')?.addEventListener('click', () => {
       void this.saveNodeModel(node, inheritCheck.checked).finally(() => this.hide());
     });
 
@@ -306,15 +293,15 @@ export class NodeModelModal {
   }
 
   private syncLocalEndpointField(): void {
-    const inherit = (this.overlay.querySelector('#chk-inherit-model') as HTMLInputElement)?.checked !== false;
-    const provider = (this.overlay.querySelector('#node-model-provider') as HTMLSelectElement)?.value || 'deepseek';
-    const group = this.overlay.querySelector('#node-local-endpoint-group') as HTMLElement | null;
-    const label = this.overlay.querySelector('#node-local-endpoint-label') as HTMLElement | null;
-    const hint = this.overlay.querySelector('#node-local-endpoint-hint') as HTMLElement | null;
-    const input = this.overlay.querySelector('#node-local-base-url') as HTMLInputElement | null;
-    const discover = this.overlay.querySelector('#btn-node-discover-models') as HTMLButtonElement | null;
-    const list = this.overlay.querySelector('#node-local-models') as HTMLElement | null;
-    const status = this.overlay.querySelector('#node-local-model-status') as HTMLElement | null;
+    const inherit = (this.dialog.querySelector('#chk-inherit-model') as HTMLInputElement)?.checked !== false;
+    const provider = (this.dialog.querySelector('#node-model-provider') as HTMLSelectElement)?.value || 'deepseek';
+    const group = this.dialog.querySelector('#node-local-endpoint-group') as HTMLElement | null;
+    const label = this.dialog.querySelector('#node-local-endpoint-label') as HTMLElement | null;
+    const hint = this.dialog.querySelector('#node-local-endpoint-hint') as HTMLElement | null;
+    const input = this.dialog.querySelector('#node-local-base-url') as HTMLInputElement | null;
+    const discover = this.dialog.querySelector('#btn-node-discover-models') as HTMLButtonElement | null;
+    const list = this.dialog.querySelector('#node-local-models') as HTMLElement | null;
+    const status = this.dialog.querySelector('#node-local-model-status') as HTMLElement | null;
     if (!group) return;
 
     const varName = this.localEndpointVar(provider);
@@ -337,22 +324,22 @@ export class NodeModelModal {
   }
 
   private async loadNodeEndpoint(): Promise<void> {
-    const provider = (this.overlay.querySelector('#node-model-provider') as HTMLSelectElement)?.value || 'deepseek';
+    const provider = (this.dialog.querySelector('#node-model-provider') as HTMLSelectElement)?.value || 'deepseek';
     const varName = this.localEndpointVar(provider);
-    const input = this.overlay.querySelector('#node-local-base-url') as HTMLInputElement | null;
+    const input = this.dialog.querySelector('#node-local-base-url') as HTMLInputElement | null;
     if (!varName || !input) return;
     const value = await EnvironmentManager.getInstance().getEnvVar(varName);
     if (value) input.value = value;
   }
 
   private async discoverNodeModels(): Promise<void> {
-    const provider = (this.overlay.querySelector('#node-model-provider') as HTMLSelectElement)?.value || 'deepseek';
+    const provider = (this.dialog.querySelector('#node-model-provider') as HTMLSelectElement)?.value || 'deepseek';
     if (provider !== 'local') return;
 
-    const input = this.overlay.querySelector('#node-local-base-url') as HTMLInputElement | null;
-    const list = this.overlay.querySelector('#node-local-models') as HTMLElement | null;
-    const status = this.overlay.querySelector('#node-local-model-status') as HTMLElement | null;
-    const modelInput = this.overlay.querySelector('#node-model-name') as HTMLInputElement | null;
+    const input = this.dialog.querySelector('#node-local-base-url') as HTMLInputElement | null;
+    const list = this.dialog.querySelector('#node-local-models') as HTMLElement | null;
+    const status = this.dialog.querySelector('#node-local-model-status') as HTMLElement | null;
+    const modelInput = this.dialog.querySelector('#node-model-name') as HTMLInputElement | null;
     if (!input || !status) return;
 
     const base = normalizeLocalBaseUrl(input.value || LOCAL_LLM_DEFAULT_URL);
@@ -400,17 +387,17 @@ export class NodeModelModal {
     let newModelData: Partial<IModelConfig> | undefined;
 
     if (!inherit) {
-      const provider = (this.overlay.querySelector('#node-model-provider') as HTMLSelectElement)?.value as LLMProvider || 'deepseek';
-      const model = (this.overlay.querySelector('#node-model-name') as HTMLInputElement)?.value.trim() || 'deepseek-flash';
-      const skillPath = (this.overlay.querySelector('#node-skill-path') as HTMLInputElement)?.value.trim();
-      const promptTemplate = (this.overlay.querySelector('#node-prompt-template') as HTMLTextAreaElement)?.value.trim();
-      const temperature = parseFloat((this.overlay.querySelector('#node-temperature') as HTMLInputElement)?.value) || 0.7;
+      const provider = (this.dialog.querySelector('#node-model-provider') as HTMLSelectElement)?.value as LLMProvider || 'deepseek';
+      const model = (this.dialog.querySelector('#node-model-name') as HTMLInputElement)?.value.trim() || 'deepseek-flash';
+      const skillPath = (this.dialog.querySelector('#node-skill-path') as HTMLInputElement)?.value.trim();
+      const promptTemplate = (this.dialog.querySelector('#node-prompt-template') as HTMLTextAreaElement)?.value.trim();
+      const temperature = parseFloat((this.dialog.querySelector('#node-temperature') as HTMLInputElement)?.value) || 0.7;
 
       // O endpoint do servidor local/Jev é global desta máquina; grava antes de fechar para que a
       // execução do pipeline já encontre o valor.
       const endpointVar = this.localEndpointVar(provider);
       if (endpointVar) {
-        const input = this.overlay.querySelector('#node-local-base-url') as HTMLInputElement | null;
+        const input = this.dialog.querySelector('#node-local-base-url') as HTMLInputElement | null;
         const raw = input?.value.trim() || (provider === 'local' ? LOCAL_LLM_DEFAULT_URL : '');
         if (raw) {
           if (provider === 'local') {
@@ -459,13 +446,5 @@ export class NodeModelModal {
       local: 'Local'
     };
     return map[provider] || provider;
-  }
-
-  private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
   }
 }

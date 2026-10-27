@@ -1,0 +1,321 @@
+/*
+ * Tema escuro do aplicativo.
+ *
+ * O shell de modais/propriedades já usa os tokens de `office-modals.css`.
+ * Este arquivo cobre a moldura principal (ribbon, canvas, task pane, console,
+ * backstage e status bar) para que a preferência global não fique restrita
+ * apenas às janelas flutuantes.
+ */
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-gradient: #141414;
+  --surface-card: #1f1f1f;
+  --surface-sidebar: #1f1f1f;
+  --surface-pill: #262626;
+  --surface-track: #303030;
+  --text-primary: #f5f5f2;
+  --text-secondary: #c3c2b7;
+  --text-muted: #918f88;
+  --text-inverse: #ffffff;
+  --slate-line: #4b5563;
+  --shadow-card: 0 14px 34px -8px rgba(0, 0, 0, 0.55), 0 4px 12px -2px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover: 0 20px 40px -10px rgba(0, 0, 0, 0.65), 0 6px 16px -3px rgba(0, 0, 0, 0.35);
+  --shadow-pill: 0 4px 14px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.2);
+
+  --ribbon-surface: #262626;
+  --ribbon-ink: #f5f5f2;
+  --ribbon-ink-2: #c3c2b7;
+  --ribbon-ink-3: #918f88;
+  --ribbon-line: rgba(255, 255, 255, 0.12);
+  --ribbon-line-strong: rgba(255, 255, 255, 0.2);
+  --ribbon-hover: rgba(255, 255, 255, 0.08);
+  --ribbon-accent: #4ea1ff;
+  --ribbon-accent-wash: rgba(78, 161, 255, 0.16);
+}
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] #app {
+  background-color: #141414 !important;
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .main-layout {
+  background-color: #141414 !important;
+}
+
+html[data-theme="dark"] .center-area {
+  background-color: #1f1f1f !important;
+  border-color: #3a3a3a !important;
+}
+
+html[data-theme="dark"] .office-ribbon-container {
+  background-color: #1f1f1f !important;
+  border-bottom-color: #3a3a3a !important;
+  box-shadow: none !important;
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .office-titlebar {
+  background-color: #262626 !important;
+  border-bottom-color: #3a3a3a !important;
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .office-ribbon-container .office-ribbon-body {
+  background: #262626 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
+}
+
+html[data-theme="dark"] .office-ribbon-container .ribbon-btn-large,
+html[data-theme="dark"] .office-ribbon-container .ribbon-btn-small,
+html[data-theme="dark"] .office-ribbon-container .ribbon-btn-label,
+html[data-theme="dark"] .office-ribbon-container .office-ribbon-group-title,
+html[data-theme="dark"] .office-ribbon-container .office-qat-btn,
+html[data-theme="dark"] .office-ribbon-container .office-autosave-label,
+html[data-theme="dark"] .office-ribbon-container .office-project-indicator {
+  color: #c3c2b7 !important;
+}
+
+html[data-theme="dark"] .office-ribbon-container .ribbon-btn-large:hover,
+html[data-theme="dark"] .office-ribbon-container .ribbon-btn-small:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .office-ribbon-container .office-tellme-box {
+  background: #262626 !important;
+  border-color: #4a4a4a !important;
+}
+
+html[data-theme="dark"] .office-ribbon-container .office-tellme-box input {
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .office-ribbon-container .ribbon-select {
+  background-color: #262626 !important;
+  border-color: #4a4a4a !important;
+  color: #f5f5f2 !important;
+}
+
+/* Task pane / inspetor */
+html[data-theme="dark"] .inspector-panel.office-task-pane {
+  background-color: #1f1f1f !important;
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .office-task-pane-header,
+html[data-theme="dark"] .task-pane-tabs {
+  background-color: #262626 !important;
+  border-color: #3a3a3a !important;
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .office-tp-title,
+html[data-theme="dark"] .task-pane-tab,
+html[data-theme="dark"] .inspector-panel h1,
+html[data-theme="dark"] .inspector-panel h2,
+html[data-theme="dark"] .inspector-panel h3,
+html[data-theme="dark"] .inspector-panel h4,
+html[data-theme="dark"] .inspector-panel strong {
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .task-pane-tab.active {
+  color: #4ea1ff !important;
+  border-bottom-color: #4ea1ff !important;
+}
+
+html[data-theme="dark"] .inspector-panel p,
+html[data-theme="dark"] .inspector-panel span,
+html[data-theme="dark"] .inspector-panel label {
+  color: #c3c2b7;
+}
+
+html[data-theme="dark"] .inspector-panel .form-input,
+html[data-theme="dark"] .inspector-panel .form-select,
+html[data-theme="dark"] .inspector-panel .form-textarea,
+html[data-theme="dark"] .inspector-panel input,
+html[data-theme="dark"] .inspector-panel textarea,
+html[data-theme="dark"] .inspector-panel select {
+  background-color: #262626 !important;
+  border-color: #4a4a4a !important;
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .inspector-panel .settings-section-card,
+html[data-theme="dark"] .inspector-panel .agent-command-card,
+html[data-theme="dark"] .inspector-panel .info-card,
+html[data-theme="dark"] .inspector-panel .task-pane-card,
+html[data-theme="dark"] .office-stat-card {
+  background-color: #262626 !important;
+  border-color: #3a3a3a !important;
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .inspector-panel .agent-command-card:hover {
+  background-color: #303030 !important;
+}
+
+html[data-theme="dark"] .task-pane-tab.active {
+  background-color: #1f1f1f !important;
+  color: #4ea1ff !important;
+}
+
+/* Assistente */
+html[data-theme="dark"] .assistant-panel {
+  background-color: #1f1f1f !important;
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .assistant-icon-btn,
+html[data-theme="dark"] .assistant-chip,
+html[data-theme="dark"] .assistant-banner {
+  background-color: #262626 !important;
+  border-color: #3a3a3a !important;
+  color: #c3c2b7 !important;
+}
+
+html[data-theme="dark"] .assistant-panel input,
+html[data-theme="dark"] .assistant-panel textarea {
+  background-color: #262626 !important;
+  border-color: #4a4a4a !important;
+  color: #f5f5f2 !important;
+}
+
+/* Botões secundários do shell */
+html[data-theme="dark"] .btn-secondary,
+html[data-theme="dark"] .tool-btn.btn-secondary {
+  background-color: #262626 !important;
+  border-color: #4a4a4a !important;
+  color: #f5f5f2 !important;
+}
+
+/* Console e terminal */
+html[data-theme="dark"] .console-panel.office-docked-console {
+  background-color: #1f1f1f !important;
+  border-top-color: #3a3a3a !important;
+}
+
+html[data-theme="dark"] .office-console-header {
+  background-color: #262626 !important;
+  border-bottom-color: #3a3a3a !important;
+}
+
+html[data-theme="dark"] .office-console-tab-btn {
+  color: #c3c2b7 !important;
+}
+
+html[data-theme="dark"] .office-console-tab-btn:hover {
+  background-color: #303030 !important;
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .office-console-tab-btn.active {
+  background-color: #1f1f1f !important;
+  border-color: #3a3a3a !important;
+  border-top-color: #4ea1ff !important;
+  color: #4ea1ff !important;
+}
+
+html[data-theme="dark"] .btn-console-office {
+  background-color: #262626 !important;
+  border-color: #4a4a4a !important;
+  color: #c3c2b7 !important;
+}
+
+html[data-theme="dark"] .btn-console-office:hover {
+  background-color: #303030 !important;
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .office-console-body {
+  background-color: #121212 !important;
+  color: #e5e5ea !important;
+}
+
+html[data-theme="dark"] .office-console-splitter {
+  background: #303030 !important;
+}
+
+/* Status bar */
+html[data-theme="dark"] .office-statusbar {
+  background-color: #0b3d66 !important;
+  border-top-color: #0a3152 !important;
+  color: #ffffff !important;
+}
+
+/* Backstage */
+html[data-theme="dark"] .office-backstage-container,
+html[data-theme="dark"] .office-backstage-main {
+  background-color: #1f1f1f !important;
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .backstage-header-title,
+html[data-theme="dark"] .backstage-info-card h4 {
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .backstage-header-sub,
+html[data-theme="dark"] .backstage-info-card p {
+  color: #c3c2b7 !important;
+}
+
+html[data-theme="dark"] .backstage-info-card {
+  background-color: #262626 !important;
+  border-color: #3a3a3a !important;
+}
+
+html[data-theme="dark"] .backstage-info-card code {
+  background-color: #303030 !important;
+  color: #e5e5ea !important;
+  border-color: #4a4a4a !important;
+}
+
+html[data-theme="dark"] .backstage-nav-item.active {
+  background-color: #262626 !important;
+  color: #4ea1ff !important;
+}
+
+html[data-theme="dark"] .office-backstage-main [style*="background: #ffffff"],
+html[data-theme="dark"] .office-backstage-main [style*="background-color: #ffffff"],
+html[data-theme="dark"] .office-backstage-main [style*="background: #f8fafc"],
+html[data-theme="dark"] .office-backstage-main [style*="background-color: #f8fafc"] {
+  background: #262626 !important;
+  border-color: #3a3a3a !important;
+  color: #c3c2b7 !important;
+}
+
+html[data-theme="dark"] .project-search-panel {
+  background-color: #1f1f1f !important;
+  border-color: #3a3a3a !important;
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .office-task-pane-toggle-strip {
+  background-color: #262626 !important;
+  border-color: #3a3a3a !important;
+  color: #c3c2b7 !important;
+}
+
+/* Editores especializados legados que ainda usam a moldura anterior. */
+html[data-theme="dark"] .project-memory-modal-dialog .modal-tabs,
+html[data-theme="dark"] .project-memory-modal-dialog .modal-footer {
+  border-color: #3a3a3a !important;
+}
+
+html[data-theme="dark"] .modal-dialog [style*="border-top: 1px solid #edebe9"] {
+  border-top-color: #3a3a3a !important;
+}
+
+html[data-theme="dark"] .office-backstage-main [style*="color: #0f172a"],
+html[data-theme="dark"] .office-backstage-main [style*="color: #1e293b"],
+html[data-theme="dark"] .office-backstage-main [style*="color: #334155"] {
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .office-backstage-main [style*="color: #475569"],
+html[data-theme="dark"] .office-backstage-main [style*="color: #64748b"] {
+  color: #c3c2b7 !important;
+}

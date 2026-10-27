@@ -1,6 +1,6 @@
 # Primeiros passos
 
-> **Aplica-se a:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Última revisão: 2026-10-21
+> **Aplica-se a:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Última revisão: 2026-10-21
 
 [English](../en/getting-started.md) · [Índice](../README.md)
 
@@ -96,7 +96,7 @@ ambiente do usuário, e nunca é gravado em um projeto:
 | `ARESTRIX_DEFAULT_PROVIDER` | `deepseek`, `openai`, `anthropic`, `google`, `groq`, `jev` ou `local`. |
 | `ARESTRIX_DEFAULT_MODEL` | Nome do modelo. Opcional nos provedores hospedados (cada um tem um padrão); **obrigatória** em `jev` e `local`. |
 
-Você não precisa definir isso à mão: **Padrões Globais → Provedor & Modelo → Modelo padrão do Studio** (escopo Studio)
+Você não precisa definir isso à mão: **Arquivo → Propriedades → Studio → Modelo do Studio**
 grava as variáveis, mostra qual modelo está em uso e pede também o endereço do servidor de `local` e `jev`.
 Escolher *Automático* grava o valor `auto`, que significa "não definido".
 
@@ -122,7 +122,7 @@ Passos:
 
 1. Inicie o servidor e carregue o modelo (por exemplo, `ollama serve` e `ollama pull qwen2.5:7b`, ou
    `llama-server -m modelo.gguf --port 8080`).
-2. No Studio, abra **Padrões Globais → Provedor & Modelo**, escolha **Local (Ollama / vLLM)** e informe o
+2. No Studio, abra **Arquivo → Propriedades → Projeto → Modelo e ferramentas**, escolha **Local (Ollama / vLLM)** e informe o
    endereço base em `LOCAL_LLM_BASE_URL`.
 3. Clique em **Buscar modelos**: o Arestrix consulta `GET /v1/models` pelo backend nativo (sem depender de
    CORS) e lista os modelos carregados. Se o servidor não listar modelos, digite o nome manualmente.
@@ -141,7 +141,7 @@ O Arestrix traz um catálogo pré-aprovado em `CppCore/runtime/models.catalog.js
 GGUF (Qwen2.5 e Mistral), licença, tamanho, SHA-256, requisitos de RAM/VRAM e suporte a ferramentas. Os pesos
 **não** são distribuídos com o produto: o download vai direto da origem oficial pinada.
 
-Em **Padrões Globais → Provedor & Modelo → Local**, clique em **Gerenciar modelos locais...** para:
+Em **Arquivo → Propriedades → Projeto → Modelo e ferramentas**, clique em **Gerenciar modelos locais** para:
 
 - baixar um modelo com progresso, retomada e verificação SHA-256;
 - verificar ou excluir um modelo já baixado;

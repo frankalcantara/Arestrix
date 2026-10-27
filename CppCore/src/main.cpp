@@ -59,6 +59,28 @@ std::vector<std::filesystem::path> allowedRoots() {
     return roots;
 }
 
+// Configuracao do usuario (Studio). Nunca guarda segredos: chaves continuam no
+// ambiente do sistema / cofre. No Windows usa %APPDATA%; no Linux usa XDG/HOME.
+std::filesystem::path studioConfigPath() {
+#ifdef _WIN32
+    if (const char* appdata = std::getenv("APPDATA"); appdata && *appdata) {
+        return std::filesystem::path(appdata) / "Arestrix" / "studio.config.json";
+    }
+    if (const char* local = std::getenv("LOCALAPPDATA"); local && *local) {
+        return std::filesystem::path(local) / "Arestrix" / "studio.config.json";
+    }
+#else
+    if (const char* xdg = std::getenv("XDG_CONFIG_HOME"); xdg && *xdg) {
+        return std::filesystem::path(xdg) / "arestrix" / "studio.config.json";
+    }
+    if (const char* home = std::getenv("HOME"); home && *home) {
+        return std::filesystem::path(home) / ".config" / "arestrix" / "studio.config.json";
+    }
+#endif
+    std::error_code ec;
+    return std::filesystem::current_path(ec) / ".arestrix" / "studio.config.json";
+}
+
 // Resolve `requested` (relativo a cada raiz, ou absoluto) e so aceita se ficar DENTRO de uma raiz.
 std::optional<std::filesystem::path> confineToAllowedRoots(const std::string& requested) {
     if (requested.empty()) return std::nullopt;
@@ -2007,6 +2029,75 @@ void ui_write_workspace_asset(webui::window::event* e) {
     }
 }
 
+// Wrapper JS -> C++ (Ler asset do workspace). Confinado as raizes permitidas.
+void ui_read_workspace_asset(webui::window::event* e) {
+    try {
+        std::string payload = e->get_string();
+        if (payload.empty()) { e->return_string("{\"ok\":false,\"error\":\"Payload vazio\"}"); return; }
+        auto j = taskforge::jsonutil::parse(payload);
+        std::string filePath = j.value("filePath", "");
+        auto p = confineToAllowedRoots(filePath);
+        if (!p || !std::filesystem::is_regular_file(*p)) {
+            e->return_string("{\"ok\":false,\"error\":\"Arquivo nao encontrado\"}");
+            return;
+        }
+        taskforge::Json resp;
+        resp["ok"] = true;
+        resp["content"] = taskforge::jsonutil::readFile(*p);
+        e->return_string(resp.dump());
+    } catch (const std::exception& ex) {
+        taskforge::Json err;
+        err["ok"] = false;
+        err["error"] = ex.what();
+        e->return_string(err.dump());
+    }
+}
+
+// Wrapper JS -> C++ (Studio settings). Arquivo de usuario, sem segredos.
+void ui_get_studio_settings(webui::window::event* e) {
+    try {
+        const auto path = studioConfigPath();
+        if (!std::filesystem::is_regular_file(path)) {
+            e->return_string("");
+            return;
+        }
+        auto settings = taskforge::jsonutil::parse(taskforge::jsonutil::readFile(path));
+        taskforge::Json resp;
+        resp["settings"] = settings;
+        e->return_string(resp.dump());
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] get_studio_settings: " << ex.what() << "\n";
+        e->return_string("");
+    }
+}
+
+void ui_save_studio_settings(webui::window::event* e) {
+    try {
+        std::string payload = e->get_string();
+        if (payload.empty()) { e->return_bool(false); return; }
+        auto j = taskforge::jsonutil::parse(payload);
+        taskforge::Json settings = j.contains("settings") ? j["settings"] : j;
+        const std::string serialized = settings.dump(2);
+        // Defesa adicional: configuracoes do Studio nao carregam segredos.
+        if (serialized.find("\"apiKey\"") != std::string::npos ||
+            serialized.find("\"password\"") != std::string::npos ||
+            serialized.find("\"secret\"") != std::string::npos) {
+            std::cerr << "[C++ Erro] save_studio_settings: tentativa de gravar segredo recusada\n";
+            e->return_bool(false);
+            return;
+        }
+        const auto path = studioConfigPath();
+        std::filesystem::create_directories(path.parent_path());
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        if (!out.is_open()) { e->return_bool(false); return; }
+        out << serialized;
+        e->return_bool(true);
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] save_studio_settings: " << ex.what() << "\n";
+        e->return_bool(false);
+    }
+}
+
 // Wrapper JS -> C++ (Gravar SKILL.md). Confinado ao projeto ativo; somente .md; escrita atomica.
 void ui_write_skill_file(webui::window::event* e) {
     try {
@@ -2803,6 +2894,9 @@ int main(int argc, char** argv) {
     win.bind("load_arestrix_file", ui_load_arestrix_file);
     win.bind("ensure_workspace_directories", ui_ensure_workspace_directories);
     win.bind("write_workspace_asset", ui_write_workspace_asset);
+    win.bind("read_workspace_asset", ui_read_workspace_asset);
+    win.bind("get_studio_settings", ui_get_studio_settings);
+    win.bind("save_studio_settings", ui_save_studio_settings);
     win.bind("write_skill_file", ui_write_skill_file);
     win.bind("read_skill_file", ui_read_skill_file);
     win.bind("open_in_vscode", ui_open_in_vscode);

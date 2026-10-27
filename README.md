@@ -22,11 +22,16 @@
 </p>
 
 <p align="center">
-  <b>Beta 2.1</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentation</a>
+  <b>Beta 2.2</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentation</a>
 </p>
 
 <p align="center">
   <img src="docs/assets/screenshots/studio-main.webp" alt="Arestrix Studio: a multi-agent pipeline running on the canvas" width="960">
+</p>
+
+<p align="center">
+  <img src="docs/assets/screenshots/properties-hub.webp" alt="Office-style Properties hub for Studio, Workspace and Project" width="470">
+  <img src="docs/assets/screenshots/studio-dark.webp" alt="Arestrix Studio in the dark theme with a running multi-agent graph" width="470">
 </p>
 
 ---
@@ -76,8 +81,12 @@ graph canvas; Arestrix validates it, generates C++20 source and compiles it with
 
 ## Feature highlights
 
-- **Visual graph editor** — Office-inspired ribbon, templates, decision vertices, feedback loops,
+- **Visual graph editor** - Office-inspired ribbon, templates, decision vertices, feedback loops,
   undo/redo and graph validation.
+- **Office Properties hub** - Studio, Workspace and Project settings in one Office-style surface,
+  with explicit inheritance, origin badges and specialist editors for credentials, Git and memory.
+- **Light and dark themes** - Light, dark or follow-system appearance across the ribbon, task pane,
+  console, Backstage and all Office dialogs. The canvas remains an independent preference.
 - **Native C++20 compiler** — inspect generated Taskflow code in Monaco, compile it with MSVC or
   GCC/Clang, and reuse unchanged builds.
 - **Agent runtime** - tool loop, sandboxes, per-vertex model settings, live telemetry and batch
@@ -128,8 +137,8 @@ Optional: enable the secret-scanning pre-commit hook once per clone with `npm ru
 Inside the Studio:
 
 1. Open one of the [examples](examples/README.md) or create a project.
-2. Choose a provider and model in **Global Defaults**; API keys are read from environment variables
-   or your credential vault.
+2. Choose a provider and model in **File > Properties > Project > Model & tools**; API keys are read
+   from environment variables or your credential vault.
 3. Press **F5** to compile and run the graph with live telemetry.
 4. Use **Export Standalone Runner** to package the pipeline for delivery.
 
@@ -161,17 +170,17 @@ python scripts/e2e_examples.py
 | [Examples](examples/README.md) | Twelve runnable projects, from a two-agent pipeline to callable subflows, flow Call vertices, asynchronous calls, parallel calls, generated forms, memory and web-research workflows. |
 | [Test audit log](docs/quality/test-audit-log.md) | Chronological test rounds and integrity audits. |
 | [Release gate](docs/en/release.md) | Reproducible validation, SHA-256 manifest and SBOM before distribution. |
-| [Beta 2.1 test plan](docs/quality/beta2-test-plan.md) | Registered Beta 2.1 scope and remaining acceptance tests (in Portuguese). |
+| [Beta 2.2 test plan](docs/quality/beta2.2-test-plan.md) | Registered Beta 2.2 scope and remaining acceptance tests (in Portuguese). |
 | [Changelog](CHANGELOG.md) | Release history, changes and known limitations. |
 
 ## Project status
 
-**Beta 2.1** (`2.1.0-beta.1`) is a development pre-release. The Studio runs on Windows and Linux;
+**Beta 2.2** (`2.2.0-beta.1`) is a development pre-release. The Studio runs on Windows and Linux;
 programs generated from a graph currently target Windows. Beta APIs, file formats and command-line
 flags may change before general availability. See the [changelog](CHANGELOG.md) for the current
 limitations. The Windows installer and code signing are included; clean-machine validation, the
 Linux package and the full test matrix are still pending. Track them in the
-[Beta 2.1 test plan](docs/quality/beta2-test-plan.md). Windows artifacts are signed by
+[Beta 2.2 test plan](docs/quality/beta2.2-test-plan.md). Windows artifacts are signed by
 [SignPath Foundation](https://signpath.org) when signing is enabled; see the
 [code signing policy](CODE_SIGNING.md).
 

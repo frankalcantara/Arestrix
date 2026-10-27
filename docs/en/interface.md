@@ -1,6 +1,6 @@
 # Interface tour
 
-> **Applies to:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Last reviewed: 2026-10-26
+> **Applies to:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Last reviewed: 2026-10-27
 
 [Português](../pt-BR/interface.md) · [Index](../README.md)
 
@@ -73,8 +73,8 @@ modules), the skills of the workspace and the pipelines. Press `Ctrl+K` to focus
 ## Backstage
 
 Opened by **File**. It has the project information (four cards: the active project, Git repository synchronization, the physical
-workspace, and the **Standalone Runner**), the **Open** screen, the unified **Save** screen, and the **Options**
-(Studio defaults, workspace governance and the **language** selector).
+workspace, and the **Standalone Runner**), the **Properties** hub, the **Open** screen, the unified **Save** screen, and the **Options**
+(workspace execution and governance shortcuts). Language, theme and the editable settings now live in **Properties**.
 
 The **Open** screen follows Office's Open. The places are on the left:
 
@@ -99,10 +99,58 @@ The **Save** screen unifies quick saving and *Save As* in the Office style:
   quick shortcuts to the active project's root and `pipelines/` folder, and automatic registration in the
   project manifest when a graph is saved inside the open project.
 
+## Properties
+
+**File > Properties** opens the shared Office-style properties hub for the three scopes. Each scope
+uses the same title bar, left navigation, content cards and Cancel/Save footer.
+
+![Properties hub for Studio, Workspace and Project](../assets/screenshots/properties-hub.webp)
+
+| Scope | Owns | Examples |
+| :--- | :--- | :--- |
+| **Studio** | Installation-wide preferences | Language, theme, canvas, default model, provider keys, AI Gateway, integrations, config-file reset |
+| **Workspace** | The physical workspace of the active project | Sandbox default, audit/security policy, `.workspace` rebuild, restore defaults |
+| **Project** | The active project manifest | Name, version, description, output, SQLite path, model/tools defaults, environment, Git/Runner summaries, pipelines |
+
+### Studio Properties
+
+Language, theme (Light / Dark / Follow system) and canvas are applied on save. The model and gateway
+sections write only to the protected environment; provider keys are write-only status fields.
+
+![Studio Properties](../assets/screenshots/studio-properties.webp)
+
+![Studio Properties in dark mode](../assets/screenshots/studio-properties-dark.webp)
+
+### Workspace Properties
+
+The Workspace owns the default sandbox policy and audit settings. Rebuilding `.workspace` rewrites
+the approved skills and MCPs while preserving the edited properties.
+
+![Workspace sandbox properties](../assets/screenshots/workspace-properties.webp)
+
+### Project Properties
+
+The Project screen edits the manifest, model/tools defaults, sanitized environment references and
+the SQLite path. Git and Runner remain specialist dialogs opened from their summary sections.
+
+![Project Properties](../assets/screenshots/project-properties.webp)
+
+![Project model and tools defaults](../assets/screenshots/project-defaults.webp)
+
+### Explicit inheritance
+
+Resolved values follow **Studio → Workspace → Project → Vertex**. The screen shows the current
+origin, and saving a Project value creates an explicit Project override. Vertex dialogs keep their
+own inheritance toggle.
+
+![Vertex sandbox dialog using the shared Office shell](../assets/screenshots/vertex-sandbox.webp)
+
+![Vertex model dialog using the shared Office shell](../assets/screenshots/vertex-model.webp)
+
 ## Assistant
 
 The side panel has two tabs: **Properties** and **Assistant**. The Assistant is a chat with the Studio's
-default AI (Global Defaults > Studio default model) that helps you **operate** and **learn** the Studio:
+default AI (File → Properties > Studio default model) that helps you **operate** and **learn** the Studio:
 
 - It answers questions by reading this documentation (in the Studio language).
 - It creates projects and builds or changes graphs: adds, connects, changes, moves and removes vertices, validates the graph.
@@ -150,21 +198,21 @@ All Studio dialogs adhere to the **Microsoft Office 365 (Fluent 2)** corporate d
 - **Tabbed Structure:** Complex forms are partitioned into structured 34px-high tabs with a `#0f6cbd` active indicator.
 - **State Preservation:** Switching between tabs keeps all entered form values intact without unmounting data.
 - **Standardized Footer:** 58px action bar with Fluent primary buttons (`#0f6cbd`), cancel, and contextual help shortcuts.
-- **Theme-ready Tokens:** Modal chrome, surfaces, text, borders, inputs, badges, callouts and footers share light/dark tokens. The dark palette is applied through `html[data-theme="dark"]` and is ready for the future global appearance switch; the Studio still starts in light mode.
+- **Light and Dark Tokens:** Modal chrome, surfaces, text, borders, inputs, badges, callouts and footers share light/dark tokens. The global **Studio > Properties > General > Theme** switch applies `html[data-theme="dark"]` across the ribbon, task pane, console, Backstage and dialogs. The default remains light, and the canvas background is an independent preference.
 
 | Modal | Office 365 Tabs | Scope |
 | :--- | :--- | :--- |
-| **Global Defaults** | Studio Model \| Sandbox & Network \| Tools & MCP \| Blackboard Memory | Studio / Workspace / Project |
+| **Properties (Studio / Workspace / Project)** | Scope-specific categories with shared Office shell | Studio / Workspace / Project |
 | **Node Library** | Template Catalog \| Pipeline Presets \| Import / Export Plugins | Studio |
-| **Node Model** | Provider & Model \| Cognitive Parameters \| Connectivity & Keys | Per vertex |
-| **Node Tools** | Native Tools \| MCP Servers \| Execution Policies | Per vertex |
-| **Node Sandbox** | Isolation Level \| Network & DNS Guard \| Quotas & Limits | Per vertex |
-| **Node Memory** | Vertex Blackboard \| Semantic Lessons \| Retention & Scope | Per vertex |
+| **Node Model** | Provider & Model \| Instructions & Skills \| Parameters | Per vertex |
+| **Node Tools** | Native Tools \| MCP Servers \| Validation & Batch | Per vertex |
+| **Node Sandbox** | Isolation & Resources \| Network & Confinement \| Folders & Volumes | Per vertex |
+| **Node Memory** | Blackboard \| Cognitive Lessons \| Regime & Scope | Per vertex |
 | **Node Skills** | Enabled Skills \| Workspace Catalog \| Import New Skill | Per vertex |
 | **Skill Editor** | Markdown Editor \| Rendered Preview \| Metadata & Testing | Per vertex / Workspace |
 | **GitHub Repositories** | Authorized Repositories \| Register New Repository | Studio Catalog |
 | **MCP Servers** | Active Servers \| Connect New Server \| Inspection & Logs | Workspace |
-| **Project Manager** | General Metadata \| Environment Variables (.env) \| Folder Structure | Project |
+| **Project Manager** | Recent Projects \| New Project \| Settings summary (links to Properties) | Project |
 | **Git Synchronization** | OS Identity & Account \| Remote Repository \| Automation & Governance | Project / OS |
 | **Standalone Runner** | Progress \| Diagnostics \| Operations \| Export | Project / Distribution |
 | **Batch Pipeline** | Input Data \| Concurrency & Bottlenecks \| Checkpoint Matrix | Run |
@@ -211,8 +259,8 @@ A docked drawer at the bottom of the screen (resizable with a splitter and colla
 
 ## Language
 
-Choose the language in **Backstage → Options**: Portuguese (Brazil) or English (US). To add another,
-see [Development](development.md#adding-a-language).
+Choose the language in **File → Properties → Studio → General**: Portuguese (Brazil) or English
+(US). To add another, see [Development](development.md#adding-a-language).
 
 ## Related
 

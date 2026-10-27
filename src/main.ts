@@ -1,5 +1,7 @@
 import './style.css';
 import './styles/office-modals.css';
+import './styles/office-properties.css';
+import './styles/app-dark-theme.css';
 import { Graph } from './core/Graph.ts';
 import { globalEventBus } from './core/EventBus.ts';
 import { Viewport } from './view/Viewport.ts';
@@ -28,8 +30,13 @@ import { getLocale, onLocaleChange } from './i18n/index.ts';
 import { NodeContextMenu } from './ui/NodeContextMenu.ts';
 import { PipelineRunner } from './core/PipelineRunner.ts';
 import { NotificationCenter } from './ui/NotificationCenter.ts';
+import { StudioSettingsStore } from './core/settings/StudioSettingsStore.ts';
+import { applyAppTheme, loadStoredAppTheme } from './view/AppTheme.ts';
 
 function bootstrap() {
+  applyAppTheme(loadStoredAppTheme());
+  void new StudioSettingsStore().load().then(settings => applyAppTheme(settings.appearance.theme));
+
   const appContainer = document.querySelector<HTMLDivElement>('#app');
   if (!appContainer) throw new Error('#app root element not found.');
 
@@ -131,7 +138,13 @@ function bootstrap() {
 
   // 7.1 Aba Assistente no mesmo painel (o laço da conversa roda no backend C++)
   new AssistantPanel(inspector.getAssistantContainer(), graph, globalEventBus);
-  globalEventBus.on('modal:open-global-defaults', () => globalDefaultsModal.show());
+  // Alias legado: as configurações globais agora pertencem às Propriedades do Projeto.
+  globalEventBus.on('modal:open-global-defaults', () => {
+    globalEventBus.emit('properties:open', { scope: 'project', section: 'defaults' });
+  });
+  globalEventBus.on('modal:open-local-models', () => globalDefaultsModal.show('model'));
+  globalEventBus.on('modal:open-global-tools', () => globalDefaultsModal.show('tools'));
+  globalEventBus.on('modal:open-global-memory', () => globalDefaultsModal.show('memory'));
 
   // 8. Console de Execução & Build na base da área central (Docked Bottom Drawer)
   new ConsolePanel(centerArea);

@@ -1,16 +1,16 @@
-# Beta 2.1 - Registro de pendências e plano de testes
+# Beta 2.2 - Registro de pendências e plano de testes
 
-> **Status:** pré-release `2.1.0-beta.1`; matriz completa e validação em máquina limpa pendentes.
+> **Status:** pré-release `2.2.0-beta.1`; matriz completa e validação em máquina limpa pendentes.
 >
-> **Versão atual:** `2.1.0-beta.1` (Beta 2.1).
+> **Versão atual:** `2.2.0-beta.1` (Beta 2.2).
 >
 > **Gate:** instalador 5B2 e assinatura/CI 5C implementados; validação em máquina limpa, pacote Linux
 > e a matriz completa 2.1-2.9 ainda pendentes.
 >
 > **Última revisão:** 2026-10-26.
 
-Este documento registra o escopo do Beta 2.1 e a matriz de testes que precisa ser concluída para
-promover a pré-release a uma release validada. A versão `2.1.0-beta.1` está no código e é publicada
+Este documento registra o escopo do Beta 2.2 e a matriz de testes que precisa ser concluída para
+promover a pré-release a uma release validada. A versão `2.2.0-beta.1` está no código e é publicada
 como pré-release de desenvolvimento.
 
 ## 1. Escopo registrado
@@ -25,7 +25,18 @@ como pré-release de desenvolvimento.
 - Gate de release reproduzível (`release_check.py`) com manifesto, `SHA256SUMS` e SBOM.
 - Pacote portátil 5B1 (`package_release.py`) com smoke test.
 
-### Pendente no Beta 2
+### Entregue no Beta 2.2
+
+- Hub de Propriedades no Backstage com escopos Studio, Workspace e Projeto compartilhando o shell Office.
+- Edição de idioma, tema global, canvas, modelo, credenciais write-only e AI Gateway no Studio.
+- Edição de sandbox, auditoria, reconstrução e reset no Workspace.
+- Edição de metadados, defaults, ambiente sanitizado e caminho SQLite no Projeto.
+- Migração das entradas antigas para deep links nas Propriedades.
+- Modais de vértice Sandbox/Modelo/Ferramentas/Memória no `BaseModal`.
+- Tema global Claro/Escuro/Seguir o sistema.
+- Capturas de tela e documentação atualizadas para o Beta 2.2.
+
+### Pendente no Beta 2.2
 
 - [ ] **5B2 — instalador Windows:** Inno Setup implementado; faltam instalação limpa, upgrade,
       uninstall, atalhos, modo silencioso e validação em Intune/SCCM.
@@ -141,14 +152,14 @@ como pré-release de desenvolvimento.
 
 ## 3. Critérios de aceite para promoção
 
-A pré-release Beta 2.1 pode ser promovida quando:
+A pré-release Beta 2.2 pode ser promovida quando:
 
 1. Todos os itens obrigatórios de 2.1–2.9 estiverem verdes no mesmo commit.
 2. O gate de release tiver `dirty=false` e `status=passed`.
 3. O instalador 5B2 e o pacote portátil tiverem sido testados em máquina limpa.
 4. Os artefatos estiverem assinados, com checksums e SBOM publicados.
 5. Não houver falha P0/P1 conhecida.
-6. A versão for atualizada para `2.1.0-beta.1` em `version.txt`, `package.json`,
+6. A versão for atualizada para `2.2.0-beta.1` em `version.txt`, `package.json`,
    `package-lock.json`, `CHANGELOG.md` e banners de documentação.
 7. O release for revisado e aprovado pelo mantenedor.
 
@@ -158,7 +169,7 @@ A pré-release Beta 2.1 pode ser promovida quando:
 - Formato Linux prioritário: AppImage, `.deb` ou tarball.
 - Certificado/HSM de assinatura e custódia da chave.
 - Estratégia de catálogo remoto assinado e hospedagem.
-- Confirmar `2.1.0-beta.1` como numeração desta pré-release (recomendado) ou definir outra antes do bump.
+- Confirmar `2.2.0-beta.1` como numeração desta pré-release (recomendado) ou definir outra antes do bump.
 
 ## 5. Registro de bloqueio
 

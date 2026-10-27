@@ -1,6 +1,6 @@
 # Desenvolvimento
 
-> **Aplica-se a:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Última revisão: 2026-10-21
+> **Aplica-se a:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Última revisão: 2026-10-21
 
 [English](../en/development.md) · [Índice](../README.md)
 

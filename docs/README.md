@@ -2,7 +2,7 @@
 
 **English** · [Português](pt-BR/README.md)
 
-> **Applies to:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Last reviewed: 2026-10-25
+> **Applies to:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Last reviewed: 2026-10-27
 >
 > Beta APIs, file formats and command-line flags may change before general availability.
 > See the [changelog](../CHANGELOG.md) for user-visible changes.
@@ -35,7 +35,7 @@
 | Document | Description |
 | :--- | :--- |
 | [Test audit log](quality/test-audit-log.md) | Chronological test rounds, category breakdown and integrity audits (in Portuguese). |
-| [Beta 2 test plan](quality/beta2-test-plan.md) | Registered Beta 2 scope, pending installer/signing/CI work and the mandatory test matrix (in Portuguese). |
+| [Beta 2.2 test plan](quality/beta2.2-test-plan.md) | Registered Beta 2.2 scope, pending installer/signing/CI work and the mandatory test matrix (in Portuguese). |
 | [Security and governance model](security/governance.md) | Credential handling, integrity verification, sandboxing and deployment boundaries. |
 | [Code signing policy](../CODE_SIGNING.md) | SignPath Foundation signing, roles, artifact scope and verification. |
 | [Privacy policy](../PRIVACY.md) | Local data, network access and third-party services. |

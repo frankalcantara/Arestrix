@@ -1,6 +1,6 @@
 # Getting started
 
-> **Applies to:** Arestrix Beta 2.1 (`2.1.0-beta.1`) · Last reviewed: 2026-10-21
+> **Applies to:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Last reviewed: 2026-10-21
 
 [Português](../pt-BR/primeiros-passos.md) · [Index](../README.md)
 
@@ -96,7 +96,7 @@ variables, and is never written to a project:
 | `ARESTRIX_DEFAULT_PROVIDER` | `deepseek`, `openai`, `anthropic`, `google`, `groq`, `jev` or `local`. |
 | `ARESTRIX_DEFAULT_MODEL` | Model name. Optional for the hosted providers (each has a default); **required** for `jev` and `local`. |
 
-You do not need to set these by hand: **Global Defaults → Provider & Model → Studio default model** (Studio scope)
+You do not need to set these by hand: **File → Properties → Studio → Studio model**
 saves them for you, shows which model is in use, and also asks for the server address of `local` and `jev`.
 Choosing *Automatic* stores the value `auto`, which means "not set".
 
@@ -121,7 +121,7 @@ Steps:
 
 1. Start the server and load the model (for example `ollama serve` and `ollama pull qwen2.5:7b`, or
    `llama-server -m model.gguf --port 8080`).
-2. In the Studio, open **Global Defaults → Provider & Model**, choose **Local (Ollama / vLLM)** and enter the
+2. In the Studio, open **File → Properties → Project → Model & tools**, choose **Local (Ollama / vLLM)** and enter the
    base URL in `LOCAL_LLM_BASE_URL`.
 3. Click **Find models**: Arestrix queries `GET /v1/models` through the native backend (no CORS dependency)
    and lists the available models. If the server does not list models, type the name manually.
@@ -139,7 +139,7 @@ Arestrix ships a pre-approved catalog at `CppCore/runtime/models.catalog.json` w
 (Qwen2.5 and Mistral), license, size, SHA-256, RAM/VRAM requirements and tool support. Weights are **not**
 distributed with the product: downloads come directly from the pinned official source.
 
-In **Global Defaults → Provider & Model → Local**, click **Manage local models...** to:
+In **File → Properties → Project → Model & tools**, click **Manage local models** to:
 
 - download a model with progress, resume and SHA-256 verification;
 - verify or delete an already downloaded model;

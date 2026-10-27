@@ -38,7 +38,8 @@ export class GlobalDefaultsModal {
     this.bindEvents();
   }
 
-  public show(): void {
+  public show(tab: GlobalDefaultsTab = this.activeTab): void {
+    this.activeTab = tab;
     this.render();
     this.overlay.classList.remove('hidden');
     this.windowController?.bringToFront();

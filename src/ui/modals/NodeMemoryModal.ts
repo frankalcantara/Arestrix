@@ -1,40 +1,51 @@
+import { BaseModal } from './BaseModal.ts';
 import { Graph } from '../../core/Graph.ts';
 import { INodeData, INodeMemoryConfig, DEFAULT_NODE_MEMORY_CONFIG } from '../../core/types.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
-import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 import { t } from '../../i18n/index.ts';
 
-export class NodeMemoryModal {
-  private overlay: HTMLElement;
+export class NodeMemoryModal extends BaseModal {
   private graph: Graph;
-  private windowController?: IModalWindowController;
+  private activeNodeId: string | null = null;
   private activeTab: 'blackboard' | 'lessons' | 'retention' = 'blackboard';
 
   constructor(graph: Graph) {
+    super({
+      id: 'node-memory-modal',
+      title: t('node_modals.memory_title'),
+      icon: '💾',
+      minWidth: 720,
+      minHeight: 520,
+      dialogClass: 'node-settings-modal-dialog',
+      closeOnBackdropClick: true
+    });
     this.graph = graph;
-
-    this.overlay = document.createElement('div');
-    this.overlay.className = 'modal-overlay hidden';
-    document.body.appendChild(this.overlay);
-
-    this.bindEvents();
   }
 
-  public open(nodeId: string): void {
+  public override open(nodeId: string): void {
     const node = this.graph.getNode(nodeId);
     if (!node) return;
 
+    this.activeNodeId = nodeId;
     this.activeTab = 'blackboard';
-    this.render(node);
-    this.overlay.classList.remove('hidden');
-    this.windowController?.bringToFront();
+    this.config.subtitle = t('node_modals.memory_subtitle', {
+      label: this.escapeHtml(node.label),
+      id: node.id,
+      projectId: this.escapeHtml(this.graph.getProjectId())
+    });
+    super.open();
   }
 
-  public hide(): void {
-    this.overlay.classList.add('hidden');
+  public override hide(): void {
+    super.hide();
+    this.activeNodeId = null;
   }
 
-  private render(node: INodeData): void {
+  protected override renderBody(): string {
+    const node = this.activeNodeId ? this.graph.getNode(this.activeNodeId) : null;
+    if (!node) {
+      return `<div class="properties-empty">${t('node_modals.no_active_vertex', 'Nenhum vértice ativo selecionado.')}</div>`;
+    }
     const globalDefaults = this.graph.getGlobalDefaults();
     const projectId = this.graph.getProjectId();
     const settings = node.agentSettings || {
@@ -67,18 +78,7 @@ export class NodeMemoryModal {
       }
     }
 
-    const titleBarHtml = ModalWindowManager.createTitleBarHTML({
-      title: t('node_modals.memory_title'),
-      subtitle: t('node_modals.memory_subtitle', { label: this.escapeHtml(node.label), id: node.id, projectId: this.escapeHtml(projectId) }),
-      icon: '💾',
-      closeBtnId: 'btn-close-memory-modal'
-    });
-
-    this.overlay.innerHTML = `
-      <div class="modal-dialog node-settings-modal-dialog">
-        ${titleBarHtml}
-
-        <!-- Abas Fluent / Office 365 -->
+    return `
         <div class="modal-tabs" role="tablist">
           <button type="button" class="tab-btn ${this.activeTab === 'blackboard' ? 'active' : ''}" data-tab="blackboard">
             <span>📋</span> ${t('node_modals.tab_blackboard', '1. Blackboard')}
@@ -91,7 +91,6 @@ export class NodeMemoryModal {
           </button>
         </div>
 
-        <div class="modal-body-scrollable">
           <!-- Toggle de Herança -->
           <div class="inheritance-toggle-card">
             <label class="inheritance-checkbox-label">
@@ -279,39 +278,33 @@ export class NodeMemoryModal {
               </div>
             </div>
           </div>
-        </div>
-
-        <div class="modal-footer office-modal-footer">
-          <button class="btn btn-secondary-pill btn-secondary-office" id="btn-cancel-memory-modal">${t('global_defaults.btn_cancel')}</button>
-          <button class="btn btn-primary btn-primary-office" id="btn-save-memory-modal">${t('node_modals.btn_save_agent_settings')}</button>
-        </div>
-      </div>
     `;
-
-    const dialog = this.overlay.querySelector('.modal-dialog') as HTMLElement;
-    if (dialog) {
-      this.windowController = ModalWindowManager.attach({
-        dialog,
-        onClose: () => this.hide()
-      });
-    }
-
-    this.attachDialogEvents(node);
   }
 
-  private attachDialogEvents(node: INodeData): void {
-    const btnClose = this.overlay.querySelector('#btn-close-memory-modal');
-    const btnCancel = this.overlay.querySelector('#btn-cancel-memory-modal');
-    const btnSave = this.overlay.querySelector('#btn-save-memory-modal');
-    const chkInherit = this.overlay.querySelector<HTMLInputElement>('#chk-inherit-memory');
-    const chkEnabled = this.overlay.querySelector<HTMLInputElement>('#node-memory-enabled');
-    const radios = this.overlay.querySelectorAll<HTMLInputElement>('input[name="node-memory-persistence"]');
+  protected override renderFooter(): string {
+    return this.renderStandardFooter({
+      secondaryId: 'btn-cancel-memory-modal',
+      primaryId: 'btn-save-memory-modal',
+      secondaryLabel: t('global_defaults.btn_cancel'),
+      primaryLabel: t('node_modals.btn_save_agent_settings')
+    });
+  }
 
-    btnClose?.addEventListener('click', () => this.hide());
+  protected override bindEvents(): void {
+    super.bindEvents();
+    const node = this.activeNodeId ? this.graph.getNode(this.activeNodeId) : null;
+    if (!node) return;
+
+    const btnCancel = this.dialog.querySelector('#btn-cancel-memory-modal');
+    const btnSave = this.dialog.querySelector('#btn-save-memory-modal');
+    const chkInherit = this.dialog.querySelector<HTMLInputElement>('#chk-inherit-memory');
+    const chkEnabled = this.dialog.querySelector<HTMLInputElement>('#node-memory-enabled');
+    const radios = this.dialog.querySelectorAll<HTMLInputElement>('input[name="node-memory-persistence"]');
+
     btnCancel?.addEventListener('click', () => this.hide());
 
     // Manipulador de abas
-    const tabButtons = this.overlay.querySelectorAll<HTMLButtonElement>('.modal-tabs .tab-btn');
+    const tabButtons = this.dialog.querySelectorAll<HTMLButtonElement>('.modal-tabs .tab-btn');
     tabButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = (btn.dataset?.tab || btn.getAttribute('data-tab')) as 'blackboard' | 'lessons' | 'retention';
@@ -323,33 +316,30 @@ export class NodeMemoryModal {
             b.classList.toggle('active', bTab === tab);
           }
         });
-        const panes = this.overlay.querySelectorAll<HTMLElement>('.tab-pane');
+        const panes = this.dialog.querySelectorAll<HTMLElement>('.tab-pane');
         panes.forEach(p => {
           p.style.display = p.id === `pane-tab-${tab}` ? '' : 'none';
         });
       });
     });
 
-    btnClose?.addEventListener('click', () => this.hide());
-    btnCancel?.addEventListener('click', () => this.hide());
-
     // Toggle de Herança re-renderiza para atualizar estados bloqueados
     chkInherit?.addEventListener('change', () => {
       this.saveFormState(node, chkInherit.checked);
-      this.render(node);
+      this.render();
     });
 
     // Toggle de Habilitar Memória re-renderiza para atualizar visual dos cards
     chkEnabled?.addEventListener('change', () => {
       this.saveFormState(node, false);
-      this.render(node);
+      this.render();
     });
 
     // Mudança no radio de persistência
     radios.forEach(r => {
       r.addEventListener('change', () => {
         this.saveFormState(node, false);
-        this.render(node);
+        this.render();
       });
     });
 
@@ -361,19 +351,19 @@ export class NodeMemoryModal {
   }
 
   private saveFormState(node: INodeData, inheritMemory: boolean): void {
-    const chkEnabled = this.overlay.querySelector<HTMLInputElement>('#node-memory-enabled');
-    const selectedRadio = this.overlay.querySelector<HTMLInputElement>('input[name="node-memory-persistence"]:checked');
-    const txtProject = this.overlay.querySelector<HTMLInputElement>('#node-memory-project');
-    const chkReadBb = this.overlay.querySelector<HTMLInputElement>('#mem-perm-read-bb');
-    const chkWriteBb = this.overlay.querySelector<HTMLInputElement>('#mem-perm-write-bb');
-    const chkReadLessons = this.overlay.querySelector<HTMLInputElement>('#mem-perm-read-lessons');
-    const chkWriteLessons = this.overlay.querySelector<HTMLInputElement>('#mem-perm-write-lessons');
-    const txtKeys = this.overlay.querySelector<HTMLInputElement>('#node-memory-keys');
-    const txtWriteKeys = this.overlay.querySelector<HTMLInputElement>('#node-memory-write-keys');
-    const txtDomains = this.overlay.querySelector<HTMLInputElement>('#node-memory-domains');
-    const txtBudget = this.overlay.querySelector<HTMLInputElement>('#node-memory-budget');
-    const txtMaxLessons = this.overlay.querySelector<HTMLInputElement>('#node-memory-max-lessons');
-    const txtMaxLessonChars = this.overlay.querySelector<HTMLInputElement>('#node-memory-max-lesson-chars');
+    const chkEnabled = this.dialog.querySelector<HTMLInputElement>('#node-memory-enabled');
+    const selectedRadio = this.dialog.querySelector<HTMLInputElement>('input[name="node-memory-persistence"]:checked');
+    const txtProject = this.dialog.querySelector<HTMLInputElement>('#node-memory-project');
+    const chkReadBb = this.dialog.querySelector<HTMLInputElement>('#mem-perm-read-bb');
+    const chkWriteBb = this.dialog.querySelector<HTMLInputElement>('#mem-perm-write-bb');
+    const chkReadLessons = this.dialog.querySelector<HTMLInputElement>('#mem-perm-read-lessons');
+    const chkWriteLessons = this.dialog.querySelector<HTMLInputElement>('#mem-perm-write-lessons');
+    const txtKeys = this.dialog.querySelector<HTMLInputElement>('#node-memory-keys');
+    const txtWriteKeys = this.dialog.querySelector<HTMLInputElement>('#node-memory-write-keys');
+    const txtDomains = this.dialog.querySelector<HTMLInputElement>('#node-memory-domains');
+    const txtBudget = this.dialog.querySelector<HTMLInputElement>('#node-memory-budget');
+    const txtMaxLessons = this.dialog.querySelector<HTMLInputElement>('#node-memory-max-lessons');
+    const txtMaxLessonChars = this.dialog.querySelector<HTMLInputElement>('#node-memory-max-lesson-chars');
 
     const allowedKeys = txtKeys ? txtKeys.value.split(',').map(s => s.trim()).filter(Boolean) : [];
     const writeKeys = txtWriteKeys ? txtWriteKeys.value.split(',').map(s => s.trim()).filter(Boolean) : [];
@@ -423,28 +413,5 @@ export class NodeMemoryModal {
     );
 
     this.graph.commandManager.execute(cmd);
-  }
-
-  private bindEvents(): void {
-    this.overlay.addEventListener('click', (e) => {
-      if (e.target === this.overlay) {
-        this.hide();
-      }
-    });
-
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !this.overlay.classList.contains('hidden')) {
-        this.hide();
-      }
-    });
-  }
-
-  private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
   }
 }

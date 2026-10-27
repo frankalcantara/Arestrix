@@ -7,7 +7,7 @@ are taken seriously. Please follow this policy instead of opening a public issue
 
 | Version | Supported |
 | :--- | :---: |
-| `1.0.0-beta.1` (Beta 1.0) | Yes |
+| `2.2.0-beta.1` (Beta 2.2) | Yes |
 | Older pre-release builds | No |
 
 During the beta, only the latest published pre-release receives security fixes.

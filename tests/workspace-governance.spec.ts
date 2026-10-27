@@ -241,6 +241,39 @@ describe('Workspace Governance, Execution & Pre-Approved Catalogs', () => {
       const provisioned = await workspaceManager.ensureWorkspaceDirectories();
       expect(provisioned).toBe(true);
     });
+
+    it('preserva as propriedades editadas ao regravar workspace.config.json', async () => {
+      let writtenConfig = '';
+      (globalThis as any).window.webui = {
+        call: async (name: string, payload: string) => {
+          const data = JSON.parse(payload);
+          if (name === 'read_workspace_asset') {
+            return JSON.stringify({
+              content: JSON.stringify({
+                properties: {
+                  rootPath: 'C:/User/Projetos/MeuApp',
+                  defaults: { sandbox: { maxMemoryMB: 2048 } },
+                  security: { autoVerifySkills: false, strictSecurityMode: false }
+                }
+              })
+            });
+          }
+          if (name === 'write_workspace_asset' && String(data.filePath).endsWith('workspace.config.json')) {
+            writtenConfig = data.content;
+          }
+          return true;
+        }
+      };
+
+      workspaceManager.setWorkspaceRoot('C:/User/Projetos/MeuApp');
+      expect(await workspaceManager.ensureWorkspaceDirectories()).toBe(true);
+
+      const config = JSON.parse(writtenConfig);
+      expect(config.properties.defaults.sandbox.maxMemoryMB).toBe(2048);
+      expect(config.autoVerifySkills).toBe(false);
+      expect(config.strictSecurityMode).toBe(false);
+      expect(config.installedAssetsVersion).toBe('3.0.0');
+    });
   });
 
   describe('2. WorkspaceSkillAuditorAgent & Governança Estrita', () => {
