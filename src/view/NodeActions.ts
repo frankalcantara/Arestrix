@@ -47,7 +47,7 @@ export const NODE_ACTIONS: readonly INodeActionDef[] = [
   {
     type: 'sandbox',
     iconName: 'shield-check',
-    icon: ShieldCheck as unknown as LucideIconNode,
+    icon: ShieldCheck,
     get label() { return t('actions.sandbox.label'); },
     get description() { return t('actions.sandbox.description'); },
     event: 'node:open-sandbox-modal',
@@ -56,7 +56,7 @@ export const NODE_ACTIONS: readonly INodeActionDef[] = [
   {
     type: 'model',
     iconName: 'brain-circuit',
-    icon: BrainCircuit as unknown as LucideIconNode,
+    icon: BrainCircuit,
     get label() { return t('actions.model.label'); },
     get description() { return t('actions.model.description'); },
     event: 'node:open-model-modal',
@@ -65,7 +65,7 @@ export const NODE_ACTIONS: readonly INodeActionDef[] = [
   {
     type: 'tools',
     iconName: 'wrench',
-    icon: Wrench as unknown as LucideIconNode,
+    icon: Wrench,
     get label() { return t('actions.tools.label'); },
     get description() { return t('actions.tools.description'); },
     event: 'node:open-tools-modal',
@@ -74,7 +74,7 @@ export const NODE_ACTIONS: readonly INodeActionDef[] = [
   {
     type: 'memory',
     iconName: 'database',
-    icon: Database as unknown as LucideIconNode,
+    icon: Database,
     get label() { return t('actions.memory.label'); },
     get description() { return t('actions.memory.description'); },
     event: 'node:open-memory-modal',
@@ -83,7 +83,7 @@ export const NODE_ACTIONS: readonly INodeActionDef[] = [
   {
     type: 'skills',
     iconName: 'book-open-text',
-    icon: BookOpenText as unknown as LucideIconNode,
+    icon: BookOpenText,
     get label() { return t('actions.skills.label'); },
     get description() { return t('actions.skills.description'); },
     event: 'node:open-skills-modal',
@@ -99,18 +99,18 @@ export function getNodeAction(type: string): INodeActionDef | undefined {
  * Ícone vetorial exibido no header de cada tipo de nó (ao lado do rótulo de tipo).
  */
 export const NODE_TYPE_ICONS: Record<TaskflowNodeType, { name: string; icon: LucideIconNode }> = {
-  static: { name: 'square', icon: Square as unknown as LucideIconNode },
-  condition: { name: 'git-branch', icon: GitBranch as unknown as LucideIconNode },
-  subflow: { name: 'workflow', icon: Workflow as unknown as LucideIconNode },
-  module: { name: 'package', icon: Package as unknown as LucideIconNode },
-  critical: { name: 'siren', icon: Siren as unknown as LucideIconNode },
-  cuda: { name: 'cpu', icon: Cpu as unknown as LucideIconNode },
-  agent: { name: 'bot', icon: Bot as unknown as LucideIconNode },
-  fork: { name: 'split', icon: Split as unknown as LucideIconNode },
-  join: { name: 'merge', icon: Merge as unknown as LucideIconNode },
-  switch: { name: 'list-tree', icon: ListTree as unknown as LucideIconNode },
-  mcp: { name: 'plug', icon: Plug as unknown as LucideIconNode },
-  interaction: { name: 'message-circle', icon: MessageCircle as unknown as LucideIconNode },
-  call: { name: 'phone-call', icon: PhoneCall as unknown as LucideIconNode },
-  output: { name: 'folder-down', icon: FolderDown as unknown as LucideIconNode }
+  static: { name: 'square', icon: Square },
+  condition: { name: 'git-branch', icon: GitBranch },
+  subflow: { name: 'workflow', icon: Workflow },
+  module: { name: 'package', icon: Package },
+  critical: { name: 'siren', icon: Siren },
+  cuda: { name: 'cpu', icon: Cpu },
+  agent: { name: 'bot', icon: Bot },
+  fork: { name: 'split', icon: Split },
+  join: { name: 'merge', icon: Merge },
+  switch: { name: 'list-tree', icon: ListTree },
+  mcp: { name: 'plug', icon: Plug },
+  interaction: { name: 'message-circle', icon: MessageCircle },
+  call: { name: 'phone-call', icon: PhoneCall },
+  output: { name: 'folder-down', icon: FolderDown }
 } as Record<TaskflowNodeType, { name: string; icon: LucideIconNode }>;

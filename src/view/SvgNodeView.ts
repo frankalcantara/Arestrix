@@ -23,12 +23,12 @@ import { Brain, Wrench, CircleCheck, CircleX, TriangleAlert, Timer } from 'lucid
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 const TELEMETRY_ICONS: Record<string, { name: string; icon: LucideIconNode }> = {
-  thinking: { name: 'brain', icon: Brain as unknown as LucideIconNode },
-  tool_start: { name: 'wrench', icon: Wrench as unknown as LucideIconNode },
-  tool_ok: { name: 'circle-check', icon: CircleCheck as unknown as LucideIconNode },
-  tool_fail: { name: 'circle-x', icon: CircleX as unknown as LucideIconNode },
-  rate_limit: { name: 'triangle-alert', icon: TriangleAlert as unknown as LucideIconNode },
-  status: { name: 'timer', icon: Timer as unknown as LucideIconNode }
+  thinking: { name: 'brain', icon: Brain },
+  tool_start: { name: 'wrench', icon: Wrench },
+  tool_ok: { name: 'circle-check', icon: CircleCheck },
+  tool_fail: { name: 'circle-x', icon: CircleX },
+  rate_limit: { name: 'triangle-alert', icon: TriangleAlert },
+  status: { name: 'timer', icon: Timer }
 };
 
 export type NodeExecutionState = 'idle' | 'queued' | 'running' | 'completed' | 'error';
