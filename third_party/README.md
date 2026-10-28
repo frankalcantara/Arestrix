@@ -36,8 +36,16 @@ Vendored (not submodules):
 
 ```bash
 npm run submodule:check    # report upstream commits without changing the working tree
-npm run submodule:update   # move submodules to their latest upstream commit
+npm run submodule:update   # fast-forward the submodules to their latest upstream commit
 ```
+
+The weekly `Submodule updates` workflow runs the same check and opens (or
+updates) the `chore/submodule-updates` pull request with the pinned/upstream
+commits and the latest upstream commit subjects. It never merges and never forces a
+submodule: only fast-forward updates are applied, and diverged submodules are
+reported for manual resolution. Because the build workflows pin the commits in
+`main`, an upstream release does not reach a build until the pointer is merged.
+See [`.github/AUTOMATION.md`](../.github/AUTOMATION.md).
 
 Submodule updates are dependency changes: run the license check, the frontend tests, the C++
 tests and the build before opening a pull request. Dependabot also opens monthly submodule pull
