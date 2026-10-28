@@ -2,7 +2,7 @@
 
 [Português](../pt-BR/README.md) · [All documentation](../README.md)
 
-> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Last reviewed: 2026-10-27
+> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Last reviewed: 2026-10-27
 
 ## Learning path
 

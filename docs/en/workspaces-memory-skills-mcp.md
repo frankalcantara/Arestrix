@@ -1,6 +1,6 @@
 # Workspaces, memory, skills and MCP
 
-> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Last reviewed: 2026-10-25
+> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Last reviewed: 2026-10-25
 
 [Português](../pt-BR/workspaces-memoria-skills-mcp.md) · [Index](../README.md)
 

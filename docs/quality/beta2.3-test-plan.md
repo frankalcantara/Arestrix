@@ -1,8 +1,8 @@
 # Beta 2.3 - Registro de pendências e plano de testes
 
-> **Status:** pré-release `2.3.0-beta.1`; matriz completa e validação em máquina limpa pendentes.
+> **Status:** pré-release `2.3.0-beta.2`; matriz completa e validação em máquina limpa pendentes.
 >
-> **Versão atual:** `2.3.0-beta.1` (Beta 2.3).
+> **Versão atual:** `2.3.0-beta.2` (Beta 2.3).
 >
 > **Gate:** instalador 5B2 e assinatura/CI 5C implementados; validação em máquina limpa, pacote Linux
 > e a matriz completa 2.1-2.10 ainda pendentes.
@@ -10,7 +10,7 @@
 > **Última revisão:** 2026-10-27.
 
 Este documento registra o escopo do Beta 2.3 e a matriz de testes que precisa ser concluída para
-promover a pré-release a uma release validada. A versão `2.3.0-beta.1` está no código e é publicada
+promover a pré-release a uma release validada. A versão `2.3.0-beta.2` está no código e é publicada
 como pré-release de desenvolvimento.
 
 ## 1. Escopo registrado
@@ -187,7 +187,7 @@ A pré-release Beta 2.3 pode ser promovida quando:
 3. O instalador 5B2 e o pacote portátil tiverem sido testados em máquina limpa.
 4. Os artefatos estiverem assinados, com checksums e SBOM publicados.
 5. Não houver falha P0/P1 conhecida.
-6. A versão for atualizada para `2.3.0-beta.1` em `version.txt`, `package.json`,
+6. A versão for atualizada para `2.3.0-beta.2` em `version.txt`, `package.json`,
    `package-lock.json`, `CHANGELOG.md` e banners de documentação.
 7. O release for revisado e aprovado pelo mantenedor.
 

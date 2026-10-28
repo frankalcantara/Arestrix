@@ -1,6 +1,6 @@
 # Comparison
 
-> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Last reviewed: 2026-10-19
+> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Last reviewed: 2026-10-19
 >
 > **Scope:** this is a directional summary based on public documentation and the Arestrix design,
 > not a benchmark. Capabilities and licensing of third-party products change; verify them with the

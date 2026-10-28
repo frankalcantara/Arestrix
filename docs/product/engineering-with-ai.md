@@ -1,6 +1,6 @@
 # Engineering with AI agents
 
-> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Last reviewed: 2026-10-19
+> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Last reviewed: 2026-10-19
 
 Arestrix was built through a continuous collaboration between human software engineering and
 multiple AI coding and reasoning models. This page records that process for transparency; it is not

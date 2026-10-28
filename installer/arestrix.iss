@@ -3,9 +3,9 @@
 ; The release pipeline passes the portable staging folder, product version and
 ; output name as preprocessor defines; see scripts/package_release.py.
 ;
-;   ISCC.exe /DAppVersion=2.3.0-beta.1 /DAppVersionNumeric=2.0.0.0 ^
-;     /DStageDir=...\arestrix-2.3.0-beta.1-windows-x64 ^
-;     /DOutputDir=...\release /DOutputBaseFilename=arestrix-2.3.0-beta.1-windows-x64-setup ^
+;   ISCC.exe /DAppVersion=2.3.0-beta.2 /DAppVersionNumeric=2.0.0.0 ^
+;     /DStageDir=...\arestrix-2.3.0-beta.2-windows-x64 ^
+;     /DOutputDir=...\release /DOutputBaseFilename=arestrix-2.3.0-beta.2-windows-x64-setup ^
 ;     installer\arestrix.iss
 
 #ifndef AppVersion

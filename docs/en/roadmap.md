@@ -1,6 +1,6 @@
 # Roadmap and known limitations
 
-> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Last reviewed: 2026-10-27
+> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Last reviewed: 2026-10-27
 >
 > This page records what is intentionally incomplete and the order we plan to address it. It is not a
 > commitment to dates.
@@ -102,7 +102,7 @@ Limitations of the institution service and background worker:
 
 ## Beta 2.3 (pre-release)
 
-The Beta 2.3 line is versioned as `2.3.0-beta.1` and is published as a development pre-release
+The Beta 2.3 line is versioned as `2.3.0-beta.2` and is published as a development pre-release
 through the deploy workflow.
 
 Delivered in Beta 2.3: the **Arestrix Library** phases 1-7, with audited skill/MCP/template assets,
@@ -111,7 +111,7 @@ pin, license check and on-demand asset download; the **File menu** review, inclu
 Office-style **Open** screen and the Info/New/Save/Export/Options refresh; and canvas background
 synchronization with the global Light/Dark/Follow-system theme.
 
-Pending after the `2.3.0-beta.1` pre-release:
+Pending after the `2.3.0-beta.2` pre-release:
 
 - Clean-machine install/upgrade/uninstall, silent install and Intune/SCCM validation, plus the Linux
   package (5B2).

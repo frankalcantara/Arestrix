@@ -1,6 +1,6 @@
 # Roadmap e limitações conhecidas
 
-> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Última revisão: 2026-10-27
+> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Última revisão: 2026-10-27
 >
 > Esta página registra o que está intencionalmente incompleto e a ordem planejada para resolver. Não é
 > um compromisso de datas.
@@ -102,7 +102,7 @@ Limitações do serviço institucional e do background:
 
 ## Beta 2.3 (pré-release)
 
-A linha Beta 2.3 está versionada como `2.3.0-beta.1` e é publicada como pré-release de
+A linha Beta 2.3 está versionada como `2.3.0-beta.2` e é publicada como pré-release de
 desenvolvimento pelo workflow de deploy.
 
 Entregue no Beta 2.3: a **Biblioteca Arestrix** nas fases 1-7, com assets de skill/MCP/template
@@ -112,7 +112,7 @@ Arquivo**, incluindo a tela **Abrir** redesenhada no padrão Office e o refresh 
 Info/Novo/Salvar/Exportar/Opções; e a sincronização do fundo do canvas com o tema global
 Claro/Escuro/Seguir o sistema.
 
-Pendente após a pré-release `2.3.0-beta.1`:
+Pendente após a pré-release `2.3.0-beta.2`:
 
 - Instalação/upgrade/uninstall em máquina limpa, instalação silenciosa e validação em Intune/SCCM,
   além do pacote Linux (5B2).

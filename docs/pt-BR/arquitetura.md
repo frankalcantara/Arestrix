@@ -1,6 +1,6 @@
 # Arquitetura
 
-> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Última revisão: 2026-10-19
+> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Última revisão: 2026-10-19
 
 [English](../en/architecture.md) · [Índice](../README.md)
 

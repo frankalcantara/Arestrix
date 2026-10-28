@@ -2,7 +2,7 @@
 
 **English** · [Português](pt-BR/README.md)
 
-> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Last reviewed: 2026-10-27
+> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Last reviewed: 2026-10-27
 >
 > Beta APIs, file formats and command-line flags may change before general availability.
 > See the [changelog](../CHANGELOG.md) for user-visible changes.

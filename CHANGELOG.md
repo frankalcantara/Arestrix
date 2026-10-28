@@ -4,9 +4,9 @@ All notable changes to Arestrix are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-Pre-release identifiers follow SemVer (`2.3.0-beta.1`); the marketing name is **Beta 2.3**.
+Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **Beta 2.3**.
 
-## [Unreleased]
+## [2.3.0-beta.2] - 2026-10-28
 
 ### Added
 
@@ -24,6 +24,12 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.1`); the marketing name is **
   `--no-llm` unless the user asks for LLM analysis and that CLI providers are never selected on the
   agent's own initiative; `skill-validation-policy.json` carries the new commit, tree, hash and
   `policyVersion`, so existing skill approvals return to `PENDING` until re-audited.
+- **Dependency stack:** upgraded to Vite 8.3.5 (rolldown), TypeScript 7.0.2, Vitest 5.0.5,
+  three 0.186.1, lucide 1.61.0, `@hpcc-js/wasm` 2.36.0 and `puppeteer-core` 25.16.0. The Vite config
+  now uses `import.meta.dirname`, the lucide SVG converter follows the 1.x `IconNode` format, and the
+  TypeScript config drops the removed `baseUrl` option.
+- **Submodules:** monaco-editor advanced to `dbf1945` (`v0.57.0-26`) and simdjson to `9c00353`
+  (`v5.0.5`).
 
 ## [2.3.0-beta.1] - 2026-10-27
 
@@ -619,6 +625,7 @@ First public beta of Arestrix Studio and the native C++20 pipeline compiler.
 - The `braces` advisory documented in `docs/security/dependency-advisories.md` affects the build chain only;
   no fixed release is available upstream yet.
 
+[2.3.0-beta.2]: https://github.com/frankalcantara/Arestrix/releases/tag/v2.3.0-beta.2
 [2.3.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v2.3.0-beta.1
 [2.2.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v2.2.0-beta.1
 [2.1.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v2.1.0-beta.1

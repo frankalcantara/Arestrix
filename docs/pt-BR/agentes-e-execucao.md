@@ -1,6 +1,6 @@
 # Agentes e execução
 
-> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Última revisão: 2026-10-21
+> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Última revisão: 2026-10-21
 
 [English](../en/agents-and-execution.md) · [Índice](../README.md)
 

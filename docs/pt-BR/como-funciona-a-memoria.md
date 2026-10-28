@@ -1,6 +1,6 @@
 # Como funciona a memória do Arestrix
 
-> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.1`) — última revisão: 2026-10-25
+> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`) — última revisão: 2026-10-25
 >
 > Este guia descreve a memória implementada no núcleo C++20 + SQLite. Ele cobre o ciclo
 > completo: captura, proposta, promoção, consolidação, recuperação, embeddings, playbooks,
