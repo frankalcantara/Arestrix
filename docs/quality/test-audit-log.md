@@ -61,6 +61,7 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 - `npm run build`: concluído; `dist` espelhado em `CppCore/dist`.
 - `npm run check:secrets`: 116 arquivos de exemplo examinados, nenhum segredo.
 - Revisão visual do menu Arquivo em 1600×1000: Abrir, Informações, Novo, Salvar, Exportar e Opções.
+- `npm run capture:properties`: capturas `file-menu-info/new/save/export/options.webp`, `libraries-sources.webp` e telas de Propriedades atualizadas.
 
 #### Pendências para promoção
 

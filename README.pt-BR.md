@@ -84,8 +84,10 @@ um pipeline em um canvas de grafo; o Arestrix valida, gera código C++20 e compi
 
 - **Editor visual de grafos** - ribbon inspirada no Office, templates, vértices de decisão, ciclos
   de feedback, undo/redo e validação do grafo.
-- **Hub de Propriedades Office** - Studio, Workspace e Projeto em uma única superfície no padrão
+- **Hub de Propriedades Office** — Studio, Workspace e Projeto em uma única superfície no padrão
   Office, com herança explícita, badges de origem e editores especializados de credenciais, Git e memória.
+- **Menu Arquivo Office** — Informações, Novo, Abrir, Salvar, Exportar e Opções com tabelas, cartões
+  de ação, ícones vetoriais e Backstage que permanece atrás das Propriedades.
 - **Temas claro e escuro** - Claro, escuro ou seguir o sistema na ribbon, task pane, console,
   Backstage e todos os diálogos Office. O canvas permanece uma preferência independente.
 - **Compilador C++20 nativo** — inspecione o código Taskflow gerado no Monaco, compile com MSVC ou

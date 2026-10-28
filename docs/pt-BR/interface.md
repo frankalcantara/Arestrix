@@ -72,49 +72,76 @@ subfluxos e módulos), as skills do workspace e os pipelines. Pressione `Ctrl+K`
 
 ## Backstage
 
-Aberta por **Arquivo**. Traz as informações do projeto (quatro cartões: o projeto ativo, a sincronização do repositório Git, o workspace
-físico e o **Runner Standalone**), o hub de **Propriedades**, a tela **Abrir**, a tela unificada
-**Salvar** e as **Opções** (atalhos de execução e governança do workspace). Idioma, tema e as
-configurações editáveis agora ficam em **Propriedades**.
+**Arquivo** abre o Backstage em tela cheia no padrão Office. A barra lateral alterna entre **Informações**, **Novo Projeto**, **Abrir**, **Salvar**, **Exportar**, **Bibliotecas de Assets**, **Propriedades** e **Opções do Studio**. Configurações editáveis apontam para o único dono em **Propriedades**.
 
-A tela **Abrir** segue o Abrir do Office. Os locais ficam à esquerda e a tabela de arquivos usa as
-colunas **Nome / Data de modificação / Tipo / Tamanho**, com a busca alinhada à direita.
+### Informações
 
-- **Recentes**: duas abas, **Projetos** (agrupados por Hoje, Ontem, Últimos 7 dias, Últimos 30 dias e
-  Mais antigos) e **Grafos** (os pipelines do projeto atual).
-- **Este Computador**: navega pelas unidades e pastas. Mostra subpastas, pastas de projeto
-  (com `arestrix.project.json`), pacotes `.arestrix` e arquivos `.json`. Clicar numa pasta de projeto
-  abre o projeto; o botão ao lado entra na pasta sem abri-lo.
+A página **Informações** resume o projeto ativo em cinco cartões: identificação, armazenamento e banco, grafo e pipelines, repositório Git remoto e Runner Standalone. As **Ações Rápidas de Manutenção** sincronizam o banco e limpam o cache de retomada. A tabela **Projetos Recentes** usa as colunas do Office (**Nome do Projeto**, **Local (Diretório)**, **Último Acesso**) e ações por linha.
+
+![Página Informações do menu Arquivo](../assets/screenshots/file-menu-info.webp)
+
+### Novo Projeto
+
+**Novo Projeto** usa um único formulário de **Detalhes do projeto**: nome, pasta física e descrição. **Criar e Abrir Projeto** grava o manifesto e abre o grafo; a tabela de projetos recentes fica abaixo do formulário.
+
+![Página Novo Projeto do menu Arquivo](../assets/screenshots/file-menu-new.webp)
+
+### Abrir
+
+A tela **Abrir** segue o Abrir do Office. Os locais ficam à esquerda e a tabela de arquivos usa as colunas **Nome / Data de modificação / Tipo / Tamanho**, com a busca alinhada à direita.
+
+- **Recentes**: duas abas, **Projetos** (agrupados por Hoje, Ontem, Últimos 7 dias, Últimos 30 dias e Mais antigos) e **Grafos** (os pipelines do projeto atual).
+- **Este Computador**: navega pelas unidades e pastas. Mostra subpastas, pastas de projeto (com `arestrix.project.json`), pacotes `.arestrix` e arquivos `.json`. Clicar numa pasta de projeto abre o projeto; o botão ao lado entra na pasta sem abri-lo.
 - **Procurar**: abre o seletor de arquivos do sistema.
 
 ![Tela Abrir no padrão Office](../assets/screenshots/open-screen.webp)
 
-Um pacote `.arestrix` é extraído numa pasta nova ao lado dele (`nome`, `nome (2)`, ...) e aberto como
-projeto. Um grafo `.json` dentro de `<projeto>/pipelines` abre o projeto inteiro; um grafo avulso só
-substitui o canvas do projeto atual depois de confirmação.
+Um pacote `.arestrix` é extraído numa pasta nova ao lado dele (`nome`, `nome (2)`, ...) e aberto como projeto. Um grafo `.json` dentro de `<projeto>/pipelines` abre o projeto inteiro; um grafo avulso só substitui o canvas do projeto atual depois de confirmação.
+
+### Salvar
 
 A tela **Salvar** unifica o salvamento rápido e o *Salvar Como* no estilo do Office:
 
-- À esquerda, permite **Salvar Projeto Atual** diretamente no local existente ou escolher onde salvar via
-  **Este Computador**, **Locais Recentes** ou **Procurar Pasta**.
-- À direita, destaca no topo o seletor de escopo: **Projeto Completo** (pacote `.arestrix` ou pasta estruturada
-  com `arestrix.project.json` + `pipelines/main.json`) ou **Apenas um Grafo do Projeto** (arquivo `.json` do
-  pipeline). Inclui navegação por unidades, pastas e breadcrumbs, atalhos para a raiz e para a pasta
-  `pipelines/` do projeto ativo, além de registro automático do grafo no manifesto quando salvo dentro do
-  projeto aberto.
+- À esquerda, permite **Salvar Projeto Atual** diretamente no local existente ou escolher onde salvar via **Este Computador**, **Locais Recentes** ou **Procurar Pasta**.
+- À direita, destaca no topo o seletor de escopo: **Projeto Completo** (pacote `.arestrix` ou pasta estruturada com `arestrix.project.json` + `pipelines/main.json`) ou **Apenas um Grafo do Projeto** (arquivo `.json` do pipeline). Inclui navegação por unidades, pastas e breadcrumbs, atalhos para a raiz e para a pasta `pipelines/` do projeto ativo, além de registro automático do grafo no manifesto quando salvo dentro do projeto aberto.
+- Ícones dos locais, cartões de escopo, campos de nome/formato e botões do rodapé usam o mesmo shell Office do restante do menu Arquivo.
+
+![Página Salvar do menu Arquivo](../assets/screenshots/file-menu-save.webp)
+
+### Exportar
+
+A página **Exportar** agrupa as três ações de entrega em cartões Office: inspecionar o código C++20 gerado, gerar um projeto CMake ou exportar o grafo atual como SVG.
+
+![Página Exportar do menu Arquivo](../assets/screenshots/file-menu-export.webp)
+
+### Bibliotecas de Assets
+
+**Bibliotecas de Assets** abre a janela compartilhada de Propriedades diretamente em **Studio > Bibliotecas** (ou **Workspace > Bibliotecas**), mantendo a página Arquivo atrás. Veja [Bibliotecas e fontes GitHub](#bibliotecas-e-fontes-github) abaixo.
+
+### Opções do Studio
+
+**Opções do Studio** é um hub de configurações, não um formulário duplicado:
+
+- **Propriedades do Studio** e **Propriedades do Workspace** abrem as janelas Office de Propriedades.
+- **Catálogo de Skills e MCPs Pré-Aprovados** abre a seção de catálogos do Workspace.
+- **Execução Integrada no Workspace** mantém as ações de auditor, linter/validador do grafo e pipeline do projeto.
+
+As listas de pastas, skills e MCPs foram movidas para seu único dono, **Propriedades do Workspace**.
+
+![Página Opções do Studio do menu Arquivo](../assets/screenshots/file-menu-options.webp)
 
 ## Propriedades
 
 **Arquivo > Propriedades** abre o hub compartilhado no padrão Office para os três escopos. Cada
-escopo usa a mesma barra de título, navegação lateral, cartões de conteúdo e rodapé Cancelar/Salvar.
+escopo usa a mesma barra de título, navegação lateral, cartões de conteúdo e rodapé Cancelar/Salvar. As Propriedades abrem como uma janela Office sobre a página Arquivo; **Cancelar**, **Fechar** ou **Esc** devolvem o usuário à página Arquivo, não ao canvas principal.
 
 ![Hub de Propriedades para Studio, Workspace e Projeto](../assets/screenshots/properties-hub.webp)
 
 | Escopo | É dono de | Exemplos |
 | :--- | :--- | :--- |
-| **Studio** | Preferências da instalação | Idioma, tema, canvas, modelo padrão, chaves de provedores, AI Gateway, integrações, reset do arquivo de configuração |
-| **Workspace** | O workspace físico do projeto ativo | Sandbox padrão, política de auditoria/segurança, reconstrução de `.workspace`, restauração de padrões |
-| **Projeto** | O manifesto do projeto ativo | Nome, versão, descrição, saída, caminho SQLite, defaults de modelo/ferramentas, ambiente, resumos de Git/Runner, pipelines |
+| **Studio** | Preferências da instalação | Idioma, tema, canvas, modelo padrão, chaves de provedores, AI Gateway, fontes GitHub, bibliotecas de assets, reset do arquivo de configuração |
+| **Workspace** | O workspace físico do projeto ativo | Sandbox padrão, política de auditoria/segurança, catálogos aprovados, bibliotecas do workspace, reconstrução de `.workspace`, restauração de padrões |
+| **Projeto** | O manifesto do projeto ativo | Nome, versão, descrição, saída, caminho SQLite, defaults de modelo/ferramentas, ambiente, pins de bibliotecas, resumos de Git/Runner, pipelines |
 
 ### Propriedades do Studio
 
@@ -142,6 +169,14 @@ respectivos resumos.
 ![Propriedades do Projeto](../assets/screenshots/project-properties.webp)
 
 ![Defaults de modelo e ferramentas do Projeto](../assets/screenshots/project-defaults.webp)
+
+### Bibliotecas e fontes GitHub
+
+A seção Bibliotecas é compartilhada por Studio e Workspace. No topo, **Fontes de repositório (GitHub)** cadastra `organizacao/projeto`, a branch ou tag, o nome da fonte, a licença permitida e a descrição. Clique em **Salvar**; a janela permanece aberta, a fonte aparece na lista e sua biblioteca vinculada é criada. Selecione essa biblioteca na árvore e clique em **Sincronizar GitHub** para ler o manifesto/árvore. O conteúdo de um asset só é baixado quando selecionado, vai para quarentena, passa pela auditoria do Skill Guard e então é promovido para uso.
+
+A mesma seção contém o navegador de bibliotecas/assets, **Importar catálogo embutido**, **Importar catálogo do Workspace**, **Importar arquivo**, **Exportar**, **Clonar**, a criação de biblioteca local e, no escopo Projeto, a habilitação de bibliotecas e os pins de assets.
+
+![Seção Bibliotecas com fontes de repositório GitHub](../assets/screenshots/libraries-sources.webp)
 
 ### Herança explícita
 

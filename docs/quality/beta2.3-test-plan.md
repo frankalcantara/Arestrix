@@ -35,7 +35,7 @@ como pré-release de desenvolvimento.
 - Revisão completa do menu Arquivo: Abrir no padrão Office, Info/Novo/Salvar/Exportar/Opções
   alinhados ao shell Office, ícones vetoriais, painéis e botões consistentes, tema escuro.
 - Sincronização do canvas com o tema global Claro/Escuro/Seguir o sistema.
-- Captura `open-screen.webp` e documentação de interface/showcase atualizadas.
+- Capturas `open-screen.webp`, `file-menu-*.webp` e `libraries-sources.webp`, com documentação de interface/showcase atualizada.
 
 ### Entregue no Beta 2.2 (base)
 

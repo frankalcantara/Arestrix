@@ -85,6 +85,8 @@ graph canvas; Arestrix validates it, generates C++20 source and compiles it with
   undo/redo and graph validation.
 - **Office Properties hub** - Studio, Workspace and Project settings in one Office-style surface,
   with explicit inheritance, origin badges and specialist editors for credentials, Git and memory.
+- **Office File menu** - Info, New, Open, Save, Export and Options with Office tables, action cards,
+  vector icons and a Backstage that stays behind Properties.
 - **Light and dark themes** - Light, dark or follow-system appearance across the ribbon, task pane,
   console, Backstage and all Office dialogs. The canvas remains an independent preference.
 - **Native C++20 compiler** — inspect generated Taskflow code in Monaco, compile it with MSVC or

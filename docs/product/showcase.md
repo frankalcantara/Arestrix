@@ -92,5 +92,19 @@ Today/Yesterday/Last week organisation.
 
 ![Office-style Open screen with recent projects](../assets/screenshots/open-screen.webp)
 
+## 11. Office File menu pages
+
+The rest of the File menu was aligned with the same Office shell: **Info** uses summary cards and an Office recent-projects table, **New Project** uses a single details form, and **Save**, **Export** and **Options** use action cards, vector icons and Office buttons. **Studio Options** is now a settings hub for Studio, Workspace and catalogs, while the execution actions stay in place.
+
+![File menu Info page](../assets/screenshots/file-menu-info.webp)
+
+![File menu Studio Options page](../assets/screenshots/file-menu-options.webp)
+
+## 12. Libraries and GitHub sources
+
+The Arestrix Library is the audited source of skills, MCPs and templates. Studio and Workspace share the library browser, project pins and the **Repository sources (GitHub)** panel at the top: register `organization/project`, branch/tag, license and description, save, then select the linked library and sync the manifest. Asset contents are downloaded on demand and audited before installation.
+
+![Libraries section with GitHub repository sources](../assets/screenshots/libraries-sources.webp)
+
 > Screenshots are captured from the development build. Interface details may change during the
 > beta. Regenerate them with `npm run capture:screenshots`.

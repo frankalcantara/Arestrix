@@ -72,48 +72,78 @@ modules), the skills of the workspace and the pipelines. Press `Ctrl+K` to focus
 
 ## Backstage
 
-Opened by **File**. It has the project information (four cards: the active project, Git repository synchronization, the physical
-workspace, and the **Standalone Runner**), the **Properties** hub, the **Open** screen, the unified **Save** screen, and the **Options**
-(workspace execution and governance shortcuts). Language, theme and the editable settings now live in **Properties**.
+**File** opens a full-screen Office Backstage. The left rail switches between **Info**, **New Project**, **Open**, **Save**, **Export**, **Asset Libraries**, **Properties** and **Studio Options**. Editable settings deep-link to the single owner in **Properties**.
 
-The **Open** screen follows Office's Open. Locations sit on the left and the file table uses
-**Name / Date modified / Type / Size** columns, with a search box aligned to the right.
+### Info
 
-- **Recent**: two tabs, **Projects** (grouped by Today, Yesterday, Previous 7 days, Previous 30 days
-  and Older) and **Graphs** (the pipelines of the current project).
-- **This PC**: browses drives and folders. It shows subfolders, project folders (with
-  `arestrix.project.json`), `.arestrix` packages and `.json` files. Clicking a project folder opens the
-  project; the button next to it enters the folder without opening it.
+The **Info** page summarises the active project in five cards: identification, storage and database, graph and pipelines, remote Git repository, and the standalone runner. **Quick Maintenance Actions** can synchronise the database and clear the resume cache. The **Recent Projects** table uses Office columns (**Project Name**, **Location (Directory)**, **Last Accessed**) and per-row actions.
+
+![File menu Info page](../assets/screenshots/file-menu-info.webp)
+
+### New Project
+
+**New Project** uses a single **Project details** form: project name, physical folder and description. **Create and Open Project** creates the manifest and opens the graph; the recent projects table sits below the form.
+
+![File menu New Project page](../assets/screenshots/file-menu-new.webp)
+
+### Open
+
+The **Open** screen follows Office's Open. Locations sit on the left and the file table uses **Name / Date modified / Type / Size** columns, with a search box aligned to the right.
+
+- **Recent**: two tabs, **Projects** (grouped by Today, Yesterday, Previous 7 days, Previous 30 days and Older) and **Graphs** (the pipelines of the current project).
+- **This PC**: browses drives and folders. It shows subfolders, project folders (with `arestrix.project.json`), `.arestrix` packages and `.json` files. Clicking a project folder opens the project; the button next to it enters the folder without opening it.
 - **Browse**: opens the system file picker.
 
 ![Office-style Open screen](../assets/screenshots/open-screen.webp)
 
-An `.arestrix` package is extracted into a new folder next to it (`name`, `name (2)`, ...) and opened as a
-project. A `.json` graph inside `<project>/pipelines` opens the whole project; a loose graph replaces the
-current project's canvas only after confirmation.
+An `.arestrix` package is extracted into a new folder next to it (`name`, `name (2)`, ...) and opened as a project. A `.json` graph inside `<project>/pipelines` opens the whole project; a loose graph replaces the current project's canvas only after confirmation.
+
+### Save
 
 The **Save** screen unifies quick saving and *Save As* in the Office style:
 
-- On the left, you can **Save Current Project** directly in place or choose a destination via **This PC**,
-  **Recent Locations**, or **Browse Folder**.
-- On the right, a prominent scope selector at the top lets you choose between **Complete Project**
-  (`.arestrix` package or structured project folder with `arestrix.project.json` + `pipelines/main.json`) and
-  **Single Project Graph** (`.json` pipeline file). It provides full drive, folder, and breadcrumb navigation,
-  quick shortcuts to the active project's root and `pipelines/` folder, and automatic registration in the
-  project manifest when a graph is saved inside the open project.
+- On the left, you can **Save Current Project** directly in place or choose a destination via **This PC**, **Recent Locations**, or **Browse Folder**.
+- On the right, a prominent scope selector at the top lets you choose between **Complete Project** (`.arestrix` package or structured project folder with `arestrix.project.json` + `pipelines/main.json`) and **Single Project Graph** (`.json` pipeline file). It provides full drive, folder, and breadcrumb navigation, quick shortcuts to the active project's root and `pipelines/` folder, and automatic registration in the project manifest when a graph is saved inside the open project.
+- Location icons, scope cards, filename/format fields and footer buttons use the same Office shell as the rest of the File menu.
+
+![File menu Save page](../assets/screenshots/file-menu-save.webp)
+
+### Export
+
+The **Export** page groups the three delivery actions in Office cards: inspect the generated C++20 source, generate a CMake project, or export the current graph as SVG.
+
+![File menu Export page](../assets/screenshots/file-menu-export.webp)
+
+### Asset Libraries
+
+**Asset Libraries** opens the shared Properties window directly on **Studio > Libraries** (or **Workspace > Libraries**), with the File page still behind it. See [Libraries and GitHub sources](#libraries-and-github-sources) below.
+
+### Studio Options
+
+**Studio Options** is a settings hub rather than a duplicate settings form:
+
+- **Studio Properties** and **Workspace Properties** open the Office Properties windows.
+- **Catalog of Pre-Approved Skills and MCPs** opens the Workspace catalog section.
+- **Integrated Execution in Workspace** keeps the auditor, graph linter/validator and project pipeline actions.
+
+Folder, skill and MCP catalog lists were moved to their single owner, **Workspace Properties**.
+
+![File menu Studio Options page](../assets/screenshots/file-menu-options.webp)
 
 ## Properties
 
 **File > Properties** opens the shared Office-style properties hub for the three scopes. Each scope
-uses the same title bar, left navigation, content cards and Cancel/Save footer.
+uses the same title bar, left navigation, content cards and Cancel/Save footer. Properties opens as
+an Office window over the File page; **Cancel**, **Close** or **Esc** returns to the File page
+instead of the main canvas.
 
 ![Properties hub for Studio, Workspace and Project](../assets/screenshots/properties-hub.webp)
 
 | Scope | Owns | Examples |
 | :--- | :--- | :--- |
-| **Studio** | Installation-wide preferences | Language, theme, canvas, default model, provider keys, AI Gateway, integrations, config-file reset |
-| **Workspace** | The physical workspace of the active project | Sandbox default, audit/security policy, `.workspace` rebuild, restore defaults |
-| **Project** | The active project manifest | Name, version, description, output, SQLite path, model/tools defaults, environment, Git/Runner summaries, pipelines |
+| **Studio** | Installation-wide preferences | Language, theme, canvas, default model, provider keys, AI Gateway, GitHub repository sources, asset libraries, config-file reset |
+| **Workspace** | The physical workspace of the active project | Sandbox default, audit/security policy, approved catalogs, workspace libraries, `.workspace` rebuild, restore defaults |
+| **Project** | The active project manifest | Name, version, description, output, SQLite path, model/tools defaults, environment, library pins, Git/Runner summaries, pipelines |
 
 ### Studio Properties
 
@@ -139,6 +169,14 @@ the SQLite path. Git and Runner remain specialist dialogs opened from their summ
 ![Project Properties](../assets/screenshots/project-properties.webp)
 
 ![Project model and tools defaults](../assets/screenshots/project-defaults.webp)
+
+### Libraries and GitHub sources
+
+The Libraries section is shared by Studio and Workspace. At the top, **Repository sources (GitHub)** registers `organization/project`, a branch or tag, a source name, the allowed license and a description. Click **Save**; the window stays open, the source appears in the list, and its linked library is created. Select that library in the tree and click **Sync GitHub** to read the manifest/tree. Asset contents are downloaded only when selected, go to quarantine, pass the Skill Guard audit and are then promoted for use.
+
+The same section contains the library/asset browser, **Import built-in catalog**, **Import Workspace catalog**, **Import file**, **Export**, **Clone**, local library creation and, in the Project scope, library enablement and asset pins.
+
+![Libraries section with GitHub repository sources](../assets/screenshots/libraries-sources.webp)
 
 ### Explicit inheritance
 

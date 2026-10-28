@@ -50,13 +50,25 @@ async function capture(page, name, label) {
   console.log(`[OK] ${name} (${label})`);
 }
 
-async function openBackstage(page, section) {
+async function ensureBackstage(page) {
+  const isOpen = await page.evaluate(() => Boolean(document.querySelector('.office-backstage-overlay.open')));
+  if (isOpen) return;
   await page.evaluate(() => document.querySelector('#tab-btn-file')?.click());
   await wait(1200);
-  await page.evaluate(sec => {
-    document.querySelector(`.backstage-nav-item[data-section="${sec}"]`)?.click();
-  }, section);
-  await wait(700);
+}
+
+async function openBackstage(page, section) {
+  await ensureBackstage(page);
+  for (let attempt = 0; attempt < 6; attempt++) {
+    await page.evaluate(sec => {
+      document.querySelector(`.office-backstage-overlay.open .backstage-nav-item[data-section="${sec}"]`)?.click();
+    }, section);
+    await wait(700);
+    const active = await page.evaluate(() =>
+      document.querySelector('.office-backstage-overlay.open .backstage-nav-item.active')?.getAttribute('data-section')
+    );
+    if (active === section) return;
+  }
 }
 
 async function openProperties(page, scope, section) {
@@ -64,16 +76,38 @@ async function openProperties(page, scope, section) {
     document.querySelectorAll('.modal-overlay:not(.hidden) [id^="btn-close-properties-"]').forEach(button => button.click());
   });
   await wait(350);
-  await page.evaluate(() => document.querySelector('#tab-btn-file')?.click());
-  await wait(1200);
-  await page.evaluate(() => document.querySelector('.backstage-nav-item[data-section="properties"]')?.click());
-  await wait(500);
-  await page.evaluate(s => document.querySelector(`[data-open-properties="${s}"]`)?.click(), scope);
+  await ensureBackstage(page);
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    await page.evaluate(() => document.querySelector('.office-backstage-overlay.open .backstage-nav-item[data-section="properties"]')?.click());
+    await wait(500);
+    const active = await page.evaluate(() =>
+      document.querySelector('.office-backstage-overlay.open .backstage-nav-item.active')?.getAttribute('data-section')
+    );
+    if (active === 'properties') break;
+  }
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const clicked = await page.evaluate(s => {
+      const button = document.querySelector(`.office-backstage-overlay.open [data-open-properties="${s}"]`);
+      if (button) button.click();
+      return Boolean(button);
+    }, scope);
+    if (clicked) break;
+    await wait(400);
+  }
+
   await wait(1000);
   if (section) {
-    await page.evaluate(id => {
-      document.querySelector(`[data-property-section="${id}"]`)?.click();
-    }, section);
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const clicked = await page.evaluate(id => {
+        const button = document.querySelector(`.modal-overlay:not(.hidden) [data-property-section="${id}"]`);
+        if (button) button.click();
+        return Boolean(button);
+      }, section);
+      if (clicked) break;
+      await wait(300);
+    }
     await wait(400);
   }
 }
@@ -166,6 +200,26 @@ try {
     await wait(500);
   }
   await capture(page, 'open-screen.webp', 'Office-style Open screen');
+
+  // 2b. File menu pages refreshed in Beta 2.3
+  for (const [section, fileName, label] of [
+    ['info', 'file-menu-info.webp', 'File menu Info'],
+    ['new', 'file-menu-new.webp', 'File menu New Project'],
+    ['saveas', 'file-menu-save.webp', 'File menu Save'],
+    ['export', 'file-menu-export.webp', 'File menu Export'],
+    ['options', 'file-menu-options.webp', 'File menu Options']
+  ]) {
+    await openBackstage(page, section);
+    if (section === 'saveas') await wait(800);
+    await capture(page, fileName, label);
+  }
+
+  // 2c. Library repository sources
+  await openBackstage(page, 'info');
+  await page.evaluate(() => document.querySelector('#btn-backstage-github-repos')?.click());
+  await wait(1600);
+  await capture(page, 'libraries-sources.webp', 'Library repository sources');
+  await closeProperties(page, 'studio');
 
   // 3. Studio Properties
   await openProperties(page, 'studio', 'general');
