@@ -2059,6 +2059,44 @@ void ui_read_workspace_asset(webui::window::event* e) {
     }
 }
 
+// Wrapper JS -> C++ (Espelhar o ledger de governanca MCP no workspace). Arquivo sem segredos.
+// O Assistente usa esse espelho para recusar attach_mcp/execucao de servidores nao auditados.
+void ui_save_mcp_governance_ledger(webui::window::event* e) {
+    try {
+        const std::string payload = e->get_string();
+        if (payload.empty() || payload.size() > 2 * 1024 * 1024) { e->return_bool(false); return; }
+        auto parsed = taskforge::jsonutil::tryParse(payload);
+        if (!parsed || !parsed->is_object() || !parsed->contains("servers") || !parsed->at("servers").is_object()) {
+            e->return_bool(false);
+            return;
+        }
+        std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+        if (root.empty()) root = std::filesystem::current_path().string();
+        std::error_code ec;
+        std::filesystem::path dir = std::filesystem::path(root) / ".workspace" / "governance";
+        std::filesystem::create_directories(dir, ec);
+        if (ec) { e->return_bool(false); return; }
+        std::filesystem::path target = dir / "mcp-ledger.json";
+        std::filesystem::path tmp = target;
+        tmp += ".tmp";
+        {
+            std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+            if (!out.is_open()) { e->return_bool(false); return; }
+            out << parsed->dump(2);
+            if (!out.good()) { e->return_bool(false); return; }
+        }
+        std::filesystem::rename(tmp, target, ec);
+        if (ec) {
+            std::filesystem::remove(target, ec);
+            std::filesystem::rename(tmp, target, ec);
+        }
+        e->return_bool(!ec);
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_save_mcp_governance_ledger: " << ex.what() << "\n";
+        e->return_bool(false);
+    }
+}
+
 // Wrapper JS -> C++ (Studio settings). Arquivo de usuario, sem segredos.
 void ui_get_studio_settings(webui::window::event* e) {
     try {
@@ -2165,7 +2203,7 @@ void ui_read_skill_file(webui::window::event* e) {
 // Wrapper JS -> C++ (Compilar e executar o grafo). Payload: graph.toJSON().
 // O progresso chega assincronamente em window.onArestrixPipelineEvent / window.onArestrixTelemetry.
 // Compila e executa o grafo (JSON do grafo raiz) no projeto ativo; progresso vai para o console do Studio.
-// Devolve vazio se a execucao comecou, ou o motivo da recusa. Usado pela interface e pelo Assistente.
+// Devolve vazio se a execucao comecou, ou o motivo da recusa. Usado pela interface (PipelineRunner).
 std::string startPipelineRun(const std::string& payload) {
     taskforge::core::Graph graph;
     if (!loadGraphFromPayload(payload, graph)) return "Grafo invalido ou vazio";
@@ -2653,9 +2691,65 @@ public:
         return true;
     }
 
-    bool runPipeline(const taskforge::Json& schema, std::string& error) override {
-        error = startPipelineRun(schema.dump());
-        return error.empty();
+    bool updateProject(const taskforge::Json& patch, taskforge::Json& updated, std::string& error) override {
+        auto& pm = taskforge::project::ProjectManager::getInstance();
+        auto manifest = pm.getCurrentProject();
+        if (manifest.projectId.empty()) {
+            error = "nenhum projeto ativo";
+            return false;
+        }
+        auto trimmed = [](std::string s) {
+            while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) s.erase(s.begin());
+            while (!s.empty() && (s.back() == ' ' || s.back() == '\t' || s.back() == '\r' || s.back() == '\n')) s.pop_back();
+            return s;
+        };
+        bool changed = false;
+        if (patch.contains("name")) {
+            if (!patch.at("name").is_string()) { error = "o nome deve ser texto"; return false; }
+            std::string name = trimmed(patch.at("name").get<std::string>());
+            while (!name.empty() && (name.back() == '.' || name.back() == ' ')) name.pop_back();
+            if (name.empty() || name.find_first_of("<>:\"/\\|?*\r\n") != std::string::npos) {
+                error = "nome de projeto invalido";
+                return false;
+            }
+            if (name != manifest.name) { manifest.name = name; changed = true; }
+        }
+        if (patch.contains("version")) {
+            if (!patch.at("version").is_string()) { error = "a versao deve ser texto"; return false; }
+            std::string version = trimmed(patch.at("version").get<std::string>());
+            if (version.empty() || version.size() > 32 || version.find_first_of("\r\n") != std::string::npos) {
+                error = "versao de projeto invalida";
+                return false;
+            }
+            if (version != manifest.version) { manifest.version = version; changed = true; }
+        }
+        if (patch.contains("description")) {
+            if (!patch.at("description").is_string()) { error = "a descricao deve ser texto"; return false; }
+            std::string description = patch.at("description").get<std::string>();
+            if (description.size() > 2000) { error = "descricao longa demais"; return false; }
+            if (description != manifest.description) { manifest.description = description; changed = true; }
+        }
+        if (patch.contains("outputDir")) {
+            if (!patch.at("outputDir").is_string()) { error = "a pasta de saida deve ser texto"; return false; }
+            std::string outputDir = trimmed(patch.at("outputDir").get<std::string>());
+            std::filesystem::path outPath(outputDir);
+            bool unsafe = outputDir.empty() || outputDir.size() > 200 || outPath.is_absolute() ||
+                          outPath.has_root_name() || outPath.has_root_directory();
+            for (const auto& part : outPath) if (part == "..") unsafe = true;
+            if (unsafe) { error = "pasta de saida invalida"; return false; }
+            if (outputDir != manifest.outputDir) { manifest.outputDir = outputDir; changed = true; }
+        }
+        if (!changed) {
+            error = "nada para alterar";
+            return false;
+        }
+        if (!pm.saveProject(manifest)) {
+            error = "nao foi possivel gravar o manifesto do projeto";
+            return false;
+        }
+        taskforge::Json j = pm.getCurrentProject();
+        updated = j;
+        return true;
     }
 
     fs::path docsDirectory(taskforge::rt::RuntimeLang lang) override {
@@ -2894,6 +2988,7 @@ int main(int argc, char** argv) {
     win.bind("ensure_workspace_directories", ui_ensure_workspace_directories);
     win.bind("write_workspace_asset", ui_write_workspace_asset);
     win.bind("read_workspace_asset", ui_read_workspace_asset);
+    win.bind("save_mcp_governance_ledger", ui_save_mcp_governance_ledger);
     win.bind("fetch_library_source", ui_fetch_library_source);
     win.bind("get_studio_settings", ui_get_studio_settings);
     win.bind("save_studio_settings", ui_save_studio_settings);

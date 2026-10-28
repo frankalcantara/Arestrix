@@ -301,6 +301,7 @@ struct ProjectManifest {
     std::string createdAt;
     std::string updatedAt;
     std::string rootPath;
+    std::string outputDir = "Output";
     std::vector<ProjectPipelineRef> pipelines;
     taskforge::Json globalDefaults = taskforge::Json::object();
     ProjectDatabaseConfig database;
@@ -318,6 +319,7 @@ inline void to_json(taskforge::Json& j, const ProjectManifest& m) {
         {"createdAt", m.createdAt},
         {"updatedAt", m.updatedAt},
         {"rootPath", m.rootPath},
+        {"outputDir", m.outputDir},
         {"pipelines", m.pipelines},
         {"globalDefaults", m.globalDefaults},
         {"database", m.database},
@@ -335,6 +337,7 @@ inline void from_json(const taskforge::Json& j, ProjectManifest& m) {
     m.createdAt = j.value("createdAt", "");
     m.updatedAt = j.value("updatedAt", "");
     m.rootPath = j.value("rootPath", "");
+    m.outputDir = j.value("outputDir", "Output");
     if (j.contains("pipelines")) {
         m.pipelines = j["pipelines"].get<std::vector<ProjectPipelineRef>>();
     }

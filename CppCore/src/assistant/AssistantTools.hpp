@@ -38,9 +38,15 @@ public:
                                               const std::string& description, std::string& error) = 0;
     virtual std::optional<Json> openProject(const std::string& path, std::string& error) = 0;
     virtual bool savePipeline(const Json& schema, std::string& error) = 0;
-    virtual bool runPipeline(const Json& schema, std::string& error) = 0;
     // Pasta com os .md da documentacao do Studio no idioma pedido (vazio se nao existir).
     virtual std::filesystem::path docsDirectory(rt::RuntimeLang lang) = 0;
+    // Altera nome, versao e/ou descricao do projeto ativo e grava o manifesto. Devolve o manifesto atualizado.
+    virtual bool updateProject(const Json& patch, Json& updated, std::string& error) {
+        (void)patch;
+        (void)updated;
+        error = "updateProject nao implementado";
+        return false;
+    }
 };
 
 struct ToolOutcome {

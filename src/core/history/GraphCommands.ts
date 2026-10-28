@@ -26,6 +26,36 @@ export class AddNodeCommand implements ICommand {
 }
 
 /**
+ * Comando para substituir o childGraph de um subflow/módulo pelo caminho de nós.
+ * Usado pelas edições aninhadas do Assistente: um único passo de desfazer restaura
+ * o subgrafo anterior (ou remove o childGraph que não existia).
+ */
+export class SetChildGraphCommand implements ICommand {
+  readonly description: string;
+  private graph: Graph;
+  private path: string[];
+  private oldChild: any | null;
+  private newChild: any;
+
+  constructor(graph: Graph, path: string[], childGraph: any) {
+    this.graph = graph;
+    this.path = [...path];
+    this.oldChild = graph.getChildGraph(this.path);
+    this.newChild = JSON.parse(JSON.stringify(childGraph));
+    this.description = `Editar subgrafo "${this.path[this.path.length - 1] || ''}"`;
+  }
+
+  execute(): void {
+    this.graph.setChildGraph(this.path, this.newChild);
+  }
+
+  undo(): void {
+    if (this.oldChild) this.graph.setChildGraph(this.path, this.oldChild);
+    else this.graph.clearChildGraph(this.path);
+  }
+}
+
+/**
  * Comando para remover um nó (e recuperar todas as conexões ao desfazer).
  */
 export class RemoveNodeCommand implements ICommand {

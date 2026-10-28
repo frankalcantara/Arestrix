@@ -30,6 +30,7 @@ import { NodeContextMenu } from './ui/NodeContextMenu.ts';
 import { PipelineRunner } from './core/PipelineRunner.ts';
 import { NotificationCenter } from './ui/NotificationCenter.ts';
 import { StudioSettingsStore } from './core/settings/StudioSettingsStore.ts';
+import { McpLedgerService } from './core/skills/McpLedgerService.ts';
 import { applyAppTheme, loadStoredAppTheme } from './view/AppTheme.ts';
 
 function bootstrap() {
@@ -142,6 +143,12 @@ function bootstrap() {
   globalEventBus.on('modal:open-local-models', () => globalDefaultsModal.show('model'));
   globalEventBus.on('modal:open-global-tools', () => globalDefaultsModal.show('tools'));
   globalEventBus.on('modal:open-global-memory', () => globalDefaultsModal.show('memory'));
+
+  // O backend C++ aplica o mesmo ledger MCP do Studio (attach_mcp/validate_graph).
+  const syncMcpLedger = () => { void McpLedgerService.getInstance(globalEventBus).syncToWorkspace(); };
+  globalEventBus.on('project:loaded', syncMcpLedger);
+  globalEventBus.on('project:created', syncMcpLedger);
+  globalEventBus.on('workspace:provisioned', syncMcpLedger);
 
   // 8. Console de Execução & Build na base da área central (Docked Bottom Drawer)
   new ConsolePanel(centerArea);

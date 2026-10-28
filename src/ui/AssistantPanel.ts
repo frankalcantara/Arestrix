@@ -10,9 +10,11 @@ import {
   MoveNodeCommand,
   AddEdgeCommand,
   RemoveEdgeCommand,
+  SetChildGraphCommand,
   CompoundCommand
 } from '../core/history/GraphCommands.ts';
 import { INodeData } from '../core/types.ts';
+import { PipelineRunner } from '../core/PipelineRunner.ts';
 import { renderMarkdown } from './modals/SkillEditorModal.ts';
 import { t, getLocale } from '../i18n/index.ts';
 
@@ -41,7 +43,7 @@ type ChatItem =
   | { kind: 'cancelled' }
   | { kind: 'confirm'; tool: string; params: Record<string, any>; answer?: boolean };
 
-const CONFIRM_TOOLS = ['create_project', 'open_project', 'clear_graph', 'save_project', 'run_pipeline'];
+const CONFIRM_TOOLS = ['create_project', 'open_project', 'update_project', 'clear_graph', 'save_project', 'run_pipeline'];
 
 /**
  * Aba "Assistente" do painel lateral. Só interface: o laço da conversa, as ferramentas, a validação,
@@ -179,6 +181,25 @@ export class AssistantPanel {
     if (op.op === 'load_project') {
       this.commitUndo();
       await this.projectManager.loadProject(String(op.rootPath || ''), this.graph);
+      return;
+    }
+    if (op.op === 'update_project') {
+      this.projectManager.updateProjectMetadata(op.patch || {}, this.graph);
+      return;
+    }
+    if (op.op === 'run_pipeline') {
+      this.commitUndo();
+      const started = await PipelineRunner.run(this.graph);
+      if (!started) {
+        this.items.push({ kind: 'error', code: 'run_rejected' });
+        this.render();
+      }
+      return;
+    }
+    if (op.op === 'set_child_graph') {
+      const cmd = new SetChildGraphCommand(this.graph, Array.isArray(op.path) ? op.path.map(String) : [], op.childGraph);
+      cmd.execute();
+      this.pending.push(cmd);
       return;
     }
     while (!this.graph.isAtRoot() && this.graph.navigateUp()) { /* sobe até a raiz */ }
@@ -424,7 +445,7 @@ export class AssistantPanel {
     q('#assistant-stop')?.addEventListener('click', () => void this.stop());
     q('#assistant-new')?.addEventListener('click', () => this.newSession());
     q('#assistant-delete')?.addEventListener('click', () => void this.deleteSession());
-    q('#assistant-open-defaults')?.addEventListener('click', () => this.bus.emit('modal:open-global-defaults'));
+    q('#assistant-open-defaults')?.addEventListener('click', () => this.bus.emit('properties:open', { scope: 'studio', section: 'studio-model' }));
     const select = q<HTMLSelectElement>('#assistant-session-select');
     select?.addEventListener('change', () => {
       if (select.value) void this.openSession(select.value);

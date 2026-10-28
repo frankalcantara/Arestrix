@@ -191,11 +191,15 @@ own inheritance toggle.
 ## Assistant
 
 The side panel has two tabs: **Properties** and **Assistant**. The Assistant is a chat with the Studio's
-default AI (File → Properties > Studio default model) that helps you **operate** and **learn** the Studio:
+default AI (File → Properties → Studio → Studio model) that helps you **operate** and **learn** the Studio:
 
 - It answers questions by reading this documentation (in the Studio language).
 - It creates projects and builds or changes graphs: adds, connects, changes, moves and removes vertices, validates the graph.
-- It saves the project and runs the pipeline.
+- It configures every vertex kind, including human **Interaction** forms, **Call** vertices with `call` edges, and **Output** deliverables.
+- It edits nested **subflow/module** graphs through `parent_path` (the chain of subflow/module ids), with the same add/connect/update/validate tools and a single undo step.
+- It lists approved workspace **skills**, attaches them to agent vertices, and discovers **MCP** servers and tools. `attach_mcp` only accepts servers approved in the Studio governance ledger; it refuses rejected or unaudited servers.
+- It saves the project, runs the pipeline and inspects the generated artifacts. Assistant-initiated runs go through the Studio validator (topology plus the skills/MCP governance ledger) before the pipeline starts.
+- It can change the project **name, version, description and output folder** after confirmation; the project folder, secrets and the environment stay out of its reach.
 
 Graph edits show up on the canvas right away. Everything the Assistant does in one reply can be undone at
 once with **Ctrl+Z**. Creating, opening or clearing a graph, saving and running ask for confirmation first
@@ -204,10 +208,10 @@ once with **Ctrl+Z**. Creating, opening or clearing a graph, saving and running 
 Each conversation is a **session** saved in the project, under `.arestrix/assistant/sessions/`; the selector
 at the top of the tab reopens earlier ones. The Assistant answers in the Studio language.
 
-The Assistant needs a provider with **tool calling**. Providers without it (Jev and local model) are marked
-"no Assistant support" in the default model selector, and the tab states that it cannot be used. The whole
-conversation loop, the tools and session storage run in the C++ backend; the tab only draws the conversation
-and applies the changes on the canvas.
+The Assistant needs a provider with **tool calling**. Jev does not offer it and is marked "no Assistant support"
+in the default model selector; on a local server, support depends on the loaded model, and the tab reports
+`tools_unsupported` when the server refuses tools. The whole conversation loop, the tools and session storage
+run in the C++ backend; the tab only draws the conversation and applies the changes on the canvas.
 
 ## Canvas and Viewport
 

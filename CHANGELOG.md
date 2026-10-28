@@ -8,6 +8,21 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.1`); the marketing name is **
 
 ## [2.3.0-beta.1] - 2026-10-27
 
+### Added
+
+- **Assistant nested graph editing:** `add_node`, `update_node`, `remove_node`, `move_node`, `connect`,
+  `disconnect`, `clear_graph`, `get_graph`, `get_node`, `validate_graph`, `attach_skill` and `attach_mcp`
+  accept an optional `parent_path` with the chain of subflow/module ids. Nested edits return a single
+  `set_child_graph` operation, so one Ctrl+Z restores the previous subgraph. Nested MCP governance is
+  validated recursively.
+- **Assistant workspace and project tools:** the default-model chat can list approved workspace **skills**,
+  read them, attach them to agent vertices, discover **MCP** servers and their tools, and attach only
+  **audited MCP servers** to agents or `mcp` vertices through `attach_mcp`. The Studio MCP ledger is
+  mirrored to `.workspace/governance/mcp-ledger.json` so the native assistant refuses rejected or
+  unaudited servers in the attach flow and in `validate_graph`. The project **name, version, description
+  and output folder** can be updated after confirmation. Skill snapshots keep the audit metadata so the
+  Studio validator can still enforce the governance ledger.
+
 ### Changed
 
 - **File menu / Backstage:** the **Open** screen now follows the Microsoft Office file picker,
@@ -70,6 +85,18 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.1`); the marketing name is **
 - **Dark theme canvas:** switching the application theme now synchronizes the graph canvas
   background. In the dark canvas, vertices use a graphite body (`#1f2937`) with light title and
   port labels instead of the light white card.
+
+### Fixed
+
+- **Assistant parity with the current Studio:** the default-model chat now knows and creates
+  **Call** vertices and `call` edges (with `maxCalls`, timeout, error policy and async settings),
+  edits **Interaction** and **Call** settings, applies the same call/interaction rules as the
+  Studio validator, lists artifacts from `exports/` and `workspace/`, and confines artifact reads
+  to the project. When the default AI is missing, the banner opens **Properties → Studio →
+  Studio model** instead of the project defaults.
+- **Assistant run governance:** an Assistant-initiated run is now handed to the Studio's
+  `PipelineRunner`, so the same `GraphValidator` gate (topology plus the skills/MCP audit ledger)
+  applies before the pipeline starts, instead of calling the backend directly.
 
 ## [2.2.0-beta.1] - 2026-10-27
 

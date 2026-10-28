@@ -178,6 +178,32 @@ taskforge::Json McpToolbox::listProjectServers(const fs::path& root) {
     return out;
 }
 
+taskforge::Json McpToolbox::listServerTools(const fs::path& root, const std::string& id) {
+    Json out = Json::array();
+    if (native::isNativeServer(id)) {
+        const native::Server* ns = native::findServer(id);
+        if (!ns) throw mcp::McpError(mcp::McpErrorCode::ServerNotFound, id);
+        for (const auto& t : ns->tools) {
+            out.push_back(Json{{"name", t.name},
+                               {"description", t.description},
+                               {"inputSchema", t.inputSchema},
+                               {"risk", t.risk}});
+        }
+        return out;
+    }
+    mcp::McpServerConfig cfg = loadServerConfig(root, id);
+    mcp::McpClient client;
+    mcp::McpErrorInfo info;
+    auto tools = client.listTools(cfg, kListTimeoutMs, &info);
+    if (tools.empty() && !info.empty()) throw mcp::McpError(info.code, info.detail);
+    for (const auto& t : tools) {
+        out.push_back(Json{{"name", t.name},
+                           {"description", t.description},
+                           {"inputSchema", t.inputSchema}});
+    }
+    return out;
+}
+
 bool McpToolbox::isToolAllowed(const std::vector<std::string>& allowed, const std::string& serverId, const std::string& toolName) {
     if (allowed.empty()) return true;   // lista vazia = todas as ferramentas dos servidores declarados
     for (const auto& entry : allowed) {

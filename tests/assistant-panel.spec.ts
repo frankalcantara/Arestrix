@@ -1,9 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Graph } from '../src/core/Graph.ts';
 import { EventBus } from '../src/core/EventBus.ts';
 import { ProjectManager } from '../src/core/ProjectManager.ts';
 import { AssistantPanel } from '../src/ui/AssistantPanel.ts';
 import { setLocale } from '../src/i18n/index.ts';
+
+vi.mock('../src/core/PipelineRunner.ts', () => ({
+  PipelineRunner: { run: vi.fn().mockResolvedValue(true) }
+}));
+
+import { PipelineRunner } from '../src/core/PipelineRunner.ts';
 
 // Raiz mínima: o painel só escreve innerHTML e procura elementos para ligar eventos.
 function stubRoot(): any {
@@ -45,6 +51,8 @@ describe('Aba Assistente (interface)', () => {
     bus = new EventBus();
     ProjectManager.getInstance(bus).resetForTesting(bus);
     graph = new Graph(bus);
+    vi.mocked(PipelineRunner.run).mockClear();
+    vi.mocked(PipelineRunner.run).mockResolvedValue(true);
   });
 
   afterEach(async () => {
@@ -93,16 +101,79 @@ describe('Aba Assistente (interface)', () => {
     expect(calls.find(c => c[0] === 'assistant_confirm')![1]).toBe('false');
     expect(root.innerHTML).toContain('Recusado.');
 
+    panel.onEvent({ type: 'confirm', sessionId: 's1', tool: 'update_project', params: { patch: { name: 'X' } } });
+    expect(root.innerHTML).toContain('alterar as propriedades do projeto ativo');
+
     // Eventos de outra sessão não entram nesta conversa.
     const before = panel.items.length;
     panel.onEvent({ type: 'text', sessionId: 'outra', text: 'intrusa' });
     expect(panel.items.length).toBe(before);
   });
 
+  it('aplica update_project no ProjectManager e sincroniza o metadata do grafo', async () => {
+    const panel: any = new AssistantPanel(stubRoot(), graph, bus);
+    panel.onEvent({
+      type: 'op',
+      op: { op: 'update_project', patch: { name: 'Projeto Novo', version: '2.0.0', description: 'Nova descrição', outputDir: 'Resultados' } }
+    });
+    await panel.opQueue;
+
+    const project = ProjectManager.getInstance(bus).getCurrentProject();
+    expect(project.name).toBe('Projeto Novo');
+    expect(project.version).toBe('2.0.0');
+    expect(project.description).toBe('Nova descrição');
+    expect(project.outputDir).toBe('Resultados');
+    expect(graph.getRootSchema().metadata.graphName).toBe('Projeto Novo');
+  });
+
+  it('entrega run_pipeline ao PipelineRunner oficial para aplicar a governança', async () => {
+    const panel: any = new AssistantPanel(stubRoot(), graph, bus);
+    panel.onEvent({ type: 'op', op: { op: 'run_pipeline' } });
+    await panel.opQueue;
+    expect(PipelineRunner.run).toHaveBeenCalledWith(graph);
+
+    vi.mocked(PipelineRunner.run).mockResolvedValueOnce(false);
+    panel.onEvent({ type: 'op', op: { op: 'run_pipeline' } });
+    await panel.opQueue;
+    expect(panel.items.some((item: any) => item.kind === 'error' && item.code === 'run_rejected')).toBe(true);
+  });
+
+  it('aplica set_child_graph no subgrafo certo e desfaz a criação do childGraph', async () => {
+    const sub = node('sub', 'Subfluxo');
+    sub.type = 'subflow';
+    graph.addNode(sub);
+    const panel: any = new AssistantPanel(stubRoot(), graph, bus);
+    panel.onEvent({
+      type: 'op',
+      op: {
+        op: 'set_child_graph',
+        path: ['sub'],
+        childGraph: {
+          version: '1.0.0',
+          metadata: { graphName: 'Subfluxo_Subflow' },
+          nodes: [node('inner', 'Dentro')],
+          edges: []
+        }
+      }
+    });
+    panel.onEvent({ type: 'done', ok: true });
+    await panel.opQueue;
+
+    expect(graph.getChildGraph(['sub'])?.nodes.map(n => n.id)).toEqual(['inner']);
+    expect(graph.undo()).toBe(true);
+    expect(graph.getChildGraph(['sub'])).toBeNull();
+    expect(graph.redo()).toBe(true);
+    expect(graph.getChildGraph(['sub'])?.nodes.map(n => n.id)).toEqual(['inner']);
+  });
+
   it('mostra atividades, erros e confirmações pelo i18n nos dois idiomas', async () => {
     for (const [locale, expected] of [
-      ['pt-BR', ['Ligou "A" a "B"', 'A IA padrão do Studio não está configurada', 'Recusado: Executar o pipeline']],
-      ['en-US', ['Connected "A" to "B"', 'The Studio default AI is not configured', 'Declined: Run the pipeline']]
+      ['pt-BR', ['Ligou "A" a "B"', 'A IA padrão do Studio não está configurada', 'Recusado: Executar o pipeline',
+                 'Consultou as skills aprovadas do workspace', 'Anexou a skill "Revisor" ao vértice "Escritor"',
+                 'Alterou o projeto "Demo"', 'Anexou o servidor MCP "Eco" ao vértice "Agente"']],
+      ['en-US', ['Connected "A" to "B"', 'The Studio default AI is not configured', 'Declined: Run the pipeline',
+                 'Checked the approved workspace skills', 'Attached the skill "Revisor" to vertex "Escritor"',
+                 'Changed the project "Demo"', 'Attached MCP server "Eco" to vertex "Agente"']]
     ] as const) {
       await setLocale(locale);
       const root = stubRoot();
@@ -110,7 +181,11 @@ describe('Aba Assistente (interface)', () => {
       panel.items = [
         { kind: 'activity', activity: { tool: 'connect', params: { from: 'A', to: 'B' }, status: 'ok' } },
         { kind: 'error', code: 'model_not_configured' },
-        { kind: 'activity', activity: { tool: 'run_pipeline', params: {}, status: 'declined' } }
+        { kind: 'activity', activity: { tool: 'run_pipeline', params: {}, status: 'declined' } },
+        { kind: 'activity', activity: { tool: 'list_skills', params: {}, status: 'ok' } },
+        { kind: 'activity', activity: { tool: 'attach_skill', params: { skill: 'Revisor', label: 'Escritor' }, status: 'ok' } },
+        { kind: 'activity', activity: { tool: 'attach_mcp', params: { server: 'Eco', label: 'Agente' }, status: 'ok' } },
+        { kind: 'activity', activity: { tool: 'update_project', params: { name: 'Demo' }, status: 'ok' } }
       ];
       panel.render();
       for (const text of expected) expect(root.innerHTML).toContain(text);
@@ -128,5 +203,25 @@ describe('Aba Assistente (interface)', () => {
     expect(root.innerHTML).toMatch(/id="assistant-send" disabled/);
     await panel.send('oi');
     expect(calls.some(c => c[0] === 'assistant_send')).toBe(false);
+  });
+
+  it('leva o banner da IA padrão às propriedades do Studio, não aos padrões do projeto', async () => {
+    status = { configured: false, provider: '', model: '', supportsTools: false, providers: [] };
+    const handlers: Record<string, () => void> = {};
+    const root: any = {
+      innerHTML: '',
+      querySelector: (selector: string) => selector === '#assistant-open-defaults'
+        ? { addEventListener: (_event: string, handler: () => void) => { handlers[selector] = handler; } }
+        : null,
+      querySelectorAll: () => []
+    };
+    const opened: any[] = [];
+    bus.on('properties:open', (payload: any) => opened.push(payload));
+
+    const panel: any = new AssistantPanel(root, graph, bus);
+    await panel.refresh();
+    expect(root.innerHTML).toContain('A IA padrão do Studio não está configurada');
+    handlers['#assistant-open-defaults']();
+    expect(opened).toEqual([{ scope: 'studio', section: 'studio-model' }]);
   });
 });

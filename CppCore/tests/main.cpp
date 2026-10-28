@@ -4450,7 +4450,7 @@ namespace {
 struct FakeAssistantHost : taskforge::assistant::AssistantHost {
     json project = json{{"projectId", "p1"}, {"name", "Demo"}, {"rootPath", "C:/demo"}};
     fs::path docs;
-    int created = 0, saved = 0, runs = 0;
+    int created = 0, saved = 0, projectUpdates = 0;
     std::string lastCreateName;
 
     json currentProject() override { return project; }
@@ -4466,7 +4466,18 @@ struct FakeAssistantHost : taskforge::assistant::AssistantHost {
         return std::nullopt;
     }
     bool savePipeline(const json&, std::string&) override { ++saved; return true; }
-    bool runPipeline(const json&, std::string&) override { ++runs; return true; }
+    bool updateProject(const json& patch, json& updated, std::string& error) override {
+        if (!patch.is_object()) { error = "patch invalido"; return false; }
+        for (const char* key : {"name", "version", "description", "outputDir"}) {
+            if (patch.contains(key)) {
+                if (!patch.at(key).is_string()) { error = "campo deve ser texto"; return false; }
+                project[key] = patch.at(key);
+            }
+        }
+        ++projectUpdates;
+        updated = project;
+        return true;
+    }
     fs::path docsDirectory(taskforge::rt::RuntimeLang) override { return docs; }
 };
 
@@ -4499,7 +4510,7 @@ TEST(assistant_graph_document_edits_without_losing_fields) {
     CHECK(a.ok && b.ok);
     CHECK(a.uiOp.value("op", std::string()) == "add_node");
     std::string ida = a.result.value("id", std::string()), idb = b.result.value("id", std::string());
-    CHECK(doc.node(ida)->at("outputs").size() == 2);   // out + artifact_out
+    CHECK(doc.node(ida)->at("outputs").size() == 3);   // out + artifact_out + call
     CHECK(doc.node(idb)->value("customLambdaBody", std::string()) == "return;");
     CHECK(!doc.addNode("inexistente", "?", std::nullopt, std::nullopt, "", RuntimeLang::Pt).ok);
 
@@ -4536,6 +4547,356 @@ TEST(assistant_graph_document_edits_without_losing_fields) {
     CHECK(doc.schema().at("edges").size() == 1);
 }
 
+TEST(assistant_supports_call_and_interaction_vertices) {
+    namespace as = taskforge::assistant;
+    using taskforge::rt::RuntimeLang;
+    as::GraphDocument doc;
+
+    auto agent = doc.addNode("agent", "Pesquisador", std::nullopt, std::nullopt, "", RuntimeLang::Pt);
+    auto interaction = doc.addNode("interaction", "Aprovar", std::nullopt, std::nullopt, "", RuntimeLang::Pt);
+    auto call = doc.addNode("call", "Chamar revisor", std::nullopt, std::nullopt, "", RuntimeLang::Pt);
+    CHECK(agent.ok && interaction.ok && call.ok);
+    std::string agentId = agent.result.value("id", std::string());
+    std::string interactionId = interaction.result.value("id", std::string());
+    std::string callId = call.result.value("id", std::string());
+
+    // O agente expoe a porta call, como no Graph.buildNode do Studio.
+    bool agentCallPort = false;
+    auto agentNode = doc.node(agentId);
+    CHECK(agentNode.has_value());
+    for (const auto& p : agentNode->at("outputs")) {
+        if (p.value("name", std::string()) == "call" && p.value("type", std::string()) == "call") agentCallPort = true;
+    }
+    CHECK(agentCallPort);
+    CHECK(doc.node(callId)->at("callSettings").value("input", std::string()) == "");
+
+    // Porta call cria aresta de chamada com os padroes de ICallSettings.
+    auto callEdge = doc.connect(agentId, "call", interactionId, "in", RuntimeLang::Pt);
+    CHECK(callEdge.ok);
+    CHECK(callEdge.result.value("kind", std::string()) == "call");
+    CHECK(doc.schema().at("edges").size() == 1);
+    CHECK(doc.schema().at("edges")[0].value("kind", std::string()) == "call");
+    CHECK(doc.schema().at("edges")[0].at("callSettings").value("maxCalls", 0) == 1);
+    CHECK(doc.summary().at("edges")[0].value("kind", std::string()) == "call");
+
+    // O tipo da aresta e coerente com a porta.
+    CHECK(!doc.connect(callId, "call", agentId, "in", RuntimeLang::En, "flow").ok);
+    CHECK(!doc.connect(interactionId, "", callId, "in", RuntimeLang::En, "call").ok);
+
+    // Vertice Call sem alvo e erro; com um alvo e maxCalls proprio, valida.
+    CHECK(!doc.validate(RuntimeLang::Pt).value("ok", true));
+    auto c = doc.connect(callId, "call", agentId, "in", RuntimeLang::Pt, "",
+                         json{{"maxCalls", 3}, {"description", "revisar"}});
+    CHECK(c.ok);
+    CHECK(doc.schema().at("edges")[1].at("callSettings").value("maxCalls", 0) == 3);
+    CHECK(doc.schema().at("edges")[1].at("callSettings").value("description", std::string()) == "revisar");
+    CHECK(doc.validate(RuntimeLang::Pt).value("ok", false));
+
+    // Settings novos editaveis e mesclados, sem perder o restante do objeto.
+    auto ui = doc.updateNode(interactionId, json{{"interactionSettings", json{{"channel", "studio"}}}}, RuntimeLang::Pt);
+    CHECK(ui.ok);
+    CHECK(doc.node(interactionId)->at("interactionSettings").value("channel", std::string()) == "studio");
+    CHECK(doc.node(interactionId)->at("interactionSettings").at("form").is_object());
+    auto uc = doc.updateNode(callId, json{{"callSettings", json{{"input", "contexto"}}}}, RuntimeLang::Pt);
+    CHECK(uc.ok);
+    CHECK(doc.node(callId)->at("callSettings").value("input", std::string()) == "contexto");
+    CHECK(doc.node(callId)->at("callSettings").at("source").is_object());
+
+    // Alvo de chamada nao pode participar do fluxo.
+    CHECK(doc.connect(callId, "", interactionId, "in", RuntimeLang::Pt).ok);
+    CHECK(!doc.validate(RuntimeLang::Pt).value("ok", true));
+}
+
+TEST(assistant_lists_exports_and_workspace_and_confines_artifact_reads) {
+    namespace as = taskforge::assistant;
+    using taskforge::rt::RuntimeLang;
+    FakeAssistantHost host;
+    fs::path root = makeTempDir("assistant-artifacts");
+    host.project["rootPath"] = root.string();
+    fs::create_directories(root / "exports");
+    fs::create_directories(root / "workspace");
+    { std::ofstream(root / "exports" / "relatorio.svg") << "<svg/>"; }
+    { std::ofstream(root / "workspace" / "resposta.md") << "# Resposta"; }
+    { std::ofstream(root.parent_path() / "segredo-artefato.txt") << "segredo"; }
+
+    as::GraphDocument doc;
+    auto out = doc.addNode("output", "Entrega", std::nullopt, std::nullopt, "", RuntimeLang::Pt);
+    CHECK(out.ok);
+    std::string outId = out.result.value("id", std::string());
+    CHECK(doc.updateNode(outId, json{{"outputSettings", json{{"sourcePath", "workspace/resposta.md"}}}}, RuntimeLang::Pt).ok);
+
+    auto list = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "list_artifacts", json::object());
+    CHECK(!list.result.isError);
+    CHECK(list.result.content.find("workspace/resposta.md") != std::string::npos);
+    CHECK(list.result.content.find("exports/relatorio.svg") != std::string::npos);
+
+    auto read = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "get_artifact", json{{"path", "workspace/resposta.md"}});
+    CHECK(!read.result.isError);
+    CHECK(read.result.content.find("# Resposta") != std::string::npos);
+    auto escape = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "get_artifact",
+                                           json{{"path", "../segredo-artefato.txt"}});
+    CHECK(escape.result.isError);
+
+    fs::remove_all(root);
+}
+
+TEST(assistant_reads_skills_mcp_and_updates_project_metadata) {
+    namespace as = taskforge::assistant;
+    using taskforge::rt::RuntimeLang;
+    FakeAssistantHost host;
+    fs::path root = makeTempDir("assistant-assets");
+    host.project["rootPath"] = root.string();
+    fs::create_directories(root / ".workspace" / "skills" / "revisor");
+    json skill = json{{"id", "revisor"}, {"name", "Revisor"}, {"description", "Revisa textos"},
+                      {"category", "qa"}, {"license", "MIT"}, {"repoName", "workspace"},
+                      {"markdownContent", "# Revisor\n\nRevise o texto."},
+                      {"systemPrompt", "Revise."}, {"tools", json::array()}};
+    { std::ofstream(root / ".workspace" / "skills" / "revisor" / "skill.json") << skill.dump(2); }
+    { std::ofstream(root / ".workspace" / "skills" / "revisor" / "SKILL.md") << "# Revisor\n\nRevise o texto."; }
+
+    as::GraphDocument doc;
+    auto agent = doc.addNode("agent", "Escritor", std::nullopt, std::nullopt, "", RuntimeLang::Pt);
+    std::string agentId = agent.result.value("id", std::string());
+
+    auto list = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "list_skills", json::object());
+    CHECK(!list.result.isError);
+    CHECK(list.result.content.find("\"revisor\"") != std::string::npos);
+    CHECK(list.result.content.find("\"Revisor\"") != std::string::npos);
+
+    auto read = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "get_skill", json{{"id", "revisor"}});
+    CHECK(!read.result.isError);
+    CHECK(read.result.content.find("Revise o texto.") != std::string::npos);
+    CHECK(as::executeAssistantTool(doc, host, RuntimeLang::Pt, "get_skill", json{{"id", "../fora"}}).result.isError);
+
+    auto attached = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "attach_skill",
+                                             json{{"node_id", agentId}, {"skill_id", "revisor"}});
+    CHECK(!attached.result.isError);
+    CHECK(attached.uiOps.size() == 1);
+    auto agentNode = doc.node(agentId);
+    CHECK(agentNode->at("agentSettings").at("skills").size() == 1);
+    CHECK(agentNode->at("agentSettings").value("activeSkillId", std::string()) == "revisor");
+    CHECK(as::executeAssistantTool(doc, host, RuntimeLang::Pt, "attach_skill",
+                                   json{{"node_id", agentId}, {"skill_id", "revisor"}}).uiOps.size() == 1);
+    CHECK(doc.node(agentId)->at("agentSettings").at("skills").size() == 1);   // atualiza, nao duplica
+
+    auto servers = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "list_mcp_servers", json::object());
+    CHECK(!servers.result.isError);
+    CHECK(servers.result.content.find("arestrix.dados") != std::string::npos);
+    auto tools = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "list_mcp_tools", json{{"server", "arestrix.dados"}});
+    CHECK(!tools.result.isError);
+    CHECK(tools.result.content.find("json_query") != std::string::npos);
+    CHECK(as::executeAssistantTool(doc, host, RuntimeLang::Pt, "list_mcp_tools", json{{"server", "nao.existe"}}).result.isError);
+
+    auto updated = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "update_project",
+                                            json{{"patch", json{{"name", "Novo Nome"}, {"version", "2.0.0"},
+                                                                {"description", "Nova descricao"},
+                                                                {"outputDir", "Resultados"}}}});
+    CHECK(!updated.result.isError);
+    CHECK(host.projectUpdates == 1);
+    CHECK(updated.result.content.find("\"Novo Nome\"") != std::string::npos);
+    CHECK(updated.result.content.find("\"Resultados\"") != std::string::npos);
+    CHECK(doc.schema().at("metadata").value("graphName", std::string()) == "Novo Nome");
+    CHECK(doc.schema().at("metadata").value("description", std::string()) == "Nova descricao");
+    CHECK(updated.uiOps.size() == 1 && updated.uiOps[0].value("op", std::string()) == "update_project");
+    CHECK(updated.uiOps[0].at("patch").value("version", std::string()) == "2.0.0");
+    CHECK(updated.uiOps[0].at("patch").value("outputDir", std::string()) == "Resultados");
+    CHECK(as::toolRisk("update_project") == as::ToolRisk::Confirm);
+    CHECK(as::executeAssistantTool(doc, host, RuntimeLang::Pt, "update_project",
+                                   json{{"patch", json{{"name", 42}}}}).result.isError);
+
+    fs::remove_all(root);
+}
+
+TEST(assistant_attaches_only_audited_mcp_servers) {
+    namespace as = taskforge::assistant;
+    using taskforge::rt::RuntimeLang;
+    FakeAssistantHost host;
+    fs::path root = makeTempDir("assistant-mcp");
+    host.project["rootPath"] = root.string();
+    fs::create_directories(root / ".workspace" / "mcps");
+    fs::create_directories(root / ".workspace" / "governance");
+
+    auto writeServer = [&](const std::string& id, bool enabled) {
+        json cfg = json{{"id", id}, {"name", id}, {"transport", "stdio"}, {"command", "node"},
+                        {"args", json::array({"server.js"})}, {"isEnabled", enabled},
+                        {"cachedTools", json::array({json{{"name", "echo"}, {"description", "Echo"},
+                                                          {"inputSchema", json{{"type", "object"}}}}})}};
+        std::ofstream(root / ".workspace" / "mcps" / (id + ".json")) << cfg.dump(2);
+    };
+    writeServer("eco", true);
+    writeServer("pendente", true);
+    writeServer("rogue", true);
+
+    auto ledgerEntry = [](const std::string& id, const std::string& verdict, const std::string& hash) {
+        return json{{"hash", hash}, {"serverId", id}, {"name", id}, {"transport", "stdio"}, {"verdict", verdict},
+                    {"riskScore", verdict == "REJECT" ? 95 : 0}, {"auditedAt", "2026-10-27T00:00:00Z"},
+                    {"auditedBy", "test"}, {"findingsCount", 0}, {"findings", json::array()},
+                    {"warnings", json::array()}, {"checklist", json::array()}, {"toolCount", 1},
+                    {"toolNames", json::array({"echo"})}, {"provenance", "external-custom"}};
+    };
+    json ledger = json{{"version", "1.0.0"}, {"updatedAt", "2026-10-27T00:00:00Z"},
+                       {"servers", json{{"hash-eco", ledgerEntry("eco", "APPROVE", "hash-eco")},
+                                        {"hash-rogue", ledgerEntry("rogue", "REJECT", "hash-rogue")}}}};
+    { std::ofstream(root / ".workspace" / "governance" / "mcp-ledger.json") << ledger.dump(2); }
+
+    as::GraphDocument doc;
+    auto agent = doc.addNode("agent", "Pesquisador", std::nullopt, std::nullopt, "", RuntimeLang::Pt);
+    auto mcp = doc.addNode("mcp", "Consultar", std::nullopt, std::nullopt, "", RuntimeLang::Pt);
+    std::string agentId = agent.result.value("id", std::string());
+    std::string mcpId = mcp.result.value("id", std::string());
+
+    // Vertice mcp: server + tool auditados, argumentos e origem.
+    auto mcpOk = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "attach_mcp",
+                                          json{{"node_id", mcpId}, {"server", "eco"}, {"tool", "echo"},
+                                               {"arguments", json{{"text", "oi"}}}, {"source", json{{"kind", "none"}}}});
+    CHECK(!mcpOk.result.isError);
+    CHECK(doc.node(mcpId)->at("mcpSettings").value("server", std::string()) == "eco");
+    CHECK(doc.node(mcpId)->at("mcpSettings").value("tool", std::string()) == "echo");
+    CHECK(doc.node(mcpId)->at("mcpSettings").at("arguments").value("text", std::string()) == "oi");
+    CHECK(mcpOk.uiOps.size() == 1);
+
+    // Agente: servidor entra em codeMode e a ferramenta restrita em allowedMcpTools.
+    auto agentOk = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "attach_mcp",
+                                            json{{"node_id", agentId}, {"server", "eco"}, {"tool", "echo"}});
+    CHECK(!agentOk.result.isError);
+    auto agentNode = doc.node(agentId);
+    CHECK(agentNode->at("agentSettings").value("inheritCodeMode", true) == false);
+    CHECK(agentNode->at("agentSettings").at("codeMode").at("mcpServers")[0].get<std::string>() == "eco");
+    CHECK(agentNode->at("agentSettings").at("codeMode").at("allowedMcpTools")[0].get<std::string>() == "eco/echo");
+
+    // Pendente / rejeitado / ferramenta inexistente sao recusados no proprio fluxo.
+    auto pending = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "attach_mcp",
+                                            json{{"node_id", agentId}, {"server", "pendente"}});
+    CHECK(pending.result.isError);
+    CHECK(pending.result.content.find("pendente de auditoria") != std::string::npos);
+    auto rejected = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "attach_mcp",
+                                             json{{"node_id", agentId}, {"server", "rogue"}});
+    CHECK(rejected.result.isError);
+    CHECK(rejected.result.content.find("REJEITADO") != std::string::npos);
+    auto missingTool = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "attach_mcp",
+                                                json{{"node_id", mcpId}, {"server", "eco"}, {"tool", "nao_existe"}});
+    CHECK(missingTool.result.isError);
+    auto mcpNoTool = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "attach_mcp",
+                                              json{{"node_id", mcpId}, {"server", "eco"}});
+    CHECK(mcpNoTool.result.isError);
+
+    // Servidor nativo nao depende do ledger.
+    auto native = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "attach_mcp",
+                                           json{{"node_id", agentId}, {"server", "arestrix.dados"}, {"tool", "json_query"}});
+    CHECK(!native.result.isError);
+
+    // validate_graph passa a aplicar a governanca MCP.
+    CHECK(doc.validate(RuntimeLang::Pt).value("ok", false));   // topologia pura continua valida
+    auto valid = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "validate_graph", json::object());
+    CHECK(valid.result.content.find("\"ok\":true") != std::string::npos);
+
+    CHECK(doc.updateNode(mcpId, json{{"mcpSettings", json{{"server", "pendente"}}}}, RuntimeLang::Pt).ok);
+    auto invalid = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "validate_graph", json::object());
+    CHECK(invalid.result.content.find("\"ok\":false") != std::string::npos);
+    CHECK(invalid.result.content.find("pendente de auditoria") != std::string::npos);
+
+    fs::remove_all(root);
+}
+
+TEST(assistant_edits_nested_child_graphs) {
+    namespace as = taskforge::assistant;
+    using taskforge::rt::RuntimeLang;
+    FakeAssistantHost host;
+    as::GraphDocument doc;
+    auto sub = doc.addNode("subflow", "Sub", std::nullopt, std::nullopt, "", RuntimeLang::Pt);
+    CHECK(sub.ok);
+    std::string subId = sub.result.value("id", std::string());
+
+    auto addA = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "add_node",
+                                         json{{"type", "static"}, {"label", "Dentro A"}, {"parent_path", json::array({subId})}});
+    CHECK(!addA.result.isError);
+    CHECK(addA.uiOps.size() == 1 && addA.uiOps[0].value("op", std::string()) == "set_child_graph");
+    CHECK(addA.uiOps[0].at("path")[0].get<std::string>() == subId);
+    auto subNode = doc.node(subId);
+    CHECK(subNode->at("childGraph").at("nodes").size() == 1);
+    CHECK(subNode->at("childGraph").at("nodes")[0].value("label", std::string()) == "Dentro A");
+    std::string childA = subNode->at("childGraph").at("nodes")[0].value("id", std::string());
+
+    auto addB = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "add_node",
+                                         json{{"type", "static"}, {"label", "Dentro B"}, {"parent_path", json::array({subId})}});
+    CHECK(!addB.result.isError);
+    std::string childB = doc.node(subId)->at("childGraph").at("nodes")[1].value("id", std::string());
+    auto connectChild = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "connect",
+                                                  json{{"from", childA}, {"to", childB}, {"parent_path", json::array({subId})}});
+    CHECK(!connectChild.result.isError);
+    CHECK(doc.node(subId)->at("childGraph").at("edges").size() == 1);
+
+    auto getChild = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "get_graph",
+                                             json{{"parent_path", json::array({subId})}});
+    CHECK(!getChild.result.isError);
+    CHECK(getChild.result.content.find("Dentro A") != std::string::npos);
+    CHECK(getChild.result.content.find("Dentro B") != std::string::npos);
+
+    auto updateChild = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "update_node",
+                                                json{{"id", childA}, {"patch", json{{"label", "Alterado"}}},
+                                                     {"parent_path", json::array({subId})}});
+    CHECK(!updateChild.result.isError);
+    CHECK(doc.node(subId)->at("childGraph").at("nodes")[0].value("label", std::string()) == "Alterado");
+
+    // Subflow dentro de subflow: caminho com dois niveis.
+    auto inner = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "add_node",
+                                          json{{"type", "subflow"}, {"label", "Inner"}, {"parent_path", json::array({subId})}});
+    CHECK(!inner.result.isError);
+    std::string innerId;
+    auto afterInner = doc.node(subId);
+    for (const auto& n : afterInner->at("childGraph").at("nodes")) {
+        if (n.value("label", std::string()) == "Inner") innerId = n.value("id", std::string());
+    }
+    CHECK(!innerId.empty());
+    auto deep = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "add_node",
+                                         json{{"type", "static"}, {"label", "Profundo"},
+                                              {"parent_path", json::array({subId, innerId})}});
+    CHECK(!deep.result.isError);
+    auto deepGet = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "get_graph",
+                                            json{{"parent_path", json::array({subId, innerId})}});
+    CHECK(!deepGet.result.isError);
+    CHECK(deepGet.result.content.find("Profundo") != std::string::npos);
+
+    // Caminho invalido (vertice que nao e subflow/module).
+    auto rootStatic = doc.addNode("static", "Raiz", std::nullopt, std::nullopt, "", RuntimeLang::Pt);
+    auto badPath = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "add_node",
+                                            json{{"type", "static"}, {"label", "X"},
+                                                 {"parent_path", json::array({rootStatic.result.value("id", std::string())})}});
+    CHECK(badPath.result.isError);
+
+    // Grafo filho com ciclo sem decisao: validate_graph no escopo detecta.
+    auto c1 = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "add_node",
+                                       json{{"type", "static"}, {"label", "C1"}, {"parent_path", json::array({subId})}});
+    auto c2 = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "add_node",
+                                       json{{"type", "static"}, {"label", "C2"}, {"parent_path", json::array({subId})}});
+    CHECK(!c1.result.isError && !c2.result.isError);
+    std::string c1Id, c2Id;
+    auto afterC = doc.node(subId);
+    for (const auto& n : afterC->at("childGraph").at("nodes")) {
+        if (n.value("label", std::string()) == "C1") c1Id = n.value("id", std::string());
+        if (n.value("label", std::string()) == "C2") c2Id = n.value("id", std::string());
+    }
+    CHECK(!c1Id.empty() && !c2Id.empty());
+    CHECK(!as::executeAssistantTool(doc, host, RuntimeLang::Pt, "connect",
+                                    json{{"from", c1Id}, {"to", c2Id}, {"parent_path", json::array({subId})}}).result.isError);
+    CHECK(!as::executeAssistantTool(doc, host, RuntimeLang::Pt, "connect",
+                                    json{{"from", c2Id}, {"to", c1Id}, {"parent_path", json::array({subId})}}).result.isError);
+    auto invalidChild = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "validate_graph",
+                                                  json{{"parent_path", json::array({subId})}});
+    CHECK(invalidChild.result.content.find("\"ok\":false") != std::string::npos);
+    CHECK(invalidChild.result.content.find("Ciclo") != std::string::npos);
+
+    // clear_graph no escopo esvazia apenas o subgrafo interno.
+    auto clearInner = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "clear_graph",
+                                               json{{"parent_path", json::array({subId, innerId})}});
+    CHECK(!clearInner.result.isError);
+    auto afterClear = doc.node(subId);
+    CHECK(afterClear->at("childGraph").at("nodes").size() >= 1);   // o subgrafo pai continua
+    for (const auto& n : afterClear->at("childGraph").at("nodes")) {
+        if (n.value("id", std::string()) == innerId) CHECK(n.at("childGraph").at("nodes").size() == 0);
+    }
+}
+
 TEST(assistant_tools_validate_arguments_and_only_read_listed_docs) {
     namespace as = taskforge::assistant;
     using taskforge::rt::RuntimeLang;
@@ -4565,14 +4926,39 @@ TEST(assistant_tools_validate_arguments_and_only_read_listed_docs) {
     CHECK(as::toolRisk("run_pipeline") == as::ToolRisk::Confirm);
     CHECK(!as::toolRisk("apagar_tudo").has_value());
     CHECK(as::assistantTools(RuntimeLang::En)[0].def.description.find("Lists") != std::string::npos);
+    auto types = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "list_node_types", json::object());
+    CHECK(types.result.content.find("\"call\"") != std::string::npos);
 
     // run_pipeline valida antes: grafo com ciclo sem decisao nao executa.
     auto a = doc.addNode("static", "A", std::nullopt, std::nullopt, "", RuntimeLang::Pt).result.value("id", std::string());
     auto b = doc.addNode("static", "B", std::nullopt, std::nullopt, "", RuntimeLang::Pt).result.value("id", std::string());
     doc.connect(a, "", b, "", RuntimeLang::Pt);
     doc.connect(b, "", a, "", RuntimeLang::Pt);
-    CHECK(as::executeAssistantTool(doc, host, RuntimeLang::Pt, "run_pipeline", json::object()).result.isError);
-    CHECK(host.runs == 0);
+    auto invalidRun = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "run_pipeline", json::object());
+    CHECK(invalidRun.result.isError);
+    CHECK(invalidRun.uiOps.empty());
+
+    // Grafo valido: a execucao e delegada a interface, que aplica o GraphValidator/ledger e o PipelineRunner.
+    as::GraphDocument runDoc;
+    runDoc.addNode("static", "Unico", std::nullopt, std::nullopt, "", RuntimeLang::Pt);
+    auto run = as::executeAssistantTool(runDoc, host, RuntimeLang::Pt, "run_pipeline", json::object());
+    CHECK(!run.result.isError);
+    CHECK(run.uiOps.size() == 1 && run.uiOps[0].value("op", std::string()) == "run_pipeline");
+
+    // Ferramenta connect propaga kind=call e call_settings.
+    as::GraphDocument callDoc;
+    auto ta = as::executeAssistantTool(callDoc, host, RuntimeLang::Pt, "add_node", json{{"type", "agent"}, {"label", "A"}});
+    auto ti = as::executeAssistantTool(callDoc, host, RuntimeLang::Pt, "add_node", json{{"type", "interaction"}, {"label", "I"}});
+    CHECK(!ta.result.isError && !ti.result.isError);
+    auto nodes = callDoc.summary().at("nodes");
+    auto tc = as::executeAssistantTool(callDoc, host, RuntimeLang::Pt, "connect",
+                                       json{{"from", nodes[0].value("id", std::string())},
+                                            {"kind", "call"},
+                                            {"to", nodes[1].value("id", std::string())},
+                                            {"call_settings", json{{"maxCalls", 2}}}});
+    CHECK(!tc.result.isError);
+    CHECK(callDoc.schema().at("edges")[0].value("kind", std::string()) == "call");
+    CHECK(callDoc.schema().at("edges")[0].at("callSettings").value("maxCalls", 0) == 2);
     fs::remove_all(host.docs);
 }
 
@@ -5042,6 +5428,7 @@ TEST(git_sync_service_and_project_manifest_config) {
     ProjectManifest m;
     m.projectId = "test-git-proj";
     m.name = "Projeto Git Teste";
+    m.outputDir = "Saidas";
     m.git.enabled = true;
     m.git.provider = "github";
     m.git.serverUrl = "https://github.com";
@@ -5056,6 +5443,7 @@ TEST(git_sync_service_and_project_manifest_config) {
 
     taskforge::Json j = m;
     CHECK(j["git"]["enabled"] == true);
+    CHECK(j["outputDir"] == "Saidas");
     CHECK(!j["git"].contains("backupMode"));
     CHECK(j["git"]["isPrivate"] == true);
     CHECK(j["git"]["provider"] == "github");
@@ -5064,6 +5452,7 @@ TEST(git_sync_service_and_project_manifest_config) {
     // Desserializacao
     auto m2 = j.get<ProjectManifest>();
     CHECK(m2.git.enabled == true);
+    CHECK(m2.outputDir == "Saidas");
     CHECK(m2.git.isPrivate == true);
     CHECK(m2.git.username == "frankalcantara");
     CHECK(m2.git.repositoryName == "projeto-git-teste");

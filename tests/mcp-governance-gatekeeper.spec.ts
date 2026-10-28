@@ -181,4 +181,31 @@ describe('Governança MCP - Fase 4: Gatekeeper no Validator.ts (Bloqueio F5 de M
     expect(result.isValid).toBe(false);
     expect(mcpErrors.some(e => e.message.includes('REJEITADO'))).toBe(true);
   });
+
+  it('espelha o ledger MCP no workspace para o backend C++ aplicar a governança', async () => {
+    const originalWindow = (globalThis as any).window;
+    const calls: Array<[string, string]> = [];
+    (globalThis as any).window = {
+      webui: {
+        call: async (name: string, arg: string) => {
+          calls.push([name, arg]);
+          return true;
+        }
+      }
+    };
+    try {
+      ledger.recordApproval({ id: 'eco', name: 'Eco MCP', transport: 'stdio', command: 'node', args: [], cachedTools: [] });
+      const ok = await ledger.syncToWorkspace();
+      expect(ok).toBe(true);
+      const mirrored = calls.filter(c => c[0] === 'save_mcp_governance_ledger').pop();
+      expect(mirrored).toBeTruthy();
+      const store = JSON.parse(mirrored![1]);
+      const entry = Object.values(store.servers as Record<string, any>).find((e: any) => e.serverId === 'eco');
+      expect(entry).toBeTruthy();
+      expect(entry.verdict).toBe('APPROVE');
+      expect(entry.toolNames).toEqual([]);
+    } finally {
+      (globalThis as any).window = originalWindow;
+    }
+  });
 });

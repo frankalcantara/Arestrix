@@ -323,6 +323,7 @@ function buildStudio(context: IPropertiesContext): IPropertiesScopeConfig {
               <input id="properties-studio-model-base-url" class="form-input properties-code-input" type="text" data-property-input="baseUrl" value="${escapeHtml(studioModel?.baseUrl || '')}" placeholder="http://localhost:11434/v1" />
               <div class="properties-hint">${escapeHtml(label('studio.model_base_hint', 'Usado apenas pelos provedores local e Jev. As chaves de API continuam no ambiente do sistema.'))}</div>
             </div>
+            <div class="properties-hint">${escapeHtml(label('studio.model_assistant_hint', 'O Assistente do Studio exige um provedor com chamada de ferramentas. O Jev não oferece esse recurso; num servidor local, o suporte depende do modelo carregado.'))}</div>
           </div>
         `,
         save: context.saveStudioModel

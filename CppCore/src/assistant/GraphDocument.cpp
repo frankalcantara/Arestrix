@@ -18,7 +18,8 @@ using rt::langPick;
 
 const std::vector<std::string>& nodeTypes() {
     static const std::vector<std::string> types = {"static", "condition", "subflow", "module", "critical", "cuda",
-                                                   "agent", "fork", "join", "switch", "mcp", "interaction", "output"};
+                                                   "agent", "fork", "join", "switch", "mcp", "interaction",
+                                                   "call", "output"};
     return types;
 }
 
@@ -40,10 +41,20 @@ Json port(const std::string& id, const std::string& name, const char* direction,
     return p;
 }
 
+// Mesmos padroes de defaultCallSettings no Studio (src/core/types.ts).
+Json defaultCallSettings() {
+    return Json{{"maxCalls", 1}, {"timeoutSeconds", 0}, {"onError", "fail"},
+                {"description", ""}, {"notify", true}, {"allowAsync", false}};
+}
+
+// Arestas antigas sem "kind" sao de fluxo; qualquer outro valor so pode ser "call".
+std::string edgeKind(const Json& edge) { return str(edge, "kind") == "call" ? "call" : "flow"; }
+
 // Mesmo texto padrao de Graph.getDefaultLambdaBody no Studio.
 std::string defaultLambda(const std::string& type, const std::string& label) {
     if (type == "mcp") return "";
     if (type == "interaction") return "";   // interacao humana: sem codigo C++ no vertice
+    if (type == "call") return "";          // chamada em fluxo: o gerador emite runFlowCall com o alvo da aresta call
     if (type == "switch") {
         return "// Switch " + label + ": devolva o índice do caso (0, 1, 2...).\n"
                "// O último caso é o \"default\": qualquer valor fora do intervalo vai para ele.\nreturn 0;";
@@ -104,6 +115,10 @@ Json buildNode(const std::string& id, const std::string& label, const std::strin
         Json artifact = port(id + "_out_data", "artifact_out", "output", "data");
         artifact["dataType"] = "std::string";
         outputs.push_back(artifact);
+        outputs.push_back(port(id + "_out_call", "call", "output", "call"));
+    } else if (type == "call") {
+        outputs.push_back(port(id + "_out_0", "out", "output", "flow"));
+        outputs.push_back(port(id + "_out_call", "call", "output", "call"));
     } else if (type == "output") {
         Json dataIn = port(id + "_in_data", "data_in", "input", "data");
         dataIn["dataType"] = "std::string";
@@ -138,6 +153,9 @@ Json buildNode(const std::string& id, const std::string& label, const std::strin
         node["outputSettings"] = Json{{"sourcePath", ""}, {"destinationPath", ""},
                                       {"artifactType", "auto"}, {"displayName", label},
                                       {"autoOpenPreview", true}, {"description", ""}};
+    }
+    if (type == "call") {
+        node["callSettings"] = Json{{"input", ""}, {"source", Json{{"kind", "previous"}, {"path", ""}}}};
     }
     if (type == "interaction") {
         node["interactionSettings"] = Json{
@@ -205,6 +223,12 @@ void GraphDocument::reset(Json schema) {
     if (!schema_.contains("edges") || !schema_["edges"].is_array()) schema_["edges"] = Json::array();
 }
 
+void GraphDocument::syncProjectMetadata(const std::string& name, const std::string& description) {
+    if (!schema_.contains("metadata") || !schema_["metadata"].is_object()) schema_["metadata"] = Json::object();
+    schema_["metadata"]["graphName"] = name;
+    schema_["metadata"]["description"] = description;
+}
+
 Json GraphDocument::emptySchema(const std::string& graphName, const std::string& projectId) {
     Json s = Json::object();
     s["version"] = "1.0.0";
@@ -259,7 +283,8 @@ Json GraphDocument::summary() const {
         const Json* dst = findNodeConst(str(e, "targetNodeId"));
         edges.push_back(Json{{"id", str(e, "id")},
                              {"from", str(e, "sourceNodeId") + ":" + portName(src, str(e, "sourcePortId"))},
-                             {"to", str(e, "targetNodeId") + ":" + portName(dst, str(e, "targetPortId"))}});
+                             {"to", str(e, "targetNodeId") + ":" + portName(dst, str(e, "targetPortId"))},
+                             {"kind", edgeKind(e)}});
     }
     Json out = Json::object();
     out["graphName"] = schema_.contains("metadata") ? str(schema_.at("metadata"), "graphName") : std::string();
@@ -313,7 +338,8 @@ EditResult GraphDocument::updateNode(const std::string& id, const Json& patch, R
         return r;
     }
     static const std::set<std::string> scalarFields = {"label", "customLambdaBody", "criticalSectionId"};
-    static const std::set<std::string> objectFields = {"parameters", "agentSettings", "switchSettings", "mcpSettings", "outputSettings"};
+    static const std::set<std::string> objectFields = {"parameters", "agentSettings", "switchSettings", "mcpSettings",
+                                                       "outputSettings", "interactionSettings", "callSettings"};
     Json applied = Json::object();
     for (auto it = patch.begin(); it != patch.end(); ++it) {
         const std::string& key = it.key();
@@ -391,7 +417,8 @@ EditResult GraphDocument::moveNode(const std::string& id, double x, double y, Ru
 }
 
 EditResult GraphDocument::connect(const std::string& fromNode, const std::string& fromPort, const std::string& toNode,
-                                  const std::string& toPort, RuntimeLang lang) {
+                                  const std::string& toPort, RuntimeLang lang, const std::string& kind,
+                                  const Json& callSettings) {
     EditResult r;
     const Json* src = findNodeConst(fromNode);
     const Json* dst = findNodeConst(toNode);
@@ -403,7 +430,14 @@ EditResult GraphDocument::connect(const std::string& fromNode, const std::string
         r.error = langPick(lang, "Um vertice nao pode ser ligado a ele mesmo.", "A vertex cannot be connected to itself.");
         return r;
     }
-    const Json* sp = findPort(*src, fromPort, true);
+    // Sem porta de origem, uma chamada usa a primeira porta "call"; o resto usa a primeira de fluxo.
+    const Json* sp = nullptr;
+    if (fromPort.empty() && kind == "call" && src->contains("outputs") && src->at("outputs").is_array()) {
+        for (const auto& p : src->at("outputs")) {
+            if (str(p, "type") == "call") { sp = &p; break; }
+        }
+    }
+    if (!sp) sp = findPort(*src, fromPort, true);
     const Json* tp = findPort(*dst, toPort, false);
     if (!sp) {
         r.error = langPick(lang, "Porta de saida nao encontrada em '", "Output port not found on '") + fromNode +
@@ -415,23 +449,54 @@ EditResult GraphDocument::connect(const std::string& fromNode, const std::string
                   "': '" + toPort + "'. " + langPick(lang, "Entradas: ", "Inputs: ") + portList(*dst, "inputs").dump();
         return r;
     }
+
+    // A porta "call" declara o alvo de uma chamada; as demais portas sao fluxo.
+    const std::string portType = str(*sp, "type");
+    std::string edgeKindValue = kind.empty() ? (portType == "call" ? "call" : "flow") : kind;
+    if (edgeKindValue != "flow" && edgeKindValue != "call") {
+        r.error = langPick(lang, "Tipo de aresta invalido: '", "Invalid edge kind: '") + edgeKindValue +
+                  langPick(lang, "'. Use 'flow' ou 'call'.", "'. Use 'flow' or 'call'.");
+        return r;
+    }
+    if (edgeKindValue == "call" && portType != "call") {
+        r.error = langPick(lang, "Uma aresta de chamada precisa sair de uma porta 'call'.",
+                           "A call edge must start from a 'call' port.");
+        return r;
+    }
+    if (edgeKindValue != "call" && portType == "call") {
+        r.error = langPick(lang, "A porta 'call' so aceita uma aresta de chamada (kind='call').",
+                           "The 'call' port only accepts a call edge (kind='call').");
+        return r;
+    }
+    if (!callSettings.is_null() && !callSettings.is_object()) {
+        r.error = langPick(lang, "As configuracoes da chamada devem ser um objeto JSON.",
+                           "Call settings must be a JSON object.");
+        return r;
+    }
+
     std::string sourcePortId = str(*sp, "id");
     std::string targetPortId = str(*tp, "id");
     std::string edgeId = "edge_" + fromNode + "_" + sourcePortId + "_to_" + toNode + "_" + targetPortId;
     for (const auto& e : schema_.at("edges")) {
         if (str(e, "id") == edgeId ||
             (str(e, "sourcePortId") == sourcePortId && str(e, "targetPortId") == targetPortId &&
-             str(e, "sourceNodeId") == fromNode && str(e, "targetNodeId") == toNode)) {
+             str(e, "sourceNodeId") == fromNode && str(e, "targetNodeId") == toNode && edgeKind(e) == edgeKindValue)) {
             r.error = langPick(lang, "Essas portas ja estao ligadas (aresta '", "These ports are already connected (edge '") +
                       str(e, "id") + "').";
             return r;
         }
     }
     Json edge = Json{{"id", edgeId}, {"sourceNodeId", fromNode}, {"sourcePortId", sourcePortId},
-                     {"targetNodeId", toNode}, {"targetPortId", targetPortId}};
+                     {"targetNodeId", toNode}, {"targetPortId", targetPortId}, {"kind", edgeKindValue}};
+    if (edgeKindValue == "call") {
+        Json settings = defaultCallSettings();
+        for (auto it = callSettings.begin(); it != callSettings.end(); ++it) settings[it.key()] = it.value();
+        edge["callSettings"] = settings;
+    }
     schema_["edges"].push_back(edge);
     r.ok = true;
-    r.result = Json{{"edgeId", edgeId}, {"from", fromNode + ":" + str(*sp, "name")}, {"to", toNode + ":" + str(*tp, "name")}};
+    r.result = Json{{"edgeId", edgeId}, {"kind", edgeKindValue},
+                    {"from", fromNode + ":" + str(*sp, "name")}, {"to", toNode + ":" + str(*tp, "name")}};
     r.uiOp = Json{{"op", "add_edge"}, {"edge", edge}};
     return r;
 }
@@ -469,11 +534,27 @@ Json GraphDocument::validate(RuntimeLang lang) const {
         for (const auto& p : n->at(list)) if (str(p, "id") == portId) return true;
         return false;
     };
+    auto isCallableType = [](const std::string& type) {
+        return type == "agent" || type == "interaction" || type == "subflow" || type == "module";
+    };
 
-    std::map<std::string, std::vector<std::string>> adj;
+    // Chamadas nao sao dependencias de fluxo: os dois grafos sao validados em separado.
+    struct EdgeRef {
+        const Json* edge;
+        std::string source;
+        std::string target;
+        std::string kind;
+    };
+    std::vector<EdgeRef> validEdges;
+    std::map<std::string, std::vector<std::string>> flowAdj;
+    std::map<std::string, std::vector<std::string>> callAdj;
     std::map<std::string, int> degree;
+    std::map<std::string, int> callOut;
     std::set<std::string> seen;
-    std::set<std::string> usedOutputs;
+    std::set<std::string> flowNodes;
+    std::set<std::string> usedFlowOutputs;
+    std::set<std::string> flowPairs;
+
     for (const auto& e : edges) {
         std::string s = str(e, "sourceNodeId"), t = str(e, "targetNodeId");
         const Json* sn = byId.count(s) ? byId[s] : nullptr;
@@ -488,68 +569,152 @@ Json GraphDocument::validate(RuntimeLang lang) const {
                              langPick(lang, "' usa uma porta inexistente.", "' uses a missing port."));
             continue;
         }
-        std::string key = s + "|" + str(e, "sourcePortId") + "|" + t + "|" + str(e, "targetPortId");
+        const std::string kind = edgeKind(e);
+        std::string key = kind + "|" + s + "|" + str(e, "sourcePortId") + "|" + t + "|" + str(e, "targetPortId");
         if (!seen.insert(key).second) {
             warnings.push_back(langPick(lang, "Aresta duplicada entre '", "Duplicate edge between '") + s + "' -> '" + t + "'.");
         }
-        adj[s].push_back(t);
+        validEdges.push_back(EdgeRef{&e, s, t, kind});
         degree[s]++;
         degree[t]++;
-        usedOutputs.insert(s + "|" + str(e, "sourcePortId"));
+        if (kind == "call") {
+            callAdj[s].push_back(t);
+            callOut[s]++;
+        } else {
+            flowAdj[s].push_back(t);
+            flowNodes.insert(s);
+            flowNodes.insert(t);
+            flowPairs.insert(s + "|" + t);
+            usedFlowOutputs.insert(s + "|" + str(e, "sourcePortId"));
+        }
     }
 
-    // Componentes fortemente conexos (Tarjan): ciclo so e valido se passar por condition ou switch.
-    std::map<std::string, int> index, low;
-    std::set<std::string> onStack;
-    std::vector<std::string> stack;
-    int counter = 0;
-    std::function<void(const std::string&)> strong = [&](const std::string& v) {
-        index[v] = low[v] = counter++;
-        stack.push_back(v);
-        onStack.insert(v);
-        for (const auto& w : adj[v]) {
-            if (!index.count(w)) {
-                strong(w);
-                low[v] = std::min(low[v], low[w]);
-            } else if (onStack.count(w)) {
-                low[v] = std::min(low[v], index[w]);
-            }
-        }
-        if (low[v] == index[v]) {
-            std::vector<std::string> comp;
-            for (;;) {
-                std::string w = stack.back();
-                stack.pop_back();
-                onStack.erase(w);
-                comp.push_back(w);
-                if (w == v) break;
-            }
-            if (comp.size() > 1) {
-                bool hasDecision = false;
-                std::string names;
-                for (const auto& id : comp) {
-                    std::string type = str(*byId[id], "type");
-                    if (type == "condition" || type == "switch") hasDecision = true;
-                    names += (names.empty() ? "" : ", ") + id;
-                }
-                if (!hasDecision) {
-                    errors.push_back(langPick(lang, "Ciclo sem vertice de decisao (condition ou switch): ",
-                                              "Cycle without a decision vertex (condition or switch): ") + names + ".");
+    // Componentes fortemente conexos (Tarjan) para cada tipo de aresta.
+    auto components = [&](const std::map<std::string, std::vector<std::string>>& adj) {
+        std::map<std::string, int> index, low;
+        std::set<std::string> onStack;
+        std::vector<std::string> stack;
+        std::vector<std::vector<std::string>> found;
+        int counter = 0;
+        std::function<void(const std::string&)> strong = [&](const std::string& v) {
+            index[v] = low[v] = counter++;
+            stack.push_back(v);
+            onStack.insert(v);
+            auto it = adj.find(v);
+            if (it != adj.end()) {
+                for (const auto& w : it->second) {
+                    if (!index.count(w)) {
+                        strong(w);
+                        low[v] = std::min(low[v], low[w]);
+                    } else if (onStack.count(w)) {
+                        low[v] = std::min(low[v], index[w]);
+                    }
                 }
             }
+            if (low[v] == index[v]) {
+                std::vector<std::string> comp;
+                for (;;) {
+                    std::string w = stack.back();
+                    stack.pop_back();
+                    onStack.erase(w);
+                    comp.push_back(w);
+                    if (w == v) break;
+                }
+                found.push_back(comp);
+            }
+        };
+        for (const auto& n : nodes) {
+            std::string id = str(n, "id");
+            if (!index.count(id)) strong(id);
         }
+        return found;
     };
-    for (const auto& n : nodes) {
-        std::string id = str(n, "id");
-        if (!index.count(id)) strong(id);
+
+    // Ciclo de fluxo so e valido se passar por condition ou switch.
+    for (const auto& comp : components(flowAdj)) {
+        if (comp.size() <= 1) continue;
+        bool hasDecision = false;
+        std::string names;
+        for (const auto& id : comp) {
+            std::string type = str(*byId[id], "type");
+            if (type == "condition" || type == "switch") hasDecision = true;
+            names += (names.empty() ? "" : ", ") + id;
+        }
+        if (!hasDecision) {
+            errors.push_back(langPick(lang, "Ciclo sem vertice de decisao (condition ou switch): ",
+                                      "Cycle without a decision vertex (condition or switch): ") + names + ".");
+        }
+    }
+
+    // Ciclo de chamadas nao tem limite de profundidade no v1: sempre erro.
+    for (const auto& comp : components(callAdj)) {
+        if (comp.size() <= 1) continue;
+        std::string names;
+        for (const auto& id : comp) names += (names.empty() ? "" : ", ") + id;
+        errors.push_back(langPick(lang, "Ciclo de chamadas sem limite de profundidade: ",
+                                  "Call cycle without a depth limit: ") + names + ".");
+    }
+
+    // Regras de chamada (mesmas do GraphValidator do Studio).
+    for (const auto& ref : validEdges) {
+        if (ref.kind != "call") continue;
+        const Json* sn = byId[ref.source];
+        const Json* tn = byId[ref.target];
+        std::string sourceType = str(*sn, "type");
+        std::string targetType = str(*tn, "type");
+        if (sourceType != "agent" && sourceType != "call") {
+            errors.push_back(langPick(lang, "Uma chamada deve sair de um agente ou de um vertice Call: '",
+                                      "A call must leave an agent or a Call vertex: '") +
+                              str(*sn, "label") + "' (" + ref.source + ").");
+        }
+        if (!isCallableType(targetType)) {
+            errors.push_back(langPick(lang, "Uma chamada deve apontar para um agente, uma interacao ou um subflow/module: '",
+                                      "A call must target an agent, an interaction or a subflow/module: '") +
+                              str(*tn, "label") + "' (" + ref.target + ").");
+        } else if ((targetType == "subflow" || targetType == "module") &&
+                   (!tn->contains("childGraph") || !tn->at("childGraph").is_object() ||
+                    !tn->at("childGraph").contains("nodes") || !tn->at("childGraph").at("nodes").is_array() ||
+                    tn->at("childGraph").at("nodes").size() == 0)) {
+            errors.push_back(langPick(lang, "O alvo de chamada '", "The call target '") + str(*tn, "label") + "' (" +
+                              ref.target + ")" + langPick(lang, " e um subflow sem grafo interno.",
+                                                         " is a subflow without a child graph."));
+        }
+        if (flowNodes.count(ref.target)) {
+            errors.push_back(langPick(lang, "O vertice chamavel '", "Callable vertex '") + str(*tn, "label") + "' (" +
+                              ref.target + ")" + langPick(lang, " tambem participa do fluxo. Remova as arestas de fluxo.",
+                                                         " also takes part in the flow. Remove its flow edges."));
+        }
+        if (flowPairs.count(ref.source + "|" + ref.target)) {
+            errors.push_back(langPick(lang, "Ha uma aresta de fluxo e uma chamada entre '",
+                                      "There is a flow edge and a call between '") +
+                              str(*sn, "label") + "' -> '" + str(*tn, "label") + "'.");
+        }
+        int maxCalls = 1;
+        if (ref.edge->contains("callSettings") && ref.edge->at("callSettings").is_object()) {
+            const Json& cs = ref.edge->at("callSettings");
+            if (cs.contains("maxCalls") && cs.at("maxCalls").is_number()) maxCalls = (int)cs.at("maxCalls").get<double>();
+        }
+        if (maxCalls < 1) {
+            errors.push_back(langPick(lang, "A chamada de '", "The call from '") + str(*sn, "label") + "' " +
+                              langPick(lang, "para '", "to '") + str(*tn, "label") +
+                              langPick(lang, "' exige maxCalls >= 1.", "' requires maxCalls >= 1."));
+        }
     }
 
     for (const auto& n : nodes) {
         std::string id = str(n, "id");
         std::string type = str(n, "type");
+
+        // Vertice Call: exatamente um alvo declarado.
+        if (type == "call" && callOut[id] != 1) {
+            errors.push_back(langPick(lang, "O vertice Call '", "Call vertex '") + str(n, "label") + "' (" + id +
+                              ")" + langPick(lang, " precisa de exatamente uma aresta de chamada de saida.",
+                                            " needs exactly one outgoing call edge."));
+        }
+
         if ((type == "condition" || type == "switch") && n.contains("outputs")) {
             for (const auto& p : n.at("outputs")) {
-                if (!usedOutputs.count(id + "|" + str(p, "id"))) {
+                if (!usedFlowOutputs.count(id + "|" + str(p, "id"))) {
                     warnings.push_back(langPick(lang, "Saida '", "Output '") + str(p, "name") +
                                        langPick(lang, "' do vertice de decisao '", "' of decision vertex '") + id +
                                        langPick(lang, "' nao leva a lugar nenhum.", "' leads nowhere."));
@@ -558,6 +723,76 @@ Json GraphDocument::validate(RuntimeLang lang) const {
         }
         if (nodes.size() > 1 && !degree.count(id)) {
             warnings.push_back(langPick(lang, "Vertice isolado (sem arestas): '", "Isolated vertex (no edges): '") + id + "'.");
+        }
+
+        // Interacao humana: formulario e politica de canal validos (autoria).
+        if (type == "interaction") {
+            if (!n.contains("interactionSettings") || !n.at("interactionSettings").is_object() ||
+                !n.at("interactionSettings").contains("form") || !n.at("interactionSettings").at("form").is_object()) {
+                errors.push_back(langPick(lang, "O vertice de interacao '", "Interaction vertex '") + str(n, "label") +
+                                  "' (" + id + ")" + langPick(lang, " nao tem configuracao de formulario.",
+                                                             " has no form configuration."));
+                continue;
+            }
+            const Json& settings = n.at("interactionSettings");
+            const Json& form = settings.at("form");
+            std::string schemaSource = settings.value("schemaSource", std::string("static"));
+            if (schemaSource != "static" && schemaSource != "vertex") {
+                errors.push_back(langPick(lang, "O vertice de interacao '", "Interaction vertex '") + str(n, "label") +
+                                  "'" + langPick(lang, " tem origem de schema invalida (use static ou vertex).",
+                                                " has an invalid schema source (use static or vertex)."));
+            }
+            std::string channel = settings.value("channel", std::string("any"));
+            if (channel != "studio" && channel != "runner" && channel != "cli" && channel != "any") {
+                errors.push_back(langPick(lang, "O vertice de interacao '", "Interaction vertex '") + str(n, "label") +
+                                  "'" + langPick(lang, " tem canal invalido.", " has an invalid channel."));
+            }
+            if (settings.contains("generator") && settings.at("generator").is_object()) {
+                std::string fallback = settings.at("generator").value("fallback", std::string());
+                if (!fallback.empty() && fallback != "fail" && fallback != "free_text") {
+                    errors.push_back(langPick(lang, "O vertice de interacao '", "Interaction vertex '") + str(n, "label") +
+                                      "'" + langPick(lang, " tem fallback invalido (use fail ou free_text).",
+                                                    " has an invalid fallback (use fail or free_text)."));
+                }
+            }
+            if (settings.contains("timeoutSeconds") && settings.at("timeoutSeconds").is_number() &&
+                settings.at("timeoutSeconds").get<double>() < 0) {
+                errors.push_back(langPick(lang, "O vertice de interacao '", "Interaction vertex '") + str(n, "label") +
+                                  "'" + langPick(lang, " tem timeout negativo.", " has a negative timeout."));
+            }
+            const Json& fields = form.contains("fields") && form.at("fields").is_array() ? form.at("fields") : Json::array();
+            if (schemaSource == "static" && fields.size() == 0) {
+                errors.push_back(langPick(lang, "O vertice de interacao '", "Interaction vertex '") + str(n, "label") +
+                                  "'" + langPick(lang, " precisa de pelo menos um campo.", " needs at least one field."));
+            }
+            if (schemaSource == "static") {
+                std::set<std::string> fieldIds;
+                for (const auto& f : fields) {
+                    std::string fieldId = str(f, "id");
+                    if (fieldId.empty() || !fieldIds.insert(fieldId).second) {
+                        errors.push_back(langPick(lang, "O vertice de interacao '", "Interaction vertex '") + str(n, "label") +
+                                          "'" + langPick(lang, " tem um campo com id vazio ou duplicado.",
+                                                        " has a field with an empty or duplicate id."));
+                    }
+                    if (str(f, "label").empty()) {
+                        errors.push_back(langPick(lang, "Vertice de interacao '", "Interaction vertex '") + str(n, "label") +
+                                          "': " + langPick(lang, "o campo '", "field '") +
+                                          (fieldId.empty() ? "?" : fieldId) + langPick(lang, "' precisa de rotulo.",
+                                                                                       "' needs a label."));
+                    }
+                    std::string fieldType = str(f, "type");
+                    if (fieldType == "choice" || fieldType == "multi_choice") {
+                        size_t options = f.contains("options") && f.at("options").is_array() ? f.at("options").size() : 0;
+                        if (options < 2) {
+                            errors.push_back(langPick(lang, "Vertice de interacao '", "Interaction vertex '") + str(n, "label") +
+                                              "': " + langPick(lang, "o campo '", "field '") +
+                                              (fieldId.empty() ? "?" : fieldId) +
+                                              langPick(lang, "' precisa de pelo menos duas opcoes.",
+                                                       "' needs at least two options."));
+                        }
+                    }
+                }
+            }
         }
     }
 

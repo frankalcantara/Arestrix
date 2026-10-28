@@ -191,11 +191,15 @@ próprio toggle de herança.
 ## Assistente
 
 O painel lateral tem duas abas: **Propriedades** e **Assistente**. O Assistente é um chat com a IA padrão do
-Studio (Propriedades > Modelo padrão do Studio) que ajuda a **operar** e a **aprender** o Studio:
+Studio (Arquivo → Propriedades → Studio → Modelo do Studio) que ajuda a **operar** e a **aprender** o Studio:
 
 - Responde dúvidas consultando esta documentação (no idioma do Studio).
 - Cria projetos e monta ou altera grafos: adiciona, liga, altera, move e remove vértices, valida o grafo.
-- Salva o projeto e executa o pipeline.
+- Configura todos os tipos de vértice, incluindo formulários de **Interação** humana, vértices **Call** com arestas de chamada e entregáveis **Output**.
+- Edita grafos aninhados de **subflow/module** por `parent_path` (a cadeia de ids de subflow/module), com as mesmas ferramentas de adicionar/ligar/alterar/validar e um único passo de desfazer.
+- Lista as **skills** aprovadas do workspace, anexa skills a agentes e descobre servidores e ferramentas **MCP**. O `attach_mcp` só aceita servidores aprovados no ledger de governança do Studio; recusa servidores rejeitados ou ainda não auditados.
+- Salva o projeto, executa o pipeline e inspeciona os artefatos gerados. A execução iniciada pelo Assistente passa pelo validador do Studio (topologia + ledger de governança de skills/MCP) antes de começar.
+- Altera **nome, versão, descrição e pasta de saída** do projeto após confirmação; a pasta do projeto, segredos e ambiente ficam fora do alcance dele.
 
 As edições no grafo aparecem na hora no canvas. Tudo o que o Assistente fizer numa resposta pode ser
 desfeito de uma vez com **Ctrl+Z**. Criar, abrir ou limpar um grafo, salvar e executar pedem
@@ -204,10 +208,11 @@ confirmação antes (botões **Permitir** e **Recusar** no chat).
 Cada conversa é uma **sessão** gravada no projeto, em `.arestrix/assistant/sessions/`; o seletor no topo da
 aba reabre as anteriores. O Assistente responde no idioma do Studio.
 
-O Assistente precisa de um provedor com **chamada de ferramentas**. Os provedores sem esse recurso (Jev e
-modelo local) aparecem marcados como "sem suporte ao Assistente" no seletor do modelo padrão, e a aba
-indica a impossibilidade. Todo o laço da conversa, as ferramentas e a gravação das sessões rodam no
-backend C++; a aba só desenha a conversa e aplica as alterações no canvas.
+O Assistente precisa de um provedor com **chamada de ferramentas**. O Jev não oferece esse recurso e aparece
+marcado como "sem suporte ao Assistente" no seletor do modelo padrão; num servidor local, o suporte depende do
+modelo carregado, e a aba informa `tools_unsupported` quando o servidor recusa ferramentas. Todo o laço da
+conversa, as ferramentas e a gravação das sessões rodam no backend C++; a aba só desenha a conversa e aplica
+as alterações no canvas.
 
 ## Canvas e Viewport
 

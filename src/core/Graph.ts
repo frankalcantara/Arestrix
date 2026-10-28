@@ -552,6 +552,49 @@ export class Graph {
     return this.navigationStack.length === 0;
   }
 
+  /** Nó alvo de um caminho de subflows/módulos a partir do nível atual. */
+  private findNodeAtPath(path: string[]): INodeData | null {
+    if (path.length === 0) return null;
+    let nodes: INodeData[] = Array.from(this.nodes.values());
+    let target: INodeData | null = null;
+    for (let i = 0; i < path.length; i++) {
+      target = nodes.find(n => n.id === path[i]) || null;
+      if (!target) return null;
+      if (i < path.length - 1) {
+        if (!target.childGraph || !Array.isArray(target.childGraph.nodes)) return null;
+        nodes = target.childGraph.nodes;
+      }
+    }
+    return target;
+  }
+
+  /** childGraph de um nó pelo caminho de subflows/módulos (cópia profunda). */
+  getChildGraph(path: string[]): IGraphSchema | null {
+    const node = this.findNodeAtPath(path);
+    if (!node || !node.childGraph) return null;
+    return JSON.parse(JSON.stringify(node.childGraph)) as IGraphSchema;
+  }
+
+  /** Substitui o childGraph de um nó pelo caminho. Usado pelo Assistente e pelo histórico. */
+  setChildGraph(path: string[], childGraph: IGraphSchema): boolean {
+    const node = this.findNodeAtPath(path);
+    if (!node) return false;
+    node.childGraph = JSON.parse(JSON.stringify(childGraph)) as IGraphSchema;
+    this.bus.emit('node:updated', this.nodes.get(path[0]) || node);
+    this.bus.emit('graph:changed');
+    return true;
+  }
+
+  /** Remove o childGraph de um nó (desfazer a criação de um subgrafo vazio). */
+  clearChildGraph(path: string[]): boolean {
+    const node = this.findNodeAtPath(path);
+    if (!node || !node.childGraph) return false;
+    delete node.childGraph;
+    this.bus.emit('node:updated', this.nodes.get(path[0]) || node);
+    this.bus.emit('graph:changed');
+    return true;
+  }
+
   getBreadcrumbs(): IBreadcrumbItem[] {
     const rootName = this.navigationStack.length > 0 
       ? this.navigationStack[0].schema.metadata.graphName 

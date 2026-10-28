@@ -53,6 +53,8 @@ public:
     // Servidores configurados no projeto (.workspace/mcps): [{id, name, transport, isEnabled}]. So metadados: nunca
     // devolve comando, argumentos nem variaveis de ambiente.
     static taskforge::Json listProjectServers(const std::filesystem::path& workspaceRoot);
+    // Ferramentas de um servidor (nativo ou MCP externo): [{name, description, inputSchema}].
+    static taskforge::Json listServerTools(const std::filesystem::path& workspaceRoot, const std::string& id);
 
 private:
     struct Binding {

@@ -188,18 +188,40 @@ export class McpLedgerService {
   private saveToStorage(): void {
     if (typeof localStorage === 'undefined') return;
     try {
-      const serversObj: Record<string, IMcpLedgerEntry> = {};
-      for (const [hash, entry] of this.entries.entries()) {
-        serversObj[hash] = entry;
-      }
-      const store: IMcpLedgerStore = {
-        version: '1.0.0',
-        updatedAt: new Date().toISOString(),
-        servers: serversObj
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.buildStore()));
     } catch (e) {
       console.warn('[McpLedgerService] Falha ao persistir ledger MCP:', e);
+    }
+  }
+
+  /** Monta o documento persistido (localStorage e espelho do workspace). */
+  private buildStore(): IMcpLedgerStore {
+    const serversObj: Record<string, IMcpLedgerEntry> = {};
+    for (const [hash, entry] of this.entries.entries()) {
+      serversObj[hash] = entry;
+    }
+    return {
+      version: '1.0.0',
+      updatedAt: new Date().toISOString(),
+      servers: serversObj
+    };
+  }
+
+  /**
+   * Espelha o ledger no workspace (`.workspace/governance/mcp-ledger.json`) para que o backend
+   * C++ aplique a mesma governança no Assistente. Não grava segredos: as entradas só têm
+   * metadados de auditoria, ids, veredictos e nomes de ferramentas.
+   */
+  public async syncToWorkspace(): Promise<boolean> {
+    const glob = typeof window !== 'undefined' ? (window as any) : (typeof globalThis !== 'undefined' ? (globalThis as any) : null);
+    const webui = glob?.webui;
+    if (!webui || typeof webui.call !== 'function') return false;
+    try {
+      const raw = await webui.call('save_mcp_governance_ledger', JSON.stringify(this.buildStore()));
+      return raw === true || raw === 'true';
+    } catch (e) {
+      console.warn('[McpLedgerService] Falha ao espelhar o ledger MCP no workspace:', e);
+      return false;
     }
   }
 
@@ -261,6 +283,7 @@ export class McpLedgerService {
     };
     this.entries.set(cleanHash, finalEntry);
     this.saveToStorage();
+    void this.syncToWorkspace();
 
     this.bus?.emit('mcps:ledger-updated', {
       hash: cleanHash,
@@ -338,6 +361,7 @@ export class McpLedgerService {
     const deleted = this.entries.delete(hash.toLowerCase());
     if (deleted) {
       this.saveToStorage();
+      void this.syncToWorkspace();
       this.bus?.emit('mcps:ledger-updated', { hash: hash.toLowerCase(), verdict: 'PENDING' });
     }
     return deleted;
@@ -350,5 +374,6 @@ export class McpLedgerService {
   public clear(): void {
     this.entries.clear();
     this.saveToStorage();
+    void this.syncToWorkspace();
   }
 }
