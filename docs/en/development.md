@@ -159,8 +159,15 @@ Submodules:
 
 ```bash
 npm run submodule:check    # report new upstream commits
-npm run submodule:update   # move to the latest upstream
+npm run submodule:update   # fast-forward to the latest upstream commit
 ```
+
+Builds always use the commits pinned in `main` (`actions/checkout` with
+`submodules: recursive`). The weekly `Submodule updates` workflow compares each
+pinned gitlink with its upstream branch, opens the `chore/submodule-updates`
+pull request and leaves the merge decision to the owner; only fast-forward
+updates are applied and diverged submodules are reported, never rewritten. See
+[`../../.github/AUTOMATION.md`](../../.github/AUTOMATION.md).
 
 ## Conventions that matter
 

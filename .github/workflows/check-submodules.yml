@@ -1,0 +1,111 @@
+name: Submodule updates
+
+# Notification-only dependency check for git submodules.
+#
+# The build workflows (`ci.yml`, `deploy.yml`) must keep checking out the exact
+# commits pinned in `main` — `actions/checkout` with `submodules: recursive`
+# does that. This workflow is the *only* place that looks at upstream heads: it
+# runs weekly, compares each pinned gitlink with the tip of its upstream branch
+# and opens a pull request. Nothing is merged automatically; the owner reviews
+# the changelog and decides whether to update.
+#
+# Fast-forward only: the script moves a submodule to the exact upstream commit
+# (detached HEAD) and stages the gitlink. It never runs `--merge`, because a
+# bot-created merge commit inside a submodule would be recorded as a gitlink
+# that does not exist upstream. Diverged submodules are reported, never applied.
+#
+# If `SUBMODULE_UPDATE_TOKEN` (fine-grained PAT with Contents + Pull requests
+# write on this repository) is configured, the pull request is authored with it
+# and therefore triggers the normal CI. With the default `GITHUB_TOKEN` the pull
+# request is still created, but GitHub does not start workflows for it: run
+# `ci.yml` manually on the branch, or use the owner bypass documented in
+# `.github/AUTOMATION.md`.
+
+on:
+  schedule:
+    - cron: "0 8 * * 1" # Every Monday at 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: submodule-updates
+  cancel-in-progress: false
+
+jobs:
+  check-submodules:
+    name: check-submodules
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout default branch with submodules
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          submodules: recursive
+          fetch-depth: 0
+          # Upstream fetches are anonymous on purpose: submodules are public and
+          # the checkout token is scoped to this repository only.
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # Inspects every submodule in .gitmodules, fast-forwards the ones that can
+      # advance, writes the report and exposes HAS_UPDATES / SUBMODULE_UPDATES.
+      # `continue-on-error` keeps the PR step reachable when one upstream is
+      # unreachable or a submodule diverged; the last step fails the run.
+      - name: Check submodule updates
+        id: check
+        continue-on-error: true
+        run: |
+          node scripts/check-submodule-updates.mjs \
+            --report submodule-updates.md \
+            --json submodule-updates.json \
+            --apply
+
+      - name: Upload submodule report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: submodule-updates
+          path: |
+            submodule-updates.md
+            submodule-updates.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Open or update submodule pull request
+        # Runs when there is an update, and also after a clean check so an
+        # obsolete `chore/submodule-updates` pull request is closed automatically.
+        if: env.HAS_UPDATES == 'true' || steps.check.outcome == 'success'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          # Prefer the PAT so the PR runs ci.yml; fall back to the workflow token.
+          token: ${{ secrets.SUBMODULE_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+          base: ${{ github.event.repository.default_branch }}
+          branch: chore/submodule-updates
+          delete-branch: true
+          title: "chore(deps): submodule updates available"
+          commit-message: |
+            chore(deps): update submodule references
+
+            Automated upstream check. Validation steps are listed in the PR body.
+          body-path: submodule-updates.md
+          # Only the gitlink changes are committed; the report itself stays out of
+          # the repository and is attached to the workflow run as an artifact.
+          add-paths: third_party
+          labels: |
+            dependencies
+            third-party
+
+      - name: Fail when the check reported problems
+        if: steps.check.outcome == 'failure'
+        run: |
+          echo "::error::Submodule check reported missing, unreachable or diverged submodules. See the report artifact and the job summary."
+          exit 1

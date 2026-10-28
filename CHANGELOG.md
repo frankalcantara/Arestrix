@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-release identifiers follow SemVer (`2.3.0-beta.1`); the marketing name is **Beta 2.3**.
 
+## [Unreleased]
+
+### Added
+
+- **Submodule update guard:** the new `Submodule updates` workflow runs weekly (and on demand),
+  compares every submodule gitlink with its upstream branch and opens or updates the
+  `chore/submodule-updates` pull request. The merge stays manual; only fast-forward updates are
+  applied, diverged submodules are reported and reference-skill changes point to the required review.
+  `npm run submodule:check` / `submodule:update` now cover every submodule in `.gitmodules` using the
+  same rules.
+
 ## [2.3.0-beta.1] - 2026-10-27
 
 ### Added

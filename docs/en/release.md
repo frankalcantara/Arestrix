@@ -121,7 +121,10 @@ Setup installer with `package_release.py --installer`, and attaches the archive,
 
 Pull requests run the pre-merge gate in `.github/workflows/ci.yml`: quality/static checks, Vitest +
 Studio build, native Windows CTest and native Linux CTest. The four jobs are required status checks
-on `main`, and Dependabot keeps npm, GitHub Actions and Git submodules current.
+on `main`, and Dependabot keeps npm, GitHub Actions and Git submodules current. Submodule pointers
+only move through a reviewed pull request: the weekly `Submodule updates` workflow compares each
+pinned gitlink with its upstream branch and opens `chore/submodule-updates` (see
+[`../../.github/AUTOMATION.md`](../../.github/AUTOMATION.md)).
 
 E2E remains a promotion requirement: run the full `release_check.py` (with E2E) from a clean tree
 before tagging an official release.

@@ -122,7 +122,9 @@ desenvolvimento.
 Pull requests rodam o gate de pré-merge no `.github/workflows/ci.yml`: quality/checks estáticos,
 Vitest + build do Studio, CTest nativo no Windows e CTest nativo no Linux. Os quatro jobs são
 required status checks na `main`, e o Dependabot mantém npm, GitHub Actions e submódulos Git
-atualizados.
+atualizados. Os ponteiros de submódulo só mudam por pull request revisado: o workflow semanal
+`Submodule updates` compara cada gitlink com o branch do upstream e abre o
+`chore/submodule-updates` (veja [`../../.github/AUTOMATION.md`](../../.github/AUTOMATION.md)).
 
 O E2E continua sendo requisito de promoção: rode o `release_check.py` completo (com E2E) em uma
 árvore limpa antes de taguear um release oficial.

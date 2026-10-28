@@ -162,8 +162,16 @@ Submódulos:
 
 ```bash
 npm run submodule:check    # informa novos commits no upstream
-npm run submodule:update   # atualiza para o upstream mais recente
+npm run submodule:update   # avança em fast-forward para o upstream mais recente
 ```
+
+O build sempre usa os commits fixados em `main` (`actions/checkout` com
+`submodules: recursive`). O workflow semanal `Submodule updates` compara cada
+gitlink com o branch do upstream, abre o pull request
+`chore/submodule-updates` e deixa a decisão de merge com o proprietário; só
+atualizações fast-forward são aplicadas e submódulos divergentes são apenas
+relatados, nunca reescritos. Veja
+[`../../.github/AUTOMATION.md`](../../.github/AUTOMATION.md).
 
 ## Convenções que importam
 
