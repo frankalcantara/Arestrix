@@ -179,7 +179,6 @@ export class ProjectManager {
       environment: {},
       git: {
         enabled: false,
-        backupMode: 'ddl_and_data',
         provider: 'github',
         serverUrl: 'https://github.com',
         username: '',

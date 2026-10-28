@@ -165,6 +165,7 @@ export class PropertiesWindow extends BaseModal {
     });
     this.bindSectionActions();
     this.bindSectionInputs();
+    this.bindSectionExtras(this.activeSectionId);
     this.applySectionDraft(this.activeSectionId);
     this.updateSaveButton();
   }
@@ -186,6 +187,7 @@ export class PropertiesWindow extends BaseModal {
       content.innerHTML = this.renderSectionHtml(active);
       this.bindSectionActions();
       this.bindSectionInputs();
+      this.bindSectionExtras(active.id);
       this.applySectionDraft(active.id);
       this.updateSaveButton();
     }
@@ -245,6 +247,13 @@ export class PropertiesWindow extends BaseModal {
         input.addEventListener('input', handler);
         input.addEventListener('change', handler);
       });
+  }
+
+  private bindSectionExtras(sectionId: string): void {
+    const section = this.scopeConfig.sections.find(item => item.id === sectionId);
+    if (!section?.bind) return;
+    const root = this.dialog.querySelector<HTMLElement>(`[data-property-section-body="${sectionId}"]`);
+    if (root) section.bind(root);
   }
 
   private readInputValue(input: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): string {

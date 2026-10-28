@@ -261,6 +261,12 @@ export class AgentTemplateRegistry {
     return JSON.stringify(list, null, 2);
   }
 
+  /** Exporta um template individual no formato serializado usado pela biblioteca. */
+  public exportTemplateAsJSON(id: string): string | null {
+    const tpl = this.templates.get(id);
+    return tpl ? JSON.stringify(this.serializeTemplate(tpl), null, 2) : null;
+  }
+
   /**
    * Importa plugins a partir de uma string JSON.
    */

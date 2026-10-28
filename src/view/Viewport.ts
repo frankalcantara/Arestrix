@@ -11,6 +11,7 @@ import { EventBus } from '../core/EventBus.ts';
 import { THEME } from './Theme.ts';
 import { IBezierCurvePoints, IObstacleBox } from './BezierEdgeRouter.ts';
 import { CanvasBackground, CANVAS_PALETTES, loadCanvasBackground, saveCanvasBackground } from './CanvasPreferences.ts';
+import { APP_THEME_CHANGED_EVENT, type AppThemeChangedDetail } from './AppTheme.ts';
 
 function sanitizeId(id: string): string {
   return id.replace(/[^a-zA-Z0-9]/g, '_');
@@ -35,6 +36,12 @@ export class Viewport {
   private frustumSize: number = 850;
   private resizeObserver!: ResizeObserver;
   private onWindowResize = (): void => this.onResize();
+  private onAppThemeChanged = (event: Event): void => {
+    const detail = (event as CustomEvent<AppThemeChangedDetail>).detail;
+    if (detail?.theme === 'dark' || detail?.theme === 'light') {
+      this.setCanvasBackground(detail.theme);
+    }
+  };
 
   // Camada Vetorial SVG Nativa para Vértices, Conexões e Alças Bézier (Inkscape-style)
   private svgLayer!: SVGSVGElement;
@@ -90,7 +97,13 @@ export class Viewport {
 
     // 4. Grid Infinito e Controlador de Câmera
     this.grid = new InfiniteGrid(this.scene);
-    this.applyCanvasBackground(loadCanvasBackground());
+    const appTheme = typeof document !== 'undefined' ? document.documentElement.dataset.theme : undefined;
+    const initialCanvas: CanvasBackground = appTheme === 'dark' ? 'dark' : loadCanvasBackground();
+    this.applyCanvasBackground(initialCanvas);
+    if (appTheme === 'dark') saveCanvasBackground('dark');
+    if (typeof document !== 'undefined') {
+      document.addEventListener(APP_THEME_CHANGED_EVENT, this.onAppThemeChanged);
+    }
     this.cameraController = new CameraController(this.camera, this.renderer.domElement, this.frustumSize);
 
     // 5. Observador de Redimensionamento do DOM para sincronizar automaticamente
@@ -1304,6 +1317,9 @@ export class Viewport {
   dispose(): void {
     this.isRunning = false;
     window.removeEventListener('resize', this.onWindowResize);
+    if (typeof document !== 'undefined') {
+      document.removeEventListener(APP_THEME_CHANGED_EVENT, this.onAppThemeChanged);
+    }
     this.resizeObserver?.disconnect();
     this.clearAllViews();
     this.interactionManager.dispose();

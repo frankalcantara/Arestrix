@@ -1,6 +1,6 @@
 # Positioning
 
-> **Applies to:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Last reviewed: 2026-10-19
+> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Last reviewed: 2026-10-19
 
 ## The problem
 
@@ -53,7 +53,7 @@ Arestrix treats an agent pipeline as a **program**, not as a hosted automation:
 
 ## Beta scope
 
-Beta 2.2 is a development pre-release. The Studio runs on Windows and Linux, but programs generated
+Beta 2.3 is a development pre-release. The Studio runs on Windows and Linux, but programs generated
 from a graph currently target Windows. APIs, file formats and command-line flags may change before
 general availability. See the [changelog](../../CHANGELOG.md) for current limitations.
 

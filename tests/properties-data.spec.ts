@@ -36,14 +36,19 @@ const context = {
     getApprovedMcps: () => [{ id: 'mcp-1', name: 'MCP 1', transport: 'stdio' }],
     isWorkspaceProvisioned: () => true
   },
-  githubRegistry: { getRepositories: () => [] }
+  libraryRegistry: {
+    list: () => [],
+    listSources: () => [],
+    listAssets: () => [],
+    getAsset: () => undefined
+  }
 } as unknown as IPropertiesContext;
 
 describe('PropertiesData', () => {
   it('builds the three scopes with their expected sections', () => {
-    expect(buildPropertiesScopeConfig('studio', context).sections.map(s => s.id)).toEqual(['general', 'studio-model', 'credentials', 'integrations', 'advanced']);
-    expect(buildPropertiesScopeConfig('workspace', context).sections.map(s => s.id)).toEqual(['general', 'catalogs', 'sandbox', 'security', 'memory', 'advanced']);
-    expect(buildPropertiesScopeConfig('project', context).sections.map(s => s.id)).toEqual(['general', 'pipelines', 'defaults', 'environment', 'git', 'runner', 'advanced']);
+    expect(buildPropertiesScopeConfig('studio', context).sections.map(s => s.id)).toEqual(['general', 'studio-model', 'credentials', 'integrations', 'libraries', 'advanced']);
+    expect(buildPropertiesScopeConfig('workspace', context).sections.map(s => s.id)).toEqual(['general', 'catalogs', 'libraries', 'sandbox', 'security', 'memory', 'advanced']);
+    expect(buildPropertiesScopeConfig('project', context).sections.map(s => s.id)).toEqual(['general', 'pipelines', 'defaults', 'libraries', 'environment', 'git', 'runner', 'advanced']);
   });
 
   it('does not render secret environment values', () => {
@@ -58,5 +63,26 @@ describe('PropertiesData', () => {
     const credentials = studio.sections.find(section => section.id === 'credentials');
     expect(credentials).toBeDefined();
     expect(credentials?.content).toContain('Nenhum valor secreto');
+  });
+
+  it('expõe criação de bibliotecas e cadastro de fontes nas Propriedades', () => {
+    const studio = buildPropertiesScopeConfig('studio', context);
+    const libraries = studio.sections.find(section => section.id === 'libraries');
+    expect(libraries).toBeDefined();
+    expect(libraries?.content).toContain('Criar nova biblioteca');
+    expect(libraries?.content).toContain('Adicionar fonte de repositório');
+    expect(libraries?.content).toContain('data-property-input="libraryName"');
+    expect(libraries?.content).toContain('data-property-input="repoPath"');
+
+    const workspace = buildPropertiesScopeConfig('workspace', context);
+    expect(workspace.sections.find(section => section.id === 'libraries')).toBeDefined();
+  });
+
+  it('expõe a seleção de bibliotecas e pins no Projeto', () => {
+    const project = buildPropertiesScopeConfig('project', context);
+    const libraries = project.sections.find(section => section.id === 'libraries');
+    expect(libraries).toBeDefined();
+    expect(libraries?.title).toContain('Bibliotecas do Projeto');
+    expect(libraries?.content).toContain('Nenhuma biblioteca liberada no Workspace');
   });
 });

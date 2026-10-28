@@ -18,6 +18,9 @@
 > usando um único shell visual e uma única camada de componentes, sem duplicar editores já existentes.
 >
 > **Última revisão:** 2026-10-26.
+>
+> **Bibliotecas e GitHub:** o desenho específico de fontes, bibliotecas e assets está em
+> [`libraries-plan.md`](libraries-plan.md), que substitui as referências ao `GitHubReposModal`.
 
 ## 1. Resumo executivo
 
@@ -298,7 +301,7 @@ Categorias sugeridas:
 4. **Ferramentas e Skills:** ferramentas nativas, scripts, MCPs e skills do projeto.
 5. **Memória:** memória do projeto, blackboard, retenção, embeddings e escopo.
 6. **Ambiente (.env):** variáveis, referências `${VAR}`, importar/exportar, validação de segredos.
-7. **Banco de dados:** SQLite/Postgres, caminho/URL, teste e modo de backup.
+7. **Banco de dados:** SQLite/Postgres, caminho/URL e teste de conexão.
 8. **Git:** provedor, servidor, usuário, repositório, branch, auto-commit, push temporizado e último
    sync. A identidade do SO e a conta ficam em Studio; o projeto só guarda o remoto e a automação.
 9. **Runner e distribuição:** enabled, título, versão, saída, parâmetros, assinatura, cofre e
@@ -369,7 +372,8 @@ Não reescrever `GlobalDefaultsModal`, `BackstageView` e `ProjectManagerModal` d
 ### Fase 3 — Propriedades do Studio (3–4 dias)
 
 - Idioma, aparência, modelo padrão, credenciais/gateway, integrações e governança.
-- Reutilizar `EnvironmentManager`, `LocalModelsModal`, `GitHubReposModal`.
+- Reutilizar `EnvironmentManager`, `LocalModelsModal` e a seção **Bibliotecas** do shell
+  (`libraries-plan.md`), sem abrir o modal legado de repositórios.
 - **Critério:** alterações persistem, segredos não aparecem e o Studio continua iniciando.
 
 ### Fase 4 — Propriedades do Workspace (4–5 dias)

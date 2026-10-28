@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <b>Beta 2.2</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentation</a>
+  <b>Beta 2.3</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentation</a>
 </p>
 
 <p align="center">
@@ -100,6 +100,9 @@ graph canvas; Arestrix validates it, generates C++20 source and compiles it with
   promotion, optional EmbeddingGemma 2 hybrid retrieval, deterministic consolidation, procedural
   playbooks, workspace promotion, injected/used-memory tracking, a token-budgeted brief and
   memory A/B in the Studio. See [how memory works](docs/en/how-memory-works.md).
+- **Arestrix Library** - audited skill, MCP and template assets with Studio, Workspace and Project
+  scopes, project pins, built-in/workspace imports and a native GitHub source with commit pin,
+  license check and on-demand downloads.
 - **Workspaces, skills and MCP** - local skill catalogs and MCP servers with a persistent session
   per server, including HTTP/Streamable HTTP and per-server headers.
 - **Delivery and governance** — standalone runner, MSI/MSIX packaging, DPAPI/Azure Key Vault
@@ -170,17 +173,17 @@ python scripts/e2e_examples.py
 | [Examples](examples/README.md) | Twelve runnable projects, from a two-agent pipeline to callable subflows, flow Call vertices, asynchronous calls, parallel calls, generated forms, memory and web-research workflows. |
 | [Test audit log](docs/quality/test-audit-log.md) | Chronological test rounds and integrity audits. |
 | [Release gate](docs/en/release.md) | Reproducible validation, SHA-256 manifest and SBOM before distribution. |
-| [Beta 2.2 test plan](docs/quality/beta2.2-test-plan.md) | Registered Beta 2.2 scope and remaining acceptance tests (in Portuguese). |
+| [Beta 2.3 test plan](docs/quality/beta2.3-test-plan.md) | Registered Beta 2.3 scope and remaining acceptance tests (in Portuguese). |
 | [Changelog](CHANGELOG.md) | Release history, changes and known limitations. |
 
 ## Project status
 
-**Beta 2.2** (`2.2.0-beta.1`) is a development pre-release. The Studio runs on Windows and Linux;
+**Beta 2.3** (`2.3.0-beta.1`) is a development pre-release. The Studio runs on Windows and Linux;
 programs generated from a graph currently target Windows. Beta APIs, file formats and command-line
 flags may change before general availability. See the [changelog](CHANGELOG.md) for the current
 limitations. The Windows installer and code signing are included; clean-machine validation, the
 Linux package and the full test matrix are still pending. Track them in the
-[Beta 2.2 test plan](docs/quality/beta2.2-test-plan.md). Windows artifacts are signed by
+[Beta 2.3 test plan](docs/quality/beta2.3-test-plan.md). Windows artifacts are signed by
 [SignPath Foundation](https://signpath.org) when signing is enabled; see the
 [code signing policy](CODE_SIGNING.md).
 

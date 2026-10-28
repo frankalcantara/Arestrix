@@ -1,5 +1,11 @@
 export type AppTheme = 'light' | 'dark' | 'system';
 
+export const APP_THEME_CHANGED_EVENT = 'arestrix:app-theme-changed';
+
+export interface AppThemeChangedDetail {
+  theme: 'light' | 'dark';
+}
+
 const STORAGE_KEY = 'arestrix_studio_settings_v1';
 let activePreference: AppTheme = 'light';
 let systemListenerInstalled = false;
@@ -19,6 +25,11 @@ export function applyAppTheme(theme: AppTheme): 'light' | 'dark' {
   if (typeof document !== 'undefined') {
     document.documentElement.dataset.theme = resolved;
     document.documentElement.style.colorScheme = resolved;
+    if (typeof document.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+      document.dispatchEvent(new CustomEvent<AppThemeChangedDetail>(APP_THEME_CHANGED_EVENT, {
+        detail: { theme: resolved }
+      }));
+    }
   }
 
   if (!systemListenerInstalled && typeof window !== 'undefined' && typeof window.matchMedia === 'function') {

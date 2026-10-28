@@ -1,5 +1,5 @@
 #include "GitSyncService.hpp"
-#include "DatabaseBackupService.hpp"
+#include "MemoryDatabaseGuard.hpp"
 #include "ProjectManager.hpp"
 #include "platform/Process.hpp"
 #include <algorithm>
@@ -304,6 +304,7 @@ void GitSyncService::ensureSafeGitignore(const std::filesystem::path& projectRoo
         "storage/*.sqlite",
         "storage/*.sqlite3",
         "storage/*.db",
+        "storage/*.sql",
         "storage/*.sqlite-journal",
         "storage/*.sqlite-wal",
         "storage/*.sqlite-shm",
@@ -313,6 +314,9 @@ void GitSyncService::ensureSafeGitignore(const std::filesystem::path& projectRoo
         "*.sqlite-journal",
         "*.sqlite-wal",
         "*.sqlite-shm",
+        "*.sql",
+        "*.dump.json",
+        "*.db.corrupt-*",
         "output/",
         ".arestrix/",
         ".workspace/",
@@ -630,7 +634,7 @@ void GitSyncService::onShutdown(const std::filesystem::path& projectRoot) {
 
     // Retencao de telemetria e housekeeping local: independe de Git estar habilitado.
     std::string retentionErr;
-    DatabaseBackupService::pruneMemoryOnShutdown(projectRoot, cur.projectId, retentionErr);
+    MemoryDatabaseGuard::applyRetentionOnShutdown(projectRoot, cur.projectId, retentionErr);
     if (!retentionErr.empty()) {
         std::cerr << "[GitSyncService] Aviso na retencao de memoria: " << retentionErr << "\n";
     }
@@ -642,25 +646,21 @@ void GitSyncService::onShutdown(const std::filesystem::path& projectRoot) {
 
     std::cout << "[GitSyncService] Executando rotina de encerramento do projeto...\n";
 
-    // 1. Executa backup e dump de bancos de dados para recuperacao de desastre
-    std::string backupErr;
-    DatabaseBackupService::performProjectShutdownBackup(projectRoot, cur.projectId, backupErr);
-    if (!backupErr.empty()) {
-        std::cerr << "[GitSyncService] Aviso no backup de encerramento: " << backupErr << "\n";
-    }
-
     if (!std::filesystem::exists(projectRoot / ".git")) return;
 
-    // 2. Remove arquivos binarios SQLite do rastreamento do Git caso tenham sido commitados anteriormente
+    // 1. Remove bancos e dumps do rastreamento do Git caso tenham sido commitados anteriormente.
+    // O Arestrix nao gera backup/dump de bancos: a custodia desses arquivos e externa ao produto.
     {
         platform::ProcessSpec rmSpec;
-        rmSpec.argv = {"git", "rm", "--cached", "--ignore-unmatch", "storage/*.sqlite", "storage/*.sqlite3", "storage/*.db", "*.sqlite", "*.db"};
+        rmSpec.argv = {"git", "rm", "--cached", "--ignore-unmatch",
+                       "storage/*.sqlite", "storage/*.sqlite3", "storage/*.db", "storage/*.sql",
+                       "*.sqlite", "*.db", "*.sql", "*.dump.json", "*.db.corrupt-*"};
         rmSpec.workingDir = projectRoot;
         rmSpec.scrubSecrets = true;
         platform::run(rmSpec, 5000);
     }
 
-    // 3. Executa commit e push de encerramento
+    // 2. Executa commit e push de encerramento
     std::cout << "[GitSyncService] Executando sincronizacao Git de encerramento do sistema...\n";
     std::string out, err;
     std::string msg = "Auto-commit on shutdown: " + getCurrentIsoTime();

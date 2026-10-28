@@ -1,6 +1,6 @@
 # `arestrix-cli` — headless execution
 
-> **Applies to:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Last reviewed: 2026-10-25
+> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Last reviewed: 2026-10-25
 
 [Português](../pt-BR/arestrix-cli.md) · [Index](README.md)
 
@@ -134,17 +134,16 @@ optional for development.
 ```
 
 Removes episodes, hits and `memory_usage` older than `--days` (default: the manifest
-`retentionDays`, or 180). It does not touch lessons, the Blackboard or the snapshot.
+`retentionDays`, or 180). It does not touch lessons or the Blackboard.
 
 ### `memory purge`
 
 ```powershell
 .\arestrix-cli.exe memory purge --project .\examples\04-memoria --json
-.\arestrix-cli.exe memory purge --project .\examples\04-memoria --keep-audit --keep-snapshot
+.\arestrix-cli.exe memory purge --project .\examples\04-memoria --keep-audit
 ```
 
-Purges all cognitive memory and telemetry for the project and compacts SQLite. By default it also
-removes `storage/memory.dump.json`, so the snapshot cannot resurrect deleted memory.
+Purges all cognitive memory and telemetry for the project and compacts SQLite.
 
 ### `memory proposals`
 

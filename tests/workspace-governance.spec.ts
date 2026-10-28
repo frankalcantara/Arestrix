@@ -473,13 +473,14 @@ describe('Workspace Governance, Execution & Pre-Approved Catalogs', () => {
 
       const overlay = backstage.getOverlay()!;
       expect(overlay.innerHTML).toContain('Opções do Studio & Governança do Workspace');
-      expect(overlay.innerHTML).toContain('Pastas Físicas do Workspace');
-      expect(overlay.innerHTML).toContain('btn-sync-workspace-disk');
+      expect(overlay.innerHTML).toContain('Propriedades do Studio');
+      expect(overlay.innerHTML).toContain('Propriedades do Workspace');
+      expect(overlay.innerHTML).toContain('Abrir catálogos');
       expect(overlay.innerHTML).toContain('btn-run-workspace-auditor');
       expect(overlay.innerHTML).toContain('btn-run-workspace-linter');
       expect(overlay.innerHTML).toContain('btn-run-workspace-project');
-      expect(overlay.innerHTML).toContain('Habilidades Pré-Aprovadas (7)');
-      expect(overlay.innerHTML).toContain('Servidores MCP Pré-Aprovados (6)');
+      expect(overlay.innerHTML).not.toContain('btn-sync-workspace-disk');
+      expect(overlay.innerHTML).not.toContain('Habilidades Pré-Aprovadas (7)');
     });
   });
 });

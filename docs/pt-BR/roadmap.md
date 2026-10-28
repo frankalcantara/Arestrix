@@ -1,6 +1,6 @@
 # Roadmap e limitações conhecidas
 
-> **Aplica-se a:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Última revisão: 2026-10-27
+> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Última revisão: 2026-10-27
 >
 > Esta página registra o que está intencionalmente incompleto e a ordem planejada para resolver. Não é
 > um compromisso de datas.
@@ -100,7 +100,30 @@ Limitações do serviço institucional e do background:
 - Ainda não há atualização automática de modelos, deduplicação ou cota de disco.
 - Os pesos não são redistribuídos; o download depende do publicador upstream e da licença.
 
-## Beta 2.2 (pré-release)
+## Beta 2.3 (pré-release)
+
+A linha Beta 2.3 está versionada como `2.3.0-beta.1` e é publicada como pré-release de
+desenvolvimento pelo workflow de deploy.
+
+Entregue no Beta 2.3: a **Biblioteca Arestrix** nas fases 1-7, com assets de skill/MCP/template
+auditados, escopos Studio/Workspace/Projeto, pins por projeto, fonte GitHub nativa com allowlist de
+host, commit pin, checagem de licença e download de assets sob demanda; a revisão do **menu
+Arquivo**, incluindo a tela **Abrir** redesenhada no padrão Office e o refresh de
+Info/Novo/Salvar/Exportar/Opções; e a sincronização do fundo do canvas com o tema global
+Claro/Escuro/Seguir o sistema.
+
+Pendente após a pré-release `2.3.0-beta.1`:
+
+- Instalação/upgrade/uninstall em máquina limpa, instalação silenciosa e validação em Intune/SCCM,
+  além do pacote Linux (5B2).
+- Aprovação da conta/projeto SignPath, primeira release assinada e assinatura do desinstalador do
+  Inno.
+- Matriz de CI Windows/Linux, catálogo remoto assinado (5C) e a matriz completa em
+  [Plano de testes do Beta 2.3](../quality/beta2.3-test-plan.md).
+- Três casos manuais de homologação das bibliotecas: tema/tamanhos, instalação limpa/upgrade e uso
+  offline.
+
+## Beta 2.2 (pré-release anterior)
 
 A linha Beta 2.2 está versionada como `2.2.0-beta.1` e é publicada como pré-release de
 desenvolvimento pelo workflow de deploy.
@@ -119,7 +142,7 @@ Pendente após a pré-release `2.2.0-beta.1`:
 - Aprovação da conta/projeto SignPath, primeira release assinada e assinatura do desinstalador do
   Inno.
 - Matriz de CI Windows/Linux, catálogo remoto assinado (5C) e a matriz completa em
-  [Plano de testes do Beta 2.2](../quality/beta2.2-test-plan.md).
+  [Plano de testes do Beta 2.3](../quality/beta2.3-test-plan.md).
 - Revisão final de contraste dos editores legados secundários e homologação do Studio.
 
 ## Beta 2.1 (pré-release anterior)
@@ -141,7 +164,7 @@ Pendente após a pré-release `2.1.0-beta.1`:
 - Aprovação da conta/projeto SignPath, primeira release assinada e assinatura do desinstalador do
   Inno. Migração para certificado de empresa fica para depois.
 - Matriz de CI Windows/Linux, catálogo remoto assinado (5C) e a matriz completa em
-  [Plano de testes do Beta 2.2](../quality/beta2.2-test-plan.md).
+  [Plano de testes do Beta 2.3](../quality/beta2.3-test-plan.md).
 - Homologação manual do Studio e publicação de checksums, SBOM, notices e notas de release.
 
 ## Próximos passos

@@ -362,7 +362,8 @@ export class SvgNodeView {
     const labelX = isInput ? px + offset : px - offset;
 
     const label = document.createElementNS(SVG_NS, 'text');
-    label.setAttribute('class', 'vertex-port-label');
+    const branchClass = isConditionBranch ? ` vertex-port-label-branch branch-${port.conditionBranchIndex}` : '';
+    label.setAttribute('class', `vertex-port-label${branchClass}`);
     label.setAttribute('x', String(labelX));
     label.setAttribute('y', String(py));
     label.setAttribute('text-anchor', isInput ? 'start' : 'end');

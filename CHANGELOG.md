@@ -4,7 +4,72 @@ All notable changes to Arestrix are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-Pre-release identifiers follow SemVer (`2.2.0-beta.1`); the marketing name is **Beta 2.2**.
+Pre-release identifiers follow SemVer (`2.3.0-beta.1`); the marketing name is **Beta 2.3**.
+
+## [2.3.0-beta.1] - 2026-10-27
+
+### Changed
+
+- **File menu / Backstage:** the **Open** screen now follows the Microsoft Office file picker,
+  with a locations list, search, recency groups, vector icons and the columns **Name / Date
+  modified / Type / Size**.
+- **File menu / Backstage:** **Info**, **New Project**, **Save**, **Export** and **Studio Options**
+  were reviewed and aligned with the Office shell: shared form panels, action cards, vector icons,
+  consistent primary/secondary buttons, and light/dark parity.
+- **Studio Options** is now a settings hub for **Studio**, **Workspace** and **Catalogs**; folder and
+  approved-skill/MCP lists moved to the single owner, **Workspace Properties**.
+- **Screenshots and docs:** added the redesigned Open screen capture and refreshed the interface,
+  properties and showcase documentation.
+- **Library Phase 1:** the embedded GitHub-branded skill catalog is now the **Arestrix Library**.
+  Fictional repository URLs were removed, the library import path runs through the Skill Guard
+  auditor before touching a vertex, and `modal:open-github-repos` now deep-links to
+  **Properties → Studio/Workspace → Libraries**.
+- New **Libraries** section in Studio and Workspace Properties: create a local library and register
+  a repository source directly in the Properties shell. Real GitHub synchronization remains an
+  explicit, audited step planned for the next phases.
+- **Library Phase 2:** asset model (`skill`/`mcp`), `LibraryStore`, `LibraryService`,
+  `LibraryAuditGate` and adapters. The built-in and Workspace catalogs can be imported into a
+  library with audit, hash and policy metadata; edits create immutable derivatives, and approved
+  assets can be installed into `.workspace/skills`/`.workspace/mcps`. Synchronization only reads
+  metadata; asset blobs will be downloaded on demand after project selection in Phase 5.
+- Libraries section now exposes **Import built-in catalog** / **Import Workspace catalog** and
+  shows the number of indexed assets.
+- **Library Phase 3:** library/asset tree inside the Properties shell, with search, type filter,
+  provenance/audit detail and actions to re-audit, duplicate/edit, install and remove. Libraries
+  can also be exported, imported from a file and cloned. Studio, Workspace and Project now share
+  the same library model; Project gets an enable/pin section (`ProjectLibraryStore`) whose pins
+  will be consumed by the agent/graph selector in Phase 4.
+- **Library Phase 4 (skills/MCPs):** `LibraryPickerModal` with audited asset selection, derive and
+  create-new actions; the agent Skills tab now reads real library assets and re-audits before
+  inserting a snapshot with `derivedFrom`/audit metadata. The agent Tools modal can install an MCP
+  asset from a library into the Workspace and refresh the MCP picker. Project pins filter and
+  prioritize the picker.
+- **Library Phase 4.1:** the agent Skills editor detects when the library asset behind a snapshot
+  changed, shows an update banner and can apply the re-audited library version after confirmation.
+  Vertex templates are now library assets (`agent-template`): custom templates can be saved to a
+  library with schema audit, and `TemplateModal → Libraries` registers and inserts a library
+  template into the graph.
+- **Library Phase 5:** real GitHub source through the native C++ `fetch_library_source` endpoint,
+  with host allowlist, commit pin, SPDX license check, size limits, short cache and optional PAT
+  from `ARESTRIX_GITHUB_TOKEN`/`GITHUB_TOKEN`. Source synchronization reads only the manifest/tree;
+  assets are created as `PENDING`, downloaded on demand after selection, audited and only then
+  promoted. Rejections discard the downloaded content. The Properties UI can register a source
+  with a ref, sync it, download/audit an asset and install it.
+- **Library Phase 6:** removed the legacy `GitHubReposModal` and `GitHubSkillsRegistry`; the
+  built-in catalog now lives in `BuiltinLibraryCatalog`. Ribbon, Backstage, Defaults and the node
+  modal open **Properties → Libraries** directly. Legacy `arestrix_github_skills_repos` entries are
+  migrated to real `ILibrarySource` entries, and the legacy tests were replaced by library tests.
+- **Library test automation:** `npm run test:libraries` runs the full frontend E2E
+  (source → sync → download → audit → install → derive → template → pins) plus the filtered C++
+  GitHub-source tests. `npm run test:libraries:live` adds a live GitHub manifest check.
+- **Library Phase 7 (homologation):** `npm run homologation:libraries` runs a deterministic
+  frontend + native gate against a local GitHub mock and writes report, matrix, environment,
+  request log and stage logs under `release/homologation/<runId>/`; `--live` adds a real GitHub
+  manifest smoke. The test-only override requires `ARESTRIX_TEST_MODE=1` and loopback URLs. Three
+  UI/install/offline cases remain manual; keyboard navigation and focus are approved.
+- **Dark theme canvas:** switching the application theme now synchronizes the graph canvas
+  background. In the dark canvas, vertices use a graphite body (`#1f2937`) with light title and
+  port labels instead of the light white card.
 
 ## [2.2.0-beta.1] - 2026-10-27
 
@@ -50,6 +115,15 @@ Pre-release identifiers follow SemVer (`2.2.0-beta.1`); the marketing name is **
 - Global theme preference (Light / Dark / Follow system) is available in Studio Properties. The dark
   theme now covers the ribbon, task pane, console, status bar, Backstage and Office modals, while the
   canvas background remains an independent preference.
+
+### Removed
+
+- Database backup/dump subsystem: `DatabaseBackupService`, `backupMode` (DDL + data / schema-only),
+  the shutdown SQL dump (`storage/database.sql`) and the memory snapshot (`storage/memory.dump.json`)
+  export/restore cycle. Arestrix no longer exports, versions or restores database backups; that
+  responsibility is external to the product. Local integrity checks (corrupt-database quarantine) and
+  telemetry retention moved to `MemoryDatabaseGuard`, and the safe `.gitignore` now also blocks
+  `*.sql`, `*.dump.json` and `*.db.corrupt-*`.
 
 ### Changed
 
@@ -499,6 +573,7 @@ First public beta of Arestrix Studio and the native C++20 pipeline compiler.
 - The `braces` advisory documented in `docs/security/dependency-advisories.md` affects the build chain only;
   no fixed release is available upstream yet.
 
+[2.3.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v2.3.0-beta.1
 [2.2.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v2.2.0-beta.1
 [2.1.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v2.1.0-beta.1
 [2.0.0-beta.1]: https://github.com/frankalcantara/Arestrix/releases/tag/v2.0.0-beta.1

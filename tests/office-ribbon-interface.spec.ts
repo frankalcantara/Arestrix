@@ -489,11 +489,11 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
       }
     });
 
-    it('deve abrir o modal de Repositórios GitHub diretamente sobre a Backstage View sem fechá-la', async () => {
+    it('deve encaminhar Bibliotecas para as Propriedades a partir da Backstage View', async () => {
       const { globalEventBus } = await import('../src/core/EventBus.ts');
-      let githubModalEventFired = false;
-      globalEventBus.on('modal:open-github-repos', () => {
-        githubModalEventFired = true;
+      let payload: any = null;
+      globalEventBus.on('properties:open', (value: any) => {
+        payload = value;
       });
 
       await ribbon.openBackstage('info');
@@ -506,8 +506,7 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
 
       btnGithub?.click();
 
-      expect(githubModalEventFired).toBe(true);
-      expect(backstage.isOpen()).toBe(true);
+      expect(payload).toEqual({ scope: 'studio', section: 'libraries' });
     });
 
     it('deve encaminhar idioma e governança das Opções para as Propriedades', async () => {
@@ -516,15 +515,15 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
       expect(backstage.isOpen()).toBe(true);
 
       const overlay = backstage.getOverlay();
-      const studioBtn = overlay?.querySelector('#btn-open-studio-properties') as any;
+      const studioBtn = overlay?.querySelector('#btn-options-studio-properties') as any;
       expect(studioBtn).toBeDefined();
       expect(studioBtn?.getAttribute('data-open-properties')).toBe('studio');
       expect(studioBtn?.getAttribute('data-properties-section')).toBe('general');
 
-      const securityBtn = overlay?.querySelector('#btn-open-workspace-security') as any;
-      expect(securityBtn).toBeDefined();
-      expect(securityBtn?.getAttribute('data-open-properties')).toBe('workspace');
-      expect(securityBtn?.getAttribute('data-properties-section')).toBe('security');
+      const workspaceBtn = overlay?.querySelector('#btn-options-workspace-properties') as any;
+      expect(workspaceBtn).toBeDefined();
+      expect(workspaceBtn?.getAttribute('data-open-properties')).toBe('workspace');
+      expect(workspaceBtn?.getAttribute('data-properties-section')).toBe('general');
 
       const html = overlay?.innerHTML || '';
       expect(html).not.toContain('backstage-language-select');

@@ -1,6 +1,6 @@
 # Tour pela interface
 
-> **Aplica-se a:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Última revisão: 2026-10-27
+> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Última revisão: 2026-10-27
 
 [English](../en/interface.md) · [Índice](../README.md)
 
@@ -13,7 +13,7 @@ O Studio segue o layout do Microsoft Office, porque a maioria das pessoas já o 
 | **Arquivo** | Abre a visão **Backstage** (abaixo). |
 | **Página Inicial** | Edição e exibição, *Vértices do Grafo* (**+ Tarefa**, seletor de tipo, **Catálogo**), execução e governança. |
 | **Inserir** | Fluxo e concorrência (condições, switch, ferramenta MCP, subfluxos, fork/join, seções críticas), aceleração por GPU, agentes cognitivos. |
-| **Agentes** | Segurança e skills do workspace, servidores MCP, o catálogo global de skills do GitHub. |
+| **Agentes** | Segurança e skills do workspace, servidores MCP e bibliotecas de skills/MCPs. |
 | **Conectores** | Importar projetos Pi, Claude, OpenAI, Hermes, Excel. |
 | **Dados** | *Memória do projeto* e *Armazenamento do workspace*, mantidos visivelmente separados. |
 | **Executar** | Compilar e Executar, o motor Taskflow, o orquestrador de Lote e Retomada e a Distribuição (**Runner Standalone**). |
@@ -77,14 +77,17 @@ físico e o **Runner Standalone**), o hub de **Propriedades**, a tela **Abrir**,
 **Salvar** e as **Opções** (atalhos de execução e governança do workspace). Idioma, tema e as
 configurações editáveis agora ficam em **Propriedades**.
 
-A tela **Abrir** segue o Abrir do Office. À esquerda ficam os locais:
+A tela **Abrir** segue o Abrir do Office. Os locais ficam à esquerda e a tabela de arquivos usa as
+colunas **Nome / Data de modificação / Tipo / Tamanho**, com a busca alinhada à direita.
 
-- **Recentes**: busca e duas abas, **Projetos** (agrupados por Hoje, Ontem, Últimos 7 dias, Últimos 30
-  dias e Mais antigos) e **Grafos** (os pipelines do projeto atual).
+- **Recentes**: duas abas, **Projetos** (agrupados por Hoje, Ontem, Últimos 7 dias, Últimos 30 dias e
+  Mais antigos) e **Grafos** (os pipelines do projeto atual).
 - **Este Computador**: navega pelas unidades e pastas. Mostra subpastas, pastas de projeto
   (com `arestrix.project.json`), pacotes `.arestrix` e arquivos `.json`. Clicar numa pasta de projeto
   abre o projeto; o botão ao lado entra na pasta sem abri-lo.
 - **Procurar**: abre o seletor de arquivos do sistema.
+
+![Tela Abrir no padrão Office](../assets/screenshots/open-screen.webp)
 
 Um pacote `.arestrix` é extraído numa pasta nova ao lado dele (`nome`, `nome (2)`, ...) e aberto como
 projeto. Um grafo `.json` dentro de `<projeto>/pipelines` abre o projeto inteiro; um grafo avulso só
@@ -208,12 +211,12 @@ Todos os modais do Studio seguem o padrão de design corporativo **Microsoft Off
 | **Propriedades (Studio / Workspace / Projeto)** | Categorias por escopo com shell Office compartilhado | Studio / Workspace / Projeto |
 | **Biblioteca de Vértices** | Catálogo de Modelos \| Presets de Pipeline \| Importar / Exportar Plugins | Studio |
 | **Modelo do Nó** | Provedor & Modelo \| Instruções & Skills \| Parâmetros | Por vértice |
-| **Ferramentas do Nó** | Ferramentas Nativas \| Servidores MCP \| Validação & Lote | Por vértice |
+| **Ferramentas do Nó** | Ferramentas Nativas \| Servidores MCP \| Adicionar da Biblioteca \| Validação & Lote | Por vértice |
 | **Sandbox do Nó** | Isolamento & Recursos \| Rede & Confinamento \| Pastas & Volumes | Por vértice |
 | **Memória do Nó** | Blackboard \| Lições Cognitivas \| Regime & Escopo | Por vértice |
-| **Skills do Nó** | Skills Habilitadas \| Catálogo do Workspace \| Importar Nova Skill | Por vértice |
+| **Skills do Nó** | Skills Habilitadas \| Biblioteca do Studio/Workspace \| Editor da Skill | Por vértice |
 | **Editor de Skill** | Editor Markdown \| Pré-visualização Renderizada \| Metadados & Teste | Por vértice / Workspace |
-| **Repositórios GitHub** | Repositórios Autorizados \| Cadastrar Novo Repositório | Catálogo Studio |
+| **Bibliotecas** | Bibliotecas e Fontes \| Criar Biblioteca \| Cadastrar Fonte | Studio / Workspace |
 | **Servidores MCP** | Servidores Ativos \| Conectar Novo Servidor \| Inspeção & Logs | Workspace |
 | **Gerenciador de Projetos** | Projetos Recentes \| Novo Projeto \| Configurações (link para Propriedades) | Projeto |
 | **Sincronização Git** | Conta & Identidade no SO \| Repositório Remoto \| Automação & Governança | Projeto / SO |

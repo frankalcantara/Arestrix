@@ -470,7 +470,7 @@ int runMemory(const std::vector<std::string>& args) {
     if (args.size() < 2 || args[1] == "--help" || args[1] == "-h") {
         std::cout << "arestrix-cli memory report [--project <pasta>] [--root <pasta>] [--db <arquivo>] [--json]\n"
                      "arestrix-cli memory prune  --project <pasta> [--days N] [--db <arquivo>] [--json]\n"
-                     "arestrix-cli memory purge  --project <pasta> [--keep-audit] [--keep-snapshot] [--db <arquivo>] [--json]\n"
+                     "arestrix-cli memory purge  --project <pasta> [--keep-audit] [--db <arquivo>] [--json]\n"
                      "arestrix-cli memory proposals list|accept|reject [id] --project <pasta> [--status pending|all] [--reason texto] [--json]\n"
                      "arestrix-cli memory embeddings status|test --project <pasta> [--model M] [--base-url URL] [--enable] [--sample texto] [--json]\n"
                      "arestrix-cli memory reindex --project <pasta> [--model M] [--base-url URL] [--force] [--json]\n"
@@ -538,7 +538,6 @@ int runMemory(const std::vector<std::string>& args) {
     std::string parseError;
     int days = -1;
     bool keepAudit = false;
-    bool keepSnapshot = false;
     std::string status = "pending";
     std::string reason;
     std::string embeddingModel;
@@ -560,7 +559,6 @@ int runMemory(const std::vector<std::string>& args) {
         const std::string& a = args[i];
         if (a == "--json") opt.json = true;
         else if (a == "--keep-audit") keepAudit = true;
-        else if (a == "--keep-snapshot") keepSnapshot = true;
         else if (a == "--days") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --days\n"; return kExitUsage; }
             try { days = std::stoi(args[++i]); } catch (...) { std::cerr << "--days invalido\n"; return kExitUsage; }
@@ -914,19 +912,12 @@ int runMemory(const std::vector<std::string>& args) {
             }
         } else {
             const bool ok = memory.purgeProject(projectId, keepAudit, true);
-            bool snapshotRemoved = false;
-            if (!keepSnapshot) {
-                const fs::path snapshot = root / "storage" / "memory.dump.json";
-                std::error_code rmEc;
-                snapshotRemoved = fs::remove(snapshot, rmEc);
-            }
             if (opt.json) {
                 std::cout << json{{"command", "purge"}, {"database", dbPath.string()}, {"projectId", projectId},
-                                  {"ok", ok}, {"keepAudit", keepAudit}, {"snapshotRemoved", snapshotRemoved}}.dump(2) << "\n";
+                                  {"ok", ok}, {"keepAudit", keepAudit}}.dump(2) << "\n";
             } else {
                 std::cout << (ok ? "Expurgo concluido" : "Expurgo incompleto")
                           << " | auditoria: " << (keepAudit ? "preservada" : "removida")
-                          << " | snapshot: " << (snapshotRemoved ? "removido" : (keepSnapshot ? "preservado" : "ausente"))
                           << "\n";
             }
             return ok ? 0 : kExitConfig;

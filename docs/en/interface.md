@@ -1,6 +1,6 @@
 # Interface tour
 
-> **Applies to:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Last reviewed: 2026-10-27
+> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Last reviewed: 2026-10-27
 
 [Português](../pt-BR/interface.md) · [Index](../README.md)
 
@@ -13,7 +13,7 @@ The Studio follows the Microsoft Office layout, because most people already know
 | **File** | Opens the **Backstage** view (below). |
 | **Home** | Edit & view, *Graph vertices* (**+ Task**, type selector, **Catalog**), execution and governance. |
 | **Insert** | Flow & concurrency (conditions, switch, MCP tool, subflows, fork/join, critical sections), GPU acceleration, cognitive agents. |
-| **Agents** | Workspace security and skills, MCP servers, the global GitHub skill catalog. |
+| **Agents** | Workspace security and skills, MCP servers and skill/MCP libraries. |
 | **Connectors** | Import Pi projects, Claude, OpenAI, Hermes, Excel. |
 | **Data** | *Project memory* and *Workspace storage*, kept visibly apart. |
 | **Run** | Build & Run, the Taskflow engine, the Batch & Resume orchestrator, and Distribution (**Standalone Runner**). |
@@ -76,14 +76,17 @@ Opened by **File**. It has the project information (four cards: the active proje
 workspace, and the **Standalone Runner**), the **Properties** hub, the **Open** screen, the unified **Save** screen, and the **Options**
 (workspace execution and governance shortcuts). Language, theme and the editable settings now live in **Properties**.
 
-The **Open** screen follows Office's Open. The places are on the left:
+The **Open** screen follows Office's Open. Locations sit on the left and the file table uses
+**Name / Date modified / Type / Size** columns, with a search box aligned to the right.
 
-- **Recent**: a search box and two tabs, **Projects** (grouped by Today, Yesterday, Previous 7 days,
-  Previous 30 days and Older) and **Graphs** (the pipelines of the current project).
+- **Recent**: two tabs, **Projects** (grouped by Today, Yesterday, Previous 7 days, Previous 30 days
+  and Older) and **Graphs** (the pipelines of the current project).
 - **This PC**: browses drives and folders. It shows subfolders, project folders (with
   `arestrix.project.json`), `.arestrix` packages and `.json` files. Clicking a project folder opens the
   project; the button next to it enters the folder without opening it.
 - **Browse**: opens the system file picker.
+
+![Office-style Open screen](../assets/screenshots/open-screen.webp)
 
 An `.arestrix` package is extracted into a new folder next to it (`name`, `name (2)`, ...) and opened as a
 project. A `.json` graph inside `<project>/pipelines` opens the whole project; a loose graph replaces the
@@ -205,12 +208,12 @@ All Studio dialogs adhere to the **Microsoft Office 365 (Fluent 2)** corporate d
 | **Properties (Studio / Workspace / Project)** | Scope-specific categories with shared Office shell | Studio / Workspace / Project |
 | **Node Library** | Template Catalog \| Pipeline Presets \| Import / Export Plugins | Studio |
 | **Node Model** | Provider & Model \| Instructions & Skills \| Parameters | Per vertex |
-| **Node Tools** | Native Tools \| MCP Servers \| Validation & Batch | Per vertex |
+| **Node Tools** | Native Tools \| MCP Servers \| Add from Library \| Validation & Batch | Per vertex |
 | **Node Sandbox** | Isolation & Resources \| Network & Confinement \| Folders & Volumes | Per vertex |
 | **Node Memory** | Blackboard \| Cognitive Lessons \| Regime & Scope | Per vertex |
-| **Node Skills** | Enabled Skills \| Workspace Catalog \| Import New Skill | Per vertex |
+| **Node Skills** | Enabled Skills \| Studio/Workspace Library \| Skill Editor | Per vertex |
 | **Skill Editor** | Markdown Editor \| Rendered Preview \| Metadata & Testing | Per vertex / Workspace |
-| **GitHub Repositories** | Authorized Repositories \| Register New Repository | Studio Catalog |
+| **Libraries** | Libraries and Sources \| Create Library \| Register Source | Studio / Workspace |
 | **MCP Servers** | Active Servers \| Connect New Server \| Inspection & Logs | Workspace |
 | **Project Manager** | Recent Projects \| New Project \| Settings summary (links to Properties) | Project |
 | **Git Synchronization** | OS Identity & Account \| Remote Repository \| Automation & Governance | Project / OS |

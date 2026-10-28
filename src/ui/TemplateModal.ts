@@ -5,6 +5,9 @@ import { Viewport } from '../view/Viewport.ts';
 import { AddNodeCommand } from '../core/history/GraphCommands.ts';
 import { ModalWindowManager, IModalWindowController } from './modals/ModalWindowManager.ts';
 import { t, onLocaleChange } from '../i18n/index.ts';
+import { LibraryPickerModal } from './libraries/LibraryPickerModal.ts';
+import { LibraryService } from '../core/libraries/LibraryService.ts';
+import { globalEventBus } from '../core/EventBus.ts';
 
 const CATEGORY_MAP: { id: string; labelKey: string }[] = [
   { id: 'Todos', labelKey: 'template_modal.cat_all' },
@@ -23,6 +26,8 @@ export class TemplateModal {
   private registry: AgentTemplateRegistry;
   private windowController?: IModalWindowController;
   private activeCategory: string = 'Todos';
+  private libraryPicker?: LibraryPickerModal;
+  private readonly libraryService = LibraryService.getInstance();
 
   constructor(graph: Graph, viewport: Viewport) {
     this.graph = graph;
@@ -78,6 +83,9 @@ export class TemplateModal {
             </button>
           </div>
           <div class="template-action-right">
+            <button id="btn-library-templates" class="btn btn-secondary-pill" title="${t('template_modal.btn_library_tip', 'Inserir um template salvo em uma biblioteca')}">
+              ${t('template_modal.btn_library', 'Bibliotecas')}
+            </button>
             <button id="btn-import-plugin" class="btn btn-secondary-pill" title="${t('template_modal.btn_import_tip')}">
               ${t('template_modal.btn_import')}
             </button>
@@ -176,6 +184,11 @@ export class TemplateModal {
           <button class="btn-toggle-code" data-code-id="${tpl.id}">
             ${t('template_modal.view_cpp')}
           </button>
+          ${tpl.isCustomPlugin ? `
+            <button class="btn btn-secondary btn-save-library" data-save-library-id="${tpl.id}">
+              ${t('template_modal.btn_save_library', 'Salvar na biblioteca')}
+            </button>
+          ` : ''}
           <button class="btn btn-primary btn-insert-node" data-insert-id="${tpl.id}">
             ${t('template_modal.btn_insert')}
           </button>
@@ -262,6 +275,53 @@ export class TemplateModal {
           this.insertTemplateNode(tplId);
           this.hide();
         }
+      });
+    });
+
+    // Inserir template vindo da biblioteca
+    this.overlay.querySelector('#btn-library-templates')?.addEventListener('click', () => {
+      if (!this.libraryPicker) this.libraryPicker = new LibraryPickerModal();
+      this.libraryPicker.open({
+        kind: 'agent-template',
+        projectId: this.graph.getProjectId(),
+        title: t('template_modal.library_title', 'Inserir template da biblioteca'),
+        subtitle: t('template_modal.library_subtitle', 'O template será registrado no catálogo e inserido no grafo.'),
+        onSelect: async (asset) => {
+          if (asset.payload.kind !== 'agent-template') return;
+          const result = this.registry.importTemplatesFromJSON(JSON.stringify(asset.payload.template));
+          if (result.success === 0) {
+            alert(t('template_modal.library_insert_failed', 'Não foi possível importar o template: {{errors}}', { errors: result.errors.join('; ') }));
+            return;
+          }
+          this.activeCategory = 'Plugins Customizados';
+          this.render();
+          this.insertTemplateNode(asset.payload.template.id);
+          this.hide();
+          globalEventBus.emit('notification:show', {
+            severity: 'success',
+            title: t('template_modal.library_title', 'Inserir template da biblioteca'),
+            message: t('template_modal.library_inserted', 'Template "{{name}}" inserido no grafo.', { name: asset.name })
+          });
+        }
+      });
+    });
+
+    // Salvar template customizado na biblioteca
+    this.overlay.querySelectorAll('.btn-save-library').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = (btn as HTMLElement).getAttribute('data-save-library-id');
+        if (!id) return;
+        const json = this.registry.exportTemplateAsJSON(id);
+        if (!json) return;
+        void this.libraryService.saveTemplateToLibrary(JSON.parse(json), { scope: 'workspace' }).then(asset => {
+          globalEventBus.emit('notification:show', {
+            severity: asset ? 'success' : 'warning',
+            title: t('template_modal.btn_save_library', 'Salvar na biblioteca'),
+            message: asset
+              ? t('template_modal.library_saved', 'Template salvo na biblioteca com auditoria.')
+              : t('template_modal.library_save_failed', 'Não foi possível salvar o template na biblioteca.')
+          });
+        });
       });
     });
 

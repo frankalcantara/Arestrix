@@ -347,6 +347,22 @@ export interface INodeSkill {
   license?: string;         // Licença (MIT, Apache-2.0, etc.)
   sourceUrl?: string;       // URL do repositório/arquivo no GitHub
   updatedAt?: string;       // Timestamp da última edição
+  /** Vínculo com o asset de biblioteca que originou este snapshot. */
+  derivedFrom?: {
+    libraryId: string;
+    assetId: string;
+    hash: string;
+    policyVersion: string;
+    originName: string;
+  };
+  /** Veredito de auditoria no momento em que o snapshot foi criado. */
+  audit?: {
+    verdict: 'APPROVE' | 'CAUTION' | 'REJECT' | 'PENDING';
+    riskScore: number;
+    hash?: string;
+    policyVersion?: string;
+    auditedAt?: string;
+  };
 }
 
 export interface IGitHubSkillRepo {
@@ -621,7 +637,6 @@ export interface IProjectGitConfig {
   autoCommitOnShutdown: boolean; // commit e push ao encerrar o sistema
   timedPushEnabled?: boolean; // push temporizado automatico (padrao true)
   timedPushIntervalMinutes?: number; // intervalo em minutos (padrao 10)
-  backupMode?: 'ddl_and_data' | 'schema_only'; // modo de backup do banco de dados (ddl_and_data ou schema_only)
   lastSyncAt?: string;
   lastCommitHash?: string;
 }

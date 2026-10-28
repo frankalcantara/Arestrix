@@ -1,6 +1,6 @@
 # Workspaces, memory, skills and MCP
 
-> **Applies to:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Last reviewed: 2026-10-25
+> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Last reviewed: 2026-10-25
 
 [Português](../pt-BR/workspaces-memoria-skills-mcp.md) · [Index](../README.md)
 
@@ -20,7 +20,7 @@ A project is described by `arestrix.project.json` in its folder:
 | `rootPath` | The physical workspace folder. |
 | `pipelines` | The graphs of the project (`pipelines/main.json` is the primary one). |
 | `database` | The SQLite file, by default `storage/database.sqlite`. |
-| `git` | Optional Git/GitHub repository synchronization (`enabled`, `backupMode`, `provider`, `serverUrl`, `repositoryName`, `remoteUrl`, `isPrivate`, `autoCommitOnRun`, `autoCommitOnShutdown`, `timedPushEnabled`, `timedPushIntervalMinutes`, `lastSyncAt`). |
+| `git` | Optional Git/GitHub repository synchronization (`enabled`, `provider`, `serverUrl`, `repositoryName`, `remoteUrl`, `isPrivate`, `autoCommitOnRun`, `autoCommitOnShutdown`, `timedPushEnabled`, `timedPushIntervalMinutes`, `lastSyncAt`). |
 | `globalDefaults` | Default `model`, `sandbox`, `codeMode` (allowed tools) and `memory` for the vertices. |
 | `environment` | Variables local to the project (`.env`). |
 
@@ -35,49 +35,45 @@ Each project in Arestrix can be linked to an independent Git repository on a con
    - When creating any new project in Arestrix, Git/GitHub synchronization is **disabled by default** (`enabled: false`).
    - If the user or enterprise chooses not to use Git, the project operates in 100% local mode: all files, pipelines, the SQLite database (`storage/database.sqlite`), and cognitive memory (`.arestrix/memory/memory.db`) remain exclusively on the local machine disk. Zero network requests, zero Git commands, and zero SQL dumps are executed. All governance, data retention, and backup redundancy against data loss or disk failure remain entirely the responsibility of the organization or user.
    - The user can enable Git synchronization at any time by clicking the Git button on the Quick Access Toolbar or in the Backstage File menu, checking *"Enable Git / GitHub Synchronization"*.
-2. **Configurable Backup Mode (Privacy & LGPD/GDPR Compliance):**
-   - **Structure and Data (DDL + INSERTs) (`ddl_and_data`):** Exports the schema and all table data as deterministic plaintext. Recommended for development environments and projects without confidential/personal data.
-   - **Structure Only / DDL (Schema Only) (`schema_only`):** Exports only table definitions (`CREATE TABLE`, `CREATE INDEX`, `CREATE VIEW`), with zero `INSERT INTO` rows. Recommended for strict compliance with LGPD/GDPR, protection of Personally Identifiable Information (PII), and preventing repository bloat when local databases contain large transaction volumes.
+2. **Databases Kept Out of Git (Privacy & LGPD/GDPR Compliance):**
+   - Arestrix never sends SQLite databases (`storage/database.sqlite` and `.arestrix/memory/memory.db`) to Git and never generates SQL/JSON backup dumps. The remote repository contains only project files (graphs, pipelines, skills and configuration).
+   - The project's safe `.gitignore` blocks binary databases, SQL dumps, JSON snapshots and quarantine files.
 3. **Smart Commit & On-Demand Push (GitHub Quota & Rate-Limit Protection):**
    - **On every pipeline execution (`F5`):** A **local** commit with contextual message is created inside the local clone without triggering an immediate remote push. This eliminates GitHub API rate-limit risks and bandwidth abuse during rapid, iterative debugging cycles.
    - **Automated Timed Push (default every 10 minutes):** If pending local modifications or unpushed commits exist, Arestrix automatically batches and pushes them periodically to the remote repository. Interval and toggle are configurable per project.
    - **Manual Synchronization Button (Immediate Push):** Located on the Quick Access Toolbar (QAT) in the title bar and within the automation modal, allowing instant pushes to GitHub anytime with one click.
    - **On application shutdown (`onShutdown`):** If Git is enabled, triggered natively by the C++ backend when closing the application or window, guaranteeing that no work remains unversioned on the remote server. If Git is disabled, shutdown finishes instantly without running external processes.
-4. **Deterministic Dumps & History Bloat Prevention (Packfiles):**
-   - SQL dumps and memory snapshots omit dynamic, volatile timestamp headers (`-- Gerado em: ...`). If the data or memory content has not changed between runs, the file on disk is not overwritten, completely eliminating ghost commits and keeping Git history compact.
-5. **Strict File Size Protection (95 MB Safety Ceiling):**
-   - To preemptively protect against GitHub's hard push rejection `GH001` (which blocks any commit containing files larger than 100 MB), `DatabaseBackupService` enforces a strict 95 MB limit on SQL dumps. If a dump exceeds this limit, the export is aborted and the user is guided to switch to *"Structure Only / DDL (Schema Only)"*.
-6. **Native Pre-Commit Secret Scanning:**
+4. **No Automatic Database Dumps:**
+   - Arestrix does not export, version or restore database dumps. Backup, redundancy and disaster recovery are the responsibility of the organization or user and must be executed outside the product with the tool of their choice.
+   - On shutdown, Arestrix only removes previously committed database/dump files from Git tracking (`git rm --cached`); remote history is not rewritten.
+5. **Native Pre-Commit Secret Scanning:**
    - `GitSyncService` automatically audits staged diffs before every commit for plain-text credential patterns (`sk-...`, `AIza...`, `AKIA...`, `ghp_...`). The commit is aborted (*fail-closed*) if any exposed key is detected.
-7. **Robust `.gitignore` Exclusions (`ensureSafeGitignore`):**
-   - Automated exclusion of binary SQLite files (`*.sqlite`, `*.db`), runtime caches (`.arestrix/`), local AI model weights (`*.gguf`, `*.safetensors`, `*.bin`, `*.onnx`, `models/`), columnar datasets (`*.parquet`, `*.arrow`, `*.feather`, `*.h5`), media, and temporary build artifacts.
-8. **Absolute Security (Zero-Secrets in Arestrix):**
+6. **Robust `.gitignore` Exclusions (`ensureSafeGitignore`):**
+   - Automated exclusion of binary SQLite files (`*.sqlite`, `*.db`), SQL dumps (`*.sql`), snapshots (`*.dump.json`), quarantines (`*.db.corrupt-*`), runtime caches (`.arestrix/`), local AI model weights (`*.gguf`, `*.safetensors`, `*.bin`, `*.onnx`, `models/`), columnar datasets (`*.parquet`, `*.arrow`, `*.feather`, `*.h5`), media, and temporary build artifacts.
+7. **Absolute Security (Zero-Secrets in Arestrix):**
    - No credentials, passwords, or Personal Access Tokens (PAT) are stored in Arestrix files, manifests, or databases. Identity registration and authentication workflows are managed **exclusively by the Operating System** via **Git Credential Manager (GCM)** / Windows Credential Store.
-9. **Private Repositories by Default:** Repositories created via GitHub CLI (`gh`) are strictly enforced as **private** (`isPrivate: true`).
-10. **Commercial Service Governance Warning:** When pointing to an external commercial Git host (e.g., `github.com` or `gitlab.com`), Arestrix displays a mandatory governance disclaimer reminding the user that project data will reside on third-party infrastructure outside Arestrix's custody, requiring explicit user consent.
+8. **Private Repositories by Default:** Repositories created via GitHub CLI (`gh`) are strictly enforced as **private** (`isPrivate: true`).
+9. **Commercial Service Governance Warning:** When pointing to an external commercial Git host (e.g., `github.com` or `gitlab.com`), Arestrix displays a mandatory governance disclaimer reminding the user that project data will reside on third-party infrastructure outside Arestrix's custody, requiring explicit user consent.
 
-### Databases, Safe Versioning, and Disaster Recovery
+### Databases and Safe Versioning
 
 Arestrix manages two SQLite database files in each project's scope:
 
 1. **Operational / Analytical Project Database (`storage/database.sqlite`):** Stores structured business data manipulated by agents and pipeline nodes through the `workspace-sqlite` MCP or native tools (`sql_query`, `sql_execute`), as well as imported datasets (e.g., Excel workbooks via `ImportExcelModal`).
 2. **AMG Cognitive Memory Database (`.arestrix/memory/memory.db`):** Stores the temporal multigraph powering agent memory (learned lessons, semantic relations, shared project Blackboard, and token telemetry).
 
-#### Why Binary Databases are Excluded from GitHub
+#### Why Databases are Excluded from Git
 * **GitHub Repository Size Limits:** GitHub recommends keeping repositories below 1 GB (with a practical ceiling of 5 GB to 10 GB) and strictly blocks pushes containing individual files larger than 100 MB.
 * **Packfile History Bloat:** SQLite files are mutable binaries. Every pipeline run mutates pages on disk; because Git cannot compute text-based line diffs on binaries, each commit would append a full binary blob, quickly causing repository bloat.
 * **Acceptable Use Policies:** GitHub explicitly prohibits using repositories primarily as an active database backend or general cloud storage backup service.
 
-#### Plaintext Dump & Self-Healing Restoration Cycle (`DatabaseBackupService`)
+#### Backup and Recovery Outside Arestrix
 
-When Git synchronization is enabled, Arestrix features an automated **Plaintext Dump and Self-Healing Restoration** cycle:
+Arestrix does not export, version or restore database dumps. The product generates neither `storage/database.sql` nor `storage/memory.dump.json`. Backup policy, redundancy and disaster recovery are the responsibility of the organization or user and must be executed externally, with the backup tool of their choice.
 
-* **Export on Application Shutdown (`onShutdown`):**
-  * **Operational Database (`storage/database.sql`):** Generates a deterministic plaintext SQL script containing DDL definitions (`CREATE TABLE`, `CREATE INDEX`, `CREATE VIEW`) and optionally row-by-row data according to the selected backup mode.
-  * **Agent Memory (`storage/memory.dump.json`):** Generates a deterministic v2 snapshot with the full cognitive graph: scopes, closure, nodes, temporal edges (validity, confidence, status and provenance) and the Blackboard. It keeps `lessons` and `working` for v1 readers. Telemetry (`memory_usage`, hits, episodes) is excluded. The database is anchored at the project root, and an empty payload never overwrites a snapshot that contains knowledge.
-* **Automatic Disaster Recovery / Clean Clone:**
-  * When cloning the project onto a fresh machine or if a local `.sqlite` file is deleted or corrupted, Arestrix detects the missing physical database upon project load.
-  * The native C++ engine (`ProjectManager::loadProject`) automatically rebuilds the operational database from `storage/database.sql` and rehydrates agent memory from `storage/memory.dump.json` without requiring any manual terminal commands.
+On shutdown, if Git is enabled, Arestrix only removes previously committed database and dump files from tracking (`git rm --cached`) and keeps the safe `.gitignore` up to date. Remote history is not rewritten.
+
+Locally, Arestrix still protects memory database integrity: a corrupt `.db` is quarantined (`memory.db.corrupt-*`) and telemetry retention is applied on shutdown.
 
 
 ## Global defaults and inheritance
@@ -107,7 +103,7 @@ it may record per run; `memory_search` enforces those domains.
 - Dual-tier schema architecture:
   * **Indispensable (Cognitive Data):** `memory_scope`/`memory_scope_closure` (hierarchy), `memory_node` (concepts), `memory_edge` (learned lessons and semantic relations with confidence and temporal validity) and `memory_working` (shared project Blackboard).
   * **Disposable Telemetry & Cache:** `memory_usage` (prompt/completion tokens, calls, and latency), `memory_hit` (prompt injection hit statistics for A/B evaluations), `memory_episode`/`memory_evidence` (raw logs of previous runs) and `memory_node_fts` (FTS5 virtual index).
-- **Snapshot & Resilience:** On application shutdown, `DatabaseBackupService` exports the full cognitive graph (scopes, closure, nodes, temporal edges and Blackboard) to `storage/memory.dump.json` in the v2 format, while keeping `lessons`/`working` for v1 compatibility. The database is always anchored at the project root, never at the process working directory. A missing database does not create an empty snapshot, and a corrupt `.db` is quarantined (`memory.db.corrupt-*`) before restore. The v2 import is transactional: either the whole graph returns, or nothing changes; v1 snapshots are also imported in a transaction. If the physical `.db` file is lost or cloned clean, memory is automatically rehydrated from this snapshot.
+- **Local integrity:** the database is always anchored at the project root, never at the process working directory. A corrupt `.db` is quarantined (`memory.db.corrupt-*`) when the project opens. Arestrix neither exports nor restores memory snapshots: backup and recovery are external to the product.
 - The runtime records sanitized success/failure episodes per agent with tokens, retries,
   duration, outcome, tool sequence (name/success), touched files, artifacts and a truncated error
   message; it does not store raw prompts/responses or tool arguments.
@@ -155,13 +151,12 @@ it may record per run; `memory_search` enforces those domains.
   (default 4000) caps each lesson/trigger. A global cap of 5000 active lessons per project also
   applies. These fields are configurable on the vertex and in **File → Properties → Project → Model & tools → Manage advanced memory**.
 - Before persisting, lessons, episodes, edges and the Blackboard are sanitized for known secrets
-  (OpenAI/Stripe, Google, AWS, GitHub, Slack, Bearer, URL parameters and PEM private keys). The
-  snapshot is sanitized before going to Git, covering rows written before this layer existed.
+  (OpenAI/Stripe, Google, AWS, GitHub, Slack, Bearer, URL parameters and PEM private keys).
+  Sanitization also covers rows written before this layer existed.
 - Project purge removes working state, lessons/edges, episodes, evidence, nodes, usage, hits and
   audit rows, then compacts SQLite with `VACUUM`; the database opens with `secure_delete=ON`.
   Telemetry retention is configurable in **File → Properties → Project → Model & tools → Manage advanced memory** (`retentionDays`, default
-  180; `0` = keep) and runs on shutdown and via `arestrix-cli memory prune`. `memory purge` also
-  removes the snapshot unless `--keep-snapshot` is passed.
+  180; `0` = keep) and runs on shutdown and via `arestrix-cli memory prune`.
 - The generated binary resolves the database from `ARESTRIX_PROJECT_ROOT` (fallback: current
   directory); `ARESTRIX_MEMORY_DB` has explicit priority. `memory_hit`/`memory_usage` use
   `ARESTRIX_RUN_ID`, and the unique key `(scope, run, node, memory)` prevents duplicate hits.
@@ -270,8 +265,11 @@ Python or JS process participates in graph execution.
 A **skill** is a `SKILL.md` file (YAML front matter plus instructions) that becomes the agent's system prompt.
 
 - **Workspace skills** live in `.workspace/skills`, pre-approved for that workspace.
-- **Studio catalog:** authorized open-source GitHub repositories that supply skills you can import.
-  Enable or disable repositories globally in **Agents → GitHub repositories**.
+- **Libraries:** the built-in **Arestrix Library** and local/curated libraries supply skills to import.
+  Manage sources, create libraries and register repositories in
+  **File → Properties → Studio/Workspace → Libraries**. For a GitHub source, **Sync** reads only the
+  manifest/tree; asset content is downloaded on demand, audited and only then promoted for use.
+  `REJECT` discards the download.
 - The vertex **Skills** action binds skills to a vertex; the built-in editor edits `SKILL.md` as Markdown with preview.
 
 ### Governance

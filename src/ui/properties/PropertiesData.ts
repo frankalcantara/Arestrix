@@ -1,9 +1,12 @@
 import { Graph } from '../../core/Graph.ts';
 import { ProjectManager } from '../../core/ProjectManager.ts';
 import { WorkspaceManager } from '../../core/workspace/WorkspaceManager.ts';
-import { GitHubSkillsRegistry } from '../../core/skills/GitHubSkillsRegistry.ts';
+import { LibraryRegistry, type LibraryScope } from '../../core/libraries/LibraryRegistry.ts';
+import { ProjectLibraryStore } from '../../core/libraries/ProjectLibraryStore.ts';
+import { bindLibraryBrowser, renderLibraryBrowser } from '../libraries/LibraryTree.ts';
 import { DEFAULT_PIPELINE_DEFAULTS } from '../../core/types.ts';
 import { sanitizeEnvReferences } from '../../core/env/EnvironmentManager.ts';
+import type { CanvasBackground } from '../../view/CanvasPreferences.ts';
 import type { IProjectSettings, IResolvedSettings, IStudioCredentialsSnapshot, IStudioModelSettings, IStudioSettings, IWorkspaceSettings } from '../../core/settings/types.ts';
 import { t } from '../../i18n/index.ts';
 import type {
@@ -16,7 +19,10 @@ export interface IPropertiesContext {
   graph: Graph;
   projectManager: ProjectManager;
   workspaceManager: WorkspaceManager;
-  githubRegistry: GitHubSkillsRegistry;
+  libraryRegistry?: LibraryRegistry;
+  projectLibraryStore?: ProjectLibraryStore;
+  /** Estado efetivo do canvas, que pode ter sido sincronizado com o tema. */
+  canvasBackground?: CanvasBackground;
   settings?: {
     studio: IStudioSettings;
     studioModel: IStudioModelSettings;
@@ -32,6 +38,8 @@ export interface IPropertiesContext {
   saveProject?: (values: Record<string, string>) => Promise<boolean>;
   saveProjectDefaults?: (values: Record<string, string>) => Promise<boolean>;
   saveProjectEnvironment?: (values: Record<string, string>) => Promise<boolean>;
+  saveLibraries?: (scope: LibraryScope, values: Record<string, string>) => Promise<boolean>;
+  saveProjectLibraries?: (values: Record<string, string>) => Promise<boolean>;
 }
 
 const hasWindow = typeof window !== 'undefined';
@@ -49,7 +57,7 @@ function label(key: string, fallback: string): string {
   return t(`properties_window.${key}`, fallback);
 }
 
-function toneBadge(text: string, tone: 'neutral' | 'success' | 'warning' | 'accent' = 'neutral'): string {
+function toneBadge(text: string, tone: 'neutral' | 'success' | 'warning' | 'accent' | 'danger' = 'neutral'): string {
   return `<span class="properties-badge properties-badge--${tone}">${escapeHtml(text)}</span>`;
 }
 
@@ -129,15 +137,112 @@ export function buildPropertiesScopeConfig(
   }
 }
 
+function buildLibrariesSection(context: IPropertiesContext, scope: LibraryScope): IPropertySection {
+  const sources = typeof (context.libraryRegistry as any)?.listSources === 'function'
+    ? context.libraryRegistry!.listSources()
+    : [];
+  const enabledSources = sources.filter(source => source.enabled);
+  const pendingSources = sources.filter(source => !source.lastSyncAt);
+  const canBrowse = Boolean(
+    context.libraryRegistry &&
+    typeof (context.libraryRegistry as any).listAssets === 'function' &&
+    typeof (context.libraryRegistry as any).getAsset === 'function'
+  );
+
+  const sourceItems = sources.map(source => {
+    const repo = source.github?.repo || '—';
+    const ref = source.github?.ref || 'main';
+    const status = !source.enabled
+      ? label('libraries.source_disabled', 'Desativada')
+      : source.lastSyncAt
+        ? label('libraries.source_synced', 'Sincronizada')
+        : label('libraries.source_pending', 'Aguardando sincronização');
+    return `
+      <strong>${escapeHtml(source.name)}</strong>
+      <span class="properties-inline-code">${escapeHtml(repo)}</span>
+      ${toneBadge(ref, 'neutral')}
+      ${toneBadge(source.licenseAllowlist?.[0] || '—', 'neutral')}
+      ${toneBadge(status, source.lastSyncAt ? 'success' : source.enabled ? 'warning' : 'neutral')}
+      <div class="properties-hint">${escapeHtml(source.github?.commit ? `commit ${source.github.commit.slice(0, 12)}…` : 'Nenhum manifesto sincronizado.')}</div>
+    `;
+  });
+
+  return {
+    id: 'libraries',
+    title: label('section.libraries', 'Bibliotecas'),
+    description: scope === 'workspace'
+      ? label('libraries.workspace_desc', 'Bibliotecas liberadas e criadas para este Workspace. As fontes de repositório são globais do Studio.')
+      : label('libraries.studio_desc', 'Fontes de repositório e bibliotecas de assets desta instalação.'),
+    icon: 'catalog',
+    badge: scope === 'workspace' ? label('badge.workspace', 'Workspace') : label('badge.global', 'Global'),
+    content: `
+      ${canBrowse ? renderLibraryBrowser({ registry: context.libraryRegistry!, scope }) : ''}
+      ${note(label('libraries.phase_note', 'Cadastre a fonte GitHub, sincronize o manifesto/árvore e baixe somente o asset selecionado. O download vai para quarentena e passa por auditoria antes de ser usado.'), 'info')}
+      ${grid([
+        row(label('libraries.sources', 'Fontes de repositório'), `${escapeHtml(String(enabledSources.length))} / ${escapeHtml(String(sources.length))} ${label('value.active_plural', 'ativas')}`),
+        row(label('libraries.pending_sources', 'Aguardando sincronização'), escapeHtml(String(pendingSources.length)))
+      ])}
+      <div class="properties-subsection-title">${escapeHtml(label('libraries.sources_title', 'Fontes de repositório'))}</div>
+      ${list(sourceItems, label('value.none', 'Nenhum item configurado.'))}
+      <div class="properties-subsection-title">${escapeHtml(label('libraries.create_title', 'Criar nova biblioteca'))}</div>
+      <div class="form-row-grid properties-form-grid">
+        <div class="form-group">
+          <label class="form-label" for="properties-library-name">${escapeHtml(label('libraries.name', 'Nome da biblioteca'))}</label>
+          <input id="properties-library-name" class="form-input" type="text" data-property-input="libraryName" placeholder="${escapeHtml(label('libraries.name_placeholder', 'ex: Skills da Equipe de Dados'))}" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="properties-library-description">${escapeHtml(label('libraries.description', 'Descrição'))}</label>
+          <input id="properties-library-description" class="form-input" type="text" data-property-input="libraryDescription" placeholder="${escapeHtml(label('libraries.description_placeholder', 'Para que serve esta biblioteca?'))}" />
+        </div>
+      </div>
+      <p class="properties-hint">${escapeHtml(label('libraries.create_hint', 'A biblioteca é criada no escopo atual e fica pronta para receber skills e MCPs. Para associá-la a um repositório, informe também os campos abaixo.'))}</p>
+      <div class="properties-subsection-title">${escapeHtml(label('libraries.add_source_title', 'Adicionar fonte de repositório'))}</div>
+      <div class="form-row-grid properties-form-grid">
+        <div class="form-group">
+          <label class="form-label" for="properties-library-repo-path">${escapeHtml(label('libraries.repo_path', 'Repositório'))}</label>
+          <input id="properties-library-repo-path" class="form-input properties-code-input" type="text" data-property-input="repoPath" placeholder="organizacao/projeto" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="properties-library-repo-ref">${escapeHtml(label('libraries.repo_ref', 'Referência (branch/tag)'))}</label>
+          <input id="properties-library-repo-ref" class="form-input properties-code-input" type="text" data-property-input="repoRef" value="main" placeholder="main" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="properties-library-repo-name">${escapeHtml(label('libraries.repo_name', 'Nome da fonte'))}</label>
+          <input id="properties-library-repo-name" class="form-input" type="text" data-property-input="repoName" placeholder="${escapeHtml(label('libraries.repo_name_placeholder', 'ex: Skills da Comunidade'))}" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="properties-library-repo-license">${escapeHtml(label('libraries.repo_license', 'Licença permitida'))}</label>
+          <select id="properties-library-repo-license" class="form-select" data-property-input="repoLicense">
+            <option value="permissive" selected>${escapeHtml(label('libraries.repo_license_permissive', 'Permissivas (MIT/Apache/BSD)'))}</option>
+            ${['MIT', 'Apache-2.0', 'BSD-3-Clause', 'BSD-2-Clause', 'ISC'].map(license => `<option value="${license}">${license}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="properties-library-repo-description">${escapeHtml(label('libraries.repo_description', 'Descrição da fonte'))}</label>
+          <input id="properties-library-repo-description" class="form-input" type="text" data-property-input="repoDescription" placeholder="${escapeHtml(label('libraries.repo_description_placeholder', 'O que esta fonte fornece?'))}" />
+        </div>
+      </div>
+      <p class="properties-hint">${escapeHtml(label('libraries.add_source_hint', 'A fonte é registrada agora; o download e a auditoria dos assets serão habilitados na fase de sincronização do GitHub.'))}</p>
+    `,
+    save: context.saveLibraries
+      ? (values) => context.saveLibraries!(scope, values)
+      : undefined,
+    bind: canBrowse
+      ? (root) => bindLibraryBrowser(root, { registry: context.libraryRegistry!, scope })
+      : undefined
+  };
+}
+
 function buildStudio(context: IPropertiesContext): IPropertiesScopeConfig {
   const savedSettings = context.settings?.studio;
   const studioModel = context.settings?.studioModel;
   const credentials = context.settings?.credentials;
   const gateway = credentials?.gateway;
-  const canvas = savedSettings?.appearance.canvasBackground
+  const canvas = context.canvasBackground
+    || savedSettings?.appearance.canvasBackground
     || (hasWindow ? (localStorage.getItem('arestrix_canvas_background') || 'light') : 'light');
-  const repositories = context.githubRegistry.getRepositories();
-  const enabledRepositories = repositories.filter(repository => repository.isEnabled);
+  const sources = context.libraryRegistry?.listSources() || [];
+  const enabledSources = sources.filter(source => source.enabled);
 
   return {
     scope: 'studio',
@@ -266,21 +371,23 @@ function buildStudio(context: IPropertiesContext): IPropertiesScopeConfig {
       section({
         id: 'integrations',
         title: label('section.integrations', 'Integrações'),
-        description: label('studio.integrations_desc', 'Conta Git e repositórios autorizados de skills.'),
+        description: label('studio.integrations_desc', 'Conta Git, fontes de repositório e bibliotecas de assets.'),
         icon: 'hub',
         badge: label('badge.global', 'Global'),
         content: `
           ${grid([
-            row(label('label.github_repositories', 'Repositórios GitHub'), `${escapeHtml(String(enabledRepositories.length))} / ${escapeHtml(String(repositories.length))} ${label('value.active_plural', 'ativos')}`),
+            row(label('label.github_repositories', 'Fontes de repositório'), `${escapeHtml(String(enabledSources.length))} / ${escapeHtml(String(sources.length))} ${label('value.active_plural', 'ativas')}`),
+            row(label('label.libraries', 'Bibliotecas'), escapeHtml(String((context.libraryRegistry?.list('studio') || []).length))),
             row(label('label.git_identity', 'Identidade Git'), toneBadge(label('value.managed_elsewhere', 'Gerenciada em conta Git'), 'neutral'))
           ])}
-          ${list(enabledRepositories.map(repository => `${escapeHtml(repository.name)} <span class="properties-inline-code">${escapeHtml(repository.repo)}</span>`), label('value.none', 'Nenhum item configurado.'))}
+          ${list(enabledSources.map(source => `${escapeHtml(source.name)} <span class="properties-inline-code">${escapeHtml(source.github?.repo || '—')}</span>`), label('value.none', 'Nenhum item configurado.'))}
         `,
         actions: [
-          { id: 'studio.open-github', label: label('action.manage_github', 'Gerenciar repositórios'), kind: 'secondary' },
+          { id: 'studio.open-libraries', label: label('action.manage_libraries', 'Gerenciar bibliotecas'), kind: 'secondary' },
           { id: 'studio.open-git', label: label('action.manage_git', 'Gerenciar conta Git'), kind: 'secondary' }
         ]
       }),
+      buildLibrariesSection(context, 'studio'),
       section({
         id: 'advanced',
         title: label('section.advanced', 'Avançado'),
@@ -345,13 +452,14 @@ function buildWorkspace(context: IPropertiesContext): IPropertiesScopeConfig {
       section({
         id: 'catalogs',
         title: label('section.catalogs', 'Catálogos'),
-        description: label('workspace.catalogs_desc', 'Skills e servidores MCP aprovados para uso no workspace.'),
+        description: label('workspace.catalogs_desc', 'Skills, servidores MCP e bibliotecas de assets aprovados para uso no workspace.'),
         icon: 'catalog',
         badge: label('badge.workspace', 'Workspace'),
         content: `
           ${grid([
             row(label('label.skills', 'Skills aprovadas'), escapeHtml(String(skills.length))),
-            row(label('label.mcp_servers', 'Servidores MCP'), escapeHtml(String(mcps.length)))
+            row(label('label.mcp_servers', 'Servidores MCP'), escapeHtml(String(mcps.length))),
+            row(label('label.libraries', 'Bibliotecas'), escapeHtml(String((context.libraryRegistry?.list('workspace') || []).length)))
           ])}
           <div class="properties-subsection-title">${escapeHtml(label('label.skills', 'Skills aprovadas'))}</div>
           ${list(skills.slice(0, 8).map(skill => `${escapeHtml(skill.name)} ${toneBadge(skill.category, 'neutral')}`), label('value.none', 'Nenhum item configurado.'))}
@@ -359,10 +467,11 @@ function buildWorkspace(context: IPropertiesContext): IPropertiesScopeConfig {
           ${list(mcps.slice(0, 8).map(mcp => `${escapeHtml(mcp.name)} ${toneBadge(mcp.transport.toUpperCase(), 'accent')}`), label('value.none', 'Nenhum item configurado.'))}
         `,
         actions: [
-          { id: 'workspace.open-github', label: label('action.manage_github', 'Gerenciar repositórios'), kind: 'secondary' },
+          { id: 'workspace.open-libraries', label: label('action.manage_libraries', 'Gerenciar bibliotecas'), kind: 'secondary' },
           { id: 'workspace.open-mcp', label: label('action.manage_mcp', 'Gerenciar servidores MCP'), kind: 'secondary' }
         ]
       }),
+      buildLibrariesSection(context, 'workspace'),
       section({
         id: 'sandbox',
         title: label('section.sandbox', 'Sandbox padrão'),
@@ -467,6 +576,11 @@ function buildProject(context: IPropertiesContext): IPropertiesScopeConfig {
   const safeEnvironment = sanitizeEnvReferences(manifest.environment || {});
   const envKeys = Object.keys(safeEnvironment);
   const pipelines = manifest.pipelines || [];
+  const projectLibraries = context.projectLibraryStore?.load(manifest.projectId) || {
+    enabledLibraryIds: [],
+    pinnedAssetIds: []
+  };
+  const availableLibraries = context.libraryRegistry?.list('workspace') || [];
 
   return {
     scope: 'project',
@@ -602,6 +716,55 @@ function buildProject(context: IPropertiesContext): IPropertiesScopeConfig {
           { id: 'project.open-http-policy', label: label('action.manage_http_policy', 'Gerenciar allowlist HTTP'), kind: 'secondary' },
           { id: 'project.open-memory-advanced', label: label('action.manage_memory_advanced', 'Gerenciar memória avançada'), kind: 'secondary' }
         ]
+      }),
+      section({
+        id: 'libraries',
+        title: label('section.project_libraries', 'Bibliotecas do Projeto'),
+        description: label('project.libraries_desc', 'Habilite bibliotecas liberadas no Workspace e fixe versões de assets.'),
+        icon: 'catalog',
+        badge: label('badge.project', 'Projeto'),
+        content: `
+          ${note(label('project.libraries_hint', 'O Projeto não cria nem edita assets: edições viram derivados em Minha biblioteca do Workspace. Os pins abaixo serão consumidos pelo seletor de agentes/grafos na Fase 4.'), 'info')}
+          ${availableLibraries.length === 0
+            ? `<div class="properties-empty">${escapeHtml(label('project.libraries_empty', 'Nenhuma biblioteca liberada no Workspace.'))}</div>`
+            : availableLibraries.map(library => {
+              const assets = context.libraryRegistry?.listAssets(library.id) || [];
+              const enabled = library.isBuiltin || projectLibraries.enabledLibraryIds.includes(library.id);
+              return `
+                <div class="properties-project-library-group">
+                  <label class="properties-check-row">
+                    <input type="checkbox" data-property-input="libraryEnabled_${escapeHtml(library.id)}" ${enabled ? 'checked' : ''} ${library.isBuiltin ? 'disabled' : ''} />
+                    <span>
+                      <strong>${escapeHtml(library.name)}</strong>
+                      ${toneBadge(library.isBuiltin ? label('libraries.kind_builtin', 'Embutida') : label('libraries.kind_local', 'Local'), library.isBuiltin ? 'success' : 'neutral')}
+                      <span class="properties-muted">${escapeHtml(String(assets.length))} ${escapeHtml(label('libraries.assets', 'assets'))}</span>
+                    </span>
+                  </label>
+                  ${assets.length === 0
+                    ? `<div class="properties-hint properties-project-library-empty">${escapeHtml(label('project.libraries_no_assets', 'Importe um catálogo nas Propriedades do Studio ou do Workspace.'))}</div>`
+                    : `<div class="properties-project-assets">
+                        ${assets.map(asset => {
+                          const tone = asset.audit.verdict === 'APPROVE' ? 'success' : asset.audit.verdict === 'CAUTION' ? 'warning' : asset.audit.verdict === 'REJECT' ? 'danger' : 'neutral';
+                          const pinned = projectLibraries.pinnedAssetIds.includes(asset.id);
+                          return `
+                            <label class="properties-check-row">
+                              <input type="checkbox" data-property-input="assetPinned_${escapeHtml(asset.id)}" ${pinned ? 'checked' : ''} ${enabled ? '' : 'disabled'} />
+                              <span>
+                                ${escapeHtml(asset.name)}
+                                ${toneBadge(asset.kind === 'skill' ? 'Skill' : 'MCP', 'neutral')}
+                                ${toneBadge(asset.audit.verdict, tone)}
+                              </span>
+                            </label>
+                          `;
+                        }).join('')}
+                      </div>`}
+                </div>
+              `;
+            }).join('')}
+        `,
+        save: context.saveProjectLibraries
+          ? (values) => context.saveProjectLibraries!(values)
+          : undefined
       }),
       section({
         id: 'environment',

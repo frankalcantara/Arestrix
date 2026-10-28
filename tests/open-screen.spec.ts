@@ -274,6 +274,16 @@ describe('Tela Abrir - renderizacao no Backstage', () => {
     expect(html).toContain('Este Computador');
     expect(html).toContain('Procurar um projeto ou grafo');
     expect(html).toContain('accept=".arestrix,.json"');
+    expect(html).toContain('backstage-open-table-header');
+    expect(html).toContain('backstage-open-table-row');
+    for (const column of [
+      t('backstage.open.col_name'),
+      t('backstage.open.col_modified'),
+      t('backstage.open.col_type'),
+      t('backstage.open.col_size')
+    ]) {
+      expect(html).toContain(column);
+    }
 
     const today = html.indexOf('>Hoje<');
     const older = html.indexOf('>Mais antigos<');

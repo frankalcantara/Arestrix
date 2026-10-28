@@ -4,10 +4,15 @@ import { INodeData, ICodeModeConfig, CodeModeTool } from '../../core/types.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
 import { t } from '../../i18n/index.ts';
 import { McpToolPicker } from '../McpToolPicker.ts';
+import { globalEventBus } from '../../core/EventBus.ts';
+import { LibraryService } from '../../core/libraries/LibraryService.ts';
+import { LibraryPickerModal } from '../libraries/LibraryPickerModal.ts';
 
 export class NodeToolsModal extends BaseModal {
   private graph: Graph;
   private mcpPicker?: McpToolPicker;
+  private libraryPicker?: LibraryPickerModal;
+  private readonly libraryService = LibraryService.getInstance();
   private activeNodeId: string | null = null;
   private activeTab: 'native' | 'mcp' | 'governance' = 'native';
 
@@ -136,9 +141,14 @@ export class NodeToolsModal extends BaseModal {
             <!-- ABA 2: Servidores MCP -->
             <div class="tab-pane" id="pane-tab-mcp" style="${this.activeTab === 'mcp' ? '' : 'display: none;'}">
               <div style="padding-top: 6px;">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                  <label class="form-label" style="margin: 0; font-weight: 700;">${t('node_modals.mcp_section_title')}</label>
-                  <span style="font-size: 11px; color: var(--text-secondary);">${t('node_modals.mcp_section_sub')}</span>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px;">
+                  <div>
+                    <label class="form-label" style="margin: 0; font-weight: 700;">${t('node_modals.mcp_section_title')}</label>
+                    <div style="font-size: 11px; color: var(--text-secondary);">${t('node_modals.mcp_section_sub')}</div>
+                  </div>
+                  <button type="button" class="btn btn-secondary-office" id="btn-node-tools-add-library" style="white-space: nowrap;">
+                    ${t('node_modals.btn_add_from_library', 'Adicionar da biblioteca')}
+                  </button>
                 </div>
                 <div id="node-mcp-picker"></div>
               </div>
@@ -215,6 +225,34 @@ export class NodeToolsModal extends BaseModal {
       this.mcpPicker = new McpToolPicker(pickerRoot);
       void this.mcpPicker.load({ servers: effectiveTools.mcpServers || [], tools: effectiveTools.allowedMcpTools || [] }, isInherited);
     }
+
+    this.dialog.querySelector('#btn-node-tools-add-library')?.addEventListener('click', () => {
+      if (!this.libraryPicker) this.libraryPicker = new LibraryPickerModal();
+      this.libraryPicker.open({
+        kind: 'mcp',
+        projectId: this.graph.getProjectId(),
+        title: t('node_modals.library_mcp_title', 'Adicionar MCP da Biblioteca'),
+        subtitle: t('node_modals.library_mcp_subtitle', 'O servidor será instalado no Workspace antes de entrar no agente.'),
+        onSelect: async (asset) => {
+          const install = await this.libraryService.installAsset(asset.id, { allowCaution: true });
+          if (!install.ok) {
+            globalEventBus.emit('notification:show', {
+              severity: 'warning',
+              title: t('node_modals.library_mcp_title', 'Adicionar MCP da Biblioteca'),
+              message: install.reason || t('node_modals.library_mcp_install_failed', 'Não foi possível instalar o MCP.')
+            });
+            return;
+          }
+          const current = this.mcpPicker?.getValue() ?? { servers: [], tools: [] };
+          await this.mcpPicker?.load(current, isInherited);
+          globalEventBus.emit('notification:show', {
+            severity: 'success',
+            title: t('node_modals.library_mcp_title', 'Adicionar MCP da Biblioteca'),
+            message: t('node_modals.library_mcp_installed', 'MCP "{{name}}" instalado no Workspace.', { name: asset.name })
+          });
+        }
+      });
+    });
 
     this.dialog.querySelector('#btn-cancel-tools-modal')?.addEventListener('click', () => this.hide());
 

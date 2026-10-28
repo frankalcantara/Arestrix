@@ -1,6 +1,6 @@
 # Brand
 
-> **Applies to:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Last reviewed: 2026-10-19
+> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Last reviewed: 2026-10-19
 
 [Português](../pt-BR/marca.md) · [Index](../README.md)
 

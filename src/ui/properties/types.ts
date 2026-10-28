@@ -18,6 +18,11 @@ export interface IPropertySection {
   actions?: IPropertyAction[];
   /** Quando definido, a seção pode ser editada e o rodapé ganha Salvar/Cancelar. */
   save?: (values: Record<string, string>) => Promise<boolean> | boolean;
+  /**
+   * Binder opcional para componentes interativos dentro da seção (ex.: árvore
+   * de bibliotecas). Recebe o corpo da seção já renderizado.
+   */
+  bind?: (root: HTMLElement) => void;
 }
 
 export interface IPropertiesScopeConfig {

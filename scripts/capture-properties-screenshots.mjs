@@ -112,6 +112,7 @@ try {
   const page = await browser.newPage();
   page.on('pageerror', error => console.error('PAGE ERROR:', error));
   await page.evaluateOnNewDocument(() => {
+    const now = Date.now();
     localStorage.setItem('arestrix_locale', 'en-US');
     localStorage.setItem('arestrix_studio_settings_v1', JSON.stringify({
       version: 1,
@@ -120,6 +121,29 @@ try {
       defaults: {}
     }));
     localStorage.setItem('arestrix_canvas_background', 'light');
+    localStorage.setItem('arestrix_recent_projects', JSON.stringify([
+      {
+        projectId: 'demo-svg',
+        name: 'Corporate SVG Agent',
+        rootPath: 'C:/Projects/CorporateSVG',
+        manifestPath: 'C:/Projects/CorporateSVG/arestrix.project.json',
+        lastOpened: new Date(now - 25 * 60 * 1000).toISOString()
+      },
+      {
+        projectId: 'demo-web',
+        name: 'Web Research Swarm',
+        rootPath: 'C:/Projects/WebResearch',
+        manifestPath: 'C:/Projects/WebResearch/arestrix.project.json',
+        lastOpened: new Date(now - 5 * 60 * 60 * 1000).toISOString()
+      },
+      {
+        projectId: 'demo-audit',
+        name: 'Compliance Audit Pipeline',
+        rootPath: 'C:/Projects/ComplianceAudit',
+        manifestPath: 'C:/Projects/ComplianceAudit/arestrix.project.json',
+        lastOpened: new Date(now - 28 * 60 * 60 * 1000).toISOString()
+      }
+    ]));
   });
 
   await page.goto(BASE_URL, { waitUntil: 'networkidle0', timeout: 30000 });
@@ -129,7 +153,21 @@ try {
   await openBackstage(page, 'properties');
   await capture(page, 'properties-hub.webp', 'Backstage Properties hub');
 
-  // 2. Studio Properties
+  // 2. Office-style Open screen
+  await openBackstage(page, 'open');
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const active = await page.evaluate(() =>
+      document.querySelector('.office-backstage-overlay.open .backstage-nav-item.active')?.getAttribute('data-section')
+    );
+    if (active === 'open') break;
+    await page.evaluate(() =>
+      document.querySelector('.office-backstage-overlay.open .backstage-nav-item[data-section="open"]')?.click()
+    );
+    await wait(500);
+  }
+  await capture(page, 'open-screen.webp', 'Office-style Open screen');
+
+  // 3. Studio Properties
   await openProperties(page, 'studio', 'general');
   await capture(page, 'studio-properties.webp', 'Studio Properties');
 

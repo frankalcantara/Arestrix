@@ -1,5 +1,5 @@
 #include "ProjectManager.hpp"
-#include "DatabaseBackupService.hpp"
+#include "MemoryDatabaseGuard.hpp"
 #include "util/Json.hpp"
 #include <fstream>
 #include <iostream>
@@ -154,8 +154,11 @@ bool ProjectManager::createProject(ProjectManifest manifest) {
     item.lastOpened = nowStr;
     addRecentProject(item);
 
-    std::string restoreErr;
-    DatabaseBackupService::restoreProjectIfNeeded(manifest.rootPath, manifest.projectId, restoreErr);
+    std::string integrityErr;
+    MemoryDatabaseGuard::quarantineIfCorrupt(manifest.rootPath, integrityErr);
+    if (!integrityErr.empty()) {
+        std::cerr << "[ProjectManager] Aviso na integridade do banco de memoria: " << integrityErr << "\n";
+    }
 
     std::cout << "[ProjectManager] Projeto '" << manifest.name << "' (" << manifest.projectId << ") criado em: " << manifest.rootPath << "\n";
     return true;
@@ -209,8 +212,11 @@ bool ProjectManager::loadProject(const std::string& pathOrDir) {
         item.lastOpened = manifest.updatedAt;
         addRecentProject(item);
 
-        std::string restoreErr;
-        DatabaseBackupService::restoreProjectIfNeeded(manifest.rootPath, manifest.projectId, restoreErr);
+        std::string integrityErr;
+        MemoryDatabaseGuard::quarantineIfCorrupt(manifest.rootPath, integrityErr);
+        if (!integrityErr.empty()) {
+            std::cerr << "[ProjectManager] Aviso na integridade do banco de memoria: " << integrityErr << "\n";
+        }
 
         std::cout << "[ProjectManager] Projeto '" << manifest.name << "' carregado com sucesso.\n";
         return true;

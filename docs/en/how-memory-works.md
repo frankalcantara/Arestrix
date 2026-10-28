@@ -1,6 +1,6 @@
 # How Arestrix memory works
 
-> **Applies to:** Arestrix Beta 2.2 (`2.2.0-beta.1`) — last reviewed: 2026-10-25
+> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.1`) — last reviewed: 2026-10-25
 >
 > This guide describes the memory implemented in the C++20 + SQLite core. It covers the full
 > cycle: capture, proposal, promotion, consolidation, retrieval, embeddings, playbooks,
@@ -16,7 +16,7 @@ Arestrix memory is designed to be:
 - **auditable:** promotions, conflicts, decay, policies and purges leave a trail;
 - **opt-in:** memory and embeddings are disabled by default;
 - **temporal:** facts carry validity, confidence and history; nothing is silently overwritten;
-- **recoverable:** versioned snapshots restore the cognitive graph.
+- **local by default:** the cognitive graph lives on the project disk; backup and recovery are external to Arestrix.
 
 The operating principle is:
 
@@ -57,7 +57,7 @@ Agent / Tools / Studio / CLI
 
 - **`MemoryService`**: public facade for project, workspace, embeddings, consolidation,
   proposals, playbooks and status.
-- **`MemoryStore`**: SQLite persistence, schema, FTS5, transactions, snapshot, purge, prune,
+- **`MemoryStore`**: SQLite persistence, schema, FTS5, transactions, purge, prune,
   aliases, policies and metrics.
 - **`MemorySanitizer`**: removes secrets before any write, legacy read or export.
 - **`MemoryExtractor`**: turns sanitized episodes into deterministic proposals.
@@ -66,7 +66,7 @@ Agent / Tools / Studio / CLI
 - **`EmbeddingProvider`**: optional OpenAI-compatible provider.
 - **`MemoryVectorIndex` / `MemoryIndexer` / `MemoryRanker`**: vector index, indexing and RRF.
 - **`MemoryInstitutionService`**: local contract for tokens, roles and policies.
-- **`DatabaseBackupService`**: snapshot, restore, quarantine and retention on shutdown.
+- **`MemoryDatabaseGuard`**: corrupt-database quarantine and telemetry retention on shutdown.
 - **`Agent` / `Tools`**: record episodes, lessons, hits and usage; expose `memory_search`.
 
 ## 4. Data model
@@ -137,7 +137,7 @@ The Blackboard is a workspace per `item_id`. Reads and writes are controlled by
 
 Before persistence, `MemorySanitizer` removes patterns such as OpenAI/Stripe, Google, AWS,
 GitHub and Slack keys, `Bearer` tokens, `api_key=...` assignments, URL parameters and PEM keys.
-Sanitization is also applied to legacy reads and snapshot exports.
+Sanitization is also applied to legacy reads.
 
 ## 6. Proposals and promotion
 
@@ -408,13 +408,10 @@ The HTTP `/mcp` endpoint accepts the same JSON-RPC with `Authorization: Bearer .
 - background consolidation is per process. Two `arestrix-memory` instances do not coordinate the
   same run; for multi-instance operation, keep consolidation manual or external.
 
-## 13. Snapshot, retention and purge
+## 13. Retention, purge and integrity
 
-- Snapshot v2 includes scopes, closure, nodes, edges, working rows, lessons, aliases and
-  playbooks.
-- Snapshot v1 remains importable.
-- Atomic writes and protection against an empty snapshot overwriting existing memory.
 - A corrupt database is quarantined as `memory.db.corrupt-<stamp>`.
+- Arestrix does not generate or restore database dumps: backup and disaster recovery are external to the product.
 - `memory purge` removes graph, proposals, playbooks, embeddings, aliases, hits, usage,
   episodes and (optionally) audit; then runs `VACUUM`.
 - `memory prune --days N` removes old telemetry without touching the cognitive graph.
@@ -494,7 +491,6 @@ the pull command.
 - institution tokens do not persist across restarts;
 - background consolidation is still manual;
 - LLM generalization is not part of this core;
-- snapshots do not carry vectors; reindex after restore;
 - institution policies are local and tokens are not persisted;
 - Studio ribbon debt is independent from memory.
 

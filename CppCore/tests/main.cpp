@@ -34,8 +34,9 @@
 #include "memory/MemoryVectorIndex.hpp"
 #include "platform/Process.hpp"
 #include "project/OpenableFiles.hpp"
+#include "libraries/GitHubSource.hpp"
 #include "project/GitSyncService.hpp"
-#include "project/DatabaseBackupService.hpp"
+#include "project/MemoryDatabaseGuard.hpp"
 #include "sqlite3.h"
 #include "project/RunnerService.hpp"
 #include "project/CorporateVault.hpp"
@@ -1634,46 +1635,6 @@ TEST(memory_store_sanitizes_secrets) {
     fs::remove_all(dir, ec);
 }
 
-TEST(memory_snapshot_sanitizes_secrets_from_legacy_rows) {
-    using taskforge::project::DatabaseBackupService;
-    using taskforge::memory::MemoryService;
-    namespace fs = std::filesystem;
-
-    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
-    fs::path root = fs::temp_directory_path() / ("arx_test_mem_sanitize_" + stamp);
-    fs::create_directories(root / ".arestrix" / "memory");
-    fs::create_directories(root / "storage");
-    const std::string pId = "snapshot-sanitize-test";
-    const fs::path dbPath = root / ".arestrix" / "memory" / "memory.db";
-    const fs::path snapPath = root / "storage" / "memory.dump.json";
-    const std::string secret = "sk-proj-" + std::string(40, 'a');
-
-    auto& memory = MemoryService::getInstance();
-    memory.closeProject(pId);
-    CHECK(memory.configure(pId, true, dbPath.string()));
-    CHECK(!memory.recordLesson(pId, "seguranca", "manual", "REGRA-SEGURA", "seed").empty());
-    memory.closeProject(pId);
-
-    // Simula uma linha antiga/legada gravada antes da sanitizacao.
-    sqlite3* db = nullptr;
-    CHECK(sqlite3_open_v2(dbPath.string().c_str(), &db, SQLITE_OPEN_READWRITE, nullptr) == SQLITE_OK);
-    CHECK(sqlite3_exec(db, ("UPDATE memory_node SET canonical_name='" + secret + "' WHERE kind='rule';").c_str(),
-                       nullptr, nullptr, nullptr) == SQLITE_OK);
-    sqlite3_close(db);
-
-    std::string error;
-    CHECK(DatabaseBackupService::exportMemorySnapshot(pId, root, snapPath, error));
-    std::ifstream in(snapPath, std::ios::binary);
-    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    in.close();
-    CHECK(content.find(secret) == std::string::npos);
-    CHECK(content.find("[REDACTED]") != std::string::npos);
-
-    memory.closeProject(pId);
-    std::error_code ec;
-    fs::remove_all(root, ec);
-}
-
 TEST(memory_store_purge_removes_all_cognitive_and_telemetry_data) {
     using taskforge::memory::MemoryStore;
     using taskforge::memory::MemoryUsageRecord;
@@ -1787,8 +1748,8 @@ TEST(memory_service_clear_session_resets_ephemeral_store) {
     memory.closeProject("ephemeral-reset");
 }
 
-TEST(database_backup_prunes_memory_on_shutdown_using_manifest) {
-    using taskforge::project::DatabaseBackupService;
+TEST(memory_database_guard_prunes_telemetry_on_shutdown_using_manifest) {
+    using taskforge::project::MemoryDatabaseGuard;
     using taskforge::memory::MemoryService;
     using taskforge::memory::MemoryUsageRecord;
     namespace fs = std::filesystem;
@@ -1835,179 +1796,10 @@ TEST(database_backup_prunes_memory_on_shutdown_using_manifest) {
     sqlite3_close(raw);
 
     std::string error;
-    CHECK(DatabaseBackupService::pruneMemoryOnShutdown(root, pId, error));
+    CHECK(MemoryDatabaseGuard::applyRetentionOnShutdown(root, pId, error));
     CHECK(error.empty());
     CHECK(memory.usageSummary(pId)["runs"] == 0);
     CHECK(memory.hitSummary(pId)["hits"] == 0);
-
-    memory.closeProject(pId);
-    std::error_code ec;
-    fs::remove_all(root, ec);
-}
-
-TEST(memory_snapshot_v2_roundtrip_preserves_full_graph) {
-    using namespace taskforge::project;
-    using taskforge::memory::MemoryService;
-    namespace fs = std::filesystem;
-
-    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
-    fs::path root = fs::temp_directory_path() / ("arx_test_mem_v2_" + stamp);
-    fs::create_directories(root / ".arestrix" / "memory");
-    fs::create_directories(root / "storage");
-    const std::string pId = "snapshot-v2-test";
-    const std::string scope = "project:" + pId;
-    const fs::path dbPath = root / ".arestrix" / "memory" / "memory.db";
-    const fs::path snapPath = root / "storage" / "memory.dump.json";
-
-    auto& memory = MemoryService::getInstance();
-    memory.closeProject(pId);
-    CHECK(memory.configure(pId, true, dbPath.string()));
-    auto* store = memory.store(pId);
-    CHECK(store != nullptr);
-    const std::string a = store->ensureNode(scope, "node-v2-a", "library", "Biblioteca A");
-    const std::string b = store->ensureNode(scope, "node-v2-b", "library", "Biblioteca B");
-    CHECK(!a.empty() && !b.empty());
-
-    taskforge::Json meta = taskforge::Json::object();
-    meta["domain"] = "v2";
-    meta["note"] = "metadata preservada";
-    const std::string currentEdge = store->recordEdge(
-        scope, a, b, "USES", taskforge::Json("atual"), "2024-01-01T00:00:00Z", "",
-        0.77, "active", "test", "ref-v2", meta);
-    const std::string oldEdge = store->recordEdge(
-        scope, a, b, "USES", taskforge::Json("antigo"), "2020-01-01T00:00:00Z",
-        "2021-01-01T00:00:00Z", 0.33, "active", "test", "ref-old", meta);
-    CHECK(!currentEdge.empty() && !oldEdge.empty());
-    CHECK(store->invalidateEdge(oldEdge, "2021-01-01T00:00:00Z", "substituida", "test"));
-    CHECK(!store->recordLesson(scope, "v2", "manual", "REGRA-V2", "seed").empty());
-    taskforge::Json working = taskforge::Json::object();
-    working["resumo"] = "valor-v2";
-    working["objeto"]["campo"] = 42;
-    CHECK(store->setWorking(scope, "pipeline", "estado", working));
-
-    std::string error;
-    CHECK(DatabaseBackupService::exportMemorySnapshot(pId, root, snapPath, error));
-    const std::string firstDump = taskforge::jsonutil::readFile(snapPath);
-    auto parsed = taskforge::jsonutil::tryParse(firstDump);
-    CHECK(parsed && parsed->is_object());
-    CHECK(parsed->value("version", std::string()) == "2.0.0");
-    CHECK(parsed->contains("nodes") && (*parsed)["nodes"].size() >= 4);
-    CHECK(parsed->contains("edges") && (*parsed)["edges"].size() == 3);
-    CHECK(parsed->contains("closure") && !(*parsed)["closure"].empty());
-
-    // Determinismo: sem timestamp volatil, duas exportacoes sao identicas.
-    CHECK(DatabaseBackupService::exportMemorySnapshot(pId, root, snapPath, error));
-    CHECK(taskforge::jsonutil::readFile(snapPath) == firstDump);
-
-    // Destroi o banco cognitivo e restaura o grafo completo.
-    memory.clearProject(pId);
-    CHECK(memory.getLessons(pId).empty());
-    CHECK(DatabaseBackupService::restoreMemorySnapshot(pId, root, snapPath, error));
-    auto lessons = memory.getLessons(pId, "v2");
-    CHECK(lessons.size() == 1 && lessons[0].lessonRule == "REGRA-V2");
-    auto restoredWorking = memory.getWorking(pId, "pipeline", "estado");
-    CHECK(restoredWorking.is_object() && restoredWorking["resumo"] == taskforge::Json("valor-v2"));
-    CHECK(restoredWorking["objeto"]["campo"] == taskforge::Json(42));
-
-    store = memory.store(pId);
-    CHECK(store != nullptr);
-    auto active = store->neighbors(scope, a, 1);
-    CHECK(active.size() == 1 && active[0].id == currentEdge);
-    CHECK(active[0].confidence > 0.76 && active[0].confidence < 0.78);
-    CHECK(active[0].sourceRef == "ref-v2");
-
-    std::vector<taskforge::memory::MemoryHitRef> searchHits;
-    const std::string found = store->searchContext(scope, "Biblioteca", 10, {}, &searchHits);
-    CHECK(found.find("Biblioteca A") != std::string::npos);
-    CHECK(!searchHits.empty());
-
-    memory.closeProject(pId);
-    sqlite3* raw = nullptr;
-    CHECK(sqlite3_open_v2(dbPath.string().c_str(), &raw, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK);
-    sqlite3_stmt* st = nullptr;
-    CHECK(sqlite3_prepare_v2(raw, "SELECT status, valid_to, source_ref, metadata FROM memory_edge WHERE id=?;",
-                             -1, &st, nullptr) == SQLITE_OK);
-    sqlite3_bind_text(st, 1, oldEdge.c_str(), -1, SQLITE_TRANSIENT);
-    CHECK(sqlite3_step(st) == SQLITE_ROW);
-    CHECK(std::string(reinterpret_cast<const char*>(sqlite3_column_text(st, 0))) == "superseded");
-    CHECK(std::string(reinterpret_cast<const char*>(sqlite3_column_text(st, 1))) == "2021-01-01T00:00:00Z");
-    CHECK(std::string(reinterpret_cast<const char*>(sqlite3_column_text(st, 2))) == "ref-old");
-    CHECK(std::string(reinterpret_cast<const char*>(sqlite3_column_text(st, 3))).find("metadata preservada") != std::string::npos);
-    sqlite3_finalize(st);
-    sqlite3_close(raw);
-
-    std::error_code ec;
-    fs::remove_all(root, ec);
-}
-
-TEST(memory_snapshot_v1_remains_importable) {
-    using namespace taskforge::project;
-    using taskforge::memory::MemoryService;
-    namespace fs = std::filesystem;
-
-    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
-    fs::path root = fs::temp_directory_path() / ("arx_test_mem_v1_" + stamp);
-    fs::create_directories(root / "storage");
-    const std::string pId = "snapshot-v1-test";
-    const fs::path snapPath = root / "storage" / "memory.dump.json";
-    taskforge::Json snapshot = taskforge::Json::object();
-    snapshot["format"] = "arestrix-memory-snapshot";
-    snapshot["version"] = "1.0.0";
-    snapshot["projectId"] = pId;
-    snapshot["lessons"] = taskforge::Json::array({taskforge::Json{
-        {"id", "lesson-v1"}, {"domain", "v1"}, {"triggerError", "legado"},
-        {"lessonRule", "REGRA-V1"}, {"sourceItem", "seed"}}});
-    snapshot["working"] = taskforge::Json{{"pipeline", taskforge::Json{{"resumo", "valor-v1"}}}};
-    {
-        std::ofstream out(snapPath, std::ios::binary | std::ios::trunc);
-        out << snapshot.dump(2);
-    }
-
-    auto& memory = MemoryService::getInstance();
-    memory.closeProject(pId);
-    std::string error;
-    CHECK(DatabaseBackupService::restoreMemorySnapshot(pId, root, snapPath, error));
-    auto lessons = memory.getLessons(pId, "v1");
-    CHECK(lessons.size() == 1 && lessons[0].lessonRule == "REGRA-V1");
-    CHECK(memory.getWorking(pId, "pipeline", "resumo") == taskforge::Json("valor-v1"));
-
-    memory.closeProject(pId);
-    std::error_code ec;
-    fs::remove_all(root, ec);
-}
-
-TEST(memory_snapshot_v2_import_is_atomic_on_failure) {
-    using namespace taskforge::project;
-    using taskforge::memory::MemoryService;
-    namespace fs = std::filesystem;
-
-    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
-    fs::path root = fs::temp_directory_path() / ("arx_test_mem_atomic_" + stamp);
-    fs::create_directories(root / ".arestrix" / "memory");
-    fs::create_directories(root / "storage");
-    const std::string pId = "snapshot-atomic-test";
-    const fs::path dbPath = root / ".arestrix" / "memory" / "memory.db";
-    const fs::path snapPath = root / "storage" / "memory.dump.json";
-
-    auto& memory = MemoryService::getInstance();
-    memory.closeProject(pId);
-    CHECK(memory.configure(pId, true, dbPath.string()));
-    CHECK(!memory.recordLesson(pId, "atomic", "manual", "REGRA-ANTES", "seed").empty());
-    std::string error;
-    CHECK(DatabaseBackupService::exportMemorySnapshot(pId, root, snapPath, error));
-
-    auto parsed = taskforge::jsonutil::tryParse(taskforge::jsonutil::readFile(snapPath));
-    CHECK(parsed && parsed->is_object());
-    CHECK((*parsed)["edges"].is_array() && !(*parsed)["edges"].empty());
-    (*parsed)["edges"][0]["srcId"] = "missing-node-for-atomic-test";
-    {
-        std::ofstream out(snapPath, std::ios::binary | std::ios::trunc);
-        out << parsed->dump(2);
-    }
-
-    CHECK(!DatabaseBackupService::restoreMemorySnapshot(pId, root, snapPath, error));
-    auto lessons = memory.getLessons(pId, "atomic");
-    CHECK(lessons.size() == 1 && lessons[0].lessonRule == "REGRA-ANTES");
 
     memory.closeProject(pId);
     std::error_code ec;
@@ -5246,13 +5038,11 @@ TEST(git_sync_service_and_project_manifest_config) {
     // 2. Serializacao do Manifesto com Git
     ProjectGitConfig defaultGit;
     CHECK(defaultGit.enabled == false); // Opcional por padrao
-    CHECK(defaultGit.backupMode == "ddl_and_data");
 
     ProjectManifest m;
     m.projectId = "test-git-proj";
     m.name = "Projeto Git Teste";
     m.git.enabled = true;
-    m.git.backupMode = "schema_only";
     m.git.provider = "github";
     m.git.serverUrl = "https://github.com";
     m.git.username = "frankalcantara";
@@ -5266,7 +5056,7 @@ TEST(git_sync_service_and_project_manifest_config) {
 
     taskforge::Json j = m;
     CHECK(j["git"]["enabled"] == true);
-    CHECK(j["git"]["backupMode"] == "schema_only");
+    CHECK(!j["git"].contains("backupMode"));
     CHECK(j["git"]["isPrivate"] == true);
     CHECK(j["git"]["provider"] == "github");
     CHECK(j["git"]["repositoryName"] == "projeto-git-teste");
@@ -5274,7 +5064,6 @@ TEST(git_sync_service_and_project_manifest_config) {
     // Desserializacao
     auto m2 = j.get<ProjectManifest>();
     CHECK(m2.git.enabled == true);
-    CHECK(m2.git.backupMode == "schema_only");
     CHECK(m2.git.isPrivate == true);
     CHECK(m2.git.username == "frankalcantara");
     CHECK(m2.git.repositoryName == "projeto-git-teste");
@@ -5327,197 +5116,58 @@ TEST(git_sync_service_and_project_manifest_config) {
     std::filesystem::remove_all(tempDir, ec);
 }
 
-TEST(database_backup_service_dump_restore_and_safe_gitignore) {
+TEST(ensure_safe_gitignore_excludes_databases_and_dumps) {
     using namespace taskforge::project;
     namespace fs = std::filesystem;
 
-    fs::path tempRoot = fs::temp_directory_path() / ("arx_test_db_backup_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()));
+    fs::path tempRoot = fs::temp_directory_path() /
+        ("arx_test_safe_gitignore_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()));
     fs::create_directories(tempRoot / "storage");
 
-    // 1. Validacao do .gitignore seguro
     GitSyncService::ensureSafeGitignore(tempRoot);
     fs::path gitignorePath = tempRoot / ".gitignore";
     CHECK(fs::exists(gitignorePath));
+
     std::ifstream ig(gitignorePath);
     std::string igContent((std::istreambuf_iterator<char>(ig)), std::istreambuf_iterator<char>());
     ig.close();
+
+    // Bancos binarios, dumps SQL e snapshots nunca entram no Git.
     CHECK(igContent.find("storage/*.sqlite") != std::string::npos);
     CHECK(igContent.find("storage/*.db") != std::string::npos);
+    CHECK(igContent.find("storage/*.sql") != std::string::npos);
     CHECK(igContent.find("*.sqlite") != std::string::npos);
-    CHECK(igContent.find("output/") != std::string::npos);
+    CHECK(igContent.find("*.sql") != std::string::npos);
+    CHECK(igContent.find("*.dump.json") != std::string::npos);
+    CHECK(igContent.find("*.db.corrupt-*") != std::string::npos);
     CHECK(igContent.find(".arestrix/") != std::string::npos);
-    CHECK(igContent.find("*.gguf") != std::string::npos);
-    CHECK(igContent.find("*.parquet") != std::string::npos);
+    CHECK(igContent.find("output/") != std::string::npos);
 
-    // 2. Criacao de banco de dados SQLite com dados variados
-    fs::path dbPath = tempRoot / "storage" / "database.sqlite";
-    fs::path sqlPath = tempRoot / "storage" / "database.sql";
-
-    sqlite3* db = nullptr;
-    CHECK(sqlite3_open_v2(dbPath.string().c_str(), &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr) == SQLITE_OK);
-    const char* setupSql =
-        "CREATE TABLE clientes (id INTEGER PRIMARY KEY, nome TEXT, saldo REAL, nota TEXT);"
-        "INSERT INTO clientes VALUES (1, 'João D''Ávila', 1500.50, 'Nota com aspas simples');"
-        "INSERT INTO clientes VALUES (2, 'Maria Santos', 3200.00, NULL);"
-        "CREATE TABLE configuracoes (chave TEXT PRIMARY KEY, valor TEXT);"
-        "INSERT INTO configuracoes VALUES ('tema', 'dark');";
-    CHECK(sqlite3_exec(db, setupSql, nullptr, nullptr, nullptr) == SQLITE_OK);
-    sqlite3_close(db);
-
-    // 3. Exportacao de dump SQL (Opcao A: DDL + Dados)
-    std::string err;
-    bool dumpOk = DatabaseBackupService::exportSqlDump(dbPath, sqlPath, err);
-    CHECK(dumpOk);
-    CHECK(fs::exists(sqlPath));
-
-    std::ifstream sqlIn(sqlPath);
-    std::string sqlDumpContent((std::istreambuf_iterator<char>(sqlIn)), std::istreambuf_iterator<char>());
-    sqlIn.close();
-    CHECK(sqlDumpContent.find("CREATE TABLE clientes") != std::string::npos);
-    CHECK(sqlDumpContent.find("João D''Ávila") != std::string::npos);
-    CHECK(sqlDumpContent.find("CREATE TABLE configuracoes") != std::string::npos);
-    CHECK(sqlDumpContent.find("INSERT INTO \"clientes\"") != std::string::npos);
-    CHECK(sqlDumpContent.find("-- Gerado em:") == std::string::npos);
-
-    // 3.1 Exportacao de dump SQL no modo apenas esquema / DDL (Opcao B)
-    fs::path sqlPathSchema = tempRoot / "storage" / "database_schema.sql";
-    bool dumpSchemaOk = DatabaseBackupService::exportSqlDump(dbPath, sqlPathSchema, err, true);
-    CHECK(dumpSchemaOk);
-    CHECK(fs::exists(sqlPathSchema));
-
-    std::ifstream sqlSchemaIn(sqlPathSchema);
-    std::string sqlSchemaContent((std::istreambuf_iterator<char>(sqlSchemaIn)), std::istreambuf_iterator<char>());
-    sqlSchemaIn.close();
-    CHECK(sqlSchemaContent.find("CREATE TABLE clientes") != std::string::npos);
-    CHECK(sqlSchemaContent.find("CREATE TABLE configuracoes") != std::string::npos);
-    CHECK(sqlSchemaContent.find("INSERT INTO") == std::string::npos); // Sem INSERTs na opcao DDL Only
-
-    // 4. Simulacao de desastre: exclui o arquivo binario .sqlite
-    fs::remove(dbPath);
-    CHECK(!fs::exists(dbPath));
-
-    // 5. Restauracao do banco a partir do dump SQL em texto puro
-    bool restoreOk = DatabaseBackupService::restoreFromSqlDump(sqlPath, dbPath, false, err);
-    CHECK(restoreOk);
-    CHECK(fs::exists(dbPath));
-
-    // Valida que os dados foram recuperados perfeitamente no novo .sqlite
-    sqlite3* dbRestored = nullptr;
-    CHECK(sqlite3_open_v2(dbPath.string().c_str(), &dbRestored, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK);
-    sqlite3_stmt* stmt = nullptr;
-    CHECK(sqlite3_prepare_v2(dbRestored, "SELECT nome, saldo FROM clientes WHERE id = 1;", -1, &stmt, nullptr) == SQLITE_OK);
-    CHECK(sqlite3_step(stmt) == SQLITE_ROW);
-    std::string nomeRec = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-    double saldoRec = sqlite3_column_double(stmt, 1);
-    CHECK(nomeRec == "João D'Ávila");
-    CHECK(std::abs(saldoRec - 1500.50) < 0.001);
-    sqlite3_finalize(stmt);
-    sqlite3_close(dbRestored);
-
-    // 6. Teste de Snapshot de Memoria Cognitiva (Lições e Blackboard)
-    std::string testProjId = "test_snap_proj";
-    fs::path memDbPath = tempRoot / ".arestrix" / "memory" / "memory.db";
-    auto& mem = taskforge::memory::MemoryService::getInstance();
-    mem.closeProject(testProjId);
-    mem.configure(testProjId, true, memDbPath.string());
-    mem.recordLesson(testProjId, "compilacao", "MSVC C2065", "Sempre incluir headers C++20 necessarios", "node_build", "teste");
-    mem.setWorking(testProjId, "item_42", "status_tarefa", "concluido_sucesso");
-
-    fs::path snapPath = tempRoot / "storage" / "memory.dump.json";
-    bool snapExportOk = DatabaseBackupService::exportMemorySnapshot(testProjId, tempRoot, snapPath, err);
-    CHECK(snapExportOk);
-    CHECK(fs::exists(snapPath));
-
-    // Limpa memoria e restaura a partir do JSON
-    mem.clearProject(testProjId);
-    bool snapRestoreOk = DatabaseBackupService::restoreMemorySnapshot(testProjId, tempRoot, snapPath, err);
-    CHECK(snapRestoreOk);
-
-    auto lessonsRestored = mem.getLessons(testProjId);
-    CHECK(!lessonsRestored.empty());
-    CHECK(lessonsRestored[0].lessonRule == "Sempre incluir headers C++20 necessarios");
-    auto workingRestored = mem.getWorking(testProjId, "item_42", "status_tarefa");
-    CHECK(workingRestored.is_string() && workingRestored.str() == "concluido_sucesso");
-
-    // Limpeza
-    mem.closeProject(testProjId);
-    std::error_code removeEc;
-    fs::remove_all(tempRoot, removeEc);
+    std::error_code ec;
+    fs::remove_all(tempRoot, ec);
 }
 
-TEST(memory_snapshot_is_project_rooted_and_restores_after_corruption) {
-    using namespace taskforge::project;
+TEST(memory_database_guard_quarantines_corrupt_database) {
+    using taskforge::project::MemoryDatabaseGuard;
     namespace fs = std::filesystem;
-    using taskforge::memory::MemoryService;
 
-    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
-    fs::path tempRoot = fs::temp_directory_path() / ("arx_test_mem_snapshot_" + stamp);
-    fs::path studioCwd = fs::temp_directory_path() / ("arx_test_mem_cwd_" + stamp);
-    fs::create_directories(tempRoot / ".arestrix" / "memory");
-    fs::create_directories(tempRoot / "storage");
-    fs::create_directories(studioCwd);
-
-    const std::string pId = "snapshot_rooted_test";
-    const fs::path dbPath = tempRoot / ".arestrix" / "memory" / "memory.db";
-    const fs::path snapPath = tempRoot / "storage" / "memory.dump.json";
-
-    auto& mem = MemoryService::getInstance();
-    mem.closeProject(pId);
-
-    const fs::path oldCwd = fs::current_path();
-    std::error_code cwdEc;
-    fs::current_path(studioCwd, cwdEc);
-    CHECK(!cwdEc);
-
-    // 1. Exportacao com CWD diferente da raiz do projeto: o banco lido e o do projeto.
-    CHECK(mem.configure(pId, true, dbPath.string()));
-    CHECK(!mem.recordLesson(pId, "snap", "manual", "REGRA-SNAPSHOT-ROOT", "seed").empty());
-    CHECK(mem.setWorking(pId, "pipeline", "resumo", taskforge::Json("valor-snapshot")));
-
-    std::string err;
-    CHECK(DatabaseBackupService::exportMemorySnapshot(pId, tempRoot, snapPath, err));
-    CHECK(fs::exists(snapPath));
-    CHECK(fs::exists(dbPath));
-    CHECK(!fs::exists(studioCwd / ".arestrix" / "memory" / "memory.db"));
-
-    std::ifstream snapIn(snapPath);
-    std::string snapshotContent((std::istreambuf_iterator<char>(snapIn)), std::istreambuf_iterator<char>());
-    snapIn.close();
-    CHECK(snapshotContent.find("REGRA-SNAPSHOT-ROOT") != std::string::npos);
-
-    // 2. Banco ausente: exportacao nao cria banco e nao toca no snapshot existente.
-    mem.closeProject(pId);
-    fs::remove(dbPath);
-    CHECK(DatabaseBackupService::exportMemorySnapshot(pId, tempRoot, snapPath, err));
-    CHECK(!fs::exists(dbPath));
-
-    std::ifstream snapAgain(snapPath);
-    std::string preserved((std::istreambuf_iterator<char>(snapAgain)), std::istreambuf_iterator<char>());
-    snapAgain.close();
-    CHECK(preserved == snapshotContent);
-
-    // 3. Restauracao com CWD diferente: o banco de destino e o do projeto.
-    CHECK(DatabaseBackupService::restoreMemorySnapshot(pId, tempRoot, snapPath, err));
-    CHECK(fs::exists(dbPath));
-    CHECK(!fs::exists(studioCwd / ".arestrix" / "memory" / "memory.db"));
-    CHECK(mem.getWorking(pId, "pipeline", "resumo") == taskforge::Json("valor-snapshot"));
-    auto restoredLessons = mem.getLessons(pId, "snap");
-    CHECK(restoredLessons.size() == 1 && restoredLessons[0].lessonRule == "REGRA-SNAPSHOT-ROOT");
-
-    // 4. Banco corrompido: quarentena + restauracao a partir do snapshot.
-    mem.closeProject(pId);
+    fs::path tempRoot = fs::temp_directory_path() /
+        ("arx_test_mem_guard_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()));
+    fs::path memoryDir = tempRoot / ".arestrix" / "memory";
+    fs::create_directories(memoryDir);
+    const fs::path dbPath = memoryDir / "memory.db";
     {
         std::ofstream corrupt(dbPath, std::ios::binary | std::ios::trunc);
         corrupt << "isto nao e um banco sqlite";
     }
-    std::string restoreErr;
-    CHECK(DatabaseBackupService::restoreProjectIfNeeded(tempRoot, pId, restoreErr));
-    CHECK(restoreErr.empty());
-    auto afterCorruption = mem.getLessons(pId, "snap");
-    CHECK(afterCorruption.size() == 1 && afterCorruption[0].lessonRule == "REGRA-SNAPSHOT-ROOT");
+
+    std::string error;
+    CHECK(MemoryDatabaseGuard::quarantineIfCorrupt(tempRoot, error));
+    CHECK(error.empty());
+    CHECK(!fs::exists(dbPath));
 
     bool quarantined = false;
-    for (const auto& entry : fs::directory_iterator(tempRoot / ".arestrix" / "memory")) {
+    for (const auto& entry : fs::directory_iterator(memoryDir)) {
         if (entry.path().filename().string().find(".corrupt-") != std::string::npos) {
             quarantined = true;
             break;
@@ -5525,11 +5175,11 @@ TEST(memory_snapshot_is_project_rooted_and_restores_after_corruption) {
     }
     CHECK(quarantined);
 
-    mem.closeProject(pId);
-    fs::current_path(oldCwd, cwdEc);
-    std::error_code cleanup;
-    fs::remove_all(tempRoot, cleanup);
-    fs::remove_all(studioCwd, cleanup);
+    // Raiz sem banco: nao cria nada e nao falha.
+    CHECK(MemoryDatabaseGuard::quarantineIfCorrupt(tempRoot, error));
+
+    std::error_code ec;
+    fs::remove_all(tempRoot, ec);
 }
 
 TEST(standalone_runner_service_and_manifest_config) {
@@ -5898,6 +5548,140 @@ TEST(runner_enterprise_packaging_wix_msix_and_intune) {
     fs::remove_all(tempRoot);
 }
 
+TEST(github_source_validation) {
+    using namespace taskforge::libraries;
+
+    CHECK(isValidRepo("organizacao/projeto"));
+    CHECK(!isValidRepo("organizacao"));
+    CHECK(!isValidRepo("../projeto"));
+    CHECK(!isValidRepo("organizacao/projeto/extra"));
+
+    CHECK(isValidRef("main"));
+    CHECK(isValidRef("feature/nova-biblioteca"));
+    CHECK(!isValidRef("../main"));
+    CHECK(!isValidRef("/main"));
+
+    CHECK(isValidAssetPath("skills/exemplo/SKILL.md"));
+    CHECK(isValidAssetPath("mcps/servidor.json"));
+    CHECK(!isValidAssetPath("../SKILL.md"));
+    CHECK(!isValidAssetPath("/etc/passwd"));
+    CHECK(!isValidAssetPath("skills\\exemplo\\SKILL.md"));
+
+    CHECK(isValidCommit("abcdef1"));
+    CHECK(isValidCommit(std::string(40, 'a')));
+    CHECK(!isValidCommit("XYZ"));
+    CHECK(!isValidCommit("abc"));
+
+    CHECK(classifyAssetKind("skills/exemplo/SKILL.md") == "skill");
+    CHECK(classifyAssetKind("mcps/servidor.json") == "mcp");
+    CHECK(classifyAssetKind("README.md").empty());
+    CHECK(classifyAssetKind("skills/exemplo/skill.json").empty());
+
+    CHECK(deriveAssetName("skills/exemplo/SKILL.md", "organizacao/projeto") == "exemplo");
+    CHECK(deriveAssetName("mcps/servidor.json", "organizacao/projeto") == "servidor");
+}
+
+TEST(github_source_rejects_invalid_requests) {
+    using namespace taskforge::libraries;
+    using taskforge::Json;
+
+    const Json invalidRepo = taskforge::jsonutil::parse(
+        fetchLibrarySourceJson(R"({"mode":"manifest","repo":"../projeto"})"));
+    CHECK(!invalidRepo.value("ok", true));
+    CHECK(invalidRepo.value("errorCode", "") == "github_invalid_request");
+
+    const Json invalidPath = taskforge::jsonutil::parse(
+        fetchLibrarySourceJson(R"({"mode":"asset","repo":"organizacao/projeto","path":"../SKILL.md"})"));
+    CHECK(!invalidPath.value("ok", true));
+    CHECK(invalidPath.value("errorCode", "") == "github_invalid_request");
+
+    const Json invalidMode = taskforge::jsonutil::parse(
+        fetchLibrarySourceJson(R"({"mode":"unknown","repo":"organizacao/projeto"})"));
+    CHECK(!invalidMode.value("ok", true));
+    CHECK(invalidMode.value("errorCode", "") == "github_invalid_request");
+}
+
+TEST(github_source_live_manifest) {
+    using taskforge::Json;
+    if (!std::getenv("ARESTRIX_GITHUB_LIVE")) {
+        std::cout << "  [skip] ARESTRIX_GITHUB_LIVE nao definido\n";
+        return;
+    }
+    const std::string payload = taskforge::libraries::fetchLibrarySourceJson(
+        R"({"mode":"manifest","repo":"octocat/Hello-World","ref":"master"})");
+    const Json result = taskforge::jsonutil::parse(payload);
+    CHECK(result.value("ok", false));
+    CHECK(result.value("commit", "").size() >= 7);
+}
+
+TEST(github_source_mock_manifest_and_asset) {
+    using taskforge::Json;
+    if (!std::getenv("ARESTRIX_TEST_MODE")
+        || !std::getenv("ARESTRIX_TEST_GITHUB_API_BASE")
+        || !std::getenv("ARESTRIX_TEST_GITHUB_RAW_BASE")) {
+        std::cout << "  [skip] ARESTRIX_TEST_MODE/ARESTRIX_TEST_GITHUB_* nao definidos\n";
+        return;
+    }
+
+    const Json manifest = taskforge::jsonutil::parse(
+        taskforge::libraries::fetchLibrarySourceJson(
+            R"({"mode":"manifest","repo":"e2e/library","ref":"main"})"));
+    CHECK(manifest.value("ok", false));
+    CHECK(manifest.value("license", "") == "MIT");
+    const std::string commit = manifest.value("commit", "");
+    CHECK(commit.size() >= 7);
+
+    int assets = 0;
+    bool hasSafe = false;
+    bool hasHostile = false;
+    bool hasMcp = false;
+    for (const auto& asset : manifest["assets"]) {
+        ++assets;
+        const std::string path = asset.value("path", "");
+        if (path == "skills/safe/SKILL.md") hasSafe = true;
+        if (path == "skills/hostile/SKILL.md") hasHostile = true;
+        if (path == "mcps/db.json") hasMcp = true;
+    }
+    CHECK(assets == 4);
+    CHECK(hasSafe);
+    CHECK(hasHostile);
+    CHECK(hasMcp);
+
+    const std::string safeRequest =
+        R"({"mode":"asset","repo":"e2e/library","ref":"main","path":"skills/safe/SKILL.md","commit":")"
+        + commit + R"("})";
+    const Json safe = taskforge::jsonutil::parse(
+        taskforge::libraries::fetchLibrarySourceJson(safeRequest));
+    CHECK(safe.value("ok", false));
+    CHECK(safe.value("content", "").find("Skill Segura E2E") != std::string::npos);
+
+    const Json missing = taskforge::jsonutil::parse(
+        taskforge::libraries::fetchLibrarySourceJson(
+            R"({"mode":"manifest","repo":"missing/repo","ref":"main"})"));
+    CHECK(!missing.value("ok", true));
+    CHECK(missing.value("errorCode", "") == "github_not_found");
+
+    const Json rate = taskforge::jsonutil::parse(
+        taskforge::libraries::fetchLibrarySourceJson(
+            R"({"mode":"manifest","repo":"rate/limit","ref":"main"})"));
+    CHECK(!rate.value("ok", true));
+    CHECK(rate.value("errorCode", "") == "github_rate_limited");
+
+    const Json blocked = taskforge::jsonutil::parse(
+        taskforge::libraries::fetchLibrarySourceJson(
+            R"({"mode":"manifest","repo":"blocked/license","ref":"main"})"));
+    CHECK(blocked.value("ok", false));
+    CHECK(blocked.value("license", "") == "GPL-3.0");
+
+    const std::string largeRequest =
+        R"({"mode":"asset","repo":"e2e/library","ref":"main","path":"skills/large/SKILL.md","commit":")"
+        + commit + R"("})";
+    const Json large = taskforge::jsonutil::parse(
+        taskforge::libraries::fetchLibrarySourceJson(largeRequest));
+    CHECK(!large.value("ok", true));
+    CHECK(large.value("errorCode", "") == "github_too_large");
+}
+
 static int runInteractionHostChild(const std::string& mode) {
     const bool timedOutMode = mode == "timeout";
     const std::string spec = std::string(R"({
@@ -5929,8 +5713,18 @@ int main(int argc, char** argv) {
     if (argc > 1 && std::string(argv[1]) == "--interaction-host-child-timeout") {
         return runInteractionHostChild("timeout");
     }
+    std::string filter;
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg.rfind("--filter=", 0) == 0) {
+            filter = arg.substr(9);
+        }
+    }
     std::srand((unsigned)std::time(nullptr));
     for (auto& t : tests()) {
+        if (!filter.empty() && std::string(t.name).find(filter) == std::string::npos) {
+            continue;
+        }
         int before = g_failed;
         std::cout << "[ RUN  ] " << t.name << std::endl;
         try {

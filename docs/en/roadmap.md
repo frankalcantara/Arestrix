@@ -1,6 +1,6 @@
 # Roadmap and known limitations
 
-> **Applies to:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Last reviewed: 2026-10-27
+> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Last reviewed: 2026-10-27
 >
 > This page records what is intentionally incomplete and the order we plan to address it. It is not a
 > commitment to dates.
@@ -100,7 +100,27 @@ Limitations of the institution service and background worker:
 - No automatic model update, deduplication or disk quota management yet.
 - Model weights are not redistributed; downloads depend on the upstream publisher and license.
 
-## Beta 2.2 (pre-release)
+## Beta 2.3 (pre-release)
+
+The Beta 2.3 line is versioned as `2.3.0-beta.1` and is published as a development pre-release
+through the deploy workflow.
+
+Delivered in Beta 2.3: the **Arestrix Library** phases 1-7, with audited skill/MCP/template assets,
+Studio/Workspace/Project scopes, project pins, a native GitHub source with host allowlist, commit
+pin, license check and on-demand asset download; the **File menu** review, including the redesigned
+Office-style **Open** screen and the Info/New/Save/Export/Options refresh; and canvas background
+synchronization with the global Light/Dark/Follow-system theme.
+
+Pending after the `2.3.0-beta.1` pre-release:
+
+- Clean-machine install/upgrade/uninstall, silent install and Intune/SCCM validation, plus the Linux
+  package (5B2).
+- SignPath account/project approval, first signed release and signing of the Inno uninstaller.
+- Windows/Linux CI matrix, signed remote catalog (5C) and the full test matrix in
+  [Beta 2.3 test plan](../quality/beta2.3-test-plan.md).
+- Three manual library homologation cases: light/dark sizes, clean install/upgrade and offline use.
+
+## Beta 2.2 (previous pre-release)
 
 The Beta 2.2 line is versioned as `2.2.0-beta.1` and is published as a development pre-release
 through the deploy workflow.
@@ -117,7 +137,7 @@ Pending after the `2.2.0-beta.1` pre-release:
   package (5B2).
 - SignPath account/project approval, first signed release and signing of the Inno uninstaller.
 - Windows/Linux CI matrix, signed remote catalog (5C) and the full test matrix in
-  [Beta 2.2 test plan](../quality/beta2.2-test-plan.md).
+  [Beta 2.3 test plan](../quality/beta2.3-test-plan.md).
 - Remaining contrast review for secondary legacy editors and final Studio homologation.
 
 ## Beta 2.1 (previous pre-release)
@@ -138,7 +158,7 @@ Pending after the `2.1.0-beta.1` pre-release:
 - SignPath account/project approval, first signed release and signing of the Inno uninstaller.
   Company certificate migration is a later step.
 - Windows/Linux CI matrix, signed remote catalog (5C) and the full test matrix in
-  [Beta 2.2 test plan](../quality/beta2.2-test-plan.md).
+  [Beta 2.3 test plan](../quality/beta2.3-test-plan.md).
 - Manual Studio homologation and publication of checksums, SBOM, notices and release notes.
 
 ## Next steps

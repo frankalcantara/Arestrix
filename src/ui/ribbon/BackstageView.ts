@@ -361,27 +361,33 @@ export class BackstageView {
 
   private renderOpenSection(proj: IProjectManifest, recentList: IRecentProjectItem[]): string {
     const isComputer = this.openPlace === 'computer';
+    const placeTitle = isComputer
+      ? t('backstage.open.place_computer')
+      : t('backstage.open.place_recent');
     return `
       <h2 class="backstage-header-title">${t('backstage.open.title')}</h2>
       <p class="backstage-header-sub">${t('backstage.open.subtitle')}</p>
 
       <div class="backstage-open-layout">
-        <nav class="backstage-open-places">
-          ${this.renderOpenPlace('recent', '🕘', t('backstage.open.place_recent'))}
+        <nav class="backstage-open-places" aria-label="${t('backstage.open.title')}">
+          ${this.renderOpenPlace('recent', ribbonIcon('clock', 18), t('backstage.open.place_recent'))}
           <div class="backstage-open-places-sep"></div>
-          ${this.renderOpenPlace('computer', '💻', t('backstage.open.place_computer'))}
+          ${this.renderOpenPlace('computer', ribbonIcon('layout', 18), t('backstage.open.place_computer'))}
           <div class="backstage-open-places-sep"></div>
           <button type="button" class="backstage-open-place" id="btn-open-browse" title="${t('backstage.open.place_browse_tip')}">
-            <span class="backstage-open-place-icon">📂</span><span>${t('backstage.open.place_browse')}</span>
+            <span class="backstage-open-place-icon">${ribbonIcon('folderOpen', 18)}</span><span>${t('backstage.open.place_browse')}</span>
           </button>
           <input type="file" id="backstage-open-file-input" accept=".arestrix,.json" style="display: none;" />
         </nav>
 
         <section class="backstage-open-content">
-          <label class="backstage-open-search">
-            <span aria-hidden="true">🔍</span>
-            <input type="search" id="backstage-open-search" value="${this.escapeHtml(this.openQuery)}" placeholder="${isComputer ? t('backstage.open.filter_folder_placeholder') : t('backstage.open.search_placeholder')}" />
-          </label>
+          <div class="backstage-open-toolbar">
+            <div class="backstage-open-toolbar-title">${placeTitle}</div>
+            <label class="backstage-open-search">
+              <span class="backstage-open-search-icon" aria-hidden="true">${ribbonIcon('search', 16)}</span>
+              <input type="search" id="backstage-open-search" value="${this.escapeHtml(this.openQuery)}" placeholder="${isComputer ? t('backstage.open.filter_folder_placeholder') : t('backstage.open.search_placeholder')}" />
+            </label>
+          </div>
           ${isComputer ? this.renderOpenComputer() : this.renderOpenRecent(proj, recentList)}
           <div class="backstage-open-empty" id="backstage-open-no-matches" style="display: none;">${t('backstage.open.no_matches')}</div>
         </section>
@@ -402,6 +408,45 @@ export class BackstageView {
       <div class="backstage-open-list-header">
         <span>${t('backstage.open.col_name')}</span>
         <span>${metaLabel}</span>
+      </div>
+    `;
+  }
+
+  private renderOpenTableHeader(metaLabel: string): string {
+    return `
+      <div class="backstage-open-table-header">
+        <span>${t('backstage.open.col_name')}</span>
+        <span>${metaLabel}</span>
+        <span>${t('backstage.open.col_type')}</span>
+        <span class="backstage-open-col-size">${t('backstage.open.col_size')}</span>
+        <span class="backstage-open-col-actions"></span>
+      </div>
+    `;
+  }
+
+  private renderOpenTableRow(
+    attrs: string,
+    icon: string,
+    name: string,
+    detail: string,
+    modified: string,
+    type: string,
+    size: string,
+    trailing = ''
+  ): string {
+    return `
+      <div class="backstage-open-row backstage-open-table-row" role="button" tabindex="0" ${attrs}>
+        <span class="backstage-open-table-name">
+          <span class="backstage-open-table-icon">${icon}</span>
+          <span class="backstage-open-table-name-text">
+            <span class="backstage-open-table-name-label">${name}</span>
+            ${detail ? `<span class="backstage-open-table-detail">${detail}</span>` : ''}
+          </span>
+        </span>
+        <span class="backstage-open-table-cell">${modified || '—'}</span>
+        <span class="backstage-open-table-cell">${type}</span>
+        <span class="backstage-open-table-cell backstage-open-cell-size">${size || '—'}</span>
+        <span class="backstage-open-table-actions">${trailing}</span>
       </div>
     `;
   }
@@ -432,8 +477,9 @@ export class BackstageView {
   }
 
   private renderOpenRecentProjects(recentList: IRecentProjectItem[]): string {
+    const header = this.renderOpenTableHeader(t('backstage.open.col_modified'));
     if (!recentList || recentList.length === 0) {
-      return `<div class="backstage-open-empty">${t('backstage.recent.empty')}</div>`;
+      return `${header}<div class="backstage-open-table"><div class="backstage-open-table-empty">${t('backstage.recent.empty')}</div></div>`;
     }
     const now = new Date();
     const groups = new Map<RecencyGroup, IRecentProjectItem[]>();
@@ -442,17 +488,19 @@ export class BackstageView {
       groups.set(group, [...(groups.get(group) || []), item]);
     }
     return `
-      ${this.renderOpenListHeader(t('backstage.open.col_last_opened'))}
-      <div class="backstage-open-list">
+      ${header}
+      <div class="backstage-open-table">
         ${RECENCY_ORDER.filter(g => groups.has(g)).map(g => `
           <div class="backstage-open-group">
-            <div class="backstage-open-group-title">${t(`backstage.open.group_${g}`)}</div>
-            ${groups.get(g)!.map(item => this.renderOpenRow(
+            <div class="backstage-open-table-group-title">${t(`backstage.open.group_${g}`)}</div>
+            ${groups.get(g)!.map(item => this.renderOpenTableRow(
               `data-open-action="recent" data-id="${this.escapeHtml(item.projectId)}" data-path="${this.escapeHtml(item.rootPath)}" data-name="${this.escapeHtml(item.name)}" data-search="${this.escapeHtml(`${item.name} ${item.rootPath}`.toLowerCase())}"`,
-              ENTRY_ICONS.project,
+              ribbonIcon('folderOpen', 20),
               this.escapeHtml(item.name),
               this.escapeHtml(item.rootPath),
               item.lastOpened ? this.formatDateTime(item.lastOpened) : t('backstage.recent.recently'),
+              t('backstage.open.kind_project'),
+              '—',
               this.renderRecentActionsSelect(item, 'backstage-open-row-actions')
             )).join('')}
           </div>
@@ -463,22 +511,26 @@ export class BackstageView {
 
   private renderOpenGraphs(proj: IProjectManifest): string {
     const pipelines = proj.pipelines || [];
+    const header = this.renderOpenTableHeader(t('backstage.open.col_location'));
     if (pipelines.length === 0) {
-      return `<div class="backstage-open-empty">${t('backstage.open.empty_graphs')}</div>`;
+      return `${header}<div class="backstage-open-table"><div class="backstage-open-table-empty">${t('backstage.open.empty_graphs')}</div></div>`;
     }
     return `
-      ${this.renderOpenListHeader(t('backstage.open.col_type'))}
-      <div class="backstage-open-list">
+      ${header}
+      <div class="backstage-open-table">
         <div class="backstage-open-group">
-          <div class="backstage-open-group-title">${t('backstage.open.graphs_group', { name: this.escapeHtml(proj.name) })}</div>
-          ${pipelines.map(p => this.renderOpenRow(
+          <div class="backstage-open-table-group-title">${t('backstage.open.graphs_group', { name: this.escapeHtml(proj.name) })}</div>
+          ${pipelines.map(p => this.renderOpenTableRow(
             `data-open-action="pipeline" data-pipeline-file="${this.escapeHtml(p.file)}" data-search="${this.escapeHtml(`${p.name} ${p.file}`.toLowerCase())}"`,
-            ENTRY_ICONS.json,
+            ribbonIcon('file', 20),
             this.escapeHtml(p.name),
+            '',
             this.escapeHtml(joinPath(proj.rootPath, p.file)),
+            t('backstage.open.kind_graph'),
+            '—',
             p.isPrimary
-              ? `<span class="badge-inherited" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700;">${t('backstage.open.badge_primary')}</span>`
-              : t('backstage.open.badge_subflow')
+              ? `<span class="backstage-open-primary">${t('backstage.open.badge_primary')}</span>`
+              : ''
           )).join('')}
         </div>
       </div>
@@ -501,16 +553,19 @@ export class BackstageView {
       <button type="button" class="backstage-open-crumb" data-open-navigate="${this.escapeHtml(c.path)}">${this.escapeHtml(c.label)}</button>
     `).join('');
 
+    const header = this.renderOpenTableHeader(t('backstage.open.col_modified'));
     let body: string;
     if (!listing.exists) {
-      body = `<div class="backstage-open-empty">${t('backstage.open.folder_missing', { path: this.escapeHtml(listing.path) })}</div>`;
+      body = `${header}<div class="backstage-open-table"><div class="backstage-open-table-empty">${t('backstage.open.folder_missing', { path: this.escapeHtml(listing.path) })}</div></div>`;
     } else if (listing.entries.length === 0) {
-      body = `<div class="backstage-open-empty">${t('backstage.open.empty_folder')}</div>`;
+      body = `${header}<div class="backstage-open-table"><div class="backstage-open-table-empty">${t('backstage.open.empty_folder')}</div></div>`;
     } else {
       body = `
-        ${this.renderOpenListHeader(t('backstage.open.col_modified'))}
-        <div class="backstage-open-list">
-          ${listing.entries.map(entry => this.renderDiskEntryRow(entry)).join('')}
+        ${header}
+        <div class="backstage-open-table">
+          <div class="backstage-open-group">
+            ${listing.entries.map(entry => this.renderDiskEntryRow(entry)).join('')}
+          </div>
         </div>
         ${listing.truncated ? `<div class="backstage-open-note">${t('backstage.open.truncated', { count: listing.entries.length })}</div>` : ''}
       `;
@@ -532,18 +587,24 @@ export class BackstageView {
     `;
   }
 
-  // Pasta comum navega; projeto, pacote, manifesto e JSON abrem. Pasta de projeto tem tambem o botao de entrar.
   private renderDiskEntryRow(entry: IOpenableEntry): string {
     const action = entry.kind === 'folder' ? 'navigate' : 'disk';
     const enter = entry.kind === 'project'
       ? `<button type="button" class="backstage-open-enter" data-open-navigate="${this.escapeHtml(entry.path)}" title="${t('backstage.open.enter_folder_tip')}">›</button>`
       : '';
-    return this.renderOpenRow(
+    const icon = entry.kind === 'folder'
+      ? ribbonIcon('folder', 20)
+      : entry.kind === 'project'
+        ? ribbonIcon('folderOpen', 20)
+        : ribbonIcon('file', 20);
+    return this.renderOpenTableRow(
       `data-open-action="${action}" data-path="${this.escapeHtml(entry.path)}" data-search="${this.escapeHtml(entry.name.toLowerCase())}"`,
-      ENTRY_ICONS[entry.kind] || ENTRY_ICONS.json,
+      icon,
       this.escapeHtml(entry.name),
+      '',
+      entry.modified ? this.formatDateTime(entry.modified) : '—',
       t(`backstage.open.kind_${entry.kind}`),
-      entry.modified ? this.formatDateTime(entry.modified) : '',
+      '—',
       enter
     );
   }
@@ -599,7 +660,7 @@ export class BackstageView {
       <div class="backstage-open-layout">
         <nav class="backstage-open-places">
           <button type="button" class="backstage-open-place" id="btn-backstage-save" title="${t('backstage.saveas.quick_save_sub', { name: this.escapeHtml(proj.name) })}">
-            <span class="backstage-open-place-icon">💾</span>
+            <span class="backstage-open-place-icon">${ribbonIcon('save', 18)}</span>
             <span class="backstage-open-row-text">
               <span class="backstage-open-row-name">${t('backstage.saveas.quick_save_btn')}</span>
               <span class="backstage-open-row-detail">${this.escapeHtml(proj.name)}</span>
@@ -607,14 +668,14 @@ export class BackstageView {
           </button>
           <div class="backstage-open-places-sep"></div>
           <button type="button" class="backstage-open-place ${isComputer ? 'active' : ''}" data-save-place="computer">
-            <span class="backstage-open-place-icon">💻</span><span>${t('backstage.saveas.place_computer')}</span>
+            <span class="backstage-open-place-icon">${ribbonIcon('layout', 18)}</span><span>${t('backstage.saveas.place_computer')}</span>
           </button>
           <button type="button" class="backstage-open-place ${!isComputer ? 'active' : ''}" data-save-place="recent">
-            <span class="backstage-open-place-icon">🕘</span><span>${t('backstage.saveas.place_recent')}</span>
+            <span class="backstage-open-place-icon">${ribbonIcon('clock', 18)}</span><span>${t('backstage.saveas.place_recent')}</span>
           </button>
           <div class="backstage-open-places-sep"></div>
           <button type="button" class="backstage-open-place" id="btn-saveas-browse-native" title="${t('backstage.saveas.place_browse_tip')}">
-            <span class="backstage-open-place-icon">📂</span><span>${t('backstage.saveas.place_browse')}</span>
+            <span class="backstage-open-place-icon">${ribbonIcon('folderOpen', 18)}</span><span>${t('backstage.saveas.place_browse')}</span>
           </button>
         </nav>
 
@@ -622,11 +683,11 @@ export class BackstageView {
           <div class="backstage-save-target-section">
             <div class="backstage-save-target-heading">
               <span class="backstage-save-target-label">${t('backstage.saveas.target_label')}</span>
-              <span class="backstage-save-active-proj-pill">🗂️ ${t('backstage.saveas.active_project_context', { name: this.escapeHtml(proj.name) })}</span>
+              <span class="backstage-save-active-proj-pill">${ribbonIcon('file', 14)} ${t('backstage.saveas.active_project_context', { name: this.escapeHtml(proj.name) })}</span>
             </div>
             <div class="backstage-save-target-grid">
               <button type="button" class="backstage-save-target-card ${!isGraph ? 'active' : ''}" id="btn-saveas-target-project" data-save-target="project">
-                <span class="backstage-save-target-icon">🗂️</span>
+                <span class="backstage-save-target-icon">${ribbonIcon('folderOpen', 24)}</span>
                 <span class="backstage-save-target-body">
                   <span class="backstage-save-target-top">
                     <span class="backstage-save-target-title">${t('backstage.saveas.target_project_title')}</span>
@@ -636,7 +697,7 @@ export class BackstageView {
                 </span>
               </button>
               <button type="button" class="backstage-save-target-card ${isGraph ? 'active' : ''}" id="btn-saveas-target-graph" data-save-target="graph">
-                <span class="backstage-save-target-icon">📊</span>
+                <span class="backstage-save-target-icon">${ribbonIcon('subflow', 24)}</span>
                 <span class="backstage-save-target-body">
                   <span class="backstage-save-target-top">
                     <span class="backstage-save-target-title">${t('backstage.saveas.target_graph_title')}</span>
@@ -652,19 +713,19 @@ export class BackstageView {
             <div class="backstage-save-form-row">
               <div>
                 <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">${isGraph ? t('backstage.saveas.filename_graph_field') : t('backstage.saveas.filename_project_field')}</label>
-                <input type="text" id="saveas-input-filename" value="${this.escapeHtml(this.saveAsFileName)}" placeholder="${t('backstage.saveas.filename_placeholder')}" style="width: 100%; height: 36px; padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 600; color: #0f172a; box-sizing: border-box; background: #ffffff;" />
+                <input type="text" id="saveas-input-filename" class="form-input properties-code-input" value="${this.escapeHtml(this.saveAsFileName)}" placeholder="${t('backstage.saveas.filename_placeholder')}" />
               </div>
 
               <div>
                 <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">${t('backstage.saveas.filetype_field')}</label>
-                <select id="saveas-select-format" style="width: 100%; height: 36px; padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 600; color: #0f172a; box-sizing: border-box; background: #ffffff;">
+                <select id="saveas-select-format" class="form-select">
                   <option value="arestrix" ${this.saveAsFormat === 'arestrix' ? 'selected' : ''}>${t('backstage.saveas.format_arestrix')}</option>
                   <option value="folder" ${this.saveAsFormat === 'folder' ? 'selected' : ''}>${t('backstage.saveas.format_folder')}</option>
                   <option value="json" ${this.saveAsFormat === 'json' ? 'selected' : ''}>${t('backstage.saveas.format_json')}</option>
                 </select>
               </div>
 
-              <button type="button" class="tool-btn btn-action" id="btn-saveas-submit" style="background: #0f6cbd; color: #ffffff; font-weight: 700; padding: 0 22px; height: 36px; font-size: 13px; display: inline-flex; align-items: center; justify-content: center;">
+              <button type="button" class="btn btn-primary-office" id="btn-saveas-submit">
                 ${isGraph ? t('backstage.saveas.btn_save_graph') : t('backstage.saveas.btn_save_project')}
               </button>
             </div>
@@ -823,7 +884,7 @@ export class BackstageView {
           <div class="backstage-cards-grid">
             <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h4 style="margin: 0; min-width: 0;">📁 ${t('backstage.info.card_ident')}</h4>
+                <h4 class="backstage-card-title" style="margin: 0; min-width: 0;"><span class="backstage-card-icon">${ribbonIcon('file', 18)}</span><span class="backstage-card-title-text">${t('backstage.info.card_ident')}</span></h4>
                 <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">📦 ${t('backstage.info.scope_proj')}</span>
               </div>
               <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>${t('backstage.info.name_label')}</strong> ${this.escapeHtml(proj.name)}</p>
@@ -837,7 +898,7 @@ export class BackstageView {
 
             <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h4 style="margin: 0; min-width: 0;">🛠️ ${t('backstage.info.card_storage')}</h4>
+                <h4 class="backstage-card-title" style="margin: 0; min-width: 0;"><span class="backstage-card-icon">${ribbonIcon('database', 18)}</span><span class="backstage-card-title-text">${t('backstage.info.card_storage')}</span></h4>
                 <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">🛠️ ${t('backstage.info.scope_workspace')}</span>
               </div>
               <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>${t('backstage.info.persist_type')}</strong> ${proj.database?.type || t('backstage.info.sqlite_default')}</p>
@@ -857,7 +918,7 @@ export class BackstageView {
 
             <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h4 style="margin: 0; min-width: 0;">⚡ ${t('backstage.info.card_graph')}</h4>
+                <h4 class="backstage-card-title" style="margin: 0; min-width: 0;"><span class="backstage-card-icon">${ribbonIcon('subflow', 18)}</span><span class="backstage-card-title-text">${t('backstage.info.card_graph')}</span></h4>
                 <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">📦 ${t('backstage.info.scope_proj')}</span>
               </div>
               <p style="margin-bottom: 8px;"><strong>${t('backstage.info.active_nodes')}</strong> ${this.graph.getAllNodes().length}</p>
@@ -867,7 +928,7 @@ export class BackstageView {
 
             <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h4 style="margin: 0; min-width: 0;">🌿 ${t('git_sync.card_git_title', 'Repositório Git Remoto')}</h4>
+                <h4 class="backstage-card-title" style="margin: 0; min-width: 0;"><span class="backstage-card-icon">${ribbonIcon('git', 18)}</span><span class="backstage-card-title-text">${t('git_sync.card_git_title', 'Repositório Git Remoto')}</span></h4>
                 <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0; color: #0f766e; font-weight: 700;">🔒 ${proj.git?.isPrivate !== false ? 'Privado' : 'Público'}</span>
               </div>
               <p style="margin-bottom: 8px;"><strong>Provedor:</strong> ${this.escapeHtml(proj.git?.provider || 'GitHub')}</p>
@@ -883,7 +944,7 @@ export class BackstageView {
 
             <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h4 style="margin: 0; min-width: 0;">🚀 ${t('runner.card_title', 'Runner Standalone')}</h4>
+                <h4 class="backstage-card-title" style="margin: 0; min-width: 0;"><span class="backstage-card-icon">${ribbonIcon('rocket', 18)}</span><span class="backstage-card-title-text">${t('runner.card_title', 'Runner Standalone')}</span></h4>
                 <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0; color: #0284c7; font-weight: 700;">${proj.runner?.enabled !== false ? 'Ativado' : 'Desativado'}</span>
               </div>
               <p style="margin-bottom: 8px;"><strong>Aplicação:</strong> ${this.escapeHtml(proj.runner?.title || (proj.name + ' Runner'))}</p>
@@ -896,7 +957,7 @@ export class BackstageView {
           </div>
 
           <div style="margin-top: 14px;">
-            <h4 style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 8px;">${t('backstage.info.quick_maintenance')}</h4>
+            <h4 class="backstage-section-heading"><span class="backstage-section-icon">${ribbonIcon('wrench', 18)}</span>${t('backstage.info.quick_maintenance')}</h4>
             <div style="display: flex; gap: 10px;">
               <button class="tool-btn btn-secondary" id="btn-quick-sync-db" style="font-weight: 700;">${t('backstage.info.btn_sync_db')}</button>
               <button class="tool-btn btn-secondary" id="btn-quick-clean-cache" style="font-weight: 700;">${t('backstage.info.btn_clean_cache')}</button>
@@ -905,7 +966,7 @@ export class BackstageView {
 
           <!-- LISTA DE PROJETOS RECENTES (ESTILO OFFICE) -->
           <div style="margin-top: 26px;">
-            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📂 ${t('backstage.info.recents_title')}</h3>
+            <h3 class="backstage-header-title backstage-inline-title" style="font-size: 16px; margin-bottom: 4px;"><span class="backstage-section-icon">${ribbonIcon('clock', 18)}</span>${t('backstage.info.recents_title')}</h3>
             <p class="backstage-header-sub" style="margin-bottom: 12px;">${t('backstage.info.recents_subtitle')}</p>
             ${this.renderRecentProjectsTable(recentList)}
           </div>
@@ -916,33 +977,40 @@ export class BackstageView {
           <h2 class="backstage-header-title">${t('backstage.new.title')}</h2>
           <p class="backstage-header-sub">${t('backstage.new.subtitle')}</p>
 
-          <div style="max-width: 650px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-bottom: 28px;">
-            <div style="margin-bottom: 16px;">
-              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">${t('backstage.new.project_name_label')}</label>
-              <input type="text" id="backstage-new-name" placeholder="${t('backstage.new.project_name_placeholder')}" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+          <div class="backstage-form-panel">
+            <div class="backstage-panel-heading">
+              <span class="backstage-panel-icon">${ribbonIcon('plus', 20)}</span>
+              <div>
+                <h3>${t('backstage.new.details_title')}</h3>
+                <p>${t('backstage.new.details_sub')}</p>
+              </div>
             </div>
 
-            <div style="margin-bottom: 16px;">
-              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">${t('backstage.new.dir_storage_label')}</label>
-              <input type="text" id="backstage-new-path" placeholder="${t('backstage.new.dir_placeholder')}" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
-              <span style="font-size: 11px; color: #64748b; margin-top: 4px; display: block;">${t('backstage.new.dir_hint')}</span>
+            <div class="form-group">
+              <label class="form-label" for="backstage-new-name">${t('backstage.new.project_name_label')}</label>
+              <input type="text" id="backstage-new-name" class="form-input" placeholder="${t('backstage.new.project_name_placeholder')}" />
             </div>
 
-            <div style="margin-bottom: 20px;">
-              <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">${t('backstage.new.desc_label')}</label>
-              <textarea id="backstage-new-desc" rows="3" placeholder="${t('backstage.new.desc_placeholder')}" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; box-sizing: border-box;"></textarea>
+            <div class="form-group">
+              <label class="form-label" for="backstage-new-path">${t('backstage.new.dir_storage_label')}</label>
+              <input type="text" id="backstage-new-path" class="form-input properties-code-input" placeholder="${t('backstage.new.dir_placeholder')}" />
+              <div class="form-hint">${t('backstage.new.dir_hint')}</div>
             </div>
 
-            <div style="display: flex; gap: 12px;">
-              <button class="tool-btn btn-action" id="btn-backstage-create-submit" style="background: #0f6cbd; color: #fff; font-weight: 700; padding: 10px 22px; height: 38px; font-size: 13px;">
+            <div class="form-group">
+              <label class="form-label" for="backstage-new-desc">${t('backstage.new.desc_label')}</label>
+              <textarea id="backstage-new-desc" class="form-textarea" rows="3" placeholder="${t('backstage.new.desc_placeholder')}"></textarea>
+            </div>
+
+            <div class="backstage-form-actions">
+              <button class="btn btn-primary-office" id="btn-backstage-create-submit">
                 ${t('backstage.new.btn_create_submit')}
               </button>
             </div>
           </div>
 
-          <!-- LISTA DE PROJETOS RECENTES (REPETIDA NA TELA NOVO PROJETO) -->
-          <div>
-            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">📂 ${t('backstage.new.recents_title')}</h3>
+          <div class="backstage-recents-section">
+            <h3 class="backstage-header-title backstage-inline-title" style="font-size: 16px; margin-bottom: 4px;"><span class="backstage-section-icon">${ribbonIcon('clock', 18)}</span>${t('backstage.new.recents_title')}</h3>
             <p class="backstage-header-sub" style="margin-bottom: 12px;">${t('backstage.new.recents_subtitle')}</p>
             ${this.renderRecentProjectsTable(recentList)}
           </div>
@@ -959,24 +1027,33 @@ export class BackstageView {
           <h2 class="backstage-header-title">${t('backstage.export.title')}</h2>
           <p class="backstage-header-sub">${t('backstage.export.export_sub')}</p>
 
-          <div class="backstage-cards-grid">
-            <div class="backstage-info-card">
-              <h4>💻 ${t('backstage.export.cpp_title')}</h4>
-              <p>${t('backstage.export.cpp_desc')}</p>
-              <button class="tool-btn btn-action" id="btn-backstage-open-codemodal" style="background: #0f6cbd; color: white; font-weight: 700;">${t('backstage.export.btn_see_cpp')}</button>
-            </div>
+          <div class="backstage-export-grid">
+            <article class="backstage-export-card">
+              <span class="backstage-export-icon">${ribbonIcon('code', 22)}</span>
+              <div class="backstage-export-body">
+                <h3>${t('backstage.export.cpp_title')}</h3>
+                <p>${t('backstage.export.cpp_desc')}</p>
+              </div>
+              <button class="btn btn-primary-office" id="btn-backstage-open-codemodal">${t('backstage.export.btn_see_cpp')}</button>
+            </article>
 
-            <div class="backstage-info-card">
-              <h4>🛠️ ${t('backstage.export.cmake_title')}</h4>
-              <p>${t('backstage.export.cmake_desc')}</p>
-              <button class="tool-btn btn-secondary" id="btn-backstage-export-cmake" style="font-weight: 700;">${t('backstage.export.btn_gen_cmake')}</button>
-            </div>
+            <article class="backstage-export-card">
+              <span class="backstage-export-icon">${ribbonIcon('box', 22)}</span>
+              <div class="backstage-export-body">
+                <h3>${t('backstage.export.cmake_title')}</h3>
+                <p>${t('backstage.export.cmake_desc')}</p>
+              </div>
+              <button class="btn btn-secondary-office" id="btn-backstage-export-cmake">${t('backstage.export.btn_gen_cmake')}</button>
+            </article>
 
-            <div class="backstage-info-card">
-              <h4>🖼️ ${t('backstage.export.svg_title')}</h4>
-              <p>${t('backstage.export.svg_desc')}</p>
-              <button class="tool-btn btn-secondary" id="btn-backstage-export-svg" style="font-weight: 700;">${t('backstage.export.btn_export_svg')}</button>
-            </div>
+            <article class="backstage-export-card">
+              <span class="backstage-export-icon">${ribbonIcon('image', 22)}</span>
+              <div class="backstage-export-body">
+                <h3>${t('backstage.export.svg_title')}</h3>
+                <p>${t('backstage.export.svg_desc')}</p>
+              </div>
+              <button class="btn btn-secondary-office" id="btn-backstage-export-svg">${t('backstage.export.btn_export_svg')}</button>
+            </article>
           </div>
         `;
 
@@ -1016,164 +1093,55 @@ export class BackstageView {
         `;
       }
       case 'options': {
-        const wm = WorkspaceManager.getInstance();
-        const dirs = wm.getWorkspaceDirectories();
-        const approvedSkills = wm.getApprovedSkills();
-        const approvedMcps = wm.getApprovedMcps();
-
         return `
           <h2 class="backstage-header-title">${t('backstage.options.title')}</h2>
           <p class="backstage-header-sub">${t('backstage.options.subtitle')}</p>
 
-          <!-- 0. IDIOMA DO STUDIO (POLIGLOTA / I18N) -->
-          <div class="backstage-info-card" style="margin-bottom: 24px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px 20px; box-sizing: border-box;">
-            <div style="display: flex; justify-content: space-between; align-items: center; min-height: 36px;">
-              <div style="display: flex; align-items: center; gap: 10px; line-height: 1;">
-                <span style="font-size: 20px; line-height: 1; display: inline-flex; align-items: center;">🌐</span>
-                <span style="font-size: 14.5px; font-weight: 700; color: #0f172a; line-height: 1; display: inline-flex; align-items: center;">${t('backstage.options.language_group')}</span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 12px; line-height: 1;">
-                <button type="button" class="tool-btn btn-secondary" id="btn-open-studio-properties" data-open-properties="studio" data-properties-section="general" style="font-weight: 700; padding: 8px 16px; font-size: 12px;">
-                  ${t('properties_window.hub.open', 'Abrir propriedades')}
-                </button>
-              </div>
-            </div>
-            <p style="margin: 10px 0 0 30px; font-size: 12px; color: #64748b;">
-              ${t('backstage.options.language_redirect_hint', 'O idioma agora é definido nas Propriedades do Studio.')}
-            </p>
+          <div class="backstage-cards-grid">
+            <article class="backstage-info-card">
+              <h4 class="backstage-card-title"><span class="backstage-card-icon">${ribbonIcon('settings', 18)}</span><span class="backstage-card-title-text">${t('properties_window.scope.studio_title', 'Propriedades do Studio')}</span></h4>
+              <p>${t('properties_window.hub.studio_desc', 'Preferências globais, credenciais, gateway, modelo padrão e integrações desta instalação.')}</p>
+              <button type="button" class="btn btn-primary-office" id="btn-options-studio-properties" data-open-properties="studio" data-properties-section="general">${t('properties_window.hub.open', 'Abrir propriedades')}</button>
+            </article>
+
+            <article class="backstage-info-card">
+              <h4 class="backstage-card-title"><span class="backstage-card-icon">${ribbonIcon('folder', 18)}</span><span class="backstage-card-title-text">${t('properties_window.scope.workspace_title', 'Propriedades do Workspace')}</span></h4>
+              <p>${t('properties_window.hub.workspace_desc', 'Pastas, catálogos aprovados, governança, sandbox padrão e memória compartilhada.')}</p>
+              <button type="button" class="btn btn-primary-office" id="btn-options-workspace-properties" data-open-properties="workspace" data-properties-section="general">${t('properties_window.hub.open', 'Abrir propriedades')}</button>
+            </article>
+
+            <article class="backstage-info-card">
+              <h4 class="backstage-card-title"><span class="backstage-card-icon">${ribbonIcon('catalog', 18)}</span><span class="backstage-card-title-text">${t('backstage.options.preapproved_cat_title')}</span></h4>
+              <p>${t('backstage.options.catalogs_moved', 'Pastas, skills e servidores MCP aprovados agora são gerenciados nas Propriedades do Workspace.')}</p>
+              <button type="button" class="btn btn-secondary-office" data-open-properties="workspace" data-properties-section="catalogs">${t('backstage.options.open_catalogs', 'Abrir catálogos')}</button>
+            </article>
           </div>
 
-          <!-- 1. IDENTIFICAÇÃO E PASTAS FÍSICAS DO WORKSPACE NA MÁQUINA DO USUÁRIO -->
-          <div class="backstage-cards-grid" style="margin-bottom: 24px;">
-            <div class="backstage-info-card">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <h4 style="margin: 0;">📁 ${t('backstage.options.folders_title')}</h4>
-                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">🛠️ ${t('backstage.options.scope_workspace_badge')}</span>
-              </div>
-              <p><strong>${t('backstage.options.root_path_label')}</strong> <code>${this.escapeHtml(dirs.root)}</code></p>
-              <p><strong>${t('backstage.options.skills_path_label')}</strong> <code>${this.escapeHtml(dirs.skills)}</code></p>
-              <p><strong>${t('backstage.options.mcps_path_label')}</strong> <code>${this.escapeHtml(dirs.mcps)}</code></p>
-              <p><strong>${t('backstage.options.agents_path_label')}</strong> <code>${this.escapeHtml(dirs.agents)}</code></p>
-              <div style="margin-top: 14px;">
-                <button class="tool-btn btn-action" id="btn-sync-workspace-disk" style="background: #0f6cbd; color: #ffffff; font-weight: 700; padding: 8px 16px; font-size: 12px; display: inline-flex; align-items: center; justify-content: center;">
-                  ${t('backstage.options.btn_sync_disk')}
-                </button>
-              </div>
-            </div>
-
-            <div class="backstage-info-card">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <h4 style="margin: 0;">🛡️ ${t('backstage.options.gov_title')}</h4>
-                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">🏢 ${t('backstage.options.scope_global_badge')}</span>
-              </div>
-              <p><strong>${t('backstage.options.audit_auto_label')}</strong> <span class="badge-inherited" style="font-weight: 700;">${t('backstage.options.audit_active')}</span></p>
-              <p><strong>${t('backstage.options.typo_design_label')}</strong> <span style="color: #0f766e; font-weight: 700;">${t('backstage.options.typo_design_val')}</span></p>
-              <p><strong>${t('backstage.options.iso_mode_label')}</strong> ${t('backstage.options.iso_mode_val')}</p>
-              <div style="margin-top: 14px;">
-                <button class="tool-btn btn-secondary" id="btn-open-workspace-security" data-open-properties="workspace" data-properties-section="security" style="font-weight: 700; padding: 8px 16px; font-size: 12px;">
-                  ${t('backstage.options.open_workspace_security', 'Abrir propriedades de segurança')}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- 2. MOTORES DE EXECUÇÃO DO WORKSPACE (AGENTES, GRAFOS, PROJETOS ATRELADOS A EVENTOS) -->
-          <div style="margin-bottom: 28px;">
-            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">⚡ ${t('backstage.options.integrated_exec_title')}</h3>
+          <div class="backstage-recents-section">
+            <h3 class="backstage-header-title backstage-inline-title" style="font-size: 16px; margin-bottom: 4px;"><span class="backstage-section-icon">${ribbonIcon('bolt', 18)}</span>${t('backstage.options.integrated_exec_title')}</h3>
             <p class="backstage-header-sub" style="margin-bottom: 14px;">${t('backstage.options.integrated_exec_sub')}</p>
 
             <div class="backstage-cards-grid">
-              <div class="backstage-info-card" style="display: flex; flex-direction: column; justify-content: space-between;">
-                <div>
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <h4 style="margin: 0;">🤖 ${t('backstage.options.auditor_title')}</h4>
-                    <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">🛠️ ${t('backstage.options.scope_workspace_badge')}</span>
-                  </div>
-                  <p style="font-size: 12px; color: #475569; margin-bottom: 8px;">
-                    ${t('backstage.options.auditor_desc')}
-                  </p>
-                </div>
-                <button class="tool-btn btn-action" id="btn-run-workspace-auditor" style="background: #107c41; color: #ffffff; font-weight: 700; padding: 8px 14px; font-size: 12px; margin-top: 10px;">
-                  ${t('backstage.options.btn_run_auditor')}
-                </button>
+              <div class="backstage-info-card">
+                <h4 class="backstage-card-title"><span class="backstage-card-icon">${ribbonIcon('shield', 18)}</span><span class="backstage-card-title-text">${t('backstage.options.auditor_title')}</span></h4>
+                <p>${t('backstage.options.auditor_desc')}</p>
+                <button class="btn btn-primary-office" id="btn-run-workspace-auditor">${t('backstage.options.btn_run_auditor')}</button>
               </div>
 
-              <div class="backstage-info-card" style="display: flex; flex-direction: column; justify-content: space-between;">
-                <div>
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <h4 style="margin: 0;">📊 ${t('backstage.options.linter_title')}</h4>
-                    <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">📦 ${t('backstage.info.scope_project')}</span>
-                  </div>
-                  <p style="font-size: 12px; color: #475569; margin-bottom: 8px;">
-                    ${t('backstage.options.linter_desc')}
-                  </p>
-                </div>
-                <button class="tool-btn btn-secondary" id="btn-run-workspace-linter" style="font-weight: 700; padding: 8px 14px; font-size: 12px; margin-top: 10px;">
-                  ${t('backstage.options.btn_run_linter')}
-                </button>
+              <div class="backstage-info-card">
+                <h4 class="backstage-card-title"><span class="backstage-card-icon">${ribbonIcon('validate', 18)}</span><span class="backstage-card-title-text">${t('backstage.options.linter_title')}</span></h4>
+                <p>${t('backstage.options.linter_desc')}</p>
+                <button class="btn btn-secondary-office" id="btn-run-workspace-linter">${t('backstage.options.btn_run_linter')}</button>
               </div>
 
-              <div class="backstage-info-card" style="display: flex; flex-direction: column; justify-content: space-between;">
-                <div>
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <h4 style="margin: 0;">🚀 ${t('backstage.options.proj_pipeline_title')}</h4>
-                    <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px;">📦 ${t('backstage.info.scope_project')}</span>
-                  </div>
-                  <p style="font-size: 12px; color: #475569; margin-bottom: 8px;">
-                    ${t('backstage.options.proj_pipeline_desc')}
-                  </p>
-                </div>
-                <button class="tool-btn btn-action" id="btn-run-workspace-project" style="background: #0f6cbd; color: #ffffff; font-weight: 700; padding: 8px 14px; font-size: 12px; margin-top: 10px;">
-                  ${t('backstage.options.btn_run_proj_pipeline')}
-                </button>
+              <div class="backstage-info-card">
+                <h4 class="backstage-card-title"><span class="backstage-card-icon">${ribbonIcon('play', 18)}</span><span class="backstage-card-title-text">${t('backstage.options.proj_pipeline_title')}</span></h4>
+                <p>${t('backstage.options.proj_pipeline_desc')}</p>
+                <button class="btn btn-primary-office" id="btn-run-workspace-project">${t('backstage.options.btn_run_proj_pipeline')}</button>
               </div>
             </div>
 
             <div id="workspace-execution-output" style="margin-top: 14px; display: none;"></div>
-          </div>
-
-          <!-- 3. CATÁLOGO DE RECURSOS PRÉ-APROVADOS NO WORKSPACE -->
-          <div style="margin-bottom: 28px;">
-            <h3 class="backstage-header-title" style="font-size: 16px; margin-bottom: 4px;">🛡️ ${t('backstage.options.preapproved_cat_title')} <span class="badge-inherited" style="font-size: 10px; margin-left: 6px;">🛠️ ${t('backstage.options.scope_workspace_badge')}</span></h3>
-            <p class="backstage-header-sub" style="margin-bottom: 14px;">${t('backstage.options.preapproved_cat_sub')}</p>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-              <!-- Habilidades Pré-aprovadas -->
-              <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
-                <h4 style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #0f172a;">
-                  📜 ${t('backstage.options.skills_count_heading', { count: approvedSkills.length })}
-                </h4>
-                <div style="max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
-                  ${approvedSkills.map(s => `
-                    <div style="padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
-                      <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <strong style="font-size: 12px; color: #0f6cbd;">${this.escapeHtml(s.name)}</strong>
-                        <span style="font-size: 10px; background: #e8f5e9; color: #1e7e34; padding: 1px 6px; border-radius: 3px; font-weight: 700;">${t('backstage.options.skill_approved_tag')}</span>
-                      </div>
-                      <div style="font-size: 11px; color: #64748b; margin-top: 2px;">${this.escapeHtml(s.description)}</div>
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-
-              <!-- MCPs Pré-aprovados -->
-              <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
-                <h4 style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #0f172a;">
-                  🔌 ${t('backstage.options.mcps_count_heading', { count: approvedMcps.length })}
-                </h4>
-                <div style="max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
-                  ${approvedMcps.map(m => `
-                    <div style="padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
-                      <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <strong style="font-size: 12px; color: #334155;">${this.escapeHtml(m.name)}</strong>
-                        <span style="font-size: 10px; background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 3px; font-weight: 700;">${this.escapeHtml(m.transport.toUpperCase())}</span>
-                      </div>
-                      <div style="font-size: 11px; color: #64748b; margin-top: 2px;">${this.escapeHtml(m.description)}</div>
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-            </div>
           </div>
         `;
       }
@@ -1517,9 +1485,9 @@ export class BackstageView {
       }
     });
 
-    // Repositórios do GitHub (Abre diretamente sobre a BackstageView)
+    // Bibliotecas e fontes (o evento legado abre as Propriedades)
     this.overlay.querySelector('#btn-backstage-github-repos')?.addEventListener('click', () => {
-      globalEventBus.emit('modal:open-github-repos');
+      globalEventBus.emit('properties:open', { scope: 'studio', section: 'libraries' });
     });
 
     // Configurar Git do Projeto

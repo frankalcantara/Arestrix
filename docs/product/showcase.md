@@ -1,6 +1,6 @@
 # Feature showcase
 
-> **Applies to:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Last reviewed: 2026-10-27
+> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Last reviewed: 2026-10-27
 
 ## 1. Studio canvas and agent swarm
 
@@ -83,6 +83,14 @@ Properties screens, while keeping explicit inheritance and per-vertex overrides.
 ![Vertex sandbox dialog](../assets/screenshots/vertex-sandbox.webp)
 
 ![Vertex model dialog](../assets/screenshots/vertex-model.webp)
+
+## 10. Office-style Open screen
+
+The **Open** screen follows the Office layout: locations on the left, a search box on the right and
+a table with Name, Date modified, Type and Size columns. Recent groups keep the Office
+Today/Yesterday/Last week organisation.
+
+![Office-style Open screen with recent projects](../assets/screenshots/open-screen.webp)
 
 > Screenshots are captured from the development build. Interface details may change during the
 > beta. Regenerate them with `npm run capture:screenshots`.

@@ -1,4 +1,5 @@
 import { THEME } from './Theme.ts';
+import { resolveAppTheme, type AppTheme } from './AppTheme.ts';
 
 export type CanvasBackground = 'light' | 'dark';
 
@@ -33,6 +34,11 @@ export const CANVAS_PALETTES: Record<CanvasBackground, CanvasPalette> = {
 };
 
 const STORAGE_KEY = 'arestrix_canvas_background';
+
+/** O canvas acompanha o tema resolvido quando o tema muda. */
+export function canvasBackgroundForAppTheme(theme: AppTheme): CanvasBackground {
+  return resolveAppTheme(theme) === 'dark' ? 'dark' : 'light';
+}
 
 export function loadCanvasBackground(): CanvasBackground {
   try {

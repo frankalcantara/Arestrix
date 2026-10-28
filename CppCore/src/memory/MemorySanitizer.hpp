@@ -6,8 +6,7 @@
 // Esta camada remove padroes conhecidos (OpenAI, Google, AWS, GitHub, Slack, Bearer,
 // query strings e chaves privadas PEM) e limita o tamanho de textos persistidos.
 //
-// Ela e aplicada no MemoryStore (licoes, episodios, arestas e Blackboard) e no
-// DatabaseBackupService antes de gravar o snapshot que vai para o Git.
+// Ela e aplicada no MemoryStore (licoes, episodios, arestas e Blackboard).
 
 #include <cstddef>
 #include <string>

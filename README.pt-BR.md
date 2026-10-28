@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <b>Beta 2.2</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentação</a>
+  <b>Beta 2.3</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentação</a>
 </p>
 
 <p align="center">
@@ -99,6 +99,9 @@ um pipeline em um canvas de grafo; o Arestrix valida, gera código C++20 e compi
 - **Memória de projeto (AMG)** — multigrafo temporal em SQLite com lições, Blackboard,
   `memory_search`/`memory_record_lesson`, episódios de sucesso/falha, rastreio de memórias
   injetadas/usadas, brief com orçamento de tokens, métricas de API e A/B no Studio.
+- **Biblioteca Arestrix** — assets de skill, MCP e template auditados, com escopos Studio,
+  Workspace e Projeto, pins por projeto, importação do catálogo embutido/workspace e fonte GitHub
+  nativa com commit pin, checagem de licença e download sob demanda.
 - **Workspaces, skills e MCP** — catálogos locais de skills e servidores MCP com sessão persistente
   por servidor, incluindo HTTP/Streamable HTTP e headers por servidor.
 - **Entrega e governança** — runner independente, empacotamento MSI/MSIX, integração com DPAPI e
@@ -169,17 +172,17 @@ python scripts/e2e_examples.py
 | [Validação de skills](docs/quality/skill-reference-review.md) | Arestrix Skill Guard: NVIDIA SkillSpector + Cloudflare security-audit, lock e revisão de referências. |
 | [Exemplos](examples/README.pt-BR.md) | Cinco projetos executáveis, de um pipeline de dois agentes a fluxos compostos, de memória e de pesquisa web. |
 | [Registro de auditoria de testes](docs/quality/test-audit-log.md) | Rodadas cronológicas de testes e auditorias de integridade. |
-| [Plano de testes do Beta 2.2](docs/quality/beta2.2-test-plan.md) | Escopo registrado e critérios de aceite pendentes. |
+| [Plano de testes do Beta 2.3](docs/quality/beta2.3-test-plan.md) | Escopo registrado e critérios de aceite pendentes. |
 | [Changelog](CHANGELOG.md) | Histórico de releases, mudanças e limitações conhecidas. |
 
 ## Status do projeto
 
-A **Beta 2.2** (`2.2.0-beta.1`) é um pré-release de desenvolvimento. O Studio roda no Windows e no
+A **Beta 2.3** (`2.3.0-beta.1`) é um pré-release de desenvolvimento. O Studio roda no Windows e no
 Linux; programas gerados a partir de um grafo atualmente têm o Windows como alvo. APIs, formatos de
 arquivo e flags de linha de comando podem mudar antes da disponibilidade geral. Consulte o
 [changelog](CHANGELOG.md) para as limitações atuais. O instalador Windows e a assinatura de código
 estão incluídos; validação em máquina limpa, pacote Linux e a matriz completa de testes ainda estão
-pendentes. Acompanhe no [plano de testes do Beta 2.2](docs/quality/beta2.2-test-plan.md). Os artefatos
+pendentes. Acompanhe no [plano de testes do Beta 2.3](docs/quality/beta2.3-test-plan.md). Os artefatos
 Windows são assinados pela [SignPath Foundation](https://signpath.org) quando a assinatura está
 habilitada; consulte a [política de assinatura de código](CODE_SIGNING.md).
 

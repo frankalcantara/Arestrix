@@ -2,7 +2,9 @@ import { BaseModal } from './BaseModal.ts';
 import { Graph } from '../../core/Graph.ts';
 import { INodeData, INodeSkill } from '../../core/types.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
-import { GitHubSkillsRegistry } from '../../core/skills/GitHubSkillsRegistry.ts';
+import { LibraryRegistry } from '../../core/libraries/LibraryRegistry.ts';
+import { LibraryService } from '../../core/libraries/LibraryService.ts';
+import { assetPayloadToNodeSkill } from '../../core/libraries/types.ts';
 import { EventBus } from '../../core/EventBus.ts';
 import { WorkspaceManager } from '../../core/workspace/WorkspaceManager.ts';
 import { WorkspaceSkillAuditorAgent } from '../../core/workspace/WorkspaceSkillAuditorAgent.ts';
@@ -14,14 +16,17 @@ import { t } from '../../i18n/index.ts';
  * Permite ao nó individual do agente:
  * 1. Escolher e importar Habilidades Pré-Aprovadas do Workspace com auditoria e certificação.
  * 2. Edição manual completa do SKILL.md (Editor Markdown com visualizador e campo de prompt do agente).
- * 3. Escolher e importar habilidades open source a partir do catálogo global fornecido
- *    pelos repositórios do GitHub configurados no sistema.
+ * 3. Escolher e importar habilidades da Biblioteca Arestrix embutida e das
+ *    bibliotecas liberadas, sempre com auditoria do Skill Guard antes de
+ *    entrar no vértice.
  * 
- * NOTA: A gestão dos repositórios autorizados do GitHub é global do sistema (via GitHubReposModal).
+ * NOTA: A gestão de fontes e bibliotecas é global do Studio/Workspace e vive
+ * nas telas de Propriedades (evento `properties:open`, seção `libraries`).
  */
 export class NodeSkillsModal extends BaseModal {
   private graph: Graph;
-  private registry: GitHubSkillsRegistry;
+  private libraryRegistry: LibraryRegistry;
+  private libraryService: LibraryService;
   private workspaceManager: WorkspaceManager;
   private workspaceAuditor: WorkspaceSkillAuditorAgent;
   private bus?: EventBus;
@@ -47,7 +52,8 @@ export class NodeSkillsModal extends BaseModal {
 
     this.graph = graph;
     this.bus = bus;
-    this.registry = GitHubSkillsRegistry.getInstance();
+    this.libraryRegistry = LibraryRegistry.getInstance();
+    this.libraryService = LibraryService.getInstance();
     this.workspaceManager = WorkspaceManager.getInstance(bus);
     this.workspaceAuditor = WorkspaceSkillAuditorAgent.getInstance();
 
@@ -125,9 +131,21 @@ export class NodeSkillsModal extends BaseModal {
 
     const currentSkill = this.getActiveSkill(node);
     const skillsList = node.agentSettings?.skills || [];
-    const githubSkills = this.registry.searchSkills(this.searchQuery, this.selectedCategory);
-    const reposList = this.registry.getRepositories();
-    const activeReposCount = reposList.filter(r => r.isEnabled).length;
+    const librarySkills = this.libraryService.listAssets()
+      .filter(asset => asset.kind === 'skill')
+      .filter(asset => {
+        const query = this.searchQuery.trim().toLowerCase();
+        const matchQuery = !query
+          || asset.name.toLowerCase().includes(query)
+          || asset.description.toLowerCase().includes(query)
+          || (asset.payload.kind === 'skill' && asset.payload.tools.some(tool => tool.toLowerCase().includes(query)));
+        const matchCategory = this.selectedCategory === 'todas'
+          || asset.category.toLowerCase() === this.selectedCategory.toLowerCase();
+        return matchQuery && matchCategory;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const librariesList = this.libraryRegistry.list();
+    const activeLibrariesCount = librariesList.length;
     const approvedSkills = this.workspaceManager.getApprovedSkills().filter(s => {
       const matchCat = this.workspaceCategoryFilter === 'todas' || s.category === this.workspaceCategoryFilter;
       const matchSearch = !this.workspaceSearchQuery ||
@@ -138,6 +156,8 @@ export class NodeSkillsModal extends BaseModal {
     });
     const approvedMcps = this.workspaceManager.getApprovedMcps();
     const currentAudit = this.workspaceAuditor.auditSkill(currentSkill);
+    const librarySourceAsset = this.libraryService.getAssetForSkill(currentSkill);
+    const hasLibraryUpdate = this.libraryService.hasLibraryUpdate(currentSkill);
 
     return `
       <!-- Abas de Navegação Particionadas por Escopo -->
@@ -149,7 +169,7 @@ export class NodeSkillsModal extends BaseModal {
           ${t('node_skills.tab_editor', '[Projeto] Habilidade do Agente & Editor')}
         </button>
         <button class="office-modal-tab-btn ${this.activeTab === 'github' ? 'active' : ''}" data-tab="github">
-          ${t('node_skills.tab_github', '[Studio] Importar do Catálogo (GitHub Open Source)')}
+          ${t('node_skills.tab_github', '[Studio] Importar da Biblioteca Arestrix')}
         </button>
       </div>
 
@@ -275,6 +295,19 @@ export class NodeSkillsModal extends BaseModal {
             </div>
           </div>
 
+          ${hasLibraryUpdate && librarySourceAsset ? `
+            <div class="office-callout callout-info" style="margin-bottom: 14px; padding: 10px 14px; border-radius: 4px; background: #eff6fc; border: 1px solid #c7e0f4; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+              <div style="font-size: 12px; color: #0f4c81; line-height: 1.45;">
+                <strong>${t('node_skills.update_available_title', 'Atualização disponível na biblioteca:')}</strong>
+                ${this.escapeHtml(librarySourceAsset.name)}
+                <span class="properties-muted">· ${this.escapeHtml(librarySourceAsset.audit.hash.slice(0, 12))}…</span>
+              </div>
+              <button id="btn-apply-library-update" class="btn btn-primary btn-sm" style="white-space: nowrap; font-weight: 700;">
+                ${t('node_skills.btn_apply_update', 'Aplicar atualização')}
+              </button>
+            </div>
+          ` : ''}
+
           <div class="office-section-card" style="margin-bottom: 14px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
               <label class="form-label" style="margin: 0; font-weight: 700;">${t('node_skills.label_focus_skill', 'Habilidade em Foco:')}</label>
@@ -368,11 +401,11 @@ export class NodeSkillsModal extends BaseModal {
             <div style="display: flex; align-items: flex-start; gap: 10px;">
               <span style="font-size: 18px; line-height: 1;">ℹ️</span>
               <div style="font-size: 12px; color: #242424; line-height: 1.4;">
-                <strong>${t('node_skills.callout_gh_title', 'Catálogo Curado de Skills Open Source:')}</strong> ${t('node_skills.callout_gh_desc', 'Escolha quais habilidades importar para este agente. As opções disponíveis são fornecidas pelos <strong>{{count}} repositórios globais</strong> ativos do sistema.', { count: activeReposCount })}
+                <strong>${t('node_skills.callout_gh_title', 'Biblioteca Arestrix (embutida):')}</strong> ${t('node_skills.callout_gh_desc', 'Escolha quais habilidades importar para este agente. As opções vêm do catálogo embutido e das bibliotecas liberadas ({{count}} fontes ativas).', { count: activeLibrariesCount })}
               </div>
             </div>
             <button class="btn btn-secondary btn-sm" id="btn-open-global-repos-from-node" style="white-space: nowrap; font-weight: 600; font-size: 11px;">
-              ${t('node_skills.btn_configure_repos', 'Configurar Projetos GitHub...')}
+              ${t('node_skills.btn_configure_repos', 'Gerenciar bibliotecas...')}
             </button>
           </div>
 
@@ -391,50 +424,60 @@ export class NodeSkillsModal extends BaseModal {
             </select>
           </div>
 
-          <!-- Grid de Habilidades do GitHub -->
+          <!-- Grid de Habilidades das Bibliotecas -->
           <div class="github-skills-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px;">
-            ${githubSkills.length === 0 ? `
+            ${librarySkills.length === 0 ? `
               <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: #64748b; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 4px;">
-                <p style="margin: 0 0 10px 0; font-size: 13px;">${t('node_skills.empty_gh_search', 'Nenhuma habilidade encontrada para o termo pesquisado ou não há repositórios ativos.')}</p>
-                <button class="btn btn-secondary btn-sm" id="btn-empty-open-global-repos" style="font-weight: 600;">
-                  ${t('node_skills.btn_empty_open_repos', 'Abrir Configuração Global de Repositórios GitHub')}
-                </button>
+                <p style="margin: 0 0 10px 0; font-size: 13px;">${t('node_skills.empty_gh_search', 'Nenhuma habilidade encontrada. Importe o catálogo embutido ou gerencie as bibliotecas.')}</p>
+                <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                  <button class="btn btn-primary btn-sm" id="btn-import-builtin-to-libraries" style="font-weight: 600;">
+                    ${t('node_skills.btn_import_builtin', 'Importar catálogo embutido')}
+                  </button>
+                  <button class="btn btn-secondary btn-sm" id="btn-empty-open-global-repos" style="font-weight: 600;">
+                    ${t('node_skills.btn_empty_open_repos', 'Abrir Bibliotecas nas Propriedades')}
+                  </button>
+                </div>
               </div>
-            ` : githubSkills.map(item => `
+            ` : librarySkills.map(asset => {
+              const libraryName = this.libraryRegistry.get(asset.libraryId)?.name || asset.libraryId;
+              const tools = asset.payload.kind === 'skill' ? asset.payload.tools : [];
+              const verdictTone = asset.audit.verdict === 'APPROVE' ? 'success' : asset.audit.verdict === 'CAUTION' ? 'warning' : asset.audit.verdict === 'REJECT' ? 'danger' : 'neutral';
+              return `
               <div class="github-skill-card" style="background: #ffffff; border: 1px solid #edebe9; border-radius: 4px; padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between; transition: border-color 0.15s ease;">
                 <div>
                   <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
-                    <span style="font-size: 14px; font-weight: 700; color: #0f6cbd;">${this.escapeHtml(item.name)}</span>
+                    <span style="font-size: 14px; font-weight: 700; color: #0f6cbd;">${this.escapeHtml(asset.name)}</span>
                     <span class="office-license-badge" style="background: #e8f5e9; color: #1e7e34; border: 1px solid #c8e6c9; border-radius: 3px; font-size: 10px; font-weight: 700; padding: 2px 6px;">
-                      ${this.escapeHtml(item.license)}
+                      ${this.escapeHtml(asset.license)}
                     </span>
                   </div>
 
-                  <div style="font-size: 11px; color: #64748b; margin-bottom: 8px;">
-                    📁 <em>${this.escapeHtml(item.repoName)}</em> &bull; <span>${this.escapeHtml(item.category)}</span>
+                  <div style="font-size: 11px; color: #64748b; margin-bottom: 8px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                    📁 <em>${this.escapeHtml(libraryName)}</em> &bull; <span>${this.escapeHtml(asset.category)}</span>
+                    <span class="properties-badge properties-badge--${verdictTone}" style="font-size: 10px;">${this.escapeHtml(asset.audit.verdict)}</span>
                   </div>
 
                   <div style="font-size: 12px; color: #242424; line-height: 1.4; margin-bottom: 10px;">
-                    ${this.escapeHtml(item.description)}
+                    ${this.escapeHtml(asset.description)}
                   </div>
 
                   <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px;">
-                    ${item.tools.map(t => `<code style="font-size: 10px; background: #f3f4f6; color: #374151; padding: 1px 4px; border-radius: 2px;">${t}</code>`).join('')}
+                    ${tools.map(tool => `<code style="font-size: 10px; background: #f3f4f6; color: #374151; padding: 1px 4px; border-radius: 2px;">${this.escapeHtml(tool)}</code>`).join('')}
                   </div>
                 </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f3f4f6; padding-top: 8px;">
-                  ${item.githubUrl ? `
-                    <a href="${item.githubUrl}" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: #0f6cbd; text-decoration: none;">
+                  ${asset.provenance.url ? `
+                    <a href="${this.escapeHtml(asset.provenance.url)}" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: #0f6cbd; text-decoration: none;">
                       ${t('node_skills.view_on_github', 'Ver no GitHub ↗')}
                     </a>
                   ` : '<span></span>'}
-                  <button class="btn btn-secondary btn-sm btn-import-github-skill" data-skill-id="${item.id}" style="font-weight: 600;">
+                  <button class="btn btn-secondary btn-sm btn-import-github-skill" data-skill-id="${this.escapeHtml(asset.id)}" style="font-weight: 600;" ${asset.audit.verdict === 'REJECT' ? 'disabled' : ''}>
                     ${t('node_skills.btn_import_to_agent', 'Importar para este Agente')}
                   </button>
                 </div>
               </div>
-            `).join('')}
+            `;}).join('')}
           </div>
         </div>
       </div>
@@ -445,13 +488,12 @@ export class NodeSkillsModal extends BaseModal {
     if (!this.activeNodeId) return '';
     const node = this.graph.getNode(this.activeNodeId);
     const skillsList = node?.agentSettings?.skills || [];
-    const reposList = this.registry.getRepositories();
-    const activeReposCount = reposList.filter(r => r.isEnabled).length;
+    const librariesCount = this.libraryRegistry.list().length;
 
     return `
       <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: #faf9f8; border-top: 1px solid #edebe9;">
         <div style="font-size: 12px; color: #64748b;">
-          ${t('node_skills.footer_total_skills', 'Total de Habilidades deste Agente: <strong>{{skillsCount}}</strong> | Repositórios Globais Ativos: <strong>{{reposCount}}</strong>', { skillsCount: skillsList.length, reposCount: activeReposCount })}
+          ${t('node_skills.footer_total_skills', 'Total de Habilidades deste Agente: <strong>{{skillsCount}}</strong> | Fontes de Biblioteca Ativas: <strong>{{reposCount}}</strong>', { skillsCount: skillsList.length, reposCount: librariesCount })}
         </div>
         <button class="btn btn-secondary" id="btn-footer-close-skills" style="min-width: 90px;">
           ${t('node_skills.btn_close', 'Fechar')}
@@ -471,7 +513,7 @@ export class NodeSkillsModal extends BaseModal {
 
     // Botão para abrir o modal global de repositórios
     const openGlobalReposHandler = () => {
-      this.bus?.emit('modal:open-github-repos');
+      this.bus?.emit('properties:open', { scope: 'studio', section: 'libraries' });
     };
     this.dialog.querySelector('#btn-open-global-repos-from-node')?.addEventListener('click', openGlobalReposHandler);
     this.dialog.querySelector('#btn-empty-open-global-repos')?.addEventListener('click', openGlobalReposHandler);
@@ -562,6 +604,40 @@ export class NodeSkillsModal extends BaseModal {
       this.notificationMessage = `🛡️ Auditoria concluída pelo Arestrix Skill Guard (NVIDIA + Cloudflare)! Veredito: ${verdict.verdict || verdict.status.toUpperCase()} (Risco: ${verdict.riskScore}/100, Hash: ${verdict.hash?.slice(0, 10)}...)`;
       this.notificationType = isOk ? 'success' : 'warning';
       this.render();
+    });
+
+    // Aplicar atualização vinda da biblioteca ao snapshot do vértice.
+    this.dialog.querySelector('#btn-apply-library-update')?.addEventListener('click', () => {
+      void (async () => {
+        const source = this.libraryService.getAssetForSkill(currentSkill);
+        if (!source) return;
+        if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+          const ok = window.confirm(t('node_skills.confirm_update', 'Aplicar a versão atual da biblioteca? Edições locais desta habilidade serão substituídas.'));
+          if (!ok) return;
+        }
+
+        const reaudited = await this.libraryService.reauditAsset(source.id);
+        const asset = reaudited.asset || source;
+        if (asset.audit.verdict === 'REJECT') {
+          this.notificationMessage = t('node_skills.msg_update_rejected', 'Atualização bloqueada: o asset foi rejeitado pelo Skill Guard.');
+          this.notificationType = 'warning';
+          this.render();
+          return;
+        }
+
+        const nodeSkill = assetPayloadToNodeSkill(asset);
+        if (node.agentSettings?.skills) {
+          const index = node.agentSettings.skills.findIndex(skill => skill.id === currentSkill.id);
+          if (index !== -1) node.agentSettings.skills[index] = nodeSkill;
+          else node.agentSettings.skills.push(nodeSkill);
+          node.agentSettings.activeSkillId = nodeSkill.id;
+          this.graph.updateNode(node.id, { agentSettings: node.agentSettings });
+        }
+
+        this.notificationMessage = t('node_skills.msg_update_applied', 'Habilidade "{{name}}" atualizada a partir da biblioteca (risco {{risk}}/100).', { name: nodeSkill.name, risk: asset.audit.riskScore });
+        this.notificationType = asset.audit.verdict === 'APPROVE' ? 'success' : 'warning';
+        this.render();
+      })();
     });
 
     // Troca de Habilidade Ativa
@@ -678,39 +754,68 @@ export class NodeSkillsModal extends BaseModal {
       this.render();
     });
 
-    // Botões de Importar Skill do GitHub para este Vértice
+    // Importação das bibliotecas: reaudita o asset e só inclui o snapshot se não houver REJECT.
     this.dialog.querySelectorAll<HTMLButtonElement>('.btn-import-github-skill').forEach(btn => {
       btn.addEventListener('click', () => {
-        const skillId = btn.getAttribute('data-skill-id');
-        if (!skillId) return;
+        void (async () => {
+          const assetId = btn.getAttribute('data-skill-id');
+          if (!assetId) return;
 
-        const githubItem = this.registry.getDefaultSkills().find(s => s.id === skillId);
-        if (!githubItem) return;
+          const current = this.libraryService.getAsset(assetId);
+          if (!current) return;
 
-        const nodeSkill = this.registry.convertToNodeSkill(githubItem);
-        if (!node.agentSettings) node.agentSettings = { inheritSandbox: false, inheritModel: false, inheritCodeMode: false };
-        if (!node.agentSettings.skills) node.agentSettings.skills = [];
+          const reaudited = await this.libraryService.reauditAsset(assetId);
+          const asset = reaudited.asset || current;
+          if (asset.audit.verdict === 'REJECT') {
+            this.notificationMessage = t(
+              'node_skills.msg_import_rejected',
+              'Importação bloqueada pelo Arestrix Skill Guard: "{{name}}" foi rejeitada (risco {{risk}}/100). {{details}}',
+              {
+                name: asset.name,
+                risk: asset.audit.riskScore,
+                details: asset.audit.findings.concat(asset.audit.warnings).join(' · ')
+              }
+            );
+            this.notificationType = 'warning';
+            this.render();
+            return;
+          }
 
-        // Substitui ou adiciona
-        const existingIdx = node.agentSettings.skills.findIndex(s => s.id === nodeSkill.id);
-        if (existingIdx !== -1) {
-          node.agentSettings.skills[existingIdx] = nodeSkill;
-        } else {
-          node.agentSettings.skills.push(nodeSkill);
-        }
-        node.agentSettings.activeSkillId = nodeSkill.id;
+          const nodeSkill = assetPayloadToNodeSkill(asset);
+          if (!node.agentSettings) node.agentSettings = { inheritSandbox: false, inheritModel: false, inheritCodeMode: false };
+          if (!node.agentSettings.skills) node.agentSettings.skills = [];
 
-        // Atualiza modelo com o prompt se o agente não tiver prompt customizado
-        if (node.agentSettings.model) {
-          node.agentSettings.model.promptTemplate = nodeSkill.systemPrompt;
-        }
+          const existingIdx = node.agentSettings.skills.findIndex(s => s.id === nodeSkill.id);
+          if (existingIdx !== -1) {
+            node.agentSettings.skills[existingIdx] = nodeSkill;
+          } else {
+            node.agentSettings.skills.push(nodeSkill);
+          }
+          node.agentSettings.activeSkillId = nodeSkill.id;
 
-        this.graph.updateNode(node.id, { agentSettings: node.agentSettings });
-        this.notificationMessage = t('node_skills.msg_imported_gh', 'Habilidade "{{name}}" importada com sucesso do repositório open source!', { name: nodeSkill.name });
-        this.notificationType = 'success';
-        this.activeTab = 'editor';
-        this.render();
+          if (node.agentSettings.model) {
+            node.agentSettings.model.promptTemplate = nodeSkill.systemPrompt;
+          }
+
+          this.graph.updateNode(node.id, { agentSettings: node.agentSettings });
+          const approved = asset.audit.verdict === 'APPROVE';
+          this.notificationMessage = approved
+            ? t('node_skills.msg_imported_gh', 'Habilidade "{{name}}" importada e auditada com sucesso (risco {{risk}}/100).', { name: nodeSkill.name, risk: asset.audit.riskScore })
+            : t('node_skills.msg_imported_gh_warning', 'Habilidade "{{name}}" importada com alertas de auditoria (risco {{risk}}/100). Revise os achados antes de executar.', { name: nodeSkill.name, risk: asset.audit.riskScore });
+          this.notificationType = approved ? 'success' : 'warning';
+          this.activeTab = 'editor';
+          this.render();
+        })();
       });
+    });
+
+    this.dialog.querySelector('#btn-import-builtin-to-libraries')?.addEventListener('click', () => {
+      void (async () => {
+        const result = await this.libraryService.importBuiltinSkills();
+        this.notificationMessage = t('node_skills.msg_import_builtin_result', '{{imported}} assets importados e auditados; {{rejected}} rejeitados.', { imported: result.imported.length, rejected: result.rejected.length });
+        this.notificationType = result.rejected.length > 0 ? 'warning' : 'success';
+        this.render();
+      })();
     });
   }
 

@@ -196,6 +196,32 @@ body, html {
   transition: opacity 0.2s ease;
 }
 
+/* Tema escuro do canvas: cartão em cinza grafite, nunca preto puro. */
+.viewport-container.canvas-bg-dark .arestrix-svg-vertex .vertex-body {
+  fill: #1f2937;
+}
+
+.viewport-container.canvas-bg-dark .arestrix-svg-vertex .vertex-title-line {
+  fill: #e5e7eb;
+}
+
+.viewport-container.canvas-bg-dark .arestrix-svg-vertex .vertex-port-label {
+  fill: #cbd5e1;
+}
+
+.viewport-container.canvas-bg-dark .arestrix-svg-vertex .vertex-port-label.branch-0 {
+  fill: #34d399;
+}
+
+.viewport-container.canvas-bg-dark .arestrix-svg-vertex .vertex-port-label.branch-1 {
+  fill: #fbbf24;
+}
+
+.viewport-container.canvas-bg-dark .arestrix-svg-vertex .vertex-action-bar > rect:first-child {
+  fill: #1f2937;
+  stroke: #475569;
+}
+
 .arestrix-svg-vertex.state-queued,
 .arestrix-svg-vertex.state-completed {
   opacity: 0.45;

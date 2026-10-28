@@ -319,3 +319,113 @@ html[data-theme="dark"] .office-backstage-main [style*="color: #475569"],
 html[data-theme="dark"] .office-backstage-main [style*="color: #64748b"] {
   color: #c3c2b7 !important;
 }
+
+html[data-theme="dark"] .backstage-open-place {
+  color: #c3c2b7 !important;
+}
+
+html[data-theme="dark"] .backstage-open-place:hover {
+  background: #303030 !important;
+}
+
+html[data-theme="dark"] .backstage-open-place.active {
+  background: #303030 !important;
+  color: #f5f5f2 !important;
+  box-shadow: inset 3px 0 0 #4ea1ff;
+}
+
+html[data-theme="dark"] .backstage-open-place-icon {
+  color: #918f88;
+}
+
+html[data-theme="dark"] .backstage-open-place.active .backstage-open-place-icon {
+  color: #4ea1ff;
+}
+
+html[data-theme="dark"] .backstage-open-toolbar-title,
+html[data-theme="dark"] .backstage-open-table-name-label {
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .backstage-open-table {
+  background: #1f1f1f !important;
+  border-color: #3a3a3a !important;
+}
+
+html[data-theme="dark"] .backstage-open-table-header,
+html[data-theme="dark"] .backstage-open-table-group-title {
+  background: #262626 !important;
+  border-color: #3a3a3a !important;
+  color: #c3c2b7 !important;
+}
+
+html[data-theme="dark"] .backstage-open-table-row {
+  border-bottom-color: #303030 !important;
+}
+
+html[data-theme="dark"] .backstage-open-table-row:hover {
+  background: #303030 !important;
+}
+
+html[data-theme="dark"] .backstage-open-table-detail,
+html[data-theme="dark"] .backstage-open-table-cell,
+html[data-theme="dark"] .backstage-open-table-empty {
+  color: #c3c2b7 !important;
+}
+
+html[data-theme="dark"] .backstage-open-primary {
+  background: #183122 !important;
+  border-color: #2f6b41 !important;
+  color: #5fe285 !important;
+}
+
+html[data-theme="dark"] .backstage-open-search {
+  background: #262626 !important;
+  border-color: #4a4a4a !important;
+}
+
+html[data-theme="dark"] .backstage-open-search input {
+  color: #f5f5f2 !important;
+}
+html[data-theme="dark"] .backstage-card-icon,
+html[data-theme="dark"] .backstage-section-icon,
+html[data-theme="dark"] .backstage-panel-icon,
+html[data-theme="dark"] .backstage-export-icon {
+  background: #1b2d42 !important;
+  color: #4ea1ff !important;
+}
+
+html[data-theme="dark"] .backstage-form-panel,
+html[data-theme="dark"] .backstage-export-card {
+  background: #262626 !important;
+  border-color: #3a3a3a !important;
+}
+
+html[data-theme="dark"] .backstage-panel-heading {
+  border-bottom-color: #3a3a3a !important;
+}
+
+html[data-theme="dark"] .backstage-panel-heading h3,
+html[data-theme="dark"] .backstage-export-body h3 {
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .backstage-panel-heading p,
+html[data-theme="dark"] .backstage-export-body p {
+  color: #c3c2b7 !important;
+}
+html[data-theme="dark"] .office-backstage-main .btn-primary-office {
+  border-color: #4ea1ff !important;
+  background: #0f6cbd !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="dark"] .office-backstage-main .btn-secondary-office {
+  border-color: #4a4a4a !important;
+  background: #262626 !important;
+  color: #f5f5f2 !important;
+}
+
+html[data-theme="dark"] .office-backstage-main .btn-secondary-office:hover {
+  background: #303030 !important;
+}

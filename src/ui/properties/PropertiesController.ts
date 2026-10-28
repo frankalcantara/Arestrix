@@ -3,10 +3,13 @@ import { Graph } from '../../core/Graph.ts';
 import { ProjectManager } from '../../core/ProjectManager.ts';
 import { WorkspaceManager } from '../../core/workspace/WorkspaceManager.ts';
 import { DEFAULT_PIPELINE_DEFAULTS } from '../../core/types.ts';
-import { GitHubSkillsRegistry } from '../../core/skills/GitHubSkillsRegistry.ts';
+import { LibraryRegistry, type LibraryScope } from '../../core/libraries/LibraryRegistry.ts';
+import { LibraryService } from '../../core/libraries/LibraryService.ts';
+import { ProjectLibraryStore } from '../../core/libraries/ProjectLibraryStore.ts';
 import { setLocale, t } from '../../i18n/index.ts';
 import { Viewport } from '../../view/Viewport.ts';
 import { applyAppTheme, type AppTheme } from '../../view/AppTheme.ts';
+import { canvasBackgroundForAppTheme } from '../../view/CanvasPreferences.ts';
 import { ProjectSettingsStore } from '../../core/settings/ProjectSettingsStore.ts';
 import { SettingsResolver } from '../../core/settings/SettingsResolver.ts';
 import { StudioSettingsStore } from '../../core/settings/StudioSettingsStore.ts';
@@ -34,6 +37,8 @@ export class PropertiesController {
   private readonly workspaceStore: WorkspaceSettingsStore;
   private readonly projectStore: ProjectSettingsStore;
   private readonly resolver = new SettingsResolver();
+  private readonly libraryService = LibraryService.getInstance();
+  private readonly projectLibraryStore = new ProjectLibraryStore();
   private workspaceSettings?: IWorkspaceSettings;
 
   constructor(
@@ -46,22 +51,34 @@ export class PropertiesController {
       graph,
       projectManager,
       workspaceManager,
-      githubRegistry: GitHubSkillsRegistry.getInstance(),
+      libraryRegistry: LibraryRegistry.getInstance(),
+      projectLibraryStore: this.projectLibraryStore,
       saveStudio: values => this.saveStudio(values),
       saveStudioModel: values => this.saveStudioModel(values),
       saveStudioCredentials: values => this.saveStudioCredentials(values),
       saveWorkspace: values => this.saveWorkspace(values),
       saveProject: values => this.saveProject(values),
       saveProjectDefaults: values => this.saveProjectDefaults(values),
-      saveProjectEnvironment: values => this.saveProjectEnvironment(values)
+      saveProjectEnvironment: values => this.saveProjectEnvironment(values),
+      saveLibraries: (scope, values) => this.saveLibraries(scope, values),
+      saveProjectLibraries: values => this.saveProjectLibraries(values)
     };
     this.workspaceStore = new WorkspaceSettingsStore(workspaceManager);
     this.projectStore = new ProjectSettingsStore(projectManager, graph);
   }
 
   public async show(scope: PropertiesScope, sectionId?: string): Promise<void> {
+    try {
+      await this.libraryService.hydrate('workspace');
+    } catch {
+      // O arquivo nativo é opcional; o registro local continua disponível.
+    }
     const settings = await this.loadSettings();
-    const config = buildPropertiesScopeConfig(scope, { ...this.context, settings });
+    const config = buildPropertiesScopeConfig(scope, {
+      ...this.context,
+      settings,
+      canvasBackground: this.viewport?.getCanvasBackground?.()
+    });
     let window = this.windows.get(scope);
     if (!window) {
       window = new PropertiesWindow(config, actionId => this.handleAction(actionId));
@@ -75,7 +92,7 @@ export class PropertiesController {
   private async saveStudio(values: Record<string, string>): Promise<boolean> {
     const current = await this.studioStore.load();
     const language = values.language === 'en-US' ? 'en-US' : 'pt-BR';
-    const canvasBackground = values.canvasBackground === 'dark' ? 'dark' : 'light';
+    const requestedCanvas = values.canvasBackground === 'dark' ? 'dark' : 'light';
     const theme: AppTheme = values.theme === 'dark' || values.theme === 'system'
       ? values.theme
       : 'light';
@@ -83,6 +100,10 @@ export class PropertiesController {
     const previousLanguage = current.language;
     const previousCanvas = current.appearance.canvasBackground;
     const previousTheme = current.appearance.theme;
+    const themeChanged = theme !== previousTheme;
+    const canvasBackground = themeChanged
+      ? canvasBackgroundForAppTheme(theme)
+      : requestedCanvas;
     current.language = language;
     current.appearance.canvasBackground = canvasBackground;
     current.appearance.theme = theme;
@@ -203,6 +224,88 @@ export class PropertiesController {
     return this.projectStore.saveMetadata({ environment: sanitizeEnvReferences(parsed) });
   }
 
+  private async saveProjectLibraries(values: Record<string, string>): Promise<boolean> {
+    const manifest = this.context.projectManager.getCurrentProject();
+    const enabledLibraryIds: string[] = [];
+    const pinnedAssetIds: string[] = [];
+
+    for (const [key, value] of Object.entries(values)) {
+      if (key.startsWith('libraryEnabled_') && value === 'true') {
+        enabledLibraryIds.push(key.slice('libraryEnabled_'.length));
+      }
+      if (key.startsWith('assetPinned_') && value === 'true') {
+        pinnedAssetIds.push(key.slice('assetPinned_'.length));
+      }
+    }
+
+    // A biblioteca embutida é sempre habilitada.
+    if (!enabledLibraryIds.includes('library-arestrix')) {
+      enabledLibraryIds.push('library-arestrix');
+    }
+
+    const enabled = new Set(enabledLibraryIds);
+    const filteredPins = pinnedAssetIds.filter(assetId => {
+      const asset = this.context.libraryRegistry?.getAsset(assetId);
+      return Boolean(asset && enabled.has(asset.libraryId));
+    });
+
+    const ok = this.projectLibraryStore.save(manifest.projectId, {
+      enabledLibraryIds,
+      pinnedAssetIds: filteredPins
+    });
+    if (ok) globalEventBus.emit('library:changed');
+    return ok;
+  }
+
+  /**
+   * Cria uma biblioteca local e/ou registra uma fonte de repositório a partir
+   * dos campos da seção Bibliotecas. As duas operações são independentes:
+   * preencher só o nome cria uma biblioteca vazia; preencher só o repositório
+   * cadastra a fonte; preencher os dois cria uma biblioteca ligada à fonte.
+   */
+  private async saveLibraries(scope: LibraryScope, values: Record<string, string>): Promise<boolean> {
+    const libraryName = values.libraryName?.trim() || '';
+    const repoPath = values.repoPath?.trim() || '';
+    if (!libraryName && !repoPath) return false;
+
+    const libraryRegistry = this.context.libraryRegistry;
+
+    if (repoPath) {
+      const created = await this.libraryService.createGitHubSource({
+        repo: repoPath,
+        ref: values.repoRef?.trim() || 'main',
+        name: libraryName || values.repoName,
+        scope,
+        licenseAllowlist: values.repoLicense && values.repoLicense !== 'permissive'
+          ? [values.repoLicense]
+          : undefined
+      });
+      if (!created.ok) return false;
+      globalEventBus.emit('library:changed');
+      await this.libraryService.persist('workspace');
+      return true;
+    }
+
+    if (libraryName && libraryRegistry) {
+      const duplicate = (libraryRegistry.list(scope) || []).some(library =>
+        library.name.trim().toLowerCase() === libraryName.toLowerCase()
+      );
+      if (duplicate) return false;
+      const created = libraryRegistry.create({
+        name: libraryName,
+        description: values.libraryDescription,
+        scope,
+        kind: 'local'
+      });
+      if (!created) return false;
+      globalEventBus.emit('library:changed');
+      await this.libraryService.persist('workspace');
+      return true;
+    }
+
+    return false;
+  }
+
   private async loadSettings(): Promise<IPropertiesContext['settings']> {
     try {
       const [studio, studioModel, credentials, workspace, project] = await Promise.all([
@@ -310,6 +413,36 @@ export class PropertiesController {
     await this.show('studio', 'advanced');
   }
 
+  private async importBuiltinLibrary(): Promise<void> {
+    const result = await this.libraryService.importBuiltinSkills();
+    this.notifyLibraryImport(
+      t('properties_window.libraries.scope_studio', 'Studio'),
+      result.imported.length,
+      result.rejected.length
+    );
+    await this.show('studio', 'libraries');
+  }
+
+  private async importWorkspaceLibrary(): Promise<void> {
+    const result = await this.libraryService.importWorkspaceCatalog();
+    this.notifyLibraryImport(
+      t('properties_window.libraries.scope_workspace', 'Workspace'),
+      result.imported.length,
+      result.rejected.length
+    );
+    await this.show('workspace', 'libraries');
+  }
+
+  private notifyLibraryImport(scope: string, imported: number, rejected: number): void {
+    globalEventBus.emit('notification:show', {
+      severity: rejected > 0 ? 'warning' : 'success',
+      title: t('properties_window.libraries.import_title', 'Bibliotecas'),
+      message: rejected > 0
+        ? t('properties_window.libraries.import_result_warning', '{{scope}}: {{imported}} assets importados e auditados; {{rejected}} rejeitados pelo Skill Guard.', { scope, imported, rejected })
+        : t('properties_window.libraries.import_result', '{{scope}}: {{imported}} assets importados e auditados.', { scope, imported })
+    });
+  }
+
   private handleAction(actionId: string): void {
     if (actionId === 'studio.reset-preferences') {
       void this.resetStudioPreferences();
@@ -321,6 +454,14 @@ export class PropertiesController {
     }
     if (actionId === 'workspace.reset') {
       void this.resetWorkspace();
+      return;
+    }
+    if (actionId === 'libraries.import-builtin') {
+      void this.importBuiltinLibrary();
+      return;
+    }
+    if (actionId === 'libraries.import-workspace') {
+      void this.importWorkspaceLibrary();
       return;
     }
 
@@ -344,9 +485,13 @@ export class PropertiesController {
       case 'project.open-memory-advanced':
         globalEventBus.emit('modal:open-global-memory');
         return;
+      case 'studio.open-libraries':
       case 'studio.open-github':
+        void this.show('studio', 'libraries');
+        return;
+      case 'workspace.open-libraries':
       case 'workspace.open-github':
-        globalEventBus.emit('modal:open-github-repos');
+        void this.show('workspace', 'libraries');
         return;
       case 'studio.open-git':
       case 'project.open-git':

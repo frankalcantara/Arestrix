@@ -723,7 +723,7 @@ export class GlobalDefaultsModal {
 
     // Abrir repositórios do GitHub
     this.overlay.querySelector('#btn-defaults-open-github-repos')?.addEventListener('click', () => {
-      globalEventBus.emit('modal:open-github-repos');
+      globalEventBus.emit('properties:open', { scope: 'studio', section: 'libraries' });
     });
 
     // Toggle estilo das pílulas de ferramentas

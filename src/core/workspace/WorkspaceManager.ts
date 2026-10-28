@@ -299,6 +299,18 @@ export class WorkspaceManager {
     return Array.from(this.installedMcps.values());
   }
 
+  /**
+   * Registra uma skill de biblioteca instalada no Workspace sem substituir o
+   * catálogo homologado. A gravação física continua sendo feita pelo serviço
+   * de bibliotecas; este método mantém o catálogo em memória coerente.
+   */
+  public registerInstalledSkill(skill: IWorkspaceApprovedSkill): void {
+    if (!skill || !skill.id) return;
+    this.installedSkills.set(skill.id, { ...skill });
+    this.persistLocalWorkspaceState();
+    this.bus.emit('workspace:skills-updated', { skill });
+  }
+
   public getGovernanceAgents(): IWorkspaceAgent[] {
     return Array.from(this.governanceAgents.values());
   }

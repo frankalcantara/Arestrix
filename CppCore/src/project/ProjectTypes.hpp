@@ -66,7 +66,6 @@ struct ProjectGitConfig {
     bool autoCommitOnShutdown = true;
     bool timedPushEnabled = true;
     int timedPushIntervalMinutes = 10;
-    std::string backupMode = "ddl_and_data"; // "ddl_and_data" ou "schema_only"
     std::string lastSyncAt = "";
     std::string lastCommitHash = "";
 };
@@ -84,7 +83,6 @@ inline void to_json(taskforge::Json& j, const ProjectGitConfig& g) {
         {"autoCommitOnShutdown", g.autoCommitOnShutdown},
         {"timedPushEnabled", g.timedPushEnabled},
         {"timedPushIntervalMinutes", g.timedPushIntervalMinutes},
-        {"backupMode", g.backupMode},
         {"lastSyncAt", g.lastSyncAt},
         {"lastCommitHash", g.lastCommitHash}
     };
@@ -102,7 +100,6 @@ inline void from_json(const taskforge::Json& j, ProjectGitConfig& g) {
     g.autoCommitOnShutdown = j.value("autoCommitOnShutdown", true);
     g.timedPushEnabled = j.value("timedPushEnabled", true);
     g.timedPushIntervalMinutes = j.value("timedPushIntervalMinutes", 10);
-    g.backupMode = j.value("backupMode", "ddl_and_data");
     g.lastSyncAt = j.value("lastSyncAt", "");
     g.lastCommitHash = j.value("lastCommitHash", "");
 }

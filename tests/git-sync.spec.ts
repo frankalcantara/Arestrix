@@ -142,11 +142,10 @@ describe('Git Auto-Save & Synchronization System', () => {
   });
 
   describe('Configuração do Manifesto do Projeto & Segurança de Dados', () => {
-    it('deve inicializar novo projeto com modo 100% local por padrão (Git desabilitado / opt-in) e backup DDL + dados', () => {
+    it('deve inicializar novo projeto com modo 100% local por padrão (Git desabilitado / opt-in)', () => {
       const manifest = projectManager.createDefaultManifest();
       expect(manifest.git).toBeDefined();
       expect(manifest.git?.enabled).toBe(false);
-      expect(manifest.git?.backupMode).toBe('ddl_and_data');
       expect(manifest.git?.provider).toBe('github');
       expect(manifest.git?.isPrivate).toBe(true);
       expect(manifest.git?.autoCommitOnRun).toBe(true);
@@ -163,11 +162,10 @@ describe('Git Auto-Save & Synchronization System', () => {
       expect(keys).not.toContain('apiKey');
     });
 
-    it('deve persistir configurações Git e backupMode no projeto ativo', async () => {
+    it('deve persistir configurações Git no projeto ativo', async () => {
       projectManager.updateProjectMetadata({
         git: {
           enabled: true,
-          backupMode: 'schema_only',
           provider: 'github',
           serverUrl: 'https://github.com',
           username: 'frankalcantara',
@@ -181,7 +179,6 @@ describe('Git Auto-Save & Synchronization System', () => {
 
       const current = projectManager.getCurrentProject();
       expect(current.git?.enabled).toBe(true);
-      expect(current.git?.backupMode).toBe('schema_only');
       expect(current.git?.username).toBe('frankalcantara');
       expect(current.git?.repositoryName).toBe('projeto-teste');
       expect(current.git?.remoteUrl).toBe('https://github.com/frankalcantara/projeto-teste.git');

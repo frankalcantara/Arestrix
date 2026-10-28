@@ -212,8 +212,9 @@ add_library(arestrix_core STATIC
   ${SRC}/memory/MemoryStore.cpp
   ${SRC}/memory/MemoryService.cpp
   ${SRC}/project/OpenableFiles.cpp
+  ${SRC}/libraries/GitHubSource.cpp
   ${SRC}/project/GitSyncService.cpp
-  ${SRC}/project/DatabaseBackupService.cpp
+  ${SRC}/project/MemoryDatabaseGuard.cpp
   ${SRC}/project/RunnerService.cpp
   ${SRC}/project/CorporateVault.cpp
   ${SRC}/project/RunnerSecurity.cpp

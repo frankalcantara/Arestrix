@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { PiProjectImporter } from '../src/core/pi/PiProjectImporter.ts';
 import { GenericPiProjectScanner } from '../src/core/pi/GenericPiProjectScanner.ts';
-import { GitHubSkillsRegistry } from '../src/core/skills/GitHubSkillsRegistry.ts';
+import { BUILTIN_LIBRARY_SKILLS } from '../src/core/libraries/BuiltinLibraryCatalog.ts';
 import { ProjectManager } from '../src/core/ProjectManager.ts';
 import { EventBus } from '../src/core/EventBus.ts';
 import { Graph } from '../src/core/Graph.ts';
@@ -97,39 +97,15 @@ describe('Topologia Concorrente (Fork/Join) e Ingestão de Skills no Pi Import',
     }
   });
 
-  it('deve gerenciar o catálogo de skills do GitHub com licenças permissivas e repositórios customizáveis', () => {
-    const registry = GitHubSkillsRegistry.getInstance();
-    const repos = registry.getRepositories();
-    expect(repos.length).toBeGreaterThanOrEqual(4);
+  it('deve fornecer o catálogo embutido com licenças permissivas', () => {
+    expect(BUILTIN_LIBRARY_SKILLS.length).toBeGreaterThanOrEqual(5);
 
-    // Todos os repos padrão devem ter licença permissiva (MIT ou Apache-2.0)
-    for (const repo of repos) {
-      expect(['MIT', 'Apache-2.0', 'BSD-3-Clause']).toContain(repo.license);
-      expect(repo.isEnabled).toBe(true);
-    }
-
-    const defaultSkills = registry.getDefaultSkills();
-    expect(defaultSkills.length).toBeGreaterThanOrEqual(5);
-
-    // Testa conversão para INodeSkill
-    const firstGitHubSkill = defaultSkills[0];
-    const nodeSkill = registry.convertToNodeSkill(firstGitHubSkill);
-    expect(nodeSkill.id).toBe(firstGitHubSkill.id);
-    expect(nodeSkill.markdownContent).toBe(firstGitHubSkill.markdownContent);
-    expect(nodeSkill.systemPrompt).toBe(firstGitHubSkill.systemPrompt);
-    expect(nodeSkill.license).toBe(firstGitHubSkill.license);
-
-    // Testa adição e toggle de novo repositório
-    const added = registry.addRepository('community/extra-skills', 'Extra Community Skills', 'Habilidades adicionais', 'MIT');
-    expect(added).toBe(true);
-    expect(registry.getRepositories().some(r => r.repo === 'community/extra-skills')).toBe(true);
-
-    // Toggle para desativar
-    const newRepo = registry.getRepositories().find(r => r.repo === 'community/extra-skills');
-    if (newRepo) {
-      registry.toggleRepository(newRepo.id, false);
-      expect(registry.getRepositories().find(r => r.id === newRepo.id)?.isEnabled).toBe(false);
-      registry.removeRepository(newRepo.id);
+    for (const skill of BUILTIN_LIBRARY_SKILLS) {
+      expect(skill.repoId).toBe('library-arestrix');
+      expect(['MIT', 'Apache-2.0', 'BSD-3-Clause']).toContain(skill.license);
+      expect(skill.markdownContent).toContain('---');
+      expect(skill.systemPrompt.length).toBeGreaterThan(0);
+      expect(skill.githubUrl).toBeUndefined();
     }
   });
 });

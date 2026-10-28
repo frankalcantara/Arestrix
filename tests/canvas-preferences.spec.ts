@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { CANVAS_PALETTES, loadCanvasBackground, saveCanvasBackground } from '../src/view/CanvasPreferences.ts';
+import { CANVAS_PALETTES, canvasBackgroundForAppTheme, loadCanvasBackground, saveCanvasBackground } from '../src/view/CanvasPreferences.ts';
 
 describe('Preferências do canvas', () => {
   let previousStorage: any;
@@ -38,5 +38,10 @@ describe('Preferências do canvas', () => {
     expect(CANVAS_PALETTES.dark.background).toBe(0x000000);
     expect(CANVAS_PALETTES.dark.gridMajor).not.toBe(CANVAS_PALETTES.dark.background);
     expect(CANVAS_PALETTES.dark.gridMinor).not.toBe(CANVAS_PALETTES.dark.background);
+  });
+
+  it('deriva o fundo do canvas do tema resolvido', () => {
+    expect(canvasBackgroundForAppTheme('light')).toBe('light');
+    expect(canvasBackgroundForAppTheme('dark')).toBe('dark');
   });
 });

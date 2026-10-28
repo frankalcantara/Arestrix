@@ -9,9 +9,9 @@
 #include "mcp/McpRegistry.hpp"
 #include "project/ProjectManager.hpp"
 #include "project/GitSyncService.hpp"
-#include "project/DatabaseBackupService.hpp"
 #include "project/RunnerService.hpp"
 #include "project/OpenableFiles.hpp"
+#include "libraries/GitHubSource.hpp"
 #include "assistant/AssistantSession.hpp"
 #include "rt/ModelClient.hpp"
 #include "rt/Http.hpp"
@@ -671,11 +671,6 @@ void ui_clear_memory(webui::window::event* e) {
         memory.clearSession(projectId);
     } else {
         memory.clearProject(projectId);
-        // O snapshot e a fonte de recuperacao: se a memoria persistente foi apagada,
-        // ele tambem precisa sair para nao ressuscitar dados no proximo projeto aberto.
-        std::error_code ec;
-        std::filesystem::remove(
-            std::filesystem::path(activeMemoryRoot()) / "storage" / "memory.dump.json", ec);
     }
     e->return_bool(true);
 }
@@ -2029,6 +2024,17 @@ void ui_write_workspace_asset(webui::window::event* e) {
     }
 }
 
+// Wrapper JS -> C++ (Fonte GitHub de bibliotecas: manifesto ou asset sob demanda)
+void ui_fetch_library_source(webui::window::event* e) {
+    try {
+        const std::string payload = e->get_string();
+        e->return_string(taskforge::libraries::fetchLibrarySourceJson(payload));
+    } catch (const std::exception& ex) {
+        std::cerr << "[C++ Erro] ui_fetch_library_source: " << ex.what() << "\n";
+        e->return_string("{\"ok\":false,\"errorCode\":\"github_internal\",\"error\":\"Falha interna ao consultar o GitHub.\"}");
+    }
+}
+
 // Wrapper JS -> C++ (Ler asset do workspace). Confinado as raizes permitidas.
 void ui_read_workspace_asset(webui::window::event* e) {
     try {
@@ -2391,11 +2397,6 @@ void ui_git_commit_push(webui::window::event* e) {
         if (root.empty()) root = taskforge::project::ProjectManager::getInstance().getCurrentProject().rootPath;
         std::string msg = j.value("message", "");
         std::string branch = j.value("branch", "main");
-        if (msg.find("shutdown") != std::string::npos || msg.find("Shutdown") != std::string::npos) {
-            std::string bErr;
-            auto cur = taskforge::project::ProjectManager::getInstance().getCurrentProject();
-            taskforge::project::DatabaseBackupService::performProjectShutdownBackup(root, cur.projectId, bErr);
-        }
         std::string out, err;
         bool ok = taskforge::project::GitSyncService::commitAndPush(root, msg, branch, out, err);
         taskforge::Json res = {{"ok", ok}, {"output", out}, {"error", err}};
@@ -2489,8 +2490,6 @@ void exit_app(webui::window::event* e) {
     taskforge::local::LocalRuntime::instance().stopServer();
     auto cur = taskforge::project::ProjectManager::getInstance().getCurrentProject();
     if (!cur.rootPath.empty()) {
-        std::string bErr;
-        taskforge::project::DatabaseBackupService::performProjectShutdownBackup(cur.rootPath, cur.projectId, bErr);
         if (cur.git.enabled && cur.git.autoCommitOnShutdown) {
             taskforge::project::GitSyncService::onShutdown(cur.rootPath);
         }
@@ -2895,6 +2894,7 @@ int main(int argc, char** argv) {
     win.bind("ensure_workspace_directories", ui_ensure_workspace_directories);
     win.bind("write_workspace_asset", ui_write_workspace_asset);
     win.bind("read_workspace_asset", ui_read_workspace_asset);
+    win.bind("fetch_library_source", ui_fetch_library_source);
     win.bind("get_studio_settings", ui_get_studio_settings);
     win.bind("save_studio_settings", ui_save_studio_settings);
     win.bind("write_skill_file", ui_write_skill_file);
@@ -2972,8 +2972,6 @@ int main(int argc, char** argv) {
     taskforge::local::LocalRuntime::instance().stopServer();
     auto curProj = taskforge::project::ProjectManager::getInstance().getCurrentProject();
     if (!curProj.rootPath.empty()) {
-        std::string bErr;
-        taskforge::project::DatabaseBackupService::performProjectShutdownBackup(curProj.rootPath, curProj.projectId, bErr);
         if (curProj.git.enabled && curProj.git.autoCommitOnShutdown) {
             taskforge::project::GitSyncService::onShutdown(curProj.rootPath);
         }

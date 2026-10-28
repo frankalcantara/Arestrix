@@ -1,6 +1,6 @@
 # Arquitetura
 
-> **Aplica-se a:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Última revisão: 2026-10-19
+> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Última revisão: 2026-10-19
 
 [English](../en/architecture.md) · [Índice](../README.md)
 
@@ -55,7 +55,7 @@ refazer funcionam para tudo, inclusive colar, duplicar e apagar.
 | `native/` | Os servidores de ferramentas nativos (arquivos, HTTP, dados, memória, tempo, Git, SQLite): C++ que roda dentro do programa, com confinamento ao projeto. |
 | `mcp/` | Cliente nativo do Model Context Protocol com sessões persistentes (stdio e HTTP) e o registro de servidores. |
 | `memory/` | Memória Blackboard, lições semânticas e multigrafo temporal em SQLite (`MemoryStore`/`MemoryService`) e o serviço institucional HTTP/MCP (`arestrix-memory`). |
-| `project/` | Projetos e workspaces (`arestrix.project.json`), serviço de sincronização Git (`GitSyncService`), dumps SQL e snapshots de memória para disaster recovery no Git (`DatabaseBackupService`), exportador do Runner Standalone (`RunnerService`) com auditoria zero-segredos, auto-commit/push e criação de repositórios privados. |
+| `project/` | Projetos e workspaces (`arestrix.project.json`), serviço de sincronização Git (`GitSyncService`), integridade local do banco de memória (`MemoryDatabaseGuard`), exportador do Runner Standalone (`RunnerService`) com auditoria zero-segredos, auto-commit/push e criação de repositórios privados. |
 | `search/` | Busca no projeto: ranking lexical (BM25 + trigramas de caracteres) sobre todos os pipelines, subfluxos e skills, com índice por hash de conteúdo. |
 | `pi/` | Scanner para importar projetos de agentes Pi. |
 | `cli/` | `arestrix-cli`, o executor sem interface. |
@@ -91,7 +91,7 @@ memória e arquivos nunca vazem entre coisas que devem ser independentes.
 | | **Studio** | **Workspace** | **Projeto** |
 | :--- | :--- | :--- | :--- |
 | O que é | O aplicativo: canvas, toolchain de compilação | A pasta física e sua infraestrutura | Um propósito de negócio e seus pipelines |
-| Guarda | Chaves de API globais, repositórios GitHub de skills autorizados, projetos recentes | Skills e MCPs em `.workspace/`, banco SQLite, sandboxes, limites | `arestrix.project.json`, `pipelines/*.json`, repositório Git dedicado (clone local com sync remoto), prompts, memória isolada por `projectId` |
+| Guarda | Chaves de API globais, bibliotecas de assets (skills, MCPs) e fontes autorizadas, projetos recentes | Skills e MCPs em `.workspace/`, banco SQLite, sandboxes, limites | `arestrix.project.json`, `pipelines/*.json`, repositório Git dedicado (clone local com sync remoto), prompts, memória isolada por `projectId` |
 | Analogia | A fábrica | A oficina | O produto em construção |
 
 Os elementos da interface levam a etiqueta do escopo (`Studio`, `Workspace`, `Projeto`) para que você

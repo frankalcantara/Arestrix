@@ -1,6 +1,6 @@
 # Revisão das referências de validação de skills
 
-> **Aplica-se a:** Arestrix Beta 2.2 (`2.2.0-beta.1`) · Última revisão: 2026-10-25
+> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.1`) · Última revisão: 2026-10-25
 >
 > Este documento define o processo obrigatório sempre que uma das referências de segurança de skills
 > for atualizada. O lock em `src/core/skills/skill-validation-policy.json` é a fonte de verdade

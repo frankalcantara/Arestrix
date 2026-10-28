@@ -46,6 +46,10 @@ taskforge-recent-projects.json
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
+# Dumps/backups de bancos nunca entram no Git: a custodia e externa ao Arestrix
+*.sql
+*.dump.json
+*.db.corrupt-*
 /arestrix-blackboard-*.json
 /arestrix-memory-*.json
 
