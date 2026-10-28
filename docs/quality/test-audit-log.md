@@ -1,6 +1,6 @@
 # Registro de Auditoria e Integridade de Testes (Test Audit Log)
 
-> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Última revisão: 2026-10-27
+> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Última revisão: 2026-10-28
 
 Este documento registra o histórico cronológico das rodadas de testes automatizados, verificações de segurança e auditorias de integridade do **Arestrix**, organizadas da **mais recente para a mais antiga**.
 
@@ -27,6 +27,41 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 ---
 
 ## Histórico Cronológico de Auditorias
+
+### Rodada #005 — 2026-10-28 (release 2.3.0-beta.2)
+- **Commit:** árvore de release `2.3.0-beta.2` (hash registrado no GitHub após o push)
+- **Status Geral:** `APROVADO NO ESCOPO AUTOMATIZADO (GATE COMPLETO COM E2E)`
+- **Ambiente de Teste:** Windows 11 (x64) | Node.js v24.11.1 | Vitest v5.0.5 | Vite v8.3.5 | TypeScript v7.0.2 | Visual Studio 2026 / MSVC C++20
+- **Métricas Globais:** 72 arquivos de teste | 558 testes aprovados | CTest 1/1 | tutorial E2E + 12 exemplos | 0 falhas
+
+#### Cobertura desta rodada
+
+| Área | Evidência |
+| :--- | :--- |
+| **Stack de build e testes** | `npm run build` (Vite 8.3.5 + TypeScript 7.0.2) e `npm test` (Vitest 5.0.5) |
+| **Canvas, ícones e Monaco** | `svg-node-view.spec.ts`, `node-view-typography.spec.ts`, `node-action-tooltips.spec.ts`, `code-modal-monaco.spec.ts` |
+| **Referências de skills** | `check:skill-references` e `skill-validation-policy.spec.ts` (NVIDIA `2b9f451`, Cloudflare `c1c8a8c`) |
+| **Submódulos** | monaco-editor `dbf1945` e simdjson `9c00353` (v5.0.5), com `check-submodule-updates` |
+| **Nativos C++20** | CTest `arestrix_tests` 1/1 (31,24 s) |
+| **E2E** | tutorial SVG (`e2e_tutorial.py`) e 12 exemplos (`e2e_examples.py`) |
+
+#### Verificações complementares
+
+- `py scripts/release_check.py`: gate completo com E2E aprovado; 26 artefatos e 131 componentes no SBOM.
+- `npm test`: 72 arquivos / 558 testes, 0 falhas.
+- `npm run build`: concluído; `dist` espelhado em `CppCore/dist`.
+- `npm run check:version`, `check:local-assets`, `check:secrets` (116 arquivos), `check:skill-references` e
+  licenças de terceiros: todos aprovados.
+- Gateway smoke: `200 -> 402`, métricas, `/v1/usage` e impacto da memória.
+- Primeira execução do gate reprovou apenas por resíduos ignorados de runs de 26/10 em
+  `examples/10-subflow-chamavel` (`.arestrix/` e `workspace/`); os resíduos foram removidos e a
+  execução seguinte passou integralmente.
+
+#### Pendências para promoção
+
+- [ ] Instalação limpa, upgrade e desinstalação em máquina Windows.
+- [ ] Assinatura Authenticode via SignPath e validação do instalador assinado.
+- [ ] Matriz manual 2.1-2.10 do [Plano de testes do Beta 2.3](beta2.3-test-plan.md).
 
 ### Rodada #004 — 2026-10-27 (release 2.3.0-beta.1)
 - **Commit:** árvore de release `2.3.0-beta.1` (hash registrado no GitHub após o push)
