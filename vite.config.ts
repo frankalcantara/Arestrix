@@ -29,7 +29,7 @@ export default defineConfig({
   plugins: [webuiRuntimeScript(), viteSingleFile()],
   resolve: {
     alias: {
-      'i18next': path.resolve(__dirname, 'third_party/i18next/src/index.js')
+      'i18next': path.resolve(import.meta.dirname, 'third_party/i18next/src/index.js')
     }
   },
   server: {
