@@ -16,7 +16,7 @@ of the components you redistribute.
 | [FastWebUI](https://github.com/frankalcantara/FastWebUI) (fork of [WebUI](https://github.com/webui-dev/webui)) | `2.5.0-beta.4` (`a8e95c1`) | MIT | Native window and C++/web RPC bridge. |
 | [i18next](https://github.com/i18next/i18next) | `v26.4.4-2-g15d0b9d9` | MIT | Internationalization runtime. |
 | [Monaco Editor](https://github.com/microsoft/monaco-editor) | npm `0.57.0`; submodule `dbf1945` | MIT | Code editor used by the Studio. |
-| [SkillSpector](https://github.com/NVIDIA/SkillSpector) | `v2.12.0-630-g69d7d059` | Apache-2.0 | Skill security analysis and static rule reference. |
+| [SkillSpector](https://github.com/NVIDIA/SkillSpector) | `v2.12.0-1159-g2b9f4512` | Apache-2.0 | Skill security analysis and static rule reference. |
 | [Cloudflare security-audit-skill](https://github.com/cloudflare/security-audit-skill) | `c1c8a8c` | MIT | Boundary-driven security audit methodology used by the Arestrix Skill Guard. |
 | [SQLite](https://sqlite.org) | `3.54.0` amalgamation | Public domain | Embedded persistence. |
 | [cpp-httplib](https://github.com/yhirose/cpp-httplib) | `v0.62.0` | MIT | HTTP server of the on-prem `arestrix-gateway`. |
