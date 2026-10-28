@@ -19,11 +19,16 @@ export class PropertiesWindow extends BaseModal {
   private scopeConfig: IPropertiesScopeConfig;
   private activeSectionId: string;
   private readonly onAction?: PropertyActionHandler;
+  private readonly onAfterSave?: (sectionId: string) => Promise<void> | void;
   private readonly sectionDrafts = new Map<string, Record<string, string>>();
   private dirty = false;
   private saving = false;
 
-  constructor(scopeConfig: IPropertiesScopeConfig, onAction?: PropertyActionHandler) {
+  constructor(
+    scopeConfig: IPropertiesScopeConfig,
+    onAction?: PropertyActionHandler,
+    onAfterSave?: (sectionId: string) => Promise<void> | void
+  ) {
     const config: IBaseModalConfig = {
       id: `properties-${scopeConfig.scope}`,
       dialogClass: 'properties-dialog',
@@ -40,6 +45,7 @@ export class PropertiesWindow extends BaseModal {
     this.scopeConfig = scopeConfig;
     this.activeSectionId = scopeConfig.sections[0]?.id || '';
     this.onAction = onAction;
+    this.onAfterSave = onAfterSave;
     this.dialog.classList.add('properties-dialog-shell');
   }
 
@@ -338,17 +344,23 @@ export class PropertiesWindow extends BaseModal {
     this.saving = true;
     this.updateSaveButton();
     try {
+      const keepOpenSection = sections.find(section => section.keepOpenOnSave === true);
       for (const section of sections) {
         const values = this.sectionDrafts.get(section.id) || {};
         const ok = await section.save?.(values);
         if (ok === false) throw new Error('save failed');
       }
+      if (keepOpenSection) {
+        this.sectionDrafts.clear();
+        await this.onAfterSave?.(keepOpenSection.id);
+      }
+      const keepOpen = Boolean(keepOpenSection);
       this.dirty = false;
       this.saving = false;
       this.sectionDrafts.clear();
       this.setFooterNote(t('properties_window.note.saved', 'Alterações salvas.'), 'ok');
       this.updateSaveButton();
-      if (typeof window !== 'undefined') {
+      if (!keepOpen && typeof window !== 'undefined') {
         window.setTimeout(() => {
           if (this.isOpen && !this.dirty) this.hide();
         }, 350);

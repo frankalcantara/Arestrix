@@ -2344,6 +2344,7 @@
     },
     "action": {
       "open_defaults": "Abrir configurações globais",
+      "manage_sources": "Gerenciar fontes GitHub",
       "manage_github": "Gerenciar repositórios",
       "manage_libraries": "Gerenciar bibliotecas",
       "manage_git": "Gerenciar conta Git",
@@ -2523,14 +2524,14 @@
       "sources": "Fontes de repositório",
       "pending_sources": "Aguardando sincronização",
       "list_title": "Bibliotecas disponíveis",
-      "sources_title": "Fontes de repositório",
-      "create_title": "Criar nova biblioteca",
+      "sources_title": "Fontes de repositório (GitHub)",
+      "create_title": "Criar nova biblioteca local",
       "name": "Nome da biblioteca",
       "name_placeholder": "ex: Skills da Equipe de Dados",
       "description": "Descrição",
       "description_placeholder": "Para que serve esta biblioteca?",
       "create_hint": "A biblioteca é criada no escopo atual e fica pronta para receber skills e MCPs. Para associá-la a um repositório, informe também os campos abaixo.",
-      "add_source_title": "Adicionar fonte de repositório",
+      "add_source_title": "Adicionar fonte de repositório GitHub",
       "repo_path": "Repositório",
       "repo_ref": "Referência (branch/tag)",
       "repo_name": "Nome da fonte",
@@ -2539,7 +2540,7 @@
       "repo_license_permissive": "Permissivas (MIT/Apache/BSD)",
       "repo_description": "Descrição da fonte",
       "repo_description_placeholder": "O que esta fonte fornece?",
-      "add_source_hint": "A fonte é registrada agora; o download e a auditoria dos assets serão habilitados na fase de sincronização do GitHub."
+      "add_source_hint": "Depois de salvar, selecione a biblioteca criada na árvore abaixo e clique em Sincronizar GitHub para ler o manifesto; os assets são baixados e auditados sob demanda."
     },
     "project": {
       "general_desc": "Identidade, caminhos e metadados do projeto ativo.",

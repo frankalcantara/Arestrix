@@ -222,7 +222,9 @@ export class BackstageView {
     scope: 'studio' | 'workspace' | 'project',
     sectionId?: string
   ): Promise<void> {
-    this.close();
+    // Mantém o Backstage aberto atrás da janela de Propriedades. Assim o modal
+    // aparece sobre a tela Arquivo e Cancelar/Fechar devolve o usuário a ela,
+    // em vez de revelar a tela principal do Studio.
     await this.propertiesController.show(scope, sectionId);
   }
 

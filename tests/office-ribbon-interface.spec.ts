@@ -504,9 +504,21 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
       const btnGithub = overlay?.querySelector('#btn-backstage-github-repos') as any;
       expect(btnGithub).toBeDefined();
 
+      let shown: { scope: string; section?: string } | null = null;
+      (backstage as any).propertiesController = {
+        show: async (scope: string, section?: string) => {
+          shown = { scope, section };
+        }
+      };
+
       btnGithub?.click();
+      await new Promise(resolve => setTimeout(resolve, 0));
 
       expect(payload).toEqual({ scope: 'studio', section: 'libraries' });
+      expect(shown).toEqual({ scope: 'studio', section: 'libraries' });
+      // O modal abre sobre o Backstage; fechar/cancelar deve devolver o usuário
+      // à tela Arquivo, não à tela principal do Studio.
+      expect(backstage.isOpen()).toBe(true);
     });
 
     it('deve encaminhar idioma e governança das Opções para as Propriedades', async () => {

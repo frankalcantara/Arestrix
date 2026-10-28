@@ -176,15 +176,46 @@ function buildLibrariesSection(context: IPropertiesContext, scope: LibraryScope)
     icon: 'catalog',
     badge: scope === 'workspace' ? label('badge.workspace', 'Workspace') : label('badge.global', 'Global'),
     content: `
+      <div class="properties-library-source-panel">
+        <div class="properties-subsection-title">${escapeHtml(label('libraries.sources_title', 'Fontes de repositório'))}</div>
+        ${note(label('libraries.phase_note', 'Cadastre a fonte GitHub, sincronize o manifesto/árvore e baixe somente o asset selecionado. O download vai para quarentena e passa por auditoria antes de ser usado.'), 'info')}
+        ${grid([
+          row(label('libraries.sources', 'Fontes de repositório'), `${escapeHtml(String(enabledSources.length))} / ${escapeHtml(String(sources.length))} ${label('value.active_plural', 'ativas')}`),
+          row(label('libraries.pending_sources', 'Aguardando sincronização'), escapeHtml(String(pendingSources.length)))
+        ])}
+        ${list(sourceItems, label('value.none', 'Nenhum item configurado.'))}
+        <div class="properties-subsection-title">${escapeHtml(label('libraries.add_source_title', 'Adicionar fonte de repositório'))}</div>
+        <div class="form-row-grid properties-form-grid">
+          <div class="form-group">
+            <label class="form-label" for="properties-library-repo-path">${escapeHtml(label('libraries.repo_path', 'Repositório'))}</label>
+            <input id="properties-library-repo-path" class="form-input properties-code-input" type="text" data-property-input="repoPath" placeholder="organizacao/projeto" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="properties-library-repo-ref">${escapeHtml(label('libraries.repo_ref', 'Referência (branch/tag)'))}</label>
+            <input id="properties-library-repo-ref" class="form-input properties-code-input" type="text" data-property-input="repoRef" value="main" placeholder="main" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="properties-library-repo-name">${escapeHtml(label('libraries.repo_name', 'Nome da fonte'))}</label>
+            <input id="properties-library-repo-name" class="form-input" type="text" data-property-input="repoName" placeholder="${escapeHtml(label('libraries.repo_name_placeholder', 'ex: Skills da Comunidade'))}" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="properties-library-repo-license">${escapeHtml(label('libraries.repo_license', 'Licença permitida'))}</label>
+            <select id="properties-library-repo-license" class="form-select" data-property-input="repoLicense">
+              <option value="permissive" selected>${escapeHtml(label('libraries.repo_license_permissive', 'Permissivas (MIT/Apache/BSD)'))}</option>
+              ${['MIT', 'Apache-2.0', 'BSD-3-Clause', 'BSD-2-Clause', 'ISC'].map(license => `<option value="${license}">${license}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="properties-library-repo-description">${escapeHtml(label('libraries.repo_description', 'Descrição da fonte'))}</label>
+            <input id="properties-library-repo-description" class="form-input" type="text" data-property-input="repoDescription" placeholder="${escapeHtml(label('libraries.repo_description_placeholder', 'O que esta fonte fornece?'))}" />
+          </div>
+        </div>
+        <p class="properties-hint">${escapeHtml(label('libraries.add_source_hint', 'Depois de salvar, selecione a biblioteca criada abaixo e clique em Sincronizar GitHub para ler o manifesto; os assets são baixados e auditados sob demanda.'))}</p>
+      </div>
+
       ${canBrowse ? renderLibraryBrowser({ registry: context.libraryRegistry!, scope }) : ''}
-      ${note(label('libraries.phase_note', 'Cadastre a fonte GitHub, sincronize o manifesto/árvore e baixe somente o asset selecionado. O download vai para quarentena e passa por auditoria antes de ser usado.'), 'info')}
-      ${grid([
-        row(label('libraries.sources', 'Fontes de repositório'), `${escapeHtml(String(enabledSources.length))} / ${escapeHtml(String(sources.length))} ${label('value.active_plural', 'ativas')}`),
-        row(label('libraries.pending_sources', 'Aguardando sincronização'), escapeHtml(String(pendingSources.length)))
-      ])}
-      <div class="properties-subsection-title">${escapeHtml(label('libraries.sources_title', 'Fontes de repositório'))}</div>
-      ${list(sourceItems, label('value.none', 'Nenhum item configurado.'))}
-      <div class="properties-subsection-title">${escapeHtml(label('libraries.create_title', 'Criar nova biblioteca'))}</div>
+
+      <div class="properties-subsection-title">${escapeHtml(label('libraries.create_title', 'Criar nova biblioteca local'))}</div>
       <div class="form-row-grid properties-form-grid">
         <div class="form-group">
           <label class="form-label" for="properties-library-name">${escapeHtml(label('libraries.name', 'Nome da biblioteca'))}</label>
@@ -195,38 +226,12 @@ function buildLibrariesSection(context: IPropertiesContext, scope: LibraryScope)
           <input id="properties-library-description" class="form-input" type="text" data-property-input="libraryDescription" placeholder="${escapeHtml(label('libraries.description_placeholder', 'Para que serve esta biblioteca?'))}" />
         </div>
       </div>
-      <p class="properties-hint">${escapeHtml(label('libraries.create_hint', 'A biblioteca é criada no escopo atual e fica pronta para receber skills e MCPs. Para associá-la a um repositório, informe também os campos abaixo.'))}</p>
-      <div class="properties-subsection-title">${escapeHtml(label('libraries.add_source_title', 'Adicionar fonte de repositório'))}</div>
-      <div class="form-row-grid properties-form-grid">
-        <div class="form-group">
-          <label class="form-label" for="properties-library-repo-path">${escapeHtml(label('libraries.repo_path', 'Repositório'))}</label>
-          <input id="properties-library-repo-path" class="form-input properties-code-input" type="text" data-property-input="repoPath" placeholder="organizacao/projeto" />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="properties-library-repo-ref">${escapeHtml(label('libraries.repo_ref', 'Referência (branch/tag)'))}</label>
-          <input id="properties-library-repo-ref" class="form-input properties-code-input" type="text" data-property-input="repoRef" value="main" placeholder="main" />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="properties-library-repo-name">${escapeHtml(label('libraries.repo_name', 'Nome da fonte'))}</label>
-          <input id="properties-library-repo-name" class="form-input" type="text" data-property-input="repoName" placeholder="${escapeHtml(label('libraries.repo_name_placeholder', 'ex: Skills da Comunidade'))}" />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="properties-library-repo-license">${escapeHtml(label('libraries.repo_license', 'Licença permitida'))}</label>
-          <select id="properties-library-repo-license" class="form-select" data-property-input="repoLicense">
-            <option value="permissive" selected>${escapeHtml(label('libraries.repo_license_permissive', 'Permissivas (MIT/Apache/BSD)'))}</option>
-            ${['MIT', 'Apache-2.0', 'BSD-3-Clause', 'BSD-2-Clause', 'ISC'].map(license => `<option value="${license}">${license}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="properties-library-repo-description">${escapeHtml(label('libraries.repo_description', 'Descrição da fonte'))}</label>
-          <input id="properties-library-repo-description" class="form-input" type="text" data-property-input="repoDescription" placeholder="${escapeHtml(label('libraries.repo_description_placeholder', 'O que esta fonte fornece?'))}" />
-        </div>
-      </div>
-      <p class="properties-hint">${escapeHtml(label('libraries.add_source_hint', 'A fonte é registrada agora; o download e a auditoria dos assets serão habilitados na fase de sincronização do GitHub.'))}</p>
+      <p class="properties-hint">${escapeHtml(label('libraries.create_hint', 'A biblioteca é criada no escopo atual e fica pronta para receber skills e MCPs. Para associá-la a um repositório, use o formulário de fonte acima.'))}</p>
     `,
     save: context.saveLibraries
       ? (values) => context.saveLibraries!(scope, values)
       : undefined,
+    keepOpenOnSave: true,
     bind: canBrowse
       ? (root) => bindLibraryBrowser(root, { registry: context.libraryRegistry!, scope })
       : undefined
@@ -383,7 +388,7 @@ function buildStudio(context: IPropertiesContext): IPropertiesScopeConfig {
           ${list(enabledSources.map(source => `${escapeHtml(source.name)} <span class="properties-inline-code">${escapeHtml(source.github?.repo || '—')}</span>`), label('value.none', 'Nenhum item configurado.'))}
         `,
         actions: [
-          { id: 'studio.open-libraries', label: label('action.manage_libraries', 'Gerenciar bibliotecas'), kind: 'secondary' },
+          { id: 'studio.open-libraries', label: label('action.manage_sources', 'Gerenciar fontes GitHub'), kind: 'secondary' },
           { id: 'studio.open-git', label: label('action.manage_git', 'Gerenciar conta Git'), kind: 'secondary' }
         ]
       }),

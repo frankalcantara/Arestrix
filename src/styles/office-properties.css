@@ -880,3 +880,14 @@
   padding-left: 24px;
   margin: 4px 0 0;
 }
+.properties-library-source-panel {
+  margin: 0 0 16px;
+  padding: 14px;
+  border: 1px solid var(--modal-line);
+  border-radius: 6px;
+  background: var(--modal-surface-2);
+}
+
+.properties-library-source-panel .properties-subsection-title:first-child {
+  margin-top: 0;
+}

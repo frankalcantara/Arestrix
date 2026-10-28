@@ -213,7 +213,7 @@ All Studio dialogs adhere to the **Microsoft Office 365 (Fluent 2)** corporate d
 | **Node Memory** | Blackboard \| Cognitive Lessons \| Regime & Scope | Per vertex |
 | **Node Skills** | Enabled Skills \| Studio/Workspace Library \| Skill Editor | Per vertex |
 | **Skill Editor** | Markdown Editor \| Rendered Preview \| Metadata & Testing | Per vertex / Workspace |
-| **Libraries** | Libraries and Sources \| Create Library \| Register Source | Studio / Workspace |
+| **Libraries** | Repository sources (GitHub) \| Create Library | Studio / Workspace |
 | **MCP Servers** | Active Servers \| Connect New Server \| Inspection & Logs | Workspace |
 | **Project Manager** | Recent Projects \| New Project \| Settings summary (links to Properties) | Project |
 | **Git Synchronization** | OS Identity & Account \| Remote Repository \| Automation & Governance | Project / OS |

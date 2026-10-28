@@ -216,7 +216,7 @@ Todos os modais do Studio seguem o padrão de design corporativo **Microsoft Off
 | **Memória do Nó** | Blackboard \| Lições Cognitivas \| Regime & Escopo | Por vértice |
 | **Skills do Nó** | Skills Habilitadas \| Biblioteca do Studio/Workspace \| Editor da Skill | Por vértice |
 | **Editor de Skill** | Editor Markdown \| Pré-visualização Renderizada \| Metadados & Teste | Por vértice / Workspace |
-| **Bibliotecas** | Bibliotecas e Fontes \| Criar Biblioteca \| Cadastrar Fonte | Studio / Workspace |
+| **Bibliotecas** | Fontes de repositório (GitHub) \| Criar Biblioteca | Studio / Workspace |
 | **Servidores MCP** | Servidores Ativos \| Conectar Novo Servidor \| Inspeção & Logs | Workspace |
 | **Gerenciador de Projetos** | Projetos Recentes \| Novo Projeto \| Configurações (link para Propriedades) | Projeto |
 | **Sincronização Git** | Conta & Identidade no SO \| Repositório Remoto \| Automação & Governança | Projeto / SO |

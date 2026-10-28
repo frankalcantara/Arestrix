@@ -2344,6 +2344,7 @@
     },
     "action": {
       "open_defaults": "Open global settings",
+      "manage_sources": "Manage GitHub sources",
       "manage_github": "Manage repositories",
       "manage_libraries": "Manage libraries",
       "manage_git": "Manage Git account",
@@ -2523,14 +2524,14 @@
       "sources": "Repository sources",
       "pending_sources": "Awaiting synchronization",
       "list_title": "Available libraries",
-      "sources_title": "Repository sources",
-      "create_title": "Create new library",
+      "sources_title": "Repository sources (GitHub)",
+      "create_title": "Create new local library",
       "name": "Library name",
       "name_placeholder": "e.g., Data Team Skills",
       "description": "Description",
       "description_placeholder": "What is this library for?",
       "create_hint": "The library is created in the current scope and is ready to receive skills and MCPs. To link it to a repository, also fill in the fields below.",
-      "add_source_title": "Add repository source",
+      "add_source_title": "Add GitHub repository source",
       "repo_path": "Repository",
       "repo_ref": "Reference (branch/tag)",
       "repo_name": "Source name",
@@ -2539,7 +2540,7 @@
       "repo_license_permissive": "Permissive (MIT/Apache/BSD)",
       "repo_description": "Source description",
       "repo_description_placeholder": "What does this source provide?",
-      "add_source_hint": "The source is registered now; asset download and auditing will be enabled in the GitHub synchronization phase."
+      "add_source_hint": "After saving, select the library created in the tree below and click Sync GitHub to read the manifest; assets are downloaded and audited on demand."
     },
     "project": {
       "general_desc": "Identity, paths and metadata of the active project.",

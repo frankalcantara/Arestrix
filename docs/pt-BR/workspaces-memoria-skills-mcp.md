@@ -266,7 +266,9 @@ Uma **skill** é um arquivo `SKILL.md` (front matter YAML mais instruções) que
 - **Skills do workspace** ficam em `.workspace/skills`, pré-aprovadas para aquele workspace.
 - **Bibliotecas:** a **Biblioteca Arestrix** embutida e as bibliotecas locais/curadas fornecem skills
   para importar. Gerencie fontes, crie bibliotecas e cadastre repositórios em
-  **Arquivo → Propriedades → Studio/Workspace → Bibliotecas**. Em uma fonte GitHub, **Sincronizar**
+  **Arquivo → Propriedades → Studio/Workspace → Bibliotecas**. No topo da seção, o bloco
+  **Fontes de repositório (GitHub)** recebe `organizacao/projeto`, referência e licença; clique
+  **Salvar** e depois selecione a biblioteca criada para usar **Sincronizar GitHub**. A sincronização
   lê apenas o manifesto/árvore; o conteúdo de um asset é baixado sob demanda, auditado e só então
   promovido para uso. `REJECT` descarta o download.
 - A ação **Skills** do vértice liga skills a ele; o editor embutido edita o `SKILL.md` como Markdown, com pré-visualização.

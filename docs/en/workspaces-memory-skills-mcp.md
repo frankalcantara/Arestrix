@@ -267,7 +267,9 @@ A **skill** is a `SKILL.md` file (YAML front matter plus instructions) that beco
 - **Workspace skills** live in `.workspace/skills`, pre-approved for that workspace.
 - **Libraries:** the built-in **Arestrix Library** and local/curated libraries supply skills to import.
   Manage sources, create libraries and register repositories in
-  **File → Properties → Studio/Workspace → Libraries**. For a GitHub source, **Sync** reads only the
+  **File → Properties → Studio/Workspace → Libraries**. At the top of the section, the
+  **Repository sources (GitHub)** panel accepts `organization/project`, a ref and a license; click
+  **Save**, then select the created library and use **Sync GitHub**. Synchronization reads only the
   manifest/tree; asset content is downloaded on demand, audited and only then promoted for use.
   `REJECT` discards the download.
 - The vertex **Skills** action binds skills to a vertex; the built-in editor edits `SKILL.md` as Markdown with preview.

@@ -81,7 +81,15 @@ export class PropertiesController {
     });
     let window = this.windows.get(scope);
     if (!window) {
-      window = new PropertiesWindow(config, actionId => this.handleAction(actionId));
+      window = new PropertiesWindow(
+        config,
+        actionId => this.handleAction(actionId),
+        async sectionId => {
+          if (sectionId === 'libraries') {
+            await this.show(scope, 'libraries');
+          }
+        }
+      );
       this.windows.set(scope, window);
     } else {
       window.setScopeConfig(config);
