@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "ruleSetVersion": "3",
-  "policyVersion": "f3d1bfef4488c59e7621c73c5ae78fde2be638411e3429757804a371399ce7be",
-  "reviewedAt": "2026-10-25",
+  "policyVersion": "f69fedf1c10cff81f4421abacc8ff25f475d372665b8669ecfcbddabe5cc77f0",
+  "reviewedAt": "2026-10-28",
   "reviewedBy": "Arestrix maintainers",
   "reviewProcess": "docs/quality/skill-reference-review.md",
   "guardSkill": {
@@ -25,13 +25,13 @@
       "role": "static-evidence",
       "repo": "https://github.com/NVIDIA/SkillSpector",
       "path": "third_party/SkillSpector",
-      "commit": "69d7d059da38160296b2311320ed4c72a9c3fdb6",
-      "tree": "18f7f8fef7d13bbcbc04495393f2e10688ddfb93",
-      "version": "v2.12.0-630-g69d7d059",
+      "commit": "2b9f4512367a96326d42f632876ada0a2304fc27",
+      "tree": "c7814ae18b6ed4b7d79b342ca0c4ed5c5951a518",
+      "version": "v2.12.0-1159-g2b9f4512",
       "license": "Apache-2.0",
       "skillPath": "skills/skill-inspector/SKILL.md",
-      "skillSha256": "89ab1550769752ffbad782ee63fee3c345d546bded672adaac5fd03d2941aa84",
-      "reviewedAt": "2026-10-25"
+      "skillSha256": "1acc220016936ba68f7b9083c19575a8866c9cf74c251d689285a0d9fbe2a067",
+      "reviewedAt": "2026-10-28"
     },
     {
       "id": "cloudflare-security-audit",

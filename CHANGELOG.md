@@ -17,6 +17,14 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.1`); the marketing name is **
   `npm run submodule:check` / `submodule:update` now cover every submodule in `.gitmodules` using the
   same rules.
 
+### Changed
+
+- **Skill guard references:** NVIDIA SkillSpector advanced from `v2.12.0-630-g69d7d059` to
+  `v2.12.0-1159-g2b9f4512` (`2b9f451`). The reviewed `SKILL.md` adds the rule that scans stay on
+  `--no-llm` unless the user asks for LLM analysis and that CLI providers are never selected on the
+  agent's own initiative; `skill-validation-policy.json` carries the new commit, tree, hash and
+  `policyVersion`, so existing skill approvals return to `PENDING` until re-audited.
+
 ## [2.3.0-beta.1] - 2026-10-27
 
 ### Added
