@@ -56,7 +56,36 @@ export interface ITraceSummary {
   tasks: number;
   calls: number;
   interactions: number;
+  /** Maior número de tarefas executando ao mesmo tempo, calculado dos startedAt/endedAt. */
+  maxConcurrency: number;
   callList: ITraceCall[];
+}
+
+/**
+ * Pico de concorrência observado no trace. Um run com duas trilhas independentes mostra 2.
+ *
+ * Eventos no mesmo instante são resolvidos com o término antes do início: tarefas encadeadas
+ * (uma termina quando a outra começa) não contam como simultâneas. Tarefas sem startedAt são
+ * ignoradas; sem endedAt, valem como instante único.
+ */
+function computeMaxConcurrency(tasks: ITraceTask[]): number {
+  const events: Array<{ at: number; delta: number }> = [];
+  for (const task of tasks) {
+    if (typeof task.startedAt !== 'number' || !Number.isFinite(task.startedAt)) continue;
+    const start = task.startedAt;
+    const end = typeof task.endedAt === 'number' && task.endedAt >= start ? task.endedAt : start;
+    events.push({ at: start, delta: 1 });
+    events.push({ at: end, delta: -1 });
+  }
+  events.sort((a, b) => a.at - b.at || a.delta - b.delta);
+
+  let current = 0;
+  let peak = 0;
+  for (const event of events) {
+    current += event.delta;
+    if (current > peak) peak = current;
+  }
+  return peak;
 }
 
 /**
@@ -119,6 +148,7 @@ export class TraceOverlay {
       tasks: tasks.length,
       calls: calls.length,
       interactions: interactions.length,
+      maxConcurrency: computeMaxConcurrency(tasks),
       callList: calls
     };
     // O ConsolePanel consome este resumo; o overlay visual ja foi aplicado.

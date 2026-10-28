@@ -2,7 +2,7 @@
 
 [Português](README.pt-BR.md) · [Documentation](../docs/README.md)
 
-Twelve ready-to-run projects, from simple to complex. Each one is a normal Arestrix project folder: open it in the Studio,
+Thirteen ready-to-run projects, from simple to complex. Each one is a normal Arestrix project folder: open it in the Studio,
 choose your model, set your API key, press **F5**.
 
 | # | Project | What it shows | Needs |
@@ -19,11 +19,12 @@ choose your model, set your API key, press **F5**.
 | 10 | [`10-subflow-chamavel`](10-subflow-chamavel) | A coordinator calls a **subflow** with its own nested graph; the compiler emits it as a native function and the runtime passes the input to the child agents. | A model. |
 | 11 | [`11-call-vertex`](11-call-vertex) | A **Call** vertex executes a declared target inside the flow, writes the answer to `.arestrix/out` and hands it to the next vertex. | A model. |
 | 12 | [`12-chamadas-assincronas`](12-chamadas-assincronas) | A coordinator starts `call_agent` with `async: true`, gets a pending `callId` and checks the result with `call_result`. | A model. |
+| 13 | [`13-trilhas-independentes`](13-trilhas-independentes) | Two paths with no shared vertex: badges, path counter, write-conflict warning and both ways to propose a junction. | Nada. |
 
 Examples 3 and 5 are **generated** by `python scripts/build_examples.py`, so the shared pieces do not drift apart.
 Vertices cannot yet execute a nested graph, so the composition is flattened into a single pipeline.
 
-All twelve end in **output vertices**: the produced file is copied to `exports/` and registered in the **Artifacts** tab,
+All thirteen end in **output vertices**: the produced file is copied to `exports/` and registered in the **Artifacts** tab,
 with a viewer per format (SVG, Markdown, spreadsheets, PDF and JSON).
 
 ## Run an example

@@ -106,6 +106,12 @@ export class Inspector {
   }
 
   private bindEvents(): void {
+    // Outras partes da interface podem pedir a aba do Assistente (ex.: "Unir trilhas").
+    this.bus.on('taskpane:open', (payload: { tab?: string } | string) => {
+      const tab = typeof payload === 'string' ? payload : payload?.tab;
+      this.showPaneTab(tab === 'assistant' ? 'assistant' : 'properties');
+    });
+
     this.bus.on('node:selected', (node: INodeData) => {
       this.currentNodeId = node.id;
       if (this.isCollapsed) {

@@ -1216,12 +1216,23 @@ export class OfficeRibbon {
 
   public validateGraph(): void {
     const res = GraphValidator.validate(this.graph);
-    if (res.isValid) {
-      this.notify(t('ribbon.panes.validate_dag'), t('ribbon.alerts.graph_valid'), 'success');
-    } else {
-      const msg = res.errors.map(err => `[${err.severity.toUpperCase()}] ${err.message}`).join('\n');
-      this.notify(t('ribbon.panes.validate_dag'), t('ribbon.alerts.validation_report', { msg }), 'error');
+    const format = (list: typeof res.errors): string =>
+      list.map(err => `[${err.severity.toUpperCase()}] ${err.message}`).join('\n');
+
+    if (!res.isValid) {
+      this.notify(t('ribbon.panes.validate_dag'), t('ribbon.alerts.validation_report', { msg: format(res.errors) }), 'error');
+      return;
     }
+
+    // Avisos não impedem a execução, mas precisam aparecer: sem isso o usuário só veria
+    // "grafo válido" e nunca saberia de um conflito de escrita entre trilhas paralelas.
+    const warnings = res.errors.filter(err => err.severity === 'warning');
+    if (warnings.length > 0) {
+      this.notify(t('ribbon.panes.validate_dag'), t('ribbon.alerts.validation_warnings', { msg: format(warnings) }), 'warning');
+      return;
+    }
+
+    this.notify(t('ribbon.panes.validate_dag'), t('ribbon.alerts.graph_valid'), 'success');
   }
 
   private bindKeyboardShortcuts(): void {

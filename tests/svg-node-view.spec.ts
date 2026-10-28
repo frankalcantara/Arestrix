@@ -531,5 +531,86 @@ describe('SvgNodeView - Vértices Vetoriais SVG e Contraste WCAG 2.1', () => {
 
       svgView.dispose();
     });
+
+    it('deve exibir selos INÍCIO/FIM apenas quando a topologia é ambígua', () => {
+      const svgView = new SvgNodeView(sampleNode, testSvgRoot, tooltip, bus);
+
+      // Sem papel definido o vértice é apenas um cartão.
+      expect(svgView.getFlowRole()).toBeNull();
+      expect(svgView.group.querySelector('.vertex-flow-badges')).toBeNull();
+
+      // Entrada de trilha: um selo, fora do cartão, legível e sem sombra.
+      svgView.setFlowRole('start');
+      const startBadges = svgView.group.querySelectorAll('.vertex-flow-badge');
+      expect(startBadges).toHaveLength(1);
+      expect(startBadges[0].getAttribute('class')).toContain('vertex-flow-badge-start');
+      expect(startBadges[0].querySelector('text')?.textContent).toBe('INÍCIO');
+      expect(startBadges[0].querySelector('text')?.style.textShadow).toBe('none');
+      expect(startBadges[0].querySelector('title')?.textContent).toContain('Início de trilha');
+
+      // Repetir o mesmo papel não empilha selos.
+      svgView.setFlowRole('start');
+      expect(svgView.group.querySelectorAll('.vertex-flow-badge')).toHaveLength(1);
+
+      // Vértice que é entrada e saída ao mesmo tempo recebe os dois lados.
+      svgView.setFlowRole('both');
+      const bothBadges = svgView.group.querySelectorAll('.vertex-flow-badge');
+      expect(bothBadges).toHaveLength(2);
+      expect(bothBadges.map(b => b.getAttribute('class'))).toEqual([
+        expect.stringContaining('vertex-flow-badge-start'),
+        expect.stringContaining('vertex-flow-badge-end')
+      ]);
+      expect(bothBadges[1].querySelector('text')?.textContent).toBe('FIM');
+
+      // Topologia inequívoca volta a limpar tudo.
+      svgView.setFlowRole(null);
+      expect(svgView.group.querySelector('.vertex-flow-badges')).toBeNull();
+
+      svgView.dispose();
+    });
+
+    it('destaca a trilha com uma faixa colorida no rodapé do cartão', () => {
+      const svgView = new SvgNodeView(sampleNode, testSvgRoot, tooltip, bus);
+
+      expect(svgView.getTrailIndex()).toBeNull();
+      expect(svgView.group.querySelector('.vertex-trail-accent')).toBeNull();
+
+      svgView.setTrailHighlight(1);
+      const accent = svgView.group.querySelector('.vertex-trail-accent') as any;
+      expect(accent).not.toBeNull();
+      expect(accent.getAttribute('fill')).toBe(THEME.trailPalette[1]);
+      expect(accent.getAttribute('pointer-events')).toBe('none');
+      expect(svgView.group.getAttribute('data-trail-index')).toBe('1');
+
+      // Repetir o mesmo índice não empilha faixas.
+      svgView.setTrailHighlight(1);
+      expect(svgView.group.querySelectorAll('.vertex-trail-accent')).toHaveLength(1);
+
+      // Desligar o destaque devolve o cartão ao estado normal.
+      svgView.setTrailHighlight(null);
+      expect(svgView.group.querySelector('.vertex-trail-accent')).toBeNull();
+      expect(svgView.group.getAttribute('data-trail-index')).toBeNull();
+
+      svgView.dispose();
+    });
+
+    it('usa a cor da trilha no selo INÍCIO para ligar a faixa à entrada', () => {
+      const svgView = new SvgNodeView(sampleNode, testSvgRoot, tooltip, bus);
+      svgView.setFlowRole('start');
+
+      const badge = svgView.group.querySelector('.vertex-flow-badge-start') as any;
+      expect(badge.querySelector('rect')?.getAttribute('stroke')).toBe(THEME.flowBadge.start.border);
+
+      svgView.setTrailHighlight(2);
+      const tinted = svgView.group.querySelector('.vertex-flow-badge-start') as any;
+      expect(tinted.querySelector('rect')?.getAttribute('stroke')).toBe(THEME.trailPalette[2]);
+      expect(tinted.querySelector('text')?.getAttribute('fill')).toBe(THEME.trailPalette[2]);
+
+      svgView.setTrailHighlight(null);
+      const restored = svgView.group.querySelector('.vertex-flow-badge-start') as any;
+      expect(restored.querySelector('rect')?.getAttribute('stroke')).toBe(THEME.flowBadge.start.border);
+
+      svgView.dispose();
+    });
   });
 });

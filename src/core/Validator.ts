@@ -71,13 +71,16 @@ export class GraphValidator {
     // 4. Grafo de chamadas: alvos declarados, sem misturar fluxo e chamada no v1.
     this.validateCalls(graph, flowEdges, callEdges, errors);
 
-    // 5. Interacao humana: formulario e politica de canal validos (autoria; execucao na Fase 2B).
+    // 5. Conflito de escrita entre vertices que podem rodar ao mesmo tempo (aviso, nunca erro).
+    this.validateResourceConflicts(graph, flowEdges, errors);
+
+    // 6. Interacao humana: formulario e politica de canal validos (autoria; execucao na Fase 2B).
     this.validateInteractions(nodes, errors);
 
-    // 6. Governanca e Validacao de Skills: bloqueia execucao se houver skills nao auditadas ou rejeitadas.
+    // 7. Governanca e Validacao de Skills: bloqueia execucao se houver skills nao auditadas ou rejeitadas.
     this.validateAgentSkills(nodes, errors);
 
-    // 7. Governanca e Validacao de Servidores MCP: bloqueia execucao se houver conectores nao homologados ou rejeitados.
+    // 8. Governanca e Validacao de Servidores MCP: bloqueia execucao se houver conectores nao homologados ou rejeitados.
     this.validateMcpServers(nodes, errors);
 
     return {
@@ -205,6 +208,101 @@ export class GraphValidator {
         nodeIds: cycle
       });
     });
+  }
+
+  /**
+   * Conflito de escrita entre trilhas que podem rodar ao mesmo tempo.
+   *
+   * Dois vértices sem caminho de fluxo entre si podem executar em paralelo; se ambos declaram
+   * gravar no mesmo arquivo, a última gravação vence sem aviso nenhum em tempo de execução.
+   * A comparação usa apenas o que está declarado na configuração do vértice (destino do Output e
+   * arquivo de saída do MCP) — corpo C++ livre é opaco de propósito.
+   *
+   * É sempre aviso: o Studio não consegue provar a intenção do autor e a execução continua
+   * exatamente como antes.
+   */
+  private static validateResourceConflicts(
+    graph: Graph,
+    flowEdges: IEdgeData[],
+    errors: IValidationError[]
+  ): void {
+    const callTargets = new Set(
+      graph.getAllEdges().filter(e => e.kind === 'call').map(e => e.targetNodeId)
+    );
+
+    const writers: { node: INodeData; resource: string }[] = [];
+    for (const node of graph.getAllNodes()) {
+      if (callTargets.has(node.id)) continue;   // alvo puro de chamada não é tarefa de fluxo
+      const resource = this.declaredWriteResource(node);
+      if (resource) writers.push({ node, resource });
+    }
+    if (writers.length < 2) return;
+
+    // Arestas de feedback fecham laço e não devem sugerir ordenação entre as trilhas.
+    const adjacency = new Map<string, string[]>();
+    for (const edge of flowEdges) {
+      if (edge.isFeedbackLoop) continue;
+      const list = adjacency.get(edge.sourceNodeId);
+      if (list) list.push(edge.targetNodeId);
+      else adjacency.set(edge.sourceNodeId, [edge.targetNodeId]);
+    }
+
+    const reaches = (from: string, to: string): boolean => {
+      const seen = new Set<string>([from]);
+      const stack: string[] = [from];
+      while (stack.length > 0) {
+        const current = stack.pop()!;
+        for (const next of adjacency.get(current) ?? []) {
+          if (next === to) return true;
+          if (seen.has(next)) continue;
+          seen.add(next);
+          stack.push(next);
+        }
+      }
+      return false;
+    };
+
+    const reported = new Set<string>();
+    for (let i = 0; i < writers.length; i++) {
+      for (let j = i + 1; j < writers.length; j++) {
+        const first = writers[i];
+        const second = writers[j];
+        if (first.resource !== second.resource) continue;
+        // Há caminho de fluxo entre os dois: um executa depois do outro, não há corrida.
+        if (reaches(first.node.id, second.node.id) || reaches(second.node.id, first.node.id)) continue;
+
+        const pairKey = [first.node.id, second.node.id].sort().join('\u0000');
+        if (reported.has(pairKey)) continue;
+        reported.add(pairKey);
+
+        errors.push({
+          type: 'resource_conflict',
+          severity: 'warning',
+          message: t('validator.resource_conflict', {
+            first: first.node.label || first.node.id,
+            second: second.node.label || second.node.id,
+            path: first.resource
+          }),
+          nodeIds: [first.node.id, second.node.id]
+        });
+      }
+    }
+  }
+
+  /** Arquivo que o vértice declara gravar, normalizado para comparação; null quando não grava nada. */
+  private static declaredWriteResource(node: INodeData): string | null {
+    let raw = '';
+    if (node.type === 'output') {
+      raw = node.outputSettings?.destinationPath ?? '';
+    } else if (node.type === 'mcp') {
+      raw = node.mcpSettings?.output?.file ?? '';
+    }
+    const normalized = raw
+      .trim()
+      .replace(/\\/g, '/')
+      .replace(/^\.\//, '')
+      .replace(/\/{2,}/g, '/');
+    return normalized || null;
   }
 
   private static validateInteractions(nodes: INodeData[], errors: IValidationError[]): void {

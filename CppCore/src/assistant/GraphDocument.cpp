@@ -701,6 +701,96 @@ Json GraphDocument::validate(RuntimeLang lang) const {
         }
     }
 
+    // Conflito de escrita entre vertices que podem rodar ao mesmo tempo: mesma regra do Studio.
+    // Aviso, nunca erro: o grafo continua valido e a execucao segue exatamente como antes.
+    {
+        std::set<std::string> callTargets;
+        for (const auto& ref : validEdges) {
+            if (ref.kind == "call") callTargets.insert(ref.target);
+        }
+
+        auto normalizePath = [](std::string p) {
+            size_t first = p.find_first_not_of(" \t\r\n");
+            size_t last = p.find_last_not_of(" \t\r\n");
+            if (first == std::string::npos) return std::string();
+            p = p.substr(first, last - first + 1);
+            for (char& c : p) if (c == '\\') c = '/';
+            while (p.rfind("./", 0) == 0) p = p.substr(2);
+            std::string out;
+            for (char c : p) {
+                if (c == '/' && !out.empty() && out.back() == '/') continue;
+                out += c;
+            }
+            return out;
+        };
+
+        struct Writer {
+            const Json* node;
+            std::string resource;
+        };
+        std::vector<Writer> writers;
+        for (const auto& n : nodes) {
+            const std::string id = str(n, "id");
+            if (callTargets.count(id)) continue;
+            const std::string type = str(n, "type");
+            std::string raw;
+            if (type == "output" && n.contains("outputSettings") && n.at("outputSettings").is_object()) {
+                raw = n.at("outputSettings").value("destinationPath", std::string());
+            } else if (type == "mcp" && n.contains("mcpSettings") && n.at("mcpSettings").is_object()) {
+                const Json& ms = n.at("mcpSettings");
+                if (ms.contains("output") && ms.at("output").is_object()) {
+                    raw = ms.at("output").value("file", std::string());
+                }
+            }
+            std::string resource = normalizePath(raw);
+            if (!resource.empty()) writers.push_back(Writer{&n, resource});
+        }
+
+        if (writers.size() > 1) {
+            // Alcancabilidade por fluxo; arestas de feedback fecham laco e nao ordenam trilhas.
+            std::map<std::string, std::vector<std::string>> flowReach;
+            for (const auto& e : edges) {
+                if (edgeKind(e) == "call") continue;
+                if (e.value("isFeedbackLoop", false)) continue;
+                flowReach[str(e, "sourceNodeId")].push_back(str(e, "targetNodeId"));
+            }
+            auto reaches = [&flowReach](const std::string& from, const std::string& to) {
+                std::set<std::string> seen{from};
+                std::vector<std::string> stack{from};
+                while (!stack.empty()) {
+                    std::string current = stack.back();
+                    stack.pop_back();
+                    auto it = flowReach.find(current);
+                    if (it == flowReach.end()) continue;
+                    for (const auto& next : it->second) {
+                        if (next == to) return true;
+                        if (seen.insert(next).second) stack.push_back(next);
+                    }
+                }
+                return false;
+            };
+
+            std::set<std::string> reported;
+            for (size_t i = 0; i < writers.size(); ++i) {
+                for (size_t j = i + 1; j < writers.size(); ++j) {
+                    if (writers[i].resource != writers[j].resource) continue;
+                    const std::string a = str(*writers[i].node, "id");
+                    const std::string b = str(*writers[j].node, "id");
+                    if (a == b) continue;
+                    if (reaches(a, b) || reaches(b, a)) continue;
+                    std::string pairKey = a < b ? a + "|" + b : b + "|" + a;
+                    if (!reported.insert(pairKey).second) continue;
+                    warnings.push_back(
+                        langPick(lang, "Vertices '", "Vertices '") + str(*writers[i].node, "label") +
+                        langPick(lang, "' e '", "' and '") + str(*writers[j].node, "label") +
+                        langPick(lang, "' podem gravar em '", "' may write to '") + writers[i].resource +
+                        langPick(lang, "' ao mesmo tempo: a ultima gravacao vence.",
+                                 "' at the same time: the last write wins."));
+                }
+            }
+        }
+    }
+
     for (const auto& n : nodes) {
         std::string id = str(n, "id");
         std::string type = str(n, "type");

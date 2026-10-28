@@ -13,6 +13,7 @@
 5. [Workspaces, memória, skills e MCP](workspaces-memoria-skills-mcp.md) - contexto persistente e integrações.
 6. [Como funciona a memória](como-funciona-a-memoria.md) - ciclo completo, embeddings, consolidação, playbooks, workspace e instituição.
 7. [Interface](interface.md) - ribbon, backstage, controles do canvas e atalhos.
+8. [Trilhas e junção](trilhas-e-juncao.md) - caminhos independentes, conflito de escrita e junção avaliada pelo Assistente.
 
 ## Referência
 
@@ -36,6 +37,6 @@
 ## Tutoriais e produtos
 
 - [Tutorial do agente SVG](tutorials/svg-agent.md) — passo a passo completo, do grafo à entrega.
-- [Exemplos](../../examples/README.pt-BR.md) - doze projetos executáveis (o de pesquisa web usa Keenable).
+- [Exemplos](../../examples/README.pt-BR.md) - treze projetos executáveis (o de pesquisa web usa Keenable).
 - [Galeria de recursos](../product/showcase.md) — capturas do Studio, compilador, runner e governança.
 - [Comparativo](../product/comparison.md) — diferenças em relação a outras abordagens de orquestração.

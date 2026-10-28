@@ -13,11 +13,12 @@
 5. [Workspaces, memory, skills and MCP](workspaces-memory-skills-mcp.md) - persistent context and integrations.
 6. [How memory works](how-memory-works.md) - full lifecycle, embeddings, consolidation, playbooks, workspace and institution.
 7. [Interface](interface.md) - ribbon, backstage, canvas controls and shortcuts.
+8. [Paths and junction](paths-and-junction.md) - independent paths, write conflicts and Assistant-evaluated junctions.
 
 ## Tutorials and examples
 
 - [SVG agent tutorial](../pt-BR/tutorials/svg-agent.md) — complete walkthrough in Portuguese.
-- [Examples](../../examples/README.md) - twelve runnable projects (the web-research one uses Keenable).
+- [Examples](../../examples/README.md) - thirteen runnable projects (the web-research one uses Keenable).
 - [Feature showcase](../product/showcase.md) — screenshots of the Studio, compiler, runner and governance screens.
 - [Comparison](../product/comparison.md) — how Arestrix differs from other orchestration approaches.
 

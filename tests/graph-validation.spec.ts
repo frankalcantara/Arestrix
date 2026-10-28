@@ -157,4 +157,97 @@ describe('Validação Topológica e Regras de Grafo Taskflow', () => {
       expect(result.errors.some(e => e.type === 'call_cycle' && e.severity === 'error')).toBe(true);
     });
   });
+
+  describe('conflito de escrita entre trilhas concorrentes (aviso, não bloqueia)', () => {
+    const makeOutput = (graph: Graph, id: string, destinationPath: string) => {
+      const node = graph.createNode(id, id, 'output', 0, 0);
+      graph.updateNode(id, {
+        outputSettings: { ...node.outputSettings!, destinationPath }
+      });
+      return graph.getNode(id)!;
+    };
+
+    it('avisa quando dois Outputs disjuntos gravam no mesmo arquivo', () => {
+      const graph = new Graph(new EventBus());
+      const a = graph.createNode('a', 'A', 'static', 0, 0);
+      const b = graph.createNode('b', 'B', 'static', 0, 200);
+      const outA = makeOutput(graph, 'out_a', 'exports/relatorio.svg');
+      const outB = makeOutput(graph, 'out_b', 'exports/relatorio.svg');
+      graph.createEdge(a.id, a.outputs[0].id, outA.id, outA.inputs[0].id);
+      graph.createEdge(b.id, b.outputs[0].id, outB.id, outB.inputs[0].id);
+
+      const result = GraphValidator.validate(graph);
+      const conflict = result.errors.find(e => e.type === 'resource_conflict');
+      expect(conflict).toBeDefined();
+      expect(conflict?.severity).toBe('warning');
+      expect(conflict?.nodeIds?.sort()).toEqual(['out_a', 'out_b']);
+      expect(conflict?.message).toContain('exports/relatorio.svg');
+      // Nunca bloqueia: o grafo continua válido e a execução segue.
+      expect(result.isValid).toBe(true);
+    });
+
+    it('não avisa quando há caminho de fluxo entre os dois (um executa depois do outro)', () => {
+      const graph = new Graph(new EventBus());
+      const first = makeOutput(graph, 'out_first', 'exports/dados.json');
+      const second = makeOutput(graph, 'out_second', 'exports/dados.json');
+      graph.createEdge(first.id, first.outputs[0].id, second.id, second.inputs[0].id);
+
+      const result = GraphValidator.validate(graph);
+      expect(result.errors.some(e => e.type === 'resource_conflict')).toBe(false);
+    });
+
+    it('não avisa quando os caminhos são diferentes', () => {
+      const graph = new Graph(new EventBus());
+      const a = makeOutput(graph, 'out_a', 'exports/a.svg');
+      const b = makeOutput(graph, 'out_b', 'exports/b.svg');
+
+      const result = GraphValidator.validate(graph);
+      expect(result.errors.some(e => e.type === 'resource_conflict')).toBe(false);
+    });
+
+    it('avisa entre ramos irmãos de uma condição', () => {
+      const graph = new Graph(new EventBus());
+      const cond = graph.createNode('cond', 'Cond', 'condition', 0, 0);
+      const a = makeOutput(graph, 'out_a', 'exports/saida.svg');
+      const b = makeOutput(graph, 'out_b', 'exports/saida.svg');
+      graph.createEdge(cond.id, cond.outputs[0].id, a.id, a.inputs[0].id);
+      graph.createEdge(cond.id, cond.outputs[1].id, b.id, b.inputs[0].id);
+
+      const result = GraphValidator.validate(graph);
+      expect(result.errors.some(e => e.type === 'resource_conflict' && e.severity === 'warning')).toBe(true);
+    });
+
+    it('compara o arquivo do Output com o arquivo de saída de um vértice MCP', () => {
+      const graph = new Graph(new EventBus());
+      const out = makeOutput(graph, 'out_a', 'exports/entrega.md');
+      const mcp = graph.createNode('mcp_a', 'MCP A', 'mcp', 0, 200);
+      graph.updateNode(mcp.id, {
+        mcpSettings: { ...mcp.mcpSettings!, output: { file: 'exports/entrega.md' } }
+      });
+
+      const result = GraphValidator.validate(graph);
+      const conflict = result.errors.find(e => e.type === 'resource_conflict');
+      expect(conflict).toBeDefined();
+      expect(conflict?.nodeIds?.sort()).toEqual(['mcp_a', 'out_a']);
+    });
+
+    it('normaliza separadores e "./" antes de comparar', () => {
+      const graph = new Graph(new EventBus());
+      makeOutput(graph, 'out_a', 'exports\\relatorio.md');
+      makeOutput(graph, 'out_b', './exports/relatorio.md');
+
+      const result = GraphValidator.validate(graph);
+      expect(result.errors.some(e => e.type === 'resource_conflict')).toBe(true);
+    });
+
+    it('não duplica o aviso para o mesmo par', () => {
+      const graph = new Graph(new EventBus());
+      makeOutput(graph, 'out_a', 'exports/x.md');
+      makeOutput(graph, 'out_b', 'exports/x.md');
+
+      const result = GraphValidator.validate(graph);
+      expect(result.errors.filter(e => e.type === 'resource_conflict')).toHaveLength(1);
+    });
+  });
 });
+

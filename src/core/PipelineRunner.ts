@@ -1,5 +1,6 @@
 import { Graph } from './Graph.ts';
 import { GraphValidator } from './Validator.ts';
+import { computeFlowRoles } from './GraphTopology.ts';
 import { globalEventBus } from './EventBus.ts';
 import { GitSyncManager } from './git/GitSyncManager.ts';
 
@@ -48,6 +49,12 @@ export class PipelineRunner {
       return false;
     }
 
+    // Avisos não bloqueiam a execução, mas ficam registrados no Console do run: são a única
+    // pista visível de um conflito de escrita entre trilhas que rodam ao mesmo tempo.
+    validation.errors
+      .filter(e => e.severity === 'warning')
+      .forEach(e => globalEventBus.emit('pipeline:log', { line: `[AVISO] ${e.message}` }));
+
     // @ts-ignore
     if (typeof webui === 'undefined') {
       globalEventBus.emit('pipeline:error', {
@@ -67,6 +74,22 @@ export class PipelineRunner {
     }
 
     globalEventBus.emit('pipeline:compiling', 'Enviando o grafo ao backend C++...');
+
+    // Quantas frentes de execução o grafo abre ao mesmo tempo. Só aparece quando há mais de
+    // uma: com uma única entrada o desenho já conta a história, e repetir isso a cada run
+    // viraria ruído no Console.
+    const flowRoles = computeFlowRoles(graph);
+    if (flowRoles.starts.length > 1) {
+      const labels = flowRoles.starts
+        .slice(0, 5)
+        .map(id => graph.getNode(id)?.label || id);
+      const extra = flowRoles.starts.length > labels.length ? ', …' : '';
+      globalEventBus.emit('pipeline:log', {
+        line: `[RUN] ${flowRoles.starts.length} trilhas independentes: ${labels.join(', ')}${extra}. ` +
+              'Elas começam juntas e o pipeline termina quando a última concluir.'
+      });
+    }
+
     PipelineRunner.running = true;
 
     try {

@@ -83,6 +83,10 @@ export class AssistantPanel {
     this.bus.on('taskpane:tab-changed', (tab: string) => {
       if (tab === 'assistant') void this.refresh();
     });
+    // Pedido vindo de outra parte da interface (ex.: "Unir trilhas" no menu do vértice).
+    this.bus.on('assistant:ask', (payload: { prompt?: string }) => {
+      void this.ask(String(payload?.prompt || ''));
+    });
     this.bus.on('project:loaded', () => {
       if (!this.busy) {
         this.sessionId = '';
@@ -240,6 +244,53 @@ export class AssistantPanel {
   }
 
   // --- Ações do usuário ---------------------------------------------------------------------
+
+  /**
+   * Injeta um pedido vindo de outra parte da interface (ex.: "Unir trilhas" no menu do vértice).
+   * Abre a aba do Assistente, garante o estado do backend e só então envia — ou explica por que
+   * não dá para enviar (sem backend, sem modelo com ferramentas, ou turno em andamento).
+   */
+  public async ask(prompt: string): Promise<void> {
+    const message = prompt.trim();
+    if (!message) return;
+
+    this.bus.emit('taskpane:open', { tab: 'assistant' });
+
+    if (!this.status) {
+      try {
+        this.status = await this.call('assistant_status');
+      } catch {
+        this.status = null;
+      }
+    }
+    this.render();
+
+    if (!this.webui()) {
+      this.notify(t('assistant.desktop_only'), 'warning');
+      return;
+    }
+    if (this.busy) {
+      this.notify(t('assistant.junction_busy', 'O Assistente ainda está respondendo. Tente de novo quando ele terminar.'), 'warning');
+      return;
+    }
+    if (!this.status?.configured || !this.status.supportsTools) {
+      this.notify(
+        t('assistant.junction_not_ready', 'Configure um modelo com suporte a ferramentas para o Assistente avaliar as trilhas.'),
+        'warning'
+      );
+      return;
+    }
+
+    // As operações do C++ chegam com caminho absoluto a partir da raiz (set_child_graph). Manter o
+    // grafo na raiz garante que o subgrafo certo seja encontrado; as demais edições já subiam antes.
+    while (!this.graph.isAtRoot() && this.graph.navigateUp()) { /* sobe até a raiz */ }
+
+    await this.send(message);
+  }
+
+  private notify(message: string, severity: 'info' | 'warning' | 'error' = 'info'): void {
+    this.bus.emit('notification:show', { title: t('inspector.pane_tabs.assistant'), message, severity });
+  }
 
   private async send(text: string): Promise<void> {
     const message = text.trim();

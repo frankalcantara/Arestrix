@@ -89,4 +89,52 @@ describe('TraceOverlay (Fase 4F)', () => {
     );
     expect(viewport.setEdgeExecutionState).toHaveBeenCalledWith('call_target', 'error');
   });
+
+  it('mede o pico de concorrência a partir dos horários do trace', () => {
+    const bus = new EventBus();
+    const graph = new Graph(bus);
+    const viewport = { setNodeRunRecord: vi.fn(), setEdgeExecutionState: vi.fn() };
+    new TraceOverlay(bus, graph, viewport as any);
+
+    const summaries: any[] = [];
+    bus.on('trace:summary', (summary: any) => summaries.push(summary));
+
+    bus.emit('trace:loaded', {
+      runId: 'run-parallel',
+      status: 'success',
+      tasks: [
+        { nodeId: 'a', status: 'ok', startedAt: 0, endedAt: 100 },
+        { nodeId: 'b', status: 'ok', startedAt: 50, endedAt: 150 },
+        // começa exatamente quando b termina: encadeada, não simultânea
+        { nodeId: 'c', status: 'ok', startedAt: 150, endedAt: 200 }
+      ],
+      calls: [],
+      interactions: []
+    });
+
+    expect(summaries[0].maxConcurrency).toBe(2);
+  });
+
+  it('trilhas encadeadas ficam em concorrência 1', () => {
+    const bus = new EventBus();
+    const graph = new Graph(bus);
+    const viewport = { setNodeRunRecord: vi.fn(), setEdgeExecutionState: vi.fn() };
+    new TraceOverlay(bus, graph, viewport as any);
+
+    const summaries: any[] = [];
+    bus.on('trace:summary', (summary: any) => summaries.push(summary));
+
+    bus.emit('trace:loaded', {
+      runId: 'run-serial',
+      status: 'success',
+      tasks: [
+        { nodeId: 'a', status: 'ok', startedAt: 0, endedAt: 100 },
+        { nodeId: 'b', status: 'ok', startedAt: 100, endedAt: 200 }
+      ],
+      calls: [],
+      interactions: []
+    });
+
+    expect(summaries[0].maxConcurrency).toBe(1);
+  });
 });

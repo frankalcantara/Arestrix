@@ -120,7 +120,9 @@ espera chamadas pendentes antes de encerrar, para não perder notificações/aud
 **Trace aberto.** Cada execução grava `.arestrix/runs/<runId>/trace.json` com as tasks, chamadas e
 interações que realmente rodaram (IDs, labels, tipo, profundidade, status e tempos; nunca
 input/output). Ao final, o Studio carrega o trace mais recente, destaca no canvas as arestas de
-chamada percorridas e mostra uma árvore curta de chamadas no console.
+chamada percorridas e mostra uma árvore curta de chamadas no console. A linha `[TRACE]` do console
+traz ainda `concurrency=`, o pico de tarefas executando ao mesmo tempo — duas trilhas independentes
+aparecem como 2.
 
 O resultado é uma mensagem de ferramenta JSON com `callId`, `target`, `status`, `output` e `depth`;
 um destino de interação também traz `answers`. O texto final do alvo também é gravado em
@@ -173,6 +175,39 @@ que nunca converge para com erro em vez de gastar dinheiro indefinidamente.
 Exemplo: no preset *arquitetura completa de agentes*, o vértice de decisão do LLM envia o ramo 0 para o
 armazenamento e o consenso, e o ramo 1 de volta para a fila. Esse retorno é a aresta tracejada.
 
+## Início e fim de trilha
+
+Quando o grafo tem mais de uma entrada **ou** mais de uma saída, o Studio marca com selos os vértices
+onde as trilhas começam (**INÍCIO**, à esquerda do cartão) e terminam (**FIM**, à direita). Uma trilha
+começa em um vértice sem fluxo de entrada e termina em um vértice sem fluxo de saída; arestas de
+feedback e alvos de chamada não contam como fluxo.
+
+Sem os selos, duas cadeias sem vértice comum parecem um desenho comum; na execução elas são duas
+trilhas independentes que rodam em paralelo e o pipeline só termina quando a última acaba. Com uma
+única entrada e uma única saída o desenho já é inequívoco e nenhum selo aparece.
+
+Os selos são informativos: não alteram a topologia, não inserem junções e não bloqueiam a execução.
+Para convergir as trilhas, ligue a saída de uma à entrada da outra — no Taskflow isso vira um `join`
+implícito.
+
+A barra de status mostra o total de trilhas do grafo ativo (`6 vértices, 4 conexões · 2 trilhas`), e
+quando há mais de uma o Console anuncia quais são antes de compilar: *"2 trilhas independentes: …;
+elas começam juntas e o pipeline termina quando a última concluir."*
+
+O botão **Trilhas** da barra de status colore cada trilha independente com uma faixa no rodapé dos
+cartões — e o selo **INÍCIO** daquela trilha assume a mesma cor, ligando a faixa à entrada. É só
+leitura, não altera a execução. Para convergir duas trilhas sem editar à mão, o menu de
+contexto de um vértice com selo **FIM** oferece **Unir trilhas com o Assistente…**: o Studio entrega ao
+Assistente as trilhas já enumeradas (rótulos, tipos, habilidades, artefatos e o primeiro comentário
+escrito no corpo C++) e ele decide semanticamente se elas devem mesmo convergir e onde. As operações
+aplicadas viram um único passo de **Ctrl+Z**. A ação vale também dentro de um subfluxo: o pedido leva o
+`parent_path` e o Assistente edita o subgrafo certo.
+
+Sem modelo configurado, a mesma dupla de menus oferece **Sugerir junção (análise local)**: o Studio
+pontua sinais declarados (pasta de entrega, tipo de artefato, habilidade, servidor MCP e termos em
+comum nos nomes) e, só quando eles bastam, cria a junção — explicando o critério. Quando os sinais não
+bastam, nada é alterado e a notificação diz por quê.
+
 ## Validação
 
 Antes de executar, o grafo é verificado:
@@ -181,9 +216,11 @@ Antes de executar, o grafo é verificado:
 | :--- | :--- |
 | Vértice sem conexões (quando o grafo tem mais de um vértice) | Aviso |
 | Vértice de condição com um ramo desconectado | Aviso |
+| Dois vértices sem caminho de fluxo entre si gravando no mesmo arquivo (destino de Output ou saída de MCP) | Aviso |
 | Ciclo que **não** contém vértice de condição | **Erro**: travaria ou repetiria para sempre |
 
-Ciclos só são permitidos quando um vértice de condição pode interrompê-los.
+Ciclos só são permitidos quando um vértice de condição pode interrompê-los. Avisos nunca bloqueiam a
+execução: eles aparecem em **Validar DAG** e no Console antes de cada execução.
 
 ## Edição
 
@@ -205,6 +242,8 @@ Ciclos só são permitidos quando um vértice de condição pode interrompê-los
 | Copiar / Recortar / Colar | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Área de transferência interna; cada colagem desloca mais um passo. |
 | Salvar como template | | Inclui o vértice na biblioteca (abaixo). |
 | Entrar no subfluxo | | Só para vértices subfluxo e módulo. |
+| Unir trilhas com o Assistente… | | Em qualquer nível, em vértice com selo **FIM** quando há mais de um fim; o Assistente avalia e aplica a junção (um Ctrl+Z desfaz). |
+| Sugerir junção (análise local) | | Alternativa sem IA: pontua pasta, tipo de artefato, skill, servidor MCP e termos do nome; se os sinais não bastarem, só explica. |
 | Remover todas as conexões | | Um único desfazer as restaura. |
 | Apagar | `Del` | |
 
@@ -230,3 +269,4 @@ visão paralelo (subfluxo), kernel CUDA e módulo de consenso.
 
 - [Arquitetura](arquitetura.md)
 - [Tour pela interface](interface.md)
+- [Trilhas e junção](trilhas-e-juncao.md)

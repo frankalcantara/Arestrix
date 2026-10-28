@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Graph } from '../src/core/Graph.ts';
 import { GraphValidator } from '../src/core/Validator.ts';
+import { computeFlowRoles } from '../src/core/GraphTopology.ts';
 import { EventBus } from '../src/core/EventBus.ts';
 
 const EXAMPLES = resolve(__dirname, '..', 'examples');
@@ -10,8 +11,8 @@ const dirs = readdirSync(EXAMPLES, { withFileTypes: true }).filter(d => d.isDire
 const read = (...p: string[]) => JSON.parse(readFileSync(join(EXAMPLES, ...p), 'utf8'));
 
 describe('projetos de exemplo (examples/)', () => {
-  it('existem os doze projetos, do simples ao complexo', () => {
-    expect(dirs).toEqual(['01-svg-agente', '02-triagem-de-suporte', '03-atendimento-ilustrado', '04-memoria', '05-matematica-com-memoria', '06-chamada-agente', '07-interacao', '08-formulario-gerado', '09-chamadas-paralelas', '10-subflow-chamavel', '11-call-vertex', '12-chamadas-assincronas']);
+  it('existem os treze projetos, do simples ao complexo', () => {
+    expect(dirs).toEqual(['01-svg-agente', '02-triagem-de-suporte', '03-atendimento-ilustrado', '04-memoria', '05-matematica-com-memoria', '06-chamada-agente', '07-interacao', '08-formulario-gerado', '09-chamadas-paralelas', '10-subflow-chamavel', '11-call-vertex', '12-chamadas-assincronas', '13-trilhas-independentes']);
   });
 
   for (const name of dirs) {
@@ -147,5 +148,25 @@ describe('projetos de exemplo (examples/)', () => {
     const three = ids('03-atendimento-ilustrado');
     for (const id of ids('01-svg-agente')) expect(three).toContain(`svg_${id}`);
     for (const id of ids('02-triagem-de-suporte')) expect(three).toContain(`atd_${id}`);
+  });
+
+  it('o exemplo 13 tem duas trilhas sem vértice comum e nenhuma junção pronta', () => {
+    const schema = read('13-trilhas-independentes', 'pipelines', 'main.json');
+    const graph = new Graph(new EventBus());
+    graph.fromJSON(schema);
+
+    const roles = computeFlowRoles(graph);
+    expect(roles.starts.slice().sort()).toEqual(['anexos_levantar', 'fontes_levantar']);
+    expect(roles.ends.slice().sort()).toEqual(['anexos_entregar', 'fontes_entregar']);
+    expect(roles.ambiguous).toBe(true);
+
+    // O exemplo chega sem junção: é o estado em que o usuário vê 2 INÍCIO e 2 FIM.
+    expect(schema.nodes.some((n: any) => n.type === 'join')).toBe(false);
+    expect(schema.edges).toHaveLength(4);
+
+    // Mesma pasta e mesmo formato: o caso em que a análise local sugere a junção.
+    const outputs = schema.nodes.filter((n: any) => n.type === 'output');
+    expect(outputs.map((n: any) => n.outputSettings.destinationPath.split('/')[0])).toEqual(['exports', 'exports']);
+    expect(outputs.map((n: any) => n.outputSettings.artifactType)).toEqual(['markdown', 'markdown']);
   });
 });

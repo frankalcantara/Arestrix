@@ -120,7 +120,9 @@ generated `main` drains pending calls before exiting, so notifications/audit are
 **Open trace.** Each run writes `.arestrix/runs/<runId>/trace.json` with the tasks, calls and
 interactions that actually ran (IDs, labels, kind, depth, status and timing; never input/output).
 After the run, the Studio loads the latest trace and highlights on the canvas the dashed call edges
-that were traversed, while the console shows a short call tree.
+that were traversed, while the console shows a short call tree. The `[TRACE]` console line also
+carries `concurrency=`, the peak number of tasks running at the same time — two independent paths
+show up as 2.
 
 The result is a JSON tool message with `callId`, `target`, `status`, `output` and `depth`; an
 interaction target also carries `answers`. The target's final text is also written to
@@ -175,6 +177,39 @@ money forever.
 Example: in the *full agent architecture* preset the LLM decision vertex sends branch 0 to storage and
 consensus, and branch 1 back to the queue. That return is the dashed edge.
 
+## Start and end of a path
+
+When the graph has more than one entry **or** more than one exit, the Studio badges the vertices where
+paths begin (**START**, left of the card) and end (**END**, right of the card). A path starts at a
+vertex with no incoming flow and ends at a vertex with no outgoing flow; feedback edges and call
+targets do not count as flow.
+
+Without the badges two chains with no shared vertex look like an ordinary drawing; at run time they
+are two independent paths that execute in parallel, and the pipeline only finishes when the last one
+does. With a single entry and a single exit the drawing is already unambiguous and no badge appears.
+
+The badges are informative: they do not change the topology, do not insert joins and do not block
+execution. To converge the paths, connect the output of one to the input of the other — in Taskflow
+that becomes an implicit `join`.
+
+The status bar shows how many paths the active graph has (`6 vertices, 4 connections · 2 paths`), and
+when there is more than one the Console announces them before compiling: *"2 independent paths: …;
+they start together and the pipeline finishes when the last one does."*
+
+The **Paths** button in the status bar colors each independent path with a stripe at the bottom of the
+cards — and that path's **START** badge takes the same color, tying the stripe to the entry. It is
+read-only, it does not change execution. To converge two paths without editing by hand, the
+context menu of a vertex with an **END** badge offers **Merge paths with the Assistant…**: the Studio
+hands the Assistant the paths already enumerated (labels, types, skills, artifacts and the first
+comment written in the C++ body) and it decides semantically whether they should converge and where.
+The applied operations become a single **Ctrl+Z** step. The action also works inside a subflow: the
+request carries the `parent_path` and the Assistant edits the right subgraph.
+
+With no model configured, the same menu pair offers **Suggest a junction (local analysis)**: the Studio
+scores declared signals (delivery folder, artifact type, skill, MCP server and terms shared by the
+names) and only creates the junction when they are enough — explaining the criterion. When they are
+not, nothing changes and the notification says why.
+
 ## Validation
 
 Before running, the graph is checked:
@@ -183,9 +218,11 @@ Before running, the graph is checked:
 | :--- | :--- |
 | A vertex with no connections (when the graph has more than one vertex) | Warning |
 | A condition vertex with an unconnected branch | Warning |
+| Two vertices with no flow path between them writing to the same file (Output destination or MCP output) | Warning |
 | A cycle that contains **no** condition vertex | **Error**: it would deadlock or loop forever |
 
-Cycles are allowed only when a condition vertex can break them.
+Cycles are allowed only when a condition vertex can break them. Warnings never block execution: they
+appear in **Validate DAG** and in the Console before every run.
 
 ## Editing
 
@@ -207,6 +244,8 @@ Cycles are allowed only when a condition vertex can break them.
 | Copy / Cut / Paste | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Internal clipboard; each paste shifts further. |
 | Save as template | | Adds the vertex to the node library (below). |
 | Enter subflow | | Only for subflow and module vertices. |
+| Merge paths with the Assistant… | | Any level, on a vertex with an **END** badge when there is more than one end; the Assistant evaluates and applies the junction (one Ctrl+Z undoes it). |
+| Suggest a junction (local analysis) | | No-AI alternative: scores folder, artifact type, skill, MCP server and name terms; when the signals are not enough it only explains. |
 | Remove all connections | | One undo step restores them. |
 | Delete | `Del` | |
 
@@ -232,3 +271,4 @@ pipeline (subflow), CUDA kernel, and consensus module.
 
 - [Architecture](architecture.md)
 - [Interface tour](interface.md)
+- [Paths and junction](paths-and-junction.md)

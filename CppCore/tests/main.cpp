@@ -4607,6 +4607,52 @@ TEST(assistant_supports_call_and_interaction_vertices) {
     CHECK(!doc.validate(RuntimeLang::Pt).value("ok", true));
 }
 
+TEST(assistant_warns_on_write_conflict_between_parallel_paths) {
+    namespace as = taskforge::assistant;
+    using taskforge::rt::RuntimeLang;
+    as::GraphDocument doc;
+
+    auto a1 = doc.addNode("static", "Coletar", std::nullopt, std::nullopt, "", RuntimeLang::Pt);
+    auto oa = doc.addNode("output", "Entrega A", std::nullopt, std::nullopt, "", RuntimeLang::Pt);
+    auto b1 = doc.addNode("static", "Baixar", std::nullopt, std::nullopt, "", RuntimeLang::Pt);
+    auto ob = doc.addNode("output", "Entrega B", std::nullopt, std::nullopt, "", RuntimeLang::Pt);
+    CHECK(a1.ok && oa.ok && b1.ok && ob.ok);
+
+    const std::string a1id = a1.result.value("id", std::string());
+    const std::string oaid = oa.result.value("id", std::string());
+    const std::string b1id = b1.result.value("id", std::string());
+    const std::string obid = ob.result.value("id", std::string());
+
+    // Mesmo arquivo escrito de formas diferentes: a comparacao normaliza.
+    CHECK(doc.updateNode(oaid, json{{"outputSettings", json{{"destinationPath", "exports\\relatorio.md"}}}},
+                         RuntimeLang::Pt).ok);
+    CHECK(doc.updateNode(obid, json{{"outputSettings", json{{"destinationPath", "./exports/relatorio.md"}}}},
+                         RuntimeLang::Pt).ok);
+    CHECK(doc.connect(a1id, "", oaid, "", RuntimeLang::Pt).ok);
+    CHECK(doc.connect(b1id, "", obid, "", RuntimeLang::Pt).ok);
+
+    auto hasConflict = [](const json& v) {
+        const json& warnings = v.at("warnings");
+        for (const auto& w : warnings) {
+            if (w.is_string() && w.get<std::string>().find("podem gravar") != std::string::npos) return true;
+        }
+        return false;
+    };
+
+    json v = doc.validate(RuntimeLang::Pt);
+    CHECK(v.value("ok", false));   // aviso nunca bloqueia a execucao
+    CHECK(hasConflict(v));
+
+    // Com caminho de fluxo entre os dois, um executa depois do outro: deixa de ser corrida.
+    CHECK(doc.connect(oaid, "", obid, "", RuntimeLang::Pt).ok);
+    CHECK(!hasConflict(doc.validate(RuntimeLang::Pt)));
+
+    // Caminhos diferentes: nada a avisar.
+    CHECK(doc.updateNode(obid, json{{"outputSettings", json{{"destinationPath", "exports/outro.md"}}}},
+                         RuntimeLang::Pt).ok);
+    CHECK(!hasConflict(doc.validate(RuntimeLang::Pt)));
+}
+
 TEST(assistant_lists_exports_and_workspace_and_confines_artifact_reads) {
     namespace as = taskforge::assistant;
     using taskforge::rt::RuntimeLang;

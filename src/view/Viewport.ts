@@ -6,6 +6,7 @@ import { ConnectionView, EdgeExecutionState, getEdgeBaseStyle } from './Connecti
 import { NodeExecutionState, NodeRunOutcome, NodeRunRecord } from './SvgNodeView.ts';
 import { InteractionManager } from './InteractionManager.ts';
 import { Graph } from '../core/Graph.ts';
+import { computeFlowRoles, computeFlowRoleMap, computeTrailAssignments } from '../core/GraphTopology.ts';
 import { INodeData, IEdgeData, IGraphSchema } from '../core/types.ts';
 import { EventBus } from '../core/EventBus.ts';
 import { THEME } from './Theme.ts';
@@ -61,6 +62,8 @@ export class Viewport {
   /** Evita que telemetria atrasada reative o modo de execução após o pipeline terminar. */
   private executionActive: boolean = false;
   private canvasBackground: CanvasBackground = 'light';
+  /** Liga/desliga a faixa colorida por trilha (botão "Trilhas" da barra de status). */
+  private trailHighlight: boolean = false;
 
   constructor(container: HTMLElement, graph: Graph, bus: EventBus) {
     this.container = container;
@@ -149,6 +152,8 @@ export class Viewport {
     });
     this.bus.on('graph:cleared', () => this.clearAllViews());
     this.bus.on('graph:loaded', () => this.syncFromGraph());
+    this.bus.on('graph:changed', () => this.refreshFlowDecorations());
+    this.bus.on('locale:changed', () => this.refreshFlowDecorations());
     this.bus.on('graph:hierarchy-changed', () => this.zoomToFit());
     this.bus.on('pipeline:compiling', () => {
       this.executionActive = false;
@@ -1149,7 +1154,37 @@ export class Viewport {
     this.clearAllViews();
     this.graph.getAllNodes().forEach(n => this.onNodeAdded(n));
     this.graph.getAllEdges().forEach(e => this.onEdgeAdded(e));
+    this.refreshFlowDecorations();
     this.refreshAllEdges();
+  }
+
+  /**
+   * Selos INÍCIO/FIM nos vértices onde as trilhas começam e terminam.
+   *
+   * Só aparecem quando a topologia é ambígua (mais de uma entrada ou mais de uma saída): é o
+   * caso em que o desenho sozinho não revela que duas trilhas disjuntas rodam em paralelo. Com
+   * uma entrada e uma saída o fluxo já é óbvio e o selo viraria ruído.
+   */
+  private refreshFlowDecorations(): void {
+    const roles = computeFlowRoleMap(computeFlowRoles(this.graph));
+    const assignments = this.trailHighlight
+      ? computeTrailAssignments(this.graph).indexByNode
+      : null;
+    this.nodeViews.forEach((nodeView, id) => {
+      nodeView.setFlowRole(roles.get(id) ?? null);
+      nodeView.setTrailHighlight(assignments ? assignments.get(id) ?? null : null);
+    });
+  }
+
+  /** Liga/desliga as cores por trilha; devolve o novo estado. */
+  public toggleTrailHighlight(): boolean {
+    this.trailHighlight = !this.trailHighlight;
+    this.refreshFlowDecorations();
+    return this.trailHighlight;
+  }
+
+  public isTrailHighlightEnabled(): boolean {
+    return this.trailHighlight;
   }
 
   public zoomToFit(): void {

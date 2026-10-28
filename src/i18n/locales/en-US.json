@@ -290,6 +290,7 @@
       "clear_confirm": "Are you sure you want to clear the entire vertex flow?",
       "cmd_found": "Command \"{{cmd}}\" located! Opening corresponding options.",
       "graph_valid": "✅ Graph 100% Valid!\nAll Taskflow dependencies and condition sentinels are correct.",
+      "validation_warnings": "⚠️ Validation Report (warnings):\n\n{{msg}}\n\nExecution is not blocked.",
       "validation_report": "⚠️ Validation Report:\n\n{{msg}}"
     }
   },
@@ -796,6 +797,11 @@
     "saving": "Saving changes...",
     "error": "Pipeline Error",
     "stats": "{{nodes}} vertices, {{edges}} connections",
+    "trails_singular": "1 path",
+    "trails_plural": "{{count}} paths",
+    "trails_tip": "Paths are independent entry points: they all start together and the pipeline only finishes when the last one does.",
+    "trails": "Paths",
+    "trails_toggle_tip": "Color each independent path on the canvas (does not change execution)",
     "mode": "C++20 MSVC Taskflow Orchestrator",
     "grid": "Grid",
     "grid_tip": "Toggle Grid (G)",
@@ -876,6 +882,9 @@
     "cut": "Cut",
     "paste": "Paste",
     "enter_subflow": "Enter subflow",
+    "merge_trails": "Merge paths with the Assistant…",
+    "suggest_junction": "Suggest a junction (local analysis)",
+    "junction_history": "Add junction",
     "disconnect": "Remove all connections",
     "disconnect_history": "Disconnect Node",
     "delete": "Delete"
@@ -1946,7 +1955,14 @@
     "skill_unapproved": "Node \"{{node}}\" has skill \"{{skill}}\" which is modified or pending validation. Audit it with the Arestrix Skill Guard before running.",
     "mcp_missing_server": "MCP node \"{{node}}\" does not have any server configured.",
     "mcp_rejected": "Node \"{{node}}\" references MCP server \"{{server}}\" which was REJECTED by Studio security governance. Fix the vulnerabilities before running.",
-    "mcp_unapproved": "Node \"{{node}}\" references MCP server \"{{server}}\" which is pending audit or has a modified definition. Audit it with SkillSpector before running."
+    "mcp_unapproved": "Node \"{{node}}\" references MCP server \"{{server}}\" which is pending audit or has a modified definition. Audit it with SkillSpector before running.",
+    "resource_conflict": "Vertices \"{{first}}\" and \"{{second}}\" may write to \"{{path}}\" at the same time, because there is no flow path between them; the last write wins. Connect them or use different paths."
+  },
+  "flow_role": {
+    "start": "START",
+    "end": "END",
+    "start_tip": "Path start: no flow reaches this vertex.",
+    "end_tip": "Path end: the flow does not continue from this vertex. To merge paths, use the context menu."
   },
   "local_models": {
     "title": "Local models",
@@ -2042,6 +2058,8 @@
     "thinking": "Thinking...",
     "model_label": "Model: {{model}}",
     "not_configured": "The Studio default AI is not configured.",
+    "junction_busy": "The Assistant is still answering. Try again when it finishes.",
+    "junction_not_ready": "Configure a model with tool support so the Assistant can evaluate the paths.",
     "open_defaults": "Configure the Studio default AI",
     "tools_unsupported_banner": "The provider {{provider}} does not support the Assistant: it does not offer tool calling.",
     "provider_unsupported": "no Assistant support",

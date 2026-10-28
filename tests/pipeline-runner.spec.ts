@@ -114,4 +114,30 @@ describe('PipelineRunner - ponte com o backend C++ (run_pipeline)', () => {
     expect(seen[3].data.reason).toBe('finished');
     dispose();
   });
+
+  it('anuncia no Console quantas trilhas independentes o grafo abre', async () => {
+    const c = graph.createNode('c', 'Coletar fontes', 'static', 0, 300);
+    const d = graph.createNode('d', 'Baixar imagens', 'static', 200, 300);
+    graph.createEdge(c.id, c.outputs[0].id, d.id, d.inputs[0].id);
+
+    const { seen, dispose } = collect(['pipeline:log']);
+    (globalThis as any).webui = { call: async () => JSON.stringify({ ok: true }) };
+
+    expect(await PipelineRunner.run(graph)).toBe(true);
+
+    const line = seen.find(s => String(s.data.line).includes('trilhas independentes'))?.data.line;
+    expect(line).toContain('2 trilhas independentes');
+    expect(line).toContain('Tarefa A');
+    expect(line).toContain('Coletar fontes');
+    dispose();
+  });
+
+  it('não anuncia trilhas quando o grafo tem uma única entrada', async () => {
+    const { seen, dispose } = collect(['pipeline:log']);
+    (globalThis as any).webui = { call: async () => JSON.stringify({ ok: true }) };
+
+    expect(await PipelineRunner.run(graph)).toBe(true);
+    expect(seen.some(s => String(s.data.line).includes('trilhas independentes'))).toBe(false);
+    dispose();
+  });
 });

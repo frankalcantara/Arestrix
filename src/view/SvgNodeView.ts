@@ -5,6 +5,8 @@ import { NODE_ACTIONS, NODE_TYPE_ICONS, NodeActionType } from './NodeActions.ts'
 import { createLucideSvgElement, LucideIconNode } from './icons/VectorIcons.ts';
 import { fitTextToLines } from './text/NodeText.ts';
 import { CanvasTooltip } from '../ui/CanvasTooltip.ts';
+import { t } from '../i18n/index.ts';
+import type { FlowRole } from '../core/GraphTopology.ts';
 import { Brain, Wrench, CircleCheck, CircleX, TriangleAlert, Timer } from 'lucide';
 
 /**
@@ -74,6 +76,10 @@ export class SvgNodeView {
   private telemetryGroup: SVGGElement | null = null;
   private runRecord: NodeRunRecord | null = null;
   private runBadgeGroup: SVGGElement | null = null;
+  private flowRole: FlowRole | null = null;
+  private flowBadgeGroup: SVGGElement | null = null;
+  private trailIndex: number | null = null;
+  private trailAccent: SVGRectElement | null = null;
 
   private tooltip: CanvasTooltip;
   private bus: EventBus;
@@ -758,6 +764,180 @@ export class SvgNodeView {
 
     this.runBadgeGroup = group;
     this.group.appendChild(group);
+  }
+
+  // --- Selos de ponta de trilha (INÍCIO / FIM) ---
+
+  /**
+   * Marca o vértice como ponta de trilha. Chame com null para remover o selo (topologia
+   * inequívoca ou vértice que não participa do fluxo).
+   *
+   * O selo fica FORA do cartão, na altura do header: não altera a geometria do vértice, não
+   * colide com portas, barra de ações nem com a pílula de execução.
+   */
+  public setFlowRole(role: FlowRole | null): void {
+    if (this.flowRole === role) return;
+    this.flowRole = role;
+    this.renderFlowBadges();
+  }
+
+  public getFlowRole(): FlowRole | null {
+    return this.flowRole;
+  }
+
+  private clearFlowBadges(): void {
+    if (this.flowBadgeGroup && this.flowBadgeGroup.parentNode) {
+      this.flowBadgeGroup.parentNode.removeChild(this.flowBadgeGroup);
+    }
+    this.flowBadgeGroup = null;
+  }
+
+  private renderFlowBadges(): void {
+    this.clearFlowBadges();
+    if (!this.flowRole) return;
+
+    const theme = THEME.flowBadge;
+    const badgeH = theme.height;
+    const headerCenterY = -this.height / 2 + THEME.nodeBody.headerHeight / 2;
+    const y = headerCenterY - badgeH / 2;
+
+    const group = document.createElementNS(SVG_NS, 'g');
+    group.setAttribute('class', 'vertex-flow-badges');
+    group.setAttribute('data-flow-role', this.flowRole);
+
+    const trailColor = this.trailIndex === null
+      ? null
+      : THEME.trailPalette[this.trailIndex % THEME.trailPalette.length];
+    const startPalette = trailColor
+      ? { ...theme.start, border: trailColor, text: trailColor }
+      : theme.start;
+
+    if (this.flowRole === 'start' || this.flowRole === 'both') {
+      group.appendChild(this.createFlowBadge(
+        t('flow_role.start', 'INÍCIO'),
+        t('flow_role.start_tip', 'Início de trilha: nenhum fluxo chega a este vértice.'),
+        -this.width / 2 - theme.offsetX,
+        y,
+        badgeH,
+        startPalette,
+        'start'
+      ));
+    }
+
+    if (this.flowRole === 'end' || this.flowRole === 'both') {
+      group.appendChild(this.createFlowBadge(
+        t('flow_role.end', 'FIM'),
+        t('flow_role.end_tip', 'Fim de trilha: o fluxo não continua a partir deste vértice. Para unir trilhas, use o menu de contexto.'),
+        this.width / 2 + theme.offsetX,
+        y,
+        badgeH,
+        theme.end,
+        'end'
+      ));
+    }
+
+    this.flowBadgeGroup = group;
+    this.group.appendChild(group);
+  }
+
+  private createFlowBadge(
+    text: string,
+    title: string,
+    edgeX: number,
+    y: number,
+    height: number,
+    palette: { bg: string; border: string; text: string },
+    side: 'start' | 'end'
+  ): SVGGElement {    const theme = THEME.flowBadge;
+    const width = Math.max(46, 18 + text.length * 6.2);
+    const x = side === 'start' ? edgeX - width : edgeX;
+
+    const badge = document.createElementNS(SVG_NS, 'g');
+    badge.setAttribute('class', `vertex-flow-badge vertex-flow-badge-${side}`);
+    badge.setAttribute('transform', `translate(${x.toFixed(1)}, ${y.toFixed(1)})`);
+    badge.setAttribute('role', 'img');
+    badge.setAttribute('aria-label', title);
+
+    const titleEl = document.createElementNS(SVG_NS, 'title');
+    titleEl.textContent = title;
+    badge.appendChild(titleEl);
+
+    const rect = document.createElementNS(SVG_NS, 'rect');
+    rect.setAttribute('width', width.toFixed(1));
+    rect.setAttribute('height', String(height));
+    rect.setAttribute('rx', String(height / 2));
+    rect.setAttribute('ry', String(height / 2));
+    rect.setAttribute('fill', palette.bg);
+    rect.setAttribute('stroke', palette.border);
+    rect.setAttribute('stroke-width', '1.1');
+    badge.appendChild(rect);
+
+    const label = document.createElementNS(SVG_NS, 'text');
+    label.setAttribute('x', String(width / 2));
+    label.setAttribute('y', String(height / 2));
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('dominant-baseline', 'central');
+    label.setAttribute('fill', palette.text);
+    label.setAttribute('font-size', String(theme.fontSize));
+    label.setAttribute('font-weight', '700');
+    label.setAttribute('letter-spacing', '0.06em');
+    label.style.textShadow = 'none';
+    label.style.filter = 'none';
+    label.style.fontFamily = THEME.typography.fontFamily;
+    label.textContent = text;
+    badge.appendChild(label);
+
+    return badge;
+  }
+
+  // --- Destaque de trilhas (toggle da barra de status) ---
+
+  /**
+   * Pinta uma faixa na base do cartão com a cor da trilha. Não usa a borda do corpo porque
+   * essa borda já comunica estado de execução/seleção; a faixa é um canal separado e reversível.
+   */
+  public setTrailHighlight(index: number | null): void {
+    if (this.trailIndex === index) return;
+    this.trailIndex = index;
+    this.renderTrailAccent();
+    // O selo INÍCIO assume a cor da trilha: é ele que liga a cor da faixa à entrada correspondente.
+    if (this.flowRole) this.renderFlowBadges();
+  }
+
+  public getTrailIndex(): number | null {
+    return this.trailIndex;
+  }
+
+  private renderTrailAccent(): void {
+    if (this.trailAccent && this.trailAccent.parentNode) {
+      this.trailAccent.parentNode.removeChild(this.trailAccent);
+    }
+    this.trailAccent = null;
+
+    if (this.trailIndex === null) {
+      this.group.removeAttribute('data-trail-index');
+      return;
+    }
+
+    const palette = THEME.trailPalette;
+    const color = palette[this.trailIndex % palette.length];
+    const h = 4;
+    const inset = THEME.nodeBody.borderRadius + 2;
+
+    const rect = document.createElementNS(SVG_NS, 'rect');
+    rect.setAttribute('class', 'vertex-trail-accent');
+    rect.setAttribute('x', String(-this.width / 2 + inset));
+    rect.setAttribute('y', String(this.height / 2 - 6));
+    rect.setAttribute('width', String(this.width - inset * 2));
+    rect.setAttribute('height', String(h));
+    rect.setAttribute('rx', String(h / 2));
+    rect.setAttribute('ry', String(h / 2));
+    rect.setAttribute('fill', color);
+    rect.setAttribute('pointer-events', 'none');
+
+    this.group.setAttribute('data-trail-index', String(this.trailIndex));
+    this.trailAccent = rect;
+    this.group.appendChild(rect);
   }
 
   private formatRunningStatusText(): string {

@@ -290,6 +290,7 @@
       "clear_confirm": "Deseja realmente limpar todo o fluxo de vértices?",
       "cmd_found": "Comando \"{{cmd}}\" localizado! Abrindo opções correspondentes.",
       "graph_valid": "✅ Grafo 100% Válido!\nTodas as dependências e sentinelas de condição do Taskflow estão corretas.",
+      "validation_warnings": "⚠️ Relatório de Validação (avisos):\n\n{{msg}}\n\nA execução não é bloqueada.",
       "validation_report": "⚠️ Relatório de Validação:\n\n{{msg}}"
     }
   },
@@ -796,6 +797,11 @@
     "saving": "Salvando alterações...",
     "error": "Erro no Pipeline",
     "stats": "{{nodes}} vértices, {{edges}} conexões",
+    "trails_singular": "1 trilha",
+    "trails_plural": "{{count}} trilhas",
+    "trails_tip": "Trilhas são pontos de entrada independentes: todas disparam juntas e o pipeline só termina quando a última concluir.",
+    "trails": "Trilhas",
+    "trails_toggle_tip": "Colorir cada trilha independente no canvas (não altera a execução)",
     "mode": "C++20 MSVC Taskflow Orchestrator",
     "grid": "Grade",
     "grid_tip": "Alternar Grade (G)",
@@ -876,6 +882,9 @@
     "cut": "Recortar",
     "paste": "Colar",
     "enter_subflow": "Entrar no subfluxo",
+    "merge_trails": "Unir trilhas com o Assistente…",
+    "suggest_junction": "Sugerir junção (análise local)",
+    "junction_history": "Adicionar junção",
     "disconnect": "Remover todas as conexões",
     "disconnect_history": "Desconectar Vértice",
     "delete": "Apagar"
@@ -1946,7 +1955,14 @@
     "skill_unapproved": "O nó \"{{node}}\" possui a habilidade \"{{skill}}\" modificada ou pendente de validação. Audite-a com o Arestrix Skill Guard antes de executar.",
     "mcp_missing_server": "O nó MCP \"{{node}}\" não possui nenhum servidor configurado.",
     "mcp_rejected": "O nó \"{{node}}\" referencia o servidor MCP \"{{server}}\" que foi REJEITADO pela governança de segurança do Studio. Corrija as vulnerabilidades antes de executar.",
-    "mcp_unapproved": "O nó \"{{node}}\" referencia o servidor MCP \"{{server}}\" pendente de auditoria ou com definição modificada. Audite-o com o SkillSpector antes de executar."
+    "mcp_unapproved": "O nó \"{{node}}\" referencia o servidor MCP \"{{server}}\" pendente de auditoria ou com definição modificada. Audite-o com o SkillSpector antes de executar.",
+    "resource_conflict": "Os vértices \"{{first}}\" e \"{{second}}\" podem gravar em \"{{path}}\" ao mesmo tempo, porque não há caminho de fluxo entre eles; a última gravação vence. Ligue um ao outro ou use caminhos diferentes."
+  },
+  "flow_role": {
+    "start": "INÍCIO",
+    "end": "FIM",
+    "start_tip": "Início de trilha: nenhum fluxo chega a este vértice.",
+    "end_tip": "Fim de trilha: o fluxo não continua a partir deste vértice. Para unir trilhas, use o menu de contexto."
   },
   "local_models": {
     "title": "Modelos locais",
@@ -2042,6 +2058,8 @@
     "thinking": "Pensando...",
     "model_label": "Modelo: {{model}}",
     "not_configured": "A IA padrão do Studio não está configurada.",
+    "junction_busy": "O Assistente ainda está respondendo. Tente de novo quando ele terminar.",
+    "junction_not_ready": "Configure um modelo com suporte a ferramentas para o Assistente avaliar as trilhas.",
     "open_defaults": "Configurar a IA padrão do Studio",
     "tools_unsupported_banner": "O provedor {{provider}} não suporta o Assistente: ele não oferece chamada de ferramentas.",
     "provider_unsupported": "sem suporte ao Assistente",

@@ -210,6 +210,18 @@ export const THEME = {
     hoverFill: 0xeef2ff
   },
 
+  // Selos de ponta de trilha (INÍCIO/FIM): informam, sem bloquear, onde a execução começa e termina.
+  flowBadge: {
+    height: 18,
+    fontSize: 9.5,
+    offsetX: 6,
+    start: { bg: '#E0F2FE', border: '#0284C7', text: '#075985' },
+    end: { bg: '#F1F5F9', border: '#64748B', text: '#334155' }
+  },
+
+  // Cores categóricas para o destaque de trilhas: cada trilha independente recebe uma faixa no rodapé do cartão.
+  trailPalette: ['#2563EB', '#C2410C', '#047857', '#7C3AED', '#B91C1C', '#0E7490', '#A16207', '#BE185D'],
+
   // Nível de detalhe: abaixo deste zoom, rótulos de portas e barra de ações são ocultados
   lod: {
     detailZoomThreshold: 0.45

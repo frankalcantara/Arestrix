@@ -14,6 +14,7 @@
 | Install, build and run your first pipeline | [Getting started](en/getting-started.md) | [Primeiros passos](pt-BR/primeiros-passos.md) |
 | Understand the architecture | [Architecture](en/architecture.md) | [Arquitetura](pt-BR/arquitetura.md) |
 | Learn the graph model | [Graph and nodes](en/graph-and-nodes.md) | [Grafo e vértices](pt-BR/grafo-e-vertices.md) |
+| Independent paths, write conflicts and junctions | [Paths and junction](en/paths-and-junction.md) | [Trilhas e junção](pt-BR/trilhas-e-juncao.md) |
 | Run agents, sandboxes and telemetry | [Agents and execution](en/agents-and-execution.md) | [Agentes e execução](pt-BR/agentes-e-execucao.md) |
 | Run without the UI (CI, servers) | [`arestrix-cli`](en/arestrix-cli.md) | [`arestrix-cli`](pt-BR/arestrix-cli.md) |
 | Workspaces, memory, skills and MCP | [Workspaces, memory and MCP](en/workspaces-memory-skills-mcp.md) | [Workspaces, memória e MCP](pt-BR/workspaces-memoria-skills-mcp.md) |
@@ -27,7 +28,7 @@
 | Resource | Language | Description |
 | :--- | :--- | :--- |
 | [SVG agent tutorial](pt-BR/tutorials/svg-agent.md) | Português | End-to-end walkthrough: graph, skills, self-correction loop and delivery vertex. |
-| [Examples](../examples/README.md) | English | Twelve runnable projects, from a two-agent pipeline to callable subflows, flow Call vertices, asynchronous calls, parallel calls, generated forms, memory and web-research workflows. |
+| [Examples](../examples/README.md) | English | Thirteen runnable projects, from a two-agent pipeline to callable subflows, flow Call vertices, asynchronous calls, parallel calls, independent paths, generated forms, memory and web-research workflows. |
 | [Exemplos](../examples/README.pt-BR.md) | Português | Os mesmos projetos, com instruções em português. |
 
 ## Operations and quality

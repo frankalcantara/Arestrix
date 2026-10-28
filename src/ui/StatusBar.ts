@@ -1,4 +1,5 @@
 import { Graph } from '../core/Graph.ts';
+import { computeFlowRoles } from '../core/GraphTopology.ts';
 import { Viewport } from '../view/Viewport.ts';
 import { EventBus } from '../core/EventBus.ts';
 import { t, getLocale, toggleLocale } from '../i18n/index.ts';
@@ -31,6 +32,7 @@ export class StatusBar {
 
     this.render();
     this.bindDomEvents();
+    this.syncTrailButton(this.viewport.isTrailHighlightEnabled());
     this.bindBusEvents();
     this.updateStats();
   }
@@ -54,6 +56,9 @@ export class StatusBar {
       </div>
 
       <div class="office-statusbar-right">
+        <button id="sb-btn-trails" class="office-sb-btn" aria-pressed="false" title="${t('statusbar.trails_toggle_tip')}">
+          ${t('statusbar.trails')}
+        </button>
         <button id="sb-btn-grid" class="office-sb-btn" title="${t('statusbar.grid_tip')}">
           ${t('statusbar.grid')}
         </button>
@@ -101,6 +106,11 @@ export class StatusBar {
     });
 
     // Botões de Grade e Ajuste
+    this.container.querySelector('#sb-btn-trails')?.addEventListener('click', () => {
+      const enabled = this.viewport.toggleTrailHighlight();
+      this.syncTrailButton(enabled);
+    });
+
     this.container.querySelector('#sb-btn-grid')?.addEventListener('click', () => {
       const isVisible = this.viewport.toggleGrid();
       const btn = this.container.querySelector('#sb-btn-grid') as HTMLElement;
@@ -122,6 +132,7 @@ export class StatusBar {
     this.bus.on('locale:changed', () => {
       this.render();
       this.bindDomEvents();
+      this.syncTrailButton(this.viewport.isTrailHighlightEnabled());
       this.updateStats();
     });
 
@@ -159,14 +170,35 @@ export class StatusBar {
     });
   }
 
-  private updateStats(): void {
-    const nodeCount = this.graph.getAllNodes().length;
-    const edgeCount = this.graph.getAllEdges().length;
-    this.statsTextEl.textContent = t('statusbar.stats', { nodes: nodeCount, edges: edgeCount });
-  }
-
   public setStatus(text: string, dotClass: 'status-ready' | 'status-compiling' | 'status-running' | 'status-error'): void {
     this.statusTextEl.textContent = text;
     this.statusDotEl.className = `office-status-dot ${dotClass}`;
+  }
+
+  /**
+   * Estatísticas do grafo ativo. O número de trilhas vem dos pontos de entrada independentes
+   * (mesma conta dos selos INÍCIO/FIM): com duas trilhas disjuntas o contador mostra 2.
+   */
+  private updateStats(): void {
+    const nodeCount = this.graph.getAllNodes().length;
+    const edgeCount = this.graph.getAllEdges().length;
+    const trailCount = computeFlowRoles(this.graph).starts.length;
+
+    const stats = t('statusbar.stats', { nodes: nodeCount, edges: edgeCount });
+    const trails = t(
+      trailCount === 1 ? 'statusbar.trails_singular' : 'statusbar.trails_plural',
+      { count: trailCount }
+    );
+
+    this.statsTextEl.textContent = `${stats} · ${trails}`;
+    this.statsTextEl.title = t('statusbar.trails_tip', { count: trailCount });
+  }
+
+  /** Mantém o botão "Trilhas" pressionado quando o destaque está ligado. */
+  private syncTrailButton(enabled: boolean): void {
+    const btn = this.container.querySelector('#sb-btn-trails') as HTMLElement | null;
+    if (!btn) return;
+    btn.classList.toggle('active', enabled);
+    btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
   }
 }

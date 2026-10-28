@@ -252,7 +252,8 @@ export class ConsolePanel {
       const duration = Math.max(0, Number(trace?.durationMs) || 0);
       this.addLine(
         `[TRACE] run ${trace?.runId ?? '?'} status=${trace?.status ?? '?'} tasks=${trace?.tasks ?? 0} ` +
-        `calls=${trace?.calls ?? 0} interactions=${trace?.interactions ?? 0} (${duration}ms)`,
+        `calls=${trace?.calls ?? 0} interactions=${trace?.interactions ?? 0} ` +
+        `concurrency=${trace?.maxConcurrency ?? 0} (${duration}ms)`,
         'line-muted'
       );
       for (const call of (Array.isArray(trace?.callList) ? trace.callList : []).slice(0, 20)) {

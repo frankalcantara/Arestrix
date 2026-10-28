@@ -3,6 +3,7 @@ import { INodeData } from '../core/types.ts';
 import { THEME } from './Theme.ts';
 import { globalEventBus } from '../core/EventBus.ts';
 import { SvgNodeView, NodeExecutionState, NodeRunRecord } from './SvgNodeView.ts';
+import type { FlowRole } from '../core/GraphTopology.ts';
 import { CanvasTooltip } from '../ui/CanvasTooltip.ts';
 
 /**
@@ -73,6 +74,24 @@ export class NodeView {
   /** Selo persistente com o resultado da última execução (não altera o modo de edição). */
   setRunRecord(record: NodeRunRecord | null): void {
     this.svgNodeView.setRunRecord(record);
+  }
+
+  /** Selo de ponta de trilha (INÍCIO/FIM); null remove o selo. */
+  setFlowRole(role: FlowRole | null): void {
+    this.svgNodeView.setFlowRole(role);
+  }
+
+  getFlowRole(): FlowRole | null {
+    return this.svgNodeView.getFlowRole();
+  }
+
+  /** Faixa colorida da trilha no rodapé do cartão; null desliga o destaque. */
+  setTrailHighlight(index: number | null): void {
+    this.svgNodeView.setTrailHighlight(index);
+  }
+
+  getTrailIndex(): number | null {
+    return this.svgNodeView.getTrailIndex();
   }
 
   getRunRecord(): NodeRunRecord | null {

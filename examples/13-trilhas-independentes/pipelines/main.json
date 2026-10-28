@@ -1,0 +1,199 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "projectId": "exemplo-trilhas-independentes",
+    "graphName": "Trilhas_Independentes",
+    "description": "Duas trilhas sem vértice comum, cada uma com sua própria entrega",
+    "targetStandard": "C++20",
+    "compilerConfig": {
+      "compiler": "msvc",
+      "cppStandard": "C++20",
+      "buildSystem": "cmake",
+      "taskflowIncludePath": "third_party/taskflow",
+      "outputBinaryName": "exemplo_trilhas_independentes",
+      "enableOpenMP": false,
+      "enableCuda": false,
+      "extraFlags": []
+    },
+    "version": "1.0.0",
+    "globalDefaults": {
+      "model": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "skillPath": "",
+        "promptTemplate": ""
+      },
+      "sandbox": {
+        "isolationLevel": "host_direct",
+        "network": "egress_llm_only",
+        "maxMemoryMB": 512,
+        "timeoutSeconds": 180,
+        "readOnlyMounts": [],
+        "readWriteMounts": []
+      },
+      "codeMode": {
+        "allowedTools": [
+          "read",
+          "write"
+        ],
+        "customScripts": []
+      },
+      "memory": {
+        "enabled": false,
+        "persistent": false,
+        "readBlackboard": false,
+        "writeBlackboard": false,
+        "semanticLessons": false,
+        "recordLessons": false,
+        "allowedKeys": [],
+        "domains": []
+      }
+    },
+    "callLimits": {
+      "maxDepth": 3,
+      "maxTotalCalls": 50
+    }
+  },
+  "nodes": [
+    {
+      "id": "fontes_levantar",
+      "label": "Levantar fontes",
+      "type": "static",
+      "position": { "x": -760, "y": 140, "z": 0 },
+      "inputs": [
+        { "id": "fontes_levantar_in_0", "name": "in", "direction": "input", "type": "flow" }
+      ],
+      "outputs": [
+        { "id": "fontes_levantar_out_0", "name": "out", "direction": "output", "type": "flow" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "// Cataloga as fontes do projeto e grava o texto base da trilha A\nstd::filesystem::create_directories(\"workspace\");\n{\n    std::ofstream arx_out(\"workspace/fontes.md\", std::ios::binary | std::ios::trunc);\n    arx_out << \"# Fontes levantadas\\n\\n- contrato-2026.pdf\\n- ata-da-reuniao.md\\n\";\n}\nstd::cout << \"[fontes] catalogo gravado em workspace/fontes.md\\n\";"
+    },
+    {
+      "id": "fontes_resumir",
+      "label": "Resumir fontes",
+      "type": "static",
+      "position": { "x": -380, "y": 140, "z": 0 },
+      "inputs": [
+        { "id": "fontes_resumir_in_0", "name": "in", "direction": "input", "type": "flow" }
+      ],
+      "outputs": [
+        { "id": "fontes_resumir_out_0", "name": "out", "direction": "output", "type": "flow" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "// Resume o catálogo de fontes: é o arquivo que a entrega vai exportar\nstd::filesystem::create_directories(\"workspace\");\n{\n    std::ofstream arx_out(\"workspace/resumo-fontes.md\", std::ios::binary | std::ios::trunc);\n    arx_out << \"# Resumo das fontes\\n\\nO contrato de 2026 define prazos e a ata registra as decisoes da reuniao.\\n\";\n}\nstd::cout << \"[fontes] resumo gravado em workspace/resumo-fontes.md\\n\";"
+    },
+    {
+      "id": "fontes_entregar",
+      "label": "Entregar resumo das fontes",
+      "type": "output",
+      "position": { "x": 0, "y": 140, "z": 0 },
+      "inputs": [
+        { "id": "fontes_entregar_in_0", "name": "in", "direction": "input", "type": "flow" },
+        { "id": "fontes_entregar_in_data", "name": "data_in", "direction": "input", "type": "data", "dataType": "std::string" }
+      ],
+      "outputs": [
+        { "id": "fontes_entregar_out_0", "name": "out", "direction": "output", "type": "flow" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "outputSettings": {
+        "sourcePath": "workspace/resumo-fontes.md",
+        "destinationPath": "exports/resumo-fontes.md",
+        "artifactType": "markdown",
+        "displayName": "Resumo das fontes",
+        "autoOpenPreview": true,
+        "description": "Entrega da trilha A"
+      }
+    },
+    {
+      "id": "anexos_levantar",
+      "label": "Levantar anexos",
+      "type": "static",
+      "position": { "x": -760, "y": -160, "z": 0 },
+      "inputs": [
+        { "id": "anexos_levantar_in_0", "name": "in", "direction": "input", "type": "flow" }
+      ],
+      "outputs": [
+        { "id": "anexos_levantar_out_0", "name": "out", "direction": "output", "type": "flow" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "// Cataloga os anexos recebidos e grava o texto base da trilha B\nstd::filesystem::create_directories(\"workspace\");\n{\n    std::ofstream arx_out(\"workspace/anexos.md\", std::ios::binary | std::ios::trunc);\n    arx_out << \"# Anexos recebidos\\n\\n- planta-baixa.dwg\\n- orcamento.xlsx\\n\";\n}\nstd::cout << \"[anexos] catalogo gravado em workspace/anexos.md\\n\";"
+    },
+    {
+      "id": "anexos_resumir",
+      "label": "Resumir anexos",
+      "type": "static",
+      "position": { "x": -380, "y": -160, "z": 0 },
+      "inputs": [
+        { "id": "anexos_resumir_in_0", "name": "in", "direction": "input", "type": "flow" }
+      ],
+      "outputs": [
+        { "id": "anexos_resumir_out_0", "name": "out", "direction": "output", "type": "flow" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "// Resume os anexos: é o arquivo que a entrega vai exportar\nstd::filesystem::create_directories(\"workspace\");\n{\n    std::ofstream arx_out(\"workspace/resumo-anexos.md\", std::ios::binary | std::ios::trunc);\n    arx_out << \"# Resumo dos anexos\\n\\nA planta baixa esta na revisao C e o orcamento fechou em R$ 48.200,00.\\n\";\n}\nstd::cout << \"[anexos] resumo gravado em workspace/resumo-anexos.md\\n\";"
+    },
+    {
+      "id": "anexos_entregar",
+      "label": "Entregar resumo dos anexos",
+      "type": "output",
+      "position": { "x": 0, "y": -160, "z": 0 },
+      "inputs": [
+        { "id": "anexos_entregar_in_0", "name": "in", "direction": "input", "type": "flow" },
+        { "id": "anexos_entregar_in_data", "name": "data_in", "direction": "input", "type": "data", "dataType": "std::string" }
+      ],
+      "outputs": [
+        { "id": "anexos_entregar_out_0", "name": "out", "direction": "output", "type": "flow" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "outputSettings": {
+        "sourcePath": "workspace/resumo-anexos.md",
+        "destinationPath": "exports/resumo-anexos.md",
+        "artifactType": "markdown",
+        "displayName": "Resumo dos anexos",
+        "autoOpenPreview": true,
+        "description": "Entrega da trilha B"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_fontes_1",
+      "sourceNodeId": "fontes_levantar",
+      "sourcePortId": "fontes_levantar_out_0",
+      "targetNodeId": "fontes_resumir",
+      "targetPortId": "fontes_resumir_in_0",
+      "kind": "flow",
+      "isFeedbackLoop": false
+    },
+    {
+      "id": "e_fontes_2",
+      "sourceNodeId": "fontes_resumir",
+      "sourcePortId": "fontes_resumir_out_0",
+      "targetNodeId": "fontes_entregar",
+      "targetPortId": "fontes_entregar_in_0",
+      "kind": "flow",
+      "isFeedbackLoop": false
+    },
+    {
+      "id": "e_anexos_1",
+      "sourceNodeId": "anexos_levantar",
+      "sourcePortId": "anexos_levantar_out_0",
+      "targetNodeId": "anexos_resumir",
+      "targetPortId": "anexos_resumir_in_0",
+      "kind": "flow",
+      "isFeedbackLoop": false
+    },
+    {
+      "id": "e_anexos_2",
+      "sourceNodeId": "anexos_resumir",
+      "sourcePortId": "anexos_resumir_out_0",
+      "targetNodeId": "anexos_entregar",
+      "targetPortId": "anexos_entregar_in_0",
+      "kind": "flow",
+      "isFeedbackLoop": false
+    }
+  ]
+}

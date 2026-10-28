@@ -10,6 +10,26 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ### Added
 
+- **Path-end badges and write-conflict warnings:** when the graph has more than one entry or exit,
+  the vertices where paths start and end carry `INÍCIO`/`FIM` badges (`START`/`END` in en-US), so
+  disjoint paths that run in parallel are visible without changing the topology. The status bar counts
+  the paths of the active graph and, when there is more than one, the Console announces them before
+  compiling; its **Trilhas** button colors each path on the canvas. The context menu of an `FIM`
+  vertex offers **Unir trilhas com o Assistente…**, which hands the Assistant the enumerated paths
+  (labels, types, skills, artifacts and the author's first C++ comment) so it can decide semantically
+  whether and where they should converge — the applied operations are a single undo step. The same
+  action works inside a subflow (the request carries `parent_path`), and a deterministic fallback,
+  **Sugerir junção (análise local)**, scores declared signals (folder, artifact type, skill, MCP
+  server, shared name terms) and only adds the junction when they are enough, always explaining the
+  criterion. The `[TRACE]` console line now reports `concurrency=`, the peak number of tasks running
+  at the same time. Two vertices with no flow path between them that declare the same Output
+  destination or MCP output file raise a `resource_conflict` **warning** — never an error — shown by
+  *Validate DAG* and logged in the Console before each run. The assistant's C++ validator
+  (`GraphDocument::validate`) applies the same rule, so `validate_graph` reports it too.
+- **Paths and junction guide + Example 13:** new `docs/en/paths-and-junction.md` and
+  `docs/pt-BR/trilhas-e-juncao.md` document the flow projection, the badges, the write conflict and
+  both junction paths. `examples/13-trilhas-independentes` is a runnable, model-free project with two
+  disjoint three-vertex paths, each delivering to `exports/`.
 - **Submodule update guard:** the new `Submodule updates` workflow runs weekly (and on demand),
   compares every submodule gitlink with its upstream branch and opens or updates the
   `chore/submodule-updates` pull request. The merge stays manual; only fast-forward updates are

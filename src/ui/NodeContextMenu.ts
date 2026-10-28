@@ -3,6 +3,7 @@ import type { EventBus } from '../core/EventBus.ts';
 import { NODE_ACTIONS } from '../view/NodeActions.ts';
 import {
   AddNodeCommand,
+  AddEdgeCommand,
   RemoveNodeCommand,
   RemoveEdgeCommand,
   CompoundCommand
@@ -15,7 +16,10 @@ import {
   resetPasteCounter
 } from '../core/NodeClipboard.ts';
 import { AgentTemplateRegistry } from '../core/templates/AgentTemplateRegistry.ts';
-import { t } from '../i18n/index.ts';
+import { computeFlowRoles } from '../core/GraphTopology.ts';
+import { buildJunctionPrompt } from '../core/TrailBrief.ts';
+import { buildJunctionEdit, evaluateJunction } from '../core/JunctionPlanner.ts';
+import { t, getLocale } from '../i18n/index.ts';
 
 interface IMenuItem {
   label: string;
@@ -131,6 +135,36 @@ export class NodeContextMenu {
     );
   }
 
+  /**
+   * Rede de segurança sem IA: avalia as trilhas por sinais declarados (pasta, tipo de artefato,
+   * habilidade, servidor MCP, termos do nome) e, se eles bastarem, cria a junção como um único
+   * passo desfazível. Quando não bastam, apenas explica — nunca altera o grafo.
+   */
+  suggestJunction(): void {
+    const title = t('context_menu.suggest_junction', 'Sugerir junção (análise local)');
+    const evaluation = evaluateJunction(this.graph, getLocale());
+
+    if (!evaluation.shouldJoin) {
+      this.bus.emit('notification:show', { title, message: evaluation.rationale, severity: 'info' });
+      return;
+    }
+
+    const edit = buildJunctionEdit(this.graph, evaluation.endIds, getLocale());
+    if (!edit) {
+      this.bus.emit('notification:show', { title, message: evaluation.rationale, severity: 'warning' });
+      return;
+    }
+
+    this.graph.commandManager.execute(new CompoundCommand(
+      t('context_menu.junction_history', 'Adicionar junção'),
+      [
+        new AddNodeCommand(this.graph, edit.node),
+        ...edit.edges.map(edge => new AddEdgeCommand(this.graph, edge))
+      ]
+    ));
+    this.bus.emit('notification:show', { title, message: evaluation.rationale, severity: 'success' });
+  }
+
   // --- UI ---
 
   private buildItems(nodeId: string): (IMenuItem | 'sep')[] {
@@ -160,6 +194,25 @@ export class NodeContextMenu {
       items.push({
         label: t('context_menu.enter_subflow', 'Entrar no subfluxo'),
         run: () => { this.graph.diveIntoSubflow(nodeId); }
+      });
+    }
+    // Junção em qualquer nível: o caminho até o subfluxo ativo vai no pedido para o Assistente
+    // editar o subgrafo certo (as ferramentas aceitam parent_path).
+    const roles = computeFlowRoles(this.graph);
+    if (roles.ends.length > 1 && roles.ends.includes(nodeId)) {
+      const parentPath = this.graph.getBreadcrumbs()
+        .slice(1)
+        .map(item => item.nodeId)
+        .filter((id): id is string => Boolean(id));
+      items.push({
+        label: t('context_menu.merge_trails', 'Unir trilhas com o Assistente…'),
+        run: () => this.bus.emit('assistant:ask', {
+          prompt: buildJunctionPrompt(this.graph, getLocale(), parentPath)
+        })
+      });
+      items.push({
+        label: t('context_menu.suggest_junction', 'Sugerir junção (análise local)'),
+        run: () => this.suggestJunction()
       });
     }
     items.push({
