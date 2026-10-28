@@ -12,7 +12,7 @@ of the components you redistribute.
 | Component | Version / pin | License | Role |
 | :--- | :--- | :--- | :--- |
 | [Taskflow](https://github.com/taskflow/taskflow) | `v4.1.0` (`45366fe`) | MIT | C++20 parallel and heterogeneous task DAG engine. |
-| [simdjson](https://github.com/simdjson/simdjson) | `v5.0.4` (`3b0b2b5`) | Apache-2.0 | SIMD-accelerated JSON parsing. |
+| [simdjson](https://github.com/simdjson/simdjson) | `v5.0.5` (`9c00353`) | Apache-2.0 | SIMD-accelerated JSON parsing. |
 | [FastWebUI](https://github.com/frankalcantara/FastWebUI) (fork of [WebUI](https://github.com/webui-dev/webui)) | `2.5.0-beta.4` (`a8e95c1`) | MIT | Native window and C++/web RPC bridge. |
 | [i18next](https://github.com/i18next/i18next) | `v26.4.4-2-g15d0b9d9` | MIT | Internationalization runtime. |
 | [Monaco Editor](https://github.com/microsoft/monaco-editor) | npm `0.57.0`; submodule `dbf1945` | MIT | Code editor used by the Studio. |
