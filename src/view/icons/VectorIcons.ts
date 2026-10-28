@@ -5,14 +5,14 @@
  * mantendo nitidez em qualquer zoom sem depender da fonte de emoji do sistema.
  */
 
-/** Formato de nó de ícone do lucide: ['svg', attrs, [[tag, attrs], ...]] */
-export type LucideIconNode = [string, Record<string, string | number>, Array<[string, Record<string, string | number>]>?];
+/** Formato de nó de ícone do lucide 1.x: lista plana de [tag, attrs]. */
+export type LucideIconNode = Array<[string, Record<string, string | number | undefined>]>;
 
 const LUCIDE_STROKE_WIDTH = 2.25;
 
-function attrsToString(attrs: Record<string, string | number>): string {
+function attrsToString(attrs: Record<string, string | number | undefined>): string {
   return Object.entries(attrs)
-    .filter(([key]) => key !== 'key')
+    .filter(([key, value]) => key !== 'key' && value !== undefined)
     .map(([key, value]) => `${key}="${String(value).replace(/"/g, '&quot;')}"`)
     .join(' ');
 }
@@ -21,8 +21,7 @@ function attrsToString(attrs: Record<string, string | number>): string {
  * Gera a marcação SVG completa de um ícone lucide (útil também para HTML/tooltips).
  */
 export function lucideToSvgMarkup(icon: LucideIconNode, strokeWidth: number = LUCIDE_STROKE_WIDTH, color: string = '#000000'): string {
-  const children = (icon[2] ?? []) as Array<[string, Record<string, string | number>]>;
-  const inner = children.map(([tag, attrs]) => `<${tag} ${attrsToString(attrs)}/>`).join('');
+  const inner = icon.map(([tag, attrs]) => `<${tag} ${attrsToString(attrs)}/>`).join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
 }
 
@@ -38,11 +37,11 @@ export function createLucideSvgElement(
   const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   g.setAttribute('class', 'arestrix-lucide-icon');
 
-  const children = (icon[2] ?? []) as Array<[string, Record<string, string | number>]>;
+  const children = icon;
   children.forEach(([tag, attrs]) => {
     const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
     Object.entries(attrs).forEach(([k, v]) => {
-      if (k !== 'key') el.setAttribute(k, String(v));
+      if (k !== 'key' && v !== undefined) el.setAttribute(k, String(v));
     });
     el.setAttribute('stroke', color);
     el.setAttribute('stroke-width', String(strokeWidth));
