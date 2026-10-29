@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 # version.txt e a fonte de verdade da versao do produto (SemVer).
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/version.txt" ARESTRIX_VERSION LIMIT_COUNT 1)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/version.txt")
 string(REGEX REPLACE "^([0-9]+\\.[0-9]+\\.[0-9]+).*$" "\\1" ARESTRIX_VERSION_NUMERIC "${ARESTRIX_VERSION}")
 project(Arestrix VERSION ${ARESTRIX_VERSION_NUMERIC} LANGUAGES C CXX)
 

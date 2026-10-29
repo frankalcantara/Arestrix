@@ -2,7 +2,7 @@
 
 [English](README.md) · [Documentação](../docs/README.md)
 
-Treze projetos prontos para executar, do simples ao complexo. Cada um é uma pasta de projeto Arestrix comum: abra no Studio,
+Quatorze projetos prontos para executar, do simples ao complexo. Cada um é uma pasta de projeto Arestrix comum: abra no Studio,
 escolha seu modelo, grave sua chave de API e pressione **F5**.
 
 | # | Projeto | O que mostra | Precisa de |
@@ -20,11 +20,12 @@ escolha seu modelo, grave sua chave de API e pressione **F5**.
 | 11 | [`11-call-vertex`](11-call-vertex) | Um vértice **Call** executa um alvo declarado dentro do fluxo, grava a resposta em `.arestrix/out` e entrega ao próximo vértice. | Um modelo. |
 | 12 | [`12-chamadas-assincronas`](12-chamadas-assincronas) | Um coordenador inicia `call_agent` com `async: true`, recebe um `callId` pendente e consulta com `call_result`. | Um modelo. |
 | 13 | [`13-trilhas-independentes`](13-trilhas-independentes) | Duas trilhas sem vértice comum: selos, contador de trilhas, aviso de conflito de escrita e as duas formas de propor uma junção. | Nada. |
+| 14 | [`14-contexto-comprimido`](14-contexto-comprimido) | Uma observação JSON grande é compactada antes de voltar ao modelo; o agente usa o token CCR com `retrieve` para recuperar o original inteiro. | Um modelo. |
 
 Os exemplos 3 e 5 são **gerados** por `python scripts/build_examples.py`, então as peças compartilhadas não ficam fora de
 sincronia. Os vértices ainda não executam um grafo aninhado, por isso a composição é achatada em um único pipeline.
 
-Todos os treze terminam em **vértices de saída** (`output`): o arquivo produzido é copiado para `exports/` e registrado na
+Todos os quatorze terminam em **vértices de saída** (`output`): o arquivo produzido é copiado para `exports/` e registrado na
 aba **Artefatos**, com visualização por formato (SVG, Markdown, planilhas, PDF e JSON).
 
 ## Executar um exemplo

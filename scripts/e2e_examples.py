@@ -585,6 +585,43 @@ def scenario_12_chamadas_assincronas():
         cleanup(work, mock)
 
 
+def scenario_14_contexto_comprimido():
+    print("\n== Exemplo 14: contexto comprimido (JSON grande + retrieve) ==")
+    out, project, events, code, work, mock = run_example("14-contexto-comprimido")
+    try:
+        check(code == 0, "terminou com codigo 0")
+        check("contexto compactado" in out and "(json)" in out,
+              "o Console registrou a compactacao do JSON")
+
+        raw = [e for e in events if e.get("event") == "raw_read"]
+        compressed = [e for e in events if e.get("event") == "compression"]
+        retrieved = [e for e in events if e.get("event") == "retrieved"]
+        check(bool(raw) and raw[0]["length"] > 20000, "o read inicial trouxe o relatorio grande")
+        check(bool(compressed) and compressed[0]["has_ccr"],
+              "a observacao seguinte veio com o token [CCR:...]")
+        if raw and compressed:
+            check(compressed[0]["length"] < raw[0]["length"] * 0.5,
+                  "o payload caiu para menos da metade")
+        check(bool(retrieved) and retrieved[0]["sentinel"] and retrieved[0]["events"] == 80,
+              "retrieve devolveu o original inteiro (sentinela e 80 eventos)")
+
+        exported = project / "exports" / "resumo-eventos.md"
+        check(exported.exists(), "vertice de saida exportou exports/resumo-eventos.md")
+        if exported.exists():
+            content = exported.read_text(encoding="utf-8")
+            check("SENTINELA-14-FIM" in content, "o resumo cita a sentinela do fim do original")
+            check("80" in content, "o resumo cita os 80 eventos")
+
+        chats = [e for e in events if e.get("event") == "chat"]
+        check(any("retrieve" in e.get("tools", []) for e in chats),
+              "a ferramenta retrieve foi oferecida ao agente")
+        check(any(e.get("requested_tools") == ["retrieve"] for e in chats),
+              "o agente chamou retrieve com o token")
+        no_secret_leak(out, "ex14")
+    finally:
+        cleanup(work, mock)
+
+
 def scenario_secrets_guard():
     print("\n== Garantia de seguranca dos exemplos ==")
     node = shutil.which("node")
@@ -606,6 +643,7 @@ def main():
                scenario_06_chamada_agente, scenario_07_interacao, scenario_08_formulario_gerado,
                scenario_09_chamadas_paralelas, scenario_10_subflow_chamavel,
                scenario_11_call_vertex, scenario_12_chamadas_assincronas,
+               scenario_14_contexto_comprimido,
                scenario_secrets_guard):
         fn()
     if failures:

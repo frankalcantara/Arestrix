@@ -6,6 +6,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **Beta 2.3**.
 
+## [2.4.0] - 2026-10-29
+
+### Added
+
+- **Context compression for the agent loop:** tool observations are routed by content kind and
+  compacted before the next model turn. JSON uses a structure-aware crusher (array/string caps),
+  logs keep the first/last lines and deduplicate repeated patterns, and code keeps imports,
+  signatures, types and top-level comments while pruning bodies. Thresholds are expressed in
+  estimated tokens; the whole pass is skipped below them.
+- **Reversible cache (`CCR`) and `retrieve`:** every compressed block is stored byte-for-byte in
+  `%LOCALAPPDATA%\Arestrix\ccr` (outside the repository), with a 7-day TTL and a 256 MB cap per
+  project plus global pruning. The model sees a `[CCR:<token>]` note and can call `retrieve` to get
+  the original; an already compressed block is never compressed again.
+- **Prose compression (optional, ONNX):** a BPE/ByteLevel tokenizer for Kompress-v2-base and
+  fp32/int8 ONNX adapters. Prose is inferred in 2048-token windows, which keeps memory bounded and
+  avoids the DirectML crash on long sequences; blocks above 8192 tokens are left intact instead of
+  being truncated.
+- **GPU acceleration (DirectML):** optional `ARESTRIX_WITH_ONNX_DML` build. DXGI enumerates adapters
+  and the runtime picks the discrete GPU by dedicated VRAM (the adapter at index 0 is often the
+  Intel iGPU). On the development GTX 1650, warm inference went from ~0.45 s to ~0.10 s at 394
+  tokens and from ~3.1 s to ~0.77 s at 1,579 tokens, with identical output. The provider falls back
+  to CPU when the GPU or `DirectML.dll` is unavailable.
+- **Machine-aware model recommendation and download:** `prose_model_status` reports CPU, RAM, disk
+  and GPUs; the recommendation chooses GPU/fp32/int8. The model is downloaded from a pinned
+  Hugging Face revision with SHA-256, `.part` resume, atomic install, progress and cancellation.
+  The Properties panel shows the hardware, the recommendation and the download controls.
+- **CLI support:** `arestrix-cli compress <file> [--prose] [--json]` diagnoses the compressor and
+  reports the provider; `compress --status` prints CPU/RAM/disk/GPUs, the chosen adapter and the
+  recommendation.
+- **Example 14 - compressed context:** a static vertex writes an 80-event JSON; the agent reads it,
+  receives the compacted form plus `[CCR:...]`, uses `retrieve` to recover the whole original and
+  exports a summary containing the final sentinel `SENTINELA-14-FIM`.
+- **Release ships ONNX Runtime + DirectML:** `scripts/fetch_onnxruntime.py` pins ONNX Runtime
+  DirectML 1.24.4 and DirectML 1.15.4 by SHA-256 and builds a normalized runtime. The deploy caches
+  it, builds with `--onnx-dml`, packages with `--require-onnx --require-directml`, copies the three
+  DLLs and the licenses into the installer, and the installer smoke test checks `onnx`/`dmlBuild`.
+  The generated pipeline executable also links the ONNX import library and finds the DLLs next to
+  the installed app.
+
+### Fixed
+
+- Prose blocks above the tokenizer limit no longer lose their tail: the block is returned unchanged
+  instead of being compressed into a prefix.
+- DirectML no longer takes down the process on long sequences: inference is chunked and direct
+  adapter calls above 2048 tokens fail closed.
+- Generated pipelines link `dxgi.lib` (GPU detection in the core) and, when present,
+  `onnxruntime.lib`; the runtime DLLs are copied next to the generated executable.
+
 ## [2.3.0-beta.2] - 2026-10-28
 
 ### Added

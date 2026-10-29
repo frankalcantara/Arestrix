@@ -244,6 +244,36 @@ def decide(body):
         }
         return text(json.dumps(schema, ensure_ascii=False))
 
+    if "ANALISTA DE EVENTOS COMPRIMIDOS" in system:
+        if step == 0:
+            return tool_call("c1", "read", {"path": "workspace/eventos.json"})
+        if step == 1:
+            raw = tool_msgs[0]["content"]
+            log({"event": "raw_read", "length": len(raw), "events": raw.count('"id"')})
+            return tool_call("c2", "write", {"path": "workspace/nota.txt", "content": "leitura concluida\n"})
+        if step == 2:
+            compressed = tool_msgs[0]["content"]
+            match = re.search(r"\[CCR:([0-9a-fA-F]{16})\]", compressed)
+            log({"event": "compression", "length": len(compressed), "has_ccr": bool(match),
+                 "token": match.group(1) if match else ""})
+            if match:
+                return tool_call("c3", "retrieve", {"token": match.group(1)})
+            return tool_call("c3", "write", {"path": "workspace/resumo.md", "content":
+                             "# Resumo dos eventos\n\nSem aviso CCR: a compactacao nao aconteceu.\n"})
+        if step == 3:
+            original = tool_msgs[2]["content"]
+            count = original.count('"id"')
+            sentinel = "SENTINELA-14-FIM" in original
+            log({"event": "retrieved", "length": len(original), "events": count, "sentinel": sentinel})
+            content = (
+                "# Resumo dos eventos\n\n"
+                f"- Eventos lidos: {count}\n"
+                f"- Original recuperado via retrieve: {len(original)} bytes\n"
+                f"- Sentinela do fim do arquivo: {'SENTINELA-14-FIM' if sentinel else 'AUSENTE'}\n"
+            )
+            return tool_call("c4", "write", {"path": "workspace/resumo.md", "content": content})
+        return text("Resumo dos eventos gravado.")
+
     if "COORDENADOR PARALELO" in system:
         if step == 0:
             return tool_calls([

@@ -11,8 +11,8 @@ const dirs = readdirSync(EXAMPLES, { withFileTypes: true }).filter(d => d.isDire
 const read = (...p: string[]) => JSON.parse(readFileSync(join(EXAMPLES, ...p), 'utf8'));
 
 describe('projetos de exemplo (examples/)', () => {
-  it('existem os treze projetos, do simples ao complexo', () => {
-    expect(dirs).toEqual(['01-svg-agente', '02-triagem-de-suporte', '03-atendimento-ilustrado', '04-memoria', '05-matematica-com-memoria', '06-chamada-agente', '07-interacao', '08-formulario-gerado', '09-chamadas-paralelas', '10-subflow-chamavel', '11-call-vertex', '12-chamadas-assincronas', '13-trilhas-independentes']);
+  it('existem os quatorze projetos, do simples ao complexo', () => {
+    expect(dirs).toEqual(['01-svg-agente', '02-triagem-de-suporte', '03-atendimento-ilustrado', '04-memoria', '05-matematica-com-memoria', '06-chamada-agente', '07-interacao', '08-formulario-gerado', '09-chamadas-paralelas', '10-subflow-chamavel', '11-call-vertex', '12-chamadas-assincronas', '13-trilhas-independentes', '14-contexto-comprimido']);
   });
 
   for (const name of dirs) {
@@ -168,5 +168,27 @@ describe('projetos de exemplo (examples/)', () => {
     const outputs = schema.nodes.filter((n: any) => n.type === 'output');
     expect(outputs.map((n: any) => n.outputSettings.destinationPath.split('/')[0])).toEqual(['exports', 'exports']);
     expect(outputs.map((n: any) => n.outputSettings.artifactType)).toEqual(['markdown', 'markdown']);
+  });
+
+  it('o exemplo 14 liga a compactação reversível no manifesto e no grafo', () => {
+    const manifest = read('14-contexto-comprimido', 'arestrix.project.json');
+    const schema = read('14-contexto-comprimido', 'pipelines', 'main.json');
+    const defaults = schema.metadata.globalDefaults.compression;
+    expect(manifest.globalDefaults.compression).toMatchObject({
+      enabled: true,
+      minBlockTokens: 200,
+      minRunTokens: 300,
+    });
+    expect(defaults).toMatchObject(manifest.globalDefaults.compression);
+
+    const seed = schema.nodes.find((n: any) => n.id === 'preparar');
+    const agent = schema.nodes.find((n: any) => n.id === 'analista');
+    const delivery = schema.nodes.find((n: any) => n.id === 'entrega');
+    expect(seed.customLambdaBody).toContain('workspace/eventos.json');
+    expect(seed.customLambdaBody).toContain('SENTINELA-14-FIM');
+    expect(agent.agentSettings.inheritCompression).toBe(true);
+    expect(agent.agentSettings.codeMode.allowedTools).toEqual(['read', 'write']);
+    expect(agent.agentSettings.model.skillPath).toBe('skills/analista-eventos.md');
+    expect(delivery.outputSettings.destinationPath).toBe('exports/resumo-eventos.md');
   });
 });

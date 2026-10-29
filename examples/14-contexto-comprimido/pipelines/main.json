@@ -1,0 +1,158 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "projectId": "exemplo-contexto-comprimido",
+    "graphName": "Contexto_Comprimido",
+    "description": "Relatorio JSON grande, compactado antes de voltar ao modelo e recuperavel via retrieve",
+    "targetStandard": "C++20",
+    "compilerConfig": {
+      "compiler": "msvc",
+      "cppStandard": "C++20",
+      "buildSystem": "cmake",
+      "taskflowIncludePath": "third_party/taskflow",
+      "outputBinaryName": "exemplo_contexto_comprimido",
+      "enableOpenMP": false,
+      "enableCuda": false,
+      "extraFlags": []
+    },
+    "version": "1.0.0",
+    "globalDefaults": {
+      "model": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "skillPath": "",
+        "promptTemplate": ""
+      },
+      "sandbox": {
+        "isolationLevel": "host_direct",
+        "network": "egress_llm_only",
+        "maxMemoryMB": 512,
+        "timeoutSeconds": 180,
+        "readOnlyMounts": [],
+        "readWriteMounts": []
+      },
+      "codeMode": {
+        "allowedTools": [
+          "read",
+          "write"
+        ],
+        "customScripts": []
+      },
+      "memory": {
+        "enabled": false,
+        "persistent": false,
+        "readBlackboard": false,
+        "writeBlackboard": false,
+        "semanticLessons": false,
+        "recordLessons": false,
+        "allowedKeys": [],
+        "domains": []
+      },
+      "compression": {
+        "enabled": true,
+        "minBlockTokens": 200,
+        "minRunTokens": 300,
+        "maxArrayItems": 8,
+        "maxStringTokens": 120,
+        "maxLogLines": 40,
+        "code": true,
+        "prose": false
+      }
+    },
+    "callLimits": {
+      "maxDepth": 3,
+      "maxTotalCalls": 50
+    }
+  },
+  "nodes": [
+    {
+      "id": "preparar",
+      "label": "Preparar_Relatorio",
+      "type": "static",
+      "position": { "x": -700, "y": 0, "z": 0 },
+      "inputs": [
+        { "id": "preparar_in_0", "name": "in", "direction": "input", "type": "flow" }
+      ],
+      "outputs": [
+        { "id": "preparar_out_0", "name": "out", "direction": "output", "type": "flow" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "// Gera um relatorio JSON grande o bastante para disparar a compactacao\nstd::filesystem::create_directories(\"workspace\");\n{\n    std::ofstream arx_out(\"workspace/eventos.json\", std::ios::binary | std::ios::trunc);\n    arx_out << \"{\\n  \\\"fonte\\\": \\\"checkout\\\",\\n  \\\"eventos\\\": [\\n\";\n    for (int i = 0; i < 80; ++i) {\n        arx_out << \"    {\\\"id\\\": \\\"evt-\" << i << \"\\\", \\\"tipo\\\": \\\"pagamento\\\", \"\n                << \"\\\"mensagem\\\": \\\"Evento de checkout processado com sucesso; cliente aguardando confirmacao e recibo detalhado do pedido.\\\", \"\n                << \"\\\"payload\\\": {\\\"pedido\\\": \\\"PED-\" << (1000 + i) << \"\\\", \\\"valor\\\": \" << (100 + i) << \", \"\n                << \"\\\"moeda\\\": \\\"BRL\\\", \\\"canal\\\": \\\"web\\\", \\\"tentativas\\\": 1}, \"\n                << \"\\\"tags\\\": [\\\"checkout\\\", \\\"pagamento\\\", \\\"confirmacao\\\"]}\";\n        if (i + 1 < 80) arx_out << \",\";\n        arx_out << \"\\n\";\n    }\n    arx_out << \"  ],\\n  \\\"sentinela\\\": \\\"SENTINELA-14-FIM\\\"\\n}\\n\";\n}\nstd::cout << \"[Preparar] workspace/eventos.json gerado (80 eventos)\\n\";"
+    },
+    {
+      "id": "analista",
+      "label": "Analista_de_Eventos",
+      "type": "agent",
+      "position": { "x": -300, "y": 0, "z": 0 },
+      "inputs": [
+        { "id": "analista_in_0", "name": "in", "direction": "input", "type": "flow" }
+      ],
+      "outputs": [
+        { "id": "analista_out_0", "name": "out", "direction": "output", "type": "flow" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "skillPath": "skills/analista-eventos.md",
+          "promptTemplate": "Leia o relatorio, recupere o original se houver [CCR:...] e grave workspace/resumo.md com a contagem e a sentinela. Responda apenas OK."
+        },
+        "inheritCodeMode": false,
+        "codeMode": {
+          "allowedTools": [
+            "read",
+            "write"
+          ],
+          "customScripts": []
+        },
+        "inheritMemory": true,
+        "inheritCompression": true
+      }
+    },
+    {
+      "id": "entrega",
+      "label": "Entrega_Resumo",
+      "type": "output",
+      "position": { "x": 100, "y": 0, "z": 0 },
+      "inputs": [
+        { "id": "entrega_in_0", "name": "in", "direction": "input", "type": "flow" },
+        { "id": "entrega_in_data", "name": "data_in", "direction": "input", "type": "data", "dataType": "std::string" }
+      ],
+      "outputs": [
+        { "id": "entrega_out_0", "name": "out", "direction": "output", "type": "flow" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "outputSettings": {
+        "sourcePath": "workspace/resumo.md",
+        "destinationPath": "exports/resumo-eventos.md",
+        "artifactType": "markdown",
+        "displayName": "Resumo dos eventos",
+        "autoOpenPreview": true,
+        "description": "Resumo produzido a partir do relatorio comprimido"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_preparar_analista",
+      "sourceNodeId": "preparar",
+      "sourcePortId": "preparar_out_0",
+      "targetNodeId": "analista",
+      "targetPortId": "analista_in_0",
+      "kind": "flow",
+      "isFeedbackLoop": false
+    },
+    {
+      "id": "e_analista_entrega",
+      "sourceNodeId": "analista",
+      "sourcePortId": "analista_out_0",
+      "targetNodeId": "entrega",
+      "targetPortId": "entrega_in_0",
+      "kind": "flow",
+      "isFeedbackLoop": false
+    }
+  ]
+}

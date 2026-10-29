@@ -347,6 +347,16 @@ def copy_onnx_runtime(stage: Path, require_onnx: bool, require_directml: bool) -
         copied.append(name)
 
     root = os.environ.get("ONNXRUNTIME_ROOT")
+    if root:
+        for candidate in (Path(root) / "lib" / "onnxruntime.lib",
+                          Path(root) / "runtimes" / "win-x64" / "native" / "onnxruntime.lib"):
+            if candidate.is_file():
+                target = stage / "runtime" / "lib"
+                target.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(candidate, target / "onnxruntime.lib")
+                copied.append("runtime/lib/onnxruntime.lib")
+                break
+
     license_dir = Path(root) / "licenses" if root else None
     if license_dir and license_dir.is_dir():
         target = stage / "licenses"
@@ -358,6 +368,12 @@ def copy_onnx_runtime(stage: Path, require_onnx: bool, require_directml: bool) -
         raise SystemExit(
             "[package] licencas do ONNX Runtime/DirectML ausentes em "
             f"{license_dir or 'ONNXRUNTIME_ROOT'}; rode scripts/fetch_onnxruntime.py."
+        )
+
+    if require_onnx and not (stage / "runtime" / "lib" / "onnxruntime.lib").is_file():
+        raise SystemExit(
+            "[package] onnxruntime.lib ausente em runtime/lib; o pipeline compilado precisaria "
+            "de ONNX e nao teria a import lib."
         )
 
     if copied:

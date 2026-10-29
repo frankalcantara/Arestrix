@@ -241,7 +241,14 @@ BuildResult buildAndRun(const core::Graph& graph,
                 << "/I\"" << rt.simdjsonInclude.string() << "\" "
                 << "main.cpp " << (hasSubflows ? "subflows.cpp " : "")
                 << "/Fe:\"" << exePath.filename().string() << "\" "
-                << "/link /nologo \"" << rt.coreLib.string() << "\" winhttp.lib advapi32.lib ole32.lib shell32.lib user32.lib";
+                << "/link /nologo \"" << rt.coreLib.string() << "\" ";
+            // O core pode ter sido compilado com ONNX (instalador oficial). Nesse caso o
+            // executavel gerado precisa da import lib; dxgi e sempre necessario pelo detector
+            // de GPUs do core.
+            const fs::path onnxLib = rt.coreLib.parent_path() / "onnxruntime.lib";
+            std::error_code onnxEc;
+            if (fs::is_regular_file(onnxLib, onnxEc)) cmd << "\"" << onnxLib.string() << "\" ";
+            cmd << "winhttp.lib advapi32.lib ole32.lib shell32.lib user32.lib dxgi.lib";
             spec.shellCommand = cmd.str();
         } else {
             spec.argv = {tc.compiler, "-std=c++20", "-O2", "-pthread",
@@ -265,6 +272,19 @@ BuildResult buildAndRun(const core::Graph& graph,
         }
         std::ofstream(hashFile, std::ios::trunc) << hash;
         log("[BUILD] Compilacao concluida em " + std::to_string((int)cr.seconds) + " s.");
+    }
+
+    // O executavel gerado linka onnxruntime.lib quando o core tem ONNX; a DLL precisa
+    // ficar ao lado dele (o diretorio do pai nao entra na busca do Windows).
+    if (tc.kind == Toolchain::Kind::Msvc) {
+        for (const char* dll : {"onnxruntime.dll", "onnxruntime_providers_shared.dll", "DirectML.dll"}) {
+            std::error_code copyEc;
+            fs::path source = rt.home / dll;
+            if (!fs::is_regular_file(source, copyEc)) source = rt.home / "build" / dll;
+            if (fs::is_regular_file(source, copyEc)) {
+                fs::copy_file(source, buildDir / dll, fs::copy_options::overwrite_existing, copyEc);
+            }
+        }
     }
 
     // 4. Executa
