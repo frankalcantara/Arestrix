@@ -54,7 +54,8 @@ taskforge-recent-projects.json
 /arestrix-memory-*.json
 
 /build/
-/build-onnx/
+/build-*/
+/.deps/
 /runtime/
 Output/
 

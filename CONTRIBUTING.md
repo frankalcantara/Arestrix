@@ -35,12 +35,18 @@ Useful commands:
 | `python CppCore/dev.py --check` | Fast repository checks without building. |
 | `python CppCore/dev.py --gateway-smoke` | HTTP smoke test for the AI Gateway (fake upstream, 200 → 402). |
 | `python CppCore/dev.py --e2e` | Tutorial and examples end to end. |
+| `python CppCore/dev.py --test --onnx-dml` | Release-only ONNX + DirectML path (run `python scripts/fetch_onnxruntime.py` first). |
 | `npm test` | Run the frontend Vitest suites. |
 | `npm run build` | Type-check and build the single-file frontend bundle. |
 | `npm run check:secrets` | Scan for credentials and personal data. |
 | `npm run check:version` | Verify that all version files agree. |
 | `python scripts/e2e_examples.py` | Run the examples against a scripted fake model. |
 | `python scripts/check_third_party_licenses.py` | Verify third-party licenses. |
+
+The official Windows release is built with ONNX Runtime + DirectML. The runtime is not vendored:
+`python scripts/fetch_onnxruntime.py --output .deps/onnxruntime-directml` (pinned versions and
+SHA-256), then `python CppCore/dev.py --test --onnx-dml`. The packaging step copies
+`onnxruntime.dll`, `onnxruntime_providers_shared.dll` and `DirectML.dll` into the installer.
 
 ## Branches and commits
 

@@ -19,8 +19,8 @@ of the components you redistribute.
 | [SkillSpector](https://github.com/NVIDIA/SkillSpector) | `v2.12.0-1159-g2b9f4512` | Apache-2.0 | Skill security analysis and static rule reference. |
 | [Cloudflare security-audit-skill](https://github.com/cloudflare/security-audit-skill) | `c1c8a8c` | MIT | Boundary-driven security audit methodology used by the Arestrix Skill Guard. |
 | [SQLite](https://sqlite.org) | `3.54.0` amalgamation | Public domain | Embedded persistence. |
-| [ONNX Runtime](https://github.com/microsoft/onnxruntime) | `1.24+` (validado com `1.24.4` DirectML e `1.31.1` CPU) | MIT | Inferência opcional da compressão de prosa (`ARESTRIX_WITH_ONNX`). Não é embutido no pacote padrão; quando habilitado, `onnxruntime.dll` acompanha o executável. |
-| [DirectML](https://github.com/microsoft/DirectML) | `1.15.4` | Licença Microsoft DirectML (redistribuível em apps) | Aceleração opcional da prosa na GPU (`ARESTRIX_WITH_ONNX_DML`, Windows). `DirectML.dll` acompanha o executável quando habilitado. |
+| [ONNX Runtime](https://github.com/microsoft/onnxruntime) | `1.24+` (validado com `1.24.4` DirectML e `1.31.1` CPU) | MIT | Inferência da compressão de prosa (`ARESTRIX_WITH_ONNX`). O instalador oficial inclui `onnxruntime.dll`; o build de desenvolvimento padrão não o embute. |
+| [DirectML](https://github.com/microsoft/DirectML) | `1.15.4` | Licença Microsoft DirectML (redistribuível em apps) | Aceleração da prosa na GPU (`ARESTRIX_WITH_ONNX_DML`, Windows). O instalador oficial inclui `DirectML.dll` e `onnxruntime_providers_shared.dll`. |
 | [cpp-httplib](https://github.com/yhirose/cpp-httplib) | `v0.62.0` | MIT | HTTP server of the on-prem `arestrix-gateway`. |
 | [Inter](https://github.com/rsms/inter) | `third_party/fonts/inter` | SIL OFL-1.1 | Interface and canvas typography. |
 

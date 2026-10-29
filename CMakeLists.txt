@@ -473,3 +473,43 @@ if(ARESTRIX_BUILD_TESTS)
   target_link_libraries(arestrix_tests PRIVATE arestrix_gateway_core arestrix_core arestrix_security_flags)
   add_test(NAME arestrix_tests COMMAND arestrix_tests WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endif()
+
+# ---------------------------------------------------------------------------
+# ONNX Runtime: os executaveis linkam onnxruntime.lib, entao a DLL precisa
+# estar ao lado deles para rodar (inclusive os testes). O mesmo conjunto e
+# empacotado pelo instalador. Rode scripts/fetch_onnxruntime.py para obter a
+# raiz normalizada (include/, lib/, bin/).
+# ---------------------------------------------------------------------------
+if(ARESTRIX_WITH_ONNX AND WIN32)
+  set(ARESTRIX_ONNX_BIN_DIR "${ONNXRUNTIME_ROOT}/bin")
+  if(NOT EXISTS "${ARESTRIX_ONNX_BIN_DIR}/onnxruntime.dll")
+    set(ARESTRIX_ONNX_BIN_DIR "${ONNXRUNTIME_ROOT}/runtimes/win-x64/native")
+  endif()
+  if(NOT EXISTS "${ARESTRIX_ONNX_BIN_DIR}/onnxruntime.dll")
+    message(FATAL_ERROR
+      "onnxruntime.dll nao encontrado em ${ONNXRUNTIME_ROOT}/bin nem em "
+      "${ONNXRUNTIME_ROOT}/runtimes/win-x64/native. Rode scripts/fetch_onnxruntime.py.")
+  endif()
+
+  set(ARESTRIX_ONNX_DLLS "${ARESTRIX_ONNX_BIN_DIR}/onnxruntime.dll")
+  if(EXISTS "${ARESTRIX_ONNX_BIN_DIR}/onnxruntime_providers_shared.dll")
+    list(APPEND ARESTRIX_ONNX_DLLS "${ARESTRIX_ONNX_BIN_DIR}/onnxruntime_providers_shared.dll")
+  endif()
+  if(ARESTRIX_WITH_ONNX_DML)
+    set(ARESTRIX_DIRECTML_BIN_DIR "${ONNXRUNTIME_ROOT}/bin" CACHE PATH "Pasta com DirectML.dll")
+    if(NOT EXISTS "${ARESTRIX_DIRECTML_BIN_DIR}/DirectML.dll")
+      message(FATAL_ERROR
+        "DirectML.dll nao encontrado em ${ARESTRIX_DIRECTML_BIN_DIR}. Rode scripts/fetch_onnxruntime.py.")
+    endif()
+    list(APPEND ARESTRIX_ONNX_DLLS "${ARESTRIX_DIRECTML_BIN_DIR}/DirectML.dll")
+  endif()
+
+  foreach(ARESTRIX_ONNX_TARGET arestrix arestrix-cli arestrix-gateway arestrix-memory arestrix_tests)
+    if(TARGET ${ARESTRIX_ONNX_TARGET})
+      add_custom_command(TARGET ${ARESTRIX_ONNX_TARGET} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ARESTRIX_ONNX_DLLS}
+                "$<TARGET_FILE_DIR:${ARESTRIX_ONNX_TARGET}>"
+        VERBATIM)
+    endif()
+  endforeach()
+endif()

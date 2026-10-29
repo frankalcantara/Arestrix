@@ -126,7 +126,8 @@ def find_vcvars():
     return None, None, None
 
 
-def build_backend(run_tests: bool, hardening: bool = True, asan: bool = False, clang_tidy: bool = False, cppcheck: bool = False):
+def build_backend(run_tests: bool, hardening: bool = True, asan: bool = False, clang_tidy: bool = False, cppcheck: bool = False,
+                  onnx: bool = False, onnx_dml: bool = False, onnx_root: str | None = None):
     """Configura via CMake e compila os alvos nativos C++20 com as opcoes de seguranca solicitadas.
     
     Parametros:
@@ -147,6 +148,22 @@ def build_backend(run_tests: bool, hardening: bool = True, asan: bool = False, c
         f"-DARESTRIX_ENABLE_CLANG_TIDY={'ON' if clang_tidy else 'OFF'}",
         f"-DARESTRIX_ENABLE_CPPCHECK={'ON' if cppcheck else 'OFF'}"
     ]
+
+    if onnx_dml:
+        onnx = True
+    if onnx:
+        root = (onnx_root or os.environ.get("ONNXRUNTIME_ROOT") or "").strip()
+        if not root:
+            sys.exit("[Erro] --onnx/--onnx-dml exige ONNXRUNTIME_ROOT ou --onnx-root.")
+        header = pathlib.Path(root) / "include" / "onnxruntime_cxx_api.h"
+        if not header.is_file():
+            sys.exit(
+                f"[Erro] ONNXRUNTIME_ROOT invalido: {header} ausente. "
+                "Rode scripts/fetch_onnxruntime.py primeiro."
+            )
+        cfg += ["-DARESTRIX_WITH_ONNX=ON", f"-DONNXRUNTIME_ROOT={root}"]
+        if onnx_dml:
+            cfg.append("-DARESTRIX_WITH_ONNX_DML=ON")
 
     if IS_WINDOWS:
         # 1. Localiza o Visual Studio e o script de inicializacao das variaveis de ambiente
@@ -260,6 +277,7 @@ Exemplos:
   python CppCore/dev.py --check              Verificacoes rapidas sem build
   python CppCore/dev.py --gateway-smoke      Smoke test HTTP do arestrix-gateway
   python CppCore/dev.py --full               Build + CTest + Vitest + checks + gateway smoke
+  python CppCore/dev.py --test --onnx-dml    Build de release com prosa ONNX + GPU (DirectML)
         """
     )
     ap.add_argument("--no-run", action="store_true", help="Apenas compila os artefatos sem iniciar o Arestrix Studio")
@@ -276,6 +294,9 @@ Exemplos:
     ap.add_argument("--asan", action="store_true", help="Ativa instrumentacao AddressSanitizer (deteccao de use-after-free e buffer overflows)")
     ap.add_argument("--clang-tidy", action="store_true", help="Ativa analise estatica Clang-Tidy integrada ao processo de compilacao")
     ap.add_argument("--cppcheck", action="store_true", help="Ativa analise estatica Cppcheck integrada ao processo de compilacao")
+    ap.add_argument("--onnx", action="store_true", help="Compila a compressao de prosa com ONNX Runtime (ONNXRUNTIME_ROOT)")
+    ap.add_argument("--onnx-dml", action="store_true", help="Compila com ONNX + DirectML (GPU; exige o pacote DirectML)")
+    ap.add_argument("--onnx-root", default=None, help="Raiz do ONNX Runtime normalizada (padrao: ONNXRUNTIME_ROOT)")
     args = ap.parse_args()
 
     if args.full:
@@ -307,7 +328,10 @@ Exemplos:
             hardening=args.hardening,
             asan=args.asan,
             clang_tidy=args.clang_tidy,
-            cppcheck=args.cppcheck
+            cppcheck=args.cppcheck,
+            onnx=args.onnx,
+            onnx_dml=args.onnx_dml,
+            onnx_root=args.onnx_root
         )
 
     # 3. Passos de verificacao (continuam apos uma falha para agregar o relatorio)

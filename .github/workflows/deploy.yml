@@ -51,11 +51,26 @@ jobs:
         with:
           python-version: "3.11"
 
+      # ONNX Runtime DirectML + DirectML.dll are not vendored. The packages are
+      # pinned by version and SHA-256 in scripts/fetch_onnxruntime.py; the cache
+      # keeps the ~36 MB extracted runtime between runs.
+      - name: Cache ONNX Runtime + DirectML
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/arestrix-deps/onnxruntime-directml
+          key: onnxruntime-directml-ort1.24.4-dml1.15.4
+
+      - name: Fetch ONNX Runtime + DirectML
+        shell: bash
+        run: |
+          python scripts/fetch_onnxruntime.py --output "$RUNNER_TEMP/arestrix-deps/onnxruntime-directml"
+          echo "ONNXRUNTIME_ROOT=$RUNNER_TEMP/arestrix-deps/onnxruntime-directml" >> "$GITHUB_ENV"
+
       # Canonical gate: frontend build, native C++20 build (MSVC, hardening),
       # CTest, Vitest, version/assets/secrets/licenses checks, gateway smoke,
       # then release-manifest + SHA256SUMS + SBOM.
       - name: Run release gate
-        run: python scripts/release_check.py --skip-e2e
+        run: python scripts/release_check.py --skip-e2e --onnx-dml
 
       - name: Read product version
         id: product
@@ -145,7 +160,7 @@ jobs:
         run: choco install innosetup --no-progress -y
 
       - name: Build portable package and installer
-        run: python scripts/package_release.py --installer
+        run: python scripts/package_release.py --installer --require-onnx --require-directml
 
       - name: Upload unsigned installer
         id: upload_unsigned_installer
@@ -212,6 +227,12 @@ jobs:
           if (-not (Test-Path $desktopShortcut)) { throw "desktop shortcut was not created" }
           & (Join-Path $dir 'arestrix-cli.exe') version
           if ($LASTEXITCODE -ne 0) { throw "installed CLI failed" }
+          foreach ($dll in @('onnxruntime.dll','onnxruntime_providers_shared.dll','DirectML.dll')) {
+            if (-not (Test-Path (Join-Path $dir $dll))) { throw "installed ONNX runtime missing $dll" }
+          }
+          $status = & (Join-Path $dir 'arestrix-cli.exe') compress --status --json | ConvertFrom-Json
+          if (-not $status.onnx) { throw "installed CLI was built without ONNX" }
+          if (-not $status.dmlBuild) { throw "installed CLI was built without DirectML" }
           $uninstall = Start-Process -FilePath (Join-Path $dir 'unins000.exe') `
             -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') `
             -Wait -PassThru
@@ -272,6 +293,8 @@ jobs:
               completed later in the Studio.
             - To **compile/run pipelines**, install the MSVC Build Tools
               ("Desktop development with C++"). The package does not bundle MSVC/GCC.
+            - Prose compression ships with ONNX Runtime + DirectML; the Kompress model is
+              downloaded on demand in Studio and can run on CPU or on a dedicated GPU.
 
             ## Integrity
 

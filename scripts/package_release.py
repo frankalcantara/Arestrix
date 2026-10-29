@@ -212,6 +212,8 @@ def write_portable_readme(stage: Path, product_version: str, system: str) -> Non
             "",
             "The folder is the `ARESTRIX_HOME`. Compiling pipelines additionally requires MSVC Build Tools",
             "(Desktop development with C++) and the Visual C++ Redistributable on the target machine.",
+            "Optional prose compression uses ONNX Runtime (bundled) and DirectML on capable GPUs;",
+            "the Kompress model is downloaded on demand from Studio.",
             "The managed local runtime is downloaded to the user data folder when selected.",
         ]
     else:
@@ -310,7 +312,59 @@ def write_manifests(stage: Path, product_version: str, commit: str, dirty: bool,
     )
 
 
-def smoke_test(stage: Path, system: str) -> None:
+ONNX_RUNTIME_FILES = ("onnxruntime.dll", "onnxruntime_providers_shared.dll", "DirectML.dll")
+
+
+def _onnx_search_dirs() -> list[Path]:
+    dirs: list[Path] = []
+    root = os.environ.get("ONNXRUNTIME_ROOT")
+    if root:
+        dirs += [Path(root) / "bin", Path(root) / "runtimes" / "win-x64" / "native"]
+    directml = os.environ.get("ARESTRIX_DIRECTML_BIN")
+    if directml:
+        dirs.append(Path(directml))
+    dirs.append(ROOT / "build")
+    return dirs
+
+
+def copy_onnx_runtime(stage: Path, require_onnx: bool, require_directml: bool) -> None:
+    dirs = _onnx_search_dirs()
+    required = ["onnxruntime.dll"] if (require_onnx or require_directml) else []
+    if require_directml:
+        required += ["onnxruntime_providers_shared.dll", "DirectML.dll"]
+
+    copied: list[str] = []
+    for name in ONNX_RUNTIME_FILES:
+        source = next((directory / name for directory in dirs if (directory / name).is_file()), None)
+        if source is None:
+            if name in required:
+                raise SystemExit(
+                    f"[package] {name} ausente; rode scripts/fetch_onnxruntime.py e defina "
+                    "ONNXRUNTIME_ROOT."
+                )
+            continue
+        shutil.copy2(source, stage / name)
+        copied.append(name)
+
+    root = os.environ.get("ONNXRUNTIME_ROOT")
+    license_dir = Path(root) / "licenses" if root else None
+    if license_dir and license_dir.is_dir():
+        target = stage / "licenses"
+        target.mkdir(exist_ok=True)
+        for item in sorted(license_dir.iterdir()):
+            if item.is_file():
+                shutil.copy2(item, target / item.name)
+    elif required:
+        raise SystemExit(
+            "[package] licencas do ONNX Runtime/DirectML ausentes em "
+            f"{license_dir or 'ONNXRUNTIME_ROOT'}; rode scripts/fetch_onnxruntime.py."
+        )
+
+    if copied:
+        print(f"[package] runtime ONNX: {', '.join(copied)}")
+
+
+def smoke_test(stage: Path, system: str, require_onnx: bool = False, require_directml: bool = False) -> None:
     binary = stage / ("arestrix-cli.exe" if system == "windows" else "arestrix-cli")
     memory = stage / ("arestrix-memory.exe" if system == "windows" else "arestrix-memory")
     for command in (
@@ -323,6 +377,24 @@ def smoke_test(stage: Path, system: str) -> None:
             print(result.stdout[-3000:])
             print(result.stderr[-3000:], file=sys.stderr)
             raise SystemExit(f"[package] smoke test falhou: {' '.join(command)}")
+
+    if require_onnx:
+        result = subprocess.run(
+            [str(binary), "compress", "--status", "--json"],
+            cwd=stage, capture_output=True, text=True, timeout=120
+        )
+        if result.returncode != 0:
+            print(result.stderr[-3000:], file=sys.stderr)
+            raise SystemExit("[package] smoke test do ONNX falhou ao consultar --status")
+        try:
+            status = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            raise SystemExit(f"[package] --status nao devolveu JSON: {error}") from error
+        if not status.get("onnx"):
+            raise SystemExit("[package] binario empacotado sem ONNX; build de release incorreto")
+        if require_directml and not status.get("dmlBuild"):
+            raise SystemExit("[package] binario empacotado sem DirectML; build de release incorreto")
+        print(f"[package] ONNX ok (dmlBuild={bool(status.get('dmlBuild'))})")
 
 
 def create_archive(stage: Path, output: Path, archive_format: str) -> Path:
@@ -349,6 +421,10 @@ def main() -> int:
                         help="gera o instalador Windows com Inno Setup a partir do mesmo staging")
     parser.add_argument("--allow-dirty", action="store_true", help="permite arvore Git suja (uso local)")
     parser.add_argument("--skip-smoke", action="store_true", help="pula o smoke test dos binarios")
+    parser.add_argument("--require-onnx", action="store_true",
+                        help="exige ONNX Runtime no pacote (build de release)")
+    parser.add_argument("--require-directml", action="store_true",
+                        help="exige DirectML no pacote (implica --require-onnx)")
     parser.add_argument("--keep-stage", action="store_true", help="mantem a pasta staging para inspecao")
     args = parser.parse_args()
 
@@ -384,6 +460,9 @@ def main() -> int:
         for base in ("arestrix", "arestrix-cli", "arestrix-gateway", "arestrix-memory"):
             shutil.copy2(find_binary(base), stage / find_binary(base).name)
 
+        require_onnx = bool(args.require_onnx or args.require_directml)
+        copy_onnx_runtime(stage, require_onnx, bool(args.require_directml))
+
         copy_tree(dist, stage / "dist")
         copy_tree(ROOT / "CppCore" / "src", stage / "CppCore" / "src")
         copy_tree(ROOT / "CppCore" / "runtime", stage / "CppCore" / "runtime")
@@ -407,7 +486,7 @@ def main() -> int:
         write_portable_readme(stage, version, system)
         write_launchers(stage, system)
         if not args.skip_smoke:
-            smoke_test(stage, system)
+            smoke_test(stage, system, require_onnx, bool(args.require_directml))
             shutil.rmtree(stage / ".arestrix", ignore_errors=True)
             shutil.rmtree(stage / "workspace", ignore_errors=True)
         write_manifests(stage, version, commit, dirty, system, arch)

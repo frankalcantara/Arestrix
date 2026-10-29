@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import platform
 import subprocess
 import sys
@@ -45,7 +46,32 @@ DEFAULT_ARTIFACTS = [
     "build/arestrix-memory",
     "build/arestrix_core.lib",
     "build/libarestrix_core.a",
+    "build/onnxruntime.dll",
+    "build/onnxruntime_providers_shared.dll",
+    "build/DirectML.dll",
 ]
+
+# Binarios de terceiros empacotados pelo release (nao vivem em third_party/, para
+# nao entrarem na politica de codigo-fonte externo).
+BINARY_COMPONENTS = (
+    ("onnxruntime.dll", "ONNX Runtime", "onnxruntime", "MIT"),
+    ("onnxruntime_providers_shared.dll", "ONNX Runtime providers", "onnxruntime", "MIT"),
+    ("DirectML.dll", "DirectML", "directml", "LicenseRef-Microsoft-DirectML"),
+)
+
+
+def onnx_versions() -> dict[str, str]:
+    root = os.environ.get("ONNXRUNTIME_ROOT")
+    if not root:
+        return {}
+    manifest = Path(root) / "manifest.json"
+    if not manifest.is_file():
+        return {}
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {"onnxruntime": str(data.get("onnxruntime", "")), "directml": str(data.get("directml", ""))}
 
 
 def run_git(*args: str) -> str:
@@ -135,6 +161,23 @@ def native_sbom() -> list[dict]:
     return components
 
 
+def binary_sbom() -> list[dict]:
+    versions = onnx_versions()
+    components: list[dict] = []
+    for filename, name, key, license_name in BINARY_COMPONENTS:
+        path = ROOT / "build" / filename
+        if not path.is_file():
+            continue
+        components.append({
+            "type": "native-binary",
+            "name": name,
+            "path": f"build/{filename}",
+            "version": versions.get(key) or "unknown",
+            "license": license_name,
+        })
+    return components
+
+
 def npm_sbom() -> list[dict]:
     lock_path = ROOT / "package-lock.json"
     if not lock_path.exists():
@@ -181,7 +224,7 @@ def main() -> int:
         encoding="utf-8",
     )
 
-    components = native_sbom() + npm_sbom()
+    components = native_sbom() + binary_sbom() + npm_sbom()
     sbom = {
         "schemaVersion": 1,
         "product": "Arestrix",

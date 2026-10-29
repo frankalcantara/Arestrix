@@ -110,6 +110,40 @@ jobs:
       - name: Build and test native backend
         run: python CppCore/dev.py --test --no-frontend
 
+  # Optional guard for the release-only ONNX/DirectML path (not a required
+  # check). The release pipeline itself builds with the same flags; this keeps
+  # that path from rotting between releases.
+  native-windows-onnx:
+    name: native-windows-onnx
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Cache ONNX Runtime + DirectML
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/arestrix-deps/onnxruntime-directml
+          key: onnxruntime-directml-ort1.24.4-dml1.15.4
+
+      - name: Fetch ONNX Runtime + DirectML
+        shell: bash
+        run: |
+          python scripts/fetch_onnxruntime.py --output "$RUNNER_TEMP/arestrix-deps/onnxruntime-directml"
+          echo "ONNXRUNTIME_ROOT=$RUNNER_TEMP/arestrix-deps/onnxruntime-directml" >> "$GITHUB_ENV"
+
+      - name: Build and test native backend with ONNX + DirectML
+        run: python CppCore/dev.py --test --no-frontend --onnx-dml
+
   native-linux:
     name: native-linux
     runs-on: ubuntu-latest
