@@ -57,6 +57,7 @@ endif()
 
 option(ARESTRIX_BUILD_STUDIO "Compila o Studio (executavel com interface WebUI)" ON)
 option(ARESTRIX_BUILD_TESTS "Compila os testes do runtime" ON)
+option(ARESTRIX_WITH_ONNX "Compressao de prosa via ONNX Runtime (exige ONNXRUNTIME_ROOT)" OFF)
 
 # ---------------------------------------------------------------------------
 # Seguranca Corporativa, Hardening e Analise Estatica / Dinamica em C++20
@@ -236,6 +237,18 @@ add_library(arestrix_core STATIC
   ${SRC}/rt/Notification.cpp
   ${SRC}/rt/Trace.cpp
   ${SRC}/rt/ModelClient.cpp
+  ${SRC}/rt/compress/ContentRouter.cpp
+  ${SRC}/rt/compress/SmartCrusher.cpp
+  ${SRC}/rt/compress/LogCompressor.cpp
+  ${SRC}/rt/compress/CodeCompressor.cpp
+  ${SRC}/rt/compress/CcrStore.cpp
+  ${SRC}/rt/compress/ProseTokenizer.cpp
+  ${SRC}/rt/compress/ProseModel.cpp
+  ${SRC}/rt/compress/ProseOnnxModel.cpp
+  ${SRC}/rt/compress/ProseCompressor.cpp
+  ${SRC}/rt/compress/ProseRecommendation.cpp
+  ${SRC}/rt/compress/ProseModelInstaller.cpp
+  ${SRC}/rt/compress/ContextCompressor.cpp
   ${SRC}/local/LocalRuntime.cpp
   ${SRC}/local/Download.cpp
   ${SRC}/assistant/GraphDocument.cpp
@@ -261,6 +274,59 @@ target_include_directories(arestrix_core PUBLIC
   ${TP}/simdjson/singleheader
   ${TP}/taskflow)
 
+# ---------------------------------------------------------------------------
+# ONNX Runtime (opcional): compressao de prosa (Kompress-v2-base).
+# Desligado por padrao; ligue com -DARESTRIX_WITH_ONNX=ON e
+# -DONNXRUNTIME_ROOT=<pasta com include/ e lib/> (ou a variavel de ambiente).
+# O runtime de execucao precisa do onnxruntime.dll ao lado do executavel.
+# ---------------------------------------------------------------------------
+if(ARESTRIX_WITH_ONNX)
+  set(ONNXRUNTIME_ROOT "" CACHE PATH "Raiz do ONNX Runtime (include/ e lib/ ou pacote NuGet)")
+  if(NOT ONNXRUNTIME_ROOT AND DEFINED ENV{ONNXRUNTIME_ROOT})
+    set(ONNXRUNTIME_ROOT "$ENV{ONNXRUNTIME_ROOT}")
+  endif()
+  set(ARESTRIX_ONNX_INCLUDE "")
+  foreach(ARESTRIX_ONNX_CANDIDATE
+      "${ONNXRUNTIME_ROOT}/include"
+      "${ONNXRUNTIME_ROOT}/build/native/include")
+    if(EXISTS "${ARESTRIX_ONNX_CANDIDATE}/onnxruntime_cxx_api.h")
+      set(ARESTRIX_ONNX_INCLUDE "${ARESTRIX_ONNX_CANDIDATE}")
+    endif()
+  endforeach()
+  if(NOT ARESTRIX_ONNX_INCLUDE)
+    message(FATAL_ERROR
+      "ARESTRIX_WITH_ONNX=ON exige ONNXRUNTIME_ROOT (include/onnxruntime_cxx_api.h). "
+      "Baixe o pacote do ONNX Runtime e aponte a variavel.")
+  endif()
+  find_library(ARESTRIX_ONNXRUNTIME_LIB NAMES onnxruntime
+    PATHS
+      "${ONNXRUNTIME_ROOT}/lib"
+      "${ONNXRUNTIME_ROOT}/runtimes/win-x64/native"
+      "${ONNXRUNTIME_ROOT}/runtimes/linux-x64/native"
+    NO_DEFAULT_PATH)
+  if(NOT ARESTRIX_ONNXRUNTIME_LIB)
+    message(FATAL_ERROR "onnxruntime.lib/.so nao encontrado em ${ONNXRUNTIME_ROOT}.")
+  endif()
+  target_include_directories(arestrix_core PUBLIC "${ARESTRIX_ONNX_INCLUDE}")
+  target_compile_definitions(arestrix_core PUBLIC ARESTRIX_WITH_ONNX=1)
+  target_link_libraries(arestrix_core PUBLIC "${ARESTRIX_ONNXRUNTIME_LIB}")
+  message(STATUS "ONNX Runtime habilitado: ${ONNXRUNTIME_ROOT} (lembre-se de copiar onnxruntime.dll)")
+endif()
+
+# DirectML (opcional, Windows): usa a GPU dedicada quando ela for mais rapida que o CPU.
+# Exige o pacote Microsoft.ML.OnnxRuntime.DirectML (1.24+) e DirectML.dll ao lado do executavel.
+option(ARESTRIX_WITH_ONNX_DML "Usa DirectML (GPU) quando disponivel (Windows)" OFF)
+if(ARESTRIX_WITH_ONNX_DML)
+  if(NOT ARESTRIX_WITH_ONNX)
+    message(FATAL_ERROR "ARESTRIX_WITH_ONNX_DML=ON exige ARESTRIX_WITH_ONNX=ON.")
+  endif()
+  if(NOT WIN32)
+    message(FATAL_ERROR "ARESTRIX_WITH_ONNX_DML so existe no Windows.")
+  endif()
+  target_compile_definitions(arestrix_core PUBLIC ARESTRIX_WITH_ONNX_DML=1)
+  message(STATUS "DirectML habilitado: copie DirectML.dll e onnxruntime_providers_shared.dll ao lado do executavel")
+endif()
+
 # SQLite (dominio publico), compilado dentro de arestrix_core: sem carga de extensoes, sem aspas duplas como texto,
 # chaves estrangeiras ligadas por padrao. Os executaveis gerados linkam so arestrix_core, entao ele precisa vir junto.
 set_source_files_properties(${TP}/sqlite/sqlite3.c PROPERTIES
@@ -275,7 +341,7 @@ find_package(Threads REQUIRED)
 target_compile_definitions(arestrix_core PRIVATE ARESTRIX_MEMORY_VERSION="${ARESTRIX_VERSION}")
 target_link_libraries(arestrix_core PUBLIC arestrix_security_flags Threads::Threads)
 if(WIN32)
-  target_link_libraries(arestrix_core PUBLIC winhttp ws2_32 advapi32 ole32 shell32 user32)
+  target_link_libraries(arestrix_core PUBLIC winhttp ws2_32 advapi32 ole32 shell32 user32 dxgi)
 endif()
 
 # Os executaveis gerados procuram a biblioteca em <raiz>/runtime/lib.

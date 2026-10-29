@@ -48,11 +48,24 @@ describe('PropertiesData', () => {
   it('builds the three scopes with their expected sections', () => {
     expect(buildPropertiesScopeConfig('studio', context).sections.map(s => s.id)).toEqual(['general', 'studio-model', 'credentials', 'integrations', 'libraries', 'advanced']);
     expect(buildPropertiesScopeConfig('workspace', context).sections.map(s => s.id)).toEqual(['general', 'catalogs', 'libraries', 'sandbox', 'security', 'memory', 'advanced']);
-    expect(buildPropertiesScopeConfig('project', context).sections.map(s => s.id)).toEqual(['general', 'pipelines', 'defaults', 'libraries', 'environment', 'git', 'runner', 'advanced']);
+    expect(buildPropertiesScopeConfig('project', context).sections.map(s => s.id)).toEqual(['general', 'pipelines', 'defaults', 'compression', 'libraries', 'environment', 'git', 'runner', 'advanced']);
   });
 
-  it('does not render secret environment values', () => {
+  it('projects the context compression section with safe defaults and the CCR location', () => {
     const project = buildPropertiesScopeConfig('project', context);
+    const compression = project.sections.find(section => section.id === 'compression');
+    expect(compression).toBeDefined();
+    expect(compression!.content).toContain('data-property-input="compressionEnabled"');
+    expect(compression!.content).toContain('data-property-input="compressionCode"');
+    expect(compression!.content).toContain('properties-compression-model');
+    expect(compression!.content).toContain('value="2000"');
+    expect(compression!.content).toContain('value="8000"');
+    expect(compression!.content).toContain('LOCALAPPDATA');
+    // Desligado por padrão: o checkbox não nasce marcado.
+    expect(compression!.content).not.toContain('compressionEnabled" checked');
+  });
+
+  it('does not render secret environment values', () => {    const project = buildPropertiesScopeConfig('project', context);
     const rendered = project.sections.map(section => section.content).join(' ');
     expect(rendered).not.toContain(secretLiteral);
     expect(rendered).toContain('1');

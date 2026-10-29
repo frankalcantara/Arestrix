@@ -75,7 +75,8 @@ export class Graph {
       sandbox: { ...current.sandbox, ...(defaults.sandbox || {}) },
       model: { ...current.model, ...(defaults.model || {}) },
       codeMode: { ...current.codeMode, ...(defaults.codeMode || {}) },
-      memory: { ...(current.memory || DEFAULT_NODE_MEMORY_CONFIG), ...(defaults.memory || {}) }
+      memory: { ...(current.memory || DEFAULT_NODE_MEMORY_CONFIG), ...(defaults.memory || {}) },
+      compression: { ...(current.compression || {}), ...(defaults.compression || {}) }
     };
     this.bus.emit('graph:defaults-updated', this.metadata.globalDefaults);
   }

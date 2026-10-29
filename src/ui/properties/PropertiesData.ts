@@ -37,6 +37,7 @@ export interface IPropertiesContext {
   saveWorkspace?: (values: Record<string, string>) => Promise<boolean>;
   saveProject?: (values: Record<string, string>) => Promise<boolean>;
   saveProjectDefaults?: (values: Record<string, string>) => Promise<boolean>;
+  saveProjectCompression?: (values: Record<string, string>) => Promise<boolean>;
   saveProjectEnvironment?: (values: Record<string, string>) => Promise<boolean>;
   saveLibraries?: (scope: LibraryScope, values: Record<string, string>) => Promise<boolean>;
   saveProjectLibraries?: (values: Record<string, string>) => Promise<boolean>;
@@ -587,6 +588,16 @@ function buildProject(context: IPropertiesContext): IPropertiesScopeConfig {
     pinnedAssetIds: []
   };
   const availableLibraries = context.libraryRegistry?.list('workspace') || [];
+  const compression = {
+    enabled: false,
+    minBlockTokens: 2000,
+    minRunTokens: 8000,
+    maxStringTokens: 1000,
+    maxArrayItems: 20,
+    maxLogLines: 200,
+    code: true,
+    ...(defaults.compression || {})
+  };
 
   return {
     scope: 'project',
@@ -722,6 +733,290 @@ function buildProject(context: IPropertiesContext): IPropertiesScopeConfig {
           { id: 'project.open-http-policy', label: label('action.manage_http_policy', 'Gerenciar allowlist HTTP'), kind: 'secondary' },
           { id: 'project.open-memory-advanced', label: label('action.manage_memory_advanced', 'Gerenciar memória avançada'), kind: 'secondary' }
         ]
+      }),
+      section({
+        id: 'compression',
+        title: label('section.compression', 'Compactação de contexto'),
+        description: label('project.compression_desc', 'Reduz as saídas de ferramenta antes de elas entrarem na janela do modelo. Desligada por padrão.'),
+        icon: 'database',
+        badge: label('badge.project', 'Projeto'),
+        content: `
+          ${note(label('project.compression_hint', 'Só observações de ferramenta (leitura, bash e MCP) são compactadas. O texto original fica recuperável pela ferramenta `retrieve`, com o token mostrado no aviso [CCR:...]. O system prompt, a skill e o brief de memória nunca são tocados.'), 'info')}
+          <label class="properties-check-row">
+            <input type="checkbox" data-property-input="compressionEnabled" ${compression.enabled ? 'checked' : ''} />
+            <span>${escapeHtml(label('label.compression_enabled', 'Compactar saídas de ferramenta (JSON e logs)'))}</span>
+          </label>
+          <label class="properties-check-row">
+            <input type="checkbox" data-property-input="compressionCode" ${compression.code !== false ? 'checked' : ''} />
+            <span>${escapeHtml(label('label.compression_code', 'Incluir código (mantém assinaturas e estrutura)'))}</span>
+          </label>
+          <div class="form-row-grid properties-form-grid">
+            <div class="form-group">
+              <label class="form-label" for="properties-compression-block">${escapeHtml(label('label.compression_block', 'Bloco mínimo (tokens)'))}</label>              <input id="properties-compression-block" class="form-input" type="number" min="100" step="100" data-property-input="compressionMinBlockTokens" value="${compression.minBlockTokens}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="properties-compression-run">${escapeHtml(label('label.compression_run', 'Run mínimo (tokens)'))}</label>
+              <input id="properties-compression-run" class="form-input" type="number" min="100" step="500" data-property-input="compressionMinRunTokens" value="${compression.minRunTokens}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="properties-compression-string">${escapeHtml(label('label.compression_string', 'String máxima (tokens)'))}</label>
+              <input id="properties-compression-string" class="form-input" type="number" min="64" step="100" data-property-input="compressionMaxStringTokens" value="${compression.maxStringTokens}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="properties-compression-array">${escapeHtml(label('label.compression_array', 'Itens por array'))}</label>
+              <input id="properties-compression-array" class="form-input" type="number" min="1" step="1" data-property-input="compressionMaxArrayItems" value="${compression.maxArrayItems}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="properties-compression-log">${escapeHtml(label('label.compression_log', 'Linhas de log'))}</label>
+              <input id="properties-compression-log" class="form-input" type="number" min="20" step="10" data-property-input="compressionMaxLogLines" value="${compression.maxLogLines}" />
+            </div>
+          </div>
+          ${grid([
+            row(label('label.compression_model', 'Modelo de prosa (Kompress)'), `<span id="properties-compression-model">${escapeHtml(label('value.checking', 'Verificando…'))}</span>`),
+            row(label('label.compression_hardware', 'Hardware'), `<span id="properties-compression-hardware">—</span>`),
+            row(label('label.compression_recommendation', 'Sugestão para esta máquina'), `<span id="properties-compression-suggestion">—</span>`)
+          ])}
+          <div id="properties-compression-download-actions">
+            <div class="form-row-grid properties-form-grid">
+              <div class="form-group">
+                <label class="form-label" for="properties-compression-variant">${escapeHtml(label('label.compression_variant', 'Variante do modelo'))}</label>
+                <select id="properties-compression-variant" class="form-select">
+                  <option value="fp32">fp32 · 601 MB</option>
+                  <option value="int8">int8 · 274 MB</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">&nbsp;</label>
+                <div>
+                  <button id="properties-compression-download" class="btn-primary" type="button">${escapeHtml(label('action.compression_download', 'Baixar modelo'))}</button>
+                  <button id="properties-compression-cancel" class="btn-secondary" type="button" style="display:none;margin-left:8px">${escapeHtml(label('action.compression_cancel', 'Cancelar'))}</button>
+                </div>
+              </div>
+            </div>
+            <div id="properties-compression-download-status" class="properties-hint" role="status"></div>
+          </div>
+          <p class="properties-hint">${escapeHtml(label('project.compression_ccr_hint', 'O cache reversível fica em %LOCALAPPDATA%\\Arestrix\\ccr (fora do repositório), com retenção de 7 dias e teto de 256 MB por projeto. A economia de cada execução aparece no Console: "contexto compactado: N bloco(s), X -> Y tokens".'))}</p>
+        `,
+        save: context.saveProjectCompression
+          ? (values) => context.saveProjectCompression!(values)
+          : undefined,
+        bind: (root) => {
+          const target = root.querySelector('#properties-compression-model') as HTMLElement | null;
+          if (!target) return;
+          const webui = typeof window !== 'undefined' ? (window as any).webui : null;
+          const actions = root.querySelector('#properties-compression-download-actions') as HTMLElement | null;
+          if (!webui || typeof webui.call !== 'function') {
+            target.textContent = label('value.desktop_only', 'Disponível no app desktop');
+            if (actions) actions.style.display = 'none';
+            return;
+          }
+
+          const suggestion = root.querySelector('#properties-compression-suggestion') as HTMLElement | null;
+          const hardware = root.querySelector('#properties-compression-hardware') as HTMLElement | null;
+          const downloadButton = root.querySelector('#properties-compression-download') as HTMLButtonElement | null;
+          const cancelButton = root.querySelector('#properties-compression-cancel') as HTMLButtonElement | null;
+          const variantSelect = root.querySelector('#properties-compression-variant') as HTMLSelectElement | null;
+          const downloadStatus = root.querySelector('#properties-compression-download-status') as HTMLElement | null;
+
+          let busy = false;
+          let jobId = '';
+          let installed: Record<string, boolean> = {};
+          let buildOnnx = true;
+
+          const parse = (raw: any) => (typeof raw === 'string' ? JSON.parse(raw) : raw);
+          const formatMB = (bytes: number) => {
+            const value = Number.isFinite(bytes) ? Math.round(bytes / (1024 * 1024)) : 0;
+            return `${value} MB`;
+          };
+
+          const syncButtons = () => {
+            if (!downloadButton) return;
+            const selected = variantSelect?.value || 'fp32';
+            const already = installed[selected] === true;
+            downloadButton.disabled = busy || already || !buildOnnx;
+            downloadButton.textContent = already
+              ? label('value.compression_model_installed', 'Instalado')
+              : label('action.compression_download', 'Baixar modelo');
+            if (cancelButton) cancelButton.style.display = busy ? '' : 'none';
+            if (variantSelect) variantSelect.disabled = busy;
+          };
+
+          const render = (data: any) => {
+            const state = data?.available
+              ? label('value.compression_model_installed', 'Instalado')
+              : label('value.compression_model_missing', 'Não instalado');
+            target.textContent = `${state} · ${data?.dir || ''}`;
+
+            const ramGB = data?.hardware?.ramTotalMB > 0 ? Math.round(data.hardware.ramTotalMB / 1024) : '?';
+            const diskGB = data?.hardware?.diskFreeMB >= 0 ? Math.round(data.hardware.diskFreeMB / 1024) : '?';
+
+            if (hardware) {
+              const gpus = Array.isArray(data?.hardware?.gpus) ? data.hardware.gpus : [];
+              const gpuText = gpus.length
+                ? gpus.map((gpu: any) => {
+                    const vram = gpu.vramMB >= 1024 ? `${Math.round(gpu.vramMB / 1024)} GB` : `${gpu.vramMB} MB`;
+                    return `${gpu.name} (${vram})`;
+                  }).join(' + ')
+                : t('properties_window.project.compression_no_gpu', 'sem GPU');
+              const cpu = data?.hardware?.cpuThreads ?? '?';
+              const dml = data?.hardware?.dmlAvailable === true;
+              const suffix = gpus.length && !dml
+                ? ` · ${t('properties_window.project.compression_dml_off', 'DirectML desligado')}`
+                : '';
+              hardware.textContent = t('properties_window.project.compression_hardware_summary', {
+                cpu, ram: ramGB, gpus: gpuText,
+                defaultValue: `${cpu} núcleos · ${ramGB} GB RAM · ${gpuText}`
+              }) + suffix;
+            }
+
+            const rec = data?.recommendation || {};
+            if (suggestion) {
+              if (rec.variant === 'gpu') {
+                suggestion.textContent = t('properties_window.project.compression_recommend_gpu', {
+                  gpu: rec.gpuName || 'GPU', size: rec.sizeMB || 601,
+                  defaultValue: `Sugestão: GPU (DirectML) — ${rec.gpuName || 'GPU'}; usa o modelo fp32 (~601 MB).`
+                });
+              } else if (rec.variant === 'fp32') {
+                suggestion.textContent = t('properties_window.project.compression_recommend_fp32', {
+                  ram: ramGB, disk: diskGB,
+                  defaultValue: `Sugestão: fp32 (rápido) — ${ramGB} GB de RAM e ${diskGB} GB livres; o modelo ocupa ~601 MB.`
+                });
+              } else if (rec.variant === 'int8') {
+                suggestion.textContent = t('properties_window.project.compression_recommend_int8', {
+                  ram: ramGB, disk: diskGB,
+                  defaultValue: `Sugestão: int8 (compacto) — RAM ou disco limitados (${ramGB} GB de RAM, ${diskGB} GB livres); o modelo ocupa ~274 MB.`
+                });
+              } else if (rec.reason === 'cpu') {
+                suggestion.textContent = t('properties_window.project.compression_recommend_cpu',
+                  'Poucos núcleos de CPU para compressão de prosa.');
+              } else {
+                suggestion.textContent = t('properties_window.project.compression_recommend_none',
+                  'Máquina abaixo do mínimo para prosa: ~1 GB de RAM livre e ~700 MB em disco.');
+              }
+            }
+
+            installed = data?.installedVariants || {};
+            buildOnnx = data?.build?.onnx !== false;
+            if (!buildOnnx && downloadStatus) {
+              downloadStatus.textContent = t('properties_window.project.compression_build_no_onnx',
+                'Este build não inclui compressão de prosa (ONNX); baixar o modelo não habilita a prosa.');
+            }
+            if (variantSelect && !busy) {
+              variantSelect.value = rec.variant === 'int8' ? 'int8' : 'fp32';
+            }
+            syncButtons();
+          };
+
+          const refresh = () => {
+            Promise.resolve(webui.call('prose_model_status'))
+              .then((raw: any) => render(parse(raw)))
+              .catch(() => {
+                target.textContent = label('value.compression_model_unknown', 'Não foi possível verificar');
+              });
+          };
+
+          const poll = () => {
+            if (!jobId || !root.isConnected) return;
+            Promise.resolve(webui.call('prose_model_download_status', JSON.stringify({ jobId })))
+              .then((raw: any) => {
+                const job = parse(raw);
+                if (!job?.ok) {
+                  if (downloadStatus) {
+                    downloadStatus.textContent = t('properties_window.project.compression_download_error', {
+                      error: job?.error || '?',
+                      defaultValue: `Falha no download: ${job?.error || '?'}`
+                    });
+                  }
+                  busy = false;
+                  jobId = '';
+                  syncButtons();
+                  return;
+                }
+                const total = Number(job.total) || 0;
+                const received = Number(job.received) || 0;
+                const pct = total > 0 ? Math.min(100, Math.floor((received / total) * 100)) : 0;
+                if (downloadStatus) {
+                  if (job.status === 'downloading') {
+                    downloadStatus.textContent = t('properties_window.project.compression_download_progress', {
+                      pct, file: job.file || '',
+                      received: formatMB(received), total: formatMB(total),
+                      defaultValue: `${pct}% · ${job.file || ''} (${formatMB(received)} de ${formatMB(total)})`
+                    });
+                  } else if (job.status === 'verifying') {
+                    downloadStatus.textContent = t('properties_window.project.compression_download_verifying', {
+                      file: job.file || 'arquivo',
+                      defaultValue: `Verificando SHA-256 de ${job.file || 'arquivo'}…`
+                    });
+                  } else if (job.status === 'cancelling') {
+                    downloadStatus.textContent = t('properties_window.project.compression_download_cancelling', 'Cancelando…');
+                  } else if (job.status === 'done') {
+                    downloadStatus.textContent = t('properties_window.project.compression_download_done', 'Modelo instalado.');
+                  } else if (job.status === 'cancelled') {
+                    downloadStatus.textContent = t('properties_window.project.compression_download_cancelled', 'Download cancelado.');
+                  } else if (job.status === 'failed') {
+                    downloadStatus.textContent = t('properties_window.project.compression_download_error', {
+                      error: job.error || '?',
+                      defaultValue: `Falha no download: ${job.error || '?'}`
+                    });
+                  }
+                }
+                if (job.status === 'done' || job.status === 'cancelled' || job.status === 'failed') {
+                  busy = false;
+                  jobId = '';
+                  syncButtons();
+                  if (job.status === 'done') refresh();
+                  return;
+                }
+                setTimeout(poll, 600);
+              })
+              .catch(() => setTimeout(poll, 1200));
+          };
+
+          if (downloadButton) {
+            downloadButton.addEventListener('click', () => {
+              if (busy || !variantSelect) return;
+              busy = true;
+              syncButtons();
+              if (downloadStatus) {
+                downloadStatus.textContent = t('properties_window.project.compression_download_starting', 'Iniciando download…');
+              }
+              Promise.resolve(webui.call('prose_model_download', JSON.stringify({ variant: variantSelect.value })))
+                .then((raw: any) => {
+                  const res = parse(raw);
+                  if (!res?.ok) {
+                    if (downloadStatus) {
+                      downloadStatus.textContent = t('properties_window.project.compression_download_error', {
+                        error: res?.error || '?',
+                        defaultValue: `Falha no download: ${res?.error || '?'}`
+                      });
+                    }
+                    busy = false;
+                    jobId = '';
+                    syncButtons();
+                    if (res?.error === 'already_installed') refresh();
+                    return;
+                  }
+                  jobId = String(res.jobId || '');
+                  poll();
+                })
+                .catch((err: any) => {
+                  if (downloadStatus) downloadStatus.textContent = String(err?.message || err);
+                  busy = false;
+                  syncButtons();
+                });
+            });
+          }
+
+          if (cancelButton) {
+            cancelButton.addEventListener('click', () => {
+              if (!jobId) return;
+              Promise.resolve(webui.call('prose_model_download_cancel', JSON.stringify({ jobId }))).catch(() => {});
+            });
+          }
+
+          if (variantSelect) variantSelect.addEventListener('change', syncButtons);
+          refresh();
+        }
       }),
       section({
         id: 'libraries',

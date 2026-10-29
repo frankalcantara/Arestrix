@@ -335,6 +335,25 @@ export interface IGlobalPipelineDefaults {
   model: IModelConfig;
   codeMode: ICodeModeConfig;
   memory?: INodeMemoryConfig;
+  compression?: IContextCompressionConfig;
+}
+
+/**
+ * Compactação de contexto do agente (observações de ferramenta).
+ * Desligada por padrão; o runtime só comprime acima dos limiares e guarda o original no CCR.
+ */
+export interface IContextCompressionConfig {
+  enabled?: boolean;
+  /** Limiares em tokens estimados (~4 bytes por token até o tokenizador da Etapa 3). */
+  minBlockTokens?: number;
+  minRunTokens?: number;
+  maxArrayItems?: number;
+  maxStringTokens?: number;
+  maxLogLines?: number;
+  /** Etapa 2: compressão de código (mantém assinaturas e estrutura). */
+  code?: boolean;
+  /** Etapa 3: compressão de prosa via ONNX. Desligada até o modelo existir. */
+  prose?: boolean;
 }
 
 export interface INodeSkill {
@@ -402,6 +421,9 @@ export interface INodeAgentSettings {
 
   inheritMemory?: boolean;
   memory?: Partial<INodeMemoryConfig>;
+
+  inheritCompression?: boolean;
+  compression?: Partial<IContextCompressionConfig>;
 
   // Habilidades e Skills completas do Agente (Conteúdo Markdown & Prompts)
   skills?: INodeSkill[];
@@ -822,5 +844,15 @@ export const DEFAULT_PIPELINE_DEFAULTS: IGlobalPipelineDefaults = {
   },
   memory: {
     ...DEFAULT_NODE_MEMORY_CONFIG
+  },
+  compression: {
+    enabled: false,
+    minBlockTokens: 2000,
+    minRunTokens: 8000,
+    maxArrayItems: 20,
+    maxStringTokens: 1000,
+    maxLogLines: 200,
+    code: true,
+    prose: false
   }
 };

@@ -1,6 +1,6 @@
 # Roadmap and known limitations
 
-> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Last reviewed: 2026-10-27
+> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Last reviewed: 2026-10-28
 >
 > This page records what is intentionally incomplete and the order we plan to address it. It is not a
 > commitment to dates.
@@ -99,6 +99,35 @@ Limitations of the institution service and background worker:
 - 14B quality/speed depends on GPU/VRAM; CPU-only execution is slow.
 - No automatic model update, deduplication or disk quota management yet.
 - Model weights are not redistributed; downloads depend on the upstream publisher and license.
+
+### Agents: distance from chat harnesses
+
+Comparison made on 2026-10-28 against the conceptual agent model described in the VS Code/Copilot
+documentation — loop, context, multi-agent and control — not the IDE. The list covers only the agent
+loop: deterministic execution, skill/MCP governance, project memory and observability are axes where
+Arestrix already goes beyond that model.
+
+| Gap | Weight | Status |
+| :--- | :--- | :--- |
+| **Context compaction and budget inside the loop.** Each tool output is capped at 32 KB (`kMaxToolOutput`), but `chat.messages` only grows (up to 30 turns): there is no summarization, eviction or global budget, and the model window is not measured. | High | After memory. The cheap step is not a per-tool cap (that already exists), but a **global** character ceiling per run, with summarization/eviction of older history when it is exceeded. |
+| **Per-tool-call policy** (`allow` / `ask` / `deny`, with argument patterns). The allowlist is binary today: the tool exists or does not, and there is no pause for approval inside a turn. | High | To be decided. The `ask` path reuses the existing interaction channel (C++ blocks, the Studio shows the request, with timeout and audit). |
+| **Handoff with context transfer.** Calls isolate the target on purpose (explicit input only); there is no handing the baton over with the conversation. | Medium | Evaluate when a conversational use case appears; the interaction vertex covers approval between steps. |
+| **Progressive skill loading.** The whole `SKILL.md` goes into the system prompt; there is no discovery by name/description nor on-demand reading of the folder resources. | Medium | Grows with the number of skills and support files. |
+| **Native `web` tool.** The native set is `read`, `write`, `edit`, `bash`, `validate_svg` and the two memory tools. | Medium-low | Covered by MCP; check demand before adding a native tool. |
+| **Per-agent model fallback.** There is a model per vertex, but no preference list (A → B) for 429s/unavailability. | Medium-low | Per-provider resilience; the gateway fails closed, it does not fall back. |
+| **Always-on, path-scoped project instructions** (`AGENTS.md`, `applyTo`) and parameterized **prompt files**. | Medium for teams | Per-agent skills, project defaults and templates cover part of it; there is no global file nor glob scope. |
+| **OAuth for MCP HTTP.** We support stdio and HTTPS with headers/env and public-URL validation. | Low | No interactive authorization flow. |
+| **Lifecycle hooks** (`preToolUse`, `postToolUse`, `sessionStart`…). | Not planned as a generic system | Partially covered by MCP vertices, static validation, critical sections and interaction — but none of them vetoes a call **inside** the loop. The real case (a destructive `bash` command) should be handled by a command policy, not a hook runtime. |
+| **Remote/cloud execution and background sessions.** | Out of scope | The product is desktop + CLI + gateway; the standalone Runner covers packaged execution. |
+
+Two recorded decisions:
+
+- **Memory before compaction.** Memory solves the problem *across* runs (curated brief, notes, lessons)
+  and reduces pressure on the context, but it does not replace compaction *inside* a run: the message
+  list keeps growing. The global context ceiling does not depend on memory and can land before it.
+- **MCP vertices do not replace hooks.** An MCP vertex is a deterministic graph task: it adds capacity
+  and enforces order. A hook intercepts the lifecycle and can deny an action the model chose. What
+  they share is "runtime decision, not model decision"; what is missing is the veto inside the loop.
 
 ## Beta 2.3 (pre-release)
 

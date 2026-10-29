@@ -19,6 +19,8 @@ of the components you redistribute.
 | [SkillSpector](https://github.com/NVIDIA/SkillSpector) | `v2.12.0-1159-g2b9f4512` | Apache-2.0 | Skill security analysis and static rule reference. |
 | [Cloudflare security-audit-skill](https://github.com/cloudflare/security-audit-skill) | `c1c8a8c` | MIT | Boundary-driven security audit methodology used by the Arestrix Skill Guard. |
 | [SQLite](https://sqlite.org) | `3.54.0` amalgamation | Public domain | Embedded persistence. |
+| [ONNX Runtime](https://github.com/microsoft/onnxruntime) | `1.24+` (validado com `1.24.4` DirectML e `1.31.1` CPU) | MIT | Inferência opcional da compressão de prosa (`ARESTRIX_WITH_ONNX`). Não é embutido no pacote padrão; quando habilitado, `onnxruntime.dll` acompanha o executável. |
+| [DirectML](https://github.com/microsoft/DirectML) | `1.15.4` | Licença Microsoft DirectML (redistribuível em apps) | Aceleração opcional da prosa na GPU (`ARESTRIX_WITH_ONNX_DML`, Windows). `DirectML.dll` acompanha o executável quando habilitado. |
 | [cpp-httplib](https://github.com/yhirose/cpp-httplib) | `v0.62.0` | MIT | HTTP server of the on-prem `arestrix-gateway`. |
 | [Inter](https://github.com/rsms/inter) | `third_party/fonts/inter` | SIL OFL-1.1 | Interface and canvas typography. |
 
@@ -28,6 +30,8 @@ of the components you redistribute.
 | :--- | :--- | :--- | :--- |
 | [llama.cpp / ggml](https://github.com/ggml-org/llama.cpp) | `b11669`, pinned in `CppCore/runtime/llama.manifest.json` | MIT | Optional local inference runtime (`llama-server`). Downloaded on demand and verified by SHA-256. |
 | GGUF model weights | Pinned revisions in `CppCore/runtime/models.catalog.json` | Per model (currently Apache-2.0) | Downloaded directly from the model publisher. Arestrix does not redistribute weights. |
+| [Kompress-v2-base](https://huggingface.co/chopratejas/kompress-v2-base) | `kompress-fp32.onnx` / `kompress-int8-wo.onnx` | Apache-2.0 | Optional prose compressor (token classification). Downloaded on demand; Arestrix does not redistribute the weights. |
+| [ModernBERT-base](https://huggingface.co/answerdotai/ModernBERT-base) | Base encoder of Kompress | Apache-2.0 | Encoder used by the compressor model. |
 
 The `llama.cpp` source is not vendored or linked into Arestrix; it runs as a separate process behind an
 OpenAI-compatible HTTP endpoint. Model licenses are displayed in the Local Models screen and must be

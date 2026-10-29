@@ -1,5 +1,6 @@
 import type {
   ICodeModeConfig,
+  IContextCompressionConfig,
   IModelConfig,
   INodeAgentSettings,
   INodeMemoryConfig,
@@ -15,6 +16,7 @@ export interface IPipelineDefaultsPatch {
   sandbox?: Partial<ISandboxPolicy>;
   codeMode?: Partial<ICodeModeConfig>;
   memory?: Partial<INodeMemoryConfig>;
+  compression?: Partial<IContextCompressionConfig>;
 }
 
 export interface IStudioSettings {

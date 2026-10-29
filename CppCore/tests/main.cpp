@@ -57,6 +57,17 @@
 #include "rt/NetGuard.hpp"
 #include "rt/McpTools.hpp"
 #include "rt/McpVertex.hpp"
+#include "rt/compress/ContentRouter.hpp"
+#include "rt/compress/SmartCrusher.hpp"
+#include "rt/compress/LogCompressor.hpp"
+#include "rt/compress/CodeCompressor.hpp"
+#include "rt/compress/CcrStore.hpp"
+#include "rt/compress/ProseTokenizer.hpp"
+#include "rt/compress/ProseModel.hpp"
+#include "rt/compress/ProseModelInstaller.hpp"
+#include "rt/compress/ProseCompressor.hpp"
+#include "rt/compress/ProseRecommendation.hpp"
+#include "rt/compress/ContextCompressor.hpp"
 #include "native/NativeTools.hpp"
 #include "rt/Runtime.hpp"
 #include "rt/Trace.hpp"
@@ -1442,6 +1453,42 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     std::string noLastSrc = TaskflowGenerator::generateSource(noLastGraph);
     CHECK(noLastSrc.find("setWorking(projectId, \"pipeline\", \"last_stage\"") == std::string::npos);
     CHECK(noLastSrc.find("\"memoryWriteKeys\":[\"resumo\"]") != std::string::npos);
+}
+
+TEST(generator_emits_context_compression_section) {
+    using taskforge::compiler::TaskflowGenerator;
+    auto port = [](const char* id, const char* name, const char* dir, const char* type) {
+        return json{{"id", id}, {"name", name}, {"direction", dir}, {"type", type}};
+    };
+    const json compression = json{{"enabled", true}, {"minBlockTokens", 4096}};
+    const json agentSettings = json{{"inheritCompression", false}, {"compression", compression}};
+    json schema = {
+        {"version", "1.0.0"},
+        {"metadata", {{"graphName", "compression"}, {"description", ""}, {"targetStandard", "C++20"},
+                      {"compilerConfig", {{"compiler", "msvc"}, {"cppStandard", "C++20"}, {"buildSystem", "cmake"},
+                                          {"taskflowIncludePath", "third_party/taskflow"}, {"outputBinaryName", "c"},
+                                          {"enableOpenMP", false}, {"enableCuda", false}, {"extraFlags", json::array()}}},
+                      {"version", "1"}, {"projectId", "proj-compress"}, {"globalDefaults", json::object()}}},
+        {"nodes", json::array({
+            json{{"id", "agente"}, {"label", "Agente"}, {"type", "agent"}, {"position", {{"x", 0}, {"y", 0}}},
+                 {"inputs", json::array({port("agente_in", "in", "input", "flow")})},
+                 {"outputs", json::array({port("agente_out", "out", "output", "flow")})},
+                 {"parameters", json::object()}, {"customLambdaBody", ""},
+                 {"agentSettings", agentSettings}}
+                 })},
+        {"edges", json::array()}};
+    taskforge::core::Graph graphWithCompression;
+    graphWithCompression.fromJson(schema);
+    const std::string src = TaskflowGenerator::generateSource(graphWithCompression);
+    CHECK(src.find("\"compression\":{\"enabled\":true") != std::string::npos);
+    CHECK(src.find("\"minBlockTokens\":4096") != std::string::npos);
+
+    // Sem a secao, o runtime recebe um objeto vazio e mantem a compactacao desligada.
+    schema["nodes"][0]["agentSettings"] = json::object();
+    taskforge::core::Graph graphPlain;
+    graphPlain.fromJson(schema);
+    const std::string plainSrc = TaskflowGenerator::generateSource(graphPlain);
+    CHECK(plainSrc.find("\"compression\":{}") != std::string::npos);
 }
 
 TEST(memory_store_working_lessons_temporal_and_usage) {
@@ -6139,6 +6186,700 @@ static int runInteractionHostChild(const std::string& mode) {
         std::cerr << "[HELPER_ERROR] " << ex.what() << "\n";
         return 1;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Compactacao de contexto (Etapa 1)
+// ---------------------------------------------------------------------------
+namespace cc = taskforge::rt::compress;
+
+static std::string bigJson(int items) {
+    taskforge::Json root = taskforge::Json::object();
+    taskforge::Json results = taskforge::Json::array();
+    for (int i = 0; i < items; ++i) {
+        results.push_back(taskforge::Json{{"id", i},
+                                          {"path", "docs/file-" + std::to_string(i) + ".md"},
+                                          {"score", i * 1.5},
+                                          {"tags", taskforge::Json::array({"alpha", "beta"})}});
+    }
+    root["results"] = results;
+    root["total"] = items;
+    return root.dump();
+}
+
+static std::string repeatedLog(int repeats) {
+    std::string text;
+    for (int i = 0; i < repeats; ++i) {
+        text += "2026-10-29T10:00:" + std::to_string(i % 60) + "Z INFO GET /health 200 3ms\n";
+        text += "2026-10-29T10:00:" + std::to_string(i % 60) + "Z INFO GET /ready 200 2ms\n";
+    }
+    text += "2026-10-29T10:01:00Z FATAL disk full no volume C:\\dados\n";
+    text += "2026-10-29T10:01:01Z ERROR request 9f3a2b1c failed\n";
+    return text;
+}
+
+TEST(context_router_classifies_content) {
+    CHECK(cc::classifyContent(bigJson(40)).kind == cc::ContentKind::Json);
+    CHECK(cc::classifyContent(repeatedLog(20)).kind == cc::ContentKind::Log);
+    CHECK(cc::classifyContent(
+              "#include <string>\n#include <vector>\n\n// Utilidades de texto do modulo de relatorios, com "
+              "comentarios longos para passar do limiar minimo do classificador.\nnamespace x {\nclass A {\npublic:\n"
+              "    int f() { return 1; }\n    int g() { return 2; }\n    int h() { return 3; }\n};\n}\n// fim do arquivo\n")
+              .kind == cc::ContentKind::Code);
+    CHECK(cc::classifyContent(
+              "Este e um texto corrido sobre arquitetura de software, sem marcadores de codigo, sem "
+              "timestamps e sem estrutura JSON. Ele existe apenas para representar prosa longa o "
+              "suficiente para o classificador nao cair no caso pequeno. As frases seguem em periodos "
+              "comuns, com virgulas e pontos finais, e nenhuma linha termina em ponto e virgula ou chave. "
+              "O objetivo e exercitar a decisao pelo caminho padrao.")
+              .kind == cc::ContentKind::Prose);
+    CHECK(cc::classifyContent("curto").kind == cc::ContentKind::Skip);
+}
+
+TEST(smart_crusher_samples_long_arrays_and_keeps_keys) {
+    cc::JsonOptions options;
+    options.maxArrayItems = 5;
+
+    const std::string input = bigJson(100);
+    cc::CompressResult result = cc::crushJson(input, options);
+    CHECK(result.changed);
+    CHECK(result.bytesAfter < result.bytesBefore);
+    CHECK(result.text.find("\"id\"") != std::string::npos);
+    CHECK(result.text.find("itens omitidos") != std::string::npos);
+
+    auto parsed = taskforge::jsonutil::tryParse(result.text);
+    CHECK(parsed.has_value());
+    CHECK(parsed->at("results").size() == 6);          // 5 itens + marcador
+    CHECK(parsed->at("results").at(static_cast<size_t>(0)).at("id").get<int>() == 0);
+    CHECK(parsed->at("total").get<int>() == 100);
+
+    // JSON pequeno ou invalido nao muda.
+    CHECK(!cc::crushJson("{\"a\":1}", options).changed);
+    CHECK(!cc::crushJson("{oops", options).changed);
+}
+
+TEST(log_compressor_collapses_repeats_and_keeps_critical) {
+    cc::LogOptions options;
+    const std::string input = repeatedLog(40);
+    cc::CompressResult result = cc::compressLog(input, options);
+    CHECK(result.changed);
+    CHECK(result.bytesAfter < result.bytesBefore);
+    CHECK(result.text.find("FATAL") != std::string::npos);
+    CHECK(result.text.find("ERROR") != std::string::npos);
+    CHECK(result.text.find("omitida") != std::string::npos);
+    // Nao pode reordenar: o FATAL continua depois dos blocos de repeticao.
+    CHECK(result.text.find("FATAL") > result.text.find("INFO"));
+}
+
+TEST(ccr_store_roundtrip_and_rejects_invalid_tokens) {
+    fs::path root = makeTempDir("ccr");
+    cc::CcrStore store(root, "proj", "run-1");
+    const std::string original = bigJson(3);
+    const std::string token = store.store(original);
+    CHECK(token.size() == 16);
+    auto back = store.retrieve(token);
+    CHECK(back.has_value());
+    CHECK(*back == original);
+
+    CHECK(!store.retrieve("../etc/passwd").has_value());
+    CHECK(!store.retrieve("zzzz").has_value());
+    CHECK(!store.retrieve("0000000000000000").has_value());
+    fs::remove_all(root);
+}
+
+TEST(ccr_store_prunes_across_runs_by_size_and_age) {
+    fs::path root = makeTempDir("ccr-prune");
+
+    cc::CcrLimits limits;
+    limits.maxAge = std::chrono::hours(24 * 7);
+    limits.maxBytes = 500;
+
+    std::string oldToken;
+    {
+        cc::CcrStore run1(root, "proj", "run-1", limits);
+        oldToken = run1.store(std::string(300, 'a'));
+        CHECK(oldToken.size() == 16);
+        // Envelhece o arquivo para a ordem da poda ser deterministica.
+        std::error_code ec;
+        fs::last_write_time(run1.directory() / (oldToken + ".txt"),
+                            fs::file_time_type::clock::now() - std::chrono::hours(1), ec);
+        CHECK(!ec);
+    }
+
+    cc::CcrStore run2(root, "proj", "run-2", limits);
+    const std::string newToken = run2.store(std::string(300, 'b'));
+    CHECK(newToken.size() == 16);
+
+    // Projeto passou de 500 bytes: a execucao mais antiga foi removida.
+    cc::CcrStore check(root, "proj", "run-2", limits);
+    CHECK(!check.retrieve(oldToken).has_value());
+    CHECK(check.retrieve(newToken).has_value());
+
+    // Idade: um arquivo vencido some no proximo store, mesmo de outra execucao.
+    cc::CcrLimits shortLived;
+    shortLived.maxAge = std::chrono::hours(1);
+    shortLived.maxBytes = 1ull * 1024 * 1024;
+    cc::CcrStore aged(root, "proj2", "run-1", shortLived);
+    const std::string agedToken = aged.store(std::string(50, 'c'));
+    std::error_code ec;
+    fs::last_write_time(aged.directory() / (agedToken + ".txt"),
+                        fs::file_time_type::clock::now() - std::chrono::hours(2), ec);
+    CHECK(!ec);
+    cc::CcrStore aged2(root, "proj2", "run-2", shortLived);
+    (void)aged2.store(std::string(50, 'd'));
+    CHECK(!aged2.retrieve(agedToken).has_value());
+
+    fs::remove_all(root);
+}
+
+static std::string sampleCppFile() {
+    return "#include <string>\n"
+           "#include <vector>\n"
+           "\n"
+           "// Classe de exemplo usada nos testes de compactacao de codigo.\n"
+           "namespace demo {\n"
+           "class Accumulator {\n"
+           "public:\n"
+           "    int value() const;\n"
+           "    void big(int limit) {\n"
+           "        for (int i = 0; i < limit; ++i) {\n"
+           "            value_ += i;\n"
+           "            if (value_ > 3) {\n"
+           "                value_ -= 1;\n"
+           "                total_ += value_;\n"
+           "            }\n"
+           "            value_ *= 2;\n"
+           "        }\n"
+           "    }\n"
+           "private:\n"
+           "    int value_ = 0;\n"
+           "    int total_ = 0;\n"
+           "};\n"
+           "}\n";
+}
+
+TEST(code_compressor_keeps_signatures_and_collapses_bodies) {
+    const std::string input = sampleCppFile();
+    cc::CompressResult result = cc::compressCode(input, cc::CodeOptions{});
+
+    CHECK(result.changed);
+    CHECK(result.bytesAfter < result.bytesBefore);
+    CHECK(result.text.find("#include <string>") != std::string::npos);
+    CHECK(result.text.find("class Accumulator") != std::string::npos);
+    CHECK(result.text.find("void big(int limit) {") != std::string::npos);
+    CHECK(result.text.find("int value_ = 0;") != std::string::npos);
+    CHECK(result.text.find("linha(s) omitida(s)") != std::string::npos);
+    // Corpo do metodo nao entra na visao comprimida.
+    CHECK(result.text.find("value_ += i;") == std::string::npos);
+    CHECK(result.text.find("total_ += value_;") == std::string::npos);
+}
+
+TEST(code_compressor_handles_python_indentation) {
+    std::string input;
+    for (int i = 0; i < 12; ++i) {
+        input += "def funcao_" + std::to_string(i) + "(valor):\n";
+        input += "    total = valor + " + std::to_string(i) + "\n";
+        input += "    if total > 10:\n";
+        input += "        total = total - 1\n";
+        input += "    return total\n";
+        input += "\n";
+    }
+    cc::CompressResult result = cc::compressCode(input, cc::CodeOptions{});
+    CHECK(result.changed);
+    CHECK(result.text.find("def funcao_0(valor):") != std::string::npos);
+    CHECK(result.text.find("return total") == std::string::npos);
+    CHECK(result.text.find("linha(s) omitida(s)") != std::string::npos);
+}
+
+static std::string extractToken(const std::string& text) {
+    const size_t at = text.find("[CCR:");
+    if (at == std::string::npos) return {};
+    const size_t end = text.find(']', at);
+    if (end == std::string::npos) return {};
+    return text.substr(at + 5, end - at - 5);
+}
+
+TEST(context_compressor_compresses_only_tool_messages_with_ccr) {
+    fs::path root = makeTempDir("ctxcompress");
+    cc::CompressionSettings settings;
+    settings.enabled = true;
+    settings.minBlockTokens = 64;
+    settings.minRunTokens = 128;
+    settings.maxArrayItems = 5;
+
+    cc::CcrStore store(root, "proj", "run-1");
+    cc::ContextCompressor compressor(settings, &store, taskforge::rt::RuntimeLang::Pt);
+
+    taskforge::rt::ChatMessage toolBig;
+    toolBig.role = "tool";
+    toolBig.text = bigJson(100);
+    toolBig.toolCallId = "call-1";
+
+    taskforge::rt::ChatMessage toolSmall;
+    toolSmall.role = "tool";
+    toolSmall.text = "{\"ok\":true}";
+    toolSmall.toolCallId = "call-2";
+
+    taskforge::rt::ChatMessage finalMessage;
+    finalMessage.role = "assistant";
+    finalMessage.text = "concluido";
+
+    std::vector<taskforge::rt::ChatMessage> messages{toolBig, toolSmall, finalMessage};
+    const std::string original = toolBig.text;
+    const cc::CompressionStats stats = compressor.apply(messages);
+
+    CHECK(stats.blocks == 1);
+    CHECK(stats.tokensAfter < stats.tokensBefore);
+    CHECK(stats.kinds == "json");
+    CHECK(messages[0].text.find("[CCR:") != std::string::npos);
+    CHECK(messages[1].text == "{\"ok\":true}");
+    CHECK(messages[2].text == "concluido");
+
+    const std::string token = extractToken(messages[0].text);
+    CHECK(token.size() == 16);
+    auto back = store.retrieve(token);
+    CHECK(back.has_value());
+    CHECK(*back == original);
+
+    // Reaplicar nao recomprime o que ja esta marcado.
+    const cc::CompressionStats again = compressor.apply(messages);
+    CHECK(again.blocks == 0);
+
+    fs::remove_all(root);
+}
+
+static taskforge::Json tinyWordPiece() {
+    taskforge::Json vocab = taskforge::Json::object();
+    vocab["[PAD]"] = 0;
+    vocab["[UNK]"] = 1;
+    vocab["[CLS]"] = 2;
+    vocab["[SEP]"] = 3;
+    vocab["the"] = 4;
+    vocab["quick"] = 5;
+    vocab["brown"] = 6;
+    vocab["fox"] = 7;
+    vocab["jumps"] = 8;
+    vocab["over"] = 9;
+    vocab["lazy"] = 10;
+    vocab["dog"] = 11;
+    vocab["."] = 12;
+    vocab["run"] = 13;
+    vocab["##s"] = 14;
+    vocab["cafe"] = 15;
+    vocab["http"] = 16;
+    vocab["example"] = 17;
+    vocab["report"] = 18;
+
+    taskforge::Json model = taskforge::Json::object();
+    model["type"] = "WordPiece";
+    model["unk_token"] = "[UNK]";
+    model["continuing_subword_prefix"] = "##";
+    model["max_input_chars_per_word"] = 100;
+    model["vocab"] = vocab;
+
+    taskforge::Json normalizer = taskforge::Json::object();
+    normalizer["type"] = "BertNormalizer";
+    normalizer["clean_text"] = true;
+    normalizer["lowercase"] = true;
+    normalizer["strip_accents"] = true;
+
+    taskforge::Json preTokenizer = taskforge::Json::object();
+    preTokenizer["type"] = "BertPreTokenizer";
+
+    taskforge::Json root = taskforge::Json::object();
+    root["model"] = model;
+    root["normalizer"] = normalizer;
+    root["pre_tokenizer"] = preTokenizer;
+    return root;
+}
+
+static taskforge::Json tinyByteLevelBpe() {
+    const std::string g = "\xC4\xA0";   // Ġ (ByteLevel do espaco)
+    taskforge::Json vocab = taskforge::Json::object();
+    vocab["[UNK]"] = 0;
+    vocab["[CLS]"] = 1;
+    vocab["[SEP]"] = 2;
+    vocab["t"] = 3;
+    vocab["h"] = 4;
+    vocab["e"] = 5;
+    vocab["th"] = 6;
+    vocab["the"] = 7;
+    vocab[g] = 8;
+    vocab[g + "the"] = 10;
+    vocab["."] = 11;
+
+    taskforge::Json merges = taskforge::Json::array();
+    merges.push_back(taskforge::Json::array({"t", "h"}));
+    merges.push_back(taskforge::Json::array({"th", "e"}));
+    merges.push_back(taskforge::Json::array({g, "the"}));
+
+    taskforge::Json model = taskforge::Json::object();
+    model["type"] = "BPE";
+    model["vocab"] = vocab;
+    model["merges"] = merges;
+
+    taskforge::Json preTokenizer = taskforge::Json::object();
+    preTokenizer["type"] = "ByteLevel";
+    preTokenizer["add_prefix_space"] = false;
+    preTokenizer["use_regex"] = true;
+
+    taskforge::Json added = taskforge::Json::array();
+    added.push_back(taskforge::Json{{"id", 1}, {"content", "[CLS]"}, {"special", true}});
+    added.push_back(taskforge::Json{{"id", 2}, {"content", "[SEP]"}, {"special", true}});
+    added.push_back(taskforge::Json{{"id", 0}, {"content", "[UNK]"}, {"special", true}});
+    added.push_back(taskforge::Json{{"id", 14}, {"content", "[IP]"}, {"special", false}});
+
+    taskforge::Json root = taskforge::Json::object();
+    root["model"] = model;
+    root["pre_tokenizer"] = preTokenizer;
+    root["added_tokens"] = added;
+    return root;
+}
+
+TEST(prose_tokenizer_bpe_bytelevel_offsets) {
+    auto tokenizer = cc::ProseTokenizer::fromJson(tinyByteLevelBpe());
+    CHECK(tokenizer.has_value());
+    CHECK(tokenizer->isByteLevelBpe());
+    CHECK(tokenizer->clsId() == 1);
+    CHECK(tokenizer->sepId() == 2);
+    CHECK(tokenizer->unkId() == 0);
+
+    const auto simple = tokenizer->tokenize("the", 0);
+    CHECK(simple.size() == 1);
+    CHECK(simple[0].id == 7);
+
+    const std::string spacedText = " the.";
+    const auto spaced = tokenizer->tokenize(spacedText, 0);
+    CHECK(spaced.size() == 2);
+    CHECK(spaced[0].id == 10);   // " the"
+    CHECK(spaced[1].id == 11);   // "."
+    CHECK(spacedText.substr(spaced[0].start, spaced[0].end - spaced[0].start) == " the");
+    CHECK(spacedText.substr(spaced[1].start, spaced[1].end - spaced[1].start) == ".");
+
+    const auto withAdded = tokenizer->tokenize("the[IP]", 0);
+    CHECK(withAdded.size() == 2);
+    CHECK(withAdded[0].id == 7);
+    CHECK(withAdded[1].id == 14);
+}
+
+TEST(prose_tokenizer_wordpiece_offsets) {
+    auto tokenizer = cc::ProseTokenizer::fromJson(tinyWordPiece());
+    CHECK(tokenizer.has_value());
+
+    const std::string text = "The quick brown fox jumps over the lazy dog.";
+    const auto tokens = tokenizer->tokenize(text, 0);
+    CHECK(tokens.size() == 10);
+    CHECK(tokens.front().id == 4);   // lowercased "the"
+    CHECK(text.substr(tokens.front().start, tokens.front().end - tokens.front().start) == "The");
+    CHECK(tokens.back().id == 12);   // "."
+    CHECK(text.substr(tokens.back().start, tokens.back().end - tokens.back().start) == ".");
+
+    const auto runs = tokenizer->tokenize("runs", 0);
+    CHECK(runs.size() == 2);
+    CHECK(runs[0].id == 13);
+    CHECK(runs[1].id == 14);
+
+    const std::string cafeText = "café";
+    const auto cafe = tokenizer->tokenize(cafeText, 0);
+    CHECK(cafe.size() == 1);
+    CHECK(cafe[0].id == 15);
+    CHECK(cafeText.substr(cafe[0].start, cafe[0].end - cafe[0].start) == "café");
+}
+
+TEST(prose_tokenizer_rejects_other_models) {
+    taskforge::Json other = taskforge::Json::object();
+    taskforge::Json model = taskforge::Json::object();
+    model["type"] = "BPE";
+    other["model"] = model;
+    CHECK(!cc::ProseTokenizer::fromJson(other).has_value());
+}
+
+class EveryFifthProseModel : public cc::ProseModel {
+public:
+    bool available() const override { return true; }
+    std::vector<float> keepProbabilities(const std::vector<int>& ids) override {
+        std::vector<float> out(ids.size(), 0.1f);
+        for (size_t i = 0; i < out.size(); i += 5) out[i] = 0.9f;
+        return out;
+    }
+};
+
+class WindowRecordingProseModel : public cc::ProseModel {
+public:
+    bool available() const override { return true; }
+    std::vector<float> keepProbabilities(const std::vector<int>& ids) override {
+        windows.push_back(ids.size());
+        return std::vector<float>(ids.size(), 0.1f);
+    }
+    std::vector<size_t> windows;
+};
+
+class UnavailableProseModel : public cc::ProseModel {
+public:
+    bool available() const override { return false; }
+    std::vector<float> keepProbabilities(const std::vector<int>&) override { return {}; }
+};
+
+TEST(prose_compressor_keeps_urls_and_punctuation) {
+    auto tokenizer = cc::ProseTokenizer::fromJson(tinyWordPiece());
+    CHECK(tokenizer.has_value());
+
+    std::string text;
+    for (int i = 0; i < 6; ++i) text += "the quick brown fox jumps over the lazy dog. ";
+    text += "See https://example.com/report.pdf and the quick brown fox.";
+
+    EveryFifthProseModel model;
+    const cc::CompressResult result = cc::compressProse(text, *tokenizer, model, cc::ProseOptions{});
+    CHECK(result.changed);
+    CHECK(result.bytesAfter < result.bytesBefore);
+    CHECK(result.text.find("https://example.com/report.pdf") != std::string::npos);
+    CHECK(result.text.find('.') != std::string::npos);
+}
+
+TEST(prose_compressor_is_noop_without_model) {
+    auto tokenizer = cc::ProseTokenizer::fromJson(tinyWordPiece());
+    CHECK(tokenizer.has_value());
+    const std::string text = "the quick brown fox jumps over the lazy dog. the quick brown fox jumps over the lazy dog.";
+    UnavailableProseModel model;
+    const cc::CompressResult result = cc::compressProse(text, *tokenizer, model, cc::ProseOptions{});
+    CHECK(!result.changed);
+    CHECK(result.text == text);
+}
+
+TEST(prose_compressor_chunks_long_text_into_windows) {
+    auto tokenizer = cc::ProseTokenizer::fromJson(tinyWordPiece());
+    CHECK(tokenizer.has_value());
+    std::string text;
+    for (int i = 0; i < 30; ++i) text += "the quick brown fox jumps over the lazy dog. ";
+    const size_t total = tokenizer->tokenize(text, 0).size();
+    CHECK(total > 64);
+
+    WindowRecordingProseModel model;
+    cc::ProseOptions options;
+    options.maxTokens = 100000;
+    options.windowTokens = 32;
+    const cc::CompressResult result = cc::compressProse(text, *tokenizer, model, options);
+    CHECK(model.windows.size() >= 2);
+    size_t covered = 0;
+    for (size_t size : model.windows) {
+        CHECK(size <= 32);
+        covered += size;
+    }
+    CHECK(covered == total);
+    CHECK(result.changed);
+}
+
+TEST(prose_compressor_skips_blocks_above_max_tokens_without_truncating) {
+    auto tokenizer = cc::ProseTokenizer::fromJson(tinyWordPiece());
+    CHECK(tokenizer.has_value());
+    std::string text;
+    for (int i = 0; i < 30; ++i) text += "the quick brown fox jumps over the lazy dog. ";
+    const size_t total = tokenizer->tokenize(text, 0).size();
+    CHECK(total > 32);
+
+    WindowRecordingProseModel model;
+    cc::ProseOptions options;
+    options.maxTokens = total - 1;
+    const cc::CompressResult result = cc::compressProse(text, *tokenizer, model, options);
+    CHECK(!result.changed);
+    CHECK(result.text == text);
+    CHECK(model.windows.empty());
+}
+
+TEST(prose_model_manifest_pins_urls_and_hashes) {
+    const auto manifest = cc::proseModelManifest();
+    CHECK(manifest.value("id", std::string()) == "kompress-v2-base");
+    CHECK(manifest.value("revision", std::string()).size() == 40);
+
+    const auto& files = manifest["files"];
+    CHECK(files.size() == 4);
+    bool sawFp32 = false;
+    bool sawInt8 = false;
+    bool sawTokenizer = false;
+    bool sawConfig = false;
+    for (const auto& file : files) {
+        const std::string name = file.value("name", std::string());
+        const std::string url = file.value("url", std::string());
+        const std::string hash = file.value("sha256", std::string());
+        const long long size = file.value("size", 0LL);
+        CHECK(url.rfind("https://huggingface.co/chopratejas/kompress-v2-base/resolve/", 0) == 0);
+        CHECK(hash.size() == 64);
+        CHECK(size > 0);
+        if (name == "kompress-fp32.onnx") {
+            sawFp32 = true;
+            CHECK(size == 600561247);
+            CHECK(file.value("variant", std::string()) == "fp32");
+        } else if (name == "kompress-int8-wo.onnx") {
+            sawInt8 = true;
+            CHECK(size == 274049435);
+            CHECK(file.value("variant", std::string()) == "int8");
+        } else if (name == "tokenizer.json") {
+            sawTokenizer = true;
+            CHECK(size == 3583228);
+        } else if (name == "config.json") {
+            sawConfig = true;
+            CHECK(size == 432);
+        }
+    }
+    CHECK(sawFp32);
+    CHECK(sawInt8);
+    CHECK(sawTokenizer);
+    CHECK(sawConfig);
+
+    CHECK(cc::proseModelDownloadStatus("pd-missing").value("ok", true) == false);
+}
+
+TEST(prose_model_installer_rejects_unknown_variant) {
+    std::string error;
+    const std::string job = cc::startProseModelDownload("../etc", error);
+    CHECK(job.empty());
+    CHECK(error == "invalid_variant");
+    CHECK(cc::cancelProseModelDownload("pd-missing") == false);
+}
+
+TEST(prose_recommendation_picks_variant_by_machine_capacity) {
+    cc::MachineProfile strong{8, 32 * 1024, 16 * 1024, 200 * 1024};
+    CHECK(cc::recommendProseVariant(strong).variant == "fp32");
+
+    cc::MachineProfile tightRam{4, 8 * 1024, 1024, 50 * 1024};
+    CHECK(cc::recommendProseVariant(tightRam).variant == "int8");
+
+    // fp32 nao cabe no disco, int8 cabe.
+    cc::MachineProfile tightDisk{8, 16 * 1024, 4 * 1024, 800};
+    CHECK(cc::recommendProseVariant(tightDisk).variant == "int8");
+
+    cc::MachineProfile tiny{4, 4 * 1024, 1024, 400};
+    auto none = cc::recommendProseVariant(tiny);
+    CHECK(none.variant == "none");
+    CHECK(none.reason == "disk");
+
+    cc::MachineProfile singleCore{1, 32 * 1024, 16 * 1024, 200 * 1024};
+    auto cpu = cc::recommendProseVariant(singleCore);
+    CHECK(cpu.variant == "none");
+    CHECK(cpu.reason == "cpu");
+
+    // GPU dedicada + DirectML: fp32 na GPU vence o CPU.
+    cc::MachineProfile gpu = strong;
+    gpu.dmlAvailable = true;
+    gpu.gpus = {{0, "Intel UHD", 1024, "intel"}, {1, "GeForce GTX 1650", 4096, "nvidia"}};
+    gpu.dmlDevice = 1;
+    CHECK(cc::recommendProseVariant(gpu).variant == "gpu");
+
+    // GPU presente, mas build sem DirectML: continua no CPU.
+    gpu.dmlAvailable = false;
+    CHECK(cc::recommendProseVariant(gpu).variant == "fp32");
+
+    // So iGPU: nao vale a pena; CPU fp32.
+    cc::MachineProfile igpu = strong;
+    igpu.dmlAvailable = true;
+    igpu.gpus = {{0, "Intel UHD", 1024, "intel"}};
+    igpu.dmlDevice = -1;
+    CHECK(cc::recommendProseVariant(igpu).variant == "fp32");
+
+    // Sonda real: nunca devolve perfil vazio (ambiente de teste tem CPU e RAM).
+    cc::MachineProfile detected = cc::detectMachineProfile(fs::temp_directory_path());
+    CHECK(detected.cpuThreads >= 1);
+    CHECK(detected.ramTotalMB > 0);
+}
+
+TEST(prose_recommendation_picks_discrete_gpu_for_directml) {
+    std::vector<cc::GpuInfo> hybrid{{0, "Intel UHD", 1024, "intel"},
+                                    {1, "GeForce GTX 1650", 4096, "nvidia"},
+                                    {2, "Microsoft Basic Render Driver", 0, "microsoft"}};
+    CHECK(cc::bestDmlDevice(hybrid) == 1);
+
+    std::vector<cc::GpuInfo> igpuOnly{{0, "Intel UHD", 1024, "intel"}};
+    CHECK(cc::bestDmlDevice(igpuOnly) == -1);
+
+    std::vector<cc::GpuInfo> strongGpu{{0, "GeForce RTX 4090", 24576, "nvidia"},
+                                       {1, "Intel UHD", 1024, "intel"}};
+    CHECK(cc::bestDmlDevice(strongGpu) == 0);
+
+    std::vector<cc::GpuInfo> software{{0, "Microsoft Basic Render Driver", 0, "microsoft"}};
+    CHECK(cc::bestDmlDevice(software) == -1);
+}
+
+TEST(context_compressor_skips_code_of_files_being_edited) {
+    fs::path root = makeTempDir("ctxcode");
+    cc::CompressionSettings settings;
+    settings.enabled = true;
+    settings.minBlockTokens = 64;
+    settings.minRunTokens = 64;
+    settings.code = true;
+
+    cc::CcrStore store(root, "proj", "run-1");
+    cc::ContextCompressor compressor(settings, &store, taskforge::rt::RuntimeLang::Pt);
+
+    taskforge::rt::ChatMessage readCall;
+    readCall.role = "assistant";
+    readCall.toolCalls.push_back(taskforge::rt::ChatToolCall{
+        "r1", "read", taskforge::Json{{"path", "src/app.cpp"}}});
+
+    taskforge::rt::ChatMessage readResult;
+    readResult.role = "tool";
+    readResult.toolCallId = "r1";
+    readResult.text = sampleCppFile();
+
+    taskforge::rt::ChatMessage editCall;
+    editCall.role = "assistant";
+    editCall.toolCalls.push_back(taskforge::rt::ChatToolCall{
+        "w1", "edit", taskforge::Json{{"path", "src\\app.cpp"}}});   // normalizacao de separador
+
+    taskforge::rt::ChatMessage editResult;
+    editResult.role = "tool";
+    editResult.toolCallId = "w1";
+    editResult.text = "ok";
+
+    taskforge::rt::ChatMessage finalMessage;
+    finalMessage.role = "assistant";
+    finalMessage.text = "feito";
+
+    std::vector<taskforge::rt::ChatMessage> withEdit{readCall, readResult, editCall, editResult, finalMessage};
+    const std::string original = readResult.text;
+    CHECK(compressor.apply(withEdit).blocks == 0);
+    CHECK(withEdit[1].text == original);
+
+    // Sem a edicao, o mesmo arquivo e comprimido normalmente.
+    std::vector<taskforge::rt::ChatMessage> withoutEdit{readCall, readResult, finalMessage};
+    const cc::CompressionStats applied = compressor.apply(withoutEdit);
+    CHECK(applied.blocks == 1);
+    CHECK(withoutEdit[1].text.find("[CCR:") != std::string::npos);
+    CHECK(withoutEdit[1].text.find("value_ += i;") == std::string::npos);
+
+    fs::remove_all(root);
+}
+
+TEST(context_compressor_is_off_by_default_and_never_touches_last_message) {
+    fs::path root = makeTempDir("ctxoff");
+    cc::CcrStore store(root, "proj", "run-1");
+
+    taskforge::rt::ChatMessage tool;
+    tool.role = "tool";
+    tool.text = bigJson(100);
+
+    std::vector<taskforge::rt::ChatMessage> messages{tool};
+    // Mensagem unica e a ultima: nunca e tocada.
+    cc::CompressionSettings enabled;
+    enabled.enabled = true;
+    enabled.minBlockTokens = 64;
+    enabled.minRunTokens = 128;
+    cc::ContextCompressor on(enabled, &store, taskforge::rt::RuntimeLang::Pt);
+    CHECK(on.apply(messages).blocks == 0);
+    CHECK(messages[0].text.find("[CCR:") == std::string::npos);
+
+    // Desligado: nada muda, mesmo com run grande.
+    taskforge::rt::ChatMessage first;
+    first.role = "tool";
+    first.text = bigJson(100);
+    taskforge::rt::ChatMessage last;
+    last.role = "assistant";
+    last.text = "fim";
+    std::vector<taskforge::rt::ChatMessage> pair{first, last};
+    cc::ContextCompressor off(cc::CompressionSettings{}, &store, taskforge::rt::RuntimeLang::Pt);
+    CHECK(off.apply(pair).blocks == 0);
+    CHECK(pair[0].text == first.text);
+
+    fs::remove_all(root);
 }
 
 int main(int argc, char** argv) {

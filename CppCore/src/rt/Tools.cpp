@@ -2,6 +2,7 @@
 #include "memory/MemoryService.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <iterator>
 #include <map>
@@ -144,6 +145,14 @@ std::vector<ToolDef> toolDefinitions(const std::vector<std::string>& allowed, Ru
                                         {"rule", {{"type", "string"}, {"description", langPick(lang, "Regra preventiva", "Preventive rule")}}},
                                         {"trigger", {{"type", "string"}, {"description", langPick(lang, "Erro ou situacao que motivou a licao", "Error or situation that motivated the lesson")}}}}},
                         {"required", {"domain", "rule"}}}});
+
+    all.push_back({"retrieve",
+                   langPick(lang,
+                            "Le o conteudo original de um trecho que foi comprimido para caber no contexto.",
+                            "Reads the original content of a block that was compressed to fit the context."),
+                   json{{"type", "object"},
+                        {"properties", {{"token", {{"type", "string"}, {"description", langPick(lang, "Token mostrado no aviso do trecho comprimido", "Token shown in the compressed block notice")}}}}},
+                        {"required", {"token"}}}});
 
     std::vector<ToolDef> out;
     for (auto& t : all) {
@@ -429,6 +438,33 @@ ToolResult executeTool(ToolContext& ctx, const std::string& name, const json& ar
             if (id.empty()) return err(T("Nao foi possivel registrar a licao.", "Could not record the lesson."));
             ++ctx.memoryLessonsWritten;
             return ToolResult{T("OK: licao registrada (", "OK: lesson recorded (") + id + ")", false};
+        }
+
+        if (name == "retrieve") {
+            const std::string token = stringArg(args, "token");
+            if (token.empty()) return err(T("Parametro 'token' ausente.", "Missing parameter 'token'."));
+            if (token.size() != 16 ||
+                !std::all_of(token.begin(), token.end(), [](unsigned char c) { return std::isxdigit(c) != 0; })) {
+                return err(T("Token invalido.", "Invalid token."));
+            }
+            if (ctx.ccrDir.empty()) {
+                return err(T("Nenhum trecho comprimido nesta execucao.", "No compressed block in this run."));
+            }
+            const fs::path file = ctx.ccrDir / (token + ".txt");
+            std::error_code ec;
+            if (!fs::exists(file, ec)) {
+                return err(T("Token nao encontrado (a execucao pode ter expirado).",
+                             "Token not found (the run may have expired)."));
+            }
+            std::ifstream in(file, std::ios::binary);
+            if (!in) return err(T("Nao foi possivel ler o original.", "Could not read the original."));
+            std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            // O original pode ser grande; devolve inteiro ate 1 MB e corta acima disso.
+            if (content.size() > 1024 * 1024) {
+                content.resize(1024 * 1024);
+                content += T("\n[... original truncado em 1 MB ...]", "\n[... original truncated at 1 MB ...]");
+            }
+            return ToolResult{std::move(content), false};
         }
 
         if (name == "bash") {

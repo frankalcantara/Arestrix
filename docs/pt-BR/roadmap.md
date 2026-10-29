@@ -1,6 +1,6 @@
 # Roadmap e limitações conhecidas
 
-> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Última revisão: 2026-10-27
+> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Última revisão: 2026-10-28
 >
 > Esta página registra o que está intencionalmente incompleto e a ordem planejada para resolver. Não é
 > um compromisso de datas.
@@ -99,6 +99,37 @@ Limitações do serviço institucional e do background:
 - Qualidade/velocidade do 14B depende de GPU/VRAM; execução somente em CPU é lenta.
 - Ainda não há atualização automática de modelos, deduplicação ou cota de disco.
 - Os pesos não são redistribuídos; o download depende do publicador upstream e da licença.
+
+### Agentes: distância em relação a harnesses de chat
+
+Comparação feita em 2026-10-28 com o modelo conceitual de agentes descrito na documentação do
+VS Code/Copilot — loop, contexto, multiagente e controle —, não com a IDE. A lista cobre apenas o
+loop do agente: execução determinística, governança de skills/MCP, memória de projeto e
+observabilidade são eixos em que o Arestrix já vai além desse modelo.
+
+| Lacuna | Peso | Situação |
+| :--- | :--- | :--- |
+| **Compactação e orçamento de contexto no loop.** Cada saída de ferramenta é limitada a 32 KB (`kMaxToolOutput`), mas `chat.messages` só cresce (até 30 turnos): não há sumarização, descarte nem orçamento global, e a janela do modelo não é medida. | Alto | Depois da memória. O passo barato não é limitar por ferramenta (isso já existe), e sim um teto **global** de caracteres por run, com sumarização/descarte do histórico antigo quando estourar. |
+| **Política por chamada de ferramenta** (`allow` / `ask` / `deny`, com padrão de argumento). Hoje a allowlist é binária: a ferramenta existe ou não existe, e não há pausa para aprovação dentro do turno. | Alto | A decidir. O caminho `ask` reaproveita o canal de interação já existente (o C++ bloqueia, o Studio mostra o pedido, com timeout e auditoria). |
+| **Handoff com transferência de contexto.** Chamadas isolam o alvo de propósito (só o input explícito); não existe passar o bastão levando a conversa. | Médio | Avaliar quando houver caso de uso conversacional; o vértice de interação cobre a aprovação entre etapas. |
+| **Carregamento progressivo de skills.** O `SKILL.md` inteiro entra no system prompt; não há descoberta por nome/descrição nem leitura sob demanda dos recursos da pasta. | Médio | Cresce com o número de skills e de arquivos de apoio. |
+| **Ferramenta `web` nativa.** O conjunto nativo é `read`, `write`, `edit`, `bash`, `validate_svg` e as duas de memória. | Médio-baixo | Coberta por MCP; avaliar demanda antes de criar tool nativa. |
+| **Fallback de modelo por agente.** Há modelo por vértice, mas não lista de preferência (A → B) para 429/indisponibilidade. | Médio-baixo | Resiliência por provedor; o gateway faz fail-closed, não fallback. |
+| **Instruções de projeto sempre ativas e escopadas por caminho** (`AGENTS.md`, `applyTo`) e **prompt files** parametrizados. | Médio para times | Skills por agente, defaults do projeto e templates cobrem parte; não há arquivo global nem escopo por glob. |
+| **OAuth em MCP HTTP.** Suportamos stdio e HTTPS com headers/env e validação de URL pública. | Baixo | Sem fluxo interativo de autorização. |
+| **Hooks de ciclo de vida** (`preToolUse`, `postToolUse`, `sessionStart`…). | Não planejado como sistema genérico | Cobertura parcial por vértices MCP, validação estática, seção crítica e interação — mas nenhum deles veta uma chamada **dentro** do loop. O caso real (comando destrutivo com `bash`) deve ser tratado por política de comandos, não por um runtime de hooks. |
+| **Execução remota/cloud e sessões em background.** | Fora de escopo | O produto é desktop + CLI + gateway; o Runner standalone cobre a execução empacotada. |
+
+Duas decisões registradas:
+
+- **Memória antes de compactação.** A memória resolve o problema *entre* execuções (brief curado,
+  notas, lições) e reduz a pressão sobre o contexto, mas não substitui a compactação *dentro* de um
+  run: a lista de mensagens continua crescendo. O teto global de contexto não depende da memória e
+  pode entrar antes dela.
+- **Vértices MCP não substituem hooks.** Um vértice MCP é uma tarefa determinística no grafo: adiciona
+  capacidade e impõe ordem. Um hook intercepta o ciclo de vida e pode negar uma ação que o modelo
+  escolheu. O que os dois compartilham é "decisão do runtime, não do modelo"; o que falta é o veto
+  dentro do loop.
 
 ## Beta 2.3 (pré-release)
 

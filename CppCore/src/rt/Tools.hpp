@@ -50,6 +50,7 @@ std::vector<std::string> validateSvg(const std::string& svg, RuntimeLang lang = 
 
 struct ToolContext {
     std::filesystem::path workspaceRoot;
+    std::filesystem::path ccrDir;        // .arestrix/ccr/<runId> (compressão reversível)
     sandbox::SandboxPolicy sandbox;
     std::string agentId;
     std::string projectId;              // projeto da memoria (MemoryService)

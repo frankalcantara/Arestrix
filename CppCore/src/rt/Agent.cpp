@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <fstream>
 #include <future>
@@ -24,6 +25,8 @@
 #include "rt/ModelClient.hpp"
 #include "rt/RuntimeLang.hpp"
 #include "rt/Tools.hpp"
+#include "rt/compress/CcrStore.hpp"
+#include "rt/compress/ContextCompressor.hpp"
 #include "sandbox/AgentTelemetryEmitter.hpp"
 #include "util/Json.hpp"
 
@@ -99,6 +102,7 @@ struct AgentSpec {
     std::vector<std::string> mcpServers;   // ids em .workspace/mcps
     std::vector<std::string> mcpAllowed;   // nomes de ferramentas MCP permitidas (vazio = todas do servidor)
     sandbox::SandboxPolicy sandbox;
+    compress::CompressionSettings compression;
 };
 
 sandbox::IsolationType parseIsolation(const std::string& s) {
@@ -163,6 +167,34 @@ AgentSpec parseSpec(const json& j, const std::string& nodeId, const std::string&
                 for (const auto& m : sb[key]) if (m.is_string()) dst.push_back(m.get<std::string>());
             }
         }
+    }
+
+    // Compactacao de contexto: desligada por padrao; o projeto/vertice liga no spec.
+    if (j.contains("compression") && j["compression"].is_object()) {
+        const auto& c = j["compression"];
+        s.compression.enabled = c.value("enabled", false);
+        s.compression.minBlockTokens = static_cast<size_t>(
+            std::max<int64_t>(100, std::min<int64_t>(100000, c.value("minBlockTokens", 2000))));
+        s.compression.minRunTokens = static_cast<size_t>(
+            std::max<int64_t>(static_cast<int64_t>(s.compression.minBlockTokens),
+                              std::min<int64_t>(1000000, c.value("minRunTokens", 8000))));
+        s.compression.maxArrayItems = static_cast<size_t>(
+            std::max<int64_t>(1, std::min<int64_t>(1000, c.value("maxArrayItems", 20))));
+        s.compression.maxStringTokens = static_cast<size_t>(
+            std::max<int64_t>(64, std::min<int64_t>(100000, c.value("maxStringTokens", 1000))));
+        s.compression.maxLogLines = static_cast<size_t>(
+            std::max<int64_t>(20, std::min<int64_t>(5000, c.value("maxLogLines", 200))));
+        s.compression.code = c.value("code", true);
+        s.compression.prose = c.value("prose", false);
+    }
+    // A/B e adocao antecipada: ARESTRIX_CONTEXT_COMPRESSION=0|1 sobrepoe o spec.
+    if (const char* env = std::getenv("ARESTRIX_CONTEXT_COMPRESSION")) {
+        if (*env) s.compression.enabled = std::string(env) != "0";
+    }
+    // A ferramenta de recuperacao so existe quando ha compressao: sem CCR ela nao teria o que ler.
+    if (s.compression.enabled &&
+        std::find(s.tools.begin(), s.tools.end(), "retrieve") == s.tools.end()) {
+        s.tools.push_back("retrieve");
     }
     return s;
 }
@@ -376,6 +408,36 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     tctx.allowed = spec.tools;
     tctx.lang = lang;
 
+    // Compactacao reversivel: store e compressor vivem por execucao do agente.
+    std::unique_ptr<compress::CcrStore> ccr;
+    std::unique_ptr<compress::ContextCompressor> compressor;
+    std::shared_ptr<compress::ProseModel> proseModel;
+    std::unique_ptr<compress::ProseTokenizer> proseTokenizer;
+    if (spec.compression.enabled) {
+        ccr = std::make_unique<compress::CcrStore>(compress::defaultCcrRoot(), spec.memoryProjectId, runId);
+        tctx.ccrDir = ccr->directory();
+        if (spec.compression.prose) {
+            const char* envDir = std::getenv("ARESTRIX_PROSE_MODEL_DIR");
+            const std::string dir = (envDir && *envDir) ? std::string(envDir) : compress::defaultProseModelDir();
+            auto parsed = compress::ProseTokenizer::fromJsonFile((fs::path(dir) / "tokenizer.json").string());
+            if (parsed) proseTokenizer = std::make_unique<compress::ProseTokenizer>(std::move(*parsed));
+            proseModel = compress::loadProseModel(dir);
+            // Sem o modelo, `prose` e ignorada: a execucao segue com JSON/log/codigo.
+            if (!proseTokenizer || !proseModel) {
+                std::cout << "[Agent " << label
+                          << "] compactacao de prosa habilitada, mas o modelo nao esta instalado; seguindo sem prosa.\n";
+                proseModel.reset();
+                proseTokenizer.reset();
+            }
+        }
+        compressor = std::make_unique<compress::ContextCompressor>(
+            spec.compression, ccr.get(), lang, proseTokenizer.get(), proseModel.get());
+    }
+    size_t compressedBlocks = 0;
+    size_t compressedTokensBefore = 0;
+    size_t compressedTokensAfter = 0;
+    std::string compressedKinds;
+
     std::cout << "[Agent " << label << "] iniciando (execucao " << iteration << ", " << spec.provider << "/" << spec.model << ")\n";
 
     std::string finalText;
@@ -453,6 +515,21 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
 
     try {
         for (int turn = 1; turn <= spec.maxTurns; ++turn) {
+            if (compressor) {
+                const compress::CompressionStats stats = compressor->apply(chat.messages);
+                if (stats.blocks > 0) {
+                    compressedBlocks += stats.blocks;
+                    compressedTokensBefore += stats.tokensBefore;
+                    compressedTokensAfter += stats.tokensAfter;
+                    if (!stats.kinds.empty()) {
+                        if (!compressedKinds.empty()) compressedKinds += ",";
+                        compressedKinds += stats.kinds;
+                    }
+                    std::cout << "[Agent " << label << "] contexto compactado: " << stats.blocks << " bloco(s), "
+                              << stats.tokensBefore << " -> " << stats.tokensAfter << " tokens (" << stats.kinds
+                              << ")\n";
+                }
+            }
             AgentTelemetryEmitter::emitStatus(nodeId, "thinking", "Turno " + std::to_string(turn));
             ChatReply t = chatOnce(chat);
             ++turns;
@@ -569,7 +646,11 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
             {"calls", turns},
             {"retries", retries},
             {"memory_enabled", spec.memoryEnabled},
-            {"memory_context_chars", static_cast<long long>(spec.memoryContext.size())}
+            {"memory_context_chars", static_cast<long long>(spec.memoryContext.size())},
+            {"compression_blocks", compressedBlocks},
+            {"compression_tokens_before", compressedTokensBefore},
+            {"compression_tokens_after", compressedTokensAfter},
+            {"compression_kinds", compressedKinds}
         });
     } catch (const std::exception& ex) {
         recordUsage(false, ex.what());

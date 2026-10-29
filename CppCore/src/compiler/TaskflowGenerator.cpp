@@ -361,6 +361,10 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
     sb["readWriteMounts"] = sandbox.contains("readWriteMounts") ? sandbox["readWriteMounts"] : json::array();
     sb["allowFallbackToHost"] = sandbox.value("allowFallbackToHost", false);
     spec["sandbox"] = sb;
+
+    // Compactacao de contexto (observacoes de ferramenta): desligada por padrao no runtime.
+    // A heranca segue a mesma regra das outras secoes (inheritCompression).
+    spec["compression"] = effectiveSection(defaults, settings, "inheritCompression", "compression");
     return spec;
 }
 

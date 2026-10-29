@@ -59,6 +59,7 @@ export class PropertiesController {
       saveWorkspace: values => this.saveWorkspace(values),
       saveProject: values => this.saveProject(values),
       saveProjectDefaults: values => this.saveProjectDefaults(values),
+      saveProjectCompression: values => this.saveProjectCompression(values),
       saveProjectEnvironment: values => this.saveProjectEnvironment(values),
       saveLibraries: (scope, values) => this.saveLibraries(scope, values),
       saveProjectLibraries: values => this.saveProjectLibraries(values)
@@ -218,8 +219,35 @@ export class PropertiesController {
     });
   }
 
-  private async saveProjectEnvironment(values: Record<string, string>): Promise<boolean> {
-    const parsed: Record<string, string> = {};
+  /**
+   * Compactação de contexto: só a seção própria escreve aqui. Os campos são normalizados para
+   * os mesmos limites que o runtime aplica, para a UI nunca salvar um valor que será ignorado.
+   */
+  private async saveProjectCompression(values: Record<string, string>): Promise<boolean> {
+    const clamp = (key: string, fallback: number, min: number, max: number): number => {
+      const raw = Number(values[key]);
+      if (!Number.isFinite(raw)) return fallback;
+      return Math.min(max, Math.max(min, Math.round(raw)));
+    };
+    const minBlockTokens = clamp('compressionMinBlockTokens', 2000, 100, 100000);
+    const minRunTokens = Math.max(
+      minBlockTokens,
+      clamp('compressionMinRunTokens', 8000, 100, 1000000)
+    );
+    return this.projectStore.saveDefaults({
+      compression: {
+        enabled: values.compressionEnabled === 'true',
+        code: values.compressionCode === 'true',
+        minBlockTokens,
+        minRunTokens,
+        maxStringTokens: clamp('compressionMaxStringTokens', 1000, 64, 100000),
+        maxArrayItems: clamp('compressionMaxArrayItems', 20, 1, 1000),
+        maxLogLines: clamp('compressionMaxLogLines', 200, 20, 5000)
+      }
+    });
+  }
+
+  private async saveProjectEnvironment(values: Record<string, string>): Promise<boolean> {    const parsed: Record<string, string> = {};
     for (const line of (values.environment || '').split(/\r?\n/)) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith('#')) continue;

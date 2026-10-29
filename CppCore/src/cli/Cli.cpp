@@ -35,6 +35,15 @@
 #include "native/NativeTools.hpp"
 #include "platform/Process.hpp"
 #include "rt/McpTools.hpp"
+#include "rt/compress/CodeCompressor.hpp"
+#include "rt/compress/ContentRouter.hpp"
+#include "rt/compress/LogCompressor.hpp"
+#include "rt/compress/ProseCompressor.hpp"
+#include "rt/compress/ProseModel.hpp"
+#include "rt/compress/ProseRecommendation.hpp"
+#include "rt/compress/ProseTokenizer.hpp"
+#include "rt/compress/SmartCrusher.hpp"
+#include "rt/compress/Tokens.hpp"
 #include "util/Json.hpp"
 
 #include <sqlite3.h>
@@ -104,6 +113,7 @@ void printHelp() {
         "  arestrix-cli run <grafo.json> [opcoes]\n"
         "  arestrix-cli run --project <pasta> [opcoes]\n"
         "  arestrix-cli gen <grafo.json>\n"
+        "  arestrix-cli compress <arquivo> [--prose] [--model-dir <pasta>] [--json]\n"
         "  arestrix-cli check [--project <pasta> | <grafo.json>] [opcoes]\n"
         "  arestrix-cli env set <NOME> [--stdin | --value <valor>] [--json]\n"
         "  arestrix-cli env reset <NOME> [--json]\n"
@@ -1969,6 +1979,167 @@ int runCompletion(const std::vector<std::string>& args) {
 
 } // namespace
 
+int runCompress(const std::vector<std::string>& args) {
+    using namespace taskforge::rt::compress;
+
+    // Diagnostico da maquina: qual artefato do Kompress faz sentido aqui.
+    if (args.size() >= 2 && args[1] == "--status") {
+        const auto profile = detectMachineProfile(defaultProseModelDir());
+        const auto recommendation = recommendProseVariant(profile);
+        json out = json::object();
+        out["cpuThreads"] = profile.cpuThreads;
+        out["ramTotalMB"] = profile.ramTotalMB;
+        out["ramFreeMB"] = profile.ramFreeMB;
+        out["diskFreeMB"] = profile.diskFreeMB;
+        out["dmlAvailable"] = profile.dmlAvailable;
+        out["dmlDevice"] = profile.dmlDevice;
+#ifdef ARESTRIX_WITH_ONNX
+        out["onnx"] = true;
+#else
+        out["onnx"] = false;
+#endif
+#ifdef ARESTRIX_WITH_ONNX_DML
+        out["dmlBuild"] = true;
+#else
+        out["dmlBuild"] = false;
+#endif
+        json gpus = json::array();
+        for (const auto& gpu : profile.gpus) {
+            gpus.push_back(json{{"index", gpu.index},
+                                {"name", gpu.name},
+                                {"vramMB", gpu.vramMB},
+                                {"vendor", gpu.vendor}});
+        }
+        out["gpus"] = std::move(gpus);
+        out["recommended"] = recommendation.variant;
+        out["reason"] = recommendation.reason;
+        out["sizeMB"] = proseModelSizeMB(recommendation.variant);
+        const bool asJson = std::find(args.begin(), args.end(), "--json") != args.end();
+        if (asJson) {
+            std::cout << out.dump(2) << "\n";
+        } else {
+            std::cout << "cpu: " << profile.cpuThreads << " nucleos\n";
+            std::cout << "ram: " << profile.ramTotalMB << " MB total, " << profile.ramFreeMB << " MB livre\n";
+            std::cout << "disco livre: " << profile.diskFreeMB << " MB\n";
+            for (const auto& gpu : profile.gpus) {
+                std::cout << "gpu " << gpu.index << ": " << gpu.name << " (" << gpu.vendor << ", "
+                          << gpu.vramMB << " MB dedicados)"
+                          << (gpu.index == profile.dmlDevice ? " [escolhida]" : "") << "\n";
+            }
+            if (!profile.gpus.empty()) {
+                std::cout << "directml: " << (profile.dmlAvailable ? "disponivel" : "indisponivel")
+                          << "\n";
+            }
+#ifndef ARESTRIX_WITH_ONNX
+            std::cout << "prosa (onnx): desabilitada neste build\n";
+#endif
+            std::cout << "recomendado: " << recommendation.variant
+                      << " (" << proseModelSizeMB(recommendation.variant) << " MB, motivo: "
+                      << recommendation.reason << ")\n";
+        }
+        return 0;
+    }
+
+    if (args.size() < 2 || args[1].empty() || args[1].rfind("--", 0) == 0) {
+        std::cerr << "uso: arestrix-cli compress <arquivo>|--status [--prose] [--model-dir <pasta>] [--json]\n";
+        return kExitUsage;
+    }
+
+    const fs::path file = args[1];
+    bool asJson = false;
+    bool withProse = false;
+    std::string modelDir = defaultProseModelDir();
+    for (size_t i = 2; i < args.size(); ++i) {
+        if (args[i] == "--json") asJson = true;
+        else if (args[i] == "--prose") withProse = true;
+        else if (args[i] == "--model-dir" && i + 1 < args.size()) modelDir = args[++i];
+        else {
+            std::cerr << "opcao desconhecida: " << args[i] << "\n";
+            return kExitUsage;
+        }
+    }
+
+    std::ifstream in(file, std::ios::binary);
+    if (!in) {
+        std::cerr << "nao foi possivel abrir: " << file.string() << "\n";
+        return kExitRuntime;
+    }
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+
+    const Classification classification = classifyContent(text);
+    const ContentKind kind = classification.kind;
+    CompressResult result;
+    result.bytesBefore = text.size();
+    result.bytesAfter = text.size();
+    result.text = text;
+    std::string compressor = "none";
+    std::string provider;
+
+    switch (kind) {
+        case ContentKind::Json:
+            result = crushJson(text, JsonOptions{});
+            compressor = "json";
+            break;
+        case ContentKind::Log:
+            result = compressLog(text, LogOptions{});
+            compressor = "log";
+            break;
+        case ContentKind::Code:
+            result = compressCode(text, CodeOptions{});
+            compressor = "code";
+            break;
+        case ContentKind::Prose:
+            if (withProse) {
+                auto tokenizer = ProseTokenizer::fromJsonFile((fs::path(modelDir) / "tokenizer.json").string());
+                auto model = tokenizer ? loadProseModel(modelDir) : nullptr;
+                if (tokenizer && model && model->available()) {
+                    result = compressProse(text, *tokenizer, *model, ProseOptions{});
+                    compressor = "prose";
+                    provider = model->provider();
+                } else {
+                    std::cerr << "modelo de prosa indisponivel em " << modelDir << "\n";
+                }
+            }
+            break;
+        case ContentKind::Skip:
+            break;
+    }
+
+    const size_t tokensBefore = estimateTokens(text);
+    const size_t tokensAfter = estimateTokens(result.text);
+    const double ratio = text.empty() ? 1.0 : static_cast<double>(result.text.size()) / static_cast<double>(text.size());
+
+    if (asJson) {
+        json out = json::object();
+        out["file"] = file.string();
+        out["kind"] = contentKindName(kind);
+        out["compressor"] = compressor;
+        out["provider"] = provider;
+        out["changed"] = result.changed;
+        out["bytesBefore"] = static_cast<int64_t>(text.size());
+        out["bytesAfter"] = static_cast<int64_t>(result.text.size());
+        out["ratio"] = ratio;
+        out["tokensBefore"] = static_cast<int64_t>(tokensBefore);
+        out["tokensAfter"] = static_cast<int64_t>(tokensAfter);
+        out["text"] = result.text;
+        std::cout << out.dump(2) << "\n";
+    } else {
+        std::cout << "arquivo: " << file.string() << "\n";
+        std::cout << "tipo: " << contentKindName(kind) << " · compressor: " << compressor;
+        if (!provider.empty()) std::cout << " · provedor: " << provider;
+        std::cout << "\n";
+        std::cout << "bytes: " << text.size() << " -> " << result.text.size()
+                  << " (razao " << ratio << ")\n";
+        std::cout << "tokens: ~" << tokensBefore << " -> ~" << tokensAfter << "\n";
+        if (!result.changed) {
+            std::cout << "sem ganho suficiente; texto original mantido\n";
+        } else {
+            std::cout << "preview:\n" << result.text.substr(0, 400) << "\n";
+        }
+    }
+    return 0;
+}
+
 int runCli(int argc, char** argv) {
     bool noUserEnv = false;
     for (int i = 1; i < argc; ++i) {
@@ -2007,6 +2178,7 @@ int runCli(int argc, char** argv) {
     if (args[0] == "completion") return runCompletion(args);
     if (args[0] == "run") return runGraph(args, false);
     if (args[0] == "gen") return runGraph(args, true);
+    if (args[0] == "compress") return runCompress(args);
 
     std::cerr << "arestrix-cli: comando desconhecido: " << args[0] << "\n\n";
     printHelp();

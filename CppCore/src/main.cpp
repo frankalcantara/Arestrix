@@ -15,6 +15,9 @@
 #include "assistant/AssistantSession.hpp"
 #include "rt/ModelClient.hpp"
 #include "rt/Http.hpp"
+#include "rt/compress/ProseModel.hpp"
+#include "rt/compress/ProseModelInstaller.hpp"
+#include "rt/compress/ProseRecommendation.hpp"
 #include "local/LocalRuntime.hpp"
 #include "pi/PiProjectScanner.hpp"
 #include "build/BuildService.hpp"
@@ -2616,6 +2619,136 @@ using taskforge::assistant::AssistantHost;
 using taskforge::assistant::GraphDocument;
 using taskforge::assistant::SessionStore;
 
+// Estado do modelo de compressao de prosa (Kompress) no disco. Nao carrega o modelo: apenas
+// informa se os arquivos existem, para a tela de Propriedades mostrar o status sem custo.
+void ui_prose_model_status(webui::window::event* e) {
+    try {
+        const std::string dir = taskforge::rt::compress::defaultProseModelDir();
+        bool hasTokenizer = false;
+        bool hasConfig = false;
+        bool hasModel = false;
+        taskforge::Json files = taskforge::Json::array();
+        for (const char* name : {"kompress-fp32.onnx", "kompress-int8-wo.onnx", "kompress-int8.onnx",
+                                 "tokenizer.json", "config.json"}) {
+            std::error_code ec;
+            const fs::path file = fs::path(dir) / name;
+            if (!fs::is_regular_file(file, ec)) continue;
+            const auto size = static_cast<long long>(fs::file_size(file, ec));
+            files.push_back(taskforge::Json{{"name", name}, {"size", size}});
+            const std::string base = name;
+            if (base == "tokenizer.json") hasTokenizer = true;
+            else if (base == "config.json") hasConfig = true;
+            else hasModel = true;
+        }
+        taskforge::Json out = taskforge::Json::object();
+        out["dir"] = dir;
+        out["available"] = hasTokenizer && hasConfig && hasModel;
+        out["files"] = files;
+        out["installedVariants"] = taskforge::Json{
+            {"fp32", taskforge::rt::compress::proseModelVariantInstalled("fp32")},
+            {"int8", taskforge::rt::compress::proseModelVariantInstalled("int8")}};
+#ifdef ARESTRIX_WITH_ONNX
+        const bool onnxBuild = true;
+#else
+        const bool onnxBuild = false;
+#endif
+#ifdef ARESTRIX_WITH_ONNX_DML
+        const bool dmlBuild = true;
+#else
+        const bool dmlBuild = false;
+#endif
+        out["build"] = taskforge::Json{{"onnx", onnxBuild}, {"dml", dmlBuild}};
+
+        // Sugestao baseada na maquina: RAM/disco/CPU decidem entre fp32 (rapido) e int8 (compacto).
+        const auto profile = taskforge::rt::compress::detectMachineProfile(fs::path(dir));
+        const auto recommendation = taskforge::rt::compress::recommendProseVariant(profile);
+        taskforge::Json gpus = taskforge::Json::array();
+        std::string gpuName;
+        for (const auto& gpu : profile.gpus) {
+            gpus.push_back(taskforge::Json{{"index", gpu.index},
+                                           {"name", gpu.name},
+                                           {"vramMB", gpu.vramMB},
+                                           {"vendor", gpu.vendor}});
+            if (gpu.index == profile.dmlDevice) gpuName = gpu.name;
+        }
+        out["hardware"] = taskforge::Json{{"cpuThreads", profile.cpuThreads},
+                                          {"ramTotalMB", profile.ramTotalMB},
+                                          {"ramFreeMB", profile.ramFreeMB},
+                                          {"diskFreeMB", profile.diskFreeMB},
+                                          {"dmlAvailable", profile.dmlAvailable},
+                                          {"dmlDevice", profile.dmlDevice},
+                                          {"gpus", std::move(gpus)}};
+        out["recommendation"] = taskforge::Json{
+            {"variant", recommendation.variant},
+            {"reason", recommendation.reason},
+            {"gpuName", gpuName},
+            {"sizeMB", taskforge::rt::compress::proseModelSizeMB(recommendation.variant)}};
+        e->return_string(out.dump());
+    } catch (const std::exception& ex) {
+        e->return_string(taskforge::Json{{"dir", ""}, {"available", false}, {"error", ex.what()}}.dump());
+    }
+}
+
+// Payload: {"variant": "fp32" | "int8" | "gpu"}. Devolve {ok, jobId, error}.
+void ui_prose_model_download(webui::window::event* e) {
+    taskforge::Json out;
+    try {
+        auto req = taskforge::jsonutil::parse(e->get_string());
+        std::string error;
+        const std::string jobId = taskforge::rt::compress::startProseModelDownload(
+            req.value("variant", std::string("fp32")), error);
+        out["ok"] = !jobId.empty();
+        out["jobId"] = jobId;
+        if (!error.empty()) out["error"] = error;
+    } catch (const std::exception& ex) {
+        out["ok"] = false;
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+// Payload: {"jobId": "pd-..."} ou vazio para listar todos.
+void ui_prose_model_download_status(webui::window::event* e) {
+    taskforge::Json out;
+    try {
+        const std::string payload = e->get_string();
+        if (payload.empty()) {
+            out["ok"] = true;
+            out["downloads"] = taskforge::rt::compress::proseModelDownloads();
+        } else {
+            auto req = taskforge::jsonutil::parse(payload);
+            out = taskforge::rt::compress::proseModelDownloadStatus(
+                req.value("jobId", std::string()));
+        }
+    } catch (const std::exception& ex) {
+        out["ok"] = false;
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+// Payload: {"jobId": "pd-..."}.
+void ui_prose_model_download_cancel(webui::window::event* e) {
+    taskforge::Json out;
+    try {
+        auto req = taskforge::jsonutil::parse(e->get_string());
+        out["ok"] = taskforge::rt::compress::cancelProseModelDownload(
+            req.value("jobId", std::string()));
+    } catch (const std::exception& ex) {
+        out["ok"] = false;
+        out["error"] = std::string(ex.what());
+    }
+    e->return_string(out.dump());
+}
+
+void ui_prose_model_manifest(webui::window::event* e) {
+    try {
+        e->return_string(taskforge::rt::compress::proseModelManifest().dump());
+    } catch (const std::exception& ex) {
+        e->return_string(taskforge::Json{{"error", std::string(ex.what())}}.dump());
+    }
+}
+
 taskforge::Json readMainGraph(const std::string& root, const taskforge::project::ProjectManifest& manifest) {
     std::error_code ec;
     fs::path file = fs::path(root) / "pipelines" / "main.json";
@@ -2924,6 +3057,11 @@ int main(int argc, char** argv) {
     win.bind("get_sandbox_status", ui_get_sandbox_status);
     win.bind("get_pipeline_checkpoint", ui_get_pipeline_checkpoint);
     win.bind("get_last_trace", ui_get_last_trace);
+    win.bind("prose_model_status", ui_prose_model_status);
+    win.bind("prose_model_manifest", ui_prose_model_manifest);
+    win.bind("prose_model_download", ui_prose_model_download);
+    win.bind("prose_model_download_status", ui_prose_model_download_status);
+    win.bind("prose_model_download_cancel", ui_prose_model_download_cancel);
     win.bind("reset_pipeline_checkpoint", ui_reset_pipeline_checkpoint);
     win.bind("get_memory_status", ui_get_memory_status);
     win.bind("set_memory_persistence", ui_set_memory_persistence);
