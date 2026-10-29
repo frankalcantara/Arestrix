@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <b>Beta 2.3</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentation</a>
+  <b>2.4.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentation</a>
 </p>
 
 <p align="center">
@@ -172,7 +172,7 @@ python scripts/e2e_examples.py
 | [`arestrix-cli`](docs/en/arestrix-cli.md) | Headless execution, CI usage, exit codes and troubleshooting. |
 | [Institution memory](docs/en/how-memory-works.md#12-institution) | `arestrix-memory`: authenticated HTTP API and MCP (stdio and `/mcp`). |
 | [Skill validation](docs/quality/skill-reference-review.md) | Arestrix Skill Guard: NVIDIA SkillSpector + Cloudflare security-audit, lock and reference review. |
-| [Examples](examples/README.md) | Twelve runnable projects, from a two-agent pipeline to callable subflows, flow Call vertices, asynchronous calls, parallel calls, generated forms, memory and web-research workflows. |
+| [Examples](examples/README.md) | Fourteen runnable projects, from a two-agent pipeline to callable subflows, flow Call vertices, asynchronous and parallel calls, generated forms, project memory, web research and reversible context compression. |
 | [Test audit log](docs/quality/test-audit-log.md) | Chronological test rounds and integrity audits. |
 | [Release gate](docs/en/release.md) | Reproducible validation, SHA-256 manifest and SBOM before distribution. |
 | [Beta 2.3 test plan](docs/quality/beta2.3-test-plan.md) | Registered Beta 2.3 scope and remaining acceptance tests (in Portuguese). |
@@ -180,11 +180,12 @@ python scripts/e2e_examples.py
 
 ## Project status
 
-**Beta 2.3** (`2.3.0-beta.1`) is a development pre-release. The Studio runs on Windows and Linux;
-programs generated from a graph currently target Windows. Beta APIs, file formats and command-line
-flags may change before general availability. See the [changelog](CHANGELOG.md) for the current
+**Arestrix 2.4.0** is the current release (2026-10-29). The Studio runs on Windows and Linux;
+programs generated from a graph currently target Windows. APIs, file formats and command-line flags
+may still change between minor releases. See the [changelog](CHANGELOG.md) for the current
 limitations. The Windows installer and code signing are included; clean-machine validation, the
 Linux package and the full test matrix are still pending. Track them in the
+[test audit log](docs/quality/test-audit-log.md) and the
 [Beta 2.3 test plan](docs/quality/beta2.3-test-plan.md). Windows artifacts are signed by
 [SignPath Foundation](https://signpath.org) when signing is enabled; see the
 [code signing policy](CODE_SIGNING.md).
@@ -210,8 +211,30 @@ conventions and the pull request checklist, and follow the [Code of Conduct](COD
 
 ## Acknowledgements
 
-Arestrix builds on Taskflow, simdjson, WebUI, SQLite, Monaco Editor, i18next and Inter, among other
-open-source projects. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
+Arestrix builds on the work of many open-source projects:
+
+- **Runtime and rendering:** [Taskflow](https://github.com/taskflow/taskflow) (task DAG engine),
+  [simdjson](https://github.com/simdjson/simdjson) (SIMD JSON), [FastWebUI](https://github.com/frankalcantara/FastWebUI)
+  (a fork of [WebUI](https://github.com/webui-dev/webui); native window and web/RPC bridge),
+  [SQLite](https://sqlite.org) (embedded persistence) and [cpp-httplib](https://github.com/yhirose/cpp-httplib)
+  (gateway HTTP server).
+- **Studio:** [Monaco Editor](https://github.com/microsoft/monaco-editor) (code editor),
+  [i18next](https://github.com/i18next/i18next) (internationalization), [Inter](https://github.com/rsms/inter)
+  (typography), [lucide](https://lucide.dev) (icons), [three.js](https://threejs.org),
+  [troika-three-text](https://github.com/protectwise/troika) and
+  [@hpcc-js/wasm](https://github.com/hpcc-systems/hpcc-js-wasm) (3D canvas and Graphviz/WASM).
+- **AI and compression:** [ONNX Runtime](https://github.com/microsoft/onnxruntime) and
+  [DirectML](https://github.com/microsoft/DirectML) power optional prose compression on CPU and GPU;
+  [Kompress-v2-base](https://huggingface.co/chopratejas/kompress-v2-base) and
+  [ModernBERT-base](https://huggingface.co/answerdotai/ModernBERT-base) provide the compressor and its
+  encoder; [llama.cpp / ggml](https://github.com/ggml-org/llama.cpp) is the optional local runtime.
+- **Security:** [NVIDIA SkillSpector](https://github.com/NVIDIA/SkillSpector) and
+  [Cloudflare security-audit-skill](https://github.com/cloudflare/security-audit-skill) inform the
+  Arestrix Skill Guard.
+
+The official Windows installer bundles ONNX Runtime and DirectML. The Kompress weights and the local
+runtime are downloaded on demand after the user accepts their licenses; Arestrix does not redistribute
+the weights. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and
 [`third_party/`](third_party/README.md) for versions, roles and licenses.
 
 ## Contact
