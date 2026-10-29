@@ -493,7 +493,7 @@ def main() -> int:
         copy_tree(ROOT / "docs" / "en", stage / "docs" / "en")
         copy_tree(ROOT / "docs" / "pt-BR", stage / "docs" / "pt-BR")
 
-        (stage / "runtime" / "lib").mkdir(parents=True)
+        (stage / "runtime" / "lib").mkdir(parents=True, exist_ok=True)
         shutil.copy2(core_library(), stage / "runtime" / "lib" / core_library().name)
         shutil.copy2(sbom, stage / "SBOM.json")
         for name in ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "CODE_SIGNING.md", "PRIVACY.md", "version.txt"):
