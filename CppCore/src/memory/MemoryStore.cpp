@@ -340,6 +340,7 @@ CREATE TABLE IF NOT EXISTS memory_edge (
   last_used TEXT,
   success_count INTEGER NOT NULL DEFAULT 0,
   failure_count INTEGER NOT NULL DEFAULT 0,
+  utility REAL NOT NULL DEFAULT 0.5,
   dormant_at TEXT
 );
 
@@ -526,6 +527,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_policy_scope ON memory_policy(scope_id, ke
     }
     addColumnIfMissing(db_, "memory_usage", "retries", "INTEGER NOT NULL DEFAULT 0");
     addColumnIfMissing(db_, "memory_usage", "outcome", "TEXT NOT NULL DEFAULT ''");
+    addColumnIfMissing(db_, "memory_edge", "utility", "REAL NOT NULL DEFAULT 0.5");
     addColumnIfMissing(db_, "memory_episode", "task_type", "TEXT NOT NULL DEFAULT ''");
     addColumnIfMissing(db_, "memory_episode", "outcome", "TEXT NOT NULL DEFAULT ''");
     addColumnIfMissing(db_, "memory_episode", "error_class", "TEXT NOT NULL DEFAULT ''");
@@ -1409,6 +1411,54 @@ std::string MemoryStore::recordValidation(const MemoryValidationRecord& validati
     return id;
 }
 
+std::vector<MemoryGateSample> MemoryStore::validationGateSamples(const std::string& scopeId,
+                                                                const std::string& taskType,
+                                                                size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<MemoryGateSample> out;
+    if (!db_ || taskType.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT e.input_hash,v.validator_id,v.validator_version "
+                       "FROM memory_validation v JOIN memory_episode e ON e.id=v.episode_id "
+                       "WHERE v.scope_id=? AND e.scope_id=? AND e.task_type=? AND v.ok=1 "
+                       "AND e.input_hash<>'' ORDER BY v.created_at DESC LIMIT ?", st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, scopeId);
+    bindText(st.stmt, 3, taskType);
+    sqlite3_bind_int(st.stmt, 4, static_cast<int>(std::min<size_t>(limit, 1000)));
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        out.push_back(MemoryGateSample{columnText(st.stmt, 0), columnText(st.stmt, 1),
+                                       columnText(st.stmt, 2)});
+    }
+    return out;
+}
+
+std::vector<bool> MemoryStore::validationOutcomes(const std::string& scopeId,
+                                                 const std::string& taskType,
+                                                 size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<bool> out;
+    if (!db_ || taskType.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT v.ok FROM memory_validation v JOIN memory_episode e "
+                       "ON e.id=v.episode_id WHERE v.scope_id=? AND e.scope_id=? "
+                       "AND e.task_type=? ORDER BY v.created_at DESC LIMIT ?", st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, scopeId);
+    bindText(st.stmt, 3, taskType);
+    sqlite3_bind_int(st.stmt, 4, static_cast<int>(std::min<size_t>(limit, 1000)));
+    while (stepRetry(st.stmt) == SQLITE_ROW) out.push_back(columnInt(st.stmt, 0) != 0);
+    return out;
+}
+
 std::vector<MemoryValidationRecord> MemoryStore::listValidations(const std::string& scopeId,
                                                                  const std::string& episodeId,
                                                                  size_t limit) const {
@@ -1940,6 +1990,158 @@ bool MemoryStore::updatePlaybook(const std::string& scopeId, const std::string& 
     return true;
 }
 
+bool MemoryStore::autoPromotePlaybook(const std::string& scopeId, const std::string& episodeId,
+                                      const std::string& validatorId,
+                                      const std::string& validatorVersion,
+                                      const std::vector<MemoryGateSample>& samples,
+                                      std::string& promotedId, std::string& reason) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    promotedId.clear();
+    reason.clear();
+    if (!db_ || scopeId.empty() || episodeId.empty() || validatorId.empty()) {
+        reason = "validacao incompleta";
+        return false;
+    }
+
+    Stmt find;
+    std::string error;
+    if (!prepare(db_, "SELECT id,task_type,confidence,evidence_json FROM memory_playbook "
+                       "WHERE scope_id=? AND source_ref=? AND status='candidate' "
+                       "ORDER BY updated_at DESC LIMIT 1", find, error)) {
+        reason = error;
+        return false;
+    }
+    bindText(find.stmt, 1, scopeId);
+    bindText(find.stmt, 2, episodeId);
+    if (stepRetry(find.stmt) != SQLITE_ROW) {
+        reason = "sem playbook candidato para o episodio";
+        return false;
+    }
+    const std::string playbookId = columnText(find.stmt, 0);
+    const std::string taskType = columnText(find.stmt, 1);
+    const double confidence = columnDouble(find.stmt, 2);
+    const std::string evidenceJson = columnText(find.stmt, 3);
+
+    // Amostras das ultimas execucoes validadas do mesmo task_type.
+    std::set<std::string> inputs;
+    bool validatorStable = true;
+    for (const auto& sample : samples) {
+        inputs.insert(sample.inputHash);
+        if (sample.validatorId != validatorId ||
+            sample.validatorVersion != validatorVersion) {
+            validatorStable = false;
+        }
+    }
+    if (samples.empty() || !validatorStable) {
+        reason = "validador mudou; playbook volta a candidato";
+        return false;
+    }
+    if (inputs.size() < 3) {
+        reason = "entradas distintas insuficientes (" + std::to_string(inputs.size()) + "/3)";
+        return false;
+    }
+
+    // No maximo uma promocao por task_type em janela movel de 24h.
+    Stmt rate;
+    if (!prepare(db_, "SELECT 1 FROM memory_audit WHERE action='auto_promote' AND target=? "
+                       "AND created_at>=strftime('%Y-%m-%dT%H:%M:%SZ','now','-1 day') LIMIT 1",
+                 rate, error)) {
+        reason = error;
+        return false;
+    }
+    bindText(rate.stmt, 1, taskType);
+    if (stepRetry(rate.stmt) == SQLITE_ROW) {
+        reason = "limite de 1 promocao por task_type em 24h";
+        return false;
+    }
+
+    taskforge::Json evidence = parseJsonOrNull(evidenceJson);
+    if (!evidence.is_array()) evidence = taskforge::Json::array();
+    evidence.push_back(taskforge::Json{{"kind", "validation"},
+                                       {"episodeId", episodeId},
+                                       {"validatorId", validatorId},
+                                       {"validatorVersion", validatorVersion}});
+    sanitizeJsonInPlace(evidence);
+
+    Stmt update;
+    if (!prepare(db_, "UPDATE memory_playbook SET status='active',"
+                       "confidence=?,evidence_json=?,updated_at=? "
+                       "WHERE scope_id=? AND id=?", update, error)) {
+        reason = error;
+        return false;
+    }
+    sqlite3_bind_double(update.stmt, 1, std::min(1.0, confidence + 0.1));
+    bindText(update.stmt, 2, evidence.dump());
+    bindText(update.stmt, 3, nowIso());
+    bindText(update.stmt, 4, scopeId);
+    bindText(update.stmt, 5, playbookId);
+    if (stepRetry(update.stmt) != SQLITE_DONE) {
+        reason = sqlite3_errmsg(db_);
+        return false;
+    }
+    audit("gate", "auto_promote", taskType, "", playbookId);
+    promotedId = playbookId;
+    return true;
+}
+
+bool MemoryStore::autoDemotePlaybooks(const std::string& scopeId, const std::string& taskType,
+                                      const std::vector<bool>& outcomes, std::string& reason) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    reason.clear();
+    if (!db_ || taskType.empty() || outcomes.empty()) return false;
+    bool twoFailures = outcomes.size() >= 2 && !outcomes[0] && !outcomes[1];
+    size_t failures = 0;
+    for (bool ok : outcomes) if (!ok) ++failures;
+    bool highFailureRate = outcomes.size() >= 10 && failures * 10 > outcomes.size() * 3;
+    if (!twoFailures && !highFailureRate) return false;
+
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "UPDATE memory_playbook SET status='candidate',updated_at=? "
+                       "WHERE scope_id=? AND task_type=? AND status='active'", st, error)) {
+        reason = error;
+        return false;
+    }
+    bindText(st.stmt, 1, nowIso());
+    bindText(st.stmt, 2, scopeId);
+    bindText(st.stmt, 3, taskType);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        reason = sqlite3_errmsg(db_);
+        return false;
+    }
+    if (sqlite3_changes(db_) == 0) return false;
+    reason = twoFailures ? "duas falhas consecutivas" : "taxa de falha acima de 30%";
+    audit("gate", "auto_demote", taskType, "", reason);
+    return true;
+}
+
+bool MemoryStore::unpromotePlaybook(const std::string& scopeId, const std::string& playbookId,
+                                    const std::string& reason, std::string& error) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty() || playbookId.empty()) {
+        error = "playbook invalido";
+        return false;
+    }
+    Stmt st;
+    if (!prepare(db_, "UPDATE memory_playbook SET status='candidate',updated_at=? "
+                       "WHERE scope_id=? AND id=? AND status='active'", st, error)) {
+        return false;
+    }
+    bindText(st.stmt, 1, nowIso());
+    bindText(st.stmt, 2, scopeId);
+    bindText(st.stmt, 3, playbookId);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        error = sqlite3_errmsg(db_);
+        return false;
+    }
+    if (sqlite3_changes(db_) == 0) {
+        error = "playbook ativo nao encontrado";
+        return false;
+    }
+    audit("gate", "unpromote", playbookId, "", reason);
+    return true;
+}
+
 std::string MemoryStore::recordProposal(const std::string& scopeId, const std::string& kind,
                                         const taskforge::Json& payload,
                                         const std::string& sourceEpisodeId,
@@ -2382,7 +2584,7 @@ std::vector<MemoryEdgeRecord> MemoryStore::listEdges(const std::string& scopeId,
     std::string sql = "SELECT id,scope_id,src_id,COALESCE(dst_id,''),relation,COALESCE(value_json,''),"
                       "COALESCE(valid_from,''),COALESCE(valid_to,''),recorded_at,confidence,status,"
                       "COALESCE(superseded_by,''),source_kind,COALESCE(source_ref,''),metadata,"
-                      "COALESCE(last_used,''),success_count,failure_count,COALESCE(dormant_at,'') "
+                      "COALESCE(last_used,''),success_count,failure_count,utility,COALESCE(dormant_at,'') "
                       "FROM memory_edge WHERE scope_id=?";
     if (!status.empty()) sql += " AND status=?";
     sql += " ORDER BY recorded_at,id LIMIT ?";
@@ -2416,7 +2618,8 @@ std::vector<MemoryEdgeRecord> MemoryStore::listEdges(const std::string& scopeId,
         edge.lastUsed = columnText(st.stmt, 15);
         edge.successCount = columnInt(st.stmt, 16);
         edge.failureCount = columnInt(st.stmt, 17);
-        edge.dormantAt = columnText(st.stmt, 18);
+        edge.utility = columnDouble(st.stmt, 18);
+        edge.dormantAt = columnText(st.stmt, 19);
         out.push_back(std::move(edge));
     }
     return out;
@@ -2731,8 +2934,8 @@ bool MemoryStore::finishHits(const std::string& scopeId, const std::string& runI
                        "dormant_at=CASE WHEN ?='success' AND EXISTS(SELECT 1 FROM memory_hit h WHERE h.scope_id=? "
                        "AND h.run_id=? AND h.node_id=? AND h.memory_id=memory_edge.id AND h.used=1) "
                        "THEN NULL ELSE dormant_at END, "
-                       "confidence=CASE WHEN ?='success' THEN MIN(1.0, confidence+0.02) "
-                       "ELSE MAX(0.05, confidence-0.05) END "
+                       "utility=CASE WHEN ?='success' THEN MIN(1.0, utility+0.02) "
+                       "ELSE MAX(0.0, utility-0.05) END "
                        "WHERE scope_id=? AND id IN (SELECT memory_id FROM memory_hit WHERE scope_id=? "
                        "AND run_id=? AND node_id=? AND used=1 AND kind IN ('lesson','fact'))",
                  edgeSt, error)) {
@@ -2799,8 +3002,8 @@ bool MemoryStore::reinforceFromHits(const std::string& scopeId,
                        "success_count=success_count+?, "
                        "failure_count=failure_count+?, "
                        "dormant_at=CASE WHEN ?='success' THEN NULL ELSE dormant_at END, "
-                       "confidence=CASE WHEN ?='success' THEN MIN(1.0, confidence+0.02) "
-                       "ELSE MAX(0.05, confidence-0.05) END "
+                       "utility=CASE WHEN ?='success' THEN MIN(1.0, utility+0.02) "
+                       "ELSE MAX(0.0, utility-0.05) END "
                        "WHERE scope_id=? AND id=? AND status='active'", st, error)) {
         lastError_ = error;
         return false;

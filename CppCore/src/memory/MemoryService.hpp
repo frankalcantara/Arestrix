@@ -197,6 +197,8 @@ public:
     std::vector<MemoryValidationRecord> listValidations(const std::string& projectId,
                                                         const std::string& episodeId = "",
                                                         size_t limit = 100);
+    bool unpromotePlaybook(const std::string& projectId, const std::string& playbookId,
+                           const std::string& reason, std::string& error);
 
     // Estado para UI/export.
     taskforge::Json toJson(const std::string& projectId);

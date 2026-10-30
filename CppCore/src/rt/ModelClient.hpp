@@ -83,6 +83,7 @@ struct ChatReply {
     long long outTokens = 0;
     bool reasoningRejected = false;   // o servidor recusou reasoning_content: envie os proximos sem ele
     int retries = 0;                  // retentativas HTTP (429/5xx/timeout)
+    int httpStatus = 0;               // ultimo status HTTP, quando houver
     // Falha: codigo estavel (model_not_configured, base_url_missing, api_key_missing, gateway_required,
     // tools_unsupported, budget_exceeded, rate_limited, http_error, bad_response) e detalhe tecnico.
     std::string errorCode;

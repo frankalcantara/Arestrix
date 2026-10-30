@@ -46,6 +46,7 @@
 #include "assistant/AssistantTools.hpp"
 #include "assistant/GraphDocument.hpp"
 #include "rt/ModelClient.hpp"
+#include "rt/MemoryFailure.hpp"
 #include "rt/Runtime.hpp"
 #include "rt/AsyncCalls.hpp"
 #include "rt/CallGraph.hpp"
@@ -2034,6 +2035,9 @@ TEST(memory_telemetry_hits_reinforce_knowledge) {
                                                      "nao usar sombra em texto");
     CHECK(!lessonId.empty());
 
+    taskforge::memory::MemoryEdgeRecord before;
+    CHECK(memory.store(pId)->getEdge(scope, lessonId, before));
+
     taskforge::memory::MemoryBriefInfo brief;
     brief.lessonIds = {lessonId};
     CHECK(memory.recordBriefHits(pId, "run-reinforce", "node-reinforce", brief));
@@ -2044,7 +2048,8 @@ TEST(memory_telemetry_hits_reinforce_knowledge) {
     CHECK(memory.store(pId)->getEdge(scope, lessonId, edge));
     CHECK(edge.successCount == 1);
     CHECK(edge.failureCount == 0);
-    CHECK(edge.confidence > 0.9);
+    CHECK(std::abs(edge.confidence - before.confidence) < 1e-9);
+    CHECK(edge.utility > before.utility);
 
     memory.closeProject(pId);
     std::error_code ec;
@@ -2948,17 +2953,160 @@ TEST(memory_hits_reinforce_and_clear_dormant) {
     CHECK(record.successCount == 1);
     CHECK(!record.lastUsed.empty());
     CHECK(record.dormantAt.empty());
+    CHECK(std::abs(record.confidence - 0.7) < 1e-9);
+    CHECK(record.utility > 0.5);
 
     CHECK(store.recordHit(scope, "run-r2", "agent-r", edgeId, "fact", true, false));
     CHECK(store.markHitsUsed(scope, "run-r2", "agent-r", {edgeId}) == 1);
     CHECK(store.finishHits(scope, "run-r2", "agent-r", "failure"));
     CHECK(store.getEdge(scope, edgeId, record));
     CHECK(record.failureCount == 1);
-    CHECK(record.confidence < 0.72);
+    // B3: utilidade muda com o uso; confianca continua sendo sustentacao.
+    CHECK(std::abs(record.confidence - 0.7) < 1e-9);
+    CHECK(record.utility < 0.5);
 
     store.close();
     std::error_code ec;
     fs::remove_all(dir, ec);
+}
+
+TEST(memory_playbook_gate_requires_distinct_validated_inputs) {
+    using taskforge::memory::MemoryEpisodeRecord;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_playbook_gate_" + stamp);
+    const fs::path knowledgePath = root / ".arestrix" / "memory" / "memory.db";
+    const fs::path telemetryPath = root / ".arestrix" / "telemetry" / "telemetry.db";
+    const std::string pId = "playbook-gate-" + stamp;
+    const std::string scope = "project:" + pId;
+
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, knowledgePath.string()));
+    CHECK(memory.configureTelemetry(pId, telemetryPath.string()));
+    auto* store = memory.store(pId);
+    CHECK(store != nullptr);
+
+    auto episodeFor = [&](const std::string& hash) {
+        MemoryEpisodeRecord episode;
+        episode.runId = "run-" + hash;
+        episode.nodeId = "agent";
+        episode.kind = "agent_success";
+        episode.content = "ok";
+        episode.taskType = "gate_task";
+        episode.outcome = "success";
+        episode.inputHash = hash;
+        episode.toolCalls = taskforge::Json::array({taskforge::Json{{"name", "read"}},
+                                                    taskforge::Json{{"name", "write"}}});
+        return memory.recordEpisode(pId, episode);
+    };
+    const std::string ep1 = episodeFor("hash-a");
+    const std::string ep2 = episodeFor("hash-b");
+    const std::string ep3 = episodeFor("hash-c");
+    CHECK(!ep1.empty() && !ep2.empty() && !ep3.empty());
+
+    const std::string candidate = store->recordPlaybook(
+        scope, "gate_task", "Gate playbook",
+        taskforge::Json::array({taskforge::Json{{"tool", "read"}},
+                                taskforge::Json{{"tool", "write"}}}),
+        taskforge::Json::object(), 0.6, "candidate", ep3, taskforge::Json::array(), 1, 0);
+    CHECK(!candidate.empty());
+
+    auto validate = [&](const std::string& episodeId) {
+        MemoryValidationRecord validation;
+        validation.episodeId = episodeId;
+        validation.validatorId = "validator-test";
+        validation.validatorVersion = "1";
+        validation.ok = true;
+        validation.score = 1.0;
+        CHECK(!memory.recordValidation(pId, validation).empty());
+    };
+    validate(ep1);
+    validate(ep2);
+    CHECK(memory.listPlaybooks(pId, "gate_task", "active", 10).size() == 0);
+    validate(ep3);
+    CHECK(memory.listPlaybooks(pId, "gate_task", "active", 10).size() == 1);
+
+    std::string error;
+    CHECK(memory.unpromotePlaybook(pId, candidate, "teste", error));
+    CHECK(error.empty());
+    CHECK(memory.listPlaybooks(pId, "gate_task", "active", 10).size() == 0);
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_playbook_gate_rejects_repeated_input) {
+    using taskforge::memory::MemoryEpisodeRecord;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_playbook_same_" + stamp);
+    const std::string pId = "playbook-same-" + stamp;
+    const std::string scope = "project:" + pId;
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(pId, (root / "telemetry.db").string()));
+    auto* store = memory.store(pId);
+    CHECK(store != nullptr);
+
+    std::vector<std::string> episodes;
+    for (int i = 0; i < 3; ++i) {
+        MemoryEpisodeRecord episode;
+        episode.runId = "same-" + std::to_string(i);
+        episode.nodeId = "agent";
+        episode.kind = "agent_success";
+        episode.content = "ok";
+        episode.taskType = "same_task";
+        episode.outcome = "success";
+        episode.inputHash = "same-input";
+        episode.toolCalls = taskforge::Json::array({taskforge::Json{{"name", "read"}}});
+        episodes.push_back(memory.recordEpisode(pId, episode));
+    }
+    const std::string candidate = store->recordPlaybook(
+        scope, "same_task", "Same playbook",
+        taskforge::Json::array({taskforge::Json{{"tool", "read"}}}),
+        taskforge::Json::object(), 0.6, "candidate", episodes.back(),
+        taskforge::Json::array(), 1, 0);
+    CHECK(!candidate.empty());
+
+    for (const auto& episodeId : episodes) {
+        MemoryValidationRecord validation;
+        validation.episodeId = episodeId;
+        validation.validatorId = "validator-test";
+        validation.validatorVersion = "1";
+        validation.ok = true;
+        CHECK(!memory.recordValidation(pId, validation).empty());
+    }
+    CHECK(memory.listPlaybooks(pId, "same_task", "active", 10).size() == 0);
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_failure_classification_uses_enum_not_text) {
+    using taskforge::rt::memoryErrorClass;
+    using taskforge::rt::isInfrastructureErrorClass;
+    CHECK(memoryErrorClass("rate_limited", 429) == "provider_429");
+    CHECK(memoryErrorClass("", 401) == "auth_401_403_or_missing_key");
+    CHECK(memoryErrorClass("api_key_missing", 0) == "auth_401_403_or_missing_key");
+    CHECK(memoryErrorClass("", 503) == "provider_5xx");
+    CHECK(memoryErrorClass("budget_exceeded", 402) == "gateway_or_budget_block");
+    CHECK(memoryErrorClass("model_not_configured", 0) == "config_model_or_skill_missing");
+    CHECK(memoryErrorClass("bad_response", 0) == "transport_timeout");
+    CHECK(memoryErrorClass("task_max_turns", 0) == "task_max_turns");
+    CHECK(isInfrastructureErrorClass("provider_429"));
+    CHECK(isInfrastructureErrorClass("auth_401_403_or_missing_key"));
+    CHECK(!isInfrastructureErrorClass("task_max_turns"));
+    CHECK(!isInfrastructureErrorClass("agent_exception"));
 }
 
 TEST(memory_snapshot_preserves_decay_fields) {
@@ -3417,7 +3565,9 @@ TEST(memory_service_brief_respects_budget) {
     taskforge::memory::MemoryBriefInfo fullInfo;
     std::string fullBrief = memory.buildBrief("brief-test", "pipeline", {"memoria"}, {"resumo"}, 2000, true, true, &fullInfo);
     CHECK(fullBrief.find("\"resumo\"") != std::string::npos);
-    CHECK(fullInfo.lessonIds.size() == 1 && fullInfo.workingKeys.size() == 1);
+    CHECK(fullInfo.lessonIds.size() == 1);
+    CHECK(fullBrief.find("[MEMO:" + fullInfo.lessonIds[0] + "]") != std::string::npos);
+    CHECK(fullInfo.workingKeys.size() == 1);
     CHECK(!fullInfo.truncated);
     taskforge::memory::MemoryBriefInfo zeroInfo;
     std::string zeroBrief = memory.buildBrief("brief-test", "pipeline", {"memoria"}, {"resumo"}, 0, true, true, &zeroInfo);

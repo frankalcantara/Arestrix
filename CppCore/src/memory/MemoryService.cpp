@@ -673,14 +673,16 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
     if (!selectedLessons.empty()) {
         const std::string header =
             "\n--- [ARESTRIX MEMORIA SEMANTICA: LICOES APRENDIDAS - PROJETO: " + scopeId(projectId) + "] ---\n"
-            "Atencao: os itens anteriores identificaram as seguintes diretrizes para prevencao de erros:\n";
+            "Atencao: os itens anteriores identificaram as seguintes diretrizes para prevencao de erros.\n"
+            "Se usar um item, cite o ID [MEMO:<id>] na resposta final.\n";
         if (header.size() <= budget) {
             brief += header;
             int lessonNumber = 1;
             for (const auto& lesson : selectedLessons) {
                 std::ostringstream line;
-                line << "[" << lessonNumber << "] (Dominio: " << lesson.domain
-                     << ", confianca " << lesson.confidence << ") " << lesson.lessonRule << "\n";
+                line << "[" << lessonNumber << "] [MEMO:" << lesson.id << "] (Dominio: "
+                     << lesson.domain << ", confianca " << lesson.confidence << ") "
+                     << lesson.lessonRule << "\n";
                 if (budget != std::string::npos && brief.size() + line.str().size() > budget) {
                     truncated = true;
                     break;
@@ -752,7 +754,7 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
             for (const auto& memory : ranked) {
                 if (memory.kind != "fact" && memory.kind != "playbook") continue;
                 std::string line = std::string(memory.kind == "playbook" ? "[PLAYBOOK] " : "[FATO] ") +
-                                   oneLine(memory.text, 500) + "\n";
+                                   "[MEMO:" + memory.id + "] " + oneLine(memory.text, 500) + "\n";
                 if (budget != std::string::npos && brief.size() + facts.size() + line.size() > budget) {
                     truncated = true;
                     break;
@@ -761,7 +763,9 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
                 factIds.push_back(memory.id);
             }
             if (!facts.empty()) {
-                const std::string header = "\n--- [ARESTRIX MEMORIA: FATOS RELEVANTES] ---\n";
+                const std::string header =
+                    "\n--- [ARESTRIX MEMORIA: FATOS RELEVANTES] ---\n"
+                    "Se usar um item, cite o ID [MEMO:<id>] na resposta final.\n";
                 if (budget == std::string::npos || brief.size() + header.size() + facts.size() <= budget) {
                     brief += header + facts;
                     if (info) info->factIds = factIds;
@@ -800,8 +804,8 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
                     }
                 }
                 if (stepsText.empty()) continue;
-                std::string line = "[PLAYBOOK] " + playbook.taskType + ": " + playbook.title +
-                                   " | " + oneLine(stepsText, 400) + "\n";
+                std::string line = "[PLAYBOOK] [MEMO:" + playbook.id + "] " + playbook.taskType +
+                                   ": " + playbook.title + " | " + oneLine(stepsText, 400) + "\n";
                 if (budget != std::string::npos &&
                     brief.size() + playbookText.size() + line.size() > budget) {
                     truncated = true;
@@ -1517,7 +1521,25 @@ std::string MemoryService::recordValidation(const std::string& projectId,
     if (!t) return "";
     MemoryValidationRecord copy = validation;
     if (copy.scopeId.empty()) copy.scopeId = scopeId(projectId);
-    return t->recordValidation(copy);
+    const std::string id = t->recordValidation(copy);
+    // B5/B6: a validacao independente e o unico gatilho de promocao de playbook.
+    if (!id.empty() && copy.ok && !copy.episodeId.empty()) {
+        if (auto* knowledge = existingStore(projectId)) {
+            const std::string scope = scopeId(projectId);
+            const taskforge::Json episode = t->getEpisode(scope, copy.episodeId);
+            const std::string taskType = episode.value("taskType", std::string());
+            const auto samples = t->validationGateSamples(scope, taskType, 20);
+            std::string promotedId;
+            std::string reason;
+            knowledge->autoPromotePlaybook(scope, copy.episodeId,
+                                           copy.validatorId, copy.validatorVersion,
+                                           samples, promotedId, reason);
+            const auto outcomes = t->validationOutcomes(scope, taskType, 10);
+            std::string demoteReason;
+            knowledge->autoDemotePlaybooks(scope, taskType, outcomes, demoteReason);
+        }
+    }
+    return id;
 }
 
 std::vector<MemoryValidationRecord> MemoryService::listValidations(const std::string& projectId,
@@ -1526,6 +1548,16 @@ std::vector<MemoryValidationRecord> MemoryService::listValidations(const std::st
     auto* t = ensureTelemetry(projectId);
     return t ? t->listValidations(scopeId(projectId), episodeId, limit)
              : std::vector<MemoryValidationRecord>();
+}
+
+bool MemoryService::unpromotePlaybook(const std::string& projectId, const std::string& playbookId,
+                                      const std::string& reason, std::string& error) {
+    auto* s = existingStore(projectId);
+    if (!s) {
+        error = "banco de conhecimento indisponivel";
+        return false;
+    }
+    return s->unpromotePlaybook(scopeId(projectId), playbookId, reason, error);
 }
 
 taskforge::Json MemoryService::toJson(const std::string& projectId) {

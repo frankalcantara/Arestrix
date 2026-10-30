@@ -5,6 +5,7 @@
 #include "project/RunnerSecurity.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -23,6 +24,7 @@
 #include "rt/AsyncCalls.hpp"
 #include "rt/CallGraph.hpp"
 #include "rt/McpTools.hpp"
+#include "rt/MemoryFailure.hpp"
 #include "rt/ModelClient.hpp"
 #include "rt/RuntimeLang.hpp"
 #include "rt/Tools.hpp"
@@ -41,6 +43,33 @@ using sandbox::AgentTelemetryEmitter;
 // ---------------------------------------------------------------------------
 // Utilitarios do runtime
 // ---------------------------------------------------------------------------
+namespace {
+
+// IDs citados pelo agente no formato [MEMO:<id>]. Usado para separar
+// "injetado" de "usado de fato" na telemetria.
+std::vector<std::string> citedMemoryIds(const std::string& text) {
+    std::vector<std::string> ids;
+    const std::string marker = "MEMO:";
+    size_t pos = 0;
+    while ((pos = text.find(marker, pos)) != std::string::npos) {
+        const size_t start = pos + marker.size();
+        size_t end = start;
+        while (end < text.size()) {
+            const unsigned char c = static_cast<unsigned char>(text[end]);
+            if (!std::isalnum(c) && c != '_' && c != '-' && c != '.' && c != ':') break;
+            ++end;
+        }
+        if (end > start) {
+            const std::string id = text.substr(start, end - start);
+            if (std::find(ids.begin(), ids.end(), id) == ids.end()) ids.push_back(id);
+        }
+        pos = end > start ? end : start;
+    }
+    return ids;
+}
+
+} // namespace
+
 void init() {
     std::cout << std::unitbuf;
     std::cerr << std::unitbuf;
@@ -482,7 +511,9 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         }
     };
     const auto runStart = std::chrono::steady_clock::now();
-    auto recordUsage = [&](bool success, const std::string& error = "") {
+    std::string failureClass;
+    auto recordUsage = [&](bool success, const std::string& error = "",
+                           const std::string& errorClass = "") {
         if (spec.memoryProjectId.empty()) return;
         const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                                  std::chrono::steady_clock::now() - runStart).count();
@@ -503,12 +534,23 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         usage.outcome = success ? "success" : "failure";
         auto& memory = memory::MemoryService::getInstance();
         memory.recordUsage(usage);
+        // B2: apenas IDs citados pelo agente contam como "usados"; o resto
+        // permanece "injetado" ou "consultado".
+        const std::vector<std::string> cited = citedMemoryIds(finalText);
+        if (!cited.empty()) {
+            memory.markHitsUsed(spec.memoryProjectId, runId, nodeId, cited);
+        }
         memory.finishHits(spec.memoryProjectId, runId, nodeId, usage.outcome);
+        const std::string effectiveClass = success ? "" :
+            (errorClass.empty() ? "agent_exception" : errorClass);
         json meta{{"label", label}, {"provider", spec.provider}, {"model", spec.model},
                   {"outcome", usage.outcome},
                   {"tokens", usage.totalTokens}, {"calls", usage.calls}, {"retries", usage.retries},
                   {"memoryEnabled", spec.memoryEnabled}, {"memoryContextChars", usage.memoryContextChars}};
-        if (!success && !error.empty()) meta["error"] = error.substr(0, 500);
+        if (!success) {
+            if (!effectiveClass.empty()) meta["errorClass"] = effectiveClass;
+            if (!error.empty()) meta["error"] = error.substr(0, 500);
+        }
 
         memory::MemoryEpisodeRecord episode;
         episode.runId = runId;
@@ -519,7 +561,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         episode.content = success ? "agent completed" : "agent failed";
         episode.taskType = taskType;
         episode.outcome = usage.outcome;
-        episode.errorClass = success ? "" : "agent_exception";
+        episode.errorClass = effectiveClass;
         episode.toolCalls = runToolCalls;
         episode.successSignals = json{{"outputNonEmpty", !finalText.empty()}, {"success", success}};
         episode.evidence = json::array({json{{"kind", "agent_outcome"}, {"success", success}}});
@@ -527,7 +569,10 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         for (const auto& file : runFiles) episode.filesTouched.push_back(json(file));
         for (const auto& artifact : runArtifacts) episode.artifacts.push_back(json(artifact));
         const std::string episodeId = memory.recordEpisode(spec.memoryProjectId, episode);
-        if (spec.memoryWriteEnabled && !episodeId.empty()) {
+        // B4: falha de infraestrutura nao vira licao. Falha de tarefa
+        // (incluindo task_max_turns) continua gerando proposta.
+        if (spec.memoryWriteEnabled && !episodeId.empty() &&
+            (success || !isInfrastructureErrorClass(episode.errorClass))) {
             memory.extractProposals(spec.memoryProjectId, episodeId);
         }
     };
@@ -552,7 +597,10 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
             AgentTelemetryEmitter::emitStatus(nodeId, "thinking", "Turno " + std::to_string(turn));
             ChatReply t = chatOnce(chat);
             ++turns;
-            if (!t.ok) throw std::runtime_error(t.error);
+            if (!t.ok) {
+                failureClass = memoryErrorClass(t.errorCode, t.httpStatus);
+                throw std::runtime_error(t.error);
+            }
             if (t.reasoningRejected) chat.includeReasoning = false;
             inTokens += t.inTokens;
             outTokens += t.outTokens;
@@ -644,6 +692,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         }
 
         if (!finished) {
+            failureClass = "task_max_turns";
             throw std::runtime_error("Agente '" + label + "' excedeu o limite de " + std::to_string(spec.maxTurns) +
                                      " turnos sem concluir.");
         }
@@ -672,10 +721,10 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
             {"compression_kinds", compressedKinds}
         });
     } catch (const std::exception& ex) {
-        recordUsage(false, ex.what());
+        recordUsage(false, ex.what(), failureClass.empty() ? "agent_exception" : failureClass);
         throw;
     } catch (...) {
-        recordUsage(false, "falha desconhecida");
+        recordUsage(false, "falha desconhecida", failureClass.empty() ? "agent_exception" : failureClass);
         throw;
     }
 

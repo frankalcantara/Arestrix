@@ -430,6 +430,7 @@ ChatReply chatOnce(const ChatRequest& req) {
             resp = postWithRetry(req.telemetryId, http, attempts, &retries);
         }
         out.retries = retries;
+        out.httpStatus = resp.status;
         if (resp.status != 200) {
             out.errorCode = looksLikeToolsRejected(resp) ? "tools_unsupported"
                           : resp.status == 402 ? "budget_exceeded"

@@ -57,8 +57,10 @@ bool MemoryPlaybookCompiler::observe(MemoryStore& store, const std::string& scop
             std::string error;
             if (!store.getPlaybook(scopeId, existingId, current)) return false;
             const double confidence = std::min(1.0, std::max(current.confidence, 0.5) + 0.1);
-            // Fase A: playbook nunca ativa sozinho; a ativacao exige validador na Fase B.
-            return store.updatePlaybook(scopeId, existingId, 1, 0, confidence, "candidate",
+            // B5: o compilador so mantem/atualiza o candidato; a ativacao e do gate
+            // que faz join com memory_validation.
+            const std::string status = current.status == "active" ? "active" : "candidate";
+            return store.updatePlaybook(scopeId, existingId, 1, 0, confidence, status,
                                         episodeId, evidence, error);
         }
         return !store.recordPlaybook(scopeId, taskType, taskType + " playbook", steps,
@@ -71,7 +73,8 @@ bool MemoryPlaybookCompiler::observe(MemoryStore& store, const std::string& scop
     std::string error;
     if (!store.getPlaybook(scopeId, existingId, current)) return false;
     const double confidence = std::max(0.1, current.confidence - 0.15);
-    return store.updatePlaybook(scopeId, existingId, 0, 1, confidence, "candidate",
+    const std::string status = current.status == "active" ? "active" : "candidate";
+    return store.updatePlaybook(scopeId, existingId, 0, 1, confidence, status,
                                 episodeId, evidence, error);
 }
 

@@ -104,6 +104,7 @@ struct MemoryEdgeRecord {
     std::string lastUsed;
     long long successCount = 0;
     long long failureCount = 0;
+    double utility = 0.5;
     std::string dormantAt;
 };
 
@@ -159,6 +160,12 @@ struct MemoryProposalRecord {
     std::string createdAt;
     std::string reviewedAt;
     std::string reviewedBy;
+};
+
+struct MemoryGateSample {
+    std::string inputHash;
+    std::string validatorId;
+    std::string validatorVersion;
 };
 
 struct MemoryPlaybookRecord {
@@ -334,6 +341,22 @@ public:
                         long long successDelta, long long failureDelta, double confidence,
                         const std::string& status, const std::string& sourceRef,
                         const taskforge::Json& evidence, std::string& error);
+    // Gate B5/B6: amostras de validacao vivem no banco de telemetria.
+    std::vector<MemoryGateSample> validationGateSamples(const std::string& scopeId,
+                                                        const std::string& taskType,
+                                                        size_t limit = 20) const;
+    std::vector<bool> validationOutcomes(const std::string& scopeId, const std::string& taskType,
+                                         size_t limit = 10) const;
+    // Ativa um candidato apenas com validacao independente e 3 input_hash
+    // distintos nas amostras fornecidas pelo banco de telemetria.
+    bool autoPromotePlaybook(const std::string& scopeId, const std::string& episodeId,
+                             const std::string& validatorId, const std::string& validatorVersion,
+                             const std::vector<MemoryGateSample>& samples,
+                             std::string& promotedId, std::string& reason);
+    bool autoDemotePlaybooks(const std::string& scopeId, const std::string& taskType,
+                             const std::vector<bool>& outcomes, std::string& reason);
+    bool unpromotePlaybook(const std::string& scopeId, const std::string& playbookId,
+                           const std::string& reason, std::string& error);
 
     std::string ensureNode(const std::string& scopeId, const std::string& nodeId,
                            const std::string& kind, const std::string& canonicalName,
