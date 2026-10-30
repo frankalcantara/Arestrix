@@ -99,10 +99,11 @@ graph canvas; Arestrix validates it, generates C++20 source and compiles it with
   key/project/user/provider/model, usage ledger and fail-closed routing. Local models are exempt.
 - **Project memory (AMG)** - opt-in SQLite temporal multigraph with per-vertex `off`/`consult`/`learn`
   modes, `memory_search` and pending `memory_propose_lesson` proposals, success/failure episodes,
-  evidence-backed promotion, optional hybrid retrieval (EmbeddingGemma 2 or Qwen3-Embedding-4B),
-  deterministic consolidation, playbook candidates, workspace promotion, injected/used-memory
-  tracking, a token-budgeted brief and context A/B in the Studio. Telemetry lives in a separate
-  database. See [how memory works](docs/en/how-memory-works.md).
+  evidence-backed promotion, project-declared continuation state (`project`/`task_type`/`item` scopes,
+  schema, TTL and CAS), optional hybrid retrieval (EmbeddingGemma 2 or Qwen3-Embedding-4B) with a
+  full index fingerprint, deterministic consolidation, validator-gated playbooks, workspace
+  promotion, injected/consulted/used tracking, a token-budgeted brief and context A/B in the Studio.
+  Telemetry lives in a separate database. See [how memory works](docs/en/how-memory-works.md).
 - **Arestrix Library** - audited skill, MCP and template assets with Studio, Workspace and Project
   scopes, project pins, built-in/workspace imports and a native GitHub source with commit pin,
   license check and on-demand downloads.

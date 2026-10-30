@@ -98,21 +98,32 @@ Telemetria fica em `.arestrix/telemetry/telemetry.db`, separada do conhecimento 
 
 O brief é montado dentro de `contextBudgetTokens` com lições ativas, fatos, evidências e o estado
 de trabalho legado quando habilitado. Playbooks compilados ficam como candidatos e não entram no
-brief até serem promovidos. Cada item injetado recebe um `usedHitRef` para medir uso real.
+brief até serem promovidos. Cada item injetado recebe `[MEMO:<id>]`; só o ID citado na resposta final
+conta como usado. Uso altera utilidade, não confiança.
 
-O agente tem duas ferramentas de memória: `memory_search` (somente leitura) e
-`memory_propose_lesson` (proposta pendente). `memory_record_lesson`, `memoryWriteKeys` e o servidor
-nativo `arestrix.memoria` foram removidos. O conhecimento é acessado pelo runtime e pelo painel.
+O agente tem `memory_search` (somente leitura), `memory_propose_lesson` (proposta pendente) e as
+ferramentas de estado `memory_state_get`, `memory_state_set`, `memory_state_list` e
+`memory_state_history`. `memory_record_lesson`, `memoryWriteKeys` e o servidor nativo
+`arestrix.memoria` foram removidos.
+
+O estado de continuação é declarado pelo projeto e fica fora do brief. Escopos: `project`,
+`task_type` e `item`; TTL, CAS, schema JSON e modo `replace`/`versioned` são suportados. O CLI expõe
+`memory state declare|list|get|set`.
 
 A busca combina FTS lexical com vetores opcionais e fusão RRF. A busca não indexa durante a
 consulta; **Testar** e **Reindexar** no painel são ações explícitas. Perfis prontos:
 EmbeddingGemma 2 (768 dimensões) e Qwen3-Embedding-4B (2560). Sem provedor, a busca continua
-lexical. O status do índice mostra modelo, dimensão, indexados, candidatos e pendentes.
+lexical. O índice guarda um fingerprint de endpoint/modelo/dimensão/prefixos; a busca só usa o
+fingerprint atual. Estados: `ready` (híbrida), `stale`/`pending`/`partial`/`failed` (lexical).
 
 O painel oferece **Comparar com e sem memória (contexto)**: cria uma cópia consistente com
 `VACUUM INTO`, calcula o fingerprint SHA-256 e mede tokens/caracteres do brief por vértice ativo.
 É o A/B v1, de custo e conteúdo de contexto; a taxa de aprovação do validador pertence ao
 protocolo completo.
+
+Playbooks só ativam com validação independente: 3 `input_hash` distintos nas últimas 20 execuções
+validadas, validador estável e 1 promoção por `task_type` em 24h. Falhas de infraestrutura não viram
+lição; `task_max_turns` é falha da tarefa.
 
 Workspace e instituição continuam disponíveis para conhecimento promovido e compartilhado. A
 promoção é explícita, exige evidência e é auditada. O projeto lê o workspace autorizado; o

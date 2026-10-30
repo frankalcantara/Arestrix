@@ -64,8 +64,12 @@ O brief é montado no início da execução, dentro do orçamento configurado:
 Playbooks compilados ficam como **candidatos** e não entram no brief até serem promovidos.
 Conhecimento com baixa confiança, conflito aberto ou validade expirada não é injetado.
 
-Cada item injetado recebe um `usedHitRef`; no fim da execução, o runtime registra se ele foi
-realmente usado. Isso alimenta a validação e o reforço de confiança.
+Cada item injetado recebe um rótulo `[MEMO:<id>]`. No fim da execução, o runtime só marca como
+**usado** o item cujo ID foi citado pelo agente na resposta final. “Injetado”, “consultado” e
+“usado” são sinais distintos.
+
+O uso altera a **utilidade** do item, não a confiança. Confiança é sustentação (evidência,
+validação e promoção); utilidade é o histórico de uso em execuções bem ou mal sucedidas.
 
 ## 5. Como o aprendizado entra
 
@@ -73,12 +77,22 @@ Uma execução `learn` grava um **episódio** com entrada, resultado, validaçã
 dele, o sistema pode criar:
 
 - **proposta de lição** (`memory_propose_lesson`) quando o agente declara uma regra;
-- **proposta automática de falha** quando o validador reprova a saída;
+- **proposta automática de falha** quando a tarefa falha (o validador reprova ou o agente estoura
+  `maxTurns`);
 - **candidato de playbook** quando há sequência suficiente de passos bem-sucedidos.
+
+Falhas de infraestrutura são classificadas por `errorClass` enumerado — transporte/timeout,
+429, 5xx, autenticação/chave, gateway/orçamento, configuração, sandbox/ferramenta ou cancelamento —
+e **não** geram proposta de lição. `task_max_turns` é falha da tarefa, não de infraestrutura.
 
 Propostas ficam pendentes no painel **Memória do Projeto**. Aprovar promove o item para o
 conhecimento ativo; rejeitar mantém o registro para auditoria. Não existe gravação direta de
 lição por ferramenta.
+
+Playbooks só saem de `candidate` com validação independente. O gate exige **3 `input_hash`
+distintos** entre as últimas 20 execuções validadas do mesmo `task_type`, validador estável e no
+máximo **1 promoção por `task_type` em 24h**. Duas falhas consecutivas ou taxa acima de 30% em 10
+execuções validadas devolvem o playbook a candidato. `unpromote` está disponível na API.
 
 ## 6. Ferramentas do agente
 
@@ -86,6 +100,10 @@ lição por ferramenta.
 | :--- | :--- |
 | `memory_search` | Busca somente leitura no conhecimento do projeto e no workspace autorizado. |
 | `memory_propose_lesson` | Registra uma proposta pendente de lição; não ativa conhecimento. |
+| `memory_state_get` | Lê uma chave de estado declarada; o valor volta rotulado como não confiável. |
+| `memory_state_set` | Grava com CAS (`expected_version`); só em modo `learn`. |
+| `memory_state_list` | Lista chaves visíveis e metadados, sem valores. |
+| `memory_state_history` | Lista versões de uma chave `versioned`. |
 
 `memory_record_lesson`, `memoryWriteKeys` e o servidor nativo `arestrix.memoria` foram removidos.
 O conhecimento é acessado pelo runtime e pelo painel, não por um chave-valor paralelo.
@@ -106,8 +124,23 @@ A busca **não indexa** durante a consulta. A indexação é explícita: o paine
 | EmbeddingGemma 2 | 768 |
 | Qwen3-Embedding-4B | 2560 |
 
-Sem provedor disponível, a busca continua funcionando no modo lexical. O status do índice mostra
-modelo, dimensão, itens indexados, candidatos e pendentes.
+Sem provedor disponível, a busca continua funcionando no modo lexical.
+
+O índice guarda um **fingerprint** SHA-256 de endpoint, modelo, dimensão efetiva, prefixos de
+consulta/documento, normalização, métrica e versão do índice. A busca só usa vetores do fingerprint
+atual; nunca mistura índices antigos. O status mostra modelo, dimensão, itens indexados, candidatos,
+pendentes e um fingerprint curto, com os estados:
+
+| Estado | Significado | Busca |
+| :--- | :--- | :--- |
+| `ready` | Fingerprint atual, índice completo | híbrida |
+| `stale` | Modelo/dimensão/endpoint/template mudou | lexical |
+| `pending` | Reindexação em andamento | lexical |
+| `partial` | Índice incompleto | lexical + aviso |
+| `failed` | Reindexação falhou | lexical + erro |
+
+Trocar de perfil invalida o índice e oferece reindexação. A reindexação é idempotente e descarta
+vetores de fingerprints antigos.
 
 ## 8. Medição A/B
 
@@ -133,7 +166,35 @@ evolução seguinte.
 - **Limpeza de sessão:** em memória efêmera, limpa apenas a sessão; nunca purga um banco de arquivo.
 - **Auditoria:** aprovações, rejeições, promoções, conflitos e expurgos deixam rastro.
 
-## 10. Referência rápida
+## 10. Estado de continuação
+
+O estado de continuação substitui o antigo Blackboard e o `arestrix.memoria`. Ele fica **fora do
+brief** e só é acessível pelas ferramentas.
+
+- A chave é **declarada pelo projeto**; o agente nunca cria chave.
+- Identidade: `(scope_kind, scope_owner, key)`.
+- Escopos: `project`, `task_type` e `item`. Cada chave tem um único escopo, sem merge entre eles.
+- O valor é validado por um subconjunto de JSON Schema **depois** da sanitização de segredos.
+- `replace` mantém só a versão atual; `versioned` mantém as últimas K versões.
+- TTL é aplicado na leitura.
+- CAS: `expected_version` ausente cria; versão igual grava; versão diferente devolve conflito com a
+  versão atual, sem sobrescrever.
+- Mudança de schema marca o valor antigo como `stale`; a próxima escrita informa a versão atual.
+- `memory_state_list` não devolve valores. Leituras são rotuladas como dados de execução anterior
+  não confiáveis.
+- Escritas, recusas e conflitos são auditados; leituras não.
+
+Declaração e operação manual pela CLI:
+
+```bash
+arestrix-cli memory state declare --project . --key cursor --scope project \
+  --schema '{"type":"object","properties":{"n":{"type":"integer"}},"required":["n"]}'
+arestrix-cli memory state set --project . --key cursor --value '{"n":1}'
+arestrix-cli memory state get --project . --key cursor --json
+arestrix-cli memory state list --project . --json
+```
+
+## 11. Referência rápida
 
 ```text
 Projeto
@@ -148,6 +209,9 @@ Vértice
 
 Ciclo
   executar -> episódio -> proposta -> aprovação -> conhecimento ativo -> brief
+
+Estado de continuação
+  chave declarada -> memory_state_get/set/list/history -> fora do brief
 ```
 
 Para operar pela linha de comando, consulte [`arestrix-cli.md`](arestrix-cli.md). Para a visão de

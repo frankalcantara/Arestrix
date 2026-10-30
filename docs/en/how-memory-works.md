@@ -64,8 +64,12 @@ The brief is built at the start of the run, within the configured budget:
 Compiled playbooks remain **candidates** and do not enter the brief until promoted. Knowledge with
 low confidence, an open conflict or expired validity is not injected.
 
-Every injected item gets a `usedHitRef`; at the end of the run the runtime records whether it was
-actually used. That feeds validation and confidence reinforcement.
+Every injected item is labeled `[MEMO:<id>]`. At the end of the run, the runtime marks an item as
+**used** only when the agent cites its ID in the final answer. “Injected”, “consulted” and “used”
+are distinct signals.
+
+Use changes an item's **utility**, not its confidence. Confidence is sustainment (evidence,
+validation and promotion); utility is the usage history across successful and failed runs.
 
 ## 5. How learning enters
 
@@ -73,11 +77,21 @@ A `learn` run writes an **episode** with input, result, validation and hashes. F
 may create:
 
 - a **lesson proposal** (`memory_propose_lesson`) when the agent states a rule;
-- an **automatic failure proposal** when the validator rejects the output;
+- an **automatic failure proposal** when the task fails (validator rejection or `maxTurns`);
 - a **playbook candidate** when there is enough evidence of a successful sequence.
+
+Infrastructure failures are classified by an enumerated `errorClass` — transport/timeout, 429,
+5xx, auth/key, gateway/budget, configuration, sandbox/tool or cancellation — and do **not** create
+a lesson proposal. `task_max_turns` is a task failure, not infrastructure.
 
 Proposals stay pending in the **Project Memory** panel. Approval promotes the item to active
 knowledge; rejection keeps the record for audit. There is no direct lesson-writing tool.
+
+Playbooks leave `candidate` only with independent validation. The gate requires **3 distinct
+`input_hash` values** among the last 20 validated runs for the same `task_type`, a stable validator
+and at most **1 promotion per `task_type` in 24h**. Two consecutive failures or more than 30%
+failures in 10 validated runs return the playbook to candidate. `unpromote` is available through the
+API.
 
 ## 6. Agent tools
 
@@ -85,6 +99,10 @@ knowledge; rejection keeps the record for audit. There is no direct lesson-writi
 | :--- | :--- |
 | `memory_search` | Read-only search over project knowledge and authorized workspace knowledge. |
 | `memory_propose_lesson` | Records a pending lesson proposal; does not activate knowledge. |
+| `memory_state_get` | Reads a declared state key; the value is labeled untrusted. |
+| `memory_state_set` | Writes with CAS (`expected_version`); `learn` mode only. |
+| `memory_state_list` | Lists visible keys and metadata, without values. |
+| `memory_state_history` | Lists versions of a `versioned` key. |
 
 `memory_record_lesson`, `memoryWriteKeys` and the native `arestrix.memoria` server were removed.
 Knowledge is accessed by the runtime and the panel, not by a parallel key-value store.
@@ -105,8 +123,23 @@ and **Reindex**. Ready profiles:
 | EmbeddingGemma 2 | 768 |
 | Qwen3-Embedding-4B | 2560 |
 
-Without a provider, search keeps working in lexical mode. Index status shows the model, dimensions,
-indexed items, candidates and pending items.
+Without a provider, search keeps working in lexical mode.
+
+The index stores a SHA-256 **fingerprint** of the endpoint, model, effective dimension, query and
+document prefixes, normalization, metric and index version. Search only uses vectors from the
+current fingerprint and never mixes old indexes. Status shows the model, dimensions, indexed items,
+candidates, pending items and a short fingerprint, with these states:
+
+| State | Meaning | Search |
+| :--- | :--- | :--- |
+| `ready` | Current fingerprint, complete index | hybrid |
+| `stale` | Model/dimension/endpoint/template changed | lexical |
+| `pending` | Reindex in progress | lexical |
+| `partial` | Incomplete index | lexical + warning |
+| `failed` | Reindex failed | lexical + error |
+
+Changing profiles invalidates the index and offers reindexing. Reindexing is idempotent and
+discards vectors from old fingerprints.
 
 ## 8. A/B measurement
 
@@ -130,7 +163,35 @@ protocol, with fixed tasks, repetitions and per-arm telemetry, is the next evolu
 - **Session clearing:** in ephemeral memory, clears only the session; it never purges a file database.
 - **Audit:** approvals, rejections, promotions, conflicts and purges leave a trail.
 
-## 10. Quick reference
+## 10. Continuation state
+
+Continuation state replaces the old Blackboard and `arestrix.memoria`. It stays **outside the
+brief** and is reachable only through tools.
+
+- The key is **declared by the project**; the agent never creates a key.
+- Identity: `(scope_kind, scope_owner, key)`.
+- Scopes: `project`, `task_type` and `item`. Each key has a single scope, with no merge between them.
+- The value is validated against a JSON Schema subset **after** secret sanitization.
+- `replace` keeps only the current version; `versioned` keeps the last K versions.
+- TTL is applied on read.
+- CAS: absent `expected_version` creates; equal version writes; a different version returns a
+  conflict with the current version and does not overwrite.
+- A schema change marks the old value `stale`; the next write provides the current version.
+- `memory_state_list` does not return values. Reads are labeled as untrusted data from a previous
+  run.
+- Writes, refusals and conflicts are audited; reads are not.
+
+Declare and operate manually through the CLI:
+
+```bash
+arestrix-cli memory state declare --project . --key cursor --scope project \
+  --schema '{"type":"object","properties":{"n":{"type":"integer"}},"required":["n"]}'
+arestrix-cli memory state set --project . --key cursor --value '{"n":1}'
+arestrix-cli memory state get --project . --key cursor --json
+arestrix-cli memory state list --project . --json
+```
+
+## 11. Quick reference
 
 ```text
 Project
@@ -145,6 +206,9 @@ Vertex
 
 Cycle
   execute -> episode -> proposal -> approval -> active knowledge -> brief
+
+Continuation state
+  declared key -> memory_state_get/set/list/history -> outside the brief
 ```
 
 For command-line operations, see [`arestrix-cli.md`](arestrix-cli.md). For the product view and

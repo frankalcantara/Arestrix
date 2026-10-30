@@ -98,21 +98,31 @@ Telemetry lives in `.arestrix/telemetry/telemetry.db`, separate from knowledge i
 
 The brief is built within `contextBudgetTokens` from active lessons, facts, evidence and legacy
 working state when enabled. Compiled playbooks remain candidates and do not enter the brief until
-promoted. Every injected item gets a `usedHitRef` so actual use can be measured.
+promoted. Every injected item is labeled `[MEMO:<id>]`; only an ID cited in the final answer counts as
+used. Use changes utility, not confidence.
 
-The agent has two memory tools: `memory_search` (read-only) and `memory_propose_lesson` (pending
-proposal). `memory_record_lesson`, `memoryWriteKeys` and the native `arestrix.memoria` server were
-removed. Knowledge is accessed by the runtime and the panel.
+The agent has `memory_search` (read-only), `memory_propose_lesson` (pending proposal) and the state
+tools `memory_state_get`, `memory_state_set`, `memory_state_list` and `memory_state_history`.
+`memory_record_lesson`, `memoryWriteKeys` and the native `arestrix.memoria` server were removed.
+
+Continuation state is declared by the project and stays outside the brief. Scopes: `project`,
+`task_type` and `item`; TTL, CAS, JSON schema and `replace`/`versioned` are supported. The CLI exposes
+`memory state declare|list|get|set`.
 
 Search combines lexical FTS with optional vectors and RRF fusion. Search does not index during a
 query; **Test** and **Reindex** in the panel are explicit actions. Ready profiles:
 EmbeddingGemma 2 (768 dimensions) and Qwen3-Embedding-4B (2560). Without a provider, search stays
-lexical. Index status shows model, dimensions, indexed items, candidates and pending items.
+lexical. The index stores an endpoint/model/dimension/prefix fingerprint; search only uses the
+current fingerprint. States: `ready` (hybrid), `stale`/`pending`/`partial`/`failed` (lexical).
 
 The panel offers **Compare with and without memory (context)**: it creates a consistent copy with
 `VACUUM INTO`, computes the SHA-256 fingerprint and measures brief tokens/characters per active
 vertex. This is A/B v1 for context cost and content; validator approval belongs to the full
 protocol.
+
+Playbooks activate only with independent validation: 3 distinct `input_hash` values in the last 20
+validated runs, a stable validator and 1 promotion per `task_type` in 24h. Infrastructure failures
+do not become lessons; `task_max_turns` is a task failure.
 
 Workspace and institution remain available for promoted and shared knowledge. Promotion is
 explicit, evidence-backed and audited. The project reads authorized workspace knowledge; the

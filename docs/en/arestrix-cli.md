@@ -166,12 +166,30 @@ reviewed; facts/playbooks require evidence.
 .\\arestrix-cli.exe memory reindex --project .\\examples\\04-memoria --force
 ```
 
-`status` shows the model, effective endpoint, state, indexed vectors and pending objects. `test`
-performs a real embedding call; `reindex` rebuilds the vector index. Embeddings are optional and
-off by default; without a provider search remains lexical. Environment variables:
+`status` shows the model, effective endpoint, state (`ready`, `stale`, `pending`, `partial`,
+`failed`), short fingerprint, indexed vectors and pending objects. `test` performs a real embedding
+call; `reindex` rebuilds the vector index for the current fingerprint and discards vectors from old
+fingerprints. Embeddings are optional and off by default; outside `ready`, search remains lexical.
+Environment variables:
 `ARESTRIX_EMBEDDINGS_ENABLED`, `ARESTRIX_EMBEDDING_BASE_URL`, `ARESTRIX_EMBEDDING_MODEL`,
 `ARESTRIX_EMBEDDING_BATCH`, `ARESTRIX_EMBEDDING_TIMEOUT`, `ARESTRIX_EMBEDDING_MAX_CHARS` and
 `ARESTRIX_EMBEDDING_DIM`.
+
+### `memory state`
+
+```powershell
+.\arestrix-cli.exe memory state declare --project .\examples\04-memoria --key cursor `
+  --scope project --schema '{"type":"object","properties":{"n":{"type":"integer"}},"required":["n"]}'
+.\arestrix-cli.exe memory state list --project .\examples\04-memoria --json
+.\arestrix-cli.exe memory state set --project .\examples\04-memoria --key cursor --value '{"n":1}'
+.\arestrix-cli.exe memory state get --project .\examples\04-memoria --key cursor --json
+```
+
+Declares, lists, reads and writes D1 continuation state. Keys are declared by the project and are
+never created by an agent. Scopes are `project`, `task_type` and `item`; use `--item` and
+`--task-type` to resolve non-project scopes. `--value` is JSON when possible. Writes accept
+`--expected` for CAS; omit it for create-only. Options include `--max-bytes`, `--ttl`, `--mode
+replace|versioned` and `--keep`.
 
 ### `memory consolidate`
 
