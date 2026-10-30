@@ -97,11 +97,12 @@ graph canvas; Arestrix validates it, generates C++20 source and compiles it with
   recommendation and CPU fallback. No inference runtime is bundled by default.
 - **Enterprise AI Gateway** - on-prem proxy with virtual keys, budgets and rate limits by
   key/project/user/provider/model, usage ledger and fail-closed routing. Local models are exempt.
-- **Project memory (AMG)** - SQLite temporal multigraph with lessons, a shared Blackboard,
-  `memory_search`/`memory_record_lesson`, success/failure episodes, proposals and evidence-backed
-  promotion, optional EmbeddingGemma 2 hybrid retrieval, deterministic consolidation, procedural
-  playbooks, workspace promotion, injected/used-memory tracking, a token-budgeted brief and
-  memory A/B in the Studio. See [how memory works](docs/en/how-memory-works.md).
+- **Project memory (AMG)** - opt-in SQLite temporal multigraph with per-vertex `off`/`consult`/`learn`
+  modes, `memory_search` and pending `memory_propose_lesson` proposals, success/failure episodes,
+  evidence-backed promotion, optional hybrid retrieval (EmbeddingGemma 2 or Qwen3-Embedding-4B),
+  deterministic consolidation, playbook candidates, workspace promotion, injected/used-memory
+  tracking, a token-budgeted brief and context A/B in the Studio. Telemetry lives in a separate
+  database. See [how memory works](docs/en/how-memory-works.md).
 - **Arestrix Library** - audited skill, MCP and template assets with Studio, Workspace and Project
   scopes, project pins, built-in/workspace imports and a native GitHub source with commit pin,
   license check and on-demand downloads.

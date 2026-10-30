@@ -7,6 +7,7 @@ import {
   type INodeMemoryConfig,
   type ISandboxPolicy
 } from '../types.ts';
+import { memoryModeOf, memoryModePatch } from '../memory/MemoryConfig.ts';
 import type {
   IPipelineDefaultsPatch,
   IResolvedSetting,
@@ -121,6 +122,11 @@ function layersFor(
  */
 export class SettingsResolver {
   public resolve(context: ISettingsContext): IResolvedSettings {
+    const memory = resolveCategory<INodeMemoryConfig>(
+      { ...DEFAULT_NODE_MEMORY_CONFIG, ...(DEFAULT_PIPELINE_DEFAULTS.memory || {}) },
+      layersFor(context, 'memory')
+    );
+    memory.value = { ...memory.value, ...memoryModePatch(memoryModeOf(memory.value)) };
     return {
       model: resolveCategory<IModelConfig>(
         DEFAULT_PIPELINE_DEFAULTS.model,
@@ -134,10 +140,7 @@ export class SettingsResolver {
         DEFAULT_PIPELINE_DEFAULTS.codeMode,
         layersFor(context, 'codeMode')
       ),
-      memory: resolveCategory<INodeMemoryConfig>(
-        { ...DEFAULT_NODE_MEMORY_CONFIG, ...(DEFAULT_PIPELINE_DEFAULTS.memory || {}) },
-        layersFor(context, 'memory')
-      )
+      memory
     };
   }
 

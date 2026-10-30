@@ -15,19 +15,19 @@ Pesquisar_Fontes (MCP Keenable: search_web_pages)
 Redigir_Texto_Matematico (agente + memória do projeto)
       |
       v
-Guardar_Licao (lição + Blackboard)
+Guardar_Licao (proposta de lição)
       |
       v
 Entrega_Texto (exports/texto-matematica.md)
 ```
 
-1. `Semear_Memoria` grava uma lição inicial: toda afirmação matemática deve citar a fonte ou
-   justificar o passo. Também grava o tema no Blackboard.
+1. `Semear_Memoria` propõe uma lição inicial: toda afirmação matemática deve citar a fonte ou
+   justificar o passo. Aprove-a em **Memória do Projeto** antes da próxima execução.
 2. `Pesquisar_Fontes` é um vértice **MCP** (sem modelo de IA). Ele lê `samples/tema.md` e chama
    `search_web_pages` no servidor `keenable`, gravando o resultado em `workspace/fontes.json`.
 3. `Redigir_Texto_Matematico` recebe o brief de memória e lê `workspace/fontes.json`. A skill
    exige explicação, demonstração, exemplo e referências reais.
-4. `Guardar_Licao` registra uma lição de revisão e atualiza o Blackboard no SQLite.
+4. `Guardar_Licao` propõe uma lição de revisão; ela fica pendente até a aprovação.
 5. `Entrega_Texto` copia o Markdown para `exports/texto-matematica.md`.
 
 ## Keenable

@@ -299,7 +299,7 @@ Categorias sugeridas:
    pipelines.
 3. **Modelo e IA:** override de provedor/modelo/skill/prompt; herdar do Studio.
 4. **Ferramentas e Skills:** ferramentas nativas, scripts, MCPs e skills do projeto.
-5. **Memória:** memória do projeto, blackboard, retenção, embeddings e escopo.
+5. **Memória:** modos do projeto e do vértice, conhecimento, retenção, embeddings e escopo.
 6. **Ambiente (.env):** variáveis, referências `${VAR}`, importar/exportar, validação de segredos.
 7. **Banco de dados:** SQLite/Postgres, caminho/URL e teste de conexão.
 8. **Git:** provedor, servidor, usuário, repositório, branch, auto-commit, push temporizado e último

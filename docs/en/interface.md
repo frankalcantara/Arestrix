@@ -252,7 +252,7 @@ All Studio dialogs adhere to the **Microsoft Office 365 (Fluent 2)** corporate d
 | **Node Model** | Provider & Model \| Instructions & Skills \| Parameters | Per vertex |
 | **Node Tools** | Native Tools \| MCP Servers \| Add from Library \| Validation & Batch | Per vertex |
 | **Node Sandbox** | Isolation & Resources \| Network & Confinement \| Folders & Volumes | Per vertex |
-| **Node Memory** | Blackboard \| Cognitive Lessons \| Regime & Scope | Per vertex |
+| **Node Memory** | Mode (`off`/`consult`/`learn`) \| Theme & Scope | Per vertex |
 | **Node Skills** | Enabled Skills \| Studio/Workspace Library \| Skill Editor | Per vertex |
 | **Skill Editor** | Markdown Editor \| Rendered Preview \| Metadata & Testing | Per vertex / Workspace |
 | **Libraries** | Repository sources (GitHub) \| Create Library | Studio / Workspace |

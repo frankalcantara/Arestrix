@@ -215,7 +215,9 @@ describe('Fase 15: Interface Estilo Microsoft Office & Conectores de Importaçã
     expect(piNode?.agentSettings).toBeDefined();
     expect(piNode?.agentSettings?.model?.model).toBe('pi-3-empathic');
     expect(piNode?.agentSettings?.memory?.enabled).toBe(true);
-    expect(piNode?.agentSettings?.memory?.persistent).toBe(true);
+    expect(piNode?.agentSettings?.memory?.mode).toBe('learn');
+    expect(piNode?.agentSettings?.memory?.persistent).toBe(false);
+    expect(piNode?.agentSettings?.memory?.theme).toBe('strategy');
     expect(piNode?.agentSettings?.memory?.domains).toContain('strategy');
   });
 

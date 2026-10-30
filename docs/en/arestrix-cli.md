@@ -134,7 +134,7 @@ optional for development.
 ```
 
 Removes episodes, hits and `memory_usage` older than `--days` (default: the manifest
-`retentionDays`, or 180). It does not touch lessons or the Blackboard.
+`retentionDays`, or 180). It does not touch lessons or project knowledge.
 
 ### `memory purge`
 

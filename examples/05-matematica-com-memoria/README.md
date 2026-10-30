@@ -15,19 +15,19 @@ Pesquisar_Fontes (Keenable MCP: search_web_pages)
 Redigir_Texto_Matematico (agent + project memory)
       |
       v
-Guardar_Licao (lesson + Blackboard)
+Guardar_Licao (lesson proposal)
       |
       v
 Entrega_Texto (exports/texto-matematica.md)
 ```
 
-1. `Semear_Memoria` records an initial lesson: every mathematical claim must cite a source or
-   justify the step. It also stores the topic in the Blackboard.
+1. `Semear_Memoria` proposes an initial lesson: every mathematical claim must cite a source or
+   justify the step. Approve it in **Project Memory** before the next run.
 2. `Pesquisar_Fontes` is an **MCP vertex** (no model call). It reads `samples/tema.md` and calls
    `search_web_pages` on the `keenable` server, writing the result to `workspace/fontes.json`.
 3. `Redigir_Texto_Matematico` receives the memory brief and reads `workspace/fontes.json`. The skill
    requires an explanation, a demonstration, a worked example and real references.
-4. `Guardar_Licao` records a review lesson and updates the Blackboard in SQLite.
+4. `Guardar_Licao` proposes a review lesson; it stays pending until approval.
 5. `Entrega_Texto` copies the Markdown to `exports/texto-matematica.md`.
 
 ## Keenable

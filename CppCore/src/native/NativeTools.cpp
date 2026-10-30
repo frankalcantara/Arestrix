@@ -32,7 +32,6 @@ const std::vector<Server>& serversForLang(rt::RuntimeLang lang) {
         v.push_back(makeFilesServer(lang));
         v.push_back(makeHttpServer(lang));
         v.push_back(makeDataServer(lang));
-        v.push_back(makeMemoryServer(lang));
         v.push_back(makeTimeServer(lang));
         v.push_back(makeGitServer(lang));
         v.push_back(makeSqliteServer(lang));

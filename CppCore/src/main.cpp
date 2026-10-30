@@ -568,21 +568,9 @@ std::string activeMemoryDb(const std::string& projectId) {
     return (std::filesystem::path(activeMemoryRoot()) / ".arestrix" / "memory" / "memory.db").string();
 }
 
-std::string memorySafeName(const std::string& projectId) {
-    std::string out = projectId.empty() ? "default" : projectId;
-    for (char& c : out) {
-        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_') c = '_';
-    }
-    return out;
-}
-
 bool configureProjectMemory(const std::string& projectId, bool persistent) {
-    const std::string root = activeMemoryRoot();
-    const std::string safe = memorySafeName(projectId);
     return taskforge::memory::MemoryService::getInstance().configure(
-        projectId, persistent, activeMemoryDb(projectId),
-        (std::filesystem::path(root) / ("arestrix-blackboard-" + safe + ".json")).string(),
-        (std::filesystem::path(root) / ("arestrix-memory-" + safe + ".json")).string());
+        projectId, persistent, activeMemoryDb(projectId));
 }
 
 std::string workspaceIdForRoot() {
@@ -622,12 +610,6 @@ void ui_get_memory_status(webui::window::event* e) {
 
     taskforge::Json res = data;
     res["projectId"] = projectId;
-    // Compatibilidade com o modal atual: Blackboard e Lições.
-    res["blackboard"] = data.contains("working") ? data["working"] : taskforge::Json::object();
-    res["semantic"] = taskforge::Json::object();
-    res["semantic"]["lessons"] = data.contains("lessons") ? data["lessons"] : taskforge::Json::array();
-    res["isBlackboardPersistent"] = true;
-    res["isSemanticPersistent"] = true;
     res["proposals"] = taskforge::memory::MemoryService::getInstance().listProposals(projectId, "pending", 100);
     res["embedding"] = taskforge::memory::MemoryService::getInstance().embeddingStatus(projectId);
     res["consolidation"] = taskforge::memory::MemoryService::getInstance().consolidationStatus(projectId);
@@ -635,6 +617,131 @@ void ui_get_memory_status(webui::window::event* e) {
     res["workspace"] = taskforge::memory::MemoryService::getInstance().workspaceStatus(projectId);
 
     e->return_string(res.dump());
+}
+
+void ui_preview_memory_brief(webui::window::event* e) {
+    std::string payload = e->get_string();
+    std::string projectId = "default";
+    std::string itemId = "pipeline";
+    std::vector<std::string> domains;
+    size_t budget = 800;
+    bool includeLessons = true;
+    std::string taskType;
+    try {
+        if (!payload.empty() && payload[0] == '{') {
+            auto j = taskforge::jsonutil::parse(payload);
+            projectId = j.value("projectId", "default");
+            itemId = j.value("itemId", std::string("pipeline"));
+            taskType = j.value("taskType", std::string());
+            if (j.contains("domains") && j["domains"].is_array()) {
+                for (const auto& d : j["domains"]) {
+                    if (d.is_string() && !d.get<std::string>().empty()) domains.push_back(d.get<std::string>());
+                }
+            }
+            int budgetValue = j.value("budget", 800);
+            if (budgetValue < 0) budgetValue = 0;
+            if (budgetValue > 32000) budgetValue = 32000;
+            budget = static_cast<size_t>(budgetValue);
+            includeLessons = j.value("includeLessons", true);
+        }
+    } catch (...) {}
+
+    configureProjectMemory(projectId, true);
+    taskforge::memory::MemoryBriefInfo info;
+    const std::string brief = taskforge::memory::MemoryService::getInstance().buildBrief(
+        projectId, itemId.empty() ? "pipeline" : itemId, domains, {}, budget,
+        includeLessons, false, &info, taskType);
+    taskforge::Json lessons = taskforge::Json::array();
+    for (const auto& id : info.lessonIds) lessons.push_back(id);
+    taskforge::Json facts = taskforge::Json::array();
+    for (const auto& id : info.factIds) facts.push_back(id);
+    taskforge::Json playbooks = taskforge::Json::array();
+    for (const auto& id : info.playbookIds) playbooks.push_back(id);
+    taskforge::Json out{{"brief", brief},
+                        {"chars", static_cast<long long>(info.chars)},
+                        {"estimatedTokens", static_cast<long long>(info.estimatedTokens)},
+                        {"truncated", info.truncated},
+                        {"lessonIds", lessons},
+                        {"factIds", facts},
+                        {"playbookIds", playbooks}};
+    e->return_string(out.dump());
+}
+
+void ui_run_memory_ab(webui::window::event* e) {
+    std::string payload = e->get_string();
+    std::string projectId = "default";
+    taskforge::Json tasks = taskforge::Json::array();
+    try {
+        if (!payload.empty() && payload[0] == '{') {
+            auto j = taskforge::jsonutil::parse(payload);
+            projectId = j.value("projectId", "default");
+            if (j.contains("tasks") && j["tasks"].is_array()) tasks = j["tasks"];
+        }
+    } catch (...) {}
+
+    configureProjectMemory(projectId, true);
+    auto& memory = taskforge::memory::MemoryService::getInstance();
+    const auto stamp = std::to_string(
+        std::chrono::system_clock::now().time_since_epoch().count());
+    const std::filesystem::path frozen =
+        std::filesystem::path(activeMemoryRoot()) / ".arestrix" / "telemetry" / "ab" /
+        ("frozen-" + stamp + ".db");
+    std::string fingerprint;
+    std::string freezeError;
+    const bool frozenOk = memory.freezeKnowledge(projectId, frozen.string(), fingerprint, freezeError);
+    bool usingFrozen = false;
+    if (frozenOk) {
+        memory.closeProject(projectId);
+        usingFrozen = memory.configure(projectId, true, frozen.string());
+        if (!usingFrozen) configureProjectMemory(projectId, true);
+    }
+
+    taskforge::Json results = taskforge::Json::array();
+    for (const auto& task : tasks) {
+        if (!task.is_object()) continue;
+        const std::string id = task.value("id", std::string("task"));
+        const std::string taskType = task.value("taskType", id);
+        int budget = task.value("budget", 800);
+        if (budget < 0) budget = 0;
+        if (budget > 32000) budget = 32000;
+        std::vector<std::string> domains;
+        if (task.contains("domains") && task["domains"].is_array()) {
+            for (const auto& d : task["domains"]) {
+                if (d.is_string() && !d.get<std::string>().empty()) domains.push_back(d.get<std::string>());
+            }
+        }
+        taskforge::Json domainArray = taskforge::Json::array();
+        for (const auto& domain : domains) domainArray.push_back(domain);
+        taskforge::memory::MemoryBriefInfo info;
+        const std::string brief = memory.buildBrief(
+            projectId, "pipeline", domains, {}, static_cast<size_t>(budget),
+            true, false, &info, taskType);
+        results.push_back(taskforge::Json{
+            {"id", id},
+            {"taskType", taskType},
+            {"domains", domainArray},
+            {"onChars", static_cast<long long>(info.chars)},
+            {"onTokens", static_cast<long long>(info.estimatedTokens)},
+            {"offChars", 0},
+            {"offTokens", 0},
+            {"truncated", info.truncated},
+            {"lessons", static_cast<long long>(info.lessonIds.size())},
+            {"facts", static_cast<long long>(info.factIds.size())},
+            {"playbooks", static_cast<long long>(info.playbookIds.size())},
+            {"briefEmpty", brief.empty()}});
+    }
+
+    taskforge::Json out{{"ok", frozenOk && usingFrozen},
+                        {"projectId", projectId},
+                        {"fingerprint", fingerprint},
+                        {"frozenPath", frozen.string()},
+                        {"frozenError", freezeError},
+                        {"tasks", results}};
+    if (usingFrozen) {
+        memory.closeProject(projectId);
+        configureProjectMemory(projectId, true);
+    }
+    e->return_string(out.dump());
 }
 
 // Wrapper de comunicação JS -> C++ (Configurar Persistência de Memória)
@@ -3064,6 +3171,8 @@ int main(int argc, char** argv) {
     win.bind("prose_model_download_cancel", ui_prose_model_download_cancel);
     win.bind("reset_pipeline_checkpoint", ui_reset_pipeline_checkpoint);
     win.bind("get_memory_status", ui_get_memory_status);
+    win.bind("preview_memory_brief", ui_preview_memory_brief);
+    win.bind("run_memory_ab", ui_run_memory_ab);
     win.bind("set_memory_persistence", ui_set_memory_persistence);
     win.bind("clear_memory", ui_clear_memory);
     win.bind("prune_memory", ui_prune_memory);

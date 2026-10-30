@@ -2,10 +2,8 @@
 
 // Arestrix Memory Graph - armazenamento SQLite do multigrafo temporal.
 //
-// Esta é a primeira camada da Fase 1: escopos, nós, arestas temporais, episódios,
-// evidências, memória de trabalho, lições e métricas de uso de API.
-// A API pública é usada por MemoryService; os motores legados (AgentBlackboard e
-// SemanticMemoryEngine) são mantidos apenas para migração/compatibilidade.
+// Escopos, nós, arestas temporais, episódios, evidências, memória de trabalho,
+// lições e métricas de uso de API. A API pública é usada por MemoryService.
 
 #include <cstdint>
 #include <mutex>
@@ -58,6 +56,22 @@ struct MemoryHitRecord {
 struct MemoryHitRef {
     std::string id;
     std::string kind;   // lesson | fact
+};
+
+// Resultado de um validador independente, ligado a um episodio.
+struct MemoryValidationRecord {
+    std::string id;
+    std::string scopeId;
+    std::string runId;
+    std::string nodeId;
+    std::string episodeId;
+    std::string validatorId;
+    std::string validatorVersion;
+    bool ok = false;
+    double score = 0.0;
+    std::string reasonsJson = "[]";
+    std::string artifactHash;
+    std::string createdAt;
 };
 
 struct MemoryPurgeOptions {
@@ -215,6 +229,9 @@ public:
     bool isOpen() const { return db_ != nullptr; }
     const std::string& path() const { return path_; }
     const std::string& lastError() const { return lastError_; }
+
+    // Copia consistente do banco (VACUUM INTO) para um arquivo novo.
+    bool backupTo(const std::string& targetPath, std::string& error);
 
     // Escopos. O closure inclui o próprio escopo com depth 0.
     bool ensureScope(const std::string& scopeId, const std::string& kind,
@@ -384,6 +401,13 @@ public:
                             const std::vector<MemoryHitRef>& refs);
     bool finishHits(const std::string& scopeId, const std::string& runId,
                     const std::string& nodeId, const std::string& outcome);
+    // Hits efetivamente usados, para reforcar o conhecimento em outro store.
+    std::vector<MemoryHitRef> usedHitRefs(const std::string& scopeId, const std::string& runId,
+                                          const std::string& nodeId) const;
+    // Reforco/decay de arestas de conhecimento a partir dos IDs usados.
+    bool reinforceFromHits(const std::string& scopeId,
+                           const std::vector<std::string>& memoryIds,
+                           const std::string& outcome);
     taskforge::Json hitSummary(const std::string& scopeId) const;
     taskforge::Json consolidationSummary(const std::string& scopeId) const;
     bool recordAudit(const std::string& actor, const std::string& action,
@@ -394,16 +418,19 @@ public:
     bool recordUsage(const MemoryUsageRecord& usage);
     taskforge::Json usageSummary(const std::string& scopeId) const;
 
+    // Validacao independente ligada a um episodio (telemetria).
+    std::string recordValidation(const MemoryValidationRecord& validation);
+    std::vector<MemoryValidationRecord> listValidations(const std::string& scopeId,
+                                                        const std::string& episodeId = "",
+                                                        size_t limit = 100) const;
+
     // Estado completo para UI/export.
     taskforge::Json toJson(const std::string& scopeId) const;
 
-    // Snapshot v2: grafo cognitivo completo (scopes, closure, nodes, edges, working)
-    // sem telemetria. O snapshot v1 (lessons/working) continua aceito pelo importador.
+    // Snapshot cognitivo completo (scopes, closure, nodes, edges, working) sem telemetria.
     taskforge::Json toCognitiveJson(const std::string& scopeId) const;
     bool importCognitiveJson(const std::string& scopeId, const taskforge::Json& data,
                              std::string& error);
-    bool importLegacySnapshot(const std::string& scopeId, const taskforge::Json& data,
-                              std::string& error);
 
     bool hasMeta(const std::string& key) const;
     std::string getMeta(const std::string& key) const;

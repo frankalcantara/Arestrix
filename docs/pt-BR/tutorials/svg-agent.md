@@ -299,7 +299,7 @@ if (content.find("feGaussianBlur") != std::string::npos ||
     violation = true;
 }
 
-// Grava relatório da Thread A no quadro compartilhado (blackboard)
+// Grava o relatório da Thread A em um arquivo compartilhado
 std::ofstream report("workspace/report_thread_a.txt");
 report << (violation ? "FAIL: VIOLACAO_TIPOGRAFIA_DETECTADA" : "PASS: TIPOGRAFIA_LIMPA");
 report.close();

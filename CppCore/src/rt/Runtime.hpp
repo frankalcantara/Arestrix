@@ -26,6 +26,16 @@ std::filesystem::path workspaceRoot();
 // Usado para correlacionar memory_hit/usage entre processos do mesmo pipeline.
 std::string currentRunId(const std::string& fallback);
 
+// Item atual (ARESTRIX_ITEM_ID) ou o fallback informado. Em lotes, o runner
+// define o id do item; fora de lotes, o fallback e "pipeline".
+std::string currentItemId(const std::string& fallback);
+
+// Hash canonico da entrada da tarefa para o gate de "entradas distintas".
+// Inclui nodeId, itemId e o inputContext; exclui brief, memoria, prompt,
+// timestamps e run id.
+std::string canonicalInputHash(const std::string& nodeId, const std::string& itemId,
+                               const std::string& input);
+
 // Emite um evento de status de no no canal de telemetria.
 void nodeEvent(const std::string& nodeId, const std::string& status, const std::string& detail = "");
 

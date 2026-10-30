@@ -98,9 +98,12 @@ um pipeline em um canvas de grafo; o Arestrix valida, gera código C++20 e compi
   hardware e fallback para CPU. Nenhum runtime de inferência é incluído por padrão.
 - **AI Gateway empresarial** — proxy on-prem com chaves virtuais, budgets e rate limits por
   chave/projeto/usuário/provedor/modelo, ledger de uso e roteamento fail-closed. Modelos locais são isentos.
-- **Memória de projeto (AMG)** — multigrafo temporal em SQLite com lições, Blackboard,
-  `memory_search`/`memory_record_lesson`, episódios de sucesso/falha, rastreio de memórias
-  injetadas/usadas, brief com orçamento de tokens, métricas de API e A/B no Studio.
+- **Memória de projeto (AMG)** — multigrafo temporal SQLite opt-in com modos por vértice
+  `off`/`consult`/`learn`, `memory_search` e propostas pendentes via `memory_propose_lesson`,
+  episódios de sucesso/falha, promoção com evidência, busca híbrida opcional (EmbeddingGemma 2 ou
+  Qwen3-Embedding-4B), consolidação determinística, playbooks candidatos, promoção para workspace,
+  rastreio de memórias injetadas/usadas, brief com orçamento de tokens e A/B de contexto no Studio.
+  Telemetria fica em banco separado. Veja [como a memória funciona](docs/pt-BR/como-funciona-a-memoria.md).
 - **Biblioteca Arestrix** — assets de skill, MCP e template auditados, com escopos Studio,
   Workspace e Projeto, pins por projeto, importação do catálogo embutido/workspace e fonte GitHub
   nativa com commit pin, checagem de licença e download sob demanda.

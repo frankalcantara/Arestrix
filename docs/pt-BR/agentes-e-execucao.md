@@ -114,7 +114,7 @@ Todo vértice tem uma barra de cinco botões (também no menu de botão direito)
 | Sandbox | Workspace | Nível de isolamento, política de rede, memória, timeout, montagens. |
 | Modelo | Projeto | Provedor, modelo, arquivo de skill, template de prompt. |
 | Ferramentas | Projeto | Ferramentas permitidas e servidores MCP. |
-| Memória | Projeto | Blackboard, lições semânticas, persistência. |
+| Memória | Projeto | Modos `off`/`consult`/`learn`, lições, propostas, persistência. |
 | Skills | Workspace / Projeto | Skills ligadas ao vértice. |
 
 As configurações podem ser herdadas dos **padrões globais** (barra de ferramentas) ou substituídas por vértice.

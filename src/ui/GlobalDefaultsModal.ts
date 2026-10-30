@@ -1,6 +1,7 @@
 import { Graph } from '../core/Graph.ts';
 import { globalEventBus } from '../core/EventBus.ts';
-import { IGlobalPipelineDefaults, LLMProvider, SandboxIsolationLevel, SandboxNetworkPolicy, CodeModeTool, DEFAULT_PIPELINE_DEFAULTS } from '../core/types.ts';
+import { IGlobalPipelineDefaults, LLMProvider, SandboxIsolationLevel, SandboxNetworkPolicy, CodeModeTool, DEFAULT_PIPELINE_DEFAULTS, type VertexMemoryMode } from '../core/types.ts';
+import { EMBEDDING_PROFILES, memoryModeOf } from '../core/memory/MemoryConfig.ts';
 import { ModalWindowManager, IModalWindowController } from './modals/ModalWindowManager.ts';
 import { EnvironmentManager } from '../core/env/EnvironmentManager.ts';
 import { EnvGuidanceModal } from './modals/EnvGuidanceModal.ts';
@@ -421,7 +422,7 @@ export class GlobalDefaultsModal {
             </div>
           </div>
 
-          <!-- ABA 4: Memória Heterogênea do Pipeline (Projeto) -->
+          <!-- ABA 4: Memória do Projeto -->
           <div class="tab-pane" id="pane-tab-memory" style="${this.activeTab === 'memory' ? '' : 'display: none;'}">
             <div class="settings-section-card">
               <div class="section-card-header">
@@ -432,176 +433,139 @@ export class GlobalDefaultsModal {
                 </div>
               </div>
 
-              <div class="memory-enable-toggle-row">
-                <label class="memory-toggle-label">
-                  <input type="checkbox" id="def-memory-enabled" ${defaults.memory?.enabled ? 'checked' : ''} />
-                  <span class="memory-toggle-text">${t('global_defaults.memory_toggle_label')}</span>
-                </label>
+              <div class="memory-status-banner badge-memory-persistent" style="margin-bottom: 14px;">
+                <div class="memory-status-icon">🟣</div>
+                <div class="memory-status-info">
+                  <span class="memory-status-title">${t('global_defaults.memory_save_indicator', 'Salvar no projeto: automático')}</span>
+                  <span class="memory-status-desc">${t('global_defaults.memory_save_indicator_desc', 'Ligado quando algum vértice aprende. A persistência é do projeto, não do vértice.')}</span>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="def-memory-default-mode">${t('global_defaults.memory_default_mode_label', 'Modo padrão dos novos vértices')}</label>
+                <select id="def-memory-default-mode" class="form-select">
+                  <option value="off" ${memoryModeOf(defaults.memory) === 'off' ? 'selected' : ''}>${t('global_defaults.memory_mode_off', 'Desligada')}</option>
+                  <option value="consult" ${memoryModeOf(defaults.memory) === 'consult' ? 'selected' : ''}>${t('global_defaults.memory_mode_consult', 'Consultar')}</option>
+                  <option value="learn" ${memoryModeOf(defaults.memory) === 'learn' ? 'selected' : ''}>${t('global_defaults.memory_mode_learn', 'Consultar e aprender')}</option>
+                </select>
               </div>
 
               <div class="form-group" style="margin-top: 10px;">
-                <label class="form-label">${t('global_defaults.memory_regime_label')}</label>
-                <div class="memory-persistence-options">
-                  <label class="persistence-radio-card ${!defaults.memory?.persistent ? 'selected' : ''}">
-                    <input type="radio" name="def-memory-persistence" value="ephemeral" ${!defaults.memory?.persistent ? 'checked' : ''} />
-                    <div class="persistence-card-content">
-                      <span class="persistence-card-title">${t('global_defaults.memory_ephemeral_title')}</span>
-                      <span class="persistence-card-desc">${t('global_defaults.memory_ephemeral_desc')}</span>
-                    </div>
-                  </label>
-
-                  <label class="persistence-radio-card ${defaults.memory?.persistent ? 'selected' : ''}">
-                    <input type="radio" name="def-memory-persistence" value="persistent" ${defaults.memory?.persistent ? 'checked' : ''} />
-                    <div class="persistence-card-content">
-                      <span class="persistence-card-title">${t('global_defaults.memory_persistent_title')}</span>
-                      <span class="persistence-card-desc">${t('global_defaults.memory_persistent_desc')}</span>
-                    </div>
-                  </label>
-                </div>
+                <label class="form-label" for="def-memory-default-theme">${t('global_defaults.memory_default_theme_label', 'Tema padrão')}</label>
+                <input type="text" id="def-memory-default-theme" class="form-input"
+                       value="${this.escapeHtml(defaults.memory?.theme || '')}" placeholder="ex: svg_typography" />
               </div>
 
-              <div class="form-group" style="margin-top: 14px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
-                <label class="form-label" for="def-memory-measurement">${t('global_defaults.memory_measurement_label')}</label>
-                <select id="def-memory-measurement" class="form-select">
-                  <option value="normal" ${(defaults.memory?.measurementMode || 'normal') === 'normal' ? 'selected' : ''}>${t('global_defaults.memory_measurement_normal')}</option>
-                  <option value="memory_off" ${defaults.memory?.measurementMode === 'memory_off' ? 'selected' : ''}>${t('global_defaults.memory_measurement_off')}</option>
+              <div class="form-group" style="margin-top: 10px;">
+                <label class="form-label" for="def-memory-budget">${t('global_defaults.memory_budget_label', 'Orçamento padrão do brief (tokens)')}</label>
+                <input type="number" id="def-memory-budget" class="form-input" min="0" max="32000" step="100"
+                       value="${defaults.memory?.contextBudgetTokens ?? 800}" />
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+                <div class="form-group">
+                  <label class="form-label" for="def-memory-max-lessons">${t('global_defaults.memory_max_lessons_label')}</label>
+                  <input type="number" id="def-memory-max-lessons" class="form-input" min="1" max="500" step="1"
+                         value="${defaults.memory?.maxLessonsPerRun ?? 20}" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="def-memory-max-lesson-chars">${t('global_defaults.memory_max_lesson_chars_label')}</label>
+                  <input type="number" id="def-memory-max-lesson-chars" class="form-input" min="100" max="20000" step="100"
+                         value="${defaults.memory?.maxLessonChars ?? 4000}" />
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-section-card" style="margin-top: 14px;">
+              <div class="section-card-header">
+                <span class="section-card-icon">🔎</span>
+                <div class="section-card-titles">
+                  <h3 class="section-card-title">${t('global_defaults.memory_embedding_section', 'Busca semântica')}</h3>
+                  <p class="section-card-desc">${t('global_defaults.memory_embedding_section_desc', 'Opcional. Sem provider, a memória continua lexical.')}</p>
+                </div>
+              </div>
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="def-memory-embedding-enabled" ${defaults.memory?.embeddingEnabled ? 'checked' : ''} />
+                <span>${t('global_defaults.memory_embedding_enable_label')}</span>
+              </label>
+              <div class="form-group" style="margin-top: 10px;">
+                <label class="form-label" for="def-memory-embedding-profile">${t('global_defaults.memory_embedding_profile_label', 'Perfil de embeddings')}</label>
+                <select id="def-memory-embedding-profile" class="form-select">
+                  <option value="">${t('global_defaults.memory_embedding_profile_custom', 'Personalizado')}</option>
+                  ${EMBEDDING_PROFILES.map((profile) => `<option value="${profile.id}" ${defaults.memory?.embeddingModel === profile.model ? 'selected' : ''}>${this.escapeHtml(profile.name)}</option>`).join('')}
                 </select>
-                <div class="form-hint">${t('global_defaults.memory_measurement_hint')}</div>
-                <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; cursor: pointer;">
-                  <input type="checkbox" id="def-memory-record-metrics" ${defaults.memory?.recordMetrics ? 'checked' : ''} />
-                  <span>${t('global_defaults.memory_record_metrics_label')}</span>
-                </label>
-                <div class="form-hint">${t('global_defaults.memory_record_metrics_hint')}</div>
+                <div class="form-hint">${t('global_defaults.memory_embedding_profile_hint', 'Preenche modelo, endpoint e dimensão. Teste e reindexe no painel Memória do Projeto.')}</div>
               </div>
-
-              <div class="memory-perms-grid" style="margin-top: 14px;">
-                <label class="memory-perm-item">
-                  <input type="checkbox" id="def-mem-read-bb" ${defaults.memory?.readBlackboard ? 'checked' : ''} />
-                  <div>
-                    <span class="perm-item-title">${t('global_defaults.perm_read_bb_title')}</span>
-                    <span class="perm-item-desc">${t('global_defaults.perm_read_bb_desc')}</span>
-                  </div>
-                </label>
-
-                <label class="memory-perm-item">
-                  <input type="checkbox" id="def-mem-write-bb" ${defaults.memory?.writeBlackboard ? 'checked' : ''} />
-                  <div>
-                    <span class="perm-item-title">${t('global_defaults.perm_write_bb_title')}</span>
-                    <span class="perm-item-desc">${t('global_defaults.perm_write_bb_desc')}</span>
-                  </div>
-                </label>
-
-                <label class="memory-perm-item">
-                  <input type="checkbox" id="def-mem-read-lessons" ${defaults.memory?.semanticLessons ? 'checked' : ''} />
-                  <div>
-                    <span class="perm-item-title">${t('global_defaults.perm_read_lessons_title')}</span>
-                    <span class="perm-item-desc">${t('global_defaults.perm_read_lessons_desc')}</span>
-                  </div>
-                </label>
-
-                <label class="memory-perm-item">
-                  <input type="checkbox" id="def-mem-write-lessons" ${defaults.memory?.recordLessons ? 'checked' : ''} />
-                  <div>
-                    <span class="perm-item-title">${t('global_defaults.perm_write_lessons_title')}</span>
-                    <span class="perm-item-desc">${t('global_defaults.perm_write_lessons_desc')}</span>
-                  </div>
-                </label>
-              </div>
-
-              <div class="form-group" style="margin-top: 14px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
-                <label class="form-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                  <input type="checkbox" id="def-memory-embedding-enabled" ${defaults.memory?.embeddingEnabled ? 'checked' : ''} />
-                  <span>${t('global_defaults.memory_embedding_enable_label')}</span>
-                </label>
-                <div class="form-hint">${t('global_defaults.memory_embedding_hint')}</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
-                  <div>
-                    <label class="form-label" for="def-memory-embedding-model">${t('global_defaults.memory_embedding_model_label')}</label>
-                    <input type="text" id="def-memory-embedding-model" class="form-input" style="font-family: monospace;"
-                           value="${this.escapeHtml(defaults.memory?.embeddingModel || 'embeddinggemma-2')}" />
-                  </div>
-                  <div>
-                    <label class="form-label" for="def-memory-embedding-base-url">${t('global_defaults.memory_embedding_base_url_label')}</label>
-                    <input type="text" id="def-memory-embedding-base-url" class="form-input" style="font-family: monospace;"
-                           value="${this.escapeHtml(defaults.memory?.embeddingBaseUrl || '')}"
-                           placeholder="http://127.0.0.1:11434/v1" />
-                  </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+                <div>
+                  <label class="form-label" for="def-memory-embedding-model">${t('global_defaults.memory_embedding_model_label')}</label>
+                  <input type="text" id="def-memory-embedding-model" class="form-input" style="font-family: monospace;"
+                         value="${this.escapeHtml(defaults.memory?.embeddingModel || 'embeddinggemma-2')}" />
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 10px;">
-                  <div>
-                    <label class="form-label" for="def-memory-embedding-batch">${t('global_defaults.memory_embedding_batch_label')}</label>
-                    <input type="number" id="def-memory-embedding-batch" class="form-input" min="1" max="128" step="1"
-                           value="${defaults.memory?.embeddingBatchSize ?? 8}" />
-                  </div>
-                  <div>
-                    <label class="form-label" for="def-memory-embedding-max-chars">${t('global_defaults.memory_embedding_max_chars_label')}</label>
-                    <input type="number" id="def-memory-embedding-max-chars" class="form-input" min="64" max="32000" step="100"
-                           value="${defaults.memory?.embeddingMaxChars ?? 8000}" />
-                  </div>
-                  <div>
-                    <label class="form-label" for="def-memory-embedding-dim">${t('global_defaults.memory_embedding_dimensions_label')}</label>
-                    <input type="number" id="def-memory-embedding-dim" class="form-input" min="0" max="8192" step="1"
-                           value="${defaults.memory?.embeddingDimensions ?? 768}" />
-                  </div>
+                <div>
+                  <label class="form-label" for="def-memory-embedding-base-url">${t('global_defaults.memory_embedding_base_url_label')}</label>
+                  <input type="text" id="def-memory-embedding-base-url" class="form-input" style="font-family: monospace;"
+                         value="${this.escapeHtml(defaults.memory?.embeddingBaseUrl || '')}"
+                         placeholder="http://127.0.0.1:11434/v1" />
                 </div>
               </div>
-
-              <div class="form-group" style="margin-top: 14px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
-                <label class="form-label" for="def-memory-write-keys">${t('global_defaults.memory_write_keys_label')}</label>
-                <input type="text" id="def-memory-write-keys" class="form-input"
-                       value="${this.escapeHtml((defaults.memory?.writeKeys || []).join(', '))}"
-                       placeholder="${t('global_defaults.memory_write_keys_placeholder')}" />
-                <div class="form-hint">${t('global_defaults.memory_write_keys_hint')}</div>
-
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
-                  <div>
-                    <label class="form-label" for="def-memory-max-lessons">${t('global_defaults.memory_max_lessons_label')}</label>
-                    <input type="number" id="def-memory-max-lessons" class="form-input" min="1" max="500" step="1"
-                           value="${defaults.memory?.maxLessonsPerRun ?? 20}" />
-                    <div class="form-hint">${t('global_defaults.memory_max_lessons_hint')}</div>
-                  </div>
-                  <div>
-                    <label class="form-label" for="def-memory-max-lesson-chars">${t('global_defaults.memory_max_lesson_chars_label')}</label>
-                    <input type="number" id="def-memory-max-lesson-chars" class="form-input" min="100" max="20000" step="100"
-                           value="${defaults.memory?.maxLessonChars ?? 4000}" />
-                    <div class="form-hint">${t('global_defaults.memory_max_lesson_chars_hint')}</div>
-                  </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 10px;">
+                <div>
+                  <label class="form-label" for="def-memory-embedding-batch">${t('global_defaults.memory_embedding_batch_label')}</label>
+                  <input type="number" id="def-memory-embedding-batch" class="form-input" min="1" max="128" step="1"
+                         value="${defaults.memory?.embeddingBatchSize ?? 8}" />
                 </div>
-
-                <div class="form-group" style="margin-top: 10px;">
-                  <label class="form-label" for="def-memory-retention-days">${t('global_defaults.memory_retention_label')}</label>
-                  <input type="number" id="def-memory-retention-days" class="form-input" min="0" max="3650" step="30"
-                         value="${defaults.memory?.retentionDays ?? 180}" />
-                  <div class="form-hint">${t('global_defaults.memory_retention_hint')}</div>
+                <div>
+                  <label class="form-label" for="def-memory-embedding-max-chars">${t('global_defaults.memory_embedding_max_chars_label')}</label>
+                  <input type="number" id="def-memory-embedding-max-chars" class="form-input" min="64" max="32000" step="100"
+                         value="${defaults.memory?.embeddingMaxChars ?? 8000}" />
+                </div>
+                <div>
+                  <label class="form-label" for="def-memory-embedding-dim">${t('global_defaults.memory_embedding_dimensions_label')}</label>
+                  <input type="number" id="def-memory-embedding-dim" class="form-input" min="0" max="8192" step="1"
+                         value="${defaults.memory?.embeddingDimensions ?? 768}" />
                 </div>
               </div>
+            </div>
 
-              <div class="form-group" style="margin-top: 14px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+            <div class="settings-section-card" style="margin-top: 14px;">
+              <div class="section-card-header">
+                <span class="section-card-icon">🧹</span>
+                <div class="section-card-titles">
+                  <h3 class="section-card-title">${t('global_defaults.memory_maintenance_section', 'Manutenção e retenção')}</h3>
+                  <p class="section-card-desc">${t('global_defaults.memory_maintenance_section_desc', 'Consolidação fora do caminho quente e retenção da telemetria.')}</p>
+                </div>
+              </div>
+              <div class="form-group">
                 <label class="form-label" for="def-memory-consolidation-mode">${t('global_defaults.memory_consolidation_title')}</label>
-                <div class="form-hint" style="margin-bottom: 8px;">${t('global_defaults.memory_consolidation_desc')}</div>
                 <select id="def-memory-consolidation-mode" class="form-select">
                   <option value="off" ${(defaults.memory?.consolidationMode || 'off') === 'off' ? 'selected' : ''}>${t('global_defaults.memory_consolidation_off')}</option>
                   <option value="idle" ${defaults.memory?.consolidationMode === 'idle' ? 'selected' : ''}>${t('global_defaults.memory_consolidation_idle')}</option>
                   <option value="after_episodes" ${defaults.memory?.consolidationMode === 'after_episodes' ? 'selected' : ''}>${t('global_defaults.memory_consolidation_after_episodes')}</option>
                 </select>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 10px;">
-                  <div>
-                    <label class="form-label" for="def-memory-consolidation-idle">${t('global_defaults.memory_consolidation_idle_label')}</label>
-                    <input type="number" id="def-memory-consolidation-idle" class="form-input" min="5" max="86400" step="30"
-                           value="${defaults.memory?.consolidationIdleSeconds ?? 300}" />
-                  </div>
-                  <div>
-                    <label class="form-label" for="def-memory-consolidation-episodes">${t('global_defaults.memory_consolidation_episodes_label')}</label>
-                    <input type="number" id="def-memory-consolidation-episodes" class="form-input" min="1" max="100000" step="1"
-                           value="${defaults.memory?.consolidationEpisodeThreshold ?? 20}" />
-                  </div>
-                  <div>
-                    <label class="form-label" for="def-memory-consolidation-dormant">${t('global_defaults.memory_consolidation_dormant_label')}</label>
-                    <input type="number" id="def-memory-consolidation-dormant" class="form-input" min="0" max="3650" step="30"
-                           value="${defaults.memory?.consolidationDormantDays ?? 180}" />
-                  </div>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 10px;">
+                <div>
+                  <label class="form-label" for="def-memory-consolidation-idle">${t('global_defaults.memory_consolidation_idle_label')}</label>
+                  <input type="number" id="def-memory-consolidation-idle" class="form-input" min="5" max="86400" step="30"
+                         value="${defaults.memory?.consolidationIdleSeconds ?? 300}" />
                 </div>
-                <div class="form-hint">${t('global_defaults.memory_consolidation_hint')}</div>
+                <div>
+                  <label class="form-label" for="def-memory-consolidation-episodes">${t('global_defaults.memory_consolidation_episodes_label')}</label>
+                  <input type="number" id="def-memory-consolidation-episodes" class="form-input" min="1" max="100000" step="1"
+                         value="${defaults.memory?.consolidationEpisodeThreshold ?? 20}" />
+                </div>
+                <div>
+                  <label class="form-label" for="def-memory-consolidation-dormant">${t('global_defaults.memory_consolidation_dormant_label')}</label>
+                  <input type="number" id="def-memory-consolidation-dormant" class="form-input" min="0" max="3650" step="30"
+                         value="${defaults.memory?.consolidationDormantDays ?? 180}" />
+                </div>
+              </div>
+              <div class="form-group" style="margin-top: 10px;">
+                <label class="form-label" for="def-memory-retention-days">${t('global_defaults.memory_retention_label')}</label>
+                <input type="number" id="def-memory-retention-days" class="form-input" min="0" max="3650" step="30"
+                       value="${defaults.memory?.retentionDays ?? 180}" />
+                <div class="form-hint">${t('global_defaults.memory_retention_hint')}</div>
               </div>
             </div>
           </div>
@@ -705,6 +669,18 @@ export class GlobalDefaultsModal {
     // Fechar
     this.overlay.querySelector('#btn-close-defaults-modal')?.addEventListener('click', () => this.hide());
     this.overlay.querySelector('#btn-cancel-defaults')?.addEventListener('click', () => this.hide());
+
+    const embeddingProfile = this.overlay.querySelector<HTMLSelectElement>('#def-memory-embedding-profile');
+    embeddingProfile?.addEventListener('change', () => {
+      const profile = EMBEDDING_PROFILES.find((item) => item.id === embeddingProfile.value);
+      if (!profile) return;
+      const model = this.overlay.querySelector<HTMLInputElement>('#def-memory-embedding-model');
+      const baseUrl = this.overlay.querySelector<HTMLInputElement>('#def-memory-embedding-base-url');
+      const dimensions = this.overlay.querySelector<HTMLInputElement>('#def-memory-embedding-dim');
+      if (model) model.value = profile.model;
+      if (baseUrl) baseUrl.value = profile.baseUrl;
+      if (dimensions) dimensions.value = String(profile.dimensions);
+    });
 
     // Abas
     this.overlay.querySelectorAll<HTMLButtonElement>('.modal-tabs .tab-btn').forEach(btn => {
@@ -1611,16 +1587,11 @@ export class GlobalDefaultsModal {
 
     const mcp = this.mcpPicker?.getValue() ?? { servers: [], tools: [] };
 
-    const memEnabled = (this.overlay.querySelector('#def-memory-enabled') as HTMLInputElement)?.checked || false;
-    const memPersistent = (this.overlay.querySelector('input[name="def-memory-persistence"]:checked') as HTMLInputElement)?.value === 'persistent';
-    const memReadBb = (this.overlay.querySelector('#def-mem-read-bb') as HTMLInputElement)?.checked || false;
-    const memWriteBb = (this.overlay.querySelector('#def-mem-write-bb') as HTMLInputElement)?.checked || false;
-    const memReadLessons = (this.overlay.querySelector('#def-mem-read-lessons') as HTMLInputElement)?.checked || false;
-    const memWriteLessons = (this.overlay.querySelector('#def-mem-write-lessons') as HTMLInputElement)?.checked || false;
-    const memMeasurement = ((this.overlay.querySelector('#def-memory-measurement') as HTMLSelectElement)?.value || 'normal') as 'normal' | 'memory_off';
-    const memRecordMetrics = (this.overlay.querySelector('#def-memory-record-metrics') as HTMLInputElement)?.checked || false;
-    const memWriteKeysRaw = (this.overlay.querySelector('#def-memory-write-keys') as HTMLInputElement)?.value || '';
-    const memWriteKeys = memWriteKeysRaw.split(',').map(s => s.trim()).filter(Boolean);
+    const memDefaultMode = ((this.overlay.querySelector('#def-memory-default-mode') as HTMLSelectElement)?.value
+      || 'off') as VertexMemoryMode;
+    const memDefaultTheme = (this.overlay.querySelector('#def-memory-default-theme') as HTMLInputElement)?.value.trim() || '';
+    const memBudget = Math.max(0, Math.min(32000,
+      Math.floor(Number((this.overlay.querySelector('#def-memory-budget') as HTMLInputElement)?.value) || 800)));
     const memMaxLessons = Math.max(1, Math.min(500,
       Math.floor(Number((this.overlay.querySelector('#def-memory-max-lessons') as HTMLInputElement)?.value) || 20)));
     const memMaxLessonChars = Math.max(100, Math.min(20000,
@@ -1650,6 +1621,12 @@ export class GlobalDefaultsModal {
     const memEmbeddingDim = Math.max(0, Math.min(8192,
       Math.floor(Number((this.overlay.querySelector('#def-memory-embedding-dim') as HTMLInputElement)?.value) || 768)));
 
+    if (memEmbeddingEnabled && !memEmbeddingBaseUrl) {
+      const proceed = confirm(t('global_defaults.memory_embedding_no_endpoint_confirm',
+        'A busca semântica está ligada sem endpoint. O sistema continuará em modo lexical até configurar um servidor. Continuar?'));
+      if (!proceed) return;
+    }
+
     const newDefaults: IGlobalPipelineDefaults = {
       sandbox: {
         isolationLevel,
@@ -1672,15 +1649,21 @@ export class GlobalDefaultsModal {
         allowedMcpTools: mcp.tools
       },
       memory: {
-        enabled: memEnabled,
-        persistent: memPersistent,
-        readBlackboard: memReadBb,
-        writeBlackboard: memWriteBb,
-        semanticLessons: memReadLessons,
-        recordLessons: memWriteLessons,
+        mode: memDefaultMode,
+        theme: memDefaultTheme,
+        readThemes: [],
+        taskType: '',
+        domains: memDefaultTheme ? [memDefaultTheme] : [],
+        enabled: memDefaultMode !== 'off',
+        // Compatibilidade: a persistência é derivada do projeto no runtime.
+        persistent: false,
+        readBlackboard: false,
+        writeBlackboard: false,
+        semanticLessons: memDefaultMode !== 'off',
+        recordLessons: memDefaultMode === 'learn',
         allowedKeys: [],
-        writeKeys: memWriteKeys,
-        domains: [],
+        writeKeys: [],
+        contextBudgetTokens: memBudget,
         maxLessonsPerRun: memMaxLessons,
         maxLessonChars: memMaxLessonChars,
         retentionDays: memRetentionDays,
@@ -1688,8 +1671,6 @@ export class GlobalDefaultsModal {
         consolidationIdleSeconds: memConsolidationIdle,
         consolidationEpisodeThreshold: memConsolidationEpisodes,
         consolidationDormantDays: memConsolidationDormant,
-        measurementMode: memMeasurement,
-        recordMetrics: memRecordMetrics,
         embeddingEnabled: memEmbeddingEnabled,
         embeddingProvider: 'local',
         embeddingModel: memEmbeddingModel,

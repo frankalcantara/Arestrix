@@ -1,25 +1,26 @@
-# Example 4 — Project memory (lessons and Blackboard)
+# Example 4 — Project memory (proposal, approval and consultation)
 
 [Português](README.pt-BR.md) · [All examples](../README.md)
 
-This example shows project memory working end to end:
+This example shows the current project-memory cycle:
 
-1. `Semear_Licao` writes a **semantic lesson** and a **Blackboard** value.
-2. `Agente_Com_Memoria` receives both in its system prompt, filtered by domain and allowed keys.
-3. The agent's answer becomes an artifact at `exports/resposta.md`.
-4. On the next run, the lesson and Blackboard value are loaded from disk, even without the seed node.
+1. `Semear_Licao` proposes a **lesson**; nothing becomes active on its own.
+2. Open **Project Memory**, review and approve the pending proposal.
+3. `Agente_Com_Memoria` receives the approved lesson in its system prompt, filtered by theme.
+4. The agent's answer becomes an artifact at `exports/resposta.md`.
+5. On the next run, the lesson is loaded from disk, even without the seed node.
 
 ```
 Semear_Licao (C++) ─► Agente_Com_Memoria (agent) ─► Entrega_Resposta (output)
        │                        ▲
        │                        └── memory injected into the prompt
-       └── writes lesson + Blackboard summary
+       └── proposes a lesson for approval
 ```
 
 | Vertex | What it does |
 | :--- | :--- |
-| `Semear_Licao` | Records the lesson `A resposta deve citar a regra aprendida` in the `memoria` domain and writes `resumo` to the Blackboard. |
-| `Agente_Com_Memoria` | Reads `semanticLessons` and `readBlackboard`, with `domains: ["memoria"]` and `allowedKeys: ["resumo"]`. |
+| `Semear_Licao` | Proposes the lesson `A resposta deve citar a regra aprendida` in the `memoria` domain. Approve it in **Project Memory** before the next run. |
+| `Agente_Com_Memoria` | Runs in `learn` mode with theme `memoria`; after approval, the lesson enters the brief. |
 | `Entrega_Resposta` | Copies `workspace/resposta.txt` to `exports/resposta.md`. |
 
 ## Run it
@@ -36,18 +37,20 @@ arestrix-cli run pipelines/main.json --root <the copied folder>
 
 Run it **twice**:
 
-- the first run creates the lesson and the Blackboard value;
-- the second run loads them from `.arestrix/memory/memory.db` and injects them again. The seed node
-  deduplicates the lesson, but loading happens at the start of each agent node.
+- the first run creates a **pending lesson proposal**;
+- open **Project Memory**, review the proposal and approve it;
+- the second run loads the approved lesson from `.arestrix/memory/memory.db` and injects it at the
+  start of the agent node.
 
-The database lives at `.arestrix/memory/memory.db` and is ignored by Git. The `memory_usage` table
-records input/output tokens, calls and memory context size for each agent.
+Knowledge lives at `.arestrix/memory/memory.db`; telemetry lives at
+`.arestrix/telemetry/telemetry.db`. Both are ignored by Git. Telemetry records input/output tokens,
+calls and memory context size for each agent.
 
 ## What to look for
 
 - Console: `[MEMORIA] contexto injetado em Agente_Com_Memoria`.
-- Agent prompt: the `[DADOS DE MEMORIA DO PROJETO ...]` block with the lesson and `resumo`.
-- A lesson from another domain and a non-authorized key do **not** appear.
+- Agent prompt: the `[DADOS DE MEMORIA DO PROJETO ...]` block with the approved lesson.
+- A lesson from another theme does **not** appear.
 - The output vertex creates `exports/resposta.md`.
 
 ## Test without spending anything

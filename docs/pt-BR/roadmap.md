@@ -56,18 +56,19 @@
   saída de rede deles ao gateway. `ARESTRIX_AI_GATEWAY_POLICY=locked` é a camada de política do
   cliente/SO, não substitui controles de rede.
 
-### Memória de projeto (Beta 2)
+### Memória de projeto
 
 Implementado no núcleo:
 
-- AMG em SQLite (`.arestrix/memory/memory.db`) com arestas temporais, evidências, auditoria,
-  working memory e métricas de uso.
-- Lições, Blackboard, ferramentas `memory_search`/`memory_record_lesson` e brief compilado com
-  `contextBudgetTokens`, ordenado por confiança/recência.
+- AMG em SQLite (`.arestrix/memory/memory.db`) com arestas temporais, evidências, auditoria e
+  telemetria separada (`.arestrix/telemetry/telemetry.db`).
+- Modos por vértice `off`/`consult`/`learn`, lições, `memory_search` e propostas pendentes via
+  `memory_propose_lesson`, além de brief compilado com `contextBudgetTokens`, ordenado por
+  confiança/recência.
 - Episódios de sucesso/falha, `memory_hit` (injetado/consultado) e métricas com retries e outcome.
-- Importação única dos JSONs legados e registro automático de falhas de agente.
-- Painel de consumo na UI, relatório nativo `arestrix-cli memory report`, impacto no AI Gateway,
-  A/B no Studio e exemplos 04 e 05. `memory_report.py` permanece opcional para desenvolvimento.
+- Propostas automáticas de falha (nunca ativadas sem aprovação) e exemplos 04 e 05.
+- Painel de consumo na UI, relatório nativo `arestrix-cli memory report`, impacto no AI Gateway e
+  A/B de contexto no Studio. `memory_report.py` permanece opcional para desenvolvimento.
 - Escopos de workspace e instituição. O `arestrix-memory` expõe REST autenticado, MCP HTTP `/mcp`,
   MCP stdio e tokens apenas em memória, com fail-closed sem tokens.
 - Ranking híbrido com embeddings (EmbeddingGemma 2) e consolidação L2/M3 idempotente.

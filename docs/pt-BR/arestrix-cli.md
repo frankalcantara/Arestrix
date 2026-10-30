@@ -134,7 +134,7 @@ opcional para desenvolvimento.
 ```
 
 Remove episódios, hits e `memory_usage` mais antigos que `--days` (padrão: `retentionDays` do
-manifesto, ou 180). Não toca em lições nem no Blackboard.
+manifesto, ou 180). Não toca em lições nem no conhecimento do projeto.
 
 ### `memory purge`
 

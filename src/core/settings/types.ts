@@ -5,6 +5,7 @@ import type {
   INodeAgentSettings,
   INodeMemoryConfig,
   IProjectManifest,
+  IProjectMemoryConfig,
   ISandboxPolicy
 } from '../types.ts';
 
@@ -15,7 +16,7 @@ export interface IPipelineDefaultsPatch {
   model?: Partial<IModelConfig>;
   sandbox?: Partial<ISandboxPolicy>;
   codeMode?: Partial<ICodeModeConfig>;
-  memory?: Partial<INodeMemoryConfig>;
+  memory?: Partial<IProjectMemoryConfig>;
   compression?: Partial<IContextCompressionConfig>;
 }
 

@@ -230,15 +230,61 @@ json effectiveMemory(const core::Graph& graph, const core::NodeData& node) {
     return effectiveSection(graph.getMetadata().globalDefaults, node.agentSettings, "inheritMemory", "memory");
 }
 
-bool anyMemoryPersistent(const core::Graph& graph) {
+bool memoryMeasurementOff(const core::Graph& graph);
+
+std::string memoryModeOf(const json& memory) {
+    if (memory.is_object()) {
+        const std::string mode = memory.value("mode", std::string());
+        if (mode == "off" || mode == "consult" || mode == "learn") return mode;
+        if (!memory.value("enabled", false)) return "off";
+        return memory.value("recordLessons", false) ? "learn" : "consult";
+    }
+    return "off";
+}
+
+json memoryThemesOf(const json& memory) {
+    json themes = json::array();
+    auto add = [&](const json& value) {
+        if (!value.is_string()) return;
+        const std::string theme = value.get<std::string>();
+        if (theme.empty()) return;
+        for (const auto& item : themes) {
+            if (item.is_string() && item.get<std::string>() == theme) return;
+        }
+        themes.push_back(theme);
+    };
+    if (memory.is_object()) {
+        if (memory.contains("theme")) add(memory["theme"]);
+        if (memory.contains("readThemes") && memory["readThemes"].is_array()) {
+            for (const auto& theme : memory["readThemes"]) add(theme);
+        }
+        if (themes.empty() && memory.contains("domains") && memory["domains"].is_array()) {
+            for (const auto& theme : memory["domains"]) add(theme);
+        }
+    }
+    return themes;
+}
+
+bool anyMemoryActive(const core::Graph& graph) {
+    if (memoryMeasurementOff(graph)) return false;
     json global = objectOrEmpty(graph.getMetadata().globalDefaults, "memory");
-    bool persistent = global.value("enabled", false) && global.value("persistent", false);
+    if (memoryModeOf(global) != "off") return true;
     for (const auto& pair : graph.getNodes()) {
         if (pair.second.type != core::TaskflowNodeType::Agent) continue;
-        json m = effectiveMemory(graph, pair.second);
-        if (m.value("enabled", false) && m.value("persistent", false)) return true;
+        if (memoryModeOf(effectiveMemory(graph, pair.second)) != "off") return true;
     }
-    return persistent;
+    return false;
+}
+
+bool anyMemoryLearns(const core::Graph& graph) {
+    if (memoryMeasurementOff(graph)) return false;
+    json global = objectOrEmpty(graph.getMetadata().globalDefaults, "memory");
+    if (memoryModeOf(global) == "learn") return true;
+    for (const auto& pair : graph.getNodes()) {
+        if (pair.second.type != core::TaskflowNodeType::Agent) continue;
+        if (memoryModeOf(effectiveMemory(graph, pair.second)) == "learn") return true;
+    }
+    return false;
 }
 
 json globalMemory(const core::Graph& graph) {
@@ -248,11 +294,6 @@ json globalMemory(const core::Graph& graph) {
 bool memoryMeasurementOff(const core::Graph& graph) {
     json global = globalMemory(graph);
     return global.value("measurementMode", std::string("normal")) == "memory_off";
-}
-
-bool memoryRecordMetrics(const core::Graph& graph) {
-    json global = objectOrEmpty(graph.getMetadata().globalDefaults, "memory");
-    return global.value("recordMetrics", false);
 }
 
 std::string cppStringList(const json& values) {
@@ -320,19 +361,21 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
 
     json memory = effectiveSection(defaults, settings, "inheritMemory", "memory");
     const bool forceMemoryOff = memoryMeasurementOff(graph);
-    const bool effectiveMemoryEnabled = memory.value("enabled", false) && !forceMemoryOff;
+    const std::string memoryMode = memoryModeOf(memory);
+    const bool effectiveMemoryEnabled = memoryMode != "off" && !forceMemoryOff;
     spec["memoryEnabled"] = effectiveMemoryEnabled;
+    spec["memoryMode"] = memoryMode;
     spec["memoryForceDisabled"] = forceMemoryOff;
     spec["memoryProjectId"] = graph.getMetadata().projectId;
-    spec["memoryWriteEnabled"] = effectiveMemoryEnabled && memory.value("recordLessons", false);
-    if (memory.contains("domains") && memory["domains"].is_array()) spec["memoryDomains"] = memory["domains"];
+    spec["memoryWriteEnabled"] = effectiveMemoryEnabled && memoryMode == "learn";
+    const json memoryDomains = memoryThemesOf(memory);
+    if (!memoryDomains.empty()) spec["memoryDomains"] = memoryDomains;
+    else if (effectiveMemoryEnabled) spec["memoryDomains"] = json::array({node.id});
+    std::string memoryTaskType = memory.value("taskType", std::string());
+    if (memoryTaskType.empty()) memoryTaskType = node.id;
+    spec["memoryTaskType"] = memoryTaskType;
     spec["memoryMaxLessonsPerRun"] = std::max(1, std::min(500, memory.value("maxLessonsPerRun", 20)));
     spec["memoryMaxLessonChars"] = std::max(100, std::min(20000, memory.value("maxLessonChars", 4000)));
-    if (memory.contains("writeKeys") && memory["writeKeys"].is_array()) {
-        spec["memoryWriteKeys"] = memory["writeKeys"];
-    } else {
-        spec["memoryWriteKeys"] = json::array();
-    }
 
     json tools = json::array();
     if (codeMode.contains("allowedTools") && codeMode["allowedTools"].is_array()) tools = codeMode["allowedTools"];
@@ -342,7 +385,7 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
             tools.push_back(name);
         };
         addTool("memory_search");
-        if (memory.value("recordLessons", false)) addTool("memory_record_lesson");
+        if (memoryMode == "learn") addTool("memory_propose_lesson");
     }
     spec["tools"] = tools;
 
@@ -602,9 +645,8 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
     code += "  taskforge::rt::init();\n";
     code += "  const std::string projectId = " + cppString(meta.projectId.empty() ? "default" : meta.projectId) + ";\n";
     code += "  auto& memory = taskforge::memory::MemoryService::getInstance();\n";
-    code += "  const bool arx_mem_persistent = " + std::string(anyMemoryPersistent(graph) ? "true" : "false") +
-            " || " + std::string(memoryRecordMetrics(graph) ? "true" : "false") +
-            " || std::getenv(\"ARESTRIX_MEMORY_METRICS\") != nullptr;\n";
+    code += "  const bool arx_mem_active = " + std::string(anyMemoryActive(graph) ? "true" : "false") + ";\n";
+    code += "  const bool arx_mem_learns = " + std::string(anyMemoryLearns(graph) ? "true" : "false") + ";\n";
     code += "  const char* arx_memory_root_env = std::getenv(\"ARESTRIX_PROJECT_ROOT\");\n";
     code += "  const std::string arx_memory_root = (arx_memory_root_env && *arx_memory_root_env)\n";
     code += "      ? std::string(arx_memory_root_env) : std::string(\".\");\n";
@@ -612,9 +654,20 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
     code += "  const std::string arx_mem_db = (arx_mem_db_env && *arx_mem_db_env)\n";
     code += "      ? std::string(arx_mem_db_env)\n";
     code += "      : (std::filesystem::path(arx_memory_root) / \".arestrix\" / \"memory\" / \"memory.db\").string();\n";
-    code += "  if (!memory.configure(projectId, arx_mem_persistent, arx_mem_db)) {\n";
-    code += "    std::cerr << \"[MEMORIA] nao foi possivel abrir o banco do projeto\\n\";\n";
+    code += "  [[maybe_unused]] const std::string arx_item_id = taskforge::rt::currentItemId(\"pipeline\");\n";
+    code += "  const bool arx_mem_has_db = std::filesystem::exists(arx_mem_db);\n";
+    code += "  const bool arx_mem_persistent = arx_mem_active && (arx_mem_learns || arx_mem_has_db);\n";
+    code += "  if (arx_mem_active) {\n";
+    code += "    if (!memory.configure(projectId, arx_mem_persistent, arx_mem_persistent ? arx_mem_db : std::string())) {\n";
+    code += "      std::cerr << \"[MEMORIA] nao foi possivel abrir o banco do projeto\\n\";\n";
+    code += "    }\n";
     code += "  }\n";
+    code += "  const char* arx_telemetry_db_env = std::getenv(\"ARESTRIX_TELEMETRY_DB\");\n";
+    code += "  const std::string arx_telemetry_db = (arx_telemetry_db_env && *arx_telemetry_db_env)\n";
+    code += "      ? std::string(arx_telemetry_db_env)\n";
+    code += "      : (std::filesystem::path(arx_memory_root) / \".arestrix\" / \"telemetry\" / \"telemetry.db\").string();\n";
+    code += "  memory.configureTelemetry(projectId, arx_telemetry_db);\n";
+    code += "  if (arx_mem_active) {\n";
     {
         const json embedding = globalMemory(graph);
         code += "  taskforge::memory::EmbeddingConfig arx_embedding_config;\n";
@@ -642,8 +695,9 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
                 "taskforge::Json::parse(" +
                 rawLiteral(memorySettings.dump()) + ")));\n";
     }
+    code += "  }\n";
     code += "  auto arx_mem_flush = [&]() {\n";
-    code += "    if (!arx_mem_persistent) memory.clearSession(projectId);\n";
+    code += "    if (arx_mem_active && !arx_mem_persistent) memory.clearSession(projectId);\n";
     code += "  };\n";
     code += "  try {\n";
     code += "  std::osyncstream(std::cout) << \">>> Iniciando pipeline Taskflow: \" << " + cppString(meta.graphName) + " << \"...\\n\";\n\n";
@@ -782,19 +836,22 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
             body = node.customLambdaBody.empty() ? "(void)sf; // subflow hierarquico" : node.customLambdaBody;
         } else if (node.type == core::TaskflowNodeType::Agent && node.customLambdaBody.empty()) {
             json mem = effectiveMemory(graph, node);
-            const bool memEnabled = mem.value("enabled", false) && !memoryMeasurementOff(graph);
+            const std::string memMode = memoryModeOf(mem);
+            const bool memEnabled = memMode != "off" && !memoryMeasurementOff(graph);
+            const bool memLearns = memMode == "learn";
             if (memEnabled) {
-                json domains = mem.contains("domains") && mem["domains"].is_array() ? mem["domains"] : json::array();
-                json keys = mem.contains("allowedKeys") && mem["allowedKeys"].is_array() ? mem["allowedKeys"] : json::array();
+                json domains = memoryThemesOf(mem);
+                if (domains.empty()) domains.push_back(node.id);
+                std::string memoryTaskType = mem.value("taskType", std::string());
+                if (memoryTaskType.empty()) memoryTaskType = node.id;
                 const int budget = mem.value("contextBudgetTokens", 800);
                 body = "    taskforge::memory::MemoryBriefInfo arx_brief_info;\n";
                 body += "    std::string arx_mem_ctx;\n";
                 body += "    if (std::getenv(\"ARESTRIX_MEMORY_DISABLE\") == nullptr) {\n";
-                body += "      arx_mem_ctx = memory.buildBrief(projectId, \"pipeline\", " +
-                        cppStringList(domains) + ", " + cppStringList(keys) + ", " +
-                        std::to_string(std::max(0, budget)) + ", " +
-                        (mem.value("semanticLessons", false) ? "true" : "false") + ", " +
-                        (mem.value("readBlackboard", false) ? "true" : "false") + ", &arx_brief_info);\n";
+                body += "      arx_mem_ctx = memory.buildBrief(projectId, arx_item_id, " +
+                        cppStringList(domains) + ", std::vector<std::string>{}, " +
+                        std::to_string(std::max(0, budget)) + ", true, false, &arx_brief_info, " +
+                        cppString(memoryTaskType) + ");\n";
                 body += "      memory.recordBriefHits(projectId, taskforge::rt::currentRunId(" +
                         cppString(node.id) + "), " + cppString(node.id) + ", arx_brief_info);\n";
                 body += "    }\n";
@@ -802,33 +859,18 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
                 std::string runCall = "taskforge::rt::runAgent(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +
                                       rawLiteral(buildAgentSpec(graph, node).dump()) + ", \"\", arx_mem_ctx" +
                                       (inputContextExpr.empty() ? "" : ", " + inputContextExpr) + ");";
-                if (mem.value("recordLessons", false)) {
+                if (memLearns) {
                     std::string domain = "geral";
                     if (domains.is_array()) {
                         for (const auto& d : domains) if (d.is_string()) { domain = d.get<std::string>(); break; }
                     }
                     std::string failPrefix = "Falha no agente " + label + ": ";
                     body += "    try {\n      " + runCall + "\n    } catch (const std::exception& arx_mem_err) {\n";
-                    body += "      memory.recordLesson(projectId, " + cppString(domain) +
+                    body += "      memory.proposeLesson(projectId, " + cppString(domain) +
                             ", \"agent_failure\",\n          std::string(" + cppString(failPrefix) + ") + arx_mem_err.what(), " + cppString(node.id) + ");\n";
                     body += "      throw;\n    }\n";
                 } else {
                     body += "    " + runCall + "\n";
-                }
-                if (mem.value("writeBlackboard", false)) {
-                    bool canWriteLastStage = true;
-                    if (mem.contains("writeKeys") && mem["writeKeys"].is_array() && !mem["writeKeys"].empty()) {
-                        canWriteLastStage = false;
-                        for (const auto& key : mem["writeKeys"]) {
-                            if (key.is_string() && key.get<std::string>() == "last_stage") {
-                                canWriteLastStage = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (canWriteLastStage) {
-                        body += "    memory.setWorking(projectId, \"pipeline\", \"last_stage\", taskforge::Json(" + cppString(node.id) + "));\n";
-                    }
                 }
             } else {
                 body = "taskforge::rt::runAgent(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +

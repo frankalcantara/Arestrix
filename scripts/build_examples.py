@@ -4,7 +4,7 @@
   01-svg-agente           o tutorial: dois agentes, fork/join, laco de autocorrecao (decisao em C++)
   02-triagem-de-suporte   agentes, agentes de decisao (switch com IA e por palavras) e MCP
   03-atendimento-ilustrado  "projeto de projetos": a triagem (02) seguida do agente de SVG (01)
-  04-memoria              licao semantica + Blackboard persistidos e injetados no agente
+  04-memoria              proposta de licao, aprovacao e injecao no agente
   05-matematica-com-memoria  pesquisa web via MCP Keenable + redacao de matematica com memoria
 
 Os projetos nao contem NENHUM segredo: o modelo vem dos Padroes Globais do projeto (provedor/modelo, sem chave) e as
@@ -511,13 +511,12 @@ def build_02():
 
 # ---------------------------------------------------------------------------------------------- exemplo 4
 def build_04():
-    """Memoria de projeto de ponta a ponta: uma licao e um resumo sao gravados, persistidos e
-    injetados no agente; a resposta vira um artefato de saida."""
+    """Memoria de projeto de ponta a ponta: uma licao e proposta, aprovada no painel e
+    injetada no agente; a resposta vira um artefato de saida."""
     seed_body = (
-        'memory.recordLesson(projectId, "memoria", "auditoria_anterior",\n'
+        'memory.proposeLesson(projectId, "memoria", "auditoria_anterior",\n'
         '    "A resposta deve citar a regra aprendida antes de concluir.", "semear");\n'
-        'memory.setWorking(projectId, "pipeline", "resumo", taskforge::Json("chamado de exemplo"));\n'
-        'std::cout << "[Semear] licao e resumo gravados\\n";'
+        'std::cout << "[Semear] proposta de licao gravada; aprove no painel de memoria\\n";'
     )
     nodes = [
         static("semear", "Semear_Licao", 0, 0, seed_body),
@@ -532,11 +531,10 @@ def build_04():
         "enabled": True,
         "persistent": True,
         "projectId": "exemplo-memoria",
-        "readBlackboard": True,
-        "writeBlackboard": True,
+        "mode": "learn",
+        "theme": "memoria",
         "semanticLessons": True,
         "recordLessons": True,
-        "allowedKeys": ["resumo"],
         "domains": ["memoria"],
         "contextBudgetTokens": 400,
     }
@@ -545,7 +543,7 @@ def build_04():
         edge("agente", 0, "entrega"),
     ]
     g = graph("exemplo-memoria", "Memoria_de_Projeto",
-              "Memoria de projeto: licao persistente, Blackboard e injecao no agente", nodes, edges)
+              "Memoria de projeto: proposta de licao, aprovacao e injecao no agente", nodes, edges)
     d = OUT / "04-memoria"
     write_json(d / "arestrix.project.json",
                manifest("exemplo-memoria", "Exemplo 4 - Memória de Projeto", g["metadata"]["description"]))
@@ -558,9 +556,9 @@ description: Aplica as licoes e o resumo carregados da memoria do projeto
 
 # Papel: AGENTE COM MEMORIA
 
-1. Leia as licoes semanticas e o resumo do Blackboard injetados no seu contexto.
+1. Leia as licoes aprovadas injetadas no seu contexto.
 2. Se precisar de detalhe extra, use `memory_search`.
-3. Se descobrir uma regra nova e duradoura, registre-a com `memory_record_lesson`.
+3. Se descobrir uma regra nova e duradoura, registre uma proposta com `memory_propose_lesson`.
 4. Grave `workspace/resposta.txt` com uma frase curta citando a regra aprendida.
 5. Responda apenas `OK`.
 """)
@@ -569,16 +567,14 @@ description: Aplica as licoes e o resumo carregados da memoria do projeto
 def build_05():
     """Pesquisa web via MCP (Keenable) + redacao de matematica com memoria de projeto."""
     seed_body = (
-        'memory.recordLesson(projectId, "matematica", "revisao_anterior",\n'
+        'memory.proposeLesson(projectId, "matematica", "revisao_anterior",\n'
         '    "Toda afirmacao matematica deve citar a fonte ou justificar o passo.", "semear");\n'
-        'memory.setWorking(projectId, "pipeline", "tema", taskforge::Json("teorema de Pitagoras"));\n'
-        'std::cout << "[Semear] licao e tema gravados na memoria\\n";'
+        'std::cout << "[Semear] proposta de licao gravada\\n";'
     )
     recall_body = (
-        'memory.setWorking(projectId, "pipeline", "ultimo_texto", taskforge::Json("workspace/texto-matematica.md"));\n'
-        'memory.recordLesson(projectId, "matematica", "pos_redacao",\n'
+        'memory.proposeLesson(projectId, "matematica", "pos_redacao",\n'
         '    "Antes de publicar, confira se cada fonte citada foi realmente consultada.", "guardar_licao");\n'
-        'std::cout << "[Guardar] licao de revisao registrada\\n";'
+        'std::cout << "[Guardar] proposta de licao de revisao gravada\\n";'
     )
     nodes = [
         static("semear", "Semear_Memoria", 0, 0, seed_body),
@@ -598,11 +594,10 @@ def build_05():
         "enabled": True,
         "persistent": True,
         "projectId": "exemplo-matematica-memoria",
-        "readBlackboard": True,
-        "writeBlackboard": True,
+        "mode": "learn",
+        "theme": "matematica",
         "semanticLessons": True,
         "recordLessons": True,
-        "allowedKeys": ["tema"],
         "domains": ["matematica"],
         "contextBudgetTokens": 600,
     }
@@ -613,7 +608,7 @@ def build_05():
         edge("guardar", 0, "entrega"),
     ]
     g = graph("exemplo-matematica-memoria", "Matematica_Com_Memoria",
-              "Pesquisa web via MCP Keenable + redacao de matematica com licoes persistentes",
+              "Pesquisa web via MCP Keenable + redacao de matematica com propostas de licoes",
               nodes, edges)
     d = OUT / "05-matematica-com-memoria"
     write_json(d / "arestrix.project.json",

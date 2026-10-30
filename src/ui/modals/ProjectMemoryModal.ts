@@ -1,12 +1,14 @@
 import { Graph } from '../../core/Graph.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 import { t } from '../../i18n/index.ts';
+import { memoryModeOf, memoryThemeOf, memoryThemesOf } from '../../core/memory/MemoryConfig.ts';
+import { DEFAULT_NODE_MEMORY_CONFIG } from '../../core/types.ts';
 
 export class ProjectMemoryModal {
   private overlay: HTMLElement;
   private graph: Graph;
   private windowController?: IModalWindowController;
-  private activeTab: 'blackboard' | 'lessons' | 'maintenance' = 'blackboard';
+  private activeTab: 'knowledge' | 'lessons' | 'maintenance' = 'knowledge';
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -19,7 +21,7 @@ export class ProjectMemoryModal {
   }
 
   public show(): void {
-    this.activeTab = 'blackboard';
+    this.activeTab = 'knowledge';
     this.render();
     this.overlay.classList.remove('hidden');
     this.windowController?.bringToFront();
@@ -33,8 +35,57 @@ export class ProjectMemoryModal {
   private render(): void {
     const projectId = this.graph.getProjectId();
     const defaults = this.graph.getGlobalDefaults();
-    const isGloballyPersistent = !!defaults.memory?.persistent;
-    const isGloballyEnabled = !!defaults.memory?.enabled;
+    const globalMemory = defaults.memory || DEFAULT_NODE_MEMORY_CONFIG;
+    const anyLearn = this.graph.getNodes().some((node) => {
+      if (node.type !== 'agent') return false;
+      const memory = node.agentSettings?.inheritMemory === false
+        ? { ...globalMemory, ...(node.agentSettings?.memory || {}) }
+        : globalMemory;
+      return memoryModeOf(memory) === 'learn';
+    });
+    const anyActive = this.graph.getNodes().some((node) => {
+      if (node.type !== 'agent') return false;
+      const memory = node.agentSettings?.inheritMemory === false
+        ? { ...globalMemory, ...(node.agentSettings?.memory || {}) }
+        : globalMemory;
+      return memoryModeOf(memory) !== 'off';
+    });
+    const effectiveRows = this.graph.getNodes()
+      .filter((node) => node.type === 'agent')
+      .map((node) => {
+        const inherited = node.agentSettings?.inheritMemory !== false;
+        const memory = inherited
+          ? globalMemory
+          : { ...globalMemory, ...(node.agentSettings?.memory || {}) };
+        return {
+          id: node.id,
+          label: node.label,
+          mode: memoryModeOf(memory),
+          theme: memoryThemeOf(memory, node.label || node.id),
+          taskType: memory.taskType || node.id,
+          inherited
+        };
+      });
+    const effectiveHtml = effectiveRows.length === 0
+      ? `<div class="form-hint">${t('project_memory.no_agents', 'Nenhum vértice de agente no projeto.')}</div>`
+      : `<table style="width: 100%; border-collapse: collapse; font-size: 11.5px;">
+           <thead><tr>
+             <th style="text-align: left; padding: 6px;">${t('project_memory.col_vertex', 'Vértice')}</th>
+             <th style="text-align: left; padding: 6px;">${t('project_memory.col_mode', 'Modo')}</th>
+             <th style="text-align: left; padding: 6px;">${t('project_memory.col_theme', 'Tema')}</th>
+             <th style="text-align: left; padding: 6px;">task_type</th>
+             <th style="text-align: left; padding: 6px;">${t('project_memory.col_origin', 'Origem')}</th>
+           </tr></thead>
+           <tbody>
+             ${effectiveRows.map((row) => `<tr>
+               <td style="padding: 6px; border-top: 1px solid #edebe9;">${this.escapeHtml(row.label || row.id)}</td>
+               <td style="padding: 6px; border-top: 1px solid #edebe9;">${row.mode}</td>
+               <td style="padding: 6px; border-top: 1px solid #edebe9;">${this.escapeHtml(row.theme)}</td>
+               <td style="padding: 6px; border-top: 1px solid #edebe9;">${this.escapeHtml(row.taskType)}</td>
+               <td style="padding: 6px; border-top: 1px solid #edebe9;">${row.inherited ? t('project_memory.origin_inherited', 'Herdado') : t('project_memory.origin_override', 'Próprio')}</td>
+             </tr>`).join('')}
+           </tbody>
+         </table>`;
     const retentionDays = defaults.memory?.retentionDays ?? 180;
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
@@ -50,8 +101,8 @@ export class ProjectMemoryModal {
 
         <!-- Abas Fluent / Office 365 -->
         <div class="modal-tabs" role="tablist">
-          <button type="button" class="tab-btn ${this.activeTab === 'blackboard' ? 'active' : ''}" data-tab="blackboard">
-            <span>📋</span> ${t('project_memory.tab_blackboard', '1. Blackboard')}
+          <button type="button" class="tab-btn ${this.activeTab === 'knowledge' ? 'active' : ''}" data-tab="knowledge">
+            <span>📋</span> ${t('project_memory.tab_knowledge', '1. Conhecimento')}
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'lessons' ? 'active' : ''}" data-tab="lessons">
             <span>📚</span> ${t('project_memory.tab_lessons', '2. Lições Globais')}
@@ -62,18 +113,18 @@ export class ProjectMemoryModal {
         </div>
 
         <div class="modal-body-scrollable">
-          <!-- ABA 1: Blackboard Viewer -->
-          <div class="tab-pane" id="pane-tab-blackboard" style="${this.activeTab === 'blackboard' ? '' : 'display: none;'}">
+          <!-- ABA 1: Conhecimento do projeto -->
+          <div class="tab-pane" id="pane-tab-knowledge" style="${this.activeTab === 'knowledge' ? '' : 'display: none;'}">
             <div class="settings-section-card">
               <div class="section-card-header">
                 <span class="section-card-icon">📋</span>
                 <div class="section-card-titles">
-                  <h3 class="section-card-title">${t('project_memory.bb_title')}</h3>
-                  <p class="section-card-desc">${t('project_memory.bb_desc')}</p>
+                  <h3 class="section-card-title">${t('project_memory.knowledge_title', 'Conhecimento do projeto')}</h3>
+                  <p class="section-card-desc">${t('project_memory.knowledge_desc', 'Lições, fatos e estado de trabalho que a memória pode injetar no prompt.')}</p>
                 </div>
               </div>
-              <div id="blackboard-viewer" class="code-editor-header" style="background:#0f172a; color:#f8fafc; font-family:monospace; padding:12px; border-radius:6px; max-height:280px; overflow-y:auto; font-size:11.5px; white-space:pre-wrap;">
-  ${t('project_memory.bb_loading')}
+              <div id="knowledge-viewer" class="code-editor-header" style="background:#0f172a; color:#f8fafc; font-family:monospace; padding:12px; border-radius:6px; max-height:280px; overflow-y:auto; font-size:11.5px; white-space:pre-wrap;">
+  ${t('project_memory.knowledge_loading', 'Carregando conhecimento…')}
               </div>
             </div>
           </div>
@@ -128,11 +179,12 @@ export class ProjectMemoryModal {
                   </div>
                 </div>
                 <div style="margin-top: 8px;">
-                  <span class="inheritance-status-badge ${isGloballyPersistent ? 'badge-memory-persistent' : 'badge-memory-ephemeral'}">
-                    ${isGloballyPersistent ? t('project_memory.badge_persistent') : t('project_memory.badge_ephemeral')}
+                  <span class="inheritance-status-badge ${anyLearn ? 'badge-memory-persistent' : 'badge-memory-ephemeral'}">
+                    ${anyLearn ? t('project_memory.badge_saving', 'Salvar no projeto: ligado') : t('project_memory.badge_idle', 'Salvar no projeto: ocioso')}
                   </span>
                   <div class="form-hint" style="margin-top: 8px;">
-                    ${t('project_memory.pipeline_default_hint', { status: isGloballyEnabled ? t('project_memory.status_active') : t('project_memory.status_optin') })}
+                    ${t('project_memory.save_auto_hint', 'O aprendizado é salvo automaticamente quando algum vértice aprende.')}
+                    ${anyActive ? '' : ` ${t('project_memory.status_optin', 'Nenhum vértice usa memória.')}`}
                   </div>
                 </div>
               </div>
@@ -147,6 +199,7 @@ export class ProjectMemoryModal {
                 </div>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
                   <button class="btn btn-secondary-pill btn-secondary-office" id="btn-refresh-memory">${t('project_memory.btn_refresh')}</button>
+                  <button class="btn btn-secondary-pill btn-secondary-office" id="btn-run-memory-ab">${t('project_memory.btn_run_ab', 'Comparar com e sem memória (contexto)')}</button>
                   <button class="btn btn-secondary-pill btn-secondary-office" id="btn-clear-session-mem" title="${t('project_memory.btn_clear_session_tip')}">${t('project_memory.btn_clear_session')}</button>
                   <button class="btn btn-danger-pill" id="btn-clear-all-mem" title="${t('project_memory.btn_clear_all_tip')}" style="background: #dc2626; color: #fff; border: none; border-radius: 4px; padding: 6px 12px; font-size: 11.5px; cursor: pointer;">${t('project_memory.btn_clear_all')}</button>
                 </div>
@@ -159,7 +212,19 @@ export class ProjectMemoryModal {
                   <button class="btn btn-secondary-pill btn-secondary-office" id="btn-prune-memory">${t('project_memory.btn_prune')}</button>
                 </div>
                 <div class="form-hint" style="margin-top: 6px;">${t('project_memory.retention_hint')}</div>
+                <pre id="memory-ab-report" style="display: none; margin-top: 10px; padding: 10px; border-radius: 6px; background: #f8fafc; color: #0f172a; font-size: 11px; white-space: pre-wrap; max-height: 240px; overflow: auto;"></pre>
               </div>
+            </div>
+
+            <div class="settings-section-card" style="margin-top: 12px;">
+              <div class="section-card-header">
+                <span class="section-card-icon">🧾</span>
+                <div class="section-card-titles">
+                  <h3 class="section-card-title">${t('project_memory.effective_title', 'Configuração efetiva por vértice')}</h3>
+                  <p class="section-card-desc">${t('project_memory.effective_desc', 'Modo, tema e task_type que cada agente realmente usa, com a origem da herança.')}</p>
+                </div>
+              </div>
+              ${effectiveHtml}
             </div>
 
             <div class="settings-section-card" style="margin-top: 12px;">
@@ -270,7 +335,7 @@ export class ProjectMemoryModal {
     const tabButtons = this.overlay.querySelectorAll<HTMLButtonElement>('.modal-tabs .tab-btn');
     tabButtons.forEach(btn => {
       btn.addEventListener('click', () => {
-        const tab = (btn.dataset?.tab || btn.getAttribute('data-tab')) as 'blackboard' | 'lessons' | 'maintenance';
+        const tab = (btn.dataset?.tab || btn.getAttribute('data-tab')) as 'knowledge' | 'lessons' | 'maintenance';
         if (!tab) return;
         this.activeTab = tab;
         tabButtons.forEach(b => {
@@ -288,6 +353,7 @@ export class ProjectMemoryModal {
     this.overlay.querySelector('#btn-close-project-mem')?.addEventListener('click', () => this.hide());
     this.overlay.querySelector('#btn-close-project-mem-footer')?.addEventListener('click', () => this.hide());
     this.overlay.querySelector('#btn-refresh-memory')?.addEventListener('click', () => this.refreshMemoryData());
+    this.overlay.querySelector('#btn-run-memory-ab')?.addEventListener('click', () => { void this.runMemoryAb(); });
     this.overlay.querySelector('#btn-test-embeddings')?.addEventListener('click', () => { void this.testEmbeddings(); });
     this.overlay.querySelector('#btn-reindex-embeddings')?.addEventListener('click', () => { void this.reindexEmbeddings(); });
     this.overlay.querySelector('#btn-consolidate-memory')?.addEventListener('click', () => { void this.consolidateMemory(); });
@@ -347,7 +413,7 @@ export class ProjectMemoryModal {
 
   public async refreshMemoryData(): Promise<void> {
     const projectId = this.graph.getProjectId();
-    const bbViewer = this.overlay.querySelector('#blackboard-viewer');
+    const knowledgeViewer = this.overlay.querySelector('#knowledge-viewer');
     const lessonsList = this.overlay.querySelector('#lessons-list');
     const usageViewer = this.overlay.querySelector('#memory-usage-viewer');
     const proposalsList = this.overlay.querySelector('#memory-proposals-list');
@@ -368,20 +434,20 @@ export class ProjectMemoryModal {
         }));
         const data = JSON.parse(raw);
 
-        // Exibe Blackboard
-        if (bbViewer) {
-          const bbObj = data.blackboard || {};
-          const keysCount = Object.keys(bbObj).length;
+        // Exibe o conhecimento do projeto.
+        if (knowledgeViewer) {
+          const knowledge = data.working || {};
+          const keysCount = Object.keys(knowledge).length;
           if (keysCount === 0) {
-            bbViewer.textContent = t('project_memory.bb_empty');
+            knowledgeViewer.textContent = t('project_memory.knowledge_empty', 'Nenhum estado de trabalho gravado.');
           } else {
-            bbViewer.textContent = JSON.stringify(bbObj, null, 2);
+            knowledgeViewer.textContent = JSON.stringify(knowledge, null, 2);
           }
         }
 
-        // Exibe Lições Semânticas
+        // Exibe as lições do projeto.
         if (lessonsList) {
-          const lessons = data.semantic?.lessons || [];
+          const lessons = data.lessons || [];
           const canPromote = !!data.workspace?.configured;
           if (lessons.length === 0) {
             lessonsList.innerHTML = `<div style="color: #64748b; font-size: 11px; padding: 10px; background: #f8fafc; border-radius: 8px;">${t('project_memory.lessons_empty')}</div>`;
@@ -542,11 +608,11 @@ export class ProjectMemoryModal {
               ].join('\n');
         }
       } else {
-        if (bbViewer) bbViewer.textContent = 'Backend WebUI em memória não detectado (Ambiente Local Vite).';
+        if (knowledgeViewer) knowledgeViewer.textContent = 'Backend WebUI em memória não detectado (Ambiente Local Vite).';
         if (lessonsList) lessonsList.innerHTML = '<div style="color:#64748b; font-size:11px;">Sem conexão nativa C++.</div>';
       }
     } catch (e: any) {
-      if (bbViewer) bbViewer.textContent = `Erro ao consultar memória: ${e.message}`;
+      if (knowledgeViewer) knowledgeViewer.textContent = `Erro ao consultar memória: ${e.message}`;
     }
   }
 
@@ -793,6 +859,65 @@ export class ProjectMemoryModal {
       }
     } catch (e) {
       console.warn("record_semantic_lesson error:", e);
+    }
+  }
+
+  private async runMemoryAb(): Promise<void> {
+    const pre = this.overlay.querySelector<HTMLPreElement>('#memory-ab-report');
+    if (!pre) return;
+    const defaults = this.graph.getGlobalDefaults();
+    const globalMemory = defaults.memory || DEFAULT_NODE_MEMORY_CONFIG;
+    const tasks: Array<{ id: string; domains: string[]; taskType: string; budget: number }> = [];
+    for (const node of this.graph.getNodes()) {
+      if (node.type !== 'agent') continue;
+      const inherited = node.agentSettings?.inheritMemory !== false;
+      const memory = inherited
+        ? globalMemory
+        : { ...globalMemory, ...(node.agentSettings?.memory || {}) };
+      if (memoryModeOf(memory) === 'off') continue;
+      tasks.push({
+        id: node.id,
+        domains: memoryThemesOf(memory, node.label || node.id),
+        taskType: memory.taskType || node.id,
+        budget: memory.contextBudgetTokens ?? 800
+      });
+    }
+    if (tasks.length === 0) {
+      pre.style.display = 'block';
+      pre.textContent = t('project_memory.ab_no_tasks', 'Nenhum vértice ativo usa memória. Nada para comparar.');
+      return;
+    }
+    const webui = typeof window !== 'undefined' ? (window as any).webui : null;
+    if (!webui || typeof webui.call !== 'function') {
+      pre.style.display = 'block';
+      pre.textContent = t('project_memory.ab_unavailable', 'A comparação está disponível no aplicativo Arestrix.');
+      return;
+    }
+    try {
+      const raw = await webui.call('run_memory_ab', JSON.stringify({
+        projectId: this.graph.getProjectId(),
+        tasks
+      }));
+      const data = raw ? JSON.parse(String(raw)) : {};
+      const lines: string[] = [];
+      lines.push(t('project_memory.ab_title', 'A/B de contexto (v1)'));
+      lines.push(`${t('project_memory.ab_fingerprint', 'Fingerprint da cópia congelada')}: ${String(data.fingerprint || '-')}`);
+      lines.push(`${t('project_memory.ab_frozen', 'Cópia congelada')}: ${String(data.frozenPath || '-')}`);
+      lines.push('');
+      for (const task of Array.isArray(data.tasks) ? data.tasks : []) {
+        lines.push(`- ${task.id}: ON ${Number(task.onTokens || 0)} tokens / ${Number(task.onChars || 0)} chars · `
+          + `${t('project_memory.ab_lessons', 'lições')} ${Number(task.lessons || 0)} · `
+          + `${t('project_memory.ab_facts', 'fatos')} ${Number(task.facts || 0)} · `
+          + `${t('project_memory.ab_playbooks', 'playbooks')} ${Number(task.playbooks || 0)}`
+          + `${task.truncated ? ` · ${t('project_memory.ab_truncated', 'truncado')}` : ''}`);
+      }
+      lines.push('');
+      lines.push(t('project_memory.ab_note', 'v1 mede o custo e o conteúdo do contexto; a taxa de aprovação do validador entra no A/B completo.'));
+      pre.style.display = 'block';
+      pre.textContent = lines.join('\n');
+    } catch (error) {
+      pre.style.display = 'block';
+      pre.textContent = `${t('project_memory.ab_error', 'Falha na comparação')}: ${String((error as any)?.message || error)}`;
     }
   }
 

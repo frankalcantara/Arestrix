@@ -46,7 +46,6 @@ export const NATIVE_EMBEDDED_MCPS: Array<{ id: string; name: string; tools: stri
   { id: 'arestrix.arquivos', name: 'Arquivos Locais (Nativo C++)', tools: ['read_file', 'write_file', 'list_directory', 'file_info', 'make_directory', 'search_text'] },
   { id: 'arestrix.http', name: 'HTTP Seguro com NetGuard (Nativo C++)', tools: ['http_get', 'http_post_json'] },
   { id: 'arestrix.dados', name: 'Transformação Pura de Dados (Nativo C++)', tools: ['json_query', 'csv_to_json', 'json_to_csv', 'regex_extract', 'base64_encode', 'base64_decode'] },
-  { id: 'arestrix.memoria', name: 'Memória Local Simples (Nativo C++)', tools: ['memory_set', 'memory_get', 'memory_list', 'memory_delete'] },
   { id: 'arestrix.tempo', name: 'Tempo e Fusos ISO 8601 (Nativo C++)', tools: ['now', 'add_duration', 'diff'] },
   { id: 'arestrix.git', name: 'Git Read-Only (Nativo C++)', tools: ['git_status', 'git_log', 'git_diff', 'git_show_file'] },
   { id: 'arestrix.sqlite', name: 'SQLite Embutido Transacional (Nativo C++)', tools: ['list_tables', 'describe_table', 'sql_query', 'sql_execute'] }

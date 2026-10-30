@@ -115,7 +115,7 @@ Every vertex has a bar of five buttons (also in the right-click menu):
 | Sandbox | Workspace | Isolation level, network policy, memory, timeout, mounts. |
 | Model | Project | Provider, model, skill file, prompt template. |
 | Tools | Project | Allowed tools and MCP servers. |
-| Memory | Project | Blackboard, semantic lessons, persistence. |
+| Memory | Project | `off`/`consult`/`learn` modes, lessons, proposals, persistence. |
 | Skills | Workspace / Project | Skills bound to the vertex. |
 
 Settings can be inherited from the **global defaults** (toolbar) or overridden per vertex.

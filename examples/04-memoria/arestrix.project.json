@@ -1,7 +1,7 @@
 {
   "projectId": "exemplo-memoria",
   "name": "Exemplo 4 - Memória de Projeto",
-  "description": "Memoria de projeto: licao persistente, Blackboard e injecao no agente",
+  "description": "Memoria de projeto: proposta de licao, aprovacao e injecao no agente",
   "version": "1.0.0",
   "createdAt": "2026-10-13T00:00:00Z",
   "updatedAt": "2026-10-13T00:00:00Z",
@@ -51,7 +51,7 @@
       "name": "Pipeline Principal",
       "file": "pipelines/main.json",
       "isPrimary": true,
-      "description": "Memoria de projeto: licao persistente, Blackboard e injecao no agente"
+      "description": "Memoria de projeto: proposta de licao, aprovacao e injecao no agente"
     }
   ]
 }

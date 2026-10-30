@@ -3,7 +3,7 @@
   "metadata": {
     "projectId": "exemplo-memoria",
     "graphName": "Memoria_de_Projeto",
-    "description": "Memoria de projeto: licao persistente, Blackboard e injecao no agente",
+    "description": "Memoria de projeto: proposta de licao, aprovacao e injecao no agente",
     "targetStandard": "C++20",
     "compilerConfig": {
       "compiler": "msvc",
@@ -77,7 +77,7 @@
         }
       ],
       "parameters": {},
-      "customLambdaBody": "memory.recordLesson(projectId, \"memoria\", \"auditoria_anterior\",\n    \"A resposta deve citar a regra aprendida antes de concluir.\", \"semear\");\nmemory.setWorking(projectId, \"pipeline\", \"resumo\", taskforge::Json(\"chamado de exemplo\"));\nstd::cout << \"[Semear] licao e resumo gravados\\n\";"
+      "customLambdaBody": "memory.proposeLesson(projectId, \"memoria\", \"auditoria_anterior\",\n    \"A resposta deve citar a regra aprendida antes de concluir.\", \"semear\");\nstd::cout << \"[Semear] proposta de licao gravada; aprove no painel de memoria\\n\";"
     },
     {
       "id": "agente",
@@ -126,13 +126,12 @@
           "enabled": true,
           "persistent": true,
           "projectId": "exemplo-memoria",
-          "readBlackboard": true,
-          "writeBlackboard": true,
+          "mode": "learn",
+          "theme": "memoria",
+          "readBlackboard": false,
+          "writeBlackboard": false,
           "semanticLessons": true,
           "recordLessons": true,
-          "allowedKeys": [
-            "resumo"
-          ],
           "domains": [
             "memoria"
           ],

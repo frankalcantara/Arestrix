@@ -60,7 +60,7 @@ Each project in Arestrix can be linked to an independent Git repository on a con
 Arestrix manages two SQLite database files in each project's scope:
 
 1. **Operational / Analytical Project Database (`storage/database.sqlite`):** Stores structured business data manipulated by agents and pipeline nodes through the `workspace-sqlite` MCP or native tools (`sql_query`, `sql_execute`), as well as imported datasets (e.g., Excel workbooks via `ImportExcelModal`).
-2. **AMG Cognitive Memory Database (`.arestrix/memory/memory.db`):** Stores the temporal multigraph powering agent memory (learned lessons, semantic relations, shared project Blackboard, and token telemetry).
+2. **AMG knowledge database (`.arestrix/memory/memory.db`):** stores the project's temporal multigraph (lessons, facts and evidence). Telemetry lives in `.arestrix/telemetry/telemetry.db`.
 
 #### Why Databases are Excluded from Git
 * **GitHub Repository Size Limits:** GitHub recommends keeping repositories below 1 GB (with a practical ceiling of 5 GB to 10 GB) and strictly blocks pushes containing individual files larger than 100 MB.
@@ -83,128 +83,50 @@ inherit them (a checkbox on the vertex) or override them. Studio-level keys are 
 
 ## Memory
 
-Memory is opt-in and disabled by default. In Beta 2 it is implemented by **AMG (Arestrix Memory
-Graph)**, a temporal SQLite multigraph written natively in C++20.
+Memory is optional, local and owned by the project. The current model has three per-vertex modes:
 
-| Kind | Scope | Purpose |
-| :--- | :--- | :--- |
-| **Blackboard** | Project | Shared key-value state between agents of the same project. |
-| **Semantic lessons** | Project | Lessons agents record and recall later. |
-| **Ephemeral vs. persistent** | Per vertex | RAM only, or stored in the project SQLite database. |
-| **API consumption** | Project | Tokens, calls, latency and injected context size. |
+| Mode | Effect |
+| :--- | :--- |
+| `off` | Reads and writes no knowledge. |
+| `consult` | Injects the authorized brief into the prompt and records hits. Writes no knowledge. |
+| `learn` | Consults, writes an episode and proposes lessons at the end of the run. |
 
-Memory is partitioned by `projectId`, so two projects never read each other's data. Each vertex declares
-which Blackboard keys it may read and write, which semantic domains it may query, and how many lessons
-it may record per run; `memory_search` enforces those domains.
+Learning implies saving, but nothing enters on its own: lessons and playbooks start as proposals
+or candidates and become active knowledge only after approval in the **Project Memory** panel.
+Telemetry lives in `.arestrix/telemetry/telemetry.db`, separate from knowledge in
+`.arestrix/memory/memory.db`; clearing a session or pruning telemetry never deletes knowledge.
 
-### What exists today
+The brief is built within `contextBudgetTokens` from active lessons, facts, evidence and legacy
+working state when enabled. Compiled playbooks remain candidates and do not enter the brief until
+promoted. Every injected item gets a `usedHitRef` so actual use can be measured.
 
-- SQLite database at `.arestrix/memory/memory.db` per project.
-- Dual-tier schema architecture:
-  * **Indispensable (Cognitive Data):** `memory_scope`/`memory_scope_closure` (hierarchy), `memory_node` (concepts), `memory_edge` (learned lessons and semantic relations with confidence and temporal validity) and `memory_working` (shared project Blackboard).
-  * **Disposable Telemetry & Cache:** `memory_usage` (prompt/completion tokens, calls, and latency), `memory_hit` (prompt injection hit statistics for A/B evaluations), `memory_episode`/`memory_evidence` (raw logs of previous runs) and `memory_node_fts` (FTS5 virtual index).
-- **Local integrity:** the database is always anchored at the project root, never at the process working directory. A corrupt `.db` is quarantined (`memory.db.corrupt-*`) when the project opens. Arestrix neither exports nor restores memory snapshots: backup and recovery are external to the product.
-- The runtime records sanitized success/failure episodes per agent with tokens, retries,
-  duration, outcome, tool sequence (name/success), touched files, artifacts and a truncated error
-  message; it does not store raw prompts/responses or tool arguments.
-- The L2 schema already contains `memory_proposal`, `memory_embedding`, `memory_playbook` and
-  `memory_alias`, and `memory_episode` records `task_type`, outcome, tools, files, artifacts,
-  evidence, success signals and redaction count.
-- When lesson writing is enabled (`recordLessons`), the runtime extracts deterministic proposals
-  from the episode (lesson, fact, entity, playbook and summary). They stay `pending` and can be
-  accepted/rejected in the Memory Center or via `arestrix-cli memory proposals`. Promotion is
-  manual.
-- Hybrid search (FTS + graph + embeddings) is optional and **off by default**. The
-  preconfigured model is `embeddinggemma-2` (768 dimensions). To enable it, use
-  an existing OpenAI-compatible `/v1/embeddings` endpoint (Ollama, llama.cpp, LM Studio, vLLM)
-  in File → Properties → Project → Model & tools → Manage advanced memory. With Ollama: `ollama pull embeddinggemma-2` and endpoint
-  `http://127.0.0.1:11434/v1`. Without a provider the system remains 100% lexical.
-  When enabled, indexed texts (sanitized lessons, facts and summaries) are sent to the
-  configured endpoint; use a local server to keep everything on the machine.
-- Deterministic consolidation: duplicate lesson/fact merge, entity aliases,
-  conflicts (`CONTRADICTS`), expiration, decay into `dormant` and generalization
-  (`GENERALIZES`). Nothing is deleted; duplicates/conflicts are demoted and audited. Use
-  **Consolidate memory** in the Studio or `arestrix-cli memory consolidate`.
-- Opt-in background consolidation per project (`consolidationMode=off|idle|after_episodes`),
-  only for persistent memory. It runs off the recall path, exposes runs/last run/next trigger in
-  `consolidationStatus` in the worker process and stops deterministically with the project/process.
-- The `arestrix-memory` service exposes authenticated `/metrics` with REST/MCP counters,
-  notifications, 401 failures, response classes, uptime and version.
-- Procedural playbooks: successful trajectories become reusable steps by `task_type`. The
-  first evidence creates a `candidate`; the second activates it. Failures update counters and
-  reduce confidence; the brief injects active playbooks within budget.
-- Workspace: a separate database at `.workspace/memory/memory.db`. The project reads the
-  workspace, but the workspace does not read the project's private memory. Promotion is
-  explicit, requires evidence and is audited. Use **Workspace → Initialize** and
-  **Promote to workspace** in the Studio, or `arestrix-cli memory workspace init|status` /
-  `memory promote`.
-- Institution: native contract with tokens, `viewer`/`editor`/`admin` roles and immutable
-  scope policies. The `arestrix-memory` binary exposes the contract over authenticated HTTP and MCP
-  (stdio and `/mcp`); see [How memory works](how-memory-works.md#12-institution).
-- Current scopes: **project** (`project:<projectId>`), **workspace** and **institution**.
-- Lessons and Blackboard are read at the start of each agent node; failure lessons are recorded at
-  the end of the run, and the Blackboard is written when the vertex has `writeBlackboard`.
-- The agent can query memory with `memory_search` and, when `recordLessons` is on, record a lesson
-  with `memory_record_lesson`.
-- Writes are governed per vertex: `allowedKeys` restricts Blackboard reads, `writeKeys` restricts
-  automatic writes, `maxLessonsPerRun` (default 20) caps lessons per run and `maxLessonChars`
-  (default 4000) caps each lesson/trigger. A global cap of 5000 active lessons per project also
-  applies. These fields are configurable on the vertex and in **File → Properties → Project → Model & tools → Manage advanced memory**.
-- Before persisting, lessons, episodes, edges and the Blackboard are sanitized for known secrets
-  (OpenAI/Stripe, Google, AWS, GitHub, Slack, Bearer, URL parameters and PEM private keys).
-  Sanitization also covers rows written before this layer existed.
-- Project purge removes working state, lessons/edges, episodes, evidence, nodes, usage, hits and
-  audit rows, then compacts SQLite with `VACUUM`; the database opens with `secure_delete=ON`.
-  Telemetry retention is configurable in **File → Properties → Project → Model & tools → Manage advanced memory** (`retentionDays`, default
-  180; `0` = keep) and runs on shutdown and via `arestrix-cli memory prune`.
-- The generated binary resolves the database from `ARESTRIX_PROJECT_ROOT` (fallback: current
-  directory); `ARESTRIX_MEMORY_DB` has explicit priority. `memory_hit`/`memory_usage` use
-  `ARESTRIX_RUN_ID`, and the unique key `(scope, run, node, memory)` prevents duplicate hits.
-  SQLite writes retry briefly on `SQLITE_BUSY`/`SQLITE_LOCKED`.
-- The brief is compiled in sections, with newer/higher-confidence lessons first and the Blackboard
-  either complete or omitted (never partial JSON). `contextBudgetTokens` limits the brief; the
-  default is roughly 800 tokens (about 4 characters per token). **0 disables the brief** for that
-  vertex.
-- `memory_hit` records which lessons/keys were injected, which were consulted via `memory_search`
-  (including those that were not in the brief), and the run outcome.
-- `memory_usage` records tokens, calls, retries, latency, context and success/failure.
-- Legacy JSON (`arestrix-blackboard-*.json`, `arestrix-memory-*.json`) is imported once and marked
-  `legacy_imported`.
-- No LLM is used to extract or consolidate memory by default. Extraction, proposals and
-  consolidation are deterministic; fact/entity promotion remains manual.
+The agent has two memory tools: `memory_search` (read-only) and `memory_propose_lesson` (pending
+proposal). `memory_record_lesson`, `memoryWriteKeys` and the native `arestrix.memoria` server were
+removed. Knowledge is accessed by the runtime and the panel.
 
-### How memory reaches the agent
+Search combines lexical FTS with optional vectors and RRF fusion. Search does not index during a
+query; **Test** and **Reindex** in the panel are explicit actions. Ready profiles:
+EmbeddingGemma 2 (768 dimensions) and Qwen3-Embedding-4B (2560). Without a provider, search stays
+lexical. Index status shows model, dimensions, indexed items, candidates and pending items.
 
-In the generated pipeline, the runtime:
+The panel offers **Compare with and without memory (context)**: it creates a consistent copy with
+`VACUUM INTO`, computes the SHA-256 fingerprint and measures brief tokens/characters per active
+vertex. This is A/B v1 for context cost and content; validator approval belongs to the full
+protocol.
 
-1. opens the project database when `persistent: true`;
-2. compiles a sectioned brief with lessons ordered by confidence/recency and the authorized key
-   snapshot;
-3. injects that brief into the system prompt as **untrusted historical data**;
-4. records `memory_hit` for each injected lesson/key and, when the agent uses `memory_search`,
-   records the consulted memories that were not in the brief as well;
-5. saves the lesson, Blackboard, episode and outcome at the end of the run;
-6. automatically records a lesson when an agent fails and `recordLessons` is on.
+Workspace and institution remain available for promoted and shared knowledge. Promotion is
+explicit, evidence-backed and audited. The project reads authorized workspace knowledge; the
+workspace does not read the project's private memory.
 
-Audit lessons are recorded by the node that interprets the decision (for example, a `condition`
-that calls `recordLesson` on the rejection branch); the runtime does not guess the semantics of a
-switch.
-
-### Project memory vs. `arestrix.memoria`
-
-These are different things:
-
-- **Project memory** is the SQLite AMG used by agents and by `memory_search` /
-  `memory_record_lesson`.
-- **`arestrix.memoria`** is a small native key-value tool that writes `.arestrix/memory.json`. It
-  remains available for simple manual cases, but it is not the agents' memory database.
+The complete guide, with configuration, retention, security and a quick reference, is in
+[How memory works](how-memory-works.md).
 
 ### Examples
 
-- [`04-memoria`](../../examples/04-memoria) — persistent lesson, Blackboard, prompt injection,
-  `memory_search`, `memory_record_lesson` and artifact delivery.
+- [`04-memoria`](../../examples/04-memoria) — lesson proposal, approval, prompt injection,
+  `memory_search` and artifact delivery.
 - [`05-matematica-com-memoria`](../../examples/05-matematica-com-memoria) — web research through the
-  Keenable MCP, memory brief and a mathematics text with references.
+  Keenable MCP, memory brief and a math text with references.
 
 ### Measuring API consumption
 
@@ -315,7 +237,6 @@ function call.
 | `arestrix.arquivos` | `read_file`, `write_file`, `list_directory`, `file_info`, `make_directory`, `search_text` | Confined to the project. Text only, 1 MB to read, 2 MB to write. |
 | `arestrix.http` | `http_get`, `http_post_json` | **Only hosts the project authorizes** (below). HTTPS only. |
 | `arestrix.dados` | `json_query`, `csv_to_json`, `json_to_csv`, `regex_extract`, `base64_encode`, `base64_decode` | Pure data transformation. Regex patterns that could hang the program are refused. |
-| `arestrix.memoria` | `memory_set`, `memory_get`, `memory_list`, `memory_delete` | Manual tool independent of AMG: small text values in `.arestrix/memory.json` (1000 keys, 64 KB each). |
 | `arestrix.tempo` | `now`, `add_duration`, `diff` | ISO 8601, leap years, time zones. |
 | `arestrix.git` | `git_status`, `git_log`, `git_diff`, `git_show_file` | **Read-only.** Needs Git installed. |
 | `arestrix.sqlite` | `list_tables`, `describe_table`, `sql_query`, `sql_execute` | An embedded SQLite database in a project file (default `data/arestrix.db`). See below. |

@@ -2,9 +2,8 @@
 
 // Fachada de memória do Arestrix sobre o MemoryStore SQLite.
 //
-// A Fase 0 usava AgentBlackboard/SemanticMemoryEngine com JSON. A Fase 1
-// centraliza tudo no banco e mantém este serviço como contrato para o gerador,
-// o runtime, a UI e os testes.
+// Centraliza conhecimento, continuação e telemetria; o runtime, o gerador, a UI
+// e a CLI usam este contrato.
 
 #include <chrono>
 #include <map>
@@ -43,12 +42,18 @@ public:
     // Abre (ou reabre) o store do projeto. persistent=false usa SQLite :memory:.
     // dbPath vazio usa ARESTRIX_MEMORY_DB ou .arestrix/memory/memory.db.
     bool configure(const std::string& projectId, bool persistent,
-                   const std::string& dbPath = "",
-                   const std::string& legacyBlackboardPath = "",
-                   const std::string& legacyLessonsPath = "");
+                   const std::string& dbPath = "");
     bool isPersistent(const std::string& projectId) const;
     MemoryStore* store(const std::string& projectId);
     std::string databasePath(const std::string& projectId) const;
+
+    // Telemetria em banco proprio (run_usage, hits, episodios, validacoes, A/B).
+    // Nao depende de memoria ligada; caminho vazio usa ARESTRIX_TELEMETRY_DB
+    // ou, quando o banco de conhecimento e um arquivo, o irmao
+    // .arestrix/telemetry/telemetry.db. Sem essas pistas, usa :memory:.
+    bool configureTelemetry(const std::string& projectId, const std::string& dbPath = "");
+    std::string telemetryDatabasePath(const std::string& projectId) const;
+    MemoryStore* telemetryStore(const std::string& projectId);
 
     // Memória de trabalho.
     bool setWorking(const std::string& projectId, const std::string& itemId,
@@ -63,12 +68,19 @@ public:
     void clearProject(const std::string& projectId);
     bool purgeProject(const std::string& projectId, bool keepAudit = false, bool vacuum = true);
     MemoryPruneResult prune(const std::string& projectId, int olderThanDays);
+    // Copia consistente do conhecimento para targetPath e fingerprint SHA-256.
+    bool freezeKnowledge(const std::string& projectId, const std::string& targetPath,
+                         std::string& fingerprint, std::string& error);
 
     // Lições semânticas.
     std::string recordLesson(const std::string& projectId, const std::string& domain,
                              const std::string& triggerError, const std::string& lessonRule,
                              const std::string& sourceItem = "",
                              const std::string& sourceKind = "agent");
+    // Fase A: licao de agente vira proposta pendente; a promocao continua manual.
+    std::string proposeLesson(const std::string& projectId, const std::string& domain,
+                              const std::string& triggerError, const std::string& lessonRule,
+                              const std::string& sourceItem = "");
     size_t activeLessonCount(const std::string& projectId);
     std::vector<MemoryLesson> getLessons(const std::string& projectId,
                                          const std::string& domain = "");
@@ -80,7 +92,8 @@ public:
                            size_t maxTokens = 800,
                            bool includeLessons = true,
                            bool includeBlackboard = true,
-                           MemoryBriefInfo* info = nullptr);
+                           MemoryBriefInfo* info = nullptr,
+                           const std::string& taskType = "");
     void clearLessons(const std::string& projectId);
 
     // Episódios, arestas e métricas.
@@ -179,21 +192,19 @@ public:
                         const std::string& actor = "runtime");
     bool recordUsage(const MemoryUsageRecord& usage);
     taskforge::Json usageSummary(const std::string& projectId);
+    std::string recordValidation(const std::string& projectId,
+                                 const MemoryValidationRecord& validation);
+    std::vector<MemoryValidationRecord> listValidations(const std::string& projectId,
+                                                        const std::string& episodeId = "",
+                                                        size_t limit = 100);
 
     // Estado para UI/export.
     taskforge::Json toJson(const std::string& projectId);
     taskforge::Json toCognitiveJson(const std::string& projectId);
     bool importCognitiveJson(const std::string& projectId, const taskforge::Json& data,
                              std::string& error);
-    bool importLegacySnapshot(const std::string& projectId, const taskforge::Json& data,
-                              std::string& error);
     bool clearSession(const std::string& projectId);
     void closeProject(const std::string& projectId);
-
-    // Migração dos arquivos JSON da Fase 0.
-    bool importLegacy(const std::string& projectId,
-                      const std::string& blackboardPath = "",
-                      const std::string& lessonsPath = "");
 
 private:
     MemoryService() = default;
@@ -211,6 +222,9 @@ private:
     struct MaintenanceRuntime;
 
     MemoryStore* ensureStore(const std::string& projectId);
+    MemoryStore* existingStore(const std::string& projectId);
+    MemoryStore* ensureTelemetry(const std::string& projectId);
+    std::string defaultTelemetryPath(const std::string& projectId) const;
     std::string scopeId(const std::string& projectId) const;
     std::string defaultPath(const std::string& projectId) const;
     static std::string safeName(const std::string& projectId);
@@ -240,6 +254,8 @@ private:
     std::map<std::string, std::unique_ptr<MemoryStore>> stores_;
     std::map<std::string, bool> persistent_;
     std::map<std::string, std::string> paths_;
+    std::map<std::string, std::unique_ptr<MemoryStore>> telemetry_;
+    std::map<std::string, std::string> telemetryPaths_;
     std::map<std::string, EmbeddingRuntime> embeddings_;
     std::map<std::string, std::unique_ptr<MemoryStore>> workspaceStores_;
     std::map<std::string, std::string> workspacePaths_;

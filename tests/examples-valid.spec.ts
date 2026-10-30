@@ -110,15 +110,14 @@ describe('projetos de exemplo (examples/)', () => {
     const seed = nodes.find((n: any) => n.id === 'semear');
     const agent = nodes.find((n: any) => n.id === 'agente');
     const delivery = nodes.find((n: any) => n.id === 'entrega');
-    expect(seed.customLambdaBody).toContain('recordLesson');
+    expect(seed.customLambdaBody).toContain('proposeLesson');
     expect(agent.agentSettings.memory).toMatchObject({
       enabled: true,
       persistent: true,
-      readBlackboard: true,
-      writeBlackboard: true,
+      mode: 'learn',
+      theme: 'memoria',
       semanticLessons: true,
       recordLessons: true,
-      allowedKeys: ['resumo'],
       domains: ['memoria'],
     });
     expect(delivery.type).toBe('output');
@@ -134,6 +133,8 @@ describe('projetos de exemplo (examples/)', () => {
     expect(writer.agentSettings.memory).toMatchObject({
       enabled: true,
       persistent: true,
+      mode: 'learn',
+      theme: 'matematica',
       domains: ['matematica'],
       contextBudgetTokens: 600,
     });

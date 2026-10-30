@@ -1,25 +1,26 @@
-# Exemplo 4 — Memória de projeto (lições e Blackboard)
+# Exemplo 4 — Memória de projeto (proposta, aprovação e consulta)
 
 [English](README.md) · [Todos os exemplos](../README.pt-BR.md)
 
-Este exemplo mostra a memória de projeto funcionando de ponta a ponta:
+Este exemplo mostra o ciclo atual da memória de projeto:
 
-1. `Semear_Licao` grava uma **lição semântica** e um valor no **Blackboard**.
-2. `Agente_Com_Memoria` recebe os dois no system prompt, com filtros de domínio e de chaves.
-3. A resposta do agente vira um artefato em `exports/resposta.md`.
-4. Na execução seguinte, a lição e o Blackboard são carregados do disco, mesmo sem o nó de semeadura.
+1. `Semear_Licao` propõe uma **lição**; nada é ativado sozinho.
+2. Abra **Memória do Projeto**, revise e aprove a proposta pendente.
+3. `Agente_Com_Memoria` recebe a lição aprovada no system prompt, filtrada por tema.
+4. A resposta do agente vira um artefato em `exports/resposta.md`.
+5. Na execução seguinte, a lição é carregada do disco, mesmo sem o nó de semeadura.
 
 ```
 Semear_Licao (C++) ─► Agente_Com_Memoria (agente) ─► Entrega_Resposta (output)
        │                        ▲
        │                        └── memória injetada no prompt
-       └── grava lição + resumo no Blackboard
+       └── propõe uma lição para aprovação
 ```
 
 | Vértice | O que faz |
 | :--- | :--- |
-| `Semear_Licao` | Registra a lição `A resposta deve citar a regra aprendida` no domínio `memoria` e grava `resumo` no Blackboard. |
-| `Agente_Com_Memoria` | Lê `semanticLessons` e `readBlackboard`, com `domains: ["memoria"]` e `allowedKeys: ["resumo"]`. |
+| `Semear_Licao` | Propõe a lição `A resposta deve citar a regra aprendida` no domínio `memoria`. Aprove-a em **Memória do Projeto** antes da próxima execução. |
+| `Agente_Com_Memoria` | Executa em modo `learn` com tema `memoria`; após a aprovação, a lição entra no brief. |
 | `Entrega_Resposta` | Copia `workspace/resposta.txt` para `exports/resposta.md`. |
 
 ## Como executar
@@ -36,19 +37,20 @@ arestrix-cli run pipelines/main.json --root <a pasta copiada>
 
 Rode **duas vezes**:
 
-- na primeira, o nó `Semear_Licao` cria a lição e o Blackboard;
-- na segunda, a lição e o resumo são carregados de `.arestrix/memory/memory.db` e injetados
-  novamente no agente. O nó de semeadura deduplica a lição, mas a carga acontece no início de
-  cada nó de agente.
+- na primeira, o nó `Semear_Licao` cria uma **proposta pendente de lição**;
+- abra **Memória do Projeto**, revise a proposta e aprove;
+- na segunda, a lição aprovada é carregada de `.arestrix/memory/memory.db` e injetada no início
+  do nó de agente.
 
-O banco fica em `.arestrix/memory/memory.db` e é ignorado pelo Git. A tabela `memory_usage`
-registra tokens de entrada/saída, chamadas e tamanho do contexto de memória de cada agente.
+O conhecimento fica em `.arestrix/memory/memory.db`; a telemetria em
+`.arestrix/telemetry/telemetry.db`. Ambos são ignorados pelo Git. A telemetria registra tokens de
+entrada/saída, chamadas e tamanho do contexto de memória de cada agente.
 
 ## O que observar
 
 - No console: `[MEMORIA] contexto injetado em Agente_Com_Memoria`.
-- No prompt do agente: o bloco `[DADOS DE MEMORIA DO PROJETO ...]`, com a lição e o `resumo`.
-- A lição de outro domínio e a chave não autorizada **não** aparecem no prompt.
+- No prompt do agente: o bloco `[DADOS DE MEMORIA DO PROJETO ...]`, com a lição aprovada.
+- Uma lição de outro tema **não** aparece no prompt.
 - O artefato `exports/resposta.md` é criado pelo vértice de saída.
 
 ## Teste sem gastar nada

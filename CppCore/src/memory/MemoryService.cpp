@@ -5,6 +5,7 @@
 #include "MemoryPlaybookCompiler.hpp"
 #include "MemoryRanker.hpp"
 #include "MemoryVectorIndex.hpp"
+#include "project/RunnerSecurity.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -14,6 +15,7 @@
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <set>
 #include <sstream>
 #include <thread>
@@ -164,19 +166,78 @@ std::string MemoryService::defaultPath(const std::string&) const {
 
 std::string MemoryService::databasePath(const std::string& projectId) const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    auto it = paths_.find(projectId);
+    auto it = paths_.find(projectKey(projectId));
     return it == paths_.end() ? std::string() : it->second;
 }
 
+std::string MemoryService::defaultTelemetryPath(const std::string& projectId) const {
+    if (const char* env = std::getenv("ARESTRIX_TELEMETRY_DB"); env && *env) return env;
+    auto it = paths_.find(projectKey(projectId));
+    if (it != paths_.end() && !it->second.empty() && it->second != ":memory:") {
+        std::filesystem::path db(it->second);
+        if (db.filename() == "memory.db" && db.parent_path().filename() == "memory" &&
+            db.parent_path().parent_path().filename() == ".arestrix") {
+            return (db.parent_path().parent_path() / "telemetry" / "telemetry.db").string();
+        }
+    }
+    return ":memory:";
+}
+
+bool MemoryService::configureTelemetry(const std::string& projectId, const std::string& dbPath) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    const std::string id = projectKey(projectId);
+    const std::string path = dbPath.empty() ? defaultTelemetryPath(id) : dbPath;
+    auto existing = telemetry_.find(id);
+    if (existing != telemetry_.end() && existing->second && existing->second->isOpen() &&
+        telemetryPaths_.find(id) != telemetryPaths_.end() && telemetryPaths_.at(id) == path) {
+        return true;
+    }
+    auto store = std::make_unique<MemoryStore>(path);
+    std::string error;
+    if (!store->open(error)) return false;
+    if (!store->ensureScope(scopeId(id), "project", "", id)) return false;
+    telemetry_[id] = std::move(store);
+    telemetryPaths_[id] = path;
+    return true;
+}
+
+std::string MemoryService::telemetryDatabasePath(const std::string& projectId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    auto it = telemetryPaths_.find(projectKey(projectId));
+    return it == telemetryPaths_.end() ? std::string() : it->second;
+}
+
+MemoryStore* MemoryService::telemetryStore(const std::string& projectId) {
+    return ensureTelemetry(projectId);
+}
+
+MemoryStore* MemoryService::existingStore(const std::string& projectId) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    auto it = stores_.find(projectKey(projectId));
+    if (it == stores_.end() || !it->second || !it->second->isOpen()) return nullptr;
+    return it->second.get();
+}
+
+MemoryStore* MemoryService::ensureTelemetry(const std::string& projectId) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    const std::string id = projectKey(projectId);
+    auto it = telemetry_.find(id);
+    if (it != telemetry_.end() && it->second && it->second->isOpen()) return it->second.get();
+    if (!configureTelemetry(id, "")) return nullptr;
+    it = telemetry_.find(id);
+    return it == telemetry_.end() ? nullptr : it->second.get();
+}
+
 bool MemoryService::configure(const std::string& projectId, bool persistent,
-                              const std::string& dbPath,
-                              const std::string& legacyBlackboardPath,
-                              const std::string& legacyLessonsPath) {
+                              const std::string& dbPath) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     const std::string id = projectId.empty() ? "default" : projectId;
+    // A0: modo nao persistente e SEMPRE :memory:. Um caminho de arquivo
+    // so pode ser aberto com persistent=true; caso contrario, clearSession
+    // poderia purgar o banco real do projeto.
     const std::string path = persistent
         ? (dbPath.empty() ? defaultPath(id) : dbPath)
-        : (dbPath.empty() ? ":memory:" : dbPath);
+        : ":memory:";
 
     auto existing = stores_.find(id);
     if (existing != stores_.end() && persistent_.find(id) != persistent_.end() &&
@@ -199,7 +260,6 @@ bool MemoryService::configure(const std::string& projectId, bool persistent,
 
     if (persistent) {
         configureWorkspaceForProjectLocked(id, path);
-        importLegacy(id, legacyBlackboardPath, legacyLessonsPath);
     }
     return true;
 }
@@ -437,7 +497,7 @@ bool MemoryService::promoteToWorkspace(const std::string& projectId, const std::
 
 bool MemoryService::isPersistent(const std::string& projectId) const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    auto it = persistent_.find(projectId);
+    auto it = persistent_.find(projectKey(projectId));
     return it != persistent_.end() && it->second;
 }
 
@@ -487,18 +547,52 @@ void MemoryService::clearProject(const std::string& projectId) {
 }
 
 bool MemoryService::purgeProject(const std::string& projectId, bool keepAudit, bool vacuum) {
-    auto* s = ensureStore(projectId);
-    if (!s) return false;
     MemoryPurgeOptions options;
     options.keepAudit = keepAudit;
     options.vacuum = vacuum;
-    return s->purge(scopeId(projectId), options);
+    bool ok = true;
+    bool any = false;
+    if (auto* s = existingStore(projectId)) {
+        any = true;
+        ok = s->purge(scopeId(projectId), options) && ok;
+    }
+    if (auto* t = ensureTelemetry(projectId)) {
+        any = true;
+        ok = t->purge(scopeId(projectId), options) && ok;
+    }
+    return any && ok;
 }
 
 MemoryPruneResult MemoryService::prune(const std::string& projectId, int olderThanDays) {
+    if (olderThanDays <= 0) return MemoryPruneResult{};
+    MemoryPruneResult total;
+    if (auto* t = ensureTelemetry(projectId)) {
+        const auto pruned = t->prune(scopeId(projectId), olderThanDays);
+        total.episodes += pruned.episodes;
+        total.hits += pruned.hits;
+        total.usage += pruned.usage;
+    }
+    if (auto* s = existingStore(projectId)) {
+        const auto pruned = s->prune(scopeId(projectId), olderThanDays);
+        total.episodes += pruned.episodes;
+        total.hits += pruned.hits;
+        total.usage += pruned.usage;
+    }
+    return total;
+}
+
+bool MemoryService::freezeKnowledge(const std::string& projectId, const std::string& targetPath,
+                                    std::string& fingerprint, std::string& error) {
+    fingerprint.clear();
     auto* s = ensureStore(projectId);
-    if (!s) return MemoryPruneResult{};
-    return s->prune(scopeId(projectId), olderThanDays);
+    if (!s) {
+        error = "banco de conhecimento indisponivel";
+        return false;
+    }
+    if (!s->backupTo(targetPath, error)) return false;
+    fingerprint = project::RunnerSecurity::sha256File(targetPath, error);
+    if (fingerprint.empty()) return false;
+    return true;
 }
 
 std::string MemoryService::recordLesson(const std::string& projectId, const std::string& domain,
@@ -507,6 +601,20 @@ std::string MemoryService::recordLesson(const std::string& projectId, const std:
     auto* s = ensureStore(projectId);
     return s ? s->recordLesson(scopeId(projectId), domain, triggerError, lessonRule, sourceItem, sourceKind)
              : std::string();
+}
+
+std::string MemoryService::proposeLesson(const std::string& projectId, const std::string& domain,
+                                         const std::string& triggerError, const std::string& lessonRule,
+                                         const std::string& sourceItem) {
+    auto* s = ensureStore(projectId);
+    if (!s) return "";
+    const std::string scope = scopeId(projectId);
+    taskforge::Json payload{{"domain", domain.empty() ? "geral" : domain},
+                            {"triggerError", triggerError},
+                            {"lessonRule", lessonRule}};
+    taskforge::Json evidence = taskforge::Json::array(
+        {taskforge::Json{{"kind", "agent"}, {"node", sourceItem}}});
+    return s->recordProposal(scope, "lesson", payload, "", evidence, 0.6);
 }
 
 std::vector<MemoryLesson> MemoryService::getLessons(const std::string& projectId,
@@ -530,7 +638,8 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
                                       const std::vector<std::string>& domains,
                                       const std::vector<std::string>& allowedKeys,
                                       size_t maxTokens, bool includeLessons,
-                                      bool includeBlackboard, MemoryBriefInfo* info) {
+                                      bool includeBlackboard, MemoryBriefInfo* info,
+                                      const std::string& taskType) {
     if (info) *info = MemoryBriefInfo{};
     if (!includeLessons && !includeBlackboard) return std::string();
     // 0 = nao injetar memoria. Nunca interpretar 0 como "sem orcamento" (infinito).
@@ -547,13 +656,13 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
         }
     }
 
-    std::string blackboardText;
-    std::vector<std::string> blackboardKeys;
+    std::string workingText;
+    std::vector<std::string> workingKeys;
     if (includeBlackboard) {
         auto snapshot = s->workingSnapshot(scopeId(projectId), itemId, allowedKeys);
         if (snapshot.is_object() && snapshot.size() > 0) {
-            blackboardText = "\n[ARESTRIX MEMORY - BLACKBOARD]\n" + snapshot.dump(2) + "\n";
-            for (auto it = snapshot.begin(); it != snapshot.end(); ++it) blackboardKeys.push_back(it.key());
+            workingText = "\n[ARESTRIX MEMORY - ESTADO DA TAREFA]\n" + snapshot.dump(2) + "\n";
+            for (auto it = snapshot.begin(); it != snapshot.end(); ++it) workingKeys.push_back(it.key());
         }
     }
 
@@ -664,13 +773,20 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
     }
 
     // Playbooks por task_type/dominio. Apenas ativos entram no brief.
-    if (includeLessons && !domains.empty()) {
+    if (includeLessons && (!domains.empty() || !taskType.empty())) {
         std::string playbookText;
         std::vector<std::string> playbookIds;
         std::set<std::string> seenTaskTypes;
+        std::vector<std::string> taskTypes;
+        if (!taskType.empty()) taskTypes.push_back(taskType);
         for (const auto& domain : domains) {
-            if (!seenTaskTypes.insert(domain).second) continue;
-            for (const auto& playbook : s->listPlaybooks(scopeId(projectId), domain, "active", 1)) {
+            if (std::find(taskTypes.begin(), taskTypes.end(), domain) == taskTypes.end()) {
+                taskTypes.push_back(domain);
+            }
+        }
+        for (const auto& type : taskTypes) {
+            if (!seenTaskTypes.insert(type).second) continue;
+            for (const auto& playbook : s->listPlaybooks(scopeId(projectId), type, "active", 1)) {
                 auto stepsOpt = taskforge::jsonutil::tryParse(playbook.stepsJson);
                 std::string stepsText;
                 if (stepsOpt && stepsOpt->is_array()) {
@@ -707,10 +823,10 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
         }
     }
 
-    if (!blackboardText.empty()) {
-        if (budget == std::string::npos || brief.size() + blackboardText.size() <= budget) {
-            brief += blackboardText;
-            if (info) info->workingKeys = blackboardKeys;
+    if (!workingText.empty()) {
+        if (budget == std::string::npos || brief.size() + workingText.size() <= budget) {
+            brief += workingText;
+            if (info) info->workingKeys = workingKeys;
         } else {
             truncated = true;
         }
@@ -727,40 +843,53 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
 
 bool MemoryService::recordBriefHits(const std::string& projectId, const std::string& runId,
                                     const std::string& nodeId, const MemoryBriefInfo& info) {
-    auto* s = ensureStore(projectId);
-    if (!s) return false;
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return false;
     const std::string scope = scopeId(projectId);
     bool ok = true;
     for (const auto& id : info.lessonIds) {
-        ok = s->recordHit(scope, runId, nodeId, id, "lesson", true, false) && ok;
+        ok = t->recordHit(scope, runId, nodeId, id, "lesson", true, false) && ok;
     }
     for (const auto& id : info.factIds) {
-        ok = s->recordHit(scope, runId, nodeId, id, "fact", true, false) && ok;
+        ok = t->recordHit(scope, runId, nodeId, id, "fact", true, false) && ok;
     }
     for (const auto& id : info.playbookIds) {
-        ok = s->recordHit(scope, runId, nodeId, id, "playbook", true, false) && ok;
+        ok = t->recordHit(scope, runId, nodeId, id, "playbook", true, false) && ok;
     }
     for (const auto& key : info.workingKeys) {
-        ok = s->recordHit(scope, runId, nodeId, "working:" + key, "working", true, false) && ok;
+        ok = t->recordHit(scope, runId, nodeId, "working:" + key, "working", true, false) && ok;
     }
     return ok;
 }
 
 int MemoryService::markHitsUsed(const std::string& projectId, const std::string& runId,
                                 const std::string& nodeId, const std::vector<std::string>& memoryIds) {
-    auto* s = ensureStore(projectId);
-    return s ? s->markHitsUsed(scopeId(projectId), runId, nodeId, memoryIds) : 0;
+    auto* t = ensureTelemetry(projectId);
+    return t ? t->markHitsUsed(scopeId(projectId), runId, nodeId, memoryIds) : 0;
 }
 
 bool MemoryService::finishHits(const std::string& projectId, const std::string& runId,
                                const std::string& nodeId, const std::string& outcome) {
-    auto* s = ensureStore(projectId);
-    return s ? s->finishHits(scopeId(projectId), runId, nodeId, outcome) : false;
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return false;
+    const std::string scope = scopeId(projectId);
+    const bool ok = t->finishHits(scope, runId, nodeId, outcome);
+    // O conhecimento so e reforcado se o store do projeto ja existe; nao abrir
+    // o banco de conhecimento apenas para registrar telemetria. Se os dois
+    // bancos apontarem para o mesmo arquivo, o proprio finishHits ja reforcou.
+    if (auto* k = existingStore(projectId)) {
+        if (databasePath(projectId) != telemetryDatabasePath(projectId)) {
+            std::vector<std::string> ids;
+            for (const auto& ref : t->usedHitRefs(scope, runId, nodeId)) ids.push_back(ref.id);
+            if (!ids.empty()) k->reinforceFromHits(scope, ids, outcome);
+        }
+    }
+    return ok;
 }
 
 taskforge::Json MemoryService::hitSummary(const std::string& projectId) {
-    auto* s = ensureStore(projectId);
-    return s ? s->hitSummary(scopeId(projectId)) : taskforge::Json::object();
+    auto* t = ensureTelemetry(projectId);
+    return t ? t->hitSummary(scopeId(projectId)) : taskforge::Json::object();
 }
 
 void MemoryService::clearLessons(const std::string& projectId) {
@@ -771,38 +900,44 @@ std::string MemoryService::recordEpisode(const std::string& projectId, const std
                                          const std::string& nodeId, const std::string& itemId,
                                          const std::string& kind, const std::string& content,
                                          const taskforge::Json& metadata) {
-    auto* s = ensureStore(projectId);
-    const std::string id = s
-        ? s->recordEpisode(scopeId(projectId), runId, nodeId, itemId, kind, content, metadata)
+    auto* t = ensureTelemetry(projectId);
+    const std::string id = t
+        ? t->recordEpisode(scopeId(projectId), runId, nodeId, itemId, kind, content, metadata)
         : std::string();
     if (!id.empty()) noteMaintenanceEpisode(projectId);
     return id;
 }
 
 std::string MemoryService::recordEpisode(const std::string& projectId, const MemoryEpisodeRecord& episode) {
-    auto* s = ensureStore(projectId);
-    if (!s) return std::string();
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return std::string();
     MemoryEpisodeRecord copy = episode;
     copy.scopeId = scopeId(projectId);
-    const std::string id = s->recordEpisode(copy);
+    const std::string id = t->recordEpisode(copy);
     if (!id.empty()) noteMaintenanceEpisode(projectId);
     return id;
 }
 
 taskforge::Json MemoryService::getEpisode(const std::string& projectId, const std::string& episodeId) {
-    auto* s = ensureStore(projectId);
-    return s ? s->getEpisode(scopeId(projectId), episodeId) : taskforge::Json::object();
+    auto* t = ensureTelemetry(projectId);
+    return t ? t->getEpisode(scopeId(projectId), episodeId) : taskforge::Json::object();
 }
 
 size_t MemoryService::extractProposals(const std::string& projectId, const std::string& episodeId) {
     auto* s = ensureStore(projectId);
-    if (!s) return 0;
+    auto* t = ensureTelemetry(projectId);
+    if (!s || !t) return 0;
     const std::string scope = scopeId(projectId);
-    const size_t proposals = MemoryExtractor::extractAndStore(*s, scope, episodeId);
-    const taskforge::Json episode = s->getEpisode(scope, episodeId);
-    if (episode.is_object() && !episode.empty()) {
-        MemoryPlaybookCompiler::observe(*s, scope, episode);
+    const taskforge::Json episode = t->getEpisode(scope, episodeId);
+    if (!episode.is_object() || episode.empty()) return 0;
+    size_t proposals = 0;
+    for (const auto& draft : MemoryExtractor::extract(episode)) {
+        if (!s->recordProposal(scope, draft.kind, draft.payload, episodeId, draft.evidence,
+                               draft.confidence).empty()) {
+            ++proposals;
+        }
     }
+    MemoryPlaybookCompiler::observe(*s, scope, episode);
     return proposals;
 }
 
@@ -1322,14 +1457,7 @@ bool MemoryService::hybridRecall(const std::string& projectId, const std::string
     if (!runtime.config.enabled || !runtime.provider || !runtime.provider->available()) return false;
     if (embeddingInCooldown(runtime.cooldownUntil)) return false;
 
-    std::string indexError;
-    MemoryIndexer::index(*s, *runtime.provider, runtime.config, scopeId(projectId),
-                         false, 32, indexError);
-    if (!indexError.empty()) {
-        embeddingStartCooldown(runtime.cooldownUntil);
-        return false;
-    }
-
+    // C4: a busca e somente leitura; indexacao acontece em reindex/importacao.
     std::vector<Embedding> queryEmbeddings;
     std::string embedError;
     if (!runtime.provider->embed({text}, true, queryEmbeddings, embedError) ||
@@ -1358,8 +1486,8 @@ bool MemoryService::hybridSearch(const std::string& projectId, const std::string
 int MemoryService::recordConsultedHits(const std::string& projectId, const std::string& runId,
                                        const std::string& nodeId,
                                        const std::vector<MemoryHitRef>& refs) {
-    auto* s = ensureStore(projectId);
-    return s ? s->recordConsultedHits(scopeId(projectId), runId, nodeId, refs) : 0;
+    auto* t = ensureTelemetry(projectId);
+    return t ? t->recordConsultedHits(scopeId(projectId), runId, nodeId, refs) : 0;
 }
 
 bool MemoryService::invalidateEdge(const std::string& projectId, const std::string& edgeId,
@@ -1371,25 +1499,48 @@ bool MemoryService::invalidateEdge(const std::string& projectId, const std::stri
 
 bool MemoryService::recordUsage(const MemoryUsageRecord& usage) {
     if (usage.scopeId.empty()) return false;
-    auto* s = ensureStore(usage.scopeId);
-    if (!s) return false;
+    auto* t = ensureTelemetry(usage.scopeId);
+    if (!t) return false;
     MemoryUsageRecord copy = usage;
     copy.scopeId = scopeId(usage.scopeId);
-    return s->recordUsage(copy);
+    return t->recordUsage(copy);
 }
 
 taskforge::Json MemoryService::usageSummary(const std::string& projectId) {
-    auto* s = ensureStore(projectId);
-    return s ? s->usageSummary(scopeId(projectId)) : taskforge::Json::object();
+    auto* t = ensureTelemetry(projectId);
+    return t ? t->usageSummary(scopeId(projectId)) : taskforge::Json::object();
+}
+
+std::string MemoryService::recordValidation(const std::string& projectId,
+                                            const MemoryValidationRecord& validation) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return "";
+    MemoryValidationRecord copy = validation;
+    if (copy.scopeId.empty()) copy.scopeId = scopeId(projectId);
+    return t->recordValidation(copy);
+}
+
+std::vector<MemoryValidationRecord> MemoryService::listValidations(const std::string& projectId,
+                                                                   const std::string& episodeId,
+                                                                   size_t limit) {
+    auto* t = ensureTelemetry(projectId);
+    return t ? t->listValidations(scopeId(projectId), episodeId, limit)
+             : std::vector<MemoryValidationRecord>();
 }
 
 taskforge::Json MemoryService::toJson(const std::string& projectId) {
     auto* s = ensureStore(projectId);
     if (!s) return taskforge::Json::object();
     taskforge::Json out = s->toJson(scopeId(projectId));
+    auto* t = ensureTelemetry(projectId);
+    if (t) {
+        out["usage"] = t->usageSummary(scopeId(projectId));
+        out["hits"] = t->hitSummary(scopeId(projectId));
+    }
     out["projectId"] = projectId;
     out["persistent"] = isPersistent(projectId);
     out["database"] = databasePath(projectId);
+    out["telemetry"] = telemetryDatabasePath(projectId);
     out["maintenance"] = maintenanceStatus(projectId);
     return out;
 }
@@ -1412,24 +1563,17 @@ bool MemoryService::importCognitiveJson(const std::string& projectId, const task
     return s->importCognitiveJson(scopeId(projectId), data, error);
 }
 
-bool MemoryService::importLegacySnapshot(const std::string& projectId, const taskforge::Json& data,
-                                         std::string& error) {
-    auto* s = ensureStore(projectId);
-    if (!s) {
-        error = "banco de memoria indisponivel";
-        return false;
-    }
-    return s->importLegacySnapshot(scopeId(projectId), data, error);
-}
-
 bool MemoryService::clearSession(const std::string& projectId) {
     if (isPersistent(projectId)) return true;
     stopMaintenance(projectId);
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (auto* s = ensureStore(projectId)) {
         if (s->resetInMemory()) return true;
-        s->clearScopeData(scopeId(projectId));
-        return true;
+        // Defesa em profundidade: nunca purgar um store de arquivo. Se isto
+        // acontecer, o regime nao persistente abriu um arquivo por engano.
+        std::cerr << "[MEMORIA] clearSession ignorado: store nao efemero ("
+                  << s->path() << ")\n";
+        return false;
     }
     return false;
 }
@@ -1437,55 +1581,13 @@ bool MemoryService::clearSession(const std::string& projectId) {
 void MemoryService::closeProject(const std::string& projectId) {
     stopMaintenance(projectId);
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    stores_.erase(projectId);
-    persistent_.erase(projectId);
-    paths_.erase(projectId);
+    stores_.erase(projectKey(projectId));
+    persistent_.erase(projectKey(projectId));
+    paths_.erase(projectKey(projectId));
+    telemetry_.erase(projectKey(projectId));
+    telemetryPaths_.erase(projectKey(projectId));
     embeddings_.erase(projectKey(projectId));
     projectWorkspace_.erase(projectKey(projectId));
-}
-
-bool MemoryService::importLegacy(const std::string& projectId,
-                                 const std::string& blackboardPath,
-                                 const std::string& lessonsPath) {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    auto* s = ensureStore(projectId);
-    if (!s) return false;
-    const std::string id = projectId.empty() ? "default" : projectId;
-    const std::string flag = "legacy_imported:" + id;
-    if (s->hasMeta(flag)) return true;
-
-    const std::string safe = safeName(id);
-    const std::string bbPath = blackboardPath.empty() ? ("arestrix-blackboard-" + safe + ".json") : blackboardPath;
-    const std::string lsPath = lessonsPath.empty() ? ("arestrix-memory-" + safe + ".json") : lessonsPath;
-
-    if (std::filesystem::is_regular_file(bbPath)) {
-        auto parsed = taskforge::jsonutil::tryParse(taskforge::jsonutil::readFile(bbPath));
-        if (!parsed || !parsed->is_object()) return false;
-        for (auto item = parsed->begin(); item != parsed->end(); ++item) {
-            if (!item.value().is_object()) continue;
-            for (auto key = item.value().begin(); key != item.value().end(); ++key) {
-                s->setWorking(scopeId(id), item.key(), key.key(), key.value());
-            }
-        }
-    }
-
-    if (std::filesystem::is_regular_file(lsPath)) {
-        auto parsed = taskforge::jsonutil::tryParse(taskforge::jsonutil::readFile(lsPath));
-        if (!parsed || !parsed->is_object()) return false;
-        if (parsed->contains("lessons") && (*parsed)["lessons"].is_array()) {
-            for (const auto& lesson : (*parsed)["lessons"]) {
-                s->recordLesson(scopeId(id),
-                                lesson.value("domain", std::string("geral")),
-                                lesson.value("triggerError", std::string()),
-                                lesson.value("lessonRule", std::string()),
-                                lesson.value("sourceItem", std::string()),
-                                "legacy");
-            }
-        }
-    }
-
-    s->setMeta(flag, "1");
-    return true;
 }
 
 } // namespace memory

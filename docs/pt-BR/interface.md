@@ -253,7 +253,7 @@ Todos os modais do Studio seguem o padrão de design corporativo **Microsoft Off
 | **Modelo do Nó** | Provedor & Modelo \| Instruções & Skills \| Parâmetros | Por vértice |
 | **Ferramentas do Nó** | Ferramentas Nativas \| Servidores MCP \| Adicionar da Biblioteca \| Validação & Lote | Por vértice |
 | **Sandbox do Nó** | Isolamento & Recursos \| Rede & Confinamento \| Pastas & Volumes | Por vértice |
-| **Memória do Nó** | Blackboard \| Lições Cognitivas \| Regime & Escopo | Por vértice |
+| **Memória do Nó** | Modo (`off`/`consult`/`learn`) \| Tema e Escopo | Por vértice |
 | **Skills do Nó** | Skills Habilitadas \| Biblioteca do Studio/Workspace \| Editor da Skill | Por vértice |
 | **Editor de Skill** | Editor Markdown \| Pré-visualização Renderizada \| Metadados & Teste | Por vértice / Workspace |
 | **Bibliotecas** | Fontes de repositório (GitHub) \| Criar Biblioteca | Studio / Workspace |

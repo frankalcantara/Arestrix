@@ -199,8 +199,6 @@ add_library(arestrix_core STATIC
   ${SRC}/sandbox/MicroVMSandboxDriver.cpp
   ${SRC}/sandbox/SandboxManager.cpp
   ${SRC}/sandbox/PipelineResumeEngine.cpp
-  ${SRC}/memory/AgentBlackboard.cpp
-  ${SRC}/memory/SemanticMemoryEngine.cpp
   ${SRC}/memory/MemorySanitizer.cpp
   ${SRC}/memory/MemoryExtractor.cpp
   ${SRC}/memory/EmbeddingProvider.cpp

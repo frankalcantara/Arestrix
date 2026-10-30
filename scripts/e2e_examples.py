@@ -225,48 +225,41 @@ def scenario_03_urgente():
 
 
 def scenario_04_memoria():
-    print("\n== Exemplo 4: memoria de projeto (licao, Blackboard e saida) ==")
+    print("\n== Exemplo 4: memoria de projeto (proposta, aprovacao e saida) ==")
     out, project, events, code, work, mock = run_example("04-memoria")
     try:
         check(code == 0, "terminou com codigo 0")
-        check("[MEMORIA] contexto injetado em Agente_Com_Memoria" in out, "o runtime injetou a memoria no agente")
         resposta = project / "workspace" / "resposta.txt"
         check(resposta.exists(), "o agente gravou workspace/resposta.txt")
         exportado = project / "exports" / "resposta.md"
         check(exportado.exists() and resposta.exists() and exportado.read_bytes() == resposta.read_bytes(),
               "o vertice de saida entregou a resposta")
         memoria = project / ".arestrix" / "memory" / "memory.db"
-        check(memoria.exists(), "o banco SQLite de memoria foi criado")
+        telemetria = project / ".arestrix" / "telemetry" / "telemetry.db"
+        check(memoria.exists(), "o banco SQLite de conhecimento foi criado")
+        check(telemetria.exists(), "o banco SQLite de telemetria foi criado")
         if memoria.exists():
             with sqlite3.connect(memoria) as conn:
-                lessons = conn.execute("SELECT r.canonical_name FROM memory_edge e JOIN memory_node r ON r.id=e.dst_id "
-                                       "WHERE e.relation='HAS_LESSON' AND e.status='active'").fetchall()
-                working = conn.execute("SELECT value_json FROM memory_working WHERE item_id='pipeline' AND key='resumo'").fetchall()
-                usage = conn.execute("SELECT COUNT(*), COALESCE(SUM(calls),0) FROM memory_usage").fetchone()
-                proposals = conn.execute("SELECT kind, status FROM memory_proposal").fetchall()
+                proposals = conn.execute("SELECT kind, status, payload_json FROM memory_proposal").fetchall()
                 playbooks = conn.execute("SELECT task_type, status, success_count FROM memory_playbook").fetchall()
-            check(any("A resposta deve citar a regra aprendida" in row[0] for row in lessons),
-                  "a licao foi persistida no banco")
-            check(any("Licao registrada pelo agente no teste" in row[0] for row in lessons),
-                  "o agente registrou uma nova licao via memory_record_lesson")
-            check(any("chamado de exemplo" in row[0] for row in working),
-                  "o Blackboard foi persistido no banco")
-            check(usage and usage[0] >= 1 and usage[1] >= 1, "o consumo de API foi registrado no banco")
-            check(len(proposals) >= 1, "propostas L2 foram geradas a partir do episodio")
+            check(len(proposals) >= 1, "propostas foram geradas a partir do episodio")
             check(any(row[1] == "pending" for row in proposals), "propostas ficam pendentes para revisao")
+            check(any("A resposta deve citar a regra aprendida" in (row[2] or "") for row in proposals),
+                  "a licao semeada ficou pendente, sem ativacao automatica")
             check(len(playbooks) >= 1, "um playbook candidato foi compilado da trajetoria")
             check(any(row[2] >= 1 for row in playbooks), "o playbook registrou a evidencia de sucesso")
         else:
-            check(False, "a licao foi persistida no banco")
-            check(False, "o Blackboard foi persistido no banco")
-            check(False, "o consumo de API foi registrado no banco")
+            check(False, "a proposta de licao foi persistida no banco")
+        if telemetria.exists():
+            with sqlite3.connect(telemetria) as conn:
+                usage = conn.execute("SELECT COUNT(*), COALESCE(SUM(calls),0) FROM memory_usage").fetchone()
+            check(usage and usage[0] >= 1 and usage[1] >= 1, "o consumo de API foi registrado na telemetria")
+        else:
+            check(False, "o consumo de API foi registrado na telemetria")
         chats = [e for e in events if e["event"] == "chat"]
-        system = chats[0].get("system", "") if chats else ""
-        check("A resposta deve citar a regra aprendida" in system, "a licao apareceu no system prompt")
-        check("chamado de exemplo" in system, "o resumo do Blackboard apareceu no system prompt")
         check(any("memory_search" in e.get("tools", []) for e in chats), "a ferramenta memory_search foi oferecida")
         check(any(e.get("reply") == "tool_call:memory_search" for e in chats), "o agente chamou memory_search")
-        check(any(e.get("reply") == "tool_call:memory_record_lesson" for e in chats), "o agente chamou memory_record_lesson")
+        check(any(e.get("reply") == "tool_call:memory_propose_lesson" for e in chats), "o agente propôs uma licao")
         check(re.search(r'"type"\s*:\s*"usage"', out) is not None, "o runtime emitiu telemetria de tokens para o Runner")
         no_secret_leak(out, "ex4")
     finally:

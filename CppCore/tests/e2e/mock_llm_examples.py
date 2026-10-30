@@ -158,7 +158,7 @@ def decide(body):
         if step == 0:
             return tool_call("c1", "memory_search", {"query": "REGRA", "limit": 5})
         if step == 1:
-            return tool_call("c2", "memory_record_lesson", {"domain": "memoria", "rule":
+            return tool_call("c2", "memory_propose_lesson", {"domain": "memoria", "rule":
                              "Licao registrada pelo agente no teste", "trigger": "teste e2e"})
         if step == 2:
             return tool_call("c3", "write", {"path": "workspace/resposta.txt", "content":

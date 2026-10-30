@@ -3,7 +3,7 @@
   "metadata": {
     "projectId": "exemplo-matematica-memoria",
     "graphName": "Matematica_Com_Memoria",
-    "description": "Pesquisa web via MCP Keenable + redacao de matematica com licoes persistentes",
+    "description": "Pesquisa web via MCP Keenable + redacao de matematica com propostas de licoes",
     "targetStandard": "C++20",
     "compilerConfig": {
       "compiler": "msvc",
@@ -77,7 +77,7 @@
         }
       ],
       "parameters": {},
-      "customLambdaBody": "memory.recordLesson(projectId, \"matematica\", \"revisao_anterior\",\n    \"Toda afirmacao matematica deve citar a fonte ou justificar o passo.\", \"semear\");\nmemory.setWorking(projectId, \"pipeline\", \"tema\", taskforge::Json(\"teorema de Pitagoras\"));\nstd::cout << \"[Semear] licao e tema gravados na memoria\\n\";"
+      "customLambdaBody": "memory.proposeLesson(projectId, \"matematica\", \"revisao_anterior\",\n    \"Toda afirmacao matematica deve citar a fonte ou justificar o passo.\", \"semear\");\nstd::cout << \"[Semear] proposta de licao gravada\\n\";"
     },
     {
       "id": "pesquisar",
@@ -168,13 +168,12 @@
           "enabled": true,
           "persistent": true,
           "projectId": "exemplo-matematica-memoria",
-          "readBlackboard": true,
-          "writeBlackboard": true,
+          "mode": "learn",
+          "theme": "matematica",
+          "readBlackboard": false,
+          "writeBlackboard": false,
           "semanticLessons": true,
           "recordLessons": true,
-          "allowedKeys": [
-            "tema"
-          ],
           "domains": [
             "matematica"
           ],
@@ -208,7 +207,7 @@
         }
       ],
       "parameters": {},
-      "customLambdaBody": "memory.setWorking(projectId, \"pipeline\", \"ultimo_texto\", taskforge::Json(\"workspace/texto-matematica.md\"));\nmemory.recordLesson(projectId, \"matematica\", \"pos_redacao\",\n    \"Antes de publicar, confira se cada fonte citada foi realmente consultada.\", \"guardar_licao\");\nstd::cout << \"[Guardar] licao de revisao registrada\\n\";"
+      "customLambdaBody": "memory.proposeLesson(projectId, \"matematica\", \"pos_redacao\",\n    \"Antes de publicar, confira se cada fonte citada foi realmente consultada.\", \"guardar_licao\");\nstd::cout << \"[Guardar] proposta de licao de revisao gravada\\n\";"
     },
     {
       "id": "entrega",

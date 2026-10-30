@@ -1,12 +1,10 @@
-// arestrix.memoria, arestrix.tempo e arestrix.git (somente leitura).
+// arestrix.tempo e arestrix.git (somente leitura).
 #include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <ctime>
-#include <fstream>
-#include <mutex>
 #include <sstream>
 
 #include "native/NativeTools.hpp"
@@ -29,42 +27,6 @@ std::string str(const Json& a, const char* key, const std::string& def = "") {
 }
 double num(const Json& a, const char* key, double def = 0) {
     return a.contains(key) && a[key].is_number() ? a[key].get<double>() : def;
-}
-
-// ============================================================================================================
-// Memoria: chave-valor do projeto, em .arestrix/memory.json
-// ============================================================================================================
-constexpr size_t kMaxKeys = 1000;
-constexpr size_t kMaxValueBytes = 64 * 1024;
-std::mutex g_memoryMutex;
-
-bool validKey(const std::string& k) {
-    if (k.empty() || k.size() > 128) return false;
-    return std::all_of(k.begin(), k.end(), [](unsigned char c) { return std::isalnum(c) || c == '_' || c == '.' || c == ':' || c == '-'; });
-}
-
-fs::path memoryFile(const Context& ctx) { return ctx.workspaceRoot / ".arestrix" / "memory.json"; }
-
-Json loadMemory(const Context& ctx) {
-    std::error_code ec;
-    if (!fs::is_regular_file(memoryFile(ctx), ec)) return Json::object();
-    auto parsed = jsonutil::tryParse(jsonutil::readFile(memoryFile(ctx)));
-    return parsed && parsed->is_object() ? *parsed : Json::object();
-}
-
-bool saveMemory(const Context& ctx, const Json& data) {
-    std::error_code ec;
-    fs::create_directories(memoryFile(ctx).parent_path(), ec);
-    fs::path tmp = memoryFile(ctx);
-    tmp += ".tmp";
-    {
-        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
-        if (!out) return false;
-        out << data.dump(2);
-    }
-    fs::remove(memoryFile(ctx), ec);
-    fs::rename(tmp, memoryFile(ctx), ec);
-    return !ec;
 }
 
 // ============================================================================================================
@@ -189,77 +151,6 @@ ToolResult runGit(const Context& ctx, std::vector<std::string> args) {
 }
 
 } // namespace
-
-Server makeMemoryServer(rt::RuntimeLang lang) {
-    Server s;
-    s.id = std::string(kIdPrefix) + "memoria";
-    s.name = "Memoria do projeto";
-    s.description = "Guarda e consulta pequenos valores de texto entre vertices e entre execucoes (.arestrix/memory.json).";
-    s.descriptionEn = "Stores and reads small text values across vertices and across runs (.arestrix/memory.json).";
-    s.category = "Memoria";
-    s.tools.push_back({"memory_set",
-                       "Guarda um valor de texto (ate 64 KB) sob uma chave (letras, numeros, _ . : -).",
-                       "Stores a text value (up to 64 KB) under a key (letters, digits, _ . : -).",
-                       schema({{"key", "string", "Chave", "Key"}, {"value", "string", "Valor", "Value"}}, {"key", "value"}, lang), "moderate",
-                       [](const Json& a, const Context& ctx) -> ToolResult {
-                           std::string key = str(a, "key");
-                           if (!validKey(key))
-                               return fail(rt::langPick(ctx.lang,
-                                                        "Chave invalida: use ate 128 caracteres entre letras, numeros e _ . : -",
-                                                        "Invalid key: use up to 128 characters among letters, digits and _ . : -"));
-                           if (!a["value"].is_string())
-                               return fail(rt::langPick(ctx.lang, "'value' deve ser texto.", "'value' must be text."));
-                           if (a["value"].str().size() > kMaxValueBytes)
-                               return fail(rt::langPick(ctx.lang, "Valor grande demais (limite de 64 KB).", "Value too large (64 KB limit)."));
-                           std::lock_guard<std::mutex> lock(g_memoryMutex);
-                           Json data = loadMemory(ctx);
-                           if (!data.contains(key) && data.size() >= kMaxKeys)
-                               return fail(rt::langPick(ctx.lang, "Memoria cheia (limite de 1000 chaves).", "Memory full (1000 keys limit)."));
-                           data[key] = a["value"].str();
-                           return saveMemory(ctx, data) ? ok("OK: " + key)
-                                                        : fail(rt::langPick(ctx.lang, "Nao foi possivel gravar a memoria.", "Could not write the memory."));
-                       }});
-    s.tools.push_back({"memory_get",
-                       "Le o valor guardado sob uma chave.",
-                       "Reads the value stored under a key.",
-                       schema({{"key", "string", "Chave", "Key"}}, {"key"}, lang), "safe",
-                       [](const Json& a, const Context& ctx) -> ToolResult {
-                           std::string key = str(a, "key");
-                           std::lock_guard<std::mutex> lock(g_memoryMutex);
-                           Json data = loadMemory(ctx);
-                           if (!data.contains(key))
-                               return fail(rt::langPick(ctx.lang, "Chave nao encontrada: ", "Key not found: ") + key);
-                           return ok(data[key].str());
-                       }});
-    s.tools.push_back({"memory_list",
-                       "Lista as chaves guardadas (opcionalmente com um prefixo).",
-                       "Lists the stored keys (optionally with a prefix).",
-                       schema({{"prefix", "string", "So as chaves que comecam assim", "Only keys starting with this"}}, {}, lang), "safe",
-                       [](const Json& a, const Context& ctx) -> ToolResult {
-                           std::string prefix = str(a, "prefix");
-                           std::lock_guard<std::mutex> lock(g_memoryMutex);
-                           Json data = loadMemory(ctx);
-                           Json keys = Json::array();
-                           for (auto it = data.begin(); it != data.end(); ++it)
-                               if (it.key().rfind(prefix, 0) == 0) keys.push_back(it.key());
-                           return ok(keys.dump());
-                       }});
-    s.tools.push_back({"memory_delete",
-                       "Apaga uma chave.",
-                       "Deletes a key.",
-                       schema({{"key", "string", "Chave", "Key"}}, {"key"}, lang), "moderate",
-                       [](const Json& a, const Context& ctx) -> ToolResult {
-                           std::string key = str(a, "key");
-                           std::lock_guard<std::mutex> lock(g_memoryMutex);
-                           Json data = loadMemory(ctx);
-                           if (!data.erase(key))
-                               return fail(rt::langPick(ctx.lang, "Chave nao encontrada: ", "Key not found: ") + key);
-                           return saveMemory(ctx, data)
-                                      ? ok("OK: " + key + rt::langPick(ctx.lang, " apagada", " deleted"))
-                                      : fail(rt::langPick(ctx.lang, "Nao foi possivel gravar a memoria.", "Could not write the memory."));
-                       }});
-    return s;
-}
 
 Server makeTimeServer(rt::RuntimeLang lang) {
     Server s;

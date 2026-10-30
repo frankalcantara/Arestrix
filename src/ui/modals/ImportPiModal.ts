@@ -344,10 +344,6 @@ export class ImportPiModal {
             <input type="checkbox" id="pi-memory-enable" checked style="cursor: pointer;">
             ${t('import_modals.chk_heterogeneous_memory')}
           </label>
-          <label style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #323130; cursor: pointer;">
-            <input type="checkbox" id="pi-memory-persist" checked style="cursor: pointer;">
-            ${t('import_modals.chk_persist_disk')}
-          </label>
         </div>
       </div>
     `;
@@ -506,7 +502,6 @@ export class ImportPiModal {
     const styleSelect = this.modal?.querySelector('#pi-agent-style') as HTMLSelectElement;
     const convInput = this.modal?.querySelector('#pi-conversation-input') as HTMLTextAreaElement;
     const memEnable = this.modal?.querySelector('#pi-memory-enable') as HTMLInputElement;
-    const memPersist = this.modal?.querySelector('#pi-memory-persist') as HTMLInputElement;
 
     const agentName = options?.name || nameInput?.value?.trim() || 'Agente_Pi_Mentor';
     const style = options?.style || styleSelect?.value || 'empathetic_dialogue';
@@ -526,15 +521,20 @@ export class ImportPiModal {
 
     const node = this.graph.buildNode(nodeId, agentName, 'agent', x, y);
 
+    const memoryEnabled = memEnable ? memEnable.checked : true;
+    const memoryTheme = 'strategy';
     const memoryConfig: INodeMemoryConfig = {
-      enabled: memEnable ? memEnable.checked : true,
-      persistent: memPersist ? memPersist.checked : true,
-      readBlackboard: true,
-      writeBlackboard: true,
-      semanticLessons: true,
-      recordLessons: true,
-      allowedKeys: ['pi_insights'],
-      domains: ['strategy']
+      enabled: memoryEnabled,
+      persistent: false,
+      mode: memoryEnabled ? 'learn' : 'off',
+      theme: memoryTheme,
+      readThemes: [],
+      taskType: '',
+      readBlackboard: false,
+      writeBlackboard: false,
+      semanticLessons: memoryEnabled,
+      recordLessons: memoryEnabled,
+      domains: [memoryTheme]
     };
 
     const agentSettings: INodeAgentSettings = {

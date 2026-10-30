@@ -243,6 +243,25 @@ void MemoryStore::close() {
     }
 }
 
+bool MemoryStore::backupTo(const std::string& targetPath, std::string& error) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || targetPath.empty()) {
+        error = "banco indisponivel";
+        return false;
+    }
+    std::error_code ec;
+    const std::filesystem::path target(targetPath);
+    if (!target.parent_path().empty()) std::filesystem::create_directories(target.parent_path(), ec);
+    if (std::filesystem::exists(target, ec)) std::filesystem::remove(target, ec);
+    std::string escaped;
+    escaped.reserve(targetPath.size());
+    for (char c : targetPath) {
+        if (c == '\'') escaped += "''";
+        else escaped += c;
+    }
+    return exec("VACUUM INTO '" + escaped + "';", &error);
+}
+
 bool MemoryStore::exec(const std::string& sql, std::string* error) {
     char* message = nullptr;
     int rc = SQLITE_ERROR;
@@ -398,6 +417,22 @@ CREATE TABLE IF NOT EXISTS memory_hit (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS memory_validation (
+  id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  run_id TEXT,
+  node_id TEXT,
+  episode_id TEXT NOT NULL,
+  validator_id TEXT NOT NULL,
+  validator_version TEXT NOT NULL DEFAULT '',
+  ok INTEGER NOT NULL DEFAULT 0,
+  score REAL,
+  reasons_json TEXT NOT NULL DEFAULT '[]',
+  artifact_hash TEXT,
+  created_at TEXT NOT NULL,
+  UNIQUE(scope_id, episode_id, validator_id, validator_version)
+);
+
 -- L2/M0: propostas, embeddings, playbooks e aliases. As tabelas nascem vazias e
 -- nao alteram o comportamento da recuperacao atual.
 CREATE TABLE IF NOT EXISTS memory_proposal (
@@ -479,6 +514,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_episode_scope_time ON memory_episode(scope
 CREATE INDEX IF NOT EXISTS idx_memory_usage_scope_time ON memory_usage(scope_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_memory_hit_scope_run ON memory_hit(scope_id, run_id, node_id);
 CREATE INDEX IF NOT EXISTS idx_memory_hit_memory ON memory_hit(scope_id, memory_id);
+CREATE INDEX IF NOT EXISTS idx_memory_validation_episode ON memory_validation(scope_id, episode_id);
 CREATE INDEX IF NOT EXISTS idx_memory_proposal_scope_status ON memory_proposal(scope_id, status, created_at);
 CREATE INDEX IF NOT EXISTS idx_memory_proposal_episode ON memory_proposal(source_episode_id);
 CREATE INDEX IF NOT EXISTS idx_memory_embedding_object ON memory_embedding(scope_id, object_type, object_id);
@@ -799,6 +835,7 @@ bool MemoryStore::purge(const std::string& scopeId, const MemoryPurgeOptions& op
     }
     execScoped("DELETE FROM memory_usage WHERE scope_id=?", 1);
     execScoped("DELETE FROM memory_working WHERE scope_id=?", 1);
+    execScoped("DELETE FROM memory_validation WHERE scope_id=?", 1);
     execScoped("DELETE FROM memory_embedding WHERE scope_id=?", 1);
     execScoped("DELETE FROM memory_alias WHERE scope_id=?", 1);
     execScoped("DELETE FROM memory_proposal WHERE scope_id=?", 1);
@@ -845,6 +882,15 @@ MemoryPruneResult MemoryStore::prune(const std::string& scopeId, int olderThanDa
     deleteOlder("DELETE FROM memory_episode WHERE scope_id=? AND created_at < ?", result.episodes);
     deleteOlder("DELETE FROM memory_hit WHERE scope_id=? AND created_at < ?", result.hits);
     deleteOlder("DELETE FROM memory_usage WHERE scope_id=? AND created_at < ?", result.usage);
+    {
+        Stmt st;
+        std::string error;
+        if (prepare(db_, "DELETE FROM memory_validation WHERE scope_id=? AND created_at < ?", st, error)) {
+            bindText(st.stmt, 1, scopeId);
+            bindText(st.stmt, 2, cutoff);
+            stepRetry(st.stmt);
+        }
+    }
     return result;
 }
 
@@ -1304,6 +1350,106 @@ taskforge::Json MemoryStore::getEpisode(const std::string& scopeId, const std::s
     if (!metadata.is_object()) metadata = taskforge::Json::object();
     sanitizeJsonInPlace(metadata);
     out["metadata"] = metadata;
+    return out;
+}
+
+std::string MemoryStore::recordValidation(const MemoryValidationRecord& validation) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || validation.scopeId.empty() || validation.episodeId.empty() ||
+        validation.validatorId.empty()) {
+        return "";
+    }
+    taskforge::Json reasons = taskforge::Json::array();
+    if (!validation.reasonsJson.empty()) {
+        if (auto parsed = taskforge::jsonutil::tryParse(validation.reasonsJson)) {
+            if (parsed->is_array()) reasons = *parsed;
+        }
+    }
+    sanitizeJsonInPlace(reasons);
+    const std::string id = validation.id.empty() ? newId("val") : validation.id;
+    const std::string now = validation.createdAt.empty() ? nowIso() : validation.createdAt;
+
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "INSERT INTO memory_validation(id,scope_id,run_id,node_id,episode_id,"
+                       "validator_id,validator_version,ok,score,reasons_json,artifact_hash,created_at) "
+                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?) "
+                       "ON CONFLICT(scope_id,episode_id,validator_id,validator_version) DO UPDATE SET "
+                       "run_id=excluded.run_id,node_id=excluded.node_id,ok=excluded.ok,"
+                       "score=excluded.score,reasons_json=excluded.reasons_json,"
+                       "artifact_hash=excluded.artifact_hash,created_at=excluded.created_at", st, error)) {
+        lastError_ = error;
+        return "";
+    }
+    bindText(st.stmt, 1, id);
+    bindText(st.stmt, 2, validation.scopeId);
+    bindNullableText(st.stmt, 3, validation.runId);
+    bindNullableText(st.stmt, 4, validation.nodeId);
+    bindText(st.stmt, 5, validation.episodeId);
+    bindText(st.stmt, 6, validation.validatorId);
+    bindText(st.stmt, 7, validation.validatorVersion);
+    sqlite3_bind_int(st.stmt, 8, validation.ok ? 1 : 0);
+    sqlite3_bind_double(st.stmt, 9, validation.score);
+    bindText(st.stmt, 10, reasons.dump());
+    bindNullableText(st.stmt, 11, validation.artifactHash);
+    bindText(st.stmt, 12, now);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return "";
+    }
+    Stmt idStmt;
+    if (prepare(db_, "SELECT id FROM memory_validation WHERE scope_id=? AND episode_id=? "
+                      "AND validator_id=? AND validator_version=?", idStmt, error)) {
+        bindText(idStmt.stmt, 1, validation.scopeId);
+        bindText(idStmt.stmt, 2, validation.episodeId);
+        bindText(idStmt.stmt, 3, validation.validatorId);
+        bindText(idStmt.stmt, 4, validation.validatorVersion);
+        if (stepRetry(idStmt.stmt) == SQLITE_ROW) return columnText(idStmt.stmt, 0);
+    }
+    return id;
+}
+
+std::vector<MemoryValidationRecord> MemoryStore::listValidations(const std::string& scopeId,
+                                                                 const std::string& episodeId,
+                                                                 size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<MemoryValidationRecord> out;
+    if (!db_) return out;
+    const size_t maxResults = limit == 0 ? 100 : limit;
+    std::string sql = "SELECT id,scope_id,COALESCE(run_id,''),COALESCE(node_id,''),episode_id,"
+                      "validator_id,validator_version,ok,COALESCE(score,0),reasons_json,"
+                      "COALESCE(artifact_hash,''),created_at FROM memory_validation WHERE scope_id=?";
+    if (!episodeId.empty()) sql += " AND episode_id=?";
+    sql += " ORDER BY created_at DESC, id DESC LIMIT ?";
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, sql, st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    int index = 1;
+    bindText(st.stmt, index++, scopeId);
+    if (!episodeId.empty()) bindText(st.stmt, index++, episodeId);
+    sqlite3_bind_int(st.stmt, index, static_cast<int>(maxResults));
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        MemoryValidationRecord record;
+        record.id = columnText(st.stmt, 0);
+        record.scopeId = columnText(st.stmt, 1);
+        record.runId = columnText(st.stmt, 2);
+        record.nodeId = columnText(st.stmt, 3);
+        record.episodeId = columnText(st.stmt, 4);
+        record.validatorId = columnText(st.stmt, 5);
+        record.validatorVersion = columnText(st.stmt, 6);
+        record.ok = columnInt(st.stmt, 7) != 0;
+        record.score = columnDouble(st.stmt, 8);
+        taskforge::Json reasons = parseJsonOrNull(columnText(st.stmt, 9));
+        if (!reasons.is_array()) reasons = taskforge::Json::array();
+        sanitizeJsonInPlace(reasons);
+        record.reasonsJson = reasons.dump();
+        record.artifactHash = columnText(st.stmt, 10);
+        record.createdAt = columnText(st.stmt, 11);
+        out.push_back(std::move(record));
+    }
     return out;
 }
 
@@ -2619,6 +2765,67 @@ bool MemoryStore::finishHits(const std::string& scopeId, const std::string& runI
     return true;
 }
 
+std::vector<MemoryHitRef> MemoryStore::usedHitRefs(const std::string& scopeId, const std::string& runId,
+                                                   const std::string& nodeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<MemoryHitRef> out;
+    if (!db_) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT memory_id, kind FROM memory_hit WHERE scope_id=? AND run_id=? AND node_id=? "
+                       "AND used=1 AND kind IN ('lesson','fact')", st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, runId);
+    bindText(st.stmt, 3, nodeId);
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        out.push_back(MemoryHitRef{columnText(st.stmt, 0), columnText(st.stmt, 1)});
+    }
+    return out;
+}
+
+bool MemoryStore::reinforceFromHits(const std::string& scopeId,
+                                    const std::vector<std::string>& memoryIds,
+                                    const std::string& outcome) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || memoryIds.empty()) return false;
+    if (outcome != "success" && outcome != "failure") return false;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "UPDATE memory_edge SET "
+                       "last_used=?, "
+                       "success_count=success_count+?, "
+                       "failure_count=failure_count+?, "
+                       "dormant_at=CASE WHEN ?='success' THEN NULL ELSE dormant_at END, "
+                       "confidence=CASE WHEN ?='success' THEN MIN(1.0, confidence+0.02) "
+                       "ELSE MAX(0.05, confidence-0.05) END "
+                       "WHERE scope_id=? AND id=? AND status='active'", st, error)) {
+        lastError_ = error;
+        return false;
+    }
+    const std::string now = nowIso();
+    bool ok = true;
+    for (const auto& id : memoryIds) {
+        if (id.empty()) continue;
+        sqlite3_reset(st.stmt);
+        sqlite3_clear_bindings(st.stmt);
+        bindText(st.stmt, 1, now);
+        sqlite3_bind_int(st.stmt, 2, outcome == "success" ? 1 : 0);
+        sqlite3_bind_int(st.stmt, 3, outcome == "failure" ? 1 : 0);
+        bindText(st.stmt, 4, outcome);
+        bindText(st.stmt, 5, outcome);
+        bindText(st.stmt, 6, scopeId);
+        bindText(st.stmt, 7, id);
+        if (stepRetry(st.stmt) != SQLITE_DONE) {
+            lastError_ = sqlite3_errmsg(db_);
+            ok = false;
+        }
+    }
+    return ok;
+}
+
 taskforge::Json MemoryStore::hitSummary(const std::string& scopeId) const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     taskforge::Json out = taskforge::Json::object();
@@ -3414,64 +3621,6 @@ bool MemoryStore::importCognitiveJson(const std::string& scopeId, const taskforg
         return fail(commitError);
     }
     audit("runtime", "snapshot_import", scopeId, "", "v2");
-    return true;
-}
-
-bool MemoryStore::importLegacySnapshot(const std::string& scopeId, const taskforge::Json& data,
-                                       std::string& error) {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    if (!db_) {
-        error = "banco de memoria fechado";
-        return false;
-    }
-    if (!data.is_object()) {
-        error = "snapshot v1 invalido";
-        return false;
-    }
-
-    auto fail = [&](const std::string& message) {
-        std::string rollbackError;
-        exec("ROLLBACK;", &rollbackError);
-        error = message;
-        if (!rollbackError.empty()) error += " (rollback: " + rollbackError + ")";
-        return false;
-    };
-    if (!exec("BEGIN IMMEDIATE;", &error)) return false;
-    if (!purge(scopeId, MemoryPurgeOptions{false, false})) {
-        return fail(lastError_.empty() ? "falha ao limpar memoria antes do snapshot v1" : lastError_);
-    }
-
-    bool ok = true;
-    if (data.contains("lessons") && data["lessons"].is_array()) {
-        for (const auto& lesson : data["lessons"]) {
-            if (!lesson.is_object()) continue;
-            const std::string rule = lesson.value("lessonRule", std::string());
-            if (rule.empty()) continue;
-            const std::string domain = lesson.value("domain", std::string("geral"));
-            const std::string trigger = lesson.value("triggerError", std::string());
-            const std::string source = lesson.value("sourceItem", std::string());
-            if (recordLesson(scopeId, domain, trigger, rule, source, "snapshot_restore").empty()) {
-                ok = false;
-                break;
-            }
-        }
-    }
-    if (ok && data.contains("working") && data["working"].is_object()) {
-        for (auto item = data["working"].begin(); item != data["working"].end() && ok; ++item) {
-            if (!item.value().is_object()) continue;
-            for (auto key = item.value().begin(); key != item.value().end(); ++key) {
-                if (!setWorking(scopeId, item.key(), key.key(), key.value())) {
-                    ok = false;
-                    break;
-                }
-            }
-        }
-    }
-    if (!ok) return fail("restauracao v1 incompleta");
-
-    std::string commitError;
-    if (!exec("COMMIT;", &commitError)) return fail(commitError);
-    audit("runtime", "snapshot_import", scopeId, "", "v1");
     return true;
 }
 

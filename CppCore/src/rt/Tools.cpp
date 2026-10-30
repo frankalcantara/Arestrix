@@ -136,10 +136,10 @@ std::vector<ToolDef> toolDefinitions(const std::vector<std::string>& allowed, Ru
                         {"properties", {{"query", {{"type", "string"}, {"description", langPick(lang, "Texto a buscar", "Text to search")}}},
                                         {"limit", {{"type", "integer"}, {"description", langPick(lang, "Maximo de resultados (1-20)", "Maximum results (1-20)")}}}}},
                         {"required", {"query"}}}});
-    all.push_back({"memory_record_lesson",
+    all.push_back({"memory_propose_lesson",
                    langPick(lang,
-                            "Registra uma licao preventiva na memoria do projeto, com dominio, gatilho e regra.",
-                            "Records a preventive lesson in project memory with domain, trigger and rule."),
+                            "Registra uma proposta de licao preventiva. Ela so entra na memoria ativa apos promocao.",
+                            "Records a preventive lesson proposal. It only becomes active memory after promotion."),
                    json{{"type", "object"},
                         {"properties", {{"domain", {{"type", "string"}, {"description", langPick(lang, "Dominio da licao", "Lesson domain")}}},
                                         {"rule", {{"type", "string"}, {"description", langPick(lang, "Regra preventiva", "Preventive rule")}}},
@@ -404,7 +404,7 @@ ToolResult executeTool(ToolContext& ctx, const std::string& name, const json& ar
             return ToolResult{result, false};
         }
 
-        if (name == "memory_record_lesson") {
+        if (name == "memory_propose_lesson") {
             if (ctx.projectId.empty()) return err(T("Memoria nao configurada para este projeto.", "Memory is not configured for this project."));
             if (!ctx.memoryWriteEnabled) return err(T("Escrita de licoes nao autorizada para este agente.", "Lesson recording is not authorized for this agent."));
             const int maxLessons = std::max(1, ctx.memoryMaxLessonsPerRun);
@@ -430,14 +430,11 @@ ToolResult executeTool(ToolContext& ctx, const std::string& name, const json& ar
                 return err(T("Dominio nao autorizado para este agente: ", "Domain not authorized for this agent: ") + domain);
             }
             auto& memory = taskforge::memory::MemoryService::getInstance();
-            if (memory.activeLessonCount(ctx.projectId) >= taskforge::memory::MemoryStore::kMaxActiveLessons) {
-                return err(T("Limite global de licoes ativas do projeto atingido.", "Project active lesson limit reached."));
-            }
-            std::string id = memory.recordLesson(
+            std::string id = memory.proposeLesson(
                 ctx.projectId, domain.empty() ? "geral" : domain, trigger, rule, ctx.agentId);
-            if (id.empty()) return err(T("Nao foi possivel registrar a licao.", "Could not record the lesson."));
+            if (id.empty()) return err(T("Nao foi possivel registrar a proposta de licao.", "Could not record the lesson proposal."));
             ++ctx.memoryLessonsWritten;
-            return ToolResult{T("OK: licao registrada (", "OK: lesson recorded (") + id + ")", false};
+            return ToolResult{T("OK: proposta de licao registrada (", "OK: lesson proposal recorded (") + id + ")", false};
         }
 
         if (name == "retrieve") {

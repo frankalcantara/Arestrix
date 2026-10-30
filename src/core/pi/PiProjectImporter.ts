@@ -349,8 +349,16 @@ export class PiProjectImporter {
       inheritMemory: false,
       memory: {
         enabled: true,
-        persistent: true,
-        domains: ['pipeline', 'agents']
+        persistent: false,
+        mode: 'learn',
+        theme: 'pipeline',
+        readThemes: ['agents'],
+        taskType: '',
+        domains: ['pipeline', 'agents'],
+        readBlackboard: false,
+        writeBlackboard: false,
+        semanticLessons: true,
+        recordLessons: true
       },
       skills,
       activeSkillId,

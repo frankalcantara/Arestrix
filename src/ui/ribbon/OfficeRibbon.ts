@@ -537,7 +537,7 @@ export class OfficeRibbon {
             <div class="ribbon-col-stack">
               <button class="ribbon-btn-small" id="ribbon-btn-mem-blackboard">
                 <span class="ribbon-sm-icon" data-icon="board">${ribbonIcon('board', 16)}</span>
-                <span>${t('ribbon.panes.blackboard')}</span>
+                <span>${t('ribbon.panes.knowledge', 'Conhecimento')}</span>
               </button>
               <button class="ribbon-btn-small" id="ribbon-btn-mem-lessons">
                 <span class="ribbon-sm-icon" data-icon="brain">${ribbonIcon('brain', 16)}</span>
@@ -1516,7 +1516,7 @@ export class OfficeRibbon {
           <!-- Grupo 4: Memória & Estado -->
           <div class="office-ribbon-group">
             <div class="office-ribbon-group-tools">
-              <button class="ribbon-btn-large" id="btn-ctx-agent-memory" title="Configurar memória semântica e blackboard">
+              <button class="ribbon-btn-large" id="btn-ctx-agent-memory" title="Configurar a memória do projeto">
                 <span class="ribbon-btn-icon" data-icon="database">${ribbonIcon('database', 30)}</span>
                 <span class="ribbon-btn-label">Memória</span>
               </button>

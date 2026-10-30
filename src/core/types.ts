@@ -253,6 +253,8 @@ export interface IMcpCallResult {
 
 // --- Arquitetura de Memória Heterogênea (Fase 12) ---
 // Memória NÃO é padrão e nem obrigatória (Opt-in seletivo por agente em cada projeto)
+export type VertexMemoryMode = 'off' | 'consult' | 'learn';
+
 export interface INodeMemoryConfig {
   enabled: boolean;          // Padrão: false (Não é padrão e nem obrigatória)
   persistent: boolean;       // false = efêmera (apenas sessão/RAM); true = persistente entre sessões (disco)
@@ -261,6 +263,14 @@ export interface INodeMemoryConfig {
   writeBlackboard: boolean;  // Escrita de deltas no Blackboard
   semanticLessons: boolean;  // Consulta de lições aprendidas (semântica)
   recordLessons: boolean;    // Registro de novas lições derivadas de falhas/auditorias
+  /** Novo modelo: modo do vértice. Quando ausente, deriva de enabled/recordLessons. */
+  mode?: VertexMemoryMode;
+  /** Tema principal de leitura/escrita. Quando ausente, usa domains[0]. */
+  theme?: string;
+  /** Temas extras apenas para leitura. */
+  readThemes?: string[];
+  /** Identidade estável de continuidade; default = id do vértice. */
+  taskType?: string;
   allowedKeys?: string[];    // Chaves específicas do Blackboard (vazio = todas autorizadas para leitura)
   writeKeys?: string[];      // Chaves que o vértice pode escrever (vazio = todas)
   domains?: string[];        // Domínios semânticos (ex: ["svg_typography", "validation"])
@@ -279,10 +289,6 @@ export interface INodeMemoryConfig {
   consolidationEpisodeThreshold?: number;
   /** Idade, em dias, para marcar fatos sem uso como dormant durante a consolidação. */
   consolidationDormantDays?: number;
-  /** normal = usa a configuração dos vértices; memory_off = força OFF no projeto (A/B). */
-  measurementMode?: 'normal' | 'memory_off';
-  /** Mantém a gravação de memory_usage mesmo quando a memória está OFF. */
-  recordMetrics?: boolean;
   /**
    * Embeddings L2/M2 (nível de projeto; ignorado em configurações de vértice).
    * Desligados por padrão: a recuperação continua 100% lexical.
@@ -298,6 +304,30 @@ export interface INodeMemoryConfig {
   embeddingMaxChars?: number;
   /** 0 = descobre a dimensão na primeira resposta. */
   embeddingDimensions?: number;
+}
+
+/**
+ * Configuração do vértice: modo e tema, mais os ajustes avançados.
+ * Mantém compatibilidade com o formato antigo via Partial<INodeMemoryConfig>.
+ */
+export interface IVertexMemorySettings extends Partial<INodeMemoryConfig> {
+  /** Modo do vértice; ausente deriva de enabled/recordLessons. */
+  mode?: VertexMemoryMode;
+  /** Tema principal de leitura/escrita. */
+  theme?: string;
+  /** Temas extras apenas para leitura. */
+  readThemes?: string[];
+  /** Identidade estável de continuidade; default = id do vértice. */
+  taskType?: string;
+}
+
+/**
+ * Configuração de memória do projeto: padrões de vértice, busca semântica,
+ * manutenção e retenção. A persistência é implícita no projeto.
+ */
+export interface IProjectMemoryConfig extends Partial<INodeMemoryConfig> {
+  mode?: VertexMemoryMode;
+  theme?: string;
 }
 
 export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {
@@ -318,8 +348,6 @@ export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {
   consolidationIdleSeconds: 300,
   consolidationEpisodeThreshold: 20,
   consolidationDormantDays: 180,
-  measurementMode: 'normal',
-  recordMetrics: false,
   embeddingEnabled: false,
   embeddingProvider: 'local',
   embeddingModel: 'embeddinggemma-2',
@@ -334,7 +362,7 @@ export interface IGlobalPipelineDefaults {
   sandbox: ISandboxPolicy;
   model: IModelConfig;
   codeMode: ICodeModeConfig;
-  memory?: INodeMemoryConfig;
+  memory?: IProjectMemoryConfig;
   compression?: IContextCompressionConfig;
 }
 
@@ -420,7 +448,7 @@ export interface INodeAgentSettings {
   codeMode?: Partial<ICodeModeConfig>;
 
   inheritMemory?: boolean;
-  memory?: Partial<INodeMemoryConfig>;
+  memory?: IVertexMemorySettings;
 
   inheritCompression?: boolean;
   compression?: Partial<IContextCompressionConfig>;

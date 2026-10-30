@@ -58,7 +58,6 @@ struct ToolContext {
     std::string memoryItemId = "pipeline";
     bool memoryWriteEnabled = false;
     std::vector<std::string> memoryDomains;
-    std::vector<std::string> memoryWriteKeys;   // vazio = todas as chaves do Blackboard
     int memoryMaxLessonsPerRun = 20;
     int memoryMaxLessonChars = 4000;
     int memoryLessonsWritten = 0;               // contador por execução do agente

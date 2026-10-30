@@ -56,10 +56,9 @@ bool MemoryPlaybookCompiler::observe(MemoryStore& store, const std::string& scop
             MemoryPlaybookRecord current;
             std::string error;
             if (!store.getPlaybook(scopeId, existingId, current)) return false;
-            const long long nextSuccess = current.successCount + 1;
             const double confidence = std::min(1.0, std::max(current.confidence, 0.5) + 0.1);
-            const std::string status = nextSuccess >= 2 ? "active" : "candidate";
-            return store.updatePlaybook(scopeId, existingId, 1, 0, confidence, status,
+            // Fase A: playbook nunca ativa sozinho; a ativacao exige validador na Fase B.
+            return store.updatePlaybook(scopeId, existingId, 1, 0, confidence, "candidate",
                                         episodeId, evidence, error);
         }
         return !store.recordPlaybook(scopeId, taskType, taskType + " playbook", steps,
@@ -71,10 +70,8 @@ bool MemoryPlaybookCompiler::observe(MemoryStore& store, const std::string& scop
     MemoryPlaybookRecord current;
     std::string error;
     if (!store.getPlaybook(scopeId, existingId, current)) return false;
-    const long long nextFailure = current.failureCount + 1;
     const double confidence = std::max(0.1, current.confidence - 0.15);
-    const std::string status = current.successCount <= nextFailure ? "candidate" : current.status;
-    return store.updatePlaybook(scopeId, existingId, 0, 1, confidence, status,
+    return store.updatePlaybook(scopeId, existingId, 0, 1, confidence, "candidate",
                                 episodeId, evidence, error);
 }
 

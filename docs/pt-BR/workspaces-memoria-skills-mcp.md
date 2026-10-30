@@ -60,7 +60,7 @@ Cada projeto no Arestrix pode ser vinculado a um repositório Git independente e
 O Arestrix opera com dois bancos de dados SQLite no escopo de cada projeto:
 
 1. **Banco Operacional / Analítico do Projeto (`storage/database.sqlite`):** Armazena tabelas manipuladas pelos agentes e nós do pipeline via MCP `workspace-sqlite` ou ferramentas nativas (`sql_query`, `sql_execute`), além de tabelas importadas (ex: planilhas Excel via `ImportExcelModal`).
-2. **Banco de Memória Cognitiva AMG (`.arestrix/memory/memory.db`):** Armazena o multigrafo temporal de aprendizado dos agentes (lições aprendidas, relações conceituais, Blackboard compartilhado e telemetria de tokens).
+2. **Banco de conhecimento AMG (`.arestrix/memory/memory.db`):** armazena o multigrafo temporal do projeto (lições, fatos e evidências). A telemetria fica em `.arestrix/telemetry/telemetry.db`.
 
 #### Por que os bancos não são enviados ao Git?
 * **Limites de Repositório do GitHub:** O GitHub recomenda manter repositórios com menos de 1 GB (com teto recomendado de 5 GB a 10 GB) e bloqueia sumariamente arquivos individuais acima de 100 MB.
@@ -83,127 +83,48 @@ memória. Cada vértice pode herdá-los (uma caixa de seleção no vértice) ou 
 
 ## Memória
 
-A memória é opcional e vem desativada por padrão. Na Beta 2 ela é implementada pelo **AMG
-(Arestrix Memory Graph)**, um multigrafo temporal em SQLite, nativo em C++20.
+A memória é opcional, local e pertence ao projeto. O modelo atual tem três modos por vértice:
 
-| Tipo | Escopo | Finalidade |
-| :--- | :--- | :--- |
-| **Blackboard** | Projeto | Estado chave-valor compartilhado entre os agentes do mesmo projeto. |
-| **Lições semânticas** | Projeto | Lições que os agentes registram e consultam depois. |
-| **Efêmera ou persistente** | Por vértice | Só em RAM, ou gravada no SQLite do projeto. |
-| **Consumo de API** | Projeto | Tokens, chamadas, latência e tamanho do contexto injetado. |
+| Modo | Efeito |
+| :--- | :--- |
+| `off` | Não lê nem grava conhecimento. |
+| `consult` | Injeta o brief autorizado no prompt e registra hits. Não grava conhecimento. |
+| `learn` | Consulta, grava um episódio e propõe lições ao final da execução. |
 
-A memória é particionada por `projectId`, então dois projetos nunca leem os dados um do outro. Cada vértice
-declara quais chaves pode ler e escrever no Blackboard, quais domínios semânticos pode consultar e
-quantas lições pode gravar por execução; `memory_search` respeita esses domínios.
+Aprender implica salvar, mas nada entra sozinho: lições e playbooks nascem como proposta ou
+candidato e só viram conhecimento ativo depois de aprovação no painel **Memória do Projeto**.
+Telemetria fica em `.arestrix/telemetry/telemetry.db`, separada do conhecimento em
+`.arestrix/memory/memory.db`; limpar sessão ou apagar telemetria não apaga conhecimento.
 
-### O que existe hoje
+O brief é montado dentro de `contextBudgetTokens` com lições ativas, fatos, evidências e o estado
+de trabalho legado quando habilitado. Playbooks compilados ficam como candidatos e não entram no
+brief até serem promovidos. Cada item injetado recebe um `usedHitRef` para medir uso real.
 
-- Banco SQLite em `.arestrix/memory/memory.db` por projeto.
-- Esquema estruturado em duas camadas:
-  * **Dados Indispensáveis (Cognitivos):** `memory_scope`/`memory_scope_closure` (hierarquia), `memory_node` (conceitos), `memory_edge` (lições aprendidas e relações semânticas com confiança/validade) e `memory_working` (Blackboard compartilhado de projeto).
-  * **Dados Efêmeros e Telemetria:** `memory_usage` (contagem de tokens, chamadas e latência), `memory_hit` (estatísticas de injeção em prompts para benchmark A/B), `memory_episode`/`memory_evidence` (logs brutos de execuções passadas) e `memory_node_fts` (índice virtual FTS5).
-- **Integridade local:** o banco é sempre ancorado na raiz do projeto, nunca no diretório de trabalho do processo. Um `.db` corrompido é colocado em quarentena (`memory.db.corrupt-*`) na abertura do projeto. O Arestrix não exporta nem restaura snapshots de memória: backup e recuperação são externos ao produto.
-- O runtime grava episódios sanitizados de sucesso e falha por agente, com tokens, retries,
-  duração, resultado, sequência de ferramentas (nome/sucesso), arquivos tocados, artefatos e
-  mensagem de erro truncada; não grava prompt/resposta brutos nem argumentos de ferramentas.
-- O schema L2 já contém `memory_proposal`, `memory_embedding`, `memory_playbook` e
-  `memory_alias`, e `memory_episode` registra `task_type`, outcome, ferramentas, arquivos,
-  artefatos, evidências, sinais de sucesso e contagem de redações.
-- Quando a escrita de lições está habilitada (`recordLessons`), o runtime extrai propostas
-  determinísticas do episódio (lição, fato, entidade, playbook e sumário). Elas ficam
-  `pending` e podem ser aceitas/rejeitadas na Central de Memória ou por
-  `arestrix-cli memory proposals`. A promoção é manual.
-- A busca híbrida (FTS + grafo + embeddings) é opcional e **desligada por padrão**. O modelo
-  pré-configurado é `embeddinggemma-2` (768 dimensões). Para ativar, use um
-  endpoint OpenAI-compatible `/v1/embeddings` já existente (Ollama, llama.cpp, LM Studio,
-  vLLM) em File → Properties → Memória. Com Ollama: `ollama pull embeddinggemma-2` e endpoint
-  `http://127.0.0.1:11434/v1`. Sem provider, o sistema continua 100% lexical.
-  Ao ativar, os textos indexados (lições, fatos e sumários sanitizados) são enviados ao
-  endpoint configurado; use um servidor local se quiser manter tudo na máquina.
-- Consolidação determinística: dedup de lições/fatos, aliases de entidades,
-  conflitos (`CONTRADICTS`), expiração, decay para `dormant` e generalização (`GENERALIZES`).
-  Nada é apagado; duplicados/conflitos são rebaixados e auditados. Use **Consolidar memória**
-  no Studio ou `arestrix-cli memory consolidate`.
-- Consolidação em background opt-in por projeto (`consolidationMode=off|idle|after_episodes`),
-  apenas em memória persistente. Roda fora do caminho de busca, expõe rodadas/última
-  execução/próximo gatilho em `consolidationStatus` no processo do worker e encerra de forma
-  determinística com o projeto/processo.
-- O serviço `arestrix-memory` expõe `/metrics` autenticado com contadores REST/MCP, notificações,
-  falhas 401, classes de resposta, uptime e versão.
-- Playbooks procedurais: trajetórias bem-sucedidas viram passos reutilizáveis por
-  `task_type`. A primeira evidência cria um `candidate`; a segunda ativa o playbook. Falhas
-  atualizam os contadores e reduzem a confiança; o brief injeta playbooks ativos dentro do
-  orçamento.
-- Workspace: banco separado em `.workspace/memory/memory.db`. O projeto lê o workspace, mas o
-  workspace não lê a memória privada do projeto. A promoção é explícita, exige evidência e é
-  auditada. Use **Workspace → Inicializar** e **Promover ao workspace** no Studio, ou
-  `arestrix-cli memory workspace init|status` / `memory promote`.
-- Instituição: contrato nativo com tokens, papéis `viewer`/`editor`/`admin` e políticas
-  invariantes de escopo. O binário `arestrix-memory` expõe o contrato por HTTP autenticado e MCP
-  (stdio e `/mcp`); detalhes em [Como funciona a memória](como-funciona-a-memoria.md#12-instituição).
-- Escopos atuais: **projeto** (`project:<projectId>`), **workspace** e **instituição**.
-- Lições e Blackboard são lidos no início de cada nó de agente; a lição de falha é gravada ao final
-  da execução e o Blackboard é gravado quando o vértice tem `writeBlackboard`.
-- O agente pode consultar a memória com `memory_search` e, quando `recordLessons` está ligado,
-  registrar uma lição com `memory_record_lesson`.
-- A escrita é governada por vértice: `allowedKeys` limita a leitura do Blackboard, `writeKeys`
-  limita a escrita automática, `maxLessonsPerRun` (padrão 20) limita lições por execução e
-  `maxLessonChars` (padrão 4000) limita o tamanho de cada lição/gatilho. Há ainda um teto global
-  de 5000 lições ativas por projeto. Esses campos são configuráveis no vértice e em
-  **Arquivo → Propriedades → Projeto → Modelo e ferramentas → Gerenciar memória avançada**.
-- Antes de persistir, lições, episódios, arestas e Blackboard passam por sanitização de segredos
-  conhecidos (OpenAI/Stripe, Google, AWS, GitHub, Slack, Bearer, parâmetros de URL e chaves
-  privadas PEM). A sanitização cobre também linhas antigas gravadas antes desta camada.
-- O expurgo do projeto remove working, lições/arestas, episódios, evidências, nós, usage, hits e
-  auditoria, e compacta o SQLite com `VACUUM`; o banco abre com `secure_delete=ON`. A retenção de
-  telemetria é configurável em **Arquivo → Propriedades → Projeto → Modelo e ferramentas → Gerenciar memória avançada** (`retentionDays`, padrão 180;
-  `0` = manter) e roda no encerramento e via `arestrix-cli memory prune`.
-- O binário gerado resolve o banco a partir de `ARESTRIX_PROJECT_ROOT` (fallback: diretório atual);
-  `ARESTRIX_MEMORY_DB` tem prioridade explícita. `memory_hit`/`memory_usage` usam
-  `ARESTRIX_RUN_ID`, e a chave única `(scope, run, node, memória)` evita hits duplicados. Escritas
-  SQLite têm retry curto para `SQLITE_BUSY`/`SQLITE_LOCKED`.
-- O brief é compilado por seções, com lições mais recentes/confiáveis primeiro e Blackboard
-  completo ou omitido (nunca JSON parcial). `contextBudgetTokens` limita o brief; o padrão é 800
-  tokens aproximados (cerca de 4 caracteres por token). **0 desativa o brief** naquele vértice.
-- `memory_hit` registra quais lições/chaves foram injetadas, quais foram consultadas via
-  `memory_search` (inclusive as que não estavam no brief) e o outcome da execução.
-- `memory_usage` registra tokens, chamadas, retries, latência, contexto e sucesso/falha.
-- O JSON legado (`arestrix-blackboard-*.json`, `arestrix-memory-*.json`) é importado uma única vez
-  e marcado como `legacy_imported`.
-- Nenhum LLM é usado para extrair ou consolidar memória por padrão. Extração, propostas e
-  consolidação são determinísticas; a promoção de fatos/entidades continua manual.
+O agente tem duas ferramentas de memória: `memory_search` (somente leitura) e
+`memory_propose_lesson` (proposta pendente). `memory_record_lesson`, `memoryWriteKeys` e o servidor
+nativo `arestrix.memoria` foram removidos. O conhecimento é acessado pelo runtime e pelo painel.
 
-### Como a memória chega ao agente
+A busca combina FTS lexical com vetores opcionais e fusão RRF. A busca não indexa durante a
+consulta; **Testar** e **Reindexar** no painel são ações explícitas. Perfis prontos:
+EmbeddingGemma 2 (768 dimensões) e Qwen3-Embedding-4B (2560). Sem provedor, a busca continua
+lexical. O status do índice mostra modelo, dimensão, indexados, candidatos e pendentes.
 
-No pipeline gerado, o runtime:
+O painel oferece **Comparar com e sem memória (contexto)**: cria uma cópia consistente com
+`VACUUM INTO`, calcula o fingerprint SHA-256 e mede tokens/caracteres do brief por vértice ativo.
+É o A/B v1, de custo e conteúdo de contexto; a taxa de aprovação do validador pertence ao
+protocolo completo.
 
-1. abre o banco do projeto quando `persistent: true`;
-2. compila um brief por seções com lições ordenadas por confiança/recência e o snapshot das chaves
-   autorizadas;
-3. injeta esse brief no system prompt como **dado histórico não confiável**;
-4. registra `memory_hit` para cada lição/chave injetada e, quando o agente usa
-   `memory_search`, registra também as memórias consultadas que não estavam no brief;
-5. grava a lição, o Blackboard, o episódio e o outcome no fim da execução;
-6. registra automaticamente uma lição quando um agente falha e `recordLessons` está ligado.
+Workspace e instituição continuam disponíveis para conhecimento promovido e compartilhado. A
+promoção é explícita, exige evidência e é auditada. O projeto lê o workspace autorizado; o
+workspace não lê a memória privada do projeto.
 
-Lições de auditoria são registradas pelo nó que interpreta o parecer (por exemplo, um `condition`
-que chama `recordLesson` no ramo de reprovação); o runtime não adivinha a semântica de um switch.
-
-### Memória de projeto e `arestrix.memoria`
-
-São coisas diferentes:
-
-- **Memória de projeto** é o AMG em SQLite, usado pelos agentes e pelas ferramentas
-  `memory_search` / `memory_record_lesson`.
-- **`arestrix.memoria`** é uma ferramenta nativa pequena, chave-valor, que grava
-  `.arestrix/memory.json`. Ela continua disponível para casos simples e manuais, mas não é o banco
-  de memória dos agentes.
+O guia completo, com configuração, retenção, segurança e referência rápida, está em
+[Como funciona a memória](como-funciona-a-memoria.md).
 
 ### Exemplos
 
-- [`04-memoria`](../../examples/04-memoria) — lição persistente, Blackboard, injeção no prompt,
-  `memory_search`, `memory_record_lesson` e entrega de artefato.
+- [`04-memoria`](../../examples/04-memoria) — proposta de lição, aprovação, injeção no prompt,
+  `memory_search` e entrega de artefato.
 - [`05-matematica-com-memoria`](../../examples/05-matematica-com-memoria) — pesquisa web via MCP
   Keenable, brief de memória e redação de um texto de matemática com referências.
 
@@ -314,7 +235,6 @@ sem processo filho e sem código de terceiros. Elas aparecem no vértice MCP e n
 | `arestrix.arquivos` | `read_file`, `write_file`, `list_directory`, `file_info`, `make_directory`, `search_text` | Confinado ao projeto. Só texto, 1 MB para ler, 2 MB para gravar. |
 | `arestrix.http` | `http_get`, `http_post_json` | **Só hosts que o projeto autorizar** (abaixo). Somente HTTPS. |
 | `arestrix.dados` | `json_query`, `csv_to_json`, `json_to_csv`, `regex_extract`, `base64_encode`, `base64_decode` | Transformação pura de dados. Padrões de regex que poderiam travar o programa são recusados. |
-| `arestrix.memoria` | `memory_set`, `memory_get`, `memory_list`, `memory_delete` | Ferramenta manual independente do AMG: pequenos textos em `.arestrix/memory.json` (1000 chaves, 64 KB cada). |
 | `arestrix.tempo` | `now`, `add_duration`, `diff` | ISO 8601, anos bissextos, fusos. |
 | `arestrix.git` | `git_status`, `git_log`, `git_diff`, `git_show_file` | **Somente leitura.** Exige o Git instalado. |
 | `arestrix.sqlite` | `list_tables`, `describe_table`, `sql_query`, `sql_execute` | Banco SQLite embutido, em um arquivo do projeto (padrão `data/arestrix.db`). Veja abaixo. |

@@ -1,7 +1,7 @@
 {
   "projectId": "exemplo-matematica-memoria",
   "name": "Exemplo 5 - Matematica com Memoria",
-  "description": "Pesquisa web via MCP Keenable + redacao de matematica com licoes persistentes",
+  "description": "Pesquisa web via MCP Keenable + redacao de matematica com propostas de licoes",
   "version": "1.0.0",
   "createdAt": "2026-10-13T00:00:00Z",
   "updatedAt": "2026-10-13T00:00:00Z",
@@ -51,7 +51,7 @@
       "name": "Pipeline Principal",
       "file": "pipelines/main.json",
       "isPrimary": true,
-      "description": "Pesquisa web via MCP Keenable + redacao de matematica com licoes persistentes"
+      "description": "Pesquisa web via MCP Keenable + redacao de matematica com propostas de licoes"
     }
   ]
 }

@@ -10,7 +10,6 @@
 //   arestrix.arquivos  ler, gravar, listar e buscar arquivos do projeto
 //   arestrix.http      requisicoes HTTPS para hosts autorizados pelo projeto
 //   arestrix.dados     JSON, CSV, expressoes regulares e base64
-//   arestrix.memoria   memoria chave-valor do projeto
 //   arestrix.tempo     data e hora, somas e diferencas
 //   arestrix.git       consultas somente-leitura ao repositorio Git do projeto
 //   arestrix.sqlite    banco de dados SQLite embutido (arquivo dentro do projeto)
@@ -79,7 +78,6 @@ taskforge::Json schema(const std::vector<Prop>& properties, const std::vector<st
 Server makeFilesServer(rt::RuntimeLang lang = rt::RuntimeLang::Pt);
 Server makeHttpServer(rt::RuntimeLang lang = rt::RuntimeLang::Pt);
 Server makeDataServer(rt::RuntimeLang lang = rt::RuntimeLang::Pt);
-Server makeMemoryServer(rt::RuntimeLang lang = rt::RuntimeLang::Pt);
 Server makeTimeServer(rt::RuntimeLang lang = rt::RuntimeLang::Pt);
 Server makeGitServer(rt::RuntimeLang lang = rt::RuntimeLang::Pt);
 Server makeSqliteServer(rt::RuntimeLang lang = rt::RuntimeLang::Pt);

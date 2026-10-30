@@ -2,6 +2,7 @@
 #include "rt/Trace.hpp"
 #include "memory/MemoryService.hpp"
 #include "platform/Process.hpp"
+#include "project/RunnerSecurity.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -55,6 +56,25 @@ std::string currentRunId(const std::string& fallback) {
     return value.empty() ? fallback : value;
 }
 
+std::string currentItemId(const std::string& fallback) {
+    const std::string value = platform::getEnv("ARESTRIX_ITEM_ID");
+    return value.empty() ? fallback : value;
+}
+
+std::string canonicalInputHash(const std::string& nodeId, const std::string& itemId,
+                               const std::string& input) {
+    std::string canonical;
+    auto append = [](std::string& out, const std::string& value) {
+        out += std::to_string(value.size());
+        out += ':';
+        out += value;
+    };
+    append(canonical, nodeId);
+    append(canonical, itemId);
+    append(canonical, input);
+    return project::RunnerSecurity::sha256(canonical);
+}
+
 void nodeEvent(const std::string& nodeId, const std::string& status, const std::string& detail) {
     AgentTelemetryEmitter::emitStatus(nodeId, status, detail);
 }
@@ -95,9 +115,9 @@ struct AgentSpec {
     bool memoryWriteEnabled = false;
     bool memoryForceDisabled = false;
     std::vector<std::string> memoryDomains;
-    std::vector<std::string> memoryWriteKeys;
     int memoryMaxLessonsPerRun = 20;
     int memoryMaxLessonChars = 4000;
+    std::string memoryTaskType;
     std::vector<std::string> tools;
     std::vector<std::string> mcpServers;   // ids em .workspace/mcps
     std::vector<std::string> mcpAllowed;   // nomes de ferramentas MCP permitidas (vazio = todas do servidor)
@@ -139,11 +159,9 @@ AgentSpec parseSpec(const json& j, const std::string& nodeId, const std::string&
     if (j.contains("memoryDomains") && j["memoryDomains"].is_array()) {
         for (const auto& d : j["memoryDomains"]) if (d.is_string()) s.memoryDomains.push_back(d.get<std::string>());
     }
-    if (j.contains("memoryWriteKeys") && j["memoryWriteKeys"].is_array()) {
-        for (const auto& k : j["memoryWriteKeys"]) if (k.is_string()) s.memoryWriteKeys.push_back(k.get<std::string>());
-    }
     s.memoryMaxLessonsPerRun = std::max(1, std::min(500, j.value("memoryMaxLessonsPerRun", 20)));
     s.memoryMaxLessonChars = std::max(100, std::min(20000, j.value("memoryMaxLessonChars", 4000)));
+    s.memoryTaskType = j.value("memoryTaskType", std::string());
     if (j.contains("tools") && j["tools"].is_array()) {
         for (const auto& t : j["tools"]) if (t.is_string()) s.tools.push_back(t.get<std::string>());
     }
@@ -267,10 +285,12 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         spec.memoryContext.clear();
         spec.memoryWriteEnabled = false;
         spec.tools.erase(std::remove(spec.tools.begin(), spec.tools.end(), "memory_search"), spec.tools.end());
-        spec.tools.erase(std::remove(spec.tools.begin(), spec.tools.end(), "memory_record_lesson"), spec.tools.end());
+        spec.tools.erase(std::remove(spec.tools.begin(), spec.tools.end(), "memory_propose_lesson"), spec.tools.end());
     }
     const std::string loopKey = runKey.empty() ? nodeId : runKey;
     const std::string runId = currentRunId(nodeId);
+    const std::string itemId = currentItemId("pipeline");
+    const std::string inputHash = canonicalInputHash(nodeId, itemId, inputContext);
     int iteration = registerRun(loopKey, spec.maxRuns);
 
     if (spec.model.empty()) throw std::runtime_error("Agente '" + label + "': modelo nao configurado.");
@@ -399,10 +419,9 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     tctx.agentId = nodeId;
     tctx.projectId = spec.memoryProjectId;
     tctx.runId = runId;
-    tctx.memoryItemId = "pipeline";
+    tctx.memoryItemId = itemId;
     tctx.memoryWriteEnabled = spec.memoryWriteEnabled;
     tctx.memoryDomains = spec.memoryDomains;
-    tctx.memoryWriteKeys = spec.memoryWriteKeys;
     tctx.memoryMaxLessonsPerRun = spec.memoryMaxLessonsPerRun;
     tctx.memoryMaxLessonChars = spec.memoryMaxLessonChars;
     tctx.allowed = spec.tools;
@@ -445,8 +464,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     long long inTokens = 0, outTokens = 0;
     int turns = 0;
     int retries = 0;
-    const std::string taskType = !spec.memoryDomains.empty() ? spec.memoryDomains.front()
-                                                             : (label.empty() ? nodeId : label);
+    const std::string taskType = !spec.memoryTaskType.empty() ? spec.memoryTaskType : nodeId;
     json runToolCalls = json::array();
     std::vector<std::string> runFiles;
     std::vector<std::string> runArtifacts;
@@ -495,7 +513,8 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         memory::MemoryEpisodeRecord episode;
         episode.runId = runId;
         episode.nodeId = nodeId;
-        episode.itemId = "pipeline";
+        episode.itemId = itemId;
+        episode.inputHash = inputHash;
         episode.kind = success ? "agent_success" : "agent_failure";
         episode.content = success ? "agent completed" : "agent failed";
         episode.taskType = taskType;

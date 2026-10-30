@@ -1790,7 +1790,16 @@ int runBatch(const Options& opt) {
             else std::cout << "[" << id << "][telemetria] " << line << std::endl;
         };
 
-        BuildOutcome outcome = executeBuild(graph, root, opt, ev);
+        const std::string oldItemId = platform::getEnv("ARESTRIX_ITEM_ID");
+        platform::setProcessEnv("ARESTRIX_ITEM_ID", id);
+        BuildOutcome outcome;
+        try {
+            outcome = executeBuild(graph, root, opt, ev);
+        } catch (...) {
+            platform::setProcessEnv("ARESTRIX_ITEM_ID", oldItemId);
+            throw;
+        }
+        platform::setProcessEnv("ARESTRIX_ITEM_ID", oldItemId);
         for (const auto& [key, value] : oldEnv) platform::setProcessEnv(key, value);
         const bool ok = outcome.exitCode == 0;
         allOk = allOk && ok;
