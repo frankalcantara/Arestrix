@@ -54,7 +54,7 @@ double MemoryVectorIndex::cosine(const std::vector<float>& a, const std::vector<
 
 std::vector<MemoryVectorHit> MemoryVectorIndex::search(
     const MemoryStore& store, const std::string& scopeId, const std::string& model,
-    const std::vector<float>& query, size_t limit,
+    const std::vector<float>& query, size_t limit, const std::string& fingerprint,
     const std::vector<std::string>& domains) {
     std::vector<MemoryVectorHit> hits;
     if (query.empty() || limit == 0 || model.empty()) return hits;
@@ -68,7 +68,7 @@ std::vector<MemoryVectorHit> MemoryVectorIndex::search(
         return domains.empty() || std::find(domains.begin(), domains.end(), domain) != domains.end();
     };
 
-    for (const auto& embedding : store.listEmbeddings(scopeId, model)) {
+    for (const auto& embedding : store.listEmbeddings(scopeId, model, fingerprint)) {
         if (static_cast<int>(query.size()) != embedding.dim) continue;
         const auto key = embedding.objectType + "|" + embedding.objectId;
         auto objectIt = objects.find(key);

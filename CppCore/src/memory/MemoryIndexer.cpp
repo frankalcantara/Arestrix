@@ -26,8 +26,9 @@ std::string fnvHex(const std::string& value) {
 } // namespace
 
 std::string MemoryIndexer::contentHash(const std::string& objectType, const std::string& objectId,
-                                       const std::string& text, const std::string& model) {
-    return fnvHex(model + "|" + objectType + "|" + objectId + "|" + text);
+                                       const std::string& text, const std::string& model,
+                                       const std::string& fingerprint) {
+    return fnvHex(fingerprint + "|" + model + "|" + objectType + "|" + objectId + "|" + text);
 }
 
 EmbeddingIndexStats MemoryIndexer::index(MemoryStore& store, IEmbeddingProvider& provider,
@@ -44,11 +45,20 @@ EmbeddingIndexStats MemoryIndexer::index(MemoryStore& store, IEmbeddingProvider&
         return stats;
     }
 
+    const std::string fingerprint = embeddingFingerprint(config, provider.dim());
     const auto objects = store.embeddingObjects(scopeId);
     stats.candidates = objects.size();
     const auto existingList = store.listEmbeddings(scopeId, config.model);
     std::map<std::string, MemoryEmbeddingRecord> existing;
     for (const auto& record : existingList) {
+        // Nunca misture vetores de fingerprints diferentes: o modelo/dimensao
+        // atual sobrescreve a linha e o vetor antigo e descartado.
+        if (record.fingerprint != fingerprint) {
+            if (store.deleteEmbedding(scopeId, record.objectType, record.objectId, config.model)) {
+                ++stats.removed;
+            }
+            continue;
+        }
         existing[record.objectType + "|" + record.objectId] = record;
     }
 
@@ -67,7 +77,7 @@ EmbeddingIndexStats MemoryIndexer::index(MemoryStore& store, IEmbeddingProvider&
         if (object.text.empty()) continue;
         const std::string key = object.objectType + "|" + object.objectId;
         const std::string hash = contentHash(object.objectType, object.objectId,
-                                             object.text, config.model);
+                                             object.text, config.model, fingerprint);
         auto found = existing.find(key);
         if (!force && found != existing.end() && found->second.contentHash == hash) {
             ++stats.skipped;
@@ -114,7 +124,8 @@ EmbeddingIndexStats MemoryIndexer::index(MemoryStore& store, IEmbeddingProvider&
             const auto& object = pending[i].object;
             const auto bytes = MemoryVectorIndex::serialize(embedding.values);
             if (!store.upsertEmbedding(scopeId, object.objectType, object.objectId, config.model,
-                                       embedding.dim, bytes, pending[i].hash, object.domain)) {
+                                       embedding.dim, bytes, pending[i].hash, object.domain,
+                                       fingerprint)) {
                 ++stats.failed;
                 continue;
             }

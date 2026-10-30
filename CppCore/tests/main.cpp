@@ -2612,6 +2612,83 @@ TEST(memory_vector_index_serialization_and_rrf) {
     CHECK(fused[0].score > 0.0);
 }
 
+TEST(memory_embedding_fingerprint_changes_with_parameters) {
+    using taskforge::memory::EmbeddingConfig;
+    using taskforge::memory::defaultEmbeddingConfig;
+    using taskforge::memory::embeddingFingerprint;
+
+    EmbeddingConfig base = defaultEmbeddingConfig();
+    base.model = "embeddinggemma-2";
+    base.dim = 768;
+    base.baseUrl = "http://127.0.0.1:11434/v1";
+    const std::string reference = embeddingFingerprint(base, 768);
+    CHECK(reference.size() == 64);
+
+    EmbeddingConfig modelChanged = base;
+    modelChanged.model = "qwen3-embedding-4b";
+    CHECK(embeddingFingerprint(modelChanged, 768) != reference);
+
+    EmbeddingConfig dimChanged = base;
+    dimChanged.dim = 512;
+    CHECK(embeddingFingerprint(dimChanged, 512) != reference);
+
+    EmbeddingConfig endpointChanged = base;
+    endpointChanged.baseUrl = "http://127.0.0.1:8080/v1";
+    CHECK(embeddingFingerprint(endpointChanged, 768) != reference);
+}
+
+TEST(memory_embedding_status_tracks_fingerprint) {
+    using taskforge::memory::EmbeddingConfig;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::defaultEmbeddingConfig;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_embedding_status_" + stamp);
+    const std::string pId = "embedding-status-" + stamp;
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, (root / "memory.db").string()));
+    CHECK(!memory.recordLesson(pId, "svg_typography", "teste",
+                               "fonte precisa de contraste minimo").empty());
+
+    EmbeddingConfig config = defaultEmbeddingConfig();
+    config.enabled = true;
+    config.model = "test-topic";
+    config.dim = 3;
+    config.baseUrl = "http://127.0.0.1:11434/v1";
+    memory.configureEmbeddings(pId, config);
+    auto provider = std::make_shared<TopicTestEmbeddingProvider>();
+    memory.setEmbeddingProvider(pId, provider);
+
+    auto before = memory.embeddingStatus(pId);
+    CHECK(before.value("state", std::string()) == "stale");
+    CHECK(before.value("indexed", 1LL) == 0);
+    CHECK(before.value("candidates", 0LL) >= 1);
+    CHECK(!before.value("fingerprint", std::string()).empty());
+
+    std::string error;
+    auto indexed = memory.reindexEmbeddings(pId, true, error);
+    CHECK(error.empty());
+    CHECK(indexed.value("ok", false));
+    auto ready = memory.embeddingStatus(pId);
+    CHECK(ready.value("state", std::string()) == "ready");
+    CHECK(ready.value("indexed", 0LL) >= 1);
+    CHECK(ready.value("stale", true) == false);
+
+    EmbeddingConfig changed = config;
+    changed.model = "test-topic-2";
+    memory.configureEmbeddings(pId, changed);
+    memory.setEmbeddingProvider(pId, provider);
+    auto stale = memory.embeddingStatus(pId);
+    CHECK(stale.value("state", std::string()) == "stale");
+    CHECK(stale.value("indexed", 1LL) == 0);
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_service_hybrid_search_and_reindex) {
     using taskforge::memory::EmbeddingConfig;
     using taskforge::memory::MemoryService;

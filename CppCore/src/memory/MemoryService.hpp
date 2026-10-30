@@ -241,6 +241,8 @@ private:
         // Circuit breaker: nao repete uma chamada que acabou de falhar a cada
         // agente/busca. Test/reindex explicitos ignoram e resetam o cooldown.
         std::chrono::steady_clock::time_point cooldownUntil{};
+        bool reindexing = false;
+        std::string lastIndexError;
     };
 
     struct MaintenanceRuntime;

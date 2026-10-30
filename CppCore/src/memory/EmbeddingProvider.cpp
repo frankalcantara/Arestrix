@@ -6,6 +6,7 @@
 #include <cmath>
 #include <sstream>
 
+#include "project/RunnerSecurity.hpp"
 #include "rt/Http.hpp"
 #include "util/Json.hpp"
 
@@ -38,6 +39,17 @@ std::string resolvedBaseUrl(const EmbeddingConfig& config) {
     if (base.empty()) base = "http://127.0.0.1:11434/v1";
     while (!base.empty() && base.back() == '/') base.pop_back();
     return base;
+}
+
+std::string prefixFor(const std::string& model, bool query) {
+    const std::string normalized = lower(model);
+    if (normalized.find("embeddinggemma") != std::string::npos) {
+        return query ? "task: search result | query: " : "title: none | text: ";
+    }
+    if (normalized.find("e5") != std::string::npos) {
+        return query ? "query: " : "passage: ";
+    }
+    return "";
 }
 
 std::string jsonError(const taskforge::Json& root, const std::string& fallback) {
@@ -132,6 +144,22 @@ taskforge::Json embeddingConfigToJson(const EmbeddingConfig& config) {
         {"dim", config.dim}};
 }
 
+std::string embeddingFingerprint(const EmbeddingConfig& config, int effectiveDim) {
+    const int dim = effectiveDim > 0 ? effectiveDim : std::max(0, config.dim);
+    taskforge::Json canonical{
+        {"indexVersion", "embedding-index-v2"},
+        {"provider", lower(config.provider)},
+        {"endpoint", resolvedBaseUrl(config)},
+        {"model", lower(config.model)},
+        {"revision", std::string()},
+        {"dim", dim},
+        {"queryPrefix", prefixFor(config.model, true)},
+        {"documentPrefix", prefixFor(config.model, false)},
+        {"normalization", "l2"},
+        {"metric", "cosine"}};
+    return project::RunnerSecurity::sha256(canonical.dump());
+}
+
 std::shared_ptr<IEmbeddingProvider> makeEmbeddingProvider(const EmbeddingConfig& config) {
     if (lower(config.provider) == "none") return std::make_shared<NullEmbeddingProvider>();
     if (config.model.empty()) return std::make_shared<NullEmbeddingProvider>();
@@ -162,19 +190,7 @@ std::string LocalLlamaEmbeddingProvider::prepareText(const std::string& text, bo
     std::string clipped = text;
     if (static_cast<int>(clipped.size()) > config_.maxChars) clipped.resize(config_.maxChars);
     if (clipped.empty()) clipped = " ";
-    const std::string model = lower(config_.model);
-    // EmbeddingGemma 2 usa instrucoes assimetricas de busca.
-    if (model.find("embeddinggemma") != std::string::npos) {
-        return query
-            ? "task: search result | query: " + clipped
-            : "title: none | text: " + clipped;
-    }
-    // E5 exige prefixos distintos para consulta e passagem. Outros modelos
-    // multilinguais (MiniLM, BGE) funcionam sem prefixo.
-    if (model.find("e5") != std::string::npos) {
-        return std::string(query ? "query: " : "passage: ") + clipped;
-    }
-    return clipped;
+    return prefixFor(config_.model, query) + clipped;
 }
 
 bool LocalLlamaEmbeddingProvider::embed(const std::vector<std::string>& texts, bool query,

@@ -204,6 +204,7 @@ struct MemoryEmbeddingRecord {
     std::vector<uint8_t> vector;
     std::string contentHash;
     std::string domain;
+    std::string fingerprint;
     std::string createdAt;
 };
 
@@ -310,14 +311,16 @@ public:
     bool upsertEmbedding(const std::string& scopeId, const std::string& objectType,
                          const std::string& objectId, const std::string& model, int dim,
                          const std::vector<uint8_t>& vector, const std::string& contentHash,
-                         const std::string& domain);
+                         const std::string& domain, const std::string& fingerprint = "");
     std::vector<MemoryEmbeddingRecord> listEmbeddings(const std::string& scopeId,
-                                                      const std::string& model) const;
+                                                      const std::string& model,
+                                                      const std::string& fingerprint = "") const;
     std::vector<MemoryEmbeddingObject> embeddingObjects(const std::string& scopeId,
                                                         size_t maxEpisodes = 200) const;
     bool deleteEmbedding(const std::string& scopeId, const std::string& objectType,
                          const std::string& objectId, const std::string& model);
-    size_t embeddingCount(const std::string& scopeId, const std::string& model) const;
+    size_t embeddingCount(const std::string& scopeId, const std::string& model,
+                          const std::string& fingerprint = "") const;
 
     // Candidatos lexicais estruturados para o ranker hibrido. O searchContext
     // continua sendo o caminho lexical historico (sem mudanca de formato).

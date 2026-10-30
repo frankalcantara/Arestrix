@@ -1207,22 +1207,44 @@ taskforge::Json MemoryService::embeddingStatus(const std::string& projectId) {
     auto& runtime = embeddingRuntimeLocked(projectId);
     taskforge::Json out = embeddingConfigToJson(runtime.config);
     const bool available = runtime.provider && runtime.provider->available();
+    const int effectiveDim = runtime.provider && runtime.provider->dim() > 0
+        ? runtime.provider->dim() : runtime.config.dim;
+    const std::string fingerprint = embeddingFingerprint(runtime.config, effectiveDim);
     out["available"] = available;
     out["active"] = runtime.config.enabled && available;
     out["providerModel"] = runtime.provider ? runtime.provider->modelId() : std::string("none");
     out["providerDim"] = runtime.provider ? runtime.provider->dim() : 0;
     out["cooldown"] = embeddingInCooldown(runtime.cooldownUntil);
+    out["fingerprint"] = fingerprint;
+    out["fingerprintShort"] = fingerprint.substr(0, 12);
+    long long indexed = 0;
+    long long candidates = 0;
+    long long allVersions = 0;
     if (auto* s = ensureStore(projectId)) {
         const std::string scope = scopeId(projectId);
-        const long long indexed = static_cast<long long>(s->embeddingCount(scope, runtime.config.model));
-        const long long candidates = static_cast<long long>(s->embeddingObjects(scope).size());
-        out["indexed"] = indexed;
-        out["candidates"] = candidates;
-        out["pending"] = std::max<long long>(0, candidates - indexed);
+        indexed = static_cast<long long>(s->embeddingCount(scope, runtime.config.model, fingerprint));
+        allVersions = static_cast<long long>(s->embeddingCount(scope, runtime.config.model));
+        for (const auto& object : s->embeddingObjects(scope)) {
+            if (!object.text.empty()) ++candidates;
+        }
+    }
+    out["indexed"] = indexed;
+    out["candidates"] = candidates;
+    out["pending"] = std::max<long long>(0, candidates - indexed);
+    out["stale"] = indexed < candidates || allVersions > indexed;
+    if (runtime.reindexing) {
+        out["state"] = "pending";
+    } else if (!runtime.lastIndexError.empty()) {
+        out["state"] = "failed";
+        out["error"] = runtime.lastIndexError;
+    } else if (!runtime.config.enabled || !available) {
+        out["state"] = "stale";
+    } else if (indexed == 0 && candidates > 0) {
+        out["state"] = "stale";
+    } else if (indexed < candidates) {
+        out["state"] = "partial";
     } else {
-        out["indexed"] = 0;
-        out["candidates"] = 0;
-        out["pending"] = 0;
+        out["state"] = "ready";
     }
     return out;
 }
@@ -1273,20 +1295,29 @@ taskforge::Json MemoryService::reindexEmbeddings(const std::string& projectId, b
         return out;
     }
     if (!runtime.provider || !runtime.provider->available()) {
-        error = "provider de embeddings indisponivel";
+        runtime.lastIndexError = "provider de embeddings indisponivel";
+        error = runtime.lastIndexError;
         out["ok"] = false;
         out["error"] = error;
         return out;
     }
+    runtime.reindexing = true;
+    runtime.lastIndexError.clear();
+    const int effectiveDim = runtime.provider->dim() > 0 ? runtime.provider->dim() : runtime.config.dim;
+    const std::string fingerprint = embeddingFingerprint(runtime.config, effectiveDim);
     const auto stats = MemoryIndexer::index(*s, *runtime.provider, runtime.config,
                                             scopeId(projectId), force, 0, error);
     if (error.empty() && stats.failed > 0) {
         error = std::to_string(stats.failed) + " embedding(s) falharam";
     }
+    runtime.reindexing = false;
+    runtime.lastIndexError = error;
     if (error.empty()) runtime.cooldownUntil = std::chrono::steady_clock::time_point{};
     else embeddingStartCooldown(runtime.cooldownUntil);
     out["ok"] = error.empty();
     out["model"] = runtime.config.model;
+    out["fingerprint"] = fingerprint;
+    out["fingerprintShort"] = fingerprint.substr(0, 12);
     out["candidates"] = static_cast<long long>(stats.candidates);
     out["indexed"] = static_cast<long long>(stats.indexed);
     out["skipped"] = static_cast<long long>(stats.skipped);
@@ -1579,6 +1610,18 @@ bool MemoryService::hybridRecall(const std::string& projectId, const std::string
     auto& runtime = embeddingRuntimeLocked(projectId);
     if (!runtime.config.enabled || !runtime.provider || !runtime.provider->available()) return false;
     if (embeddingInCooldown(runtime.cooldownUntil)) return false;
+    if (runtime.reindexing || !runtime.lastIndexError.empty()) return false;
+
+    // A8 v2: busca hibrida apenas com o indice completo do fingerprint atual.
+    // Em stale/partial/pending/failed, o chamador usa o fallback lexical.
+    const int effectiveDim = runtime.provider->dim() > 0 ? runtime.provider->dim() : runtime.config.dim;
+    const std::string fingerprint = embeddingFingerprint(runtime.config, effectiveDim);
+    size_t candidates = 0;
+    for (const auto& object : s->embeddingObjects(scopeId(projectId))) {
+        if (!object.text.empty()) ++candidates;
+    }
+    const size_t indexed = s->embeddingCount(scopeId(projectId), runtime.config.model, fingerprint);
+    if (indexed == 0 || indexed < candidates) return false;
 
     // C4: a busca e somente leitura; indexacao acontece em reindex/importacao.
     std::vector<Embedding> queryEmbeddings;
@@ -1592,7 +1635,8 @@ bool MemoryService::hybridRecall(const std::string& projectId, const std::string
     const size_t candidateLimit = std::max<size_t>(limit * 3, 20);
     auto lexical = s->lexicalCandidates(scopeId(projectId), text, candidateLimit, domains);
     auto vector = MemoryVectorIndex::search(*s, scopeId(projectId), runtime.config.model,
-                                            queryEmbeddings[0].values, candidateLimit, domains);
+                                            queryEmbeddings[0].values, candidateLimit,
+                                            fingerprint, domains);
     output = MemoryRanker::fuse(lexical, vector, limit);
     return true;
 }

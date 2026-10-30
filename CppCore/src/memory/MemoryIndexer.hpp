@@ -25,7 +25,8 @@ public:
                                      bool force, size_t maxObjects, std::string& error);
 
     static std::string contentHash(const std::string& objectType, const std::string& objectId,
-                                   const std::string& text, const std::string& model);
+                                   const std::string& text, const std::string& model,
+                                   const std::string& fingerprint = "");
 };
 
 } // namespace memory

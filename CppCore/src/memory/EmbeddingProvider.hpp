@@ -78,6 +78,9 @@ private:
 EmbeddingConfig defaultEmbeddingConfig();
 EmbeddingConfig embeddingConfigFromJson(const taskforge::Json& value);
 taskforge::Json embeddingConfigToJson(const EmbeddingConfig& config);
+// Fingerprint canonico do indice: endpoint, modelo, dimensao efetiva,
+// prefixos de consulta/documento, normalizacao, metrica e versao.
+std::string embeddingFingerprint(const EmbeddingConfig& config, int effectiveDim = 0);
 std::shared_ptr<IEmbeddingProvider> makeEmbeddingProvider(const EmbeddingConfig& config);
 
 } // namespace memory

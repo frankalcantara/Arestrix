@@ -478,15 +478,25 @@ export class ProjectMemoryModal {
 
         if (embeddingStatus) {
           const emb = data.embedding || {};
-          const state = emb.active
-            ? t('project_memory.embedding_ready')
-            : (emb.enabled ? t('project_memory.embedding_unavailable') : t('project_memory.embedding_disabled'));
-          embeddingStatus.textContent = [
-            `${t('project_memory.embedding_state')}: ${state}`,
+          const state = String(emb.state || (emb.active ? 'ready' : 'stale'));
+          const stateLabel = state === 'ready'
+            ? t('project_memory.embedding_ready', 'pronto')
+            : state === 'pending'
+              ? t('project_memory.embedding_pending', 'reindexando')
+              : state === 'partial'
+                ? t('project_memory.embedding_partial', 'parcial')
+                : state === 'failed'
+                  ? t('project_memory.embedding_failed', 'falhou')
+                  : t('project_memory.embedding_stale', 'stale (reindexe)');
+          const lines = [
+            `${t('project_memory.embedding_state')}: ${stateLabel}`,
             `${t('project_memory.embedding_model')}: ${emb.model || '-'}`,
             `${t('project_memory.embedding_endpoint')}: ${emb.localBaseUrl || '-'}`,
-            `${t('project_memory.embedding_indexed')}: ${Number(emb.indexed || 0)} / ${Number(emb.candidates || 0)}`
-          ].join('\n');
+            `${t('project_memory.embedding_indexed')}: ${Number(emb.indexed || 0)} / ${Number(emb.candidates || 0)}`,
+            `${t('project_memory.embedding_fingerprint', 'Fingerprint')}: ${emb.fingerprintShort || '-'}`
+          ];
+          if (emb.error) lines.push(`${t('project_memory.embedding_error', 'Erro')}: ${emb.error}`);
+          embeddingStatus.textContent = lines.join('\n');
         }
 
         if (consolidationStatus) {

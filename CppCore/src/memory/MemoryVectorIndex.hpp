@@ -31,7 +31,7 @@ public:
 
     static std::vector<MemoryVectorHit> search(
         const MemoryStore& store, const std::string& scopeId, const std::string& model,
-        const std::vector<float>& query, size_t limit,
+        const std::vector<float>& query, size_t limit, const std::string& fingerprint,
         const std::vector<std::string>& domains = {});
 };
 

@@ -520,6 +520,7 @@ CREATE TABLE IF NOT EXISTS memory_embedding (
   vector BLOB NOT NULL,
   content_hash TEXT NOT NULL,
   domain TEXT NOT NULL DEFAULT '',
+  fingerprint TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
   PRIMARY KEY (scope_id, object_type, object_id, model)
 );
@@ -601,6 +602,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_policy_scope ON memory_policy(scope_id, ke
     addColumnIfMissing(db_, "memory_episode", "redactions", "INTEGER NOT NULL DEFAULT 0");
     // M2: dominio no indice vetorial para respeitar memoryDomains na busca hibrida.
     addColumnIfMissing(db_, "memory_embedding", "domain", "TEXT NOT NULL DEFAULT ''");
+    addColumnIfMissing(db_, "memory_embedding", "fingerprint", "TEXT NOT NULL DEFAULT ''");
     // M3: reforco/decay sem apagar memoria.
     addColumnIfMissing(db_, "memory_edge", "last_used", "TEXT");
     addColumnIfMissing(db_, "memory_edge", "success_count", "INTEGER NOT NULL DEFAULT 0");
@@ -1945,7 +1947,7 @@ std::vector<MemoryValidationRecord> MemoryStore::listValidations(const std::stri
 bool MemoryStore::upsertEmbedding(const std::string& scopeId, const std::string& objectType,
                                   const std::string& objectId, const std::string& model, int dim,
                                   const std::vector<uint8_t>& vector, const std::string& contentHash,
-                                  const std::string& domain) {
+                                  const std::string& domain, const std::string& fingerprint) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (!db_ || scopeId.empty() || objectType.empty() || objectId.empty() || model.empty()) return false;
     if (dim <= 0 || vector.size() != static_cast<size_t>(dim) * sizeof(float)) return false;
@@ -1954,10 +1956,11 @@ bool MemoryStore::upsertEmbedding(const std::string& scopeId, const std::string&
     Stmt st;
     std::string error;
     if (!prepare(db_, "INSERT INTO memory_embedding(scope_id,object_type,object_id,model,dim,vector,"
-                       "content_hash,domain,created_at) VALUES(?,?,?,?,?,?,?,?,?) "
+                       "content_hash,domain,fingerprint,created_at) VALUES(?,?,?,?,?,?,?,?,?,?) "
                        "ON CONFLICT(scope_id,object_type,object_id,model) DO UPDATE SET "
                        "dim=excluded.dim, vector=excluded.vector, content_hash=excluded.content_hash, "
-                       "domain=excluded.domain, created_at=excluded.created_at", st, error)) {
+                       "domain=excluded.domain, fingerprint=excluded.fingerprint, "
+                       "created_at=excluded.created_at", st, error)) {
         lastError_ = error;
         return false;
     }
@@ -1970,7 +1973,8 @@ bool MemoryStore::upsertEmbedding(const std::string& scopeId, const std::string&
     sqlite3_bind_blob(st.stmt, 6, vector.data(), static_cast<int>(vector.size()), SQLITE_TRANSIENT);
     bindText(st.stmt, 7, contentHash);
     bindText(st.stmt, 8, cleanDomain.text);
-    bindText(st.stmt, 9, nowIso());
+    bindText(st.stmt, 9, fingerprint);
+    bindText(st.stmt, 10, nowIso());
     if (stepRetry(st.stmt) != SQLITE_DONE) {
         lastError_ = sqlite3_errmsg(db_);
         return false;
@@ -1979,19 +1983,23 @@ bool MemoryStore::upsertEmbedding(const std::string& scopeId, const std::string&
 }
 
 std::vector<MemoryEmbeddingRecord> MemoryStore::listEmbeddings(const std::string& scopeId,
-                                                               const std::string& model) const {
+                                                               const std::string& model,
+                                                               const std::string& fingerprint) const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     std::vector<MemoryEmbeddingRecord> out;
     if (!db_ || model.empty()) return out;
     Stmt st;
     std::string error;
-    if (!prepare(db_, "SELECT object_type,object_id,model,dim,vector,content_hash,COALESCE(domain,''),created_at "
-                       "FROM memory_embedding WHERE scope_id=? AND model=?", st, error)) {
+    std::string sql = "SELECT object_type,object_id,model,dim,vector,content_hash,COALESCE(domain,''),"
+                      "COALESCE(fingerprint,''),created_at FROM memory_embedding WHERE scope_id=? AND model=?";
+    if (!fingerprint.empty()) sql += " AND fingerprint=?";
+    if (!prepare(db_, sql.c_str(), st, error)) {
         lastError_ = error;
         return out;
     }
     bindText(st.stmt, 1, scopeId);
     bindText(st.stmt, 2, model);
+    if (!fingerprint.empty()) bindText(st.stmt, 3, fingerprint);
     while (stepRetry(st.stmt) == SQLITE_ROW) {
         MemoryEmbeddingRecord record;
         record.objectType = columnText(st.stmt, 0);
@@ -2006,7 +2014,8 @@ std::vector<MemoryEmbeddingRecord> MemoryStore::listEmbeddings(const std::string
         }
         record.contentHash = columnText(st.stmt, 5);
         record.domain = columnText(st.stmt, 6);
-        record.createdAt = columnText(st.stmt, 7);
+        record.fingerprint = columnText(st.stmt, 7);
+        record.createdAt = columnText(st.stmt, 8);
         if (record.dim > 0 &&
             record.vector.size() == static_cast<size_t>(record.dim) * sizeof(float)) {
             out.push_back(std::move(record));
@@ -2015,17 +2024,21 @@ std::vector<MemoryEmbeddingRecord> MemoryStore::listEmbeddings(const std::string
     return out;
 }
 
-size_t MemoryStore::embeddingCount(const std::string& scopeId, const std::string& model) const {
+size_t MemoryStore::embeddingCount(const std::string& scopeId, const std::string& model,
+                                   const std::string& fingerprint) const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (!db_ || model.empty()) return 0;
     Stmt st;
     std::string error;
-    if (!prepare(db_, "SELECT COUNT(*) FROM memory_embedding WHERE scope_id=? AND model=?", st, error)) {
+    std::string sql = "SELECT COUNT(*) FROM memory_embedding WHERE scope_id=? AND model=?";
+    if (!fingerprint.empty()) sql += " AND fingerprint=?";
+    if (!prepare(db_, sql.c_str(), st, error)) {
         lastError_ = error;
         return 0;
     }
     bindText(st.stmt, 1, scopeId);
     bindText(st.stmt, 2, model);
+    if (!fingerprint.empty()) bindText(st.stmt, 3, fingerprint);
     return stepRetry(st.stmt) == SQLITE_ROW ? static_cast<size_t>(columnInt(st.stmt, 0)) : 0;
 }
 
