@@ -4,6 +4,7 @@
 #include "MemorySanitizer.hpp"
 #include "MemoryPlaybookCompiler.hpp"
 #include "MemoryRanker.hpp"
+#include "MemoryStateSchema.hpp"
 #include "MemoryVectorIndex.hpp"
 #include "project/RunnerSecurity.hpp"
 
@@ -43,6 +44,23 @@ std::string isoNow() {
 
 std::string projectKey(const std::string& projectId) {
     return projectId.empty() ? "default" : projectId;
+}
+
+std::string stateOwnerFor(const taskforge::Json& info, const std::string& projectId,
+                          const std::string& itemId, const std::string& taskType,
+                          std::string& error) {
+    const std::string kind = info.value("scopeKind", std::string());
+    if (kind == "project") return projectKey(projectId);
+    if (kind == "task_type") {
+        if (taskType.empty()) error = "task_type ausente para o estado";
+        return taskType;
+    }
+    if (kind == "item") {
+        if (itemId.empty()) error = "item_id ausente para o estado";
+        return itemId;
+    }
+    error = "escopo de estado desconhecido";
+    return "";
 }
 
 std::string oneLine(std::string text, size_t limit = 1200) {
@@ -540,6 +558,107 @@ bool MemoryService::ingestWorkingDelta(const std::string& projectId, const std::
 
 void MemoryService::clearWorkingItem(const std::string& projectId, const std::string& itemId) {
     if (auto* s = ensureStore(projectId)) s->clearWorkingItem(scopeId(projectId), itemId);
+}
+
+bool MemoryService::declareStateKey(const std::string& projectId, const std::string& key,
+                                    const std::string& scopeKind, const taskforge::Json& schema,
+                                    long long maxBytes, long long ttlSeconds,
+                                    const std::string& valueMode, long long versionedKeep,
+                                    std::string& error) {
+    auto* s = ensureStore(projectId);
+    if (!s) {
+        error = "banco de conhecimento indisponivel";
+        return false;
+    }
+    return s->declareStateKey(scopeId(projectId), key, scopeKind, schema, maxBytes,
+                              ttlSeconds, valueMode, versionedKeep, error);
+}
+
+taskforge::Json MemoryService::stateKeyInfo(const std::string& projectId,
+                                            const std::string& key) {
+    auto* s = existingStore(projectId);
+    return s ? s->stateKeyInfo(scopeId(projectId), key) : taskforge::Json::object();
+}
+
+taskforge::Json MemoryService::stateKeys(const std::string& projectId) {
+    auto* s = existingStore(projectId);
+    return s ? s->stateKeys(scopeId(projectId)) : taskforge::Json::array();
+}
+
+taskforge::Json MemoryService::getState(const std::string& projectId, const std::string& key,
+                                        const std::string& itemId, const std::string& taskType,
+                                        std::string& error) {
+    auto* s = ensureStore(projectId);
+    if (!s) {
+        error = "banco de conhecimento indisponivel";
+        return taskforge::Json{{"ok", false}, {"error", error}};
+    }
+    const auto info = s->stateKeyInfo(scopeId(projectId), key);
+    if (info.empty()) {
+        error = "chave de estado nao declarada: " + key;
+        return taskforge::Json{{"ok", false}, {"error", error}};
+    }
+    const std::string owner = stateOwnerFor(info, projectId, itemId, taskType, error);
+    if (owner.empty()) return taskforge::Json{{"ok", false}, {"error", error}};
+    return s->getState(scopeId(projectId), key, owner, error);
+}
+
+taskforge::Json MemoryService::setState(const std::string& projectId, const std::string& key,
+                                        const std::string& itemId, const std::string& taskType,
+                                        const taskforge::Json& value, bool hasExpected,
+                                        long long expectedVersion, std::string& error) {
+    auto* s = ensureStore(projectId);
+    if (!s) {
+        error = "banco de conhecimento indisponivel";
+        return taskforge::Json{{"ok", false}, {"error", error}};
+    }
+    const auto info = s->stateKeyInfo(scopeId(projectId), key);
+    if (info.empty()) {
+        error = "chave de estado nao declarada: " + key;
+        return taskforge::Json{{"ok", false}, {"error", error}};
+    }
+    const auto schema = info.contains("schema") ? info["schema"] : taskforge::Json::object();
+    taskforge::Json cleanValue = value;
+    sanitizeJsonInPlace(cleanValue);
+    if (!validateStateValue(schema, cleanValue, error)) {
+        return taskforge::Json{{"ok", false}, {"error", error}, {"schemaError", true}};
+    }
+    const std::string owner = stateOwnerFor(info, projectId, itemId, taskType, error);
+    if (owner.empty()) return taskforge::Json{{"ok", false}, {"error", error}};
+    return s->setState(scopeId(projectId), key, owner, cleanValue, hasExpected,
+                       expectedVersion, error);
+}
+
+taskforge::Json MemoryService::listState(const std::string& projectId, const std::string& itemId,
+                                         const std::string& taskType) {
+    auto* s = ensureStore(projectId);
+    if (!s) return taskforge::Json{{"ok", false}, {"error", "banco de conhecimento indisponivel"}};
+    taskforge::Json out{{"ok", true}, {"keys", taskforge::Json::array()}};
+    for (const auto& info : s->stateKeys(scopeId(projectId))) {
+        std::string error;
+        const std::string owner = stateOwnerFor(info, projectId, itemId, taskType, error);
+        if (owner.empty()) continue;
+        taskforge::Json item = s->listState(scopeId(projectId), info.value("key", std::string()), owner);
+        item["scopeKind"] = info.value("scopeKind", std::string());
+        item["scopeOwner"] = owner;
+        item["valueMode"] = info.value("valueMode", std::string());
+        item["ttlSeconds"] = info.value("ttlSeconds", 0LL);
+        out["keys"].push_back(item);
+    }
+    return out;
+}
+
+taskforge::Json MemoryService::stateHistory(const std::string& projectId, const std::string& key,
+                                            const std::string& itemId, const std::string& taskType,
+                                            size_t limit) {
+    auto* s = ensureStore(projectId);
+    if (!s) return taskforge::Json{{"ok", false}, {"error", "banco de conhecimento indisponivel"}};
+    const auto info = s->stateKeyInfo(scopeId(projectId), key);
+    if (info.empty()) return taskforge::Json{{"ok", false}, {"error", "chave de estado nao declarada"}};
+    std::string error;
+    const std::string owner = stateOwnerFor(info, projectId, itemId, taskType, error);
+    if (owner.empty()) return taskforge::Json{{"ok", false}, {"error", error}};
+    return s->stateHistory(scopeId(projectId), key, owner, limit);
 }
 
 void MemoryService::clearProject(const std::string& projectId) {

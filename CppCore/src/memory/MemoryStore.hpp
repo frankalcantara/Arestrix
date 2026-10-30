@@ -259,6 +259,25 @@ public:
                             const taskforge::Json& delta);
     void clearWorkingItem(const std::string& scopeId, const std::string& itemId);
     void clearScopeData(const std::string& scopeId);
+
+    // D1 v2: estado de continuacao declarado e versionado.
+    bool declareStateKey(const std::string& scopeId, const std::string& key,
+                         const std::string& scopeKind, const taskforge::Json& schema,
+                         long long maxBytes, long long ttlSeconds,
+                         const std::string& valueMode, long long versionedKeep,
+                         std::string& error);
+    taskforge::Json stateKeyInfo(const std::string& scopeId, const std::string& key) const;
+    taskforge::Json stateKeys(const std::string& scopeId) const;
+    taskforge::Json getState(const std::string& scopeId, const std::string& key,
+                             const std::string& scopeOwner, std::string& error) const;
+    taskforge::Json setState(const std::string& scopeId, const std::string& key,
+                             const std::string& scopeOwner, const taskforge::Json& value,
+                             bool hasExpected, long long expectedVersion,
+                             std::string& error);
+    taskforge::Json listState(const std::string& scopeId, const std::string& key,
+                              const std::string& scopeOwner) const;
+    taskforge::Json stateHistory(const std::string& scopeId, const std::string& key,
+                                 const std::string& scopeOwner, size_t limit) const;
     // Expurgo completo: working, edges, episodes, evidence, nodes, usage, hits e,
     // opcionalmente, auditoria. Com vacuum=true, compacta o arquivo SQLite.
     bool purge(const std::string& scopeId, const MemoryPurgeOptions& options = {});

@@ -178,6 +178,20 @@ std::string isoDaysAgoImpl(int days) {
     return std::string(out);
 }
 
+std::string isoAfterSecondsImpl(long long seconds) {
+    const auto when = std::chrono::system_clock::now() + std::chrono::seconds(std::max<long long>(0, seconds));
+    const std::time_t t = std::chrono::system_clock::to_time_t(when);
+    std::tm tm{};
+#if defined(_WIN32)
+    gmtime_s(&tm, &t);
+#else
+    gmtime_r(&t, &tm);
+#endif
+    char out[32];
+    std::strftime(out, sizeof(out), "%Y-%m-%dT%H:%M:%SZ", &tm);
+    return std::string(out);
+}
+
 taskforge::Json parseJsonOrNull(const std::string& text) {
     if (text.empty()) return taskforge::Json();
     auto parsed = taskforge::jsonutil::tryParse(text);
@@ -385,6 +399,53 @@ CREATE TABLE IF NOT EXISTS memory_working (
   updated_at TEXT NOT NULL,
   PRIMARY KEY (scope_id, item_id, key)
 );
+
+-- D1 v2: estado de continuacao declarado pelo projeto. O agente nunca cria
+-- chaves; ele le/grava apenas as chaves declaradas.
+CREATE TABLE IF NOT EXISTS memory_state_key (
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  key TEXT NOT NULL,
+  scope_kind TEXT NOT NULL CHECK (scope_kind IN ('project','task_type','item')),
+  schema_json TEXT NOT NULL DEFAULT '{}',
+  schema_hash TEXT NOT NULL DEFAULT '',
+  max_bytes INTEGER NOT NULL DEFAULT 16384,
+  ttl_seconds INTEGER NOT NULL DEFAULT 0,
+  value_mode TEXT NOT NULL DEFAULT 'replace' CHECK (value_mode IN ('replace','versioned')),
+  versioned_keep INTEGER NOT NULL DEFAULT 5,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (scope_id, key)
+);
+
+CREATE TABLE IF NOT EXISTS memory_state (
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  scope_kind TEXT NOT NULL,
+  scope_owner TEXT NOT NULL,
+  key TEXT NOT NULL,
+  value_json TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1,
+  schema_hash TEXT NOT NULL DEFAULT '',
+  expires_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (scope_id, scope_kind, scope_owner, key)
+);
+
+CREATE TABLE IF NOT EXISTS memory_state_history (
+  id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  scope_kind TEXT NOT NULL,
+  scope_owner TEXT NOT NULL,
+  key TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  value_json TEXT NOT NULL,
+  schema_hash TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_state_key_scope ON memory_state_key(scope_id);
+CREATE INDEX IF NOT EXISTS idx_memory_state_scope ON memory_state(scope_id, scope_kind, scope_owner);
+CREATE INDEX IF NOT EXISTS idx_memory_state_history_key ON memory_state_history(scope_id, key, version);
 
 CREATE TABLE IF NOT EXISTS memory_usage (
   id TEXT PRIMARY KEY,
@@ -801,6 +862,381 @@ void MemoryStore::clearWorkingItem(const std::string& scopeId, const std::string
     stepRetry(st.stmt);
 }
 
+bool MemoryStore::declareStateKey(const std::string& scopeId, const std::string& key,
+                                  const std::string& scopeKind, const taskforge::Json& schema,
+                                  long long maxBytes, long long ttlSeconds,
+                                  const std::string& valueMode, long long versionedKeep,
+                                  std::string& error) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty() || key.empty() || key.size() > 128) {
+        error = "chave de estado invalida";
+        return false;
+    }
+    if (scopeKind != "project" && scopeKind != "task_type" && scopeKind != "item") {
+        error = "escopo de estado invalido";
+        return false;
+    }
+    if (valueMode != "replace" && valueMode != "versioned") {
+        error = "modo de valor invalido";
+        return false;
+    }
+    taskforge::Json cleanSchema = schema.is_object() ? schema : taskforge::Json::object();
+    sanitizeJsonInPlace(cleanSchema);
+    const std::string schemaJson = cleanSchema.dump();
+    const std::string schemaHash = hashHex(schemaJson);
+    Stmt st;
+    if (!prepare(db_, "INSERT INTO memory_state_key(scope_id,key,scope_kind,schema_json,schema_hash,"
+                       "max_bytes,ttl_seconds,value_mode,versioned_keep,created_at,updated_at) "
+                       "VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(scope_id,key) DO UPDATE SET "
+                       "scope_kind=excluded.scope_kind,schema_json=excluded.schema_json,"
+                       "schema_hash=excluded.schema_hash,max_bytes=excluded.max_bytes,"
+                       "ttl_seconds=excluded.ttl_seconds,value_mode=excluded.value_mode,"
+                       "versioned_keep=excluded.versioned_keep,updated_at=excluded.updated_at",
+                 st, error)) {
+        return false;
+    }
+    const std::string now = nowIso();
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, key);
+    bindText(st.stmt, 3, scopeKind);
+    bindText(st.stmt, 4, schemaJson);
+    bindText(st.stmt, 5, schemaHash);
+    sqlite3_bind_int64(st.stmt, 6, std::max<long long>(1, std::min<long long>(65536, maxBytes)));
+    sqlite3_bind_int64(st.stmt, 7, std::max<long long>(0, ttlSeconds));
+    bindText(st.stmt, 8, valueMode);
+    sqlite3_bind_int64(st.stmt, 9, std::max<long long>(1, std::min<long long>(100, versionedKeep)));
+    bindText(st.stmt, 10, now);
+    bindText(st.stmt, 11, now);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        error = sqlite3_errmsg(db_);
+        return false;
+    }
+    audit("human", "declare_state_key", key, "", scopeKind);
+    return true;
+}
+
+taskforge::Json MemoryStore::stateKeyInfo(const std::string& scopeId,
+                                          const std::string& key) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out = taskforge::Json::object();
+    if (!db_ || key.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT key,scope_kind,schema_json,schema_hash,max_bytes,ttl_seconds,"
+                       "value_mode,versioned_keep,updated_at FROM memory_state_key "
+                       "WHERE scope_id=? AND key=?", st, error)) {
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, key);
+    if (stepRetry(st.stmt) != SQLITE_ROW) return out;
+    out["key"] = columnText(st.stmt, 0);
+    out["scopeKind"] = columnText(st.stmt, 1);
+    taskforge::Json schema = parseJsonOrNull(columnText(st.stmt, 2));
+    out["schema"] = schema.is_object() ? schema : taskforge::Json::object();
+    out["schemaHash"] = columnText(st.stmt, 3);
+    out["maxBytes"] = columnInt(st.stmt, 4);
+    out["ttlSeconds"] = columnInt(st.stmt, 5);
+    out["valueMode"] = columnText(st.stmt, 6);
+    out["versionedKeep"] = columnInt(st.stmt, 7);
+    out["updatedAt"] = columnText(st.stmt, 8);
+    return out;
+}
+
+taskforge::Json MemoryStore::stateKeys(const std::string& scopeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out = taskforge::Json::array();
+    if (!db_) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT key,scope_kind,schema_json,schema_hash,max_bytes,ttl_seconds,"
+                       "value_mode,versioned_keep,updated_at FROM memory_state_key "
+                       "WHERE scope_id=? ORDER BY key", st, error)) {
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        taskforge::Json schema = parseJsonOrNull(columnText(st.stmt, 2));
+        out.push_back(taskforge::Json{{"key", columnText(st.stmt, 0)},
+                                      {"scopeKind", columnText(st.stmt, 1)},
+                                      {"schema", schema.is_object() ? schema : taskforge::Json::object()},
+                                      {"schemaHash", columnText(st.stmt, 3)},
+                                      {"maxBytes", columnInt(st.stmt, 4)},
+                                      {"ttlSeconds", columnInt(st.stmt, 5)},
+                                      {"valueMode", columnText(st.stmt, 6)},
+                                      {"versionedKeep", columnInt(st.stmt, 7)},
+                                      {"updatedAt", columnText(st.stmt, 8)}});
+    }
+    return out;
+}
+
+taskforge::Json MemoryStore::getState(const std::string& scopeId, const std::string& key,
+                                      const std::string& scopeOwner,
+                                      std::string& error) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out{{"ok", true}, {"key", key}, {"found", false}};
+    if (!db_ || key.empty() || scopeOwner.empty()) {
+        error = "chave ou escopo do estado ausente";
+        out["ok"] = false;
+        out["error"] = error;
+        return out;
+    }
+    const taskforge::Json info = stateKeyInfo(scopeId, key);
+    if (info.empty()) {
+        error = "chave de estado nao declarada: " + key;
+        out["ok"] = false;
+        out["error"] = error;
+        return out;
+    }
+    const std::string scopeKind = info.value("scopeKind", std::string());
+    Stmt st;
+    if (!prepare(db_, "SELECT value_json,version,schema_hash,COALESCE(expires_at,''),updated_at "
+                       "FROM memory_state WHERE scope_id=? AND scope_kind=? AND scope_owner=? AND key=?",
+                 st, error)) {
+        out["ok"] = false;
+        out["error"] = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, scopeKind);
+    bindText(st.stmt, 3, scopeOwner);
+    bindText(st.stmt, 4, key);
+    if (stepRetry(st.stmt) != SQLITE_ROW) return out;
+    const std::string expiresAt = columnText(st.stmt, 3);
+    if (!expiresAt.empty() && expiresAt <= nowIso()) {
+        out["expired"] = true;
+        return out;
+    }
+    taskforge::Json value = parseJsonOrNull(columnText(st.stmt, 0));
+    sanitizeJsonInPlace(value);
+    out["found"] = true;
+    out["value"] = value;
+    out["version"] = columnInt(st.stmt, 1);
+    out["stale"] = columnText(st.stmt, 2) != info.value("schemaHash", std::string());
+    out["untrusted"] = true;
+    out["scopeKind"] = scopeKind;
+    out["scopeOwner"] = scopeOwner;
+    out["expiresAt"] = expiresAt;
+    out["updatedAt"] = columnText(st.stmt, 4);
+    return out;
+}
+
+taskforge::Json MemoryStore::setState(const std::string& scopeId, const std::string& key,
+                                      const std::string& scopeOwner,
+                                      const taskforge::Json& value, bool hasExpected,
+                                      long long expectedVersion, std::string& error) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out{{"ok", false}, {"key", key}};
+    if (!db_ || key.empty() || scopeOwner.empty()) {
+        error = "chave ou escopo do estado ausente";
+        out["error"] = error;
+        return out;
+    }
+    const taskforge::Json info = stateKeyInfo(scopeId, key);
+    if (info.empty()) {
+        error = "chave de estado nao declarada: " + key;
+        out["error"] = error;
+        return out;
+    }
+    taskforge::Json cleanValue = value;
+    sanitizeJsonInPlace(cleanValue);
+    const std::string valueJson = cleanValue.dump();
+    const long long maxBytes = info.value("maxBytes", 16384LL);
+    if (static_cast<long long>(valueJson.size()) > maxBytes) {
+        error = "valor do estado excede o limite de bytes";
+        out["error"] = error;
+        return out;
+    }
+    const std::string scopeKind = info.value("scopeKind", std::string());
+    const std::string schemaHash = info.value("schemaHash", std::string());
+    Stmt current;
+    if (!prepare(db_, "SELECT version FROM memory_state WHERE scope_id=? AND scope_kind=? "
+                       "AND scope_owner=? AND key=?", current, error)) {
+        out["error"] = error;
+        return out;
+    }
+    bindText(current.stmt, 1, scopeId);
+    bindText(current.stmt, 2, scopeKind);
+    bindText(current.stmt, 3, scopeOwner);
+    bindText(current.stmt, 4, key);
+    const bool exists = stepRetry(current.stmt) == SQLITE_ROW;
+    const long long currentVersion = exists ? columnInt(current.stmt, 0) : 0;
+    if (exists) {
+        if (!hasExpected) {
+            error = "chave ja existe; informe expected_version para sobrescrever";
+            out["error"] = error;
+            out["conflict"] = true;
+            out["currentVersion"] = currentVersion;
+            return out;
+        }
+        if (expectedVersion != currentVersion) {
+            error = "versao desatualizada";
+            out["error"] = error;
+            out["conflict"] = true;
+            out["currentVersion"] = currentVersion;
+            return out;
+        }
+    } else if (hasExpected) {
+        error = "chave nova deve ser criada sem expected_version";
+        out["error"] = error;
+        out["conflict"] = true;
+        out["currentVersion"] = 0;
+        return out;
+    }
+    const long long newVersion = currentVersion + 1;
+    const long long ttlSeconds = info.value("ttlSeconds", 0LL);
+    const std::string expiresAt = ttlSeconds > 0 ? isoAfterSecondsImpl(ttlSeconds) : std::string();
+    Stmt st;
+    if (!prepare(db_, "INSERT INTO memory_state(scope_id,scope_kind,scope_owner,key,value_json,version,"
+                       "schema_hash,expires_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) "
+                       "ON CONFLICT(scope_id,scope_kind,scope_owner,key) DO UPDATE SET "
+                       "value_json=excluded.value_json,version=excluded.version,"
+                       "schema_hash=excluded.schema_hash,expires_at=excluded.expires_at,"
+                       "updated_at=excluded.updated_at", st, error)) {
+        out["error"] = error;
+        return out;
+    }
+    const std::string now = nowIso();
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, scopeKind);
+    bindText(st.stmt, 3, scopeOwner);
+    bindText(st.stmt, 4, key);
+    bindText(st.stmt, 5, valueJson);
+    sqlite3_bind_int64(st.stmt, 6, newVersion);
+    bindText(st.stmt, 7, schemaHash);
+    bindNullableText(st.stmt, 8, expiresAt);
+    bindText(st.stmt, 9, now);
+    bindText(st.stmt, 10, now);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        error = sqlite3_errmsg(db_);
+        out["error"] = error;
+        return out;
+    }
+
+    if (info.value("valueMode", std::string("replace")) == "versioned") {
+        Stmt hist;
+        if (prepare(db_, "INSERT INTO memory_state_history(id,scope_id,scope_kind,scope_owner,key,"
+                          "version,value_json,schema_hash,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                    hist, error)) {
+            bindText(hist.stmt, 1, newId("state"));
+            bindText(hist.stmt, 2, scopeId);
+            bindText(hist.stmt, 3, scopeKind);
+            bindText(hist.stmt, 4, scopeOwner);
+            bindText(hist.stmt, 5, key);
+            sqlite3_bind_int64(hist.stmt, 6, newVersion);
+            bindText(hist.stmt, 7, valueJson);
+            bindText(hist.stmt, 8, schemaHash);
+            bindText(hist.stmt, 9, now);
+            stepRetry(hist.stmt);
+        }
+        const long long keep = std::max<long long>(1, info.value("versionedKeep", 5LL));
+        Stmt prune;
+        if (prepare(db_, "DELETE FROM memory_state_history WHERE scope_id=? AND scope_kind=? "
+                          "AND scope_owner=? AND key=? AND version NOT IN (SELECT version FROM "
+                          "memory_state_history WHERE scope_id=? AND scope_kind=? AND scope_owner=? "
+                          "AND key=? ORDER BY version DESC LIMIT ?)", prune, error)) {
+            bindText(prune.stmt, 1, scopeId);
+            bindText(prune.stmt, 2, scopeKind);
+            bindText(prune.stmt, 3, scopeOwner);
+            bindText(prune.stmt, 4, key);
+            bindText(prune.stmt, 5, scopeId);
+            bindText(prune.stmt, 6, scopeKind);
+            bindText(prune.stmt, 7, scopeOwner);
+            bindText(prune.stmt, 8, key);
+            sqlite3_bind_int64(prune.stmt, 9, keep);
+            stepRetry(prune.stmt);
+        }
+    }
+    audit("runtime", "state_set", key, "", scopeOwner);
+    out["ok"] = true;
+    out["version"] = newVersion;
+    out["expiresAt"] = expiresAt;
+    out["schemaHash"] = schemaHash;
+    return out;
+}
+
+taskforge::Json MemoryStore::listState(const std::string& scopeId, const std::string& key,
+                                       const std::string& scopeOwner) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out{{"ok", true}, {"key", key}, {"found", false}};
+    if (!db_ || key.empty() || scopeOwner.empty()) {
+        out["ok"] = false;
+        out["error"] = "chave ou escopo do estado ausente";
+        return out;
+    }
+    const taskforge::Json info = stateKeyInfo(scopeId, key);
+    if (info.empty()) {
+        out["ok"] = false;
+        out["error"] = "chave de estado nao declarada: " + key;
+        return out;
+    }
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT version,schema_hash,COALESCE(expires_at,''),updated_at "
+                       "FROM memory_state WHERE scope_id=? AND scope_kind=? AND scope_owner=? AND key=?",
+                 st, error)) {
+        out["ok"] = false;
+        out["error"] = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, info.value("scopeKind", std::string()));
+    bindText(st.stmt, 3, scopeOwner);
+    bindText(st.stmt, 4, key);
+    if (stepRetry(st.stmt) != SQLITE_ROW) return out;
+    const std::string expiresAt = columnText(st.stmt, 2);
+    out["found"] = true;
+    out["version"] = columnInt(st.stmt, 0);
+    out["stale"] = columnText(st.stmt, 1) != info.value("schemaHash", std::string());
+    out["expiresAt"] = expiresAt;
+    out["expired"] = !expiresAt.empty() && expiresAt <= nowIso();
+    out["scopeKind"] = info.value("scopeKind", std::string());
+    out["scopeOwner"] = scopeOwner;
+    out["updatedAt"] = columnText(st.stmt, 3);
+    return out;
+}
+
+taskforge::Json MemoryStore::stateHistory(const std::string& scopeId, const std::string& key,
+                                          const std::string& scopeOwner, size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out{{"ok", true}, {"key", key}, {"versions", taskforge::Json::array()}};
+    const taskforge::Json info = stateKeyInfo(scopeId, key);
+    if (info.empty()) {
+        out["ok"] = false;
+        out["error"] = "chave de estado nao declarada: " + key;
+        return out;
+    }
+    if (info.value("valueMode", std::string("replace")) != "versioned") {
+        out["ok"] = false;
+        out["error"] = "chave nao e versionada";
+        return out;
+    }
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT version,value_json,schema_hash,created_at FROM memory_state_history "
+                       "WHERE scope_id=? AND scope_kind=? AND scope_owner=? AND key=? "
+                       "ORDER BY version DESC LIMIT ?", st, error)) {
+        out["ok"] = false;
+        out["error"] = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, info.value("scopeKind", std::string()));
+    bindText(st.stmt, 3, scopeOwner);
+    bindText(st.stmt, 4, key);
+    sqlite3_bind_int(st.stmt, 5, static_cast<int>(std::min<size_t>(limit, 100)));
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        taskforge::Json value = parseJsonOrNull(columnText(st.stmt, 1));
+        sanitizeJsonInPlace(value);
+        out["versions"].push_back(taskforge::Json{{"version", columnInt(st.stmt, 0)},
+                                                  {"value", value},
+                                                  {"schemaHash", columnText(st.stmt, 2)},
+                                                  {"createdAt", columnText(st.stmt, 3)},
+                                                  {"untrusted", true}});
+    }
+    return out;
+}
+
 void MemoryStore::clearScopeData(const std::string& scopeId) {
     purge(scopeId, MemoryPurgeOptions{false, false});
 }
@@ -836,6 +1272,9 @@ bool MemoryStore::purge(const std::string& scopeId, const MemoryPurgeOptions& op
                    "target IN (SELECT id FROM memory_episode WHERE scope_id=?)", 3);
     }
     execScoped("DELETE FROM memory_usage WHERE scope_id=?", 1);
+    execScoped("DELETE FROM memory_state_history WHERE scope_id=?", 1);
+    execScoped("DELETE FROM memory_state WHERE scope_id=?", 1);
+    execScoped("DELETE FROM memory_state_key WHERE scope_id=?", 1);
     execScoped("DELETE FROM memory_working WHERE scope_id=?", 1);
     execScoped("DELETE FROM memory_validation WHERE scope_id=?", 1);
     execScoped("DELETE FROM memory_embedding WHERE scope_id=?", 1);

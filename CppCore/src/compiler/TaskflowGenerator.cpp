@@ -385,7 +385,13 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
             tools.push_back(name);
         };
         addTool("memory_search");
-        if (memoryMode == "learn") addTool("memory_propose_lesson");
+        addTool("memory_state_get");
+        addTool("memory_state_list");
+        addTool("memory_state_history");
+        if (memoryMode == "learn") {
+            addTool("memory_propose_lesson");
+            addTool("memory_state_set");
+        }
     }
     spec["tools"] = tools;
 

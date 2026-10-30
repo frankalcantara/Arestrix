@@ -1477,6 +1477,8 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(modeSrc.find("memory.buildBrief(projectId, arx_item_id, std::vector<std::string>{\"svg_typography\"}, "
                        "std::vector<std::string>{}, 600, true, false, &arx_brief_info, \"svg_review\")") != std::string::npos);
     CHECK(modeSrc.find("\"memory_propose_lesson\"") != std::string::npos);
+    CHECK(modeSrc.find("\"memory_state_set\"") != std::string::npos);
+    CHECK(modeSrc.find("\"memory_state_get\"") != std::string::npos);
     CHECK(modeSrc.find("const bool arx_mem_persistent = arx_mem_active && (arx_mem_learns || arx_mem_has_db);") != std::string::npos);
 
     json consultSchema = modeSchema;
@@ -1487,6 +1489,8 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(consultSrc.find("\"memoryEnabled\":true") != std::string::npos);
     CHECK(consultSrc.find("\"memoryWriteEnabled\":false") != std::string::npos);
     CHECK(consultSrc.find("\"memory_propose_lesson\"") == std::string::npos);
+    CHECK(consultSrc.find("\"memory_state_set\"") == std::string::npos);
+    CHECK(consultSrc.find("\"memory_state_get\"") != std::string::npos);
     CHECK(consultSrc.find("catch (const std::exception& arx_mem_err)") == std::string::npos);
 
     json offModeSchema = modeSchema;
@@ -3087,6 +3091,117 @@ TEST(memory_playbook_gate_rejects_repeated_input) {
     }
     CHECK(memory.listPlaybooks(pId, "same_task", "active", 10).size() == 0);
 
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_state_declared_cas_scopes_and_history) {
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_memory_state_" + stamp);
+    const std::string pId = "state-test-" + stamp;
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(pId, (root / "telemetry.db").string()));
+
+    const taskforge::Json schema = taskforge::Json::parse(R"({
+        "type":"object",
+        "properties":{"n":{"type":"integer","minimum":1},"label":{"type":"string","maxLength":20}},
+        "required":["n"],
+        "additionalProperties":false
+    })");
+
+    std::string error;
+    CHECK(memory.declareStateKey(pId, "cursor", "project", schema, 4096, 0, "replace", 5, error));
+    CHECK(error.empty());
+    CHECK(memory.declareStateKey(pId, "item_cursor", "item", schema, 4096, 0, "replace", 5, error));
+    CHECK(memory.declareStateKey(pId, "versioned", "task_type", schema, 4096, 0, "versioned", 2, error));
+    CHECK(error.empty());
+
+    // Chave nao declarada e recusada.
+    CHECK(!memory.getState(pId, "missing", "item-a", "task-a", error).value("ok", true));
+    error.clear();
+
+    // Schema invalido nao altera o valor.
+    CHECK(!memory.setState(pId, "cursor", "item-a", "task-a",
+                           taskforge::Json::parse(R"({"n":0})"), false, 0, error).value("ok", true));
+    error.clear();
+
+    // Create-only, depois CAS.
+    auto created = memory.setState(pId, "cursor", "item-a", "task-a",
+                                   taskforge::Json::parse(R"({"n":1})"), false, 0, error);
+    CHECK(created.value("ok", false));
+    CHECK(created.value("version", 0LL) == 1);
+    auto conflict = memory.setState(pId, "cursor", "item-a", "task-a",
+                                    taskforge::Json::parse(R"({"n":2})"), false, 0, error);
+    CHECK(!conflict.value("ok", true));
+    CHECK(conflict.value("currentVersion", 0LL) == 1);
+    auto updated = memory.setState(pId, "cursor", "item-a", "task-a",
+                                   taskforge::Json::parse(R"({"n":2})"), true, 1, error);
+    CHECK(updated.value("ok", false));
+    CHECK(updated.value("version", 0LL) == 2);
+
+    // Mudanca de schema marca o valor antigo como stale.
+    CHECK(memory.declareStateKey(pId, "stale_key", "project", schema, 4096, 0, "replace", 5, error));
+    CHECK(memory.setState(pId, "stale_key", "item-a", "task-a",
+                          taskforge::Json::parse(R"({"n":1})"), false, 0, error).value("ok", false));
+    taskforge::Json changedSchema = schema;
+    changedSchema["properties"]["extra"] = taskforge::Json::parse(R"({"type":"string"})");
+    CHECK(memory.declareStateKey(pId, "stale_key", "project", changedSchema, 4096, 0, "replace", 5, error));
+    CHECK(memory.getState(pId, "stale_key", "item-a", "task-a", error).value("stale", false));
+
+    // Escopo item nao vaza entre itens.
+    CHECK(memory.setState(pId, "item_cursor", "item-a", "task-a",
+                          taskforge::Json::parse(R"({"n":7})"), false, 0, error).value("ok", false));
+    CHECK(!memory.getState(pId, "item_cursor", "item-b", "task-a", error).value("found", true));
+    CHECK(memory.getState(pId, "item_cursor", "item-a", "task-a", error).value("found", false));
+
+    // Lista nao devolve valores.
+    const auto list = memory.listState(pId, "item-a", "task-a");
+    CHECK(list.value("ok", false));
+    for (const auto& item : list["keys"]) {
+        CHECK(!item.contains("value"));
+    }
+
+    // Versionamento com poda K=2.
+    CHECK(memory.setState(pId, "versioned", "item-a", "task-a",
+                          taskforge::Json::parse(R"({"n":1})"), false, 0, error).value("ok", false));
+    CHECK(memory.setState(pId, "versioned", "item-a", "task-a",
+                          taskforge::Json::parse(R"({"n":2})"), true, 1, error).value("ok", false));
+    CHECK(memory.setState(pId, "versioned", "item-a", "task-a",
+                          taskforge::Json::parse(R"({"n":3})"), true, 2, error).value("ok", false));
+    const auto history = memory.stateHistory(pId, "versioned", "item-a", "task-a", 10);
+    CHECK(history.value("ok", false));
+    CHECK(history["versions"].size() == 2);
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_state_ttl_expires_on_read) {
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_memory_ttl_" + stamp);
+    const std::string pId = "state-ttl-" + stamp;
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, (root / "memory.db").string()));
+    std::string error;
+    CHECK(memory.declareStateKey(pId, "short", "project", taskforge::Json::object(),
+                                 1024, 1, "replace", 5, error));
+    CHECK(memory.setState(pId, "short", "", "",
+                          taskforge::Json::parse(R"({"v":1})"), false, 0, error).value("ok", false));
+    CHECK(memory.getState(pId, "short", "", "", error).value("found", false));
+    std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+    const auto expired = memory.getState(pId, "short", "", "", error);
+    CHECK(!expired.value("found", true));
+    CHECK(expired.value("expired", false));
     memory.closeProject(pId);
     std::error_code ec;
     fs::remove_all(root, ec);

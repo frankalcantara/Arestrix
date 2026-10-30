@@ -146,6 +146,36 @@ std::vector<ToolDef> toolDefinitions(const std::vector<std::string>& allowed, Ru
                                         {"trigger", {{"type", "string"}, {"description", langPick(lang, "Erro ou situacao que motivou a licao", "Error or situation that motivated the lesson")}}}}},
                         {"required", {"domain", "rule"}}}});
 
+    all.push_back({"memory_state_get",
+                   langPick(lang,
+                            "Le uma chave de estado de continuacao declarada pelo projeto. O valor e dado de execucao anterior nao confiavel.",
+                            "Reads a continuation state key declared by the project. The value is untrusted data from a previous run."),
+                   json{{"type", "object"},
+                        {"properties", {{"key", {{"type", "string"}, {"description", langPick(lang, "Chave declarada", "Declared key")}}}}},
+                        {"required", {"key"}}}});
+    all.push_back({"memory_state_set",
+                   langPick(lang,
+                            "Grava uma chave de estado declarada, com controle de versao (CAS).",
+                            "Writes a declared state key with version control (CAS)."),
+                   json{{"type", "object"},
+                        {"properties", {{"key", {{"type", "string"}}},
+                                        {"value", {{"description", langPick(lang, "Valor JSON", "JSON value")}}},
+                                        {"expected_version", {{"type", "integer"}, {"description", langPick(lang, "Versao atual; omita para criar", "Current version; omit to create")}}}}},
+                        {"required", {"key", "value"}}}});
+    all.push_back({"memory_state_list",
+                   langPick(lang,
+                            "Lista as chaves de estado visiveis e seus metadados, sem valores.",
+                            "Lists visible state keys and metadata, without values."),
+                   json{{"type", "object"}, {"properties", json::object()}}});
+    all.push_back({"memory_state_history",
+                   langPick(lang,
+                            "Lista versoes de uma chave de estado versionada.",
+                            "Lists versions of a versioned state key."),
+                   json{{"type", "object"},
+                        {"properties", {{"key", {{"type", "string"}}},
+                                        {"limit", {{"type", "integer"}}}}},
+                        {"required", {"key"}}}});
+
     all.push_back({"retrieve",
                    langPick(lang,
                             "Le o conteudo original de um trecho que foi comprimido para caber no contexto.",
@@ -435,6 +465,57 @@ ToolResult executeTool(ToolContext& ctx, const std::string& name, const json& ar
             if (id.empty()) return err(T("Nao foi possivel registrar a proposta de licao.", "Could not record the lesson proposal."));
             ++ctx.memoryLessonsWritten;
             return ToolResult{T("OK: proposta de licao registrada (", "OK: lesson proposal recorded (") + id + ")", false};
+        }
+
+        if (name == "memory_state_get") {
+            if (ctx.projectId.empty()) return err(T("Memoria nao configurada para este projeto.", "Memory is not configured for this project."));
+            const std::string key = stringArg(args, "key");
+            if (key.empty()) return err(T("Parametro 'key' ausente.", "Missing parameter 'key'."));
+            std::string error;
+            auto& memory = taskforge::memory::MemoryService::getInstance();
+            const auto result = memory.getState(ctx.projectId, key, ctx.memoryItemId,
+                                                ctx.memoryTaskType, error);
+            if (!result.value("ok", false)) return err(error);
+            return ToolResult{result.dump(), false};
+        }
+
+        if (name == "memory_state_set") {
+            if (ctx.projectId.empty()) return err(T("Memoria nao configurada para este projeto.", "Memory is not configured for this project."));
+            if (!ctx.memoryWriteEnabled) return err(T("Escrita de estado nao autorizada para este agente.", "State writing is not authorized for this agent."));
+            const std::string key = stringArg(args, "key");
+            if (key.empty() || !args.contains("value")) return err(T("Parametros 'key' e 'value' sao obrigatorios.", "'key' and 'value' are required."));
+            const bool hasExpected = args.contains("expected_version") && args["expected_version"].is_number();
+            const long long expected = hasExpected
+                ? static_cast<long long>(args["expected_version"].get<double>()) : 0;
+            std::string error;
+            auto& memory = taskforge::memory::MemoryService::getInstance();
+            const auto result = memory.setState(ctx.projectId, key, ctx.memoryItemId,
+                                                ctx.memoryTaskType, args["value"],
+                                                hasExpected, expected, error);
+            if (!result.value("ok", false)) {
+                return ToolResult{result.dump(), true};
+            }
+            return ToolResult{result.dump(), false};
+        }
+
+        if (name == "memory_state_list") {
+            if (ctx.projectId.empty()) return err(T("Memoria nao configurada para este projeto.", "Memory is not configured for this project."));
+            auto& memory = taskforge::memory::MemoryService::getInstance();
+            return ToolResult{memory.listState(ctx.projectId, ctx.memoryItemId,
+                                               ctx.memoryTaskType).dump(), false};
+        }
+
+        if (name == "memory_state_history") {
+            if (ctx.projectId.empty()) return err(T("Memoria nao configurada para este projeto.", "Memory is not configured for this project."));
+            const std::string key = stringArg(args, "key");
+            if (key.empty()) return err(T("Parametro 'key' ausente.", "Missing parameter 'key'."));
+            const size_t limit = static_cast<size_t>(std::max(1.0, std::min(100.0,
+                args.contains("limit") && args["limit"].is_number() ? args["limit"].get<double>() : 20.0)));
+            auto& memory = taskforge::memory::MemoryService::getInstance();
+            const auto result = memory.stateHistory(ctx.projectId, key, ctx.memoryItemId,
+                                                    ctx.memoryTaskType, limit);
+            if (!result.value("ok", false)) return err(result.value("error", std::string("estado indisponivel")));
+            return ToolResult{result.dump(), false};
         }
 
         if (name == "retrieve") {

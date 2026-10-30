@@ -200,6 +200,28 @@ public:
     bool unpromotePlaybook(const std::string& projectId, const std::string& playbookId,
                            const std::string& reason, std::string& error);
 
+    // D1 v2: estado de continuacao declarado. As ferramentas do agente nunca
+    // criam chaves; a declaracao e do projeto/UI/CLI.
+    bool declareStateKey(const std::string& projectId, const std::string& key,
+                         const std::string& scopeKind, const taskforge::Json& schema,
+                         long long maxBytes, long long ttlSeconds,
+                         const std::string& valueMode, long long versionedKeep,
+                         std::string& error);
+    taskforge::Json stateKeyInfo(const std::string& projectId, const std::string& key);
+    taskforge::Json stateKeys(const std::string& projectId);
+    taskforge::Json getState(const std::string& projectId, const std::string& key,
+                             const std::string& itemId, const std::string& taskType,
+                             std::string& error);
+    taskforge::Json setState(const std::string& projectId, const std::string& key,
+                             const std::string& itemId, const std::string& taskType,
+                             const taskforge::Json& value, bool hasExpected,
+                             long long expectedVersion, std::string& error);
+    taskforge::Json listState(const std::string& projectId, const std::string& itemId,
+                              const std::string& taskType);
+    taskforge::Json stateHistory(const std::string& projectId, const std::string& key,
+                                 const std::string& itemId, const std::string& taskType,
+                                 size_t limit);
+
     // Estado para UI/export.
     taskforge::Json toJson(const std::string& projectId);
     taskforge::Json toCognitiveJson(const std::string& projectId);

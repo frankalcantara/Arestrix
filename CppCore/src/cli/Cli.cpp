@@ -486,13 +486,14 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory reindex --project <pasta> [--model M] [--base-url URL] [--force] [--json]\n"
                      "arestrix-cli memory consolidate --project <pasta> [--dormant-days N] [--no-decay] [--no-dedup] [--no-generalize] [--json]\n"
                      "arestrix-cli memory workspace init|status --project <pasta> [--workspace-id ID] [--json]\n"
+                     "arestrix-cli memory state list|declare|get|set --project <pasta> [--key K] [--scope project|task_type|item] [--schema JSON] [--value JSON] [--expected N] [--item ID] [--task-type T] [--json]\n"
                      "arestrix-cli memory promote --project <pasta> --kind lesson|fact|playbook --id ID --evidence texto [--workspace-id ID] [--json]\n";
         return args.size() < 2 ? kExitUsage : 0;
     }
     const std::string command = args[1];
     if (command != "report" && command != "prune" && command != "purge" && command != "proposals" &&
         command != "embeddings" && command != "reindex" && command != "consolidate" &&
-        command != "workspace" && command != "promote") {
+        command != "workspace" && command != "state" && command != "promote") {
         std::cerr << "arestrix-cli memory: comando desconhecido: " << command << "\n";
         return kExitUsage;
     }
@@ -541,6 +542,18 @@ int runMemory(const std::vector<std::string>& args) {
             return kExitUsage;
         }
         optionStart = 3;
+    } else if (command == "state") {
+        if (args.size() < 3) {
+            std::cerr << "arestrix-cli memory state: informe list|declare|get|set\n";
+            return kExitUsage;
+        }
+        embeddingAction = args[2];
+        if (embeddingAction != "list" && embeddingAction != "declare" &&
+            embeddingAction != "get" && embeddingAction != "set") {
+            std::cerr << "arestrix-cli memory state: acao desconhecida: " << embeddingAction << "\n";
+            return kExitUsage;
+        }
+        optionStart = 3;
     }
 
     Options opt;
@@ -565,6 +578,18 @@ int runMemory(const std::vector<std::string>& args) {
     std::string promoteKind;
     std::string promoteId;
     std::string promoteEvidence;
+    std::string stateKey;
+    std::string stateScope = "project";
+    std::string stateSchema = "{}";
+    std::string stateValue;
+    std::string stateItem;
+    std::string stateTaskType;
+    long long stateMaxBytes = 16384;
+    long long stateTtl = 0;
+    long long stateKeep = 5;
+    std::string stateMode = "replace";
+    bool stateHasExpected = false;
+    long long stateExpected = 0;
     for (size_t i = optionStart; i < args.size(); ++i) {
         const std::string& a = args[i];
         if (a == "--json") opt.json = true;
@@ -607,6 +632,50 @@ int runMemory(const std::vector<std::string>& args) {
         else if (a == "--evidence") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --evidence\n"; return kExitUsage; }
             promoteEvidence = args[++i];
+        }
+        else if (a == "--key") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --key\n"; return kExitUsage; }
+            stateKey = args[++i];
+        }
+        else if (a == "--scope") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --scope\n"; return kExitUsage; }
+            stateScope = args[++i];
+        }
+        else if (a == "--schema") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --schema\n"; return kExitUsage; }
+            stateSchema = args[++i];
+        }
+        else if (a == "--value") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --value\n"; return kExitUsage; }
+            stateValue = args[++i];
+        }
+        else if (a == "--item") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --item\n"; return kExitUsage; }
+            stateItem = args[++i];
+        }
+        else if (a == "--task-type") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --task-type\n"; return kExitUsage; }
+            stateTaskType = args[++i];
+        }
+        else if (a == "--max-bytes") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --max-bytes\n"; return kExitUsage; }
+            try { stateMaxBytes = std::stoll(args[++i]); } catch (...) { std::cerr << "--max-bytes invalido\n"; return kExitUsage; }
+        }
+        else if (a == "--ttl") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --ttl\n"; return kExitUsage; }
+            try { stateTtl = std::stoll(args[++i]); } catch (...) { std::cerr << "--ttl invalido\n"; return kExitUsage; }
+        }
+        else if (a == "--keep") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --keep\n"; return kExitUsage; }
+            try { stateKeep = std::stoll(args[++i]); } catch (...) { std::cerr << "--keep invalido\n"; return kExitUsage; }
+        }
+        else if (a == "--mode") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --mode\n"; return kExitUsage; }
+            stateMode = args[++i];
+        }
+        else if (a == "--expected") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --expected\n"; return kExitUsage; }
+            try { stateExpected = std::stoll(args[++i]); stateHasExpected = true; } catch (...) { std::cerr << "--expected invalido\n"; return kExitUsage; }
         }
         else if (a == "--status") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --status\n"; return kExitUsage; }
@@ -712,7 +781,7 @@ int runMemory(const std::vector<std::string>& args) {
 
     if (command != "report") {
         std::error_code ec;
-        if (!fs::is_regular_file(dbPath, ec)) {
+        if (command != "state" && !fs::is_regular_file(dbPath, ec)) {
             std::cerr << "Banco de memoria nao encontrado: " << dbPath.string() << "\n";
             return kExitConfig;
         }
@@ -721,6 +790,70 @@ int runMemory(const std::vector<std::string>& args) {
         if (!memory.configure(projectId, true, dbPath.string())) {
             std::cerr << "Falha ao abrir o banco de memoria: " << dbPath.string() << "\n";
             return kExitConfig;
+        }
+
+        if (command == "state") {
+            taskforge::Json out = taskforge::Json::object();
+            std::string stateError;
+            if (embeddingAction == "list") {
+                out["ok"] = true;
+                out["keys"] = memory.stateKeys(projectId);
+            } else if (embeddingAction == "declare") {
+                if (stateKey.empty()) {
+                    std::cerr << "arestrix-cli memory state declare: informe --key\n";
+                    return kExitUsage;
+                }
+                taskforge::Json schema = taskforge::Json::object();
+                try {
+                    schema = taskforge::Json::parse(stateSchema);
+                } catch (...) {
+                    std::cerr << "--schema invalido (JSON)\n";
+                    return kExitUsage;
+                }
+                out["ok"] = memory.declareStateKey(projectId, stateKey, stateScope, schema,
+                                                   stateMaxBytes, stateTtl, stateMode,
+                                                   stateKeep, stateError);
+                out["key"] = stateKey;
+            } else if (embeddingAction == "get") {
+                if (stateKey.empty()) {
+                    std::cerr << "arestrix-cli memory state get: informe --key\n";
+                    return kExitUsage;
+                }
+                out = memory.getState(projectId, stateKey, stateItem, stateTaskType, stateError);
+            } else if (embeddingAction == "set") {
+                if (stateKey.empty() || stateValue.empty()) {
+                    std::cerr << "arestrix-cli memory state set: informe --key e --value\n";
+                    return kExitUsage;
+                }
+                taskforge::Json value;
+                try {
+                    value = taskforge::Json::parse(stateValue);
+                } catch (...) {
+                    value = taskforge::Json(stateValue);
+                }
+                out = memory.setState(projectId, stateKey, stateItem, stateTaskType, value,
+                                      stateHasExpected, stateExpected, stateError);
+            }
+            if (!stateError.empty()) out["error"] = stateError;
+            if (opt.json) {
+                std::cout << out.dump(2) << "\n";
+            } else if (out.value("ok", false)) {
+                if (embeddingAction == "list") {
+                    std::cout << "Chaves de estado: " << out["keys"].size() << "\n";
+                    for (const auto& item : out["keys"]) {
+                        std::cout << "  " << item.value("key", std::string())
+                                  << " [" << item.value("scopeKind", std::string()) << "]"
+                                  << " schema=" << item.value("schemaHash", std::string()).substr(0, 12)
+                                  << "\n";
+                    }
+                } else {
+                    std::cout << "OK: " << stateKey
+                              << " versao " << out.value("version", 0LL) << "\n";
+                }
+            } else {
+                std::cerr << "Falha: " << out.value("error", stateError) << "\n";
+            }
+            return out.value("ok", false) ? 0 : kExitConfig;
         }
 
         if (command == "consolidate") {

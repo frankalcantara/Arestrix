@@ -56,6 +56,7 @@ struct ToolContext {
     std::string projectId;              // projeto da memoria (MemoryService)
     std::string runId;                  // execucao corrente (memory_hit)
     std::string memoryItemId = "pipeline";
+    std::string memoryTaskType;
     bool memoryWriteEnabled = false;
     std::vector<std::string> memoryDomains;
     int memoryMaxLessonsPerRun = 20;

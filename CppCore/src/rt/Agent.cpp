@@ -313,8 +313,10 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         spec.memoryEnabled = false;
         spec.memoryContext.clear();
         spec.memoryWriteEnabled = false;
-        spec.tools.erase(std::remove(spec.tools.begin(), spec.tools.end(), "memory_search"), spec.tools.end());
-        spec.tools.erase(std::remove(spec.tools.begin(), spec.tools.end(), "memory_propose_lesson"), spec.tools.end());
+        for (const char* tool : {"memory_search", "memory_propose_lesson", "memory_state_get",
+                                 "memory_state_set", "memory_state_list", "memory_state_history"}) {
+            spec.tools.erase(std::remove(spec.tools.begin(), spec.tools.end(), tool), spec.tools.end());
+        }
     }
     const std::string loopKey = runKey.empty() ? nodeId : runKey;
     const std::string runId = currentRunId(nodeId);
@@ -449,6 +451,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     tctx.projectId = spec.memoryProjectId;
     tctx.runId = runId;
     tctx.memoryItemId = itemId;
+    tctx.memoryTaskType = !spec.memoryTaskType.empty() ? spec.memoryTaskType : nodeId;
     tctx.memoryWriteEnabled = spec.memoryWriteEnabled;
     tctx.memoryDomains = spec.memoryDomains;
     tctx.memoryMaxLessonsPerRun = spec.memoryMaxLessonsPerRun;
