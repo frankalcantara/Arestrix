@@ -1,4 +1,5 @@
 #include "MemoryStore.hpp"
+#include "MemoryPredicates.hpp"
 #include "MemorySanitizer.hpp"
 
 #include <algorithm>
@@ -2778,6 +2779,25 @@ bool MemoryStore::promoteProposal(const std::string& scopeId, const std::string&
             bindText(existing.stmt, 4, predicate);
             if (stepRetry(existing.stmt) == SQLITE_ROW) {
                 promoted = columnText(existing.stmt, 0);
+            }
+        }
+        if (promoted.empty() && isSingleValuedPredicate(predicate)) {
+            // C5: um predicado funcional aceita um unico valor ativo. O valor
+            // anterior e encerrado, nao apagado, e fica no historico.
+            Stmt previous;
+            std::vector<std::string> previousIds;
+            if (prepare(db_, "SELECT id FROM memory_edge WHERE scope_id=? AND src_id=? AND relation=? "
+                               "AND status='active' AND (dst_id IS NULL OR dst_id<>?)", previous, error)) {
+                bindText(previous.stmt, 1, scopeId);
+                bindText(previous.stmt, 2, subjectId);
+                bindText(previous.stmt, 3, predicate);
+                bindText(previous.stmt, 4, objectId);
+                while (stepRetry(previous.stmt) == SQLITE_ROW) {
+                    previousIds.push_back(columnText(previous.stmt, 0));
+                }
+            }
+            for (const auto& previousId : previousIds) {
+                invalidateEdge(previousId, proposal.createdAt, "single_valued_predicate", "promotion");
             }
         }
         if (promoted.empty()) {

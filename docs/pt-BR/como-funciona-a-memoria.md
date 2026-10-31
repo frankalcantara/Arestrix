@@ -94,6 +94,12 @@ distintos** entre as últimas 20 execuções validadas do mesmo `task_type`, val
 máximo **1 promoção por `task_type` em 24h**. Duas falhas consecutivas ou taxa acima de 30% em 10
 execuções validadas devolvem o playbook a candidato. `unpromote` está disponível na API.
 
+Fatos também têm **cardinalidade de predicado**. Predicados de acumulação — `USES`, `USES_TOOL`,
+`PRODUCES`, `READS`, `WRITES`, `TOUCHES`, `CITES`, `INCLUDES`, `TAGGED_WITH`, `HAS`, `DEPENDS_ON` —
+aceitam vários objetos ativos. Predicados funcionais e desconhecidos são single-valued: promover um
+novo valor encerra o anterior (`superseded`, com histórico), em vez de deixar dois valores ativos.
+O detector de contradições ignora predicados multi-valued.
+
 ## 6. Ferramentas do agente
 
 | Ferramenta | Efeito |

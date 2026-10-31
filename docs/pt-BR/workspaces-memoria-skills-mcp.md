@@ -123,7 +123,8 @@ protocolo completo.
 
 Playbooks só ativam com validação independente: 3 `input_hash` distintos nas últimas 20 execuções
 validadas, validador estável e 1 promoção por `task_type` em 24h. Falhas de infraestrutura não viram
-lição; `task_max_turns` é falha da tarefa.
+lição; `task_max_turns` é falha da tarefa. Fatos têm predicados single-valued (funcionais) ou
+multi-valued (`USES`, `PRODUCES` etc.), evitando sobrescrita acidental e falsos conflitos.
 
 Workspace e instituição continuam disponíveis para conhecimento promovido e compartilhado. A
 promoção é explícita, exige evidência e é auditada. O projeto lê o workspace autorizado; o

@@ -93,6 +93,12 @@ and at most **1 promotion per `task_type` in 24h**. Two consecutive failures or 
 failures in 10 validated runs return the playbook to candidate. `unpromote` is available through the
 API.
 
+Facts also have **predicate cardinality**. Accumulation predicates — `USES`, `USES_TOOL`,
+`PRODUCES`, `READS`, `WRITES`, `TOUCHES`, `CITES`, `INCLUDES`, `TAGGED_WITH`, `HAS`, `DEPENDS_ON` —
+accept multiple active objects. Functional and unknown predicates are single-valued: promoting a
+new value ends the previous one (`superseded`, with history) instead of leaving two active values.
+The contradiction detector ignores multi-valued predicates.
+
 ## 6. Agent tools
 
 | Tool | Effect |

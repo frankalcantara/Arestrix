@@ -212,6 +212,7 @@ add_library(arestrix_core STATIC
   ${SRC}/memory/MemoryStore.cpp
   ${SRC}/memory/MemoryService.cpp
   ${SRC}/memory/MemoryStateSchema.cpp
+  ${SRC}/memory/MemoryPredicates.cpp
   ${SRC}/project/OpenableFiles.cpp
   ${SRC}/libraries/GitHubSource.cpp
   ${SRC}/project/GitSyncService.cpp

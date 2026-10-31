@@ -30,6 +30,7 @@
 #include "memory/MemoryInstitutionApi.hpp"
 #include "memory/MemoryInstitutionService.hpp"
 #include "memory/MemoryPlaybookCompiler.hpp"
+#include "memory/MemoryPredicates.hpp"
 #include "memory/MemoryRanker.hpp"
 #include "memory/MemoryVectorIndex.hpp"
 #include "platform/Process.hpp"
@@ -3282,6 +3283,64 @@ TEST(memory_state_ttl_expires_on_read) {
     memory.closeProject(pId);
     std::error_code ec;
     fs::remove_all(root, ec);
+}
+
+TEST(memory_predicate_cardinality_controls_fact_overwrite) {
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::isMultiValuedPredicate;
+    using taskforge::memory::isSingleValuedPredicate;
+    namespace fs = std::filesystem;
+
+    CHECK(isSingleValuedPredicate("PREFERS"));
+    CHECK(isSingleValuedPredicate("default_model"));
+    CHECK(isMultiValuedPredicate("USES"));
+    CHECK(isMultiValuedPredicate("PRODUCES"));
+
+    const fs::path dir = makeTempDir("memory-predicates");
+    MemoryStore store((dir / "memory.db").string());
+    std::string error;
+    CHECK(store.open(error));
+    const std::string scope = "project:predicates";
+    CHECK(store.ensureScope(scope, "project", "", "predicates"));
+
+    auto promoteFact = [&](const std::string& subject, const std::string& predicate,
+                           const std::string& object) {
+        const std::string proposal = store.recordProposal(
+            scope, "fact",
+            taskforge::Json{{"subject", subject}, {"predicate", predicate}, {"object", object}},
+            "", taskforge::Json::array({taskforge::Json{{"kind", "test"}}}), 0.8);
+        std::string promoted;
+        std::string promoteError;
+        CHECK(!proposal.empty());
+        CHECK(store.promoteProposal(scope, proposal, "test", promoteError, &promoted));
+        CHECK(promoteError.empty());
+        return promoted;
+    };
+
+    const std::string dark = promoteFact("editor", "PREFERS", "dark");
+    const std::string light = promoteFact("editor", "PREFERS", "light");
+    CHECK(!dark.empty() && !light.empty());
+    taskforge::memory::MemoryEdgeRecord darkEdge;
+    CHECK(store.getEdge(scope, dark, darkEdge));
+    CHECK(darkEdge.status == "superseded");
+
+    size_t preferredActive = 0;
+    for (const auto& edge : store.listEdges(scope, "active")) {
+        if (edge.relation == "PREFERS") ++preferredActive;
+    }
+    CHECK(preferredActive == 1);
+
+    promoteFact("editor", "USES", "read");
+    promoteFact("editor", "USES", "write");
+    size_t usesActive = 0;
+    for (const auto& edge : store.listEdges(scope, "active")) {
+        if (edge.relation == "USES") ++usesActive;
+    }
+    CHECK(usesActive == 2);
+
+    store.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
 }
 
 TEST(memory_failure_classification_uses_enum_not_text) {

@@ -1,4 +1,5 @@
 #include "MemoryConsolidator.hpp"
+#include "MemoryPredicates.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -256,6 +257,9 @@ void detectFactContradictions(MemoryStore& store, const std::string& scope,
     std::map<std::string, std::vector<EdgeView>> groups;
     for (auto& view : views) {
         if (isLesson(view.edge) || isMarker(view.edge)) continue;
+        // C5: predicados multi-valued podem ter varios objetos legitimos e
+        // nao sao contradicoes entre si.
+        if (isMultiValuedPredicate(view.edge.relation)) continue;
         const std::string key = normalizeMemoryKey(view.srcName) + "|" +
                                 normalizeMemoryKey(view.edge.relation);
         groups[key].push_back(std::move(view));

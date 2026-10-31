@@ -122,7 +122,8 @@ protocol.
 
 Playbooks activate only with independent validation: 3 distinct `input_hash` values in the last 20
 validated runs, a stable validator and 1 promotion per `task_type` in 24h. Infrastructure failures
-do not become lessons; `task_max_turns` is a task failure.
+do not become lessons; `task_max_turns` is a task failure. Facts use single-valued (functional) or
+multi-valued (`USES`, `PRODUCES`, etc.) predicates, avoiding accidental overwrite and false conflicts.
 
 Workspace and institution remain available for promoted and shared knowledge. Promotion is
 explicit, evidence-backed and audited. The project reads authorized workspace knowledge; the
