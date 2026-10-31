@@ -1,0 +1,10 @@
+{
+  "projectId": "memoria-baseline",
+  "name": "Memoria Baseline",
+  "globalDefaults": {
+    "memory": {
+      "enabled": false,
+      "persistent": false
+    }
+  }
+}

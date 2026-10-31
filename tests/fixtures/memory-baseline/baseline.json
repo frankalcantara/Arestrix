@@ -1,0 +1,203 @@
+{
+  "schema": 1,
+  "stage": "E0",
+  "version": "2.5.0",
+  "projectId": "memoria-baseline",
+  "fixtureHash": "8078b60ac35407ebada5c7066a085064ee8ab8967ab11300c48367b00f110a88",
+  "fixtureFiles": {
+    "arestrix.project.json": "cb2f85a514ae9157c0818fc6ae9db07c599f2b1c8ffb2d8d49ba63bf519daa2a",
+    "pipeline.json": "b25a0131e33c3b313de31a62574360bcb777fc782b42b50181e9e46da00aac72",
+    "knowledge.json": "5930528346cd6ca472780710c60811f6a81358aefb99fb21f0c2c69ed0911622"
+  },
+  "tolerance": {
+    "default": 0,
+    "metrics": {}
+  },
+  "metrics": {
+    "runs": 3,
+    "elapsedSeconds": 32.234,
+    "tokens": {
+      "prompt": 6264,
+      "completion": 849,
+      "total": 7113,
+      "cached": 0,
+      "cacheWrite": 0
+    },
+    "turns": {
+      "modelCalls": 15,
+      "agentRuns": 9,
+      "averageTurnsPerAgentRun": 1.6667
+    },
+    "retries": 0,
+    "brief": {
+      "chars": 6795,
+      "averageCharsPerAgentRun": 755.0
+    },
+    "hits": {
+      "rows": 48,
+      "injected": 39,
+      "used": 24,
+      "consulted": 9,
+      "usedFromBrief": 15,
+      "cited": 24
+    },
+    "episodes": {
+      "rows": 9,
+      "success": 9,
+      "failure": 0
+    },
+    "usage": {
+      "rows": 9,
+      "success": 9,
+      "failure": 0
+    },
+    "tables": {
+      "knowledge": {
+        "rows": {
+          "memory_alias": 11,
+          "memory_audit": 8,
+          "memory_edge": 8,
+          "memory_embedding": 0,
+          "memory_episode": 0,
+          "memory_evidence": 0,
+          "memory_hit": 0,
+          "memory_meta": 0,
+          "memory_node": 11,
+          "memory_node_fts": 11,
+          "memory_playbook": 2,
+          "memory_policy": 0,
+          "memory_proposal": 5,
+          "memory_scope": 1,
+          "memory_scope_closure": 1,
+          "memory_state": 0,
+          "memory_state_history": 0,
+          "memory_state_key": 0,
+          "memory_usage": 0,
+          "memory_validation": 0,
+          "memory_working": 0
+        },
+        "seeded": {
+          "memory_alias": 11,
+          "memory_audit": 0,
+          "memory_edge": 8,
+          "memory_embedding": 0,
+          "memory_episode": 0,
+          "memory_evidence": 0,
+          "memory_hit": 0,
+          "memory_meta": 0,
+          "memory_node": 11,
+          "memory_node_fts": 11,
+          "memory_playbook": 1,
+          "memory_policy": 0,
+          "memory_proposal": 0,
+          "memory_scope": 1,
+          "memory_scope_closure": 1,
+          "memory_state": 0,
+          "memory_state_history": 0,
+          "memory_state_key": 0,
+          "memory_usage": 0,
+          "memory_validation": 0,
+          "memory_working": 0
+        },
+        "created": {
+          "memory_alias": 0,
+          "memory_audit": 8,
+          "memory_edge": 0,
+          "memory_embedding": 0,
+          "memory_episode": 0,
+          "memory_evidence": 0,
+          "memory_hit": 0,
+          "memory_meta": 0,
+          "memory_node": 0,
+          "memory_node_fts": 0,
+          "memory_playbook": 1,
+          "memory_policy": 0,
+          "memory_proposal": 5,
+          "memory_scope": 0,
+          "memory_scope_closure": 0,
+          "memory_state": 0,
+          "memory_state_history": 0,
+          "memory_state_key": 0,
+          "memory_usage": 0,
+          "memory_validation": 0,
+          "memory_working": 0
+        }
+      },
+      "telemetry": {
+        "rows": {
+          "memory_alias": 0,
+          "memory_audit": 0,
+          "memory_edge": 0,
+          "memory_embedding": 0,
+          "memory_episode": 9,
+          "memory_evidence": 0,
+          "memory_hit": 48,
+          "memory_meta": 0,
+          "memory_node": 0,
+          "memory_node_fts": 0,
+          "memory_playbook": 0,
+          "memory_policy": 0,
+          "memory_proposal": 0,
+          "memory_scope": 1,
+          "memory_scope_closure": 1,
+          "memory_state": 0,
+          "memory_state_history": 0,
+          "memory_state_key": 0,
+          "memory_usage": 9,
+          "memory_validation": 0,
+          "memory_working": 0
+        },
+        "seeded": {
+          "memory_alias": 0,
+          "memory_audit": 0,
+          "memory_edge": 0,
+          "memory_embedding": 0,
+          "memory_episode": 0,
+          "memory_evidence": 0,
+          "memory_hit": 0,
+          "memory_meta": 0,
+          "memory_node": 0,
+          "memory_node_fts": 0,
+          "memory_playbook": 0,
+          "memory_policy": 0,
+          "memory_proposal": 0,
+          "memory_scope": 0,
+          "memory_scope_closure": 0,
+          "memory_state": 0,
+          "memory_state_history": 0,
+          "memory_state_key": 0,
+          "memory_usage": 0,
+          "memory_validation": 0,
+          "memory_working": 0
+        },
+        "created": {
+          "memory_alias": 0,
+          "memory_audit": 0,
+          "memory_edge": 0,
+          "memory_embedding": 0,
+          "memory_episode": 9,
+          "memory_evidence": 0,
+          "memory_hit": 48,
+          "memory_meta": 0,
+          "memory_node": 0,
+          "memory_node_fts": 0,
+          "memory_playbook": 0,
+          "memory_policy": 0,
+          "memory_proposal": 0,
+          "memory_scope": 1,
+          "memory_scope_closure": 1,
+          "memory_state": 0,
+          "memory_state_history": 0,
+          "memory_state_key": 0,
+          "memory_usage": 9,
+          "memory_validation": 0,
+          "memory_working": 0
+        }
+      }
+    },
+    "schemaFingerprint": {
+      "knowledge": "83349691909b478e",
+      "telemetry": "83349691909b478e"
+    }
+  }
+}

@@ -1,0 +1,186 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "projectId": "memoria-baseline",
+    "graphName": "MemoriaBaseline",
+    "description": "Linha de base E0: gerador com regras de artefato, auditor e consultor de memoria",
+    "targetStandard": "C++20",
+    "version": "1.0.0",
+    "compilerConfig": {
+      "compiler": "msvc",
+      "cppStandard": "C++20",
+      "buildSystem": "cmake",
+      "taskflowIncludePath": "third_party/taskflow",
+      "outputBinaryName": "memoria_baseline",
+      "enableOpenMP": false,
+      "enableCuda": false,
+      "extraFlags": []
+    },
+    "globalDefaults": {
+      "model": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "skillPath": "",
+        "promptTemplate": ""
+      },
+      "sandbox": {
+        "isolationLevel": "host_direct",
+        "network": "egress_llm_only",
+        "maxMemoryMB": 512,
+        "timeoutSeconds": 120,
+        "readOnlyMounts": [],
+        "readWriteMounts": []
+      },
+      "codeMode": {
+        "allowedTools": ["write"],
+        "customScripts": []
+      },
+      "memory": {
+        "enabled": false,
+        "persistent": false
+      }
+    }
+  },
+  "nodes": [
+    {
+      "id": "gerador",
+      "label": "Gerador_Baseline",
+      "type": "agent",
+      "position": { "x": 0, "y": 0 },
+      "inputs": [
+        { "id": "gerador_in", "name": "in", "direction": "input", "type": "flow" }
+      ],
+      "outputs": [
+        { "id": "gerador_out", "name": "out", "direction": "output", "type": "flow" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "validationRules": [
+        {
+          "targetPathPattern": "artefatos/{itemId}.md",
+          "minSizeBytes": 400,
+          "contentPattern": "STATUS_OK"
+        }
+      ],
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "skillPath": "",
+          "promptTemplate": "Gere o artefato da tarefa com o marcador STATUS_OK e escreva em artefatos/pipeline.md."
+        },
+        "inheritCodeMode": false,
+        "codeMode": {
+          "allowedTools": ["write"],
+          "customScripts": []
+        },
+        "inheritMemory": false,
+        "memory": {
+          "enabled": true,
+          "persistent": true,
+          "projectId": "memoria-baseline",
+          "mode": "learn",
+          "theme": "baseline",
+          "taskType": "gerar_artefato",
+          "contextBudgetTokens": 800
+        }
+      }
+    },
+    {
+      "id": "auditor",
+      "label": "Auditor_Baseline",
+      "type": "agent",
+      "position": { "x": 300, "y": 0 },
+      "inputs": [
+        { "id": "auditor_in", "name": "in", "direction": "input", "type": "flow" }
+      ],
+      "outputs": [
+        { "id": "auditor_out", "name": "out", "direction": "output", "type": "flow" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "skillPath": "",
+          "promptTemplate": "Audite o artefato gerado e responda com STATUS: APROVADO ou STATUS: REPROVADO."
+        },
+        "inheritCodeMode": false,
+        "codeMode": {
+          "allowedTools": ["read"],
+          "customScripts": []
+        },
+        "inheritMemory": false,
+        "memory": {
+          "enabled": true,
+          "persistent": true,
+          "projectId": "memoria-baseline",
+          "mode": "consult",
+          "theme": "baseline",
+          "taskType": "auditar_artefato",
+          "contextBudgetTokens": 800
+        }
+      }
+    },
+    {
+      "id": "consultor",
+      "label": "Consultor_Baseline",
+      "type": "agent",
+      "position": { "x": 600, "y": 0 },
+      "inputs": [
+        { "id": "consultor_in", "name": "in", "direction": "input", "type": "flow" }
+      ],
+      "outputs": [
+        { "id": "consultor_out", "name": "out", "direction": "output", "type": "flow" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "skillPath": "",
+          "promptTemplate": "Consulte a memoria do projeto sobre o tema baseline e resuma o que foi encontrado."
+        },
+        "inheritCodeMode": false,
+        "codeMode": {
+          "allowedTools": [],
+          "customScripts": []
+        },
+        "inheritMemory": false,
+        "memory": {
+          "enabled": true,
+          "persistent": true,
+          "projectId": "memoria-baseline",
+          "mode": "consult",
+          "theme": "baseline",
+          "taskType": "consultar_memoria",
+          "contextBudgetTokens": 800
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "sourceNodeId": "gerador",
+      "sourcePortId": "gerador_out",
+      "targetNodeId": "auditor",
+      "targetPortId": "auditor_in"
+    },
+    {
+      "id": "e2",
+      "sourceNodeId": "auditor",
+      "sourcePortId": "auditor_out",
+      "targetNodeId": "consultor",
+      "targetPortId": "consultor_in"
+    }
+  ]
+}

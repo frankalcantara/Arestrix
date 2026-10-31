@@ -733,9 +733,11 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
     code += "  }).name(\"Pipeline_Bootstrap\");\n\n";
 
     // --- Tarefas ---------------------------------------------------------------------------
+    // arx_item_id e declarado no main e usado pelo buildBrief dentro das tarefas;
+    // sem captura explicita o codigo gerado nao compila em MSVC nem em GCC.
     const std::string lambdaCapture = inputContextExpr.empty()
-        ? "[&ctx, &memory, &projectId]"
-        : "[&ctx, &memory, &projectId, &arx_subflow_input]";
+        ? "[&ctx, &memory, &projectId, &arx_item_id]"
+        : "[&ctx, &memory, &projectId, &arx_item_id, &arx_subflow_input]";
     for (const auto& id : ids) {
         if (callTargets.count(id)) continue;   // chamavel puro: nao vira task de fluxo
         const auto& node = nodes.at(id);

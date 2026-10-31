@@ -1419,6 +1419,8 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(src.find("ARESTRIX_TELEMETRY_DB") != std::string::npos);
     CHECK(src.find("memory.configureTelemetry(projectId, arx_telemetry_db)") != std::string::npos);
     CHECK(src.find("taskforge::rt::currentItemId(\"pipeline\")") != std::string::npos);
+    // Regressao 2.5.0: buildBrief usa arx_item_id; sem a captura o codigo gerado nao compila.
+    CHECK(src.find("[&ctx, &memory, &projectId, &arx_item_id]") != std::string::npos);
     CHECK(src.find("memory.buildBrief(projectId, arx_item_id, std::vector<std::string>{\"svg_typography\"}, "
                    "std::vector<std::string>{}, 800, true, false, &arx_brief_info, \"agente\", \"\")") != std::string::npos);
     CHECK(src.find("ARESTRIX_MEMORY_DISABLE") != std::string::npos);
