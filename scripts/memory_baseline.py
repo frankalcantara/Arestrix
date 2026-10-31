@@ -373,13 +373,15 @@ def collect_metrics(project: pathlib.Path, runs: int, elapsed_seconds: float,
             "COALESCE(SUM(completion_tokens),0), COALESCE(SUM(total_tokens),0), "
             "COALESCE(SUM(cached_tokens),0), COALESCE(SUM(cache_write_tokens),0), "
             "COALESCE(SUM(retries),0), COALESCE(SUM(memory_context_chars),0), "
-            "COALESCE(SUM(outcome='success'),0), COALESCE(SUM(outcome='failure'),0) "
+            "COALESCE(SUM(outcome='success'),0), COALESCE(SUM(outcome='failure'),0), "
+            "COALESCE(SUM(invalid_citations),0) "
             "FROM memory_usage"
         ).fetchone()
         hits = conn.execute(
-            "SELECT COUNT(*), COALESCE(SUM(injected),0), COALESCE(SUM(used),0), "
-            "COALESCE(SUM(CASE WHEN used=1 AND injected=0 THEN 1 ELSE 0 END),0), "
-            "COALESCE(SUM(CASE WHEN used=1 AND injected=1 THEN 1 ELSE 0 END),0) "
+            "SELECT COUNT(*), COALESCE(SUM(injected),0), COALESCE(SUM(consulted),0), "
+            "COALESCE(SUM(used),0), "
+            "COALESCE(SUM(CASE WHEN used=1 AND injected=1 THEN 1 ELSE 0 END),0), "
+            "COALESCE(SUM(CASE WHEN used=1 AND consulted=1 AND injected=0 THEN 1 ELSE 0 END),0) "
             "FROM memory_hit"
         ).fetchone()
         episodes = conn.execute(
@@ -415,11 +417,14 @@ def collect_metrics(project: pathlib.Path, runs: int, elapsed_seconds: float,
         "hits": {
             "rows": int(hits[0] or 0),
             "injected": int(hits[1] or 0),
-            "used": int(hits[2] or 0),
-            "consulted": int(hits[3] or 0),
-            "usedFromBrief": int(hits[4] or 0),
-            "cited": int(hits[2] or 0),
+            "consulted": int(hits[2] or 0),
+            "used": int(hits[3] or 0),
+            "citedFromBrief": int(hits[4] or 0),
+            "citedFromSearch": int(hits[5] or 0),
+            "usedFromBrief": int(hits[4] or 0),  # compatibilidade
+            "cited": int(hits[3] or 0),
         },
+        "invalidCitations": int(usage[11] or 0),
         "episodes": {
             "rows": int(episodes[0] or 0),
             "success": int(episodes[1] or 0),
@@ -576,7 +581,8 @@ def summary(metrics: dict) -> str:
         f"chamadas={metrics['turns']['modelCalls']} "
         f"brief_chars={metrics['brief']['chars']} "
         f"hits(inj={hits['injected']}, cons={hits['consulted']}, "
-        f"citados_brief={hits['usedFromBrief']}, usados={hits['used']})"
+        f"cit_brief={hits['citedFromBrief']}, cit_busca={hits['citedFromSearch']}, "
+        f"inv={metrics['invalidCitations']})"
     )
 
 

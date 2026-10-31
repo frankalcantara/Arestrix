@@ -70,7 +70,9 @@ Conhecimento com baixa confiança, conflito aberto ou validade expirada não é 
 
 Cada item injetado recebe um rótulo `[MEMO:<id>]`. No fim da execução, o runtime só marca como
 **usado** o item cujo ID foi citado pelo agente na resposta final. “Injetado”, “consultado” e
-“usado” são sinais distintos.
+“usado” são sinais distintos: resultados de `memory_search` também trazem `[MEMO:<id>]` e a mesma
+instrução de citação, mas devolvê-los marca apenas `consulted`. Citar um id que não foi entregue
+naquela execução é ignorado e contado como citação inválida.
 
 O uso altera a **utilidade** do item, não a confiança. Confiança é sustentação (evidência,
 validação e promoção); utilidade é o histórico de uso em execuções bem ou mal sucedidas.

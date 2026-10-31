@@ -23,6 +23,10 @@ namespace memory {
 
 namespace {
 
+// Versao do esquema de conhecimento/telemetria. A primeira versao gravada e 2
+// (E2: coluna consulted em memory_hit e invalid_citations em memory_usage).
+constexpr int kMemorySchemaVersion = 2;
+
 struct Stmt {
     sqlite3_stmt* stmt = nullptr;
     ~Stmt() { if (stmt) sqlite3_finalize(stmt); }
@@ -465,6 +469,7 @@ CREATE TABLE IF NOT EXISTS memory_usage (
   memory_context_chars INTEGER NOT NULL DEFAULT 0,
   memory_enabled INTEGER NOT NULL DEFAULT 0,
   retries INTEGER NOT NULL DEFAULT 0,
+  invalid_citations INTEGER NOT NULL DEFAULT 0,
   outcome TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL
 );
@@ -477,6 +482,7 @@ CREATE TABLE IF NOT EXISTS memory_hit (
   memory_id TEXT NOT NULL,
   kind TEXT NOT NULL,
   injected INTEGER NOT NULL DEFAULT 0,
+  consulted INTEGER NOT NULL DEFAULT 0,
   used INTEGER NOT NULL DEFAULT 0,
   outcome TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL
@@ -615,6 +621,10 @@ CREATE INDEX IF NOT EXISTS idx_memory_policy_scope ON memory_policy(scope_id, ke
     addColumnIfMissing(db_, "memory_edge", "dormant_at", "TEXT");
     addColumnIfMissing(db_, "memory_playbook", "source_ref", "TEXT");
     addColumnIfMissing(db_, "memory_playbook", "evidence_json", "TEXT NOT NULL DEFAULT '[]'");
+    // E2: separa "consultado por busca" de "citado pelo agente" e conta
+    // citacoes de ids que nao foram entregues na execucao.
+    addColumnIfMissing(db_, "memory_hit", "consulted", "INTEGER NOT NULL DEFAULT 0");
+    addColumnIfMissing(db_, "memory_usage", "invalid_citations", "INTEGER NOT NULL DEFAULT 0");
 
     // Migracao: consolida hits duplicados de versoes anteriores e cria a chave unica
     // (scope, run, node, memoria). Sem isso, consultas concorrentes podem duplicar linhas.
@@ -650,6 +660,23 @@ DELETE FROM memory_hit WHERE rowid NOT IN
             lastError_ = migrationError;
             std::fprintf(stderr, "[MemoryStore] indice memory_hit falhou: %s\n", migrationError.c_str());
         }
+    }
+
+    // Backfill idempotente: linhas antigas de busca foram gravadas com used=1.
+    // consulted=1 preserva o sinal sem inventar citacao (used fica como estava).
+    std::string backfillError;
+    if (!exec("UPDATE memory_hit SET consulted=1 WHERE injected=0 AND used=1 AND consulted=0;",
+              &backfillError)) {
+        lastError_ = backfillError;
+    }
+
+    int storedVersion = 0;
+    const std::string versionText = getMeta("schema_version");
+    if (!versionText.empty()) {
+        try { storedVersion = std::stoi(versionText); } catch (...) { storedVersion = 0; }
+    }
+    if (storedVersion < kMemorySchemaVersion) {
+        setMeta("schema_version", std::to_string(kMemorySchemaVersion));
     }
     return true;
 }
@@ -3258,7 +3285,8 @@ std::string MemoryStore::searchContext(const std::string& scopeId, const std::st
         std::transform(hay.begin(), hay.end(), hay.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         std::transform(needle.begin(), needle.end(), needle.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         if (hay.find(needle) != std::string::npos) {
-            out << "[LICAO] (" << lesson.domain << ") " << lesson.lessonRule << "\n";
+            out << "[LICAO] [MEMO:" << lesson.id << "] (" << lesson.domain << ") "
+                << lesson.lessonRule << "\n";
             if (hits) hits->push_back(MemoryHitRef{lesson.id, "lesson"});
             any = true;
             if (++emitted >= maxResults) break;
@@ -3305,8 +3333,8 @@ std::string MemoryStore::searchContext(const std::string& scopeId, const std::st
                     if (!domainAllowed(domain)) continue;
                 }
                 const std::string edgeId = columnText(st.stmt, 0);
-                out << "[FATO] " << columnText(st.stmt, 1) << " --" << columnText(st.stmt, 2) << "--> "
-                    << columnText(st.stmt, 3);
+                out << "[FATO] [MEMO:" << edgeId << "] " << columnText(st.stmt, 1) << " --"
+                    << columnText(st.stmt, 2) << "--> " << columnText(st.stmt, 3);
                 const std::string from = columnText(st.stmt, 4);
                 const std::string to = columnText(st.stmt, 5);
                 if (!from.empty() || !to.empty()) out << " [" << from << " .. " << (to.empty() ? "agora" : to) << "]";
@@ -3320,7 +3348,11 @@ std::string MemoryStore::searchContext(const std::string& scopeId, const std::st
         }
     }
 
-    return any ? sanitizeText(out.str()).text : std::string();
+    if (!any) return std::string();
+    const std::string header =
+        "[ARESTRIX MEMORIA: RESULTADOS DA BUSCA]\n"
+        "Se usar um item, cite o ID [MEMO:<id>] na resposta final.\n";
+    return sanitizeText(header + out.str()).text;
 }
 
 bool MemoryStore::recordHit(const std::string& scopeId, const std::string& runId,
@@ -3359,27 +3391,47 @@ bool MemoryStore::recordHit(const std::string& scopeId, const std::string& runId
 }
 
 int MemoryStore::markHitsUsed(const std::string& scopeId, const std::string& runId,
-                              const std::string& nodeId, const std::vector<std::string>& memoryIds) {
+                              const std::string& nodeId, const std::vector<std::string>& memoryIds,
+                              int* invalid) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (invalid) *invalid = 0;
     if (!db_ || memoryIds.empty()) return 0;
-    std::string sql = "UPDATE memory_hit SET used=1 WHERE scope_id=? AND run_id=? AND node_id=? AND memory_id IN (";
-    for (size_t i = 0; i < memoryIds.size(); ++i) sql += (i ? ",?" : "?");
-    sql += ")";
     Stmt st;
     std::string error;
-    if (!prepare(db_, sql.c_str(), st, error)) {
+    if (!prepare(db_, "UPDATE memory_hit SET used=1 WHERE scope_id=? AND run_id=? AND node_id=? AND memory_id=?",
+                 st, error)) {
         lastError_ = error;
         return 0;
     }
-    bindText(st.stmt, 1, scopeId);
-    bindText(st.stmt, 2, runId);
-    bindText(st.stmt, 3, nodeId);
-    for (size_t i = 0; i < memoryIds.size(); ++i) bindText(st.stmt, static_cast<int>(i + 4), memoryIds[i]);
-    if (stepRetry(st.stmt) != SQLITE_DONE) {
-        lastError_ = sqlite3_errmsg(db_);
-        return 0;
+    int marked = 0;
+    int ignored = 0;
+    for (const auto& id : memoryIds) {
+        if (id.empty()) continue;
+        sqlite3_reset(st.stmt);
+        sqlite3_clear_bindings(st.stmt);
+        bindText(st.stmt, 1, scopeId);
+        bindText(st.stmt, 2, runId);
+        bindText(st.stmt, 3, nodeId);
+        bindText(st.stmt, 4, id);
+        if (stepRetry(st.stmt) == SQLITE_DONE && sqlite3_changes(db_) > 0) {
+            ++marked;
+        } else {
+            ++ignored;
+        }
     }
-    return sqlite3_changes(db_);
+    if (ignored > 0) {
+        Stmt usage;
+        if (prepare(db_, "UPDATE memory_usage SET invalid_citations=invalid_citations+? "
+                           "WHERE scope_id=? AND run_id=? AND node_id=?", usage, error)) {
+            sqlite3_bind_int(usage.stmt, 1, ignored);
+            bindText(usage.stmt, 2, scopeId);
+            bindText(usage.stmt, 3, runId);
+            bindText(usage.stmt, 4, nodeId);
+            stepRetry(usage.stmt);
+        }
+    }
+    if (invalid) *invalid = ignored;
+    return marked;
 }
 
 int MemoryStore::recordConsultedHits(const std::string& scopeId, const std::string& runId,
@@ -3392,10 +3444,11 @@ int MemoryStore::recordConsultedHits(const std::string& scopeId, const std::stri
     for (const auto& ref : refs) {
         if (ref.id.empty()) continue;
 
-        // Se a memoria ja tinha sido injetada, so marcamos used=1 na linha existente.
+        // Se a memoria ja tinha sido injetada (ou consultada antes), apenas
+        // marcamos consulted=1. E2: busca nunca grava used=1; so a citacao.
         Stmt update;
         std::string error;
-        if (prepare(db_, "UPDATE memory_hit SET used=1 WHERE scope_id=? AND run_id=? AND node_id=? AND memory_id=?",
+        if (prepare(db_, "UPDATE memory_hit SET consulted=1 WHERE scope_id=? AND run_id=? AND node_id=? AND memory_id=?",
                     update, error)) {
             bindText(update.stmt, 1, scopeId);
             bindText(update.stmt, 2, runId);
@@ -3410,12 +3463,12 @@ int MemoryStore::recordConsultedHits(const std::string& scopeId, const std::stri
             continue;
         }
 
-        // Memoria descoberta por busca: conta como consultada, nao como injetada.
+        // Memoria descoberta por busca: conta como consultada, nao como usada.
         Stmt insert;
-        if (!prepare(db_, "INSERT INTO memory_hit(id,scope_id,run_id,node_id,memory_id,kind,injected,used,outcome,created_at) "
-                           "VALUES (?,?,?,?,?,?,0,1,'',?) "
+        if (!prepare(db_, "INSERT INTO memory_hit(id,scope_id,run_id,node_id,memory_id,kind,injected,consulted,used,outcome,created_at) "
+                           "VALUES (?,?,?,?,?,?,0,1,0,'',?) "
                            "ON CONFLICT(scope_id,run_id,node_id,memory_id) DO UPDATE SET "
-                           "used=1, kind=excluded.kind", insert, error)) {
+                           "consulted=1, kind=excluded.kind", insert, error)) {
             lastError_ = error;
             continue;
         }
@@ -3621,9 +3674,10 @@ taskforge::Json MemoryStore::hitSummary(const std::string& scopeId) const {
     if (!db_) return out;
     Stmt st;
     std::string error;
-    if (!prepare(db_, "SELECT COUNT(*), COALESCE(SUM(injected),0), COALESCE(SUM(used),0), "
-                       "COALESCE(SUM(CASE WHEN used=1 AND injected=0 THEN 1 ELSE 0 END),0), "
+    if (!prepare(db_, "SELECT COUNT(*), COALESCE(SUM(injected),0), COALESCE(SUM(consulted),0), "
+                       "COALESCE(SUM(used),0), "
                        "COALESCE(SUM(CASE WHEN used=1 AND injected=1 THEN 1 ELSE 0 END),0), "
+                       "COALESCE(SUM(CASE WHEN used=1 AND consulted=1 AND injected=0 THEN 1 ELSE 0 END),0), "
                        "COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
                        "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0) "
                        "FROM memory_hit WHERE scope_id=?", st, error)) {
@@ -3634,11 +3688,13 @@ taskforge::Json MemoryStore::hitSummary(const std::string& scopeId) const {
     if (stepRetry(st.stmt) == SQLITE_ROW) {
         out["hits"] = columnInt(st.stmt, 0);
         out["injected"] = columnInt(st.stmt, 1);
-        out["used"] = columnInt(st.stmt, 2);
-        out["consulted"] = columnInt(st.stmt, 3);
-        out["usedInjected"] = columnInt(st.stmt, 4);
-        out["successHits"] = columnInt(st.stmt, 5);
-        out["failureHits"] = columnInt(st.stmt, 6);
+        out["consulted"] = columnInt(st.stmt, 2);
+        out["used"] = columnInt(st.stmt, 3);
+        out["citedFromBrief"] = columnInt(st.stmt, 4);
+        out["citedFromSearch"] = columnInt(st.stmt, 5);
+        out["usedInjected"] = columnInt(st.stmt, 4);  // compatibilidade
+        out["successHits"] = columnInt(st.stmt, 6);
+        out["failureHits"] = columnInt(st.stmt, 7);
     }
     return out;
 }
@@ -3788,7 +3844,8 @@ taskforge::Json MemoryStore::usageSummary(const std::string& scopeId) const {
                        "COALESCE(SUM(memory_context_chars),0), COALESCE(SUM(memory_enabled),0), "
                        "COALESCE(SUM(retries),0), "
                        "COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
-                       "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0) "
+                       "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0), "
+                       "COALESCE(SUM(invalid_citations),0) "
                        "FROM memory_usage WHERE scope_id=?", st, error)) {
         lastError_ = error;
         return out;
@@ -3808,6 +3865,7 @@ taskforge::Json MemoryStore::usageSummary(const std::string& scopeId) const {
         out["retries"] = columnInt(st.stmt, 10);
         out["successRuns"] = columnInt(st.stmt, 11);
         out["failureRuns"] = columnInt(st.stmt, 12);
+        out["invalidCitations"] = columnInt(st.stmt, 13);
     }
     return out;
 }

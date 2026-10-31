@@ -710,7 +710,7 @@ export class ProjectMemoryModal {
                 `${t('project_memory.usage_tokens')}: ${total} (prompt ${prompt} / ${t('project_memory.usage_output')} ${completion})`,
                 `${t('project_memory.usage_cached', 'Prompt em cache')}: ${Number(u.cachedTokens || 0)} (${t('project_memory.usage_cache_write', 'escrita')} ${Number(u.cacheWriteTokens || 0)})`,
                 `${t('project_memory.usage_context')}: ${ctx}`,
-                `${t('project_memory.usage_hits')}: ${Number(hits.injected || 0)} · ${t('project_memory.usage_used_injected')}: ${Number(hits.usedInjected || 0)} · ${t('project_memory.usage_consulted')}: ${Number(hits.consulted || 0)}`,
+                `${t('project_memory.usage_hits')}: ${Number(hits.injected || 0)} · ${t('project_memory.usage_cited_brief')}: ${Number(hits.citedFromBrief ?? hits.usedInjected ?? 0)} · ${t('project_memory.usage_consulted')}: ${Number(hits.consulted || 0)} · ${t('project_memory.usage_cited_search')}: ${Number(hits.citedFromSearch || 0)} · ${t('project_memory.usage_invalid_citations')}: ${Number(u.invalidCitations || 0)}`,
                 `${t('project_memory.usage_latency')}: ${latency.toFixed(0)} ms`,
               ].join('\n');
         }

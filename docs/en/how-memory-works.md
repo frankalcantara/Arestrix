@@ -69,7 +69,9 @@ low confidence, an open conflict or expired validity is not injected.
 
 Every injected item is labeled `[MEMO:<id>]`. At the end of the run, the runtime marks an item as
 **used** only when the agent cites its ID in the final answer. “Injected”, “consulted” and “used”
-are distinct signals.
+are distinct signals: `memory_search` results also carry `[MEMO:<id>]` and the same citation
+instruction, but returning them only marks `consulted`. Citing an ID that was not delivered in
+that run is ignored and counted as an invalid citation.
 
 Use changes an item's **utility**, not its confidence. Confidence is sustainment (evidence,
 validation and promotion); utility is the usage history across successful and failed runs.

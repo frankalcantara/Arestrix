@@ -2081,6 +2081,76 @@ TEST(memory_telemetry_hits_reinforce_knowledge) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_search_hits_are_consulted_until_cited) {
+    using taskforge::memory::MemoryEdgeRecord;
+    using taskforge::memory::MemoryHitRef;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryUsageRecord;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_consulted_" + stamp);
+    const std::string pId = "consulted-" + stamp;
+    const std::string scope = "project:" + pId;
+    const std::string run = "run-search";
+    const std::string node = "node-search";
+
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, (root / "knowledge.db").string()));
+    CHECK(memory.configureTelemetry(pId, (root / "telemetry.db").string()));
+
+    const std::string first = memory.recordLesson(pId, "svg", "sombra",
+                                                  "nao usar sombra em texto", "teste");
+    const std::string second = memory.recordLesson(pId, "svg", "sombra",
+                                                   "revisar sombra em icones", "teste");
+    CHECK(!first.empty() && !second.empty());
+
+    MemoryUsageRecord usage;
+    usage.scopeId = pId;
+    usage.runId = run;
+    usage.nodeId = node;
+    usage.calls = 1;
+    usage.outcome = "success";
+    CHECK(memory.recordUsage(usage));
+
+    std::vector<MemoryHitRef> hits;
+    const std::string text = memory.searchContext(pId, "sombra", 5, {"svg"}, &hits);
+    CHECK(hits.size() == 2);
+    CHECK(text.find("[MEMO:") != std::string::npos);
+    CHECK(text.find("cite o ID [MEMO:<id>]") != std::string::npos);
+    CHECK(memory.recordConsultedHits(pId, run, node, hits) == 2);
+
+    // Busca apenas consulta; nada foi citado ainda.
+    auto summary = memory.hitSummary(pId);
+    CHECK(summary["consulted"] == 2);
+    CHECK(summary["used"] == 0);
+    CHECK(summary["citedFromSearch"] == 0);
+
+    // Citar um resultado marca used; o id inexistente e contado e ignorado.
+    int invalid = 0;
+    CHECK(memory.markHitsUsed(pId, run, node, {hits[0].id, "citacao-inexistente"}, &invalid) == 1);
+    CHECK(invalid == 1);
+    summary = memory.hitSummary(pId);
+    CHECK(summary["consulted"] == 2);
+    CHECK(summary["used"] == 1);
+    CHECK(summary["citedFromSearch"] == 1);
+    CHECK(memory.usageSummary(pId)["invalidCitations"] == 1);
+
+    // Reforco por resultado usa somente o hit citado.
+    CHECK(memory.finishHits(pId, run, node, "success"));
+    MemoryEdgeRecord citedEdge;
+    MemoryEdgeRecord otherEdge;
+    CHECK(memory.store(pId)->getEdge(scope, hits[0].id, citedEdge));
+    CHECK(memory.store(pId)->getEdge(scope, hits[1].id, otherEdge));
+    CHECK(citedEdge.successCount == 1);
+    CHECK(otherEdge.successCount == 0);
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_telemetry_records_without_knowledge_store) {
     using taskforge::memory::MemoryService;
     using taskforge::memory::MemoryUsageRecord;
@@ -4325,13 +4395,15 @@ TEST(memory_search_respects_domains_limit_and_records_consulted_hits) {
     CHECK(result.find("Biblioteca Beta") != std::string::npos);
     CHECK(result.find("Biblioteca Expirada") == std::string::npos);
 
-    // 5. Memoria descoberta por busca e nao injetada vira hit consultado.
+    // 5. Memoria descoberta por busca e consultada, mas ainda nao citada.
     CHECK(store.recordConsultedHits("project:busca", "run-search", "node-x",
                                     {MemoryHitRef{alpha, "lesson"}}) == 1);
     auto summary = store.hitSummary("project:busca");
     CHECK(summary["injected"] == 0);
     CHECK(summary["consulted"] == 1);
+    CHECK(summary["used"] == 0);
     CHECK(summary["usedInjected"] == 0);
+    CHECK(summary["citedFromSearch"] == 0);
 
     // 6. Memoria injetada e depois consultada atualiza a mesma linha, sem duplicar.
     CHECK(store.recordHit("project:busca", "run-2", "node-y", alpha, "lesson", true, false));
@@ -4339,9 +4411,20 @@ TEST(memory_search_respects_domains_limit_and_records_consulted_hits) {
                                     {MemoryHitRef{alpha, "lesson"}}) == 1);
     summary = store.hitSummary("project:busca");
     CHECK(summary["injected"] == 1);
-    CHECK(summary["usedInjected"] == 1);
-    CHECK(summary["consulted"] == 1);
+    CHECK(summary["consulted"] == 2);
+    CHECK(summary["used"] == 0);
+
+    // 7. Citacao do brief e citacao da busca sao contadas separadamente.
+    CHECK(store.markHitsUsed("project:busca", "run-2", "node-y", {alpha}) == 1);
+    summary = store.hitSummary("project:busca");
+    CHECK(summary["used"] == 1);
+    CHECK(summary["citedFromBrief"] == 1);
+    CHECK(summary["citedFromSearch"] == 0);
+    CHECK(store.markHitsUsed("project:busca", "run-search", "node-x", {alpha}) == 1);
+    summary = store.hitSummary("project:busca");
     CHECK(summary["used"] == 2);
+    CHECK(summary["citedFromBrief"] == 1);
+    CHECK(summary["citedFromSearch"] == 1);
 
     store.close();
     std::error_code ec;

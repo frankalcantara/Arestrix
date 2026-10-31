@@ -36,6 +36,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 EXE = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT / ("arestrix-cli.exe" if os.name == "nt" else "arestrix-cli")
 TEST_KEY = "test-key-memory"
 RULE = "REGRA_PERSISTENTE_XYZ"
+RULE2 = "REGRA_SECUNDARIA_SEARCH"
 HIDDEN_RULE = "NAO_DEVE_APARECER"
 BLACKBOARD_VALUE = "valor-do-blackboard"
 HIDDEN_KEY_VALUE = "valor-ignorado"
@@ -96,6 +97,7 @@ def make_graphs():
         "parameters": {},
         "customLambdaBody": (
             f'memory.recordLesson(projectId, "teste", "manual", "{RULE}", "seed");\n'
+            f'memory.recordLesson(projectId, "teste", "manual", "{RULE2}", "seed");\n'
             f'memory.recordLesson(projectId, "outro", "manual", "{HIDDEN_RULE}", "seed");\n'
             f'memory.setWorking(projectId, "pipeline", "resumo", taskforge::Json("{BLACKBOARD_VALUE}"));\n'
             f'memory.setWorking(projectId, "pipeline", "ignorado", taskforge::Json("{HIDDEN_KEY_VALUE}"));\n'
@@ -184,7 +186,21 @@ def make_graphs():
     g6 = validation_graph("prepara_ok", "STATUS_OK")
     g7 = validation_graph("prepara_ruim", "SEM_MARCADOR")
     g8 = graph([validation_agent("validador_falha", "Agente_Com_Regras_Falha", valid_model=False)], [])
-    return g1, g2, g3, g4, g5, g6, g7, g8
+
+    search_agent = copy.deepcopy(agent)
+    search_agent["id"] = "buscador"
+    search_agent["label"] = "Agente_Busca_Cita"
+    search_agent["inputs"] = [port("buscador_in", "in", "input")]
+    search_agent["outputs"] = [port("buscador_out", "out", "output")]
+    search_agent["agentSettings"]["model"]["promptTemplate"] = "Busque o tema REGRA e resuma."
+    search_agent["agentSettings"]["inheritCodeMode"] = False
+    search_agent["agentSettings"]["codeMode"] = {"allowedTools": [], "customScripts": []}
+    search_agent["agentSettings"]["memory"].update({
+        "mode": "consult", "theme": "teste", "domains": ["teste"],
+        "taskType": "busca_cita", "contextBudgetTokens": 0,
+    })
+    g9 = graph([search_agent], [])
+    return g1, g2, g3, g4, g5, g6, g7, g8, g9
 
 
 class MockHandler(BaseHTTPRequestHandler):
@@ -216,6 +232,34 @@ class MockHandler(BaseHTTPRequestHandler):
                 }],
             }
             finish = "tool_calls"
+        elif "Agente_Busca_Cita" in label and not has_tool_result:
+            message = {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{
+                    "id": "call_search_memory",
+                    "type": "function",
+                    "function": {
+                        "name": "memory_search",
+                        "arguments": json.dumps({"query": "REGRA", "limit": 5}),
+                    },
+                }],
+            }
+            finish = "tool_calls"
+        elif "Agente_Busca_Cita" in label:
+            tool_text = ""
+            for item in reversed(messages):
+                if item.get("role") == "tool":
+                    tool_text = item.get("content", "") or ""
+                    break
+            ids = [item for item in re.findall(r"\[MEMO:([^\]]+)\]", tool_text)
+                   if item and not item.startswith("<")]
+            cited = ids[0] if ids else "sem-id"
+            message = {
+                "role": "assistant",
+                "content": f"Resultado da busca [MEMO:{cited}] [MEMO:citacao-invalida-e2e]",
+            }
+            finish = "stop"
         else:
             message = {"role": "assistant", "content": "OK"}
             finish = "stop"
@@ -264,8 +308,8 @@ def main():
     project = work / "projeto"
     project.mkdir(parents=True)
     log_file = work / "systems.log"
-    g1, g2, g3, g4, g5, g6, g7, g8 = make_graphs()
-    for index, item in enumerate((g1, g2, g3, g4, g5, g6, g7, g8), start=1):
+    g1, g2, g3, g4, g5, g6, g7, g8, g9 = make_graphs()
+    for index, item in enumerate((g1, g2, g3, g4, g5, g6, g7, g8, g9), start=1):
         (work / f"graph{index}.json").write_text(json.dumps(item, indent=2), encoding="utf-8")
 
     port_num = free_port()
@@ -418,6 +462,50 @@ def main():
             "SELECT COUNT(*) FROM memory_playbook WHERE task_type='validacao_artefato' AND status='active'")
         check(demoted and demoted[0][0] == 0,
               "duas reprovacoes seguidas despromoveram o playbook")
+
+        print("\n== E2: consultado distinto de citado ==")
+        env_search = dict(env)
+        env_search["ARESTRIX_ITEM_ID"] = "busca-1"
+        p_search = run_graph(EXE, work / "graph9.json", project, env_search)
+        check(p_search.returncode == 0, "a execucao com busca terminou com codigo 0")
+        search_hits = telemetry_rows(
+            project,
+            "SELECT memory_id, consulted, used FROM memory_hit "
+            "WHERE node_id='buscador' AND injected=0 ORDER BY memory_id")
+        check(len(search_hits) >= 2, "a busca registrou os resultados consultados")
+        check(all(row[1] == 1 for row in search_hits),
+              "todo resultado de busca fica consulted=1")
+        cited = [row for row in search_hits if row[2] == 1]
+        uncited = [row for row in search_hits if row[2] == 0]
+        check(len(cited) == 1, "apenas o resultado citado fica used=1")
+        check(len(uncited) >= 1, "o resultado nao citado continua used=0")
+        invalid = telemetry_rows(
+            project,
+            "SELECT COALESCE(SUM(invalid_citations),0) FROM memory_usage WHERE node_id='buscador'")
+        check(invalid and invalid[0][0] >= 1,
+              "citacao de id inexistente foi ignorada e contada")
+        expected_cited = db_rows(
+            project, "SELECT success_count FROM memory_edge WHERE id=?", (cited[0][0],))
+        expected_uncited = db_rows(
+            project, "SELECT success_count FROM memory_edge WHERE id=?", (uncited[0][0],))
+        check(expected_cited and expected_cited[0][0] >= 1,
+              "o item citado foi reforcado")
+        check(expected_uncited and expected_uncited[0][0] == 0,
+              "o item apenas consultado nao foi reforcado")
+        p_rep2 = subprocess.run(
+            [str(EXE), "memory", "report", "--root", str(project), "--json"],
+            capture_output=True, text=True, timeout=60)
+        try:
+            report2 = json.loads(p_rep2.stdout)
+        except Exception:
+            report2 = {}
+        check(p_rep2.returncode == 0, "memory report pos-E2 terminou com codigo 0")
+        check(str(report2.get("schemaVersion", {}).get("knowledge", "")) == "2",
+              "o relatorio expoe a versao 2 do esquema")
+        check(int(report2.get("invalidCitations", 0)) >= 1,
+              "o relatorio conta as citacoes invalidas")
+        check(int(report2.get("hits", {}).get("citedFromSearch", 0)) >= 1,
+              "o relatorio separa citacoes vindas da busca")
 
         print("\n== Memoria desligada com metricas (comparacao de consumo) ==")
         env_off = dict(env)

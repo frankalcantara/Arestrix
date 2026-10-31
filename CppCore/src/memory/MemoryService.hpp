@@ -181,7 +181,8 @@ public:
     bool recordBriefHits(const std::string& projectId, const std::string& runId,
                          const std::string& nodeId, const MemoryBriefInfo& info);
     int markHitsUsed(const std::string& projectId, const std::string& runId,
-                     const std::string& nodeId, const std::vector<std::string>& memoryIds);
+                     const std::string& nodeId, const std::vector<std::string>& memoryIds,
+                     int* invalid = nullptr);
     int recordConsultedHits(const std::string& projectId, const std::string& runId,
                             const std::string& nodeId,
                             const std::vector<MemoryHitRef>& refs);

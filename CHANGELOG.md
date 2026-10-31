@@ -25,6 +25,11 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   verdicts in real runs.
 - `memory report` now reads the telemetry database and shows validated/unvalidated runs and
   the approval rate per `task_type`.
+- **Consulted vs used (multigraph plan, E2):** `memory_hit.consulted` and
+  `memory_usage.invalid_citations` split search results from real citations. `memory_search`
+  returns `[MEMO:id]` per item plus the citation instruction, and citations of IDs not delivered
+  in the run are ignored and counted. The report separates injected, consulted, cited from the
+  brief and cited from search. Telemetry schema version is now `2`.
 
 ### Changed
 

@@ -65,11 +65,15 @@ grafo roda N vezes e os contadores sao lidos do banco de conhecimento
 
 ## Interpretacao dos contadores
 
-- `tokens`, `turns`, `retries` e `brief.chars` vem de `memory_usage`.
+- `tokens`, `turns`, `retries`, `brief.chars` e `invalidCitations` vem de
+  `memory_usage`.
 - `hits.injected` conta itens entregues pelo brief.
-- `hits.consulted` conta itens descobertos por busca (`used=1` e `injected=0`).
-  Na 2.5.0 a busca tambem marca `used=1` em itens ja injetados; por isso
-  `hits.cited` ainda e igual a `hits.used`. A etapa E2 separa os dois sinais.
+- `hits.consulted` conta itens devolvidos por `memory_search` (coluna
+  `consulted`); nao implica uso.
+- `hits.used` conta apenas citacoes `[MEMO:id]`. `hits.citedFromBrief` e
+  `hits.citedFromSearch` separam a origem da citacao.
+- `invalidCitations` conta citacoes de ids que nao foram entregues na execucao.
+- `tables.*.rows.memory_meta` inclui `schema_version` (2 desde a E2).
 - `tables.knowledge` e `tables.telemetry` trazem `rows` (total), `seeded`
   (linhas ja presentes depois da semeadura, antes das execucoes) e `created`
   (`rows - seeded`) para todas as tabelas `memory_*`, exceto as internas do

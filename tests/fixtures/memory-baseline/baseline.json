@@ -15,11 +15,11 @@
   },
   "metrics": {
     "runs": 3,
-    "elapsedSeconds": 14.078,
+    "elapsedSeconds": 14.578,
     "tokens": {
-      "prompt": 6264,
+      "prompt": 6465,
       "completion": 849,
-      "total": 7113,
+      "total": 7314,
       "cached": 0,
       "cacheWrite": 0
     },
@@ -36,11 +36,14 @@
     "hits": {
       "rows": 48,
       "injected": 39,
-      "used": 24,
-      "consulted": 9,
-      "usedFromBrief": 15,
-      "cited": 24
+      "consulted": 21,
+      "used": 6,
+      "citedFromBrief": 6,
+      "citedFromSearch": 0,
+      "usedFromBrief": 6,
+      "cited": 6
     },
+    "invalidCitations": 0,
     "episodes": {
       "rows": 9,
       "success": 9,
@@ -61,7 +64,7 @@
           "memory_episode": 0,
           "memory_evidence": 0,
           "memory_hit": 0,
-          "memory_meta": 0,
+          "memory_meta": 1,
           "memory_node": 11,
           "memory_node_fts": 11,
           "memory_playbook": 2,
@@ -84,7 +87,7 @@
           "memory_episode": 0,
           "memory_evidence": 0,
           "memory_hit": 0,
-          "memory_meta": 0,
+          "memory_meta": 1,
           "memory_node": 11,
           "memory_node_fts": 11,
           "memory_playbook": 1,
@@ -132,7 +135,7 @@
           "memory_episode": 9,
           "memory_evidence": 0,
           "memory_hit": 48,
-          "memory_meta": 0,
+          "memory_meta": 1,
           "memory_node": 0,
           "memory_node_fts": 0,
           "memory_playbook": 0,
@@ -178,7 +181,7 @@
           "memory_episode": 9,
           "memory_evidence": 0,
           "memory_hit": 48,
-          "memory_meta": 0,
+          "memory_meta": 1,
           "memory_node": 0,
           "memory_node_fts": 0,
           "memory_playbook": 0,
@@ -196,8 +199,8 @@
       }
     },
     "schemaFingerprint": {
-      "knowledge": "83349691909b478e",
-      "telemetry": "83349691909b478e"
+      "knowledge": "f2ecd3a34669b97a",
+      "telemetry": "f2ecd3a34669b97a"
     }
   }
 }
