@@ -259,8 +259,10 @@ int registerRun(const std::string& nodeId, int maxRuns) {
     int limit = maxRuns;
     if (!env.empty()) { try { limit = std::stoi(env); } catch (...) {} }
     if (limit > 0 && n > limit) {
-        throw std::runtime_error("Limite de execucoes do agente '" + nodeId + "' atingido (" + std::to_string(limit) +
-                                 "). Possivel laco de feedback sem convergencia.");
+        throw AgentFailure("Limite de execucoes do agente '" + nodeId + "' atingido (" +
+                               std::to_string(limit) +
+                               "). Possivel laco de feedback sem convergencia.",
+                           "task_max_runs");
     }
     return n;
 }
@@ -327,25 +329,31 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     const std::string inputHash = canonicalInputHash(nodeId, itemId, inputContext);
     int iteration = registerRun(loopKey, spec.maxRuns);
 
-    if (spec.model.empty()) throw std::runtime_error("Agente '" + label + "': modelo nao configurado.");
+    if (spec.model.empty()) {
+        throw AgentFailure("Agente '" + label + "': modelo nao configurado.",
+                           "config_model_or_skill_missing");
+    }
 
     ProviderInfo info = resolveProvider(spec.provider);
     if (!info.configError.empty()) {
-        throw std::runtime_error("Provedor '" + spec.provider + "': AI Gateway obrigatorio. "
-                                 "Defina ARESTRIX_AI_GATEWAY_URL e ARESTRIX_AI_GATEWAY_KEY "
-                                 "(ou desative ARESTRIX_REQUIRE_AI_GATEWAY).");
+        throw AgentFailure("Provedor '" + spec.provider + "': AI Gateway obrigatorio. "
+                           "Defina ARESTRIX_AI_GATEWAY_URL e ARESTRIX_AI_GATEWAY_KEY "
+                           "(ou desative ARESTRIX_REQUIRE_AI_GATEWAY).",
+                           "auth_401_403_or_missing_key");
     }
     if (info.baseUrl.empty()) {
-        throw std::runtime_error("Provedor '" + spec.provider + "': defina a variavel " +
-                                 upper(spec.provider) + "_BASE_URL ou ARESTRIX_AI_GATEWAY_URL.");
+        throw AgentFailure("Provedor '" + spec.provider + "': defina a variavel " +
+                               upper(spec.provider) + "_BASE_URL ou ARESTRIX_AI_GATEWAY_URL.",
+                           "config_model_or_skill_missing");
     }
     std::string apiKey = envOr(info.keyEnv, "");
     if (apiKey.empty() && info.keyRequired) {
-        throw std::runtime_error(
+        throw AgentFailure(
             info.gateway
                 ? "Chave virtual do AI Gateway ausente: defina ARESTRIX_AI_GATEWAY_KEY."
                 : "Chave de API ausente: defina a variavel de ambiente " + info.keyEnv +
-                      " (Padroes Globais > Chaves de API).");
+                      " (Padroes Globais > Chaves de API).",
+            "auth_401_403_or_missing_key");
     }
 
     fs::path root = workspaceRoot();
@@ -356,7 +364,8 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         auto p = resolveInWorkspace(root, spec.skillPath);
         std::error_code ec;
         if (!p || !fs::is_regular_file(*p, ec)) {
-            throw std::runtime_error("Skill nao encontrada no workspace: " + spec.skillPath);
+            throw AgentFailure("Skill nao encontrada no workspace: " + spec.skillPath,
+                               "config_model_or_skill_missing");
         }
         skillText = stripFrontmatter(jsonutil::readFile(*p));
     }
@@ -420,7 +429,8 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         try {
             mcpTools = std::make_unique<McpToolbox>(root, spec.mcpServers, spec.mcpAllowed, lang);
         } catch (const std::exception& ex) {
-            throw std::runtime_error("Agente '" + label + "': " + ex.what());
+            throw AgentFailure("Agente '" + label + "': " + ex.what(),
+                               "sandbox_or_tool_unavailable");
         }
         for (const auto& d : mcpTools->definitions()) tools.push_back(d);
     }
@@ -610,7 +620,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
             ++turns;
             if (!t.ok) {
                 failureClass = memoryErrorClass(t.errorCode, t.httpStatus);
-                throw std::runtime_error(t.error);
+                throw AgentFailure(t.error, failureClass);
             }
             if (t.reasoningRejected) chat.includeReasoning = false;
             inTokens += t.inTokens;
@@ -706,8 +716,9 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
 
         if (!finished) {
             failureClass = "task_max_turns";
-            throw std::runtime_error("Agente '" + label + "' excedeu o limite de " + std::to_string(spec.maxTurns) +
-                                     " turnos sem concluir.");
+            throw AgentFailure("Agente '" + label + "' excedeu o limite de " +
+                                   std::to_string(spec.maxTurns) + " turnos sem concluir.",
+                               failureClass);
         }
 
         // Registra a resposta final do agente para consulta/depuracao.

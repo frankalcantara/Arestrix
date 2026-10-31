@@ -670,6 +670,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
     code += "#include \"rt/Runtime.hpp\"\n";
     if (!subflowTargets.empty()) code += "#include \"rt/CallGraph.hpp\"\n";
     code += "#include \"memory/MemoryService.hpp\"\n";
+    code += "#include \"rt/MemoryFailure.hpp\"\n";
     for (const auto& pair : nodes) {
         if (hasValidationRules(pair.second)) {
             code += "#include \"rt/ArtifactValidation.hpp\"\n";
@@ -939,10 +940,18 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
                         for (const auto& d : domains) if (d.is_string()) { domain = d.get<std::string>(); break; }
                     }
                     std::string failPrefix = "Falha no agente " + label + ": ";
-                    body += "    try {\n      " + runCall + "\n" + validationCode +
-                            "    } catch (const std::exception& arx_mem_err) {\n";
+                    body += "    try {\n      " + runCall + "\n" + validationCode + "    } catch (const taskforge::rt::AgentFailure& arx_agent_err) {\n";
+                    body += "      if (!taskforge::rt::isInfrastructureErrorClass(arx_agent_err.errorClass())) {\n";
+                    body += "        memory.proposeLesson(projectId, " + cppString(domain) +
+                            ", \"agent_failure\",\n            std::string(" + cppString(failPrefix) +
+                            ") + arx_agent_err.what(), " + cppString(node.id) +
+                            ", arx_agent_err.errorClass());\n";
+                    body += "      }\n";
+                    body += "      throw;\n";
+                    body += "    } catch (const std::exception& arx_mem_err) {\n";
                     body += "      memory.proposeLesson(projectId, " + cppString(domain) +
-                            ", \"agent_failure\",\n          std::string(" + cppString(failPrefix) + ") + arx_mem_err.what(), " + cppString(node.id) + ");\n";
+                            ", \"agent_failure\",\n          std::string(" + cppString(failPrefix) +
+                            ") + arx_mem_err.what(), " + cppString(node.id) + ", \"agent_exception\");\n";
                     body += "      throw;\n    }\n";
                 } else {
                     body += "    " + runCall + "\n" + validationCode;
