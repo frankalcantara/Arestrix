@@ -74,6 +74,27 @@ struct MemoryValidationRecord {
     std::string createdAt;
 };
 
+// E4: instantaneo autocontido da prova de um item de conhecimento. Nao guarda
+// FK para episodio: sobrevive ao prune da telemetria.
+struct MemoryEvidenceRecord {
+    std::string id;
+    std::string scopeId;
+    std::string targetKind;     // lesson | fact | playbook | entity | proposal | edge
+    std::string targetId;
+    std::string action;         // create | promote | demote | unpromote | invalidate
+    std::string episodeId;
+    std::string runId;
+    std::string nodeId;
+    std::string inputHash;
+    std::string validatorId;
+    std::string validatorVersion;
+    bool ok = false;
+    std::string artifactHash;
+    std::string excerptHash;
+    std::string summary;
+    std::string createdAt;
+};
+
 struct MemoryPurgeOptions {
     bool keepAudit = false;
     bool vacuum = true;
@@ -482,6 +503,16 @@ public:
     taskforge::Json usageSummary(const std::string& scopeId) const;
 
     // Validacao independente ligada a um episodio (telemetria).
+    // E4: instantaneos de evidencia (conhecimento, sem FK para telemetria).
+    std::string recordEvidence(const MemoryEvidenceRecord& evidence);
+    std::vector<MemoryEvidenceRecord> listEvidence(const std::string& scopeId,
+                                                   const std::string& targetKind = "",
+                                                   const std::string& targetId = "",
+                                                   size_t limit = 100) const;
+    taskforge::Json evidenceSummary(const std::string& scopeId) const;
+    size_t evidenceCount(const std::string& scopeId, const std::string& targetKind,
+                         const std::string& targetId) const;
+
     std::string recordValidation(const MemoryValidationRecord& validation);
     std::vector<MemoryValidationRecord> listValidations(const std::string& scopeId,
                                                         const std::string& episodeId = "",

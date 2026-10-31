@@ -15,7 +15,7 @@
   },
   "metrics": {
     "runs": 3,
-    "elapsedSeconds": 14.578,
+    "elapsedSeconds": 13.5,
     "tokens": {
       "prompt": 6465,
       "completion": 849,
@@ -62,7 +62,7 @@
           "memory_edge": 8,
           "memory_embedding": 0,
           "memory_episode": 0,
-          "memory_evidence": 0,
+          "memory_evidence": 9,
           "memory_hit": 0,
           "memory_meta": 1,
           "memory_node": 11,
@@ -85,7 +85,7 @@
           "memory_edge": 8,
           "memory_embedding": 0,
           "memory_episode": 0,
-          "memory_evidence": 0,
+          "memory_evidence": 9,
           "memory_hit": 0,
           "memory_meta": 1,
           "memory_node": 11,
@@ -199,8 +199,8 @@
       }
     },
     "schemaFingerprint": {
-      "knowledge": "f2ecd3a34669b97a",
-      "telemetry": "f2ecd3a34669b97a"
+      "knowledge": "9b7e503757faa28e",
+      "telemetry": "9b7e503757faa28e"
     }
   }
 }

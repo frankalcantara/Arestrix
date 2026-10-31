@@ -104,6 +104,12 @@ behavior is preserved. The playbook gate always uses the verdict, with or withou
 Proposals stay pending in the **Project Memory** panel. Approval promotes the item to active
 knowledge; rejection keeps the record for audit. There is no direct lesson-writing tool.
 
+Every promotion and demotion writes an **evidence snapshot** to `memory_evidence` in the
+knowledge database: target, action, source episode (when available), validator, artifact hash,
+summary and excerpt hash. The snapshot has **no foreign key to the episode**, so telemetry
+retention can delete old episodes, hits and validations without deleting the proof. The report and
+the panel show how many snapshots exist and how many active items lack evidence.
+
 Playbooks leave `candidate` only with independent validation. The gate requires **3 distinct
 `input_hash` values** among the last 20 validated runs for the same `task_type`, a stable validator
 and at most **1 promotion per `task_type` in 24h**. Two consecutive failures or more than 30%

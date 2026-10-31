@@ -211,6 +211,12 @@ public:
     std::vector<MemoryValidationRecord> listValidations(const std::string& projectId,
                                                         const std::string& episodeId = "",
                                                         size_t limit = 100);
+    // E4: evidencia autocontida, lida do banco de conhecimento (nao da telemetria).
+    std::vector<MemoryEvidenceRecord> evidenceFor(const std::string& projectId,
+                                                  const std::string& targetKind,
+                                                  const std::string& targetId = "",
+                                                  size_t limit = 100);
+    taskforge::Json evidenceSummary(const std::string& projectId);
     bool unpromotePlaybook(const std::string& projectId, const std::string& playbookId,
                            const std::string& reason, std::string& error);
 

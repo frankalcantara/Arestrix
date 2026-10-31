@@ -462,6 +462,12 @@ def main():
             "SELECT COUNT(*) FROM memory_playbook WHERE task_type='validacao_artefato' AND status='active'")
         check(demoted and demoted[0][0] == 0,
               "duas reprovacoes seguidas despromoveram o playbook")
+        playbook_evidence = db_rows(
+            project,
+            "SELECT action, ok FROM memory_evidence WHERE target_kind='playbook'")
+        check(any(row[0] == "promote" for row in playbook_evidence) and
+              any(row[0] == "demote" and row[1] == 0 for row in playbook_evidence),
+              "promocao e despromocao deixaram instantaneos de evidencia")
 
         print("\n== E2: consultado distinto de citado ==")
         env_search = dict(env)
@@ -500,12 +506,16 @@ def main():
         except Exception:
             report2 = {}
         check(p_rep2.returncode == 0, "memory report pos-E2 terminou com codigo 0")
-        check(str(report2.get("schemaVersion", {}).get("knowledge", "")) == "2",
-              "o relatorio expoe a versao 2 do esquema")
+        check(str(report2.get("schemaVersion", {}).get("knowledge", "")) == "3",
+              "o relatorio expoe a versao 3 do esquema")
         check(int(report2.get("invalidCitations", 0)) >= 1,
               "o relatorio conta as citacoes invalidas")
         check(int(report2.get("hits", {}).get("citedFromSearch", 0)) >= 1,
               "o relatorio separa citacoes vindas da busca")
+        check(int(report2.get("evidence", {}).get("snapshots", 0)) > 0,
+              "o relatorio le os instantaneos de evidencia")
+        check(int(report2.get("evidence", {}).get("missingTargets", -1)) == 0,
+              "todo item ativo tem evidencia")
 
         print("\n== Memoria desligada com metricas (comparacao de consumo) ==")
         env_off = dict(env)
