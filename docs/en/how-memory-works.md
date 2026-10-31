@@ -138,8 +138,10 @@ Search combines:
 - optional **vector** search when an embedding provider is configured;
 - **RRF fusion** to rank both result sets.
 
-Search **does not index** during a query. Indexing is explicit: the project panel offers **Test**
-and **Reindex**. Ready profiles:
+Search **does not index** during a query. Indexing happens outside the read path: at the end of
+every persistent run (default budget of **10 s or 64 objects**), in the maintenance worker
+(`idle`/`after_episodes`) and in the panel's explicit **Test** and **Reindex** actions. An embedding
+provider failure never fails the run. Ready profiles:
 
 | Profile | Dimensions |
 | :--- | :--- |
@@ -158,8 +160,12 @@ candidates, pending items and a short fingerprint, with these states:
 | `ready` | Current fingerprint, complete index | hybrid |
 | `stale` | Model/dimension/endpoint/template changed | lexical |
 | `pending` | Reindex in progress | lexical |
-| `partial` | Incomplete index | lexical + warning |
+| `partial` | Incomplete index | hybrid: vector for indexed items, lexical for the rest |
 | `failed` | Reindex failed | lexical + error |
+
+In `partial`, items with a vector enter the lexical + vector fusion; items still without a vector
+enter only through the lexical side, without turning hybrid search off. `memory health` and the
+panel show indexed and pending totals.
 
 Changing profiles invalidates the index and offers reindexing. Reindexing is idempotent and
 discards vectors from old fingerprints.

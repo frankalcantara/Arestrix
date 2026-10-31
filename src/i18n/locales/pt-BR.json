@@ -1500,6 +1500,7 @@
     "embedding_model": "Modelo",
     "embedding_endpoint": "Endpoint",
     "embedding_indexed": "Vetores indexados",
+    "embedding_pending_count": "pendentes",
     "btn_test_embeddings": "Testar embeddings",
     "btn_reindex_embeddings": "Reindexar",
     "embedding_test_ok": "Embeddings OK: {{model}} ({{dim}}d) em {{ms}} ms.",

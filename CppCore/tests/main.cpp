@@ -1436,6 +1436,9 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(src.find("memory.episodeIdFor(projectId, arx_val_run, \"agente\")") != std::string::npos);
     CHECK(src.find("memory.recordValidation(projectId, arx_val_record, true)") != std::string::npos);
     CHECK(src.find("\"memoryValidatedReinforcement\":true") != std::string::npos);
+    // E3: indexacao automatica fora da busca, no fim da execucao.
+    CHECK(src.find("memory.indexPending(projectId, 10000, 64)") != std::string::npos);
+    CHECK(src.find("arx_mem_index();") != std::string::npos);
     CHECK(src.find("ARESTRIX_MEMORY_DISABLE") != std::string::npos);
     CHECK(src.find("recordBriefHits(projectId, taskforge::rt::currentRunId(\"agente\"), \"agente\", arx_brief_info)") != std::string::npos);
     CHECK(src.find("\"memoryEnabled\":true") != std::string::npos);
@@ -2037,6 +2040,208 @@ TEST(memory_telemetry_is_separate_from_knowledge) {
         CHECK(telemetry.hitSummary(scope)["hits"] == 1);
     }
 
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+namespace {
+
+// Provider deterministico para testar indexacao e fusao sem servidor externo.
+class TestEmbeddingProvider : public taskforge::memory::IEmbeddingProvider {
+public:
+    explicit TestEmbeddingProvider(int delayMs = 0) : delayMs_(delayMs) {}
+    bool available() const override { return true; }
+    std::string modelId() const override { return "test-embed"; }
+    int dim() const override { return 2; }
+    bool embed(const std::vector<std::string>& texts, bool,
+               std::vector<taskforge::memory::Embedding>& out,
+               std::string& error) override {
+        out.clear();
+        if (delayMs_ > 0) std::this_thread::sleep_for(std::chrono::milliseconds(delayMs_));
+        for (const auto& text : texts) {
+            taskforge::memory::Embedding embedding;
+            embedding.model = "test-embed";
+            embedding.dim = 2;
+            embedding.values = {1.0f, static_cast<float>((text.size() % 5) + 1)};
+            out.push_back(std::move(embedding));
+        }
+        error.clear();
+        return true;
+    }
+
+private:
+    int delayMs_ = 0;
+};
+
+class FailingEmbeddingProvider : public taskforge::memory::IEmbeddingProvider {
+public:
+    bool available() const override { return true; }
+    std::string modelId() const override { return "test-embed"; }
+    int dim() const override { return 2; }
+    bool embed(const std::vector<std::string>&, bool,
+               std::vector<taskforge::memory::Embedding>& out, std::string& error) override {
+        out.clear();
+        error = "servidor de embeddings fora do ar";
+        return false;
+    }
+};
+
+} // namespace
+
+TEST(memory_index_pending_partial_fusion_and_ready_state) {
+    using taskforge::memory::EmbeddingConfig;
+    using taskforge::memory::MemoryHitRef;
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_index_partial_" + stamp);
+    const std::string pId = "index-partial-" + stamp;
+
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, (root / "knowledge.db").string()));
+    CHECK(memory.configureTelemetry(pId, (root / "telemetry.db").string()));
+
+    EmbeddingConfig config;
+    config.enabled = true;
+    config.model = "test-embed";
+    config.dim = 2;
+    config.batchSize = 1;
+    CHECK(memory.configureEmbeddings(pId, config));
+    memory.setEmbeddingProvider(pId, std::make_shared<TestEmbeddingProvider>());
+
+    const std::string alpha = memory.recordLesson(pId, "svg", "sombra",
+                                                  "regra sombra alpha", "test");
+    const std::string beta = memory.recordLesson(pId, "svg", "sombra",
+                                                 "regra sombra beta", "test");
+    CHECK(!alpha.empty() && !beta.empty());
+
+    // Indexa apenas um dos dois: estado partial, mas a busca ja e hibrida.
+    const auto first = memory.indexPending(pId, 60000, 1);
+    CHECK(first.value("state", std::string()) == "partial");
+    CHECK(first.value("indexed", 0LL) == 1);
+    CHECK(first.value("pending", 0LL) == 1);
+
+    std::vector<MemoryHitRef> hits;
+    const std::string text = memory.searchContext(pId, "sombra", 10, {"svg"}, &hits);
+    CHECK(text.find("alpha") != std::string::npos);
+    CHECK(text.find("beta") != std::string::npos);
+    // O fallback lexical inclui o cabecalho; a fusao hibrida nao.
+    CHECK(text.find("RESULTADOS DA BUSCA") == std::string::npos);
+
+    const auto second = memory.indexPending(pId, 60000, 0);
+    CHECK(second.value("state", std::string()) == "ready");
+    CHECK(second.value("indexed", 0LL) == 2);
+    CHECK(second.value("pending", 0LL) == 0);
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_index_pending_respects_object_and_time_budgets) {
+    using taskforge::memory::EmbeddingConfig;
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_index_budget_" + stamp);
+    const std::string pId = "index-budget-" + stamp;
+
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, (root / "knowledge.db").string()));
+    CHECK(memory.configureTelemetry(pId, (root / "telemetry.db").string()));
+
+    EmbeddingConfig config;
+    config.enabled = true;
+    config.model = "test-embed";
+    config.dim = 2;
+    config.batchSize = 8;
+    CHECK(memory.configureEmbeddings(pId, config));
+    memory.setEmbeddingProvider(pId, std::make_shared<TestEmbeddingProvider>());
+
+    bool seeded = true;
+    for (int i = 0; i < 5000; ++i) {
+        seeded = !memory.recordLesson(pId, "svg", "sombra",
+                                      "regra " + std::to_string(i), "test").empty() && seeded;
+    }
+    CHECK(seeded);
+    const auto capped = memory.indexPending(pId, 60000, 64);
+    CHECK(capped.value("indexedThisRun", 0LL) == 64);
+    CHECK(capped.value("pendingAfterRun", 0LL) == 4936);
+    CHECK(capped.value("state", std::string()) == "partial");
+
+    // Orcamento de tempo: provider lento, um objeto por lote.
+    EmbeddingConfig slowConfig = config;
+    slowConfig.batchSize = 1;
+    CHECK(memory.configureEmbeddings(pId, slowConfig));
+    memory.setEmbeddingProvider(pId, std::make_shared<TestEmbeddingProvider>(10));
+    const auto timed = memory.indexPending(pId, 20, 100);
+    CHECK(timed.value("stoppedByBudget", false));
+    CHECK(timed.value("indexedThisRun", 0LL) < 100);
+    CHECK(timed.value("state", std::string()) == "partial");
+
+    // Servidor fora do ar: a rodada termina sem excecao e o estado fica failed.
+    memory.setEmbeddingProvider(pId, std::make_shared<FailingEmbeddingProvider>());
+    const auto failed = memory.indexPending(pId, 1000, 10);
+    CHECK(!failed.value("ok", true));
+    CHECK(failed.value("state", std::string()) == "failed");
+    CHECK(failed.value("failedThisRun", 0LL) > 0);
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_search_does_not_write_knowledge) {
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_search_readonly_" + stamp);
+    const fs::path dbPath = root / "knowledge.db";
+    const std::string pId = "search-readonly-" + stamp;
+
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, dbPath.string()));
+    CHECK(memory.configureTelemetry(pId, (root / "telemetry.db").string()));
+    CHECK(!memory.recordLesson(pId, "svg", "sombra", "regra sombra leitura", "test").empty());
+
+    sqlite3* observer = nullptr;
+    CHECK(sqlite3_open_v2(dbPath.string().c_str(), &observer, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK);
+    auto dataVersion = [&]() {
+        sqlite3_stmt* st = nullptr;
+        int value = 0;
+        if (sqlite3_prepare_v2(observer, "PRAGMA data_version", -1, &st, nullptr) == SQLITE_OK &&
+            sqlite3_step(st) == SQLITE_ROW) {
+            value = sqlite3_column_int(st, 0);
+        }
+        if (st) sqlite3_finalize(st);
+        return value;
+    };
+    const int beforeVersion = dataVersion();
+    std::string hashError;
+    const std::string beforeHash = taskforge::project::RunnerSecurity::sha256File(dbPath, hashError);
+    CHECK(!beforeHash.empty());
+
+    bool searchesOk = true;
+    for (int i = 0; i < 100; ++i) {
+        std::vector<taskforge::memory::MemoryHitRef> hits;
+        const std::string text = memory.searchContext(pId, "sombra", 10, {"svg"}, &hits);
+        searchesOk = !text.empty() && searchesOk;
+    }
+    CHECK(searchesOk);
+
+    const int afterVersion = dataVersion();
+    const std::string afterHash = taskforge::project::RunnerSecurity::sha256File(dbPath, hashError);
+    CHECK(beforeVersion == afterVersion);
+    CHECK(beforeHash == afterHash);
+    sqlite3_close(observer);
+
+    memory.closeProject(pId);
     std::error_code ec;
     fs::remove_all(root, ec);
 }
