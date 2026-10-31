@@ -493,7 +493,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
 
     std::string finalText;
     bool finished = false;
-    long long inTokens = 0, outTokens = 0;
+    long long inTokens = 0, outTokens = 0, cachedTokens = 0, cacheWriteTokens = 0;
     int turns = 0;
     int retries = 0;
     const std::string taskType = !spec.memoryTaskType.empty() ? spec.memoryTaskType : nodeId;
@@ -529,6 +529,8 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         usage.promptTokens = inTokens;
         usage.completionTokens = outTokens;
         usage.totalTokens = inTokens + outTokens;
+        usage.cachedTokens = cachedTokens;
+        usage.cacheWriteTokens = cacheWriteTokens;
         usage.calls = turns;
         usage.latencyMs = static_cast<long long>(elapsed);
         usage.memoryContextChars = static_cast<long long>(spec.memoryContext.size());
@@ -548,7 +550,9 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
             (errorClass.empty() ? "agent_exception" : errorClass);
         json meta{{"label", label}, {"provider", spec.provider}, {"model", spec.model},
                   {"outcome", usage.outcome},
-                  {"tokens", usage.totalTokens}, {"calls", usage.calls}, {"retries", usage.retries},
+                  {"tokens", usage.totalTokens}, {"cachedTokens", usage.cachedTokens},
+                  {"cacheWriteTokens", usage.cacheWriteTokens},
+                  {"calls", usage.calls}, {"retries", usage.retries},
                   {"memoryEnabled", spec.memoryEnabled}, {"memoryContextChars", usage.memoryContextChars}};
         if (!success) {
             if (!effectiveClass.empty()) meta["errorClass"] = effectiveClass;
@@ -607,6 +611,8 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
             if (t.reasoningRejected) chat.includeReasoning = false;
             inTokens += t.inTokens;
             outTokens += t.outTokens;
+            cachedTokens += t.cachedTokens;
+            cacheWriteTokens += t.cacheWriteTokens;
             retries += t.retries;
 
             if (!t.reasoning.empty()) {
@@ -714,6 +720,8 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
             {"prompt_tokens", inTokens},
             {"completion_tokens", outTokens},
             {"total_tokens", inTokens + outTokens},
+            {"cached_tokens", cachedTokens},
+            {"cache_write_tokens", cacheWriteTokens},
             {"calls", turns},
             {"retries", retries},
             {"memory_enabled", spec.memoryEnabled},

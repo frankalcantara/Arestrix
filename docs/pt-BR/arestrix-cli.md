@@ -122,9 +122,9 @@ Diagnostica runtime, toolchain, raiz e presença de chaves de provedor. Chaves s
 .\arestrix-cli.exe memory report --project .\examples\04-memoria --json
 ```
 
-Lê o SQLite nativamente e mostra tokens, chamadas, retries, sucesso/falha, contexto e memórias
-injetadas/usadas. Substitui o `memory_report.py` no fluxo de automação; o script Python continua
-opcional para desenvolvimento.
+Lê o SQLite nativamente e mostra tokens de prompt/saída, cache lido e cache escrito, chamadas,
+retries, sucesso/falha, contexto e memórias injetadas/usadas. Substitui o `memory_report.py` no fluxo
+de automação; o script Python continua opcional para desenvolvimento.
 
 ### `memory prune`
 

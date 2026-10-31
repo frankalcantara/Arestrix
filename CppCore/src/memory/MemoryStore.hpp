@@ -118,6 +118,8 @@ struct MemoryUsageRecord {
     long long promptTokens = 0;
     long long completionTokens = 0;
     long long totalTokens = 0;
+    long long cachedTokens = 0;
+    long long cacheWriteTokens = 0;
     long long calls = 0;
     long long latencyMs = 0;
     long long memoryContextChars = 0;

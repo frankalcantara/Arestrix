@@ -142,6 +142,11 @@ The complete guide, with configuration, retention, security and a quick referenc
 
 ### Measuring API consumption
 
+Telemetry records prompt, output, cache-read (`cachedTokens`) and cache-write (`cacheWriteTokens`)
+tokens, plus calls, retries and latency. Use the panel or `arestrix-cli memory report` for cost per
+run.
+
+
 Each agent run records tokens, calls, latency and memory context size in the `memory_usage` table.
 To compare consumption with memory on/off:
 

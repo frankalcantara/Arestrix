@@ -309,8 +309,11 @@ ChatReply parseResponseBody(const ProviderInfo& info, const std::string& body) {
     ChatReply r;
     if (info.protocol == "anthropic") {
         if (j.contains("usage") && j["usage"].is_object()) {
-            r.inTokens = j["usage"].value("input_tokens", 0LL);
-            r.outTokens = j["usage"].value("output_tokens", 0LL);
+            const Json& usage = j["usage"];
+            r.inTokens = usage.value("input_tokens", 0LL);
+            r.outTokens = usage.value("output_tokens", 0LL);
+            r.cachedTokens = usage.value("cache_read_input_tokens", 0LL);
+            r.cacheWriteTokens = usage.value("cache_creation_input_tokens", 0LL);
         }
         r.stopReason = j.value("stop_reason", std::string());
         if (!j.contains("content") || !j["content"].is_array()) {
@@ -330,8 +333,18 @@ ChatReply parseResponseBody(const ProviderInfo& info, const std::string& body) {
         }
     } else {
         if (j.contains("usage") && j["usage"].is_object()) {
-            r.inTokens = j["usage"].value("prompt_tokens", 0LL);
-            r.outTokens = j["usage"].value("completion_tokens", 0LL);
+            const Json& usage = j["usage"];
+            r.inTokens = usage.value("prompt_tokens", 0LL);
+            r.outTokens = usage.value("completion_tokens", 0LL);
+            // OpenAI: prompt_tokens_details.cached_tokens; DeepSeek:
+            // prompt_cache_hit_tokens; alguns gateways expõem cached_tokens.
+            r.cachedTokens = usage.value("cached_tokens",
+                                         usage.value("prompt_cache_hit_tokens", 0LL));
+            if (usage.contains("prompt_tokens_details") &&
+                usage["prompt_tokens_details"].is_object()) {
+                r.cachedTokens = usage["prompt_tokens_details"].value("cached_tokens", r.cachedTokens);
+            }
+            r.cacheWriteTokens = usage.value("cache_creation_input_tokens", 0LL);
         }
         if (!j.contains("choices") || !j["choices"].is_array() || j["choices"].empty()) {
             throw std::runtime_error("Resposta inesperada da API (sem 'choices'): " + body.substr(0, 400));

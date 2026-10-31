@@ -458,6 +458,8 @@ CREATE TABLE IF NOT EXISTS memory_usage (
   prompt_tokens INTEGER NOT NULL DEFAULT 0,
   completion_tokens INTEGER NOT NULL DEFAULT 0,
   total_tokens INTEGER NOT NULL DEFAULT 0,
+  cached_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_write_tokens INTEGER NOT NULL DEFAULT 0,
   calls INTEGER NOT NULL DEFAULT 0,
   latency_ms INTEGER NOT NULL DEFAULT 0,
   memory_context_chars INTEGER NOT NULL DEFAULT 0,
@@ -591,6 +593,8 @@ CREATE INDEX IF NOT EXISTS idx_memory_policy_scope ON memory_policy(scope_id, ke
     addColumnIfMissing(db_, "memory_usage", "retries", "INTEGER NOT NULL DEFAULT 0");
     addColumnIfMissing(db_, "memory_usage", "outcome", "TEXT NOT NULL DEFAULT ''");
     addColumnIfMissing(db_, "memory_edge", "utility", "REAL NOT NULL DEFAULT 0.5");
+    addColumnIfMissing(db_, "memory_usage", "cached_tokens", "INTEGER NOT NULL DEFAULT 0");
+    addColumnIfMissing(db_, "memory_usage", "cache_write_tokens", "INTEGER NOT NULL DEFAULT 0");
     addColumnIfMissing(db_, "memory_episode", "task_type", "TEXT NOT NULL DEFAULT ''");
     addColumnIfMissing(db_, "memory_episode", "outcome", "TEXT NOT NULL DEFAULT ''");
     addColumnIfMissing(db_, "memory_episode", "error_class", "TEXT NOT NULL DEFAULT ''");
@@ -3672,8 +3676,8 @@ bool MemoryStore::recordUsage(const MemoryUsageRecord& usage) {    std::lock_gua
     if (!db_) return false;
     Stmt st;
     std::string error;
-    if (!prepare(db_, "INSERT INTO memory_usage(id,scope_id,run_id,node_id,provider,model,prompt_tokens,completion_tokens,total_tokens,calls,latency_ms,memory_context_chars,memory_enabled,retries,outcome,created_at) "
-                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", st, error)) {
+    if (!prepare(db_, "INSERT INTO memory_usage(id,scope_id,run_id,node_id,provider,model,prompt_tokens,completion_tokens,total_tokens,cached_tokens,cache_write_tokens,calls,latency_ms,memory_context_chars,memory_enabled,retries,outcome,created_at) "
+                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", st, error)) {
         lastError_ = error;
         return false;
     }
@@ -3686,13 +3690,15 @@ bool MemoryStore::recordUsage(const MemoryUsageRecord& usage) {    std::lock_gua
     sqlite3_bind_int64(st.stmt, 7, usage.promptTokens);
     sqlite3_bind_int64(st.stmt, 8, usage.completionTokens);
     sqlite3_bind_int64(st.stmt, 9, usage.totalTokens);
-    sqlite3_bind_int64(st.stmt, 10, usage.calls);
-    sqlite3_bind_int64(st.stmt, 11, usage.latencyMs);
-    sqlite3_bind_int64(st.stmt, 12, usage.memoryContextChars);
-    sqlite3_bind_int64(st.stmt, 13, usage.memoryEnabled);
-    sqlite3_bind_int64(st.stmt, 14, usage.retries);
-    bindText(st.stmt, 15, usage.outcome);
-    bindText(st.stmt, 16, nowIso());
+    sqlite3_bind_int64(st.stmt, 10, usage.cachedTokens);
+    sqlite3_bind_int64(st.stmt, 11, usage.cacheWriteTokens);
+    sqlite3_bind_int64(st.stmt, 12, usage.calls);
+    sqlite3_bind_int64(st.stmt, 13, usage.latencyMs);
+    sqlite3_bind_int64(st.stmt, 14, usage.memoryContextChars);
+    sqlite3_bind_int64(st.stmt, 15, usage.memoryEnabled);
+    sqlite3_bind_int64(st.stmt, 16, usage.retries);
+    bindText(st.stmt, 17, usage.outcome);
+    bindText(st.stmt, 18, nowIso());
     if (stepRetry(st.stmt) != SQLITE_DONE) {
         lastError_ = sqlite3_errmsg(db_);
         return false;
@@ -3707,7 +3713,8 @@ taskforge::Json MemoryStore::usageSummary(const std::string& scopeId) const {
     Stmt st;
     std::string error;
     if (!prepare(db_, "SELECT COUNT(*), COALESCE(SUM(prompt_tokens),0), COALESCE(SUM(completion_tokens),0), "
-                       "COALESCE(SUM(total_tokens),0), COALESCE(SUM(calls),0), COALESCE(AVG(latency_ms),0), "
+                       "COALESCE(SUM(total_tokens),0), COALESCE(SUM(cached_tokens),0), "
+                       "COALESCE(SUM(cache_write_tokens),0), COALESCE(SUM(calls),0), COALESCE(AVG(latency_ms),0), "
                        "COALESCE(SUM(memory_context_chars),0), COALESCE(SUM(memory_enabled),0), "
                        "COALESCE(SUM(retries),0), "
                        "COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
@@ -3722,13 +3729,15 @@ taskforge::Json MemoryStore::usageSummary(const std::string& scopeId) const {
         out["promptTokens"] = columnInt(st.stmt, 1);
         out["completionTokens"] = columnInt(st.stmt, 2);
         out["totalTokens"] = columnInt(st.stmt, 3);
-        out["calls"] = columnInt(st.stmt, 4);
-        out["avgLatencyMs"] = columnDouble(st.stmt, 5);
-        out["memoryContextChars"] = columnInt(st.stmt, 6);
-        out["memoryEnabledRuns"] = columnInt(st.stmt, 7);
-        out["retries"] = columnInt(st.stmt, 8);
-        out["successRuns"] = columnInt(st.stmt, 9);
-        out["failureRuns"] = columnInt(st.stmt, 10);
+        out["cachedTokens"] = columnInt(st.stmt, 4);
+        out["cacheWriteTokens"] = columnInt(st.stmt, 5);
+        out["calls"] = columnInt(st.stmt, 6);
+        out["avgLatencyMs"] = columnDouble(st.stmt, 7);
+        out["memoryContextChars"] = columnInt(st.stmt, 8);
+        out["memoryEnabledRuns"] = columnInt(st.stmt, 9);
+        out["retries"] = columnInt(st.stmt, 10);
+        out["successRuns"] = columnInt(st.stmt, 11);
+        out["failureRuns"] = columnInt(st.stmt, 12);
     }
     return out;
 }

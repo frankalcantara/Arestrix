@@ -1087,6 +1087,7 @@ int runMemory(const std::vector<std::string>& args) {
 
     json out{{"database", dbPath.string()}, {"runs", 0}, {"successRuns", 0}, {"failureRuns", 0},
              {"retries", 0}, {"promptTokens", 0}, {"completionTokens", 0}, {"totalTokens", 0},
+             {"cachedTokens", 0}, {"cacheWriteTokens", 0},
              {"calls", 0}, {"avgLatencyMs", 0.0}, {"memoryContextChars", 0}, {"memoryEnabledRuns", 0},
              {"hits", json{{"total", 0}, {"injected", 0}, {"used", 0}, {"consulted", 0},
                            {"usedInjected", 0}, {"success", 0}, {"failure", 0}}},
@@ -1110,6 +1111,24 @@ int runMemory(const std::vector<std::string>& args) {
             out["avgLatencyMs"] = sqlite3_column_double(st, 8);
             out["memoryContextChars"] = sqlite3_column_int64(st, 9);
             out["memoryEnabledRuns"] = sqlite3_column_int64(st, 10);
+        }
+        sqlite3_finalize(st);
+        st = nullptr;
+    }
+
+    bool hasCachedTokens = false;
+    if (prepare("PRAGMA table_info(memory_usage)", &st)) {
+        while (sqlite3_step(st) == SQLITE_ROW) {
+            if (sqliteText(st, 1) == "cached_tokens") hasCachedTokens = true;
+        }
+        sqlite3_finalize(st);
+        st = nullptr;
+    }
+    if (hasCachedTokens &&
+        prepare("SELECT COALESCE(SUM(cached_tokens),0), COALESCE(SUM(cache_write_tokens),0) FROM memory_usage", &st)) {
+        if (sqlite3_step(st) == SQLITE_ROW) {
+            out["cachedTokens"] = sqlite3_column_int64(st, 0);
+            out["cacheWriteTokens"] = sqlite3_column_int64(st, 1);
         }
         sqlite3_finalize(st);
         st = nullptr;
@@ -1202,7 +1221,9 @@ int runMemory(const std::vector<std::string>& args) {
                   << " | retries: " << out["retries"].get<long long>() << "\n";
         std::cout << "Tokens: " << out["totalTokens"].get<long long>()
                   << " (prompt " << out["promptTokens"].get<long long>()
-                  << " / saida " << out["completionTokens"].get<long long>() << ")\n";
+                  << " / saida " << out["completionTokens"].get<long long>()
+                  << " / cache " << out["cachedTokens"].get<long long>()
+                  << " + " << out["cacheWriteTokens"].get<long long>() << " escrita)\n";
         std::cout << "Contexto: " << out["memoryContextChars"].get<long long>()
                   << " caracteres | runs com memoria: " << out["memoryEnabledRuns"].get<long long>() << "\n";
         std::cout << "Memorias injetadas: " << out["hits"]["injected"].get<long long>()

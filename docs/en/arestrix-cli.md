@@ -122,9 +122,9 @@ values are never printed.
 .\arestrix-cli.exe memory report --project .\examples\04-memoria --json
 ```
 
-Reads SQLite natively and shows tokens, calls, retries, success/failure, context and
-injected/used memories. It replaces `memory_report.py` in automation; the Python script remains
-optional for development.
+Reads SQLite natively and shows prompt/output tokens, cache-read and cache-write tokens, calls,
+retries, success/failure, context and injected/used memories. It replaces `memory_report.py` in
+automation; the Python script remains optional for development.
 
 ### `memory prune`
 

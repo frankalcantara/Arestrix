@@ -165,6 +165,13 @@ Essa é a versão **A/B v1**: mede custo e conteúdo do contexto, não a taxa de
 validador. O protocolo completo, com tarefas fixas, repetições e telemetria por braço, é a
 evolução seguinte.
 
+### Custo por execução
+
+A telemetria registra prompt, saída e os tokens de **prompt cache**: leitura de cache
+(`cached_tokens`) e escrita de cache (`cache_write_tokens`), quando o provedor informa. O painel e
+`arestrix-cli memory report` mostram o total; o custo efetivo usa o preço do provedor para tokens
+normais, cached e de escrita.
+
 ## 9. Retenção, segurança e escopo
 
 - **Escopo estrito:** o conhecimento do projeto não vaza para outro projeto; o workspace só é

@@ -81,6 +81,8 @@ struct ChatReply {
     std::string stopReason;
     long long inTokens = 0;
     long long outTokens = 0;
+    long long cachedTokens = 0;      // prompt cache read (desconto no custo)
+    long long cacheWriteTokens = 0;  // prompt cache write, quando o provedor informa
     bool reasoningRejected = false;   // o servidor recusou reasoning_content: envie os proximos sem ele
     int retries = 0;                  // retentativas HTTP (429/5xx/timeout)
     int httpStatus = 0;               // ultimo status HTTP, quando houver

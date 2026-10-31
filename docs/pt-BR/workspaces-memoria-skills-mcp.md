@@ -143,6 +143,11 @@ O guia completo, com configuração, retenção, segurança e referência rápid
 
 ### Medindo o consumo de API
 
+A telemetria registra prompt, saída, tokens de cache lidos (`cachedTokens`) e escritos
+(`cacheWriteTokens`), além de chamadas, retries e latência. Use o painel ou
+`arestrix-cli memory report` para o custo por execução.
+
+
 Cada execução de agente registra tokens, chamadas, latência e tamanho do contexto de memória na
 tabela `memory_usage`. Para comparar o consumo com a memória ligada/desligada:
 

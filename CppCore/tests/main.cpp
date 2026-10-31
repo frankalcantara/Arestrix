@@ -1614,6 +1614,8 @@ TEST(memory_store_working_lessons_temporal_and_usage) {
     usage.promptTokens = 100;
     usage.completionTokens = 20;
     usage.totalTokens = 120;
+    usage.cachedTokens = 80;
+    usage.cacheWriteTokens = 10;
     usage.calls = 1;
     usage.memoryContextChars = 50;
     usage.memoryEnabled = 1;
@@ -1624,6 +1626,8 @@ TEST(memory_store_working_lessons_temporal_and_usage) {
     CHECK(summary["runs"] == 1);
     CHECK(summary["promptTokens"] == 100);
     CHECK(summary["totalTokens"] == 120);
+    CHECK(summary["cachedTokens"] == 80);
+    CHECK(summary["cacheWriteTokens"] == 10);
     CHECK(summary["successRuns"] == 1);
     CHECK(summary["failureRuns"] == 0);
     CHECK(summary["retries"] == 2);
@@ -5849,11 +5853,13 @@ TEST(model_client_converts_history_for_openai_and_anthropic) {
     CHECK(an["tools"][0].contains("input_schema"));
 
     auto r1 = rt::parseResponseBody(rt::resolveProvider("openai"),
-        R"({"choices":[{"finish_reason":"tool_calls","message":{"content":null,"tool_calls":[{"id":"x","function":{"name":"connect","arguments":"{\"from\":\"a\"}"}}]}}],"usage":{"prompt_tokens":5,"completion_tokens":2}})");
+        R"({"choices":[{"finish_reason":"tool_calls","message":{"content":null,"tool_calls":[{"id":"x","function":{"name":"connect","arguments":"{\"from\":\"a\"}"}}]}}],"usage":{"prompt_tokens":5,"completion_tokens":2,"prompt_tokens_details":{"cached_tokens":3}}})");
     CHECK(r1.ok && r1.toolCalls.size() == 1 && r1.toolCalls[0].args.value("from", std::string()) == "a" && r1.inTokens == 5);
+    CHECK(r1.cachedTokens == 3);
     auto r2 = rt::parseResponseBody(rt::resolveProvider("anthropic"),
-        R"({"stop_reason":"tool_use","content":[{"type":"text","text":"ok"},{"type":"tool_use","id":"t","name":"get_graph","input":{}}],"usage":{"input_tokens":3,"output_tokens":1}})");
+        R"({"stop_reason":"tool_use","content":[{"type":"text","text":"ok"},{"type":"tool_use","id":"t","name":"get_graph","input":{}}],"usage":{"input_tokens":3,"output_tokens":1,"cache_read_input_tokens":2,"cache_creation_input_tokens":1}})");
     CHECK(r2.text == "ok" && r2.toolCalls.size() == 1 && r2.outTokens == 1);
+    CHECK(r2.cachedTokens == 2 && r2.cacheWriteTokens == 1);
 
     CHECK(!rt::resolveProvider("jev").supportsTools);
     // Servidor local compativel com OpenAI: o suporte a tools depende do modelo, mas o provedor nao e

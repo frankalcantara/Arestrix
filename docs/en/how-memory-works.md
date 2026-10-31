@@ -162,6 +162,13 @@ The panel offers **Compare with and without memory (context)**. The action:
 This is **A/B v1**: it measures context cost and content, not the validator approval rate. The full
 protocol, with fixed tasks, repetitions and per-arm telemetry, is the next evolution.
 
+### Cost per run
+
+Telemetry records prompt, output and **prompt cache** tokens: cache reads (`cached_tokens`) and cache
+writes (`cache_write_tokens`) when the provider reports them. The panel and
+`arestrix-cli memory report` show the totals; effective cost uses the provider's normal, cached and
+cache-write prices.
+
 ## 9. Retention, security and scope
 
 - **Strict scope:** project knowledge does not leak into another project; the workspace is read only
