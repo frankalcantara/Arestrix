@@ -614,6 +614,7 @@ void ui_get_memory_status(webui::window::event* e) {
     res["embedding"] = taskforge::memory::MemoryService::getInstance().embeddingStatus(projectId);
     res["consolidation"] = taskforge::memory::MemoryService::getInstance().consolidationStatus(projectId);
     res["playbooks"] = taskforge::memory::MemoryService::getInstance().listPlaybooks(projectId, "", "", 100);
+    res["stateKeys"] = taskforge::memory::MemoryService::getInstance().stateKeys(projectId);
     res["workspace"] = taskforge::memory::MemoryService::getInstance().workspaceStatus(projectId);
 
     e->return_string(res.dump());
@@ -747,6 +748,63 @@ void ui_run_memory_ab(webui::window::event* e) {
 }
 
 // Wrapper de comunicação JS -> C++ (Configurar Persistência de Memória)
+void ui_declare_memory_state_key(webui::window::event* e) {
+    std::string payload = e->get_string();
+    std::string projectId = "default";
+    std::string key;
+    std::string scopeKind = "project";
+    std::string valueMode = "replace";
+    taskforge::Json schema = taskforge::Json::object();
+    long long maxBytes = 16384;
+    long long ttlSeconds = 0;
+    long long versionedKeep = 5;
+    std::string error;
+    try {
+        auto j = taskforge::jsonutil::parse(payload);
+        projectId = j.value("projectId", "default");
+        key = j.value("key", std::string());
+        scopeKind = j.value("scope", std::string("project"));
+        valueMode = j.value("mode", std::string("replace"));
+        maxBytes = j.value("maxBytes", 16384LL);
+        ttlSeconds = j.value("ttlSeconds", 0LL);
+        versionedKeep = j.value("keep", 5LL);
+        if (j.contains("schema")) {
+            if (j["schema"].is_string()) {
+                if (auto parsed = taskforge::jsonutil::tryParse(j["schema"].str())) schema = *parsed;
+            } else if (j["schema"].is_object()) {
+                schema = j["schema"];
+            }
+        }
+    } catch (...) {}
+    configureProjectMemory(projectId, true);
+    const bool ok = taskforge::memory::MemoryService::getInstance().declareStateKey(
+        projectId, key, scopeKind, schema, maxBytes, ttlSeconds, valueMode,
+        versionedKeep, error);
+    taskforge::Json out{{"ok", ok}, {"key", key}};
+    if (!error.empty()) out["error"] = error;
+    e->return_string(out.dump());
+}
+
+void ui_unpromote_memory_playbook(webui::window::event* e) {
+    std::string payload = e->get_string();
+    std::string projectId = "default";
+    std::string playbookId;
+    std::string reason = "manual";
+    try {
+        auto j = taskforge::jsonutil::parse(payload);
+        projectId = j.value("projectId", "default");
+        playbookId = j.value("id", std::string());
+        reason = j.value("reason", std::string("manual"));
+    } catch (...) {}
+    configureProjectMemory(projectId, true);
+    std::string error;
+    const bool ok = taskforge::memory::MemoryService::getInstance().unpromotePlaybook(
+        projectId, playbookId, reason, error);
+    taskforge::Json out{{"ok", ok}, {"id", playbookId}};
+    if (!error.empty()) out["error"] = error;
+    e->return_string(out.dump());
+}
+
 void ui_set_memory_persistence(webui::window::event* e) {
     std::string payload = e->get_string();
     std::string projectId = "default";
@@ -3175,6 +3233,8 @@ int main(int argc, char** argv) {
     win.bind("get_memory_status", ui_get_memory_status);
     win.bind("preview_memory_brief", ui_preview_memory_brief);
     win.bind("run_memory_ab", ui_run_memory_ab);
+    win.bind("declare_memory_state_key", ui_declare_memory_state_key);
+    win.bind("unpromote_memory_playbook", ui_unpromote_memory_playbook);
     win.bind("set_memory_persistence", ui_set_memory_persistence);
     win.bind("clear_memory", ui_clear_memory);
     win.bind("prune_memory", ui_prune_memory);

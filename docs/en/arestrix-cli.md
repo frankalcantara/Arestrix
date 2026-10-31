@@ -225,12 +225,14 @@ duplicates become `superseded`, conflict losers become `candidate` and unused me
 .\\arestrix-cli.exe memory workspace status --project .\\examples\\04-memoria --workspace-id team
 .\\arestrix-cli.exe memory promote --project .\\examples\\04-memoria --workspace-id team `
   --kind lesson --id <lesson-id> --evidence "reviewed by two people"
+.\\arestrix-cli.exe memory unpromote --project .\\examples\\04-memoria --id <playbook-id> `
+  --reason "validator changed"
 ```
 
 The workspace uses `.workspace/memory/memory.db`. The project reads the workspace; the
 workspace does not read the project's private memory. `promote` accepts `lesson`, `fact` and
 `playbook`, requires evidence and writes audit entries in both databases. Promotion never
-deletes the original.
+deletes the original. `unpromote` returns an active playbook to `candidate` with audit.
 
 ### `mcp`
 

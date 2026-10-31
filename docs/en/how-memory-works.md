@@ -93,8 +93,8 @@ knowledge; rejection keeps the record for audit. There is no direct lesson-writi
 Playbooks leave `candidate` only with independent validation. The gate requires **3 distinct
 `input_hash` values** among the last 20 validated runs for the same `task_type`, a stable validator
 and at most **1 promotion per `task_type` in 24h**. Two consecutive failures or more than 30%
-failures in 10 validated runs return the playbook to candidate. `unpromote` is available through the
-API.
+failures in 10 validated runs return the playbook to candidate. In the panel, an active playbook has
+a **Back to candidate** button; the CLI equivalent is `memory unpromote`.
 
 Facts also have **predicate cardinality**. Accumulation predicates — `USES`, `USES_TOOL`,
 `PRODUCES`, `READS`, `WRITES`, `TOUCHES`, `CITES`, `INCLUDES`, `TAGGED_WITH`, `HAS`, `DEPENDS_ON` —
@@ -213,6 +213,9 @@ brief** and is reachable only through tools.
 - `memory_state_list` does not return values. Reads are labeled as untrusted data from a previous
   run.
 - Writes, refusals and conflicts are audited; reads are not.
+
+In the Studio, the **State** tab in the **Project Memory** panel lists declared keys and lets you
+create one with scope, schema, TTL, mode and retained versions. The agent still cannot create keys.
 
 Declare and operate manually through the CLI:
 

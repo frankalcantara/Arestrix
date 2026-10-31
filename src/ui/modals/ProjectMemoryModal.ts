@@ -8,7 +8,7 @@ export class ProjectMemoryModal {
   private overlay: HTMLElement;
   private graph: Graph;
   private windowController?: IModalWindowController;
-  private activeTab: 'knowledge' | 'lessons' | 'maintenance' = 'knowledge';
+  private activeTab: 'knowledge' | 'lessons' | 'state' | 'maintenance' = 'knowledge';
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -107,8 +107,11 @@ export class ProjectMemoryModal {
           <button type="button" class="tab-btn ${this.activeTab === 'lessons' ? 'active' : ''}" data-tab="lessons">
             <span>📚</span> ${t('project_memory.tab_lessons', '2. Lições Globais')}
           </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'state' ? 'active' : ''}" data-tab="state">
+            <span>🗂️</span> ${t('project_memory.tab_state', '3. Estado')}
+          </button>
           <button type="button" class="tab-btn ${this.activeTab === 'maintenance' ? 'active' : ''}" data-tab="maintenance">
-            <span>⚡</span> ${t('project_memory.tab_maintenance', '3. Manutenção')}
+            <span>⚡</span> ${t('project_memory.tab_maintenance', '4. Manutenção')}
           </button>
         </div>
 
@@ -167,7 +170,69 @@ export class ProjectMemoryModal {
             </div>
           </div>
 
-          <!-- ABA 3: Overview & Manutenção -->
+          <!-- ABA 3: Estado de continuação -->
+          <div class="tab-pane" id="pane-tab-state" style="${this.activeTab === 'state' ? '' : 'display: none;'}">
+            <div class="settings-section-card">
+              <div class="section-card-header">
+                <span class="section-card-icon">🗂️</span>
+                <div class="section-card-titles">
+                  <h3 class="section-card-title">${t('project_memory.state_title', 'Estado de continuação')}</h3>
+                  <p class="section-card-desc">${t('project_memory.state_desc', 'Chaves declaradas pelo projeto; o agente lê e grava apenas estas chaves, por ferramentas.')}</p>
+                </div>
+              </div>
+              <div id="memory-state-keys-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px; max-height: 240px; overflow-y: auto;">
+                <div style="color: #64748b; font-size: 11px;">${t('project_memory.state_loading', 'Carregando estado…')}</div>
+              </div>
+              <details style="margin-top: 14px; border-top: 1px solid #edebe9; padding-top: 12px;">
+                <summary style="cursor: pointer; font-size: 11.5px; font-weight: 700; color: #0f6cbd;">${t('project_memory.state_declare_summary', 'Declarar chave de estado')}</summary>
+                <div class="form-row-grid" style="margin-top: 8px;">
+                  <div class="form-group">
+                    <label class="form-label" for="state-key-name">${t('project_memory.state_key_label', 'Chave')}</label>
+                    <input type="text" id="state-key-name" class="form-input" placeholder="ex: cursor, ultimo_texto" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="state-key-scope">${t('project_memory.state_scope_label', 'Escopo')}</label>
+                    <select id="state-key-scope" class="form-select">
+                      <option value="project">${t('project_memory.state_scope_project', 'Projeto')}</option>
+                      <option value="task_type">${t('project_memory.state_scope_task', 'Tipo de tarefa')}</option>
+                      <option value="item">${t('project_memory.state_scope_item', 'Item do lote')}</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group" style="margin-top: 8px;">
+                  <label class="form-label" for="state-key-schema">${t('project_memory.state_schema_label', 'Schema JSON (opcional)')}</label>
+                  <textarea id="state-key-schema" class="form-input" rows="3" style="font-family: monospace; font-size: 11px;">{}</textarea>
+                </div>
+                <div class="form-row-grid" style="margin-top: 8px;">
+                  <div class="form-group">
+                    <label class="form-label" for="state-key-bytes">${t('project_memory.state_max_bytes', 'Máx. bytes')}</label>
+                    <input type="number" id="state-key-bytes" class="form-input" value="16384" min="1" max="65536" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="state-key-ttl">${t('project_memory.state_ttl', 'TTL (segundos)')}</label>
+                    <input type="number" id="state-key-ttl" class="form-input" value="0" min="0" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="state-key-mode">${t('project_memory.state_mode', 'Modo')}</label>
+                    <select id="state-key-mode" class="form-select">
+                      <option value="replace">${t('project_memory.state_mode_replace', 'Substituir')}</option>
+                      <option value="versioned">${t('project_memory.state_mode_versioned', 'Versionado')}</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="state-key-keep">${t('project_memory.state_keep', 'Versões mantidas')}</label>
+                    <input type="number" id="state-key-keep" class="form-input" value="5" min="1" max="100" />
+                  </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+                  <button class="btn btn-primary btn-primary-office" id="btn-declare-state-key" style="padding: 6px 14px; font-size: 11.5px;">${t('project_memory.state_declare_button', 'Declarar chave')}</button>
+                  <div id="memory-state-message" class="form-hint"></div>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <!-- ABA 4: Overview & Manutenção -->
           <div class="tab-pane" id="pane-tab-maintenance" style="${this.activeTab === 'maintenance' ? '' : 'display: none;'}">
             <div class="form-row-grid">
               <div class="settings-section-card">
@@ -335,7 +400,7 @@ export class ProjectMemoryModal {
     const tabButtons = this.overlay.querySelectorAll<HTMLButtonElement>('.modal-tabs .tab-btn');
     tabButtons.forEach(btn => {
       btn.addEventListener('click', () => {
-        const tab = (btn.dataset?.tab || btn.getAttribute('data-tab')) as 'knowledge' | 'lessons' | 'maintenance';
+        const tab = (btn.dataset?.tab || btn.getAttribute('data-tab')) as 'knowledge' | 'lessons' | 'state' | 'maintenance';
         if (!tab) return;
         this.activeTab = tab;
         tabButtons.forEach(b => {
@@ -409,6 +474,10 @@ export class ProjectMemoryModal {
       if (txtRule) txtRule.value = '';
       this.refreshMemoryData();
     });
+
+    this.overlay.querySelector('#btn-declare-state-key')?.addEventListener('click', () => {
+      void this.declareStateKey();
+    });
   }
 
   public async refreshMemoryData(): Promise<void> {
@@ -421,6 +490,7 @@ export class ProjectMemoryModal {
     const consolidationStatus = this.overlay.querySelector('#memory-consolidation-status');
     const conflictsList = this.overlay.querySelector('#memory-conflicts-list');
     const playbooksList = this.overlay.querySelector('#memory-playbooks-list');
+    const stateKeysList = this.overlay.querySelector('#memory-state-keys-list');
     const workspaceStatus = this.overlay.querySelector('#memory-workspace-status');
     const initWorkspaceButton = this.overlay.querySelector<HTMLButtonElement>('#btn-init-workspace');
 
@@ -587,9 +657,35 @@ export class ProjectMemoryModal {
                   </div>
                   <div style="font-size: 11px; color: #0f172a; margin-top: 3px;">${this.escapeHtml(String(playbook.title || ''))}</div>
                   <div style="font-size: 10.5px; color: #475569; margin-top: 4px; white-space: pre-wrap;">${this.escapeHtml(steps)}</div>
+                  ${playbook.status === 'active'
+                    ? `<button class="btn btn-secondary-pill btn-secondary-office" data-unpromote-playbook="${this.escapeHtml(String(playbook.id || ''))}" style="margin-top: 6px; padding: 4px 10px; font-size: 10.5px;">${t('project_memory.playbook_unpromote', 'Voltar a candidato')}</button>`
+                    : ''}
                 </div>`;
             }).join('');
+            playbooksList.querySelectorAll<HTMLButtonElement>('[data-unpromote-playbook]').forEach((btn) => {
+              btn.addEventListener('click', () => {
+                const id = btn.getAttribute('data-unpromote-playbook') || '';
+                if (id) void this.unpromotePlaybook(id);
+              });
+            });
           }
+        }
+
+        if (stateKeysList) {
+          const keys = Array.isArray(data.stateKeys) ? data.stateKeys : [];
+          stateKeysList.innerHTML = keys.length === 0
+            ? `<div style="color: #64748b; font-size: 11px;">${t('project_memory.state_empty', 'Nenhuma chave de estado declarada.')}</div>`
+            : keys.map((item: any) => `
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px;">
+                  <div style="display: flex; justify-content: space-between; gap: 8px; align-items: center;">
+                    <strong style="font-size: 11px; color: #1d4ed8;">${this.escapeHtml(String(item.key || ''))}</strong>
+                    <span style="font-size: 10px; color: #64748b;">${this.escapeHtml(String(item.scopeKind || ''))} · ${this.escapeHtml(String(item.valueMode || 'replace'))}</span>
+                  </div>
+                  <div style="font-size: 10.5px; color: #475569; margin-top: 3px;">
+                    ${t('project_memory.state_ttl', 'TTL (segundos)')}: ${Number(item.ttlSeconds || 0)} ·
+                    ${t('project_memory.state_hash', 'schema')}: ${this.escapeHtml(String(item.schemaHash || '').slice(0, 12))}
+                  </div>
+                </div>`).join('');
         }
 
         // Exibe consumo de API e contexto de memória
@@ -870,6 +966,79 @@ export class ProjectMemoryModal {
       }
     } catch (e) {
       console.warn("record_semantic_lesson error:", e);
+    }
+  }
+
+  private async declareStateKey(): Promise<void> {
+    const key = this.overlay.querySelector<HTMLInputElement>('#state-key-name')?.value.trim() || '';
+    const scope = this.overlay.querySelector<HTMLSelectElement>('#state-key-scope')?.value || 'project';
+    const schemaText = this.overlay.querySelector<HTMLTextAreaElement>('#state-key-schema')?.value.trim() || '{}';
+    const maxBytes = Number(this.overlay.querySelector<HTMLInputElement>('#state-key-bytes')?.value || 16384);
+    const ttlSeconds = Number(this.overlay.querySelector<HTMLInputElement>('#state-key-ttl')?.value || 0);
+    const mode = this.overlay.querySelector<HTMLSelectElement>('#state-key-mode')?.value || 'replace';
+    const keep = Number(this.overlay.querySelector<HTMLInputElement>('#state-key-keep')?.value || 5);
+    const message = this.overlay.querySelector<HTMLElement>('#memory-state-message');
+    if (!key) {
+      if (message) message.textContent = t('project_memory.state_key_required', 'Informe a chave.');
+      return;
+    }
+    try {
+      JSON.parse(schemaText);
+    } catch {
+      if (message) message.textContent = t('project_memory.state_schema_invalid', 'Schema JSON inválido.');
+      return;
+    }
+    const webui = typeof window !== 'undefined' ? (window as any).webui : null;
+    if (!webui || typeof webui.call !== 'function') {
+      if (message) message.textContent = t('project_memory.ab_unavailable', 'Disponível no aplicativo Arestrix.');
+      return;
+    }
+    try {
+      const raw = await webui.call('declare_memory_state_key', JSON.stringify({
+        projectId: this.graph.getProjectId(),
+        key,
+        scope,
+        schema: schemaText,
+        maxBytes,
+        ttlSeconds,
+        mode,
+        keep
+      }));
+      const result = raw ? JSON.parse(String(raw)) : {};
+      if (message) {
+        message.textContent = result.ok
+          ? t('project_memory.state_declared', 'Chave declarada.')
+          : String(result.error || t('project_memory.state_declare_failed', 'Falha ao declarar.'));
+      }
+      if (result.ok) {
+        const name = this.overlay.querySelector<HTMLInputElement>('#state-key-name');
+        const schema = this.overlay.querySelector<HTMLTextAreaElement>('#state-key-schema');
+        if (name) name.value = '';
+        if (schema) schema.value = '{}';
+        await this.refreshMemoryData();
+      }
+    } catch (error) {
+      if (message) message.textContent = `${t('project_memory.state_declare_failed', 'Falha ao declarar')}: ${String((error as any)?.message || error)}`;
+    }
+  }
+
+  private async unpromotePlaybook(id: string): Promise<void> {
+    const webui = typeof window !== 'undefined' ? (window as any).webui : null;
+    if (!webui || typeof webui.call !== 'function') return;
+    try {
+      const raw = await webui.call('unpromote_memory_playbook', JSON.stringify({
+        projectId: this.graph.getProjectId(),
+        id,
+        reason: 'manual'
+      }));
+      const result = raw ? JSON.parse(String(raw)) : {};
+      if (!result.ok) {
+        alert(String(result.error || 'Falha ao voltar o playbook a candidato.'));
+        return;
+      }
+      await this.refreshMemoryData();
+    } catch (error) {
+      alert(String((error as any)?.message || error));
     }
   }
 

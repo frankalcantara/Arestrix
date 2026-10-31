@@ -224,11 +224,14 @@ duplicados viram `superseded`, conflitos perdedores viram `candidate` e memória
 .\\arestrix-cli.exe memory workspace status --project .\\examples\\04-memoria --workspace-id equipe
 .\\arestrix-cli.exe memory promote --project .\\examples\\04-memoria --workspace-id equipe `
   --kind lesson --id <lesson-id> --evidence "revisada por duas pessoas"
+.\\arestrix-cli.exe memory unpromote --project .\\examples\\04-memoria --id <playbook-id> `
+  --reason "validador mudou"
 ```
 
 O workspace usa `.workspace/memory/memory.db`. O projeto lê o workspace; o workspace não lê a
 memória privada do projeto. `promote` aceita `lesson`, `fact` e `playbook`, exige evidência e
-grava auditoria nos dois bancos. Promoção não apaga o original.
+grava auditoria nos dois bancos. Promoção não apaga o original. `unpromote` devolve um playbook ativo
+a `candidate`, com auditoria.
 
 ### `mcp`
 

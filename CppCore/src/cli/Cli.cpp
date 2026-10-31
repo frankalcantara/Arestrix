@@ -489,13 +489,15 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory workspace init|status --project <pasta> [--workspace-id ID] [--json]\n"
                      "arestrix-cli memory state list|declare|get|set --project <pasta> [--key K] [--scope project|task_type|item] [--schema JSON] [--value JSON] [--expected N] [--item ID] [--task-type T] [--json]\n"
                      "arestrix-cli memory ab validate|order|report --suite <arquivo> [--observations <arquivo>] [--repetitions N] [--seed N] [--json]\n"
-                     "arestrix-cli memory promote --project <pasta> --kind lesson|fact|playbook --id ID --evidence texto [--workspace-id ID] [--json]\n";
+                     "arestrix-cli memory promote --project <pasta> --kind lesson|fact|playbook --id ID --evidence texto [--workspace-id ID] [--json]\n"
+                     "arestrix-cli memory unpromote --project <pasta> --id <playbook-id> [--reason texto] [--json]\n";
         return args.size() < 2 ? kExitUsage : 0;
     }
     const std::string command = args[1];
     if (command != "report" && command != "prune" && command != "purge" && command != "proposals" &&
         command != "embeddings" && command != "reindex" && command != "consolidate" &&
-        command != "workspace" && command != "state" && command != "ab" && command != "promote") {
+        command != "workspace" && command != "state" && command != "ab" &&
+        command != "promote" && command != "unpromote") {
         std::cerr << "arestrix-cli memory: comando desconhecido: " << command << "\n";
         return kExitUsage;
     }
@@ -943,6 +945,22 @@ int runMemory(const std::vector<std::string>& args) {
                 std::cerr << "Falha: " << out.value("error", stateError) << "\n";
             }
             return out.value("ok", false) ? 0 : kExitConfig;
+        }
+
+        if (command == "unpromote") {
+            if (promoteId.empty()) {
+                std::cerr << "arestrix-cli memory unpromote: informe --id\n";
+                return kExitUsage;
+            }
+            std::string unpromoteError;
+            const bool unpromoted = memory.unpromotePlaybook(
+                projectId, promoteId, reason.empty() ? "cli" : reason, unpromoteError);
+            taskforge::Json out{{"ok", unpromoted}, {"id", promoteId}};
+            if (!unpromoteError.empty()) out["error"] = unpromoteError;
+            if (opt.json) std::cout << out.dump(2) << "\n";
+            else if (unpromoted) std::cout << "Playbook voltou a candidato: " << promoteId << "\n";
+            else std::cerr << "Falha: " << unpromoteError << "\n";
+            return unpromoted ? 0 : kExitConfig;
         }
 
         if (command == "consolidate") {

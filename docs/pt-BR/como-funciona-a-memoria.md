@@ -96,7 +96,8 @@ lição por ferramenta.
 Playbooks só saem de `candidate` com validação independente. O gate exige **3 `input_hash`
 distintos** entre as últimas 20 execuções validadas do mesmo `task_type`, validador estável e no
 máximo **1 promoção por `task_type` em 24h**. Duas falhas consecutivas ou taxa acima de 30% em 10
-execuções validadas devolvem o playbook a candidato. `unpromote` está disponível na API.
+execuções validadas devolvem o playbook a candidato. No painel, um playbook ativo tem o botão
+**Voltar a candidato**; a CLI equivalente é `memory unpromote`.
 
 Fatos também têm **cardinalidade de predicado**. Predicados de acumulação — `USES`, `USES_TOOL`,
 `PRODUCES`, `READS`, `WRITES`, `TOUCHES`, `CITES`, `INCLUDES`, `TAGGED_WITH`, `HAS`, `DEPENDS_ON` —
@@ -218,6 +219,10 @@ brief** e só é acessível pelas ferramentas.
 - `memory_state_list` não devolve valores. Leituras são rotuladas como dados de execução anterior
   não confiáveis.
 - Escritas, recusas e conflitos são auditados; leituras não.
+
+No Studio, a aba **Estado** do painel **Memória do Projeto** lista as chaves declaradas e permite
+criar uma chave com escopo, schema, TTL, modo e versões mantidas. O agente continua sem permissão
+para criar chaves.
 
 Declaração e operação manual pela CLI:
 
