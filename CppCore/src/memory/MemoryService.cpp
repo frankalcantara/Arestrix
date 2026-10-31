@@ -1025,11 +1025,12 @@ int MemoryService::markHitsUsed(const std::string& projectId, const std::string&
 }
 
 bool MemoryService::finishHits(const std::string& projectId, const std::string& runId,
-                               const std::string& nodeId, const std::string& outcome) {
+                               const std::string& nodeId, const std::string& outcome,
+                               bool reinforce) {
     auto* t = ensureTelemetry(projectId);
     if (!t) return false;
     const std::string scope = scopeId(projectId);
-    const bool ok = t->finishHits(scope, runId, nodeId, outcome);
+    const bool ok = t->finishHits(scope, runId, nodeId, outcome, reinforce);
     // O conhecimento so e reforcado se o store do projeto ja existe; nao abrir
     // o banco de conhecimento apenas para registrar telemetria. Se os dois
     // bancos apontarem para o mesmo arquivo, o proprio finishHits ja reforcou.
@@ -1037,7 +1038,15 @@ bool MemoryService::finishHits(const std::string& projectId, const std::string& 
         if (databasePath(projectId) != telemetryDatabasePath(projectId)) {
             std::vector<std::string> ids;
             for (const auto& ref : t->usedHitRefs(scope, runId, nodeId)) ids.push_back(ref.id);
-            if (!ids.empty()) k->reinforceFromHits(scope, ids, outcome);
+            if (!ids.empty()) {
+                if (reinforce) {
+                    k->reinforceFromHits(scope, ids, outcome);
+                } else {
+                    // E1: o resultado do agente nao altera utility; o uso so
+                    // atualiza last_used ate o veredito independente chegar.
+                    k->touchHitsLastUsed(scope, ids);
+                }
+            }
         }
     }
     return ok;
@@ -1716,18 +1725,49 @@ taskforge::Json MemoryService::usageSummary(const std::string& projectId) {
     return t ? t->usageSummary(scopeId(projectId)) : taskforge::Json::object();
 }
 
+std::string MemoryService::episodeIdFor(const std::string& projectId, const std::string& runId,
+                                        const std::string& nodeId) {
+    auto* t = ensureTelemetry(projectId);
+    return t ? t->episodeIdFor(scopeId(projectId), runId, nodeId) : std::string();
+}
+
 std::string MemoryService::recordValidation(const std::string& projectId,
-                                            const MemoryValidationRecord& validation) {
+                                            const MemoryValidationRecord& validation,
+                                            bool reinforce) {
     auto* t = ensureTelemetry(projectId);
     if (!t) return "";
     MemoryValidationRecord copy = validation;
     if (copy.scopeId.empty()) copy.scopeId = scopeId(projectId);
+    const std::string scope = scopeId(projectId);
+
+    // O episodio e a fonte do task_type e do run/no quando o chamador so
+    // conhece o episodeId (ou o contrario).
+    if (!copy.episodeId.empty() && (copy.runId.empty() || copy.nodeId.empty())) {
+        const taskforge::Json episode = t->getEpisode(scope, copy.episodeId);
+        if (copy.runId.empty()) copy.runId = episode.value("runId", std::string());
+        if (copy.nodeId.empty()) copy.nodeId = episode.value("nodeId", std::string());
+    }
+    if (copy.episodeId.empty() && !copy.runId.empty() && !copy.nodeId.empty()) {
+        copy.episodeId = t->episodeIdFor(scope, copy.runId, copy.nodeId);
+    }
+
     const std::string id = t->recordValidation(copy);
+    // E1: com o interruptor ligado, o veredito e o unico caminho de reforco.
+    if (reinforce && !id.empty() && !copy.runId.empty() && !copy.nodeId.empty()) {
+        if (auto* knowledge = existingStore(projectId)) {
+            std::vector<std::string> ids;
+            for (const auto& ref : t->usedHitRefs(scope, copy.runId, copy.nodeId)) {
+                ids.push_back(ref.id);
+            }
+            if (!ids.empty()) {
+                knowledge->reinforceFromHits(scope, ids, copy.ok ? "success" : "failure");
+            }
+        }
+    }
     // B5/B6: validacao independente promove; falhas consecutivas/excesso de
     // falhas despromovem. O gate usa so o ok.
     if (!id.empty() && !copy.episodeId.empty()) {
         if (auto* knowledge = existingStore(projectId)) {
-            const std::string scope = scopeId(projectId);
             const taskforge::Json episode = t->getEpisode(scope, copy.episodeId);
             const std::string taskType = episode.value("taskType", std::string());
             if (copy.ok) {

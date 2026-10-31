@@ -143,6 +143,8 @@ struct AgentSpec {
     bool memoryEnabled = false;
     bool memoryWriteEnabled = false;
     bool memoryForceDisabled = false;
+    // E1: o veredito de artefato passa a ser o unico caminho de reforco.
+    bool memoryValidatedReinforcement = false;
     std::vector<std::string> memoryDomains;
     int memoryMaxLessonsPerRun = 20;
     int memoryMaxLessonChars = 4000;
@@ -185,6 +187,7 @@ AgentSpec parseSpec(const json& j, const std::string& nodeId, const std::string&
     s.memoryEnabled = j.value("memoryEnabled", false);
     s.memoryWriteEnabled = j.value("memoryWriteEnabled", false);
     s.memoryForceDisabled = j.value("memoryForceDisabled", false);
+    s.memoryValidatedReinforcement = j.value("memoryValidatedReinforcement", false);
     if (j.contains("memoryDomains") && j["memoryDomains"].is_array()) {
         for (const auto& d : j["memoryDomains"]) if (d.is_string()) s.memoryDomains.push_back(d.get<std::string>());
     }
@@ -545,7 +548,8 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         if (!cited.empty()) {
             memory.markHitsUsed(spec.memoryProjectId, runId, nodeId, cited);
         }
-        memory.finishHits(spec.memoryProjectId, runId, nodeId, usage.outcome);
+        memory.finishHits(spec.memoryProjectId, runId, nodeId, usage.outcome,
+                          !spec.memoryValidatedReinforcement);
         const std::string effectiveClass = success ? "" :
             (errorClass.empty() ? "agent_exception" : errorClass);
         json meta{{"label", label}, {"provider", spec.provider}, {"model", spec.model},

@@ -38,11 +38,13 @@ public:
     void setStateFilePath(const std::string& path);
     std::string getStateFilePath() const;
 
-    // Resolve placeholders como {itemId} ou {id} no caminho
-    std::string resolvePattern(const std::string& pattern, const std::string& itemId) const;
+    // Resolve placeholders como {itemId} ou {id} no caminho. Estatico para ser
+    // reaproveitado pela validacao de artefato do runtime de agentes.
+    static std::string resolvePattern(const std::string& pattern, const std::string& itemId);
 
-    // Valida artefato físico no disco
-    bool validateArtifact(const std::string& resolvedPath, size_t minBytes, const std::string& regexPattern) const;
+    // Valida artefato fisico no disco. Nao depende do estado do resume engine.
+    static bool validateArtifact(const std::string& resolvedPath, size_t minBytes,
+                                 const std::string& regexPattern);
 
     // Verifica se etapa já foi concluída (com auto-recuperação física)
     bool isStageCompleted(

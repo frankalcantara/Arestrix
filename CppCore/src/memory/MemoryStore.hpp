@@ -310,6 +310,10 @@ public:
                               const taskforge::Json& metadata = taskforge::Json::object());
     std::string recordEpisode(const MemoryEpisodeRecord& episode);
     taskforge::Json getEpisode(const std::string& scopeId, const std::string& episodeId) const;
+    // Episodio mais recente de (run, no). Usado para ligar o veredito de
+    // artefato ao episodio sem mudar a assinatura de runAgent.
+    std::string episodeIdFor(const std::string& scopeId, const std::string& runId,
+                             const std::string& nodeId) const;
 
     // Indice vetorial L2/M2. O store nao conhece o provider: apenas persiste BLOBs.
     bool upsertEmbedding(const std::string& scopeId, const std::string& objectType,
@@ -448,8 +452,11 @@ public:
     int recordConsultedHits(const std::string& scopeId, const std::string& runId,
                             const std::string& nodeId,
                             const std::vector<MemoryHitRef>& refs);
+    // reinforce=false (E1, interruptor memory.validatedReinforcement) apenas
+    // atualiza last_used; utility/contagens esperam o veredito independente.
     bool finishHits(const std::string& scopeId, const std::string& runId,
-                    const std::string& nodeId, const std::string& outcome);
+                    const std::string& nodeId, const std::string& outcome,
+                    bool reinforce = true);
     // Hits efetivamente usados, para reforcar o conhecimento em outro store.
     std::vector<MemoryHitRef> usedHitRefs(const std::string& scopeId, const std::string& runId,
                                           const std::string& nodeId) const;
@@ -457,6 +464,10 @@ public:
     bool reinforceFromHits(const std::string& scopeId,
                            const std::vector<std::string>& memoryIds,
                            const std::string& outcome);
+    // E1: sem veredito, o uso so atualiza last_used (sem utility/contagens).
+    bool touchHitsLastUsed(const std::string& scopeId,
+                           const std::vector<std::string>& memoryIds,
+                           const std::string& at = "");
     taskforge::Json hitSummary(const std::string& scopeId) const;
     taskforge::Json consolidationSummary(const std::string& scopeId) const;
     bool recordAudit(const std::string& actor, const std::string& action,

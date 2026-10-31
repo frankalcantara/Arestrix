@@ -18,6 +18,19 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   drift. See `docs/internal/memoria-linha-de-base.md`.
 - The multigraph implementation plan is now versioned at
   `docs/internal/plano-memoria-multigrafo.md`, with E0 marked done.
+- **Independent artifact verdict (multigraph plan, E1):** `validationRules` now reach the
+  runtime. After an agent succeeds, `rt::validateArtifacts` resolves `{itemId}`, checks minimum
+  size and content pattern, and records the verdict in `memory_validation` linked to the
+  episode, with a canonical rule version and artifact hash. The playbook gate consumes these
+  verdicts in real runs.
+- `memory report` now reads the telemetry database and shows validated/unvalidated runs and
+  the approval rate per `task_type`.
+
+### Changed
+
+- With `globalDefaults.memory.validatedReinforcement` enabled, the agent outcome only updates
+  `last_used`; utility and success/failure counters wait for the independent verdict
+  (`recordValidation`). Disabled by default, preserving the 2.5.0 behavior.
 
 ### Fixed
 

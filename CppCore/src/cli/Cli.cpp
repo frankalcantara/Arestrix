@@ -1181,12 +1181,33 @@ int runMemory(const std::vector<std::string>& args) {
         return kExitConfig;
     }
 
+    // A telemetria vive em banco proprio desde a 2.5.0. O relatorio le o
+    // conhecimento em dbPath e anexa a telemetria quando o layout padrao existe.
+    fs::path telemetryPath = dbPath;
+    if (dbPath.filename() == "memory.db" && dbPath.parent_path().filename() == "memory" &&
+        dbPath.parent_path().parent_path().filename() == ".arestrix") {
+        telemetryPath = dbPath.parent_path().parent_path() / "telemetry" / "telemetry.db";
+    }
+
     sqlite3* db = nullptr;
     if (sqlite3_open_v2(dbPath.string().c_str(), &db, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK) {
         std::cerr << "Falha ao abrir o banco: " << (db ? sqlite3_errmsg(db) : "sqlite") << "\n";
         if (db) sqlite3_close(db);
         return kExitConfig;
     }
+
+    bool hasTelemetry = false;
+    if (telemetryPath != dbPath && fs::is_regular_file(telemetryPath, ec)) {
+        char* quoted = sqlite3_mprintf("%Q", telemetryPath.string().c_str());
+        const std::string attachSql = "ATTACH DATABASE " + std::string(quoted ? quoted : "''") +
+                                      " AS telemetry";
+        sqlite3_free(quoted);
+        hasTelemetry = sqlite3_exec(db, attachSql.c_str(), nullptr, nullptr, nullptr) == SQLITE_OK;
+    }
+    const std::string usageTable = hasTelemetry ? "telemetry.memory_usage" : "memory_usage";
+    const std::string hitTable = hasTelemetry ? "telemetry.memory_hit" : "memory_hit";
+    const std::string validationTable = hasTelemetry ? "telemetry.memory_validation" : "memory_validation";
+    const std::string episodeTable = hasTelemetry ? "telemetry.memory_episode" : "memory_episode";
 
     auto prepare = [&](const char* sql, sqlite3_stmt** stmt) {
         return sqlite3_prepare_v2(db, sql, -1, stmt, nullptr) == SQLITE_OK;
@@ -1201,11 +1222,13 @@ int runMemory(const std::vector<std::string>& args) {
              {"modes", json::array()}, {"nodes", json::array()}};
 
     sqlite3_stmt* st = nullptr;
-    if (prepare("SELECT COUNT(*), COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
-                "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0), COALESCE(SUM(retries),0), "
-                "COALESCE(SUM(prompt_tokens),0), COALESCE(SUM(completion_tokens),0), COALESCE(SUM(total_tokens),0), "
-                "COALESCE(SUM(calls),0), COALESCE(AVG(latency_ms),0), COALESCE(SUM(memory_context_chars),0), "
-                "COALESCE(SUM(memory_enabled),0) FROM memory_usage", &st)) {
+    const std::string usageSql =
+        "SELECT COUNT(*), COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
+        "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0), COALESCE(SUM(retries),0), "
+        "COALESCE(SUM(prompt_tokens),0), COALESCE(SUM(completion_tokens),0), COALESCE(SUM(total_tokens),0), "
+        "COALESCE(SUM(calls),0), COALESCE(AVG(latency_ms),0), COALESCE(SUM(memory_context_chars),0), "
+        "COALESCE(SUM(memory_enabled),0) FROM " + usageTable;
+    if (prepare(usageSql.c_str(), &st)) {
         if (sqlite3_step(st) == SQLITE_ROW) {
             out["runs"] = sqlite3_column_int64(st, 0);
             out["successRuns"] = sqlite3_column_int64(st, 1);
@@ -1223,16 +1246,9 @@ int runMemory(const std::vector<std::string>& args) {
         st = nullptr;
     }
 
-    bool hasCachedTokens = false;
-    if (prepare("PRAGMA table_info(memory_usage)", &st)) {
-        while (sqlite3_step(st) == SQLITE_ROW) {
-            if (sqliteText(st, 1) == "cached_tokens") hasCachedTokens = true;
-        }
-        sqlite3_finalize(st);
-        st = nullptr;
-    }
-    if (hasCachedTokens &&
-        prepare("SELECT COALESCE(SUM(cached_tokens),0), COALESCE(SUM(cache_write_tokens),0) FROM memory_usage", &st)) {
+    const std::string cachedSql =
+        "SELECT COALESCE(SUM(cached_tokens),0), COALESCE(SUM(cache_write_tokens),0) FROM " + usageTable;
+    if (prepare(cachedSql.c_str(), &st)) {
         if (sqlite3_step(st) == SQLITE_ROW) {
             out["cachedTokens"] = sqlite3_column_int64(st, 0);
             out["cacheWriteTokens"] = sqlite3_column_int64(st, 1);
@@ -1241,12 +1257,14 @@ int runMemory(const std::vector<std::string>& args) {
         st = nullptr;
     }
 
-    if (prepare("SELECT memory_enabled, COUNT(*), COALESCE(SUM(prompt_tokens),0), COALESCE(SUM(completion_tokens),0), "
-                "COALESCE(SUM(total_tokens),0), COALESCE(SUM(calls),0), COALESCE(AVG(latency_ms),0), "
-                "COALESCE(SUM(memory_context_chars),0), COALESCE(SUM(retries),0), "
-                "COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
-                "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0) "
-                "FROM memory_usage GROUP BY memory_enabled ORDER BY memory_enabled DESC", &st)) {
+    const std::string modesSql =
+        "SELECT memory_enabled, COUNT(*), COALESCE(SUM(prompt_tokens),0), COALESCE(SUM(completion_tokens),0), "
+        "COALESCE(SUM(total_tokens),0), COALESCE(SUM(calls),0), COALESCE(AVG(latency_ms),0), "
+        "COALESCE(SUM(memory_context_chars),0), COALESCE(SUM(retries),0), "
+        "COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
+        "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0) "
+        "FROM " + usageTable + " GROUP BY memory_enabled ORDER BY memory_enabled DESC";
+    if (prepare(modesSql.c_str(), &st)) {
         while (sqlite3_step(st) == SQLITE_ROW) {
             out["modes"].push_back(json{{"memoryEnabled", sqlite3_column_int64(st, 0) != 0},
                                         {"runs", sqlite3_column_int64(st, 1)},
@@ -1264,12 +1282,14 @@ int runMemory(const std::vector<std::string>& args) {
         st = nullptr;
     }
 
-    if (prepare("SELECT COALESCE(node_id,'(sem no)'), COUNT(*), COALESCE(SUM(prompt_tokens),0), "
-                "COALESCE(SUM(completion_tokens),0), COALESCE(SUM(total_tokens),0), COALESCE(SUM(calls),0), "
-                "COALESCE(AVG(latency_ms),0), COALESCE(SUM(memory_context_chars),0), COALESCE(SUM(retries),0), "
-                "COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
-                "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0) "
-                "FROM memory_usage GROUP BY node_id ORDER BY SUM(total_tokens) DESC", &st)) {
+    const std::string nodesSql =
+        "SELECT COALESCE(node_id,'(sem no)'), COUNT(*), COALESCE(SUM(prompt_tokens),0), "
+        "COALESCE(SUM(completion_tokens),0), COALESCE(SUM(total_tokens),0), COALESCE(SUM(calls),0), "
+        "COALESCE(AVG(latency_ms),0), COALESCE(SUM(memory_context_chars),0), COALESCE(SUM(retries),0), "
+        "COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
+        "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0) "
+        "FROM " + usageTable + " GROUP BY node_id ORDER BY SUM(total_tokens) DESC";
+    if (prepare(nodesSql.c_str(), &st)) {
         while (sqlite3_step(st) == SQLITE_ROW) {
             out["nodes"].push_back(json{{"nodeId", sqliteText(st, 0)},
                                         {"runs", sqlite3_column_int64(st, 1)},
@@ -1287,11 +1307,13 @@ int runMemory(const std::vector<std::string>& args) {
         st = nullptr;
     }
 
-    if (prepare("SELECT COUNT(*), COALESCE(SUM(injected),0), COALESCE(SUM(used),0), "
-                "COALESCE(SUM(CASE WHEN used=1 AND injected=0 THEN 1 ELSE 0 END),0), "
-                "COALESCE(SUM(CASE WHEN used=1 AND injected=1 THEN 1 ELSE 0 END),0), "
-                "COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
-                "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0) FROM memory_hit", &st)) {
+    const std::string hitsSql =
+        "SELECT COUNT(*), COALESCE(SUM(injected),0), COALESCE(SUM(used),0), "
+        "COALESCE(SUM(CASE WHEN used=1 AND injected=0 THEN 1 ELSE 0 END),0), "
+        "COALESCE(SUM(CASE WHEN used=1 AND injected=1 THEN 1 ELSE 0 END),0), "
+        "COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
+        "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0) FROM " + hitTable;
+    if (prepare(hitsSql.c_str(), &st)) {
         if (sqlite3_step(st) == SQLITE_ROW) {
             out["hits"] = json{{"total", sqlite3_column_int64(st, 0)},
                                {"injected", sqlite3_column_int64(st, 1)},
@@ -1315,12 +1337,62 @@ int runMemory(const std::vector<std::string>& args) {
         st = nullptr;
     }
 
+    // E1: vereditos independentes por execucao e task_type.
+    out["telemetryDatabase"] = hasTelemetry ? telemetryPath.string() : dbPath.string();
+    out["validations"] = json{{"total", 0}, {"approved", 0}, {"rejected", 0}, {"episodes", 0}};
+    const std::string validationSql =
+        "SELECT COUNT(*), COALESCE(SUM(ok),0), COALESCE(SUM(CASE WHEN ok=0 THEN 1 ELSE 0 END),0), "
+        "COUNT(DISTINCT episode_id) FROM " + validationTable;
+    if (prepare(validationSql.c_str(), &st)) {
+        if (sqlite3_step(st) == SQLITE_ROW) {
+            out["validations"] = json{{"total", sqlite3_column_int64(st, 0)},
+                                      {"approved", sqlite3_column_int64(st, 1)},
+                                      {"rejected", sqlite3_column_int64(st, 2)},
+                                      {"episodes", sqlite3_column_int64(st, 3)}};
+        }
+        sqlite3_finalize(st);
+        st = nullptr;
+    }
+
+    out["taskTypes"] = json::array();
+    const std::string taskTypeSql =
+        "SELECT e.task_type, COUNT(*), "
+        "COALESCE(SUM(CASE WHEN v.episode_id IS NULL THEN 0 ELSE 1 END),0), "
+        "COALESCE(SUM(CASE WHEN v.episode_id IS NULL THEN 1 ELSE 0 END),0), "
+        "COALESCE(SUM(CASE WHEN v.ok=1 THEN 1 ELSE 0 END),0), "
+        "COALESCE(SUM(CASE WHEN v.ok=0 THEN 1 ELSE 0 END),0) "
+        "FROM " + episodeTable + " e LEFT JOIN (SELECT episode_id, MAX(ok) AS ok FROM " +
+        validationTable + " GROUP BY episode_id) v ON v.episode_id=e.id "
+        "WHERE COALESCE(e.task_type,'')<>'' GROUP BY e.task_type ORDER BY COUNT(*) DESC";
+    if (prepare(taskTypeSql.c_str(), &st)) {
+        while (sqlite3_step(st) == SQLITE_ROW) {
+            const long long episodes = sqlite3_column_int64(st, 1);
+            const long long validated = sqlite3_column_int64(st, 2);
+            out["taskTypes"].push_back(json{
+                {"taskType", sqliteText(st, 0)},
+                {"episodes", episodes},
+                {"validated", validated},
+                {"unvalidated", sqlite3_column_int64(st, 3)},
+                {"approved", sqlite3_column_int64(st, 4)},
+                {"rejected", sqlite3_column_int64(st, 5)},
+                {"approvalRate", validated > 0
+                     ? static_cast<double>(sqlite3_column_int64(st, 4)) / static_cast<double>(validated)
+                     : 0.0}});
+        }
+        sqlite3_finalize(st);
+        st = nullptr;
+    }
+
     sqlite3_close(db);
 
     if (opt.json) {
         std::cout << out.dump(2) << "\n";
     } else {
         std::cout << "Banco: " << out["database"].str() << "\n";
+        if (out.contains("telemetryDatabase") &&
+            out["telemetryDatabase"].str() != out["database"].str()) {
+            std::cout << "Telemetria: " << out["telemetryDatabase"].str() << "\n";
+        }
         std::cout << "Execucoes: " << out["runs"].get<long long>()
                   << " | sucesso: " << out["successRuns"].get<long long>()
                   << " | falha: " << out["failureRuns"].get<long long>()
@@ -1336,6 +1408,17 @@ int runMemory(const std::vector<std::string>& args) {
         std::cout << "Memorias injetadas: " << out["hits"]["injected"].get<long long>()
                   << " | usadas do brief: " << out["hits"]["usedInjected"].get<long long>()
                   << " | consultadas via busca: " << out["hits"]["consulted"].get<long long>() << "\n";
+        std::cout << "Validacoes: " << out["validations"]["total"].get<long long>()
+                  << " veredito(s) em " << out["validations"]["episodes"].get<long long>()
+                  << " execucao(oes) | aprovadas " << out["validations"]["approved"].get<long long>()
+                  << " | reprovadas " << out["validations"]["rejected"].get<long long>() << "\n";
+        for (const auto& taskType : out["taskTypes"]) {
+            std::cout << "  " << taskType.value("taskType", std::string())
+                      << ": execucoes=" << taskType["episodes"].get<long long>()
+                      << " validadas=" << taskType["validated"].get<long long>()
+                      << " sem_veredito=" << taskType["unvalidated"].get<long long>()
+                      << " aprovacao=" << (taskType["approvalRate"].get<double>() * 100.0) << "%\n";
+        }
         if (out.contains("embeddings")) {
             std::cout << "Embeddings: " << out["embeddings"]["vectors"].get<long long>()
                       << " vetores | " << out["embeddings"]["models"].get<long long>() << " modelo(s)\n";

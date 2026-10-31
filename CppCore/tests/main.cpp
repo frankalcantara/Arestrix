@@ -47,6 +47,7 @@
 #include "assistant/AssistantSession.hpp"
 #include "assistant/AssistantTools.hpp"
 #include "assistant/GraphDocument.hpp"
+#include "rt/ArtifactValidation.hpp"
 #include "rt/ModelClient.hpp"
 #include "rt/MemoryFailure.hpp"
 #include "rt/Runtime.hpp"
@@ -1376,6 +1377,7 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
                                                        {"embeddingModel", "test/multilingual-embed"},
                                                        {"embeddingBaseUrl", "http://127.0.0.1:9999/v1"},
                                                        {"embeddingBatchSize", 8},
+                                                       {"validatedReinforcement", true},
                                                        {"consolidationMode", "idle"},
                                                        {"consolidationIdleSeconds", 60},
                                                        {"consolidationDormantDays", 90}}}}}}},
@@ -1387,6 +1389,9 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
                  {"inputs", json::array({port("agente_in", "in", "input", "flow")})},
                  {"outputs", json::array({port("agente_out", "out", "output", "flow")})},
                  {"parameters", json::object()}, {"customLambdaBody", ""},
+                 {"validationRules", json::array({json{{"targetPathPattern", "artefatos/{itemId}.md"},
+                                                       {"minSizeBytes", 400},
+                                                       {"contentPattern", "STATUS_OK"}}})},
                  {"agentSettings", {{"inheritMemory", false},
                                     {"memory", {{"enabled", true}, {"persistent", true},
                                                 {"readBlackboard", true}, {"writeBlackboard", true},
@@ -1423,6 +1428,14 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(src.find("[&ctx, &memory, &projectId, &arx_item_id]") != std::string::npos);
     CHECK(src.find("memory.buildBrief(projectId, arx_item_id, std::vector<std::string>{\"svg_typography\"}, "
                    "std::vector<std::string>{}, 800, true, false, &arx_brief_info, \"agente\", \"\")") != std::string::npos);
+    // E1: as regras de artefato chegam ao codigo gerado e o veredito e ligado
+    // ao episodio depois de runAgent.
+    CHECK(src.find("#include \"rt/ArtifactValidation.hpp\"") != std::string::npos);
+    CHECK(src.find("taskforge::rt::validateArtifacts(taskforge::Json::parse(") != std::string::npos);
+    CHECK(src.find("\"targetPathPattern\":\"artefatos/{itemId}.md\"") != std::string::npos);
+    CHECK(src.find("memory.episodeIdFor(projectId, arx_val_run, \"agente\")") != std::string::npos);
+    CHECK(src.find("memory.recordValidation(projectId, arx_val_record, true)") != std::string::npos);
+    CHECK(src.find("\"memoryValidatedReinforcement\":true") != std::string::npos);
     CHECK(src.find("ARESTRIX_MEMORY_DISABLE") != std::string::npos);
     CHECK(src.find("recordBriefHits(projectId, taskforge::rt::currentRunId(\"agente\"), \"agente\", arx_brief_info)") != std::string::npos);
     CHECK(src.find("\"memoryEnabled\":true") != std::string::npos);
@@ -2099,6 +2112,241 @@ TEST(memory_telemetry_records_without_knowledge_store) {
     CHECK(!fs::exists(knowledgePath));
     CHECK(memory.usageSummary(pId)["runs"] == 1);
     CHECK(fs::exists(telemetryPath));
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+TEST(artifact_validation_rules_resolve_size_pattern_and_hash) {
+    namespace fs = std::filesystem;
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_artifact_validation_" + stamp);
+    fs::create_directories(root / "artefatos");
+    const std::string content = "STATUS_OK\n" + std::string(600, 'x');
+    {
+        std::ofstream file(root / "artefatos" / "item-42.md", std::ios::binary);
+        file << content;
+    }
+    const std::string pattern = (root / "artefatos" / "{itemId}.md").string();
+
+    auto rule = [&](long long minBytes, const std::string& regex) {
+        return taskforge::Json{{"targetPathPattern", pattern},
+                               {"minSizeBytes", minBytes},
+                               {"contentPattern", regex}};
+    };
+
+    taskforge::Json rules = taskforge::Json::array({rule(100, "STATUS_OK")});
+    auto result = taskforge::rt::validateArtifacts(rules, "item-42");
+    CHECK(result.hasRules);
+    CHECK(result.ok);
+    CHECK(result.score == 1.0);
+    CHECK(result.rulesTotal == 1 && result.rulesPassed == 1);
+    CHECK(result.validatorId == "artifact-rules");
+    CHECK(!result.validatorVersion.empty());
+    CHECK(result.artifactHash == taskforge::project::RunnerSecurity::sha256(content));
+    CHECK(result.reasonsJson == "[]");
+    CHECK(result.resolvedPaths.size() == 1);
+
+    // A versao canonica nao depende da ordem em que as chaves foram escritas.
+    taskforge::Json reordered = taskforge::Json::array({
+        taskforge::Json{{"contentPattern", "STATUS_OK"},
+                        {"minSizeBytes", 100},
+                        {"targetPathPattern", pattern}}});
+    const auto reorderedResult = taskforge::rt::validateArtifacts(reordered, "item-42");
+    CHECK(reorderedResult.validatorVersion == result.validatorVersion);
+    CHECK(reorderedResult.ok);
+
+    // Arquivo ausente.
+    const auto missing = taskforge::rt::validateArtifacts(rules, "nao-existe");
+    CHECK(missing.hasRules);
+    CHECK(!missing.ok);
+    CHECK(missing.score == 0.0);
+    CHECK(missing.artifactHash.empty());
+    CHECK(!missing.reasons.empty());
+
+    // Tamanho minimo.
+    const auto tooSmall = taskforge::rt::validateArtifacts(
+        taskforge::Json::array({rule(5000, "STATUS_OK")}), "item-42");
+    CHECK(!tooSmall.ok);
+    CHECK(tooSmall.score == 0.0);
+
+    // Padrao ausente e padrao invalido.
+    const auto noPattern = taskforge::rt::validateArtifacts(
+        taskforge::Json::array({rule(100, "NAO_EXISTE")}), "item-42");
+    CHECK(!noPattern.ok);
+    const auto badRegex = taskforge::rt::validateArtifacts(
+        taskforge::Json::array({rule(100, "[")}), "item-42");
+    CHECK(!badRegex.ok);
+
+    // Fracao de regras aprovadas.
+    taskforge::Json twoRules = taskforge::Json::array({rule(100, "STATUS_OK"),
+                                                       rule(5000, "STATUS_OK")});
+    const auto partial = taskforge::rt::validateArtifacts(twoRules, "item-42");
+    CHECK(!partial.ok);
+    CHECK(partial.rulesTotal == 2 && partial.rulesPassed == 1);
+    CHECK(partial.score == 0.5);
+
+    // Vertice sem regras nao tem veredito.
+    const auto empty = taskforge::rt::validateArtifacts(taskforge::Json::array(), "item-42");
+    CHECK(!empty.hasRules);
+    CHECK(!empty.ok);
+
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_validated_reinforcement_uses_only_the_verdict) {
+    using taskforge::memory::MemoryBriefInfo;
+    using taskforge::memory::MemoryEdgeRecord;
+    using taskforge::memory::MemoryEpisodeRecord;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_validated_reinforcement_" + stamp);
+    const std::string pId = "validated-" + stamp;
+    const std::string scope = "project:" + pId;
+
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, (root / "knowledge.db").string()));
+    CHECK(memory.configureTelemetry(pId, (root / "telemetry.db").string()));
+    auto* store = memory.store(pId);
+    CHECK(store != nullptr);
+
+    const std::string lessonId = memory.recordLesson(pId, "dominio", "gatilho", "regra", "teste");
+    CHECK(!lessonId.empty());
+
+    auto utilityOf = [&]() {
+        MemoryEdgeRecord edge;
+        CHECK(store->getEdge(scope, lessonId, edge));
+        return edge.utility;
+    };
+    auto episodeFor = [&](const std::string& runId, const std::string& nodeId,
+                          const std::string& inputHash) {
+        MemoryEpisodeRecord episode;
+        episode.runId = runId;
+        episode.nodeId = nodeId;
+        episode.kind = "agent_success";
+        episode.content = "ok";
+        episode.taskType = "validated_task";
+        episode.outcome = "success";
+        episode.inputHash = inputHash;
+        return memory.recordEpisode(pId, episode);
+    };
+    auto markUsedFromBrief = [&](const std::string& runId, const std::string& nodeId) {
+        MemoryBriefInfo info;
+        info.lessonIds.push_back(lessonId);
+        CHECK(memory.recordBriefHits(pId, runId, nodeId, info));
+        CHECK(memory.markHitsUsed(pId, runId, nodeId, {lessonId}) == 1);
+    };
+
+    // Run 1: sucesso sem veredito nao altera a utilidade; so last_used.
+    CHECK(!episodeFor("run-1", "agent", "hash-1").empty());
+    markUsedFromBrief("run-1", "agent");
+    CHECK(memory.finishHits(pId, "run-1", "agent", "success", false));
+    CHECK(utilityOf() == 0.5);
+    {
+        MemoryEdgeRecord edge;
+        CHECK(store->getEdge(scope, lessonId, edge));
+        CHECK(!edge.lastUsed.empty());
+        CHECK(edge.successCount == 0);
+    }
+
+    // Veredito aprovado reforca.
+    MemoryValidationRecord approval;
+    approval.episodeId = memory.episodeIdFor(pId, "run-1", "agent");
+    CHECK(!approval.episodeId.empty());
+    approval.runId = "run-1";
+    approval.nodeId = "agent";
+    approval.validatorId = "artifact-rules";
+    approval.validatorVersion = "v1";
+    approval.ok = true;
+    approval.score = 1.0;
+    CHECK(!memory.recordValidation(pId, approval, true).empty());
+    CHECK(std::abs(utilityOf() - 0.52) < 1e-9);
+
+    // Run 2: reprovacao reduz a utilidade.
+    CHECK(!episodeFor("run-2", "agent", "hash-2").empty());
+    markUsedFromBrief("run-2", "agent");
+    CHECK(memory.finishHits(pId, "run-2", "agent", "success", false));
+    MemoryValidationRecord rejection;
+    rejection.episodeId = memory.episodeIdFor(pId, "run-2", "agent");
+    rejection.runId = "run-2";
+    rejection.nodeId = "agent";
+    rejection.validatorId = "artifact-rules";
+    rejection.validatorVersion = "v1";
+    rejection.ok = false;
+    rejection.score = 0.0;
+    CHECK(!memory.recordValidation(pId, rejection, true).empty());
+    CHECK(std::abs(utilityOf() - 0.47) < 1e-9);
+
+    // Run 3: sem veredito a utilidade continua igual.
+    CHECK(!episodeFor("run-3", "agent", "hash-3").empty());
+    markUsedFromBrief("run-3", "agent");
+    CHECK(memory.finishHits(pId, "run-3", "agent", "success", false));
+    CHECK(std::abs(utilityOf() - 0.47) < 1e-9);
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_playbook_gate_demotes_on_two_rejections) {
+    using taskforge::memory::MemoryEpisodeRecord;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_gate_demote_" + stamp);
+    const std::string pId = "gate-demote-" + stamp;
+    const std::string scope = "project:" + pId;
+
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, (root / "knowledge.db").string()));
+    CHECK(memory.configureTelemetry(pId, (root / "telemetry.db").string()));
+    auto* store = memory.store(pId);
+    CHECK(store != nullptr);
+
+    const std::string active = store->recordPlaybook(
+        scope, "demote_task", "Active playbook",
+        taskforge::Json::array({taskforge::Json{{"tool", "read"}}}),
+        taskforge::Json::object(), 0.8, "active", "seed",
+        taskforge::Json::array(), 3, 0);
+    CHECK(!active.empty());
+    CHECK(memory.listPlaybooks(pId, "demote_task", "active", 10).size() == 1);
+
+    auto reject = [&](const std::string& runId) {
+        MemoryEpisodeRecord episode;
+        episode.runId = runId;
+        episode.nodeId = "agent";
+        episode.kind = "agent_success";
+        episode.content = "ok";
+        episode.taskType = "demote_task";
+        episode.outcome = "success";
+        episode.inputHash = runId;
+        episode.toolCalls = taskforge::Json::array({taskforge::Json{{"name", "read"}}});
+        const std::string episodeId = memory.recordEpisode(pId, episode);
+        CHECK(!episodeId.empty());
+        MemoryValidationRecord validation;
+        validation.episodeId = episodeId;
+        validation.runId = runId;
+        validation.nodeId = "agent";
+        validation.validatorId = "artifact-rules";
+        validation.validatorVersion = "v1";
+        validation.ok = false;
+        validation.score = 0.0;
+        CHECK(!memory.recordValidation(pId, validation).empty());
+    };
+
+    reject("demote-1");
+    CHECK(memory.listPlaybooks(pId, "demote_task", "active", 10).size() == 1);
+    reject("demote-2");
+    CHECK(memory.listPlaybooks(pId, "demote_task", "active", 10).size() == 0);
 
     memory.closeProject(pId);
     std::error_code ec;

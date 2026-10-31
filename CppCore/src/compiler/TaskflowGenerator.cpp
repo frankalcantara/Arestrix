@@ -296,6 +296,51 @@ bool memoryMeasurementOff(const core::Graph& graph) {
     return global.value("measurementMode", std::string("normal")) == "memory_off";
 }
 
+bool hasValidationRules(const core::NodeData& node) {
+    return node.validationRules.is_array() && !node.validationRules.empty();
+}
+
+// E1: depois de runAgent terminar sem excecao, avalia as regras de artefato do
+// vertice e grava o veredito ligado ao episodio. Sem episodio (memoria
+// desligada ou falha antes do registro) nao ha veredito. Falha ao gravar a
+// validacao nunca derruba o pipeline.
+std::string artifactValidationCode(const core::NodeData& node, const json& memory) {
+    if (!hasValidationRules(node)) return "";
+    const bool reinforce = memory.value("validatedReinforcement", false);
+    const std::string nodeId = TaskflowGenerator::cppString(node.id);
+    std::string code;
+    code += "    {\n";
+    code += "      try {\n";
+    code += "        const auto arx_val = taskforge::rt::validateArtifacts("
+            "taskforge::Json::parse(" + rawLiteral(node.validationRules.dump()) +
+            "), arx_item_id);\n";
+    code += "        if (arx_val.hasRules) {\n";
+    code += "          const std::string arx_val_run = taskforge::rt::currentRunId(" + nodeId + ");\n";
+    code += "          taskforge::memory::MemoryValidationRecord arx_val_record;\n";
+    code += "          arx_val_record.runId = arx_val_run;\n";
+    code += "          arx_val_record.nodeId = " + nodeId + ";\n";
+    code += "          arx_val_record.episodeId = memory.episodeIdFor(projectId, arx_val_run, " +
+            nodeId + ");\n";
+    code += "          arx_val_record.validatorId = arx_val.validatorId;\n";
+    code += "          arx_val_record.validatorVersion = arx_val.validatorVersion;\n";
+    code += "          arx_val_record.ok = arx_val.ok;\n";
+    code += "          arx_val_record.score = arx_val.score;\n";
+    code += "          arx_val_record.reasonsJson = arx_val.reasonsJson;\n";
+    code += "          arx_val_record.artifactHash = arx_val.artifactHash;\n";
+    code += "          if (!arx_val_record.episodeId.empty()) {\n";
+    code += "            memory.recordValidation(projectId, arx_val_record, " +
+            std::string(reinforce ? "true" : "false") + ");\n";
+    code += "          } else {\n";
+    code += "            std::cerr << \"[MEMORIA] validacao sem episodio: \" << " + nodeId + " << \"\\n\";\n";
+    code += "          }\n";
+    code += "        }\n";
+    code += "      } catch (const std::exception& arx_val_err) {\n";
+    code += "        std::cerr << \"[MEMORIA] falha ao registrar validacao: \" << arx_val_err.what() << \"\\n\";\n";
+    code += "      }\n";
+    code += "    }\n";
+    return code;
+}
+
 std::string cppStringList(const json& values) {
     std::string out = "std::vector<std::string>{";
     bool first = true;
@@ -368,6 +413,9 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
     spec["memoryForceDisabled"] = forceMemoryOff;
     spec["memoryProjectId"] = graph.getMetadata().projectId;
     spec["memoryWriteEnabled"] = effectiveMemoryEnabled && memoryMode == "learn";
+    // E1: quando ligado, finishHits so atualiza last_used e o veredito de
+    // artefato passa a ser o unico caminho de reforco da utilidade.
+    spec["memoryValidatedReinforcement"] = memory.value("validatedReinforcement", false);
     const json memoryDomains = memoryThemesOf(memory);
     if (!memoryDomains.empty()) spec["memoryDomains"] = memoryDomains;
     else if (effectiveMemoryEnabled) spec["memoryDomains"] = json::array({node.id});
@@ -621,7 +669,14 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
     if (hasCuda) code += "#include <taskflow/cuda/cudaflow.hpp>\n";
     code += "#include \"rt/Runtime.hpp\"\n";
     if (!subflowTargets.empty()) code += "#include \"rt/CallGraph.hpp\"\n";
-    code += "#include \"memory/MemoryService.hpp\"\n\n";
+    code += "#include \"memory/MemoryService.hpp\"\n";
+    for (const auto& pair : nodes) {
+        if (hasValidationRules(pair.second)) {
+            code += "#include \"rt/ArtifactValidation.hpp\"\n";
+            break;
+        }
+    }
+    code += "\n";
 
     code += "struct AgentContext {\n";
     code += "  std::string pipeline_name = " + cppString(meta.graphName) + ";\n";
@@ -868,18 +923,20 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
                 std::string runCall = "taskforge::rt::runAgent(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +
                                       rawLiteral(buildAgentSpec(graph, node).dump()) + ", \"\", arx_mem_ctx" +
                                       (inputContextExpr.empty() ? "" : ", " + inputContextExpr) + ");";
+                const std::string validationCode = artifactValidationCode(node, mem);
                 if (memLearns) {
                     std::string domain = "geral";
                     if (domains.is_array()) {
                         for (const auto& d : domains) if (d.is_string()) { domain = d.get<std::string>(); break; }
                     }
                     std::string failPrefix = "Falha no agente " + label + ": ";
-                    body += "    try {\n      " + runCall + "\n    } catch (const std::exception& arx_mem_err) {\n";
+                    body += "    try {\n      " + runCall + "\n" + validationCode +
+                            "    } catch (const std::exception& arx_mem_err) {\n";
                     body += "      memory.proposeLesson(projectId, " + cppString(domain) +
                             ", \"agent_failure\",\n          std::string(" + cppString(failPrefix) + ") + arx_mem_err.what(), " + cppString(node.id) + ");\n";
                     body += "      throw;\n    }\n";
                 } else {
-                    body += "    " + runCall + "\n";
+                    body += "    " + runCall + "\n" + validationCode;
                 }
             } else {
                 body = "taskforge::rt::runAgent(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +

@@ -21,6 +21,7 @@ Uso: python scripts/e2e_memory.py [caminho-do-arestrix-cli]
 import json
 import os
 import pathlib
+import re
 import shutil
 import socket
 import sqlite3
@@ -133,7 +134,57 @@ def make_graphs():
     g4 = graph([off_agent], [])
     g5 = graph([copy.deepcopy(agent)], [])
     g5["metadata"]["globalDefaults"]["memory"].update({"measurementMode": "memory_off", "recordMetrics": True})
-    return g1, g2, g3, g4, g5
+
+    def validation_agent(node_id, label, valid_model=True):
+        node = copy.deepcopy(agent)
+        node["id"] = node_id
+        node["label"] = label
+        node["inputs"] = [port(node_id + "_in", "in", "input")]
+        node["outputs"] = [port(node_id + "_out", "out", "output")]
+        node["agentSettings"]["model"]["promptTemplate"] = "Leia o artefato e responda OK."
+        if not valid_model:
+            node["agentSettings"]["model"]["model"] = ""
+        node["agentSettings"]["inheritCodeMode"] = False
+        node["agentSettings"]["codeMode"] = {"allowedTools": ["read"], "customScripts": []}
+        node["agentSettings"]["memory"].update({
+            "mode": "learn", "theme": "teste", "domains": ["teste"],
+            "taskType": "validacao_artefato", "contextBudgetTokens": 800,
+        })
+        node["validationRules"] = [{
+            "targetPathPattern": "artefatos/pipeline.md",
+            "minSizeBytes": 200,
+            "contentPattern": "STATUS_OK",
+        }]
+        return node
+
+    def write_artifact(node_id, marker):
+        content = marker + "\\n" + ("x" * 400)
+        return {
+            "id": node_id, "label": "Prepara_Artefato", "type": "static",
+            "position": {"x": 0, "y": 0},
+            "inputs": [port(node_id + "_in", "in", "input")],
+            "outputs": [port(node_id + "_out", "out", "output")],
+            "parameters": {},
+            "customLambdaBody": (
+                'std::filesystem::create_directories("artefatos");\n'
+                f'{{ std::ofstream arx_f("artefatos/pipeline.md", std::ios::binary); '
+                f'arx_f << "{content}"; }}\n'
+                'std::cout << "[PREP] artefato gravado\\n";'
+            ),
+        }
+
+    def validation_graph(prep_id, marker):
+        prep = write_artifact(prep_id, marker)
+        node = validation_agent("validador", "Agente_Com_Regras")
+        return graph([prep, node], [{
+            "id": prep_id + "_edge", "sourceNodeId": prep_id, "sourcePortId": prep_id + "_out",
+            "targetNodeId": "validador", "targetPortId": "validador_in",
+        }])
+
+    g6 = validation_graph("prepara_ok", "STATUS_OK")
+    g7 = validation_graph("prepara_ruim", "SEM_MARCADOR")
+    g8 = graph([validation_agent("validador_falha", "Agente_Com_Regras_Falha", valid_model=False)], [])
+    return g1, g2, g3, g4, g5, g6, g7, g8
 
 
 class MockHandler(BaseHTTPRequestHandler):
@@ -143,12 +194,33 @@ class MockHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get("Content-Length", "0"))
         body = json.loads(self.rfile.read(length) or b"{}")
-        system = body.get("messages", [{}])[0].get("content", "")
+        messages = body.get("messages", [])
+        system = messages[0].get("content", "") if messages else ""
         with self.server.log_lock:
             with self.server.log_path.open("a", encoding="utf-8") as f:
                 f.write(system + "\n===SYSTEM-END===\n")
+        match = re.search(r'no "([^"]+)" de um pipeline', system)
+        label = match.group(1) if match else ""
+        has_tool_result = any(msg.get("role") == "tool" for msg in messages)
+        if "Agente_Com_Regras" in label and not has_tool_result:
+            message = {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{
+                    "id": "call_read_artifact",
+                    "type": "function",
+                    "function": {
+                        "name": "read",
+                        "arguments": json.dumps({"path": "artefatos/pipeline.md"}),
+                    },
+                }],
+            }
+            finish = "tool_calls"
+        else:
+            message = {"role": "assistant", "content": "OK"}
+            finish = "stop"
         data = json.dumps({
-            "choices": [{"message": {"role": "assistant", "content": "OK"}, "finish_reason": "stop"}],
+            "choices": [{"message": message, "finish_reason": finish}],
             "usage": {"prompt_tokens": 1, "completion_tokens": 1},
         }).encode("utf-8")
         self.send_response(200)
@@ -192,12 +264,9 @@ def main():
     project = work / "projeto"
     project.mkdir(parents=True)
     log_file = work / "systems.log"
-    g1, g2, g3, g4, g5 = make_graphs()
-    (work / "graph1.json").write_text(json.dumps(g1, indent=2), encoding="utf-8")
-    (work / "graph2.json").write_text(json.dumps(g2, indent=2), encoding="utf-8")
-    (work / "graph3.json").write_text(json.dumps(g3, indent=2), encoding="utf-8")
-    (work / "graph4.json").write_text(json.dumps(g4, indent=2), encoding="utf-8")
-    (work / "graph5.json").write_text(json.dumps(g5, indent=2), encoding="utf-8")
+    g1, g2, g3, g4, g5, g6, g7, g8 = make_graphs()
+    for index, item in enumerate((g1, g2, g3, g4, g5, g6, g7, g8), start=1):
+        (work / f"graph{index}.json").write_text(json.dumps(item, indent=2), encoding="utf-8")
 
     port_num = free_port()
     server = HTTPServer(("127.0.0.1", port_num), MockHandler)
@@ -290,6 +359,66 @@ def main():
               "a falha foi gravada como proposta de licao")
         check("agent_failure" in failure_text, "a proposta foi classificada como falha de agente")
 
+        print("\n== E1: regras de artefato, veredito e gate de playbooks ==")
+        env_val = dict(env)
+        for item_id in ("val-a", "val-b", "val-c"):
+            env_val["ARESTRIX_ITEM_ID"] = item_id
+            p_val = run_graph(EXE, work / "graph6.json", project, env_val)
+            out_val = (p_val.stdout or "") + (p_val.stderr or "")
+            check(p_val.returncode == 0, f"execucao validada {item_id} terminou com codigo 0")
+
+        validations = telemetry_rows(
+            project,
+            "SELECT v.ok,v.node_id,v.episode_id,e.input_hash,v.validator_id,v.validator_version "
+            "FROM memory_validation v JOIN memory_episode e ON e.id=v.episode_id "
+            "WHERE v.node_id='validador' ORDER BY v.created_at")
+        check(len(validations) == 3, "cada execucao com regras gravou um veredito")
+        check(all(row[0] == 1 for row in validations), "os tres vereditos foram aprovados")
+        check(len({row[3] for row in validations}) == 3, "os vereditos apontam entradas distintas")
+        check(all(row[4] == "artifact-rules" for row in validations), "o validador e artifact-rules")
+        check(all(row[5] for row in validations), "a versao do validador foi gravada")
+        playbooks = db_rows(
+            project,
+            "SELECT status FROM memory_playbook WHERE task_type='validacao_artefato'")
+        check(len(playbooks) == 1 and playbooks[0][0] == "active",
+              "o gate promoveu o playbook com tres entradas aprovadas")
+
+        p_rep = subprocess.run(
+            [str(EXE), "memory", "report", "--root", str(project), "--json"],
+            capture_output=True, text=True, timeout=60)
+        try:
+            report = json.loads(p_rep.stdout)
+        except Exception:
+            report = {}
+        check(p_rep.returncode == 0, "memory report terminou com codigo 0")
+        check(int(report.get("validations", {}).get("total", 0)) >= 3,
+              "o relatorio contou os vereditos")
+        entry = next((item for item in report.get("taskTypes", [])
+                      if item.get("taskType") == "validacao_artefato"), None)
+        check(entry is not None and abs(float(entry.get("approvalRate", 0)) - 1.0) < 1e-9,
+              "o relatorio trouxe a taxa de aprovacao por task_type")
+
+        p_fail = run_graph(EXE, work / "graph8.json", project, env)
+        check(p_fail.returncode != 0, "a execucao de infraestrutura falhou como esperado")
+        failed_validations = telemetry_rows(
+            project, "SELECT COUNT(*) FROM memory_validation WHERE node_id='validador_falha'")
+        check(failed_validations and failed_validations[0][0] == 0,
+              "falha antes do agente nao gravou veredito")
+
+        for item_id in ("rej-a", "rej-b"):
+            env_val["ARESTRIX_ITEM_ID"] = item_id
+            p_rej = run_graph(EXE, work / "graph7.json", project, env_val)
+            check(p_rej.returncode == 0, f"execucao reprovada {item_id} terminou com codigo 0")
+        rejected = telemetry_rows(
+            project,
+            "SELECT COUNT(*) FROM memory_validation WHERE node_id='validador' AND ok=0")
+        check(rejected and rejected[0][0] >= 2, "as reprovacoes gravaram vereditos ok=0")
+        demoted = db_rows(
+            project,
+            "SELECT COUNT(*) FROM memory_playbook WHERE task_type='validacao_artefato' AND status='active'")
+        check(demoted and demoted[0][0] == 0,
+              "duas reprovacoes seguidas despromoveram o playbook")
+
         print("\n== Memoria desligada com metricas (comparacao de consumo) ==")
         env_off = dict(env)
         env_off["ARESTRIX_MEMORY_METRICS"] = "1"
@@ -364,7 +493,10 @@ def main():
         check(int(ws_status.get("lessons", 0)) >= 1, "a licao foi promovida ao workspace")
     finally:
         server.shutdown()
-        shutil.rmtree(work, ignore_errors=True)
+        if os.environ.get("ARESTRIX_E2E_KEEP") == "1":
+            print(f"\nProjeto preservado em {work}")
+        else:
+            shutil.rmtree(work, ignore_errors=True)
 
     if failures:
         print(f"\n{len(failures)} verificacao(oes) falharam:")

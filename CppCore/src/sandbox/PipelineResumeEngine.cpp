@@ -36,7 +36,7 @@ std::string PipelineResumeEngine::currentTimestamp() const {
     return ss.str();
 }
 
-std::string PipelineResumeEngine::resolvePattern(const std::string& pattern, const std::string& itemId) const {
+std::string PipelineResumeEngine::resolvePattern(const std::string& pattern, const std::string& itemId) {
     std::string result = pattern;
     std::string token1 = "{itemId}";
     std::string token2 = "{id}";
@@ -56,7 +56,7 @@ std::string PipelineResumeEngine::resolvePattern(const std::string& pattern, con
     return result;
 }
 
-bool PipelineResumeEngine::validateArtifact(const std::string& resolvedPath, size_t minBytes, const std::string& regexPattern) const {
+bool PipelineResumeEngine::validateArtifact(const std::string& resolvedPath, size_t minBytes, const std::string& regexPattern) {
     std::error_code ec;
     if (!std::filesystem::exists(resolvedPath, ec)) {
         return false;

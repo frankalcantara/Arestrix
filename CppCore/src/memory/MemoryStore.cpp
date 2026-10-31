@@ -1788,6 +1788,24 @@ std::string MemoryStore::recordEpisode(const MemoryEpisodeRecord& episode) {
     return id;
 }
 
+std::string MemoryStore::episodeIdFor(const std::string& scopeId, const std::string& runId,
+                                      const std::string& nodeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || runId.empty()) return "";
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT id FROM memory_episode WHERE scope_id=? AND run_id=? "
+                       "AND COALESCE(node_id,'')=? ORDER BY created_at DESC, id DESC LIMIT 1",
+                 st, error)) {
+        lastError_ = error;
+        return "";
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, runId);
+    bindText(st.stmt, 3, nodeId);
+    return stepRetry(st.stmt) == SQLITE_ROW ? columnText(st.stmt, 0) : std::string();
+}
+
 taskforge::Json MemoryStore::getEpisode(const std::string& scopeId, const std::string& episodeId) const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     taskforge::Json out = taskforge::Json::object();
@@ -3418,7 +3436,8 @@ int MemoryStore::recordConsultedHits(const std::string& scopeId, const std::stri
 }
 
 bool MemoryStore::finishHits(const std::string& scopeId, const std::string& runId,
-                             const std::string& nodeId, const std::string& outcome) {
+                             const std::string& nodeId, const std::string& outcome,
+                             bool reinforce) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (!db_) return false;
     Stmt st;
@@ -3434,6 +3453,28 @@ bool MemoryStore::finishHits(const std::string& scopeId, const std::string& runI
     if (stepRetry(st.stmt) != SQLITE_DONE) {
         lastError_ = sqlite3_errmsg(db_);
         return false;
+    }
+
+    // E1: com o veredito independente ligado, o resultado do agente nao altera
+    // utilidade nem contagens; so o veredito de recordValidation reforca.
+    if (!reinforce) {
+        Stmt touch;
+        if (!prepare(db_, "UPDATE memory_edge SET last_used=? WHERE scope_id=? AND id IN "
+                           "(SELECT memory_id FROM memory_hit WHERE scope_id=? AND run_id=? "
+                           "AND node_id=? AND used=1 AND kind IN ('lesson','fact'))",
+                     touch, error)) {
+            return false;
+        }
+        bindText(touch.stmt, 1, nowIso());
+        bindText(touch.stmt, 2, scopeId);
+        bindText(touch.stmt, 3, scopeId);
+        bindText(touch.stmt, 4, runId);
+        bindText(touch.stmt, 5, nodeId);
+        if (stepRetry(touch.stmt) != SQLITE_DONE) {
+            lastError_ = sqlite3_errmsg(db_);
+            return false;
+        }
+        return true;
     }
 
     // Reforco/decay: uso em sucesso reativa a memoria e soma evidencia; uso em
@@ -3503,6 +3544,35 @@ std::vector<MemoryHitRef> MemoryStore::usedHitRefs(const std::string& scopeId, c
         out.push_back(MemoryHitRef{columnText(st.stmt, 0), columnText(st.stmt, 1)});
     }
     return out;
+}
+
+bool MemoryStore::touchHitsLastUsed(const std::string& scopeId,
+                                    const std::vector<std::string>& memoryIds,
+                                    const std::string& at) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || memoryIds.empty()) return false;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "UPDATE memory_edge SET last_used=? WHERE scope_id=? AND id=? AND status='active'",
+                 st, error)) {
+        lastError_ = error;
+        return false;
+    }
+    const std::string when = at.empty() ? nowIso() : at;
+    bool ok = true;
+    for (const auto& id : memoryIds) {
+        if (id.empty()) continue;
+        sqlite3_reset(st.stmt);
+        sqlite3_clear_bindings(st.stmt);
+        bindText(st.stmt, 1, when);
+        bindText(st.stmt, 2, scopeId);
+        bindText(st.stmt, 3, id);
+        if (stepRetry(st.stmt) != SQLITE_DONE) {
+            lastError_ = sqlite3_errmsg(db_);
+            ok = false;
+        }
+    }
+    return ok;
 }
 
 bool MemoryStore::reinforceFromHits(const std::string& scopeId,

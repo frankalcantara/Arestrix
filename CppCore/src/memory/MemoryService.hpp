@@ -186,15 +186,23 @@ public:
                             const std::string& nodeId,
                             const std::vector<MemoryHitRef>& refs);
     bool finishHits(const std::string& projectId, const std::string& runId,
-                    const std::string& nodeId, const std::string& outcome);
+                    const std::string& nodeId, const std::string& outcome,
+                    bool reinforce = true);
     taskforge::Json hitSummary(const std::string& projectId);
     bool invalidateEdge(const std::string& projectId, const std::string& edgeId,
                         const std::string& validTo, const std::string& reason,
                         const std::string& actor = "runtime");
     bool recordUsage(const MemoryUsageRecord& usage);
     taskforge::Json usageSummary(const std::string& projectId);
+    // Episodio mais recente de (run, no), para ligar o veredito sem mudar
+    // a assinatura de runAgent.
+    std::string episodeIdFor(const std::string& projectId, const std::string& runId,
+                             const std::string& nodeId);
+    // reinforce=true (memory.validatedReinforcement) troca o reforco por
+    // resultado do agente pelo reforco por veredito.
     std::string recordValidation(const std::string& projectId,
-                                 const MemoryValidationRecord& validation);
+                                 const MemoryValidationRecord& validation,
+                                 bool reinforce = false);
     std::vector<MemoryValidationRecord> listValidations(const std::string& projectId,
                                                         const std::string& episodeId = "",
                                                         size_t limit = 100);

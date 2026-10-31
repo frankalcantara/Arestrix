@@ -87,6 +87,18 @@ Infrastructure failures are classified by an enumerated `errorClass` — transpo
 5xx, auth/key, gateway/budget, configuration, sandbox/tool or cancellation — and do **not** create
 a lesson proposal. `task_max_turns` is a task failure, not infrastructure.
 
+### Artifact validation
+
+When a vertex declares `validationRules` — a path with `{itemId}`, a minimum size and a content
+pattern — the runtime evaluates the rules **after** the agent finishes without an exception. The
+verdict is stored in `memory_validation`, linked to the vertex episode, with
+`validator_id=artifact-rules`, the SHA-256 of the canonical rules and the hash of the artifacts
+read. Infrastructure or task failures produce no verdict: the episode stays **without a verdict**.
+
+With `globalDefaults.memory.validatedReinforcement` enabled, the agent result no longer changes
+utility; only the verdict reinforces the items used in that run. Disabled (the default), the 2.5.0
+behavior is preserved. The playbook gate always uses the verdict, with or without the switch.
+
 Proposals stay pending in the **Project Memory** panel. Approval promotes the item to active
 knowledge; rejection keeps the record for audit. There is no direct lesson-writing tool.
 

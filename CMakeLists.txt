@@ -232,6 +232,7 @@ add_library(arestrix_core STATIC
   ${SRC}/rt/NetGuard.cpp
   ${SRC}/rt/RuntimeLang.cpp
   ${SRC}/rt/Tools.cpp
+  ${SRC}/rt/ArtifactValidation.cpp
   ${SRC}/rt/Agent.cpp
   ${SRC}/rt/CallGraph.cpp
   ${SRC}/rt/AsyncCalls.cpp
