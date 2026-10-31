@@ -1,6 +1,7 @@
 #include "MemoryIndexer.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <map>
 #include <set>
@@ -33,9 +34,17 @@ std::string MemoryIndexer::contentHash(const std::string& objectType, const std:
 
 EmbeddingIndexStats MemoryIndexer::index(MemoryStore& store, IEmbeddingProvider& provider,
                                          const EmbeddingConfig& config, const std::string& scopeId,
-                                         bool force, size_t maxObjects, std::string& error) {
+                                         bool force, size_t maxObjects, std::string& error,
+                                         int timeBudgetMs) {
     EmbeddingIndexStats stats;
     error.clear();
+    const auto started = std::chrono::steady_clock::now();
+    auto budgetExceeded = [&]() {
+        if (timeBudgetMs <= 0) return false;
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - started).count();
+        return elapsed >= timeBudgetMs;
+    };
     if (!provider.available()) {
         error = "provider de embeddings indisponivel";
         return stats;
@@ -84,7 +93,6 @@ EmbeddingIndexStats MemoryIndexer::index(MemoryStore& store, IEmbeddingProvider&
             continue;
         }
         pending.push_back(Pending{object, hash});
-        if (maxObjects > 0 && pending.size() >= maxObjects) break;
     }
 
     // Remove vetores de objetos que nao existem mais no escopo/modelo.
@@ -97,8 +105,14 @@ EmbeddingIndexStats MemoryIndexer::index(MemoryStore& store, IEmbeddingProvider&
     }
 
     const size_t batchSize = static_cast<size_t>(std::max(1, config.batchSize));
-    for (size_t start = 0; start < pending.size(); start += batchSize) {
-        const size_t end = std::min(pending.size(), start + batchSize);
+    const size_t processCount = maxObjects > 0
+        ? std::min(pending.size(), maxObjects) : pending.size();
+    for (size_t start = 0; start < processCount; start += batchSize) {
+        if (budgetExceeded()) {
+            stats.stoppedByBudget = true;
+            break;
+        }
+        const size_t end = std::min(processCount, start + batchSize);
         std::vector<std::string> texts;
         texts.reserve(end - start);
         for (size_t i = start; i < end; ++i) texts.push_back(pending[i].object.text);
@@ -108,11 +122,15 @@ EmbeddingIndexStats MemoryIndexer::index(MemoryStore& store, IEmbeddingProvider&
         if (!provider.embed(texts, false, embeddings, embedError)) {
             error = embedError.empty() ? "falha ao gerar embeddings" : embedError;
             stats.failed += end - start;
+            stats.pending = pending.size() > stats.indexed + stats.failed
+                ? pending.size() - stats.indexed - stats.failed : 0;
             return stats;
         }
         if (embeddings.size() != texts.size()) {
             error = "provider devolveu quantidade incorreta de embeddings";
             stats.failed += end - start;
+            stats.pending = pending.size() > stats.indexed + stats.failed
+                ? pending.size() - stats.indexed - stats.failed : 0;
             return stats;
         }
         for (size_t i = start; i < end; ++i) {
@@ -132,6 +150,8 @@ EmbeddingIndexStats MemoryIndexer::index(MemoryStore& store, IEmbeddingProvider&
             ++stats.indexed;
         }
     }
+    stats.pending = pending.size() > stats.indexed + stats.failed
+        ? pending.size() - stats.indexed - stats.failed : 0;
     return stats;
 }
 

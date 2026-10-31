@@ -138,6 +138,10 @@ public:
     EmbeddingConfig embeddingConfig(const std::string& projectId);
     taskforge::Json embeddingStatus(const std::string& projectId);
     taskforge::Json testEmbeddings(const std::string& projectId, const std::string& sample = "");
+    // E3: indexa pendencias fora do caminho de busca, com orcamento de tempo e
+    // quantidade. Nunca derruba a execucao; devolve o estado resultante.
+    taskforge::Json indexPending(const std::string& projectId, int timeBudgetMs = 10000,
+                                 size_t maxObjects = 64);
     taskforge::Json reindexEmbeddings(const std::string& projectId, bool force,
                                       std::string& error);
 

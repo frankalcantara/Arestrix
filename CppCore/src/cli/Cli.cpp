@@ -121,7 +121,7 @@ void printHelp() {
         "  arestrix-cli env list [--json]\n"
         "  arestrix-cli env check <NOME>... [--json]\n"
         "  arestrix-cli doctor [--project <pasta>] [--json]\n"
-        "  arestrix-cli memory report|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote [--project <pasta>] [opcoes]\n"
+        "  arestrix-cli memory report|health|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote [--project <pasta>] [opcoes]\n"
         "  arestrix-cli mcp list|test|tools [id] [--project <pasta>] [--json]\n"
         "  arestrix-cli project info|validate|graphs [--project <pasta>] [--json]\n"
         "  arestrix-cli completion powershell|bash|zsh\n"
@@ -484,6 +484,7 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory purge  --project <pasta> [--keep-audit] [--db <arquivo>] [--json]\n"
                      "arestrix-cli memory proposals list|accept|reject [id] --project <pasta> [--status pending|all] [--reason texto] [--json]\n"
                      "arestrix-cli memory embeddings status|test --project <pasta> [--model M] [--base-url URL] [--enable] [--sample texto] [--json]\n"
+                     "arestrix-cli memory health --project <pasta> [--json]\n"
                      "arestrix-cli memory reindex --project <pasta> [--model M] [--base-url URL] [--force] [--json]\n"
                      "arestrix-cli memory consolidate --project <pasta> [--dormant-days N] [--no-decay] [--no-dedup] [--no-generalize] [--json]\n"
                      "arestrix-cli memory workspace init|status --project <pasta> [--workspace-id ID] [--json]\n"
@@ -495,9 +496,9 @@ int runMemory(const std::vector<std::string>& args) {
     }
     const std::string command = args[1];
     if (command != "report" && command != "prune" && command != "purge" && command != "proposals" &&
-        command != "embeddings" && command != "reindex" && command != "consolidate" &&
-        command != "workspace" && command != "state" && command != "ab" &&
-        command != "promote" && command != "unpromote") {
+        command != "embeddings" && command != "health" && command != "reindex" &&
+        command != "consolidate" && command != "workspace" && command != "state" &&
+        command != "ab" && command != "promote" && command != "unpromote") {
         std::cerr << "arestrix-cli memory: comando desconhecido: " << command << "\n";
         return kExitUsage;
     }
@@ -881,6 +882,26 @@ int runMemory(const std::vector<std::string>& args) {
         if (!memory.configure(projectId, true, dbPath.string())) {
             std::cerr << "Falha ao abrir o banco de memoria: " << dbPath.string() << "\n";
             return kExitConfig;
+        }
+
+        if (command == "health") {
+            // E3: visao unica de indexados/pendentes sem reindexar nem escrever.
+            auto config = memorySettings.is_object()
+                ? taskforge::memory::embeddingConfigFromJson(memorySettings)
+                : taskforge::memory::defaultEmbeddingConfig();
+            memory.configureEmbeddings(projectId, config);
+            taskforge::Json out = memory.embeddingStatus(projectId);
+            out["ok"] = true;
+            if (opt.json) {
+                std::cout << out.dump(2) << "\n";
+            } else {
+                std::cout << "Memoria: " << out.value("state", std::string("stale"))
+                          << " | indexados " << out.value("indexed", 0LL)
+                          << " / " << out.value("candidates", 0LL)
+                          << " | pendentes " << out.value("pending", 0LL)
+                          << " | modelo " << out.value("model", std::string()) << "\n";
+            }
+            return 0;
         }
 
         if (command == "state") {

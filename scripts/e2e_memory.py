@@ -537,6 +537,20 @@ def main():
         check(emb_status.get("active") is False, "embeddings continuam desligados por padrao")
         check(int(emb_status.get("indexed", 0)) == 0, "nenhum vetor foi indexado com embeddings desligados")
 
+        p_health = subprocess.run(
+            [str(EXE), "memory", "health", "--root", str(project), "--json"],
+            capture_output=True, text=True, timeout=60)
+        try:
+            health = json.loads(p_health.stdout)
+        except Exception:
+            health = {}
+        check(p_health.returncode == 0, "memory health terminou com codigo 0")
+        check("indexed" in health and "pending" in health,
+              "memory health expoe indexados e pendentes")
+        check(int(health.get("indexed", 0)) == 0 and
+              int(health.get("pending", -1)) == int(health.get("candidates", -2)),
+              "memory health conta as pendencias com embeddings desligados")
+
         print("\n== Consolidacao deterministica ==")
         p_cons = subprocess.run(
             [str(EXE), "memory", "consolidate", "--root", str(project), "--json"],

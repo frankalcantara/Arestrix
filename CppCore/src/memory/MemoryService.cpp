@@ -1329,6 +1329,68 @@ taskforge::Json MemoryService::testEmbeddings(const std::string& projectId,
     return out;
 }
 
+taskforge::Json MemoryService::indexPending(const std::string& projectId, int timeBudgetMs,
+                                            size_t maxObjects) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    auto* s = ensureStore(projectId);
+    auto& runtime = embeddingRuntimeLocked(projectId);
+    if (!s) {
+        return taskforge::Json{{"ok", false}, {"state", "failed"},
+                               {"error", "banco de memoria indisponivel"}};
+    }
+    if (!runtime.config.enabled) {
+        taskforge::Json out = embeddingStatus(projectId);
+        out["ok"] = true;
+        out["skipped"] = "embeddings_disabled";
+        return out;
+    }
+    if (!runtime.provider || !runtime.provider->available()) {
+        taskforge::Json out = embeddingStatus(projectId);
+        out["ok"] = false;
+        out["error"] = "provider de embeddings indisponivel";
+        return out;
+    }
+    if (embeddingInCooldown(runtime.cooldownUntil)) {
+        taskforge::Json out = embeddingStatus(projectId);
+        out["ok"] = false;
+        out["error"] = "provider em cooldown";
+        return out;
+    }
+
+    runtime.reindexing = true;
+    EmbeddingIndexStats stats;
+    std::string error;
+    try {
+        stats = MemoryIndexer::index(*s, *runtime.provider, runtime.config,
+                                     scopeId(projectId), false, maxObjects, error,
+                                     timeBudgetMs);
+    } catch (const std::exception& ex) {
+        error = ex.what();
+    }
+    runtime.reindexing = false;
+    if (error.empty() && stats.failed > 0) {
+        error = std::to_string(stats.failed) + " embedding(s) falharam";
+    }
+    if (error.empty()) {
+        runtime.lastIndexError.clear();
+        runtime.cooldownUntil = std::chrono::steady_clock::time_point{};
+    } else {
+        runtime.lastIndexError = error;
+        embeddingStartCooldown(runtime.cooldownUntil);
+    }
+
+    taskforge::Json out = embeddingStatus(projectId);
+    out["ok"] = error.empty();
+    out["indexedThisRun"] = static_cast<long long>(stats.indexed);
+    out["failedThisRun"] = static_cast<long long>(stats.failed);
+    out["pendingAfterRun"] = static_cast<long long>(stats.pending);
+    out["stoppedByBudget"] = stats.stoppedByBudget;
+    out["timeBudgetMs"] = timeBudgetMs;
+    out["maxObjects"] = static_cast<long long>(maxObjects);
+    if (!error.empty()) out["error"] = error;
+    return out;
+}
+
 taskforge::Json MemoryService::reindexEmbeddings(const std::string& projectId, bool force,
                                                  std::string& error) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
@@ -1371,6 +1433,8 @@ taskforge::Json MemoryService::reindexEmbeddings(const std::string& projectId, b
     out["skipped"] = static_cast<long long>(stats.skipped);
     out["removed"] = static_cast<long long>(stats.removed);
     out["failed"] = static_cast<long long>(stats.failed);
+    out["pending"] = static_cast<long long>(stats.pending);
+    out["stoppedByBudget"] = stats.stoppedByBudget;
     out["error"] = error;
     return out;
 }
@@ -1508,6 +1572,8 @@ void MemoryService::maintenanceLoop(const std::string& projectId,
 
         std::string error;
         taskforge::Json report = consolidate(projectId, runConfig.options, error);
+        // E3: a manutencao tambem drena pendencias de embeddings, fora da busca.
+        report["embeddingIndex"] = indexPending(projectId, 10000, 64);
 
         lock.lock();
         runtime->busy = false;
@@ -1567,7 +1633,8 @@ taskforge::Json MemoryService::runMaintenanceOnce(const std::string& projectId,
             config = it->second->config;
         }
     }
-    const taskforge::Json report = consolidate(projectId, config.options, error);
+    taskforge::Json report = consolidate(projectId, config.options, error);
+    report["embeddingIndex"] = indexPending(projectId, 10000, 64);
 
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     auto it = maintenance_.find(projectKey(projectId));
@@ -1661,8 +1728,9 @@ bool MemoryService::hybridRecall(const std::string& projectId, const std::string
     if (embeddingInCooldown(runtime.cooldownUntil)) return false;
     if (runtime.reindexing || !runtime.lastIndexError.empty()) return false;
 
-    // A8 v2: busca hibrida apenas com o indice completo do fingerprint atual.
-    // Em stale/partial/pending/failed, o chamador usa o fallback lexical.
+    // A8 v2: stale/pending/failed caem para lexical. Em partial (indice
+    // incompleto) a parte vetorial cobre os itens indexados e os demais entram
+    // somente pela parte lexical da fusao; a busca nunca indexa.
     const int effectiveDim = runtime.provider->dim() > 0 ? runtime.provider->dim() : runtime.config.dim;
     const std::string fingerprint = embeddingFingerprint(runtime.config, effectiveDim);
     size_t candidates = 0;
@@ -1670,7 +1738,7 @@ bool MemoryService::hybridRecall(const std::string& projectId, const std::string
         if (!object.text.empty()) ++candidates;
     }
     const size_t indexed = s->embeddingCount(scopeId(projectId), runtime.config.model, fingerprint);
-    if (indexed == 0 || indexed < candidates) return false;
+    if (indexed == 0) return false;
 
     // C4: a busca e somente leitura; indexacao acontece em reindex/importacao.
     std::vector<Embedding> queryEmbeddings;

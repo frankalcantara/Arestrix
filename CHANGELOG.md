@@ -25,6 +25,11 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   verdicts in real runs.
 - `memory report` now reads the telemetry database and shows validated/unvalidated runs and
   the approval rate per `task_type`.
+- **Automatic pending indexing (multigraph plan, E3):** after every persistent run, and in the
+  maintenance worker, pending embeddings are indexed outside the read path with a 10 s / 64 object
+  budget. Provider failures never fail the run. `partial` indexes now serve hybrid search: indexed
+  items get vector scores while unindexed items still enter lexically; `stale`/`pending`/`failed`
+  remain lexical. `memory health` and the project panel show indexed and pending counts.
 - **Consulted vs used (multigraph plan, E2):** `memory_hit.consulted` and
   `memory_usage.invalid_citations` split search results from real citations. `memory_search`
   returns `[MEMO:id]` per item plus the citation instruction, and citations of IDs not delivered
