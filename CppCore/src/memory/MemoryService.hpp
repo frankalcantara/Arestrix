@@ -93,7 +93,8 @@ public:
                            bool includeLessons = true,
                            bool includeBlackboard = true,
                            MemoryBriefInfo* info = nullptr,
-                           const std::string& taskType = "");
+                           const std::string& taskType = "",
+                           const std::string& intent = "");
     void clearLessons(const std::string& projectId);
 
     // Episódios, arestas e métricas.
@@ -244,6 +245,13 @@ private:
         bool reindexing = false;
         std::string lastIndexError;
     };
+
+    struct BriefCacheEntry {
+        std::string value;
+        MemoryBriefInfo info;
+    };
+    std::map<std::string, BriefCacheEntry> briefCache_;
+    void invalidateBriefCache();
 
     struct MaintenanceRuntime;
 

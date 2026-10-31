@@ -53,7 +53,11 @@ consolidação e embeddings. O vértice pode sobrescrever a memória quando `inh
 
 ## 4. O que o brief contém
 
-O brief é montado no início da execução, dentro do orçamento configurado:
+O brief é montado no início da execução, dentro do orçamento configurado. A consulta combina o
+`task_type`, o tema e o **prompt-template do vértice** — nunca o texto de entrada do usuário. As
+lições são filtradas por tema diretamente no SQL, sem varrer todas as lições do projeto, e o brief
+é cacheado por vértice/execução; qualquer escrita de conhecimento, promoção, consolidação ou
+reindexação invalida o cache.
 
 1. **Lições ativas** do tema, ordenadas por confiança e recência.
 2. **Fatos ativos** ligados ao tema e às consultas da tarefa.

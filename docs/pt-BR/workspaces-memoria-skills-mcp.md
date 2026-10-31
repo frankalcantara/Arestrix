@@ -97,9 +97,10 @@ Telemetria fica em `.arestrix/telemetry/telemetry.db`, separada do conhecimento 
 `.arestrix/memory/memory.db`; limpar sessão ou apagar telemetria não apaga conhecimento.
 
 O brief é montado dentro de `contextBudgetTokens` com lições ativas, fatos, evidências e o estado
-de trabalho legado quando habilitado. Playbooks compilados ficam como candidatos e não entram no
-brief até serem promovidos. Cada item injetado recebe `[MEMO:<id>]`; só o ID citado na resposta final
-conta como usado. Uso altera utilidade, não confiança.
+de trabalho legado quando habilitado. A consulta usa `task_type`, tema e prompt-template do vértice;
+lições são filtradas no SQL e o brief é cacheado com invalidação em mutações. Playbooks compilados
+ficam como candidatos e não entram no brief até serem promovidos. Cada item injetado recebe
+`[MEMO:<id>]`; só o ID citado na resposta final conta como usado. Uso altera utilidade, não confiança.
 
 O agente tem `memory_search` (somente leitura), `memory_propose_lesson` (proposta pendente) e as
 ferramentas de estado `memory_state_get`, `memory_state_set`, `memory_state_list` e

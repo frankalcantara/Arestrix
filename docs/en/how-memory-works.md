@@ -53,7 +53,10 @@ embeddings. A vertex may override memory when `inheritMemory` is false.
 
 ## 4. What the brief contains
 
-The brief is built at the start of the run, within the configured budget:
+The brief is built at the start of the run, within the configured budget. The query combines the
+`task_type`, the theme and the vertex's **prompt template** — never user input text. Lessons are
+filtered by theme directly in SQL, without scanning every project lesson, and the brief is cached
+per vertex/run; any knowledge write, promotion, consolidation or reindex invalidates the cache.
 
 1. **Active lessons** for the theme, ordered by confidence and recency.
 2. **Active facts** linked to the theme and task queries.

@@ -851,13 +851,14 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
                 std::string memoryTaskType = mem.value("taskType", std::string());
                 if (memoryTaskType.empty()) memoryTaskType = node.id;
                 const int budget = mem.value("contextBudgetTokens", 800);
+                const std::string memoryIntent = buildAgentSpec(graph, node).value("promptTemplate", std::string());
                 body = "    taskforge::memory::MemoryBriefInfo arx_brief_info;\n";
                 body += "    std::string arx_mem_ctx;\n";
                 body += "    if (std::getenv(\"ARESTRIX_MEMORY_DISABLE\") == nullptr) {\n";
                 body += "      arx_mem_ctx = memory.buildBrief(projectId, arx_item_id, " +
                         cppStringList(domains) + ", std::vector<std::string>{}, " +
                         std::to_string(std::max(0, budget)) + ", true, false, &arx_brief_info, " +
-                        cppString(memoryTaskType) + ");\n";
+                        cppString(memoryTaskType) + ", " + cppString(memoryIntent) + ");\n";
                 body += "      memory.recordBriefHits(projectId, taskforge::rt::currentRunId(" +
                         cppString(node.id) + "), " + cppString(node.id) + ", arx_brief_info);\n";
                 body += "    }\n";

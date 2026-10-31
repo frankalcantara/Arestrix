@@ -97,9 +97,10 @@ Telemetry lives in `.arestrix/telemetry/telemetry.db`, separate from knowledge i
 `.arestrix/memory/memory.db`; clearing a session or pruning telemetry never deletes knowledge.
 
 The brief is built within `contextBudgetTokens` from active lessons, facts, evidence and legacy
-working state when enabled. Compiled playbooks remain candidates and do not enter the brief until
-promoted. Every injected item is labeled `[MEMO:<id>]`; only an ID cited in the final answer counts as
-used. Use changes utility, not confidence.
+working state when enabled. The query uses `task_type`, theme and the vertex prompt template; lessons
+are filtered in SQL and the brief is cached with invalidation on mutations. Compiled playbooks remain
+candidates and do not enter the brief until promoted. Every injected item is labeled `[MEMO:<id>]`;
+only an ID cited in the final answer counts as used. Use changes utility, not confidence.
 
 The agent has `memory_search` (read-only), `memory_propose_lesson` (pending proposal) and the state
 tools `memory_state_get`, `memory_state_set`, `memory_state_list` and `memory_state_history`.

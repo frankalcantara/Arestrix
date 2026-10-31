@@ -1419,7 +1419,7 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(src.find("memory.configureTelemetry(projectId, arx_telemetry_db)") != std::string::npos);
     CHECK(src.find("taskforge::rt::currentItemId(\"pipeline\")") != std::string::npos);
     CHECK(src.find("memory.buildBrief(projectId, arx_item_id, std::vector<std::string>{\"svg_typography\"}, "
-                   "std::vector<std::string>{}, 800, true, false, &arx_brief_info, \"agente\")") != std::string::npos);
+                   "std::vector<std::string>{}, 800, true, false, &arx_brief_info, \"agente\", \"\")") != std::string::npos);
     CHECK(src.find("ARESTRIX_MEMORY_DISABLE") != std::string::npos);
     CHECK(src.find("recordBriefHits(projectId, taskforge::rt::currentRunId(\"agente\"), \"agente\", arx_brief_info)") != std::string::npos);
     CHECK(src.find("\"memoryEnabled\":true") != std::string::npos);
@@ -1476,7 +1476,7 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(modeSrc.find("\"memoryMode\":\"learn\"") != std::string::npos);
     CHECK(modeSrc.find("\"memoryTaskType\":\"svg_review\"") != std::string::npos);
     CHECK(modeSrc.find("memory.buildBrief(projectId, arx_item_id, std::vector<std::string>{\"svg_typography\"}, "
-                       "std::vector<std::string>{}, 600, true, false, &arx_brief_info, \"svg_review\")") != std::string::npos);
+                       "std::vector<std::string>{}, 600, true, false, &arx_brief_info, \"svg_review\", \"\")") != std::string::npos);
     CHECK(modeSrc.find("\"memory_propose_lesson\"") != std::string::npos);
     CHECK(modeSrc.find("\"memory_state_set\"") != std::string::npos);
     CHECK(modeSrc.find("\"memory_state_get\"") != std::string::npos);
@@ -3828,6 +3828,37 @@ TEST(memory_service_brief_respects_budget) {
     memory.closeProject("brief-test");
     std::error_code ec;
     fs::remove_all(dir, ec);
+}
+
+TEST(memory_brief_filters_domains_in_sql_and_invalidates_cache) {
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_brief_cache_" + stamp);
+    const std::string pId = "brief-cache-" + stamp;
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, (root / "memory.db").string()));
+    CHECK(!memory.recordLesson(pId, "design", "t", "regra de design").empty());
+    CHECK(!memory.recordLesson(pId, "network", "t", "regra de rede").empty());
+
+    taskforge::memory::MemoryBriefInfo info;
+    const std::string first = memory.buildBrief(pId, "pipeline", {"design"}, {}, 2000,
+                                                true, false, &info);
+    CHECK(first.find("regra de design") != std::string::npos);
+    CHECK(first.find("regra de rede") == std::string::npos);
+    const std::string cached = memory.buildBrief(pId, "pipeline", {"design"}, {}, 2000,
+                                                 true, false, nullptr);
+    CHECK(cached == first);
+
+    CHECK(!memory.recordLesson(pId, "design", "t", "segunda regra de design").empty());
+    const std::string refreshed = memory.buildBrief(pId, "pipeline", {"design"}, {}, 2000,
+                                                    true, false, nullptr);
+    CHECK(refreshed.find("segunda regra de design") != std::string::npos);
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
 }
 
 TEST(memory_maintenance_config_and_background_run) {

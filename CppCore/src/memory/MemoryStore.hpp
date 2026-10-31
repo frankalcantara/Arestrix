@@ -295,6 +295,8 @@ public:
     size_t activeLessonCount(const std::string& scopeId) const;
     std::vector<MemoryLesson> getLessons(const std::string& scopeId,
                                          const std::string& domain = "") const;
+    std::vector<MemoryLesson> getLessonsForDomains(const std::string& scopeId,
+                                                   const std::vector<std::string>& domains) const;
     std::string formatLessons(const std::string& scopeId,
                               const std::vector<std::string>& domains = {}) const;
     void clearLessons(const std::string& scopeId);

@@ -627,12 +627,14 @@ void ui_preview_memory_brief(webui::window::event* e) {
     size_t budget = 800;
     bool includeLessons = true;
     std::string taskType;
+    std::string intent;
     try {
         if (!payload.empty() && payload[0] == '{') {
             auto j = taskforge::jsonutil::parse(payload);
             projectId = j.value("projectId", "default");
             itemId = j.value("itemId", std::string("pipeline"));
             taskType = j.value("taskType", std::string());
+            intent = j.value("intent", std::string());
             if (j.contains("domains") && j["domains"].is_array()) {
                 for (const auto& d : j["domains"]) {
                     if (d.is_string() && !d.get<std::string>().empty()) domains.push_back(d.get<std::string>());
@@ -650,7 +652,7 @@ void ui_preview_memory_brief(webui::window::event* e) {
     taskforge::memory::MemoryBriefInfo info;
     const std::string brief = taskforge::memory::MemoryService::getInstance().buildBrief(
         projectId, itemId.empty() ? "pipeline" : itemId, domains, {}, budget,
-        includeLessons, false, &info, taskType);
+        includeLessons, false, &info, taskType, intent);
     taskforge::Json lessons = taskforge::Json::array();
     for (const auto& id : info.lessonIds) lessons.push_back(id);
     taskforge::Json facts = taskforge::Json::array();

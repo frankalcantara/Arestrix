@@ -1634,6 +1634,46 @@ std::vector<MemoryLesson> MemoryStore::getLessons(const std::string& scopeId,
     return out;
 }
 
+std::vector<MemoryLesson> MemoryStore::getLessonsForDomains(
+    const std::string& scopeId, const std::vector<std::string>& domains) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<MemoryLesson> out;
+    if (!db_ || domains.empty()) return out;
+    std::string sql =
+        "SELECT e.id, e.scope_id, d.canonical_name, r.canonical_name, e.recorded_at, e.metadata, e.source_ref, e.confidence "
+        "FROM memory_edge e "
+        "JOIN memory_node d ON d.id=e.src_id "
+        "JOIN memory_node r ON r.id=e.dst_id "
+        "WHERE e.scope_id=? AND e.relation='HAS_LESSON' AND e.status='active' AND e.dormant_at IS NULL "
+        "AND d.canonical_name IN (";
+    for (size_t i = 0; i < domains.size(); ++i) sql += (i ? ",?" : "?");
+    sql += ") ORDER BY e.confidence DESC, e.recorded_at DESC, e.id DESC";
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, sql.c_str(), st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    for (size_t i = 0; i < domains.size(); ++i) {
+        bindText(st.stmt, static_cast<int>(i + 2), domains[i]);
+    }
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        MemoryLesson lesson;
+        lesson.id = columnText(st.stmt, 0);
+        lesson.projectId = columnText(st.stmt, 1);
+        lesson.domain = sanitizeText(columnText(st.stmt, 2), 128).text;
+        lesson.lessonRule = sanitizeText(columnText(st.stmt, 3), 4000).text;
+        lesson.createdAt = columnText(st.stmt, 4);
+        taskforge::Json metadata = parseJsonOrNull(columnText(st.stmt, 5));
+        lesson.triggerError = sanitizeText(metadata.value("triggerError", std::string()), 4000).text;
+        lesson.sourceItem = sanitizeText(metadata.value("sourceItem", columnText(st.stmt, 6)), 4000).text;
+        lesson.confidence = columnDouble(st.stmt, 7);
+        out.push_back(std::move(lesson));
+    }
+    return out;
+}
+
 std::string MemoryStore::formatLessons(const std::string& scopeId,
                                        const std::vector<std::string>& domains) const {
     std::vector<MemoryLesson> lessons = getLessons(scopeId);

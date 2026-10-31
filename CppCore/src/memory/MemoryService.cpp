@@ -510,6 +510,7 @@ bool MemoryService::promoteToWorkspace(const std::string& projectId, const std::
 
     source->recordAudit(reviewer, "promote_to_workspace", memoryId, "", targetScope + "|" + promotedId);
     target->recordAudit(reviewer, "receive_workspace_promotion", promotedId, projectId, kind);
+    invalidateBriefCache();
     return true;
 }
 
@@ -718,8 +719,9 @@ std::string MemoryService::recordLesson(const std::string& projectId, const std:
                                         const std::string& triggerError, const std::string& lessonRule,
                                         const std::string& sourceItem, const std::string& sourceKind) {
     auto* s = ensureStore(projectId);
-    return s ? s->recordLesson(scopeId(projectId), domain, triggerError, lessonRule, sourceItem, sourceKind)
-             : std::string();
+    if (!s) return std::string();
+    invalidateBriefCache();
+    return s->recordLesson(scopeId(projectId), domain, triggerError, lessonRule, sourceItem, sourceKind);
 }
 
 std::string MemoryService::proposeLesson(const std::string& projectId, const std::string& domain,
@@ -758,21 +760,41 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
                                       const std::vector<std::string>& allowedKeys,
                                       size_t maxTokens, bool includeLessons,
                                       bool includeBlackboard, MemoryBriefInfo* info,
-                                      const std::string& taskType) {
+                                      const std::string& taskType,
+                                      const std::string& intent) {
     if (info) *info = MemoryBriefInfo{};
     if (!includeLessons && !includeBlackboard) return std::string();
     // 0 = nao injetar memoria. Nunca interpretar 0 como "sem orcamento" (infinito).
     if (maxTokens == 0) return std::string();
+    auto appendKey = [](std::string& key, const std::string& value) {
+        key += std::to_string(value.size());
+        key += ':';
+        key += value;
+        key += '\x1f';
+    };
+    std::string cacheKey;
+    appendKey(cacheKey, projectId);
+    appendKey(cacheKey, itemId);
+    appendKey(cacheKey, taskType);
+    appendKey(cacheKey, intent);
+    appendKey(cacheKey, std::to_string(maxTokens));
+    appendKey(cacheKey, includeLessons ? "1" : "0");
+    appendKey(cacheKey, includeBlackboard ? "1" : "0");
+    for (const auto& domain : domains) appendKey(cacheKey, domain);
+    for (const auto& allowed : allowedKeys) appendKey(cacheKey, allowed);
+    if (auto cached = briefCache_.find(cacheKey); cached != briefCache_.end()) {
+        if (info) *info = cached->second.info;
+        return cached->second.value;
+    }
     auto* s = ensureStore(projectId);
     if (!s) return std::string();
 
     std::vector<MemoryLesson> selectedLessons;
     if (includeLessons) {
-        for (const auto& lesson : s->getLessons(scopeId(projectId))) {
-            if (domains.empty() || std::find(domains.begin(), domains.end(), lesson.domain) != domains.end()) {
-                selectedLessons.push_back(lesson);
-            }
-        }
+        // C2: filtra os temas no SQL, sem varrer todas as licoes do projeto.
+        selectedLessons = domains.empty()
+            ? s->getLessons(scopeId(projectId))
+            : s->getLessonsForDomains(scopeId(projectId), domains);
     }
 
     std::string workingText;
@@ -857,14 +879,20 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
     // blackboard. Sem embeddings habilitados, o bloco nem e consultado.
     if (includeLessons) {
         std::string query;
+        auto appendQuery = [&](const std::string& text) {
+            if (text.empty()) return;
+            if (!query.empty()) query += " ";
+            query += text;
+        };
         for (const auto& domain : domains) {
             std::string normalized = domain;
             std::replace(normalized.begin(), normalized.end(), '_', ' ');
-            if (!normalized.empty()) {
-                if (!query.empty()) query += " ";
-                query += normalized;
-            }
+            appendQuery(normalized);
         }
+        // C1: a intencao do vertice e um template do projeto, nunca dado do
+        // usuario; entra na consulta ao lado do task_type e do tema.
+        appendQuery(taskType);
+        if (!intent.empty()) appendQuery(oneLine(intent, 600));
         if (query.empty() && itemId != "pipeline") query = itemId;
         std::vector<RankedMemory> ranked;
         if (!query.empty() && hybridRecall(projectId, query, 4, domains, ranked)) {
@@ -961,7 +989,12 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
         info->estimatedTokens = (brief.size() + 3) / 4;
         info->truncated = truncated;
     }
+    briefCache_[cacheKey] = BriefCacheEntry{brief, info ? *info : MemoryBriefInfo{}};
     return brief;
+}
+
+void MemoryService::invalidateBriefCache() {
+    briefCache_.clear();
 }
 
 bool MemoryService::recordBriefHits(const std::string& projectId, const std::string& runId,
@@ -1016,6 +1049,7 @@ taskforge::Json MemoryService::hitSummary(const std::string& projectId) {
 }
 
 void MemoryService::clearLessons(const std::string& projectId) {
+    invalidateBriefCache();
     if (auto* s = ensureStore(projectId)) s->clearLessons(scopeId(projectId));
 }
 
@@ -1099,7 +1133,9 @@ bool MemoryService::promoteProposal(const std::string& projectId, const std::str
         error = "banco de memoria indisponivel";
         return false;
     }
-    return s->promoteProposal(scopeId(projectId), proposalId, reviewer, error, promotedId);
+    const bool promoted = s->promoteProposal(scopeId(projectId), proposalId, reviewer, error, promotedId);
+    if (promoted) invalidateBriefCache();
+    return promoted;
 }
 
 bool MemoryService::rejectProposal(const std::string& projectId, const std::string& proposalId,
@@ -1301,6 +1337,7 @@ taskforge::Json MemoryService::reindexEmbeddings(const std::string& projectId, b
         out["error"] = error;
         return out;
     }
+    invalidateBriefCache();
     runtime.reindexing = true;
     runtime.lastIndexError.clear();
     const int effectiveDim = runtime.provider->dim() > 0 ? runtime.provider->dim() : runtime.config.dim;
@@ -1336,6 +1373,7 @@ taskforge::Json MemoryService::consolidate(const std::string& projectId,
         error = "banco de memoria indisponivel";
         return taskforge::Json{{"ok", false}, {"error", error}};
     }
+    invalidateBriefCache();
     const auto report = MemoryConsolidator::run(*s, scopeId(projectId), options, error);
     taskforge::Json out = report.toJson();
     out["projectId"] = projectId;
@@ -1685,21 +1723,25 @@ std::string MemoryService::recordValidation(const std::string& projectId,
     MemoryValidationRecord copy = validation;
     if (copy.scopeId.empty()) copy.scopeId = scopeId(projectId);
     const std::string id = t->recordValidation(copy);
-    // B5/B6: a validacao independente e o unico gatilho de promocao de playbook.
-    if (!id.empty() && copy.ok && !copy.episodeId.empty()) {
+    // B5/B6: validacao independente promove; falhas consecutivas/excesso de
+    // falhas despromovem. O gate usa so o ok.
+    if (!id.empty() && !copy.episodeId.empty()) {
         if (auto* knowledge = existingStore(projectId)) {
             const std::string scope = scopeId(projectId);
             const taskforge::Json episode = t->getEpisode(scope, copy.episodeId);
             const std::string taskType = episode.value("taskType", std::string());
-            const auto samples = t->validationGateSamples(scope, taskType, 20);
-            std::string promotedId;
-            std::string reason;
-            knowledge->autoPromotePlaybook(scope, copy.episodeId,
-                                           copy.validatorId, copy.validatorVersion,
-                                           samples, promotedId, reason);
+            if (copy.ok) {
+                const auto samples = t->validationGateSamples(scope, taskType, 20);
+                std::string promotedId;
+                std::string reason;
+                knowledge->autoPromotePlaybook(scope, copy.episodeId,
+                                               copy.validatorId, copy.validatorVersion,
+                                               samples, promotedId, reason);
+            }
             const auto outcomes = t->validationOutcomes(scope, taskType, 10);
             std::string demoteReason;
             knowledge->autoDemotePlaybooks(scope, taskType, outcomes, demoteReason);
+            invalidateBriefCache();
         }
     }
     return id;
@@ -1755,7 +1797,9 @@ bool MemoryService::importCognitiveJson(const std::string& projectId, const task
         error = "banco de memoria indisponivel";
         return false;
     }
-    return s->importCognitiveJson(scopeId(projectId), data, error);
+    const bool imported = s->importCognitiveJson(scopeId(projectId), data, error);
+    if (imported) invalidateBriefCache();
+    return imported;
 }
 
 bool MemoryService::clearSession(const std::string& projectId) {
@@ -1774,6 +1818,7 @@ bool MemoryService::clearSession(const std::string& projectId) {
 }
 
 void MemoryService::closeProject(const std::string& projectId) {
+    invalidateBriefCache();
     stopMaintenance(projectId);
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     stores_.erase(projectKey(projectId));
