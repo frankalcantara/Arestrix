@@ -162,8 +162,26 @@ O painel oferece **Comparar com e sem memória (contexto)**. A ação:
 4. compara com o baseline sem memória (zero).
 
 Essa é a versão **A/B v1**: mede custo e conteúdo do contexto, não a taxa de aprovação do
-validador. O protocolo completo, com tarefas fixas, repetições e telemetria por braço, é a
-evolução seguinte.
+validador.
+
+O **A/B v2** é o protocolo estatístico completo. O conjunto versionado
+[`tests/fixtures/memory-ab-v1.json`](../../tests/fixtures/memory-ab-v1.json) tem 20 tarefas —
+12 com conhecimento relevante, 4 de controle e 4 de falha conhecida — e cada uma declara seu
+`input_hash`. A CLI valida o conjunto, sorteia uma ordem intercalada com semente e analisa as
+observações:
+
+```bash
+arestrix-cli memory ab validate --suite tests/fixtures/memory-ab-v1.json
+arestrix-cli memory ab order --suite tests/fixtures/memory-ab-v1.json \
+  --repetitions 3 --seed 42 --json
+arestrix-cli memory ab report --suite tests/fixtures/memory-ab-v1.json \
+  --observations ab-observations.json --repetitions 3 --json
+```
+
+A métrica primária é a **taxa de aprovação do validador**, comparada em pares. O relatório traz
+deltas pareados, IC 95% (t de Student), tokens, turnos, custo e latência; falhas de infraestrutura
+são contabilizadas à parte e não entram no veredito. A execução das tarefas e a coleta do validador
+são responsabilidade do harness que produz `ab-observations.json`.
 
 ### Custo por execução
 

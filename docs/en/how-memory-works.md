@@ -159,8 +159,25 @@ The panel offers **Compare with and without memory (context)**. The action:
 3. measures, per active vertex, brief tokens and characters, lessons, facts and playbooks;
 4. compares with the no-memory baseline (zero).
 
-This is **A/B v1**: it measures context cost and content, not the validator approval rate. The full
-protocol, with fixed tasks, repetitions and per-arm telemetry, is the next evolution.
+This is **A/B v1**: it measures context cost and content, not the validator approval rate.
+
+**A/B v2** is the full statistical protocol. The versioned suite
+[`tests/fixtures/memory-ab-v1.json`](../../tests/fixtures/memory-ab-v1.json) has 20 tasks — 12 with
+relevant knowledge, 4 controls and 4 known failures — and each declares its `input_hash`. The CLI
+validates the suite, shuffles an interleaved order with a seed and analyzes observations:
+
+```bash
+arestrix-cli memory ab validate --suite tests/fixtures/memory-ab-v1.json
+arestrix-cli memory ab order --suite tests/fixtures/memory-ab-v1.json \
+  --repetitions 3 --seed 42 --json
+arestrix-cli memory ab report --suite tests/fixtures/memory-ab-v1.json \
+  --observations ab-observations.json --repetitions 3 --json
+```
+
+The primary metric is **validator approval**, compared in pairs. The report includes paired deltas,
+95% CI (Student t), tokens, turns, cost and latency; infrastructure failures are counted separately
+and excluded from the verdict. Running the tasks and collecting the validator verdict belongs to the
+harness that produces `ab-observations.json`.
 
 ### Cost per run
 

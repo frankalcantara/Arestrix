@@ -191,6 +191,21 @@ never created by an agent. Scopes are `project`, `task_type` and `item`; use `--
 `--expected` for CAS; omit it for create-only. Options include `--max-bytes`, `--ttl`, `--mode
 replace|versioned` and `--keep`.
 
+### `memory ab`
+
+```powershell
+.\arestrix-cli.exe memory ab validate --suite tests\fixtures\memory-ab-v1.json --json
+.\arestrix-cli.exe memory ab order --suite tests\fixtures\memory-ab-v1.json `
+  --repetitions 3 --seed 42 --json
+.\arestrix-cli.exe memory ab report --suite tests\fixtures\memory-ab-v1.json `
+  --observations ab-observations.json --repetitions 3 --json
+```
+
+Validates the versioned 12/4/4 suite, builds a seeded interleaved run order and analyzes paired
+observations. The report's primary metric is validator approval; secondary metrics are tokens,
+turns, cost and latency. Infrastructure failures are excluded from the paired verdict and counted
+separately. `--json` is recommended for harness automation.
+
 ### `memory consolidate`
 
 ```powershell

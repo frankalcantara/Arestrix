@@ -31,6 +31,7 @@
 #include "core/Graph.hpp"
 #include "mcp/McpClient.hpp"
 #include "mcp/McpErrors.hpp"
+#include "memory/MemoryAbProtocol.hpp"
 #include "memory/MemoryService.hpp"
 #include "native/NativeTools.hpp"
 #include "platform/Process.hpp"
@@ -487,13 +488,14 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory consolidate --project <pasta> [--dormant-days N] [--no-decay] [--no-dedup] [--no-generalize] [--json]\n"
                      "arestrix-cli memory workspace init|status --project <pasta> [--workspace-id ID] [--json]\n"
                      "arestrix-cli memory state list|declare|get|set --project <pasta> [--key K] [--scope project|task_type|item] [--schema JSON] [--value JSON] [--expected N] [--item ID] [--task-type T] [--json]\n"
+                     "arestrix-cli memory ab validate|order|report --suite <arquivo> [--observations <arquivo>] [--repetitions N] [--seed N] [--json]\n"
                      "arestrix-cli memory promote --project <pasta> --kind lesson|fact|playbook --id ID --evidence texto [--workspace-id ID] [--json]\n";
         return args.size() < 2 ? kExitUsage : 0;
     }
     const std::string command = args[1];
     if (command != "report" && command != "prune" && command != "purge" && command != "proposals" &&
         command != "embeddings" && command != "reindex" && command != "consolidate" &&
-        command != "workspace" && command != "state" && command != "promote") {
+        command != "workspace" && command != "state" && command != "ab" && command != "promote") {
         std::cerr << "arestrix-cli memory: comando desconhecido: " << command << "\n";
         return kExitUsage;
     }
@@ -554,6 +556,18 @@ int runMemory(const std::vector<std::string>& args) {
             return kExitUsage;
         }
         optionStart = 3;
+    } else if (command == "ab") {
+        if (args.size() < 3) {
+            std::cerr << "arestrix-cli memory ab: informe validate|order|report\n";
+            return kExitUsage;
+        }
+        embeddingAction = args[2];
+        if (embeddingAction != "validate" && embeddingAction != "order" &&
+            embeddingAction != "report") {
+            std::cerr << "arestrix-cli memory ab: acao desconhecida: " << embeddingAction << "\n";
+            return kExitUsage;
+        }
+        optionStart = 3;
     }
 
     Options opt;
@@ -590,6 +604,10 @@ int runMemory(const std::vector<std::string>& args) {
     std::string stateMode = "replace";
     bool stateHasExpected = false;
     long long stateExpected = 0;
+    std::string abSuitePath;
+    std::string abObservationsPath;
+    int abRepetitions = 3;
+    long long abSeed = 42;
     for (size_t i = optionStart; i < args.size(); ++i) {
         const std::string& a = args[i];
         if (a == "--json") opt.json = true;
@@ -676,6 +694,22 @@ int runMemory(const std::vector<std::string>& args) {
         else if (a == "--expected") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --expected\n"; return kExitUsage; }
             try { stateExpected = std::stoll(args[++i]); stateHasExpected = true; } catch (...) { std::cerr << "--expected invalido\n"; return kExitUsage; }
+        }
+        else if (a == "--suite") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --suite\n"; return kExitUsage; }
+            abSuitePath = args[++i];
+        }
+        else if (a == "--observations") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --observations\n"; return kExitUsage; }
+            abObservationsPath = args[++i];
+        }
+        else if (a == "--repetitions") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --repetitions\n"; return kExitUsage; }
+            try { abRepetitions = std::stoi(args[++i]); } catch (...) { std::cerr << "--repetitions invalido\n"; return kExitUsage; }
+        }
+        else if (a == "--seed") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --seed\n"; return kExitUsage; }
+            try { abSeed = std::stoll(args[++i]); } catch (...) { std::cerr << "--seed invalido\n"; return kExitUsage; }
         }
         else if (a == "--status") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --status\n"; return kExitUsage; }
@@ -777,6 +811,61 @@ int runMemory(const std::vector<std::string>& args) {
             }
         }
     }
+    if (command == "ab") {
+        if (abSuitePath.empty()) {
+            std::cerr << "arestrix-cli memory ab: informe --suite\n";
+            return kExitUsage;
+        }
+        taskforge::Json suite;
+        std::string error;
+        if (!readJsonFile(fs::path(abSuitePath), suite, error)) {
+            std::cerr << "Falha ao ler --suite: " << error << "\n";
+            return kExitConfig;
+        }
+        taskforge::Json out;
+        if (embeddingAction == "validate") {
+            out = taskforge::memory::MemoryAbProtocol::validateSuite(suite, error);
+        } else if (embeddingAction == "order") {
+            out = taskforge::memory::MemoryAbProtocol::buildRunOrder(
+                suite, abRepetitions, static_cast<uint32_t>(abSeed), error);
+        } else {
+            if (abObservationsPath.empty()) {
+                std::cerr << "arestrix-cli memory ab report: informe --observations\n";
+                return kExitUsage;
+            }
+            taskforge::Json observations;
+            if (!readJsonFile(fs::path(abObservationsPath), observations, error)) {
+                std::cerr << "Falha ao ler --observations: " << error << "\n";
+                return kExitConfig;
+            }
+            out = taskforge::memory::MemoryAbProtocol::analyze(
+                suite, observations, abRepetitions, error);
+        }
+        if (!error.empty()) out["error"] = error;
+        if (opt.json) {
+            std::cout << out.dump(2) << "\n";
+        } else if (out.value("ok", false)) {
+            if (embeddingAction == "validate") {
+                std::cout << "Conjunto A/B ok: " << out["tasks"].get<long long>()
+                          << " tarefas (12 relevantes, 4 controle, 4 falhas)\n";
+            } else if (embeddingAction == "order") {
+                std::cout << "Ordem A/B: " << out["order"].size()
+                          << " execucoes, " << abRepetitions << " repeticao(oes)\n";
+            } else {
+                std::cout << "Aprovacao: ON " << out["primary"]["on"].get<double>()
+                          << " / OFF " << out["primary"]["off"].get<double>()
+                          << " | delta " << out["primary"]["delta"].get<double>()
+                          << " IC95 [" << out["primary"]["ciLow"].get<double>()
+                          << ", " << out["primary"]["ciHigh"].get<double>() << "]\n";
+                std::cout << "Infra excluida: " << out["infraEvents"].get<long long>()
+                          << " | tarefas no par: " << out["primary"]["n"].get<long long>() << "\n";
+            }
+        } else {
+            std::cerr << "Falha: " << out.value("error", error) << "\n";
+        }
+        return out.value("ok", false) ? 0 : kExitConfig;
+    }
+
     if (dbPath.empty()) dbPath = root / ".arestrix" / "memory" / "memory.db";
 
     if (command != "report") {

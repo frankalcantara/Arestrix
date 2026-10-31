@@ -190,6 +190,21 @@ criadas por um agente. Escopos: `project`, `task_type` e `item`; use `--item` e 
 resolver escopos não globais. `--value` é JSON quando possível. Gravações aceitam `--expected` para
 CAS; omita para criar. Opções incluem `--max-bytes`, `--ttl`, `--mode replace|versioned` e `--keep`.
 
+### `memory ab`
+
+```powershell
+.\arestrix-cli.exe memory ab validate --suite tests\fixtures\memory-ab-v1.json --json
+.\arestrix-cli.exe memory ab order --suite tests\fixtures\memory-ab-v1.json `
+  --repetitions 3 --seed 42 --json
+.\arestrix-cli.exe memory ab report --suite tests\fixtures\memory-ab-v1.json `
+  --observations ab-observations.json --repetitions 3 --json
+```
+
+Valida o conjunto versionado 12/4/4, gera uma ordem intercalada com semente e analisa observações
+pareadas. A métrica primária é a aprovação do validador; as secundárias são tokens, turnos, custo e
+latência. Falhas de infraestrutura ficam fora do veredito pareado e são contadas à parte. Use
+`--json` para automação do harness.
+
 ### `memory consolidate`
 
 ```powershell

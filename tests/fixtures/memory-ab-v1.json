@@ -1,0 +1,126 @@
+{
+  "version": "memory-ab-v1",
+  "hashRule": "sha256(\"memory-ab-v1|id|input\")",
+  "tasks": [
+    {
+      "id": "svg-contraste",
+      "category": "relevant",
+      "inputHash": "704be7cb617f4f30fd51155f5d0507bf146804975a0621c9ec31b625b2098384",
+      "input": "Corrija a tipografia de um SVG garantindo contraste minimo e cite a regra aprendida."
+    },
+    {
+      "id": "svg-sombra",
+      "category": "relevant",
+      "inputHash": "581d26cebefff8117ed0f1b35fbaa660148b7f63889a1e882d94805f6916f866",
+      "input": "Valide um SVG e remova sombras ou blur aplicados a texto."
+    },
+    {
+      "id": "pi-lessons",
+      "category": "relevant",
+      "inputHash": "db46f630d0f0b28ae3b302e374cf3b43385b69a24123644f8c08a8c90e590afd",
+      "input": "Aplique licoes de um projeto anterior ao redigir uma resposta tecnica."
+    },
+    {
+      "id": "pi-fontes",
+      "category": "relevant",
+      "inputHash": "09b59e9f940d68524d4cdc50a2300f7362c3bcc08ede4e17aeb42917d09bf240",
+      "input": "Redija um texto matematico citando apenas fontes realmente consultadas."
+    },
+    {
+      "id": "pi-revisao",
+      "category": "relevant",
+      "inputHash": "8045e9db1936548ee5cdcdc323e3dabe0004de7562284f1ab00c3462580d3bd4",
+      "input": "Revise um texto e registre uma proposta de licao preventiva."
+    },
+    {
+      "id": "pi-tools",
+      "category": "relevant",
+      "inputHash": "7acd8fc094d689b5c119f9e8336549e1f0ac228525685194f423bab6c1ec75af",
+      "input": "Use a sequencia de ferramentas recomendada para produzir um artefato."
+    },
+    {
+      "id": "pi-erro",
+      "category": "relevant",
+      "inputHash": "cae8709b468180e743b54d119e6453b1134a28ce5f7b26f5491ea2efa870990b",
+      "input": "Evite repetir um erro de validacao ja registrado no projeto."
+    },
+    {
+      "id": "pi-formato",
+      "category": "relevant",
+      "inputHash": "f37c109437e3497b27b3d4db23bdf6bbb793f94119c4e44431f8d81d8e86cb21",
+      "input": "Gere um relatorio no formato aprovado pelo validador."
+    },
+    {
+      "id": "pi-continuidade",
+      "category": "relevant",
+      "inputHash": "043ce35097e1d21c7142e43718979f5a696b6c83ddcc47101bcd3a167c9a025a",
+      "input": "Retome o cursor de um processamento em lote sem reiniciar itens concluidos."
+    },
+    {
+      "id": "pi-handoff",
+      "category": "relevant",
+      "inputHash": "42900e0a55fa39b6d94c936aca72974f4709c071f50862a3d91fa17176603761",
+      "input": "Use o estado declarado para continuar uma tarefa entre execucoes."
+    },
+    {
+      "id": "pi-custo",
+      "category": "relevant",
+      "inputHash": "90a9564fd0858eb77de409b42f24b0ee0bee40ff2dabe59ea18363193169de84",
+      "input": "Produza a resposta usando o brief de memoria dentro do orcamento de tokens."
+    },
+    {
+      "id": "pi-evidencia",
+      "category": "relevant",
+      "inputHash": "eff81ddb68332b948af5d8d488ed166121846a4124c2d6ed63f78e83cab142ba",
+      "input": "Promova um fato apenas quando houver evidencia suficiente."
+    },
+    {
+      "id": "ctrl-resumo",
+      "category": "control",
+      "inputHash": "47c2a3b64fc0ad8dccf3c2ad0dea0bd23d90b2eb6836e8fbd17480db2695483f",
+      "input": "Resuma em uma frase um texto neutro sem usar memoria."
+    },
+    {
+      "id": "ctrl-json",
+      "category": "control",
+      "inputHash": "03b33a0227e75d65296839824fd043b59c2ae5aa0e7f7f329057fa6285ab0709",
+      "input": "Converta um objeto JSON simples para uma lista de pares."
+    },
+    {
+      "id": "ctrl-data",
+      "category": "control",
+      "inputHash": "f3b70fcf4978c9d516436597a44eee28b7008db8652866006136e1bd9ba4d76b",
+      "input": "Calcule a diferenca entre duas datas ISO 8601."
+    },
+    {
+      "id": "ctrl-email",
+      "category": "control",
+      "inputHash": "eff1902674ba9a796abe897b393618dd0901e5f238ac74212901543e8eea1966",
+      "input": "Classifique um e-mail como urgente ou normal."
+    },
+    {
+      "id": "fail-rede",
+      "category": "known_failure",
+      "inputHash": "f6e4ef21893a5ca79b4c05abbf861cac2cf592ca81d21a0c495f75710bb31dd6",
+      "input": "Execute uma chamada externa que sera interrompida por timeout de rede."
+    },
+    {
+      "id": "fail-max",
+      "category": "known_failure",
+      "inputHash": "72b26c369b925157806c13b5418b6042abde6d546fb0ca0713232f57b875a7fc",
+      "input": "Continue tentando sem concluir ate estourar o limite de turnos."
+    },
+    {
+      "id": "fail-schema",
+      "category": "known_failure",
+      "inputHash": "2b3599e6bf1eac09ab3073c4c6ac90628dae515ab67e9ede341ca6b8058f8b11",
+      "input": "Grave um estado com valor fora do schema declarado."
+    },
+    {
+      "id": "fail-fonte",
+      "category": "known_failure",
+      "inputHash": "8526e69980dd5a140a6cabe36f50fcde856bc54d73f01f62ce0cee7f5a8fc0c3",
+      "input": "Cite uma fonte inexistente e deixe o validador reprovar."
+    }
+  ]
+}

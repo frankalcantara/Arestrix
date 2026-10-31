@@ -31,6 +31,7 @@
 #include "memory/MemoryInstitutionService.hpp"
 #include "memory/MemoryPlaybookCompiler.hpp"
 #include "memory/MemoryPredicates.hpp"
+#include "memory/MemoryAbProtocol.hpp"
 #include "memory/MemoryRanker.hpp"
 #include "memory/MemoryVectorIndex.hpp"
 #include "platform/Process.hpp"
@@ -3287,6 +3288,71 @@ TEST(memory_state_ttl_expires_on_read) {
     memory.closeProject(pId);
     std::error_code ec;
     fs::remove_all(root, ec);
+}
+
+TEST(memory_ab_protocol_validates_orders_and_analyzes_pairs) {
+    using taskforge::memory::MemoryAbProtocol;
+
+    auto suite = [] {
+        taskforge::Json tasks = taskforge::Json::array();
+        for (int i = 1; i <= 20; ++i) {
+            char hash[65];
+            std::snprintf(hash, sizeof(hash), "%064x", i);
+            const char* category = i <= 12 ? "relevant" : (i <= 16 ? "control" : "known_failure");
+            tasks.push_back(taskforge::Json{{"id", "task-" + std::to_string(i)},
+                                            {"inputHash", std::string(hash)},
+                                            {"category", category}});
+        }
+        return taskforge::Json{{"version", "memory-ab-v1"}, {"tasks", tasks}};
+    }();
+    std::string error;
+    const auto valid = MemoryAbProtocol::validateSuite(suite, error);
+    CHECK(valid.value("ok", false));
+    CHECK(valid.value("relevant", 0LL) == 12);
+    CHECK(valid.value("control", 0LL) == 4);
+    CHECK(valid.value("knownFailure", 0LL) == 4);
+
+    auto broken = suite;
+    taskforge::Json shortTasks = taskforge::Json::array();
+    for (int i = 0; i < 19; ++i) shortTasks.push_back(suite["tasks"][i]);
+    broken["tasks"] = shortTasks;
+    CHECK(!MemoryAbProtocol::validateSuite(broken, error).value("ok", true));
+
+    const auto order1 = MemoryAbProtocol::buildRunOrder(suite, 2, 42, error);
+    const auto order2 = MemoryAbProtocol::buildRunOrder(suite, 2, 42, error);
+    CHECK(order1.value("ok", false));
+    CHECK(order1["order"].size() == 80);
+    CHECK(order1["order"].dump() == order2["order"].dump());
+
+    taskforge::Json observations = taskforge::Json::array();
+    for (int i = 1; i <= 20; ++i) {
+        const std::string taskId = "task-" + std::to_string(i);
+        const bool relevant = i <= 12;
+        for (int repetition = 1; repetition <= 2; ++repetition) {
+            observations.push_back(taskforge::Json{{"taskId", taskId}, {"arm", "on"},
+                                                   {"repetition", repetition},
+                                                   {"ok", relevant}, {"tokens", 100.0},
+                                                   {"turns", 3.0}, {"cost", 0.02},
+                                                   {"latencyMs", 120.0}});
+            observations.push_back(taskforge::Json{{"taskId", taskId}, {"arm", "off"},
+                                                   {"repetition", repetition},
+                                                   {"ok", false}, {"tokens", 80.0},
+                                                   {"turns", 3.0}, {"cost", 0.01},
+                                                   {"latencyMs", 100.0}});
+        }
+    }
+    observations.push_back(taskforge::Json{{"taskId", "task-1"}, {"arm", "on"},
+                                           {"repetition", 3}, {"ok", false},
+                                           {"errorClass", "provider_429"}});
+    const auto report = MemoryAbProtocol::analyze(
+        suite, taskforge::Json{{"observations", observations}}, 2, error);
+    CHECK(report.value("ok", false));
+    CHECK(report["primary"]["n"].get<long long>() == 20);
+    CHECK(std::abs(report["primary"]["delta"].get<double>() - 0.6) < 1e-9);
+    CHECK(report["primary"]["ciLow"].get<double>() <= report["primary"]["delta"].get<double>());
+    CHECK(report["primary"]["ciHigh"].get<double>() >= report["primary"]["delta"].get<double>());
+    CHECK(std::abs(report["secondary"]["tokens"]["delta"].get<double>() - 20.0) < 1e-9);
+    CHECK(report.value("infraEvents", 0LL) == 1);
 }
 
 TEST(memory_predicate_cardinality_controls_fact_overwrite) {
