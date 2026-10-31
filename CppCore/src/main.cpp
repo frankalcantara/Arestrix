@@ -3052,6 +3052,87 @@ public:
         return true;
     }
 
+    taskforge::Json memoryLevels(const taskforge::Json& project, std::string& error) override {
+        auto& pm = taskforge::project::ProjectManager::getInstance();
+        const std::string root = pm.getActiveProjectRoot();
+        if (root.empty()) {
+            error = "nenhum projeto ativo";
+            return taskforge::Json::object();
+        }
+        const std::string projectId = project.value("projectId", std::string("default"));
+        configureProjectMemory(projectId, true);
+        auto& memory = taskforge::memory::MemoryService::getInstance();
+        taskforge::Json projectOut{
+            {"projectId", projectId},
+            {"database", memory.databasePath(projectId)},
+            {"telemetry", memory.telemetryDatabasePath(projectId)},
+            {"lessons", static_cast<long long>(memory.activeLessonCount(projectId))},
+            {"proposals", memory.listProposals(projectId, "pending", 50)},
+            {"playbooks", memory.listPlaybooks(projectId, "", "", 50)},
+            {"stateKeys", memory.stateKeys(projectId)},
+            {"embedding", memory.embeddingStatus(projectId)},
+            {"usage", memory.usageSummary(projectId)}};
+        if (project.contains("globalDefaults") && project["globalDefaults"].is_object() &&
+            project["globalDefaults"].contains("memory")) {
+            projectOut["settings"] = project["globalDefaults"]["memory"];
+        }
+        return taskforge::Json{{"project", projectOut},
+                               {"workspace", memory.workspaceStatus(projectId)}};
+    }
+
+    bool reviewMemoryProposal(const std::string& proposalId, bool accept,
+                              const std::string& reason, std::string& error) override {
+        const std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+        if (root.empty()) {
+            error = "nenhum projeto ativo";
+            return false;
+        }
+        const std::string projectId =
+            taskforge::project::ProjectManager::getInstance().getCurrentProject().projectId;
+        configureProjectMemory(projectId, true);
+        auto& memory = taskforge::memory::MemoryService::getInstance();
+        return accept
+            ? memory.promoteProposal(projectId, proposalId, "studio-assistant", error)
+            : memory.rejectProposal(projectId, proposalId, "studio-assistant", reason, error);
+    }
+
+    bool declareMemoryStateKey(const taskforge::Json& spec, std::string& error) override {
+        const std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+        if (root.empty()) {
+            error = "nenhum projeto ativo";
+            return false;
+        }
+        const std::string projectId =
+            taskforge::project::ProjectManager::getInstance().getCurrentProject().projectId;
+        configureProjectMemory(projectId, true);
+        taskforge::Json schema = spec.contains("schema") && spec["schema"].is_object()
+            ? spec["schema"] : taskforge::Json::object();
+        return taskforge::memory::MemoryService::getInstance().declareStateKey(
+            projectId,
+            spec.value("key", std::string()),
+            spec.value("scope", std::string("project")),
+            schema,
+            spec.value("max_bytes", 16384LL),
+            spec.value("ttl_seconds", 0LL),
+            spec.value("mode", std::string("replace")),
+            spec.value("keep", 5LL),
+            error);
+    }
+
+    bool unpromoteMemoryPlaybook(const std::string& playbookId, const std::string& reason,
+                                 std::string& error) override {
+        const std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+        if (root.empty()) {
+            error = "nenhum projeto ativo";
+            return false;
+        }
+        const std::string projectId =
+            taskforge::project::ProjectManager::getInstance().getCurrentProject().projectId;
+        configureProjectMemory(projectId, true);
+        return taskforge::memory::MemoryService::getInstance().unpromotePlaybook(
+            projectId, playbookId, reason.empty() ? "studio-assistant" : reason, error);
+    }
+
     fs::path docsDirectory(taskforge::rt::RuntimeLang lang) override {
         return findProjectRoot() / "docs" / (lang == taskforge::rt::RuntimeLang::En ? "en" : "pt-BR");
     }

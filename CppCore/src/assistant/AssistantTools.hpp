@@ -47,6 +47,34 @@ public:
         error = "updateProject nao implementado";
         return false;
     }
+
+    // Memoria do projeto. Implementado pelo Studio; testes podem devolver
+    // dados falsos sem abrir o MemoryService.
+    virtual Json memoryLevels(const Json& project, std::string& error) {
+        (void)project;
+        error = "memoryLevels nao implementado";
+        return Json::object();
+    }
+    virtual bool reviewMemoryProposal(const std::string& proposalId, bool accept,
+                                      const std::string& reason, std::string& error) {
+        (void)proposalId;
+        (void)accept;
+        (void)reason;
+        error = "reviewMemoryProposal nao implementado";
+        return false;
+    }
+    virtual bool declareMemoryStateKey(const Json& spec, std::string& error) {
+        (void)spec;
+        error = "declareMemoryStateKey nao implementado";
+        return false;
+    }
+    virtual bool unpromoteMemoryPlaybook(const std::string& playbookId,
+                                         const std::string& reason, std::string& error) {
+        (void)playbookId;
+        (void)reason;
+        error = "unpromoteMemoryPlaybook nao implementado";
+        return false;
+    }
 };
 
 struct ToolOutcome {

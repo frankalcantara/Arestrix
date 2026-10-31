@@ -5320,6 +5320,12 @@ struct FakeAssistantHost : taskforge::assistant::AssistantHost {
     json project = json{{"projectId", "p1"}, {"name", "Demo"}, {"rootPath", "C:/demo"}};
     fs::path docs;
     int created = 0, saved = 0, projectUpdates = 0;
+    int memoryReviews = 0, memoryDeclares = 0, memoryUnpromotes = 0;
+    bool lastReviewAccept = false;
+    std::string lastReviewId;
+    std::string lastReviewReason;
+    json lastStateSpec = json::object();
+    std::string lastUnpromoteId;
     std::string lastCreateName;
 
     json currentProject() override { return project; }
@@ -5348,6 +5354,31 @@ struct FakeAssistantHost : taskforge::assistant::AssistantHost {
         return true;
     }
     fs::path docsDirectory(taskforge::rt::RuntimeLang) override { return docs; }
+
+    json memoryLevels(const json&, std::string&) override {
+        return json{{"project", json{{"projectId", "p1"}, {"lessons", 3},
+                                     {"proposals", json::array({json{{"id", "prop-1"}, {"kind", "lesson"}}})},
+                                     {"embedding", json{{"state", "ready"}}}}},
+                    {"workspace", json{{"configured", true}, {"lessons", 2}}}};
+    }
+    bool reviewMemoryProposal(const std::string& id, bool accept, const std::string& reason,
+                              std::string&) override {
+        ++memoryReviews;
+        lastReviewId = id;
+        lastReviewAccept = accept;
+        lastReviewReason = reason;
+        return true;
+    }
+    bool declareMemoryStateKey(const json& spec, std::string&) override {
+        ++memoryDeclares;
+        lastStateSpec = spec;
+        return true;
+    }
+    bool unpromoteMemoryPlaybook(const std::string& id, const std::string&, std::string&) override {
+        ++memoryUnpromotes;
+        lastUnpromoteId = id;
+        return true;
+    }
 };
 
 taskforge::rt::ChatReply scriptedCall(const std::string& id, const std::string& name, json args) {
@@ -5520,6 +5551,61 @@ TEST(assistant_warns_on_write_conflict_between_parallel_paths) {
     CHECK(doc.updateNode(obid, json{{"outputSettings", json{{"destinationPath", "exports/outro.md"}}}},
                          RuntimeLang::Pt).ok);
     CHECK(!hasConflict(doc.validate(RuntimeLang::Pt)));
+}
+
+TEST(assistant_memory_tools_inspect_and_review) {
+    namespace as = taskforge::assistant;
+    using taskforge::rt::RuntimeLang;
+    json schema = as::GraphDocument::emptySchema("g", "p1");
+    schema["nodes"].push_back(json{{"id", "agent-1"}, {"type", "agent"}, {"label", "Agente"},
+                                   {"inputs", json::array()}, {"outputs", json::array()},
+                                   {"agentSettings", json{{"memory", json{{"mode", "learn"},
+                                                                          {"theme", "memoria"}}}}}});
+    as::GraphDocument doc(schema);
+    FakeAssistantHost host;
+
+    auto inspect = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "memory_inspect",
+                                            json{{"level", "all"}});
+    CHECK(!inspect.result.isError);
+    auto levels = taskforge::jsonutil::parse(inspect.result.content);
+    CHECK(levels.value("level", std::string()) == "all");
+    CHECK(levels["project"].value("lessons", 0LL) == 3);
+    CHECK(levels["workspace"].value("configured", false));
+
+    auto vertex = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "memory_inspect",
+                                           json{{"level", "vertex"}, {"node_id", "agent-1"}});
+    CHECK(!vertex.result.isError);
+    auto vertexJson = taskforge::jsonutil::parse(vertex.result.content);
+    CHECK(vertexJson["memory"].value("mode", std::string()) == "learn");
+
+    auto review = as::executeAssistantTool(doc, host, RuntimeLang::Pt,
+                                           "memory_review_proposal",
+                                           json{{"id", "prop-1"}, {"decision", "accept"},
+                                                {"reason", "teste"}});
+    CHECK(!review.result.isError);
+    CHECK(host.memoryReviews == 1 && host.lastReviewAccept);
+    CHECK(host.lastReviewId == "prop-1" && host.lastReviewReason == "teste");
+
+    auto declared = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "memory_declare_state_key",
+        json{{"key", "cursor"}, {"scope", "item"},
+             {"schema", json{{"type", "object"}}}, {"mode", "versioned"}, {"keep", 2}});
+    CHECK(!declared.result.isError);
+    CHECK(host.memoryDeclares == 1);
+    CHECK(host.lastStateSpec.value("key", std::string()) == "cursor");
+    CHECK(host.lastStateSpec.value("scope", std::string()) == "item");
+    CHECK(host.lastStateSpec.value("mode", std::string()) == "versioned");
+
+    auto unpromote = as::executeAssistantTool(doc, host, RuntimeLang::Pt,
+                                              "memory_unpromote_playbook",
+                                              json{{"id", "pb-1"}, {"reason", "teste"}});
+    CHECK(!unpromote.result.isError);
+    CHECK(host.memoryUnpromotes == 1 && host.lastUnpromoteId == "pb-1");
+
+    CHECK(as::toolRisk("memory_review_proposal") == as::ToolRisk::Confirm);
+    CHECK(as::toolRisk("memory_declare_state_key") == as::ToolRisk::Confirm);
+    CHECK(as::toolRisk("memory_unpromote_playbook") == as::ToolRisk::Confirm);
+    CHECK(as::toolRisk("memory_inspect") == as::ToolRisk::Read);
 }
 
 TEST(assistant_lists_exports_and_workspace_and_confines_artifact_reads) {

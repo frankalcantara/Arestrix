@@ -174,7 +174,7 @@ Any pipeline designed to generate deliverable products (vector graphics, reports
   - **Text / Markdown:** Formatted viewer for technical documents and reports with syntax highlighting and one-click copy.
   - **PDF and JSON:** Structured view with clean indentation and direct system viewer launch.
 - **Artifacts Tab in the Bottom Drawer:** Positioned alongside the *Terminal* and *Telemetry* tabs, the *Artifacts* tab displays the real-time count of generated deliverables, lets users inspect visual graphics or code, copy content, and open the `exports/` folder in Windows Explorer with one click.
-- **Local Chat Assistant Operation:** The Studio's native chat assistant integrates with the artifact lifecycle through the `list_artifacts` and `get_artifact` tools, allowing the assistant to examine generated deliverables and provide analytical feedback directly to the user.
+- **Local Chat Assistant Operation:** The Studio's native chat assistant integrates with the artifact lifecycle through the `list_artifacts` and `get_artifact` tools, allowing the assistant to examine generated deliverables and provide analytical feedback directly to the user. It also has `memory_inspect` for project, workspace and vertex memory, plus confirmed `memory_review_proposal`, `memory_declare_state_key` and `memory_unpromote_playbook` actions.
 
 ## Standalone Runner (Phase 1: Autonomous Executable)
 
