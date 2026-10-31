@@ -1308,24 +1308,49 @@ int runMemory(const std::vector<std::string>& args) {
     }
 
     const std::string hitsSql =
-        "SELECT COUNT(*), COALESCE(SUM(injected),0), COALESCE(SUM(used),0), "
-        "COALESCE(SUM(CASE WHEN used=1 AND injected=0 THEN 1 ELSE 0 END),0), "
+        "SELECT COUNT(*), COALESCE(SUM(injected),0), COALESCE(SUM(consulted),0), "
+        "COALESCE(SUM(used),0), "
         "COALESCE(SUM(CASE WHEN used=1 AND injected=1 THEN 1 ELSE 0 END),0), "
+        "COALESCE(SUM(CASE WHEN used=1 AND consulted=1 AND injected=0 THEN 1 ELSE 0 END),0), "
         "COALESCE(SUM(CASE WHEN outcome='success' THEN 1 ELSE 0 END),0), "
         "COALESCE(SUM(CASE WHEN outcome='failure' THEN 1 ELSE 0 END),0) FROM " + hitTable;
     if (prepare(hitsSql.c_str(), &st)) {
         if (sqlite3_step(st) == SQLITE_ROW) {
             out["hits"] = json{{"total", sqlite3_column_int64(st, 0)},
                                {"injected", sqlite3_column_int64(st, 1)},
-                               {"used", sqlite3_column_int64(st, 2)},
-                               {"consulted", sqlite3_column_int64(st, 3)},
+                               {"consulted", sqlite3_column_int64(st, 2)},
+                               {"used", sqlite3_column_int64(st, 3)},
+                               {"citedFromBrief", sqlite3_column_int64(st, 4)},
+                               {"citedFromSearch", sqlite3_column_int64(st, 5)},
                                {"usedInjected", sqlite3_column_int64(st, 4)},
-                               {"success", sqlite3_column_int64(st, 5)},
-                               {"failure", sqlite3_column_int64(st, 6)}};
+                               {"success", sqlite3_column_int64(st, 6)},
+                               {"failure", sqlite3_column_int64(st, 7)}};
         }
         sqlite3_finalize(st);
         st = nullptr;
     }
+
+    out["invalidCitations"] = 0;
+    const std::string invalidSql =
+        "SELECT COALESCE(SUM(invalid_citations),0) FROM " + usageTable;
+    if (prepare(invalidSql.c_str(), &st)) {
+        if (sqlite3_step(st) == SQLITE_ROW) out["invalidCitations"] = sqlite3_column_int64(st, 0);
+        sqlite3_finalize(st);
+        st = nullptr;
+    }
+
+    // Versao do esquema em cada banco (E2+). A telemetria e anexada quando existe.
+    auto schemaVersionOf = [&](const std::string& prefix) -> std::string {
+        sqlite3_stmt* versionStmt = nullptr;
+        const std::string sql = "SELECT value FROM " + prefix + "memory_meta WHERE key='schema_version'";
+        if (sqlite3_prepare_v2(db, sql.c_str(), -1, &versionStmt, nullptr) != SQLITE_OK) return "";
+        std::string value;
+        if (sqlite3_step(versionStmt) == SQLITE_ROW) value = sqliteText(versionStmt, 0);
+        sqlite3_finalize(versionStmt);
+        return value;
+    };
+    out["schemaVersion"] = json{{"knowledge", schemaVersionOf("")},
+                                {"telemetry", schemaVersionOf(hasTelemetry ? "telemetry." : "")}};
 
     if (prepare("SELECT COUNT(*), COUNT(DISTINCT model), COALESCE(SUM(dim),0) FROM memory_embedding", &st)) {
         if (sqlite3_step(st) == SQLITE_ROW) {
@@ -1406,8 +1431,12 @@ int runMemory(const std::vector<std::string>& args) {
         std::cout << "Contexto: " << out["memoryContextChars"].get<long long>()
                   << " caracteres | runs com memoria: " << out["memoryEnabledRuns"].get<long long>() << "\n";
         std::cout << "Memorias injetadas: " << out["hits"]["injected"].get<long long>()
-                  << " | usadas do brief: " << out["hits"]["usedInjected"].get<long long>()
-                  << " | consultadas via busca: " << out["hits"]["consulted"].get<long long>() << "\n";
+                  << " | citadas do brief: " << out["hits"]["citedFromBrief"].get<long long>()
+                  << " | consultadas via busca: " << out["hits"]["consulted"].get<long long>()
+                  << " | citadas da busca: " << out["hits"]["citedFromSearch"].get<long long>()
+                  << " | citacoes invalidas: " << out["invalidCitations"].get<long long>() << "\n";
+        std::cout << "Esquema: conhecimento " << out["schemaVersion"]["knowledge"].str()
+                  << " | telemetria " << out["schemaVersion"]["telemetry"].str() << "\n";
         std::cout << "Validacoes: " << out["validations"]["total"].get<long long>()
                   << " veredito(s) em " << out["validations"]["episodes"].get<long long>()
                   << " execucao(oes) | aprovadas " << out["validations"]["approved"].get<long long>()
