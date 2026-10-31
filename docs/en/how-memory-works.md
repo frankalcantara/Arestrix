@@ -87,7 +87,10 @@ may create:
 
 Infrastructure failures are classified by an enumerated `errorClass` — transport/timeout, 429,
 5xx, auth/key, gateway/budget, configuration, sandbox/tool or cancellation — and do **not** create
-a lesson proposal. `task_max_turns` is a task failure, not infrastructure.
+a lesson proposal. The agent throws `AgentFailure` with that class; the generated wrapper checks the
+class, never the exception text. `task_max_turns` is a task failure, not infrastructure. The
+proposal text is normalized before deduplication: UUIDs, timestamps and long numbers become
+placeholders, so two identical failures with different IDs produce a single proposal.
 
 ### Artifact validation
 

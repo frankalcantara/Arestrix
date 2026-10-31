@@ -200,7 +200,27 @@ def make_graphs():
         "taskType": "busca_cita", "contextBudgetTokens": 0,
     })
     g9 = graph([search_agent], [])
-    return g1, g2, g3, g4, g5, g6, g7, g8, g9
+
+    def failure_agent(node_id, label):
+        node = copy.deepcopy(agent)
+        node["id"] = node_id
+        node["label"] = label
+        node["inputs"] = [port(node_id + "_in", "in", "input")]
+        node["outputs"] = [port(node_id + "_out", "out", "output")]
+        node["agentSettings"]["model"]["promptTemplate"] = "Responda apenas OK."
+        node["agentSettings"]["inheritCodeMode"] = False
+        node["agentSettings"]["codeMode"] = {"allowedTools": [], "customScripts": []}
+        node["agentSettings"]["memory"].update({
+            "mode": "learn", "theme": "teste", "domains": ["teste"],
+            "taskType": "falha_" + node_id, "contextBudgetTokens": 0,
+        })
+        return node
+
+    g10 = graph([failure_agent("http429", "Agente_HTTP_429")], [])
+    g11 = graph([failure_agent("http401", "Agente_HTTP_401")], [])
+    g12 = graph([failure_agent("http503", "Agente_HTTP_503")], [])
+    g13 = graph([failure_agent("maxturns", "Agente_Max_Turns")], [])
+    return g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13
 
 
 class MockHandler(BaseHTTPRequestHandler):
@@ -218,7 +238,42 @@ class MockHandler(BaseHTTPRequestHandler):
         match = re.search(r'no "([^"]+)" de um pipeline', system)
         label = match.group(1) if match else ""
         has_tool_result = any(msg.get("role") == "tool" for msg in messages)
-        if "Agente_Com_Regras" in label and not has_tool_result:
+
+        http_status = 0
+        if "Agente_HTTP_429" in label:
+            http_status = 429
+        elif "Agente_HTTP_401" in label:
+            http_status = 401
+        elif "Agente_HTTP_503" in label:
+            http_status = 503
+        if http_status:
+            data = json.dumps({
+                "error": {"message": "falha simulada de infraestrutura", "type": "mock"},
+            }).encode("utf-8")
+            self.send_response(http_status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            if http_status in (429, 503):
+                self.send_header("Retry-After", "1")
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
+        if "Agente_Max_Turns" in label:
+            message = {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{
+                    "id": "call_read_loop",
+                    "type": "function",
+                    "function": {
+                        "name": "read",
+                        "arguments": json.dumps({"path": "artefatos/pipeline.md"}),
+                    },
+                }],
+            }
+            finish = "tool_calls"
+        elif "Agente_Com_Regras" in label and not has_tool_result:
             message = {
                 "role": "assistant",
                 "content": None,
@@ -308,8 +363,9 @@ def main():
     project = work / "projeto"
     project.mkdir(parents=True)
     log_file = work / "systems.log"
-    g1, g2, g3, g4, g5, g6, g7, g8, g9 = make_graphs()
-    for index, item in enumerate((g1, g2, g3, g4, g5, g6, g7, g8, g9), start=1):
+    g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13 = make_graphs()
+    for index, item in enumerate(
+            (g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13), start=1):
         (work / f"graph{index}.json").write_text(json.dumps(item, indent=2), encoding="utf-8")
 
     port_num = free_port()
@@ -390,18 +446,40 @@ def main():
         check(ui_off and ui_off[0][0] >= 1 and ui_off[0][1] == 0,
               "measurementMode=memory_off foi registrado como memoria OFF")
 
-        print("\n== Memoria de projeto: falha de agente gera licao automatica ==")
+        print("\n== E5: falha de infraestrutura nao vira licao ==")
         p3 = run_graph(EXE, work / "graph3.json", project, env)
         out3 = (p3.stdout or "") + (p3.stderr or "")
         check(p3.returncode != 0, "a execucao com modelo ausente falhou como esperado")
         check("modelo nao configurado" in out3, "a falha veio do agente sem modelo")
-        failure_proposals = db_rows(
+        proposals = db_rows(
             project,
             "SELECT payload_json FROM memory_proposal WHERE kind='lesson' AND status='pending'")
-        failure_text = " ".join(row[0] for row in failure_proposals)
-        check("Falha no agente Agente_Com_Memoria" in failure_text,
-              "a falha foi gravada como proposta de licao")
-        check("agent_failure" in failure_text, "a proposta foi classificada como falha de agente")
+        proposal_text = " ".join(row[0] for row in proposals)
+        check("Falha no agente Agente_Com_Memoria" not in proposal_text,
+              "modelo ausente (infraestrutura) nao gerou proposta")
+
+        for graph_index, label in ((10, "429"), (11, "401"), (12, "503")):
+            p_infra = run_graph(EXE, work / f"graph{graph_index}.json", project, env)
+            check(p_infra.returncode != 0,
+                  f"o provedor simulado {label} falhou a execucao como esperado")
+        proposals = db_rows(
+            project,
+            "SELECT payload_json FROM memory_proposal WHERE kind='lesson' AND status='pending'")
+        proposal_text = " ".join(row[0] for row in proposals)
+        check('"errorClass":"provider_429"' not in proposal_text and
+              '"errorClass":"auth_401_403_or_missing_key"' not in proposal_text and
+              '"errorClass":"provider_5xx"' not in proposal_text,
+              "nenhuma proposta tem classe de infraestrutura")
+
+        p_max = run_graph(EXE, work / "graph13.json", project, env)
+        out_max = (p_max.stdout or "") + (p_max.stderr or "")
+        check(p_max.returncode != 0, "a execucao com max_turns falhou como esperado")
+        check("excedeu o limite" in out_max, "a falha veio do limite de turnos")
+        proposals = db_rows(
+            project,
+            "SELECT payload_json FROM memory_proposal WHERE kind='lesson' AND status='pending'")
+        check(any('"errorClass":"task_max_turns"' in row[0] for row in proposals),
+              "task_max_turns gerou proposta com a classe correta")
 
         print("\n== E1: regras de artefato, veredito e gate de playbooks ==")
         env_val = dict(env)

@@ -1450,8 +1450,11 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(src.find("\"memory_propose_lesson\"") != std::string::npos);
     CHECK(src.find("runAgent(\"agente\", \"Agente\"") != std::string::npos);
     CHECK(src.find("arx_mem_ctx);") != std::string::npos);
+    CHECK(src.find("catch (const taskforge::rt::AgentFailure& arx_agent_err)") != std::string::npos);
+    CHECK(src.find("isInfrastructureErrorClass(arx_agent_err.errorClass())") != std::string::npos);
     CHECK(src.find("catch (const std::exception& arx_mem_err)") != std::string::npos);
     CHECK(src.find("proposeLesson(projectId, \"svg_typography\", \"agent_failure\"") != std::string::npos);
+    CHECK(src.find("#include \"rt/MemoryFailure.hpp\"") != std::string::npos);
     CHECK(src.find("setWorking(projectId, arx_item_id, \"last_stage\"") == std::string::npos);
     CHECK(src.find("memory.clearSession(projectId)") != std::string::npos);
 
@@ -4107,21 +4110,89 @@ TEST(memory_predicate_cardinality_controls_fact_overwrite) {
     fs::remove_all(dir, ec);
 }
 
+TEST(memory_failure_proposals_normalize_and_dedupe) {
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_failure_proposal_" + stamp);
+    const std::string pId = "failure-proposal-" + stamp;
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, (root / "knowledge.db").string()));
+
+    const std::string first = memory.proposeLesson(
+        pId, "dom", "agent_failure",
+        "Falha no agente X: req 550e8400-e29b-41d4-a716-446655440000 em "
+        "2026-10-31T12:00:00Z codigo 123456789",
+        "agent", "agent_exception");
+    const std::string second = memory.proposeLesson(
+        pId, "dom", "agent_failure",
+        "Falha no agente X: req 11111111-2222-3333-4444-555555555555 em "
+        "2025-01-01T00:00:00Z codigo 987654321",
+        "agent", "agent_exception");
+    CHECK(!first.empty());
+    CHECK(first == second);
+
+    auto proposals = memory.listProposals(pId, "pending", 100);
+    CHECK(proposals.size() == 1);
+    if (!proposals.empty()) {
+        const std::string payload = proposals[0].value("payloadJson", std::string());
+        CHECK(payload.find("\"errorClass\":\"agent_exception\"") != std::string::npos);
+        CHECK(payload.find("550e8400") == std::string::npos);
+    }
+
+    const std::string taskFailure = memory.proposeLesson(
+        pId, "dom", "agent_failure", "Agente X excedeu o limite de 30 turnos",
+        "agent", "task_max_turns");
+    CHECK(!taskFailure.empty());
+    CHECK(taskFailure != first);
+    CHECK(memory.listProposals(pId, "pending", 100).size() == 2);
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_failure_classification_uses_enum_not_text) {
-    using taskforge::rt::memoryErrorClass;
+    using taskforge::rt::AgentFailure;
     using taskforge::rt::isInfrastructureErrorClass;
+    using taskforge::rt::memoryErrorClass;
+    using taskforge::rt::normalizeFailureText;
     CHECK(memoryErrorClass("rate_limited", 429) == "provider_429");
     CHECK(memoryErrorClass("", 401) == "auth_401_403_or_missing_key");
+    CHECK(memoryErrorClass("", 403) == "auth_401_403_or_missing_key");
     CHECK(memoryErrorClass("api_key_missing", 0) == "auth_401_403_or_missing_key");
+    CHECK(memoryErrorClass("gateway_required", 0) == "auth_401_403_or_missing_key");
     CHECK(memoryErrorClass("", 503) == "provider_5xx");
+    CHECK(memoryErrorClass("", 500) == "provider_5xx");
     CHECK(memoryErrorClass("budget_exceeded", 402) == "gateway_or_budget_block");
     CHECK(memoryErrorClass("model_not_configured", 0) == "config_model_or_skill_missing");
+    CHECK(memoryErrorClass("tools_unsupported", 0) == "config_model_or_skill_missing");
     CHECK(memoryErrorClass("bad_response", 0) == "transport_timeout");
     CHECK(memoryErrorClass("task_max_turns", 0) == "task_max_turns");
+    CHECK(memoryErrorClass("task_max_runs", 0) == "task_max_runs");
     CHECK(isInfrastructureErrorClass("provider_429"));
     CHECK(isInfrastructureErrorClass("auth_401_403_or_missing_key"));
+    CHECK(isInfrastructureErrorClass("sandbox_or_tool_unavailable"));
     CHECK(!isInfrastructureErrorClass("task_max_turns"));
     CHECK(!isInfrastructureErrorClass("agent_exception"));
+    CHECK(!isInfrastructureErrorClass("task_max_runs"));
+
+    AgentFailure failure("provider fora do ar", "provider_503");
+    CHECK(failure.errorClass() == "provider_503");
+    CHECK(std::string(failure.what()) == "provider fora do ar");
+
+    const std::string first =
+        "Falha no agente X: req 550e8400-e29b-41d4-a716-446655440000 em "
+        "2026-10-31T12:00:00Z codigo 123456789";
+    const std::string second =
+        "Falha no agente X: req 11111111-2222-3333-4444-555555555555 em "
+        "2025-01-01T00:00:00Z codigo 987654321";
+    CHECK(normalizeFailureText(first) == normalizeFailureText(second));
+    CHECK(normalizeFailureText(first).find("550e8400") == std::string::npos);
+    CHECK(normalizeFailureText(first).find("2026-10-31") == std::string::npos);
+    CHECK(normalizeFailureText("  erro   simples  ") == "erro simples");
 }
 
 TEST(memory_snapshot_preserves_decay_fields) {

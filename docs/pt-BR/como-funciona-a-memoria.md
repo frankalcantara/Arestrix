@@ -89,7 +89,10 @@ dele, o sistema pode criar:
 
 Falhas de infraestrutura são classificadas por `errorClass` enumerado — transporte/timeout,
 429, 5xx, autenticação/chave, gateway/orçamento, configuração, sandbox/ferramenta ou cancelamento —
-e **não** geram proposta de lição. `task_max_turns` é falha da tarefa, não de infraestrutura.
+e **não** geram proposta de lição. O agente lança `AgentFailure` com essa classe; o wrapper gerado
+consulta a classe, nunca o texto da exceção. `task_max_turns` é falha da tarefa, não de
+infraestrutura. O texto da proposta é normalizado antes da deduplicação: UUIDs, datas/horas e
+números longos viram marcadores, então duas falhas iguais com ids diferentes geram uma proposta só.
 
 ### Validação de artefato
 

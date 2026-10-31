@@ -25,6 +25,11 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   verdicts in real runs.
 - `memory report` now reads the telemetry database and shows validated/unvalidated runs and
   the approval rate per `task_type`.
+- **Typed agent failures (multigraph plan, E5):** `rt::AgentFailure` carries the enumerated
+  `errorClass`; the generated wrapper checks it before proposing a lesson, so infrastructure
+  failures (429/5xx/auth/gateway/config/sandbox) never become knowledge. Proposals carry
+  `errorClass` in the payload, and failure text is normalized (UUIDs, timestamps, long numbers)
+  before deduplication.
 - **Self-contained evidence (multigraph plan, E4):** `memory_evidence` is now an evidence
   snapshot table in the knowledge database (target kind/id, action, episode, validator, artifact
   and excerpt hashes, summary) with no foreign key to episodes or edges. Promotions, demotions,
