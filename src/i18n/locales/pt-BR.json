@@ -1593,6 +1593,9 @@
     "usage_cited_search": "citadas da busca",
     "usage_consulted": "consultadas via busca",
     "usage_invalid_citations": "citações inválidas",
+    "usage_evidence": "Evidências",
+    "evidence_count": "evidências",
+    "evidence_targets": "alvos",
     "btn_close": "Fechar"
   },
   "batch_pipeline": {

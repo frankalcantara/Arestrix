@@ -2246,6 +2246,175 @@ TEST(memory_search_does_not_write_knowledge) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_evidence_survives_prune_and_records_promotion_and_demotion) {
+    using taskforge::memory::MemoryEpisodeRecord;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_evidence_" + stamp);
+    const fs::path knowledgePath = root / "knowledge.db";
+    const fs::path telemetryPath = root / "telemetry.db";
+    const std::string pId = "evidence-" + stamp;
+    const std::string scope = "project:" + pId;
+
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, knowledgePath.string()));
+    CHECK(memory.configureTelemetry(pId, telemetryPath.string()));
+    auto* store = memory.store(pId);
+    CHECK(store != nullptr);
+
+    const std::string lesson = memory.recordLesson(pId, "svg", "sombra",
+                                                   "regra com evidencia", "test");
+    CHECK(!lesson.empty());
+    CHECK(!memory.evidenceFor(pId, "lesson", lesson).empty());
+
+    const std::string playbook = store->recordPlaybook(
+        scope, "evidence_task", "Evidence playbook",
+        taskforge::Json::array({taskforge::Json{{"tool", "read"}}}),
+        taskforge::Json::object(), 0.8, "active", "seed",
+        taskforge::Json::array(), 1, 0);
+    CHECK(!playbook.empty());
+    CHECK(!memory.evidenceFor(pId, "playbook", playbook).empty());
+
+    MemoryEpisodeRecord episode;
+    episode.runId = "evidence-run";
+    episode.nodeId = "agent";
+    episode.kind = "agent_success";
+    episode.content = "ok";
+    episode.taskType = "evidence_task";
+    episode.outcome = "success";
+    episode.inputHash = "evidence-input";
+    const std::string episodeId = memory.recordEpisode(pId, episode);
+    CHECK(!episodeId.empty());
+
+    // Promocao de proposta grava um segundo instantaneo, com o episodio de origem.
+    taskforge::Json payload{{"subject", "Alpha"}, {"predicate", "USES"}, {"object", "Beta"}};
+    taskforge::Json evidence = taskforge::Json::array(
+        {taskforge::Json{{"kind", "test"}, {"ok", true}}});
+    const std::string proposal = store->recordProposal(scope, "fact", payload, episodeId,
+                                                       evidence, 0.9);
+    CHECK(!proposal.empty());
+    std::string promotionError;
+    std::string promotedFact;
+    CHECK(memory.promoteProposal(pId, proposal, "tester", promotionError, &promotedFact));
+    CHECK(!promotedFact.empty());
+    const auto factEvidence = memory.evidenceFor(pId, "fact", promotedFact);
+    CHECK(!factEvidence.empty());
+    bool hasPromote = false;
+    for (const auto& item : factEvidence) if (item.action == "promote") hasPromote = true;
+    CHECK(hasPromote);
+    const auto lessonEvidenceBefore = memory.evidenceFor(pId, "lesson", lesson);
+    const auto playbookEvidenceBefore = memory.evidenceFor(pId, "playbook", playbook);
+
+    // Envelhece o episodio e roda a retencao: a telemetria some, a evidencia fica.
+    {
+        sqlite3* telemetry = nullptr;
+        CHECK(sqlite3_open(telemetryPath.string().c_str(), &telemetry) == SQLITE_OK);
+        CHECK(sqlite3_exec(telemetry,
+                           "UPDATE memory_episode SET created_at='2000-01-01T00:00:00Z'",
+                           nullptr, nullptr, nullptr) == SQLITE_OK);
+        sqlite3_close(telemetry);
+    }
+    const auto pruned = memory.prune(pId, 1);
+    CHECK(pruned.episodes >= 1);
+    CHECK(memory.evidenceFor(pId, "lesson", lesson).size() == lessonEvidenceBefore.size());
+    CHECK(memory.evidenceFor(pId, "playbook", playbook).size() == playbookEvidenceBefore.size());
+    CHECK(memory.evidenceFor(pId, "fact", promotedFact).size() == factEvidence.size());
+
+    // Duas reprovacoes seguidas despromovem e deixam evidencia + auditoria.
+    auto reject = [&](const std::string& input) {
+        MemoryEpisodeRecord item;
+        item.runId = "reject-" + input;
+        item.nodeId = "agent";
+        item.kind = "agent_success";
+        item.content = "ok";
+        item.taskType = "evidence_task";
+        item.outcome = "success";
+        item.inputHash = input;
+        const std::string id = memory.recordEpisode(pId, item);
+        CHECK(!id.empty());
+        MemoryValidationRecord validation;
+        validation.episodeId = id;
+        validation.runId = item.runId;
+        validation.nodeId = item.nodeId;
+        validation.validatorId = "artifact-rules";
+        validation.validatorVersion = "v1";
+        validation.ok = false;
+        validation.score = 0.0;
+        CHECK(!memory.recordValidation(pId, validation).empty());
+    };
+    reject("reject-1");
+    reject("reject-2");
+    CHECK(memory.listPlaybooks(pId, "evidence_task", "active", 10).empty());
+    const auto playbookEvidence = memory.evidenceFor(pId, "playbook", playbook);
+    bool hasDemote = false;
+    for (const auto& item : playbookEvidence) {
+        if (item.action == "demote" && !item.ok) hasDemote = true;
+    }
+    CHECK(hasDemote);
+
+    sqlite3* knowledge = nullptr;
+    CHECK(sqlite3_open(knowledgePath.string().c_str(), &knowledge) == SQLITE_OK);
+    sqlite3_stmt* audit = nullptr;
+    CHECK(sqlite3_prepare_v2(knowledge,
+                             "SELECT COUNT(*) FROM memory_audit WHERE action='auto_demote'",
+                             -1, &audit, nullptr) == SQLITE_OK);
+    CHECK(sqlite3_step(audit) == SQLITE_ROW && sqlite3_column_int(audit, 0) >= 1);
+    sqlite3_finalize(audit);
+    sqlite3_close(knowledge);
+
+    memory.closeProject(pId);
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_evidence_schema_has_no_episode_or_edge_foreign_key) {
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+
+    const auto stamp = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    fs::path root = fs::temp_directory_path() / ("arx_test_evidence_schema_" + stamp);
+    const fs::path dbPath = root / "knowledge.db";
+    const std::string pId = "evidence-schema-" + stamp;
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(pId);
+    CHECK(memory.configure(pId, true, dbPath.string()));
+    memory.closeProject(pId);
+
+    sqlite3* db = nullptr;
+    CHECK(sqlite3_open_v2(dbPath.string().c_str(), &db, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK);
+    sqlite3_stmt* st = nullptr;
+    auto columnTextAt = [](sqlite3_stmt* statement, int index) {
+        const unsigned char* value = sqlite3_column_text(statement, index);
+        return value ? std::string(reinterpret_cast<const char*>(value)) : std::string();
+    };
+    CHECK(sqlite3_prepare_v2(db, "PRAGMA foreign_key_list(memory_evidence)", -1, &st, nullptr) == SQLITE_OK);
+    bool referencesEpisodeOrEdge = false;
+    while (sqlite3_step(st) == SQLITE_ROW) {
+        const std::string table = columnTextAt(st, 2);
+        if (table == "memory_episode" || table == "memory_edge") referencesEpisodeOrEdge = true;
+    }
+    sqlite3_finalize(st);
+    CHECK(!referencesEpisodeOrEdge);
+    CHECK(sqlite3_prepare_v2(db, "PRAGMA table_info(memory_evidence)", -1, &st, nullptr) == SQLITE_OK);
+    bool hasTargetKind = false;
+    bool hasTargetId = false;
+    while (sqlite3_step(st) == SQLITE_ROW) {
+        const std::string column = columnTextAt(st, 1);
+        if (column == "target_kind") hasTargetKind = true;
+        if (column == "target_id") hasTargetId = true;
+    }
+    sqlite3_finalize(st);
+    sqlite3_close(db);
+    CHECK(hasTargetKind && hasTargetId);
+
+    std::error_code ec;
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_telemetry_hits_reinforce_knowledge) {
     using taskforge::memory::MemoryService;
     namespace fs = std::filesystem;

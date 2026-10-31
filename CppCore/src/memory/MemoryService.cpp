@@ -508,6 +508,16 @@ bool MemoryService::promoteToWorkspace(const std::string& projectId, const std::
         return false;
     }
 
+    {
+        MemoryEvidenceRecord snapshot;
+        snapshot.scopeId = targetScope;
+        snapshot.targetKind = kind == "fact" ? "fact" : kind;
+        snapshot.targetId = promotedId;
+        snapshot.action = "promote_workspace";
+        snapshot.ok = true;
+        snapshot.summary = "Promovido do projeto " + projectId + " por " + reviewer;
+        target->recordEvidence(snapshot);
+    }
     source->recordAudit(reviewer, "promote_to_workspace", memoryId, "", targetScope + "|" + promotedId);
     target->recordAudit(reviewer, "receive_workspace_promotion", promotedId, projectId, kind);
     invalidateBriefCache();
@@ -1699,6 +1709,8 @@ taskforge::Json MemoryService::listPlaybooks(const std::string& projectId,
         auto evidence = taskforge::jsonutil::tryParse(playbook.evidenceJson);
         out.push_back(taskforge::Json{
             {"id", playbook.id},
+            {"evidenceCount", static_cast<long long>(
+                s->evidenceCount(scopeId(projectId), "playbook", playbook.id))},
             {"taskType", playbook.taskType},
             {"title", playbook.title},
             {"steps", steps && steps->is_array() ? *steps : taskforge::Json::array()},
@@ -1865,6 +1877,20 @@ std::vector<MemoryValidationRecord> MemoryService::listValidations(const std::st
              : std::vector<MemoryValidationRecord>();
 }
 
+std::vector<MemoryEvidenceRecord> MemoryService::evidenceFor(const std::string& projectId,
+                                                             const std::string& targetKind,
+                                                             const std::string& targetId,
+                                                             size_t limit) {
+    auto* s = ensureStore(projectId);
+    return s ? s->listEvidence(scopeId(projectId), targetKind, targetId, limit)
+             : std::vector<MemoryEvidenceRecord>();
+}
+
+taskforge::Json MemoryService::evidenceSummary(const std::string& projectId) {
+    auto* s = ensureStore(projectId);
+    return s ? s->evidenceSummary(scopeId(projectId)) : taskforge::Json::object();
+}
+
 bool MemoryService::unpromotePlaybook(const std::string& projectId, const std::string& playbookId,
                                       const std::string& reason, std::string& error) {
     auto* s = existingStore(projectId);
@@ -1889,6 +1915,7 @@ taskforge::Json MemoryService::toJson(const std::string& projectId) {
     out["database"] = databasePath(projectId);
     out["telemetry"] = telemetryDatabasePath(projectId);
     out["maintenance"] = maintenanceStatus(projectId);
+    out["evidence"] = s->evidenceSummary(scopeId(projectId));
     return out;
 }
 
