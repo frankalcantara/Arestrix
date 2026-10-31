@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <b>2.4.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentação</a>
+  <b>2.5.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentação</a>
 </p>
 
 <p align="center">
@@ -104,8 +104,9 @@ um pipeline em um canvas de grafo; o Arestrix valida, gera código C++20 e compi
   (escopos `project`/`task_type`/`item`, schema, TTL e CAS), busca híbrida opcional (EmbeddingGemma 2
   ou Qwen3-Embedding-4B) com fingerprint completo do índice, consolidação determinística, playbooks
   com gate de validador, promoção para workspace, rastreio injetado/consultado/usado, brief com
-  orçamento de tokens e A/B de contexto no Studio. Telemetria fica em banco separado. Veja
-  [como a memória funciona](docs/pt-BR/como-funciona-a-memoria.md).
+  orçamento de tokens e A/B de contexto no Studio. Telemetria fica em banco separado. O plano de
+  memória (Fases A–C) está concluído; a Fase D é um programa separado. Veja
+  [pendências](docs/PENDENCIAS.md) e [como a memória funciona](docs/pt-BR/como-funciona-a-memoria.md).
 - **Biblioteca Arestrix** — assets de skill, MCP e template auditados, com escopos Studio,
   Workspace e Projeto, pins por projeto, importação do catálogo embutido/workspace e fonte GitHub
   nativa com commit pin, checagem de licença e download sob demanda.
@@ -184,7 +185,7 @@ python scripts/e2e_examples.py
 
 ## Status do projeto
 
-O **Arestrix 2.4.0** é o release atual (2026-10-29). O Studio roda no Windows e no Linux;
+O **Arestrix 2.5.0** é o release atual (2026-10-31). O Studio roda no Windows e no Linux;
 programas gerados a partir de um grafo atualmente têm o Windows como alvo. APIs, formatos de
 arquivo e flags de linha de comando ainda podem mudar entre releases menores. Consulte o
 [changelog](CHANGELOG.md) para as limitações atuais. O instalador Windows e a assinatura de código

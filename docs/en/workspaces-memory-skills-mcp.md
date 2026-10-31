@@ -1,6 +1,6 @@
 # Workspaces, memory, skills and MCP
 
-> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Last reviewed: 2026-10-25
+> **Applies to:** Arestrix 2.5 (`2.5.0`) · Last reviewed: 2026-10-31
 
 [Português](../pt-BR/workspaces-memoria-skills-mcp.md) · [Index](../README.md)
 
@@ -131,7 +131,8 @@ explicit, evidence-backed and audited. The project reads authorized workspace kn
 workspace does not read the project's private memory.
 
 The complete guide, with configuration, retention, security and a quick reference, is in
-[How memory works](how-memory-works.md).
+[How memory works](how-memory-works.md). Deployment status and the only product gap — the advanced
+semantic layer — are in [Pending items](pending.md).
 
 ### Examples
 

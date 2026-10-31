@@ -1,6 +1,6 @@
 # Workspaces, memória, skills e MCP
 
-> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Última revisão: 2026-10-25
+> **Aplica-se a:** Arestrix 2.5 (`2.5.0`) · Última revisão: 2026-10-31
 
 [English](../en/workspaces-memory-skills-mcp.md) · [Índice](../README.md)
 
@@ -132,7 +132,8 @@ promoção é explícita, exige evidência e é auditada. O projeto lê o worksp
 workspace não lê a memória privada do projeto.
 
 O guia completo, com configuração, retenção, segurança e referência rápida, está em
-[Como funciona a memória](como-funciona-a-memoria.md).
+[Como funciona a memória](como-funciona-a-memoria.md). O estado da implantação e a única lacuna de
+produto — a camada semântica avançada — estão em [Pendências](../PENDENCIAS.md).
 
 ### Exemplos
 

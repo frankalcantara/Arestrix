@@ -1,6 +1,6 @@
 # Positioning
 
-> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Last reviewed: 2026-10-19
+> **Applies to:** Arestrix 2.5 (`2.5.0`) · Last reviewed: 2026-10-31
 
 ## The problem
 
@@ -51,10 +51,11 @@ Arestrix treats an agent pipeline as a **program**, not as a hosted automation:
 - Organizations that cannot send prompts and data to a multi-tenant automation platform.
 - Educators and researchers who need a reproducible, local example of agent orchestration.
 
-## Beta scope
+## Release scope
 
-Beta 2.3 is a development pre-release. The Studio runs on Windows and Linux, but programs generated
+Arestrix 2.5 is the current release. The Studio runs on Windows and Linux, but programs generated
 from a graph currently target Windows. APIs, file formats and command-line flags may change before
-general availability. See the [changelog](../../CHANGELOG.md) for current limitations.
+general availability. See the [changelog](../../CHANGELOG.md) for current limitations and
+[pending items](../en/pending.md) for the remaining operational work.
 
 For a factual comparison with other approaches, see [Comparison](comparison.md).

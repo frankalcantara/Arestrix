@@ -6,6 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **Beta 2.3**.
 
+## [2.5.0] - 2026-10-31
+
+### Added
+
+- **Project memory simplification (Phases A-C):** per-vertex `off`/`consult`/`learn` modes, project
+  memory defaults, proposal-based lessons, separate telemetry, memory validation, `task_type`,
+  token-budgeted briefs and context A/B.
+- **Continuation state (D1 v2):** project-declared keys with `project`/`task_type`/`item` scopes,
+  JSON-schema validation after sanitization, TTL, CAS, `replace`/`versioned` history and
+  `memory_state_get/set/list/history`; CLI `memory state` and the Studio **State** tab.
+- **Signal quality (B2-B6):** cited `[MEMO:<id>]` usage tracking, utility separated from confidence,
+  enumerated `errorClass` with infrastructure failures excluded from lesson proposals, and
+  validator-gated playbooks with distinct-input promotion, 24h rate limit, unpromote and auto-demote.
+- **Embedding index v2:** full fingerprint (endpoint/model/dimension/prefixes/metric/version),
+  `ready`/`stale`/`pending`/`partial`/`failed`, reindexing that discards old fingerprints and
+  lexical fallback; EmbeddingGemma 2 and Qwen3-Embedding-4B profiles.
+- **A/B v2:** versioned 12/4/4 suite, seeded interleaved order, paired validator approval, 95%
+  Student-t intervals and secondary token/turn/cost/latency deltas; CLI `memory ab validate|order|report`.
+- **Cost and semantics controls:** prompt-cache token accounting in `run_usage`; single-valued and
+  multi-valued fact predicates; briefs guided by `task_type`, theme and vertex prompt template with
+  SQL theme filtering and cache invalidation.
+- **Studio assistant memory tools:** `memory_inspect` for project/workspace/vertex levels and
+  confirmed `memory_review_proposal`, `memory_declare_state_key` and `memory_unpromote_playbook`.
+
+### Changed
+
+- Memory and CLI documentation rewritten around the three modes, continuation state, proposals,
+  fingerprint states and the A/B protocol.
+- Legacy `AgentBlackboard`, `SemanticMemoryEngine`, legacy JSON import and the native
+  `arestrix.memoria` server removed. No migration is provided for old projects.
+
+### Pending
+
+- The memory plan (Phases A-C) is complete. Phase D (advanced multigraph: facets, domain knowledge,
+  claim paths and model routing) is a separate program outside this plan. See `docs/PENDENCIAS.md`.
+- The A/B execution harness, institution level in the Studio assistant and live embedding-provider
+  validation are tracked there as operational pendings.
+
 ## [2.4.0] - 2026-10-29
 
 ### Added

@@ -2,7 +2,7 @@
 
 [Português](../pt-BR/README.md) · [All documentation](../README.md)
 
-> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Last reviewed: 2026-10-27
+> **Applies to:** Arestrix 2.5 (`2.5.0`) · Last reviewed: 2026-10-31
 
 ## Learning path
 
@@ -11,9 +11,10 @@
 3. [Graph and nodes](graph-and-nodes.md) — vertex types, edges, validation and feedback loops.
 4. [Agents and execution](agents-and-execution.md) — tool loop, sandboxes, telemetry and batch runs.
 5. [Workspaces, memory, skills and MCP](workspaces-memory-skills-mcp.md) - persistent context and integrations.
-6. [How memory works](how-memory-works.md) - full lifecycle, embeddings, consolidation, playbooks, workspace and institution.
-7. [Interface](interface.md) - ribbon, backstage, canvas controls and shortcuts.
-8. [Paths and junction](paths-and-junction.md) - independent paths, write conflicts and Assistant-evaluated junctions.
+6. [How memory works](how-memory-works.md) - full lifecycle, embeddings, continuation state, playbooks, workspace and institution.
+7. [Pending items](pending.md) - project-wide operational pending work and the separate Phase D program.
+8. [Interface](interface.md) - ribbon, backstage, canvas controls and shortcuts.
+9. [Paths and junction](paths-and-junction.md) - independent paths, write conflicts and Assistant-evaluated junctions.
 
 ## Tutorials and examples
 

@@ -1,6 +1,6 @@
 # Trilhas e junção
 
-> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`)
+> **Aplica-se a:** Arestrix 2.5 (`2.5.0`)
 
 Um grafo pode ter mais de um caminho de execução. Quando dois caminhos não compartilham nenhum
 vértice, o Studio os trata como **trilhas independentes**: elas começam juntas, rodam em paralelo e o

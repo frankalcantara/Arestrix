@@ -1,6 +1,6 @@
 # Interface tour
 
-> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Last reviewed: 2026-10-27
+> **Applies to:** Arestrix 2.5 (`2.5.0`) · Last reviewed: 2026-10-31
 
 [Português](../pt-BR/interface.md) · [Index](../README.md)
 

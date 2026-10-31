@@ -1,6 +1,6 @@
 # Roadmap and known limitations
 
-> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Last reviewed: 2026-10-28
+> **Applies to:** Arestrix 2.5 (`2.5.0`) · Last reviewed: 2026-10-31
 >
 > This page records what is intentionally incomplete and the order we plan to address it. It is not a
 > commitment to dates.

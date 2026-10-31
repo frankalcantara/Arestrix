@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <b>2.4.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentation</a>
+  <b>2.5.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentation</a>
 </p>
 
 <p align="center">
@@ -103,7 +103,9 @@ graph canvas; Arestrix validates it, generates C++20 source and compiles it with
   schema, TTL and CAS), optional hybrid retrieval (EmbeddingGemma 2 or Qwen3-Embedding-4B) with a
   full index fingerprint, deterministic consolidation, validator-gated playbooks, workspace
   promotion, injected/consulted/used tracking, a token-budgeted brief and context A/B in the Studio.
-  Telemetry lives in a separate database. See [how memory works](docs/en/how-memory-works.md).
+  Telemetry lives in a separate database. The memory plan (Phases A-C) is complete; Phase D is a
+  separate program outside it. See [pending items](docs/en/pending.md) and
+  [how memory works](docs/en/how-memory-works.md).
 - **Arestrix Library** - audited skill, MCP and template assets with Studio, Workspace and Project
   scopes, project pins, built-in/workspace imports and a native GitHub source with commit pin,
   license check and on-demand downloads.
@@ -182,7 +184,7 @@ python scripts/e2e_examples.py
 
 ## Project status
 
-**Arestrix 2.4.0** is the current release (2026-10-29). The Studio runs on Windows and Linux;
+**Arestrix 2.5.0** is the current release (2026-10-31). The Studio runs on Windows and Linux;
 programs generated from a graph currently target Windows. APIs, file formats and command-line flags
 may still change between minor releases. See the [changelog](CHANGELOG.md) for the current
 limitations. The Windows installer and code signing are included; clean-machine validation, the

@@ -1,6 +1,6 @@
 # Primeiros passos
 
-> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Última revisão: 2026-10-21
+> **Aplica-se a:** Arestrix 2.5 (`2.5.0`) · Última revisão: 2026-10-31
 
 [English](../en/getting-started.md) · [Índice](../README.md)
 

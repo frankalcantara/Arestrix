@@ -1,6 +1,6 @@
 # Grafo e vértices
 
-> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Última revisão: 2026-10-19
+> **Aplica-se a:** Arestrix 2.5 (`2.5.0`) · Última revisão: 2026-10-31
 
 [English](../en/graph-and-nodes.md) · [Índice](../README.md)
 

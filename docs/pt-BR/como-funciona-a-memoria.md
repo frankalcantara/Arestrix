@@ -1,6 +1,6 @@
 # Como funciona a memória do Arestrix
 
-> **Aplica-se a:** Arestrix 2.4 — última revisão: 2026-10-30
+> **Aplica-se a:** Arestrix 2.5 — última revisão: 2026-10-31
 >
 > Guia de uma página e referência da memória de projeto. A memória é opcional, local e
 > pertence ao projeto. Não há importação automática de formatos antigos.
@@ -262,3 +262,16 @@ produto e os limites atuais, consulte [`workspaces-memoria-skills-mcp.md`](works
 O serviço `arestrix-memory` expõe o conhecimento institucional por HTTP autenticado e MCP (stdio e
 `/mcp`), com tokens, papéis `viewer`/`editor`/`admin` e escopo invariante. Ele é opcional e separado
 do banco privado do projeto.
+
+## 13. Status da implantação
+
+A implantação operacional da memória está concluída: modos, propostas, validação, estado de
+continuação, telemetria, embeddings com fingerprint, playbooks com gate, A/B v2 e ferramentas do
+assistente do Studio.
+
+O plano de simplificação (Fases A–C) está concluído. A Fase D — multigrafo avançado com facetas,
+conhecimento de domínio, caminhos sobre afirmações e roteamento de modelos — é um programa separado,
+fora deste plano, e não bloqueia o release. A recuperação por embeddings já está implementada.
+
+O harness de execução do A/B, o nível institucional no assistente e a validação com provedores reais
+são pendências operacionais. Consulte [`PENDENCIAS.md`](../PENDENCIAS.md).

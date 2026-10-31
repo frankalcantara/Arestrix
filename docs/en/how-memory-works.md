@@ -1,6 +1,6 @@
 # How Arestrix memory works
 
-> **Applies to:** Arestrix 2.4 — last reviewed: 2026-10-30
+> **Applies to:** Arestrix 2.5 — last reviewed: 2026-10-31
 >
 > A one-page guide and reference for project memory. Memory is optional, local and owned by the
 > project. There is no automatic import of old formats.
@@ -255,3 +255,15 @@ current limits, see [`workspaces-memory-skills-mcp.md`](workspaces-memory-skills
 The `arestrix-memory` service exposes institution knowledge over authenticated HTTP and MCP (stdio
 and `/mcp`), with tokens, `viewer`/`editor`/`admin` roles and invariant scope. It is optional and
 separate from the project's private database.
+
+## 13. Deployment status
+
+The operational memory deployment is complete: modes, proposals, validation, continuation state,
+telemetry, fingerprinted embeddings, gated playbooks, A/B v2 and the Studio assistant tools.
+
+The simplification plan (Phases A-C) is complete. Phase D — the advanced multigraph with facets,
+domain knowledge, paths over claims and model routing — is a separate program outside this plan and
+does not block the release. Embedding retrieval is already implemented.
+
+The A/B execution harness, the institutional level in the assistant and validation with real
+providers are operational pending items. See [`pending.md`](pending.md).

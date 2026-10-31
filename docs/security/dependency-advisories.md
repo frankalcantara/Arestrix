@@ -1,6 +1,6 @@
 # npm dependency advisories
 
-Last reviewed: 2026-10-19.
+Last reviewed: 2026-10-31.
 
 As of 2026-10-16, `npm audit` reports **3 high-severity vulnerabilities**, all from the same
 advisory: [`braces` GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)

@@ -2,7 +2,7 @@
   "name": "arestrix",
   "description": "Arestrix - Visual Node Graph Orchestrator for Concurrent Multi-Agent Pipelines with Taskflow C++20 and Three.js",
   "private": true,
-  "version": "2.4.0",
+  "version": "2.5.0",
   "license": "MIT",
   "repository": {
     "type": "git",

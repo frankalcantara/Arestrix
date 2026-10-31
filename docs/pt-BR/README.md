@@ -2,7 +2,7 @@
 
 [English](../en/README.md) · [Toda a documentação](../README.md)
 
-> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Última revisão: 2026-10-27
+> **Aplica-se a:** Arestrix 2.5 (`2.5.0`) · Última revisão: 2026-10-31
 
 ## Trilha de aprendizado
 
@@ -11,9 +11,10 @@
 3. [Grafo e vértices](grafo-e-vertices.md) — tipos de vértice, arestas, validação e ciclos de feedback.
 4. [Agentes e execução](agentes-e-execucao.md) — laço de ferramentas, sandboxes, telemetria e execução em lote.
 5. [Workspaces, memória, skills e MCP](workspaces-memoria-skills-mcp.md) - contexto persistente e integrações.
-6. [Como funciona a memória](como-funciona-a-memoria.md) - ciclo completo, embeddings, consolidação, playbooks, workspace e instituição.
-7. [Interface](interface.md) - ribbon, backstage, controles do canvas e atalhos.
-8. [Trilhas e junção](trilhas-e-juncao.md) - caminhos independentes, conflito de escrita e junção avaliada pelo Assistente.
+6. [Como funciona a memória](como-funciona-a-memoria.md) - ciclo completo, embeddings, estado de continuação, playbooks, workspace e instituição.
+7. [Pendências](../PENDENCIAS.md) - trabalho operacional pendente e o programa separado da Fase D.
+8. [Interface](interface.md) - ribbon, backstage, controles do canvas e atalhos.
+9. [Trilhas e junção](trilhas-e-juncao.md) - caminhos independentes, conflito de escrita e junção avaliada pelo Assistente.
 
 ## Referência
 

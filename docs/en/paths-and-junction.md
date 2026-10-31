@@ -1,6 +1,6 @@
 # Paths and junction
 
-> **Applies to:** Arestrix Beta 2.3 (`2.3.0-beta.2`)
+> **Applies to:** Arestrix 2.5 (`2.5.0`)
 
 A graph can have more than one execution path. When two paths share no vertex, the Studio treats them
 as **independent paths**: they start together, run in parallel, and the pipeline only finishes when
