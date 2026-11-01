@@ -150,7 +150,41 @@ E<n> — <título>
   referência de comparação.
 - Nunca fazer force-push em `main`.
 
-## 7. Depois do merge
+## 7. Incidente Linux da E0 (corrigido antes do trem)
+
+O PR #21 (E0) foi mergeado com o job `native-linux` vermelho. O log público não
+expõe o compilador sem autenticação; a falha foi reproduzida localmente em
+Ubuntu 24.04 com GCC 13.3:
+
+```text
+CppCore/tests/main.cpp:9411:
+call of overloaded 'at(size_t)' is ambiguous
+```
+
+A linha usava `Json::at(static_cast<size_t>(0))`; GCC considera a conversão
+ambígua entre `at(const std::string&)` e `at(size_t)`. A correção é acessar o
+array por índice:
+
+```cpp
+(*parsed)["results"][0].at("id")
+```
+
+Ela está na branch `fix/linux-json-at` (commit `0deb87f`), com PR:
+
+```text
+https://github.com/frankalcantara/Arestrix/pull/new/fix/linux-json-at
+```
+
+Validação Linux em WSL Ubuntu 24.04:
+
+- build completo com GCC 13.3;
+- `arestrix_tests` com **2418/2418** verificações.
+
+O trem fica pausado até esse PR entrar em `main`; as branches E1–E20 não
+precisam ser reescritas, porque o merge de cada PR traz a correção de `main`
+sem tocar no teste alterado. O CI de cada PR roda contra o merge commit.
+
+## 8. Depois do merge
 
 1. Branch `docs/memory-v1`: revisão integral da documentação PT/EN contra o
    comportamento real, flags, CLI, UI, banco e limitações.
