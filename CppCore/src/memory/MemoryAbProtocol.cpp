@@ -190,14 +190,23 @@ taskforge::Json MemoryAbProtocol::analyze(const taskforge::Json& suite,
         std::vector<double> cost;
         std::vector<double> latency;
         size_t infra = 0;
+        size_t invalid = 0;
     };
     std::map<std::string, std::map<std::string, ArmSamples>> byTask;
+    std::set<std::string> invalidTasks;
     size_t infraEvents = 0;
+    size_t infraRetries = 0;
     for (const auto& observation : observations["observations"]) {
         if (!observation.is_object()) continue;
         const std::string taskId = stringField(observation, "taskId");
         const std::string arm = stringField(observation, "arm");
         if (arm != "on" && arm != "off") continue;
+        infraRetries += static_cast<size_t>(numberField(observation, "infraRetries"));
+        if (observation.value("invalid", false) || observation.value("validatorMissing", false)) {
+            ++byTask[taskId][arm].invalid;
+            invalidTasks.insert(taskId);
+            continue;
+        }
         const std::string errorClass = stringField(observation, "errorClass");
         if (taskforge::rt::isInfrastructureErrorClass(errorClass)) {
             ++byTask[taskId][arm].infra;
@@ -249,6 +258,10 @@ taskforge::Json MemoryAbProtocol::analyze(const taskforge::Json& suite,
         }
         const ArmSamples& on = found->second["on"];
         const ArmSamples& off = found->second["off"];
+        if (invalidTasks.count(taskId)) {
+            excluded.push_back(taskforge::Json{{"taskId", taskId}, {"reason", "sem validador"}});
+            continue;
+        }
         if (on.ok.size() < static_cast<size_t>(repetitions) ||
             off.ok.size() < static_cast<size_t>(repetitions)) {
             excluded.push_back(taskforge::Json{{"taskId", taskId}, {"reason", "repeticoes insuficientes"},
@@ -326,10 +339,14 @@ taskforge::Json MemoryAbProtocol::analyze(const taskforge::Json& suite,
                                       {"delta", mean(latencyDeltas)},
                                       {"ciLow", interval(latencyDeltas)["ciLow"]},
                                       {"ciHigh", interval(latencyDeltas)["ciHigh"]}}}};
+    taskforge::Json invalidList = taskforge::Json::array();
+    for (const auto& taskId : invalidTasks) invalidList.push_back(taskId);
     return taskforge::Json{{"ok", true},
                            {"suiteVersion", validation["version"]},
                            {"repetitions", repetitions},
                            {"infraEvents", static_cast<long long>(infraEvents)},
+                           {"infraRetries", static_cast<long long>(infraRetries)},
+                           {"invalidTasks", invalidList},
                            {"primary", primary},
                            {"secondary", secondary},
                            {"pairs", pairs},

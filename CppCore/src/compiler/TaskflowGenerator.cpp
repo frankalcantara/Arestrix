@@ -805,8 +805,12 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
     code += "  taskforge::rt::init();\n";
     code += "  const std::string projectId = " + cppString(meta.projectId.empty() ? "default" : meta.projectId) + ";\n";
     code += "  auto& memory = taskforge::memory::MemoryService::getInstance();\n";
-    code += "  const bool arx_mem_active = " + std::string(anyMemoryActive(graph) ? "true" : "false") + ";\n";
-    code += "  const bool arx_mem_learns = " + std::string(anyMemoryLearns(graph) ? "true" : "false") + ";\n";
+    code += "  const char* arx_ab_arm_env = std::getenv(\"ARESTRIX_AB_ARM\");\n";
+    code += "  const bool arx_ab_on = arx_ab_arm_env && std::string(arx_ab_arm_env) == \"on\";\n";
+    code += "  const bool arx_mem_readonly = arx_ab_on || std::getenv(\"ARESTRIX_MEMORY_READONLY\") != nullptr;\n";
+    code += "  const bool arx_mem_disabled = std::getenv(\"ARESTRIX_MEMORY_DISABLE\") != nullptr;\n";
+    code += "  const bool arx_mem_active = " + std::string(anyMemoryActive(graph) ? "true" : "false") + " && !arx_mem_disabled;\n";
+    code += "  const bool arx_mem_learns = " + std::string(anyMemoryLearns(graph) ? "true" : "false") + " && !arx_mem_disabled && !arx_ab_on && !arx_mem_readonly;\n";
     code += "  const char* arx_memory_root_env = std::getenv(\"ARESTRIX_PROJECT_ROOT\");\n";
     code += "  const std::string arx_memory_root = (arx_memory_root_env && *arx_memory_root_env)\n";
     code += "      ? std::string(arx_memory_root_env) : std::string(\".\");\n";
@@ -818,7 +822,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
     code += "  const bool arx_mem_has_db = std::filesystem::exists(arx_mem_db);\n";
     code += "  const bool arx_mem_persistent = arx_mem_active && (arx_mem_learns || arx_mem_has_db);\n";
     code += "  if (arx_mem_active) {\n";
-    code += "    if (!memory.configure(projectId, arx_mem_persistent, arx_mem_persistent ? arx_mem_db : std::string())) {\n";
+    code += "    if (!memory.configure(projectId, arx_mem_persistent, arx_mem_persistent ? arx_mem_db : std::string(), arx_mem_readonly)) {\n";
     code += "      std::cerr << \"[MEMORIA] nao foi possivel abrir o banco do projeto\\n\";\n";
     code += "    }\n";
     code += "  }\n";
@@ -855,18 +859,18 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
     }
     {
         const json memorySettings = globalMemory(graph);
-        code += "  memory.configureMaintenance(projectId, taskforge::memory::maintenanceConfigFromJson("
+        code += "  if (!arx_mem_readonly) memory.configureMaintenance(projectId, taskforge::memory::maintenanceConfigFromJson("
                 "taskforge::Json::parse(" +
                 rawLiteral(memorySettings.dump()) + ")));\n";
     }
     code += "  }\n";
     code += "  auto arx_mem_flush = [&]() {\n";
-    code += "    if (arx_mem_active && !arx_mem_persistent) memory.clearSession(projectId);\n";
+    code += "    if (arx_mem_active && !arx_mem_persistent && !arx_mem_readonly) memory.clearSession(projectId);\n";
     code += "  };\n";
     // E3: indexa pendencias fora do caminho de busca, no fim da execucao.
     // Orcamento padrao: 10 s ou 64 objetos; falha do provider nunca derruba o pipeline.
     code += "  auto arx_mem_index = [&]() {\n";
-    code += "    if (!arx_mem_active || !arx_mem_persistent) return;\n";
+    code += "    if (!arx_mem_active || !arx_mem_persistent || arx_mem_readonly) return;\n";
     code += "    try { memory.indexPending(projectId, 10000, 64); }\n";
     code += "    catch (const std::exception& arx_idx_err) {\n";
     code += "      std::cerr << \"[MEMORIA] indexacao pos-execucao ignorada: \" << arx_idx_err.what() << \"\\n\";\n";
@@ -1042,8 +1046,10 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
                         for (const auto& d : domains) if (d.is_string()) { domain = d.get<std::string>(); break; }
                     }
                     std::string failPrefix = "Falha no agente " + label + ": ";
+                    body += "    const bool arx_learning_allowed = std::getenv(\"ARESTRIX_AB_ARM\") == nullptr && "
+                            "std::getenv(\"ARESTRIX_MEMORY_READONLY\") == nullptr;\n";
                     body += "    try {\n      " + runCall + "\n" + validationCode + "    } catch (const taskforge::rt::AgentFailure& arx_agent_err) {\n";
-                    body += "      if (!taskforge::rt::isInfrastructureErrorClass(arx_agent_err.errorClass())) {\n";
+                    body += "      if (arx_learning_allowed && !taskforge::rt::isInfrastructureErrorClass(arx_agent_err.errorClass())) {\n";
                     body += "        memory.proposeLesson(projectId, " + cppString(domain) +
                             ", \"agent_failure\",\n            std::string(" + cppString(failPrefix) +
                             ") + arx_agent_err.what(), " + cppString(node.id) +
@@ -1051,7 +1057,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
                     body += "      }\n";
                     body += "      throw;\n";
                     body += "    } catch (const std::exception& arx_mem_err) {\n";
-                    body += "      memory.proposeLesson(projectId, " + cppString(domain) +
+                    body += "      if (arx_learning_allowed) memory.proposeLesson(projectId, " + cppString(domain) +
                             ", \"agent_failure\",\n          std::string(" + cppString(failPrefix) +
                             ") + arx_mem_err.what(), " + cppString(node.id) + ", \"agent_exception\");\n";
                     body += "      throw;\n    }\n";

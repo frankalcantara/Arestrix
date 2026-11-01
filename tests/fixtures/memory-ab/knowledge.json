@@ -1,0 +1,32 @@
+{
+  "lessons": [
+    {
+      "id": "ab-lesson-1",
+      "domain": "ab",
+      "trigger": "contraste",
+      "rule": "Garanta contraste minimo de 4.5:1 e cite a regra aprendida.",
+      "confidence": 0.95
+    },
+    {
+      "id": "ab-lesson-2",
+      "domain": "ab",
+      "trigger": "sombras",
+      "rule": "Nunca aplique sombra ou blur ao texto de um SVG.",
+      "confidence": 0.9
+    }
+  ],
+  "facts": [],
+  "playbook": {
+    "id": "ab-playbook-1",
+    "taskType": "ab",
+    "title": "Fluxo de correcao visual",
+    "steps": [
+      "Leia o artefato",
+      "Valide contraste e sombras",
+      "Grave o artefato corrigido"
+    ],
+    "preconditions": {},
+    "confidence": 0.85,
+    "status": "active"
+  }
+}

@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -35,6 +36,8 @@
 #include "memory/MemoryService.hpp"
 #include "native/NativeTools.hpp"
 #include "platform/Process.hpp"
+#include "project/RunnerSecurity.hpp"
+#include "rt/MemoryFailure.hpp"
 #include "rt/McpTools.hpp"
 #include "rt/compress/CodeCompressor.hpp"
 #include "rt/compress/ContentRouter.hpp"
@@ -89,6 +92,12 @@ struct ProjectPaths {
     fs::path graph;
     std::string projectId;
 };
+
+// E9: executado depois de executeBuild, que precisa estar definido.
+int runMemoryAbExecutor(const fs::path& suitePath, const fs::path& pipelinePath,
+                        const std::string& nodeId, int repetitions, long long seed,
+                        const fs::path& root, const std::string& projectId,
+                        const fs::path& dbPath, bool jsonOutput);
 
 std::string version() {
 #ifdef ARESTRIX_CLI_VERSION
@@ -490,6 +499,7 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory workspace init|status --project <pasta> [--workspace-id ID] [--json]\n"
                      "arestrix-cli memory state list|declare|get|set --project <pasta> [--key K] [--scope project|task_type|item] [--schema JSON] [--value JSON] [--expected N] [--item ID] [--task-type T] [--json]\n"
                      "arestrix-cli memory ab validate|order|report --suite <arquivo> [--observations <arquivo>] [--repetitions N] [--seed N] [--json]\n"
+                     "arestrix-cli memory ab run --suite <arquivo> --pipeline <grafo> --node <vertice> [--repetitions N] [--seed N] [--root <pasta>] [--db <arquivo>] [--json]\n"
                      "arestrix-cli memory promote --project <pasta> --kind lesson|fact|playbook --id ID --evidence texto [--workspace-id ID] [--json]\n"
                      "arestrix-cli memory unpromote --project <pasta> --id <playbook-id> [--reason texto] [--json]\n";
         return args.size() < 2 ? kExitUsage : 0;
@@ -561,12 +571,12 @@ int runMemory(const std::vector<std::string>& args) {
         optionStart = 3;
     } else if (command == "ab") {
         if (args.size() < 3) {
-            std::cerr << "arestrix-cli memory ab: informe validate|order|report\n";
+            std::cerr << "arestrix-cli memory ab: informe validate|order|report|run\n";
             return kExitUsage;
         }
         embeddingAction = args[2];
         if (embeddingAction != "validate" && embeddingAction != "order" &&
-            embeddingAction != "report") {
+            embeddingAction != "report" && embeddingAction != "run") {
             std::cerr << "arestrix-cli memory ab: acao desconhecida: " << embeddingAction << "\n";
             return kExitUsage;
         }
@@ -609,6 +619,8 @@ int runMemory(const std::vector<std::string>& args) {
     long long stateExpected = 0;
     std::string abSuitePath;
     std::string abObservationsPath;
+    fs::path abPipelinePath;
+    std::string abNodeId;
     int abRepetitions = 3;
     long long abSeed = 42;
     for (size_t i = optionStart; i < args.size(); ++i) {
@@ -705,6 +717,14 @@ int runMemory(const std::vector<std::string>& args) {
         else if (a == "--observations") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --observations\n"; return kExitUsage; }
             abObservationsPath = args[++i];
+        }
+        else if (a == "--pipeline") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --pipeline\n"; return kExitUsage; }
+            abPipelinePath = args[++i];
+        }
+        else if (a == "--node") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --node\n"; return kExitUsage; }
+            abNodeId = args[++i];
         }
         else if (a == "--repetitions") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --repetitions\n"; return kExitUsage; }
@@ -826,6 +846,14 @@ int runMemory(const std::vector<std::string>& args) {
             return kExitConfig;
         }
         taskforge::Json out;
+        if (embeddingAction == "run") {
+            if (abPipelinePath.empty() || abNodeId.empty()) {
+                std::cerr << "arestrix-cli memory ab run: informe --pipeline e --node\n";
+                return kExitUsage;
+            }
+            return runMemoryAbExecutor(fs::path(abSuitePath), abPipelinePath, abNodeId,
+                                       abRepetitions, abSeed, root, projectId, dbPath, opt.json);
+        }
         if (embeddingAction == "validate") {
             out = taskforge::memory::MemoryAbProtocol::validateSuite(suite, error);
         } else if (embeddingAction == "order") {
@@ -2162,6 +2190,379 @@ BuildOutcome executeBuild(const core::Graph& graph, const fs::path& root, const 
     out.exitCode = (result.success && !timeoutHit) ? 0
                  : (timeoutHit ? kExitTimeout : (result.stage == "toolchain" ? kExitDependency : kExitRuntime));
     return out;
+}
+
+// ---------------------------------------------------------------------------
+// E9: executor do protocolo A/B pareado.
+// ---------------------------------------------------------------------------
+struct AbEnvScope {
+    std::vector<std::pair<std::string, std::string>> saved;
+    void set(const std::string& name, const std::string& value) {
+        saved.push_back({name, platform::getEnv(name)});
+        platform::setProcessEnv(name, value);
+    }
+    ~AbEnvScope() {
+        for (auto it = saved.rbegin(); it != saved.rend(); ++it) {
+            platform::setProcessEnv(it->first, it->second);
+        }
+    }
+};
+
+long long abMaxRowid(const fs::path& dbPath, const std::string& table) {
+    std::error_code ec;
+    if (!fs::is_regular_file(dbPath, ec)) return 0;
+    sqlite3* db = nullptr;
+    if (sqlite3_open_v2(dbPath.string().c_str(), &db,
+                        SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX, nullptr) != SQLITE_OK) {
+        if (db) sqlite3_close(db);
+        return 0;
+    }
+    sqlite3_busy_timeout(db, 5000);
+    sqlite3_stmt* st = nullptr;
+    long long value = 0;
+    const std::string sql = "SELECT COALESCE(MAX(rowid),0) FROM " + table;
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &st, nullptr) == SQLITE_OK &&
+        sqlite3_step(st) == SQLITE_ROW) {
+        value = sqlite3_column_int64(st, 0);
+    }
+    if (st) sqlite3_finalize(st);
+    sqlite3_close(db);
+    return value;
+}
+
+struct AbTelemetryFacts {
+    bool episodeFound = false;
+    std::string episodeId;
+    std::string runId;
+    std::string outcome;
+    std::string errorClass;
+    bool validationFound = false;
+    bool validationOk = false;
+    long long tokens = 0;
+    long long calls = 0;
+    long long httpRetries = 0;
+    long long latencyMs = 0;
+    long long cachedTokens = 0;
+};
+
+AbTelemetryFacts abReadFacts(const fs::path& telemetryDb, const std::string& nodeId,
+                             const std::string& itemId, long long episodeMark,
+                             long long usageMark, long long validationMark) {
+    AbTelemetryFacts facts;
+    const std::string path = telemetryDb.string();
+
+    sqlite3* db = nullptr;
+    if (sqlite3_open_v2(path.c_str(), &db,
+                        SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX, nullptr) != SQLITE_OK) {
+        if (db) sqlite3_close(db);
+        return facts;
+    }
+    sqlite3_busy_timeout(db, 5000);
+
+    sqlite3_stmt* st = nullptr;
+    if (sqlite3_prepare_v2(db,
+            "SELECT id,run_id,COALESCE(outcome,''),COALESCE(error_class,'') "
+            "FROM memory_episode WHERE rowid>? AND node_id=? AND item_id=? "
+            "ORDER BY rowid DESC LIMIT 1", -1, &st, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int64(st, 1, episodeMark);
+        sqlite3_bind_text(st, 2, nodeId.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(st, 3, itemId.c_str(), -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(st) == SQLITE_ROW) {
+            facts.episodeFound = true;
+            const auto text = [&](int col) {
+                const unsigned char* raw = sqlite3_column_text(st, col);
+                return raw ? std::string(reinterpret_cast<const char*>(raw)) : std::string();
+            };
+            facts.episodeId = text(0);
+            facts.runId = text(1);
+            facts.outcome = text(2);
+            facts.errorClass = text(3);
+        }
+    }
+    if (st) sqlite3_finalize(st);
+    st = nullptr;
+
+    if (facts.episodeFound && !facts.runId.empty()) {
+        if (sqlite3_prepare_v2(db,
+                "SELECT ok,COALESCE(score,0) FROM memory_validation "
+                "WHERE rowid>? AND run_id=? AND node_id=? ORDER BY rowid DESC LIMIT 1",
+                -1, &st, nullptr) == SQLITE_OK) {
+            sqlite3_bind_int64(st, 1, validationMark);
+            sqlite3_bind_text(st, 2, facts.runId.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(st, 3, nodeId.c_str(), -1, SQLITE_TRANSIENT);
+            if (sqlite3_step(st) == SQLITE_ROW) {
+                facts.validationFound = true;
+                facts.validationOk = sqlite3_column_int(st, 0) != 0;
+            }
+        }
+        if (st) sqlite3_finalize(st);
+        st = nullptr;
+
+        if (sqlite3_prepare_v2(db,
+                "SELECT COALESCE(SUM(total_tokens),0),COALESCE(SUM(calls),0),"
+                "COALESCE(SUM(retries),0),COALESCE(SUM(latency_ms),0),"
+                "COALESCE(SUM(cached_tokens),0) FROM memory_usage "
+                "WHERE rowid>? AND run_id=? AND node_id=?", -1, &st, nullptr) == SQLITE_OK) {
+            sqlite3_bind_int64(st, 1, usageMark);
+            sqlite3_bind_text(st, 2, facts.runId.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(st, 3, nodeId.c_str(), -1, SQLITE_TRANSIENT);
+            if (sqlite3_step(st) == SQLITE_ROW) {
+                facts.tokens = sqlite3_column_int64(st, 0);
+                facts.calls = sqlite3_column_int64(st, 1);
+                facts.httpRetries = sqlite3_column_int64(st, 2);
+                facts.latencyMs = sqlite3_column_int64(st, 3);
+                facts.cachedTokens = sqlite3_column_int64(st, 4);
+            }
+        }
+        if (st) sqlite3_finalize(st);
+    }
+    sqlite3_close(db);
+    return facts;
+}
+
+std::string abExitErrorClass(int exitCode, bool timeout, const std::string& error) {
+    if (timeout || exitCode == kExitTimeout) return "transport_timeout";
+    if (exitCode == kExitDependency || exitCode == kExitConfig) return "sandbox_or_tool_unavailable";
+    std::string lower = error;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (lower.find("429") != std::string::npos) return "provider_429";
+    if (lower.find("timeout") != std::string::npos) return "transport_timeout";
+    if (lower.find("provider") != std::string::npos ||
+        lower.find("network") != std::string::npos ||
+        lower.find("conexao") != std::string::npos) {
+        return "provider_5xx";
+    }
+    if (lower.find("compil") != std::string::npos ||
+        lower.find("toolchain") != std::string::npos) {
+        return "sandbox_or_tool_unavailable";
+    }
+    return "agent_exception";
+}
+
+int runMemoryAbExecutor(const fs::path& suitePath, const fs::path& pipelinePath,
+                        const std::string& nodeId, int repetitions, long long seed,
+                        const fs::path& rootArg, const std::string& projectId,
+                        const fs::path& dbPath, bool jsonOutput) {
+    std::error_code ec;
+    const fs::path root = fs::absolute(rootArg, ec);
+    const fs::path pipeline = pipelinePath.is_absolute() ? pipelinePath : (root / pipelinePath);
+    std::string error;
+    taskforge::Json suite;
+    if (!readJsonFile(suitePath, suite, error)) {
+        std::cerr << "Falha ao ler --suite: " << error << "\n";
+        return kExitConfig;
+    }
+    taskforge::Json order = taskforge::memory::MemoryAbProtocol::buildRunOrder(
+        suite, repetitions, static_cast<uint32_t>(seed), error);
+    if (!order.value("ok", false)) {
+        std::cerr << "Conjunto A/B invalido: " << error << "\n";
+        return kExitConfig;
+    }
+
+    core::Graph graph;
+    if (!loadGraph(pipeline, graph, error)) {
+        std::cerr << "Falha ao ler --pipeline: " << error << "\n";
+        return kExitConfig;
+    }
+    if (graph.getNodes().find(nodeId) == graph.getNodes().end()) {
+        std::cerr << "Vertice nao encontrado no grafo: " << nodeId << "\n";
+        return kExitConfig;
+    }
+
+    fs::path memoryDb = dbPath;
+    if (memoryDb.empty()) memoryDb = root / ".arestrix" / "memory" / "memory.db";
+    if (memoryDb.is_relative()) memoryDb = root / memoryDb;
+    if (!fs::is_regular_file(memoryDb, ec)) {
+        std::cerr << "Banco de memoria nao encontrado: " << memoryDb.string() << "\n";
+        return kExitConfig;
+    }
+
+    auto& memory = taskforge::memory::MemoryService::getInstance();
+    memory.closeProject(projectId);
+    if (!memory.configure(projectId, true, memoryDb.string())) {
+        std::cerr << "Falha ao abrir o banco de memoria: " << memoryDb.string() << "\n";
+        return kExitConfig;
+    }
+
+    const std::string stamp = std::to_string(
+        std::chrono::system_clock::now().time_since_epoch().count());
+    const fs::path abDir = root / ".arestrix" / "telemetry" / "ab";
+    fs::create_directories(abDir, ec);
+    const fs::path frozen = abDir / ("frozen-" + stamp + ".db");
+    const fs::path measurement = abDir / ("measurement-" + stamp + ".db");
+    const fs::path observationsPath = abDir / ("observations-" + stamp + ".json");
+    const fs::path reportPath = abDir / ("report-" + stamp + ".json");
+
+    std::string fingerprint;
+    std::string freezeError;
+    if (!memory.freezeKnowledge(projectId, frozen.string(), fingerprint, freezeError)) {
+        std::cerr << "Falha ao congelar o conhecimento: " << freezeError << "\n";
+        return kExitConfig;
+    }
+
+    taskforge::Json tasksById = taskforge::Json::object();
+    for (const auto& task : suite["tasks"]) {
+        tasksById[task.value("id", std::string())] = task;
+    }
+
+    taskforge::Json observations = taskforge::Json::array();
+    const auto& runOrder = order["order"];
+    const size_t total = runOrder.size();
+    if (!jsonOutput) {
+        std::cout << "A/B: " << total << " execucoes, conhecimento congelado "
+                  << fingerprint.substr(0, 12) << "\n";
+    }
+
+    for (size_t index = 0; index < total; ++index) {
+        const auto& entry = runOrder[index];
+        const std::string taskId = entry.value("taskId", std::string());
+        const std::string arm = entry.value("arm", std::string());
+        const int repetition = static_cast<int>(entry.value("repetition", 0LL));
+        const auto& task = tasksById[taskId];
+        const std::string input = task.value("input", std::string());
+        const std::string category = task.value("category", std::string());
+
+        int infraRetries = 0;
+        AbTelemetryFacts facts;
+        BuildOutcome outcome;
+        bool timeout = false;
+        for (int attempt = 0; attempt <= 2; ++attempt) {
+            const long long episodeMark = abMaxRowid(measurement, "memory_episode");
+            const long long usageMark = abMaxRowid(measurement, "memory_usage");
+            const long long validationMark = abMaxRowid(measurement, "memory_validation");
+
+            {
+                AbEnvScope env;
+                env.set("ARESTRIX_PROJECT_ROOT", root.string());
+                env.set("ARESTRIX_MEMORY_DB", frozen.string());
+                env.set("ARESTRIX_TELEMETRY_DB", measurement.string());
+                env.set("ARESTRIX_AB_ARM", arm);
+                env.set("ARESTRIX_AB_REPETITION", std::to_string(repetition));
+                env.set("ARESTRIX_AB_NODE", nodeId);
+                env.set("ARESTRIX_AB_TASK_INPUT", input);
+                env.set("ARESTRIX_ITEM_ID", taskId);
+                env.set("ARESTRIX_MEMORY_READONLY", arm == "on" ? "1" : "");
+                env.set("ARESTRIX_MEMORY_DISABLE", arm == "off" ? "1" : "");
+
+                Options abOpt;
+                abOpt.root = root;
+                abOpt.quiet = true;
+                abOpt.json = true;
+                abOpt.timeoutSeconds = 900;
+                build::BuildEvents events;
+                events.onPhase = [](const std::string&, const std::string&) {};
+                events.onLog = [](const std::string&, bool) {};
+                events.onTelemetry = [](const std::string&) {};
+                outcome = executeBuild(graph, root, abOpt, events);
+                timeout = outcome.timeoutHit;
+            }
+
+            facts = abReadFacts(measurement, nodeId, taskId, episodeMark, usageMark, validationMark);
+            std::string errorClass = facts.errorClass;
+            bool retryable = false;
+            if (!facts.episodeFound) {
+                errorClass = abExitErrorClass(outcome.exitCode, timeout, outcome.error);
+                retryable = taskforge::rt::isInfrastructureErrorClass(errorClass);
+            } else if (facts.outcome == "failure") {
+                if (errorClass.empty()) errorClass = "agent_exception";
+                retryable = taskforge::rt::isInfrastructureErrorClass(errorClass);
+            } else if (!facts.validationFound) {
+                errorClass.clear();
+            }
+            if (!retryable || attempt >= 2) {
+                if (retryable) ++infraRetries;
+                break;
+            }
+            ++infraRetries;
+            if (!jsonOutput) {
+                std::cout << "  infra " << taskId << " " << arm << " rep " << repetition
+                          << " (tentativa " << (attempt + 1) << "), repetindo\n";
+            }
+        }
+
+        bool ok = false;
+        bool invalid = false;
+        std::string errorClass = facts.errorClass;
+        if (facts.episodeFound) {
+            if (facts.validationFound) {
+                ok = facts.validationOk;
+            } else if (facts.outcome == "success") {
+                invalid = true;
+            } else {
+                if (errorClass.empty()) errorClass = "agent_exception";
+            }
+        } else {
+            errorClass = abExitErrorClass(outcome.exitCode, timeout, outcome.error);
+        }
+
+        observations.push_back(taskforge::Json{
+            {"taskId", taskId},
+            {"category", category},
+            {"arm", arm},
+            {"repetition", repetition},
+            {"ok", ok},
+            {"invalid", invalid},
+            {"errorClass", errorClass},
+            {"tokens", facts.tokens},
+            {"turns", facts.calls},
+            {"cost", 0.0},
+            {"latencyMs", facts.latencyMs},
+            {"retries", facts.httpRetries},
+            {"infraRetries", infraRetries},
+            {"cachedTokens", facts.cachedTokens},
+            {"runId", facts.runId},
+            {"episodeId", facts.episodeId}});
+
+        if (!jsonOutput && ((index + 1) % 10 == 0 || index + 1 == total)) {
+            std::cout << "  " << (index + 1) << "/" << total << " execucoes\n";
+        }
+    }
+
+    taskforge::Json observationsDoc{{"observations", observations},
+                                    {"frozenFingerprint", fingerprint},
+                                    {"frozenPath", frozen.string()},
+                                    {"measurementDb", measurement.string()}};
+    std::ofstream obsOut(observationsPath, std::ios::binary | std::ios::trunc);
+    if (obsOut) obsOut << observationsDoc.dump(2) << "\n";
+
+    taskforge::Json report = taskforge::memory::MemoryAbProtocol::analyze(
+        suite, observationsDoc, repetitions, error);
+    std::string afterHash = project::RunnerSecurity::sha256File(frozen, error);
+    report["frozenFingerprint"] = fingerprint;
+    report["frozenFingerprintAfter"] = afterHash;
+    report["knowledgeUnchanged"] = !afterHash.empty() && afterHash == fingerprint;
+    report["frozenPath"] = frozen.string();
+    report["measurementDb"] = measurement.string();
+    report["observationsPath"] = observationsPath.string();
+    report["reportPath"] = reportPath.string();
+    report["observations"] = static_cast<long long>(observations.size());
+
+    std::ofstream reportOut(reportPath, std::ios::binary | std::ios::trunc);
+    if (reportOut) reportOut << report.dump(2) << "\n";
+
+    if (jsonOutput) {
+        std::cout << report.dump(2) << "\n";
+    } else if (report.value("ok", false)) {
+        std::cout << "Aprovacao: ON " << report["primary"]["on"].get<double>()
+                  << " / OFF " << report["primary"]["off"].get<double>()
+                  << " | delta " << report["primary"]["delta"].get<double>()
+                  << " IC95 [" << report["primary"]["ciLow"].get<double>()
+                  << ", " << report["primary"]["ciHigh"].get<double>() << "]\n";
+        std::cout << "Infra excluida: " << report["infraEvents"].get<long long>()
+                  << " (retentativas " << report["infraRetries"].get<long long>() << ")"
+                  << " | tarefas no par: " << report["primary"]["n"].get<long long>()
+                  << " | invalidas: " << report["invalidTasks"].size() << "\n";
+        std::cout << "Conhecimento congelado: " << fingerprint.substr(0, 16)
+                  << " | inalterado: " << (report.value("knowledgeUnchanged", false) ? "sim" : "nao")
+                  << "\n";
+        std::cout << "Observacoes: " << observationsPath.string() << "\n";
+        std::cout << "Relatorio: " << reportPath.string() << "\n";
+    } else {
+        std::cerr << "Falha no A/B: " << report.value("error", error) << "\n";
+    }
+    return report.value("ok", false) && report.value("knowledgeUnchanged", false)
+        ? 0 : kExitRuntime;
 }
 
 int runBatch(const Options& opt) {

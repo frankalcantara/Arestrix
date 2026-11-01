@@ -25,6 +25,11 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   verdicts in real runs.
 - `memory report` now reads the telemetry database and shows validated/unvalidated runs and
   the approval rate per `task_type`.
+- **A/B executor (multigraph plan, E9):** `memory ab run` freezes project knowledge into a
+  read-only copy, runs the paired ON/OFF arms for every suite task and repetition, tags telemetry
+  rows with the arm and repetition, retries infrastructure failures up to twice, and emits a paired
+  report with a 95% CI and the frozen knowledge fingerprint. The Studio action that only compared
+  brief size is now labelled "Preview brief size".
 - **Prompt cache requested (multigraph plan, E8):** with `memory.promptCache` enabled, Anthropic
   requests carry skill + brief as an ephemeral `cache_control` system block while the execution
   context stays uncached; OpenAI-compatible requests keep the stable skill/brief/context order for

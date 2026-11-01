@@ -1412,7 +1412,7 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     std::string src = TaskflowGenerator::generateSource(g);
 
     CHECK(src.find("#include \"memory/MemoryService.hpp\"") != std::string::npos);
-    CHECK(src.find("memory.configure(projectId, arx_mem_persistent, arx_mem_persistent ? arx_mem_db : std::string())") != std::string::npos);
+    CHECK(src.find("memory.configure(projectId, arx_mem_persistent, arx_mem_persistent ? arx_mem_db : std::string(), arx_mem_readonly)") != std::string::npos);
     CHECK(src.find("memory.configureEmbeddings(projectId, arx_embedding_config)") != std::string::npos);
     CHECK(src.find("memory.configureMaintenance(projectId, taskforge::memory::maintenanceConfigFromJson("
                    "taskforge::Json::parse(") != std::string::npos);
@@ -1477,7 +1477,7 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(offSrc.find("\"memory_search\"") == std::string::npos);
     CHECK(offSrc.find("memory.buildBrief(") == std::string::npos);
     CHECK(offSrc.find("ARESTRIX_MEMORY_METRICS") == std::string::npos);
-    CHECK(offSrc.find("const bool arx_mem_active = false;") != std::string::npos);
+    CHECK(offSrc.find("const bool arx_mem_active = false && !arx_mem_disabled;") != std::string::npos);
 
     // Blackboard fora do modo simples: nao ha escrita automatica de last_stage.
     json noLastSchema = schema;
@@ -1538,7 +1538,7 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     taskforge::core::Graph metricsGraph;
     metricsGraph.fromJson(metricsSchema);
     std::string metricsSrc = TaskflowGenerator::generateSource(metricsGraph);
-    CHECK(metricsSrc.find("const bool arx_mem_active = false;") != std::string::npos);
+    CHECK(metricsSrc.find("const bool arx_mem_active = false && !arx_mem_disabled;") != std::string::npos);
     CHECK(metricsSrc.find("ARESTRIX_MEMORY_METRICS") == std::string::npos);
 }
 
@@ -4179,6 +4179,86 @@ TEST(memory_ab_protocol_validates_orders_and_analyzes_pairs) {
     CHECK(report["primary"]["ciHigh"].get<double>() >= report["primary"]["delta"].get<double>());
     CHECK(std::abs(report["secondary"]["tokens"]["delta"].get<double>() - 20.0) < 1e-9);
     CHECK(report.value("infraEvents", 0LL) == 1);
+}
+
+TEST(memory_ab_protocol_marks_invalid_tasks_and_counts_infra_retries) {
+    using taskforge::memory::MemoryAbProtocol;
+
+    taskforge::Json tasks = taskforge::Json::array();
+    for (int i = 1; i <= 20; ++i) {
+        char hash[65];
+        std::snprintf(hash, sizeof(hash), "%064x", i);
+        const char* category = i <= 12 ? "relevant" : (i <= 16 ? "control" : "known_failure");
+        tasks.push_back(taskforge::Json{{"id", "task-" + std::to_string(i)},
+                                        {"inputHash", std::string(hash)},
+                                        {"category", category}});
+    }
+    taskforge::Json suite{{"version", "memory-ab-v1"}, {"tasks", tasks}};
+
+    taskforge::Json observations = taskforge::Json::array();
+    for (int i = 1; i <= 20; ++i) {
+        const std::string taskId = "task-" + std::to_string(i);
+        for (const char* arm : {"on", "off"}) {
+            taskforge::Json observation{{"taskId", taskId}, {"arm", arm},
+                                        {"repetition", 1}, {"ok", i != 1},
+                                        {"tokens", 10.0}, {"turns", 2.0},
+                                        {"cost", 0.0}, {"latencyMs", 10.0}};
+            if (i == 1) observation["invalid"] = true;
+            observations.push_back(observation);
+        }
+    }
+    observations.push_back(taskforge::Json{{"taskId", "task-2"}, {"arm", "on"},
+                                           {"repetition", 1}, {"errorClass", "provider_429"},
+                                           {"infraRetries", 1}});
+
+    std::string error;
+    const auto report = MemoryAbProtocol::analyze(
+        suite, taskforge::Json{{"observations", observations}}, 1, error);
+    CHECK(report.value("ok", false));
+    CHECK(report["primary"]["n"].get<long long>() == 19);
+    CHECK(report["invalidTasks"].size() == 1);
+    CHECK(report["invalidTasks"][0].get<std::string>() == "task-1");
+    CHECK(report.value("infraEvents", 0LL) == 1);
+    CHECK(report.value("infraRetries", 0LL) == 1);
+    bool excludedInvalid = false;
+    for (const auto& item : report["excluded"]) {
+        if (item.value("taskId", std::string()) == "task-1" &&
+            item.value("reason", std::string()) == "sem validador") {
+            excludedInvalid = true;
+        }
+    }
+    CHECK(excludedInvalid);
+}
+
+TEST(memory_store_read_only_copy_rejects_writes) {
+    using taskforge::memory::MemoryStore;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-readonly-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const fs::path db = root / "memory.db";
+    const std::string scope = "project:readonly-test";
+    std::string error;
+
+    {
+        MemoryStore source(db.string());
+        CHECK(source.open(error));
+        CHECK(source.ensureScope(scope, "project", "", "readonly-test"));
+        CHECK(!source.recordLesson(scope, "ab", "contraste",
+                                   "Mantenha contraste minimo de 4.5:1", "seed").empty());
+    }
+    CHECK(MemoryStore::sealForReadOnly(db.string(), error));
+
+    MemoryStore ro(db.string(), MemoryStore::kMaxActiveLessons, true);
+    CHECK(ro.open(error));
+    CHECK(ro.isReadOnly());
+    CHECK(ro.getLessons(scope, "ab").size() == 1);
+    CHECK(ro.recordLesson(scope, "ab", "sombra", "Nao use sombra no texto", "seed").empty());
+    ro.close();
+
+    fs::remove_all(root, ec);
 }
 
 TEST(memory_predicate_cardinality_controls_fact_overwrite) {

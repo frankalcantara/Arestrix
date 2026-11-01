@@ -248,7 +248,7 @@ MemoryStore* MemoryService::ensureTelemetry(const std::string& projectId) {
 }
 
 bool MemoryService::configure(const std::string& projectId, bool persistent,
-                              const std::string& dbPath) {
+                              const std::string& dbPath, bool readOnly) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     const std::string id = projectId.empty() ? "default" : projectId;
     // A0: modo nao persistente e SEMPRE :memory:. Um caminho de arquivo
@@ -261,23 +261,27 @@ bool MemoryService::configure(const std::string& projectId, bool persistent,
     auto existing = stores_.find(id);
     if (existing != stores_.end() && persistent_.find(id) != persistent_.end() &&
         persistent_.at(id) == persistent && paths_.find(id) != paths_.end() &&
-        paths_.at(id) == path) {
+        paths_.at(id) == path && readOnly_.find(id) != readOnly_.end() &&
+        readOnly_.at(id) == readOnly) {
         return existing->second && existing->second->isOpen();
     }
 
-    auto store = std::make_unique<MemoryStore>(path);
+    auto store = std::make_unique<MemoryStore>(path, MemoryStore::kMaxActiveLessons, readOnly);
     std::string error;
     if (!store->open(error)) {
         return false;
     }
-    if (!store->ensureScope(scopeId(id), "project", "", id)) {
+    // O banco congelado do medico A/B ja nasce com escopo; abrir somente
+    // leitura nao pode tentar criar nem migrar nada.
+    if (!readOnly && !store->ensureScope(scopeId(id), "project", "", id)) {
         return false;
     }
     stores_[id] = std::move(store);
     persistent_[id] = persistent;
     paths_[id] = path;
+    readOnly_[id] = readOnly;
 
-    if (persistent) {
+    if (persistent && !readOnly) {
         configureWorkspaceForProjectLocked(id, path);
     }
     return true;
@@ -721,6 +725,9 @@ bool MemoryService::freezeKnowledge(const std::string& projectId, const std::str
         return false;
     }
     if (!s->backupTo(targetPath, error)) return false;
+    // O medico abre a copia com SQLITE_OPEN_READONLY. Consolidar o WAL agora
+    // garante que a leitura nao crie -wal/-shm e que o hash permaneca estavel.
+    if (!MemoryStore::sealForReadOnly(targetPath, error)) return false;
     fingerprint = project::RunnerSecurity::sha256File(targetPath, error);
     if (fingerprint.empty()) return false;
     return true;
@@ -1851,7 +1858,7 @@ std::string MemoryService::recordValidation(const std::string& projectId,
     const std::string id = t->recordValidation(copy);
     // E1: com o interruptor ligado, o veredito e o unico caminho de reforco.
     if (reinforce && !id.empty() && !copy.runId.empty() && !copy.nodeId.empty()) {
-        if (auto* knowledge = existingStore(projectId)) {
+        if (auto* knowledge = existingStore(projectId); knowledge && !knowledge->isReadOnly()) {
             std::vector<std::string> ids;
             for (const auto& ref : t->usedHitRefs(scope, copy.runId, copy.nodeId)) {
                 ids.push_back(ref.id);
@@ -1864,7 +1871,7 @@ std::string MemoryService::recordValidation(const std::string& projectId,
     // B5/B6: validacao independente promove; falhas consecutivas/excesso de
     // falhas despromovem. O gate usa so o ok.
     if (!id.empty() && !copy.episodeId.empty()) {
-        if (auto* knowledge = existingStore(projectId)) {
+        if (auto* knowledge = existingStore(projectId); knowledge && !knowledge->isReadOnly()) {
             const taskforge::Json episode = t->getEpisode(scope, copy.episodeId);
             const std::string taskType = episode.value("taskType", std::string());
             if (copy.ok) {
@@ -1976,6 +1983,7 @@ void MemoryService::closeProject(const std::string& projectId) {
     stores_.erase(projectKey(projectId));
     persistent_.erase(projectKey(projectId));
     paths_.erase(projectKey(projectId));
+    readOnly_.erase(projectKey(projectId));
     telemetry_.erase(projectKey(projectId));
     telemetryPaths_.erase(projectKey(projectId));
     embeddings_.erase(projectKey(projectId));

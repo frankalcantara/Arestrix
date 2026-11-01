@@ -208,14 +208,15 @@ discards vectors from old fingerprints.
 
 ## 8. A/B measurement
 
-The panel offers **Compare with and without memory (context)**. The action:
+The panel offers **Preview brief size**. The action:
 
 1. creates a consistent copy of knowledge with `VACUUM INTO`;
 2. computes the SHA-256 fingerprint of the copy;
 3. measures, per active vertex, brief tokens and characters, lessons, facts and playbooks;
 4. compares with the no-memory baseline (zero).
 
-This is **A/B v1**: it measures context cost and content, not the validator approval rate.
+This is **A/B v1**: it measures context cost and content, not the validator approval rate. The full
+executor is the `memory ab run` command described below.
 
 **A/B v2** is the full statistical protocol. The versioned suite
 [`tests/fixtures/memory-ab-v1.json`](../../tests/fixtures/memory-ab-v1.json) has 20 tasks — 12 with
@@ -226,14 +227,21 @@ validates the suite, shuffles an interleaved order with a seed and analyzes obse
 arestrix-cli memory ab validate --suite tests/fixtures/memory-ab-v1.json
 arestrix-cli memory ab order --suite tests/fixtures/memory-ab-v1.json \
   --repetitions 3 --seed 42 --json
-arestrix-cli memory ab report --suite tests/fixtures/memory-ab-v1.json \
-  --observations ab-observations.json --repetitions 3 --json
+arestrix-cli memory ab run --suite tests/fixtures/memory-ab-v1.json \
+  --pipeline pipeline.json --node gerador --repetitions 3 --seed 42 --json
 ```
 
+`memory ab run` actually executes the pilot. It freezes knowledge with `VACUUM INTO` and opens that
+copy read-only (`SQLITE_OPEN_READONLY` and `PRAGMA query_only`) in the ON arm; the OFF arm sets
+`ARESTRIX_MEMORY_DISABLE=1`. Both halves write telemetry to the same measurement database, with
+`ab_arm` and `ab_repetition` on every row. Infrastructure failures are retried up to twice and
+counted outside the verdict; tasks without a validator appear in `invalidTasks` and do not enter the
+pair.
+
 The primary metric is **validator approval**, compared in pairs. The report includes paired deltas,
-95% CI (Student t), tokens, turns, cost and latency; infrastructure failures are counted separately
-and excluded from the verdict. Running the tasks and collecting the validator verdict belongs to the
-harness that produces `ab-observations.json`.
+95% CI (Student t), tokens, turns, cost and latency, plus the knowledge fingerprint before and after
+the measurement. `memory ab report` remains available for analysing an observation file collected
+elsewhere.
 
 ### Cost per run
 
@@ -321,5 +329,6 @@ The simplification plan (Phases A-C) is complete. Phase D — the advanced multi
 domain knowledge, paths over claims and model routing — is a separate program outside this plan and
 does not block the release. Embedding retrieval is already implemented.
 
-The A/B execution harness, the institutional level in the assistant and validation with real
-providers are operational pending items. See [`pending.md`](pending.md).
+The institutional level in the assistant and validation with real providers are operational pending
+items. The A/B harness is implemented in `memory ab run` and runs with the simulated provider in the
+e2e. See [`pending.md`](pending.md).
