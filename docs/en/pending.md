@@ -2,9 +2,8 @@
 
 > **Version:** 2.5.0 · **Updated:** 2026-10-31
 >
-> Single project-wide pending list. The memory implementation plan (Phases A-C) is complete. Phase D
-> is a separate program, outside this plan, and does not block the release. The remaining items are
-> operational.
+> Single project-wide pending list. The memory implementation plan (Phases A-C) and the advanced
+> multigraph (Phase D / E11-E20) are complete. The remaining items are operational.
 
 ## 1. Summary
 
@@ -12,8 +11,8 @@
 | :--- | :--- |
 | Phases A-C of the memory plan | **Complete** |
 | Modes, proposals, telemetry, validation, brief, state, embeddings and A/B | **Complete** |
-| Phase D - advanced multigraph | Separate program, outside this plan |
-| A/B v2 execution harness | Operational pending |
+| Phase D - advanced multigraph | **Implemented; opt-in switches** |
+| A/B v2 execution harness | **Implemented** |
 | `institution` level in the assistant `memory_inspect` | Operational pending |
 | Validation with real embedding providers | Operational pending |
 | Clean-machine release validation / signing | Release pending |
@@ -34,25 +33,25 @@
 - Prompt/cache tokens in `run_usage`.
 - Single-valued and multi-valued fact predicates.
 - A/B v2 with the versioned 12/4/4 suite, shuffled order, repetitions, paired deltas and 95% CI.
-- Studio assistant tools: `memory_inspect`, `memory_review_proposal`, `memory_declare_state_key`
-  and `memory_unpromote_playbook`.
-- CLI for memory, state, embeddings, proposals, workspace, unpromote and A/B.
+- Studio assistant tools: `memory_inspect`, `memory_search`, `memory_review_proposal`,
+  `memory_declare_state_key`, `memory_unpromote_playbook` and `memory_retire_path`.
+- CLI for memory, state, embeddings, proposals, workspace, paths, bridges, unpromote and A/B.
 
-## 3. Phase D - separate program, outside this plan
+## 3. Phase D - advanced multigraph implemented
 
-Embedding retrieval already exists: EmbeddingGemma 2 and Qwen3-Embedding-4B profiles, fingerprint,
-RRF fusion and lexical fallback. Phase D is the **advanced multigraph**, a separate program that is
-not part of the simplification plan closed by this release:
+Phase D was implemented in E11-E20 with opt-in switches and reproducible measurement:
 
-1. **Facets** — semantic classification of nodes and edges for aspect-based queries.
-2. **Domain knowledge** — reusable domain layers across projects/workspace.
-3. **Paths over claims** — explicit navigation across claims, evidence and contradictions.
-4. **Model routing** — model choice by query/task type based on the graph.
-5. **Semantic evaluation** — query set, relevance metrics and comparison with the current
-   lexical/hybrid baseline.
+1. **Sources and claims** — versioned local ingestion, validated extraction and claim proposals.
+2. **Lenses and facets** — deterministic per-entity/lens facets and search filtering.
+3. **Paths and schemas** — idempotent consolidation of approved traces, Beta utility, invalidation
+   and reconstructible shortcuts.
+4. **Serving and traversal** — eligible paths before graph retrieval, Thompson exploration, bounded
+   beam traversal and a coverage vector.
+5. **Routing and bridges** — local/frontier decisions by `task_type` and interdomain hypotheses.
 
-Dependencies already in place for Phase D: fingerprint, validation, continuation state and
-`task_type`.
+The conservative defaults remain: `memory.pathServing`, `memory.traversal`, `memory.bridges` and
+`routing.mode` stay off until real-data measurement. The final report is
+`tests/fixtures/memory-eval-v1-report.json`.
 
 ### Out of scope (not pending)
 
@@ -66,9 +65,10 @@ Dependencies already in place for Phase D: fingerprint, validation, continuation
 
 ### 4.1 A/B v2 execution harness
 
-The A/B v2 core is ready: suite validation, order, paired analysis and CI. The missing harness runs
-the 20 tasks, applies the validator and writes `ab-observations.json` with `ab_run_id`, `arm`, `ok`,
-tokens, turns, cost and latency. Without it, the report is analytical only.
+The harness is implemented in `memory ab run` and covered by `scripts/e2e_memory_ab.py`: 20 tasks x
+3 repetitions x 2 arms, frozen knowledge, validator and `ab-observations.json` with `ab_run_id`,
+`arm`, `ok`, tokens, turns, cost and latency. The remaining work is to run it with real providers and
+record the result in the report.
 
 ### 4.2 Institutional level in the assistant
 
@@ -88,13 +88,15 @@ behavior when no provider is available.
 - Linux package and Linux/macOS CI matrix.
 - Signed remote catalog.
 
-## 6. Definition of done for Phase D
+## 6. Phase D closed
 
-Phase D is complete when there is:
+Phase D is complete with:
 
-1. a specification for facets, domain, claims and routing;
-2. a schema and migration compatible with the current database;
-3. API/UI and assistant tools to inspect and operate those levels;
-4. a versioned evaluation set and reproducible results;
-5. green unit, integration and E2E tests;
-6. updated PT/EN documentation and this item removed from the pending list.
+1. a specification for sources, claims, lenses/facets, paths, traversal, routing and bridges;
+2. an idempotent schema compatible with the current database;
+3. API, CLI, panel and assistant tools (`memory_inspect`, `memory_search`, `memory_retire_path`);
+4. a versioned, reproducible evaluation set in `tests/fixtures/memory-eval-v1-report.json`;
+5. green unit, integration, E2E and baseline tests;
+6. updated PT/EN documentation.
+
+The new switches stay conservative and should only be enabled after real-data measurement.

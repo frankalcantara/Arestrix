@@ -2,9 +2,9 @@
 
 > **Versão:** 2.5.0 · **Atualizado em:** 2026-10-31
 >
-> Documento único de pendências do projeto. O plano de implantação da memória (Fases A–C) está
-> concluído. A Fase D é um programa separado, fora deste plano, e não bloqueia o release. As
-> pendências restantes são operacionais.
+> Documento único de pendências do projeto. O plano de memória (Fases A–C) e o
+> multigrafo avançado (Fase D / E11–E20) estão concluídos. As pendências
+> restantes são operacionais.
 
 ## 1. Resumo
 
@@ -12,8 +12,8 @@
 | :--- | :--- |
 | Fases A–C do plano de memória | **Concluídas** |
 | Modos, propostas, telemetria, validação, brief, estado, embeddings e A/B | **Concluídos** |
-| Fase D — multigrafo avançado | Programa separado, fora deste plano |
-| Harness de execução do A/B v2 | Pendente operacional |
+| Fase D — multigrafo avançado | **Implementada; interruptores opt-in** |
+| Harness de execução do A/B v2 | **Implementado** |
 | Nível `institution` no `memory_inspect` do assistente | Pendente operacional |
 | Validação com provedores reais de embeddings | Pendente operacional |
 | Validação de release em máquina limpa / assinatura | Pendente de release |
@@ -36,24 +36,30 @@
 - Tokens de prompt/cache em `run_usage`.
 - Predicados de fato single-valued e multi-valued.
 - A/B v2 com conjunto versionado 12/4/4, ordem sorteada, repetições, deltas pareados e IC 95%.
-- Ferramentas do assistente do Studio: `memory_inspect`, `memory_review_proposal`,
-  `memory_declare_state_key` e `memory_unpromote_playbook`.
-- CLI para memória, estado, embeddings, propostas, workspace, unpromote e A/B.
+- Ferramentas do assistente do Studio: `memory_inspect`, `memory_search`,
+  `memory_review_proposal`, `memory_declare_state_key`, `memory_unpromote_playbook` e
+  `memory_retire_path`.
+- CLI para memória, estado, embeddings, propostas, workspace, caminhos, pontes, unpromote e A/B.
 
-## 3. Fase D — programa separado, fora deste plano
+## 3. Fase D — multigrafo avançado implementado
 
-A recuperação com embeddings já existe: perfis EmbeddingGemma 2 e Qwen3-Embedding-4B, fingerprint,
-fusão RRF e fallback lexical. A Fase D é o **multigrafo avançado**, um programa separado que não faz
-parte do plano de simplificação encerrado neste release:
+A Fase D foi implementada nas etapas E11–E20, com interruptores opt-in e
+medição reproduzível. Já existem no núcleo e no Studio:
 
-1. **Facetas** — classificação semântica dos nós e arestas para consultas por aspecto.
-2. **Conhecimento de domínio** — camadas de domínio reutilizáveis entre projetos/workspace.
-3. **Caminhos sobre afirmações** — navegação explícita por claims, evidências e contradições.
-4. **Roteamento de modelos** — escolha de modelo por tipo de consulta/tarefa com base no grafo.
-5. **Avaliação semântica** — conjunto de consultas, métricas de relevância e comparação com o
-   baseline lexical/híbrido atual.
+1. **Fontes e afirmações** — ingestão local versionada, extração validada e
+   propostas de claim.
+2. **Lentes e facetas** — facetas determinísticas por entidade/lente e filtro de
+   busca.
+3. **Caminhos e esquemas** — consolidação idempotente de traços aprovados,
+   utilidade Beta, invalidação e atalhos reconstruíveis.
+4. **Serviço e travessia** — caminhos elegíveis antes do grafo, exploração
+   Thompson, travessia em feixe e vetor de cobertura.
+5. **Roteamento e pontes** — decisão local/fronteira por `task_type` e
+   hipóteses interdomínio.
 
-Dependências já prontas para a Fase D: fingerprint, validação, estado de continuação e `task_type`.
+Os padrões continuam conservadores: `memory.pathServing`, `memory.traversal`,
+`memory.bridges` e `routing.mode` ficam desligados até uma medição com dados
+reais. O relatório final está em `tests/fixtures/memory-eval-v1-report.json`.
 
 ### Fora de escopo (não é pendência)
 
@@ -67,9 +73,11 @@ Dependências já prontas para a Fase D: fingerprint, validação, estado de con
 
 ### 4.1 Harness de execução do A/B v2
 
-O núcleo do A/B v2 está pronto: validação do conjunto, ordem, análise pareada e IC. Falta o harness
-que executa as 20 tarefas, aplica o validador e grava `ab-observations.json` com `ab_run_id`, `arm`,
-`ok`, tokens, turnos, custo e latência. Sem ele, o relatório é apenas analítico.
+O harness está implementado em `memory ab run` e coberto por
+`scripts/e2e_memory_ab.py`: 20 tarefas × 3 repetições × 2 braços, banco
+congelado, validador e `ab-observations.json` com `ab_run_id`, `arm`, `ok`,
+tokens, turnos, custo e latência. O que resta é executá-lo com provedores reais
+e registrar o resultado no relatório.
 
 ### 4.2 Nível institucional no assistente
 
@@ -89,13 +97,19 @@ comportamento seguro quando o provedor não está disponível.
 - Pacote Linux e matriz de CI Linux/macOS.
 - Catálogo remoto assinado.
 
-## 6. Critério para iniciar e encerrar a Fase D
+## 6. Fase D encerrada
 
-A Fase D pode ser considerada concluída quando houver:
+A Fase D foi concluída com:
 
-1. especificação de facetas, domínio, claims e roteamento;
-2. schema e migração compatíveis com o banco atual;
-3. API/UI e ferramentas do assistente para consultar e operar esses níveis;
-4. conjunto de avaliação versionado e resultados reprodutíveis;
-5. testes unitários, de integração e E2E verdes;
-6. documentação PT/EN atualizada e pendência removida deste documento.
+1. especificação de fontes, claims, lentes/facetas, caminhos, travessia,
+   roteamento e pontes;
+2. schema idempotente compatível com o banco atual;
+3. API, CLI, painel e ferramentas do assistente (`memory_inspect`,
+   `memory_search`, `memory_retire_path`);
+4. conjunto de avaliação versionado e reproduzível em
+   `tests/fixtures/memory-eval-v1-report.json`;
+5. testes unitários, de integração, E2E e linha de base verdes;
+6. documentação PT/EN atualizada.
+
+Os padrões permanecem conservadores: os interruptores novos só devem ser
+ligados após medição com dados reais.

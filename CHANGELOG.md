@@ -10,6 +10,12 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ### Added
 
+- **Studio assistant memory access:** `memory_inspect` now exposes sources,
+  facets, paths, path serving, traversal, evidence, maintenance, health and
+  routing settings; new read-only `memory_search` and confirmed
+  `memory_retire_path` tools let the default assistant consult and curate the
+  new memory without bypassing confirmations. Bridge hypotheses remain
+  informational and are not promoted into automatic edges.
 - **Final memory evaluation (multigraph plan, E20):** `scripts/memory_evaluation.py`
   runs the reproducible baseline, hybrid-fallback, facets/traversal,
   paths/serving and routing-shadow variants over the same frozen fixture and

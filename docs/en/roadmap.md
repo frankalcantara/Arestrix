@@ -70,12 +70,15 @@ Implemented in the core:
   context A/B in the Studio. `memory_report.py` remains optional for development.
 - Workspace and institution scopes. `arestrix-memory` exposes authenticated REST, MCP HTTP `/mcp`,
   MCP stdio and memory-only tokens, fail-closed without tokens.
-- Hybrid ranking with embeddings (EmbeddingGemma 2) and idempotent L2/M3 consolidation.
+- Hybrid ranking with embeddings (EmbeddingGemma 2 and Qwen3) and idempotent L2/M3 consolidation.
 - Opt-in background consolidation per project (`off`, `idle` or `after_episodes`), with observable
   state in the panel and deterministic shutdown.
+- Sources/passages, claims, lenses/facets, paths, path serving, beam traversal, local/frontier
+  routing and interdomain bridges, all behind opt-in switches.
 - Authenticated `/metrics` in `arestrix-memory`, with REST/MCP counters, 401 failures, response
   classes, uptime and version.
-- Conflict list and consolidation state in the project memory panel.
+- Conflict list, paths, facets, sources and consolidation state in the project memory panel.
+- Reproducible final evaluation in `tests/fixtures/memory-eval-v1-report.json`.
 
 Still pending:
 
@@ -83,6 +86,7 @@ Still pending:
   exists).
 - LLM consolidation, `memory_handoff` and recursive learning.
 - Consolidation coordination across multiple service processes/instances.
+- Real-data/provider measurement before enabling the experimental switches.
 
 Limitations of the institution service and background worker:
 
