@@ -1,7 +1,12 @@
 import { Graph } from '../../core/Graph.ts';
 import { ModalWindowManager, IModalWindowController } from './ModalWindowManager.ts';
 import { t } from '../../i18n/index.ts';
-import { memoryModeOf, memoryThemeOf, memoryThemesOf } from '../../core/memory/MemoryConfig.ts';
+import {
+  activeSkillNameOf,
+  memoryModeOf,
+  memoryThemeOf,
+  memoryThemesOf
+} from '../../core/memory/MemoryConfig.ts';
 import { DEFAULT_NODE_MEMORY_CONFIG } from '../../core/types.ts';
 
 export class ProjectMemoryModal {
@@ -61,7 +66,12 @@ export class ProjectMemoryModal {
           id: node.id,
           label: node.label,
           mode: memoryModeOf(memory),
-          theme: memoryThemeOf(memory, node.label || node.id),
+          theme: memoryThemeOf({
+            memory,
+            skillName: activeSkillNameOf(node.agentSettings),
+            label: node.label,
+            id: node.id
+          }, node.label || node.id),
           taskType: memory.taskType || node.id,
           inherited
         };
@@ -1059,7 +1069,12 @@ export class ProjectMemoryModal {
       if (memoryModeOf(memory) === 'off') continue;
       tasks.push({
         id: node.id,
-        domains: memoryThemesOf(memory, node.label || node.id),
+        domains: memoryThemesOf({
+          memory,
+          skillName: activeSkillNameOf(node.agentSettings),
+          label: node.label,
+          id: node.id
+        }, node.label || node.id),
         taskType: memory.taskType || node.id,
         budget: memory.contextBudgetTokens ?? 800
       });

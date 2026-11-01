@@ -1535,6 +1535,56 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(metricsSrc.find("ARESTRIX_MEMORY_METRICS") == std::string::npos);
 }
 
+TEST(generator_resolves_default_memory_theme_from_skill_label_and_id) {
+    using taskforge::compiler::TaskflowGenerator;
+    using taskforge::core::Graph;
+
+    auto sourceFor = [](const json& agentSettings, const std::string& label,
+                        const std::string& id) {
+        json schema = {
+            {"version", "1.0.0"},
+            {"metadata", {{"graphName", "MemoryTheme"}, {"description", ""},
+                          {"targetStandard", "C++20"},
+                          {"compilerConfig", {{"compiler", "msvc"}, {"cppStandard", "C++20"},
+                                              {"buildSystem", "cmake"},
+                                              {"taskflowIncludePath", "third_party/taskflow"},
+                                              {"outputBinaryName", "m"}, {"enableOpenMP", false},
+                                              {"enableCuda", false}, {"extraFlags", json::array()}}},
+                          {"version", "1"}, {"projectId", "theme-test"},
+                          {"globalDefaults", {{"memory", {{"enabled", false}}}}}}},
+            {"nodes", json::array({json{
+                {"id", id}, {"label", label}, {"type", "agent"},
+                {"position", {{"x", 0}, {"y", 0}}},
+                {"inputs", json::array()}, {"outputs", json::array()},
+                {"parameters", json::object()}, {"customLambdaBody", ""},
+                {"agentSettings", agentSettings}}})},
+            {"edges", json::array()}};
+        Graph graph;
+        graph.fromJson(schema);
+        return TaskflowGenerator::generateSource(graph);
+    };
+
+    json base = {{"inheritMemory", false},
+                 {"memory", {{"enabled", true}, {"persistent", true}, {"mode", "consult"}}}};
+
+    json withSkill = base;
+    withSkill["skills"] = json::array({json{{"id", "revisor"}, {"name", "Revisor de SVG"}}});
+    withSkill["activeSkillId"] = "revisor";
+    std::string src = sourceFor(withSkill, "Auditor", "auditor");
+    CHECK(src.find("\"memoryDomains\":[\"revisor_de_svg\"]") != std::string::npos);
+
+    src = sourceFor(base, "Auditor de Conteúdo", "auditor");
+    CHECK(src.find("\"memoryDomains\":[\"auditor_de_conteudo\"]") != std::string::npos);
+
+    src = sourceFor(base, "!!!", "auditor");
+    CHECK(src.find("\"memoryDomains\":[\"auditor\"]") != std::string::npos);
+
+    json explicitTheme = withSkill;
+    explicitTheme["memory"]["theme"] = "svg_typography";
+    src = sourceFor(explicitTheme, "Auditor", "auditor");
+    CHECK(src.find("\"memoryDomains\":[\"svg_typography\"]") != std::string::npos);
+}
+
 TEST(generator_emits_context_compression_section) {
     using taskforge::compiler::TaskflowGenerator;
     auto port = [](const char* id, const char* name, const char* dir, const char* type) {
