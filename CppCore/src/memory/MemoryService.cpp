@@ -200,6 +200,19 @@ MemoryMaintenanceConfig maintenanceConfigFromJson(const taskforge::Json& value) 
         config.options.dormantAfterDays = std::max(0, std::min(3650,
             value.value("consolidationDormantDays", config.options.dormantAfterDays)));
     }
+    config.claimExtractor = MemoryClaimExtractor::configFromJson(value);
+    if (config.claimExtractor.enabled && !config.enabled) {
+        // A extracao e uma tarefa de manutencao; ligar o extrator sem modo de
+        // consolidacao ainda precisa de um gatilho ocioso.
+        config.enabled = true;
+        config.mode = "idle";
+    }
+    const taskforge::Json claimSwitch = value.contains("claimExtraction")
+        ? value["claimExtraction"] : taskforge::Json();
+    if (claimSwitch.is_object()) {
+        config.claimMaxPassages = static_cast<size_t>(std::max<long long>(
+            1, std::min<long long>(100, claimSwitch.value("maxPassages", 10))));
+    }
     return config;
 }
 
@@ -209,7 +222,12 @@ taskforge::Json maintenanceConfigToJson(const MemoryMaintenanceConfig& config) {
         {"mode", config.mode},
         {"idleSeconds", config.idleSeconds},
         {"episodeThreshold", config.episodeThreshold},
-        {"options", consolidationOptionsToJson(config.options)}};
+        {"options", consolidationOptionsToJson(config.options)},
+        {"claimExtraction", taskforge::Json{{"enabled", config.claimExtractor.enabled},
+                                            {"maxPassages", static_cast<long long>(config.claimMaxPassages)}}},
+        {"extractor", taskforge::Json{{"model", config.claimExtractor.model},
+                                      {"revision", config.claimExtractor.revision},
+                                      {"baseUrl", config.claimExtractor.baseUrl}}}};
 }
 
 MemoryService::~MemoryService() {
@@ -1384,6 +1402,108 @@ taskforge::Json MemoryService::getEpisode(const std::string& projectId, const st
     return t ? t->getEpisode(scopeId(projectId), episodeId) : taskforge::Json::object();
 }
 
+taskforge::Json MemoryService::extractClaims(const std::string& projectId,
+                                             const ClaimExtractorConfig& config,
+                                             size_t maxPassages) {
+    taskforge::Json out{{"ok", true}, {"candidates", 0LL}, {"extracted", 0LL},
+                        {"proposed", 0LL}, {"abstained", 0LL}, {"failed", 0LL},
+                        {"extractorFingerprint", config.fingerprint()},
+                        {"diagnostics", taskforge::Json::array()}};
+    if (!config.enabled) {
+        out["ok"] = false;
+        out["skipped"] = "claim_extraction_off";
+        return out;
+    }
+    auto* s = ensureStore(projectId);
+    auto* t = ensureTelemetry(projectId);
+    if (!s || !t) {
+        out["ok"] = false;
+        out["error"] = "memoria indisponivel";
+        return out;
+    }
+    const std::string scope = scopeId(projectId);
+    const auto used = t->usedPassageIds(scope, std::max<size_t>(1, maxPassages) * 4);
+    const auto passages = s->passagesForIds(scope, used, std::max<size_t>(1, maxPassages) * 4);
+    out["candidates"] = static_cast<long long>(passages.size());
+    size_t extracted = 0;
+    for (const auto& passage : passages) {
+        if (extracted >= maxPassages) break;
+        if (s->claimExtractionSeen(scope, passage.passageHash, config.fingerprint())) continue;
+        ++extracted;
+        std::string error;
+        taskforge::Json diagnostics = taskforge::Json::object();
+        const auto claims = MemoryClaimExtractor::extract(
+            passage.text, config, error, &diagnostics);
+        out["diagnostics"].push_back(taskforge::Json{
+            {"passageId", passage.passageId}, {"passageHash", passage.passageHash},
+            {"accepted", diagnostics.value("accepted", 0LL)},
+            {"rejected", diagnostics.value("rejected", 0LL)},
+            {"reasons", diagnostics.contains("reasons") ? diagnostics["reasons"]
+                                                         : taskforge::Json::array()},
+            {"error", error}});
+        if (!error.empty()) {
+            out["failed"] = out.value("failed", 0LL) + 1;
+            s->markClaimExtraction(scope, passage.passageId, passage.passageHash,
+                                   config.fingerprint(), "failed", error);
+            continue;
+        }
+        size_t proposed = 0;
+        size_t abstained = 0;
+        for (const auto& claim : claims) {
+            bool ambiguous = false;
+            const std::string subjectId = s->findEntity(scope, claim.subject, &ambiguous);
+            if (subjectId.empty() || ambiguous) {
+                ++abstained;
+                continue;
+            }
+            std::string objectId;
+            if (!claim.object.empty()) {
+                objectId = s->findEntity(scope, claim.object, &ambiguous);
+                if (objectId.empty() || ambiguous) {
+                    ++abstained;
+                    continue;
+                }
+            }
+            taskforge::Json payload{
+                {"subject", claim.subject}, {"subjectId", subjectId},
+                {"subjectType", claim.subjectType}, {"predicate", claim.predicate},
+                {"object", claim.object}, {"objectId", objectId}, {"value", claim.value},
+                {"unit", claim.unit}, {"polarity", claim.polarity},
+                {"qualifiers", taskforge::jsonutil::tryParse(claim.qualifiersJson)
+                    .value_or(taskforge::Json::object())},
+                {"validFrom", claim.validFrom}, {"validTo", claim.validTo},
+                {"lens", claim.lens}, {"quote", claim.quote},
+                {"knownPredicate", claim.knownPredicate},
+                {"passageId", passage.passageId}, {"passageHash", passage.passageHash},
+                {"sourceUri", passage.uri}, {"start", passage.start}, {"end", passage.end},
+                {"extractorFingerprint", config.fingerprint()},
+                {"extractorModel", config.model}, {"extractorRevision", config.revision},
+                {"promptVersion", config.promptVersion}, {"schemaVersion", config.schemaVersion}};
+            taskforge::Json evidence = taskforge::Json::array({
+                taskforge::Json{{"kind", "passage"},
+                                {"passageId", passage.passageId},
+                                {"passageHash", passage.passageHash},
+                                {"sourceUri", passage.uri},
+                                {"start", passage.start},
+                                {"end", passage.end},
+                                {"quote", claim.quote},
+                                {"extractorFingerprint", config.fingerprint()},
+                                {"model", config.model},
+                                {"revision", config.revision}}});
+            if (!s->recordProposal(scope, "claim", payload, "", evidence, 0.6).empty()) {
+                ++proposed;
+            }
+        }
+        s->markClaimExtraction(scope, passage.passageId, passage.passageHash,
+                               config.fingerprint(),
+                               claims.empty() ? "empty" : proposed > 0 ? "proposed" : "abstained");
+        out["proposed"] = out.value("proposed", 0LL) + static_cast<long long>(proposed);
+        out["abstained"] = out.value("abstained", 0LL) + static_cast<long long>(abstained);
+    }
+    out["extracted"] = static_cast<long long>(extracted);
+    return out;
+}
+
 size_t MemoryService::extractProposals(const std::string& projectId, const std::string& episodeId) {
     auto* s = ensureStore(projectId);
     auto* t = ensureTelemetry(projectId);
@@ -1917,6 +2037,10 @@ void MemoryService::maintenanceLoop(const std::string& projectId,
         taskforge::Json report = consolidate(projectId, runConfig.options, error);
         // E3: a manutencao tambem drena pendencias de embeddings, fora da busca.
         report["embeddingIndex"] = indexPending(projectId, 10000, 64);
+        if (runConfig.claimExtractor.enabled) {
+            report["claimExtraction"] = extractClaims(projectId, runConfig.claimExtractor,
+                                                      runConfig.claimMaxPassages);
+        }
 
         lock.lock();
         runtime->busy = false;
@@ -1978,6 +2102,10 @@ taskforge::Json MemoryService::runMaintenanceOnce(const std::string& projectId,
     }
     taskforge::Json report = consolidate(projectId, config.options, error);
     report["embeddingIndex"] = indexPending(projectId, 10000, 64);
+    if (config.claimExtractor.enabled) {
+        report["claimExtraction"] = extractClaims(projectId, config.claimExtractor,
+                                                  config.claimMaxPassages);
+    }
 
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     auto it = maintenance_.find(projectKey(projectId));

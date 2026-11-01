@@ -3,6 +3,7 @@ import { ModalWindowManager, IModalWindowController } from './ModalWindowManager
 import { t } from '../../i18n/index.ts';
 import {
   activeSkillNameOf,
+  claimExtractionEnabled,
   memoryModeOf,
   memoryThemeOf,
   memoryThemesOf
@@ -288,6 +289,7 @@ export class ProjectMemoryModal {
                 </div>
                 <div class="form-hint" style="margin-top: 6px;">${t('project_memory.retention_hint')}</div>
                 <div class="form-hint" id="memory-sources-status" style="margin-top: 6px;">${t('project_memory.sources_loading', 'Fontes locais: carregando...')}</div>
+                <div class="form-hint" style="margin-top: 4px;">${t('project_memory.claims_status', 'Extração de afirmações')}: ${claimExtractionEnabled(globalMemory as any) ? t('project_memory.on', 'ligada (manutenção)') : t('project_memory.off', 'desligada')}</div>
                 <pre id="memory-ab-report" style="display: none; margin-top: 10px; padding: 10px; border-radius: 6px; background: #f8fafc; color: #0f172a; font-size: 11px; white-space: pre-wrap; max-height: 240px; overflow: auto;"></pre>
               </div>
             </div>

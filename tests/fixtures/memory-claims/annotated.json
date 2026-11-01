@@ -1,0 +1,795 @@
+{
+  "version": "memory-claims-v1",
+  "cases": [
+    {
+      "passage": "Passage 1: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 1",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 2: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 2",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 3: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 3",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 4: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 4",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 5: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 5",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 6: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 6",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 7: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 7",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 8: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 8",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 9: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 9",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 10: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 10",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 11: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 11",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 12: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 12",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 13: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 13",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 14: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 14",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 15: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 15",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 16: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 16",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 17: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 17",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 18: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 18",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 19: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 19",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 20: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 20",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 21: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 21",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 22: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 22",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 23: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 23",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 24: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 24",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 25: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 25",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 26: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 26",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 27: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 27",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 28: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 28",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 29: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 29",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 30: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 30",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 31: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 31",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 32: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 32",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 33: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 33",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 34: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 34",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 35: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 35",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 36: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 36",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 37: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 37",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 38: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 38",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 39: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 39",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 40: the minimum contrast is 4.5:1.",
+      "expected": true,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 40",
+            "predicate": "HAS_VALUE",
+            "value": "4.5:1",
+            "unit": "ratio",
+            "quote": "minimum contrast is 4.5:1",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 41: the minimum contrast is 4.5:1.",
+      "expected": false,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 41",
+            "predicate": "HAS_VALUE",
+            "value": "9:1",
+            "quote": "quote that does not exist",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 42: the minimum contrast is 4.5:1.",
+      "expected": false,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 42",
+            "predicate": "HAS_VALUE",
+            "value": "9:1",
+            "quote": "quote that does not exist",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 43: the minimum contrast is 4.5:1.",
+      "expected": false,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 43",
+            "predicate": "HAS_VALUE",
+            "value": "9:1",
+            "quote": "quote that does not exist",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 44: the minimum contrast is 4.5:1.",
+      "expected": false,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 44",
+            "predicate": "HAS_VALUE",
+            "value": "9:1",
+            "quote": "quote that does not exist",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 45: the minimum contrast is 4.5:1.",
+      "expected": false,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 45",
+            "predicate": "HAS_VALUE",
+            "value": "9:1",
+            "quote": "quote that does not exist",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 46: the minimum contrast is 4.5:1.",
+      "expected": false,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 46",
+            "predicate": "HAS_VALUE",
+            "value": "9:1",
+            "quote": "quote that does not exist",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 47: the minimum contrast is 4.5:1.",
+      "expected": false,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 47",
+            "predicate": "HAS_VALUE",
+            "value": "9:1",
+            "quote": "quote that does not exist",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 48: the minimum contrast is 4.5:1.",
+      "expected": false,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 48",
+            "predicate": "HAS_VALUE",
+            "value": "9:1",
+            "quote": "quote that does not exist",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 49: the minimum contrast is 4.5:1.",
+      "expected": false,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 49",
+            "predicate": "HAS_VALUE",
+            "value": "9:1",
+            "quote": "quote that does not exist",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "passage": "Passage 50: the minimum contrast is 4.5:1.",
+      "expected": false,
+      "response": {
+        "claims": [
+          {
+            "subject": "Guia 50",
+            "predicate": "HAS_VALUE",
+            "value": "9:1",
+            "quote": "quote that does not exist",
+            "valid_from": "2026-01-01"
+          }
+        ]
+      }
+    }
+  ]
+}

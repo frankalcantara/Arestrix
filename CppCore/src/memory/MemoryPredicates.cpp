@@ -38,5 +38,20 @@ bool isMultiValuedPredicate(const std::string& predicate) {
     return predicateCardinality(predicate) == PredicateCardinality::Multiple;
 }
 
+bool isKnownPredicate(const std::string& predicate) {
+    static const char* catalog[] = {
+        "USES", "USES_TOOL", "PRODUCES", "PRODUCES_FILE", "READS", "WRITES",
+        "TOUCHES", "CITES", "INCLUDES", "TAGGED_WITH", "HAS", "DEPENDS_ON",
+        "HAS_VALUE", "MEASURES", "LOCATED_IN", "AUTHORED_BY", "REQUIRES",
+        "SUPPORTS", "CONTRADICTS", "SUPERSEDES", "GENERALIZES", "IS_A",
+        "PART_OF", "OWNS", "MANAGES", "PREFERS", "MENTIONS", "DEFINES"
+    };
+    const std::string key = normalized(predicate);
+    for (const char* candidate : catalog) {
+        if (key == candidate) return true;
+    }
+    return false;
+}
+
 } // namespace memory
 } // namespace taskforge

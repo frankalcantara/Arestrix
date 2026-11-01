@@ -34,6 +34,7 @@
 #include "memory/MemoryPredicates.hpp"
 #include "memory/MemoryAbProtocol.hpp"
 #include "memory/MemoryRanker.hpp"
+#include "memory/MemoryClaimExtractor.hpp"
 #include "memory/MemorySources.hpp"
 #include "memory/MemoryVectorIndex.hpp"
 #include "platform/Process.hpp"
@@ -4489,6 +4490,160 @@ TEST(memory_sources_ingest_versions_search_and_redacts_secrets) {
     }
 
     memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_claim_extractor_validates_schema_quote_and_empty_list) {
+    using taskforge::memory::ClaimExtractorConfig;
+    using taskforge::memory::MemoryClaimExtractor;
+    ClaimExtractorConfig config;
+    config.maxItems = 3;
+    const std::string passage = "O contraste minimo e 4.5:1.";
+    std::string error;
+    taskforge::Json diagnostics;
+
+    const std::string valid = R"({"claims":[{"subject":"Guia","subject_type":"document","predicate":"HAS_VALUE","value":"4.5:1","unit":"ratio","polarity":"positive","valid_from":"2026-01-01","valid_to":"","lens":"ab","quote":"contraste minimo e 4.5:1"}]})";
+    auto claims = MemoryClaimExtractor::parseResponse(valid, passage, config, error, &diagnostics);
+    CHECK(error.empty());
+    CHECK(claims.size() == 1);
+    CHECK(claims[0].subject == "Guia");
+    CHECK(claims[0].predicate == "HAS_VALUE");
+    CHECK(claims[0].knownPredicate);
+    CHECK(claims[0].quote == "contraste minimo e 4.5:1");
+    CHECK(diagnostics.value("accepted", 0LL) == 1);
+
+    const std::string invalidQuote = R"({"claims":[{"subject":"Guia","predicate":"HAS_VALUE","value":"9","quote":"nao existe"}]})";
+    claims = MemoryClaimExtractor::parseResponse(invalidQuote, passage, config, error, &diagnostics);
+    CHECK(claims.empty());
+    CHECK(diagnostics.value("rejected", 0LL) == 1);
+
+    const std::string invalidDate = R"({"claims":[{"subject":"Guia","predicate":"HAS_VALUE","value":"9","valid_from":"ontem","quote":"contraste minimo"}]})";
+    CHECK(MemoryClaimExtractor::parseResponse(invalidDate, passage, config, error).empty());
+
+    const std::string empty = R"({"claims":[]})";
+    claims = MemoryClaimExtractor::parseResponse(empty, passage, config, error);
+    CHECK(error.empty());
+    CHECK(claims.empty());
+
+    claims = MemoryClaimExtractor::parseResponse("nao e json", passage, config, error);
+    CHECK(claims.empty());
+    CHECK(!error.empty());
+}
+
+TEST(memory_claim_extractor_precision_on_annotated_fifty_passages) {
+    using taskforge::memory::ClaimExtractorConfig;
+    using taskforge::memory::MemoryClaimExtractor;
+    namespace fs = std::filesystem;
+
+    fs::path fixture = fs::current_path() / "tests" / "fixtures" / "memory-claims" / "annotated.json";
+    if (!fs::exists(fixture)) {
+        fixture = fs::current_path().parent_path() / "tests" / "fixtures" / "memory-claims" / "annotated.json";
+    }
+    CHECK(fs::exists(fixture));
+    if (!fs::exists(fixture)) return;
+
+    std::ifstream in(fixture, std::ios::binary);
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    const taskforge::Json suite = taskforge::Json::parse(text);
+    CHECK(suite["cases"].size() == 50);
+    ClaimExtractorConfig config;
+    size_t truePositive = 0;
+    size_t falsePositive = 0;
+    size_t expectedPositive = 0;
+    for (const auto& item : suite["cases"]) {
+        const bool expected = item.value("expected", false);
+        if (expected) ++expectedPositive;
+        std::string error;
+        const auto claims = MemoryClaimExtractor::parseResponse(
+            item["response"].dump(), item.value("passage", std::string()), config, error);
+        const bool predicted = !claims.empty();
+        if (predicted && expected) ++truePositive;
+        if (predicted && !expected) ++falsePositive;
+    }
+    CHECK(expectedPositive == 40);
+    CHECK(truePositive == 40);
+    CHECK(falsePositive == 0);
+    const double precision = truePositive + falsePositive == 0
+        ? 0.0 : static_cast<double>(truePositive) /
+                    static_cast<double>(truePositive + falsePositive);
+    CHECK(std::abs(precision - 1.0) < 1e-9);
+}
+
+TEST(memory_claims_promote_with_lens_evidence_and_temporal_conflicts) {
+    using taskforge::memory::MemoryClaimExtractor;
+    using taskforge::memory::MemoryStore;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-claims-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const fs::path db = root / "memory.db";
+    const std::string scope = "project:claims-test";
+    std::string error;
+
+    MemoryStore store(db.string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "claims-test"));
+    const std::string subject = store.resolveNode(scope, "Guia de contraste", "entity");
+    const std::string objectA = store.resolveNode(scope, "4.5:1", "value");
+    const std::string objectB = store.resolveNode(scope, "3:1", "value");
+    const std::string objectC = store.resolveNode(scope, "2:1", "value");
+    CHECK(!subject.empty() && !objectA.empty() && !objectB.empty() && !objectC.empty());
+
+    auto makeClaim = [&](const std::string& from, const std::string& to,
+                         const std::string& objectName, const std::string& objectId,
+                         const std::string& quote) {
+        taskforge::Json payload{{"subject", "Guia de contraste"}, {"subjectId", subject},
+                                {"predicate", "HAS_VALUE"}, {"object", objectName},
+                                {"objectId", objectId}, {"value", ""}, {"unit", "ratio"},
+                                {"polarity", "positive"}, {"qualifiers", taskforge::Json::object()},
+                                {"validFrom", from}, {"validTo", to}, {"lens", "ab"},
+                                {"quote", quote}, {"knownPredicate", true},
+                                {"passageHash", "passage-hash"}, {"passageId", "psg_1"}};
+        taskforge::Json evidence = taskforge::Json::array({
+            taskforge::Json{{"kind", "passage"}, {"quote", quote}}});
+        return store.recordProposal(scope, "claim", payload, "", evidence, 0.8);
+    };
+
+    const std::string first = makeClaim("2020-01-01", "2021-01-01", "4.5:1", objectA, "contraste minimo");
+    CHECK(!first.empty());
+    std::string promotedFirst;
+    CHECK(store.promoteProposal(scope, first, "test", error, &promotedFirst));
+    CHECK(!promotedFirst.empty());
+    taskforge::memory::MemoryEdgeRecord edge;
+    CHECK(store.getEdge(scope, promotedFirst, edge));
+    const taskforge::Json metadata = taskforge::jsonutil::tryParse(edge.metadata)
+        .value_or(taskforge::Json::object());
+    CHECK(metadata.value("lens", std::string()) == "ab");
+    CHECK(metadata.value("claim", false));
+    const auto evidence = store.listEvidence(scope, "claim", promotedFirst, 10);
+    CHECK(!evidence.empty());
+
+    const std::string disjoint = makeClaim("2022-01-01", "", "3:1", objectB, "contraste minimo");
+    CHECK(!disjoint.empty());
+    std::string promotedDisjoint;
+    CHECK(store.promoteProposal(scope, disjoint, "test", error, &promotedDisjoint));
+    CHECK(store.getEdge(scope, promotedFirst, edge));
+    CHECK(edge.status == "active");
+    CHECK(store.getEdge(scope, promotedDisjoint, edge));
+    CHECK(edge.status == "active");
+
+    const std::string overlapping = makeClaim("2020-06-01", "", "2:1", objectC, "contraste minimo");
+    CHECK(!overlapping.empty());
+    std::string promotedOverlap;
+    CHECK(store.promoteProposal(scope, overlapping, "test", error, &promotedOverlap));
+    CHECK(store.getEdge(scope, promotedFirst, edge));
+    CHECK(edge.status != "active");
+    CHECK(store.getEdge(scope, promotedOverlap, edge));
+    CHECK(edge.status == "active");
+
+    CHECK(store.markClaimExtraction(scope, "psg_1", "passage-hash", "fp-1", "proposed"));
+    CHECK(store.claimExtractionSeen(scope, "passage-hash", "fp-1"));
+    CHECK(!store.claimExtractionSeen(scope, "passage-hash", "fp-2"));
+    CHECK(!MemoryClaimExtractor::parseResponse("{}", "passage", {}, error).size());
+
+    store.close();
     fs::remove_all(root, ec);
 }
 

@@ -79,7 +79,7 @@ struct MemoryValidationRecord {
 struct MemoryEvidenceRecord {
     std::string id;
     std::string scopeId;
-    std::string targetKind;     // lesson | fact | playbook | entity | proposal | edge
+    std::string targetKind;     // lesson | fact | playbook | entity | proposal | edge | claim
     std::string targetId;
     std::string action;         // create | promote | demote | unpromote | invalidate
     std::string episodeId;
@@ -188,6 +188,16 @@ struct MemoryPassageHit {
     long long start = 0;
     long long end = 0;
     std::string text;
+};
+
+struct MemoryClaimCandidate {
+    std::string passageId;
+    std::string sourceId;
+    std::string uri;
+    std::string text;
+    std::string passageHash;
+    long long start = 0;
+    long long end = 0;
 };
 
 struct MemoryTraceRecord {
@@ -503,6 +513,10 @@ public:
                          const std::string& validTo, const std::string& dormantAt,
                          const std::string& lastUsed, std::string& error);
     std::unordered_map<std::string, std::string> nodeNames(const std::string& scopeId) const;
+    // E13: resolve uma mencao existente sem criar no. Devolve vazio quando nao
+    // ha correspondencia ou quando a mencao e ambigua.
+    std::string findEntity(const std::string& scopeId, const std::string& mention,
+                           bool* ambiguous = nullptr) const;
 
     // Resolucao de entidades/aliases (M3). Nomes equivalentes apontam para o
     // mesmo node; aliases nunca sobrescrevem um mapeamento existente.
@@ -590,6 +604,17 @@ public:
     std::vector<MemoryPassageHit> searchPassages(const std::string& scopeId,
                                                  const std::string& text, size_t limit = 10) const;
     taskforge::Json sourceSummary(const std::string& scopeId) const;
+
+    // E13: passagens citadas em execucoes aprovadas e bookkeeping da extracao.
+    std::vector<std::string> usedPassageIds(const std::string& scopeId, size_t limit = 100) const;
+    std::vector<MemoryClaimCandidate> passagesForIds(const std::string& scopeId,
+                                                     const std::vector<std::string>& ids,
+                                                     size_t limit = 100) const;
+    bool claimExtractionSeen(const std::string& scopeId, const std::string& passageHash,
+                             const std::string& fingerprint) const;
+    bool markClaimExtraction(const std::string& scopeId, const std::string& passageId,
+                             const std::string& passageHash, const std::string& fingerprint,
+                             const std::string& status, const std::string& error = "");
 
     // Validacao independente ligada a um episodio (telemetria).
     // E4: instantaneos de evidencia (conhecimento, sem FK para telemetria).
