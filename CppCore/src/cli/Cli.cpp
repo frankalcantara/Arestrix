@@ -1277,6 +1277,13 @@ int runMemory(const std::vector<std::string>& args) {
         sqlite3_finalize(st);
         st = nullptr;
     }
+    {
+        const long long promptTokens = out.value("promptTokens", 0LL);
+        const long long cachedTokens = out.value("cachedTokens", 0LL);
+        out["cacheHitRate"] = promptTokens > 0
+            ? static_cast<double>(cachedTokens) / static_cast<double>(promptTokens)
+            : 0.0;
+    }
 
     const std::string modesSql =
         "SELECT memory_enabled, COUNT(*), COALESCE(SUM(prompt_tokens),0), COALESCE(SUM(completion_tokens),0), "
@@ -1510,6 +1517,9 @@ int runMemory(const std::vector<std::string>& args) {
                   << " / saida " << out["completionTokens"].get<long long>()
                   << " / cache " << out["cachedTokens"].get<long long>()
                   << " + " << out["cacheWriteTokens"].get<long long>() << " escrita)\n";
+        std::cout << "Cache de prompt: " << out["cachedTokens"].get<long long>()
+                  << " / " << out["promptTokens"].get<long long>() << " tokens de entrada ("
+                  << (out["cacheHitRate"].get<double>() * 100.0) << "%)\n";
         std::cout << "Contexto: " << out["memoryContextChars"].get<long long>()
                   << " caracteres | runs com memoria: " << out["memoryEnabledRuns"].get<long long>() << "\n";
         std::cout << "Memorias injetadas: " << out["hits"]["injected"].get<long long>()

@@ -25,6 +25,10 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   verdicts in real runs.
 - `memory report` now reads the telemetry database and shows validated/unvalidated runs and
   the approval rate per `task_type`.
+- **Prompt cache requested (multigraph plan, E8):** with `memory.promptCache` enabled, Anthropic
+  requests carry skill + brief as an ephemeral `cache_control` system block while the execution
+  context stays uncached; OpenAI-compatible requests keep the stable skill/brief/context order for
+  automatic prefix caching. `memory report` shows the fraction of input tokens served by cache.
 - **Embedding representation contract (multigraph plan, E7):** Qwen3-Embedding gets the versioned
   query instruction and no document prefix; `embeddingRevision` and `embeddingTruncateDim` are
   configurable and enter the fingerprint. MRL vectors are truncated, renormalized to norm 1 and

@@ -280,7 +280,20 @@ Json buildRequestBody(const ProviderInfo& info, const ChatRequest& req, bool inc
     body["model"] = req.model;
     if (info.protocol == "anthropic") {
         body["max_tokens"] = req.maxTokens;
-        if (!req.system.empty()) body["system"] = req.system;
+        if (req.promptCache && !req.systemCacheable.empty()) {
+            // Skill + brief sao o prefixo estavel reenviado a cada turno. O
+            // contexto de execucao fica fora do bloco cacheado.
+            Json blocks = Json::array();
+            blocks.push_back(Json{{"type", "text"},
+                                  {"text", req.systemCacheable},
+                                  {"cache_control", Json{{"type", "ephemeral"}}}});
+            if (!req.systemDynamic.empty()) {
+                blocks.push_back(Json{{"type", "text"}, {"text", req.systemDynamic}});
+            }
+            body["system"] = blocks;
+        } else if (!req.system.empty()) {
+            body["system"] = req.system;
+        }
         body["messages"] = anthropicMessages(req);
         if (!req.tools.empty()) {
             Json tools = Json::array();

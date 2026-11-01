@@ -56,7 +56,10 @@ struct ChatMessage {
 struct ChatRequest {
     std::string provider;
     std::string model;
-    std::string system;
+    std::string system;            // prompt combinado (OpenAI e fallback)
+    std::string systemCacheable;   // skill + brief, prefixo estavel por execucao
+    std::string systemDynamic;     // contexto de execucao, nao cacheado
+    bool promptCache = false;      // pede cache_control explicito no protocolo Anthropic
     std::vector<ChatMessage> messages;
     std::vector<ToolDef> tools;
     int maxTokens = 8192;

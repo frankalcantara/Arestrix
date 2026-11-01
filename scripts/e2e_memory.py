@@ -320,7 +320,7 @@ class MockHandler(BaseHTTPRequestHandler):
             finish = "stop"
         data = json.dumps({
             "choices": [{"message": message, "finish_reason": finish}],
-            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "cached_tokens": 1},
         }).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -594,6 +594,9 @@ def main():
               "o relatorio le os instantaneos de evidencia")
         check(int(report2.get("evidence", {}).get("missingTargets", -1)) == 0,
               "todo item ativo tem evidencia")
+        check(int(report2.get("cachedTokens", 0)) > 0 and
+              float(report2.get("cacheHitRate", 0)) > 0,
+              "o relatorio mostra a fracao de tokens servida pelo cache")
 
         print("\n== Memoria desligada com metricas (comparacao de consumo) ==")
         env_off = dict(env)
