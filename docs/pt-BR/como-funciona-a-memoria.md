@@ -372,6 +372,15 @@ o vetor de cobertura: utilidade do melhor caminho, fração sustentada, conflito
 distância de intenção e abstenção. A travessia só lê o grafo e não escreve
 conhecimento.
 
+### Pontes interdomínio
+
+Com `globalDefaults.memory.bridges` ligado, a manutenção procura a mesma
+entidade em lentes distintas nos traços aprovados e registra uma **hipótese**
+`bridge_hypothesis`, com condições, afirmações e caminhos candidatos. O detector
+tem orçamento por rodada, limite por entidade e deduplicação por par de lentes;
+eventos descartados aparecem no relatório e em `memory bridges detect`. Nenhuma
+aresta é criada automaticamente: a promoção é manual, como em qualquer proposta.
+
 ### Roteamento de modelos
 
 O roteador usa a taxa de validação por `task_type`, com prior Beta, para estimar

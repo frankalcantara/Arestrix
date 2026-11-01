@@ -217,9 +217,22 @@ MemoryMaintenanceConfig maintenanceConfigFromJson(const taskforge::Json& value) 
         config.pathOptions.mu = std::max(0.0, std::min(10.0,
             pathSwitch.value("mu", 2.674e-7)));
     }
+    const taskforge::Json bridgeSwitch = value.contains("bridges")
+        ? value["bridges"] : taskforge::Json();
+    config.bridgesEnabled = bridgeSwitch.is_boolean()
+        ? bridgeSwitch.get<bool>()
+        : bridgeSwitch.is_object() ? bridgeSwitch.value("enabled", false) : false;
+    if (bridgeSwitch.is_object()) {
+        config.bridgeOptions.maxProposals = static_cast<size_t>(std::max<long long>(
+            1, std::min<long long>(1000, bridgeSwitch.value("maxProposals", 5))));
+        config.bridgeOptions.maxPerEntity = static_cast<size_t>(std::max<long long>(
+            1, std::min<long long>(100, bridgeSwitch.value("maxPerEntity", 1))));
+        config.bridgeOptions.maxDiscarded = static_cast<size_t>(std::max<long long>(
+            1, std::min<long long>(100000, bridgeSwitch.value("maxDiscarded", 1000))));
+    }
     config.claimExtractor = MemoryClaimExtractor::configFromJson(value);
-    if ((config.claimExtractor.enabled || config.lensesEnabled || config.pathsEnabled) &&
-        !config.enabled) {
+    if ((config.claimExtractor.enabled || config.lensesEnabled || config.pathsEnabled ||
+         config.bridgesEnabled) && !config.enabled) {
         // Extracao, lentes e caminhos sao tarefas de manutencao; liga-las sem
         // modo de consolidacao ainda precisa de um gatilho ocioso.
         config.enabled = true;
@@ -248,6 +261,9 @@ taskforge::Json maintenanceConfigToJson(const MemoryMaintenanceConfig& config) {
                                   {"minDistinctInputs", config.pathOptions.minDistinctInputs},
                                   {"prior", config.pathOptions.prior},
                                   {"mu", config.pathOptions.mu}}},
+        {"bridges", taskforge::Json{{"enabled", config.bridgesEnabled},
+                                    {"maxProposals", static_cast<long long>(config.bridgeOptions.maxProposals)},
+                                    {"maxPerEntity", static_cast<long long>(config.bridgeOptions.maxPerEntity)}}},
         {"extractor", taskforge::Json{{"model", config.claimExtractor.model},
                                       {"revision", config.claimExtractor.revision},
                                       {"baseUrl", config.claimExtractor.baseUrl}}}};
@@ -1810,6 +1826,23 @@ taskforge::Json MemoryService::rebuildPaths(const std::string& projectId, bool p
     return report;
 }
 
+taskforge::Json MemoryService::rebuildBridges(const std::string& projectId,
+                                               bool bridgesEnabled,
+                                               const BridgeOptions& options) {
+    auto* s = ensureStore(projectId);
+    auto* t = ensureTelemetry(projectId);
+    if (!s || !t) return taskforge::Json{{"ok", false}, {"error", "memoria indisponivel"}};
+    if (!bridgesEnabled) return taskforge::Json{{"ok", true}, {"disabled", true}};
+    const std::string scope = scopeId(projectId);
+    const auto approved = t->approvedTraceIds(scope, 10000);
+    const std::set<std::string> approvedSet(approved.begin(), approved.end());
+    std::vector<MemoryTraceRecord> traces;
+    for (const auto& trace : t->listTraces(scope, 10000)) {
+        if (approvedSet.count(trace.traceId)) traces.push_back(trace);
+    }
+    return MemoryBridges::detect(*s, scope, traces, options);
+}
+
 taskforge::Json MemoryService::listPaths(const std::string& projectId,
                                          const std::string& state) {
     auto* s = ensureStore(projectId);
@@ -2505,6 +2538,8 @@ void MemoryService::maintenanceLoop(const std::string& projectId,
         }
         report["facets"] = rebuildFacets(projectId, runConfig.lensesEnabled);
         report["paths"] = rebuildPaths(projectId, runConfig.pathsEnabled, runConfig.pathOptions);
+        report["bridges"] = rebuildBridges(projectId, runConfig.bridgesEnabled,
+                                           runConfig.bridgeOptions);
 
         lock.lock();
         runtime->busy = false;
@@ -2572,6 +2607,8 @@ taskforge::Json MemoryService::runMaintenanceOnce(const std::string& projectId,
     }
     report["facets"] = rebuildFacets(projectId, config.lensesEnabled);
     report["paths"] = rebuildPaths(projectId, config.pathsEnabled, config.pathOptions);
+    report["bridges"] = rebuildBridges(projectId, config.bridgesEnabled,
+                                       config.bridgeOptions);
 
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     auto it = maintenance_.find(projectKey(projectId));

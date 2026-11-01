@@ -38,6 +38,7 @@
 #include "memory/MemoryClaimExtractor.hpp"
 #include "memory/MemoryFacets.hpp"
 #include "memory/MemoryAnchors.hpp"
+#include "memory/MemoryBridges.hpp"
 #include "memory/MemoryPaths.hpp"
 #include "memory/MemorySources.hpp"
 #include "memory/MemoryTraversal.hpp"
@@ -5005,6 +5006,65 @@ TEST(memory_service_serves_paths_in_brief_and_search) {
     CHECK(pathHit);
     CHECK(claimHit);
     memory.closeProject("path-service-test");
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_bridges_propose_hypotheses_without_creating_edges) {
+    using taskforge::memory::BridgeOptions;
+    using taskforge::memory::MemoryBridges;
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryTraceRecord;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-bridges";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string scope = "project:bridges";
+    std::string error;
+    MemoryStore store((root / "memory.db").string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "bridges"));
+    const std::string subject = store.resolveNode(scope, "Guia", "entity");
+    const std::string a = store.resolveNode(scope, "4.5:1", "value");
+    const std::string b = store.resolveNode(scope, "3:1", "value");
+    const std::string claimA = store.recordEdge(
+        scope, subject, a, "HAS_CONTRAST", taskforge::Json::object(),
+        "2026-01-01", "", 0.8, "active", "claim", "bridge-a",
+        taskforge::Json{{"claim", true}, {"lens", "ab"}});
+    const std::string claimB = store.recordEdge(
+        scope, subject, b, "HAS_CONTRAST", taskforge::Json::object(),
+        "2026-01-02", "", 0.8, "active", "claim", "bridge-b",
+        taskforge::Json{{"claim", true}, {"lens", "cd"}});
+    CHECK(!claimA.empty() && !claimB.empty());
+    MemoryTraceRecord trace;
+    trace.traceId = "trace-bridge";
+    trace.scopeId = scope;
+    trace.taskType = "ab";
+    trace.outcome = "success";
+    trace.inputHash = "input-bridge";
+    trace.createdAt = "2026-11-01T00:00:00Z";
+    trace.used = taskforge::Json::array({claimA, claimB});
+    const auto evidenceBefore = store.evidenceSummary(scope);
+    const size_t edgeBefore = store.listEdges(scope, "active", 10000).size();
+
+    BridgeOptions options;
+    options.maxProposals = 1;
+    options.maxPerEntity = 1;
+    auto report = MemoryBridges::detect(store, scope, {trace}, options);
+    CHECK(report.value("ok", false));
+    CHECK(report.value("proposed", 0LL) == 1);
+    const auto proposals = store.listProposals(scope, "pending", 10);
+    CHECK(proposals.size() == 1);
+    CHECK(proposals[0].kind == "bridge_hypothesis");
+    CHECK(store.listEdges(scope, "active", 10000).size() == edgeBefore);   // hipótese, nunca aresta automática
+    CHECK(store.evidenceSummary(scope).value("snapshots", 0LL) ==
+          evidenceBefore.value("snapshots", 0LL));
+
+    report = MemoryBridges::detect(store, scope, {trace}, options);
+    CHECK(report.value("deduped", 0LL) == 1);
+    CHECK(store.listProposals(scope, "pending", 10).size() == 1);
+    store.close();
     fs::remove_all(root, ec);
 }
 

@@ -502,6 +502,7 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory trace show <run> <no> --project <pasta> [--json]\n"
                      "arestrix-cli memory claims extract --project <pasta> [--max-passages N] [--json]\n"
                      "arestrix-cli memory paths list|show|retire [id] --project <pasta> [--state S] [--json]\n"
+                     "arestrix-cli memory bridges detect --project <pasta> [--max-proposals N] [--max-per-entity N] [--json]\n"
                      "arestrix-cli memory ab validate|order|report --suite <arquivo> [--observations <arquivo>] [--repetitions N] [--seed N] [--json]\n"
                      "arestrix-cli memory ab run --suite <arquivo> --pipeline <grafo> --node <vertice> [--repetitions N] [--seed N] [--root <pasta>] [--db <arquivo>] [--json]\n"
                      "arestrix-cli memory promote --project <pasta> --kind lesson|fact|playbook --id ID --evidence texto [--workspace-id ID] [--json]\n"
@@ -513,7 +514,7 @@ int runMemory(const std::vector<std::string>& args) {
         command != "embeddings" && command != "health" && command != "reindex" &&
         command != "consolidate" && command != "workspace" && command != "state" &&
         command != "ab" && command != "trace" && command != "claims" &&
-        command != "paths" && command != "promote" && command != "unpromote") {
+        command != "paths" && command != "bridges" && command != "promote" && command != "unpromote") {
         std::cerr << "arestrix-cli memory: comando desconhecido: " << command << "\n";
         return kExitUsage;
     }
@@ -618,6 +619,13 @@ int runMemory(const std::vector<std::string>& args) {
         } else {
             optionStart = 3;
         }
+    } else if (command == "bridges") {
+        if (args.size() < 3 || args[2] != "detect") {
+            std::cerr << "arestrix-cli memory bridges: informe detect\n";
+            return kExitUsage;
+        }
+        embeddingAction = args[2];
+        optionStart = 3;
     } else if (command == "ab") {
         if (args.size() < 3) {
             std::cerr << "arestrix-cli memory ab: informe validate|order|report|run\n";
@@ -675,6 +683,8 @@ int runMemory(const std::vector<std::string>& args) {
     long long minExecutions = 5;
     long long minDistinctInputs = 3;
     size_t claimsMaxPassages = 10;
+    size_t bridgeMaxProposals = 5;
+    size_t bridgeMaxPerEntity = 1;
     std::string pathState;
     std::string abSuitePath;
     std::string abObservationsPath;
@@ -801,6 +811,18 @@ int runMemory(const std::vector<std::string>& args) {
             try {
                 claimsMaxPassages = static_cast<size_t>(std::max<long long>(1, std::min<long long>(100, std::stoll(args[++i]))));
             } catch (...) { std::cerr << "--max-passages invalido\n"; return kExitUsage; }
+        }
+        else if (a == "--max-proposals") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --max-proposals\n"; return kExitUsage; }
+            try {
+                bridgeMaxProposals = static_cast<size_t>(std::max<long long>(1, std::min<long long>(1000, std::stoll(args[++i]))));
+            } catch (...) { std::cerr << "--max-proposals invalido\n"; return kExitUsage; }
+        }
+        else if (a == "--max-per-entity") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --max-per-entity\n"; return kExitUsage; }
+            try {
+                bridgeMaxPerEntity = static_cast<size_t>(std::max<long long>(1, std::min<long long>(100, std::stoll(args[++i]))));
+            } catch (...) { std::cerr << "--max-per-entity invalido\n"; return kExitUsage; }
         }
         else if (a == "--suite") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --suite\n"; return kExitUsage; }
@@ -1047,6 +1069,15 @@ int runMemory(const std::vector<std::string>& args) {
                 std::cout << "Caminho retirado: " << pathId << "\n";
             }
             return 0;
+        }
+
+        if (command == "bridges") {
+            taskforge::memory::BridgeOptions options;
+            options.maxProposals = bridgeMaxProposals;
+            options.maxPerEntity = bridgeMaxPerEntity;
+            taskforge::Json out = memory.rebuildBridges(projectId, true, options);
+            std::cout << out.dump(2) << "\n";
+            return out.value("ok", false) ? 0 : kExitConfig;
         }
 
         if (command == "claims") {

@@ -6087,6 +6087,22 @@ bool MemoryStore::setPathState(const std::string& scopeId, const std::string& pa
     return pathChanged;
 }
 
+bool MemoryStore::bridgeProposalSeen(const std::string& scopeId,
+                                     const std::string& pairKey) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || pairKey.empty()) return false;
+    Stmt st;
+    std::string error;
+    if (prepare(db_, "SELECT 1 FROM memory_proposal WHERE scope_id=? "
+                       "AND kind='bridge_hypothesis' AND status<>'rejected' "
+                       "AND json_extract(payload_json,'$.pairKey')=? LIMIT 1", st, error)) {
+        bindText(st.stmt, 1, scopeId);
+        bindText(st.stmt, 2, pairKey);
+        return stepRetry(st.stmt) == SQLITE_ROW;
+    }
+    return false;
+}
+
 std::vector<std::string> MemoryStore::pathsForClaim(const std::string& claimId) const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     std::vector<std::string> out;
