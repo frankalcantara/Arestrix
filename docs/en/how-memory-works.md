@@ -159,17 +159,30 @@ every persistent run (default budget of **10 s or 64 objects**), in the maintena
 (`idle`/`after_episodes`) and in the panel's explicit **Test** and **Reindex** actions. An embedding
 provider failure never fails the run. Ready profiles:
 
-| Profile | Dimensions |
-| :--- | :--- |
-| EmbeddingGemma 2 | 768 |
-| Qwen3-Embedding-4B | 2560 |
+| Profile | Stored dimensions | Note |
+| :--- | :--- | :--- |
+| EmbeddingGemma 2 | 768 | full vector; also accepts 512, 256 and 128 via MRL |
+| Qwen3-Embedding-4B | 768 | truncated from 2560; accepts 32 to 2560 via MRL |
 
 Without a provider, search keeps working in lexical mode.
 
-The index stores a SHA-256 **fingerprint** of the endpoint, model, effective dimension, query and
-document prefixes, normalization, metric and index version. Search only uses vectors from the
-current fingerprint and never mixes old indexes. Status shows the model, dimensions, indexed items,
-candidates, pending items and a short fingerprint, with these states:
+Each model has its own representation prefix. **Qwen3** receives the query instruction
+`Instruct: Given a task description, retrieve memory items that help complete it` followed by
+`Query:`; the document gets no prefix. **EmbeddingGemma 2** uses distinct query and document
+prefixes. The instruction text is versioned and part of the **fingerprint**: changing it
+invalidates the index.
+
+The **model revision** field (`embeddingRevision`) records the server digest/revision when
+provided; it is also part of the fingerprint. **MRL truncation** (`embeddingTruncateDim`, 0 = full)
+reduces the vector and **renormalizes it to norm 1**; NaN/Inf or zero-norm vectors are rejected.
+Accepted dimensions: EmbeddingGemma 2 at 768, 512, 256 or 128; Qwen3 from 32 to 2560.
+
+The index stores a SHA-256 **fingerprint** of the endpoint, model, revision, effective dimension,
+truncation, prefixes/instruction, normalization, metric and index version. Search only uses vectors
+from the current fingerprint and never mixes old indexes. Changing the model, revision, dimension,
+truncation or instruction leaves the index `stale` and requires reindexing. Status shows the model,
+dimensions, revision, indexed items, candidates, pending items and a short fingerprint, with these
+states:
 
 | State | Meaning | Search |
 | :--- | :--- | :--- |

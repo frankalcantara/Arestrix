@@ -1277,7 +1277,9 @@ taskforge::Json MemoryService::embeddingStatus(const std::string& projectId) {
     const bool available = runtime.provider && runtime.provider->available();
     const int effectiveDim = runtime.provider && runtime.provider->dim() > 0
         ? runtime.provider->dim() : runtime.config.dim;
-    const std::string fingerprint = embeddingFingerprint(runtime.config, effectiveDim);
+    const std::string fingerprint = embeddingFingerprint(
+        runtime.config, effectiveDim,
+        runtime.provider ? runtime.provider->revision() : std::string());
     out["available"] = available;
     out["active"] = runtime.config.enabled && available;
     out["providerModel"] = runtime.provider ? runtime.provider->modelId() : std::string("none");
@@ -1435,7 +1437,8 @@ taskforge::Json MemoryService::reindexEmbeddings(const std::string& projectId, b
     runtime.reindexing = true;
     runtime.lastIndexError.clear();
     const int effectiveDim = runtime.provider->dim() > 0 ? runtime.provider->dim() : runtime.config.dim;
-    const std::string fingerprint = embeddingFingerprint(runtime.config, effectiveDim);
+    const std::string fingerprint = embeddingFingerprint(
+        runtime.config, effectiveDim, runtime.provider->revision());
     const auto stats = MemoryIndexer::index(*s, *runtime.provider, runtime.config,
                                             scopeId(projectId), force, 0, error);
     if (error.empty() && stats.failed > 0) {
@@ -1755,7 +1758,8 @@ bool MemoryService::hybridRecall(const std::string& projectId, const std::string
     // incompleto) a parte vetorial cobre os itens indexados e os demais entram
     // somente pela parte lexical da fusao; a busca nunca indexa.
     const int effectiveDim = runtime.provider->dim() > 0 ? runtime.provider->dim() : runtime.config.dim;
-    const std::string fingerprint = embeddingFingerprint(runtime.config, effectiveDim);
+    const std::string fingerprint = embeddingFingerprint(
+        runtime.config, effectiveDim, runtime.provider->revision());
     size_t candidates = 0;
     for (const auto& object : s->embeddingObjects(scopeId(projectId))) {
         if (!object.text.empty()) ++candidates;

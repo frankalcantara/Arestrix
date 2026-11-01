@@ -37,6 +37,8 @@ describe('Fase 12: Arquitetura de Memória Heterogênea (Opt-in, Persistência e
       expect(defaults.memory?.embeddingBatchSize).toBe(8);
       expect(defaults.memory?.embeddingMaxChars).toBe(8000);
       expect(defaults.memory?.embeddingDimensions).toBe(768);
+      expect(defaults.memory?.embeddingRevision).toBe('');
+      expect(defaults.memory?.embeddingTruncateDim).toBe(0);
     });
 
     it('deve manter embeddings desativados mesmo quando a memória é ativada', () => {

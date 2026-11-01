@@ -31,7 +31,9 @@ struct EmbeddingConfig {
     int timeoutSeconds = 60;
     int batchSize = 8;
     int maxChars = 8000;
-    int dim = 768;                    // EmbeddingGemma 2; 0 = descobrir na primeira resposta
+    int dim = 768;                    // dimensao armazenada; 0 = descobrir na primeira resposta
+    std::string revision;             // revisao/digest do modelo; entra no fingerprint
+    int truncateDim = 0;              // MRL: 0 = vetor completo; >0 trunca e renormaliza
 };
 
 class IEmbeddingProvider {
@@ -40,7 +42,9 @@ public:
     virtual bool available() const = 0;
     virtual std::string modelId() const = 0;
     virtual int dim() const = 0;
-    // query=true aplica o prefixo de consulta do modelo (ex.: E5 "query: ").
+    // Revisao/digest efetivo (usuario ou descoberto no servidor). Entra no fingerprint.
+    virtual std::string revision() const { return ""; }
+    // query=true aplica o prefixo/instrucao de consulta do modelo.
     virtual bool embed(const std::vector<std::string>& texts, bool query,
                        std::vector<Embedding>& out, std::string& error) = 0;
 };
@@ -64,6 +68,9 @@ public:
     bool available() const override;
     std::string modelId() const override { return config_.model; }
     int dim() const override { return dim_; }
+    std::string revision() const override {
+        return config_.revision.empty() ? serverRevision_ : config_.revision;
+    }
     bool embed(const std::vector<std::string>& texts, bool query,
                std::vector<Embedding>& out, std::string& error) override;
 
@@ -73,14 +80,24 @@ private:
 
     EmbeddingConfig config_;
     int dim_ = 0;
+    std::string serverRevision_;
 };
 
 EmbeddingConfig defaultEmbeddingConfig();
 EmbeddingConfig embeddingConfigFromJson(const taskforge::Json& value);
 taskforge::Json embeddingConfigToJson(const EmbeddingConfig& config);
-// Fingerprint canonico do indice: endpoint, modelo, dimensao efetiva,
-// prefixos de consulta/documento, normalizacao, metrica e versao.
-std::string embeddingFingerprint(const EmbeddingConfig& config, int effectiveDim = 0);
+// Prefixos/instrucoes por modelo (documentados e versionados no fingerprint).
+std::string embeddingQueryPrefix(const std::string& model);
+std::string embeddingDocumentPrefix(const std::string& model);
+// Prepara um vetor recebido do servidor: valida dimensoes aceitas pelo modelo,
+// trunca MRL, renormaliza L2 e rejeita NaN/Inf ou vetor degenerado.
+bool prepareEmbeddingVector(const std::string& model, std::vector<float>& values,
+                            int truncateDim, int expectedDim, int& effectiveDim,
+                            std::string& error);
+// Fingerprint canonico do indice: endpoint, modelo, revisao, dimensao efetiva,
+// truncamento, prefixos, normalizacao, metrica e versao.
+std::string embeddingFingerprint(const EmbeddingConfig& config, int effectiveDim = 0,
+                                 const std::string& revisionOverride = "");
 std::shared_ptr<IEmbeddingProvider> makeEmbeddingProvider(const EmbeddingConfig& config);
 
 } // namespace memory

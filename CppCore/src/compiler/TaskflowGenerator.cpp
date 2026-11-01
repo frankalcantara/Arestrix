@@ -845,6 +845,10 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
                 std::to_string(std::max(64, std::min(32000, embedding.value("embeddingMaxChars", 8000)))) + ";\n";
         code += "  arx_embedding_config.dim = " +
                 std::to_string(std::max(0, std::min(8192, embedding.value("embeddingDimensions", 768)))) + ";\n";
+        code += "  arx_embedding_config.revision = " +
+                cppString(embedding.value("embeddingRevision", std::string())) + ";\n";
+        code += "  arx_embedding_config.truncateDim = " +
+                std::to_string(std::max(0, std::min(8192, embedding.value("embeddingTruncateDim", 0)))) + ";\n";
         code += "  memory.configureEmbeddings(projectId, arx_embedding_config);\n";
     }
     {
