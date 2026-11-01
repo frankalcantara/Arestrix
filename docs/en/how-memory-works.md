@@ -368,6 +368,15 @@ the coverage vector in the trace: best path utility, sustained fraction,
 conflicts, intent distance and abstention. Traversal only reads the graph and
 never writes knowledge.
 
+### Model routing
+
+The router estimates local-tier confidence from validation outcomes per
+`task_type` with a Beta prior. In `routing.mode=binary` it chooses between local
+and frontier tiers using `p_min` and expected cost; in `shadow` it records the
+decision without changing the executed model. Local-only claims block the
+frontier tier. Validator failure, abstention or unresolved conflict can escalate
+to frontier, and the decision is written to the trace. The default is `off`.
+
 ### Retrieval traces
 
 Every knowledge write bumps `knowledge_version` in the same transaction; reads

@@ -57,6 +57,7 @@
 #include "assistant/GraphDocument.hpp"
 #include "rt/ArtifactValidation.hpp"
 #include "rt/ModelClient.hpp"
+#include "rt/ModelRouter.hpp"
 #include "rt/MemoryFailure.hpp"
 #include "rt/Runtime.hpp"
 #include "rt/AsyncCalls.hpp"
@@ -5096,6 +5097,64 @@ TEST(memory_paths_exploration_fraction_and_thompson_bounds) {
     }
     CHECK(!MemoryPaths::shouldExplore(0.0, 1));
     CHECK(MemoryPaths::shouldExplore(1.0, 1));
+}
+
+TEST(model_router_decides_by_confidence_privacy_and_shadow) {
+    using taskforge::rt::ModelRouter;
+    using taskforge::rt::ModelTier;
+    using taskforge::rt::RoutingConfig;
+    using taskforge::rt::RoutingStats;
+
+    RoutingConfig config;
+    config.mode = "binary";
+    config.localSmall = ModelTier{"local_small", "local", "small", 0.1};
+    config.localLarge = ModelTier{"local_large", "local", "large", 0.2};
+    config.frontier = ModelTier{"frontier", "deepseek", "deepseek-flash", 1.0};
+    config.pMin = 0.5;
+    RoutingStats none;
+    auto decision = ModelRouter::decide(none, config);
+    CHECK(decision.tier == "frontier");
+    CHECK(decision.reason == "insufficient_data");
+
+    RoutingStats good;
+    good.success = 9;
+    good.failure = 1;
+    decision = ModelRouter::decide(good, config);
+    CHECK(decision.tier == "local_large");
+    CHECK(decision.provider == "local");
+    CHECK(decision.confidence > 0.8);
+
+    RoutingStats bad;
+    bad.success = 1;
+    bad.failure = 9;
+    decision = ModelRouter::decide(bad, config);
+    CHECK(decision.tier == "frontier");
+
+    RoutingConfig privacy = config;
+    privacy.localOnly = true;
+    decision = ModelRouter::decide(good, privacy);
+    CHECK(decision.tier == "local_large");
+    CHECK(decision.reason == "privacy_local_only");
+
+    RoutingConfig shadow = config;
+    shadow.mode = "shadow";
+    ModelTier current{"current", "openai", "gpt-current", 1.0};
+    decision = ModelRouter::decide(good, shadow, &current);
+    CHECK(decision.shadow);
+    CHECK(decision.shadowTier == "local_large");
+    CHECK(decision.provider == "openai");
+    CHECK(decision.model == "gpt-current");
+
+    auto escalated = ModelRouter::escalate(decision, config, "validator_failed");
+    CHECK(escalated.escalated);
+    CHECK(escalated.tier == "frontier");
+    CHECK(escalated.reason == "validator_failed");
+
+    RoutingConfig off;
+    off.mode = "off";
+    decision = ModelRouter::decide(good, off, &current);
+    CHECK(decision.reason == "routing_off");
+    CHECK(decision.provider == "openai");
 }
 
 TEST(memory_claim_extractor_precision_on_annotated_fifty_passages) {

@@ -208,6 +208,27 @@ export interface IModelConfig {
   temperature?: number;
 }
 
+export type RoutingMode = 'off' | 'shadow' | 'binary';
+
+export interface IModelTierConfig {
+  provider: LLMProvider;
+  model: string;
+  cost?: number;
+}
+
+/** E18: roteador por classe de tarefa; desligado por padrão. */
+export interface IRoutingConfig {
+  mode?: RoutingMode;
+  tiers?: {
+    localSmall?: IModelTierConfig;
+    localLarge?: IModelTierConfig;
+    frontier?: IModelTierConfig;
+  };
+  shadowRate?: number;
+  pMin?: number;
+  localOnly?: boolean;
+}
+
 export type CodeModeTool = 'write' | 'edit' | 'read' | 'bash' | 'validate_svg';
 
 export interface ICodeModeConfig {
@@ -374,6 +395,8 @@ export interface IProjectMemoryConfig extends Partial<INodeMemoryConfig> {
     prior?: number;
     mu?: number;
   };
+  /** E18: impede que esta memória seja enviada a um modelo remoto. */
+  localOnly?: boolean;
   /** E16: serve caminhos ativos antes da busca no grafo (off até o A/B). */
   pathServing?: boolean | {
     enabled?: boolean;
@@ -443,6 +466,7 @@ export interface IGlobalPipelineDefaults {
   codeMode: ICodeModeConfig;
   memory?: IProjectMemoryConfig;
   compression?: IContextCompressionConfig;
+  routing?: IRoutingConfig;
 }
 
 /**
@@ -961,5 +985,11 @@ export const DEFAULT_PIPELINE_DEFAULTS: IGlobalPipelineDefaults = {
     maxLogLines: 200,
     code: true,
     prose: false
+  },
+  routing: {
+    mode: 'off',
+    shadowRate: 0,
+    pMin: 0.5,
+    localOnly: false
   }
 };

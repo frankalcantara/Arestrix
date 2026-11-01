@@ -542,6 +542,9 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
     spec["memoryTaskType"] = memoryTaskType;
     spec["memoryMaxLessonsPerRun"] = std::max(1, std::min(500, memory.value("maxLessonsPerRun", 20)));
     spec["memoryMaxLessonChars"] = std::max(100, std::min(20000, memory.value("maxLessonChars", 4000)));
+    json routing = defaults.value("routing", json::object());
+    if (memory.value("localOnly", false)) routing["localOnly"] = true;
+    spec["routing"] = routing;
 
     json tools = json::array();
     if (codeMode.contains("allowedTools") && codeMode["allowedTools"].is_array()) tools = codeMode["allowedTools"];

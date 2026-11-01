@@ -2392,6 +2392,23 @@ taskforge::Json MemoryService::searchGraph(const std::string& projectId,
     return result;
 }
 
+taskforge::Json MemoryService::routingStats(const std::string& projectId,
+                                            const std::string& taskType) {
+    taskforge::Json out{{"success", 0LL}, {"failure", 0LL}, {"coverage", 0.0}};
+    auto* t = ensureTelemetry(projectId);
+    if (!t || taskType.empty()) return out;
+    const auto outcomes = t->validationOutcomes(scopeId(projectId), taskType, 100);
+    long long success = 0;
+    long long failure = 0;
+    for (bool ok : outcomes) {
+        if (ok) ++success;
+        else ++failure;
+    }
+    out["success"] = success;
+    out["failure"] = failure;
+    return out;
+}
+
 void MemoryService::noteMaintenanceEpisode(const std::string& projectId) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     auto it = maintenance_.find(projectKey(projectId));
