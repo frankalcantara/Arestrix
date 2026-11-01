@@ -368,6 +368,15 @@ the coverage vector in the trace: best path utility, sustained fraction,
 conflicts, intent distance and abstention. Traversal only reads the graph and
 never writes knowledge.
 
+### Interdomain bridges
+
+With `globalDefaults.memory.bridges` enabled, maintenance looks for the same
+entity across distinct lenses in approved traces and records a
+`bridge_hypothesis` **hypothesis** with conditions, candidate claims and paths.
+Detection is budgeted per run, limited per entity and deduplicated by lens pair;
+discarded events appear in the report and in `memory bridges detect`. No edge is
+created automatically: promotion is manual, as for any proposal.
+
 ### Model routing
 
 The router estimates local-tier confidence from validation outcomes per

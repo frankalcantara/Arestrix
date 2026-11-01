@@ -16,6 +16,7 @@
 #include "memory/MemoryConsolidator.hpp"
 #include "memory/MemoryRanker.hpp"
 #include "memory/MemoryClaimExtractor.hpp"
+#include "memory/MemoryBridges.hpp"
 #include "memory/MemoryPaths.hpp"
 #include "memory/MemoryTraversal.hpp"
 #include "memory/MemoryStore.hpp"
@@ -38,6 +39,8 @@ struct MemoryMaintenanceConfig {
     bool lensesEnabled = false;
     bool pathsEnabled = false;
     PathOptions pathOptions;
+    bool bridgesEnabled = false;
+    BridgeOptions bridgeOptions;
 };
 
 MemoryMaintenanceConfig maintenanceConfigFromJson(const taskforge::Json& value);
@@ -146,6 +149,8 @@ public:
     taskforge::Json rebuildFacets(const std::string& projectId, bool facetsEnabled);
     taskforge::Json rebuildPaths(const std::string& projectId, bool pathsEnabled,
                                  const PathOptions& options = {});
+    taskforge::Json rebuildBridges(const std::string& projectId, bool bridgesEnabled,
+                                   const BridgeOptions& options = {});
     taskforge::Json listPaths(const std::string& projectId, const std::string& state = "");
     taskforge::Json getPath(const std::string& projectId, const std::string& pathId);
     bool setPathState(const std::string& projectId, const std::string& pathId,

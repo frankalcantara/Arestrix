@@ -405,6 +405,13 @@ export interface IProjectMemoryConfig extends Partial<INodeMemoryConfig> {
     minUses?: number;
     maxPaths?: number;
   };
+  /** E19: propõe pontes interdomínio; nunca cria aresta automaticamente. */
+  bridges?: boolean | {
+    enabled?: boolean;
+    maxProposals?: number;
+    maxPerEntity?: number;
+    maxDiscarded?: number;
+  };
   /** E17: travessia em feixe quando nenhum caminho cobre a consulta. */
   traversal?: boolean | {
     enabled?: boolean;

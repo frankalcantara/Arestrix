@@ -56,6 +56,15 @@ export function pathServingEnabled(
   return !!value?.enabled;
 }
 
+/** E19: pontes interdomínio são apenas propostas. */
+export function bridgesEnabled(
+  config?: { bridges?: boolean | { enabled?: boolean } } | null
+): boolean {
+  const value = config?.bridges;
+  if (typeof value === 'boolean') return value;
+  return !!value?.enabled;
+}
+
 /** E17: travessia em feixe, desligada por padrão. */
 export function traversalEnabled(
   config?: { traversal?: boolean | { enabled?: boolean } } | null
