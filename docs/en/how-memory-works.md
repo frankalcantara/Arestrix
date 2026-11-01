@@ -74,6 +74,13 @@ per vertex/run; any knowledge write, promotion, consolidation or reindex invalid
 Compiled playbooks remain **candidates** and do not enter the brief until promoted. Knowledge with
 low confidence, an open conflict or expired validity is not injected.
 
+With `globalDefaults.memory.promptCache` enabled, the **skill + brief** prefix is sent to the
+Anthropic provider as a system block with `cache_control: ephemeral`; the execution context stays in
+a second, uncached block. The order skill, brief and context is fixed and the brief is identical
+across turns of the same run, so providers with automatic prefix caching (OpenAI-compatible) also
+benefit from the resend. `memory report` shows the fraction of input tokens served by the cache.
+The switch is off by default.
+
 Every injected item is labeled `[MEMO:<id>]`. At the end of the run, the runtime marks an item as
 **used** only when the agent cites its ID in the final answer. “Injected”, “consulted” and “used”
 are distinct signals: `memory_search` results also carry `[MEMO:<id>]` and the same citation

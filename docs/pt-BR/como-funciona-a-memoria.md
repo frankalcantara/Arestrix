@@ -74,6 +74,13 @@ reindexação invalida o cache.
 Playbooks compilados ficam como **candidatos** e não entram no brief até serem promovidos.
 Conhecimento com baixa confiança, conflito aberto ou validade expirada não é injetado.
 
+Com `globalDefaults.memory.promptCache` ligado, o prefixo **skill + brief** é enviado ao provedor
+Anthropic como um bloco de system com `cache_control: ephemeral`; o contexto de execução fica em um
+segundo bloco, sem cache. A ordem skill, brief e contexto é fixa e o brief é idêntico em todos os
+turnos da mesma execução, então provedores com cache automático de prefixo (OpenAI-compatíveis)
+também aproveitam o reenvio. `memory report` mostra a fração de tokens de entrada servida pelo
+cache. O interruptor é desligado por padrão.
+
 Cada item injetado recebe um rótulo `[MEMO:<id>]`. No fim da execução, o runtime só marca como
 **usado** o item cujo ID foi citado pelo agente na resposta final. “Injetado”, “consultado” e
 “usado” são sinais distintos: resultados de `memory_search` também trazem `[MEMO:<id>]` e a mesma

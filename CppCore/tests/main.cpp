@@ -1381,6 +1381,7 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
                                                        {"embeddingRevision", "rev-1"},
                                                        {"embeddingTruncateDim", 768},
                                                        {"validatedReinforcement", true},
+                                                       {"promptCache", true},
                                                        {"consolidationMode", "idle"},
                                                        {"consolidationIdleSeconds", 60},
                                                        {"consolidationDormantDays", 90}}}}}}},
@@ -1441,6 +1442,7 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(src.find("memory.episodeIdFor(projectId, arx_val_run, \"agente\")") != std::string::npos);
     CHECK(src.find("memory.recordValidation(projectId, arx_val_record, true)") != std::string::npos);
     CHECK(src.find("\"memoryValidatedReinforcement\":true") != std::string::npos);
+    CHECK(src.find("\"memoryPromptCache\":true") != std::string::npos);
     // E3: indexacao automatica fora da busca, no fim da execucao.
     CHECK(src.find("memory.indexPending(projectId, 10000, 64)") != std::string::npos);
     CHECK(src.find("arx_mem_index();") != std::string::npos);
@@ -6904,6 +6906,26 @@ TEST(model_client_converts_history_for_openai_and_anthropic) {
     json an = rt::buildRequestBody(rt::resolveProvider("anthropic"), req, true);
     CHECK(an.value("system", std::string()) == "sys");
     CHECK(an["messages"].size() == 3);   // user, assistant, user com os dois tool_result
+
+    // E8: com o interruptor ligado, skill+brief vira o bloco cacheavel e o
+    // contexto de execucao fica fora do cache.
+    req.systemCacheable = "skill+brief";
+    req.systemDynamic = "ctx";
+    req.system = "skill+briefctx";
+    req.promptCache = true;
+    const json cachedRequest = rt::buildRequestBody(rt::resolveProvider("anthropic"), req, true);
+    CHECK(cachedRequest["system"].is_array());
+    CHECK(cachedRequest["system"].size() == 2);
+    CHECK(cachedRequest["system"][0].value("text", std::string()) == "skill+brief");
+    CHECK(cachedRequest["system"][0]["cache_control"].value("type", std::string()) == "ephemeral");
+    CHECK(cachedRequest["system"][1].value("text", std::string()) == "ctx");
+    CHECK(!cachedRequest["system"][1].contains("cache_control"));
+    req.promptCache = false;
+    const json plainRequest = rt::buildRequestBody(rt::resolveProvider("anthropic"), req, true);
+    CHECK(plainRequest.value("system", std::string()) == "skill+briefctx");
+    const json openAiCached = rt::buildRequestBody(rt::resolveProvider("deepseek"), req, true);
+    CHECK(openAiCached["messages"][0].value("content", std::string()) == "skill+briefctx");
+    CHECK(!openAiCached.contains("cache_control"));
     CHECK(an["messages"][2]["content"].size() == 2);
     CHECK(an["messages"][2]["content"][1].value("is_error", false));
     CHECK(an["messages"][1]["content"][1].value("type", std::string()) == "tool_use");

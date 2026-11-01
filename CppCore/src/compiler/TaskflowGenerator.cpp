@@ -512,6 +512,8 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
     // E1: quando ligado, finishHits so atualiza last_used e o veredito de
     // artefato passa a ser o unico caminho de reforco da utilidade.
     spec["memoryValidatedReinforcement"] = memory.value("validatedReinforcement", false);
+    // E8: cache explicito do prefixo skill+brief no protocolo Anthropic.
+    spec["memoryPromptCache"] = memory.value("promptCache", false);
     const json memoryDomains = memoryThemesFor(node, memory);
     if (!memoryDomains.empty()) spec["memoryDomains"] = memoryDomains;
     else if (effectiveMemoryEnabled) spec["memoryDomains"] = json::array({node.id});
