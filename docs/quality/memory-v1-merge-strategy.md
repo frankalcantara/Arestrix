@@ -1,7 +1,9 @@
 # Estratégia de merge do multigrafo (E0–E20)
 
 **Decisão:** trem de PRs empilhados, na ordem `E0 → E1 → … → E20`.
-**Base:** `main` em `5bec4aa` (tag `v2.5.0`).
+**Base inicial:** `main` em `5bec4aa` (tag `v2.5.0`).
+**Estado atual:** E0 mergeada em `main` como `0a4bf5b`; o CI Linux falhou no
+PR #21 e a correção está em `fix/linux-json-at`. E1–E20 aguardam o trem.
 **Topo da cadeia:** `mem/E20-avaliacao-final`.
 **Estado:** as 21 branches já estão publicadas em `origin`.
 
