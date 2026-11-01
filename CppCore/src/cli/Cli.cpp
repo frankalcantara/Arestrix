@@ -489,6 +489,7 @@ std::string sqliteText(sqlite3_stmt* stmt, int index) {
 int runMemory(const std::vector<std::string>& args) {
     if (args.size() < 2 || args[1] == "--help" || args[1] == "-h") {
         std::cout << "arestrix-cli memory report [--project <pasta>] [--root <pasta>] [--db <arquivo>] [--json]\n"
+                     "arestrix-cli memory report --recurrence [--since <data>] [--min-verdict-rate N] [--min-citation-rate N] [--min-executions N] [--min-distinct-inputs N] [--min-reuse-rate N] [--json]\n"
                      "arestrix-cli memory prune  --project <pasta> [--days N] [--db <arquivo>] [--json]\n"
                      "arestrix-cli memory purge  --project <pasta> [--keep-audit] [--db <arquivo>] [--json]\n"
                      "arestrix-cli memory proposals list|accept|reject [id] --project <pasta> [--status pending|all] [--reason texto] [--json]\n"
@@ -617,6 +618,14 @@ int runMemory(const std::vector<std::string>& args) {
     std::string stateMode = "replace";
     bool stateHasExpected = false;
     long long stateExpected = 0;
+    // E10: marco de recorrencia.
+    bool recurrence = false;
+    std::string recurrenceSince;
+    double minVerdictRate = 0.70;
+    double minCitationRate = 0.30;
+    double minReuseRate = 0.20;
+    long long minExecutions = 5;
+    long long minDistinctInputs = 3;
     std::string abSuitePath;
     std::string abObservationsPath;
     fs::path abPipelinePath;
@@ -709,6 +718,33 @@ int runMemory(const std::vector<std::string>& args) {
         else if (a == "--expected") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --expected\n"; return kExitUsage; }
             try { stateExpected = std::stoll(args[++i]); stateHasExpected = true; } catch (...) { std::cerr << "--expected invalido\n"; return kExitUsage; }
+        }
+        else if (a == "--recurrence") {
+            recurrence = true;
+        }
+        else if (a == "--since") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --since\n"; return kExitUsage; }
+            recurrenceSince = args[++i];
+        }
+        else if (a == "--min-verdict-rate") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --min-verdict-rate\n"; return kExitUsage; }
+            try { minVerdictRate = std::stod(args[++i]); } catch (...) { std::cerr << "--min-verdict-rate invalido\n"; return kExitUsage; }
+        }
+        else if (a == "--min-citation-rate") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --min-citation-rate\n"; return kExitUsage; }
+            try { minCitationRate = std::stod(args[++i]); } catch (...) { std::cerr << "--min-citation-rate invalido\n"; return kExitUsage; }
+        }
+        else if (a == "--min-reuse-rate") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --min-reuse-rate\n"; return kExitUsage; }
+            try { minReuseRate = std::stod(args[++i]); } catch (...) { std::cerr << "--min-reuse-rate invalido\n"; return kExitUsage; }
+        }
+        else if (a == "--min-executions") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --min-executions\n"; return kExitUsage; }
+            try { minExecutions = std::stoll(args[++i]); } catch (...) { std::cerr << "--min-executions invalido\n"; return kExitUsage; }
+        }
+        else if (a == "--min-distinct-inputs") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --min-distinct-inputs\n"; return kExitUsage; }
+            try { minDistinctInputs = std::stoll(args[++i]); } catch (...) { std::cerr << "--min-distinct-inputs invalido\n"; return kExitUsage; }
         }
         else if (a == "--suite") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --suite\n"; return kExitUsage; }
@@ -1236,6 +1272,40 @@ int runMemory(const std::vector<std::string>& args) {
     if (dbPath.filename() == "memory.db" && dbPath.parent_path().filename() == "memory" &&
         dbPath.parent_path().parent_path().filename() == ".arestrix") {
         telemetryPath = dbPath.parent_path().parent_path() / "telemetry" / "telemetry.db";
+    }
+
+    if (command == "report" && recurrence) {
+        const fs::path recurrencePath = fs::is_regular_file(telemetryPath, ec) ? telemetryPath : dbPath;
+        taskforge::memory::MemoryStore store(recurrencePath.string(), 0, true);
+        std::string openError;
+        if (!store.open(openError)) {
+            std::cerr << "Falha ao abrir a telemetria: " << openError << "\n";
+            return kExitConfig;
+        }
+        taskforge::Json out = store.recurrenceReport(
+            "project:" + projectId, recurrenceSince, minVerdictRate, minCitationRate,
+            minExecutions, minDistinctInputs, minReuseRate);
+        out["database"] = recurrencePath.string();
+        out["projectId"] = projectId;
+        if (opt.json) {
+            std::cout << out.dump(2) << "\n";
+        } else {
+            std::cout << "Marco de recorrencia: " << out.value("decision", std::string())
+                      << "\n";
+            std::cout << "Motivo: " << out.value("decisionReason", std::string()) << "\n";
+            for (const auto& task : out["taskTypes"]) {
+                std::cout << "  " << task.value("taskType", std::string())
+                          << ": execucoes " << task.value("executions", 0LL)
+                          << " | veredito " << (100.0 * task.value("verdictRate", 0.0))
+                          << "% (aprovacao " << (100.0 * task.value("approvalRate", 0.0))
+                          << "%) | inputs " << task.value("distinctInputs", 0LL)
+                          << " | citacao " << (100.0 * task.value("citationRate", 0.0))
+                          << "% | reuso " << (100.0 * task.value("reuseRate", 0.0))
+                          << "% | tokens/exec " << task.value("tokensPerExecution", 0.0)
+                          << (task.value("ok", false) ? " | OK" : " | abaixo") << "\n";
+            }
+        }
+        return 0;
     }
 
     sqlite3* db = nullptr;

@@ -120,11 +120,17 @@ values are never printed.
 ```powershell
 .\arestrix-cli.exe memory report --project .\examples\04-memoria
 .\arestrix-cli.exe memory report --project .\examples\04-memoria --json
+.\arestrix-cli.exe memory report --project .\examples\04-memoria --recurrence --json
 ```
 
 Reads SQLite natively and shows prompt/output tokens, cache-read and cache-write tokens, calls,
 retries, success/failure, context and injected/used memories. It replaces `memory_report.py` in
 automation; the Python script remains optional for development.
+
+`--recurrence` produces the recurrence milestone per `task_type`: verdict and approval, distinct
+inputs, intent pairs, citation, reuse and tokens per execution. Thresholds can be adjusted with
+`--min-verdict-rate`, `--min-citation-rate`, `--min-executions`, `--min-distinct-inputs` and
+`--min-reuse-rate`; `--since` limits the period. The result includes the recommended decision.
 
 ### `memory prune`
 

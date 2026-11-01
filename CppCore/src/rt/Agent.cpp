@@ -341,6 +341,9 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     const std::string runId = currentRunId(nodeId);
     const std::string itemId = currentItemId("pipeline");
     const std::string inputHash = canonicalInputHash(nodeId, itemId, inputContext);
+    // E10: o template e configuracao do vertice, nao o prompt do usuario. O
+    // hash nao inclui item, input nem substituicoes de variaveis.
+    const std::string intentTemplateHash = project::RunnerSecurity::sha256(spec.promptTemplate);
     int iteration = registerRun(loopKey, spec.maxRuns);
 
     if (spec.model.empty()) {
@@ -607,6 +610,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         episode.nodeId = nodeId;
         episode.itemId = itemId;
         episode.inputHash = inputHash;
+        episode.intentTemplateHash = intentTemplateHash;
         episode.kind = success ? "agent_success" : "agent_failure";
         episode.content = success ? "agent completed" : "agent failed";
         episode.taskType = taskType;

@@ -163,6 +163,7 @@ struct MemoryEpisodeRecord {
     std::string outcome;       // success | failure
     std::string errorClass;
     std::string inputHash;
+    std::string intentTemplateHash;   // SHA-256 do promptTemplate antes das variaveis
     taskforge::Json toolCalls = taskforge::Json::array();
     taskforge::Json filesTouched = taskforge::Json::array();
     taskforge::Json artifacts = taskforge::Json::array();
@@ -507,6 +508,12 @@ public:
     // Métricas de consumo de API (tokens, chamadas e contexto de memória).
     bool recordUsage(const MemoryUsageRecord& usage);
     taskforge::Json usageSummary(const std::string& scopeId) const;
+
+    // E10: marco de recorrencia por task_type sobre a telemetria.
+    taskforge::Json recurrenceReport(const std::string& scopeId, const std::string& since,
+                                     double minVerdictRate, double minCitationRate,
+                                     long long minExecutions, long long minDistinctInputs,
+                                     double minReuseRate) const;
 
     // Validacao independente ligada a um episodio (telemetria).
     // E4: instantaneos de evidencia (conhecimento, sem FK para telemetria).
