@@ -142,6 +142,17 @@ Shows the execution retrieval trace: knowledge version consulted, brief and
 search steps, candidates with scores and position, delivered and used items,
 plus truncation counters.
 
+### `memory claims`
+
+```powershell
+.\arestrix-cli.exe memory claims extract --project .\examples\04-memoria --max-passages 10 --json
+```
+
+Runs claim extraction on demand over passages cited by approved executions. It
+requires `memory.claimExtraction` enabled and `memory.extractor` configured;
+maintenance uses the same path automatically. Proposals start pending and are
+reviewed through `memory proposals`.
+
 ### `memory prune`
 
 ```powershell

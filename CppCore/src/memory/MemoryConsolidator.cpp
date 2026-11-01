@@ -280,6 +280,31 @@ void detectFactContradictions(MemoryStore& store, const std::string& scope,
             objects.insert(normalizeMemoryKey(view.dstName.empty() ? view.edge.valueJson : view.dstName));
         }
         if (objects.size() < 2) continue;
+        // E13: valores funcionais so conflitam quando as validades se
+        // sobrepoem. Dois valores com intervalos disjuntos sao historia, nao
+        // contradicao.
+        auto lower = [](const std::string& value) {
+            return value.empty() ? std::string("0000-00-00T00:00:00Z") : value;
+        };
+        auto upper = [](const std::string& value) {
+            return value.empty() ? std::string("9999-12-31T23:59:59Z") : value;
+        };
+        bool anyOverlap = false;
+        for (size_t i = 0; i < group.size() && !anyOverlap; ++i) {
+            for (size_t j = i + 1; j < group.size(); ++j) {
+                const std::string objectI = normalizeMemoryKey(
+                    group[i].dstName.empty() ? group[i].edge.valueJson : group[i].dstName);
+                const std::string objectJ = normalizeMemoryKey(
+                    group[j].dstName.empty() ? group[j].edge.valueJson : group[j].dstName);
+                if (objectI == objectJ) continue;
+                if (lower(group[i].edge.validFrom) < upper(group[j].edge.validTo) &&
+                    lower(group[j].edge.validFrom) < upper(group[i].edge.validTo)) {
+                    anyOverlap = true;
+                    break;
+                }
+            }
+        }
+        if (!anyOverlap) continue;
 
         const std::string groupId = "cg_" + shortHash(key);
         bool alreadyMarked = true;

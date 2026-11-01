@@ -2,6 +2,7 @@
 #include "MemoryPredicates.hpp"
 #include "MemorySanitizer.hpp"
 #include "MemorySources.hpp"
+#include "project/RunnerSecurity.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -615,6 +616,18 @@ CREATE TABLE IF NOT EXISTS memory_passage (
   status TEXT NOT NULL DEFAULT 'active',
   created_at TEXT NOT NULL,
   UNIQUE(source_id, ordinal)
+);
+
+CREATE TABLE IF NOT EXISTS memory_claim_extraction (
+  id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  passage_id TEXT NOT NULL,
+  passage_hash TEXT NOT NULL,
+  extractor_fingerprint TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'proposed',
+  error TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  UNIQUE(scope_id, passage_hash, extractor_fingerprint)
 );
 
 CREATE VIRTUAL TABLE IF NOT EXISTS memory_passage_fts USING fts5(
@@ -3305,6 +3318,103 @@ bool MemoryStore::promoteProposal(const std::string& scopeId, const std::string&
             error = "falha ao gravar licao promovida";
             return false;
         }
+    } else if (proposal.kind == "claim") {
+        const std::string subject = payload.value("subject", std::string());
+        const std::string predicate = payload.value("predicate", std::string());
+        const std::string object = payload.value("object", std::string());
+        const std::string value = payload.value("value", std::string());
+        if (subject.empty() || predicate.empty() || (object.empty() && value.empty())) {
+            error = "claim promovida sem subject/predicate/object ou value";
+            return false;
+        }
+        std::string subjectId = payload.value("subjectId", std::string());
+        if (subjectId.empty()) {
+            bool ambiguous = false;
+            subjectId = findEntity(scopeId, subject, &ambiguous);
+            if (subjectId.empty() || ambiguous) {
+                error = ambiguous ? "subject ambiguo na claim" : "subject inexistente na claim";
+                return false;
+            }
+        }
+        std::string objectId = payload.value("objectId", std::string());
+        if (!object.empty() && objectId.empty()) {
+            bool ambiguous = false;
+            objectId = findEntity(scopeId, object, &ambiguous);
+            if (objectId.empty() || ambiguous) {
+                error = ambiguous ? "object ambiguo na claim" : "object inexistente na claim";
+                return false;
+            }
+        }
+        const std::string validFrom = payload.value("validFrom", proposal.createdAt);
+        const std::string validTo = payload.value("validTo", std::string());
+        taskforge::Json claimValue{
+            {"value", value.empty() ? taskforge::Json(object) : taskforge::Json(value)},
+            {"unit", payload.value("unit", std::string())},
+            {"polarity", payload.value("polarity", std::string("positive"))},
+            {"qualifiers", payload.contains("qualifiers") ? payload["qualifiers"]
+                                                            : taskforge::Json::object()},
+            {"quote", payload.value("quote", std::string())},
+            {"passageId", payload.value("passageId", std::string())},
+            {"sourceHash", payload.value("passageHash", std::string())}};
+        taskforge::Json metadata{
+            {"lens", payload.value("lens", std::string())},
+            {"claim", true},
+            {"knownPredicate", payload.value("knownPredicate", true)},
+            {"extractorFingerprint", payload.value("extractorFingerprint", std::string())},
+            {"extractorModel", payload.value("extractorModel", std::string())},
+            {"extractorRevision", payload.value("extractorRevision", std::string())},
+            {"passageId", payload.value("passageId", std::string())},
+            {"sourceUri", payload.value("sourceUri", std::string())},
+            {"quote", payload.value("quote", std::string())}};
+        if (payload.value("claim", true) && isSingleValuedPredicate(predicate)) {
+            // E13: so encerra valores anteriores quando as validades se
+            // sobrepoem; intervalos disjuntos contam historia, nao conflito.
+            auto lower = [](const std::string& v) {
+                return v.empty() ? std::string("0000-00-00T00:00:00Z") : v;
+            };
+            auto upper = [](const std::string& v) {
+                return v.empty() ? std::string("9999-12-31T23:59:59Z") : v;
+            };
+            Stmt previous;
+            std::vector<std::string> previousIds;
+            if (prepare(db_, "SELECT id,valid_from,valid_to,dst_id FROM memory_edge "
+                               "WHERE scope_id=? AND src_id=? AND relation=? AND status='active'",
+                         previous, error)) {
+                bindText(previous.stmt, 1, scopeId);
+                bindText(previous.stmt, 2, subjectId);
+                bindText(previous.stmt, 3, predicate);
+                while (stepRetry(previous.stmt) == SQLITE_ROW) {
+                    const std::string otherDst = columnText(previous.stmt, 3);
+                    if (!objectId.empty() && otherDst == objectId) continue;
+                    if (lower(validFrom) < upper(columnText(previous.stmt, 2)) &&
+                        lower(columnText(previous.stmt, 1)) < upper(validTo)) {
+                        previousIds.push_back(columnText(previous.stmt, 0));
+                    }
+                }
+            }
+            for (const auto& previousId : previousIds) {
+                invalidateEdge(previousId, proposal.createdAt, "claim_conflict", "promotion");
+            }
+        }
+        promoted = recordEdge(scopeId, subjectId, objectId, predicate, claimValue,
+                              validFrom, validTo, proposal.confidence, "active",
+                              "claim", proposal.id, metadata);
+        if (promoted.empty()) {
+            error = "falha ao gravar claim promovida";
+            return false;
+        }
+        MemoryEvidenceRecord claimEvidence;
+        claimEvidence.scopeId = scopeId;
+        claimEvidence.targetKind = "claim";
+        claimEvidence.targetId = promoted;
+        claimEvidence.action = "promote";
+        claimEvidence.episodeId = proposal.sourceEpisodeId;
+        claimEvidence.artifactHash = payload.value("passageHash", std::string());
+        claimEvidence.excerptHash = project::RunnerSecurity::sha256(
+            payload.value("quote", std::string()));
+        claimEvidence.summary = payload.value("quote", std::string());
+        claimEvidence.ok = true;
+        recordEvidence(claimEvidence);
     } else if (proposal.kind == "fact") {
         const std::string subject = payload.value("subject", std::string());
         const std::string predicate = payload.value("predicate", std::string());
@@ -3754,6 +3864,41 @@ std::unordered_map<std::string, std::string> MemoryStore::nodeNames(
         out[columnText(st.stmt, 0)] = columnText(st.stmt, 1);
     }
     return out;
+}
+
+std::string MemoryStore::findEntity(const std::string& scopeId, const std::string& mention,
+                                    bool* ambiguous) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (ambiguous) *ambiguous = false;
+    if (!db_ || mention.empty()) return "";
+    const std::string key = normalizeMemoryKey(mention);
+    if (key.empty()) return "";
+    Stmt st;
+    std::string error;
+    std::vector<std::string> ids;
+    if (prepare(db_, "SELECT DISTINCT node_id FROM memory_alias WHERE scope_id=? AND alias=?",
+                 st, error)) {
+        bindText(st.stmt, 1, scopeId);
+        bindText(st.stmt, 2, key);
+        while (stepRetry(st.stmt) == SQLITE_ROW) ids.push_back(columnText(st.stmt, 0));
+    }
+    if (ids.empty()) {
+        Stmt nodes;
+        if (prepare(db_, "SELECT id,canonical_name FROM memory_node WHERE scope_id=? AND kind<>'conflict'",
+                     nodes, error)) {
+            bindText(nodes.stmt, 1, scopeId);
+            while (stepRetry(nodes.stmt) == SQLITE_ROW) {
+                if (normalizeMemoryKey(columnText(nodes.stmt, 1)) == key) {
+                    ids.push_back(columnText(nodes.stmt, 0));
+                }
+            }
+        }
+    }
+    if (ids.size() > 1) {
+        if (ambiguous) *ambiguous = true;
+        return "";
+    }
+    return ids.empty() ? std::string() : ids.front();
 }
 
 std::string MemoryStore::searchContext(const std::string& scopeId, const std::string& text,
@@ -5031,6 +5176,99 @@ taskforge::Json MemoryStore::sourceSummary(const std::string& scopeId) const {
         }
     }
     return out;
+}
+
+std::vector<std::string> MemoryStore::usedPassageIds(const std::string& scopeId,
+                                                     size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<std::string> out;
+    if (!db_) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT DISTINCT h.memory_id FROM memory_hit h "
+                       "JOIN memory_validation v ON v.scope_id=h.scope_id "
+                       "AND v.run_id=h.run_id AND v.node_id=h.node_id AND v.ok=1 "
+                       "WHERE h.scope_id=? AND h.used=1 AND h.memory_id LIKE 'psg_%' "
+                       "ORDER BY h.memory_id LIMIT ?", st, error)) {
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    sqlite3_bind_int(st.stmt, 2, static_cast<int>(std::max<size_t>(1, limit)));
+    while (stepRetry(st.stmt) == SQLITE_ROW) out.push_back(columnText(st.stmt, 0));
+    return out;
+}
+
+std::vector<MemoryClaimCandidate> MemoryStore::passagesForIds(
+    const std::string& scopeId, const std::vector<std::string>& ids, size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<MemoryClaimCandidate> out;
+    if (!db_ || ids.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT p.id,p.source_id,s.uri,p.text,p.text_hash,p.start,p.end "
+                       "FROM memory_passage p JOIN memory_source s ON s.id=p.source_id "
+                       "WHERE p.scope_id=? AND p.status='active' AND s.status='active' "
+                       "AND p.id=? LIMIT 1", st, error)) {
+        return out;
+    }
+    for (const auto& id : ids) {
+        if (out.size() >= limit) break;
+        sqlite3_reset(st.stmt);
+        sqlite3_clear_bindings(st.stmt);
+        bindText(st.stmt, 1, scopeId);
+        bindText(st.stmt, 2, id);
+        if (stepRetry(st.stmt) == SQLITE_ROW) {
+            out.push_back({columnText(st.stmt, 0), columnText(st.stmt, 1),
+                           columnText(st.stmt, 2), columnText(st.stmt, 3),
+                           columnText(st.stmt, 4), columnInt(st.stmt, 5),
+                           columnInt(st.stmt, 6)});
+        }
+    }
+    return out;
+}
+
+bool MemoryStore::claimExtractionSeen(const std::string& scopeId,
+                                      const std::string& passageHash,
+                                      const std::string& fingerprint) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || passageHash.empty() || fingerprint.empty()) return false;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT 1 FROM memory_claim_extraction WHERE scope_id=? "
+                       "AND passage_hash=? AND extractor_fingerprint=? "
+                       "AND status IN ('proposed','empty','abstained') LIMIT 1", st, error)) {
+        return false;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, passageHash);
+    bindText(st.stmt, 3, fingerprint);
+    return stepRetry(st.stmt) == SQLITE_ROW;
+}
+
+bool MemoryStore::markClaimExtraction(const std::string& scopeId, const std::string& passageId,
+                                      const std::string& passageHash,
+                                      const std::string& fingerprint,
+                                      const std::string& status, const std::string& error) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || passageHash.empty() || fingerprint.empty()) return false;
+    Stmt st;
+    std::string sqlError;
+    if (!prepare(db_, "INSERT INTO memory_claim_extraction(id,scope_id,passage_id,passage_hash,"
+                       "extractor_fingerprint,status,error,created_at) VALUES(?,?,?,?,?,?,?,?) "
+                       "ON CONFLICT(scope_id,passage_hash,extractor_fingerprint) DO UPDATE SET "
+                       "status=excluded.status,error=excluded.error", st, sqlError)) {
+        lastError_ = sqlError;
+        return false;
+    }
+    bindText(st.stmt, 1, newId("cex"));
+    bindText(st.stmt, 2, scopeId);
+    bindText(st.stmt, 3, passageId);
+    bindText(st.stmt, 4, passageHash);
+    bindText(st.stmt, 5, fingerprint);
+    bindText(st.stmt, 6, status);
+    bindText(st.stmt, 7, error);
+    bindText(st.stmt, 8, nowIso());
+    return stepRetry(st.stmt) == SQLITE_DONE;
 }
 
 taskforge::Json MemoryStore::toCognitiveJson(const std::string& scopeId) const {

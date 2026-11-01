@@ -288,6 +288,25 @@ conteúdo é uma operação nula. `memory_search` devolve trechos com
 `[MEMO:psg:<id>]`, caminho e posição; citar o ID marca o trecho como usado. O
 brief não inclui trechos nesta etapa.
 
+### Afirmações a partir de trechos
+
+Com `globalDefaults.memory.claimExtraction` ligado, a manutenção escolhe
+trechos com `used=1` em execuções aprovadas, ainda não extraídos pelo fingerprint
+atual do extrator. O modelo local (`memory.extractor`: `baseUrl`, `model`,
+`revision`, versões de prompt/schema, `maxItems` e timeout) devolve JSON e nunca
+roda durante a execução do agente.
+
+Cada afirmação vira uma proposta `claim` pendente com sujeito, predicado, objeto
+ou valor, unidade, polaridade, qualificadores, validade, lente e `quote`. A
+validação exige JSON válido, `quote` literal no trecho, datas e unidade
+analisáveis e resolução de entidade por alias; menção ambígua gera abstenção.
+Predicados fora do catálogo continuam como proposta marcada.
+
+A promoção é manual e grava uma aresta com lente, citação e fingerprint do
+extrator no metadata, mais um instantâneo de evidência. Para predicados de valor
+único, só valores com validade sobreposta encerram o anterior; intervalos
+disjuntos permanecem como história.
+
 ### Traços de recuperação
 
 Toda escrita de conhecimento incrementa `knowledge_version` na mesma transação;

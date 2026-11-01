@@ -286,6 +286,25 @@ content is a no-op. `memory_search` returns passages with `[MEMO:psg:<id>]`,
 path and position; citing the ID marks the passage as used. The brief does not
 include passages at this stage.
 
+### Claims from passages
+
+With `globalDefaults.memory.claimExtraction` enabled, maintenance selects
+passages with `used=1` in approved executions that have not been extracted by
+the current extractor fingerprint. The local model (`memory.extractor`:
+`baseUrl`, `model`, `revision`, prompt/schema versions, `maxItems` and timeout)
+returns JSON and never runs during agent execution.
+
+Each claim becomes a pending `claim` proposal with subject, predicate, object or
+value, unit, polarity, qualifiers, validity, lens and `quote`. Validation
+requires valid JSON, a quote literally present in the passage, parsable dates and
+unit, and alias entity resolution; an ambiguous mention abstains. Predicates
+outside the catalog remain as flagged proposals.
+
+Promotion is manual and writes an edge with lens, citation and extractor
+fingerprint in metadata, plus an evidence snapshot. For single-valued predicates,
+only values with overlapping validity close the previous one; disjoint intervals
+remain as history.
+
 ### Retrieval traces
 
 Every knowledge write bumps `knowledge_version` in the same transaction; reads

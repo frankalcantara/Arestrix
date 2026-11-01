@@ -500,6 +500,7 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory workspace init|status --project <pasta> [--workspace-id ID] [--json]\n"
                      "arestrix-cli memory state list|declare|get|set --project <pasta> [--key K] [--scope project|task_type|item] [--schema JSON] [--value JSON] [--expected N] [--item ID] [--task-type T] [--json]\n"
                      "arestrix-cli memory trace show <run> <no> --project <pasta> [--json]\n"
+                     "arestrix-cli memory claims extract --project <pasta> [--max-passages N] [--json]\n"
                      "arestrix-cli memory ab validate|order|report --suite <arquivo> [--observations <arquivo>] [--repetitions N] [--seed N] [--json]\n"
                      "arestrix-cli memory ab run --suite <arquivo> --pipeline <grafo> --node <vertice> [--repetitions N] [--seed N] [--root <pasta>] [--db <arquivo>] [--json]\n"
                      "arestrix-cli memory promote --project <pasta> --kind lesson|fact|playbook --id ID --evidence texto [--workspace-id ID] [--json]\n"
@@ -510,7 +511,8 @@ int runMemory(const std::vector<std::string>& args) {
     if (command != "report" && command != "prune" && command != "purge" && command != "proposals" &&
         command != "embeddings" && command != "health" && command != "reindex" &&
         command != "consolidate" && command != "workspace" && command != "state" &&
-        command != "ab" && command != "trace" && command != "promote" && command != "unpromote") {
+        command != "ab" && command != "trace" && command != "claims" &&
+        command != "promote" && command != "unpromote") {
         std::cerr << "arestrix-cli memory: comando desconhecido: " << command << "\n";
         return kExitUsage;
     }
@@ -586,6 +588,13 @@ int runMemory(const std::vector<std::string>& args) {
         traceRun = args[3];
         traceNode = args[4];
         optionStart = 5;
+    } else if (command == "claims") {
+        if (args.size() < 3 || args[2] != "extract") {
+            std::cerr << "arestrix-cli memory claims: informe extract\n";
+            return kExitUsage;
+        }
+        embeddingAction = args[2];
+        optionStart = 3;
     } else if (command == "ab") {
         if (args.size() < 3) {
             std::cerr << "arestrix-cli memory ab: informe validate|order|report|run\n";
@@ -642,6 +651,7 @@ int runMemory(const std::vector<std::string>& args) {
     double minReuseRate = 0.20;
     long long minExecutions = 5;
     long long minDistinctInputs = 3;
+    size_t claimsMaxPassages = 10;
     std::string abSuitePath;
     std::string abObservationsPath;
     fs::path abPipelinePath;
@@ -761,6 +771,12 @@ int runMemory(const std::vector<std::string>& args) {
         else if (a == "--min-distinct-inputs") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --min-distinct-inputs\n"; return kExitUsage; }
             try { minDistinctInputs = std::stoll(args[++i]); } catch (...) { std::cerr << "--min-distinct-inputs invalido\n"; return kExitUsage; }
+        }
+        else if (a == "--max-passages") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --max-passages\n"; return kExitUsage; }
+            try {
+                claimsMaxPassages = static_cast<size_t>(std::max<long long>(1, std::min<long long>(100, std::stoll(args[++i]))));
+            } catch (...) { std::cerr << "--max-passages invalido\n"; return kExitUsage; }
         }
         else if (a == "--suite") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --suite\n"; return kExitUsage; }
@@ -962,6 +978,28 @@ int runMemory(const std::vector<std::string>& args) {
         if (!memory.configure(projectId, true, dbPath.string())) {
             std::cerr << "Falha ao abrir o banco de memoria: " << dbPath.string() << "\n";
             return kExitConfig;
+        }
+
+        if (command == "claims") {
+            auto config = taskforge::memory::MemoryClaimExtractor::configFromJson(memorySettings);
+            if (!config.enabled) {
+                std::cerr << "memory.claimExtraction esta desligado\n";
+                return kExitConfig;
+            }
+            taskforge::Json out = memory.extractClaims(projectId, config, claimsMaxPassages);
+            out["projectId"] = projectId;
+            if (opt.json) {
+                std::cout << out.dump(2) << "\n";
+            } else if (out.value("ok", false)) {
+                std::cout << "Afirmacoes: candidatos " << out.value("candidates", 0LL)
+                          << " | extraidos " << out.value("extracted", 0LL)
+                          << " | propostas " << out.value("proposed", 0LL)
+                          << " | abstencoes " << out.value("abstained", 0LL)
+                          << " | falhas " << out.value("failed", 0LL) << "\n";
+            } else {
+                std::cerr << "Falha na extracao: " << out.value("error", std::string()) << "\n";
+            }
+            return out.value("ok", false) ? 0 : kExitConfig;
         }
 
         if (command == "health") {
