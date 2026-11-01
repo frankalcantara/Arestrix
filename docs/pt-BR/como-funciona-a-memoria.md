@@ -414,6 +414,15 @@ A telemetria registra prompt, saída e os tokens de **prompt cache**: leitura de
 `arestrix-cli memory report` mostram o total; o custo efetivo usa o preço do provedor para tokens
 normais, cached e de escrita.
 
+## 8.1 Avaliação final
+
+A avaliação reproduzível compara lexical, híbrida com fallback, facetas +
+travessia, caminhos + serviço e roteamento em `shadow`, sempre sobre o mesmo
+conhecimento congelado e orçamento. O relatório registra tokens, chamadas,
+brief, hits e fingerprints. Nenhum interruptor experimental passa a ligado por
+padrão: `pathServing`, `traversal`, `routing.mode` e `bridges` continuam `off`
+até uma medição com dados reais mostrar ganho e custo justificados.
+
 ## 9. Retenção, segurança e escopo
 
 - **Escopo estrito:** o conhecimento do projeto não vaza para outro projeto; o workspace só é
