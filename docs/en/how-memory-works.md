@@ -340,6 +340,21 @@ arestrix-cli memory paths show <path> --project . --json
 arestrix-cli memory paths retire <path> --project .
 ```
 
+### Path serving
+
+With `globalDefaults.memory.pathServing` enabled, the brief and
+`memory_search` try active paths compatible with the `task_type` first. Every
+claim must be active, in validity and allowed by the access policy; if one
+fails, the whole path is not served. The path appears as
+`[MEMO:path:<id>]` with its claims and sources. Citing the path counts as using
+its claims; citing a claim also marks the path. A configurable fraction of
+queries uses Thompson sampling and is recorded in the trace.
+
+Paths with enough utility and uses materialize derived `via_caminho` edges.
+They are reconstructible projections, not evidence, and are excluded from
+conflict detection and normal search; they follow the path state. The switch
+stays off until the A/B result is recorded.
+
 ### Retrieval traces
 
 Every knowledge write bumps `knowledge_version` in the same transaction; reads

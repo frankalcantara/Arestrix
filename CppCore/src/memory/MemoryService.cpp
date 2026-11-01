@@ -253,6 +253,37 @@ taskforge::Json maintenanceConfigToJson(const MemoryMaintenanceConfig& config) {
                                       {"baseUrl", config.claimExtractor.baseUrl}}}};
 }
 
+PathServingConfig pathServingConfigFromJson(const taskforge::Json& value) {
+    PathServingConfig config;
+    if (!value.is_object()) return config;
+    const taskforge::Json switchValue = value.contains("pathServing")
+        ? value["pathServing"] : taskforge::Json();
+    if (switchValue.is_boolean()) {
+        config.enabled = switchValue.get<bool>();
+        return config;
+    }
+    if (!switchValue.is_object()) return config;
+    config.enabled = switchValue.value("enabled", false);
+    config.explorationRate = std::max(0.0, std::min(1.0,
+        switchValue.value("explorationRate", 0.0)));
+    config.minUtility = std::max(0.0, std::min(1.0,
+        switchValue.value("minUtility", 0.6)));
+    config.minUses = std::max<long long>(1, std::min<long long>(100000,
+        switchValue.value("minUses", 3)));
+    config.maxPaths = static_cast<size_t>(std::max<long long>(1,
+        std::min<long long>(8, switchValue.value("maxPaths", 2))));
+    return config;
+}
+
+taskforge::Json pathServingConfigToJson(const PathServingConfig& config) {
+    return taskforge::Json{
+        {"enabled", config.enabled},
+        {"explorationRate", config.explorationRate},
+        {"minUtility", config.minUtility},
+        {"minUses", config.minUses},
+        {"maxPaths", static_cast<long long>(config.maxPaths)}};
+}
+
 MemoryService::~MemoryService() {
     stopAllMaintenance();
 }
@@ -879,6 +910,33 @@ std::string MemoryService::formatLessons(const std::string& projectId,
     return s ? s->formatLessons(scopeId(projectId), domains) : std::string();
 }
 
+taskforge::Json MemoryService::servePaths(const std::string& projectId,
+                                          const std::string& taskType,
+                                          const std::string& intent,
+                                          const std::vector<std::string>& access) {
+    const auto config = pathServingConfig(projectId);
+    if (!config.enabled) return taskforge::Json{{"ok", true}, {"served", false},
+                                                {"enabled", false},
+                                                {"paths", taskforge::Json::array()}};
+    auto* s = ensureStore(projectId);
+    if (!s) return taskforge::Json{{"ok", false}, {"served", false},
+                                   {"paths", taskforge::Json::array()}};
+    auto served = MemoryPaths::serve(*s, scopeId(projectId), taskType, intent, access,
+                                     8, config.explorationRate);
+    taskforge::Json filtered = taskforge::Json::array();
+    for (const auto& path : served["paths"]) {
+        if (!path.is_object()) continue;
+        if (path.value("utility", 0.0) < config.minUtility) continue;
+        if (path.value("uses", 0LL) < config.minUses) continue;
+        if (filtered.size() >= config.maxPaths) break;
+        filtered.push_back(path);
+    }
+    served["paths"] = filtered;
+    served["served"] = !filtered.empty();
+    served["enabled"] = true;
+    return served;
+}
+
 std::string MemoryService::buildBrief(const std::string& projectId, const std::string& itemId,
                                       const std::vector<std::string>& domains,
                                       const std::vector<std::string>& allowedKeys,
@@ -913,6 +971,14 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
         }
         for (const auto& id : briefInfo.playbookIds) {
             addTraceCandidate(candidates, id, "playbook", 0.0, 0.0, 0.0);
+            delivered.insert(id);
+        }
+        for (const auto& id : briefInfo.pathIds) {
+            addTraceCandidate(candidates, id, "path", 0.0, 0.0, 0.0);
+            delivered.insert(id);
+        }
+        for (const auto& id : briefInfo.pathClaimIds) {
+            addTraceCandidate(candidates, id, "fact", 0.0, 0.0, 0.0);
             delivered.insert(id);
         }
         if (!briefInfo.workingKeys.empty()) {
@@ -979,6 +1045,62 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
     const size_t budget = maxTokens == 0 ? std::string::npos : maxTokens * 4;   // ~4 caracteres/token
     std::string brief;
     bool truncated = false;
+
+    // E16: caminhos ativos elegiveis sao servidos antes da travessia/grafo.
+    if (includeLessons) {
+        const auto servedPaths = servePaths(projectId, taskType, intent, {});
+        std::string pathText;
+        std::vector<std::string> pathIds;
+        std::vector<std::string> pathClaimIds;
+        if (servedPaths.value("served", false)) {
+            for (const auto& path : servedPaths["paths"]) {
+                if (!path.is_object()) continue;
+                const std::string text = path.value("text", std::string());
+                if (text.empty()) continue;
+                pathText += text;
+                pathIds.push_back(path.value("id", std::string()));
+                for (const auto& claim : path["claims"]) {
+                    if (claim.is_string()) pathClaimIds.push_back(claim.str());
+                }
+            }
+        }
+        if (!pathText.empty()) {
+            const std::string header =
+                "\n--- [ARESTRIX MEMORY: CAMINHOS CANONICOS] ---\n"
+                "Caminhos reutilizaveis; cada afirmacao tambem pode ser citada.\n";
+            if (budget == std::string::npos || header.size() + pathText.size() <= budget) {
+                brief += header + pathText;
+                if (info) {
+                    info->pathIds = pathIds;
+                    info->pathClaimIds = pathClaimIds;
+                }
+                for (const auto& id : pathIds) {
+                    addTraceCandidate(traceCandidates, id, "path", 0.0, 0.0, 0.0);
+                }
+                for (const auto& id : pathClaimIds) {
+                    addTraceCandidate(traceCandidates, id, "fact", 0.0, 0.0, 0.0);
+                }
+                taskforge::Json pathCandidates = taskforge::Json::array();
+                for (const auto& id : pathIds) {
+                    pathCandidates.push_back(taskforge::Json{
+                        {"id", id}, {"kind", "path"}, {"delivered", true}});
+                }
+                for (const auto& id : pathClaimIds) {
+                    pathCandidates.push_back(taskforge::Json{
+                        {"id", id}, {"kind", "fact"}, {"delivered", true}});
+                }
+                recordStep("path", "", pathCandidates);
+                if (servedPaths.value("exploration", false) && !runId.empty() && !nodeId.empty()) {
+                    recordTraceStep(projectId, runId, nodeId, itemId, taskType, intentHash, "",
+                                    taskforge::Json{{"kind", "path_exploration"},
+                                                    {"exploration", true},
+                                                    {"candidates", pathCandidates}});
+                }
+            } else {
+                truncated = true;
+            }
+        }
+    }
 
     if (!selectedLessons.empty()) {
         const std::string header =
@@ -1179,6 +1301,8 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
         for (const auto& id : resultInfo.lessonIds) delivered.insert(id);
         for (const auto& id : resultInfo.factIds) delivered.insert(id);
         for (const auto& id : resultInfo.playbookIds) delivered.insert(id);
+        for (const auto& id : resultInfo.pathIds) delivered.insert(id);
+        for (const auto& id : resultInfo.pathClaimIds) delivered.insert(id);
         if (!resultInfo.workingKeys.empty()) delivered.insert("state:" + itemId);
         recordStep("brief", traceQuery,
                    traceCandidatesToJson(traceCandidates, delivered));
@@ -1346,6 +1470,12 @@ bool MemoryService::recordBriefHits(const std::string& projectId, const std::str
     for (const auto& id : info.playbookIds) {
         ok = t->recordHit(scope, runId, nodeId, id, "playbook", true, false) && ok;
     }
+    for (const auto& id : info.pathIds) {
+        ok = t->recordHit(scope, runId, nodeId, id, "path", true, false) && ok;
+    }
+    for (const auto& id : info.pathClaimIds) {
+        ok = t->recordHit(scope, runId, nodeId, id, "fact", true, false) && ok;
+    }
     for (const auto& key : info.workingKeys) {
         ok = t->recordHit(scope, runId, nodeId, "working:" + key, "working", true, false) && ok;
     }
@@ -1357,7 +1487,29 @@ int MemoryService::markHitsUsed(const std::string& projectId, const std::string&
                                 int* invalid) {
     if (invalid) *invalid = 0;
     auto* t = ensureTelemetry(projectId);
-    return t ? t->markHitsUsed(scopeId(projectId), runId, nodeId, memoryIds, invalid) : 0;
+    if (!t) return 0;
+    // E16: citar um caminho conta como uso de suas afirmacoes; citar uma
+    // afirmacao tambem marca o caminho que a contem.
+    std::vector<std::string> expanded = memoryIds;
+    std::set<std::string> seen(expanded.begin(), expanded.end());
+    auto add = [&](const std::string& id) {
+        if (!id.empty() && seen.insert(id).second) expanded.push_back(id);
+    };
+    if (auto* s = existingStore(projectId)) {
+        const std::string scope = scopeId(projectId);
+        for (const auto& id : memoryIds) {
+            if (id.rfind("path_", 0) == 0) {
+                const auto path = s->getPath(scope, id);
+                if (!path.empty() && path["claims"].is_array()) {
+                    for (const auto& claim : path["claims"]) {
+                        if (claim.is_string()) add(claim.str());
+                    }
+                }
+            }
+            for (const auto& pathId : s->pathsForClaim(id)) add(pathId);
+        }
+    }
+    return t->markHitsUsed(scopeId(projectId), runId, nodeId, expanded, invalid);
 }
 
 bool MemoryService::finishHits(const std::string& projectId, const std::string& runId,
@@ -1552,6 +1704,7 @@ taskforge::Json MemoryService::rebuildPaths(const std::string& projectId, bool p
     }
     auto report = MemoryPaths::consolidate(*s, scope, traces, options);
     report["reconcile"] = MemoryPaths::reconcile(*s, scope);
+    report["shortcuts"] = MemoryPaths::materializeShortcuts(*s, scope);
     report["summary"] = s->pathSummary(scope);
     return report;
 }
@@ -1688,12 +1841,48 @@ std::string MemoryService::searchContext(const std::string& projectId, const std
                                          size_t limit, const std::vector<std::string>& domains,
                                          std::vector<MemoryHitRef>* hits,
                                          const std::string& runId, const std::string& nodeId,
-                                         const std::vector<std::string>& lenses) {
+                                         const std::vector<std::string>& lenses,
+                                         const std::string& taskType,
+                                         const std::string& intent) {
     auto* s = ensureStore(projectId);
     if (!s) return std::string();
     std::string result;
+    std::string pathResult;
     std::string hybrid;
     taskforge::Json stepCandidates = taskforge::Json::array();
+    auto appendPathCandidate = [&](const std::string& id, const std::string& kind) {
+        stepCandidates.push_back(taskforge::Json{
+            {"id", id}, {"kind", kind}, {"lexical", 0.0}, {"vector", 0.0},
+            {"fused", 0.0}, {"position", static_cast<long long>(stepCandidates.size())},
+            {"delivered", true}});
+    };
+
+    // E16: caminho elegivel vem antes da busca no grafo e nao esconde o
+    // fallback lexical/vetorial quando o caminho nao cobre a consulta.
+    const auto servedPaths = servePaths(projectId, taskType, intent, {});
+    if (servedPaths.value("served", false)) {
+        std::string pathText;
+        for (const auto& path : servedPaths["paths"]) {
+            if (!path.is_object()) continue;
+            const std::string textBlock = path.value("text", std::string());
+            if (textBlock.empty()) continue;
+            pathText += textBlock;
+            const std::string pathId = path.value("id", std::string());
+            if (!pathId.empty()) {
+                if (hits) hits->push_back(MemoryHitRef{pathId, "path"});
+                appendPathCandidate(pathId, "path");
+            }
+            for (const auto& claim : path["claims"]) {
+                if (!claim.is_string()) continue;
+                if (hits) hits->push_back(MemoryHitRef{claim.str(), "fact"});
+                appendPathCandidate(claim.str(), "fact");
+            }
+        }
+        if (!pathText.empty()) {
+            pathResult = "\n--- [ARESTRIX MEMORY: CAMINHOS CANONICOS] ---\n" + pathText;
+        }
+    }
+
     if (hybridSearch(projectId, text, limit, domains, hits, hybrid, &stepCandidates, lenses)) {
         result = std::move(hybrid);
     } else {
@@ -1705,6 +1894,10 @@ std::string MemoryService::searchContext(const std::string& projectId, const std
             addTraceCandidate(candidates, lexical[i].id, lexical[i].kind, score, 0.0, score);
         }
         stepCandidates = traceCandidatesToJson(candidates, {});
+    }
+    if (!pathResult.empty()) {
+        if (!result.empty()) result = pathResult + "\n" + result;
+        else result = std::move(pathResult);
     }
 
     std::string passageText;
@@ -1739,9 +1932,11 @@ std::string MemoryService::searchContext(const std::string& projectId, const std
                 stepCandidates[i]["delivered"] = true;
             }
         }
-        recordTraceStep(projectId, runId, nodeId, "", "", "", "",
+        recordTraceStep(projectId, runId, nodeId, "", taskType, intent.empty()
+                            ? std::string() : project::RunnerSecurity::sha256(intent), "",
                         taskforge::Json{{"kind", "search"},
                                         {"queryHash", project::RunnerSecurity::sha256(text)},
+                                        {"exploration", servedPaths.value("exploration", false)},
                                         {"candidates", stepCandidates}});
     }
 
@@ -2032,6 +2227,20 @@ MemoryMaintenanceConfig MemoryService::maintenanceConfig(const std::string& proj
     if (it == maintenance_.end() || !it->second) return MemoryMaintenanceConfig{};
     std::lock_guard<std::mutex> runtimeLock(it->second->mutex);
     return it->second->config;
+}
+
+bool MemoryService::configurePathServing(const std::string& projectId,
+                                         const PathServingConfig& config) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    pathServing_[projectKey(projectId)] = config;
+    invalidateBriefCache();
+    return true;
+}
+
+PathServingConfig MemoryService::pathServingConfig(const std::string& projectId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    auto it = pathServing_.find(projectKey(projectId));
+    return it == pathServing_.end() ? PathServingConfig{} : it->second;
 }
 
 void MemoryService::noteMaintenanceEpisode(const std::string& projectId) {
@@ -2499,6 +2708,7 @@ taskforge::Json MemoryService::toJson(const std::string& projectId) {
     out["facets"] = s->facetSummary(scopeId(projectId));
     out["paths"] = s->pathSummary(scopeId(projectId));
     out["pathRecords"] = listPaths(projectId);
+    out["pathServing"] = pathServingConfigToJson(pathServingConfig(projectId));
     return out;
 }
 
@@ -2544,6 +2754,7 @@ void MemoryService::closeProject(const std::string& projectId) {
     stores_.erase(projectKey(projectId));
     persistent_.erase(projectKey(projectId));
     paths_.erase(projectKey(projectId));
+    pathServing_.erase(projectKey(projectId));
     readOnly_.erase(projectKey(projectId));
     telemetry_.erase(projectKey(projectId));
     telemetryPaths_.erase(projectKey(projectId));

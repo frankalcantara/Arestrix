@@ -47,6 +47,15 @@ export function pathsEnabled(
   return !!value?.enabled;
 }
 
+/** E16: o serviço de caminhos fica desligado até o A/B ser registrado. */
+export function pathServingEnabled(
+  config?: { pathServing?: boolean | { enabled?: boolean } } | null
+): boolean {
+  const value = config?.pathServing;
+  if (typeof value === 'boolean') return value;
+  return !!value?.enabled;
+}
+
 /**
  * Mapeia o modelo antigo (enabled/semanticLessons/recordLessons) para o novo
  * modo do vértice. O novo campo `mode` tem precedência quando presente.

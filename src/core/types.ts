@@ -374,6 +374,14 @@ export interface IProjectMemoryConfig extends Partial<INodeMemoryConfig> {
     prior?: number;
     mu?: number;
   };
+  /** E16: serve caminhos ativos antes da busca no grafo (off até o A/B). */
+  pathServing?: boolean | {
+    enabled?: boolean;
+    explorationRate?: number;
+    minUtility?: number;
+    minUses?: number;
+    maxPaths?: number;
+  };
   extractor?: {
     baseUrl?: string;
     model?: string;

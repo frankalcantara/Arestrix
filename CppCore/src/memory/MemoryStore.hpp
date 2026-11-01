@@ -33,6 +33,8 @@ struct MemoryBriefInfo {
     std::vector<std::string> lessonIds;
     std::vector<std::string> factIds;
     std::vector<std::string> playbookIds;
+    std::vector<std::string> pathIds;
+    std::vector<std::string> pathClaimIds;
     std::vector<std::string> workingKeys;
     size_t chars = 0;
     size_t estimatedTokens = 0;
@@ -664,6 +666,11 @@ public:
                                                const std::string& claimId) const;
     bool revalidatePathClaim(const std::string& scopeId, const std::string& pathId,
                              const std::string& oldClaimId, const std::string& newClaimId);
+    bool syncPathShortcut(const std::string& scopeId, const std::string& pathId,
+                          bool active, const std::string& srcId, const std::string& dstId,
+                          const std::vector<std::string>& claimIds, double utility);
+    taskforge::Json shortcutForPath(const std::string& scopeId,
+                                    const std::string& pathId) const;
     taskforge::Json pathSummary(const std::string& scopeId) const;
 
     // E12: ingere uma versao de fonte e pesquisa trechos ativos.
