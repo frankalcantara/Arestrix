@@ -243,6 +243,29 @@ The primary metric is **validator approval**, compared in pairs. The report incl
 the measurement. `memory ab report` remains available for analysing an observation file collected
 elsewhere.
 
+### Recurrence milestone
+
+E10 measures whether tasks repeat often enough to justify paths. The episode
+records `intent_template_hash`, the SHA-256 of the vertex `promptTemplate`
+before variable substitution. The template is configuration, not the user
+prompt, so this field never stores input text.
+
+```bash
+arestrix-cli memory report --recurrence --json
+arestrix-cli memory report --recurrence --since 2026-10-01T00:00:00Z \
+  --min-verdict-rate 0.70 --min-citation-rate 0.30 \
+  --min-executions 5 --min-distinct-inputs 3 --min-reuse-rate 0.20
+```
+
+For each `task_type`, the report includes executions, executions with a verdict,
+approval rate, distinct `input_hash` values, (`task_type`,
+`intent_template_hash`) pairs, citation rate, reuse rate and tokens per
+execution. Reuse is the fraction of executions that cite an item already cited
+by an earlier execution of the same `task_type`. The result selects one of
+`continue_full`, `continue_base_knowledge` (E11–E14, paths deferred),
+`fix_validators` or `insufficient_data`. The thresholds used are stored in the
+JSON.
+
 ### Cost per run
 
 Telemetry records prompt, output and **prompt cache** tokens: cache reads (`cached_tokens`) and cache

@@ -349,6 +349,24 @@ def main() -> int:
             finally:
                 conn.close()
 
+        recurrence = run(cli, [
+            "memory", "report", "--recurrence", "--root", str(project),
+            "--db", str(measurement), "--json",
+        ], env, 120)
+        if recurrence.returncode != 0:
+            raise RuntimeError("relatorio de recorrencia falhou:\n"
+                               + (recurrence.stdout or "") + (recurrence.stderr or ""))
+        marco = json.loads(recurrence.stdout)
+        check(marco.get("decision") == "continue_full",
+              f"o piloto deveria decidir continue_full, decidiu {marco.get('decision')}")
+        check(int(marco.get("taskTypeCount", 0)) == 1, "o piloto deveria ter um task_type")
+        task = marco["taskTypes"][0]
+        check(int(task.get("executions", 0)) == 120, "o marco deveria somar 120 execucoes")
+        check(int(task.get("distinctInputs", 0)) == 20, "o marco deveria ver 20 entradas distintas")
+        check(float(task.get("citationRate", 0)) == 0.5, "a citacao deveria ser 50% no piloto")
+        check(float(task.get("reuseRate", 0)) > 0.2, "a taxa de reuso deveria passar do limiar")
+        check(len(task.get("intentPairs", [])) == 1, "o template unico deveria gerar um par de intencao")
+
         marker = "[DADOS DE MEMORIA DO PROJETO"
         with_memory = sum(1 for prompt in server.system_prompts if marker in prompt)
         without_memory = sum(1 for prompt in server.system_prompts if marker not in prompt)

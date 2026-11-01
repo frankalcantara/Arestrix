@@ -25,6 +25,10 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   verdicts in real runs.
 - `memory report` now reads the telemetry database and shows validated/unvalidated runs and
   the approval rate per `task_type`.
+- **Recurrence milestone (multigraph plan, E10):** episodes record
+  `intent_template_hash` (the vertex prompt template, never the user prompt), and
+  `memory report --recurrence` reports verdict/approval, distinct inputs, intent
+  pairs, citation and reuse per `task_type` against configurable thresholds.
 - **A/B executor (multigraph plan, E9):** `memory ab run` freezes project knowledge into a
   read-only copy, runs the paired ON/OFF arms for every suite task and repetition, tags telemetry
   rows with the arm and repetition, retries infrastructure failures up to twice, and emits a paired

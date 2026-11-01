@@ -4230,6 +4230,107 @@ TEST(memory_ab_protocol_marks_invalid_tasks_and_counts_infra_retries) {
     CHECK(excludedInvalid);
 }
 
+TEST(memory_recurrence_report_counts_verdicts_citations_and_reuse) {
+    using taskforge::memory::MemoryEpisodeRecord;
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryUsageRecord;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-recurrence-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const fs::path db = root / "memory.db";
+    const std::string scope = "project:recurrence-test";
+    std::string error;
+
+    MemoryStore store(db.string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "recurrence-test"));
+
+    const std::string intent = taskforge::project::RunnerSecurity::sha256("template alpha");
+    const char* cited[] = {"m1", "m2", "m3", "m1", "m2"};
+    for (int i = 0; i < 5; ++i) {
+        const std::string run = "run-" + std::to_string(i);
+        MemoryEpisodeRecord episode;
+        episode.scopeId = scope;
+        episode.runId = run;
+        episode.nodeId = "alpha-node";
+        episode.itemId = "item-" + std::to_string(i);
+        episode.kind = "agent_success";
+        episode.content = "ok";
+        episode.taskType = "alpha";
+        episode.outcome = "success";
+        episode.inputHash = "input-" + std::to_string(i);  // 5 inputs distintos
+        episode.intentTemplateHash = intent;
+        const std::string episodeId = store.recordEpisode(episode);
+        CHECK(!episodeId.empty());
+        const auto loaded = store.getEpisode(scope, episodeId);
+        CHECK(loaded.value("intentTemplateHash", std::string()) == intent);
+
+        MemoryValidationRecord validation;
+        validation.scopeId = scope;
+        validation.runId = run;
+        validation.nodeId = "alpha-node";
+        validation.episodeId = episodeId;
+        validation.validatorId = "artifact-rules";
+        validation.validatorVersion = "v1";
+        validation.ok = true;
+        CHECK(!store.recordValidation(validation).empty());
+        CHECK(store.recordHit(scope, run, "alpha-node", cited[i], "lesson", true, true));
+
+        MemoryUsageRecord usage;
+        usage.scopeId = scope;
+        usage.runId = run;
+        usage.nodeId = "alpha-node";
+        usage.provider = "mock";
+        usage.model = "mock";
+        usage.totalTokens = 100 * (i + 1);
+        usage.calls = 1;
+        usage.outcome = "success";
+        CHECK(store.recordUsage(usage));
+    }
+
+    const auto report = store.recurrenceReport(scope, "", 0.70, 0.30, 5, 3, 0.20);
+    CHECK(report.value("ok", false));
+    CHECK(report.value("decision", std::string()) == "continue_full");
+    CHECK(report["taskTypes"].size() == 1);
+    const auto& task = report["taskTypes"][0];
+    CHECK(task.value("taskType", std::string()) == "alpha");
+    CHECK(task.value("executions", 0LL) == 5);
+    CHECK(task.value("executionsWithVerdict", 0LL) == 5);
+    CHECK(std::abs(task.value("approvalRate", 0.0) - 1.0) < 1e-9);
+    CHECK(task.value("distinctInputs", 0LL) == 5);
+    CHECK(std::abs(task.value("citationRate", 0.0) - 1.0) < 1e-9);
+    CHECK(task.value("reusedExecutions", 0LL) == 2);
+    CHECK(std::abs(task.value("reuseRate", 0.0) - 0.4) < 1e-9);
+    CHECK(std::abs(task.value("tokensPerExecution", 0.0) - 300.0) < 1e-9);
+    CHECK(task["intentPairs"].size() == 1);
+    CHECK(task["intentPairs"][0].value("intentTemplateHash", std::string()) == intent);
+    CHECK(task.value("ok", false));
+
+    // O template muda o hash; o item e o input nao.
+    const std::string otherIntent = taskforge::project::RunnerSecurity::sha256("template beta");
+    CHECK(otherIntent != intent);
+    MemoryEpisodeRecord other;
+    other.scopeId = scope;
+    other.runId = "run-other";
+    other.nodeId = "alpha-node";
+    other.itemId = "outro-item";
+    other.kind = "agent_success";
+    other.content = "ok";
+    other.taskType = "alpha";
+    other.outcome = "success";
+    other.inputHash = "outro-input";
+    other.intentTemplateHash = otherIntent;
+    const std::string otherId = store.recordEpisode(other);
+    CHECK(store.getEpisode(scope, otherId).value("intentTemplateHash", std::string()) == otherIntent);
+
+    store.close();
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_store_read_only_copy_rejects_writes) {
     using taskforge::memory::MemoryStore;
     namespace fs = std::filesystem;
