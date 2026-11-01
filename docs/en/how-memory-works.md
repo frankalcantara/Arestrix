@@ -410,6 +410,15 @@ writes (`cache_write_tokens`) when the provider reports them. The panel and
 `arestrix-cli memory report` show the totals; effective cost uses the provider's normal, cached and
 cache-write prices.
 
+## 8.1 Final evaluation
+
+The reproducible evaluation compares lexical, hybrid fallback, facets +
+traversal, paths + serving and routing in `shadow`, always over the same frozen
+knowledge and budget. The report records tokens, calls, brief, hits and
+fingerprints. No experimental switch becomes enabled by default: `pathServing`,
+`traversal`, `routing.mode` and `bridges` remain `off` until a real-data
+measurement shows a justified gain and cost.
+
 ## 9. Retention, security and scope
 
 - **Strict scope:** project knowledge does not leak into another project; the workspace is read only

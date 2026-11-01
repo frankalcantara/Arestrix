@@ -1,0 +1,241 @@
+{
+  "schema": 1,
+  "stage": "E20",
+  "seed": 20261101,
+  "cases": [
+    {
+      "id": "homonym-parallel",
+      "class": "negative",
+      "query": "Guia de contraste",
+      "expect": "no_unsupported_bridge",
+      "why": "homonimos e relacoes paralelas nao podem virar evidencia"
+    },
+    {
+      "id": "negation-validity",
+      "class": "negative",
+      "query": "contraste nao e 4.5:1",
+      "expect": "respect_negation_and_validity",
+      "why": "negacao e validades diferentes precisam permanecer distintas"
+    },
+    {
+      "id": "duplicate-source",
+      "class": "negative",
+      "query": "fonte duplicada",
+      "expect": "deduplicate_source",
+      "why": "fontes duplicadas contam uma vez"
+    },
+    {
+      "id": "no-evidence",
+      "class": "negative",
+      "query": "pergunta sem evidencia",
+      "expect": "abstain",
+      "why": "consulta sem evidencia deve abster"
+    },
+    {
+      "id": "no-traversal",
+      "class": "negative",
+      "query": "consulta sem travessia",
+      "expect": "abstain_or_lexical",
+      "why": "ausencia de caminho nao autoriza travessia arbitraria"
+    },
+    {
+      "id": "convergence-without-relation",
+      "class": "negative",
+      "query": "lentes convergem mas nao se relacionam",
+      "expect": "bridge_hypothesis_only",
+      "why": "convergencia vira hipotese, nunca aresta automatica"
+    },
+    {
+      "id": "multi-hop-valid",
+      "class": "positive",
+      "query": "Guia para contraste",
+      "expect": "supported_path",
+      "why": "caminho conhecido deve ser encontrado"
+    },
+    {
+      "id": "cited-passage",
+      "class": "positive",
+      "query": "trecho citado",
+      "expect": "citation_supported",
+      "why": "citacao literal deve sobreviver ao uso"
+    }
+  ],
+  "variants": [
+    {
+      "variant": "baseline_lexical",
+      "ok": true,
+      "runs": 1,
+      "tokens": {
+        "prompt": 2155,
+        "completion": 283,
+        "total": 2438,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "turns": {
+        "modelCalls": 5,
+        "agentRuns": 3,
+        "averageTurnsPerAgentRun": 1.6667
+      },
+      "briefChars": 2265,
+      "hits": {
+        "rows": 16,
+        "injected": 13,
+        "consulted": 7,
+        "used": 2,
+        "citedFromBrief": 2,
+        "citedFromSearch": 0,
+        "usedFromBrief": 2,
+        "cited": 2
+      },
+      "invalidCitations": 0,
+      "schemaFingerprint": {
+        "knowledge": "c0d0a293458281a8",
+        "telemetry": "c0d0a293458281a8"
+      }
+    },
+    {
+      "variant": "hybrid_fallback",
+      "ok": true,
+      "runs": 1,
+      "tokens": {
+        "prompt": 2155,
+        "completion": 283,
+        "total": 2438,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "turns": {
+        "modelCalls": 5,
+        "agentRuns": 3,
+        "averageTurnsPerAgentRun": 1.6667
+      },
+      "briefChars": 2265,
+      "hits": {
+        "rows": 16,
+        "injected": 13,
+        "consulted": 7,
+        "used": 2,
+        "citedFromBrief": 2,
+        "citedFromSearch": 0,
+        "usedFromBrief": 2,
+        "cited": 2
+      },
+      "invalidCitations": 0,
+      "schemaFingerprint": {
+        "knowledge": "c0d0a293458281a8",
+        "telemetry": "c0d0a293458281a8"
+      }
+    },
+    {
+      "variant": "facets_traversal",
+      "ok": true,
+      "runs": 1,
+      "tokens": {
+        "prompt": 2155,
+        "completion": 283,
+        "total": 2438,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "turns": {
+        "modelCalls": 5,
+        "agentRuns": 3,
+        "averageTurnsPerAgentRun": 1.6667
+      },
+      "briefChars": 2265,
+      "hits": {
+        "rows": 16,
+        "injected": 13,
+        "consulted": 7,
+        "used": 2,
+        "citedFromBrief": 2,
+        "citedFromSearch": 0,
+        "usedFromBrief": 2,
+        "cited": 2
+      },
+      "invalidCitations": 0,
+      "schemaFingerprint": {
+        "knowledge": "c0d0a293458281a8",
+        "telemetry": "c0d0a293458281a8"
+      }
+    },
+    {
+      "variant": "paths_serving",
+      "ok": true,
+      "runs": 1,
+      "tokens": {
+        "prompt": 2155,
+        "completion": 283,
+        "total": 2438,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "turns": {
+        "modelCalls": 5,
+        "agentRuns": 3,
+        "averageTurnsPerAgentRun": 1.6667
+      },
+      "briefChars": 2265,
+      "hits": {
+        "rows": 16,
+        "injected": 13,
+        "consulted": 7,
+        "used": 2,
+        "citedFromBrief": 2,
+        "citedFromSearch": 0,
+        "usedFromBrief": 2,
+        "cited": 2
+      },
+      "invalidCitations": 0,
+      "schemaFingerprint": {
+        "knowledge": "c0d0a293458281a8",
+        "telemetry": "c0d0a293458281a8"
+      }
+    },
+    {
+      "variant": "routing_shadow",
+      "ok": true,
+      "runs": 1,
+      "tokens": {
+        "prompt": 2155,
+        "completion": 283,
+        "total": 2438,
+        "cached": 0,
+        "cacheWrite": 0
+      },
+      "turns": {
+        "modelCalls": 5,
+        "agentRuns": 3,
+        "averageTurnsPerAgentRun": 1.6667
+      },
+      "briefChars": 2265,
+      "hits": {
+        "rows": 16,
+        "injected": 13,
+        "consulted": 7,
+        "used": 2,
+        "citedFromBrief": 2,
+        "citedFromSearch": 0,
+        "usedFromBrief": 2,
+        "cited": 2
+      },
+      "invalidCitations": 0,
+      "schemaFingerprint": {
+        "knowledge": "c0d0a293458281a8",
+        "telemetry": "c0d0a293458281a8"
+      }
+    }
+  ],
+  "acceptance": {
+    "allVariantsComplete": true,
+    "negativeCasesPresent": true,
+    "defaultsOff": [
+      "pathServing",
+      "traversal",
+      "routing.mode",
+      "bridges"
+    ],
+    "note": "interruptores experimentais permanecem desligados por padrao"
+  }
+}
