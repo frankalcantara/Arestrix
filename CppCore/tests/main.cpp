@@ -7410,7 +7410,7 @@ TEST(smart_crusher_samples_long_arrays_and_keeps_keys) {
     auto parsed = taskforge::jsonutil::tryParse(result.text);
     CHECK(parsed.has_value());
     CHECK(parsed->at("results").size() == 6);          // 5 itens + marcador
-    CHECK(parsed->at("results").at(static_cast<size_t>(0)).at("id").get<int>() == 0);
+    CHECK((*parsed)["results"][0].at("id").get<int>() == 0);
     CHECK(parsed->at("total").get<int>() == 100);
 
     // JSON pequeno ou invalido nao muda.
