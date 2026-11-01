@@ -136,6 +136,12 @@ public:
                               const std::string& runId = "",
                               const std::string& nodeId = "");
 
+    // E12: ingestao de fontes e trechos sem modelo de linguagem.
+    size_t ingestSources(const std::string& projectId, const std::string& workspaceRoot,
+                         const std::vector<std::string>& uris, size_t maxFileBytes,
+                         size_t maxFiles);
+    taskforge::Json sourceSummary(const std::string& projectId);
+
     // E11: versao do conhecimento e tracos de recuperacao.
     long long knowledgeVersion(const std::string& projectId);
     bool recordTraceStep(const std::string& projectId, const std::string& runId,

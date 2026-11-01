@@ -1,6 +1,7 @@
 #include "MemoryStore.hpp"
 #include "MemoryPredicates.hpp"
 #include "MemorySanitizer.hpp"
+#include "MemorySources.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -589,6 +590,40 @@ CREATE TABLE IF NOT EXISTS memory_trace (
   UNIQUE(scope_id, run_id, node_id)
 );
 
+CREATE TABLE IF NOT EXISTS memory_source (
+  id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  uri TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT '',
+  size INTEGER NOT NULL DEFAULT 0,
+  first_seen TEXT NOT NULL,
+  last_seen TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active'
+);
+
+CREATE TABLE IF NOT EXISTS memory_passage (
+  id TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL REFERENCES memory_source(id),
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  ordinal INTEGER NOT NULL,
+  start INTEGER NOT NULL DEFAULT 0,
+  end INTEGER NOT NULL DEFAULT 0,
+  text TEXT NOT NULL,
+  text_hash TEXT NOT NULL,
+  tokens INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  UNIQUE(source_id, ordinal)
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS memory_passage_fts USING fts5(
+  passage_id UNINDEXED,
+  text,
+  uri UNINDEXED,
+  source_id UNINDEXED
+);
+
 CREATE TABLE IF NOT EXISTS memory_proposal (
   id TEXT PRIMARY KEY,
   scope_id TEXT NOT NULL REFERENCES memory_scope(id),
@@ -676,6 +711,8 @@ CREATE INDEX IF NOT EXISTS idx_memory_embedding_object ON memory_embedding(scope
 CREATE INDEX IF NOT EXISTS idx_memory_playbook_task ON memory_playbook(scope_id, task_type, status);
 CREATE INDEX IF NOT EXISTS idx_memory_alias_node ON memory_alias(scope_id, node_id);
 CREATE INDEX IF NOT EXISTS idx_memory_policy_scope ON memory_policy(scope_id, key);
+CREATE INDEX IF NOT EXISTS idx_memory_source_uri ON memory_source(scope_id, uri, status);
+CREATE INDEX IF NOT EXISTS idx_memory_passage_source ON memory_passage(source_id, status);
 )SQL", &error)) {
         return false;
     }
@@ -688,7 +725,8 @@ CREATE INDEX IF NOT EXISTS idx_memory_policy_scope ON memory_policy(scope_id, ke
         // conhecimento. Telemetria nao tem trigger.
         const char* tables[] = {"memory_scope", "memory_node", "memory_alias", "memory_edge",
                                 "memory_working", "memory_state", "memory_state_history",
-                                "memory_playbook", "memory_evidence"};
+                                "memory_playbook", "memory_evidence", "memory_source",
+                                "memory_passage"};
         std::string triggers;
         for (const char* table : tables) {
             for (const char* event : {"INSERT", "UPDATE", "DELETE"}) {
@@ -4755,6 +4793,226 @@ taskforge::Json MemoryStore::getTrace(const std::string& scopeId, const std::str
     out["truncatedSteps"] = columnInt(st.stmt, 15);
     out["createdAt"] = columnText(st.stmt, 16);
     out["updatedAt"] = columnText(st.stmt, 17);
+    return out;
+}
+
+std::string MemoryStore::ingestSource(const MemorySourceRecord& source,
+                                      const std::vector<MemoryPassageRecord>& passages,
+                                      size_t* insertedPassages, std::string& error) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (insertedPassages) *insertedPassages = 0;
+    if (!db_ || source.scopeId.empty() || source.uri.empty() || source.contentHash.empty()) {
+        error = "fonte invalida";
+        return "";
+    }
+    const std::string uri = MemorySources::normalizeUri(source.uri);
+    const std::string id = source.id.empty()
+        ? MemorySources::sourceId(source.scopeId, uri, source.contentHash) : source.id;
+    if (!exec("BEGIN IMMEDIATE;", &error)) return "";
+
+    auto rollback = [&]() {
+        std::string ignored;
+        exec("ROLLBACK;", &ignored);
+        return "";
+    };
+
+    std::string activeId;
+    std::string activeHash;
+    Stmt st;
+    if (!prepare(db_, "SELECT id,content_hash FROM memory_source WHERE scope_id=? AND uri=? "
+                       "AND status='active' ORDER BY rowid DESC LIMIT 1", st, error)) {
+        return rollback();
+    }
+    bindText(st.stmt, 1, source.scopeId);
+    bindText(st.stmt, 2, uri);
+    if (stepRetry(st.stmt) == SQLITE_ROW) {
+        activeId = columnText(st.stmt, 0);
+        activeHash = columnText(st.stmt, 1);
+    }
+    sqlite3_finalize(st.stmt);
+    st.stmt = nullptr;
+
+    const std::string now = nowIso();
+    if (activeId == id && activeHash == source.contentHash) {
+        Stmt update;
+        if (!prepare(db_, "UPDATE memory_source SET last_seen=? WHERE id=?", update, error)) {
+            return rollback();
+        }
+        bindText(update.stmt, 1, now);
+        bindText(update.stmt, 2, id);
+        if (stepRetry(update.stmt) != SQLITE_DONE) {
+            error = sqlite3_errmsg(db_);
+            return rollback();
+        }
+        if (!exec("COMMIT;", &error)) return "";
+        return id;
+    }
+
+    if (!activeId.empty() && activeId != id) {
+        Stmt supersede;
+        if (!prepare(db_, "UPDATE memory_source SET status='superseded' WHERE id=?", supersede, error)) {
+            return rollback();
+        }
+        bindText(supersede.stmt, 1, activeId);
+        if (stepRetry(supersede.stmt) != SQLITE_DONE) {
+            error = sqlite3_errmsg(db_);
+            return rollback();
+        }
+        Stmt oldPassages;
+        if (!prepare(db_, "UPDATE memory_passage SET status='superseded' WHERE source_id=?",
+                     oldPassages, error)) {
+            return rollback();
+        }
+        bindText(oldPassages.stmt, 1, activeId);
+        if (stepRetry(oldPassages.stmt) != SQLITE_DONE) {
+            error = sqlite3_errmsg(db_);
+            return rollback();
+        }
+    }
+
+    {
+        Stmt insert;
+        if (!prepare(db_, "INSERT INTO memory_source(id,scope_id,uri,content_hash,kind,size,"
+                           "first_seen,last_seen,status) VALUES(?,?,?,?,?,?,?,?,'active') "
+                           "ON CONFLICT(id) DO UPDATE SET last_seen=excluded.last_seen,status='active'",
+                     insert, error)) {
+            return rollback();
+        }
+        bindText(insert.stmt, 1, id);
+        bindText(insert.stmt, 2, source.scopeId);
+        bindText(insert.stmt, 3, uri);
+        bindText(insert.stmt, 4, source.contentHash);
+        bindText(insert.stmt, 5, source.kind);
+        sqlite3_bind_int64(insert.stmt, 6, source.size);
+        bindText(insert.stmt, 7, now);
+        bindText(insert.stmt, 8, now);
+        if (stepRetry(insert.stmt) != SQLITE_DONE) {
+            error = sqlite3_errmsg(db_);
+            return rollback();
+        }
+    }
+
+    {
+        Stmt removeFts;
+        if (!prepare(db_, "DELETE FROM memory_passage_fts WHERE source_id=?", removeFts, error)) {
+            return rollback();
+        }
+        bindText(removeFts.stmt, 1, id);
+        if (stepRetry(removeFts.stmt) != SQLITE_DONE) {
+            error = sqlite3_errmsg(db_);
+            return rollback();
+        }
+    }
+
+    Stmt insertPassage;
+    if (!prepare(db_, "INSERT INTO memory_passage(id,source_id,scope_id,ordinal,start,end,text,"
+                       "text_hash,tokens,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,'active',?) "
+                       "ON CONFLICT(id) DO UPDATE SET start=excluded.start,end=excluded.end,"
+                       "text=excluded.text,text_hash=excluded.text_hash,tokens=excluded.tokens,"
+                       "status='active',created_at=excluded.created_at", insertPassage, error)) {
+        return rollback();
+    }
+    Stmt insertFts;
+    if (!prepare(db_, "INSERT INTO memory_passage_fts(passage_id,text,uri,source_id) VALUES(?,?,?,?)",
+                 insertFts, error)) {
+        return rollback();
+    }
+    for (const auto& passage : passages) {
+        sqlite3_reset(insertPassage.stmt);
+        sqlite3_clear_bindings(insertPassage.stmt);
+        bindText(insertPassage.stmt, 1, passage.id);
+        bindText(insertPassage.stmt, 2, id);
+        bindText(insertPassage.stmt, 3, source.scopeId);
+        sqlite3_bind_int64(insertPassage.stmt, 4, passage.ordinal);
+        sqlite3_bind_int64(insertPassage.stmt, 5, passage.start);
+        sqlite3_bind_int64(insertPassage.stmt, 6, passage.end);
+        bindText(insertPassage.stmt, 7, passage.text);
+        bindText(insertPassage.stmt, 8, passage.textHash);
+        sqlite3_bind_int64(insertPassage.stmt, 9, passage.tokens);
+        bindText(insertPassage.stmt, 10, now);
+        if (stepRetry(insertPassage.stmt) != SQLITE_DONE) {
+            error = sqlite3_errmsg(db_);
+            return rollback();
+        }
+        sqlite3_reset(insertFts.stmt);
+        sqlite3_clear_bindings(insertFts.stmt);
+        bindText(insertFts.stmt, 1, passage.id);
+        bindText(insertFts.stmt, 2, passage.text);
+        bindText(insertFts.stmt, 3, uri);
+        bindText(insertFts.stmt, 4, id);
+        if (stepRetry(insertFts.stmt) != SQLITE_DONE) {
+            error = sqlite3_errmsg(db_);
+            return rollback();
+        }
+    }
+    if (!exec("COMMIT;", &error)) return "";
+    if (insertedPassages) *insertedPassages = passages.size();
+    return id;
+}
+
+std::vector<MemoryPassageHit> MemoryStore::searchPassages(const std::string& scopeId,
+                                                          const std::string& text,
+                                                          size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<MemoryPassageHit> out;
+    if (!db_ || text.empty()) return out;
+    std::string escaped;
+    for (char c : text) {
+        if (c == '"') escaped += "\"\"";
+        else escaped += c;
+    }
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT p.id,p.source_id,s.uri,p.start,p.end,p.text "
+                       "FROM memory_passage_fts f JOIN memory_passage p ON p.id=f.passage_id "
+                       "JOIN memory_source s ON s.id=p.source_id "
+                       "WHERE memory_passage_fts MATCH ? AND p.scope_id=? "
+                       "AND p.status='active' AND s.status='active' "
+                       "ORDER BY bm25(memory_passage_fts) LIMIT ?", st, error)) {
+        return out;
+    }
+    bindText(st.stmt, 1, "\"" + escaped + "\"");
+    bindText(st.stmt, 2, scopeId);
+    sqlite3_bind_int(st.stmt, 3, static_cast<int>(std::max<size_t>(1, limit)));
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        out.push_back({columnText(st.stmt, 0), columnText(st.stmt, 1), columnText(st.stmt, 2),
+                       columnInt(st.stmt, 3), columnInt(st.stmt, 4), columnText(st.stmt, 5)});
+    }
+    return out;
+}
+
+taskforge::Json MemoryStore::sourceSummary(const std::string& scopeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out = taskforge::Json::object();
+    if (!db_) return out;
+    out["sources"] = 0;
+    out["passages"] = 0;
+    out["supersededSources"] = 0;
+    out["supersededPassages"] = 0;
+    Stmt st;
+    std::string error;
+    if (prepare(db_, "SELECT "
+                       "SUM(CASE WHEN status='active' THEN 1 ELSE 0 END),"
+                       "SUM(CASE WHEN status='superseded' THEN 1 ELSE 0 END) "
+                       "FROM memory_source WHERE scope_id=?", st, error)) {
+        bindText(st.stmt, 1, scopeId);
+        if (stepRetry(st.stmt) == SQLITE_ROW) {
+            out["sources"] = columnInt(st.stmt, 0);
+            out["supersededSources"] = columnInt(st.stmt, 1);
+        }
+        sqlite3_finalize(st.stmt);
+        st.stmt = nullptr;
+    }
+    if (prepare(db_, "SELECT "
+                       "SUM(CASE WHEN status='active' THEN 1 ELSE 0 END),"
+                       "SUM(CASE WHEN status='superseded' THEN 1 ELSE 0 END) "
+                       "FROM memory_passage WHERE scope_id=?", st, error)) {
+        bindText(st.stmt, 1, scopeId);
+        if (stepRetry(st.stmt) == SQLITE_ROW) {
+            out["passages"] = columnInt(st.stmt, 0);
+            out["supersededPassages"] = columnInt(st.stmt, 1);
+        }
+    }
     return out;
 }
 

@@ -4,6 +4,7 @@
 #include "MemorySanitizer.hpp"
 #include "MemoryPlaybookCompiler.hpp"
 #include "MemoryRanker.hpp"
+#include "MemorySources.hpp"
 #include "MemoryStateSchema.hpp"
 #include "MemoryVectorIndex.hpp"
 #include "project/RunnerSecurity.hpp"
@@ -18,6 +19,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <set>
 #include <sstream>
 #include <thread>
@@ -26,6 +28,8 @@
 
 namespace taskforge {
 namespace memory {
+
+namespace fs = std::filesystem;
 
 namespace {
 
@@ -1142,6 +1146,105 @@ void MemoryService::invalidateBriefCache() {
     briefCache_.clear();
 }
 
+size_t MemoryService::ingestSources(const std::string& projectId, const std::string& workspaceRoot,
+                                    const std::vector<std::string>& uris, size_t maxFileBytes,
+                                    size_t maxFiles) {
+    auto* s = existingStore(projectId);
+    if (!s || workspaceRoot.empty() || uris.empty()) return 0;
+    std::error_code ec;
+    const fs::path root = fs::weakly_canonical(fs::absolute(workspaceRoot, ec), ec);
+    if (ec || root.empty()) return 0;
+
+    std::set<std::string> uniqueUris;
+    std::vector<std::string> candidates;
+    for (const auto& raw : uris) {
+        if (raw.empty()) continue;
+        const fs::path requested = root / raw;
+        const fs::path resolved = fs::weakly_canonical(requested, ec);
+        if (ec) continue;
+        const fs::path relative = fs::relative(resolved, root, ec);
+        if (ec || relative.empty()) continue;
+        const std::string relativeUri = MemorySources::normalizeUri(relative.generic_string());
+        if (relativeUri.rfind("..", 0) == 0 || MemorySources::isExcluded(relativeUri)) continue;
+        if (fs::is_directory(resolved, ec)) {
+            for (fs::recursive_directory_iterator it(resolved, fs::directory_options::skip_permission_denied, ec), end;
+                 it != end; it.increment(ec)) {
+                if (ec) break;
+                if (it->is_directory(ec)) {
+                    const std::string dirUri = MemorySources::normalizeUri(
+                        fs::relative(it->path(), root, ec).generic_string());
+                    if (MemorySources::isExcluded(dirUri)) {
+                        it.disable_recursion_pending();
+                    }
+                    continue;
+                }
+                if (!it->is_regular_file(ec)) continue;
+                const std::string fileUri = MemorySources::normalizeUri(
+                    fs::relative(it->path(), root, ec).generic_string());
+                if (MemorySources::isExcluded(fileUri)) continue;
+                if (uniqueUris.insert(fileUri).second) candidates.push_back(fileUri);
+                if (maxFiles > 0 && candidates.size() >= maxFiles) break;
+            }
+        } else if (fs::is_regular_file(resolved, ec)) {
+            if (uniqueUris.insert(relativeUri).second) candidates.push_back(relativeUri);
+        }
+        if (maxFiles > 0 && candidates.size() >= maxFiles) break;
+    }
+
+    size_t changed = 0;
+    for (const auto& uri : candidates) {
+        const fs::path path = root / uri;
+        if (!fs::is_regular_file(path, ec)) continue;
+        const auto rawSize = fs::file_size(path, ec);
+        if (ec || rawSize == 0) continue;
+        if (!MemorySources::isSupported(uri, static_cast<size_t>(rawSize), maxFileBytes)) continue;
+        std::ifstream in(path, std::ios::binary);
+        if (!in) continue;
+        std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        if (content.empty() || content.find('\0') != std::string::npos) continue;
+        SanitizeResult clean = sanitizeText(content, 0);
+        if (clean.text.empty()) continue;
+        const std::string kind = MemorySources::kindForUri(uri);
+        if (kind.empty()) continue;
+        const std::string contentHash = project::RunnerSecurity::sha256(clean.text);
+        const auto drafts = MemorySources::segment(clean.text, kind);
+        if (drafts.empty()) continue;
+
+        MemorySourceRecord source;
+        source.scopeId = scopeId(projectId);
+        source.uri = uri;
+        source.contentHash = contentHash;
+        source.kind = kind;
+        source.size = static_cast<long long>(clean.text.size());
+        source.id = MemorySources::sourceId(source.scopeId, uri, contentHash);
+        std::vector<MemoryPassageRecord> passages;
+        passages.reserve(drafts.size());
+        for (const auto& draft : drafts) {
+            MemoryPassageRecord passage;
+            passage.id = MemorySources::passageId(contentHash, draft.ordinal);
+            passage.sourceId = source.id;
+            passage.scopeId = source.scopeId;
+            passage.ordinal = draft.ordinal;
+            passage.start = draft.start;
+            passage.end = draft.end;
+            passage.text = draft.text;
+            passage.textHash = project::RunnerSecurity::sha256(draft.text);
+            passage.tokens = static_cast<long long>((draft.text.size() + 3) / 4);
+            passages.push_back(std::move(passage));
+        }
+        std::string ingestError;
+        size_t inserted = 0;
+        const std::string sourceId = s->ingestSource(source, passages, &inserted, ingestError);
+        if (!sourceId.empty() && inserted > 0) ++changed;
+    }
+    return changed;
+}
+
+taskforge::Json MemoryService::sourceSummary(const std::string& projectId) {
+    auto* s = existingStore(projectId);
+    return s ? s->sourceSummary(scopeId(projectId)) : taskforge::Json::object();
+}
+
 long long MemoryService::knowledgeVersion(const std::string& projectId) {
     auto* s = existingStore(projectId);
     return s ? s->knowledgeVersion() : 0;
@@ -1392,6 +1495,27 @@ std::string MemoryService::searchContext(const std::string& projectId, const std
             addTraceCandidate(candidates, lexical[i].id, lexical[i].kind, score, 0.0, score);
         }
         stepCandidates = traceCandidatesToJson(candidates, {});
+    }
+
+    std::string passageText;
+    const auto passages = s->searchPassages(scopeId(projectId), text, limit);
+    for (size_t i = 0; i < passages.size(); ++i) {
+        const auto& passage = passages[i];
+        if (passageText.empty()) passageText = "\n[ARESTRIX PASSAGENS DE FONTE]\n";
+        passageText += "[MEMO:psg:" + passage.id + "] " + passage.uri + ":" +
+                       std::to_string(passage.start) + "-" + std::to_string(passage.end) + "\n" +
+                       oneLine(passage.text, 1200) + "\n";
+        if (hits) hits->push_back(MemoryHitRef{passage.id, "passage"});
+        const double score = 1.0 / (60.0 + static_cast<double>(i + 1));
+        stepCandidates.push_back(taskforge::Json{
+            {"id", passage.id}, {"kind", "passage"}, {"lexical", score},
+            {"vector", 0.0}, {"fused", score},
+            {"position", static_cast<long long>(stepCandidates.size())},
+            {"delivered", true}});
+    }
+    if (!passageText.empty()) {
+        if (!result.empty()) result += "\n";
+        result += passageText;
     }
 
     if (!runId.empty() && !nodeId.empty()) {
@@ -2140,6 +2264,7 @@ taskforge::Json MemoryService::toJson(const std::string& projectId) {
     out["telemetry"] = telemetryDatabasePath(projectId);
     out["maintenance"] = maintenanceStatus(projectId);
     out["evidence"] = s->evidenceSummary(scopeId(projectId));
+    out["sources"] = s->sourceSummary(scopeId(projectId));
     return out;
 }
 
