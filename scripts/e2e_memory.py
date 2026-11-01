@@ -168,12 +168,23 @@ def memory_db(project):
     return project / ".arestrix" / "memory" / "memory.db"
 
 
-def db_rows(project, sql, params=()):
-    path = memory_db(project)
+def telemetry_db(project):
+    return project / ".arestrix" / "telemetry" / "telemetry.db"
+
+
+def rows_at(path, sql, params=()):
     if not path.exists():
         return []
     with sqlite3.connect(path) as conn:
         return conn.execute(sql, params).fetchall()
+
+
+def db_rows(project, sql, params=()):
+    return rows_at(memory_db(project), sql, params)
+
+
+def telemetry_rows(project, sql, params=()):
+    return rows_at(telemetry_db(project), sql, params)
 
 
 def main():
@@ -214,22 +225,21 @@ def main():
         check(any(RULE in row[0] for row in lessons), "a licao foi persistida no banco")
         working = db_rows(project, "SELECT value_json FROM memory_working WHERE item_id='pipeline' AND key='resumo'")
         check(any(BLACKBOARD_VALUE in row[0] for row in working), "o Blackboard foi persistido no banco")
-        usage = db_rows(project, "SELECT COUNT(*), COALESCE(SUM(calls),0), COALESCE(SUM(prompt_tokens),0), "
-                                 "COALESCE(SUM(memory_context_chars),0) FROM memory_usage")
+        usage = telemetry_rows(project, "SELECT COUNT(*), COALESCE(SUM(calls),0), COALESCE(SUM(prompt_tokens),0), "
+                                        "COALESCE(SUM(memory_context_chars),0) FROM memory_usage")
         check(usage and usage[0][0] >= 1, "o consumo de API foi registrado em memory_usage")
         check(usage and usage[0][1] >= 1 and usage[0][3] > 0, "a chamada de API registrou contexto de memoria")
-        outcome = db_rows(project, "SELECT COALESCE(SUM(outcome='success'),0), COALESCE(SUM(retries),0) FROM memory_usage")
+        outcome = telemetry_rows(project, "SELECT COALESCE(SUM(outcome='success'),0), COALESCE(SUM(retries),0) FROM memory_usage")
         check(outcome and outcome[0][0] >= 1, "a execucao bem-sucedida foi registrada com outcome=success")
-        hits = db_rows(project, "SELECT COALESCE(SUM(injected),0), COALESCE(SUM(used),0) FROM memory_hit")
+        hits = telemetry_rows(project, "SELECT COALESCE(SUM(injected),0), COALESCE(SUM(used),0) FROM memory_hit")
         check(hits and hits[0][0] >= 1, "as memorias injetadas foram registradas em memory_hit")
-        episodes = db_rows(project, "SELECT kind, metadata FROM memory_episode WHERE kind='agent_success'")
+        episodes = telemetry_rows(project, "SELECT kind, metadata FROM memory_episode WHERE kind='agent_success'")
         check(episodes and '"outcome":"success"' in episodes[0][1], "o episodio de sucesso foi registrado com outcome")
 
         text1 = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
         check(RULE in text1, "a licao apareceu no system prompt")
-        check(BLACKBOARD_VALUE in text1, "a chave autorizada do Blackboard apareceu no prompt")
         check(HIDDEN_RULE not in text1, "licao de outro dominio nao foi injetada")
-        check(HIDDEN_KEY_VALUE not in text1, "chave nao autorizada do Blackboard nao foi injetada")
+        check(HIDDEN_KEY_VALUE not in text1, "chave nao autorizada nao foi injetada")
         check(TEST_KEY not in out1, "a chave de teste nao aparece na saida")
 
         print("\n== Memoria de projeto: segunda execucao (carrega do disco) ==")
@@ -239,9 +249,8 @@ def main():
         text2 = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
         check(text2.count("===SYSTEM-END===") >= 2, "o agente recebeu um segundo system prompt")
         check(text2.count(RULE) >= 2, "a licao foi carregada do disco na segunda execucao")
-        check(text2.count(BLACKBOARD_VALUE) >= 2, "o Blackboard foi carregado do banco na segunda execucao")
         check("[MEMORIA] contexto injetado" in out2, "o runtime injetou memoria tambem na segunda execucao")
-        usage2 = db_rows(project, "SELECT COUNT(*), COALESCE(SUM(calls),0), COALESCE(SUM(prompt_tokens),0) FROM memory_usage")
+        usage2 = telemetry_rows(project, "SELECT COUNT(*), COALESCE(SUM(calls),0), COALESCE(SUM(prompt_tokens),0) FROM memory_usage")
         check(usage2 and usage2[0][0] >= 2, "a segunda execucao tambem registrou consumo de API")
         check(usage2 and usage2[0][1] >= 2, "as chamadas de API foram acumuladas no banco")
 
@@ -253,8 +262,8 @@ def main():
         out_ab = (p_ab.stdout or "") + (p_ab.stderr or "")
         check(p_ab.returncode == 0, "a execucao A/B OFF terminou com codigo 0")
         check("[MEMORIA] contexto injetado" not in out_ab, "ARESTRIX_MEMORY_DISABLE removeu o contexto")
-        ab = db_rows(project, "SELECT COUNT(*), COALESCE(SUM(memory_enabled),0), COALESCE(SUM(outcome='success'),0) "
-                              "FROM memory_usage WHERE memory_enabled=0")
+        ab = telemetry_rows(project, "SELECT COUNT(*), COALESCE(SUM(memory_enabled),0), COALESCE(SUM(outcome='success'),0) "
+                                     "FROM memory_usage WHERE memory_enabled=0")
         check(ab and ab[0][0] >= 1 and ab[0][1] == 0 and ab[0][2] >= 1,
               "o mesmo grafo foi registrado como memoria OFF com outcome=success")
 
@@ -263,8 +272,8 @@ def main():
         out_ui = (p_ui.stdout or "") + (p_ui.stderr or "")
         check(p_ui.returncode == 0, "a execucao A/B configurada no projeto terminou com codigo 0")
         check("[MEMORIA] contexto injetado" not in out_ui, "measurementMode=memory_off removeu o contexto")
-        ui_off = db_rows(project, "SELECT COUNT(*), COALESCE(SUM(memory_enabled),0) "
-                                  "FROM memory_usage WHERE memory_enabled=0 AND outcome='success'")
+        ui_off = telemetry_rows(project, "SELECT COUNT(*), COALESCE(SUM(memory_enabled),0) "
+                                         "FROM memory_usage WHERE memory_enabled=0 AND outcome='success'")
         check(ui_off and ui_off[0][0] >= 1 and ui_off[0][1] == 0,
               "measurementMode=memory_off foi registrado como memoria OFF")
 
@@ -273,10 +282,13 @@ def main():
         out3 = (p3.stdout or "") + (p3.stderr or "")
         check(p3.returncode != 0, "a execucao com modelo ausente falhou como esperado")
         check("modelo nao configurado" in out3, "a falha veio do agente sem modelo")
-        failure_lessons = db_rows(project, "SELECT e.metadata FROM memory_edge e WHERE e.relation='HAS_LESSON' AND e.metadata LIKE '%agent_failure%'")
-        failure_text = " ".join(row[0] for row in failure_lessons)
-        check("Falha no agente Agente_Com_Memoria" in failure_text, "a falha foi gravada como licao automatica")
-        check('"agent_failure"' in failure_text, "a licao foi classificada como falha de agente")
+        failure_proposals = db_rows(
+            project,
+            "SELECT payload_json FROM memory_proposal WHERE kind='lesson' AND status='pending'")
+        failure_text = " ".join(row[0] for row in failure_proposals)
+        check("Falha no agente Agente_Com_Memoria" in failure_text,
+              "a falha foi gravada como proposta de licao")
+        check("agent_failure" in failure_text, "a proposta foi classificada como falha de agente")
 
         print("\n== Memoria desligada com metricas (comparacao de consumo) ==")
         env_off = dict(env)
@@ -285,8 +297,8 @@ def main():
         out4 = (p4.stdout or "") + (p4.stderr or "")
         check(p4.returncode == 0, "a execucao com memoria desligada terminou com codigo 0")
         check("[MEMORIA] contexto injetado" not in out4, "o agente nao recebeu contexto de memoria")
-        off = db_rows(project, "SELECT COUNT(*), COALESCE(SUM(prompt_tokens),0), COALESCE(SUM(memory_enabled),0) "
-                               "FROM memory_usage WHERE memory_enabled=0")
+        off = telemetry_rows(project, "SELECT COUNT(*), COALESCE(SUM(prompt_tokens),0), COALESCE(SUM(memory_enabled),0) "
+                                      "FROM memory_usage WHERE memory_enabled=0")
         check(off and off[0][0] >= 1, "o consumo da execucao sem memoria foi registrado")
         check(off and off[0][1] > 0 and off[0][2] == 0, "a execucao sem memoria tem tokens e memoria_enabled=0")
 

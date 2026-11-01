@@ -1,0 +1,79 @@
+{
+  "schema": 1,
+  "scope": "project:memoria-baseline",
+  "lessons": [
+    {
+      "id": "baseline-lesson-1",
+      "domain": "baseline",
+      "rule": "Sempre declarar STATUS_OK no artefato gerado.",
+      "trigger": "artefato sem marcador de status",
+      "confidence": 0.9
+    },
+    {
+      "id": "baseline-lesson-2",
+      "domain": "baseline",
+      "rule": "Conferir o tamanho minimo do artefato antes de concluir.",
+      "trigger": "artefato truncado",
+      "confidence": 0.88
+    },
+    {
+      "id": "baseline-lesson-3",
+      "domain": "baseline",
+      "rule": "Citar a fonte da memoria usada no resumo final.",
+      "trigger": "resumo sem proveniencia",
+      "confidence": 0.86
+    },
+    {
+      "id": "baseline-lesson-4",
+      "domain": "baseline",
+      "rule": "Nao reescrever o artefato aprovado sem motivo declarado.",
+      "trigger": "retrabalho desnecessario",
+      "confidence": 0.84
+    },
+    {
+      "id": "baseline-lesson-5",
+      "domain": "seguranca",
+      "rule": "Nunca gravar chaves de API em arquivos do projeto.",
+      "trigger": "segredo exposto",
+      "confidence": 0.95
+    }
+  ],
+  "facts": [
+    {
+      "id": "baseline-fact-1",
+      "source": "baseline_projeto",
+      "relation": "USA",
+      "target": "baseline_banco",
+      "domain": "baseline",
+      "confidence": 0.82
+    },
+    {
+      "id": "baseline-fact-2",
+      "source": "baseline_projeto",
+      "relation": "PRODUZ",
+      "target": "baseline_relatorio",
+      "domain": "baseline",
+      "confidence": 0.8
+    },
+    {
+      "id": "baseline-fact-3",
+      "source": "baseline_auditor",
+      "relation": "VALIDA",
+      "target": "baseline_relatorio",
+      "domain": "baseline",
+      "confidence": 0.78
+    }
+  ],
+  "playbook": {
+    "id": "baseline-playbook-1",
+    "taskType": "gerar_artefato",
+    "title": "Gerar artefato com status",
+    "steps": [
+      { "tool": "write", "action": "escrever o artefato com STATUS_OK" },
+      { "tool": "read", "action": "conferir o conteudo gravado" }
+    ],
+    "preconditions": { "theme": "baseline" },
+    "confidence": 0.8,
+    "status": "active"
+  }
+}

@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **Beta 2.3**.
 
+## [Unreleased]
+
+### Added
+
+- **Memory baseline (multigraph plan, E0):** `tests/fixtures/memory-baseline/` freezes a
+  three-agent project with a curated knowledge set (five lessons, three facts, one active
+  playbook), and `scripts/memory_baseline.py` replays it with a deterministic provider,
+  writing `baseline.json` with tokens, turns, retries, brief size, injected/consulted/cited
+  hits, per-table row counts and schema fingerprints. `--check` fails on any undocumented
+  drift. See `docs/internal/memoria-linha-de-base.md`.
+- The multigraph implementation plan is now versioned at
+  `docs/internal/plano-memoria-multigrafo.md`, with E0 marked done.
+
+### Fixed
+
+- Generated pipelines with memory-enabled agents no longer fail to compile: the task
+  lambdas capture `arx_item_id`, used by `buildBrief`. This affected every memory graph,
+  including `scripts/e2e_memory.py`.
+- `scripts/e2e_memory.py` now reads usage, hits and episodes from the telemetry database,
+  checks agent failures as lesson proposals and no longer expects the removed Blackboard
+  prompt block.
+
 ## [2.5.0] - 2026-10-31
 
 ### Added
