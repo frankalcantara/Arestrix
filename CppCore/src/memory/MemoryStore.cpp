@@ -7,6 +7,7 @@
 #include <cctype>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <filesystem>
@@ -213,9 +214,10 @@ double memoryTokenSimilarity(const std::string& a, const std::string& b) {
     return tokenJaccard(a, b);
 }
 
-MemoryStore::MemoryStore(std::string path, size_t maxActiveLessons)
+MemoryStore::MemoryStore(std::string path, size_t maxActiveLessons, bool readOnly)
     : path_(std::move(path)),
-      maxActiveLessons_(maxActiveLessons == 0 ? kMaxActiveLessons : maxActiveLessons) {}
+      maxActiveLessons_(maxActiveLessons == 0 ? kMaxActiveLessons : maxActiveLessons),
+      readOnly_(readOnly) {}
 
 MemoryStore::~MemoryStore() {
     close();
@@ -225,13 +227,19 @@ bool MemoryStore::open(std::string& error) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (db_) return true;
 
-    if (path_ != ":memory:") {
+    if (readOnly_ && path_ == ":memory:") {
+        error = "banco em memoria nao pode ser somente leitura";
+        return false;
+    }
+    if (!readOnly_ && path_ != ":memory:") {
         std::error_code ec;
         std::filesystem::path parent = std::filesystem::path(path_).parent_path();
         if (!parent.empty()) std::filesystem::create_directories(parent, ec);
     }
 
-    const int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX;
+    const int flags = readOnly_
+        ? (SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX)
+        : (SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX);
     if (sqlite3_open_v2(path_.c_str(), &db_, flags, nullptr) != SQLITE_OK) {
         error = db_ ? sqlite3_errmsg(db_) : "sqlite3_open_v2 falhou";
         lastError_ = error;
@@ -244,6 +252,15 @@ bool MemoryStore::open(std::string& error) {
     sqlite3_db_config(db_, SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 0, nullptr);
     sqlite3_db_config(db_, SQLITE_DBCONFIG_TRUSTED_SCHEMA, 0, nullptr);
 
+    if (readOnly_) {
+        // O medico A/B abre o conhecimento congelado sem chance de escrita.
+        if (!exec("PRAGMA query_only=ON; PRAGMA foreign_keys=ON;", &error)) {
+            lastError_ = error;
+            close();
+            return false;
+        }
+        return true;
+    }
     if (!exec("PRAGMA foreign_keys=ON; PRAGMA secure_delete=ON;", &error) ||
         !exec(path_ == ":memory:" ? "PRAGMA synchronous=NORMAL;" : "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;", &error) ||
         !createSchema(error)) {
@@ -279,6 +296,28 @@ bool MemoryStore::backupTo(const std::string& targetPath, std::string& error) {
         else escaped += c;
     }
     return exec("VACUUM INTO '" + escaped + "';", &error);
+}
+
+bool MemoryStore::sealForReadOnly(const std::string& path, std::string& error) {
+    sqlite3* db = nullptr;
+    if (sqlite3_open_v2(path.c_str(), &db, SQLITE_OPEN_READWRITE, nullptr) != SQLITE_OK) {
+        error = db ? sqlite3_errmsg(db) : "sqlite3_open_v2 falhou";
+        if (db) sqlite3_close(db);
+        return false;
+    }
+    char* message = nullptr;
+    const int rc = sqlite3_exec(db,
+        "PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode=DELETE;",
+        nullptr, nullptr, &message);
+    if (rc != SQLITE_OK) {
+        error = message ? message : sqlite3_errmsg(db);
+        if (message) sqlite3_free(message);
+        sqlite3_close(db);
+        return false;
+    }
+    if (message) sqlite3_free(message);
+    sqlite3_close(db);
+    return true;
 }
 
 bool MemoryStore::exec(const std::string& sql, std::string* error) {
@@ -372,6 +411,8 @@ CREATE TABLE IF NOT EXISTS memory_episode (
   kind TEXT NOT NULL,
   content TEXT NOT NULL,
   sanitized INTEGER NOT NULL DEFAULT 1,
+  ab_arm TEXT NOT NULL DEFAULT '',
+  ab_repetition INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   metadata TEXT NOT NULL DEFAULT '{}'
 );
@@ -482,6 +523,8 @@ CREATE TABLE IF NOT EXISTS memory_usage (
   retries INTEGER NOT NULL DEFAULT 0,
   invalid_citations INTEGER NOT NULL DEFAULT 0,
   outcome TEXT NOT NULL DEFAULT '',
+  ab_arm TEXT NOT NULL DEFAULT '',
+  ab_repetition INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
 
@@ -496,6 +539,8 @@ CREATE TABLE IF NOT EXISTS memory_hit (
   consulted INTEGER NOT NULL DEFAULT 0,
   used INTEGER NOT NULL DEFAULT 0,
   outcome TEXT NOT NULL DEFAULT '',
+  ab_arm TEXT NOT NULL DEFAULT '',
+  ab_repetition INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
 
@@ -511,6 +556,8 @@ CREATE TABLE IF NOT EXISTS memory_validation (
   score REAL,
   reasons_json TEXT NOT NULL DEFAULT '[]',
   artifact_hash TEXT,
+  ab_arm TEXT NOT NULL DEFAULT '',
+  ab_repetition INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   UNIQUE(scope_id, episode_id, validator_id, validator_version)
 );
@@ -612,6 +659,14 @@ CREATE INDEX IF NOT EXISTS idx_memory_policy_scope ON memory_policy(scope_id, ke
     addColumnIfMissing(db_, "memory_edge", "utility", "REAL NOT NULL DEFAULT 0.5");
     addColumnIfMissing(db_, "memory_usage", "cached_tokens", "INTEGER NOT NULL DEFAULT 0");
     addColumnIfMissing(db_, "memory_usage", "cache_write_tokens", "INTEGER NOT NULL DEFAULT 0");
+    addColumnIfMissing(db_, "memory_usage", "ab_arm", "TEXT NOT NULL DEFAULT ''");
+    addColumnIfMissing(db_, "memory_usage", "ab_repetition", "INTEGER NOT NULL DEFAULT 0");
+    addColumnIfMissing(db_, "memory_episode", "ab_arm", "TEXT NOT NULL DEFAULT ''");
+    addColumnIfMissing(db_, "memory_episode", "ab_repetition", "INTEGER NOT NULL DEFAULT 0");
+    addColumnIfMissing(db_, "memory_validation", "ab_arm", "TEXT NOT NULL DEFAULT ''");
+    addColumnIfMissing(db_, "memory_validation", "ab_repetition", "INTEGER NOT NULL DEFAULT 0");
+    addColumnIfMissing(db_, "memory_hit", "ab_arm", "TEXT NOT NULL DEFAULT ''");
+    addColumnIfMissing(db_, "memory_hit", "ab_repetition", "INTEGER NOT NULL DEFAULT 0");
     addColumnIfMissing(db_, "memory_episode", "task_type", "TEXT NOT NULL DEFAULT ''");
     addColumnIfMissing(db_, "memory_episode", "outcome", "TEXT NOT NULL DEFAULT ''");
     addColumnIfMissing(db_, "memory_episode", "error_class", "TEXT NOT NULL DEFAULT ''");
@@ -1878,8 +1933,9 @@ std::string MemoryStore::recordEpisode(const MemoryEpisodeRecord& episode) {
     std::string error;
     if (!prepare(db_, "INSERT INTO memory_episode(id,scope_id,run_id,node_id,item_id,kind,content,sanitized,"
                        "task_type,outcome,error_class,input_hash,tool_calls_json,files_touched_json,"
-                       "artifacts_json,evidence_json,success_signals_json,redactions,created_at,metadata) "
-                       "VALUES(?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?)", st, error)) {
+                       "artifacts_json,evidence_json,success_signals_json,redactions,ab_arm,ab_repetition,"
+                       "created_at,metadata) "
+                       "VALUES(?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", st, error)) {
         lastError_ = error;
         return "";
     }
@@ -1900,8 +1956,12 @@ std::string MemoryStore::recordEpisode(const MemoryEpisodeRecord& episode) {
     bindText(st.stmt, 15, cleanEvidence.dump());
     bindText(st.stmt, 16, cleanSignals.dump());
     sqlite3_bind_int64(st.stmt, 17, static_cast<sqlite3_int64>(redactions));
-    bindText(st.stmt, 18, nowIso());
-    bindText(st.stmt, 19, cleanMetadata.dump());
+    const char* abArm = std::getenv("ARESTRIX_AB_ARM");
+    bindText(st.stmt, 18, abArm ? abArm : "");
+    const char* abRep = std::getenv("ARESTRIX_AB_REPETITION");
+    sqlite3_bind_int64(st.stmt, 19, abRep ? std::atoll(abRep) : 0);
+    bindText(st.stmt, 20, nowIso());
+    bindText(st.stmt, 21, cleanMetadata.dump());
     if (stepRetry(st.stmt) != SQLITE_DONE) {
         lastError_ = sqlite3_errmsg(db_);
         return "";
@@ -2000,12 +2060,14 @@ std::string MemoryStore::recordValidation(const MemoryValidationRecord& validati
     Stmt st;
     std::string error;
     if (!prepare(db_, "INSERT INTO memory_validation(id,scope_id,run_id,node_id,episode_id,"
-                       "validator_id,validator_version,ok,score,reasons_json,artifact_hash,created_at) "
-                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?) "
+                       "validator_id,validator_version,ok,score,reasons_json,artifact_hash,"
+                       "ab_arm,ab_repetition,created_at) "
+                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
                        "ON CONFLICT(scope_id,episode_id,validator_id,validator_version) DO UPDATE SET "
                        "run_id=excluded.run_id,node_id=excluded.node_id,ok=excluded.ok,"
                        "score=excluded.score,reasons_json=excluded.reasons_json,"
-                       "artifact_hash=excluded.artifact_hash,created_at=excluded.created_at", st, error)) {
+                       "artifact_hash=excluded.artifact_hash,ab_arm=excluded.ab_arm,"
+                       "ab_repetition=excluded.ab_repetition,created_at=excluded.created_at", st, error)) {
         lastError_ = error;
         return "";
     }
@@ -2020,7 +2082,11 @@ std::string MemoryStore::recordValidation(const MemoryValidationRecord& validati
     sqlite3_bind_double(st.stmt, 9, validation.score);
     bindText(st.stmt, 10, reasons.dump());
     bindNullableText(st.stmt, 11, validation.artifactHash);
-    bindText(st.stmt, 12, now);
+    const char* abArm = std::getenv("ARESTRIX_AB_ARM");
+    bindText(st.stmt, 12, abArm ? abArm : "");
+    const char* abRep = std::getenv("ARESTRIX_AB_REPETITION");
+    sqlite3_bind_int64(st.stmt, 13, abRep ? std::atoll(abRep) : 0);
+    bindText(st.stmt, 14, now);
     if (stepRetry(st.stmt) != SQLITE_DONE) {
         lastError_ = sqlite3_errmsg(db_);
         return "";
@@ -3693,12 +3759,13 @@ bool MemoryStore::recordHit(const std::string& scopeId, const std::string& runId
     if (!db_ || memoryId.empty()) return false;
     Stmt st;
     std::string error;
-    if (!prepare(db_, "INSERT INTO memory_hit(id,scope_id,run_id,node_id,memory_id,kind,injected,used,outcome,created_at) "
-                       "VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(scope_id,run_id,node_id,memory_id) DO UPDATE SET "
+    if (!prepare(db_, "INSERT INTO memory_hit(id,scope_id,run_id,node_id,memory_id,kind,injected,used,outcome,ab_arm,ab_repetition,created_at) "
+                       "VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(scope_id,run_id,node_id,memory_id) DO UPDATE SET "
                        "kind=excluded.kind, "
                        "injected=MAX(memory_hit.injected, excluded.injected), "
                        "used=MAX(memory_hit.used, excluded.used), "
-                       "outcome=CASE WHEN excluded.outcome<>'' THEN excluded.outcome ELSE memory_hit.outcome END",
+                       "outcome=CASE WHEN excluded.outcome<>'' THEN excluded.outcome ELSE memory_hit.outcome END, "
+                       "ab_arm=excluded.ab_arm, ab_repetition=excluded.ab_repetition",
                  st, error)) {
         lastError_ = error;
         return false;
@@ -3712,7 +3779,11 @@ bool MemoryStore::recordHit(const std::string& scopeId, const std::string& runId
     sqlite3_bind_int(st.stmt, 7, injected ? 1 : 0);
     sqlite3_bind_int(st.stmt, 8, used ? 1 : 0);
     bindText(st.stmt, 9, outcome);
-    bindText(st.stmt, 10, nowIso());
+    const char* abArm = std::getenv("ARESTRIX_AB_ARM");
+    bindText(st.stmt, 10, abArm ? abArm : "");
+    const char* abRep = std::getenv("ARESTRIX_AB_REPETITION");
+    sqlite3_bind_int64(st.stmt, 11, abRep ? std::atoll(abRep) : 0);
+    bindText(st.stmt, 12, nowIso());
     if (stepRetry(st.stmt) != SQLITE_DONE) {
         lastError_ = sqlite3_errmsg(db_);
         return false;
@@ -3795,10 +3866,10 @@ int MemoryStore::recordConsultedHits(const std::string& scopeId, const std::stri
 
         // Memoria descoberta por busca: conta como consultada, nao como usada.
         Stmt insert;
-        if (!prepare(db_, "INSERT INTO memory_hit(id,scope_id,run_id,node_id,memory_id,kind,injected,consulted,used,outcome,created_at) "
-                           "VALUES (?,?,?,?,?,?,0,1,0,'',?) "
+        if (!prepare(db_, "INSERT INTO memory_hit(id,scope_id,run_id,node_id,memory_id,kind,injected,consulted,used,outcome,ab_arm,ab_repetition,created_at) "
+                           "VALUES (?,?,?,?,?,?,0,1,0,'',?,?,?) "
                            "ON CONFLICT(scope_id,run_id,node_id,memory_id) DO UPDATE SET "
-                           "consulted=1, kind=excluded.kind", insert, error)) {
+                           "consulted=1, kind=excluded.kind, ab_arm=excluded.ab_arm, ab_repetition=excluded.ab_repetition", insert, error)) {
             lastError_ = error;
             continue;
         }
@@ -3808,7 +3879,11 @@ int MemoryStore::recordConsultedHits(const std::string& scopeId, const std::stri
         bindText(insert.stmt, 4, nodeId);
         bindText(insert.stmt, 5, ref.id);
         bindText(insert.stmt, 6, ref.kind.empty() ? "memory" : ref.kind);
-        bindText(insert.stmt, 7, nowIso());
+        const char* abArm = std::getenv("ARESTRIX_AB_ARM");
+        bindText(insert.stmt, 7, abArm ? abArm : "");
+        const char* abRep = std::getenv("ARESTRIX_AB_REPETITION");
+        sqlite3_bind_int64(insert.stmt, 8, abRep ? std::atoll(abRep) : 0);
+        bindText(insert.stmt, 9, nowIso());
         if (stepRetry(insert.stmt) == SQLITE_DONE) {
             ++changed;
         } else {
@@ -4132,8 +4207,8 @@ bool MemoryStore::recordUsage(const MemoryUsageRecord& usage) {    std::lock_gua
     if (!db_) return false;
     Stmt st;
     std::string error;
-    if (!prepare(db_, "INSERT INTO memory_usage(id,scope_id,run_id,node_id,provider,model,prompt_tokens,completion_tokens,total_tokens,cached_tokens,cache_write_tokens,calls,latency_ms,memory_context_chars,memory_enabled,retries,outcome,created_at) "
-                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", st, error)) {
+    if (!prepare(db_, "INSERT INTO memory_usage(id,scope_id,run_id,node_id,provider,model,prompt_tokens,completion_tokens,total_tokens,cached_tokens,cache_write_tokens,calls,latency_ms,memory_context_chars,memory_enabled,retries,outcome,ab_arm,ab_repetition,created_at) "
+                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", st, error)) {
         lastError_ = error;
         return false;
     }
@@ -4154,7 +4229,11 @@ bool MemoryStore::recordUsage(const MemoryUsageRecord& usage) {    std::lock_gua
     sqlite3_bind_int64(st.stmt, 15, usage.memoryEnabled);
     sqlite3_bind_int64(st.stmt, 16, usage.retries);
     bindText(st.stmt, 17, usage.outcome);
-    bindText(st.stmt, 18, nowIso());
+    const char* abArm = std::getenv("ARESTRIX_AB_ARM");
+    bindText(st.stmt, 18, abArm ? abArm : "");
+    const char* abRep = std::getenv("ARESTRIX_AB_REPETITION");
+    sqlite3_bind_int64(st.stmt, 19, abRep ? std::atoll(abRep) : 0);
+    bindText(st.stmt, 20, nowIso());
     if (stepRetry(st.stmt) != SQLITE_DONE) {
         lastError_ = sqlite3_errmsg(db_);
         return false;

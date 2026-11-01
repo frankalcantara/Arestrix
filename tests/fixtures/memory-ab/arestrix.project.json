@@ -1,0 +1,10 @@
+{
+  "projectId": "memoria-ab",
+  "name": "Memoria A/B",
+  "globalDefaults": {
+    "memory": {
+      "enabled": false,
+      "persistent": false
+    }
+  }
+}

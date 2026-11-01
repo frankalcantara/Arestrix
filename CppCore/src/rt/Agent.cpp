@@ -316,6 +316,17 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     AgentSpec spec = parseSpec(jsonutil::parse(specJson), nodeId, label);
     spec.memoryContext = memoryContext;
 
+    // A/B controlado no mesmo grafo: o braco ON consulta um banco congelado,
+    // entao nenhuma escrita de aprendizado pode acontecer durante a medicao.
+    const char* abArmEnv = std::getenv("ARESTRIX_AB_ARM");
+    const bool abArmOn = abArmEnv && std::string(abArmEnv) == "on";
+    if (abArmOn) {
+        spec.memoryWriteEnabled = false;
+        for (const char* tool : {"memory_propose_lesson", "memory_state_set"}) {
+            spec.tools.erase(std::remove(spec.tools.begin(), spec.tools.end(), tool), spec.tools.end());
+        }
+    }
+
     // A/B controlado no mesmo grafo: desliga injecao e ferramentas de memoria sem editar o JSON.
     if (spec.memoryForceDisabled || std::getenv("ARESTRIX_MEMORY_DISABLE") != nullptr) {
         spec.memoryEnabled = false;
@@ -423,6 +434,15 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                 langPick(lang, "Entrada recebida do chamador (dados):\n", "Input from the caller (data):\n") +
                 inputContext;
         }
+    }
+    // E9: o executor A/B entrega a tarefa do conjunto ao vertice alvo sem
+    // reescrever o grafo. A entrada e dado, nunca instrucao de sistema.
+    const std::string abTaskInput = envOr("ARESTRIX_AB_TASK_INPUT", "");
+    const std::string abTargetNode = envOr("ARESTRIX_AB_NODE", "");
+    if (!abTaskInput.empty() && (abTargetNode.empty() || abTargetNode == nodeId)) {
+        userPrompt += "\n\n" +
+            langPick(lang, "Tarefa do conjunto A/B (dados):\n", "A/B suite task (data):\n") +
+            abTaskInput;
     }
 
     const std::vector<CallTarget> callTargets = callTargetsFor(nodeId);

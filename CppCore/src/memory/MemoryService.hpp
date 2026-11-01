@@ -42,7 +42,7 @@ public:
     // Abre (ou reabre) o store do projeto. persistent=false usa SQLite :memory:.
     // dbPath vazio usa ARESTRIX_MEMORY_DB ou .arestrix/memory/memory.db.
     bool configure(const std::string& projectId, bool persistent,
-                   const std::string& dbPath = "");
+                   const std::string& dbPath = "", bool readOnly = false);
     bool isPersistent(const std::string& projectId) const;
     MemoryStore* store(const std::string& projectId);
     std::string databasePath(const std::string& projectId) const;
@@ -308,6 +308,7 @@ private:
     std::map<std::string, std::unique_ptr<MemoryStore>> stores_;
     std::map<std::string, bool> persistent_;
     std::map<std::string, std::string> paths_;
+    std::map<std::string, bool> readOnly_;
     std::map<std::string, std::unique_ptr<MemoryStore>> telemetry_;
     std::map<std::string, std::string> telemetryPaths_;
     std::map<std::string, EmbeddingRuntime> embeddings_;

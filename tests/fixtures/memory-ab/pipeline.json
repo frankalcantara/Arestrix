@@ -1,0 +1,93 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "projectId": "memoria-ab",
+    "graphName": "MemoriaAB",
+    "description": "Executor A/B E9: um gerador com validador de artefato e memoria apenas de consulta",
+    "targetStandard": "C++20",
+    "version": "1.0.0",
+    "compilerConfig": {
+      "compiler": "msvc",
+      "cppStandard": "C++20",
+      "buildSystem": "cmake",
+      "taskflowIncludePath": "third_party/taskflow",
+      "outputBinaryName": "memoria_ab",
+      "enableOpenMP": false,
+      "enableCuda": false,
+      "extraFlags": []
+    },
+    "globalDefaults": {
+      "model": {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "skillPath": "",
+        "promptTemplate": ""
+      },
+      "sandbox": {
+        "isolationLevel": "host_direct",
+        "network": "egress_llm_only",
+        "maxMemoryMB": 512,
+        "timeoutSeconds": 120,
+        "readOnlyMounts": [],
+        "readWriteMounts": []
+      },
+      "codeMode": {
+        "allowedTools": ["write"],
+        "customScripts": []
+      },
+      "memory": {
+        "enabled": false,
+        "persistent": false
+      }
+    }
+  },
+  "nodes": [
+    {
+      "id": "gerador",
+      "label": "Gerador_AB",
+      "type": "agent",
+      "position": { "x": 0, "y": 0 },
+      "inputs": [
+        { "id": "gerador_in", "name": "in", "direction": "input", "type": "flow" }
+      ],
+      "outputs": [
+        { "id": "gerador_out", "name": "out", "direction": "output", "type": "flow" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "validationRules": [
+        {
+          "targetPathPattern": "artefatos/pipeline.md",
+          "minSizeBytes": 400,
+          "contentPattern": "STATUS_OK"
+        }
+      ],
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "provider": "deepseek",
+          "model": "deepseek-flash",
+          "skillPath": "",
+          "promptTemplate": "Gere o artefato da tarefa com o marcador STATUS_OK e escreva em artefatos/pipeline.md."
+        },
+        "inheritCodeMode": false,
+        "codeMode": {
+          "allowedTools": ["write"],
+          "customScripts": []
+        },
+        "inheritMemory": false,
+        "memory": {
+          "enabled": true,
+          "persistent": true,
+          "projectId": "memoria-ab",
+          "mode": "consult",
+          "theme": "ab",
+          "taskType": "ab",
+          "contextBudgetTokens": 800
+        }
+      }
+    }
+  ],
+  "edges": []
+}

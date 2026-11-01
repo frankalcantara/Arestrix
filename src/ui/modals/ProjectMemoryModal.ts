@@ -274,7 +274,7 @@ export class ProjectMemoryModal {
                 </div>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
                   <button class="btn btn-secondary-pill btn-secondary-office" id="btn-refresh-memory">${t('project_memory.btn_refresh')}</button>
-                  <button class="btn btn-secondary-pill btn-secondary-office" id="btn-run-memory-ab">${t('project_memory.btn_run_ab', 'Comparar com e sem memória (contexto)')}</button>
+                  <button class="btn btn-secondary-pill btn-secondary-office" id="btn-run-memory-ab">${t('project_memory.btn_run_ab', 'Pré-visualizar o tamanho do brief')}</button>
                   <button class="btn btn-secondary-pill btn-secondary-office" id="btn-clear-session-mem" title="${t('project_memory.btn_clear_session_tip')}">${t('project_memory.btn_clear_session')}</button>
                   <button class="btn btn-danger-pill" id="btn-clear-all-mem" title="${t('project_memory.btn_clear_all_tip')}" style="background: #dc2626; color: #fff; border: none; border-radius: 4px; padding: 6px 12px; font-size: 11.5px; cursor: pointer;">${t('project_memory.btn_clear_all')}</button>
                 </div>
@@ -1098,7 +1098,7 @@ export class ProjectMemoryModal {
       }));
       const data = raw ? JSON.parse(String(raw)) : {};
       const lines: string[] = [];
-      lines.push(t('project_memory.ab_title', 'A/B de contexto (v1)'));
+      lines.push(t('project_memory.ab_title', 'Pré-visualização do brief (v1)'));
       lines.push(`${t('project_memory.ab_fingerprint', 'Fingerprint da cópia congelada')}: ${String(data.fingerprint || '-')}`);
       lines.push(`${t('project_memory.ab_frozen', 'Cópia congelada')}: ${String(data.frozenPath || '-')}`);
       lines.push('');
@@ -1110,7 +1110,7 @@ export class ProjectMemoryModal {
           + `${task.truncated ? ` · ${t('project_memory.ab_truncated', 'truncado')}` : ''}`);
       }
       lines.push('');
-      lines.push(t('project_memory.ab_note', 'v1 mede o custo e o conteúdo do contexto; a taxa de aprovação do validador entra no A/B completo.'));
+      lines.push(t('project_memory.ab_note', 'Esta prévia mede o custo e o conteúdo do contexto. O A/B pareado com veredito roda por `arestrix-cli memory ab run`.'));
       pre.style.display = 'block';
       pre.textContent = lines.join('\n');
     } catch (error) {

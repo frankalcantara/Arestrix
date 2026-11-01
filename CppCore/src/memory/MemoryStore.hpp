@@ -249,7 +249,8 @@ class MemoryStore {
 public:
     static constexpr size_t kMaxActiveLessons = 5000;
 
-    explicit MemoryStore(std::string path, size_t maxActiveLessons = kMaxActiveLessons);
+    explicit MemoryStore(std::string path, size_t maxActiveLessons = kMaxActiveLessons,
+                         bool readOnly = false);
     ~MemoryStore();
 
     MemoryStore(const MemoryStore&) = delete;
@@ -258,6 +259,11 @@ public:
     bool open(std::string& error);
     void close();
     bool isOpen() const { return db_ != nullptr; }
+    bool isReadOnly() const { return readOnly_; }
+
+    // Deixa uma copia pronta para ser aberta somente leitura: consolida o WAL
+    // e volta ao journal em disco, para que medir o hash nao dependa de -wal.
+    static bool sealForReadOnly(const std::string& path, std::string& error);
     const std::string& path() const { return path_; }
     const std::string& lastError() const { return lastError_; }
 
@@ -549,6 +555,7 @@ private:
     sqlite3* db_ = nullptr;
     std::string path_;
     size_t maxActiveLessons_ = kMaxActiveLessons;
+    bool readOnly_ = false;
     mutable std::string lastError_;
 };
 

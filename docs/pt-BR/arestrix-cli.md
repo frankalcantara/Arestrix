@@ -198,12 +198,18 @@ CAS; omita para criar. Opções incluem `--max-bytes`, `--ttl`, `--mode replace|
   --repetitions 3 --seed 42 --json
 .\arestrix-cli.exe memory ab report --suite tests\fixtures\memory-ab-v1.json `
   --observations ab-observations.json --repetitions 3 --json
+.\arestrix-cli.exe memory ab run --suite tests\fixtures\memory-ab-v1.json `
+  --pipeline pipeline.json --node gerador --repetitions 3 --seed 42 --json
 ```
 
 Valida o conjunto versionado 12/4/4, gera uma ordem intercalada com semente e analisa observações
 pareadas. A métrica primária é a aprovação do validador; as secundárias são tokens, turnos, custo e
-latência. Falhas de infraestrutura ficam fora do veredito pareado e são contadas à parte. Use
-`--json` para automação do harness.
+latência. Falhas de infraestrutura ficam fora do veredito pareado e são contadas à parte.
+
+`memory ab run` executa o piloto: congela o conhecimento, abre a cópia somente leitura no braço ON,
+desliga a memória no braço OFF e grava `ab_arm`/`ab_repetition` na telemetria de medição. O relatório
+inclui o IC 95%, a lista de tarefas sem validador e o fingerprint do conhecimento antes e depois.
+Use `--json` para automação do harness.
 
 ### `memory consolidate`
 

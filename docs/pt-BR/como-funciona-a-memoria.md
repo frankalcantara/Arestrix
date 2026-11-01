@@ -211,7 +211,7 @@ vetores de fingerprints antigos.
 
 ## 8. Medição A/B
 
-O painel oferece **Comparar com e sem memória (contexto)**. A ação:
+O painel oferece **Pré-visualizar o tamanho do brief**. A ação:
 
 1. cria uma cópia consistente do conhecimento com `VACUUM INTO`;
 2. calcula o fingerprint SHA-256 da cópia;
@@ -219,7 +219,7 @@ O painel oferece **Comparar com e sem memória (contexto)**. A ação:
 4. compara com o baseline sem memória (zero).
 
 Essa é a versão **A/B v1**: mede custo e conteúdo do contexto, não a taxa de aprovação do
-validador.
+validador. O executor completo é o comando `memory ab run` descrito abaixo.
 
 O **A/B v2** é o protocolo estatístico completo. O conjunto versionado
 [`tests/fixtures/memory-ab-v1.json`](../../tests/fixtures/memory-ab-v1.json) tem 20 tarefas —
@@ -231,14 +231,20 @@ observações:
 arestrix-cli memory ab validate --suite tests/fixtures/memory-ab-v1.json
 arestrix-cli memory ab order --suite tests/fixtures/memory-ab-v1.json \
   --repetitions 3 --seed 42 --json
-arestrix-cli memory ab report --suite tests/fixtures/memory-ab-v1.json \
-  --observations ab-observations.json --repetitions 3 --json
+arestrix-cli memory ab run --suite tests/fixtures/memory-ab-v1.json \
+  --pipeline pipeline.json --node gerador --repetitions 3 --seed 42 --json
 ```
 
+`memory ab run` executa de fato o piloto. Ele congela o conhecimento com `VACUUM INTO` e abre essa
+cópia apenas para leitura (`SQLITE_OPEN_READONLY` e `PRAGMA query_only`) no braço ON; no braço OFF
+define `ARESTRIX_MEMORY_DISABLE=1`. As duas metades gravam telemetria no mesmo banco de medição, com
+`ab_arm` e `ab_repetition` em cada linha. Falhas de infraestrutura são repetidas até duas vezes e
+contadas fora do veredito; tarefas sem validador aparecem em `invalidTasks` e não entram no par.
+
 A métrica primária é a **taxa de aprovação do validador**, comparada em pares. O relatório traz
-deltas pareados, IC 95% (t de Student), tokens, turnos, custo e latência; falhas de infraestrutura
-são contabilizadas à parte e não entram no veredito. A execução das tarefas e a coleta do validador
-são responsabilidade do harness que produz `ab-observations.json`.
+deltas pareados, IC 95% (t de Student), tokens, turnos, custo e latência, além do fingerprint do
+conhecimento antes e depois da medição. `memory ab report` continua disponível para analisar um
+arquivo de observações já coletado.
 
 ### Custo por execução
 
@@ -329,5 +335,6 @@ O plano de simplificação (Fases A–C) está concluído. A Fase D — multigra
 conhecimento de domínio, caminhos sobre afirmações e roteamento de modelos — é um programa separado,
 fora deste plano, e não bloqueia o release. A recuperação por embeddings já está implementada.
 
-O harness de execução do A/B, o nível institucional no assistente e a validação com provedores reais
-são pendências operacionais. Consulte [`PENDENCIAS.md`](../PENDENCIAS.md).
+O nível institucional no assistente e a validação com provedores reais são pendências operacionais.
+O harness do A/B está implementado em `memory ab run` e roda com o provedor simulado no e2e.
+Consulte [`PENDENCIAS.md`](../PENDENCIAS.md).
