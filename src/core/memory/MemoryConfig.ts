@@ -22,6 +22,14 @@ export function memorySourcesEnabled(
 }
 
 /** E13: a extração de afirmações é opcional e roda só na manutenção. */
+export function lensesEnabled(
+  config?: { lenses?: boolean | { enabled?: boolean } } | null
+): boolean {
+  const value = config?.lenses;
+  if (typeof value === 'boolean') return value;
+  return !!value?.enabled;
+}
+
 export function claimExtractionEnabled(
   config?: { claimExtraction?: boolean | { enabled?: boolean } } | null
 ): boolean {

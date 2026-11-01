@@ -305,6 +305,20 @@ fingerprint in metadata, plus an evidence snapshot. For single-valued predicates
 only values with overlapping validity close the previous one; disjoint intervals
 remain as history.
 
+### Lenses and facets
+
+With `globalDefaults.memory.lenses` enabled, maintenance ensures a lens for every
+active edge (the lens comes from extraction or the writer's theme/domain) and
+builds deterministic facets per entity and lens. Facets include only active
+claims; proposed or contested claims are excluded. When `claims_hash` changes,
+the facet is updated with a new revision; reprocessing the same set leaves the
+revision unchanged.
+
+Facets use the **symmetric** embedding role, with its own prefix (EmbeddingGemma:
+`task: sentence similarity`; Qwen3: similarity instruction) and a fingerprint
+distinct from retrieval. `memory_search` accepts a lens filter derived from the
+vertex themes and returns only edges belonging to that lens.
+
 ### Retrieval traces
 
 Every knowledge write bumps `knowledge_version` in the same transaction; reads

@@ -307,6 +307,21 @@ extrator no metadata, mais um instantâneo de evidência. Para predicados de val
 único, só valores com validade sobreposta encerram o anterior; intervalos
 disjuntos permanecem como história.
 
+### Lentes e facetas
+
+Com `globalDefaults.memory.lenses` ligado, a manutenção garante uma lente para
+cada aresta ativa (a lente vem da extração ou do tema/domínio de quem escreveu)
+e gera facetas determinísticas por entidade e lente. A faceta reúne apenas
+afirmações ativas; afirmações propostas ou contestadas ficam de fora. Quando o
+`claims_hash` muda, a faceta é atualizada e recebe nova revisão; reprocessar o
+mesmo conjunto não muda a revisão.
+
+As facetas usam o papel **simétrico** dos embeddings, com prefixo próprio
+(EmbeddingGemma: `task: sentence similarity`; Qwen3: instrução de similaridade) e
+fingerprint diferente do papel de recuperação. `memory_search` aceita filtro por
+lentes, derivadas dos temas do vértice, e devolve apenas as arestas daquela
+lente.
+
 ### Traços de recuperação
 
 Toda escrita de conhecimento incrementa `knowledge_version` na mesma transação;

@@ -618,6 +618,39 @@ CREATE TABLE IF NOT EXISTS memory_passage (
   UNIQUE(source_id, ordinal)
 );
 
+CREATE TABLE IF NOT EXISTS memory_lens (
+  id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(scope_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS memory_edge_lens (
+  edge_id TEXT NOT NULL REFERENCES memory_edge(id),
+  lens_id TEXT NOT NULL REFERENCES memory_lens(id),
+  PRIMARY KEY (edge_id, lens_id)
+);
+
+CREATE TABLE IF NOT EXISTS memory_facet (
+  id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  entity_id TEXT NOT NULL REFERENCES memory_node(id),
+  lens_id TEXT NOT NULL REFERENCES memory_lens(id),
+  revision INTEGER NOT NULL DEFAULT 1,
+  description TEXT NOT NULL,
+  supporting_claims_json TEXT NOT NULL DEFAULT '[]',
+  claims_hash TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  embedding_fingerprint TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(scope_id, entity_id, lens_id)
+);
+
 CREATE TABLE IF NOT EXISTS memory_claim_extraction (
   id TEXT PRIMARY KEY,
   scope_id TEXT NOT NULL REFERENCES memory_scope(id),
@@ -726,6 +759,8 @@ CREATE INDEX IF NOT EXISTS idx_memory_alias_node ON memory_alias(scope_id, node_
 CREATE INDEX IF NOT EXISTS idx_memory_policy_scope ON memory_policy(scope_id, key);
 CREATE INDEX IF NOT EXISTS idx_memory_source_uri ON memory_source(scope_id, uri, status);
 CREATE INDEX IF NOT EXISTS idx_memory_passage_source ON memory_passage(source_id, status);
+CREATE INDEX IF NOT EXISTS idx_memory_edge_lens_lens ON memory_edge_lens(lens_id, edge_id);
+CREATE INDEX IF NOT EXISTS idx_memory_facet_entity ON memory_facet(scope_id, entity_id, lens_id);
 )SQL", &error)) {
         return false;
     }
@@ -739,7 +774,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_passage_source ON memory_passage(source_id
         const char* tables[] = {"memory_scope", "memory_node", "memory_alias", "memory_edge",
                                 "memory_working", "memory_state", "memory_state_history",
                                 "memory_playbook", "memory_evidence", "memory_source",
-                                "memory_passage"};
+                                "memory_passage", "memory_lens", "memory_edge_lens", "memory_facet"};
         std::string triggers;
         for (const char* table : tables) {
             for (const char* event : {"INSERT", "UPDATE", "DELETE"}) {
@@ -1525,6 +1560,15 @@ bool MemoryStore::purge(const std::string& scopeId, const MemoryPurgeOptions& op
     // explicito do escopo remove os instantaneos junto com o conhecimento.
     execScoped("DELETE FROM memory_evidence WHERE scope_id=?", 1);
     execScoped("DELETE FROM memory_hit WHERE scope_id=?", 1);
+    execScoped("DELETE FROM memory_claim_extraction WHERE scope_id=?", 1);
+    execScoped("DELETE FROM memory_facet WHERE scope_id=?", 1);
+    execScoped("DELETE FROM memory_edge_lens WHERE edge_id IN "
+               "(SELECT id FROM memory_edge WHERE scope_id=?)", 1);
+    execScoped("DELETE FROM memory_lens WHERE scope_id=?", 1);
+    execScoped("DELETE FROM memory_passage_fts WHERE source_id IN "
+               "(SELECT id FROM memory_source WHERE scope_id=?)", 1);
+    execScoped("DELETE FROM memory_passage WHERE scope_id=?", 1);
+    execScoped("DELETE FROM memory_source WHERE scope_id=?", 1);
     if (!options.keepAudit) {
         execScoped("DELETE FROM memory_audit WHERE target=? OR "
                    "target IN (SELECT id FROM memory_edge WHERE scope_id=?) OR "
@@ -1749,13 +1793,27 @@ std::string MemoryStore::recordEdge(const std::string& scopeId, const std::strin
     const std::string valueJson = cleanValue.is_null() ? "" : cleanValue.dump();
     const std::string from = validFrom.empty() ? nowIso() : validFrom;
     const std::string hash = edgeHash(scopeId, srcId, dstId, relation, valueJson, from, validTo);
+    auto attachLens = [&](const std::string& edgeId) {
+        std::string lensName = relation;
+        if (cleanMetadata.is_object()) {
+            lensName = cleanMetadata.value("lens",
+                cleanMetadata.value("domain", relation));
+        }
+        if (lensName.empty()) lensName = relation;
+        const std::string lensId = ensureLens(scopeId, lensName);
+        if (!lensId.empty()) linkEdgeLens(edgeId, lensId);
+    };
 
     Stmt existing;
     std::string error;
     if (prepare(db_, "SELECT id FROM memory_edge WHERE scope_id=? AND edge_hash=? AND status='active' LIMIT 1", existing, error)) {
         bindText(existing.stmt, 1, scopeId);
         bindText(existing.stmt, 2, hash);
-        if (stepRetry(existing.stmt) == SQLITE_ROW) return columnText(existing.stmt, 0);
+        if (stepRetry(existing.stmt) == SQLITE_ROW) {
+            const std::string existingId = columnText(existing.stmt, 0);
+            attachLens(existingId);
+            return existingId;
+        }
     }
 
     const std::string id = newId("edge");
@@ -1798,6 +1856,7 @@ std::string MemoryStore::recordEdge(const std::string& scopeId, const std::strin
         evidence.excerptHash = hashHex(valueJson.empty() ? relation : valueJson);
         recordEvidence(evidence);
     }
+    attachLens(id);
     return id;
 }
 
@@ -3903,7 +3962,8 @@ std::string MemoryStore::findEntity(const std::string& scopeId, const std::strin
 
 std::string MemoryStore::searchContext(const std::string& scopeId, const std::string& text,
                                        size_t limit, const std::vector<std::string>& domains,
-                                       std::vector<MemoryHitRef>* hits) const {
+                                       std::vector<MemoryHitRef>* hits,
+                                       const std::vector<std::string>& lenses) const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (!db_ || text.empty()) return "";
 
@@ -3978,6 +4038,27 @@ std::string MemoryStore::searchContext(const std::string& scopeId, const std::st
                     if (!domainAllowed(domain)) continue;
                 }
                 const std::string edgeId = columnText(st.stmt, 0);
+                if (!lenses.empty()) {
+                    auto names = edgeLensNames(edgeId);
+                    if (names.empty()) {
+                        // Arestas antigas/importadas ainda sem backfill usam o
+                        // tema/dominio/relacao como lente virtual, sem escrita.
+                        const taskforge::Json metadata = parseJsonOrNull(columnText(st.stmt, 7));
+                        std::string virtualLens = metadata.is_object()
+                            ? metadata.value("lens", metadata.value("domain", columnText(st.stmt, 2)))
+                            : columnText(st.stmt, 2);
+                        if (virtualLens.empty()) virtualLens = columnText(st.stmt, 2);
+                        if (!virtualLens.empty()) names.push_back(virtualLens);
+                    }
+                    bool matchesLens = false;
+                    for (const auto& name : names) {
+                        if (std::find(lenses.begin(), lenses.end(), name) != lenses.end()) {
+                            matchesLens = true;
+                            break;
+                        }
+                    }
+                    if (!matchesLens) continue;
+                }
                 out << "[FATO] [MEMO:" << edgeId << "] " << columnText(st.stmt, 1) << " --"
                     << columnText(st.stmt, 2) << "--> " << columnText(st.stmt, 3);
                 const std::string from = columnText(st.stmt, 4);
@@ -5271,6 +5352,259 @@ bool MemoryStore::markClaimExtraction(const std::string& scopeId, const std::str
     return stepRetry(st.stmt) == SQLITE_DONE;
 }
 
+std::string MemoryStore::ensureLens(const std::string& scopeId, const std::string& name,
+                                    const std::string& description) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty() || name.empty()) return "";
+    const std::string id = "lens_" + hashHex(scopeId + "|" + name).substr(0, 24);
+    Stmt existing;
+    std::string error;
+    if (!prepare(db_, "INSERT INTO memory_lens(id,scope_id,name,description,version,created_at,updated_at) "
+                       "VALUES(?,?,?,?,1,?,?) ON CONFLICT(scope_id,name) DO UPDATE SET "
+                       "description=CASE WHEN excluded.description<>'' THEN excluded.description "
+                       "ELSE memory_lens.description END,"
+                       "updated_at=excluded.updated_at,"
+                       "version=CASE WHEN memory_lens.description<>'' AND excluded.description<>'' "
+                       "AND memory_lens.description<>excluded.description THEN memory_lens.version+1 "
+                       "ELSE memory_lens.version END", existing, error)) {
+        lastError_ = error;
+        return "";
+    }
+    const std::string now = nowIso();
+    bindText(existing.stmt, 1, id);
+    bindText(existing.stmt, 2, scopeId);
+    bindText(existing.stmt, 3, name);
+    bindText(existing.stmt, 4, description);
+    bindText(existing.stmt, 5, now);
+    bindText(existing.stmt, 6, now);
+    if (stepRetry(existing.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return "";
+    }
+    Stmt find;
+    if (prepare(db_, "SELECT id FROM memory_lens WHERE scope_id=? AND name=?", find, error)) {
+        bindText(find.stmt, 1, scopeId);
+        bindText(find.stmt, 2, name);
+        if (stepRetry(find.stmt) == SQLITE_ROW) return columnText(find.stmt, 0);
+    }
+    return id;
+}
+
+bool MemoryStore::renameLens(const std::string& scopeId, const std::string& lensId,
+                             const std::string& newName, const std::string& description) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || lensId.empty() || newName.empty()) return false;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "UPDATE memory_lens SET name=?,description=?,version=version+1,updated_at=? "
+                       "WHERE scope_id=? AND id=?", st, error)) {
+        lastError_ = error;
+        return false;
+    }
+    bindText(st.stmt, 1, newName);
+    bindText(st.stmt, 2, description);
+    bindText(st.stmt, 3, nowIso());
+    bindText(st.stmt, 4, scopeId);
+    bindText(st.stmt, 5, lensId);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return false;
+    }
+    return sqlite3_changes(db_) > 0;
+}
+
+std::vector<MemoryLensRecord> MemoryStore::listLenses(const std::string& scopeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<MemoryLensRecord> out;
+    if (!db_) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT id,scope_id,name,description,version FROM memory_lens "
+                       "WHERE scope_id=? ORDER BY name", st, error)) {
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        out.push_back({columnText(st.stmt, 0), columnText(st.stmt, 1), columnText(st.stmt, 2),
+                       columnText(st.stmt, 3), columnInt(st.stmt, 4)});
+    }
+    return out;
+}
+
+bool MemoryStore::linkEdgeLens(const std::string& edgeId, const std::string& lensId) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || edgeId.empty() || lensId.empty()) return false;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "INSERT OR IGNORE INTO memory_edge_lens(edge_id,lens_id) VALUES(?,?)", st, error)) {
+        lastError_ = error;
+        return false;
+    }
+    bindText(st.stmt, 1, edgeId);
+    bindText(st.stmt, 2, lensId);
+    return stepRetry(st.stmt) == SQLITE_DONE;
+}
+
+std::vector<std::string> MemoryStore::edgeLensNames(const std::string& edgeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<std::string> out;
+    if (!db_) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT l.name FROM memory_edge_lens el JOIN memory_lens l ON l.id=el.lens_id "
+                       "WHERE el.edge_id=? ORDER BY l.name", st, error)) {
+        return out;
+    }
+    bindText(st.stmt, 1, edgeId);
+    while (stepRetry(st.stmt) == SQLITE_ROW) out.push_back(columnText(st.stmt, 0));
+    return out;
+}
+
+std::vector<std::string> MemoryStore::edgeIdsForLenses(
+    const std::string& scopeId, const std::vector<std::string>& lensNames) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<std::string> out;
+    if (!db_ || lensNames.empty()) return out;
+    std::string sql = "SELECT DISTINCT el.edge_id FROM memory_edge_lens el "
+                      "JOIN memory_lens l ON l.id=el.lens_id "
+                      "JOIN memory_edge e ON e.id=el.edge_id "
+                      "WHERE e.scope_id=? AND e.status='active' AND l.name IN (";
+    for (size_t i = 0; i < lensNames.size(); ++i) {
+        if (i > 0) sql += ",";
+        sql += "?";
+    }
+    sql += ")";
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, sql.c_str(), st, error)) return out;
+    bindText(st.stmt, 1, scopeId);
+    for (size_t i = 0; i < lensNames.size(); ++i) {
+        bindText(st.stmt, static_cast<int>(i + 2), lensNames[i]);
+    }
+    while (stepRetry(st.stmt) == SQLITE_ROW) out.push_back(columnText(st.stmt, 0));
+    return out;
+}
+
+size_t MemoryStore::backfillLenses(const std::string& scopeId) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_) return 0;
+    size_t attached = 0;
+    for (const auto& edge : listEdges(scopeId, "", 10000)) {
+        if (edge.status != "active") continue;
+        if (!edgeLensNames(edge.id).empty()) continue;
+        auto metadata = taskforge::jsonutil::tryParse(edge.metadata);
+        const taskforge::Json meta = metadata && metadata->is_object()
+            ? *metadata : taskforge::Json::object();
+        std::string name = meta.value("lens", meta.value("domain", edge.relation));
+        if (name.empty()) name = edge.relation.empty() ? "default" : edge.relation;
+        const std::string lensId = ensureLens(scopeId, name);
+        if (!lensId.empty() && linkEdgeLens(edge.id, lensId)) ++attached;
+    }
+    return attached;
+}
+
+std::string MemoryStore::upsertFacet(const MemoryFacetRecord& facet, bool* changed) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (changed) *changed = false;
+    if (!db_ || facet.scopeId.empty() || facet.entityId.empty() || facet.lensId.empty()) return "";
+    const std::string id = "fct_" + hashHex(facet.scopeId + "|" + facet.entityId + "|" +
+                                             facet.lensId).substr(0, 24);
+    Stmt existing;
+    std::string error;
+    long long revision = 1;
+    bool same = false;
+    if (prepare(db_, "SELECT revision,claims_hash FROM memory_facet WHERE id=?", existing, error)) {
+        bindText(existing.stmt, 1, id);
+        if (stepRetry(existing.stmt) == SQLITE_ROW) {
+            revision = columnInt(existing.stmt, 0);
+            same = columnText(existing.stmt, 1) == facet.claimsHash;
+            if (same) return id;
+            ++revision;
+        }
+    }
+    Stmt st;
+    const std::string now = nowIso();
+    if (!prepare(db_, "INSERT INTO memory_facet(id,scope_id,entity_id,lens_id,revision,description,"
+                       "supporting_claims_json,claims_hash,status,embedding_fingerprint,created_at,updated_at) "
+                       "VALUES(?,?,?,?,?,?,?,?,'active',?,?,?) "
+                       "ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,"
+                       "description=excluded.description,supporting_claims_json=excluded.supporting_claims_json,"
+                       "claims_hash=excluded.claims_hash,status='active',"
+                       "embedding_fingerprint=excluded.embedding_fingerprint,updated_at=excluded.updated_at",
+                     st, error)) {
+        lastError_ = error;
+        return "";
+    }
+    bindText(st.stmt, 1, id);
+    bindText(st.stmt, 2, facet.scopeId);
+    bindText(st.stmt, 3, facet.entityId);
+    bindText(st.stmt, 4, facet.lensId);
+    sqlite3_bind_int64(st.stmt, 5, revision);
+    bindText(st.stmt, 6, facet.description);
+    bindText(st.stmt, 7, facet.supportingClaimsJson);
+    bindText(st.stmt, 8, facet.claimsHash);
+    bindText(st.stmt, 9, facet.embeddingFingerprint);
+    bindText(st.stmt, 10, now);
+    bindText(st.stmt, 11, now);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return "";
+    }
+    if (changed) *changed = true;
+    return id;
+}
+
+std::vector<MemoryFacetRecord> MemoryStore::listFacets(const std::string& scopeId,
+                                                       const std::string& entityId,
+                                                       const std::string& lensId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<MemoryFacetRecord> out;
+    if (!db_) return out;
+    std::string sql = "SELECT id,scope_id,entity_id,lens_id,revision,description,"
+                      "supporting_claims_json,claims_hash,status,embedding_fingerprint "
+                      "FROM memory_facet WHERE scope_id=?";
+    if (!entityId.empty()) sql += " AND entity_id=?";
+    if (!lensId.empty()) sql += " AND lens_id=?";
+    sql += " ORDER BY entity_id,lens_id";
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, sql.c_str(), st, error)) return out;
+    bindText(st.stmt, 1, scopeId);
+    int index = 2;
+    if (!entityId.empty()) bindText(st.stmt, index++, entityId);
+    if (!lensId.empty()) bindText(st.stmt, index++, lensId);
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        out.push_back({columnText(st.stmt, 0), columnText(st.stmt, 1), columnText(st.stmt, 2),
+                       columnText(st.stmt, 3), columnInt(st.stmt, 4), columnText(st.stmt, 5),
+                       columnText(st.stmt, 6), columnText(st.stmt, 7), columnText(st.stmt, 8),
+                       columnText(st.stmt, 9)});
+    }
+    return out;
+}
+
+taskforge::Json MemoryStore::facetSummary(const std::string& scopeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out{{"lenses", 0LL}, {"facets", 0LL}, {"edgesWithLens", 0LL},
+                        {"edgesWithoutLens", 0LL}};
+    if (!db_) return out;
+    auto scalar = [&](const char* sql) -> long long {
+        Stmt st;
+        std::string error;
+        if (!prepare(db_, sql, st, error)) return 0;
+        bindText(st.stmt, 1, scopeId);
+        return stepRetry(st.stmt) == SQLITE_ROW ? columnInt(st.stmt, 0) : 0;
+    };
+    out["lenses"] = scalar("SELECT COUNT(*) FROM memory_lens WHERE scope_id=?");
+    out["facets"] = scalar("SELECT COUNT(*) FROM memory_facet WHERE scope_id=? AND status='active'");
+    out["edgesWithLens"] = scalar(
+        "SELECT COUNT(DISTINCT e.id) FROM memory_edge e JOIN memory_edge_lens el ON el.edge_id=e.id "
+        "WHERE e.scope_id=? AND e.status='active'");
+    out["edgesWithoutLens"] = scalar(
+        "SELECT COUNT(*) FROM memory_edge e WHERE e.scope_id=? AND e.status='active' "
+        "AND NOT EXISTS (SELECT 1 FROM memory_edge_lens el WHERE el.edge_id=e.id)");
+    return out;
+}
+
 taskforge::Json MemoryStore::toCognitiveJson(const std::string& scopeId) const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     taskforge::Json out = taskforge::Json::object();
@@ -5638,6 +5972,13 @@ bool MemoryStore::importCognitiveJson(const std::string& scopeId, const taskforg
         "DELETE FROM memory_working WHERE scope_id=?",
         "DELETE FROM memory_alias WHERE scope_id=?",
         "DELETE FROM memory_playbook WHERE scope_id=?",
+        "DELETE FROM memory_facet WHERE scope_id=?",
+        "DELETE FROM memory_edge_lens WHERE edge_id IN (SELECT id FROM memory_edge WHERE scope_id=?)",
+        "DELETE FROM memory_lens WHERE scope_id=?",
+        "DELETE FROM memory_claim_extraction WHERE scope_id=?",
+        "DELETE FROM memory_passage_fts WHERE source_id IN (SELECT id FROM memory_source WHERE scope_id=?)",
+        "DELETE FROM memory_passage WHERE scope_id=?",
+        "DELETE FROM memory_source WHERE scope_id=?",
         "DELETE FROM memory_node_fts WHERE node_id IN (SELECT id FROM memory_node WHERE scope_id=?)",
         "DELETE FROM memory_edge WHERE scope_id=?",
         "DELETE FROM memory_node WHERE scope_id=?"

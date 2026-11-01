@@ -33,6 +33,7 @@ struct MemoryMaintenanceConfig {
     // E13: extracao de afirmacoes fora do caminho do agente.
     ClaimExtractorConfig claimExtractor;
     size_t claimMaxPassages = 10;
+    bool lensesEnabled = false;
 };
 
 MemoryMaintenanceConfig maintenanceConfigFromJson(const taskforge::Json& value);
@@ -117,6 +118,8 @@ public:
     taskforge::Json extractClaims(const std::string& projectId,
                                   const ClaimExtractorConfig& config,
                                   size_t maxPassages = 10);
+    // E14: garante lentes e regenera facetas; chamado pela manutencao.
+    taskforge::Json rebuildFacets(const std::string& projectId, bool facetsEnabled);
     taskforge::Json listProposals(const std::string& projectId, const std::string& status = "pending",
                                   size_t limit = 100);
     bool promoteProposal(const std::string& projectId, const std::string& proposalId,
@@ -143,7 +146,8 @@ public:
                               const std::vector<std::string>& domains = {},
                               std::vector<MemoryHitRef>* hits = nullptr,
                               const std::string& runId = "",
-                              const std::string& nodeId = "");
+                              const std::string& nodeId = "",
+                              const std::vector<std::string>& lenses = {});
 
     // E12: ingestao de fontes e trechos sem modelo de linguagem.
     size_t ingestSources(const std::string& projectId, const std::string& workspaceRoot,
@@ -317,7 +321,8 @@ private:
     bool hybridSearch(const std::string& projectId, const std::string& text, size_t limit,
                       const std::vector<std::string>& domains,
                       std::vector<MemoryHitRef>* hits, std::string& output,
-                      taskforge::Json* traceCandidates = nullptr);
+                      taskforge::Json* traceCandidates = nullptr,
+                      const std::vector<std::string>& lenses = {});
     bool configureWorkspaceLocked(const std::string& workspaceId, const std::string& dbPath,
                                   const std::string& parentId, const std::string& name);
     std::string workspaceScope(const std::string& workspaceId) const;
@@ -326,7 +331,8 @@ private:
     bool hybridRecall(const std::string& projectId, const std::string& text, size_t limit,
                       const std::vector<std::string>& domains,
                       std::vector<RankedMemory>& output,
-                      taskforge::Json* traceCandidates = nullptr);
+                      taskforge::Json* traceCandidates = nullptr,
+                      const std::vector<std::string>& lenses = {});
 
     // Worker de manutencao: o stop ocorre fora de mutex_ para evitar deadlock
     // com uma rodada de consolidacao em andamento.

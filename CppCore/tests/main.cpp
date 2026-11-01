@@ -34,7 +34,9 @@
 #include "memory/MemoryPredicates.hpp"
 #include "memory/MemoryAbProtocol.hpp"
 #include "memory/MemoryRanker.hpp"
+#include "memory/EmbeddingProvider.hpp"
 #include "memory/MemoryClaimExtractor.hpp"
+#include "memory/MemoryFacets.hpp"
 #include "memory/MemorySources.hpp"
 #include "memory/MemoryVectorIndex.hpp"
 #include "platform/Process.hpp"
@@ -4528,6 +4530,99 @@ TEST(memory_claim_extractor_validates_schema_quote_and_empty_list) {
     claims = MemoryClaimExtractor::parseResponse("nao e json", passage, config, error);
     CHECK(claims.empty());
     CHECK(!error.empty());
+}
+
+TEST(memory_lenses_facets_rebuild_with_claims_and_distinct_embedding_roles) {
+    using taskforge::memory::EmbeddingConfig;
+    using taskforge::memory::MemoryFacets;
+    using taskforge::memory::MemoryStore;
+    namespace fs = std::filesystem;
+
+    EmbeddingConfig embedding;
+    embedding.model = "embeddinggemma-2";
+    embedding.dim = 768;
+    const std::string retrievalFingerprint = taskforge::memory::embeddingFingerprint(embedding);
+    const std::string symmetricFingerprint =
+        taskforge::memory::embeddingFingerprintForRole(embedding, true);
+    CHECK(retrievalFingerprint != symmetricFingerprint);
+    CHECK(taskforge::memory::embeddingSymmetricPrefix("embeddinggemma-2") ==
+          " task: sentence similarity | query:  ");
+    CHECK(taskforge::memory::embeddingSymmetricPrefix("qwen3-embedding-4b").find("similarity") !=
+          std::string::npos);
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-lenses-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const fs::path db = root / "memory.db";
+    const std::string scope = "project:lenses-test";
+    std::string error;
+
+    MemoryStore store(db.string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "lenses-test"));
+    const std::string entity = store.resolveNode(scope, "Guia", "entity");
+    const std::string valueA = store.resolveNode(scope, "4.5:1", "value");
+    const std::string valueB = store.resolveNode(scope, "3:1", "value");
+    CHECK(!entity.empty() && !valueA.empty() && !valueB.empty());
+
+    const auto claimA = store.recordEdge(
+        scope, entity, valueA, "HAS_VALUE", taskforge::Json::object(),
+        "2026-01-01", "", 0.8, "active", "claim", "prop-a",
+        taskforge::Json{{"claim", true}, {"lens", "ab"}, {"quote", "contraste 4.5:1"}});
+    const auto claimB = store.recordEdge(
+        scope, entity, valueB, "HAS_VALUE", taskforge::Json::object(),
+        "2026-01-01", "", 0.7, "active", "claim", "prop-b",
+        taskforge::Json{{"claim", true}, {"lens", "cd"}, {"quote", "contraste 3:1"}});
+    CHECK(!claimA.empty() && !claimB.empty());
+    CHECK(store.edgeLensNames(claimA).size() == 1);
+    CHECK(store.edgeLensNames(claimB).size() == 1);
+
+    auto report = MemoryFacets::rebuild(store, scope, embedding, true);
+    CHECK(report.value("ok", false));
+    CHECK(report.value("edgesWithLens", 0LL) >= 2);
+    auto facets = store.listFacets(scope, entity);
+    CHECK(facets.size() == 2);
+    CHECK(!facets[0].supportingClaimsJson.empty());
+    CHECK(!facets[0].embeddingFingerprint.empty());
+    CHECK(facets[0].embeddingFingerprint != retrievalFingerprint);
+    const std::string abLens = store.ensureLens(scope, "ab");
+    long long revisionA = 0;
+    for (const auto& facet : facets) {
+        if (facet.lensId == abLens) revisionA = facet.revision;
+    }
+    CHECK(revisionA > 0);
+    report = MemoryFacets::rebuild(store, scope, embedding, true);
+    CHECK(report.value("changed", 0LL) == 0);
+    for (const auto& facet : store.listFacets(scope, entity)) {
+        if (facet.lensId == abLens) CHECK(facet.revision == revisionA);
+    }
+
+    const auto claimC = store.recordEdge(
+        scope, entity, valueA, "HAS_VALUE", taskforge::Json{{"value", "4.5:1"}},
+        "2026-02-01", "", 0.9, "active", "claim", "prop-c",
+        taskforge::Json{{"claim", true}, {"lens", "ab"}, {"quote", "contraste atualizado"}});
+    CHECK(!claimC.empty());
+    report = MemoryFacets::rebuild(store, scope, embedding, true);
+    CHECK(report.value("changed", 0LL) >= 1);
+    facets = store.listFacets(scope, entity);
+    CHECK(facets.size() == 2);
+    bool abFound = false;
+    for (const auto& facet : facets) {
+        if (facet.lensId == store.ensureLens(scope, "ab")) {
+            CHECK(facet.revision > revisionA);
+            CHECK(facet.supportingClaimsJson.find(claimC) != std::string::npos);
+            abFound = true;
+        }
+    }
+    CHECK(abFound);
+
+    const auto lensIds = store.edgeIdsForLenses(scope, {"ab"});
+    CHECK(std::find(lensIds.begin(), lensIds.end(), claimC) != lensIds.end());
+    CHECK(std::find(lensIds.begin(), lensIds.end(), claimB) == lensIds.end());
+
+    store.close();
+    fs::remove_all(root, ec);
 }
 
 TEST(memory_claim_extractor_precision_on_annotated_fifty_passages) {

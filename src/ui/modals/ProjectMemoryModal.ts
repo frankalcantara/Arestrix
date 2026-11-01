@@ -4,6 +4,7 @@ import { t } from '../../i18n/index.ts';
 import {
   activeSkillNameOf,
   claimExtractionEnabled,
+  lensesEnabled,
   memoryModeOf,
   memoryThemeOf,
   memoryThemesOf
@@ -290,6 +291,8 @@ export class ProjectMemoryModal {
                 <div class="form-hint" style="margin-top: 6px;">${t('project_memory.retention_hint')}</div>
                 <div class="form-hint" id="memory-sources-status" style="margin-top: 6px;">${t('project_memory.sources_loading', 'Fontes locais: carregando...')}</div>
                 <div class="form-hint" style="margin-top: 4px;">${t('project_memory.claims_status', 'Extração de afirmações')}: ${claimExtractionEnabled(globalMemory as any) ? t('project_memory.on', 'ligada (manutenção)') : t('project_memory.off', 'desligada')}</div>
+                <div class="form-hint" style="margin-top: 4px;">${t('project_memory.lenses_status', 'Lentes e facetas')}: ${lensesEnabled(globalMemory as any) ? t('project_memory.on', 'ligadas') : t('project_memory.off', 'desligadas')}</div>
+                <div class="form-hint" id="memory-facets-status" style="margin-top: 4px;"></div>
                 <pre id="memory-ab-report" style="display: none; margin-top: 10px; padding: 10px; border-radius: 6px; background: #f8fafc; color: #0f172a; font-size: 11px; white-space: pre-wrap; max-height: 240px; overflow: auto;"></pre>
               </div>
             </div>
@@ -501,6 +504,7 @@ export class ProjectMemoryModal {
     const proposalsList = this.overlay.querySelector('#memory-proposals-list');
     const embeddingStatus = this.overlay.querySelector('#memory-embedding-status');
     const sourcesStatus = this.overlay.querySelector('#memory-sources-status');
+    const facetsStatus = this.overlay.querySelector('#memory-facets-status');
     const consolidationStatus = this.overlay.querySelector('#memory-consolidation-status');
     const conflictsList = this.overlay.querySelector('#memory-conflicts-list');
     const playbooksList = this.overlay.querySelector('#memory-playbooks-list');
@@ -710,6 +714,14 @@ export class ProjectMemoryModal {
             + `${Number(sourceCounts.sources || 0)} ${t('project_memory.sources_files', 'arquivo(s)')} · `
             + `${Number(sourceCounts.passages || 0)} ${t('project_memory.sources_passages', 'trecho(s)')} · `
             + `${Number(sourceCounts.supersededPassages || 0)} ${t('project_memory.sources_superseded', 'superseded')}`;
+        }
+
+        if (facetsStatus) {
+          const facetCounts = data.facets || {};
+          facetsStatus.textContent = `${t('project_memory.lenses_label', 'Lentes')}: `
+            + `${Number(facetCounts.lenses || 0)} · ${t('project_memory.facets_label', 'facetas')}: `
+            + `${Number(facetCounts.facets || 0)} · ${t('project_memory.edges_without_lens', 'arestas sem lente')}: `
+            + `${Number(facetCounts.edgesWithoutLens || 0)}`;
         }
 
         // Exibe consumo de API e contexto de memória
