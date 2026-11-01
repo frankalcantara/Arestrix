@@ -114,6 +114,38 @@ export class GlobalDefaultsModal {
                 </div>
               </div>
 
+              <!-- E18: roteamento local/fronteira por classe de tarefa. -->
+              <div class="form-row-grid" style="margin-top: 12px; border-top: 1px solid #edebe9; padding-top: 12px;">
+                <div class="form-group">
+                  <label class="form-label" for="def-routing-mode">${t('global_defaults.routing_mode', 'Roteamento de modelos')}</label>
+                  <select id="def-routing-mode" class="form-select">
+                    <option value="off" ${(defaults.routing?.mode || 'off') === 'off' ? 'selected' : ''}>off</option>
+                    <option value="shadow" ${(defaults.routing?.mode || 'off') === 'shadow' ? 'selected' : ''}>shadow</option>
+                    <option value="binary" ${(defaults.routing?.mode || 'off') === 'binary' ? 'selected' : ''}>binary</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="def-routing-pmin">${t('global_defaults.routing_pmin', 'Limiar p_min')}</label>
+                  <input type="number" id="def-routing-pmin" class="form-input" min="0" max="1" step="0.05" value="${defaults.routing?.pMin ?? 0.5}" />
+                </div>
+              </div>
+              <div class="form-row-grid">
+                <div class="form-group">
+                  <label class="form-label" for="def-routing-local-provider">${t('global_defaults.routing_local_provider', 'Provedor local')}</label>
+                  <input type="text" id="def-routing-local-provider" class="form-input" value="${this.escapeHtml(defaults.routing?.tiers?.localLarge?.provider || 'local')}" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="def-routing-local-model">${t('global_defaults.routing_local_model', 'Modelo local')}</label>
+                  <input type="text" id="def-routing-local-model" class="form-input" value="${this.escapeHtml(defaults.routing?.tiers?.localLarge?.model || '')}" />
+                </div>
+              </div>
+              <div class="form-group" style="margin-top: 8px;">
+                <label style="font-size: 11.5px; display: flex; gap: 6px; align-items: center;">
+                  <input type="checkbox" id="def-routing-local-only" ${defaults.routing?.localOnly ? 'checked' : ''} />
+                  ${t('global_defaults.routing_local_only', 'Somente modelos locais (privacidade)')}
+                </label>
+              </div>
+
               <!-- Servidor local já em execução (Ollama / llama.cpp / vLLM / LM Studio / Jev) -->
               <div class="form-group" id="def-local-endpoint-group" style="display: none; margin-top: 12px;">
                 <label class="form-label" for="def-local-base-url" id="def-local-endpoint-label"></label>
@@ -1648,6 +1680,15 @@ export class GlobalDefaultsModal {
       if (!proceed) return;
     }
 
+    const routingMode = ((this.overlay.querySelector('#def-routing-mode') as HTMLSelectElement)?.value
+      || 'off') as 'off' | 'shadow' | 'binary';
+    const routingPmin = Math.max(0, Math.min(1,
+      Number((this.overlay.querySelector('#def-routing-pmin') as HTMLInputElement)?.value) || 0.5));
+    const routingLocalProvider = ((this.overlay.querySelector('#def-routing-local-provider') as HTMLInputElement)?.value.trim()
+      || 'local') as LLMProvider;
+    const routingLocalModel = (this.overlay.querySelector('#def-routing-local-model') as HTMLInputElement)?.value.trim() || '';
+    const routingLocalOnly = (this.overlay.querySelector('#def-routing-local-only') as HTMLInputElement)?.checked || false;
+
     const newDefaults: IGlobalPipelineDefaults = {
       sandbox: {
         isolationLevel,
@@ -1702,6 +1743,24 @@ export class GlobalDefaultsModal {
         embeddingDimensions: memEmbeddingDim,
         embeddingRevision: memEmbeddingRevision,
         embeddingTruncateDim: memEmbeddingTruncate
+      },
+      routing: {
+        mode: routingMode,
+        shadowRate: 0,
+        pMin: routingPmin,
+        localOnly: routingLocalOnly,
+        tiers: {
+          localLarge: {
+            provider: routingLocalProvider,
+            model: routingLocalModel,
+            cost: 0.2
+          },
+          frontier: {
+            provider,
+            model,
+            cost: 1.0
+          }
+        }
       }
     };
 

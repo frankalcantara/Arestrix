@@ -231,6 +231,8 @@ public:
                                 size_t limit, const std::string& taskType = "",
                                 const std::string& runId = "", const std::string& nodeId = "",
                                 std::vector<MemoryHitRef>* hits = nullptr);
+    taskforge::Json routingStats(const std::string& projectId,
+                                 const std::string& taskType);
     taskforge::Json maintenanceStatus(const std::string& projectId);
     // Executa uma rodada agora no chamador (usado por CLI/testes e pelo worker).
     taskforge::Json runMaintenanceOnce(const std::string& projectId,

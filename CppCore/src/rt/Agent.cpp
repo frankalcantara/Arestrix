@@ -26,6 +26,7 @@
 #include "rt/McpTools.hpp"
 #include "rt/MemoryFailure.hpp"
 #include "rt/ModelClient.hpp"
+#include "rt/ModelRouter.hpp"
 #include "rt/RuntimeLang.hpp"
 #include "rt/Tools.hpp"
 #include "rt/compress/CcrStore.hpp"
@@ -159,6 +160,7 @@ struct AgentSpec {
     int memoryMaxLessonsPerRun = 20;
     int memoryMaxLessonChars = 4000;
     std::string memoryTaskType;
+    RoutingConfig routing;
     std::vector<std::string> tools;
     std::vector<std::string> mcpServers;   // ids em .workspace/mcps
     std::vector<std::string> mcpAllowed;   // nomes de ferramentas MCP permitidas (vazio = todas do servidor)
@@ -213,6 +215,7 @@ AgentSpec parseSpec(const json& j, const std::string& nodeId, const std::string&
     s.memoryMaxLessonsPerRun = std::max(1, std::min(500, j.value("memoryMaxLessonsPerRun", 20)));
     s.memoryMaxLessonChars = std::max(100, std::min(20000, j.value("memoryMaxLessonChars", 4000)));
     s.memoryTaskType = j.value("memoryTaskType", std::string());
+    if (j.contains("routing")) s.routing = ModelRouter::configFromJson(j["routing"]);
     if (j.contains("tools") && j["tools"].is_array()) {
         for (const auto& t : j["tools"]) if (t.is_string()) s.tools.push_back(t.get<std::string>());
     }
@@ -360,6 +363,30 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     // E10: o template e configuracao do vertice, nao o prompt do usuario. O
     // hash nao inclui item, input nem substituicoes de variaveis.
     const std::string intentTemplateHash = project::RunnerSecurity::sha256(spec.promptTemplate);
+    const std::string routingTaskType = !spec.memoryTaskType.empty()
+        ? spec.memoryTaskType : nodeId;
+    RoutingDecision routingDecision;
+    if (spec.routing.mode != "off") {
+        auto& memoryService = memory::MemoryService::getInstance();
+        const auto statsJson = memoryService.routingStats(spec.memoryProjectId, routingTaskType);
+        RoutingStats stats;
+        stats.success = statsJson.value("success", 0LL);
+        stats.failure = statsJson.value("failure", 0LL);
+        stats.coverage = statsJson.value("coverage", 0.0);
+        ModelTier executed{"current", spec.provider, spec.model, 1.0};
+        routingDecision = ModelRouter::decide(stats, spec.routing, &executed);
+        if (spec.routing.mode == "binary" && !routingDecision.provider.empty() &&
+            !routingDecision.model.empty()) {
+            spec.provider = routingDecision.provider;
+            spec.model = routingDecision.model;
+        }
+        if (!spec.memoryProjectId.empty()) {
+            memoryService.recordTraceStep(
+                spec.memoryProjectId, runId, nodeId, itemId, routingTaskType, intentTemplateHash, "",
+                json{{"kind", "routing_decision"},
+                     {"decision", ModelRouter::decisionToJson(routingDecision)}});
+        }
+    }
     int iteration = registerRun(loopKey, spec.maxRuns);
 
     if (spec.model.empty()) {
@@ -621,6 +648,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                   {"cacheWriteTokens", usage.cacheWriteTokens},
                   {"calls", usage.calls}, {"retries", usage.retries},
                   {"memoryEnabled", spec.memoryEnabled}, {"memoryContextChars", usage.memoryContextChars}};
+        if (spec.routing.mode != "off") meta["routing"] = ModelRouter::decisionToJson(routingDecision);
         if (!success) {
             if (!effectiveClass.empty()) meta["errorClass"] = effectiveClass;
             if (!error.empty()) meta["error"] = error.substr(0, 500);
