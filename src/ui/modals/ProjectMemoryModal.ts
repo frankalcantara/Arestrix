@@ -8,6 +8,7 @@ import {
   memoryModeOf,
   pathServingEnabled,
   pathsEnabled,
+  traversalEnabled,
   memoryThemeOf,
   memoryThemesOf
 } from '../../core/memory/MemoryConfig.ts';
@@ -300,6 +301,7 @@ export class ProjectMemoryModal {
                 <div class="form-hint" id="memory-facets-status" style="margin-top: 4px;"></div>
                 <div class="form-hint" style="margin-top: 4px;">${t('project_memory.paths_status', 'Caminhos canônicos')}: ${pathsEnabled(globalMemory as any) ? t('project_memory.on', 'ligados') : t('project_memory.off', 'desligados')}</div>
                 <div class="form-hint" style="margin-top: 4px;">${t('project_memory.path_serving_status', 'Serviço de caminhos')}: ${pathServingEnabled(globalMemory as any) ? t('project_memory.on', 'ligado') : t('project_memory.off', 'desligado')}</div>
+                <div class="form-hint" style="margin-top: 4px;">${t('project_memory.traversal_status', 'Travessia em feixe')}: ${traversalEnabled(globalMemory as any) ? t('project_memory.on', 'ligada') : t('project_memory.off', 'desligada')}</div>
                 <pre id="memory-ab-report" style="display: none; margin-top: 10px; padding: 10px; border-radius: 6px; background: #f8fafc; color: #0f172a; font-size: 11px; white-space: pre-wrap; max-height: 240px; overflow: auto;"></pre>
               </div>
             </div>

@@ -56,6 +56,15 @@ export function pathServingEnabled(
   return !!value?.enabled;
 }
 
+/** E17: travessia em feixe, desligada por padrão. */
+export function traversalEnabled(
+  config?: { traversal?: boolean | { enabled?: boolean } } | null
+): boolean {
+  const value = config?.traversal;
+  if (typeof value === 'boolean') return value;
+  return !!value?.enabled;
+}
+
 /**
  * Mapeia o modelo antigo (enabled/semanticLessons/recordLessons) para o novo
  * modo do vértice. O novo campo `mode` tem precedência quando presente.

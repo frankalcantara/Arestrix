@@ -37,8 +37,10 @@
 #include "memory/EmbeddingProvider.hpp"
 #include "memory/MemoryClaimExtractor.hpp"
 #include "memory/MemoryFacets.hpp"
+#include "memory/MemoryAnchors.hpp"
 #include "memory/MemoryPaths.hpp"
 #include "memory/MemorySources.hpp"
+#include "memory/MemoryTraversal.hpp"
 #include "memory/MemoryVectorIndex.hpp"
 #include "platform/Process.hpp"
 #include "project/OpenableFiles.hpp"
@@ -5002,6 +5004,82 @@ TEST(memory_service_serves_paths_in_brief_and_search) {
     CHECK(pathHit);
     CHECK(claimHit);
     memory.closeProject("path-service-test");
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_traversal_beam_finds_path_and_respects_budget_and_access) {
+    using taskforge::memory::MemoryAnchors;
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryTraversal;
+    using taskforge::memory::TraversalOptions;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-traversal";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string scope = "project:traversal";
+    std::string error;
+    MemoryStore store((root / "memory.db").string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "traversal"));
+    const std::string start = store.resolveNode(scope, "Guia", "entity");
+    std::vector<std::string> nodes{start};
+    for (int i = 1; i <= 12; ++i) {
+        nodes.push_back(store.resolveNode(scope, "Passo " + std::to_string(i), "entity"));
+    }
+    for (size_t i = 0; i + 1 < nodes.size(); ++i) {
+        const std::string id = store.recordEdge(
+            scope, nodes[i], nodes[i + 1], "NEXT", taskforge::Json::object(),
+            "2026-01-01", "", 0.9, "active", "claim", "traversal",
+            taskforge::Json{{"claim", true}, {"lens", "ab"}});
+        CHECK(!id.empty());
+    }
+    const std::string localEdge = store.recordEdge(
+        scope, nodes[1], nodes[11], "LOCAL_ONLY", taskforge::Json::object(),
+        "2026-01-01", "", 0.9, "active", "claim", "traversal",
+        taskforge::Json{{"claim", true}, {"lens", "ab"}, {"access", "local"}});
+    CHECK(!localEdge.empty());
+
+    const auto anchors = MemoryAnchors::resolve(store, scope, "Guia", 5);
+    CHECK(!anchors.empty());
+    CHECK(anchors[0].id == start);
+    const long long versionBefore = store.knowledgeVersion();
+    TraversalOptions options;
+    options.beamWidth = 3;
+    options.maxDepth = 4;
+    options.maxResults = 12;
+    options.timeBudgetMs = 1000;
+    auto result = MemoryTraversal::run(store, scope, "Guia", "ab", options, {});
+    CHECK(result.value("ok", false));
+    CHECK(!result.value("abstained", true));
+    CHECK(result["nodes"].size() >= 4);
+    CHECK(result["coverage"].contains("bestPathUtility"));
+    CHECK(result["coverage"].contains("sustainedFraction"));
+    CHECK(result["coverage"].contains("conflicts"));
+    CHECK(result["coverage"].contains("intentDistance"));
+    CHECK(result["coverage"].value("abstained", true) == false);
+    CHECK(store.knowledgeVersion() == versionBefore);
+
+    auto local = MemoryTraversal::run(store, scope, "Guia", "ab", options, {"local"});
+    bool localSeen = false;
+    for (const auto& node : local["nodes"]) {
+        if (node.value("id", std::string()) == localEdge) localSeen = true;
+    }
+    CHECK(localSeen);
+    auto publicOnly = MemoryTraversal::run(store, scope, "Guia", "ab", options, {});
+    for (const auto& node : publicOnly["nodes"]) {
+        CHECK(node.value("id", std::string()) != localEdge);
+    }
+
+    TraversalOptions limited;
+    limited.expandedLimit = 1;
+    limited.beamWidth = 1;
+    limited.maxDepth = 4;
+    const auto bounded = MemoryTraversal::run(store, scope, "Guia", "ab", limited, {});
+    CHECK(bounded["nodes"].size() <= 1);
+
+    store.close();
     fs::remove_all(root, ec);
 }
 

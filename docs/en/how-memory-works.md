@@ -355,6 +355,19 @@ They are reconstructible projections, not evidence, and are excluded from
 conflict detection and normal search; they follow the path state. The switch
 stays off until the A/B result is recorded.
 
+### Beam traversal
+
+When no path covers the query, `globalDefaults.memory.traversal` enables a
+bounded traversal from anchors resolved by alias, FTS and optional vector
+candidates. The search limits beam width, depth, expanded candidates, time and
+characters; ineligible items never enter the top-k and cycles do not repeat
+nodes. `memory_search` accepts `mode: "graph"` for this route.
+
+The pack returns each item with source, validity and justification, and records
+the coverage vector in the trace: best path utility, sustained fraction,
+conflicts, intent distance and abstention. Traversal only reads the graph and
+never writes knowledge.
+
 ### Retrieval traces
 
 Every knowledge write bumps `knowledge_version` in the same transaction; reads

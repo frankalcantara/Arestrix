@@ -3850,6 +3850,62 @@ std::vector<MemoryEdgeRecord> MemoryStore::neighbors(const std::string& scopeId,
     return out;
 }
 
+std::vector<MemoryEdgeRecord> MemoryStore::incidentEdges(const std::string& scopeId,
+                                                        const std::string& nodeId,
+                                                        size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<MemoryEdgeRecord> out;
+    if (!db_ || nodeId.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT id,scope_id,src_id,COALESCE(dst_id,''),relation,"
+                       "COALESCE(value_json,''),COALESCE(valid_from,''),COALESCE(valid_to,''),"
+                       "recorded_at,confidence,status,COALESCE(superseded_by,''),source_kind,"
+                       "COALESCE(source_ref,''),metadata,COALESCE(last_used,''),success_count,"
+                       "failure_count,utility,COALESCE(dormant_at,'') "
+                       "FROM memory_edge WHERE scope_id=? AND status='active' "
+                       "AND dormant_at IS NULL AND relation<>'via_caminho' "
+                       "AND (src_id=? OR dst_id=?) "
+                       "AND (valid_from IS NULL OR valid_from<=?) "
+                       "AND (valid_to IS NULL OR valid_to>?) "
+                       "ORDER BY recorded_at DESC LIMIT ?", st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    const std::string now = nowIso();
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, nodeId);
+    bindText(st.stmt, 3, nodeId);
+    bindText(st.stmt, 4, now);
+    bindText(st.stmt, 5, now);
+    sqlite3_bind_int(st.stmt, 6, static_cast<int>(std::max<size_t>(1, limit)));
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        MemoryEdgeRecord edge;
+        edge.id = columnText(st.stmt, 0);
+        edge.scopeId = columnText(st.stmt, 1);
+        edge.srcId = columnText(st.stmt, 2);
+        edge.dstId = columnText(st.stmt, 3);
+        edge.relation = columnText(st.stmt, 4);
+        edge.valueJson = columnText(st.stmt, 5);
+        edge.validFrom = columnText(st.stmt, 6);
+        edge.validTo = columnText(st.stmt, 7);
+        edge.recordedAt = columnText(st.stmt, 8);
+        edge.confidence = columnDouble(st.stmt, 9);
+        edge.status = columnText(st.stmt, 10);
+        edge.supersededBy = columnText(st.stmt, 11);
+        edge.sourceKind = columnText(st.stmt, 12);
+        edge.sourceRef = columnText(st.stmt, 13);
+        edge.metadata = columnText(st.stmt, 14);
+        edge.lastUsed = columnText(st.stmt, 15);
+        edge.successCount = columnInt(st.stmt, 16);
+        edge.failureCount = columnInt(st.stmt, 17);
+        edge.utility = columnDouble(st.stmt, 18);
+        edge.dormantAt = columnText(st.stmt, 19);
+        out.push_back(std::move(edge));
+    }
+    return out;
+}
+
 std::vector<MemoryEdgeRecord> MemoryStore::searchEdges(const std::string& scopeId,
                                                         const std::string& text,
                                                         size_t limit) const {
