@@ -651,6 +651,63 @@ CREATE TABLE IF NOT EXISTS memory_facet (
   UNIQUE(scope_id, entity_id, lens_id)
 );
 
+CREATE TABLE IF NOT EXISTS memory_path_schema (
+  id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  signature TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(scope_id, signature)
+);
+
+CREATE TABLE IF NOT EXISTS memory_path (
+  id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  revision INTEGER NOT NULL DEFAULT 1,
+  schema_id TEXT NOT NULL REFERENCES memory_path_schema(id),
+  task_type TEXT NOT NULL DEFAULT '',
+  state TEXT NOT NULL DEFAULT 'candidate',
+  intent_sample TEXT NOT NULL DEFAULT '',
+  access_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS memory_path_claim (
+  path_id TEXT NOT NULL REFERENCES memory_path(id),
+  ordinal INTEGER NOT NULL,
+  claim_id TEXT NOT NULL,
+  claim_revision TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (path_id, ordinal)
+);
+
+CREATE TABLE IF NOT EXISTS memory_path_stats (
+  path_id TEXT PRIMARY KEY REFERENCES memory_path(id),
+  success INTEGER NOT NULL DEFAULT 0,
+  failure INTEGER NOT NULL DEFAULT 0,
+  last_tau INTEGER NOT NULL DEFAULT 0,
+  uses INTEGER NOT NULL DEFAULT 0,
+  distinct_inputs INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS memory_path_input (
+  path_id TEXT NOT NULL REFERENCES memory_path(id),
+  input_hash TEXT NOT NULL,
+  PRIMARY KEY (path_id, input_hash)
+);
+
+CREATE TABLE IF NOT EXISTS memory_path_event (
+  trace_id TEXT PRIMARY KEY,
+  path_id TEXT NOT NULL REFERENCES memory_path(id),
+  input_hash TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS memory_claim_path (
+  claim_id TEXT NOT NULL,
+  path_id TEXT NOT NULL REFERENCES memory_path(id),
+  PRIMARY KEY (claim_id, path_id)
+);
+
 CREATE TABLE IF NOT EXISTS memory_claim_extraction (
   id TEXT PRIMARY KEY,
   scope_id TEXT NOT NULL REFERENCES memory_scope(id),
@@ -761,6 +818,8 @@ CREATE INDEX IF NOT EXISTS idx_memory_source_uri ON memory_source(scope_id, uri,
 CREATE INDEX IF NOT EXISTS idx_memory_passage_source ON memory_passage(source_id, status);
 CREATE INDEX IF NOT EXISTS idx_memory_edge_lens_lens ON memory_edge_lens(lens_id, edge_id);
 CREATE INDEX IF NOT EXISTS idx_memory_facet_entity ON memory_facet(scope_id, entity_id, lens_id);
+CREATE INDEX IF NOT EXISTS idx_memory_path_state ON memory_path(scope_id, state, task_type);
+CREATE INDEX IF NOT EXISTS idx_memory_claim_path_path ON memory_claim_path(path_id);
 )SQL", &error)) {
         return false;
     }
@@ -774,7 +833,10 @@ CREATE INDEX IF NOT EXISTS idx_memory_facet_entity ON memory_facet(scope_id, ent
         const char* tables[] = {"memory_scope", "memory_node", "memory_alias", "memory_edge",
                                 "memory_working", "memory_state", "memory_state_history",
                                 "memory_playbook", "memory_evidence", "memory_source",
-                                "memory_passage", "memory_lens", "memory_edge_lens", "memory_facet"};
+                                "memory_passage", "memory_lens", "memory_edge_lens", "memory_facet",
+                                "memory_path_schema", "memory_path", "memory_path_claim",
+                                "memory_path_stats", "memory_path_input", "memory_path_event",
+                                "memory_claim_path"};
         std::string triggers;
         for (const char* table : tables) {
             for (const char* event : {"INSERT", "UPDATE", "DELETE"}) {
@@ -1561,6 +1623,18 @@ bool MemoryStore::purge(const std::string& scopeId, const MemoryPurgeOptions& op
     execScoped("DELETE FROM memory_evidence WHERE scope_id=?", 1);
     execScoped("DELETE FROM memory_hit WHERE scope_id=?", 1);
     execScoped("DELETE FROM memory_claim_extraction WHERE scope_id=?", 1);
+    execScoped("DELETE FROM memory_claim_path WHERE path_id IN "
+               "(SELECT id FROM memory_path WHERE scope_id=?)", 1);
+    execScoped("DELETE FROM memory_path_event WHERE path_id IN "
+               "(SELECT id FROM memory_path WHERE scope_id=?)", 1);
+    execScoped("DELETE FROM memory_path_input WHERE path_id IN "
+               "(SELECT id FROM memory_path WHERE scope_id=?)", 1);
+    execScoped("DELETE FROM memory_path_stats WHERE path_id IN "
+               "(SELECT id FROM memory_path WHERE scope_id=?)", 1);
+    execScoped("DELETE FROM memory_path_claim WHERE path_id IN "
+               "(SELECT id FROM memory_path WHERE scope_id=?)", 1);
+    execScoped("DELETE FROM memory_path WHERE scope_id=?", 1);
+    execScoped("DELETE FROM memory_path_schema WHERE scope_id=?", 1);
     execScoped("DELETE FROM memory_facet WHERE scope_id=?", 1);
     execScoped("DELETE FROM memory_edge_lens WHERE edge_id IN "
                "(SELECT id FROM memory_edge WHERE scope_id=?)", 1);
@@ -3677,6 +3751,20 @@ bool MemoryStore::invalidateEdge(const std::string& edgeId, const std::string& v
         lastError_ = sqlite3_errmsg(db_);
         return false;
     }
+    // E15: a suspensao acontece no mesmo passo da invalidacao; a revalidacao
+    // posterior pode remapear a dependencia para uma substituicao compativel.
+    {
+        Stmt suspend;
+        std::string suspendError;
+        if (prepare(db_, "UPDATE memory_path SET state='suspended',updated_at=? "
+                           "WHERE state='active' AND id IN "
+                           "(SELECT path_id FROM memory_claim_path WHERE claim_id=?)",
+                     suspend, suspendError)) {
+            bindText(suspend.stmt, 1, nowIso());
+            bindText(suspend.stmt, 2, edgeId);
+            stepRetry(suspend.stmt);
+        }
+    }
     audit(actor, "invalidate_edge", edgeId, "", reason);
     if (!edgeScope.empty()) {
         MemoryEvidenceRecord snapshot;
@@ -3904,6 +3992,18 @@ bool MemoryStore::updateEdgeState(const std::string& scopeId, const std::string&
         error = sqlite3_errmsg(db_);
         return false;
     }
+    if ((!status.empty() && status != "active") || (!validTo.empty() && validTo <= nowIso())) {
+        Stmt suspend;
+        std::string suspendError;
+        if (prepare(db_, "UPDATE memory_path SET state='suspended',updated_at=? "
+                           "WHERE state='active' AND id IN "
+                           "(SELECT path_id FROM memory_claim_path WHERE claim_id=?)",
+                     suspend, suspendError)) {
+            bindText(suspend.stmt, 1, nowIso());
+            bindText(suspend.stmt, 2, edgeId);
+            stepRetry(suspend.stmt);
+        }
+    }
     return true;
 }
 
@@ -3923,6 +4023,19 @@ std::unordered_map<std::string, std::string> MemoryStore::nodeNames(
         out[columnText(st.stmt, 0)] = columnText(st.stmt, 1);
     }
     return out;
+}
+
+std::string MemoryStore::nodeKind(const std::string& scopeId, const std::string& nodeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || nodeId.empty()) return "";
+    Stmt st;
+    std::string error;
+    if (prepare(db_, "SELECT kind FROM memory_node WHERE scope_id=? AND id=?", st, error)) {
+        bindText(st.stmt, 1, scopeId);
+        bindText(st.stmt, 2, nodeId);
+        if (stepRetry(st.stmt) == SQLITE_ROW) return columnText(st.stmt, 0);
+    }
+    return "";
 }
 
 std::string MemoryStore::findEntity(const std::string& scopeId, const std::string& mention,
@@ -5605,6 +5718,429 @@ taskforge::Json MemoryStore::facetSummary(const std::string& scopeId) const {
     return out;
 }
 
+std::vector<MemoryTraceRecord> MemoryStore::listTraces(const std::string& scopeId,
+                                                       size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<MemoryTraceRecord> out;
+    if (!db_) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT trace_id,scope_id,run_id,node_id,item_id,task_type,"
+                       "intent_template_hash,input_hash,knowledge_version,model,tier,outcome,"
+                       "anchors_json,steps_json,delivered_json,used_json,truncated_steps,created_at "
+                       "FROM memory_trace WHERE scope_id=? ORDER BY created_at,rowid LIMIT ?", st, error)) {
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    sqlite3_bind_int(st.stmt, 2, static_cast<int>(std::max<size_t>(1, limit)));
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        MemoryTraceRecord trace;
+        trace.traceId = columnText(st.stmt, 0);
+        trace.scopeId = columnText(st.stmt, 1);
+        trace.runId = columnText(st.stmt, 2);
+        trace.nodeId = columnText(st.stmt, 3);
+        trace.itemId = columnText(st.stmt, 4);
+        trace.taskType = columnText(st.stmt, 5);
+        trace.intentTemplateHash = columnText(st.stmt, 6);
+        trace.inputHash = columnText(st.stmt, 7);
+        trace.knowledgeVersion = columnInt(st.stmt, 8);
+        trace.model = columnText(st.stmt, 9);
+        trace.tier = columnText(st.stmt, 10);
+        trace.outcome = columnText(st.stmt, 11);
+        auto array = [&](int index) {
+            taskforge::Json value = parseJsonOrNull(columnText(st.stmt, index));
+            return value.is_array() ? value : taskforge::Json::array();
+        };
+        trace.anchors = array(12);
+        trace.steps = array(13);
+        trace.delivered = array(14);
+        trace.used = array(15);
+        trace.createdAt = columnText(st.stmt, 17);
+        out.push_back(std::move(trace));
+    }
+    return out;
+}
+
+std::string MemoryStore::upsertPath(const std::string& scopeId, const std::string& taskType,
+                                    const std::string& signature,
+                                    const std::vector<std::string>& claimIds,
+                                    const std::string& intentSample,
+                                    const std::string& accessJson, bool* created) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (created) *created = false;
+    if (!db_ || scopeId.empty() || signature.empty()) return "";
+    const std::string schemaId = "psch_" + hashHex(scopeId + "|" + signature).substr(0, 24);
+    const std::string pathId = "path_" + hashHex(scopeId + "|" + taskType + "|" + signature).substr(0, 24);
+    const std::string now = nowIso();
+    Stmt schema;
+    std::string error;
+    if (!prepare(db_, "INSERT OR IGNORE INTO memory_path_schema(id,scope_id,signature,created_at) "
+                       "VALUES(?,?,?,?)", schema, error)) {
+        lastError_ = error;
+        return "";
+    }
+    bindText(schema.stmt, 1, schemaId);
+    bindText(schema.stmt, 2, scopeId);
+    bindText(schema.stmt, 3, signature);
+    bindText(schema.stmt, 4, now);
+    if (stepRetry(schema.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return "";
+    }
+    Stmt existing;
+    if (prepare(db_, "SELECT 1 FROM memory_path WHERE id=?", existing, error)) {
+        bindText(existing.stmt, 1, pathId);
+        if (stepRetry(existing.stmt) == SQLITE_ROW) {
+            Stmt update;
+            if (prepare(db_, "UPDATE memory_path SET updated_at=? WHERE id=?", update, error)) {
+                bindText(update.stmt, 1, now);
+                bindText(update.stmt, 2, pathId);
+                stepRetry(update.stmt);
+            }
+            return pathId;
+        }
+    }
+    Stmt path;
+    if (!prepare(db_, "INSERT INTO memory_path(id,scope_id,revision,schema_id,task_type,state,"
+                       "intent_sample,access_json,created_at,updated_at) "
+                       "VALUES(?,?,1,?,?,'candidate',?,?,?,?)", path, error)) {
+        lastError_ = error;
+        return "";
+    }
+    bindText(path.stmt, 1, pathId);
+    bindText(path.stmt, 2, scopeId);
+    bindText(path.stmt, 3, schemaId);
+    bindText(path.stmt, 4, taskType);
+    bindText(path.stmt, 5, intentSample);
+    bindText(path.stmt, 6, accessJson.empty() ? "{}" : accessJson);
+    bindText(path.stmt, 7, now);
+    bindText(path.stmt, 8, now);
+    if (stepRetry(path.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return "";
+    }
+    Stmt stats;
+    if (prepare(db_, "INSERT OR IGNORE INTO memory_path_stats(path_id) VALUES(?)", stats, error)) {
+        bindText(stats.stmt, 1, pathId);
+        stepRetry(stats.stmt);
+    }
+    Stmt clearClaims;
+    if (prepare(db_, "DELETE FROM memory_path_claim WHERE path_id=?", clearClaims, error)) {
+        bindText(clearClaims.stmt, 1, pathId);
+        stepRetry(clearClaims.stmt);
+    }
+    Stmt insertClaim;
+    Stmt insertReverse;
+    if (prepare(db_, "INSERT OR REPLACE INTO memory_path_claim(path_id,ordinal,claim_id,claim_revision) "
+                       "VALUES(?,?,?,'')", insertClaim, error) &&
+        prepare(db_, "INSERT OR IGNORE INTO memory_claim_path(claim_id,path_id) VALUES(?,?)",
+                insertReverse, error)) {
+        for (size_t i = 0; i < claimIds.size(); ++i) {
+            sqlite3_reset(insertClaim.stmt);
+            sqlite3_clear_bindings(insertClaim.stmt);
+            bindText(insertClaim.stmt, 1, pathId);
+            sqlite3_bind_int64(insertClaim.stmt, 2, static_cast<long long>(i));
+            bindText(insertClaim.stmt, 3, claimIds[i]);
+            stepRetry(insertClaim.stmt);
+            sqlite3_reset(insertReverse.stmt);
+            sqlite3_clear_bindings(insertReverse.stmt);
+            bindText(insertReverse.stmt, 1, claimIds[i]);
+            bindText(insertReverse.stmt, 2, pathId);
+            stepRetry(insertReverse.stmt);
+        }
+    }
+    if (created) *created = true;
+    return pathId;
+}
+
+bool MemoryStore::recordPathEvent(const std::string& pathId, const std::string& traceId,
+                                  const std::string& inputHash, bool success, long long tau,
+                                  long long minDistinctInputs) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || pathId.empty() || traceId.empty()) return false;
+    Stmt seen;
+    std::string error;
+    if (!prepare(db_, "INSERT OR IGNORE INTO memory_path_event(trace_id,path_id,input_hash,created_at) "
+                       "VALUES(?,?,?,?)", seen, error)) {
+        lastError_ = error;
+        return false;
+    }
+    bindText(seen.stmt, 1, traceId);
+    bindText(seen.stmt, 2, pathId);
+    bindText(seen.stmt, 3, inputHash);
+    bindText(seen.stmt, 4, nowIso());
+    if (stepRetry(seen.stmt) != SQLITE_DONE || sqlite3_changes(db_) == 0) return false;
+
+    if (!inputHash.empty()) {
+        Stmt input;
+        if (prepare(db_, "INSERT OR IGNORE INTO memory_path_input(path_id,input_hash) VALUES(?,?)",
+                     input, error)) {
+            bindText(input.stmt, 1, pathId);
+            bindText(input.stmt, 2, inputHash);
+            stepRetry(input.stmt);
+        }
+    }
+    long long distinctInputs = 0;
+    Stmt count;
+    if (prepare(db_, "SELECT COUNT(*) FROM memory_path_input WHERE path_id=?", count, error)) {
+        bindText(count.stmt, 1, pathId);
+        if (stepRetry(count.stmt) == SQLITE_ROW) distinctInputs = columnInt(count.stmt, 0);
+    }
+    Stmt update;
+    if (!prepare(db_, "UPDATE memory_path_stats SET success=success+?,failure=failure+?,"
+                       "uses=uses+1,last_tau=MAX(last_tau,?),distinct_inputs=? WHERE path_id=?",
+                 update, error)) {
+        lastError_ = error;
+        return false;
+    }
+    sqlite3_bind_int64(update.stmt, 1, success ? 1 : 0);
+    sqlite3_bind_int64(update.stmt, 2, success ? 0 : 1);
+    sqlite3_bind_int64(update.stmt, 3, tau);
+    sqlite3_bind_int64(update.stmt, 4, distinctInputs);
+    bindText(update.stmt, 5, pathId);
+    if (stepRetry(update.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return false;
+    }
+    if (distinctInputs >= std::max<long long>(1, minDistinctInputs)) {
+        Stmt activate;
+        if (prepare(db_, "UPDATE memory_path SET state='active',updated_at=? "
+                           "WHERE id=? AND state IN ('candidate','suspended')", activate, error)) {
+            bindText(activate.stmt, 1, nowIso());
+            bindText(activate.stmt, 2, pathId);
+            stepRetry(activate.stmt);
+        }
+    }
+    return true;
+}
+
+std::vector<MemoryPathRecord> MemoryStore::listPaths(const std::string& scopeId,
+                                                     const std::string& state) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<MemoryPathRecord> out;
+    if (!db_) return out;
+    std::string sql = "SELECT p.id,p.scope_id,p.revision,p.schema_id,p.task_type,p.state,"
+                      "p.intent_sample,p.access_json,COALESCE(s.success,0),COALESCE(s.failure,0),"
+                      "COALESCE(s.last_tau,0),COALESCE(s.uses,0),COALESCE(s.distinct_inputs,0) "
+                      "FROM memory_path p LEFT JOIN memory_path_stats s ON s.path_id=p.id "
+                      "WHERE p.scope_id=?";
+    if (!state.empty()) sql += " AND p.state=?";
+    sql += " ORDER BY p.task_type,p.id";
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, sql.c_str(), st, error)) return out;
+    bindText(st.stmt, 1, scopeId);
+    if (!state.empty()) bindText(st.stmt, 2, state);
+    std::vector<MemoryPathRecord> rows;
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        MemoryPathRecord path;
+        path.id = columnText(st.stmt, 0);
+        path.scopeId = columnText(st.stmt, 1);
+        path.revision = columnInt(st.stmt, 2);
+        path.schemaId = columnText(st.stmt, 3);
+        path.taskType = columnText(st.stmt, 4);
+        path.state = columnText(st.stmt, 5);
+        path.intentSample = columnText(st.stmt, 6);
+        path.accessJson = columnText(st.stmt, 7);
+        path.success = columnInt(st.stmt, 8);
+        path.failure = columnInt(st.stmt, 9);
+        path.lastTau = columnInt(st.stmt, 10);
+        path.uses = columnInt(st.stmt, 11);
+        path.distinctInputs = columnInt(st.stmt, 12);
+        path.utility = (static_cast<double>(path.success) + 1.0) /
+                       static_cast<double>(path.success + path.failure + 2);
+        rows.push_back(std::move(path));
+    }
+    for (auto& path : rows) {
+        Stmt claims;
+        if (prepare(db_, "SELECT claim_id FROM memory_path_claim WHERE path_id=? ORDER BY ordinal",
+                     claims, error)) {
+            bindText(claims.stmt, 1, path.id);
+            while (stepRetry(claims.stmt) == SQLITE_ROW) path.claimIds.push_back(columnText(claims.stmt, 0));
+        }
+        out.push_back(std::move(path));
+    }
+    return out;
+}
+
+taskforge::Json MemoryStore::getPath(const std::string& scopeId,
+                                     const std::string& pathId) const {
+    const auto paths = listPaths(scopeId);
+    for (const auto& path : paths) {
+        if (path.id != pathId) continue;
+        taskforge::Json claims = taskforge::Json::array();
+        for (const auto& id : path.claimIds) claims.push_back(id);
+        return taskforge::Json{{"id", path.id}, {"scopeId", path.scopeId},
+                               {"revision", path.revision}, {"schemaId", path.schemaId},
+                               {"taskType", path.taskType}, {"state", path.state},
+                               {"intentSample", path.intentSample}, {"access", path.accessJson},
+                               {"success", path.success}, {"failure", path.failure},
+                               {"lastTau", path.lastTau}, {"uses", path.uses},
+                               {"distinctInputs", path.distinctInputs},
+                               {"utility", path.utility}, {"claims", claims}};
+    }
+    return taskforge::Json::object();
+}
+
+bool MemoryStore::setPathState(const std::string& scopeId, const std::string& pathId,
+                               const std::string& state, const std::string& reason) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || pathId.empty() || state.empty()) return false;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "UPDATE memory_path SET state=?,updated_at=?,"
+                       "access_json=json_set(COALESCE(access_json,'{}'),'$.stateReason',?) "
+                       "WHERE id=? AND scope_id=?", st, error)) {
+        lastError_ = error;
+        return false;
+    }
+    bindText(st.stmt, 1, state);
+    bindText(st.stmt, 2, nowIso());
+    bindText(st.stmt, 3, reason);
+    bindText(st.stmt, 4, pathId);
+    bindText(st.stmt, 5, scopeId);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return false;
+    }
+    return sqlite3_changes(db_) > 0;
+}
+
+std::vector<std::string> MemoryStore::pathsForClaim(const std::string& claimId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<std::string> out;
+    if (!db_ || claimId.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (prepare(db_, "SELECT path_id FROM memory_claim_path WHERE claim_id=?", st, error)) {
+        bindText(st.stmt, 1, claimId);
+        while (stepRetry(st.stmt) == SQLITE_ROW) out.push_back(columnText(st.stmt, 0));
+    }
+    return out;
+}
+
+std::vector<std::string> MemoryStore::replacementClaimIds(const std::string& scopeId,
+                                                         const std::string& claimId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<std::string> out;
+    if (!db_ || claimId.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (prepare(db_, "SELECT e.id FROM memory_edge e "
+                       "JOIN memory_edge old ON old.id=? "
+                       "JOIN memory_node old_dst ON old_dst.id=old.dst_id "
+                       "JOIN memory_node new_dst ON new_dst.id=e.dst_id "
+                       "WHERE e.scope_id=? AND e.status='active' AND e.id<>old.id "
+                       "AND e.src_id=old.src_id AND e.relation=old.relation "
+                       "AND new_dst.kind=old_dst.kind "
+                       "ORDER BY e.valid_from DESC,e.recorded_at DESC", st, error)) {
+        bindText(st.stmt, 1, claimId);
+        bindText(st.stmt, 2, scopeId);
+        while (stepRetry(st.stmt) == SQLITE_ROW) out.push_back(columnText(st.stmt, 0));
+    }
+    return out;
+}
+
+std::vector<std::string> MemoryStore::predicateClaimIds(const std::string& scopeId,
+                                                        const std::string& claimId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<std::string> out;
+    if (!db_ || claimId.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (prepare(db_, "SELECT e.id FROM memory_edge e "
+                       "JOIN memory_edge old ON old.id=? "
+                       "WHERE e.scope_id=? AND e.status='active' AND e.id<>old.id "
+                       "AND e.src_id=old.src_id AND e.relation=old.relation "
+                       "ORDER BY e.valid_from DESC,e.recorded_at DESC", st, error)) {
+        bindText(st.stmt, 1, claimId);
+        bindText(st.stmt, 2, scopeId);
+        while (stepRetry(st.stmt) == SQLITE_ROW) out.push_back(columnText(st.stmt, 0));
+    }
+    return out;
+}
+
+bool MemoryStore::revalidatePathClaim(const std::string& scopeId, const std::string& pathId,
+                                      const std::string& oldClaimId,
+                                      const std::string& newClaimId) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || pathId.empty() || oldClaimId.empty() || newClaimId.empty()) return false;
+    Stmt update;
+    std::string error;
+    if (!prepare(db_, "UPDATE memory_path_claim SET claim_id=?,claim_revision=? "
+                       "WHERE path_id=? AND claim_id=?",
+                 update, error)) {
+        lastError_ = error;
+        return false;
+    }
+    bindText(update.stmt, 1, newClaimId);
+    bindText(update.stmt, 2, newClaimId);
+    bindText(update.stmt, 3, pathId);
+    bindText(update.stmt, 4, oldClaimId);
+    if (stepRetry(update.stmt) != SQLITE_DONE || sqlite3_changes(db_) == 0) return false;
+    Stmt remove;
+    if (prepare(db_, "DELETE FROM memory_claim_path WHERE claim_id=? AND path_id=?",
+                 remove, error)) {
+        bindText(remove.stmt, 1, oldClaimId);
+        bindText(remove.stmt, 2, pathId);
+        stepRetry(remove.stmt);
+    }
+    Stmt insert;
+    if (prepare(db_, "INSERT OR IGNORE INTO memory_claim_path(claim_id,path_id) VALUES(?,?)",
+                 insert, error)) {
+        bindText(insert.stmt, 1, newClaimId);
+        bindText(insert.stmt, 2, pathId);
+        stepRetry(insert.stmt);
+    }
+    Stmt revision;
+    if (prepare(db_, "UPDATE memory_path SET revision=revision+1,updated_at=? "
+                       "WHERE id=? AND scope_id=?", revision, error)) {
+        bindText(revision.stmt, 1, nowIso());
+        bindText(revision.stmt, 2, pathId);
+        bindText(revision.stmt, 3, scopeId);
+        stepRetry(revision.stmt);
+    }
+    return true;
+}
+
+taskforge::Json MemoryStore::pathSummary(const std::string& scopeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out{{"paths", 0LL}, {"active", 0LL}, {"candidate", 0LL},
+                        {"suspended", 0LL}, {"retired", 0LL}};
+    if (!db_) return out;
+    Stmt st;
+    std::string error;
+    if (prepare(db_, "SELECT state,COUNT(*) FROM memory_path WHERE scope_id=? GROUP BY state", st, error)) {
+        bindText(st.stmt, 1, scopeId);
+        while (stepRetry(st.stmt) == SQLITE_ROW) {
+            const std::string state = columnText(st.stmt, 0);
+            const long long count = columnInt(st.stmt, 1);
+            out[state] = count;
+            out["paths"] = out.value("paths", 0LL) + count;
+        }
+    }
+    return out;
+}
+
+std::vector<std::string> MemoryStore::approvedTraceIds(const std::string& scopeId,
+                                                       size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<std::string> out;
+    if (!db_) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT DISTINCT t.trace_id FROM memory_trace t "
+                       "JOIN memory_validation v ON v.scope_id=t.scope_id "
+                       "AND v.run_id=t.run_id AND v.node_id=t.node_id AND v.ok=1 "
+                       "WHERE t.scope_id=? ORDER BY t.created_at LIMIT ?", st, error)) {
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    sqlite3_bind_int(st.stmt, 2, static_cast<int>(std::max<size_t>(1, limit)));
+    while (stepRetry(st.stmt) == SQLITE_ROW) out.push_back(columnText(st.stmt, 0));
+    return out;
+}
+
 taskforge::Json MemoryStore::toCognitiveJson(const std::string& scopeId) const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     taskforge::Json out = taskforge::Json::object();
@@ -5976,6 +6512,13 @@ bool MemoryStore::importCognitiveJson(const std::string& scopeId, const taskforg
         "DELETE FROM memory_edge_lens WHERE edge_id IN (SELECT id FROM memory_edge WHERE scope_id=?)",
         "DELETE FROM memory_lens WHERE scope_id=?",
         "DELETE FROM memory_claim_extraction WHERE scope_id=?",
+        "DELETE FROM memory_claim_path WHERE path_id IN (SELECT id FROM memory_path WHERE scope_id=?)",
+        "DELETE FROM memory_path_event WHERE path_id IN (SELECT id FROM memory_path WHERE scope_id=?)",
+        "DELETE FROM memory_path_input WHERE path_id IN (SELECT id FROM memory_path WHERE scope_id=?)",
+        "DELETE FROM memory_path_stats WHERE path_id IN (SELECT id FROM memory_path WHERE scope_id=?)",
+        "DELETE FROM memory_path_claim WHERE path_id IN (SELECT id FROM memory_path WHERE scope_id=?)",
+        "DELETE FROM memory_path WHERE scope_id=?",
+        "DELETE FROM memory_path_schema WHERE scope_id=?",
         "DELETE FROM memory_passage_fts WHERE source_id IN (SELECT id FROM memory_source WHERE scope_id=?)",
         "DELETE FROM memory_passage WHERE scope_id=?",
         "DELETE FROM memory_source WHERE scope_id=?",

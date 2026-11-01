@@ -190,6 +190,24 @@ struct MemoryPassageHit {
     std::string text;
 };
 
+struct MemoryPathRecord {
+    std::string id;
+    std::string scopeId;
+    long long revision = 1;
+    std::string schemaId;
+    std::string taskType;
+    std::string state = "candidate";
+    std::string intentSample;
+    std::string accessJson = "{}";
+    long long success = 0;
+    long long failure = 0;
+    long long lastTau = 0;
+    long long uses = 0;
+    long long distinctInputs = 0;
+    std::vector<std::string> claimIds;
+    double utility = 0.0;
+};
+
 struct MemoryLensRecord {
     std::string id;
     std::string scopeId;
@@ -234,6 +252,7 @@ struct MemoryTraceRecord {
     std::string model;
     std::string tier;
     std::string outcome;
+    std::string createdAt;
     taskforge::Json anchors = taskforge::Json::array();
     taskforge::Json steps = taskforge::Json::array();
     taskforge::Json delivered = taskforge::Json::array();
@@ -534,6 +553,7 @@ public:
                          const std::string& validTo, const std::string& dormantAt,
                          const std::string& lastUsed, std::string& error);
     std::unordered_map<std::string, std::string> nodeNames(const std::string& scopeId) const;
+    std::string nodeKind(const std::string& scopeId, const std::string& nodeId) const;
     // E13: resolve uma mencao existente sem criar no. Devolve vazio quando nao
     // ha correspondencia ou quando a mencao e ambigua.
     std::string findEntity(const std::string& scopeId, const std::string& mention,
@@ -618,6 +638,33 @@ public:
                     bool memoryEnabled);
     taskforge::Json getTrace(const std::string& scopeId, const std::string& runId,
                              const std::string& nodeId) const;
+    std::vector<MemoryTraceRecord> listTraces(const std::string& scopeId,
+                                              size_t limit = 10000) const;
+    std::vector<std::string> approvedTraceIds(const std::string& scopeId,
+                                              size_t limit = 10000) const;
+
+    // E15: caminhos canonicos e suas estatisticas.
+    std::string upsertPath(const std::string& scopeId, const std::string& taskType,
+                           const std::string& signature,
+                           const std::vector<std::string>& claimIds,
+                           const std::string& intentSample,
+                           const std::string& accessJson, bool* created = nullptr);
+    bool recordPathEvent(const std::string& pathId, const std::string& traceId,
+                         const std::string& inputHash, bool success, long long tau,
+                         long long minDistinctInputs);
+    std::vector<MemoryPathRecord> listPaths(const std::string& scopeId,
+                                            const std::string& state = "") const;
+    taskforge::Json getPath(const std::string& scopeId, const std::string& pathId) const;
+    bool setPathState(const std::string& scopeId, const std::string& pathId,
+                      const std::string& state, const std::string& reason);
+    std::vector<std::string> pathsForClaim(const std::string& claimId) const;
+    std::vector<std::string> replacementClaimIds(const std::string& scopeId,
+                                                 const std::string& claimId) const;
+    std::vector<std::string> predicateClaimIds(const std::string& scopeId,
+                                               const std::string& claimId) const;
+    bool revalidatePathClaim(const std::string& scopeId, const std::string& pathId,
+                             const std::string& oldClaimId, const std::string& newClaimId);
+    taskforge::Json pathSummary(const std::string& scopeId) const;
 
     // E12: ingere uma versao de fonte e pesquisa trechos ativos.
     std::string ingestSource(const MemorySourceRecord& source,

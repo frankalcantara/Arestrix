@@ -16,6 +16,7 @@
 #include "memory/MemoryConsolidator.hpp"
 #include "memory/MemoryRanker.hpp"
 #include "memory/MemoryClaimExtractor.hpp"
+#include "memory/MemoryPaths.hpp"
 #include "memory/MemoryStore.hpp"
 #include "util/JsonValue.hpp"
 
@@ -34,6 +35,8 @@ struct MemoryMaintenanceConfig {
     ClaimExtractorConfig claimExtractor;
     size_t claimMaxPassages = 10;
     bool lensesEnabled = false;
+    bool pathsEnabled = false;
+    PathOptions pathOptions;
 };
 
 MemoryMaintenanceConfig maintenanceConfigFromJson(const taskforge::Json& value);
@@ -120,6 +123,12 @@ public:
                                   size_t maxPassages = 10);
     // E14: garante lentes e regenera facetas; chamado pela manutencao.
     taskforge::Json rebuildFacets(const std::string& projectId, bool facetsEnabled);
+    taskforge::Json rebuildPaths(const std::string& projectId, bool pathsEnabled,
+                                 const PathOptions& options = {});
+    taskforge::Json listPaths(const std::string& projectId, const std::string& state = "");
+    taskforge::Json getPath(const std::string& projectId, const std::string& pathId);
+    bool setPathState(const std::string& projectId, const std::string& pathId,
+                      const std::string& state, std::string& error);
     taskforge::Json listProposals(const std::string& projectId, const std::string& status = "pending",
                                   size_t limit = 100);
     bool promoteProposal(const std::string& projectId, const std::string& proposalId,

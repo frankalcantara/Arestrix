@@ -6,6 +6,7 @@ import {
   claimExtractionEnabled,
   lensesEnabled,
   memoryModeOf,
+  pathsEnabled,
   memoryThemeOf,
   memoryThemesOf
 } from '../../core/memory/MemoryConfig.ts';
@@ -15,7 +16,7 @@ export class ProjectMemoryModal {
   private overlay: HTMLElement;
   private graph: Graph;
   private windowController?: IModalWindowController;
-  private activeTab: 'knowledge' | 'lessons' | 'state' | 'maintenance' = 'knowledge';
+  private activeTab: 'knowledge' | 'lessons' | 'state' | 'maintenance' | 'paths' = 'knowledge';
 
   constructor(graph: Graph) {
     this.graph = graph;
@@ -124,6 +125,9 @@ export class ProjectMemoryModal {
           </button>
           <button type="button" class="tab-btn ${this.activeTab === 'maintenance' ? 'active' : ''}" data-tab="maintenance">
             <span>⚡</span> ${t('project_memory.tab_maintenance', '4. Manutenção')}
+          </button>
+          <button type="button" class="tab-btn ${this.activeTab === 'paths' ? 'active' : ''}" data-tab="paths">
+            <span>🛤️</span> ${t('project_memory.tab_paths', '5. Caminhos')}
           </button>
         </div>
 
@@ -293,6 +297,7 @@ export class ProjectMemoryModal {
                 <div class="form-hint" style="margin-top: 4px;">${t('project_memory.claims_status', 'Extração de afirmações')}: ${claimExtractionEnabled(globalMemory as any) ? t('project_memory.on', 'ligada (manutenção)') : t('project_memory.off', 'desligada')}</div>
                 <div class="form-hint" style="margin-top: 4px;">${t('project_memory.lenses_status', 'Lentes e facetas')}: ${lensesEnabled(globalMemory as any) ? t('project_memory.on', 'ligadas') : t('project_memory.off', 'desligadas')}</div>
                 <div class="form-hint" id="memory-facets-status" style="margin-top: 4px;"></div>
+                <div class="form-hint" style="margin-top: 4px;">${t('project_memory.paths_status', 'Caminhos canônicos')}: ${pathsEnabled(globalMemory as any) ? t('project_memory.on', 'ligados') : t('project_memory.off', 'desligados')}</div>
                 <pre id="memory-ab-report" style="display: none; margin-top: 10px; padding: 10px; border-radius: 6px; background: #f8fafc; color: #0f172a; font-size: 11px; white-space: pre-wrap; max-height: 240px; overflow: auto;"></pre>
               </div>
             </div>
@@ -387,6 +392,21 @@ export class ProjectMemoryModal {
               <pre id="memory-usage-viewer" style="margin: 8px 0 0; padding: 10px; border-radius: 6px; background: #f8fafc; color: #0f172a; font-size: 11.5px; white-space: pre-wrap;">${t('project_memory.usage_loading')}</pre>
             </div>
           </div>
+
+          <!-- ABA 5: Caminhos canônicos -->
+          <div class="tab-pane" id="pane-tab-paths" style="${this.activeTab === 'paths' ? '' : 'display: none;'}">
+            <div class="settings-section-card">
+              <div class="section-card-header">
+                <span class="section-card-icon">🛤️</span>
+                <div class="section-card-titles">
+                  <h3 class="section-card-title">${t('project_memory.paths_title', 'Caminhos canônicos')}</h3>
+                  <p class="section-card-desc">${t('project_memory.paths_desc', 'Sequências de afirmações consolidadas a partir de traços aprovados, com utilidade e estado de invalidação.')}</p>
+                </div>
+              </div>
+              <div id="memory-paths-summary" class="form-hint" style="margin-top: 8px;">${t('project_memory.paths_loading', 'Carregando caminhos…')}</div>
+              <div id="memory-paths-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px; max-height: 340px; overflow-y: auto;"></div>
+            </div>
+          </div>
         </div>
 
         <div class="modal-footer office-modal-footer">
@@ -416,7 +436,7 @@ export class ProjectMemoryModal {
     const tabButtons = this.overlay.querySelectorAll<HTMLButtonElement>('.modal-tabs .tab-btn');
     tabButtons.forEach(btn => {
       btn.addEventListener('click', () => {
-        const tab = (btn.dataset?.tab || btn.getAttribute('data-tab')) as 'knowledge' | 'lessons' | 'state' | 'maintenance';
+        const tab = (btn.dataset?.tab || btn.getAttribute('data-tab')) as 'knowledge' | 'lessons' | 'state' | 'maintenance' | 'paths';
         if (!tab) return;
         this.activeTab = tab;
         tabButtons.forEach(b => {
@@ -511,6 +531,8 @@ export class ProjectMemoryModal {
     const stateKeysList = this.overlay.querySelector('#memory-state-keys-list');
     const workspaceStatus = this.overlay.querySelector('#memory-workspace-status');
     const initWorkspaceButton = this.overlay.querySelector<HTMLButtonElement>('#btn-init-workspace');
+    const pathsList = this.overlay.querySelector('#memory-paths-list');
+    const pathsSummary = this.overlay.querySelector('#memory-paths-summary');
 
     try {
       // @ts-ignore
@@ -724,6 +746,42 @@ export class ProjectMemoryModal {
             + `${Number(facetCounts.edgesWithoutLens || 0)}`;
         }
 
+        if (pathsSummary) {
+          const pathCounts = data.paths || {};
+          pathsSummary.textContent = `${t('project_memory.paths_active', 'ativos')}: `
+            + `${Number(pathCounts.active || 0)} · ${t('project_memory.paths_candidate', 'candidatos')}: `
+            + `${Number(pathCounts.candidate || 0)} · ${t('project_memory.paths_suspended', 'suspensos')}: `
+            + `${Number(pathCounts.suspended || 0)} · ${t('project_memory.paths_retired', 'retirados')}: `
+            + `${Number(pathCounts.retired || 0)}`;
+        }
+        if (pathsList) {
+          const records = Array.isArray(data.pathRecords) ? data.pathRecords : [];
+          pathsList.innerHTML = records.length === 0
+            ? `<div style="color: #64748b; font-size: 11px;">${t('project_memory.paths_empty', 'Nenhum caminho consolidado ainda.')}</div>`
+            : records.map((path: any) => `
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px;">
+                  <div style="display: flex; justify-content: space-between; gap: 8px; align-items: center;">
+                    <strong style="font-size: 11px; color: #1d4ed8;">${this.escapeHtml(String(path.taskType || 'geral'))}</strong>
+                    <span style="font-size: 10px; color: #64748b;">${this.escapeHtml(String(path.state || ''))} · util ${Number(path.utility || 0).toFixed(2)}</span>
+                  </div>
+                  <div style="font-size: 10.5px; color: #475569; margin-top: 3px;">
+                    ${this.escapeHtml(String(path.id || ''))} · ${Number(path.success || 0)}/${Number(path.failure || 0)}
+                    · ${t('project_memory.paths_distinct_inputs', 'entradas distintas')}: ${Number(path.distinctInputs || 0)}
+                  </div>
+                  ${path.state !== 'retired'
+                    ? `<button class="btn btn-secondary-pill btn-secondary-office" data-retire-path="${this.escapeHtml(String(path.id || ''))}" style="margin-top: 6px; padding: 4px 10px; font-size: 10.5px;">${t('project_memory.paths_retire', 'Retirar caminho')}</button>`
+                    : ''}
+                </div>`).join('');
+          pathsList.querySelectorAll<HTMLButtonElement>('[data-retire-path]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              const id = btn.getAttribute('data-retire-path') || '';
+              if (id && confirm(t('project_memory.paths_retire_confirm', 'Retirar este caminho? Ele não será reutilizado até nova consolidação.'))) {
+                void this.retirePath(id);
+              }
+            });
+          });
+        }
+
         // Exibe consumo de API e contexto de memória
         if (usageViewer) {
           const u = data.usage || {};
@@ -815,6 +873,25 @@ export class ProjectMemoryModal {
       }
     } catch (e: any) {
       alert(t('project_memory.workspace_error', { error: String(e?.message || e) }));
+    }
+  }
+
+  private async retirePath(pathId: string): Promise<void> {
+    const projectId = this.graph.getProjectId();
+    try {
+      // @ts-ignore
+      if (typeof webui !== 'undefined') {
+        // @ts-ignore
+        const raw = await webui.call("retire_memory_path",
+          JSON.stringify({ projectId, pathId }));
+        const result = JSON.parse(raw);
+        if (!result.ok) {
+          alert(t('project_memory.paths_retire_error', { error: String(result.error || '') }));
+        }
+        this.refreshMemoryData();
+      }
+    } catch (e: any) {
+      alert(t('project_memory.paths_retire_error', { error: String(e?.message || e) }));
     }
   }
 
