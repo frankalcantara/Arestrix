@@ -2619,6 +2619,23 @@ std::vector<MemoryEmbeddingObject> MemoryStore::embeddingObjects(const std::stri
         }
     }
 
+    Stmt passages;
+    if (prepare(db_, "SELECT p.id,p.text,s.uri,p.created_at FROM memory_passage p "
+                       "JOIN memory_source s ON s.id=p.source_id "
+                       "WHERE p.scope_id=? AND p.status='active' AND s.status='active' LIMIT 2000",
+                 passages, error)) {
+        bindText(passages.stmt, 1, scopeId);
+        while (stepRetry(passages.stmt) == SQLITE_ROW) {
+            MemoryEmbeddingObject object;
+            object.objectType = "passage";
+            object.objectId = columnText(passages.stmt, 0);
+            object.text = sanitizeText(columnText(passages.stmt, 2) + " | " +
+                                       columnText(passages.stmt, 1), 8000).text;
+            object.createdAt = columnText(passages.stmt, 3);
+            if (!object.text.empty()) out.push_back(std::move(object));
+        }
+    }
+
     if (maxEpisodes > 0) {
         Stmt episodes;
         if (prepare(db_, "SELECT id,task_type,outcome,content,created_at FROM memory_episode "

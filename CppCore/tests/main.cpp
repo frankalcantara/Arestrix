@@ -4478,6 +4478,16 @@ TEST(memory_sources_ingest_versions_search_and_redacts_secrets) {
                                                           nullptr, "run-src-2", "node-src-2");
     CHECK(secretResult.find(secret) == std::string::npos);
 
+    {
+        taskforge::memory::MemoryStore store(memoryDb.string());
+        std::string storeError;
+        CHECK(store.open(storeError));
+        const auto objects = store.embeddingObjects("project:" + projectId);
+        CHECK(std::any_of(objects.begin(), objects.end(), [](const auto& object) {
+            return object.objectType == "passage";
+        }));
+    }
+
     memory.closeProject(projectId);
     fs::remove_all(root, ec);
 }
