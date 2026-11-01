@@ -64,7 +64,7 @@
           "memory_episode": 0,
           "memory_evidence": 9,
           "memory_hit": 0,
-          "memory_meta": 1,
+          "memory_meta": 2,
           "memory_node": 11,
           "memory_node_fts": 11,
           "memory_playbook": 2,
@@ -75,6 +75,7 @@
           "memory_state": 0,
           "memory_state_history": 0,
           "memory_state_key": 0,
+          "memory_trace": 0,
           "memory_usage": 0,
           "memory_validation": 0,
           "memory_working": 0
@@ -87,7 +88,7 @@
           "memory_episode": 0,
           "memory_evidence": 9,
           "memory_hit": 0,
-          "memory_meta": 1,
+          "memory_meta": 2,
           "memory_node": 11,
           "memory_node_fts": 11,
           "memory_playbook": 1,
@@ -98,6 +99,7 @@
           "memory_state": 0,
           "memory_state_history": 0,
           "memory_state_key": 0,
+          "memory_trace": 0,
           "memory_usage": 0,
           "memory_validation": 0,
           "memory_working": 0
@@ -121,6 +123,7 @@
           "memory_state": 0,
           "memory_state_history": 0,
           "memory_state_key": 0,
+          "memory_trace": 0,
           "memory_usage": 0,
           "memory_validation": 0,
           "memory_working": 0
@@ -135,7 +138,7 @@
           "memory_episode": 9,
           "memory_evidence": 0,
           "memory_hit": 48,
-          "memory_meta": 1,
+          "memory_meta": 2,
           "memory_node": 0,
           "memory_node_fts": 0,
           "memory_playbook": 0,
@@ -146,6 +149,7 @@
           "memory_state": 0,
           "memory_state_history": 0,
           "memory_state_key": 0,
+          "memory_trace": 9,
           "memory_usage": 9,
           "memory_validation": 3,
           "memory_working": 0
@@ -169,6 +173,7 @@
           "memory_state": 0,
           "memory_state_history": 0,
           "memory_state_key": 0,
+          "memory_trace": 0,
           "memory_usage": 0,
           "memory_validation": 0,
           "memory_working": 0
@@ -181,7 +186,7 @@
           "memory_episode": 9,
           "memory_evidence": 0,
           "memory_hit": 48,
-          "memory_meta": 1,
+          "memory_meta": 2,
           "memory_node": 0,
           "memory_node_fts": 0,
           "memory_playbook": 0,
@@ -192,6 +197,7 @@
           "memory_state": 0,
           "memory_state_history": 0,
           "memory_state_key": 0,
+          "memory_trace": 9,
           "memory_usage": 9,
           "memory_validation": 3,
           "memory_working": 0
@@ -199,8 +205,8 @@
       }
     },
     "schemaFingerprint": {
-      "knowledge": "a6ffc4300d7737a8",
-      "telemetry": "a6ffc4300d7737a8"
+      "knowledge": "b21c4199001181a9",
+      "telemetry": "b21c4199001181a9"
     }
   }
 }

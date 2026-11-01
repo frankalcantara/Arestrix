@@ -623,6 +623,10 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         for (const auto& file : runFiles) episode.filesTouched.push_back(json(file));
         for (const auto& artifact : runArtifacts) episode.artifacts.push_back(json(artifact));
         const std::string episodeId = memory.recordEpisode(spec.memoryProjectId, episode);
+        // E11: o traco fecha junto com o episodio e aponta para a versao do
+        // conhecimento consultada no inicio da recuperacao.
+        memory.closeTrace(spec.memoryProjectId, runId, nodeId, usage.outcome, spec.model,
+                          "default", spec.memoryEnabled);
         // B4: falha de infraestrutura nao vira licao. Falha de tarefa
         // (incluindo task_max_turns) continua gerando proposta.
         if (spec.memoryWriteEnabled && !episodeId.empty() &&

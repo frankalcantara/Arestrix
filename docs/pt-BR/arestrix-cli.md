@@ -132,6 +132,16 @@ distintas, pares de intenção, citação, reuso e tokens por execução. Os lim
 com `--min-verdict-rate`, `--min-citation-rate`, `--min-executions`, `--min-distinct-inputs` e
 `--min-reuse-rate`; `--since` limita o período. O resultado inclui a decisão recomendada.
 
+### `memory trace`
+
+```powershell
+.\arestrix-cli.exe memory trace show <run> <no> --project .\examples\04-memoria --json
+```
+
+Mostra o traço de recuperação da execução: versão do conhecimento consultada,
+passos do brief e das buscas, candidatos com escores e posição, itens entregues
+e usados, além das contagens de truncamento.
+
 ### `memory prune`
 
 ```powershell

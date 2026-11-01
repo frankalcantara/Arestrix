@@ -130,7 +130,7 @@ void printHelp() {
         "  arestrix-cli env list [--json]\n"
         "  arestrix-cli env check <NOME>... [--json]\n"
         "  arestrix-cli doctor [--project <pasta>] [--json]\n"
-        "  arestrix-cli memory report|health|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote [--project <pasta>] [opcoes]\n"
+        "  arestrix-cli memory report|trace|health|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote [--project <pasta>] [opcoes]\n"
         "  arestrix-cli mcp list|test|tools [id] [--project <pasta>] [--json]\n"
         "  arestrix-cli project info|validate|graphs [--project <pasta>] [--json]\n"
         "  arestrix-cli completion powershell|bash|zsh\n"
@@ -499,6 +499,7 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory consolidate --project <pasta> [--dormant-days N] [--no-decay] [--no-dedup] [--no-generalize] [--json]\n"
                      "arestrix-cli memory workspace init|status --project <pasta> [--workspace-id ID] [--json]\n"
                      "arestrix-cli memory state list|declare|get|set --project <pasta> [--key K] [--scope project|task_type|item] [--schema JSON] [--value JSON] [--expected N] [--item ID] [--task-type T] [--json]\n"
+                     "arestrix-cli memory trace show <run> <no> --project <pasta> [--json]\n"
                      "arestrix-cli memory ab validate|order|report --suite <arquivo> [--observations <arquivo>] [--repetitions N] [--seed N] [--json]\n"
                      "arestrix-cli memory ab run --suite <arquivo> --pipeline <grafo> --node <vertice> [--repetitions N] [--seed N] [--root <pasta>] [--db <arquivo>] [--json]\n"
                      "arestrix-cli memory promote --project <pasta> --kind lesson|fact|playbook --id ID --evidence texto [--workspace-id ID] [--json]\n"
@@ -509,7 +510,7 @@ int runMemory(const std::vector<std::string>& args) {
     if (command != "report" && command != "prune" && command != "purge" && command != "proposals" &&
         command != "embeddings" && command != "health" && command != "reindex" &&
         command != "consolidate" && command != "workspace" && command != "state" &&
-        command != "ab" && command != "promote" && command != "unpromote") {
+        command != "ab" && command != "trace" && command != "promote" && command != "unpromote") {
         std::cerr << "arestrix-cli memory: comando desconhecido: " << command << "\n";
         return kExitUsage;
     }
@@ -517,6 +518,8 @@ int runMemory(const std::vector<std::string>& args) {
     std::string proposalAction;
     std::string proposalId;
     std::string embeddingAction;
+    std::string traceRun;
+    std::string traceNode;
     size_t optionStart = 2;
     if (command == "proposals") {
         if (args.size() < 3) {
@@ -570,6 +573,19 @@ int runMemory(const std::vector<std::string>& args) {
             return kExitUsage;
         }
         optionStart = 3;
+    } else if (command == "trace") {
+        if (args.size() < 3 || args[2] != "show") {
+            std::cerr << "arestrix-cli memory trace: informe show <run> <no>\n";
+            return kExitUsage;
+        }
+        if (args.size() < 5) {
+            std::cerr << "arestrix-cli memory trace show: informe <run> e <no>\n";
+            return kExitUsage;
+        }
+        embeddingAction = args[2];
+        traceRun = args[3];
+        traceNode = args[4];
+        optionStart = 5;
     } else if (command == "ab") {
         if (args.size() < 3) {
             std::cerr << "arestrix-cli memory ab: informe validate|order|report|run\n";
@@ -935,7 +951,7 @@ int runMemory(const std::vector<std::string>& args) {
 
     if (dbPath.empty()) dbPath = root / ".arestrix" / "memory" / "memory.db";
 
-    if (command != "report") {
+    if (command != "report" && command != "trace") {
         std::error_code ec;
         if (command != "state" && !fs::is_regular_file(dbPath, ec)) {
             std::cerr << "Banco de memoria nao encontrado: " << dbPath.string() << "\n";
@@ -1306,6 +1322,44 @@ int runMemory(const std::vector<std::string>& args) {
             }
         }
         return 0;
+    }
+
+    if (command == "trace") {
+        const fs::path tracePath = fs::is_regular_file(telemetryPath, ec) ? telemetryPath : dbPath;
+        taskforge::memory::MemoryStore store(tracePath.string(), 0, true);
+        std::string openError;
+        if (!store.open(openError)) {
+            std::cerr << "Falha ao abrir a telemetria: " << openError << "\n";
+            return kExitConfig;
+        }
+        taskforge::Json out = store.getTrace("project:" + projectId, traceRun, traceNode);
+        out["database"] = tracePath.string();
+        out["projectId"] = projectId;
+        if (out.contains("traceId")) {
+            if (opt.json) {
+                std::cout << out.dump(2) << "\n";
+            } else {
+                std::cout << "Trace " << out.value("traceId", std::string())
+                          << " | run " << traceRun << " | no " << traceNode
+                          << " | conhecimento v" << out.value("knowledgeVersion", 0LL) << "\n";
+                std::cout << "Tipo: " << out.value("taskType", std::string())
+                          << " | saida: " << out.value("outcome", std::string())
+                          << " | modelo: " << out.value("model", std::string()) << "\n";
+                std::cout << "Passos: " << out["steps"].size()
+                          << " | entregues: " << out["delivered"].size()
+                          << " | usados: " << out["used"].size()
+                          << " | passos cortados: " << out.value("truncatedSteps", 0LL) << "\n";
+                for (const auto& step : out["steps"]) {
+                    std::cout << "  [" << step.value("kind", std::string()) << "] "
+                              << "consulta " << step.value("queryHash", std::string()).substr(0, 16)
+                              << " | candidatos " << step["candidates"].size()
+                              << " | cortados " << step.value("truncatedCandidates", 0LL) << "\n";
+                }
+            }
+            return 0;
+        }
+        std::cerr << "Trace nao encontrado para run " << traceRun << " e no " << traceNode << "\n";
+        return kExitConfig;
     }
 
     sqlite3* db = nullptr;

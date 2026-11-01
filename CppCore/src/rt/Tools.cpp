@@ -426,7 +426,8 @@ ToolResult executeTool(ToolContext& ctx, const std::string& name, const json& ar
             std::vector<taskforge::memory::MemoryHitRef> hits;
             auto& memory = taskforge::memory::MemoryService::getInstance();
             std::string result = memory.searchContext(ctx.projectId, query, static_cast<size_t>(limit),
-                                                      ctx.memoryDomains, &hits);
+                                                      ctx.memoryDomains, &hits,
+                                                      ctx.runId, ctx.agentId);
             if (!hits.empty() && !ctx.runId.empty()) {
                 memory.recordConsultedHits(ctx.projectId, ctx.runId, ctx.agentId, hits);
             }
