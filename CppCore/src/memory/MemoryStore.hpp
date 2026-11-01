@@ -190,6 +190,27 @@ struct MemoryPassageHit {
     std::string text;
 };
 
+struct MemoryLensRecord {
+    std::string id;
+    std::string scopeId;
+    std::string name;
+    std::string description;
+    long long version = 1;
+};
+
+struct MemoryFacetRecord {
+    std::string id;
+    std::string scopeId;
+    std::string entityId;
+    std::string lensId;
+    long long revision = 1;
+    std::string description;
+    std::string supportingClaimsJson = "[]";
+    std::string claimsHash;
+    std::string status = "active";
+    std::string embeddingFingerprint;
+};
+
 struct MemoryClaimCandidate {
     std::string passageId;
     std::string sourceId;
@@ -537,7 +558,8 @@ public:
     std::string searchContext(const std::string& scopeId, const std::string& text,
                               size_t limit = 10,
                               const std::vector<std::string>& domains = {},
-                              std::vector<MemoryHitRef>* hits = nullptr) const;
+                              std::vector<MemoryHitRef>* hits = nullptr,
+                              const std::vector<std::string>& lenses = {}) const;
 
     // Rastreio de memórias injetadas/consultadas e resultado da execução.
     bool recordHit(const std::string& scopeId, const std::string& runId,
@@ -615,6 +637,25 @@ public:
     bool markClaimExtraction(const std::string& scopeId, const std::string& passageId,
                              const std::string& passageHash, const std::string& fingerprint,
                              const std::string& status, const std::string& error = "");
+
+    // E14: catalogo de lentes, vinculo por aresta e facetas deterministicas.
+    std::string ensureLens(const std::string& scopeId, const std::string& name,
+                           const std::string& description = "");
+    bool renameLens(const std::string& scopeId, const std::string& lensId,
+                    const std::string& newName, const std::string& description);
+    std::vector<MemoryLensRecord> listLenses(const std::string& scopeId) const;
+    bool linkEdgeLens(const std::string& edgeId, const std::string& lensId);
+    std::vector<std::string> edgeLensNames(const std::string& edgeId) const;
+    std::vector<std::string> edgeIdsForLenses(const std::string& scopeId,
+                                              const std::vector<std::string>& lensNames) const;
+    // Garante uma lente para arestas antigas/importadas que nao passaram por
+    // recordEdge (ex.: seed direto no SQLite).
+    size_t backfillLenses(const std::string& scopeId);
+    std::string upsertFacet(const MemoryFacetRecord& facet, bool* changed);
+    std::vector<MemoryFacetRecord> listFacets(const std::string& scopeId,
+                                              const std::string& entityId = "",
+                                              const std::string& lensId = "") const;
+    taskforge::Json facetSummary(const std::string& scopeId) const;
 
     // Validacao independente ligada a um episodio (telemetria).
     // E4: instantaneos de evidencia (conhecimento, sem FK para telemetria).

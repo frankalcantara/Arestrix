@@ -4,6 +4,7 @@
 #include "MemorySanitizer.hpp"
 #include "MemoryPlaybookCompiler.hpp"
 #include "MemoryRanker.hpp"
+#include "MemoryFacets.hpp"
 #include "MemorySources.hpp"
 #include "MemoryStateSchema.hpp"
 #include "MemoryVectorIndex.hpp"
@@ -200,6 +201,10 @@ MemoryMaintenanceConfig maintenanceConfigFromJson(const taskforge::Json& value) 
         config.options.dormantAfterDays = std::max(0, std::min(3650,
             value.value("consolidationDormantDays", config.options.dormantAfterDays)));
     }
+    const taskforge::Json lensSwitch = value.contains("lenses") ? value["lenses"] : taskforge::Json();
+    config.lensesEnabled = lensSwitch.is_boolean()
+        ? lensSwitch.get<bool>()
+        : lensSwitch.is_object() ? lensSwitch.value("enabled", false) : false;
     config.claimExtractor = MemoryClaimExtractor::configFromJson(value);
     if (config.claimExtractor.enabled && !config.enabled) {
         // A extracao e uma tarefa de manutencao; ligar o extrator sem modo de
@@ -225,6 +230,7 @@ taskforge::Json maintenanceConfigToJson(const MemoryMaintenanceConfig& config) {
         {"options", consolidationOptionsToJson(config.options)},
         {"claimExtraction", taskforge::Json{{"enabled", config.claimExtractor.enabled},
                                             {"maxPassages", static_cast<long long>(config.claimMaxPassages)}}},
+        {"lenses", config.lensesEnabled},
         {"extractor", taskforge::Json{{"model", config.claimExtractor.model},
                                       {"revision", config.claimExtractor.revision},
                                       {"baseUrl", config.claimExtractor.baseUrl}}}};
@@ -1504,6 +1510,13 @@ taskforge::Json MemoryService::extractClaims(const std::string& projectId,
     return out;
 }
 
+taskforge::Json MemoryService::rebuildFacets(const std::string& projectId, bool facetsEnabled) {
+    auto* s = ensureStore(projectId);
+    if (!s) return taskforge::Json{{"ok", false}, {"error", "memoria indisponivel"}};
+    const auto embedding = embeddingConfig(projectId);
+    return MemoryFacets::rebuild(*s, scopeId(projectId), embedding, facetsEnabled);
+}
+
 size_t MemoryService::extractProposals(const std::string& projectId, const std::string& episodeId) {
     auto* s = ensureStore(projectId);
     auto* t = ensureTelemetry(projectId);
@@ -1601,16 +1614,17 @@ std::vector<MemoryEdgeRecord> MemoryService::searchEdges(const std::string& proj
 std::string MemoryService::searchContext(const std::string& projectId, const std::string& text,
                                          size_t limit, const std::vector<std::string>& domains,
                                          std::vector<MemoryHitRef>* hits,
-                                         const std::string& runId, const std::string& nodeId) {
+                                         const std::string& runId, const std::string& nodeId,
+                                         const std::vector<std::string>& lenses) {
     auto* s = ensureStore(projectId);
     if (!s) return std::string();
     std::string result;
     std::string hybrid;
     taskforge::Json stepCandidates = taskforge::Json::array();
-    if (hybridSearch(projectId, text, limit, domains, hits, hybrid, &stepCandidates)) {
+    if (hybridSearch(projectId, text, limit, domains, hits, hybrid, &stepCandidates, lenses)) {
         result = std::move(hybrid);
     } else {
-        result = s->searchContext(scopeId(projectId), text, limit, domains, hits);
+        result = s->searchContext(scopeId(projectId), text, limit, domains, hits, lenses);
         std::map<std::string, TraceCandidateData> candidates;
         const auto lexical = s->lexicalCandidates(scopeId(projectId), text, 50, domains);
         for (size_t i = 0; i < lexical.size(); ++i) {
@@ -2041,6 +2055,7 @@ void MemoryService::maintenanceLoop(const std::string& projectId,
             report["claimExtraction"] = extractClaims(projectId, runConfig.claimExtractor,
                                                       runConfig.claimMaxPassages);
         }
+        report["facets"] = rebuildFacets(projectId, runConfig.lensesEnabled);
 
         lock.lock();
         runtime->busy = false;
@@ -2106,6 +2121,7 @@ taskforge::Json MemoryService::runMaintenanceOnce(const std::string& projectId,
         report["claimExtraction"] = extractClaims(projectId, config.claimExtractor,
                                                   config.claimMaxPassages);
     }
+    report["facets"] = rebuildFacets(projectId, config.lensesEnabled);
 
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     auto it = maintenance_.find(projectKey(projectId));
@@ -2192,7 +2208,8 @@ taskforge::Json MemoryService::listPlaybooks(const std::string& projectId,
 bool MemoryService::hybridRecall(const std::string& projectId, const std::string& text,
                                  size_t limit, const std::vector<std::string>& domains,
                                  std::vector<RankedMemory>& output,
-                                 taskforge::Json* traceCandidates) {
+                                 taskforge::Json* traceCandidates,
+                                 const std::vector<std::string>& lenses) {
     if (text.empty()) return false;
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     auto* s = ensureStore(projectId);
@@ -2230,6 +2247,13 @@ bool MemoryService::hybridRecall(const std::string& projectId, const std::string
                                             queryEmbeddings[0].values, candidateLimit,
                                             fingerprint, domains);
     output = MemoryRanker::fuse(lexical, vector, limit);
+    if (!lenses.empty()) {
+        const auto allowedEdges = s->edgeIdsForLenses(scopeId(projectId), lenses);
+        const std::set<std::string> allowed(allowedEdges.begin(), allowedEdges.end());
+        output.erase(std::remove_if(output.begin(), output.end(), [&](const RankedMemory& memory) {
+            return memory.kind == "fact" && allowed.count(memory.id) == 0;
+        }), output.end());
+    }
     if (traceCandidates) {
         std::map<std::string, TraceCandidateData> traceMap;
         for (size_t i = 0; i < lexical.size(); ++i) {
@@ -2251,9 +2275,10 @@ bool MemoryService::hybridRecall(const std::string& projectId, const std::string
 bool MemoryService::hybridSearch(const std::string& projectId, const std::string& text,
                                  size_t limit, const std::vector<std::string>& domains,
                                  std::vector<MemoryHitRef>* hits, std::string& output,
-                                 taskforge::Json* traceCandidates) {
+                                 taskforge::Json* traceCandidates,
+                                 const std::vector<std::string>& lenses) {
     std::vector<RankedMemory> ranked;
-    if (!hybridRecall(projectId, text, limit, domains, ranked, traceCandidates)) return false;
+    if (!hybridRecall(projectId, text, limit, domains, ranked, traceCandidates, lenses)) return false;
     output = formatRanked(ranked, limit, hits);
     return true;
 }
@@ -2396,6 +2421,7 @@ taskforge::Json MemoryService::toJson(const std::string& projectId) {
     out["maintenance"] = maintenanceStatus(projectId);
     out["evidence"] = s->evidenceSummary(scopeId(projectId));
     out["sources"] = s->sourceSummary(scopeId(projectId));
+    out["facets"] = s->facetSummary(scopeId(projectId));
     return out;
 }
 

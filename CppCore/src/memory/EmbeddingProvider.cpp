@@ -61,6 +61,19 @@ std::string prefixFor(const std::string& model, bool query) {
     return "";
 }
 
+std::string symmetricPrefixFor(const std::string& model) {
+    const std::string normalized = lower(model);
+    if (normalized.find("embeddinggemma") != std::string::npos) {
+        return " task: sentence similarity | query:  ";
+    }
+    if (normalized.find("qwen3") != std::string::npos ||
+        normalized.find("qwen-3") != std::string::npos) {
+        return " Instruct: Given two texts, judge their semantic similarity\nQuery:  ";
+    }
+    if (normalized.find("e5") != std::string::npos) return "query: ";
+    return "";
+}
+
 std::string prefixVersionFor(const std::string& model) {
     const std::string normalized = lower(model);
     if (normalized.find("embeddinggemma") != std::string::npos) return "embeddinggemma-v1";
@@ -203,6 +216,33 @@ std::string embeddingDocumentPrefix(const std::string& model) {
     return prefixFor(model, false);
 }
 
+std::string embeddingSymmetricPrefix(const std::string& model) {
+    return symmetricPrefixFor(model);
+}
+
+std::string embeddingFingerprintForRole(const EmbeddingConfig& config, bool symmetric,
+                                        int effectiveDim,
+                                        const std::string& revisionOverride) {
+    if (!symmetric) return embeddingFingerprint(config, effectiveDim, revisionOverride);
+    const int dim = effectiveDim > 0
+        ? effectiveDim
+        : (config.truncateDim > 0 ? config.truncateDim : std::max(0, config.dim));
+    const std::string revision = !config.revision.empty() ? config.revision : revisionOverride;
+    taskforge::Json canonical{
+        {"indexVersion", "embedding-index-v2"},
+        {"role", "symmetric"},
+        {"provider", lower(config.provider)},
+        {"endpoint", resolvedBaseUrl(config)},
+        {"model", lower(config.model)},
+        {"revision", revision},
+        {"dim", dim},
+        {"truncateDim", config.truncateDim},
+        {"symmetricPrefix", symmetricPrefixFor(config.model)},
+        {"normalization", "l2"},
+        {"metric", "cosine"}};
+    return project::RunnerSecurity::sha256(canonical.dump());
+}
+
 bool prepareEmbeddingVector(const std::string& model, std::vector<float>& values,
                             int truncateDim, int expectedDim, int& effectiveDim,
                             std::string& error) {
@@ -293,7 +333,17 @@ std::string LocalLlamaEmbeddingProvider::prepareText(const std::string& text, bo
     std::string clipped = text;
     if (static_cast<int>(clipped.size()) > config_.maxChars) clipped.resize(config_.maxChars);
     if (clipped.empty()) clipped = " ";
+    if (symmetric_) return symmetricPrefixFor(config_.model) + clipped;
     return prefixFor(config_.model, query) + clipped;
+}
+
+bool LocalLlamaEmbeddingProvider::embedSymmetric(const std::vector<std::string>& texts,
+                                                 std::vector<Embedding>& out,
+                                                 std::string& error) {
+    symmetric_ = true;
+    const bool ok = embed(texts, false, out, error);
+    symmetric_ = false;
+    return ok;
 }
 
 bool LocalLlamaEmbeddingProvider::embed(const std::vector<std::string>& texts, bool query,
