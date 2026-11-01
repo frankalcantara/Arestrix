@@ -1031,7 +1031,9 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
                 body += "      arx_mem_ctx = memory.buildBrief(projectId, arx_item_id, " +
                         cppStringList(domains) + ", std::vector<std::string>{}, " +
                         std::to_string(std::max(0, budget)) + ", true, false, &arx_brief_info, " +
-                        cppString(memoryTaskType) + ", " + cppString(memoryIntent) + ");\n";
+                        cppString(memoryTaskType) + ", " + cppString(memoryIntent) + ", " +
+                        "taskforge::rt::currentRunId(" + cppString(node.id) + "), " +
+                        cppString(node.id) + ");\n";
                 body += "      memory.recordBriefHits(projectId, taskforge::rt::currentRunId(" +
                         cppString(node.id) + "), " + cppString(node.id) + ", arx_brief_info);\n";
                 body += "    }\n";

@@ -84,6 +84,54 @@ void embeddingStartCooldown(std::chrono::steady_clock::time_point& until) {
     until = std::chrono::steady_clock::now() + std::chrono::seconds(60);
 }
 
+struct TraceCandidateData {
+    std::string id;
+    std::string kind;
+    double lexical = 0.0;
+    double vector = 0.0;
+    double fused = 0.0;
+};
+
+taskforge::Json traceCandidatesToJson(const std::map<std::string, TraceCandidateData>& candidates,
+                                      const std::set<std::string>& delivered,
+                                      size_t limit = 50) {
+    std::vector<std::pair<std::string, TraceCandidateData>> ordered(candidates.begin(), candidates.end());
+    std::sort(ordered.begin(), ordered.end(), [](const auto& left, const auto& right) {
+        if (left.second.fused != right.second.fused) return left.second.fused > right.second.fused;
+        if (left.second.lexical != right.second.lexical) return left.second.lexical > right.second.lexical;
+        if (left.second.vector != right.second.vector) return left.second.vector > right.second.vector;
+        return left.first < right.first;
+    });
+    taskforge::Json out = taskforge::Json::array();
+    int position = 0;
+    size_t emitted = 0;
+    for (const auto& [id, candidate] : ordered) {
+        if (emitted >= limit) break;
+        out.push_back(taskforge::Json{
+            {"id", id},
+            {"kind", candidate.kind},
+            {"lexical", candidate.lexical},
+            {"vector", candidate.vector},
+            {"fused", candidate.fused},
+            {"position", position++},
+            {"delivered", delivered.count(id) != 0}});
+        ++emitted;
+    }
+    return out;
+}
+
+void addTraceCandidate(std::map<std::string, TraceCandidateData>& candidates,
+                       const std::string& id, const std::string& kind,
+                       double lexical, double vector, double fused) {
+    if (id.empty()) return;
+    TraceCandidateData& candidate = candidates[id];
+    candidate.id = id;
+    if (!kind.empty()) candidate.kind = kind;
+    if (lexical > 0.0) candidate.lexical = lexical;
+    if (vector > 0.0) candidate.vector = vector;
+    if (fused > 0.0) candidate.fused = fused;
+}
+
 std::string formatRanked(const std::vector<RankedMemory>& ranked, size_t limit,
                          std::vector<MemoryHitRef>* hits) {
     std::ostringstream out;
@@ -789,11 +837,49 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
                                       size_t maxTokens, bool includeLessons,
                                       bool includeBlackboard, MemoryBriefInfo* info,
                                       const std::string& taskType,
-                                      const std::string& intent) {
+                                      const std::string& intent,
+                                      const std::string& runId,
+                                      const std::string& nodeId) {
     if (info) *info = MemoryBriefInfo{};
+    const std::string intentHash = intent.empty()
+        ? std::string() : project::RunnerSecurity::sha256(intent);
+    auto recordStep = [&](const std::string& kind, const std::string& query,
+                          const taskforge::Json& candidates) {
+        if (runId.empty() || nodeId.empty()) return;
+        recordTraceStep(projectId, runId, nodeId, itemId, taskType, intentHash, "",
+                        taskforge::Json{{"kind", kind},
+                                        {"queryHash", query.empty() ? std::string()
+                                                                    : project::RunnerSecurity::sha256(query)},
+                                        {"candidates", candidates}});
+    };
+    auto candidatesFromInfo = [&](const MemoryBriefInfo& briefInfo) {
+        std::map<std::string, TraceCandidateData> candidates;
+        std::set<std::string> delivered;
+        for (const auto& id : briefInfo.lessonIds) {
+            addTraceCandidate(candidates, id, "lesson", 0.0, 0.0, 0.0);
+            delivered.insert(id);
+        }
+        for (const auto& id : briefInfo.factIds) {
+            addTraceCandidate(candidates, id, "fact", 0.0, 0.0, 0.0);
+            delivered.insert(id);
+        }
+        for (const auto& id : briefInfo.playbookIds) {
+            addTraceCandidate(candidates, id, "playbook", 0.0, 0.0, 0.0);
+            delivered.insert(id);
+        }
+        if (!briefInfo.workingKeys.empty()) {
+            const std::string stateId = "state:" + itemId;
+            addTraceCandidate(candidates, stateId, "state", 0.0, 0.0, 0.0);
+            delivered.insert(stateId);
+        }
+        return traceCandidatesToJson(candidates, delivered);
+    };
     if (!includeLessons && !includeBlackboard) return std::string();
     // 0 = nao injetar memoria. Nunca interpretar 0 como "sem orcamento" (infinito).
-    if (maxTokens == 0) return std::string();
+    if (maxTokens == 0) {
+        recordStep("brief", "", taskforge::Json::array());
+        return std::string();
+    }
     auto appendKey = [](std::string& key, const std::string& value) {
         key += std::to_string(value.size());
         key += ':';
@@ -812,17 +898,24 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
     for (const auto& allowed : allowedKeys) appendKey(cacheKey, allowed);
     if (auto cached = briefCache_.find(cacheKey); cached != briefCache_.end()) {
         if (info) *info = cached->second.info;
+        if (!runId.empty() && !nodeId.empty()) {
+            recordStep("brief", "", candidatesFromInfo(cached->second.info));
+        }
         return cached->second.value;
     }
     auto* s = ensureStore(projectId);
     if (!s) return std::string();
 
+    std::map<std::string, TraceCandidateData> traceCandidates;
     std::vector<MemoryLesson> selectedLessons;
     if (includeLessons) {
         // C2: filtra os temas no SQL, sem varrer todas as licoes do projeto.
         selectedLessons = domains.empty()
             ? s->getLessons(scopeId(projectId))
             : s->getLessonsForDomains(scopeId(projectId), domains);
+        for (const auto& lesson : selectedLessons) {
+            addTraceCandidate(traceCandidates, lesson.id, "lesson", 0.0, 0.0, 0.0);
+        }
     }
 
     std::string workingText;
@@ -905,6 +998,7 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
 
     // Fatos/playbooks ranqueados (hibrido) entram depois das licoes e antes do
     // blackboard. Sem embeddings habilitados, o bloco nem e consultado.
+    std::string traceQuery;
     if (includeLessons) {
         std::string query;
         auto appendQuery = [&](const std::string& text) {
@@ -922,8 +1016,19 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
         appendQuery(taskType);
         if (!intent.empty()) appendQuery(oneLine(intent, 600));
         if (query.empty() && itemId != "pipeline") query = itemId;
+        traceQuery = query;
         std::vector<RankedMemory> ranked;
-        if (!query.empty() && hybridRecall(projectId, query, 4, domains, ranked)) {
+        taskforge::Json hybridCandidates = taskforge::Json::array();
+        if (!query.empty() && hybridRecall(projectId, query, 4, domains, ranked, &hybridCandidates)) {
+            for (const auto& candidate : hybridCandidates) {
+                if (!candidate.is_object()) continue;
+                addTraceCandidate(traceCandidates,
+                                  candidate.value("id", std::string()),
+                                  candidate.value("kind", std::string()),
+                                  candidate.value("lexical", 0.0),
+                                  candidate.value("vector", 0.0),
+                                  candidate.value("fused", 0.0));
+            }
             std::string facts;
             std::vector<std::string> factIds;
             for (const auto& memory : ranked) {
@@ -979,6 +1084,7 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
                     }
                 }
                 if (stepsText.empty()) continue;
+                addTraceCandidate(traceCandidates, playbook.id, "playbook", 0.0, 0.0, 0.0);
                 std::string line = "[PLAYBOOK] [MEMO:" + playbook.id + "] " + playbook.taskType +
                                    ": " + playbook.title + " | " + oneLine(stepsText, 400) + "\n";
                 if (budget != std::string::npos &&
@@ -1003,6 +1109,7 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
     }
 
     if (!workingText.empty()) {
+        addTraceCandidate(traceCandidates, "state:" + itemId, "state", 0.0, 0.0, 0.0);
         if (budget == std::string::npos || brief.size() + workingText.size() <= budget) {
             brief += workingText;
             if (info) info->workingKeys = workingKeys;
@@ -1017,12 +1124,64 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
         info->estimatedTokens = (brief.size() + 3) / 4;
         info->truncated = truncated;
     }
-    briefCache_[cacheKey] = BriefCacheEntry{brief, info ? *info : MemoryBriefInfo{}};
+    const MemoryBriefInfo resultInfo = info ? *info : MemoryBriefInfo{};
+    briefCache_[cacheKey] = BriefCacheEntry{brief, resultInfo};
+    if (!runId.empty() && !nodeId.empty()) {
+        std::set<std::string> delivered;
+        for (const auto& id : resultInfo.lessonIds) delivered.insert(id);
+        for (const auto& id : resultInfo.factIds) delivered.insert(id);
+        for (const auto& id : resultInfo.playbookIds) delivered.insert(id);
+        if (!resultInfo.workingKeys.empty()) delivered.insert("state:" + itemId);
+        recordStep("brief", traceQuery,
+                   traceCandidatesToJson(traceCandidates, delivered));
+    }
     return brief;
 }
 
 void MemoryService::invalidateBriefCache() {
     briefCache_.clear();
+}
+
+long long MemoryService::knowledgeVersion(const std::string& projectId) {
+    auto* s = existingStore(projectId);
+    return s ? s->knowledgeVersion() : 0;
+}
+
+bool MemoryService::recordTraceStep(const std::string& projectId, const std::string& runId,
+                                    const std::string& nodeId, const std::string& itemId,
+                                    const std::string& taskType,
+                                    const std::string& intentTemplateHash,
+                                    const std::string& inputHash,
+                                    const taskforge::Json& step) {
+    if (runId.empty() || nodeId.empty()) return false;
+    auto* t = ensureTelemetry(projectId);
+    auto* s = existingStore(projectId);
+    if (!t) return false;
+    MemoryTraceRecord trace;
+    trace.scopeId = scopeId(projectId);
+    trace.runId = runId;
+    trace.nodeId = nodeId;
+    trace.itemId = itemId;
+    trace.taskType = taskType;
+    trace.intentTemplateHash = intentTemplateHash;
+    trace.inputHash = inputHash;
+    trace.knowledgeVersion = s ? s->knowledgeVersion() : 0;
+    return t->appendTrace(trace, step);
+}
+
+bool MemoryService::closeTrace(const std::string& projectId, const std::string& runId,
+                               const std::string& nodeId, const std::string& outcome,
+                               const std::string& model, const std::string& tier,
+                               bool memoryEnabled) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return false;
+    return t->closeTrace(scopeId(projectId), runId, nodeId, outcome, model, tier, memoryEnabled);
+}
+
+taskforge::Json MemoryService::getTrace(const std::string& projectId, const std::string& runId,
+                                        const std::string& nodeId) {
+    auto* t = ensureTelemetry(projectId);
+    return t ? t->getTrace(scopeId(projectId), runId, nodeId) : taskforge::Json::object();
 }
 
 bool MemoryService::recordBriefHits(const std::string& projectId, const std::string& runId,
@@ -1215,15 +1374,41 @@ std::vector<MemoryEdgeRecord> MemoryService::searchEdges(const std::string& proj
 
 std::string MemoryService::searchContext(const std::string& projectId, const std::string& text,
                                          size_t limit, const std::vector<std::string>& domains,
-                                         std::vector<MemoryHitRef>* hits) {
+                                         std::vector<MemoryHitRef>* hits,
+                                         const std::string& runId, const std::string& nodeId) {
     auto* s = ensureStore(projectId);
     if (!s) return std::string();
     std::string result;
     std::string hybrid;
-    if (hybridSearch(projectId, text, limit, domains, hits, hybrid)) {
+    taskforge::Json stepCandidates = taskforge::Json::array();
+    if (hybridSearch(projectId, text, limit, domains, hits, hybrid, &stepCandidates)) {
         result = std::move(hybrid);
     } else {
         result = s->searchContext(scopeId(projectId), text, limit, domains, hits);
+        std::map<std::string, TraceCandidateData> candidates;
+        const auto lexical = s->lexicalCandidates(scopeId(projectId), text, 50, domains);
+        for (size_t i = 0; i < lexical.size(); ++i) {
+            const double score = 1.0 / (60.0 + static_cast<double>(i + 1));
+            addTraceCandidate(candidates, lexical[i].id, lexical[i].kind, score, 0.0, score);
+        }
+        stepCandidates = traceCandidatesToJson(candidates, {});
+    }
+
+    if (!runId.empty() && !nodeId.empty()) {
+        std::set<std::string> delivered;
+        if (hits) {
+            for (const auto& hit : *hits) delivered.insert(hit.id);
+        }
+        for (size_t i = 0; i < stepCandidates.size(); ++i) {
+            if (!stepCandidates[i].is_object()) continue;
+            if (delivered.count(stepCandidates[i].value("id", std::string()))) {
+                stepCandidates[i]["delivered"] = true;
+            }
+        }
+        recordTraceStep(projectId, runId, nodeId, "", "", "", "",
+                        taskforge::Json{{"kind", "search"},
+                                        {"queryHash", project::RunnerSecurity::sha256(text)},
+                                        {"candidates", stepCandidates}});
     }
 
     const std::string workspaceId = workspaceIdForProject(projectId);
@@ -1751,7 +1936,8 @@ taskforge::Json MemoryService::listPlaybooks(const std::string& projectId,
 
 bool MemoryService::hybridRecall(const std::string& projectId, const std::string& text,
                                  size_t limit, const std::vector<std::string>& domains,
-                                 std::vector<RankedMemory>& output) {
+                                 std::vector<RankedMemory>& output,
+                                 taskforge::Json* traceCandidates) {
     if (text.empty()) return false;
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     auto* s = ensureStore(projectId);
@@ -1789,14 +1975,30 @@ bool MemoryService::hybridRecall(const std::string& projectId, const std::string
                                             queryEmbeddings[0].values, candidateLimit,
                                             fingerprint, domains);
     output = MemoryRanker::fuse(lexical, vector, limit);
+    if (traceCandidates) {
+        std::map<std::string, TraceCandidateData> traceMap;
+        for (size_t i = 0; i < lexical.size(); ++i) {
+            addTraceCandidate(traceMap, lexical[i].id, lexical[i].kind,
+                              1.0 / (60.0 + static_cast<double>(i + 1)), 0.0, 0.0);
+        }
+        for (size_t i = 0; i < vector.size(); ++i) {
+            addTraceCandidate(traceMap, vector[i].objectId, vector[i].objectType,
+                              0.0, 1.0 / (60.0 + static_cast<double>(i + 1)), 0.0);
+        }
+        for (const auto& memory : output) {
+            addTraceCandidate(traceMap, memory.id, memory.kind, 0.0, 0.0, memory.score);
+        }
+        *traceCandidates = traceCandidatesToJson(traceMap, {});
+    }
     return true;
 }
 
 bool MemoryService::hybridSearch(const std::string& projectId, const std::string& text,
                                  size_t limit, const std::vector<std::string>& domains,
-                                 std::vector<MemoryHitRef>* hits, std::string& output) {
+                                 std::vector<MemoryHitRef>* hits, std::string& output,
+                                 taskforge::Json* traceCandidates) {
     std::vector<RankedMemory> ranked;
-    if (!hybridRecall(projectId, text, limit, domains, ranked)) return false;
+    if (!hybridRecall(projectId, text, limit, domains, ranked, traceCandidates)) return false;
     output = formatRanked(ranked, limit, hits);
     return true;
 }

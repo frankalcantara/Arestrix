@@ -1433,7 +1433,8 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     // Regressao 2.5.0: buildBrief usa arx_item_id; sem a captura o codigo gerado nao compila.
     CHECK(src.find("[&ctx, &memory, &projectId, &arx_item_id]") != std::string::npos);
     CHECK(src.find("memory.buildBrief(projectId, arx_item_id, std::vector<std::string>{\"svg_typography\"}, "
-                   "std::vector<std::string>{}, 800, true, false, &arx_brief_info, \"agente\", \"\")") != std::string::npos);
+                   "std::vector<std::string>{}, 800, true, false, &arx_brief_info, \"agente\", \"\", "
+                   "taskforge::rt::currentRunId(\"agente\"), \"agente\")") != std::string::npos);
     // E1: as regras de artefato chegam ao codigo gerado e o veredito e ligado
     // ao episodio depois de runAgent.
     CHECK(src.find("#include \"rt/ArtifactValidation.hpp\"") != std::string::npos);
@@ -1505,7 +1506,8 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(modeSrc.find("\"memoryMode\":\"learn\"") != std::string::npos);
     CHECK(modeSrc.find("\"memoryTaskType\":\"svg_review\"") != std::string::npos);
     CHECK(modeSrc.find("memory.buildBrief(projectId, arx_item_id, std::vector<std::string>{\"svg_typography\"}, "
-                       "std::vector<std::string>{}, 600, true, false, &arx_brief_info, \"svg_review\", \"\")") != std::string::npos);
+                       "std::vector<std::string>{}, 600, true, false, &arx_brief_info, \"svg_review\", \"\", "
+                       "taskforge::rt::currentRunId(\"agente\"), \"agente\")") != std::string::npos);
     CHECK(modeSrc.find("\"memory_propose_lesson\"") != std::string::npos);
     CHECK(modeSrc.find("\"memory_state_set\"") != std::string::npos);
     CHECK(modeSrc.find("\"memory_state_get\"") != std::string::npos);
@@ -4228,6 +4230,143 @@ TEST(memory_ab_protocol_marks_invalid_tasks_and_counts_infra_retries) {
         }
     }
     CHECK(excludedInvalid);
+}
+
+TEST(memory_trace_append_close_is_idempotent_and_counts_limits) {
+    using taskforge::memory::MemoryEpisodeRecord;
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryTraceRecord;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-trace-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const fs::path db = root / "memory.db";
+    const std::string scope = "project:trace-test";
+    std::string error;
+
+    MemoryStore store(db.string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "trace-test"));
+
+    const long long versionBefore = store.knowledgeVersion();
+    CHECK(!store.recordLesson(scope, "ab", "trigger", "regra", "seed").empty());
+    const long long versionAfter = store.knowledgeVersion();
+    CHECK(versionAfter > versionBefore);
+    CHECK(store.getLessons(scope, "ab").size() == 1);
+    CHECK(store.knowledgeVersion() == versionAfter);
+    taskforge::memory::MemoryUsageRecord usage;
+    usage.scopeId = scope;
+    usage.runId = "read-only";
+    usage.nodeId = "node";
+    usage.totalTokens = 1;
+    CHECK(store.recordUsage(usage));
+    CHECK(store.knowledgeVersion() == versionAfter);
+
+    MemoryTraceRecord trace;
+    trace.scopeId = scope;
+    trace.runId = "run-trace";
+    trace.nodeId = "node";
+    trace.itemId = "item";
+    trace.taskType = "ab";
+    trace.intentTemplateHash = "intent";
+    trace.knowledgeVersion = versionAfter;
+
+    taskforge::Json candidates = taskforge::Json::array();
+    candidates.push_back(taskforge::Json{{"id", "lesson-1"}, {"kind", "lesson"}});
+    candidates.push_back(taskforge::Json{{"id", "lesson-2"}, {"kind", "lesson"}});
+    candidates.push_back(taskforge::Json{{"id", "lesson-3"}, {"kind", "lesson"}});
+    taskforge::Json step{{"kind", "brief"}, {"query", "q"}, {"candidates", candidates}};
+    CHECK(store.appendTrace(trace, step, 2, 2));
+    CHECK(store.appendTrace(trace, step, 2, 2));
+    CHECK(store.appendTrace(trace, step, 2, 2));
+
+    CHECK(store.recordHit(scope, "run-trace", "node", "lesson-1", "lesson", true, true));
+    MemoryEpisodeRecord episode;
+    episode.scopeId = scope;
+    episode.runId = "run-trace";
+    episode.nodeId = "node";
+    episode.itemId = "item";
+    episode.kind = "agent_success";
+    episode.content = "ok";
+    episode.taskType = "ab";
+    episode.outcome = "success";
+    episode.inputHash = "input";
+    episode.intentTemplateHash = "intent";
+    CHECK(!store.recordEpisode(episode).empty());
+    const bool closed = store.closeTrace(scope, "run-trace", "node", "success", "model-x", "default", true);
+    if (!closed) std::cerr << "closeTrace error: " << store.lastError() << "\n";
+    CHECK(closed);
+    const auto first = store.getTrace(scope, "run-trace", "node");
+    CHECK(first.value("traceId", std::string()).size() > 0);
+    CHECK(first.value("model", std::string()) == "model-x");
+    CHECK(first["steps"].size() == 2);
+    CHECK(first.value("truncatedSteps", 0LL) == 1);
+    CHECK(first["steps"][0]["truncatedCandidates"].get<long long>() == 1);
+    CHECK(first["delivered"].size() == 1);
+    CHECK(first["delivered"][0].get<std::string>() == "lesson-1");
+    CHECK(first["used"].size() == 1);
+    CHECK(first.value("knowledgeVersion", 0LL) == versionAfter);
+
+    const std::string traceId = first.value("traceId", std::string());
+    CHECK(store.appendTrace(trace, step, 2, 2));
+    CHECK(store.getTrace(scope, "run-trace", "node").value("traceId", std::string()) == traceId);
+    CHECK(store.getTrace(scope, "run-trace", "node")["steps"].size() == 2);
+
+    store.close();
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_trace_records_brief_and_searches_with_limits) {
+    using taskforge::memory::MemoryBriefInfo;
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-trace-integration";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "trace-integration";
+    const std::string scope = "project:" + projectId;
+    const fs::path memoryDb = root / "memory.db";
+    const fs::path telemetryDb = root / "telemetry.db";
+    std::string error;
+
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, memoryDb.string()));
+    CHECK(memory.configureTelemetry(projectId, telemetryDb.string()));
+    CHECK(!memory.recordLesson(projectId, "ab", "trigger", "regra de contraste", "seed").empty());
+
+    MemoryBriefInfo info;
+    const std::string brief = memory.buildBrief(
+        projectId, "item", {"ab"}, {}, 800, true, false, &info,
+        "ab", "template", "run-trace-int", "node-trace-int");
+    CHECK(!brief.empty());
+    CHECK(memory.recordBriefHits(projectId, "run-trace-int", "node-trace-int", info));
+
+    for (int i = 0; i < 9; ++i) {
+        std::vector<taskforge::memory::MemoryHitRef> hits;
+        memory.searchContext(projectId, "contraste", 10, {"ab"}, &hits,
+                             "run-trace-int", "node-trace-int");
+    }
+    CHECK(memory.closeTrace(projectId, "run-trace-int", "node-trace-int", "success",
+                            "model-x", "default", true));
+
+    const auto trace = memory.getTrace(projectId, "run-trace-int", "node-trace-int");
+    CHECK(trace.value("traceId", std::string()).size() > 0);
+    CHECK(trace["steps"].size() == 8);
+    CHECK(trace.value("truncatedSteps", 0LL) == 2);
+    CHECK(trace["steps"][0].value("kind", std::string()) == "brief");
+    CHECK(trace["steps"][1].value("kind", std::string()) == "search");
+    CHECK(!trace["steps"][0]["candidates"].empty());
+    CHECK(!trace["delivered"].empty());
+    CHECK(trace.value("knowledgeVersion", 0LL) > 0);
+    CHECK(trace.value("taskType", std::string()) == "ab");
+
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
 }
 
 TEST(memory_recurrence_report_counts_verdicts_citations_and_reuse) {

@@ -152,6 +152,27 @@ struct MemoryUsageRecord {
 
 // Episodio enriquecido (M0/M1): o suficiente para extracao deterministica sem
 // guardar prompt/resposta brutos. Campos JSON usam listas/objetos pequenos e sanitizados.
+// E11: traco imutavel de uma execucao de vertice com memoria. O trace_id e
+// estavel por (scope, run, node); os passos sao anexados em ordem.
+struct MemoryTraceRecord {
+    std::string traceId;
+    std::string scopeId;
+    std::string runId;
+    std::string nodeId;
+    std::string itemId;
+    std::string taskType;
+    std::string intentTemplateHash;
+    std::string inputHash;
+    long long knowledgeVersion = 0;
+    std::string model;
+    std::string tier;
+    std::string outcome;
+    taskforge::Json anchors = taskforge::Json::array();
+    taskforge::Json steps = taskforge::Json::array();
+    taskforge::Json delivered = taskforge::Json::array();
+    taskforge::Json used = taskforge::Json::array();
+};
+
 struct MemoryEpisodeRecord {
     std::string scopeId;
     std::string runId;
@@ -514,6 +535,17 @@ public:
                                      double minVerdictRate, double minCitationRate,
                                      long long minExecutions, long long minDistinctInputs,
                                      double minReuseRate) const;
+
+    // E11: versao monotona do conhecimento e tracos de recuperacao.
+    long long knowledgeVersion() const;
+    bool appendTrace(const MemoryTraceRecord& trace, const taskforge::Json& step,
+                     size_t maxSteps = 8, size_t maxCandidates = 50);
+    bool closeTrace(const std::string& scopeId, const std::string& runId,
+                    const std::string& nodeId, const std::string& outcome,
+                    const std::string& model, const std::string& tier,
+                    bool memoryEnabled);
+    taskforge::Json getTrace(const std::string& scopeId, const std::string& runId,
+                             const std::string& nodeId) const;
 
     // Validacao independente ligada a um episodio (telemetria).
     // E4: instantaneos de evidencia (conhecimento, sem FK para telemetria).
