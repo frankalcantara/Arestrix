@@ -35,6 +35,7 @@ struct MemoryBriefInfo {
     std::vector<std::string> playbookIds;
     std::vector<std::string> pathIds;
     std::vector<std::string> pathClaimIds;
+    std::vector<std::string> traversalIds;
     std::vector<std::string> workingKeys;
     size_t chars = 0;
     size_t estimatedTokens = 0;
@@ -541,6 +542,9 @@ public:
     std::vector<MemoryEdgeRecord> neighbors(const std::string& scopeId,
                                             const std::string& nodeId, int depth = 1,
                                             const std::string& asOf = "") const;
+    std::vector<MemoryEdgeRecord> incidentEdges(const std::string& scopeId,
+                                                const std::string& nodeId,
+                                                size_t limit = 50) const;
     std::vector<MemoryEdgeRecord> searchEdges(const std::string& scopeId,
                                               const std::string& text,
                                               size_t limit = 20) const;

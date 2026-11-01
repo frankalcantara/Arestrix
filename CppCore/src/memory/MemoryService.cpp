@@ -284,6 +284,51 @@ taskforge::Json pathServingConfigToJson(const PathServingConfig& config) {
         {"maxPaths", static_cast<long long>(config.maxPaths)}};
 }
 
+TraversalConfig traversalConfigFromJson(const taskforge::Json& value) {
+    TraversalConfig config;
+    if (!value.is_object()) return config;
+    const taskforge::Json switchValue = value.contains("traversal")
+        ? value["traversal"] : taskforge::Json();
+    if (switchValue.is_boolean()) {
+        config.enabled = switchValue.get<bool>();
+        return config;
+    }
+    if (!switchValue.is_object()) return config;
+    config.enabled = switchValue.value("enabled", false);
+    config.options.candidateLimit = static_cast<size_t>(std::max<long long>(
+        1, std::min<long long>(500, switchValue.value("candidateLimit", 40))));
+    config.options.beamWidth = static_cast<size_t>(std::max<long long>(
+        1, std::min<long long>(32, switchValue.value("beamWidth", 4))));
+    config.options.maxDepth = static_cast<size_t>(std::max<long long>(
+        1, std::min<long long>(16, switchValue.value("maxDepth", 3))));
+    config.options.expandedLimit = static_cast<size_t>(std::max<long long>(
+        1, std::min<long long>(5000, switchValue.value("expandedLimit", 200))));
+    config.options.maxResults = static_cast<size_t>(std::max<long long>(
+        1, std::min<long long>(50, switchValue.value("maxResults", 8))));
+    config.options.maxChars = static_cast<size_t>(std::max<long long>(
+        256, std::min<long long>(32000, switchValue.value("maxChars", 4000))));
+    config.options.timeBudgetMs = static_cast<int>(std::max<long long>(
+        1, std::min<long long>(5000, switchValue.value("timeBudgetMs", 50))));
+    config.options.minScore = std::max(0.0, std::min(1.0,
+        switchValue.value("minScore", 0.02)));
+    config.options.exact = switchValue.value("exact", false);
+    return config;
+}
+
+taskforge::Json traversalConfigToJson(const TraversalConfig& config) {
+    return taskforge::Json{
+        {"enabled", config.enabled},
+        {"candidateLimit", static_cast<long long>(config.options.candidateLimit)},
+        {"beamWidth", static_cast<long long>(config.options.beamWidth)},
+        {"maxDepth", static_cast<long long>(config.options.maxDepth)},
+        {"expandedLimit", static_cast<long long>(config.options.expandedLimit)},
+        {"maxResults", static_cast<long long>(config.options.maxResults)},
+        {"maxChars", static_cast<long long>(config.options.maxChars)},
+        {"timeBudgetMs", config.options.timeBudgetMs},
+        {"minScore", config.options.minScore},
+        {"exact", config.options.exact}};
+}
+
 MemoryService::~MemoryService() {
     stopAllMaintenance();
 }
@@ -981,6 +1026,10 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
             addTraceCandidate(candidates, id, "fact", 0.0, 0.0, 0.0);
             delivered.insert(id);
         }
+        for (const auto& id : briefInfo.traversalIds) {
+            addTraceCandidate(candidates, id, "fact", 0.0, 0.0, 0.0);
+            delivered.insert(id);
+        }
         if (!briefInfo.workingKeys.empty()) {
             const std::string stateId = "state:" + itemId;
             addTraceCandidate(candidates, stateId, "state", 0.0, 0.0, 0.0);
@@ -1047,6 +1096,7 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
     bool truncated = false;
 
     // E16: caminhos ativos elegiveis sao servidos antes da travessia/grafo.
+    bool pathServed = false;
     if (includeLessons) {
         const auto servedPaths = servePaths(projectId, taskType, intent, {});
         std::string pathText;
@@ -1089,6 +1139,7 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
                     pathCandidates.push_back(taskforge::Json{
                         {"id", id}, {"kind", "fact"}, {"delivered", true}});
                 }
+                pathServed = true;
                 recordStep("path", "", pathCandidates);
                 if (servedPaths.value("exploration", false) && !runId.empty() && !nodeId.empty()) {
                     recordTraceStep(projectId, runId, nodeId, itemId, taskType, intentHash, "",
@@ -1098,6 +1149,52 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
                 }
             } else {
                 truncated = true;
+            }
+        }
+    }
+
+    // E17: quando nenhum caminho cobre a consulta, a travessia em feixe
+    // fornece um pacote com justificativa e cobertura.
+    if (includeLessons && !pathServed) {
+        const auto traversal = traversalConfig(projectId);
+        if (traversal.enabled) {
+            std::string query = taskType;
+            if (!intent.empty()) {
+                if (!query.empty()) query += " ";
+                query += oneLine(intent, 600);
+            }
+            for (const auto& domain : domains) {
+                if (!query.empty()) query += " ";
+                query += domain;
+            }
+            auto found = MemoryTraversal::run(*s, scopeId(projectId), query, taskType,
+                                               traversal.options);
+            const std::string traversalText = found.value("text", std::string());
+            if (!traversalText.empty()) {
+                const std::string header =
+                    "\n--- [ARESTRIX MEMORY: TRAVESSIA EM FEIXE] ---\n";
+                if (budget == std::string::npos ||
+                    brief.size() + header.size() + traversalText.size() <= budget) {
+                    brief += header + traversalText;
+                    std::vector<std::string> ids;
+                    for (const auto& node : found["nodes"]) {
+                        if (!node.is_object()) continue;
+                        const std::string id = node.value("id", std::string());
+                        if (id.empty()) continue;
+                        ids.push_back(id);
+                        addTraceCandidate(traceCandidates, id, "fact", 0.0, 0.0, 0.0);
+                    }
+                    if (info) info->traversalIds = ids;
+                    recordStep("traversal", query, found["nodes"]);
+                    if (!runId.empty() && !nodeId.empty()) {
+                        recordTraceStep(projectId, runId, nodeId, itemId, taskType, intentHash, "",
+                                        taskforge::Json{{"kind", "traversal_coverage"},
+                                                        {"coverage", found["coverage"]},
+                                                        {"candidates", found["nodes"]}});
+                    }
+                } else {
+                    truncated = true;
+                }
             }
         }
     }
@@ -1303,6 +1400,7 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
         for (const auto& id : resultInfo.playbookIds) delivered.insert(id);
         for (const auto& id : resultInfo.pathIds) delivered.insert(id);
         for (const auto& id : resultInfo.pathClaimIds) delivered.insert(id);
+        for (const auto& id : resultInfo.traversalIds) delivered.insert(id);
         if (!resultInfo.workingKeys.empty()) delivered.insert("state:" + itemId);
         recordStep("brief", traceQuery,
                    traceCandidatesToJson(traceCandidates, delivered));
@@ -1474,6 +1572,9 @@ bool MemoryService::recordBriefHits(const std::string& projectId, const std::str
         ok = t->recordHit(scope, runId, nodeId, id, "path", true, false) && ok;
     }
     for (const auto& id : info.pathClaimIds) {
+        ok = t->recordHit(scope, runId, nodeId, id, "fact", true, false) && ok;
+    }
+    for (const auto& id : info.traversalIds) {
         ok = t->recordHit(scope, runId, nodeId, id, "fact", true, false) && ok;
     }
     for (const auto& key : info.workingKeys) {
@@ -2243,6 +2344,54 @@ PathServingConfig MemoryService::pathServingConfig(const std::string& projectId)
     return it == pathServing_.end() ? PathServingConfig{} : it->second;
 }
 
+bool MemoryService::configureTraversal(const std::string& projectId,
+                                       const TraversalConfig& config) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    traversal_[projectKey(projectId)] = config;
+    invalidateBriefCache();
+    return true;
+}
+
+TraversalConfig MemoryService::traversalConfig(const std::string& projectId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    auto it = traversal_.find(projectKey(projectId));
+    return it == traversal_.end() ? TraversalConfig{} : it->second;
+}
+
+taskforge::Json MemoryService::searchGraph(const std::string& projectId,
+                                           const std::string& text, size_t limit,
+                                           const std::string& taskType,
+                                           const std::string& runId,
+                                           const std::string& nodeId,
+                                           std::vector<MemoryHitRef>* hits) {
+    const auto config = traversalConfig(projectId);
+    taskforge::Json out{{"ok", true}, {"enabled", config.enabled}, {"abstained", true},
+                        {"text", std::string()}, {"coverage", taskforge::Json::object()},
+                        {"nodes", taskforge::Json::array()}};
+    if (!config.enabled) return out;
+    auto* s = ensureStore(projectId);
+    if (!s) return taskforge::Json{{"ok", false}, {"enabled", true}};
+    TraversalOptions options = config.options;
+    options.maxResults = std::max<size_t>(1, std::min(limit, options.maxResults));
+    auto result = MemoryTraversal::run(*s, scopeId(projectId), text, taskType, options, {});
+    if (hits) {
+        for (const auto& node : result["nodes"]) {
+            if (!node.is_object()) continue;
+            const std::string id = node.value("id", std::string());
+            if (!id.empty()) hits->push_back(MemoryHitRef{id, "fact"});
+        }
+    }
+    if (!runId.empty() && !nodeId.empty()) {
+        recordTraceStep(projectId, runId, nodeId, "", taskType, "", "",
+                        taskforge::Json{{"kind", "traversal"},
+                                        {"queryHash", project::RunnerSecurity::sha256(text)},
+                                        {"coverage", result["coverage"]},
+                                        {"candidates", result["nodes"]}});
+    }
+    result["enabled"] = true;
+    return result;
+}
+
 void MemoryService::noteMaintenanceEpisode(const std::string& projectId) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     auto it = maintenance_.find(projectKey(projectId));
@@ -2709,6 +2858,7 @@ taskforge::Json MemoryService::toJson(const std::string& projectId) {
     out["paths"] = s->pathSummary(scopeId(projectId));
     out["pathRecords"] = listPaths(projectId);
     out["pathServing"] = pathServingConfigToJson(pathServingConfig(projectId));
+    out["traversal"] = traversalConfigToJson(traversalConfig(projectId));
     return out;
 }
 
@@ -2755,6 +2905,7 @@ void MemoryService::closeProject(const std::string& projectId) {
     persistent_.erase(projectKey(projectId));
     paths_.erase(projectKey(projectId));
     pathServing_.erase(projectKey(projectId));
+    traversal_.erase(projectKey(projectId));
     readOnly_.erase(projectKey(projectId));
     telemetry_.erase(projectKey(projectId));
     telemetryPaths_.erase(projectKey(projectId));

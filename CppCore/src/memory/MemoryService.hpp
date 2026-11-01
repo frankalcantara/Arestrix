@@ -17,6 +17,7 @@
 #include "memory/MemoryRanker.hpp"
 #include "memory/MemoryClaimExtractor.hpp"
 #include "memory/MemoryPaths.hpp"
+#include "memory/MemoryTraversal.hpp"
 #include "memory/MemoryStore.hpp"
 #include "util/JsonValue.hpp"
 
@@ -53,6 +54,14 @@ struct PathServingConfig {
 
 PathServingConfig pathServingConfigFromJson(const taskforge::Json& value);
 taskforge::Json pathServingConfigToJson(const PathServingConfig& config);
+
+// E17: travessia em feixe quando nenhum caminho cobre a consulta.
+struct TraversalConfig {
+    bool enabled = false;
+    TraversalOptions options;
+};
+TraversalConfig traversalConfigFromJson(const taskforge::Json& value);
+taskforge::Json traversalConfigToJson(const TraversalConfig& config);
 
 class MemoryService {
 public:
@@ -216,6 +225,12 @@ public:
     MemoryMaintenanceConfig maintenanceConfig(const std::string& projectId) const;
     bool configurePathServing(const std::string& projectId, const PathServingConfig& config);
     PathServingConfig pathServingConfig(const std::string& projectId) const;
+    bool configureTraversal(const std::string& projectId, const TraversalConfig& config);
+    TraversalConfig traversalConfig(const std::string& projectId) const;
+    taskforge::Json searchGraph(const std::string& projectId, const std::string& text,
+                                size_t limit, const std::string& taskType = "",
+                                const std::string& runId = "", const std::string& nodeId = "",
+                                std::vector<MemoryHitRef>* hits = nullptr);
     taskforge::Json maintenanceStatus(const std::string& projectId);
     // Executa uma rodada agora no chamador (usado por CLI/testes e pelo worker).
     taskforge::Json runMaintenanceOnce(const std::string& projectId,
@@ -384,6 +399,7 @@ private:
     std::map<std::string, std::string> projectWorkspace_;
     std::map<std::string, std::unique_ptr<MaintenanceRuntime>> maintenance_;
     std::map<std::string, PathServingConfig> pathServing_;   // E16
+    std::map<std::string, TraversalConfig> traversal_;       // E17
 };
 
 } // namespace memory

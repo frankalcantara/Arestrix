@@ -359,6 +359,19 @@ derivadas `via_caminho`. Elas são projeções reconstruíveis, não são evidê
 não entram na detecção de conflito nem na busca normal, e acompanham o estado do
 caminho. O interruptor permanece desligado até o A/B ser registrado.
 
+### Travessia em feixe
+
+Quando nenhum caminho cobre a consulta, `globalDefaults.memory.traversal` liga
+uma travessia limitada a partir de âncoras resolvidas por alias, FTS e
+candidatos vetoriais. A busca usa largura de feixe, profundidade, candidatos,
+tempo e caracteres limitados; itens inelegíveis nunca entram no top-k e ciclos
+não repetem nós. `memory_search` aceita `mode: "graph"` para esse caminho.
+
+O pacote devolve cada item com fonte, validade e justificativa, e grava no traço
+o vetor de cobertura: utilidade do melhor caminho, fração sustentada, conflitos,
+distância de intenção e abstenção. A travessia só lê o grafo e não escreve
+conhecimento.
+
 ### Traços de recuperação
 
 Toda escrita de conhecimento incrementa `knowledge_version` na mesma transação;
