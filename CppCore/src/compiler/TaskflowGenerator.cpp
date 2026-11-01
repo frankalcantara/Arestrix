@@ -1,6 +1,7 @@
 #include "TaskflowGenerator.hpp"
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <functional>
 #include <set>
 #include <sstream>
@@ -242,24 +243,119 @@ std::string memoryModeOf(const json& memory) {
     return "off";
 }
 
-json memoryThemesOf(const json& memory) {
+std::string trimThemeText(const std::string& value) {
+    const size_t first = value.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return "";
+    const size_t last = value.find_last_not_of(" \t\r\n");
+    return value.substr(first, last - first + 1);
+}
+
+// Mesma regra do TypeScript (MemoryConfig.ts): dobra acentos latinos comuns,
+// mantem apenas a-z/0-9, separadores viram `_`, sem `_` nas pontas. Os dois
+// lados precisam produzir o mesmo identificador.
+std::string foldThemeAccents(const std::string& value) {
+    static const struct { const char* from; const char* to; } replacements[] = {
+        {"\xC3\xA1", "a"}, {"\xC3\xA0", "a"}, {"\xC3\xA2", "a"}, {"\xC3\xA3", "a"}, {"\xC3\xA4", "a"},
+        {"\xC3\x81", "A"}, {"\xC3\x80", "A"}, {"\xC3\x82", "A"}, {"\xC3\x83", "A"}, {"\xC3\x84", "A"},
+        {"\xC3\xA9", "e"}, {"\xC3\xA8", "e"}, {"\xC3\xAA", "e"}, {"\xC3\xAB", "e"},
+        {"\xC3\x89", "E"}, {"\xC3\x88", "E"}, {"\xC3\x8A", "E"}, {"\xC3\x8B", "E"},
+        {"\xC3\xAD", "i"}, {"\xC3\xAC", "i"}, {"\xC3\xAE", "i"}, {"\xC3\xAF", "i"},
+        {"\xC3\x8D", "I"}, {"\xC3\x8C", "I"}, {"\xC3\x8E", "I"}, {"\xC3\x8F", "I"},
+        {"\xC3\xB3", "o"}, {"\xC3\xB2", "o"}, {"\xC3\xB4", "o"}, {"\xC3\xB5", "o"}, {"\xC3\xB6", "o"},
+        {"\xC3\x93", "O"}, {"\xC3\x92", "O"}, {"\xC3\x94", "O"}, {"\xC3\x95", "O"}, {"\xC3\x96", "O"},
+        {"\xC3\xBA", "u"}, {"\xC3\xB9", "u"}, {"\xC3\xBB", "u"}, {"\xC3\xBC", "u"},
+        {"\xC3\x9A", "U"}, {"\xC3\x99", "U"}, {"\xC3\x9B", "U"}, {"\xC3\x9C", "U"},
+        {"\xC3\xA7", "c"}, {"\xC3\x87", "C"}, {"\xC3\xB1", "n"}, {"\xC3\x91", "N"},
+    };
+    std::string folded = value;
+    for (const auto& replacement : replacements) {
+        size_t pos = 0;
+        while ((pos = folded.find(replacement.from, pos)) != std::string::npos) {
+            folded.replace(pos, std::strlen(replacement.from), replacement.to);
+            pos += std::strlen(replacement.to);
+        }
+    }
+    return folded;
+}
+
+std::string memoryThemeIdentifier(const std::string& value) {
+    const std::string folded = foldThemeAccents(value);
+    std::string out;
+    bool separator = false;
+    for (unsigned char c : folded) {
+        if (c >= 'A' && c <= 'Z') c = static_cast<unsigned char>(c - 'A' + 'a');
+        if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+            out.push_back(static_cast<char>(c));
+            separator = false;
+        } else if (!separator && !out.empty()) {
+            out.push_back('_');
+            separator = true;
+        }
+    }
+    while (!out.empty() && out.back() == '_') out.pop_back();
+    return out;
+}
+
+std::string activeSkillNameOf(const core::NodeData& node) {
+    const json& settings = node.agentSettings;
+    if (!settings.is_object() || !settings.contains("skills") ||
+        !settings["skills"].is_array()) {
+        return "";
+    }
+    const std::string activeId = settings.value("activeSkillId", std::string());
+    for (const auto& skill : settings["skills"]) {
+        if (!skill.is_object()) continue;
+        if (!activeId.empty() && skill.value("id", std::string()) != activeId) continue;
+        std::string name = skill.value("name", std::string());
+        if (name.empty()) name = skill.value("id", std::string());
+        name = trimThemeText(name);
+        if (!name.empty()) return name;
+    }
+    return "";
+}
+
+// Tema efetivo: explicito (ou domains[0] legado) -> skill ativa -> rotulo -> id.
+std::string effectiveMemoryTheme(const core::NodeData& node, const json& memory) {
+    if (memory.is_object()) {
+        if (memory.contains("theme") && memory["theme"].is_string()) {
+            const std::string theme = trimThemeText(memory["theme"].get<std::string>());
+            if (!theme.empty()) return theme;
+        }
+        if (memory.contains("domains") && memory["domains"].is_array()) {
+            for (const auto& domain : memory["domains"]) {
+                if (!domain.is_string()) continue;
+                const std::string theme = trimThemeText(domain.get<std::string>());
+                if (!theme.empty()) return theme;
+            }
+        }
+    }
+    const std::string skill = memoryThemeIdentifier(activeSkillNameOf(node));
+    if (!skill.empty()) return skill;
+    const std::string label = memoryThemeIdentifier(node.label);
+    if (!label.empty()) return label;
+    return memoryThemeIdentifier(node.id);
+}
+
+json memoryThemesFor(const core::NodeData& node, const json& memory) {
     json themes = json::array();
-    auto add = [&](const json& value) {
-        if (!value.is_string()) return;
-        const std::string theme = value.get<std::string>();
+    auto add = [&](const std::string& value) {
+        const std::string theme = trimThemeText(value);
         if (theme.empty()) return;
         for (const auto& item : themes) {
             if (item.is_string() && item.get<std::string>() == theme) return;
         }
         themes.push_back(theme);
     };
-    if (memory.is_object()) {
-        if (memory.contains("theme")) add(memory["theme"]);
-        if (memory.contains("readThemes") && memory["readThemes"].is_array()) {
-            for (const auto& theme : memory["readThemes"]) add(theme);
+    add(effectiveMemoryTheme(node, memory));
+    if (memory.is_object() && memory.contains("readThemes") && memory["readThemes"].is_array()) {
+        for (const auto& theme : memory["readThemes"]) {
+            if (theme.is_string()) add(theme.get<std::string>());
         }
-        if (themes.empty() && memory.contains("domains") && memory["domains"].is_array()) {
-            for (const auto& theme : memory["domains"]) add(theme);
+    }
+    if (themes.empty() && memory.is_object() && memory.contains("domains") &&
+        memory["domains"].is_array()) {
+        for (const auto& theme : memory["domains"]) {
+            if (theme.is_string()) add(theme.get<std::string>());
         }
     }
     return themes;
@@ -416,7 +512,7 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
     // E1: quando ligado, finishHits so atualiza last_used e o veredito de
     // artefato passa a ser o unico caminho de reforco da utilidade.
     spec["memoryValidatedReinforcement"] = memory.value("validatedReinforcement", false);
-    const json memoryDomains = memoryThemesOf(memory);
+    const json memoryDomains = memoryThemesFor(node, memory);
     if (!memoryDomains.empty()) spec["memoryDomains"] = memoryDomains;
     else if (effectiveMemoryEnabled) spec["memoryDomains"] = json::array({node.id});
     std::string memoryTaskType = memory.value("taskType", std::string());
@@ -913,7 +1009,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
             const bool memEnabled = memMode != "off" && !memoryMeasurementOff(graph);
             const bool memLearns = memMode == "learn";
             if (memEnabled) {
-                json domains = memoryThemesOf(mem);
+                json domains = memoryThemesFor(node, mem);
                 if (domains.empty()) domains.push_back(node.id);
                 std::string memoryTaskType = mem.value("taskType", std::string());
                 if (memoryTaskType.empty()) memoryTaskType = node.id;

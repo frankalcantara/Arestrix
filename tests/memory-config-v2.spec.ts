@@ -1,12 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import {
+  activeSkillNameOf,
   applyMemoryMode,
   memoryModeOf,
   memoryModePatch,
+  memoryThemeIdentifier,
   memoryThemeOf,
+  memoryThemeSourceOf,
   memoryThemesOf
 } from '../src/core/memory/MemoryConfig.ts';
-import { DEFAULT_NODE_MEMORY_CONFIG, type INodeMemoryConfig } from '../src/core/types.ts';
+import {
+  DEFAULT_NODE_MEMORY_CONFIG,
+  type INodeMemoryConfig,
+  type INodeSkill
+} from '../src/core/types.ts';
 
 function config(partial: Partial<INodeMemoryConfig>): INodeMemoryConfig {
   return { ...DEFAULT_NODE_MEMORY_CONFIG, ...partial };
@@ -28,6 +35,63 @@ describe('modelo de memória v2: modo + tema', () => {
     expect(memoryThemeOf(config({ theme: 'svg_typography', domains: ['antigo'] }))).toBe('svg_typography');
     expect(memoryThemeOf(config({ domains: ['markdown', 'revisao'] }))).toBe('markdown');
     expect(memoryThemeOf(config({}), 'node-id')).toBe('node-id');
+  });
+
+  it('resolve o tema efetivo na ordem explícito, skill, rótulo e id', () => {
+    expect(memoryThemeSourceOf({
+      memory: config({ theme: 'svg_typography' }),
+      skillName: 'Revisor de SVG',
+      label: 'Auditor',
+      id: 'auditor'
+    })).toEqual({ theme: 'svg_typography', origin: 'explicit' });
+
+    expect(memoryThemeSourceOf({
+      memory: config({}),
+      skillName: 'Revisor de SVG',
+      label: 'Auditor',
+      id: 'auditor'
+    })).toEqual({ theme: 'revisor_de_svg', origin: 'skill' });
+
+    expect(memoryThemeSourceOf({
+      memory: config({}),
+      label: 'Auditor de Conteúdo',
+      id: 'auditor'
+    })).toEqual({ theme: 'auditor_de_conteudo', origin: 'label' });
+
+    expect(memoryThemeSourceOf({
+      memory: config({}),
+      label: '!!!',
+      id: 'auditor'
+    })).toEqual({ theme: 'auditor', origin: 'id' });
+
+    expect(memoryThemeSourceOf({ memory: config({}) }, 'fallback-id'))
+      .toEqual({ theme: 'fallback-id', origin: 'fallback' });
+  });
+
+  it('normaliza identificadores como o C++', () => {
+    expect(memoryThemeIdentifier('Revisor de SVG')).toBe('revisor_de_svg');
+    expect(memoryThemeIdentifier('  Ação  ')).toBe('acao');
+    expect(memoryThemeIdentifier('Gerador_Baseline')).toBe('gerador_baseline');
+    expect(memoryThemeIdentifier('!!!')).toBe('');
+  });
+
+  it('usa a skill ativa e cai para a primeira', () => {
+    const skills: INodeSkill[] = [
+      { id: 'a', name: 'Alpha', description: '', markdownContent: '', systemPrompt: '', tools: [] },
+      { id: 'b', name: 'Beta', description: '', markdownContent: '', systemPrompt: '', tools: [] }
+    ];
+    expect(activeSkillNameOf({ skills, activeSkillId: 'b' })).toBe('Beta');
+    expect(activeSkillNameOf({ skills, activeSkillId: 'missing' })).toBe('Alpha');
+    expect(activeSkillNameOf({ skills: [] })).toBe('');
+  });
+
+  it('combina temas a partir de uma fonte com skill, rótulo e id', () => {
+    expect(memoryThemesOf({
+      memory: config({}),
+      skillName: 'Revisor de SVG',
+      label: 'Auditor',
+      id: 'auditor'
+    })).toEqual(['revisor_de_svg']);
   });
 
   it('combina tema principal e temas extras sem duplicar', () => {

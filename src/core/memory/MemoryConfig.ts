@@ -1,4 +1,9 @@
-import { DEFAULT_NODE_MEMORY_CONFIG, type INodeMemoryConfig, type VertexMemoryMode } from '../types.ts';
+import {
+  DEFAULT_NODE_MEMORY_CONFIG,
+  type INodeMemoryConfig,
+  type INodeSkill,
+  type VertexMemoryMode
+} from '../types.ts';
 
 /**
  * Mapeia o modelo antigo (enabled/semanticLessons/recordLessons) para o novo
@@ -13,31 +18,100 @@ export function memoryModeOf(config?: Partial<INodeMemoryConfig> | null): Vertex
   return config.recordLessons ? 'learn' : 'consult';
 }
 
-/** Tema principal: theme → domains[0] → fallback. */
+export type MemoryThemeOrigin = 'explicit' | 'skill' | 'label' | 'id' | 'fallback';
+
+/**
+ * Entrada do resolvedor de tema efetivo. `memory` é a configuração efetiva do
+ * vértice; skillName/label/id vêm do vértice e nunca sobrescrevem um tema
+ * explícito.
+ */
+export interface MemoryThemeSource {
+  memory?: Partial<INodeMemoryConfig> | null;
+  skillName?: string;
+  label?: string;
+  id?: string;
+}
+
+/**
+ * Forma de identificador usada por tema e lentes. Determinística e idêntica ao
+ * C++: apenas a-z/0-9, separadores viram `_`, sem `_` nas pontas. Acentos e
+ * outros caracteres não-ASCII viram separador (e são colapsados).
+ */
+export function memoryThemeIdentifier(value?: string | null): string {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+/** Nome da skill ativa; cai para o id da skill e depois para vazio. */
+export function activeSkillNameOf(
+  settings?: { skills?: INodeSkill[]; activeSkillId?: string } | null
+): string {
+  const skills = settings?.skills || [];
+  if (skills.length === 0) return '';
+  const activeId = (settings?.activeSkillId || '').trim();
+  const active = activeId ? skills.find((skill) => skill.id === activeId) : undefined;
+  const chosen = active || skills[0];
+  return (chosen?.name || chosen?.id || '').trim();
+}
+
+function normalizeThemeSource(
+  source?: MemoryThemeSource | Partial<INodeMemoryConfig> | null
+): MemoryThemeSource {
+  if (!source) return {};
+  if (Object.prototype.hasOwnProperty.call(source, 'memory')) return source as MemoryThemeSource;
+  return { memory: source as Partial<INodeMemoryConfig> };
+}
+
+/**
+ * Tema efetivo e sua origem: tema explícito (ou legado `domains[0]`) → nome da
+ * skill ativa → rótulo do vértice → id do vértice → fallback.
+ */
+export function memoryThemeSourceOf(
+  source?: MemoryThemeSource | Partial<INodeMemoryConfig> | null,
+  fallback = ''
+): { theme: string; origin: MemoryThemeOrigin } {
+  const normalized = normalizeThemeSource(source);
+  const memory = normalized.memory;
+  const explicit = (memory?.theme || '').trim();
+  if (explicit) return { theme: explicit, origin: 'explicit' };
+  const legacy = (memory?.domains || []).find((item) => item && item.trim());
+  if (legacy) return { theme: legacy.trim(), origin: 'explicit' };
+  const skill = memoryThemeIdentifier(normalized.skillName);
+  if (skill) return { theme: skill, origin: 'skill' };
+  const label = memoryThemeIdentifier(normalized.label);
+  if (label) return { theme: label, origin: 'label' };
+  const id = memoryThemeIdentifier(normalized.id);
+  if (id) return { theme: id, origin: 'id' };
+  return { theme: (fallback || '').trim(), origin: 'fallback' };
+}
+
+/** Tema principal efetivo (API histórica: aceita config ou MemoryThemeSource). */
 export function memoryThemeOf(
-  config?: Partial<INodeMemoryConfig> | null,
+  source?: MemoryThemeSource | Partial<INodeMemoryConfig> | null,
   fallback = ''
 ): string {
-  const theme = (config?.theme || '').trim();
-  if (theme) return theme;
-  const first = (config?.domains || []).find((item) => item && item.trim());
-  return first ? first.trim() : fallback;
+  return memoryThemeSourceOf(source, fallback).theme;
 }
 
 /** Tema principal + temas extras de leitura, sem duplicatas. */
 export function memoryThemesOf(
-  config?: Partial<INodeMemoryConfig> | null,
+  source?: MemoryThemeSource | Partial<INodeMemoryConfig> | null,
   fallback = ''
 ): string[] {
+  const normalized = normalizeThemeSource(source);
   const themes: string[] = [];
   const add = (value?: string) => {
     const theme = (value || '').trim();
     if (theme && !themes.includes(theme)) themes.push(theme);
   };
-  add(memoryThemeOf(config, fallback));
-  for (const theme of config?.readThemes || []) add(theme);
+  add(memoryThemeSourceOf(normalized, fallback).theme);
+  for (const theme of normalized.memory?.readThemes || []) add(theme);
   if (themes.length === 0) {
-    for (const theme of config?.domains || []) add(theme);
+    for (const theme of normalized.memory?.domains || []) add(theme);
   }
   return themes;
 }

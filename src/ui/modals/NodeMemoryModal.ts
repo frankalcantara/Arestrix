@@ -1,7 +1,12 @@
 import { BaseModal } from './BaseModal.ts';
 import { Graph } from '../../core/Graph.ts';
 import { INodeData, INodeMemoryConfig, DEFAULT_NODE_MEMORY_CONFIG, type VertexMemoryMode } from '../../core/types.ts';
-import { memoryModeOf, memoryThemeOf, memoryThemesOf } from '../../core/memory/MemoryConfig.ts';
+import {
+  activeSkillNameOf,
+  memoryModeOf,
+  memoryThemeSourceOf,
+  memoryThemesOf
+} from '../../core/memory/MemoryConfig.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
 import { t } from '../../i18n/index.ts';
 
@@ -61,7 +66,22 @@ export class NodeMemoryModal extends BaseModal {
     const effective: INodeMemoryConfig = { ...DEFAULT_NODE_MEMORY_CONFIG, ...globalMemory, ...nodeMemory };
     const mode = memoryModeOf(effective);
     const fallbackTheme = (node.label || node.id || '').trim();
-    const theme = memoryThemeOf(effective, fallbackTheme);
+    const themeSource = memoryThemeSourceOf({
+      memory: effective,
+      skillName: activeSkillNameOf(settings),
+      label: node.label,
+      id: node.id
+    }, fallbackTheme);
+    const theme = themeSource.theme;
+    const themeOriginLabel = themeSource.origin === 'skill'
+      ? t('node_modals.memory_theme_from_skill', 'da skill')
+      : themeSource.origin === 'label'
+        ? t('node_modals.memory_theme_from_label', 'do rótulo')
+        : themeSource.origin === 'id'
+          ? t('node_modals.memory_theme_from_id', 'do id')
+          : themeSource.origin === 'explicit'
+            ? t('node_modals.memory_theme_from_explicit', 'explícito')
+            : t('node_modals.memory_theme_from_fallback', 'fallback');
     const readThemes = (effective.readThemes || []).filter((item) => item.trim());
     const taskType = (effective.taskType || '').trim();
     const budget = effective.contextBudgetTokens ?? 800;
@@ -105,7 +125,7 @@ export class NodeMemoryModal extends BaseModal {
       <div class="settings-form-wrapper ${isInherited ? 'form-disabled-opacity' : ''}">
         <div class="form-hint" style="margin-bottom: 10px;">
           ${t('node_modals.memory_effective', 'Configuração efetiva')}:
-          ${mode} · ${this.escapeHtml(theme)} · ${this.escapeHtml(taskType || node.id)} · ${budget} tokens
+          ${mode} · ${this.escapeHtml(theme)} (${t('node_modals.memory_theme_origin', 'origem')}: ${this.escapeHtml(themeOriginLabel)}) · ${this.escapeHtml(taskType || node.id)} · ${budget} tokens
         </div>
         <div class="settings-section-card">
           <div class="form-group">
