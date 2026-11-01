@@ -71,12 +71,15 @@ Implementado no núcleo:
   A/B de contexto no Studio. `memory_report.py` permanece opcional para desenvolvimento.
 - Escopos de workspace e instituição. O `arestrix-memory` expõe REST autenticado, MCP HTTP `/mcp`,
   MCP stdio e tokens apenas em memória, com fail-closed sem tokens.
-- Ranking híbrido com embeddings (EmbeddingGemma 2) e consolidação L2/M3 idempotente.
+- Ranking híbrido com embeddings (EmbeddingGemma 2 e Qwen3) e consolidação L2/M3 idempotente.
 - Consolidação em background opt-in por projeto (`off`, `idle` ou `after_episodes`), com estado
   observável no painel e shutdown determinístico.
+- Fontes/trechos, afirmações, lentes/facetas, caminhos, serviço de caminhos, travessia em feixe,
+  roteamento local/fronteira e pontes interdomínio, todos com interruptores opt-in.
 - `/metrics` autenticado no `arestrix-memory`, com contadores REST/MCP, falhas 401, respostas por
   classe, uptime e versão.
-- Lista de conflitos e estado de consolidação no painel de memória do projeto.
+- Lista de conflitos, caminhos, facetas, fontes e estado de consolidação no painel de memória.
+- Avaliação final reproduzível em `tests/fixtures/memory-eval-v1-report.json`.
 
 Ainda pendente:
 
@@ -84,6 +87,7 @@ Ainda pendente:
   existe).
 - Consolidação por LLM, `memory_handoff` e aprendizagem recursiva.
 - Coordenação de consolidação entre múltiplos processos/instâncias do serviço institucional.
+- Medição com dados/provedores reais antes de ligar os interruptores experimentais.
 
 Limitações do serviço institucional e do background:
 

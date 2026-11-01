@@ -58,7 +58,7 @@ arestrix-cli gen <grafo.json>
 arestrix-cli check [--project <pasta> | <grafo.json>] [--require-env NOME]
 arestrix-cli doctor [--project <pasta>]
 arestrix-cli env set|reset|list|check
-arestrix-cli memory report|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote [--project <pasta>]
+arestrix-cli memory report|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote|paths|bridges [--project <pasta>]
 arestrix-cli mcp list|test|tools [id]
 arestrix-cli project info|graphs|validate
 arestrix-cli completion powershell|bash|zsh
@@ -152,6 +152,27 @@ Executa a extração de afirmações sob demanda sobre trechos citados em execu�
 aprovadas. Exige `memory.claimExtraction` ligado e `memory.extractor`
 configurado; a manutenção usa o mesmo caminho automaticamente. As propostas
 nascem pendentes e são revisadas por `memory proposals`.
+
+### `memory paths`
+
+```powershell
+.\arestrix-cli.exe memory paths list --project .\examples\04-memoria --json
+.\arestrix-cli.exe memory paths show <path-id> --project .\examples\04-memoria --json
+.\arestrix-cli.exe memory paths retire <path-id> --project .\examples\04-memoria
+```
+
+Lista, inspeciona ou retira caminhos canônicos. Retirar não apaga as afirmações,
+a evidência nem as estatísticas; o caminho deixa de ser servido.
+
+### `memory bridges`
+
+```powershell
+.\arestrix-cli.exe memory bridges detect --project .\examples\04-memoria --max-proposals 5 --max-per-entity 1 --json
+```
+
+Detecta convergência entre lentes nos traços aprovados e grava propostas
+`bridge_hypothesis`. O relatório mostra propostas, duplicatas e eventos
+descartados; nenhuma aresta é criada automaticamente.
 
 ### `memory prune`
 

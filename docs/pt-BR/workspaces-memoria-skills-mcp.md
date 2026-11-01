@@ -91,36 +91,62 @@ A memória é opcional, local e pertence ao projeto. O modelo atual tem três mo
 | `consult` | Injeta o brief autorizado no prompt e registra hits. Não grava conhecimento. |
 | `learn` | Consulta, grava um episódio e propõe lições ao final da execução. |
 
-Aprender implica salvar, mas nada entra sozinho: lições e playbooks nascem como proposta ou
-candidato e só viram conhecimento ativo depois de aprovação no painel **Memória do Projeto**.
-Telemetria fica em `.arestrix/telemetry/telemetry.db`, separada do conhecimento em
+Aprender implica salvar, mas nada entra sozinho: lições, fatos, trechos e playbooks nascem como
+proposta ou candidato e só viram conhecimento ativo depois de aprovação no painel **Memória do
+Projeto**. Telemetria fica em `.arestrix/telemetry/telemetry.db`, separada do conhecimento em
 `.arestrix/memory/memory.db`; limpar sessão ou apagar telemetria não apaga conhecimento.
 
 O brief é montado dentro de `contextBudgetTokens` com lições ativas, fatos, evidências e o estado
 de trabalho legado quando habilitado. A consulta usa `task_type`, tema e prompt-template do vértice;
 lições são filtradas no SQL e o brief é cacheado com invalidação em mutações. Playbooks compilados
 ficam como candidatos e não entram no brief até serem promovidos. Cada item injetado recebe
-`[MEMO:<id>]`; só o ID citado na resposta final conta como usado. Uso altera utilidade, não confiança.
+`[MEMO:<id>]`; só o ID citado na resposta final conta como usado. Uso altera utilidade, não
+confiança nem o estado de sustentação.
 
-O agente tem `memory_search` (somente leitura), `memory_propose_lesson` (proposta pendente) e as
-ferramentas de estado `memory_state_get`, `memory_state_set`, `memory_state_list` e
-`memory_state_history`. `memory_record_lesson`, `memoryWriteKeys` e o servidor nativo
-`arestrix.memoria` foram removidos.
+A camada semântica avançada já está no núcleo e no Studio:
+
+- **Fontes e trechos:** arquivos locais autorizados são segmentados, sanitizados e versionados;
+  `memory_search` devolve `[MEMO:psg:<id>]` e a citação é validada.
+- **Afirmações e lentes:** a manutenção extrai afirmações de trechos citados, valida citações e
+  predicados, e usa lentes derivadas do tema/skill/domínio.
+- **Facetas:** descrições determinísticas por entidade e lente, com revisão por `claims_hash` e
+  embeddings de papel simétrico.
+- **Caminhos e atalhos:** traços aprovados consolidam caminhos canônicos com utilidade Beta
+  descontada. Caminhos elegíveis podem ser servidos como `[MEMO:path:<id>]`; atalhos `via_caminho`
+  são projeções, não evidência, e acompanham o estado do caminho.
+- **Travessia:** quando nenhum caminho cobre a consulta, uma busca em feixe limitada expande o
+  grafo e registra cobertura no traço.
+- **Roteamento:** `routing.mode=shadow|binary` estima a confiança por `task_type`, custo esperado e
+  privacidade `localOnly`.
+- **Pontes:** convergência entre lentes gera propostas `bridge_hypothesis`; nunca cria aresta
+  automaticamente.
+
+Esses recursos são opt-in. `memory.paths`, `memory.pathServing`, `memory.traversal`,
+`memory.bridges` e `routing.mode` ficam desligados por padrão; a decisão e o A/B estão no
+relatório interno `memoria-avaliacao-v1.md`. O painel **Memória do Projeto** expõe estado,
+propostas, evidências, fontes, facetas, caminhos, conflitos, manutenção, embeddings e o A/B.
+
+O agente de pipeline tem `memory_search` (somente leitura), `memory_propose_lesson` (proposta
+pendente) e as ferramentas de estado `memory_state_get`, `memory_state_set`, `memory_state_list` e
+`memory_state_history`. O assistente do Studio tem `memory_inspect`, `memory_search`,
+`memory_review_proposal`, `memory_declare_state_key`, `memory_unpromote_playbook` e
+`memory_retire_path` (as três últimas pedem confirmação).
 
 O estado de continuação é declarado pelo projeto e fica fora do brief. Escopos: `project`,
 `task_type` e `item`; TTL, CAS, schema JSON e modo `replace`/`versioned` são suportados. O CLI expõe
-`memory state declare|list|get|set`.
+`memory state declare|list|get|set`, `memory paths list|show|retire` e `memory bridges detect`.
 
-A busca combina FTS lexical com vetores opcionais e fusão RRF. A busca não indexa durante a
-consulta; **Testar** e **Reindexar** no painel são ações explícitas. Perfis prontos:
-EmbeddingGemma 2 (768 dimensões) e Qwen3-Embedding-4B (2560). Sem provedor, a busca continua
-lexical. O índice guarda um fingerprint de endpoint/modelo/dimensão/prefixos; a busca só usa o
-fingerprint atual. Estados: `ready` (híbrida), `stale`/`pending`/`partial`/`failed` (lexical).
+A busca combina FTS lexical com vetores opcionais e fusão RRF; `mode: graph` usa a travessia em
+feixe. A busca não indexa durante a consulta; **Testar** e **Reindexar** no painel são ações
+explícitas. Perfis prontos: EmbeddingGemma 2 (768 dimensões) e Qwen3-Embedding-4B (768 truncado de
+2560). Sem provedor, a busca continua lexical. O índice guarda um fingerprint de
+endpoint/modelo/dimensão/prefixos; a busca só usa o fingerprint atual. Estados: `ready` (híbrida),
+`stale`/`pending`/`partial`/`failed` (lexical).
 
 O painel oferece **Comparar com e sem memória (contexto)**: cria uma cópia consistente com
 `VACUUM INTO`, calcula o fingerprint SHA-256 e mede tokens/caracteres do brief por vértice ativo.
-É o A/B v1, de custo e conteúdo de contexto; a taxa de aprovação do validador pertence ao
-protocolo completo.
+O A/B de 20 tarefas × 3 repetições × 2 braços mede aprovação, tokens e turnos; a avaliação final
+compara lexical, híbrida com fallback, facetas + travessia, caminhos + serviço e roteamento shadow.
 
 Playbooks só ativam com validação independente: 3 `input_hash` distintos nas últimas 20 execuções
 validadas, validador estável e 1 promoção por `task_type` em 24h. Falhas de infraestrutura não viram
@@ -132,8 +158,8 @@ promoção é explícita, exige evidência e é auditada. O projeto lê o worksp
 workspace não lê a memória privada do projeto.
 
 O guia completo, com configuração, retenção, segurança e referência rápida, está em
-[Como funciona a memória](como-funciona-a-memoria.md). O estado da implantação e a única lacuna de
-produto — a camada semântica avançada — estão em [Pendências](../PENDENCIAS.md).
+[Como funciona a memória](como-funciona-a-memoria.md). O estado da implantação está em
+[Pendências](../PENDENCIAS.md).
 
 ### Exemplos
 
@@ -191,13 +217,14 @@ inteiramente em C++: nenhum Python ou processo JS participa da execução do gra
 
 ### Limitações atuais
 
-- A visualização completa do grafo cognitivo e a edição de conflitos ainda não estão na UI;
-  a lista de conflitos e o estado de consolidação já aparecem no painel.
-- A extração determinística, as propostas, a busca híbrida opcional, a consolidação (manual e em
-  background), os playbooks, o workspace e a exposição HTTP/MCP da instituição já existem no núcleo.
-- Ainda faltam generalização/consolidação por LLM e coordenação de background entre múltiplos
-  processos/instâncias.
-- `memory_handoff` e consolidação por LLM ficam para as próximas fases.
+- A visualização completa do grafo cognitivo como canvas dedicado e a edição manual de conflitos
+  ainda não estão na UI; o painel lista conflitos, caminhos, facetas, fontes e o estado de
+  consolidação.
+- A generalização/consolidação por LLM e a coordenação de manutenção entre múltiplos processos
+  continuam fora do escopo desta versão.
+- Os interruptores de caminhos, serviço de caminhos, travessia, pontes e roteamento permanecem
+  desligados por padrão até medição com dados reais.
+- `memory_handoff` continua fora do escopo.
 
 ## Skills
 

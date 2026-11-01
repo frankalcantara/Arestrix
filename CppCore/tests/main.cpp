@@ -7513,6 +7513,10 @@ struct FakeAssistantHost : taskforge::assistant::AssistantHost {
     fs::path docs;
     int created = 0, saved = 0, projectUpdates = 0;
     int memoryReviews = 0, memoryDeclares = 0, memoryUnpromotes = 0;
+    int memorySearches = 0, memoryRetires = 0;
+    std::string lastSearchQuery;
+    std::string lastSearchMode;
+    std::string lastRetiredPath;
     bool lastReviewAccept = false;
     std::string lastReviewId;
     std::string lastReviewReason;
@@ -7552,6 +7556,21 @@ struct FakeAssistantHost : taskforge::assistant::AssistantHost {
                                      {"proposals", json::array({json{{"id", "prop-1"}, {"kind", "lesson"}}})},
                                      {"embedding", json{{"state", "ready"}}}}},
                     {"workspace", json{{"configured", true}, {"lessons", 2}}}};
+    }
+    json memorySearch(const std::string& query, int limit, const std::string& mode,
+                      const std::string&, std::string&) override {
+        ++memorySearches;
+        lastSearchQuery = query;
+        lastSearchMode = mode;
+        return json{{"ok", true}, {"mode", mode.empty() ? "hybrid" : mode},
+                    {"text", "[MEMO:path-1] achado"},
+                    {"hits", json::array({json{{"id", "path-1"}, {"kind", "path"}}})},
+                    {"limit", limit}};
+    }
+    bool retireMemoryPath(const std::string& pathId, const std::string&, std::string&) override {
+        ++memoryRetires;
+        lastRetiredPath = pathId;
+        return true;
     }
     bool reviewMemoryProposal(const std::string& id, bool accept, const std::string& reason,
                               std::string&) override {
@@ -7794,9 +7813,26 @@ TEST(assistant_memory_tools_inspect_and_review) {
     CHECK(!unpromote.result.isError);
     CHECK(host.memoryUnpromotes == 1 && host.lastUnpromoteId == "pb-1");
 
+    auto search = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "memory_search",
+                                           json{{"query", "contraste"}, {"mode", "graph"},
+                                                {"task_type", "ab"}, {"limit", 4}});
+    CHECK(!search.result.isError);
+    auto searchJson = taskforge::jsonutil::parse(search.result.content);
+    CHECK(searchJson["text"].get<std::string>().find("[MEMO:path-1]") != std::string::npos);
+    CHECK(searchJson["hits"].size() == 1);
+    CHECK(host.memorySearches == 1 && host.lastSearchQuery == "contraste");
+    CHECK(host.lastSearchMode == "graph");
+
+    auto retired = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "memory_retire_path",
+                                            json{{"id", "path-1"}, {"reason", "teste"}});
+    CHECK(!retired.result.isError);
+    CHECK(host.memoryRetires == 1 && host.lastRetiredPath == "path-1");
+
     CHECK(as::toolRisk("memory_review_proposal") == as::ToolRisk::Confirm);
     CHECK(as::toolRisk("memory_declare_state_key") == as::ToolRisk::Confirm);
     CHECK(as::toolRisk("memory_unpromote_playbook") == as::ToolRisk::Confirm);
+    CHECK(as::toolRisk("memory_retire_path") == as::ToolRisk::Confirm);
+    CHECK(as::toolRisk("memory_search") == as::ToolRisk::Read);
     CHECK(as::toolRisk("memory_inspect") == as::ToolRisk::Read);
 }
 

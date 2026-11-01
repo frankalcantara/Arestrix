@@ -492,12 +492,14 @@ separate from the project's private database.
 ## 13. Deployment status
 
 The operational memory deployment is complete: modes, proposals, validation, continuation state,
-telemetry, fingerprinted embeddings, gated playbooks, A/B v2 and the Studio assistant tools.
+telemetry, fingerprinted embeddings, gated playbooks, A/B v2 and the Studio assistant tools
+(`memory_inspect`, `memory_search`, proposal review, state, playbooks and path retirement).
 
-The simplification plan (Phases A-C) is complete. Phase D — the advanced multigraph with facets,
-domain knowledge, paths over claims and model routing — is a separate program outside this plan and
-does not block the release. Embedding retrieval is already implemented.
+The simplification plan (Phases A-C) and the advanced multigraph (E11-E20) are implemented:
+sources/passages, claims, lenses/facets, paths, path serving, traversal, routing and bridges. The new
+switches remain opt-in and off by default; the final evaluation is recorded in
+`tests/fixtures/memory-eval-v1-report.json`.
 
-The institutional level in the assistant and validation with real providers are operational pending
-items. The A/B harness is implemented in `memory ab run` and runs with the simulated provider in the
-e2e. See [`pending.md`](pending.md).
+Validation with real providers and multi-process coordination are operational pending items. The A/B
+harness is implemented in `memory ab run` and runs with the simulated provider in the e2e. See
+[`pending.md`](pending.md).
