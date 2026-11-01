@@ -143,6 +143,9 @@ std::string formatRanked(const std::vector<RankedMemory>& ranked, size_t limit,
     for (const auto& memory : ranked) {
         if (emitted >= limit) break;
         if (memory.id.empty() || memory.text.empty()) continue;
+        // Trechos sao formatados por searchContext com caminho e posicao; nao
+        // duplicar no bloco hibrido de fatos.
+        if (memory.kind == "passage") continue;
         std::string tag = "[FATO]";
         if (memory.kind == "lesson") tag = "[LICAO]";
         else if (memory.kind == "playbook") tag = "[PLAYBOOK]";

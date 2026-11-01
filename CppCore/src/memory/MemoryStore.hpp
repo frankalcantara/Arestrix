@@ -55,7 +55,7 @@ struct MemoryHitRecord {
 // depender de ela ter sido injetada no brief.
 struct MemoryHitRef {
     std::string id;
-    std::string kind;   // lesson | fact
+    std::string kind;   // lesson | fact | passage
 };
 
 // Resultado de um validador independente, ligado a um episodio.
