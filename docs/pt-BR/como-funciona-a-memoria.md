@@ -89,6 +89,19 @@ Falhas de infraestrutura são classificadas por `errorClass` enumerado — trans
 429, 5xx, autenticação/chave, gateway/orçamento, configuração, sandbox/ferramenta ou cancelamento —
 e **não** geram proposta de lição. `task_max_turns` é falha da tarefa, não de infraestrutura.
 
+### Validação de artefato
+
+Quando o vértice declara `validationRules` — caminho com `{itemId}`, tamanho mínimo e padrão de
+conteúdo —, o runtime avalia as regras **depois** que o agente termina sem exceção. O veredito é
+gravado em `memory_validation`, ligado ao episódio do vértice, com `validator_id=artifact-rules`, a
+versão SHA-256 das regras e o hash dos artefatos lidos. Falha de infraestrutura ou de tarefa não
+gera veredito: o episódio fica **sem veredito**.
+
+Com `globalDefaults.memory.validatedReinforcement` ligado, o resultado do agente deixa de alterar a
+utilidade; só o veredito reforça os itens usados naquela execução. Desligado (padrão), o
+comportamento da 2.5.0 é preservado. O gate de playbooks sempre usa o veredito, com ou sem o
+interruptor.
+
 Propostas ficam pendentes no painel **Memória do Projeto**. Aprovar promove o item para o
 conhecimento ativo; rejeitar mantém o registro para auditoria. Não existe gravação direta de
 lição por ferramenta.

@@ -15,7 +15,7 @@
   },
   "metrics": {
     "runs": 3,
-    "elapsedSeconds": 32.234,
+    "elapsedSeconds": 14.078,
     "tokens": {
       "prompt": 6264,
       "completion": 849,
@@ -144,7 +144,7 @@
           "memory_state_history": 0,
           "memory_state_key": 0,
           "memory_usage": 9,
-          "memory_validation": 0,
+          "memory_validation": 3,
           "memory_working": 0
         },
         "seeded": {
@@ -190,7 +190,7 @@
           "memory_state_history": 0,
           "memory_state_key": 0,
           "memory_usage": 9,
-          "memory_validation": 0,
+          "memory_validation": 3,
           "memory_working": 0
         }
       }

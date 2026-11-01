@@ -328,6 +328,12 @@ export interface IVertexMemorySettings extends Partial<INodeMemoryConfig> {
 export interface IProjectMemoryConfig extends Partial<INodeMemoryConfig> {
   mode?: VertexMemoryMode;
   theme?: string;
+  /**
+   * E1: quando ligado, o resultado do agente não altera a utilidade da memória.
+   * Só um veredito independente de artefato (`validationRules`) reforça.
+   * Desligado por padrão; a chave fica em `globalDefaults.memory`.
+   */
+  validatedReinforcement?: boolean;
 }
 
 export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {

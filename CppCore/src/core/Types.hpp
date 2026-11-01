@@ -81,6 +81,7 @@ struct NodeData {
     json interactionSettings; // vertice interaction: formulario, canal, timeout e politica
     json callSettings;     // vertice call: input fixo e origem do input na chamada em fluxo
     json childGraph;       // subflow/module: grafo filho aninhado
+    json validationRules;  // Fase 11: regras de artefato avaliadas pelo runtime
 };
 
 struct EdgeData {
@@ -232,7 +233,8 @@ inline void to_json(json& j, const NodeData& n) {
         {"outputSettings", n.outputSettings},
         {"interactionSettings", n.interactionSettings},
         {"callSettings", n.callSettings},
-        {"childGraph", n.childGraph}
+        {"childGraph", n.childGraph},
+        {"validationRules", n.validationRules}
     };
 }
 inline void from_json(const json& j, NodeData& n) {
@@ -256,6 +258,7 @@ inline void from_json(const json& j, NodeData& n) {
     if(j.contains("interactionSettings")) j.at("interactionSettings").get_to(n.interactionSettings);
     if(j.contains("callSettings")) j.at("callSettings").get_to(n.callSettings);
     if(j.contains("childGraph")) j.at("childGraph").get_to(n.childGraph);
+    if(j.contains("validationRules")) j.at("validationRules").get_to(n.validationRules);
 }
 
 // Serialização manual de EdgeData para campos opcionais
