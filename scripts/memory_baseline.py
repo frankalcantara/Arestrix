@@ -345,7 +345,7 @@ def table_counts(path: pathlib.Path) -> dict[str, int]:
         ]
         counts: dict[str, int] = {}
         for name in names:
-            if name.startswith("memory_node_fts_"):
+            if name.startswith("memory_node_fts_") or name.startswith("memory_passage_fts_"):
                 continue  # tabelas internas do FTS5
             counts[name] = conn.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()[0]
         return counts

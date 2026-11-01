@@ -151,6 +151,7 @@ def make_graphs():
         node["agentSettings"]["memory"].update({
             "mode": "learn", "theme": "teste", "domains": ["teste"],
             "taskType": "validacao_artefato", "contextBudgetTokens": 800,
+            "sources": {"enabled": True, "paths": [], "maxFileBytes": 4096, "maxFiles": 50},
         })
         node["validationRules"] = [{
             "targetPathPattern": "artefatos/pipeline.md",
@@ -504,6 +505,19 @@ def main():
             "SELECT status FROM memory_playbook WHERE task_type='validacao_artefato'")
         check(len(playbooks) == 1 and playbooks[0][0] == "active",
               "o gate promoveu o playbook com tres entradas aprovadas")
+        source_rows = db_rows(
+            project,
+            "SELECT uri,status FROM memory_source WHERE status='active'")
+        check(any(row[0] == "artefatos/pipeline.md" for row in source_rows),
+              "o read do agente ingeriu a fonte do artefato")
+        passage_rows = db_rows(
+            project,
+            "SELECT COUNT(*), COALESCE(SUM(CASE WHEN text LIKE '%STATUS_OK%' THEN 1 ELSE 0 END),0) "
+            "FROM memory_passage WHERE status='active'")
+        check(passage_rows and passage_rows[0][0] >= 1,
+              "a fonte ingerida tem trechos ativos")
+        check(passage_rows and passage_rows[0][1] >= 1,
+              "o trecho preservou o conteudo lido")
 
         p_rep = subprocess.run(
             [str(EXE), "memory", "report", "--root", str(project), "--json"],

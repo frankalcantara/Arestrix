@@ -154,6 +154,42 @@ struct MemoryUsageRecord {
 // guardar prompt/resposta brutos. Campos JSON usam listas/objetos pequenos e sanitizados.
 // E11: traco imutavel de uma execucao de vertice com memoria. O trace_id e
 // estavel por (scope, run, node); os passos sao anexados em ordem.
+// E12: fonte de dominio e seus trechos versionados. O texto do trecho fica no
+// banco de conhecimento; o brief nao o injeta nesta etapa.
+struct MemorySourceRecord {
+    std::string id;
+    std::string scopeId;
+    std::string uri;
+    std::string contentHash;
+    std::string kind;
+    long long size = 0;
+    std::string firstSeen;
+    std::string lastSeen;
+    std::string status = "active";
+};
+
+struct MemoryPassageRecord {
+    std::string id;
+    std::string sourceId;
+    std::string scopeId;
+    long long ordinal = 0;
+    long long start = 0;
+    long long end = 0;
+    std::string text;
+    std::string textHash;
+    long long tokens = 0;
+    std::string status = "active";
+};
+
+struct MemoryPassageHit {
+    std::string id;
+    std::string sourceId;
+    std::string uri;
+    long long start = 0;
+    long long end = 0;
+    std::string text;
+};
+
 struct MemoryTraceRecord {
     std::string traceId;
     std::string scopeId;
@@ -546,6 +582,14 @@ public:
                     bool memoryEnabled);
     taskforge::Json getTrace(const std::string& scopeId, const std::string& runId,
                              const std::string& nodeId) const;
+
+    // E12: ingere uma versao de fonte e pesquisa trechos ativos.
+    std::string ingestSource(const MemorySourceRecord& source,
+                             const std::vector<MemoryPassageRecord>& passages,
+                             size_t* insertedPassages, std::string& error);
+    std::vector<MemoryPassageHit> searchPassages(const std::string& scopeId,
+                                                 const std::string& text, size_t limit = 10) const;
+    taskforge::Json sourceSummary(const std::string& scopeId) const;
 
     // Validacao independente ligada a um episodio (telemetria).
     // E4: instantaneos de evidencia (conhecimento, sem FK para telemetria).

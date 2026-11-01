@@ -266,6 +266,26 @@ by an earlier execution of the same `task_type`. The result selects one of
 `fix_validators` or `insufficient_data`. The thresholds used are stored in the
 JSON.
 
+### Local sources and passages
+
+With `globalDefaults.memory.sources` enabled, memory ingests text, Markdown and
+code files **after** execution, without calling a language model:
+
+- files successfully read by the `read` tool;
+- folders or files declared in `memory.sources.paths`.
+
+Ingestion applies an extension allowlist, `maxFileBytes` (default 512 KiB),
+`maxFiles` (default 2,000) per run, fixed exclusions (`.git`, `node_modules`, `.arestrix`,
+`.workspace/memory`) and secret sanitization. Content is segmented
+deterministically: Markdown by headings/paragraphs, code by top-level blocks and
+text in 1,000-character windows with 200 characters of overlap.
+
+Each source version has a `content_hash`; changes create a new version and old
+passages become `superseded`, preserved as evidence. Re-ingesting identical
+content is a no-op. `memory_search` returns passages with `[MEMO:psg:<id>]`,
+path and position; citing the ID marks the passage as used. The brief does not
+include passages at this stage.
+
 ### Retrieval traces
 
 Every knowledge write bumps `knowledge_version` in the same transaction; reads
