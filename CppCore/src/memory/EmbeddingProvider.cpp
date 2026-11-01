@@ -41,14 +41,32 @@ std::string resolvedBaseUrl(const EmbeddingConfig& config) {
     return base;
 }
 
+// A instrucao do Qwen3 faz parte do prefixo de consulta e, portanto, do
+// fingerprint. Mudar este texto invalida o indice automaticamente.
+constexpr const char* kQwen3QueryInstruction =
+    " Instruct: Given a task description, retrieve memory items that help complete it\nQuery:  ";
+
 std::string prefixFor(const std::string& model, bool query) {
     const std::string normalized = lower(model);
     if (normalized.find("embeddinggemma") != std::string::npos) {
         return query ? "task: search result | query: " : "title: none | text: ";
     }
+    if (normalized.find("qwen3") != std::string::npos ||
+        normalized.find("qwen-3") != std::string::npos) {
+        return query ? kQwen3QueryInstruction : "";
+    }
     if (normalized.find("e5") != std::string::npos) {
         return query ? "query: " : "passage: ";
     }
+    return "";
+}
+
+std::string prefixVersionFor(const std::string& model) {
+    const std::string normalized = lower(model);
+    if (normalized.find("embeddinggemma") != std::string::npos) return "embeddinggemma-v1";
+    if (normalized.find("qwen3") != std::string::npos ||
+        normalized.find("qwen-3") != std::string::npos) return "qwen3-retrieval-v1";
+    if (normalized.find("e5") != std::string::npos) return "e5-v1";
     return "";
 }
 
@@ -108,6 +126,10 @@ EmbeddingConfig embeddingConfigFromJson(const taskforge::Json& value) {
                                    source.value("maxChars", config.maxChars));
     config.dim = source.value("embeddingDimensions",
                               source.value("dimensions", source.value("dim", config.dim)));
+    config.revision = source.value("embeddingRevision",
+                                   source.value("revision", config.revision));
+    config.truncateDim = source.value("embeddingTruncateDim",
+                                      source.value("truncateDim", config.truncateDim));
 
     // Variaveis de ambiente vencem o arquivo do projeto: sao uteis para testes
     // pontuais sem alterar o grafo salvo.
@@ -121,6 +143,11 @@ EmbeddingConfig embeddingConfigFromJson(const taskforge::Json& value) {
     config.batchSize = std::max(1, std::min(128, envInt("ARESTRIX_EMBEDDING_BATCH", config.batchSize)));
     config.maxChars = std::max(64, std::min(32000, envInt("ARESTRIX_EMBEDDING_MAX_CHARS", config.maxChars)));
     config.dim = std::max(0, std::min(8192, envInt("ARESTRIX_EMBEDDING_DIM", config.dim)));
+    config.truncateDim = std::max(0, std::min(8192,
+        envInt("ARESTRIX_EMBEDDING_TRUNCATE_DIM", config.truncateDim)));
+    if (const std::string revision = envOr("ARESTRIX_EMBEDDING_REVISION"); !revision.empty()) {
+        config.revision = revision;
+    }
 
     if (config.provider.empty()) config.provider = "local";
     if (config.model.empty()) config.model = "embeddinggemma-2";
@@ -141,23 +168,99 @@ taskforge::Json embeddingConfigToJson(const EmbeddingConfig& config) {
         {"timeoutSeconds", config.timeoutSeconds},
         {"batchSize", config.batchSize},
         {"maxChars", config.maxChars},
-        {"dim", config.dim}};
+        {"dim", config.dim},
+        {"revision", config.revision},
+        {"truncateDim", config.truncateDim}};
 }
 
-std::string embeddingFingerprint(const EmbeddingConfig& config, int effectiveDim) {
-    const int dim = effectiveDim > 0 ? effectiveDim : std::max(0, config.dim);
+std::string embeddingFingerprint(const EmbeddingConfig& config, int effectiveDim,
+                                 const std::string& revisionOverride) {
+    const int dim = effectiveDim > 0
+        ? effectiveDim
+        : (config.truncateDim > 0 ? config.truncateDim : std::max(0, config.dim));
+    const std::string revision = !config.revision.empty() ? config.revision : revisionOverride;
     taskforge::Json canonical{
         {"indexVersion", "embedding-index-v2"},
         {"provider", lower(config.provider)},
         {"endpoint", resolvedBaseUrl(config)},
         {"model", lower(config.model)},
-        {"revision", std::string()},
+        {"revision", revision},
         {"dim", dim},
+        {"truncateDim", config.truncateDim},
+        {"prefixVersion", prefixVersionFor(config.model)},
         {"queryPrefix", prefixFor(config.model, true)},
         {"documentPrefix", prefixFor(config.model, false)},
         {"normalization", "l2"},
         {"metric", "cosine"}};
     return project::RunnerSecurity::sha256(canonical.dump());
+}
+
+std::string embeddingQueryPrefix(const std::string& model) {
+    return prefixFor(model, true);
+}
+
+std::string embeddingDocumentPrefix(const std::string& model) {
+    return prefixFor(model, false);
+}
+
+bool prepareEmbeddingVector(const std::string& model, std::vector<float>& values,
+                            int truncateDim, int expectedDim, int& effectiveDim,
+                            std::string& error) {
+    error.clear();
+    effectiveDim = 0;
+    if (values.empty()) {
+        error = "vetor de embedding vazio";
+        return false;
+    }
+    for (float value : values) {
+        if (!std::isfinite(value)) {
+            error = "vetor de embedding contem NaN/Inf";
+            return false;
+        }
+    }
+
+    if (truncateDim > 0) {
+        const std::string normalized = lower(model);
+        if (normalized.find("embeddinggemma") != std::string::npos) {
+            const bool allowed = truncateDim == 128 || truncateDim == 256 ||
+                                 truncateDim == 512 || truncateDim == 768;
+            if (!allowed) {
+                error = "dimensao de truncamento invalida para EmbeddingGemma 2: " +
+                        std::to_string(truncateDim);
+                return false;
+            }
+        } else if (normalized.find("qwen3") != std::string::npos ||
+                   normalized.find("qwen-3") != std::string::npos) {
+            if (truncateDim < 32 || truncateDim > 2560) {
+                error = "dimensao de truncamento invalida para Qwen3: " +
+                        std::to_string(truncateDim);
+                return false;
+            }
+        }
+        if (static_cast<size_t>(truncateDim) > values.size()) {
+            error = "truncamento de " + std::to_string(truncateDim) +
+                    " excede o vetor de " + std::to_string(values.size());
+            return false;
+        }
+        values.resize(static_cast<size_t>(truncateDim));
+    }
+
+    if (expectedDim > 0 && static_cast<int>(values.size()) != expectedDim) {
+        error = "dimensao de embedding " + std::to_string(values.size()) +
+                " (esperado " + std::to_string(expectedDim) + ")";
+        return false;
+    }
+
+    double norm = 0.0;
+    for (float value : values) norm += static_cast<double>(value) * value;
+    if (!std::isfinite(norm) || norm <= 0.0) {
+        error = "vetor de embedding degenerado (norma zero)";
+        return false;
+    }
+    const float scale = static_cast<float>(1.0 / std::sqrt(norm));
+    for (float& value : values) value *= scale;
+    effectiveDim = static_cast<int>(values.size());
+    return true;
 }
 
 std::shared_ptr<IEmbeddingProvider> makeEmbeddingProvider(const EmbeddingConfig& config) {
@@ -171,7 +274,7 @@ std::shared_ptr<IEmbeddingProvider> makeEmbeddingProvider(const EmbeddingConfig&
 LocalLlamaEmbeddingProvider::LocalLlamaEmbeddingProvider(EmbeddingConfig config)
     : config_(std::move(config)) {
     config_.baseUrl = resolvedBaseUrl(config_);
-    dim_ = std::max(0, config_.dim);
+    dim_ = config_.truncateDim > 0 ? config_.truncateDim : std::max(0, config_.dim);
 }
 
 bool LocalLlamaEmbeddingProvider::available() const {
@@ -249,6 +352,16 @@ bool LocalLlamaEmbeddingProvider::embed(const std::vector<std::string>& texts, b
             out.clear();
             return false;
         }
+        if (config_.revision.empty() && serverRevision_.empty()) {
+            for (const char* key : {"etag", "x-model-digest", "x-model-revision",
+                                    "x-embedding-revision"}) {
+                auto header = response.headers.find(key);
+                if (header != response.headers.end() && !header->second.empty()) {
+                    serverRevision_ = header->second;
+                    break;
+                }
+            }
+        }
 
         const auto& data = parsed->contains("data") ? (*parsed)["data"] : taskforge::Json();
         if (!data.is_array() || data.empty()) {
@@ -274,27 +387,16 @@ bool LocalLlamaEmbeddingProvider::embed(const std::vector<std::string>& texts, b
                     out.clear();
                     return false;
                 }
-                const double value = number.get<double>();
-                if (!std::isfinite(value)) {
-                    error = "vetor de embedding contem NaN/Inf";
-                    out.clear();
-                    return false;
-                }
-                embedding.values.push_back(static_cast<float>(value));
+                embedding.values.push_back(static_cast<float>(number.get<double>()));
             }
-            if (embedding.values.empty()) {
-                error = "vetor de embedding vazio";
+            int effectiveDim = 0;
+            if (!prepareEmbeddingVector(config_.model, embedding.values, config_.truncateDim,
+                                        dim_, effectiveDim, error)) {
                 out.clear();
                 return false;
             }
-            embedding.dim = static_cast<int>(embedding.values.size());
-            if (dim_ <= 0) dim_ = embedding.dim;
-            if (embedding.dim != dim_) {
-                error = "dimensao de embedding inconsistente: " + std::to_string(embedding.dim) +
-                        " (esperado " + std::to_string(dim_) + ")";
-                out.clear();
-                return false;
-            }
+            embedding.dim = effectiveDim;
+            if (dim_ <= 0) dim_ = effectiveDim;
             const long long index = item.value("index", fallbackIndex++);
             batch.push_back({index, std::move(embedding)});
         }

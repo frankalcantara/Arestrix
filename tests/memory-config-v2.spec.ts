@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   activeSkillNameOf,
   applyMemoryMode,
+  EMBEDDING_PROFILES,
+  embeddingProfileFor,
   memoryModeOf,
   memoryModePatch,
   memoryThemeIdentifier,
@@ -124,5 +126,17 @@ describe('modelo de memória v2: modo + tema', () => {
     expect(patch.projectId).toBeUndefined();
     expect(Object.prototype.hasOwnProperty.call(patch, 'measurementMode')).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(patch, 'recordMetrics')).toBe(false);
+  });
+
+  it('perfis guardam 768 dimensões e o Qwen3 trunca de 2560', () => {
+    const gemma = EMBEDDING_PROFILES.find((profile) => profile.id === 'embeddinggemma-2');
+    const qwen = EMBEDDING_PROFILES.find((profile) => profile.id === 'qwen3-embedding-4b');
+    expect(gemma?.dimensions).toBe(768);
+    expect(gemma?.truncateDim).toBe(0);
+    expect(gemma?.revision).toBe('');
+    expect(qwen?.dimensions).toBe(768);
+    expect(qwen?.truncateDim).toBe(768);
+    expect(qwen?.revision).toBe('');
+    expect(embeddingProfileFor('qwen3-embedding-4b')).toBe(qwen);
   });
 });

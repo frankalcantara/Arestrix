@@ -144,6 +144,10 @@ export interface EmbeddingProfile {
   name: string;
   model: string;
   dimensions: number;
+  /** Dimensão MRL armazenada (0 = vetor completo). */
+  truncateDim: number;
+  /** Revisão/digest do modelo; vazio = usuário/servidor. */
+  revision: string;
   baseUrl: string;
 }
 
@@ -153,13 +157,17 @@ export const EMBEDDING_PROFILES: EmbeddingProfile[] = [
     name: 'EmbeddingGemma 2 (768d)',
     model: 'embeddinggemma-2',
     dimensions: 768,
+    truncateDim: 0,
+    revision: '',
     baseUrl: 'http://127.0.0.1:11434/v1'
   },
   {
     id: 'qwen3-embedding-4b',
-    name: 'Qwen3-Embedding-4B (2560d)',
+    name: 'Qwen3-Embedding-4B (768d truncado de 2560)',
     model: 'qwen3-embedding-4b',
-    dimensions: 2560,
+    dimensions: 768,
+    truncateDim: 768,
+    revision: '',
     baseUrl: 'http://127.0.0.1:11434/v1'
   }
 ];

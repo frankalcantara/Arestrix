@@ -54,7 +54,9 @@ EmbeddingIndexStats MemoryIndexer::index(MemoryStore& store, IEmbeddingProvider&
         return stats;
     }
 
-    const std::string fingerprint = embeddingFingerprint(config, provider.dim());
+    EmbeddingConfig effectiveConfig = config;
+    if (effectiveConfig.revision.empty()) effectiveConfig.revision = provider.revision();
+    const std::string fingerprint = embeddingFingerprint(effectiveConfig, provider.dim());
     const auto objects = store.embeddingObjects(scopeId);
     stats.candidates = objects.size();
     const auto existingList = store.listEmbeddings(scopeId, config.model);
