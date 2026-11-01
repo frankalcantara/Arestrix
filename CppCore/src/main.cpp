@@ -1037,6 +1037,26 @@ void ui_consolidate_memory(webui::window::event* e) {
     e->return_string(out.dump());
 }
 
+// Wrapper de comunicação JS -> C++ (Retirar caminho canônico)
+void ui_retire_memory_path(webui::window::event* e) {
+    const std::string payload = e->get_string();
+    std::string projectId = "default";
+    std::string pathId;
+    try {
+        if (!payload.empty() && payload[0] == '{') {
+            auto j = taskforge::jsonutil::parse(payload);
+            projectId = j.value("projectId", "default");
+            pathId = j.value("pathId", std::string());
+        }
+    } catch (...) {}
+    configureProjectMemory(projectId, true);
+    std::string error;
+    const bool ok = taskforge::memory::MemoryService::getInstance().setPathState(
+        projectId, pathId, "retired", error);
+    e->return_string(taskforge::Json{{"ok", ok}, {"pathId", pathId},
+                                     {"error", error}}.dump());
+}
+
 // Wrapper de comunicação JS -> C++ (Registrar Lição Semântica)
 void ui_record_semantic_lesson(webui::window::event* e) {
     std::string payload = e->get_string();
@@ -3324,6 +3344,7 @@ int main(int argc, char** argv) {
     win.bind("test_memory_embeddings", ui_test_memory_embeddings);
     win.bind("reindex_memory_embeddings", ui_reindex_memory_embeddings);
     win.bind("consolidate_memory", ui_consolidate_memory);
+    win.bind("retire_memory_path", ui_retire_memory_path);
     win.bind("init_workspace", ui_init_workspace);
     win.bind("promote_to_workspace", ui_promote_to_workspace);
     win.bind("record_semantic_lesson", ui_record_semantic_lesson);

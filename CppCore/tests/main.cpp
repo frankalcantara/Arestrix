@@ -37,6 +37,7 @@
 #include "memory/EmbeddingProvider.hpp"
 #include "memory/MemoryClaimExtractor.hpp"
 #include "memory/MemoryFacets.hpp"
+#include "memory/MemoryPaths.hpp"
 #include "memory/MemorySources.hpp"
 #include "memory/MemoryVectorIndex.hpp"
 #include "platform/Process.hpp"
@@ -4620,6 +4621,206 @@ TEST(memory_lenses_facets_rebuild_with_claims_and_distinct_embedding_roles) {
     const auto lensIds = store.edgeIdsForLenses(scope, {"ab"});
     CHECK(std::find(lensIds.begin(), lensIds.end(), claimC) != lensIds.end());
     CHECK(std::find(lensIds.begin(), lensIds.end(), claimB) == lensIds.end());
+
+    store.close();
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_paths_utility_is_beta_with_prior_and_decay) {
+    using taskforge::memory::MemoryPaths;
+    using taskforge::memory::PathOptions;
+    PathOptions options;
+    options.prior = 1.0;
+    options.mu = 0.0;
+    CHECK(std::abs(MemoryPaths::utility(1, 0, 0, 0, options) - 2.0 / 3.0) < 1e-9);
+    CHECK(std::abs(MemoryPaths::utility(0, 1, 0, 0, options) - 1.0 / 3.0) < 1e-9);
+    CHECK(MemoryPaths::utility(1, 0, 0, 0, options) < 1.0);
+    options.mu = 1.0;
+    const double decayed = MemoryPaths::utility(1, 0, 0, 10, options);
+    CHECK(decayed < MemoryPaths::utility(1, 0, 0, 0, options));
+    const double outOfOrder = MemoryPaths::utility(1, 0, 10, 5, options);
+    CHECK(std::abs(outOfOrder - MemoryPaths::utility(1, 0, 0, 0, options)) < 1e-9);
+}
+
+TEST(memory_paths_consolidate_idempotently_and_suspend_dependencies) {
+    using taskforge::memory::MemoryPaths;
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryTraceRecord;
+    using taskforge::memory::PathOptions;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-paths-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const fs::path db = root / "memory.db";
+    const std::string scope = "project:paths-test";
+    std::string error;
+
+    MemoryStore store(db.string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "paths-test"));
+    const std::string subject = store.resolveNode(scope, "Guia", "entity");
+    const std::string object = store.resolveNode(scope, "4.5:1", "value");
+    const std::string claim1 = store.recordEdge(
+        scope, subject, object, "HAS_VALUE", taskforge::Json::object(), "2026-01-01", "",
+        0.8, "active", "claim", "p1",
+        taskforge::Json{{"claim", true}, {"lens", "ab"}, {"quote", "q1"}});
+    const std::string claim2 = store.recordEdge(
+        scope, subject, object, "HAS_VALUE", taskforge::Json::object(), "2026-02-01", "",
+        0.8, "active", "claim", "p2",
+        taskforge::Json{{"claim", true}, {"lens", "ab"}, {"quote", "q2"}});
+    CHECK(!claim1.empty() && !claim2.empty());
+
+    auto makeTrace = [&](const std::string& id, const std::string& input) {
+        MemoryTraceRecord trace;
+        trace.traceId = id;
+        trace.scopeId = scope;
+        trace.taskType = "ab";
+        trace.outcome = "success";
+        trace.inputHash = input;
+        trace.createdAt = "2026-11-01T00:00:00Z";
+        trace.used = taskforge::Json::array({claim1, claim2});
+        return trace;
+    };
+    PathOptions options;
+    options.minDistinctInputs = 3;
+    std::vector<MemoryTraceRecord> traces{makeTrace("trace-1", "input-1")};
+    auto report = MemoryPaths::consolidate(store, scope, traces, options);
+    CHECK(report.value("ok", false));
+    auto paths = store.listPaths(scope);
+    CHECK(paths.size() == 1);
+    CHECK(paths[0].state == "candidate");
+    CHECK(paths[0].uses == 1);
+    CHECK(paths[0].distinctInputs == 1);
+    const std::string pathId = paths[0].id;
+
+    report = MemoryPaths::consolidate(store, scope, traces, options);
+    CHECK(report.value("ok", false));
+    paths = store.listPaths(scope);
+    CHECK(paths.size() == 1);
+    CHECK(paths[0].uses == 1);   // trace_id idempotente
+    traces.push_back(makeTrace("trace-2", "input-2"));
+    MemoryPaths::consolidate(store, scope, traces, options);
+    paths = store.listPaths(scope);
+    CHECK(paths[0].uses == 2);
+    CHECK(paths[0].distinctInputs == 2);
+    CHECK(paths[0].state == "candidate");
+    traces.push_back(makeTrace("trace-3", "input-3"));
+    MemoryPaths::consolidate(store, scope, traces, options);
+    paths = store.listPaths(scope);
+    CHECK(paths[0].distinctInputs == 3);
+    CHECK(paths[0].state == "active");
+    CHECK(paths[0].success == 3);
+    CHECK(store.pathSummary(scope).value("active", 0LL) == 1);
+    CHECK(store.pathsForClaim(claim1).size() == 1);
+    CHECK(store.setPathState(scope, pathId, "retired", "test"));
+    CHECK(store.getPath(scope, pathId).value("state", std::string()) == "retired");
+
+    store.close();
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_paths_retract_suspend_revalidate_and_retire) {
+    using taskforge::memory::MemoryEdgeRecord;
+    using taskforge::memory::MemoryPaths;
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryTraceRecord;
+    using taskforge::memory::PathOptions;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-path-invalidation";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const fs::path db = root / "memory.db";
+    std::string error;
+    MemoryStore store(db.string());
+    CHECK(store.open(error));
+    PathOptions options;
+    options.minDistinctInputs = 1;
+
+    auto makeTrace = [](const std::string& scope, const std::string& id,
+                        const std::string& claim) {
+        MemoryTraceRecord trace;
+        trace.traceId = id;
+        trace.scopeId = scope;
+        trace.taskType = "ap";
+        trace.outcome = "success";
+        trace.inputHash = "same-input";
+        trace.createdAt = "2026-11-01T00:00:00Z";
+        trace.used = taskforge::Json::array({claim});
+        return trace;
+    };
+
+    // Retração sem substituto: suspende, sem alterar a afirmação.
+    {
+        const std::string scope = "project:path-retract";
+        CHECK(store.ensureScope(scope, "project", "", "retract"));
+        const std::string subject = store.resolveNode(scope, "Guia", "entity");
+        const std::string object = store.resolveNode(scope, "valor", "value");
+        const std::string claim = store.recordEdge(
+            scope, subject, object, "UNIQUE_PREDICATE", taskforge::Json::object(),
+            "2026-01-01", "", 0.8, "active", "claim", "retract",
+            taskforge::Json{{"claim", true}, {"lens", "ab"}});
+        MemoryPaths::consolidate(store, scope, {makeTrace(scope, "trace-r", claim)}, options);
+        CHECK(store.listPaths(scope).at(0).state == "active");
+        CHECK(store.invalidateEdge(claim, "2026-11-02", "retracted", "test"));
+        CHECK(store.listPaths(scope).at(0).state == "suspended");
+        MemoryPaths::reconcile(store, scope, "claim_retracted");
+        CHECK(store.listPaths(scope).at(0).state == "suspended");
+        MemoryEdgeRecord edge;
+        CHECK(store.getEdge(scope, claim, edge));
+        CHECK(edge.status != "active");
+    }
+
+    // Substituição compatível: troca a revisão e mantém o caminho ativo.
+    {
+        const std::string scope = "project:path-revalidate";
+        CHECK(store.ensureScope(scope, "project", "", "revalidate"));
+        const std::string subject = store.resolveNode(scope, "Guia", "entity");
+        const std::string object = store.resolveNode(scope, "valor", "value");
+        const std::string oldClaim = store.recordEdge(
+            scope, subject, object, "HAS_VALUE", taskforge::Json::object(),
+            "2026-01-01", "", 0.8, "active", "claim", "old",
+            taskforge::Json{{"claim", true}, {"lens", "ab"}});
+        MemoryPaths::consolidate(store, scope, {makeTrace(scope, "trace-v", oldClaim)}, options);
+        CHECK(store.listPaths(scope).at(0).state == "active");
+        CHECK(store.invalidateEdge(oldClaim, "2026-11-02", "superseded", "test"));
+        const std::string newClaim = store.recordEdge(
+            scope, subject, object, "HAS_VALUE", taskforge::Json::object(),
+            "2026-11-02", "", 0.9, "active", "claim", "new",
+            taskforge::Json{{"claim", true}, {"lens", "ab"}});
+        const auto report = MemoryPaths::reconcile(store, scope, "claim_replaced");
+        CHECK(report.value("reactivated", 0LL) == 1);
+        const auto paths = store.listPaths(scope);
+        CHECK(paths.at(0).state == "active");
+        CHECK(paths.at(0).revision >= 2);
+        CHECK(paths.at(0).claimIds.size() == 1);
+        CHECK(paths.at(0).claimIds.at(0) == newClaim);
+    }
+
+    // Substituição incompatível: retira o caminho.
+    {
+        const std::string scope = "project:path-retire";
+        CHECK(store.ensureScope(scope, "project", "", "retire"));
+        const std::string subject = store.resolveNode(scope, "Guia", "entity");
+        const std::string object = store.resolveNode(scope, "valor", "value");
+        const std::string oldClaim = store.recordEdge(
+            scope, subject, object, "HAS_VALUE", taskforge::Json::object(),
+            "2026-01-01", "", 0.8, "active", "claim", "old",
+            taskforge::Json{{"claim", true}, {"lens", "ab"}});
+        MemoryPaths::consolidate(store, scope, {makeTrace(scope, "trace-x", oldClaim)}, options);
+        CHECK(store.listPaths(scope).at(0).state == "active");
+        CHECK(store.invalidateEdge(oldClaim, "2026-11-02", "superseded", "test"));
+        const std::string other = store.resolveNode(scope, "outra entidade", "entity");
+        store.recordEdge(scope, subject, other, "HAS_VALUE", taskforge::Json::object(),
+                         "2026-11-02", "", 0.9, "active", "claim", "incompatible",
+                         taskforge::Json{{"claim", true}, {"lens", "ab"}});
+        const auto report = MemoryPaths::reconcile(store, scope, "claim_replaced");
+        CHECK(report.value("retired", 0LL) == 1);
+        CHECK(store.listPaths(scope).at(0).state == "retired");
+    }
 
     store.close();
     fs::remove_all(root, ec);

@@ -10,6 +10,12 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ### Added
 
+- **Canonical paths and invalidation (multigraph plan, E15):** approved traces
+  consolidate into canonical claim paths, with idempotency per `trace_id`,
+  activation after a configurable number of distinct inputs, Beta utility with
+  time decay and a prior, and dependency invalidation. A path whose claim stops
+  being active is suspended in the same maintenance pass; explicit `memory paths
+  list|show|retire` commands and the project memory UI expose path state.
 - **Memory baseline (multigraph plan, E0):** `tests/fixtures/memory-baseline/` freezes a
   three-agent project with a curated knowledge set (five lessons, three facts, one active
   playbook), and `scripts/memory_baseline.py` replays it with a deterministic provider,

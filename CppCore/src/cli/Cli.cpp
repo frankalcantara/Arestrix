@@ -501,6 +501,7 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory state list|declare|get|set --project <pasta> [--key K] [--scope project|task_type|item] [--schema JSON] [--value JSON] [--expected N] [--item ID] [--task-type T] [--json]\n"
                      "arestrix-cli memory trace show <run> <no> --project <pasta> [--json]\n"
                      "arestrix-cli memory claims extract --project <pasta> [--max-passages N] [--json]\n"
+                     "arestrix-cli memory paths list|show|retire [id] --project <pasta> [--state S] [--json]\n"
                      "arestrix-cli memory ab validate|order|report --suite <arquivo> [--observations <arquivo>] [--repetitions N] [--seed N] [--json]\n"
                      "arestrix-cli memory ab run --suite <arquivo> --pipeline <grafo> --node <vertice> [--repetitions N] [--seed N] [--root <pasta>] [--db <arquivo>] [--json]\n"
                      "arestrix-cli memory promote --project <pasta> --kind lesson|fact|playbook --id ID --evidence texto [--workspace-id ID] [--json]\n"
@@ -512,7 +513,7 @@ int runMemory(const std::vector<std::string>& args) {
         command != "embeddings" && command != "health" && command != "reindex" &&
         command != "consolidate" && command != "workspace" && command != "state" &&
         command != "ab" && command != "trace" && command != "claims" &&
-        command != "promote" && command != "unpromote") {
+        command != "paths" && command != "promote" && command != "unpromote") {
         std::cerr << "arestrix-cli memory: comando desconhecido: " << command << "\n";
         return kExitUsage;
     }
@@ -522,6 +523,7 @@ int runMemory(const std::vector<std::string>& args) {
     std::string embeddingAction;
     std::string traceRun;
     std::string traceNode;
+    std::string pathId;
     size_t optionStart = 2;
     if (command == "proposals") {
         if (args.size() < 3) {
@@ -595,6 +597,27 @@ int runMemory(const std::vector<std::string>& args) {
         }
         embeddingAction = args[2];
         optionStart = 3;
+    } else if (command == "paths") {
+        if (args.size() < 3) {
+            std::cerr << "arestrix-cli memory paths: informe list|show|retire\n";
+            return kExitUsage;
+        }
+        embeddingAction = args[2];
+        if (embeddingAction != "list" && embeddingAction != "show" &&
+            embeddingAction != "retire") {
+            std::cerr << "arestrix-cli memory paths: acao desconhecida: " << embeddingAction << "\n";
+            return kExitUsage;
+        }
+        if (embeddingAction != "list") {
+            if (args.size() < 4) {
+                std::cerr << "arestrix-cli memory paths " << embeddingAction << ": informe o id\n";
+                return kExitUsage;
+            }
+            pathId = args[3];
+            optionStart = 4;
+        } else {
+            optionStart = 3;
+        }
     } else if (command == "ab") {
         if (args.size() < 3) {
             std::cerr << "arestrix-cli memory ab: informe validate|order|report|run\n";
@@ -652,6 +675,7 @@ int runMemory(const std::vector<std::string>& args) {
     long long minExecutions = 5;
     long long minDistinctInputs = 3;
     size_t claimsMaxPassages = 10;
+    std::string pathState;
     std::string abSuitePath;
     std::string abObservationsPath;
     fs::path abPipelinePath;
@@ -806,6 +830,10 @@ int runMemory(const std::vector<std::string>& args) {
             if (i + 1 >= args.size()) { std::cerr << "faltou --status\n"; return kExitUsage; }
             status = args[++i];
             if (status == "all") status.clear();
+        }
+        else if (a == "--state") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --state\n"; return kExitUsage; }
+            pathState = args[++i];
         } else if (a == "--reason") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --reason\n"; return kExitUsage; }
             reason = args[++i];
@@ -978,6 +1006,47 @@ int runMemory(const std::vector<std::string>& args) {
         if (!memory.configure(projectId, true, dbPath.string())) {
             std::cerr << "Falha ao abrir o banco de memoria: " << dbPath.string() << "\n";
             return kExitConfig;
+        }
+
+        if (command == "paths") {
+            if (embeddingAction == "list") {
+                taskforge::Json out = memory.listPaths(projectId, pathState);
+                if (opt.json) {
+                    std::cout << out.dump(2) << "\n";
+                } else {
+                    for (const auto& path : out) {
+                        std::cout << path.value("id", std::string()) << " | "
+                                  << path.value("taskType", std::string()) << " | "
+                                  << path.value("state", std::string()) << " | uses "
+                                  << path.value("uses", 0LL) << " | inputs "
+                                  << path.value("distinctInputs", 0LL) << " | util "
+                                  << path.value("utility", 0.0) << "\n";
+                    }
+                }
+                return 0;
+            }
+            if (embeddingAction == "show") {
+                taskforge::Json out = memory.getPath(projectId, pathId);
+                if (out.empty()) {
+                    std::cerr << "Caminho nao encontrado: " << pathId << "\n";
+                    return kExitConfig;
+                }
+                std::cout << (opt.json ? out.dump(2) : out.dump(2)) << "\n";
+                return 0;
+            }
+            std::string pathError;
+            const bool ok = memory.setPathState(projectId, pathId, "retired", pathError);
+            if (!ok) {
+                std::cerr << "Falha ao retirar caminho: " << pathError << "\n";
+                return kExitConfig;
+            }
+            if (opt.json) {
+                std::cout << taskforge::Json{{"ok", true}, {"pathId", pathId},
+                                             {"state", "retired"}}.dump(2) << "\n";
+            } else {
+                std::cout << "Caminho retirado: " << pathId << "\n";
+            }
+            return 0;
         }
 
         if (command == "claims") {

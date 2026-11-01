@@ -205,10 +205,23 @@ MemoryMaintenanceConfig maintenanceConfigFromJson(const taskforge::Json& value) 
     config.lensesEnabled = lensSwitch.is_boolean()
         ? lensSwitch.get<bool>()
         : lensSwitch.is_object() ? lensSwitch.value("enabled", false) : false;
+    const taskforge::Json pathSwitch = value.contains("paths") ? value["paths"] : taskforge::Json();
+    config.pathsEnabled = pathSwitch.is_boolean()
+        ? pathSwitch.get<bool>()
+        : pathSwitch.is_object() ? pathSwitch.value("enabled", false) : false;
+    if (pathSwitch.is_object()) {
+        config.pathOptions.minDistinctInputs = std::max<long long>(
+            1, std::min<long long>(100, pathSwitch.value("minDistinctInputs", 3)));
+        config.pathOptions.prior = std::max(0.01, std::min(100.0,
+            pathSwitch.value("prior", 1.0)));
+        config.pathOptions.mu = std::max(0.0, std::min(10.0,
+            pathSwitch.value("mu", 2.674e-7)));
+    }
     config.claimExtractor = MemoryClaimExtractor::configFromJson(value);
-    if (config.claimExtractor.enabled && !config.enabled) {
-        // A extracao e uma tarefa de manutencao; ligar o extrator sem modo de
-        // consolidacao ainda precisa de um gatilho ocioso.
+    if ((config.claimExtractor.enabled || config.lensesEnabled || config.pathsEnabled) &&
+        !config.enabled) {
+        // Extracao, lentes e caminhos sao tarefas de manutencao; liga-las sem
+        // modo de consolidacao ainda precisa de um gatilho ocioso.
         config.enabled = true;
         config.mode = "idle";
     }
@@ -231,6 +244,10 @@ taskforge::Json maintenanceConfigToJson(const MemoryMaintenanceConfig& config) {
         {"claimExtraction", taskforge::Json{{"enabled", config.claimExtractor.enabled},
                                             {"maxPassages", static_cast<long long>(config.claimMaxPassages)}}},
         {"lenses", config.lensesEnabled},
+        {"paths", taskforge::Json{{"enabled", config.pathsEnabled},
+                                  {"minDistinctInputs", config.pathOptions.minDistinctInputs},
+                                  {"prior", config.pathOptions.prior},
+                                  {"mu", config.pathOptions.mu}}},
         {"extractor", taskforge::Json{{"model", config.claimExtractor.model},
                                       {"revision", config.claimExtractor.revision},
                                       {"baseUrl", config.claimExtractor.baseUrl}}}};
@@ -1517,6 +1534,59 @@ taskforge::Json MemoryService::rebuildFacets(const std::string& projectId, bool 
     return MemoryFacets::rebuild(*s, scopeId(projectId), embedding, facetsEnabled);
 }
 
+taskforge::Json MemoryService::rebuildPaths(const std::string& projectId, bool pathsEnabled,
+                                            const PathOptions& options) {
+    auto* s = ensureStore(projectId);
+    auto* t = ensureTelemetry(projectId);
+    if (!s || !t) return taskforge::Json{{"ok", false}, {"error", "memoria indisponivel"}};
+    if (!pathsEnabled) {
+        return taskforge::Json{{"ok", true}, {"disabled", true},
+                               {"paths", s->pathSummary(scopeId(projectId))}};
+    }
+    const std::string scope = scopeId(projectId);
+    const auto approved = t->approvedTraceIds(scope, 10000);
+    const std::set<std::string> approvedSet(approved.begin(), approved.end());
+    std::vector<MemoryTraceRecord> traces;
+    for (const auto& trace : t->listTraces(scope, 10000)) {
+        if (approvedSet.count(trace.traceId)) traces.push_back(trace);
+    }
+    auto report = MemoryPaths::consolidate(*s, scope, traces, options);
+    report["reconcile"] = MemoryPaths::reconcile(*s, scope);
+    report["summary"] = s->pathSummary(scope);
+    return report;
+}
+
+taskforge::Json MemoryService::listPaths(const std::string& projectId,
+                                         const std::string& state) {
+    auto* s = ensureStore(projectId);
+    taskforge::Json out = taskforge::Json::array();
+    if (!s) return out;
+    for (const auto& path : s->listPaths(scopeId(projectId), state)) {
+        out.push_back(taskforge::Json{
+            {"id", path.id}, {"taskType", path.taskType}, {"state", path.state},
+            {"revision", path.revision}, {"success", path.success},
+            {"failure", path.failure}, {"uses", path.uses},
+            {"distinctInputs", path.distinctInputs}, {"utility", path.utility}});
+    }
+    return out;
+}
+
+taskforge::Json MemoryService::getPath(const std::string& projectId,
+                                       const std::string& pathId) {
+    auto* s = ensureStore(projectId);
+    return s ? s->getPath(scopeId(projectId), pathId) : taskforge::Json::object();
+}
+
+bool MemoryService::setPathState(const std::string& projectId, const std::string& pathId,
+                                 const std::string& state, std::string& error) {
+    auto* s = ensureStore(projectId);
+    if (!s) {
+        error = "memoria indisponivel";
+        return false;
+    }
+    return s->setPathState(scopeId(projectId), pathId, state, "cli");
+}
+
 size_t MemoryService::extractProposals(const std::string& projectId, const std::string& episodeId) {
     auto* s = ensureStore(projectId);
     auto* t = ensureTelemetry(projectId);
@@ -1571,7 +1641,10 @@ bool MemoryService::promoteProposal(const std::string& projectId, const std::str
         return false;
     }
     const bool promoted = s->promoteProposal(scopeId(projectId), proposalId, reviewer, error, promotedId);
-    if (promoted) invalidateBriefCache();
+    if (promoted) {
+        invalidateBriefCache();
+        MemoryPaths::reconcile(*s, scopeId(projectId), "claim_state_changed");
+    }
     return promoted;
 }
 
@@ -2056,6 +2129,7 @@ void MemoryService::maintenanceLoop(const std::string& projectId,
                                                       runConfig.claimMaxPassages);
         }
         report["facets"] = rebuildFacets(projectId, runConfig.lensesEnabled);
+        report["paths"] = rebuildPaths(projectId, runConfig.pathsEnabled, runConfig.pathOptions);
 
         lock.lock();
         runtime->busy = false;
@@ -2122,6 +2196,7 @@ taskforge::Json MemoryService::runMaintenanceOnce(const std::string& projectId,
                                                   config.claimMaxPassages);
     }
     report["facets"] = rebuildFacets(projectId, config.lensesEnabled);
+    report["paths"] = rebuildPaths(projectId, config.pathsEnabled, config.pathOptions);
 
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     auto it = maintenance_.find(projectKey(projectId));
@@ -2422,6 +2497,8 @@ taskforge::Json MemoryService::toJson(const std::string& projectId) {
     out["evidence"] = s->evidenceSummary(scopeId(projectId));
     out["sources"] = s->sourceSummary(scopeId(projectId));
     out["facets"] = s->facetSummary(scopeId(projectId));
+    out["paths"] = s->pathSummary(scopeId(projectId));
+    out["pathRecords"] = listPaths(projectId);
     return out;
 }
 

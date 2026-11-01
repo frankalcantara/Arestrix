@@ -367,6 +367,13 @@ export interface IProjectMemoryConfig extends Partial<INodeMemoryConfig> {
   claimExtraction?: boolean | { enabled?: boolean; maxPassages?: number };
   /** E14: lentes e facetas determinísticas (off por padrão). */
   lenses?: boolean | { enabled?: boolean };
+  /** E15: caminhos canônicos consolidados a partir de traços aprovados. */
+  paths?: boolean | {
+    enabled?: boolean;
+    minDistinctInputs?: number;
+    prior?: number;
+    mu?: number;
+  };
   extractor?: {
     baseUrl?: string;
     model?: string;
