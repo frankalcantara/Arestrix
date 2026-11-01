@@ -1019,9 +1019,11 @@ bool MemoryService::recordBriefHits(const std::string& projectId, const std::str
 }
 
 int MemoryService::markHitsUsed(const std::string& projectId, const std::string& runId,
-                                const std::string& nodeId, const std::vector<std::string>& memoryIds) {
+                                const std::string& nodeId, const std::vector<std::string>& memoryIds,
+                                int* invalid) {
+    if (invalid) *invalid = 0;
     auto* t = ensureTelemetry(projectId);
-    return t ? t->markHitsUsed(scopeId(projectId), runId, nodeId, memoryIds) : 0;
+    return t ? t->markHitsUsed(scopeId(projectId), runId, nodeId, memoryIds, invalid) : 0;
 }
 
 bool MemoryService::finishHits(const std::string& projectId, const std::string& runId,

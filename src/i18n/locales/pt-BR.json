@@ -1588,7 +1588,10 @@
     "usage_hits": "Memórias injetadas",
     "usage_used": "usadas/consultadas",
     "usage_used_injected": "usadas do brief",
+    "usage_cited_brief": "citadas do brief",
+    "usage_cited_search": "citadas da busca",
     "usage_consulted": "consultadas via busca",
+    "usage_invalid_citations": "citações inválidas",
     "btn_close": "Fechar"
   },
   "batch_pipeline": {

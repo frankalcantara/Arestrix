@@ -445,8 +445,11 @@ public:
                    const std::string& nodeId, const std::string& memoryId,
                    const std::string& kind, bool injected, bool used,
                    const std::string& outcome = "");
+    // E2: used=1 so por citacao. IDs que nao foram entregues na execucao sao
+    // ignorados e contados em invalid (e em memory_usage.invalid_citations).
     int markHitsUsed(const std::string& scopeId, const std::string& runId,
-                     const std::string& nodeId, const std::vector<std::string>& memoryIds);
+                     const std::string& nodeId, const std::vector<std::string>& memoryIds,
+                     int* invalid = nullptr);
     // Registra memórias descobertas por memory_search. Atualiza o hit existente
     // (se a memoria ja tinha sido injetada) ou insere injected=0/used=1.
     int recordConsultedHits(const std::string& scopeId, const std::string& runId,
