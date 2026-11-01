@@ -10,6 +10,13 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ### Added
 
+- **Path serving and shortcuts (multigraph plan, E16):** with
+  `memory.pathServing` enabled, the brief and `memory_search` try eligible
+  active paths before graph retrieval, deliver `[MEMO:path:<id>]` blocks with
+  claim sources, expand citations of a path to its claims (and vice versa), and
+  record exploration in the trace. Derived `via_caminho` edges are
+  reconstructible shortcuts, excluded from search, conflicts and evidence, and
+  follow the path state. The switch stays off pending the recorded A/B result.
 - **Canonical paths and invalidation (multigraph plan, E15):** approved traces
   consolidate into canonical claim paths, with idempotency per `trace_id`,
   activation after a configurable number of distinct inputs, Beta utility with

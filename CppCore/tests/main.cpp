@@ -4826,6 +4826,200 @@ TEST(memory_paths_retract_suspend_revalidate_and_retire) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_paths_serving_requires_all_claims_eligible) {
+    using taskforge::memory::MemoryPaths;
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryTraceRecord;
+    using taskforge::memory::PathOptions;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-path-serving";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string scope = "project:path-serving";
+    std::string error;
+    MemoryStore store((root / "memory.db").string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "serving"));
+    const std::string subject = store.resolveNode(scope, "Guia", "entity");
+    const std::string object = store.resolveNode(scope, "4.5:1", "value");
+    const std::string claim = store.recordEdge(
+        scope, subject, object, "HAS_CONTRAST", taskforge::Json::object(),
+        "2026-01-01", "", 0.8, "active", "claim", "serving",
+        taskforge::Json{{"claim", true}, {"lens", "ab"}, {"access", "local"}});
+    MemoryTraceRecord trace;
+    trace.traceId = "trace-serving";
+    trace.scopeId = scope;
+    trace.taskType = "ab";
+    trace.outcome = "success";
+    trace.inputHash = "input-serving";
+    trace.createdAt = "2026-11-01T00:00:00Z";
+    trace.used = taskforge::Json::array({claim});
+    PathOptions options;
+    options.minDistinctInputs = 1;
+    MemoryPaths::consolidate(store, scope, {trace}, options);
+
+    auto served = MemoryPaths::serve(store, scope, "ab", "", {}, 2, 0.0);
+    CHECK(!served.value("served", false));   // acesso local exige local
+    served = MemoryPaths::serve(store, scope, "ab", "", {"local"}, 2, 0.0);
+    CHECK(served.value("served", false));
+    CHECK(served["paths"][0].value("text", std::string()).find("[MEMO:path:") !=
+          std::string::npos);
+
+    CHECK(store.invalidateEdge(claim, "2026-11-02", "retracted", "test"));
+    served = MemoryPaths::serve(store, scope, "ab", "", {"local"}, 2, 0.0);
+    CHECK(!served.value("served", false));   // uma afirmação inelegível bloqueia tudo
+
+    store.close();
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_paths_shortcuts_are_derived_and_follow_path_state) {
+    using taskforge::memory::MemoryPaths;
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryTraceRecord;
+    using taskforge::memory::PathOptions;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-path-shortcuts";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string scope = "project:path-shortcuts";
+    std::string error;
+    MemoryStore store((root / "memory.db").string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "shortcuts"));
+    const std::string src = store.resolveNode(scope, "Guia", "entity");
+    const std::string dst = store.resolveNode(scope, "4.5:1", "value");
+    const std::string claim = store.recordEdge(
+        scope, src, dst, "HAS_CONTRAST", taskforge::Json::object(),
+        "2026-01-01", "", 0.8, "active", "claim", "shortcut",
+        taskforge::Json{{"claim", true}, {"lens", "ab"}});
+    MemoryTraceRecord trace;
+    trace.traceId = "trace-shortcut";
+    trace.scopeId = scope;
+    trace.taskType = "ab";
+    trace.outcome = "success";
+    trace.inputHash = "input-shortcut";
+    trace.createdAt = "2026-11-01T00:00:00Z";
+    trace.used = taskforge::Json::array({claim});
+    PathOptions options;
+    options.minDistinctInputs = 1;
+    MemoryPaths::consolidate(store, scope, {trace}, options);
+    const std::string pathId = store.listPaths(scope).at(0).id;
+    const auto evidenceBefore = store.evidenceSummary(scope);
+
+    const auto report = MemoryPaths::materializeShortcuts(store, scope, 0.5, 1);
+    CHECK(report.value("active", 0LL) == 1);
+    auto shortcut = store.shortcutForPath(scope, pathId);
+    CHECK(shortcut.value("status", std::string()) == "active");
+    CHECK(shortcut.value("metadata", std::string()).find("\"derived\":true") !=
+          std::string::npos);
+    CHECK(store.evidenceSummary(scope).value("snapshots", 0LL) ==
+          evidenceBefore.value("snapshots", 0LL));
+    for (const auto& edge : store.searchEdges(scope, "Guia", 20)) {
+        CHECK(edge.relation != "via_caminho");
+    }
+
+    CHECK(store.setPathState(scope, pathId, "suspended", "test"));
+    shortcut = store.shortcutForPath(scope, pathId);
+    CHECK(shortcut.value("status", std::string()) == "superseded");
+    store.close();
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_service_serves_paths_in_brief_and_search) {
+    using taskforge::memory::MemoryBriefInfo;
+    using taskforge::memory::MemoryPaths;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryTraceRecord;
+    using taskforge::memory::PathOptions;
+    using taskforge::memory::PathServingConfig;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-path-service";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject("path-service-test");
+    CHECK(memory.configure("path-service-test", true, (root / "memory.db").string()));
+    auto* store = memory.store("path-service-test");
+    CHECK(store != nullptr);
+    const std::string scope = "project:path-service-test";
+    const std::string subject = store->resolveNode(scope, "Guia", "entity");
+    const std::string object = store->resolveNode(scope, "4.5:1", "value");
+    const std::string claim = store->recordEdge(
+        scope, subject, object, "HAS_CONTRAST", taskforge::Json::object(),
+        "2026-01-01", "", 0.8, "active", "claim", "service",
+        taskforge::Json{{"claim", true}, {"lens", "ab"}});
+    PathOptions pathOptions;
+    pathOptions.minDistinctInputs = 3;
+    std::vector<MemoryTraceRecord> traces;
+    for (int i = 0; i < 3; ++i) {
+        MemoryTraceRecord trace;
+        trace.traceId = "trace-service-" + std::to_string(i);
+        trace.scopeId = scope;
+        trace.taskType = "ab";
+        trace.outcome = "success";
+        trace.inputHash = "input-" + std::to_string(i);
+        trace.createdAt = "2026-11-01T00:00:00Z";
+        trace.used = taskforge::Json::array({claim});
+        traces.push_back(trace);
+    }
+    MemoryPaths::consolidate(*store, scope, traces, pathOptions);
+    const auto paths = store->listPaths(scope);
+    CHECK(paths.size() == 1);
+    CHECK(paths[0].state == "active");
+    PathServingConfig serving;
+    serving.enabled = true;
+    serving.minUtility = 0.5;
+    serving.minUses = 3;
+    serving.maxPaths = 1;
+    CHECK(memory.configurePathServing("path-service-test", serving));
+
+    MemoryBriefInfo info;
+    const std::string brief = memory.buildBrief(
+        "path-service-test", "pipeline", {}, {}, 4000, true, false, &info,
+        "ab", "intent", "", "");
+    CHECK(brief.find("[MEMO:path:") != std::string::npos);
+    CHECK(info.pathIds.size() == 1);
+    CHECK(info.pathClaimIds.size() == 1);
+    CHECK(info.pathClaimIds[0] == claim);
+
+    std::vector<taskforge::memory::MemoryHitRef> hits;
+    const std::string search = memory.searchContext(
+        "path-service-test", "contraste", 5, {}, &hits, "", "", {}, "ab", "intent");
+    CHECK(search.find("[MEMO:path:") != std::string::npos);
+    bool pathHit = false;
+    bool claimHit = false;
+    for (const auto& hit : hits) {
+        if (hit.kind == "path") pathHit = true;
+        if (hit.id == claim) claimHit = true;
+    }
+    CHECK(pathHit);
+    CHECK(claimHit);
+    memory.closeProject("path-service-test");
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_paths_exploration_fraction_and_thompson_bounds) {
+    using taskforge::memory::MemoryPaths;
+    size_t explored = 0;
+    for (uint64_t seed = 0; seed < 10000; ++seed) {
+        if (MemoryPaths::shouldExplore(0.1, seed)) ++explored;
+    }
+    CHECK(explored >= 900 && explored <= 1100);
+    for (uint64_t seed = 0; seed < 100; ++seed) {
+        const double sample = MemoryPaths::thompsonSample(3, 2, seed);
+        CHECK(sample >= 0.0 && sample <= 1.0);
+    }
+    CHECK(!MemoryPaths::shouldExplore(0.0, 1));
+    CHECK(MemoryPaths::shouldExplore(1.0, 1));
+}
+
 TEST(memory_claim_extractor_precision_on_annotated_fifty_passages) {
     using taskforge::memory::ClaimExtractorConfig;
     using taskforge::memory::MemoryClaimExtractor;

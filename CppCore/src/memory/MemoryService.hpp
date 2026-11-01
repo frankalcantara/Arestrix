@@ -42,6 +42,18 @@ struct MemoryMaintenanceConfig {
 MemoryMaintenanceConfig maintenanceConfigFromJson(const taskforge::Json& value);
 taskforge::Json maintenanceConfigToJson(const MemoryMaintenanceConfig& config);
 
+// E16: servico de caminhos no hot path. Desligado por padrao ate o A/B.
+struct PathServingConfig {
+    bool enabled = false;
+    double explorationRate = 0.0;
+    double minUtility = 0.6;
+    long long minUses = 3;
+    size_t maxPaths = 2;
+};
+
+PathServingConfig pathServingConfigFromJson(const taskforge::Json& value);
+taskforge::Json pathServingConfigToJson(const PathServingConfig& config);
+
 class MemoryService {
 public:
     ~MemoryService();
@@ -156,7 +168,9 @@ public:
                               std::vector<MemoryHitRef>* hits = nullptr,
                               const std::string& runId = "",
                               const std::string& nodeId = "",
-                              const std::vector<std::string>& lenses = {});
+                              const std::vector<std::string>& lenses = {},
+                              const std::string& taskType = "",
+                              const std::string& intent = "");
 
     // E12: ingestao de fontes e trechos sem modelo de linguagem.
     size_t ingestSources(const std::string& projectId, const std::string& workspaceRoot,
@@ -200,6 +214,8 @@ public:
     bool configureMaintenance(const std::string& projectId,
                               const MemoryMaintenanceConfig& config);
     MemoryMaintenanceConfig maintenanceConfig(const std::string& projectId) const;
+    bool configurePathServing(const std::string& projectId, const PathServingConfig& config);
+    PathServingConfig pathServingConfig(const std::string& projectId) const;
     taskforge::Json maintenanceStatus(const std::string& projectId);
     // Executa uma rodada agora no chamador (usado por CLI/testes e pelo worker).
     taskforge::Json runMaintenanceOnce(const std::string& projectId,
@@ -332,6 +348,9 @@ private:
                       std::vector<MemoryHitRef>* hits, std::string& output,
                       taskforge::Json* traceCandidates = nullptr,
                       const std::vector<std::string>& lenses = {});
+    taskforge::Json servePaths(const std::string& projectId, const std::string& taskType,
+                               const std::string& intent,
+                               const std::vector<std::string>& access);
     bool configureWorkspaceLocked(const std::string& workspaceId, const std::string& dbPath,
                                   const std::string& parentId, const std::string& name);
     std::string workspaceScope(const std::string& workspaceId) const;
@@ -364,6 +383,7 @@ private:
     std::map<std::string, std::string> workspacePaths_;
     std::map<std::string, std::string> projectWorkspace_;
     std::map<std::string, std::unique_ptr<MaintenanceRuntime>> maintenance_;
+    std::map<std::string, PathServingConfig> pathServing_;   // E16
 };
 
 } // namespace memory

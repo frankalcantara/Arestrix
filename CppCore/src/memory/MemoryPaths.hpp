@@ -38,6 +38,25 @@ public:
     static taskforge::Json suspendForClaim(MemoryStore& store, const std::string& scopeId,
                                            const std::string& claimId,
                                            const std::string& reason = "claim_inactive");
+
+    // E16: seleciona caminhos ativos e elegiveis antes da busca no grafo.
+    // `access` e a politica do chamador (ex.: {"project"} ou {"local"}).
+    static taskforge::Json serve(MemoryStore& store, const std::string& scopeId,
+                                 const std::string& taskType, const std::string& intent,
+                                 const std::vector<std::string>& access,
+                                 size_t maxPaths, double explorationRate);
+    static bool pathEligible(MemoryStore& store, const std::string& scopeId,
+                             const MemoryPathRecord& path,
+                             const std::vector<std::string>& access,
+                             std::string* reason = nullptr);
+    static double thompsonSample(long long success, long long failure, uint64_t seed);
+    static bool shouldExplore(double rate, uint64_t seed);
+
+    // E16: atalhos sao projecoes reconstruiveis; nao sao evidencia nem entram
+    // em conflitos, e herdam o estado do caminho.
+    static taskforge::Json materializeShortcuts(MemoryStore& store, const std::string& scopeId,
+                                                double minUtility = 0.6,
+                                                long long minUses = 3);
 };
 
 } // namespace memory

@@ -91,6 +91,7 @@ std::vector<EdgeView> loadViews(MemoryStore& store, const std::string& scope,
     std::vector<EdgeView> out;
     const auto names = store.nodeNames(scope);
     for (auto& edge : store.listEdges(scope, status, 20000)) {
+        if (edge.relation == "via_caminho") continue;   // E16: projecao, nao evidencia
         EdgeView view;
         view.edge = std::move(edge);
         auto src = names.find(view.edge.srcId);

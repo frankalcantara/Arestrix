@@ -343,6 +343,22 @@ arestrix-cli memory paths show <path> --project . --json
 arestrix-cli memory paths retire <path> --project .
 ```
 
+### Serviço de caminhos
+
+Com `globalDefaults.memory.pathServing` ligado, o brief e `memory_search`
+consultam primeiro os caminhos ativos compatíveis com o `task_type`. Todas as
+afirmações precisam estar ativas, dentro da validade e liberadas pela política de
+acesso; se uma falhar, o caminho inteiro não é servido. O caminho aparece como
+`[MEMO:path:<id>]` com as afirmações e suas fontes. Citar o caminho conta como
+uso das afirmações; citar uma afirmação também marca o caminho. Uma fração
+configurável das consultas usa amostragem de Thompson e fica registrada no
+traço.
+
+Caminhos com utilidade e número de usos suficientes materializam arestas
+derivadas `via_caminho`. Elas são projeções reconstruíveis, não são evidência,
+não entram na detecção de conflito nem na busca normal, e acompanham o estado do
+caminho. O interruptor permanece desligado até o A/B ser registrado.
+
 ### Traços de recuperação
 
 Toda escrita de conhecimento incrementa `knowledge_version` na mesma transação;
