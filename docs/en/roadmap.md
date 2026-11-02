@@ -1,6 +1,6 @@
 # Roadmap and known limitations
 
-> **Applies to:** Arestrix 2.5 (`2.5.0`) · Last reviewed: 2026-10-31
+> **Applies to:** Arestrix 2.6 (`2.6.0`) · Last reviewed: 2026-11-02
 >
 > This page records what is intentionally incomplete and the order we plan to address it. It is not a
 > commitment to dates.

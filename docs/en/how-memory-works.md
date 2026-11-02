@@ -1,6 +1,6 @@
 # How Arestrix memory works
 
-> **Applies to:** Arestrix 2.5 — last reviewed: 2026-11-02
+> **Applies to:** Arestrix 2.6 — last reviewed: 2026-11-02
 >
 > A one-page guide and reference for project memory. Memory is optional, local and owned by the
 > project. There is no automatic import of old formats.

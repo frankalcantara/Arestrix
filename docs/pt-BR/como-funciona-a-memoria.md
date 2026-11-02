@@ -1,6 +1,6 @@
 # Como funciona a memória do Arestrix
 
-> **Aplica-se a:** Arestrix 2.5 — última revisão: 2026-11-02
+> **Aplica-se a:** Arestrix 2.6 — última revisão: 2026-11-02
 >
 > Guia de uma página e referência da memória de projeto. A memória é opcional, local e
 > pertence ao projeto. Não há importação automática de formatos antigos.

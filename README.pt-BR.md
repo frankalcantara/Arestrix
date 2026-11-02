@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <b>2.5.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentação</a>
+  <b>2.6.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentação</a>
 </p>
 
 <p align="center">
@@ -185,7 +185,7 @@ python scripts/e2e_examples.py
 
 ## Status do projeto
 
-O **Arestrix 2.5.0** é o release atual (2026-10-31). O Studio roda no Windows e no Linux;
+O **Arestrix 2.6.0** é o release atual (2026-11-02). O Studio roda no Windows e no Linux;
 programas gerados a partir de um grafo atualmente têm o Windows como alvo. APIs, formatos de
 arquivo e flags de linha de comando ainda podem mudar entre releases menores. Consulte o
 [changelog](CHANGELOG.md) para as limitações atuais. O instalador Windows e a assinatura de código
