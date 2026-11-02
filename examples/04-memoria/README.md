@@ -66,15 +66,14 @@ It checks prompt injection, filters, API usage and persistence.
 
 The runtime records tokens, calls, retries, success/failure, context and injected/used memories. In
 the Studio, use **Global Defaults → Memory → Measurement / A-B**: run with **Normal** and then with
-**A/B: memory OFF** + **Record metrics**, on the same graph. For automation:
+**A/B: memory OFF**, on the same graph. For automation:
 
 ```bash
-# memory on, metrics on
-ARESTRIX_MEMORY_METRICS=1 arestrix-cli run pipelines/main.json --root <project>
+# memory on
+arestrix-cli run pipelines/main.json --root <project>
 
 # memory OFF on the same graph
-ARESTRIX_MEMORY_METRICS=1 ARESTRIX_MEMORY_DISABLE=1 \
-  arestrix-cli run pipelines/main.json --root <project>
+ARESTRIX_MEMORY_DISABLE=1 arestrix-cli run pipelines/main.json --root <project>
 
 # native report
 arestrix-cli memory report --project <project>

@@ -103,8 +103,10 @@ graph canvas; Arestrix validates it, generates C++20 source and compiles it with
   schema, TTL and CAS), optional hybrid retrieval (EmbeddingGemma 2 or Qwen3-Embedding-4B) with a
   full index fingerprint, deterministic consolidation, validator-gated playbooks, workspace
   promotion, injected/consulted/used tracking, a token-budgeted brief and context A/B in the Studio.
-  Telemetry lives in a separate database. The memory plan (Phases A-C) is complete; Phase D is a
-  separate program outside it. See [pending items](docs/en/pending.md) and
+  The advanced multigraph is implemented as opt-in: sources/passages, validated claims, lenses and
+  facets, canonical paths with serving and shortcuts, bounded beam traversal, local/frontier routing
+  and interdomain bridge hypotheses. Telemetry lives in a separate database. The experimental
+  switches remain off pending real-data measurement. See [pending items](docs/en/pending.md) and
   [how memory works](docs/en/how-memory-works.md).
 - **Arestrix Library** - audited skill, MCP and template assets with Studio, Workspace and Project
   scopes, project pins, built-in/workspace imports and a native GitHub source with commit pin,

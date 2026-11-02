@@ -30,7 +30,7 @@
 - Playbook gate with 3 distinct inputs, stable validator, 24h limit, unpromote and auto-demote.
 - Hybrid search with full fingerprint, `ready/stale/pending/partial/failed` and lexical fallback.
 - Brief guided by `task_type`, theme and prompt template; SQL theme filtering and invalidatable cache.
-- Prompt/cache tokens in `run_usage`.
+- Prompt/cache tokens in `memory_usage`.
 - Single-valued and multi-valued fact predicates.
 - A/B v2 with the versioned 12/4/4 suite, shuffled order, repetitions, paired deltas and 95% CI.
 - Studio assistant tools: `memory_inspect`, `memory_search`, `memory_review_proposal`,
@@ -55,8 +55,9 @@ The conservative defaults remain: `memory.pathServing`, `memory.traversal`, `mem
 
 ### Out of scope (not pending)
 
-- LLM extraction or consolidation; current memory is deterministic.
-- Multi-machine synchronization and multi-worker coordination.
+- Claim extraction by a local model already exists behind `memory.claimExtraction`; LLM
+  consolidation/generalization remains out of scope.
+- Multi-machine synchronization and multi-worker coordination (out of scope for this release).
 - Graph checkpoint/resume.
 - Changes to the institutional HTTP/MCP protocol.
 - Automatic migration of old projects; there is no legacy importer.
@@ -66,9 +67,9 @@ The conservative defaults remain: `memory.pathServing`, `memory.traversal`, `mem
 ### 4.1 A/B v2 execution harness
 
 The harness is implemented in `memory ab run` and covered by `scripts/e2e_memory_ab.py`: 20 tasks x
-3 repetitions x 2 arms, frozen knowledge, validator and `ab-observations.json` with `ab_run_id`,
-`arm`, `ok`, tokens, turns, cost and latency. The remaining work is to run it with real providers and
-record the result in the report.
+3 repetitions x 2 arms, frozen knowledge, validator and an `observations-<timestamp>.json` file with
+`runId`, `episodeId`, `arm`, `ok`, tokens, turns and latency. Monetary cost is not computed. The
+remaining work is to run it with real providers and record the result in the report.
 
 ### 4.2 Institutional level in the assistant
 

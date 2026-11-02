@@ -128,10 +128,10 @@ O resultado é uma mensagem de ferramenta JSON com `callId`, `target`, `status`,
 um destino de interação também traz `answers`. O texto final do alvo também é gravado em
 `.arestrix/out/<target>.txt`.
 
-Veja [`examples/06-chamada-agente`](../examples/06-chamada-agente) para um coordenador chamando um
-especialista, [`examples/09-chamadas-paralelas`](../examples/09-chamadas-paralelas) para duas
-delegações no mesmo turno, [`examples/10-subflow-chamavel`](../examples/10-subflow-chamavel) para um
-subflow nativo chamável e [`examples/11-call-vertex`](../examples/11-call-vertex) para um vértice
+Veja [`examples/06-chamada-agente`](../../examples/06-chamada-agente) para um coordenador chamando um
+especialista, [`examples/09-chamadas-paralelas`](../../examples/09-chamadas-paralelas) para duas
+delegações no mesmo turno, [`examples/10-subflow-chamavel`](../../examples/10-subflow-chamavel) para um
+subflow nativo chamável e [`examples/11-call-vertex`](../../examples/11-call-vertex) para um vértice
 Call executando um alvo dentro do fluxo.
 
 ## Vértices de interação

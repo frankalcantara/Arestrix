@@ -58,7 +58,7 @@ arestrix-cli gen <grafo.json>
 arestrix-cli check [--project <pasta> | <grafo.json>] [--require-env NOME]
 arestrix-cli doctor [--project <pasta>]
 arestrix-cli env set|reset|list|check
-arestrix-cli memory report|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote|paths|bridges [--project <pasta>]
+arestrix-cli memory report|health|trace|claims|paths|bridges|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote|unpromote|state|ab [--project <pasta>]
 arestrix-cli mcp list|test|tools [id]
 arestrix-cli project info|graphs|validate
 arestrix-cli completion powershell|bash|zsh
@@ -132,6 +132,16 @@ distintas, pares de intenção, citação, reuso e tokens por execução. Os lim
 com `--min-verdict-rate`, `--min-citation-rate`, `--min-executions`, `--min-distinct-inputs` e
 `--min-reuse-rate`; `--since` limita o período. O resultado inclui a decisão recomendada.
 
+### `memory health`
+
+```powershell
+.\arestrix-cli.exe memory health --project .\examples\04-memoria --json
+```
+
+Mostra o estado operacional do banco de conhecimento e da telemetria, incluindo
+indexação de embeddings, pendências e erros de acesso. Para versão/fingerprint do
+esquema e contagens por tabela, use `memory report`.
+
 ### `memory trace`
 
 ```powershell
@@ -203,7 +213,8 @@ Expurga toda a memória cognitiva e telemetria do projeto e compacta o SQLite.
 ```
 
 Lista, aceita (promove com auditoria) ou rejeita propostas L2. Só propostas `pending` podem ser
-revisadas; fatos/playbooks exigem evidência.
+revisadas; fatos/playbooks exigem evidência. Propostas `bridge_hypothesis` são hipóteses
+informativas: a aceitação automática é recusada e não cria aresta.
 
 ### `memory embeddings` e `memory reindex`
 
@@ -251,8 +262,9 @@ CAS; omita para criar. Opções incluem `--max-bytes`, `--ttl`, `--mode replace|
 ```
 
 Valida o conjunto versionado 12/4/4, gera uma ordem intercalada com semente e analisa observações
-pareadas. A métrica primária é a aprovação do validador; as secundárias são tokens, turnos, custo e
-latência. Falhas de infraestrutura ficam fora do veredito pareado e são contadas à parte.
+pareadas. A métrica primária é a aprovação do validador; as secundárias são tokens, turnos e
+latência. Custo monetário não é calculado nesta versão. Falhas de infraestrutura ficam fora do
+veredito pareado e são contadas à parte.
 
 `memory ab run` executa o piloto: congela o conhecimento, abre a cópia somente leitura no braço ON,
 desliga a memória no braço OFF e grava `ab_arm`/`ab_repetition` na telemetria de medição. O relatório
@@ -467,8 +479,7 @@ $env:KEENABLE_API = "sua-chave"
 ### Comparar memória ligada e desligada
 
 ```powershell
-# memória ON, gravando métricas
-$env:ARESTRIX_MEMORY_METRICS = "1"
+# memória ON
 .\arestrix-cli.exe run .\examples\04-memoria\pipelines\main.json `
   --root .\examples\04-memoria
 
@@ -503,7 +514,6 @@ Para testes sem chave real, os scripts de e2e usam LLMs falsos e MCPs de teste; 
 | :--- | :--- |
 | `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`, etc. | Chave do provedor usado pelos agentes. |
 | `KEENABLE_API` | Chave do MCP Keenable no exemplo 05. |
-| `ARESTRIX_MEMORY_METRICS=1` | Grava métricas mesmo com a memória desligada. No Studio, use **Arquivo → Propriedades → Projeto → Modelo e ferramentas → Gerenciar memória avançada → Registrar métricas**. |
 | `ARESTRIX_MEMORY_DISABLE=1` | Desliga brief e ferramentas de memória em runtime. No Studio, use **Modo de Medição / A-B**. |
 | `ARESTRIX_PYTHON` | Usada apenas por exemplos que declaram um MCP stdio em Python. |
 | `ARESTRIX_NOTIFICATIONS=0` | Desliga o canal de notificações não bloqueantes de chamadas e seu registro JSONL. |

@@ -66,7 +66,7 @@ scheduled Taskflow task.
   `inputContext` to its agents/interactions and the child output artifact is returned to the caller.
   Nested call edges and nested subflows are rejected in v1.
 
-See [`examples/06-chamada-agente`](../examples/06-chamada-agente) and
+See [`examples/06-chamada-agente`](../../examples/06-chamada-agente) and
 [Graph and nodes](graph-and-nodes.md#call-edges-delegation).
 
 ### Human interaction vertices
@@ -93,8 +93,8 @@ date) and never executes HTML or JavaScript produced by a model.
 - Timeout, cancel and `fail`/`default`/`abort` policies are enforced; without a channel the vertex
   fails closed.
 
-See [`examples/07-interacao`](../examples/07-interacao) (static form) and
-[`examples/08-formulario-gerado`](../examples/08-formulario-gerado) (generated form), plus
+See [`examples/07-interacao`](../../examples/07-interacao) (static form) and
+[`examples/08-formulario-gerado`](../../examples/08-formulario-gerado) (generated form), plus
 [Graph and nodes](graph-and-nodes.md#interaction-vertices).
 
 **Agent language.** At run time the agent is configured in the language of its own constitution: the skill and the prompt
@@ -174,7 +174,7 @@ Any pipeline designed to generate deliverable products (vector graphics, reports
   - **Text / Markdown:** Formatted viewer for technical documents and reports with syntax highlighting and one-click copy.
   - **PDF and JSON:** Structured view with clean indentation and direct system viewer launch.
 - **Artifacts Tab in the Bottom Drawer:** Positioned alongside the *Terminal* and *Telemetry* tabs, the *Artifacts* tab displays the real-time count of generated deliverables, lets users inspect visual graphics or code, copy content, and open the `exports/` folder in Windows Explorer with one click.
-- **Local Chat Assistant Operation:** The Studio's native chat assistant integrates with the artifact lifecycle through the `list_artifacts` and `get_artifact` tools, allowing the assistant to examine generated deliverables and provide analytical feedback directly to the user. It also has `memory_inspect` for project, workspace and vertex memory, `memory_search` for read-only retrieval (hybrid or graph traversal when enabled), and confirmed `memory_review_proposal`, `memory_declare_state_key`, `memory_unpromote_playbook` and `memory_retire_path` actions. `memory_inspect` includes proposals, sources, facets, paths, coverage, health and switches; bridge hypotheses are informational and never create edges automatically.
+- **Local Chat Assistant Operation:** The Studio's native chat assistant integrates with the artifact lifecycle through the `list_artifacts` and `get_artifact` tools, allowing the assistant to examine generated deliverables and provide analytical feedback directly to the user. It also has `memory_inspect` for project, workspace and vertex memory, `memory_search` for read-only retrieval (hybrid or graph traversal when enabled), and confirmed `memory_review_proposal`, `memory_declare_state_key`, `memory_unpromote_playbook` and `memory_retire_path` actions. `memory_inspect` includes proposals, sources, facets, paths, traversal, health and switches; bridge hypotheses are informational and never create edges automatically.
 
 ## Standalone Runner (Phase 1: Autonomous Executable)
 

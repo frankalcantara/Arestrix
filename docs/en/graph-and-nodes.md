@@ -128,10 +128,10 @@ The result is a JSON tool message with `callId`, `target`, `status`, `output` an
 interaction target also carries `answers`. The target's final text is also written to
 `.arestrix/out/<target>.txt`.
 
-See [`examples/06-chamada-agente`](../examples/06-chamada-agente) for a coordinator calling a
-specialist, [`examples/09-chamadas-paralelas`](../examples/09-chamadas-paralelas) for two
-delegations in one turn, [`examples/10-subflow-chamavel`](../examples/10-subflow-chamavel) for a
-native callable subflow, and [`examples/11-call-vertex`](../examples/11-call-vertex) for a Call
+See [`examples/06-chamada-agente`](../../examples/06-chamada-agente) for a coordinator calling a
+specialist, [`examples/09-chamadas-paralelas`](../../examples/09-chamadas-paralelas) for two
+delegations in one turn, [`examples/10-subflow-chamavel`](../../examples/10-subflow-chamavel) for a
+native callable subflow, and [`examples/11-call-vertex`](../../examples/11-call-vertex) for a Call
 vertex executing a target inside the flow.
 
 ## Interaction vertices

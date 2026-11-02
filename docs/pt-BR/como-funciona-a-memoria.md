@@ -1,6 +1,6 @@
 # Como funciona a memória do Arestrix
 
-> **Aplica-se a:** Arestrix 2.5 — última revisão: 2026-10-31
+> **Aplica-se a:** Arestrix 2.5 — última revisão: 2026-11-02
 >
 > Guia de uma página e referência da memória de projeto. A memória é opcional, local e
 > pertence ao projeto. Não há importação automática de formatos antigos.
@@ -10,8 +10,10 @@
 - **Desligada por padrão.** Nenhum vértice consulta ou grava conhecimento sem configuração explícita.
 - **Três modos.** `off`, `consult` e `learn`. O modo é decidido por vértice.
 - **Aprender implica salvar.** `learn` grava um episódio e pode propor conhecimento; `consult` só lê.
-- **Nada entra sozinho.** Lições e playbooks nascem como proposta/candidato e só viram conhecimento
-  ativo depois de uma aprovação.
+- **Conhecimento derivado exige gate.** Lições, fatos/claims e playbooks passam por
+  proposta/candidato e validação; caminhos só ativam com entradas distintas validadas. Fontes e
+  trechos são ingeridos e ficam ativos após a execução; pontes permanecem hipóteses e nunca viram
+  aresta automaticamente.
 - **Telemetria separada.** Episódios, hits e uso de API ficam em banco próprio; limpar sessão ou
   apagar telemetria nunca apaga o conhecimento.
 - **Local-first.** SQLite no disco do projeto, sem dependência de nuvem.
@@ -67,8 +69,11 @@ reindexação invalida o cache.
 
 1. **Lições ativas** do tema, ordenadas por confiança e recência.
 2. **Fatos ativos** ligados ao tema e às consultas da tarefa.
-3. **Evidências** das lições e fatos injetados.
-4. **Estado de trabalho** apenas quando o formato legado/manual o habilita. O grafo gerado pelo
+3. **Caminhos ativos elegíveis** quando `memory.pathServing` está ligado; todas as afirmações
+   precisam estar ativas, válidas e permitidas pela política de acesso.
+4. **Pacote de travessia** quando nenhum caminho cobre a consulta e `memory.traversal` está ligado.
+5. **Evidências** das lições e fatos injetados.
+6. **Estado de trabalho** apenas quando o formato legado/manual o habilita. O grafo gerado pelo
    Arestrix não usa esse bloco.
 
 Playbooks compilados ficam como **candidatos** e não entram no brief até serem promovidos.
@@ -135,7 +140,8 @@ Playbooks só saem de `candidate` com validação independente. O gate exige **3
 distintos** entre as últimas 20 execuções validadas do mesmo `task_type`, validador estável e no
 máximo **1 promoção por `task_type` em 24h**. Duas falhas consecutivas ou taxa acima de 30% em 10
 execuções validadas devolvem o playbook a candidato. No painel, um playbook ativo tem o botão
-**Voltar a candidato**; a CLI equivalente é `memory unpromote`.
+**Voltar a candidato**; a CLI equivalente é `memory unpromote`. A aprovação manual de uma proposta
+de playbook é uma exceção explícita do operador e não passa pelo gate automático.
 
 Fatos também têm **cardinalidade de predicado**. Predicados de acumulação — `USES`, `USES_TOOL`,
 `PRODUCES`, `READS`, `WRITES`, `TOUCHES`, `CITES`, `INCLUDES`, `TAGGED_WITH`, `HAS`, `DEPENDS_ON` —
@@ -147,7 +153,7 @@ O detector de contradições ignora predicados multi-valued.
 
 | Ferramenta | Efeito |
 | :--- | :--- |
-| `memory_search` | Busca somente leitura no conhecimento do projeto e no workspace autorizado. |
+| `memory_search` | Busca somente leitura no projeto/workspace; aceita `mode: graph` para travessia quando ligada. |
 | `memory_propose_lesson` | Registra uma proposta pendente de lição; não ativa conhecimento. |
 | `memory_state_get` | Lê uma chave de estado declarada; o valor volta rotulado como não confiável. |
 | `memory_state_set` | Grava com CAS (`expected_version`); só em modo `learn`. |
@@ -242,8 +248,8 @@ define `ARESTRIX_MEMORY_DISABLE=1`. As duas metades gravam telemetria no mesmo b
 contadas fora do veredito; tarefas sem validador aparecem em `invalidTasks` e não entram no par.
 
 A métrica primária é a **taxa de aprovação do validador**, comparada em pares. O relatório traz
-deltas pareados, IC 95% (t de Student), tokens, turnos, custo e latência, além do fingerprint do
-conhecimento antes e depois da medição. `memory ab report` continua disponível para analisar um
+deltas pareados, IC 95% (t de Student), tokens, turnos e latência, além do fingerprint do
+conhecimento antes e depois da medição. Custo monetário não é calculado nesta versão. `memory ab report` continua disponível para analisar um
 arquivo de observações já coletado.
 
 ### Marco de recorrência
@@ -318,9 +324,8 @@ mesmo conjunto não muda a revisão.
 
 As facetas usam o papel **simétrico** dos embeddings, com prefixo próprio
 (EmbeddingGemma: `task: sentence similarity`; Qwen3: instrução de similaridade) e
-fingerprint diferente do papel de recuperação. `memory_search` aceita filtro por
-lentes, derivadas dos temas do vértice, e devolve apenas as arestas daquela
-lente.
+fingerprint diferente do papel de recuperação. `memory_search` deriva o filtro
+de lentes dos temas do vértice e devolve apenas as arestas daquela lente.
 
 ### Caminhos canônicos
 
@@ -386,9 +391,9 @@ aresta é criada automaticamente: a promoção é manual, como em qualquer propo
 O roteador usa a taxa de validação por `task_type`, com prior Beta, para estimar
 a confiança de um nível local. Em `routing.mode=binary`, ele escolhe entre local
 e fronteira por `p_min` e custo esperado; em `shadow`, registra a decisão sem
-trocar o modelo executado. Afirmações marcadas como somente locais bloqueiam o
-nível de fronteira. Reprovação no validador, abstenção ou conflito podem
-escalar para fronteira, e a decisão fica no traço. O modo padrão é `off`.
+trocar o modelo executado. `memory.localOnly` bloqueia o nível remoto para o
+projeto inteiro. A decisão fica no traço; o escalonamento automático por
+reprovação ainda não é executado pelo runtime. O modo padrão é `off`.
 
 ### Traços de recuperação
 
@@ -439,7 +444,8 @@ até uma medição com dados reais mostrar ganho e custo justificados.
 O estado de continuação substitui o antigo Blackboard e o `arestrix.memoria`. Ele fica **fora do
 brief** e só é acessível pelas ferramentas.
 
-- A chave é **declarada pelo projeto**; o agente nunca cria chave.
+- A chave é **declarada pelo projeto**; o agente de pipeline não cria chave. O assistente do
+  Studio pode declará-la somente por `memory_declare_state_key`, com confirmação humana.
 - Identidade: `(scope_kind, scope_owner, key)`.
 - Escopos: `project`, `task_type` e `item`. Cada chave tem um único escopo, sem merge entre eles.
 - O valor é validado por um subconjunto de JSON Schema **depois** da sanitização de segredos.
@@ -450,11 +456,12 @@ brief** e só é acessível pelas ferramentas.
 - Mudança de schema marca o valor antigo como `stale`; a próxima escrita informa a versão atual.
 - `memory_state_list` não devolve valores. Leituras são rotuladas como dados de execução anterior
   não confiáveis.
-- Escritas, recusas e conflitos são auditados; leituras não.
+- Escritas bem-sucedidas são auditadas; recusas e conflitos retornam erro com a versão atual. A
+  auditoria detalhada de recusas ainda não é gravada.
 
 No Studio, a aba **Estado** do painel **Memória do Projeto** lista as chaves declaradas e permite
-criar uma chave com escopo, schema, TTL, modo e versões mantidas. O agente continua sem permissão
-para criar chaves.
+criar uma chave com escopo, schema, TTL, modo e versões mantidas. O agente de pipeline continua sem
+permissão para criar chaves; o assistente só o faz pela ferramenta confirmada.
 
 Declaração e operação manual pela CLI:
 
@@ -497,9 +504,9 @@ do banco privado do projeto.
 
 ## 13. Status da implantação
 
-A implantação operacional da memória está concluída: modos, propostas, validação, estado de
-continuação, telemetria, embeddings com fingerprint, playbooks com gate, A/B v2 e ferramentas do
-assistente do Studio (`memory_inspect`, `memory_search`, revisão de propostas, estado, playbooks e
+O núcleo da memória está implementado: modos, propostas, validação, estado de continuação,
+telemetria, embeddings com fingerprint, playbooks com gate, A/B v2 e ferramentas do assistente do
+Studio. (`memory_inspect`, `memory_search`, revisão de propostas, estado, playbooks e
 retirada de caminhos).
 
 O plano de simplificação (Fases A–C) e o multigrafo avançado (E11–E20) estão implementados:
