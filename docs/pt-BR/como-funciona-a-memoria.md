@@ -414,6 +414,15 @@ A telemetria registra prompt, saída e os tokens de **prompt cache**: leitura de
 `arestrix-cli memory report` mostram o total; o custo efetivo usa o preço do provedor para tokens
 normais, cached e de escrita.
 
+## 8.1 Avaliação final
+
+A avaliação reproduzível compara lexical, híbrida com fallback, facetas +
+travessia, caminhos + serviço e roteamento em `shadow`, sempre sobre o mesmo
+conhecimento congelado e orçamento. O relatório registra tokens, chamadas,
+brief, hits e fingerprints. Nenhum interruptor experimental passa a ligado por
+padrão: `pathServing`, `traversal`, `routing.mode` e `bridges` continuam `off`
+até uma medição com dados reais mostrar ganho e custo justificados.
+
 ## 9. Retenção, segurança e escopo
 
 - **Escopo estrito:** o conhecimento do projeto não vaza para outro projeto; o workspace só é
@@ -490,12 +499,14 @@ do banco privado do projeto.
 
 A implantação operacional da memória está concluída: modos, propostas, validação, estado de
 continuação, telemetria, embeddings com fingerprint, playbooks com gate, A/B v2 e ferramentas do
-assistente do Studio.
+assistente do Studio (`memory_inspect`, `memory_search`, revisão de propostas, estado, playbooks e
+retirada de caminhos).
 
-O plano de simplificação (Fases A–C) está concluído. A Fase D — multigrafo avançado com facetas,
-conhecimento de domínio, caminhos sobre afirmações e roteamento de modelos — é um programa separado,
-fora deste plano, e não bloqueia o release. A recuperação por embeddings já está implementada.
+O plano de simplificação (Fases A–C) e o multigrafo avançado (E11–E20) estão implementados:
+fontes/trechos, afirmações, lentes/facetas, caminhos, serviço de caminhos, travessia, roteamento e
+pontes. Os interruptores novos continuam opt-in e desligados por padrão; a avaliação final está
+registrada em `tests/fixtures/memory-eval-v1-report.json`.
 
-O nível institucional no assistente e a validação com provedores reais são pendências operacionais.
-O harness do A/B está implementado em `memory ab run` e roda com o provedor simulado no e2e.
-Consulte [`PENDENCIAS.md`](../PENDENCIAS.md).
+A validação com provedores reais e a coordenação multi-processo são pendências operacionais. O
+harness do A/B está implementado em `memory ab run` e roda com o provedor simulado no e2e. Consulte
+[`PENDENCIAS.md`](../PENDENCIAS.md).

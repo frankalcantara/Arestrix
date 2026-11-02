@@ -3082,6 +3082,7 @@ public:
         const std::string projectId = project.value("projectId", std::string("default"));
         configureProjectMemory(projectId, true);
         auto& memory = taskforge::memory::MemoryService::getInstance();
+        const auto status = memory.toJson(projectId);
         taskforge::Json projectOut{
             {"projectId", projectId},
             {"database", memory.databasePath(projectId)},
@@ -3091,13 +3092,94 @@ public:
             {"playbooks", memory.listPlaybooks(projectId, "", "", 50)},
             {"stateKeys", memory.stateKeys(projectId)},
             {"embedding", memory.embeddingStatus(projectId)},
-            {"usage", memory.usageSummary(projectId)}};
-        if (project.contains("globalDefaults") && project["globalDefaults"].is_object() &&
-            project["globalDefaults"].contains("memory")) {
-            projectOut["settings"] = project["globalDefaults"]["memory"];
+            {"usage", memory.usageSummary(projectId)},
+            {"hits", status.value("hits", taskforge::Json::object())},
+            {"sources", status.value("sources", taskforge::Json::object())},
+            {"facets", status.value("facets", taskforge::Json::object())},
+            {"paths", status.value("paths", taskforge::Json::object())},
+            {"pathRecords", status.value("pathRecords", taskforge::Json::array())},
+            {"pathServing", status.value("pathServing", taskforge::Json::object())},
+            {"traversal", status.value("traversal", taskforge::Json::object())},
+            {"evidence", status.value("evidence", taskforge::Json::object())},
+            {"maintenance", memory.maintenanceStatus(projectId)},
+            {"health", taskforge::Json{{"database", memory.databasePath(projectId)},
+                                       {"telemetry", memory.telemetryDatabasePath(projectId)},
+                                       {"persistent", memory.isPersistent(projectId)}}}};
+        auto graph = readMainGraph(root, pm.getCurrentProject());
+        const auto defaults = graph.contains("metadata") && graph["metadata"].is_object()
+            ? graph["metadata"].value("globalDefaults", taskforge::Json::object())
+            : taskforge::Json::object();
+        if (defaults.is_object()) {
+            if (defaults.contains("memory")) projectOut["settings"] = defaults["memory"];
+            if (defaults.contains("routing")) projectOut["routing"] = defaults["routing"];
+        }
+        if (project.contains("globalDefaults") && project["globalDefaults"].is_object()) {
+            if (project["globalDefaults"].contains("memory")) {
+                projectOut["settings"] = project["globalDefaults"]["memory"];
+            }
+            if (project["globalDefaults"].contains("routing")) {
+                projectOut["routing"] = project["globalDefaults"]["routing"];
+            }
         }
         return taskforge::Json{{"project", projectOut},
                                {"workspace", memory.workspaceStatus(projectId)}};
+    }
+
+    taskforge::Json memorySearch(const std::string& query, int limit,
+                                 const std::string& mode, const std::string& taskType,
+                                 std::string& error) override {
+        const std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+        if (root.empty()) {
+            error = "nenhum projeto ativo";
+            return taskforge::Json::object();
+        }
+        const std::string projectId =
+            taskforge::project::ProjectManager::getInstance().getCurrentProject().projectId;
+        configureProjectMemory(projectId, true);
+        auto& memory = taskforge::memory::MemoryService::getInstance();
+        std::vector<taskforge::memory::MemoryHitRef> hits;
+        taskforge::Json out;
+        if (mode == "graph") {
+            const int safeLimit = limit < 1 ? 1 : limit;
+            out = memory.searchGraph(projectId, query, static_cast<size_t>(safeLimit),
+                                     taskType, "", "", &hits);
+            if (!out.value("enabled", false)) {
+                error = "travessia em grafo desligada; use mode=hybrid";
+                return taskforge::Json::object();
+            }
+            out["mode"] = "graph";
+        } else {
+            const int safeLimit = limit < 1 ? 1 : limit;
+            std::string text = memory.searchContext(projectId, query,
+                                                    static_cast<size_t>(safeLimit),
+                                                    {}, &hits, "", "", {}, taskType);
+            out = taskforge::Json{{"ok", true}, {"mode", "hybrid"}, {"text", text}};
+        }
+        taskforge::Json hitList = taskforge::Json::array();
+        for (const auto& hit : hits) hitList.push_back(taskforge::Json{{"id", hit.id}, {"kind", hit.kind}});
+        out["hits"] = hitList;
+        return out;
+    }
+
+    bool retireMemoryPath(const std::string& pathId, const std::string& reason,
+                          std::string& error) override {
+        const std::string root = taskforge::project::ProjectManager::getInstance().getActiveProjectRoot();
+        if (root.empty()) {
+            error = "nenhum projeto ativo";
+            return false;
+        }
+        const std::string projectId =
+            taskforge::project::ProjectManager::getInstance().getCurrentProject().projectId;
+        configureProjectMemory(projectId, true);
+        auto& memory = taskforge::memory::MemoryService::getInstance();
+        const bool ok = memory.setPathState(projectId, pathId, "retired", error);
+        if (ok) {
+            // A retirada nao apaga afirmacoes; apenas deixa de servir o caminho.
+            taskforge::memory::MemoryPaths::reconcile(
+                *memory.store(projectId), "project:" + projectId, "assistant_retired");
+        }
+        (void)reason;
+        return ok;
     }
 
     bool reviewMemoryProposal(const std::string& proposalId, bool accept,
@@ -3111,6 +3193,16 @@ public:
             taskforge::project::ProjectManager::getInstance().getCurrentProject().projectId;
         configureProjectMemory(projectId, true);
         auto& memory = taskforge::memory::MemoryService::getInstance();
+        if (accept) {
+            for (const auto& proposal : memory.listProposals(projectId, "pending", 200)) {
+                if (proposal.value("id", std::string()) == proposalId &&
+                    proposal.value("kind", std::string()) == "bridge_hypothesis") {
+                    error = "hipotese de ponte nao cria aresta automaticamente; registre a decisao "
+                            "manual ou rejeite a proposta";
+                    return false;
+                }
+            }
+        }
         return accept
             ? memory.promoteProposal(projectId, proposalId, "studio-assistant", error)
             : memory.rejectProposal(projectId, proposalId, "studio-assistant", reason, error);

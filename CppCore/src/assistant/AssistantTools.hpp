@@ -55,6 +55,22 @@ public:
         error = "memoryLevels nao implementado";
         return Json::object();
     }
+    virtual Json memorySearch(const std::string& query, int limit, const std::string& mode,
+                              const std::string& taskType, std::string& error) {
+        (void)query;
+        (void)limit;
+        (void)mode;
+        (void)taskType;
+        error = "memorySearch nao implementado";
+        return Json::object();
+    }
+    virtual bool retireMemoryPath(const std::string& pathId, const std::string& reason,
+                                  std::string& error) {
+        (void)pathId;
+        (void)reason;
+        error = "retireMemoryPath nao implementado";
+        return false;
+    }
     virtual bool reviewMemoryProposal(const std::string& proposalId, bool accept,
                                       const std::string& reason, std::string& error) {
         (void)proposalId;

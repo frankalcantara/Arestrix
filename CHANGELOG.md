@@ -10,6 +10,20 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ### Added
 
+- **Studio assistant memory access:** `memory_inspect` now exposes sources,
+  facets, paths, path serving, traversal, evidence, maintenance, health and
+  routing settings; new read-only `memory_search` and confirmed
+  `memory_retire_path` tools let the default assistant consult and curate the
+  new memory without bypassing confirmations. Bridge hypotheses remain
+  informational and are not promoted into automatic edges.
+- **Final memory evaluation (multigraph plan, E20):** `scripts/memory_evaluation.py`
+  runs the reproducible baseline, hybrid-fallback, facets/traversal,
+  paths/serving and routing-shadow variants over the same frozen fixture and
+  context budget, records tokens, calls, brief and hits in
+  `tests/fixtures/memory-eval-v1-report.json`, and keeps `pathServing`,
+  `traversal`, `routing.mode` and `bridges` disabled by default. The corpus
+  includes homonyms, negation/validity, duplicate sources, no-evidence,
+  no-traversal and convergence-without-relation cases.
 - **Interdomain bridges (multigraph plan, E19):** maintenance can detect
   convergence of approved traces on the same entity across distinct lenses and
   record a pending `bridge_hypothesis` proposal with candidate claims, paths and

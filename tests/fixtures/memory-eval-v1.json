@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "name": "memory-eval-v1",
+  "description": "Casos negativos e variantes da avaliacao final (E20).",
+  "seed": 20261101,
+  "cases": [
+    {
+      "id": "homonym-parallel",
+      "class": "negative",
+      "query": "Guia de contraste",
+      "expect": "no_unsupported_bridge",
+      "why": "homonimos e relacoes paralelas nao podem virar evidencia"
+    },
+    {
+      "id": "negation-validity",
+      "class": "negative",
+      "query": "contraste nao e 4.5:1",
+      "expect": "respect_negation_and_validity",
+      "why": "negacao e validades diferentes precisam permanecer distintas"
+    },
+    {
+      "id": "duplicate-source",
+      "class": "negative",
+      "query": "fonte duplicada",
+      "expect": "deduplicate_source",
+      "why": "fontes duplicadas contam uma vez"
+    },
+    {
+      "id": "no-evidence",
+      "class": "negative",
+      "query": "pergunta sem evidencia",
+      "expect": "abstain",
+      "why": "consulta sem evidencia deve abster"
+    },
+    {
+      "id": "no-traversal",
+      "class": "negative",
+      "query": "consulta sem travessia",
+      "expect": "abstain_or_lexical",
+      "why": "ausencia de caminho nao autoriza travessia arbitraria"
+    },
+    {
+      "id": "convergence-without-relation",
+      "class": "negative",
+      "query": "lentes convergem mas nao se relacionam",
+      "expect": "bridge_hypothesis_only",
+      "why": "convergencia vira hipotese, nunca aresta automatica"
+    },
+    {
+      "id": "multi-hop-valid",
+      "class": "positive",
+      "query": "Guia para contraste",
+      "expect": "supported_path",
+      "why": "caminho conhecido deve ser encontrado"
+    },
+    {
+      "id": "cited-passage",
+      "class": "positive",
+      "query": "trecho citado",
+      "expect": "citation_supported",
+      "why": "citacao literal deve sobreviver ao uso"
+    }
+  ],
+  "variants": [
+    "baseline_lexical",
+    "hybrid_fallback",
+    "facets_traversal",
+    "paths_serving",
+    "routing_shadow"
+  ],
+  "acceptance": {
+    "all_variants_complete": true,
+    "switches_default_off": [
+      "pathServing",
+      "traversal",
+      "routing.mode",
+      "bridges"
+    ],
+    "frozen_knowledge_unchanged": true
+  }
+}
