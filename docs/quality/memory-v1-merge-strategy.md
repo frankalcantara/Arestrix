@@ -2,10 +2,10 @@
 
 **Decisão:** trem de PRs empilhados, na ordem `E0 → E1 → … → E20`.
 **Base inicial:** `main` em `5bec4aa` (tag `v2.5.0`).
-**Estado atual:** E0 mergeada em `main` como `0a4bf5b`; o CI Linux falhou no
-PR #21 e a correção está em `fix/linux-json-at`. E1–E20 aguardam o trem.
+**Estado atual:** E0–E20 mergeadas em `main` pelo trem de PRs; topo em
+`3d65162`. A correção Linux foi mergeada no PR #22.
 **Topo da cadeia:** `mem/E20-avaliacao-final`.
-**Estado:** as 21 branches já estão publicadas em `origin`.
+**Estado:** as 21 branches estão publicadas em `origin` e o trem foi concluído.
 
 ## 1. Por que PRs empilhados
 
@@ -64,8 +64,10 @@ devem ser mergeados fora de ordem.
 2. Abrir um PR por etapa, sempre com base em `main`.
 3. Fazer merge **somente** do PR da vez. Não abrir caminho paralelo para E2 antes
    de E0 e E1 estarem em `main`.
-4. Usar **rebase and merge** (ou fast-forward quando o GitHub permitir),
-   preservando um commit por etapa. Não usar squash.
+4. Usar **merge commit** (`--merge`), preservando o commit da etapa como
+   segundo pai. Rebase-and-merge reescreve a base e faz o PR seguinte mostrar
+   commits anteriores; por isso foi descartado durante a execução. Não usar
+   squash.
 5. Não mergear com checks vermelhos, revisão pendente ou documentação de etapa
    ausente.
 6. Se uma etapa falhar depois do merge, pausar o trem e corrigir na própria
@@ -182,9 +184,10 @@ Validação Linux em WSL Ubuntu 24.04:
 - build completo com GCC 13.3;
 - `arestrix_tests` com **2418/2418** verificações.
 
-O trem fica pausado até esse PR entrar em `main`; as branches E1–E20 não
-precisam ser reescritas, porque o merge de cada PR traz a correção de `main`
-sem tocar no teste alterado. O CI de cada PR roda contra o merge commit.
+A correção entrou em `main` pelo PR #22. O trem foi executado em blocos de três
+etapas (E0–E3, E4–E6, E7–E9, E10–E12, E13–E15, E16–E18, E19–E20); antes de cada
+PR a branch foi rebaseada em `main`, e o merge foi feito com merge commit. O CI
+de cada PR rodou contra o merge commit e ficou verde.
 
 ## 8. Depois do merge
 
