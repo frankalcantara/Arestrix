@@ -12,7 +12,7 @@
 4. [Agents and execution](agents-and-execution.md) — tool loop, sandboxes, telemetry and batch runs.
 5. [Workspaces, memory, skills and MCP](workspaces-memory-skills-mcp.md) - persistent context and integrations.
 6. [How memory works](how-memory-works.md) - full lifecycle, embeddings, continuation state, playbooks, workspace and institution.
-7. [Pending items](pending.md) - project-wide operational pending work and the Phase D status.
+7. [Pending items](pending.md) - project-wide operational pending work and the Phase D status. Memory-specific items: [memory pending](memory-pending.md).
 8. [Interface](interface.md) - ribbon, backstage, canvas controls and shortcuts.
 9. [Paths and junction](paths-and-junction.md) - independent paths, write conflicts and Assistant-evaluated junctions.
 
