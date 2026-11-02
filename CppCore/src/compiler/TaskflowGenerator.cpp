@@ -542,6 +542,29 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
     spec["memoryTaskType"] = memoryTaskType;
     spec["memoryMaxLessonsPerRun"] = std::max(1, std::min(500, memory.value("maxLessonsPerRun", 20)));
     spec["memoryMaxLessonChars"] = std::max(100, std::min(20000, memory.value("maxLessonChars", 4000)));
+    // Compactacao do historico com a memoria existente. Desligada por padrao;
+    // aceita booleano ou objeto {enabled, keepRecentMessages, minChars,
+    // maxSummaryChars, maxSummaryTokens, maxItems}.
+    const json compaction = memory.value("contextCompaction", json(false));
+    bool compactionEnabled = false;
+    json compactionOptions = json::object();
+    if (compaction.is_boolean()) {
+        compactionEnabled = compaction.get<bool>();
+    } else if (compaction.is_object()) {
+        compactionEnabled = compaction.value("enabled", false);
+        compactionOptions = compaction;
+    }
+    spec["memoryContextCompaction"] = effectiveMemoryEnabled && compactionEnabled;
+    spec["memoryCompactionKeepRecent"] = static_cast<long long>(std::max(
+        1, std::min(50, compactionOptions.value("keepRecentMessages", 6))));
+    spec["memoryCompactionMinChars"] = static_cast<long long>(std::max(
+        0, std::min(1000000, compactionOptions.value("minChars", 4000))));
+    spec["memoryCompactionMaxChars"] = static_cast<long long>(std::max(
+        64, std::min(100000, compactionOptions.value("maxSummaryChars", 2000))));
+    spec["memoryCompactionMaxTokens"] = static_cast<long long>(std::max(
+        16, std::min(100000, compactionOptions.value("maxSummaryTokens", 500))));
+    spec["memoryCompactionMaxItems"] = static_cast<long long>(std::max(
+        1, std::min(100, compactionOptions.value("maxItems", 16))));
     json routing = defaults.value("routing", json::object());
     if (memory.value("localOnly", false)) routing["localOnly"] = true;
     spec["routing"] = routing;

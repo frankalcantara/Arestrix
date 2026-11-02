@@ -8,7 +8,7 @@ below are the next memory work. No item here blocks the current release.
 
 | Priority | Item | State |
 | :--- | :--- | :--- |
-| High | Context compaction backed by existing memory | Pending |
+| High | Context compaction backed by existing memory | Implemented behind `memory.contextCompaction` (off by default); A/B recorded |
 | High | Extract memory into the standalone Mnemosyne module and submodule | Assessment complete; migration pending |
 | High | Enable experimental switches only after real-data A/B | Pending |
 | Medium | Institutional memory level in the Studio assistant | Pending |
@@ -26,9 +26,10 @@ The current real-provider tests prove two separate things:
 2. static long context can be replaced by a short prompt plus memory, reducing
    prompt tokens by 87% in the controlled test.
 
-They do **not** prove that the conversation history itself shrinks. Today the
-agent resends prior messages each turn. Memory adds a brief; it does not evict or
-summarize old turns. The pending work is the bridge between those facts.
+They do **not** prove that the conversation history itself shrinks. With the
+switch off, the agent still resends prior messages each turn and memory only adds
+a brief. The bridge between those facts is now implemented behind
+`memory.contextCompaction`, described below.
 
 ### Design constraints
 
@@ -37,8 +38,8 @@ summarize old turns. The pending work is the bridge between those facts.
 - Compaction must preserve citations and claim identity. A compacted item must
   still point to the original memory id; summarized text is not new evidence.
 - The compactor must never promote claims, create edges or change support state.
-- The original turns must remain available for audit and for a fallback when
-  compaction fails.
+- The original turns must remain available for fallback within the run; the
+  trace records compaction metadata without storing message payloads.
 - The prompt budget is explicit. The compacted turn must fit the configured
   budget; otherwise the runtime keeps the uncompacted turn.
 - Secrets and untrusted text pass through the existing sanitizer before any
@@ -70,12 +71,49 @@ summarize old turns. The pending work is the bridge between those facts.
 - The A/B report records quality, prompt tokens, completion tokens, latency and
   the number of turns compacted.
 
+### Implemented
+
+`rt::ContextCompactor` implements the deterministic path. It is constructed per
+agent run with an injected durable-memory provider and never writes knowledge.
+It runs at the start of a turn, after the previous tool result finished, and
+only changes the request copy: the full conversation remains in the agent history
+for fallback. The existing trace records compaction metadata (counts, ids,
+before/after sizes and fallback reason) but, by design, no message payloads.
+
+- The switch is `memory.contextCompaction` (`false` by default; boolean or
+  `{enabled, keepRecentMessages, minChars, maxSummaryChars, maxSummaryTokens,
+  maxItems}`). `ARESTRIX_MEMORY_CONTEXT_COMPACTION=0|1` exists for A/B only.
+- The first user prompt (current task), the system prompt and the last
+  `keepRecentMessages` messages are never compacted. The cut never separates an
+  assistant `tool_calls` message from its tool results.
+- Durable items come from active lessons, active claim edges, active paths,
+  active facets, passages cited in validated runs, approved traces and active
+  playbooks. Every line keeps its physical id as `[MEMO:<id>]`.
+- The block is marked as a derived summary, not source evidence. Text and tool
+  arguments pass through `MemorySanitizer` before entering it.
+- If the provider is empty or throws, the summary exceeds the explicit
+  characters/tokens budget, or the block is not smaller than the removed
+  messages, the original context is sent unchanged.
+- The trace records one `context_compaction` step with switch state, applied
+  flag, turns/messages compacted, characters and estimated tokens of the
+  replaced prefix versus the derived block, memory ids and the fallback reason.
+  The same object is stored in the episode metadata and the usage event.
+
+Unit coverage is in `CppCore/tests/main.cpp`: switch off byte identity, task and
+recent window preservation, empty memory, provider failure, `[MEMO:*]` ids,
+character/token budgets, tool-call pairing, and unchanged `knowledge_version`,
+edge status and path state.
+
 ### Evaluation
 
-Use `scripts/e2e_memory_deepseek_long.py` as the long-interaction baseline and
-add a compacted arm. Keep the same fixture, model and token budget. The test must
-show both lower prompt size and equal answer quality before the switch is
-enabled by default.
+Use `scripts/e2e_memory_deepseek_long.py` as the long-interaction baseline.
+It now runs `on`, `off` and `compacted` over the same fixture, model, question
+and a 45,000-token ceiling. Recorded on 2026-11-02: ON answered `ORION-42` with
+13,780 prompt tokens; the compacted arm also answered `ORION-42` with 12,884
+prompt tokens (**6.5% fewer**, 14,253 &rarr; 13,404 total tokens), kept the same
+memory id (`deepseek-long-lesson`) and reported 18 compacted turns. Repeated runs
+measured 5.5% to 7.1% fewer prompt tokens, so the switch stays opt-in until a
+broader real-data A/B covers more task shapes.
 
 ## 2. Standalone Mnemosyne module and submodule
 

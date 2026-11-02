@@ -47,6 +47,7 @@ telemetria. A raiz do projeto vem de `ARESTRIX_PROJECT_ROOT`.
 | `readThemes` | Temas extras apenas de leitura. |
 | `taskType` | Identidade estável de continuidade; padrão é o id do vértice. |
 | `contextBudgetTokens` | Orçamento do brief; `0` desativa a injeção. |
+| `contextCompaction` | Desligado por padrão. Compacta turnos concluídos em um bloco derivado com referências `[MEMO:<id>]` usando a memória existente; falhas mantêm o histórico original. |
 | `maxLessonsPerRun` | Limite de propostas por execução. |
 | `maxLessonChars` | Limite de caracteres por lição/trigger. |
 
@@ -438,7 +439,11 @@ mesma pergunta e exigem a mesma resposta correta.
 gravações, uma busca e a resposta final. Com memória ON ele usa o brief e
 `memory_search`; sem memória ele não tem brief nem ferramenta. Resultado: ON
 respondeu `ORION-42` em 9 chamadas e 14.164 tokens; OFF respondeu `UNKNOWN` em 8
-chamadas e 8.475 tokens.
+chamadas e 8.475 tokens. O script também roda um braço `compacted` com
+`memory.contextCompaction` ligado: respondeu `ORION-42`, usou 12.884 tokens de
+prompt contra 13.780 do braço ON (**6,5% menos**), preservou a mesma citação
+(`deepseek-long-lesson`) e registrou 15 turnos compactados no trace, sem alterar
+o conhecimento.
 
 **Substituição de contexto** (`scripts/e2e_memory_prompt_reduction.py`): um braço
 recebe um manual longo no prompt; o outro recebe um prompt curto e a mesma
@@ -446,8 +451,10 @@ verdade pela memória. Os dois responderam `ORION-42`. O braço com contexto uso
 24.718 tokens de prompt; o braço com memória usou 3.228, uma redução de 87%.
 
 A memória, portanto, reduz o contexto **estático** que o projeto precisa enviar.
-Ela ainda não compacta automaticamente o histórico de uma conversa longa; essa
-pendência está registrada em [memory-pending.md](../en/memory-pending.md).
+A compactação de contexto agora também reduz o **histórico da conversa** de uma
+execução longa, mas o interruptor continua desligado por padrão até uma medição
+mais ampla com dados reais. O trabalho restante está registrado em
+[memory-pending.md](../en/memory-pending.md).
 
 ## 9. Retenção, segurança e escopo
 

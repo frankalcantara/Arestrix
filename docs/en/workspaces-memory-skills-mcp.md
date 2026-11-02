@@ -103,6 +103,11 @@ candidates and do not enter the brief until promoted. Every injected item is lab
 only an ID cited in the final answer counts as used. Use changes utility, not confidence or claim
 support state.
 
+`contextCompaction` is a separate opt-in switch (off by default). It replaces finished turns with a
+derived block that keeps the durable memory ids (`[MEMO:<id>]`), while preserving the system prompt,
+the current task and the last N messages. Empty memory, provider failure or a block that does not fit
+the explicit budget keeps the original history; the trace records the fallback.
+
 The advanced semantic layer is now in the core and Studio:
 
 - **Sources and passages:** authorized local files are segmented, sanitized and versioned; search

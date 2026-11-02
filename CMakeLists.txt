@@ -248,6 +248,7 @@ add_library(arestrix_core STATIC
   ${SRC}/rt/Notification.cpp
   ${SRC}/rt/Trace.cpp
   ${SRC}/rt/ModelClient.cpp
+  ${SRC}/rt/ContextCompactor.cpp
   ${SRC}/rt/compress/ContentRouter.cpp
   ${SRC}/rt/compress/SmartCrusher.cpp
   ${SRC}/rt/compress/LogCompressor.cpp

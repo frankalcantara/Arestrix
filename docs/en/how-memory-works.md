@@ -47,6 +47,7 @@ telemetry. The project root comes from `ARESTRIX_PROJECT_ROOT`.
 | `readThemes` | Extra read-only themes. |
 | `taskType` | Stable continuity identity; defaults to the vertex id. |
 | `contextBudgetTokens` | Brief budget; `0` disables injection. |
+| `contextCompaction` | Off by default. Compacts finished turns into a derived block with `[MEMO:<id>]` references using existing memory; failures keep the original history. |
 | `maxLessonsPerRun` | Proposal limit per run. |
 | `maxLessonChars` | Character limit per lesson/trigger. |
 
@@ -435,16 +436,21 @@ question and require the same correct answer.
 **Long interaction** (`scripts/e2e_memory_deepseek_long.py`): the agent performs
 six writes, one search and a final answer. With memory ON it uses the brief and
 `memory_search`; without memory it has neither. ON answered `ORION-42` in 9 calls
-and 14,164 tokens; OFF answered `UNKNOWN` in 8 calls and 8,475 tokens.
+and 14,164 tokens; OFF answered `UNKNOWN` in 8 calls and 8,475 tokens. The script
+now also runs a `compacted` arm with `memory.contextCompaction` enabled: it
+answered `ORION-42`, used 12,884 prompt tokens against 13,780 in the ON arm
+(**6.5% fewer**), kept the same memory citation (`deepseek-long-lesson`) and
+recorded 15 compacted turns in the trace without changing knowledge.
 
 **Context substitution** (`scripts/e2e_memory_prompt_reduction.py`): one arm
 receives a long manual in the prompt; the other receives a short prompt and the
 same truth from memory. Both answered `ORION-42`. The context arm used 24,718
 prompt tokens; the memory arm used 3,228, an 87% reduction.
 
-Memory therefore reduces the **static** context a project must send. It does not
-yet compact the history of a long conversation automatically; that pending item
-is tracked in [memory-pending.md](memory-pending.md).
+Memory reduces the **static** context a project must send. Context compaction now
+also reduces the **conversation history** of one long run, but the switch remains
+off by default until broader real-data measurement. The remaining work is tracked
+in [memory-pending.md](memory-pending.md).
 
 ## 9. Retention, security and scope
 

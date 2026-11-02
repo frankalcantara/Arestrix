@@ -382,6 +382,21 @@ export interface IProjectMemoryConfig extends Partial<INodeMemoryConfig> {
    * Desligado por padrão; a chave fica em `globalDefaults.memory`.
    */
   promptCache?: boolean;
+  /**
+   * Compactação do histórico de uma interação longa usando a memória existente.
+   * Desligada por padrão. O texto sumarizado é derivado e não vira evidência;
+   * ids de memória são preservados como `[MEMO:<id>]`.
+   */
+  contextCompaction?: boolean | {
+    enabled?: boolean;
+    /** Mensagens recentes preservadas (inclui tool results do turno atual). */
+    keepRecentMessages?: number;
+    /** Só compacta quando o histórico passar deste tamanho em caracteres. */
+    minChars?: number;
+    maxSummaryChars?: number;
+    maxSummaryTokens?: number;
+    maxItems?: number;
+  };
   /** E12: fontes locais ingeridas após a execução (off por padrão). */
   sources?: Partial<IMemorySourcesConfig>;
   /** E13: extração de afirmações na manutenção (off por padrão). */

@@ -30,6 +30,15 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "tests" / "fixtures" / "memory-deepseek-long"
 REPORT = ROOT / "tests" / "fixtures" / "memory-deepseek-long-report.json"
 EXPECTED_CODE = "ORION-42"
+LESSON_ID = "deepseek-long-lesson"
+COMPACTION = {
+    "enabled": True,
+    "keepRecentMessages": 4,
+    "minChars": 200,
+    "maxSummaryChars": 1200,
+    "maxSummaryTokens": 300,
+    "maxItems": 12,
+}
 
 sys.path.insert(0, str(ROOT / "scripts"))
 import memory_baseline  # noqa: E402
@@ -62,6 +71,23 @@ def read_usage(project: pathlib.Path) -> dict:
             "COALESCE(SUM(used),0) FROM memory_hit"
         ).fetchone()
         episodes = conn.execute("SELECT COUNT(*) FROM memory_episode").fetchone()[0]
+        compaction = {}
+        try:
+            row = conn.execute(
+                "SELECT metadata FROM memory_episode ORDER BY created_at DESC LIMIT 1"
+            ).fetchone()
+            if row and row[0]:
+                compaction = json.loads(row[0]).get("contextCompaction", {}) or {}
+        except (sqlite3.Error, json.JSONDecodeError):
+            compaction = {}
+        compaction_trace = None
+        try:
+            for (steps_json,) in conn.execute("SELECT steps_json FROM memory_trace"):
+                for step in json.loads(steps_json or "[]"):
+                    if isinstance(step, dict) and step.get("kind") == "context_compaction":
+                        compaction_trace = step
+        except (sqlite3.Error, json.JSONDecodeError):
+            compaction_trace = None
         return {
             "calls": int(usage[0] or 0),
             "promptTokens": int(usage[1] or 0),
@@ -72,18 +98,28 @@ def read_usage(project: pathlib.Path) -> dict:
             "consulted": int(hits[1] or 0),
             "used": int(hits[2] or 0),
             "episodes": int(episodes or 0),
+            "contextCompaction": compaction,
+            "contextCompactionTrace": compaction_trace,
         }
     finally:
         conn.close()
 
 
 def run_arm(cli: pathlib.Path, arm: str, disabled: bool, keep: bool,
-            timeout: int) -> tuple[dict, pathlib.Path | None]:
+            timeout: int, compaction: dict | None = None) -> tuple[dict, pathlib.Path | None]:
     work = pathlib.Path(tempfile.mkdtemp(prefix=f"arestrix-deepseek-{arm}-"))
     project = work / "projeto"
     project.mkdir(parents=True)
     graph = work / "pipeline.json"
-    shutil.copy2(FIXTURE / "pipeline.json", graph)
+    graph_data = json.loads((FIXTURE / "pipeline.json").read_text(encoding="utf-8"))
+    if compaction:
+        for node in graph_data.get("nodes", []):
+            if node.get("type") != "agent":
+                continue
+            memory = node.setdefault("agentSettings", {}).setdefault("memory", {})
+            memory["contextCompaction"] = compaction
+            break
+    graph.write_text(json.dumps(graph_data, ensure_ascii=False, indent=2), encoding="utf-8")
     old_fixture = memory_baseline.FIXTURE
     old_project = memory_baseline.PROJECT_ID
     old_scope = memory_baseline.SCOPE_ID
@@ -139,8 +175,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--cli", default=str(cli_path()))
-    parser.add_argument("--max-total-tokens", type=int, default=30000,
-                        help="aborta depois da execucao se ON+OFF ultrapassar este teto")
+    parser.add_argument("--max-total-tokens", type=int, default=45000,
+                        help="aborta depois da execucao se ON+OFF+COMPACTED ultrapassar este teto")
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--keep", action="store_true")
     parser.add_argument("--no-write-report", action="store_true")
@@ -157,17 +193,36 @@ def main() -> int:
     print(f"DeepSeek real: {FIXTURE / 'pipeline.json'}")
     on, on_dir = run_arm(cli, "on", False, args.keep, args.timeout)
     off, off_dir = run_arm(cli, "off", True, args.keep, args.timeout)
-    total_tokens = on["usage"]["totalTokens"] + off["usage"]["totalTokens"]
+    compacted, compacted_dir = run_arm(cli, "compacted", False, args.keep,
+                                       args.timeout, COMPACTION)
+    total_tokens = (on["usage"]["totalTokens"] + off["usage"]["totalTokens"] +
+                    compacted["usage"]["totalTokens"])
+    on_prompt = on["usage"]["promptTokens"]
+    compacted_prompt = compacted["usage"]["promptTokens"]
+    compaction_info = compacted["usage"].get("contextCompaction") or {}
+    compaction_trace = compacted["usage"].get("contextCompactionTrace")
     checks = {
         "onExitZero": on["exitCode"] == 0,
         "offExitZero": off["exitCode"] == 0,
+        "compactedExitZero": compacted["exitCode"] == 0,
         "onHasSixSteps": on["stepsWritten"] >= 6,
         "offHasSixSteps": off["stepsWritten"] >= 6,
+        "compactedHasSixSteps": compacted["stepsWritten"] >= 6,
         "onLongEnough": on["usage"]["calls"] >= 6,
+        "compactedLongEnough": compacted["usage"]["calls"] >= 6,
         "onBriefInjected": on["usage"]["briefChars"] > 0,
         "offBriefEmpty": off["usage"]["briefChars"] == 0,
+        "compactedBriefInjected": compacted["usage"]["briefChars"] > 0,
         "onHasCode": EXPECTED_CODE in on["final"],
         "offHasNoCode": EXPECTED_CODE not in off["final"],
+        "compactedHasCode": EXPECTED_CODE in compacted["final"],
+        "compactedApplied": bool(compaction_info.get("applied")),
+        "compactedTurns": int(compaction_info.get("turnsCompacted", 0)) > 0,
+        "compactedMemoryIds": LESSON_ID in (compaction_info.get("memoryIds") or []),
+        "compactedTraceRecordsCompaction": bool(
+            compaction_trace and "fallbackReason" in compaction_trace
+            and "charsBefore" in compaction_trace),
+        "compactedPromptReduced": 0 < compacted_prompt < on_prompt,
         "withinTokenBudget": total_tokens <= args.max_total_tokens,
     }
     report = {
@@ -177,23 +232,36 @@ def main() -> int:
         "expectedCode": EXPECTED_CODE,
         "maxTotalTokens": args.max_total_tokens,
         "totalTokens": total_tokens,
+        "promptTokens": {
+            "on": on_prompt,
+            "compacted": compacted_prompt,
+            "reductionPercent": round(
+                100.0 * (on_prompt - compacted_prompt) / on_prompt, 2) if on_prompt else 0.0,
+        },
+        "compactionConfig": COMPACTION,
         "checks": checks,
         "pass": all(checks.values()),
         "on": on,
         "off": off,
+        "compacted": compacted,
     }
     if not args.no_write_report:
         REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n",
                           encoding="utf-8")
     print(json.dumps({"pass": report["pass"], "checks": checks,
                       "tokens": total_tokens,
-                      "onFinal": on["final"], "offFinal": off["final"]},
+                      "promptTokens": report["promptTokens"],
+                      "compaction": compaction_info,
+                      "onFinal": on["final"], "offFinal": off["final"],
+                      "compactedFinal": compacted["final"]},
                      ensure_ascii=False, indent=2))
     if args.keep:
         if on_dir:
             print(f"ON temporario: {on_dir}")
         if off_dir:
             print(f"OFF temporario: {off_dir}")
+        if compacted_dir:
+            print(f"COMPACTED temporario: {compacted_dir}")
     return 0 if report["pass"] else 1
 
 

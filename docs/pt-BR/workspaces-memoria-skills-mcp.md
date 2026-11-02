@@ -103,6 +103,11 @@ ficam como candidatos e não entram no brief até serem promovidos. Cada item in
 `[MEMO:<id>]`; só o ID citado na resposta final conta como usado. Uso altera utilidade, não
 confiança nem o estado de sustentação.
 
+`contextCompaction` é um interruptor separado, opt-in e desligado por padrão. Ele substitui turnos
+concluídos por um bloco derivado que mantém os ids duráveis (`[MEMO:<id>]`), preservando o system
+prompt, a tarefa atual e as últimas N mensagens. Memória vazia, falha do provedor ou bloco que não
+cabe no orçamento explícito mantêm o histórico original; o trace registra o fallback.
+
 A camada semântica avançada já está no núcleo e no Studio:
 
 - **Fontes e trechos:** arquivos locais autorizados são segmentados, sanitizados e versionados;

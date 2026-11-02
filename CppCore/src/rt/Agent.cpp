@@ -23,6 +23,7 @@
 #include "rt/Http.hpp"
 #include "rt/AsyncCalls.hpp"
 #include "rt/CallGraph.hpp"
+#include "rt/ContextCompactor.hpp"
 #include "rt/McpTools.hpp"
 #include "rt/MemoryFailure.hpp"
 #include "rt/ModelClient.hpp"
@@ -156,6 +157,13 @@ struct AgentSpec {
     std::vector<std::string> memorySourcePaths;
     int memorySourceMaxFileBytes = 524288;
     int memorySourceMaxFiles = 2000;
+    // Compactacao do historico (derivada da memoria existente), desligada por padrao.
+    bool memoryContextCompaction = false;
+    size_t memoryCompactionKeepRecent = 6;
+    size_t memoryCompactionMinChars = 4000;
+    size_t memoryCompactionMaxChars = 2000;
+    size_t memoryCompactionMaxTokens = 500;
+    size_t memoryCompactionMaxItems = 16;
     std::vector<std::string> memoryDomains;
     int memoryMaxLessonsPerRun = 20;
     int memoryMaxLessonChars = 4000;
@@ -204,6 +212,17 @@ AgentSpec parseSpec(const json& j, const std::string& nodeId, const std::string&
     s.memorySources = j.value("memorySources", false);
     s.memorySourceMaxFileBytes = j.value("memorySourceMaxFileBytes", 524288);
     s.memorySourceMaxFiles = j.value("memorySourceMaxFiles", 2000);
+    s.memoryContextCompaction = j.value("memoryContextCompaction", false);
+    s.memoryCompactionKeepRecent = static_cast<size_t>(
+        std::max<int64_t>(1, std::min<int64_t>(50, j.value("memoryCompactionKeepRecent", 6))));
+    s.memoryCompactionMinChars = static_cast<size_t>(
+        std::max<int64_t>(0, std::min<int64_t>(1000000, j.value("memoryCompactionMinChars", 4000))));
+    s.memoryCompactionMaxChars = static_cast<size_t>(
+        std::max<int64_t>(64, std::min<int64_t>(100000, j.value("memoryCompactionMaxChars", 2000))));
+    s.memoryCompactionMaxTokens = static_cast<size_t>(
+        std::max<int64_t>(16, std::min<int64_t>(100000, j.value("memoryCompactionMaxTokens", 500))));
+    s.memoryCompactionMaxItems = static_cast<size_t>(
+        std::max<int64_t>(1, std::min<int64_t>(100, j.value("memoryCompactionMaxItems", 16))));
     if (j.contains("memorySourcePaths") && j["memorySourcePaths"].is_array()) {
         for (const auto& path : j["memorySourcePaths"]) {
             if (path.is_string()) s.memorySourcePaths.push_back(path.get<std::string>());
@@ -262,6 +281,10 @@ AgentSpec parseSpec(const json& j, const std::string& nodeId, const std::string&
     // A/B e adocao antecipada: ARESTRIX_CONTEXT_COMPRESSION=0|1 sobrepoe o spec.
     if (const char* env = std::getenv("ARESTRIX_CONTEXT_COMPRESSION")) {
         if (*env) s.compression.enabled = std::string(env) != "0";
+    }
+    // A/B da compactacao de historico: 0|1 sobrepoe o spec, sem mudar o padrao.
+    if (const char* env = std::getenv("ARESTRIX_MEMORY_CONTEXT_COMPACTION")) {
+        if (*env) s.memoryContextCompaction = std::string(env) != "0";
     }
     // A ferramenta de recuperacao so existe quando ha compressao: sem CCR ela nao teria o que ler.
     if (s.compression.enabled &&
@@ -349,6 +372,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     // A/B controlado no mesmo grafo: desliga injecao e ferramentas de memoria sem editar o JSON.
     if (spec.memoryForceDisabled || std::getenv("ARESTRIX_MEMORY_DISABLE") != nullptr) {
         spec.memoryEnabled = false;
+        spec.memoryContextCompaction = false;
         spec.memoryContext.clear();
         spec.memoryWriteEnabled = false;
         for (const char* tool : {"memory_search", "memory_propose_lesson", "memory_state_get",
@@ -572,6 +596,39 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         compressor = std::make_unique<compress::ContextCompressor>(
             spec.compression, ccr.get(), lang, proseTokenizer.get(), proseModel.get());
     }
+    // Compactacao do historico com a memoria existente. A decisao e tomada no
+    // inicio de cada turno, depois que o turno anterior terminou (nunca no meio
+    // de uma chamada de ferramenta). O historico completo continua em
+    // chat.messages; apenas a requisicao enviada recebe a copia compactada.
+    std::unique_ptr<ContextCompactor> contextCompactor;
+    if (spec.memoryContextCompaction && spec.memoryEnabled && !spec.memoryProjectId.empty()) {
+        auto& compactionMemory = memory::MemoryService::getInstance();
+        const std::string compactionProjectId = spec.memoryProjectId;
+        const std::vector<std::string> compactionDomains = spec.memoryDomains;
+        const std::string compactionTaskType = !spec.memoryTaskType.empty()
+            ? spec.memoryTaskType : nodeId;
+        CompactionConfig compactionConfig;
+        compactionConfig.enabled = true;
+        compactionConfig.keepRecentMessages = spec.memoryCompactionKeepRecent;
+        compactionConfig.minHistoryChars = spec.memoryCompactionMinChars;
+        compactionConfig.maxSummaryChars = spec.memoryCompactionMaxChars;
+        compactionConfig.maxSummaryTokens = spec.memoryCompactionMaxTokens;
+        compactionConfig.maxItems = spec.memoryCompactionMaxItems;
+        contextCompactor = std::make_unique<ContextCompactor>(
+            compactionConfig,
+            [&compactionMemory, compactionProjectId, compactionDomains, compactionTaskType](
+                const std::string& query) {
+                return memoryDurableItems(compactionMemory, compactionProjectId, compactionDomains,
+                                          compactionTaskType, query);
+            });
+    }
+    size_t compactionAppliedTurns = 0;
+    size_t compactionRemovedMessages = 0;
+    size_t compactionTurns = 0;
+    size_t compactionCharsBefore = 0;
+    size_t compactionCharsAfter = 0;
+    std::vector<std::string> compactionMemoryIds;
+    std::string compactionFallbackReason;
     size_t compressedBlocks = 0;
     size_t compressedTokensBefore = 0;
     size_t compressedTokensAfter = 0;
@@ -648,6 +705,26 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                   {"cacheWriteTokens", usage.cacheWriteTokens},
                   {"calls", usage.calls}, {"retries", usage.retries},
                   {"memoryEnabled", spec.memoryEnabled}, {"memoryContextChars", usage.memoryContextChars}};
+        json compactionMeta = json::object();
+        if (!spec.memoryProjectId.empty() && spec.memoryContextCompaction) {
+            json ids = json::array();
+            for (const auto& id : compactionMemoryIds) ids.push_back(id);
+            compactionMeta = json{
+                {"enabled", spec.memoryContextCompaction},
+                {"applied", compactionAppliedTurns > 0},
+                {"turnsCompacted", static_cast<long long>(compactionTurns)},
+                {"messagesRemoved", static_cast<long long>(compactionRemovedMessages)},
+                {"charsBefore", static_cast<long long>(compactionCharsBefore)},
+                {"charsAfter", static_cast<long long>(compactionCharsAfter)},
+                {"estimatedTokensBefore",
+                 static_cast<long long>(ContextCompactor::estimateTokens(compactionCharsBefore))},
+                {"estimatedTokensAfter",
+                 static_cast<long long>(ContextCompactor::estimateTokens(compactionCharsAfter))},
+                {"memoryIds", ids},
+                {"fallbackReason", compactionFallbackReason.empty()
+                                       ? std::string("none") : compactionFallbackReason}};
+            meta["contextCompaction"] = compactionMeta;
+        }
         if (spec.routing.mode != "off") meta["routing"] = ModelRouter::decisionToJson(routingDecision);
         if (!success) {
             if (!effectiveClass.empty()) meta["errorClass"] = effectiveClass;
@@ -672,6 +749,17 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         for (const auto& file : runFiles) episode.filesTouched.push_back(json(file));
         for (const auto& artifact : runArtifacts) episode.artifacts.push_back(json(artifact));
         const std::string episodeId = memory.recordEpisode(spec.memoryProjectId, episode);
+        // Compactacao de contexto: um passo agregado no trace existente,
+        // incluindo fallback e o estado do interruptor. O detalhamento tambem
+        // fica no metadata do episodio (o trace tem limite de passos).
+        if (!compactionMeta.empty()) {
+            json compactionStep = compactionMeta;
+            compactionStep["kind"] = "context_compaction";
+            compactionStep["promptTokens"] = usage.promptTokens;
+            compactionStep["completionTokens"] = usage.completionTokens;
+            memory.recordTraceStep(spec.memoryProjectId, runId, nodeId, itemId, taskType,
+                                   intentTemplateHash, inputHash, compactionStep);
+        }
         // E11: o traco fecha junto com o episodio e aponta para a versao do
         // conhecimento consultada no inicio da recuperacao.
         memory.closeTrace(spec.memoryProjectId, runId, nodeId, usage.outcome, spec.model,
@@ -720,7 +808,38 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                 }
             }
             AgentTelemetryEmitter::emitStatus(nodeId, "thinking", "Turno " + std::to_string(turn));
-            ChatReply t = chatOnce(chat);
+            ChatRequest compactedRequest;
+            bool hasCompactedRequest = false;
+            if (contextCompactor) {
+                const CompactionResult compaction = contextCompactor->compact(chat.messages);
+                if (compaction.applied) {
+                    ++compactionAppliedTurns;
+                    compactionRemovedMessages += compaction.removedMessages;
+                    compactionTurns += compaction.compactedTurns;
+                    compactionCharsBefore += compaction.originalChars;
+                    compactionCharsAfter += compaction.compactedChars;
+                    for (const auto& id : compaction.memoryIds) {
+                        if (std::find(compactionMemoryIds.begin(), compactionMemoryIds.end(), id) ==
+                            compactionMemoryIds.end()) {
+                            compactionMemoryIds.push_back(id);
+                        }
+                    }
+                    compactedRequest = chat;
+                    compactedRequest.messages = compaction.messages;
+                    hasCompactedRequest = true;
+                    // O run aplicou compactacao neste turno; um motivo antigo de
+                    // fallback (limiar inicial) nao representa o resultado.
+                    compactionFallbackReason.clear();
+                    std::cout << "[Agent " << label << "] compactacao de memoria: "
+                              << compaction.removedMessages << " mensagem(ns), "
+                              << compaction.compactedTurns << " turno(s), "
+                              << compaction.originalChars << " -> " << compaction.compactedChars
+                              << " caracteres, " << compaction.memoryIds.size() << " referencia(s)\n";
+                } else if (compactionFallbackReason.empty()) {
+                    compactionFallbackReason = compaction.fallbackReason;
+                }
+            }
+            ChatReply t = hasCompactedRequest ? chatOnce(compactedRequest) : chatOnce(chat);
             ++turns;
             if (!t.ok) {
                 failureClass = memoryErrorClass(t.errorCode, t.httpStatus);
@@ -835,7 +954,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                   << ", saida=" << outTokens << ", retries=" << retries << ")\n";
 
         // Um unico evento nativo por agente: o Runner agrega sem parsing de stdout nem processo auxiliar.
-        AgentTelemetryEmitter::emitEvent(nodeId, "usage", json{
+        json usageEvent{
             {"prompt_tokens", inTokens},
             {"completion_tokens", outTokens},
             {"total_tokens", inTokens + outTokens},
@@ -849,7 +968,25 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
             {"compression_tokens_before", compressedTokensBefore},
             {"compression_tokens_after", compressedTokensAfter},
             {"compression_kinds", compressedKinds}
-        });
+        };
+        // Campos novos so aparecem quando o interruptor esta ligado; desligado
+        // preserva o evento de telemetria anterior.
+        if (spec.memoryContextCompaction) {
+            usageEvent["context_compaction_enabled"] = true;
+            usageEvent["context_compaction_applied"] = compactionAppliedTurns > 0;
+            usageEvent["context_compaction_turns"] = static_cast<long long>(compactionTurns);
+            usageEvent["context_compaction_messages_removed"] =
+                static_cast<long long>(compactionRemovedMessages);
+            usageEvent["context_compaction_chars_before"] =
+                static_cast<long long>(compactionCharsBefore);
+            usageEvent["context_compaction_chars_after"] =
+                static_cast<long long>(compactionCharsAfter);
+            usageEvent["context_compaction_memory_ids"] =
+                static_cast<long long>(compactionMemoryIds.size());
+            usageEvent["context_compaction_fallback"] =
+                compactionFallbackReason.empty() ? std::string("none") : compactionFallbackReason;
+        }
+        AgentTelemetryEmitter::emitEvent(nodeId, "usage", usageEvent);
     } catch (const std::exception& ex) {
         recordUsage(false, ex.what(), failureClass.empty() ? "agent_exception" : failureClass);
         throw;
