@@ -663,6 +663,7 @@ public:
     taskforge::Json getPath(const std::string& scopeId, const std::string& pathId) const;
     bool setPathState(const std::string& scopeId, const std::string& pathId,
                       const std::string& state, const std::string& reason);
+    bool bridgeProposalSeen(const std::string& scopeId, const std::string& pairKey) const;
     std::vector<std::string> pathsForClaim(const std::string& claimId) const;
     std::vector<std::string> replacementClaimIds(const std::string& scopeId,
                                                  const std::string& claimId) const;

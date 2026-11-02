@@ -10,6 +10,12 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ### Added
 
+- **Interdomain bridges (multigraph plan, E19):** maintenance can detect
+  convergence of approved traces on the same entity across distinct lenses and
+  record a pending `bridge_hypothesis` proposal with candidate claims, paths and
+  conditions. Detection is budgeted, deduplicated by entity/lens pair and never
+  creates an edge; discarded-event counts are returned in the report and the
+  `memory bridges detect` CLI.
 - **Model routing (multigraph plan, E18):** `routing.mode` supports `off`,
   `shadow` and `binary`; decisions use a Beta estimate per `task_type` from
   validated outcomes, expected cost, a `p_min` threshold and local-only privacy.
