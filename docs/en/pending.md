@@ -1,5 +1,8 @@
 # Arestrix project pending items
 
+> Memory-specific pending work, including context compaction backed by existing
+> memory, is tracked in [Memory pending items](memory-pending.md).
+
 > **Version:** 2.5.0 · **Updated:** 2026-10-31
 >
 > Single project-wide pending list. The memory implementation plan (Phases A-C) and the advanced

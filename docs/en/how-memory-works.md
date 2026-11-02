@@ -426,6 +426,26 @@ fingerprints. No experimental switch becomes enabled by default: `pathServing`,
 `traversal`, `routing.mode` and `bridges` remain `off` until a real-data
 measurement shows a justified gain and cost.
 
+## 8.2 Real-provider validation
+
+Two controlled tests use the real DeepSeek API outside the normal CI, with
+`DEEPSEEK_API_KEY`, a token ceiling and a reproducible report. Both ask the same
+question and require the same correct answer.
+
+**Long interaction** (`scripts/e2e_memory_deepseek_long.py`): the agent performs
+six writes, one search and a final answer. With memory ON it uses the brief and
+`memory_search`; without memory it has neither. ON answered `ORION-42` in 9 calls
+and 14,164 tokens; OFF answered `UNKNOWN` in 8 calls and 8,475 tokens.
+
+**Context substitution** (`scripts/e2e_memory_prompt_reduction.py`): one arm
+receives a long manual in the prompt; the other receives a short prompt and the
+same truth from memory. Both answered `ORION-42`. The context arm used 24,718
+prompt tokens; the memory arm used 3,228, an 87% reduction.
+
+Memory therefore reduces the **static** context a project must send. It does not
+yet compact the history of a long conversation automatically; that pending item
+is tracked in [memory-pending.md](memory-pending.md).
+
 ## 9. Retention, security and scope
 
 - **Strict scope:** project knowledge does not leak into another project; the workspace is read only

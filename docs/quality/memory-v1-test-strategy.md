@@ -286,6 +286,9 @@ são proibidos.
 
 ## 9. Lacunas atuais
 
+A pendência de compactação de histórico usando a memória existente está
+registrada em [memory-pending.md](../en/memory-pending.md).
+
 1. Validação com provedores reais ainda não foi executada.
 2. Não há runner macOS na matriz.
 3. O teste de 10 mil traços e o soak de 24 h ainda são metas, não gates.

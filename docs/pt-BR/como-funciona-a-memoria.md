@@ -428,6 +428,27 @@ brief, hits e fingerprints. Nenhum interruptor experimental passa a ligado por
 padrão: `pathServing`, `traversal`, `routing.mode` e `bridges` continuam `off`
 até uma medição com dados reais mostrar ganho e custo justificados.
 
+## 8.2 Validação com provedor real
+
+Dois testes controlados usam a API real da DeepSeek, fora do CI normal, com
+`DEEPSEEK_API_KEY`, teto de tokens e relatório reproduzível. Ambos comparam a
+mesma pergunta e exigem a mesma resposta correta.
+
+**Interação longa** (`scripts/e2e_memory_deepseek_long.py`): o agente faz seis
+gravações, uma busca e a resposta final. Com memória ON ele usa o brief e
+`memory_search`; sem memória ele não tem brief nem ferramenta. Resultado: ON
+respondeu `ORION-42` em 9 chamadas e 14.164 tokens; OFF respondeu `UNKNOWN` em 8
+chamadas e 8.475 tokens.
+
+**Substituição de contexto** (`scripts/e2e_memory_prompt_reduction.py`): um braço
+recebe um manual longo no prompt; o outro recebe um prompt curto e a mesma
+verdade pela memória. Os dois responderam `ORION-42`. O braço com contexto usou
+24.718 tokens de prompt; o braço com memória usou 3.228, uma redução de 87%.
+
+A memória, portanto, reduz o contexto **estático** que o projeto precisa enviar.
+Ela ainda não compacta automaticamente o histórico de uma conversa longa; essa
+pendência está registrada em [memory-pending.md](../en/memory-pending.md).
+
 ## 9. Retenção, segurança e escopo
 
 - **Escopo estrito:** o conhecimento do projeto não vaza para outro projeto; o workspace só é
