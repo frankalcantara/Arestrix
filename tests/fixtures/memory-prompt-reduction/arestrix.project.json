@@ -1,0 +1,10 @@
+{
+  "projectId": "memoria-prompt-reduction",
+  "name": "Memoria Prompt Reduction",
+  "globalDefaults": {
+    "memory": {
+      "enabled": false,
+      "persistent": false
+    }
+  }
+}
