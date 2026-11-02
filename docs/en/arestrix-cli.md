@@ -199,12 +199,19 @@ replace|versioned` and `--keep`.
   --repetitions 3 --seed 42 --json
 .\arestrix-cli.exe memory ab report --suite tests\fixtures\memory-ab-v1.json `
   --observations ab-observations.json --repetitions 3 --json
+.\arestrix-cli.exe memory ab run --suite tests\fixtures\memory-ab-v1.json `
+  --pipeline pipeline.json --node gerador --repetitions 3 --seed 42 --json
 ```
 
 Validates the versioned 12/4/4 suite, builds a seeded interleaved run order and analyzes paired
 observations. The report's primary metric is validator approval; secondary metrics are tokens,
 turns, cost and latency. Infrastructure failures are excluded from the paired verdict and counted
-separately. `--json` is recommended for harness automation.
+separately.
+
+`memory ab run` executes the pilot: it freezes knowledge, opens the copy read-only in the ON arm,
+disables memory in the OFF arm and writes `ab_arm`/`ab_repetition` to the measurement telemetry.
+The report includes the 95% CI, the tasks without a validator and the knowledge fingerprint before
+and after. `--json` is recommended for harness automation.
 
 ### `memory consolidate`
 
