@@ -108,6 +108,13 @@ Propostas ficam pendentes no painel **Memória do Projeto**. Aprovar promove o i
 conhecimento ativo; rejeitar mantém o registro para auditoria. Não existe gravação direta de
 lição por ferramenta.
 
+Toda promoção e despromoção grava um **instantâneo de evidência** em `memory_evidence`, no banco
+de conhecimento: alvo, ação, episódio de origem (quando houver), validador, hash do artefato,
+resumo e hash do trecho. O instantâneo **não tem chave estrangeira para o episódio**, então a
+retenção da telemetria pode apagar episódios, hits e validações antigas sem apagar a prova. O
+relatório e o painel mostram quantos instantâneos existem e quantos itens ativos estão sem
+evidência.
+
 Playbooks só saem de `candidate` com validação independente. O gate exige **3 `input_hash`
 distintos** entre as últimas 20 execuções validadas do mesmo `task_type`, validador estável e no
 máximo **1 promoção por `task_type` em 24h**. Duas falhas consecutivas ou taxa acima de 30% em 10

@@ -530,6 +530,7 @@ export class ProjectMemoryModal {
                 </div>
                 <div style="font-size: 12px; font-weight: 700; color: #0f172a;">${this.escapeHtml(l.lessonRule)}</div>
                 ${l.triggerError ? `<div style="font-size: 10px; color: #b91c1c;">Gatilho: ${this.escapeHtml(l.triggerError)}</div>` : ''}
+                <div style="font-size: 10px; color: #64748b;">${t('project_memory.evidence_count')}: ${Number(l.evidenceCount || 0)}</div>
                 ${canPromote && l.id ? `<button class="btn btn-secondary-pill btn-secondary-office btn-promote-lesson" data-lesson-id="${this.escapeHtml(String(l.id))}" style="align-self: flex-start; padding: 3px 9px; font-size: 10px;">${t('project_memory.btn_promote_workspace')}</button>` : ''}
               </div>
             `).join('');
@@ -653,7 +654,7 @@ export class ProjectMemoryModal {
                 <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px;">
                   <div style="display: flex; justify-content: space-between; gap: 8px; align-items: center;">
                     <strong style="font-size: 11px; color: #1d4ed8;">${this.escapeHtml(String(playbook.taskType || ''))}</strong>
-                    <span style="font-size: 10px; color: #64748b;">${this.escapeHtml(String(playbook.status || ''))} · ${Number(playbook.successCount || 0)}/${Number(playbook.failureCount || 0)}</span>
+                    <span style="font-size: 10px; color: #64748b;">${this.escapeHtml(String(playbook.status || ''))} · ${Number(playbook.successCount || 0)}/${Number(playbook.failureCount || 0)} · ${t('project_memory.evidence_count')} ${Number(playbook.evidenceCount || 0)}</span>
                   </div>
                   <div style="font-size: 11px; color: #0f172a; margin-top: 3px;">${this.escapeHtml(String(playbook.title || ''))}</div>
                   <div style="font-size: 10.5px; color: #475569; margin-top: 4px; white-space: pre-wrap;">${this.escapeHtml(steps)}</div>
@@ -711,6 +712,7 @@ export class ProjectMemoryModal {
                 `${t('project_memory.usage_cached', 'Prompt em cache')}: ${Number(u.cachedTokens || 0)} (${t('project_memory.usage_cache_write', 'escrita')} ${Number(u.cacheWriteTokens || 0)})`,
                 `${t('project_memory.usage_context')}: ${ctx}`,
                 `${t('project_memory.usage_hits')}: ${Number(hits.injected || 0)} · ${t('project_memory.usage_cited_brief')}: ${Number(hits.citedFromBrief ?? hits.usedInjected ?? 0)} · ${t('project_memory.usage_consulted')}: ${Number(hits.consulted || 0)} · ${t('project_memory.usage_cited_search')}: ${Number(hits.citedFromSearch || 0)} · ${t('project_memory.usage_invalid_citations')}: ${Number(u.invalidCitations || 0)}`,
+                `${t('project_memory.usage_evidence')}: ${Number(data.evidence?.snapshots || 0)} (${Number(data.evidence?.targets || 0)} ${t('project_memory.evidence_targets')})`,
                 `${t('project_memory.usage_latency')}: ${latency.toFixed(0)} ms`,
               ].join('\n');
         }

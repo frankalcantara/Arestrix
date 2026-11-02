@@ -1429,6 +1429,67 @@ int runMemory(const std::vector<std::string>& args) {
         st = nullptr;
     }
 
+    // E4: evidencia autocontida no banco de conhecimento.
+    out["evidence"] = json{{"snapshots", 0}, {"targets", 0}, {"missingTargets", 0},
+                           {"byKind", json::object()}, {"missingByKind", json::object()}};
+    {
+        long long snapshots = 0;
+        long long targets = 0;
+        if (prepare("SELECT COUNT(*), COUNT(DISTINCT target_kind || ':' || target_id) "
+                    "FROM memory_evidence", &st)) {
+            if (sqlite3_step(st) == SQLITE_ROW) {
+                snapshots = sqlite3_column_int64(st, 0);
+                targets = sqlite3_column_int64(st, 1);
+            }
+            sqlite3_finalize(st);
+            st = nullptr;
+        }
+        json byKind = json::object();
+        if (prepare("SELECT target_kind, COUNT(*) FROM memory_evidence "
+                    "GROUP BY target_kind ORDER BY target_kind", &st)) {
+            while (sqlite3_step(st) == SQLITE_ROW) {
+                byKind[sqliteText(st, 0)] = sqlite3_column_int64(st, 1);
+            }
+            sqlite3_finalize(st);
+            st = nullptr;
+        }
+        auto scalarCount = [&](const char* sql) -> long long {
+            sqlite3_stmt* local = nullptr;
+            long long value = 0;
+            if (sqlite3_prepare_v2(db, sql, -1, &local, nullptr) == SQLITE_OK &&
+                sqlite3_step(local) == SQLITE_ROW) {
+                value = sqlite3_column_int64(local, 0);
+            }
+            if (local) sqlite3_finalize(local);
+            return value;
+        };
+        const long long activeLessons = scalarCount(
+            "SELECT COUNT(*) FROM memory_edge WHERE status='active' AND relation='HAS_LESSON'");
+        const long long activeFacts = scalarCount(
+            "SELECT COUNT(*) FROM memory_edge WHERE status='active' AND relation NOT IN "
+            "('HAS_LESSON','CONTRADICTS','SUPERSEDES','GENERALIZES')");
+        const long long activePlaybooks = scalarCount(
+            "SELECT COUNT(*) FROM memory_playbook WHERE status='active'");
+        auto kindCount = [&](const char* kind) -> long long {
+            const std::string key(kind);
+            return byKind.contains(key) && byKind[key].is_number()
+                ? byKind[key].get<long long>() : 0LL;
+        };
+        json missing = json::object();
+        long long missingTotal = 0;
+        auto addMissing = [&](const char* kind, long long active) {
+            const long long absent = std::max<long long>(0, active - kindCount(kind));
+            missing[kind] = absent;
+            missingTotal += absent;
+        };
+        addMissing("lesson", activeLessons);
+        addMissing("fact", activeFacts);
+        addMissing("playbook", activePlaybooks);
+        out["evidence"] = json{{"snapshots", snapshots}, {"targets", targets},
+                               {"missingTargets", missingTotal},
+                               {"byKind", byKind}, {"missingByKind", missing}};
+    }
+
     sqlite3_close(db);
 
     if (opt.json) {
@@ -1458,6 +1519,12 @@ int runMemory(const std::vector<std::string>& args) {
                   << " | citacoes invalidas: " << out["invalidCitations"].get<long long>() << "\n";
         std::cout << "Esquema: conhecimento " << out["schemaVersion"]["knowledge"].str()
                   << " | telemetria " << out["schemaVersion"]["telemetry"].str() << "\n";
+        if (out.contains("evidence")) {
+            std::cout << "Evidencias: " << out["evidence"]["snapshots"].get<long long>()
+                      << " instantaneo(s) | alvos " << out["evidence"]["targets"].get<long long>()
+                      << " | sem evidencia " << out["evidence"]["missingTargets"].get<long long>()
+                      << "\n";
+        }
         std::cout << "Validacoes: " << out["validations"]["total"].get<long long>()
                   << " veredito(s) em " << out["validations"]["episodes"].get<long long>()
                   << " execucao(oes) | aprovadas " << out["validations"]["approved"].get<long long>()

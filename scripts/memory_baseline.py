@@ -115,6 +115,22 @@ def add_node(conn: sqlite3.Connection, node_id: str, kind: str, name: str,
     )
 
 
+def add_evidence(conn: sqlite3.Connection, target_kind: str, target_id: str,
+                 summary: str) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO memory_evidence(id,scope_id,target_kind,target_id,action,"
+        "episode_id,run_id,node_id,input_hash,validator_id,validator_version,ok,"
+        "artifact_hash,excerpt_hash,summary,created_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            "evidence-" + target_id, SCOPE_ID, target_kind, target_id, "create",
+            None, None, None, None, "baseline-seed", "1", 1,
+            None, sha256_text(target_kind + "|" + target_id + "|" + summary),
+            summary, SEED_NOW,
+        ),
+    )
+
+
 def add_edge(conn: sqlite3.Connection, edge_id: str, src: str, dst: str,
              relation: str, confidence: float, metadata: dict) -> None:
     value_json = None
@@ -166,6 +182,8 @@ def seed_knowledge(db_path: pathlib.Path, knowledge: dict) -> dict:
                     "sourceItem": "baseline_seed",
                 },
             )
+            add_evidence(conn, "lesson", lesson["id"],
+                         "Licao (" + lesson["domain"] + "): " + lesson["rule"])
 
         for fact in knowledge["facts"]:
             src_id = "baseline-entity-" + normalize_comparable(fact["source"]).replace(" ", "-")
@@ -176,6 +194,8 @@ def seed_knowledge(db_path: pathlib.Path, knowledge: dict) -> dict:
                 conn, fact["id"], src_id, dst_id, fact["relation"],
                 float(fact["confidence"]), {"domain": fact["domain"]},
             )
+            add_evidence(conn, "fact", fact["id"],
+                         fact["relation"] + " " + fact["source"] + " -> " + fact["target"])
 
         playbook = knowledge["playbook"]
         conn.execute(
@@ -192,6 +212,8 @@ def seed_knowledge(db_path: pathlib.Path, knowledge: dict) -> dict:
                 SEED_NOW, SEED_NOW,
             ),
         )
+        add_evidence(conn, "playbook", playbook["id"],
+                     "Playbook (" + playbook["taskType"] + "): " + playbook["title"])
         conn.commit()
     finally:
         conn.close()

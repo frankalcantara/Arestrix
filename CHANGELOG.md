@@ -25,6 +25,12 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   verdicts in real runs.
 - `memory report` now reads the telemetry database and shows validated/unvalidated runs and
   the approval rate per `task_type`.
+- **Self-contained evidence (multigraph plan, E4):** `memory_evidence` is now an evidence
+  snapshot table in the knowledge database (target kind/id, action, episode, validator, artifact
+  and excerpt hashes, summary) with no foreign key to episodes or edges. Promotions, demotions,
+  invalidations and direct creates write snapshots, so telemetry pruning no longer removes the
+  proof. `memory report` and the project panel expose evidence counts and missing active targets.
+  Telemetry schema version is now `3`.
 - **Automatic pending indexing (multigraph plan, E3):** after every persistent run, and in the
   maintenance worker, pending embeddings are indexed outside the read path with a 10 s / 64 object
   budget. Provider failures never fail the run. `partial` indexes now serve hybrid search: indexed
