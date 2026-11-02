@@ -142,8 +142,10 @@ A busca combina:
 - **vetorial** opcional, quando um provedor de embeddings está configurado;
 - **fusão RRF** para ordenar os dois resultados.
 
-A busca **não indexa** durante a consulta. A indexação é explícita: o painel do projeto oferece
-**Testar** e **Reindexar**. Perfis prontos:
+A busca **não indexa** durante a consulta. A indexação acontece fora do caminho de leitura: no fim
+de cada execução com memória persistente (orçamento padrão de **10 s ou 64 objetos**), no worker de
+manutenção (`idle`/`after_episodes`) e nas ações explícitas **Testar** e **Reindexar** do painel.
+Falha do provedor de embeddings não derruba a execução. Perfis prontos:
 
 | Perfil | Dimensão |
 | :--- | :--- |
@@ -162,8 +164,12 @@ pendentes e um fingerprint curto, com os estados:
 | `ready` | Fingerprint atual, índice completo | híbrida |
 | `stale` | Modelo/dimensão/endpoint/template mudou | lexical |
 | `pending` | Reindexação em andamento | lexical |
-| `partial` | Índice incompleto | lexical + aviso |
+| `partial` | Índice incompleto | híbrida: vetorial nos indexados, lexical nos demais |
 | `failed` | Reindexação falhou | lexical + erro |
+
+Em `partial`, os itens com vetor entram pela fusão lexical + vetorial; os itens ainda sem vetor
+entram apenas pela parte lexical, sem desligar a busca híbrida. `memory health` e o painel mostram
+os totais de indexados e pendentes.
 
 Trocar de perfil invalida o índice e oferece reindexação. A reindexação é idempotente e descarta
 vetores de fingerprints antigos.

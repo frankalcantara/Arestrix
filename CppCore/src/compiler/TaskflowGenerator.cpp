@@ -760,6 +760,15 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
     code += "  auto arx_mem_flush = [&]() {\n";
     code += "    if (arx_mem_active && !arx_mem_persistent) memory.clearSession(projectId);\n";
     code += "  };\n";
+    // E3: indexa pendencias fora do caminho de busca, no fim da execucao.
+    // Orcamento padrao: 10 s ou 64 objetos; falha do provider nunca derruba o pipeline.
+    code += "  auto arx_mem_index = [&]() {\n";
+    code += "    if (!arx_mem_active || !arx_mem_persistent) return;\n";
+    code += "    try { memory.indexPending(projectId, 10000, 64); }\n";
+    code += "    catch (const std::exception& arx_idx_err) {\n";
+    code += "      std::cerr << \"[MEMORIA] indexacao pos-execucao ignorada: \" << arx_idx_err.what() << \"\\n\";\n";
+    code += "    }\n";
+    code += "  };\n";
     code += "  try {\n";
     code += "  std::osyncstream(std::cout) << \">>> Iniciando pipeline Taskflow: \" << " + cppString(meta.graphName) + " << \"...\\n\";\n\n";
     code += "  AgentContext ctx;\n";
@@ -1098,6 +1107,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
     code += "\n";
     code += "  auto end = std::chrono::high_resolution_clock::now();\n";
     code += "  auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();\n";
+    if (inputContextExpr.empty()) code += "  arx_mem_index();\n";
     code += "  arx_mem_flush();\n";
     code += "  std::cout << \">>> Pipeline concluido com sucesso em \" << elapsed_ms << \" ms.\\n\";\n";
     code += "  } catch (const std::exception& ex) {\n";
@@ -1105,6 +1115,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
     if (inputContextExpr.empty()) {
         code += "    taskforge::rt::drainAsyncCalls();\n";
         code += "    taskforge::rt::finishTrace(false);\n";
+        code += "    arx_mem_index();\n";
     }
     code += "    std::cerr << \">>> [ERRO] Pipeline interrompido: \" << ex.what() << std::endl;\n";
     code += "    return 1;\n";
