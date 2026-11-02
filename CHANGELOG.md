@@ -8,6 +8,8 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-11-02
+
 ### Added
 
 - **Memory-backed context compaction:** `memory.contextCompaction` (off by

@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <b>2.5.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentation</a>
+  <b>2.6.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentation</a>
 </p>
 
 <p align="center">
@@ -186,7 +186,7 @@ python scripts/e2e_examples.py
 
 ## Project status
 
-**Arestrix 2.5.0** is the current release (2026-10-31). The Studio runs on Windows and Linux;
+**Arestrix 2.6.0** is the current release (2026-11-02). The Studio runs on Windows and Linux;
 programs generated from a graph currently target Windows. APIs, file formats and command-line flags
 may still change between minor releases. See the [changelog](CHANGELOG.md) for the current
 limitations. The Windows installer and code signing are included; clean-machine validation, the
