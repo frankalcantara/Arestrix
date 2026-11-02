@@ -41,7 +41,7 @@ telemetry. The project root comes from `ARESTRIX_PROJECT_ROOT`.
 | `mode: off` | Reads and writes no memory. |
 | `mode: consult` | Injects the authorized brief into the prompt. Writes no knowledge. |
 | `mode: learn` | Consults, then writes an episode and lesson proposals at the end. |
-| `theme` | Main read/write theme; falls back to `domains[0]`. |
+| `theme` | Main read/write theme. Without it: legacy `domains[0]`, then active skill name, label and vertex id. |
 | `readThemes` | Extra read-only themes. |
 | `taskType` | Stable continuity identity; defaults to the vertex id. |
 | `contextBudgetTokens` | Brief budget; `0` disables injection. |
@@ -50,6 +50,13 @@ telemetry. The project root comes from `ARESTRIX_PROJECT_ROOT`.
 
 Project settings provide the inherited default: mode, theme, retention, consolidation and
 embeddings. A vertex may override memory when `inheritMemory` is false.
+
+The **effective theme** follows the same order in TypeScript and C++: explicit `theme`; legacy
+`domains[0]`; active skill name; vertex label; vertex id. The last three become identifiers
+(lowercase, accents folded, `_` separators). The vertex window shows the theme and its origin
+(“from skill”, “from label” or “from id”). Changing the active skill without an explicit `theme`
+**changes the theme and therefore the lesson filter and write authorization**; declare the theme
+to keep it stable.
 
 ## 4. What the brief contains
 

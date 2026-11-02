@@ -25,6 +25,10 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   verdicts in real runs.
 - `memory report` now reads the telemetry database and shows validated/unvalidated runs and
   the approval rate per `task_type`.
+- **Unified effective memory theme (multigraph plan, E6):** explicit `theme`, legacy
+  `domains[0]`, active skill name, vertex label and vertex id, resolved by the same
+  accent-folding identifier rule in TypeScript and C++. The vertex window shows the theme origin,
+  and changing the active skill without an explicit theme changes the lesson filter.
 - **Typed agent failures (multigraph plan, E5):** `rt::AgentFailure` carries the enumerated
   `errorClass`; the generated wrapper checks it before proposing a lesson, so infrastructure
   failures (429/5xx/auth/gateway/config/sandbox) never become knowledge. Proposals carry

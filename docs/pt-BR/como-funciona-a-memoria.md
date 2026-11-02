@@ -41,7 +41,7 @@ telemetria. A raiz do projeto vem de `ARESTRIX_PROJECT_ROOT`.
 | `mode: off` | Não lê nem grava memória. |
 | `mode: consult` | Injeta o brief autorizado no prompt. Não grava conhecimento. |
 | `mode: learn` | Consulta e, ao terminar, grava episódio e propostas de lição. |
-| `theme` | Tema principal de leitura e escrita; fallback para `domains[0]`. |
+| `theme` | Tema principal de leitura e escrita. Sem ele: `domains[0]` legado, depois nome da skill ativa, rótulo e id do vértice. |
 | `readThemes` | Temas extras apenas de leitura. |
 | `taskType` | Identidade estável de continuidade; padrão é o id do vértice. |
 | `contextBudgetTokens` | Orçamento do brief; `0` desativa a injeção. |
@@ -50,6 +50,12 @@ telemetria. A raiz do projeto vem de `ARESTRIX_PROJECT_ROOT`.
 
 A configuração do projeto define o padrão herdado pelos vértices: modo, tema, retenção,
 consolidação e embeddings. O vértice pode sobrescrever a memória quando `inheritMemory` é falso.
+
+O **tema efetivo** segue a mesma ordem no TypeScript e no C++: `theme` explícito; `domains[0]`
+legado; nome da skill ativa; rótulo do vértice; id do vértice. Os três últimos viram identificador
+(minúsculas, sem acentos, separadores `_`). A janela do vértice mostra o tema e a origem
+(“da skill”, “do rótulo” ou “do id”). Trocar a skill ativa sem um `theme` explícito **muda o tema e,
+portanto, o filtro de lições e a autorização de escrita**; para manter o tema, declare-o.
 
 ## 4. O que o brief contém
 
