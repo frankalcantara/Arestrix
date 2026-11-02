@@ -2709,7 +2709,7 @@ std::vector<MemoryEmbeddingObject> MemoryStore::embeddingObjects(const std::stri
                       "FROM memory_edge e JOIN memory_node s ON s.id=e.src_id "
                       "LEFT JOIN memory_node d ON d.id=e.dst_id "
                       "WHERE e.scope_id=? AND e.status='active' AND e.dormant_at IS NULL "
-                      "AND e.relation NOT IN ('HAS_LESSON','CONTRADICTS','SUPERSEDES','GENERALIZES') "
+                      "AND e.relation NOT IN ('HAS_LESSON','CONTRADICTS','SUPERSEDES','GENERALIZES','via_caminho') "
                       "AND (e.valid_from IS NULL OR e.valid_from <= ?) "
                       "AND (e.valid_to IS NULL OR e.valid_to > ?) LIMIT 2000", edges, error)) {
         const std::string now = nowIso();
@@ -2850,7 +2850,7 @@ std::vector<MemorySearchCandidate> MemoryStore::lexicalCandidates(
                       "FROM memory_edge e JOIN memory_node s ON s.id=e.src_id "
                       "LEFT JOIN memory_node d ON d.id=e.dst_id "
                       "WHERE e.scope_id=? AND e.status='active' AND e.dormant_at IS NULL "
-                      "AND e.relation NOT IN ('HAS_LESSON','CONTRADICTS','SUPERSEDES','GENERALIZES') AND ("
+                      "AND e.relation NOT IN ('HAS_LESSON','CONTRADICTS','SUPERSEDES','GENERALIZES','via_caminho') AND ("
                       "  e.src_id IN (SELECT node_id FROM memory_node_fts WHERE memory_node_fts MATCH ?) OR "
                       "  e.dst_id IN (SELECT node_id FROM memory_node_fts WHERE memory_node_fts MATCH ?) OR "
                       "  e.value_json LIKE ?"
@@ -3764,6 +3764,15 @@ bool MemoryStore::invalidateEdge(const std::string& edgeId, const std::string& v
             bindText(suspend.stmt, 2, edgeId);
             stepRetry(suspend.stmt);
         }
+        Stmt hideShortcuts;
+        if (prepare(db_, "UPDATE memory_edge SET status='superseded',valid_to=? "
+                           "WHERE relation='via_caminho' AND json_extract(metadata,'$.pathId') IN "
+                           "(SELECT path_id FROM memory_claim_path WHERE claim_id=?)",
+                     hideShortcuts, suspendError)) {
+            bindText(hideShortcuts.stmt, 1, nowIso());
+            bindText(hideShortcuts.stmt, 2, edgeId);
+            stepRetry(hideShortcuts.stmt);
+        }
     }
     audit(actor, "invalidate_edge", edgeId, "", reason);
     if (!edgeScope.empty()) {
@@ -3793,6 +3802,7 @@ std::vector<MemoryEdgeRecord> MemoryStore::neighbors(const std::string& scopeId,
         "  UNION "
         "  SELECT e.dst_id, w.depth+1 FROM memory_edge e JOIN walk w ON e.src_id=w.node_id "
         "  WHERE w.depth < ? AND e.scope_id=? AND e.status='active' AND e.dormant_at IS NULL "
+        "    AND e.relation<>'via_caminho' "
         "    AND (e.valid_from IS NULL OR e.valid_from <= ?) "
         "    AND (e.valid_to IS NULL OR e.valid_to > ?) "
         ") "
@@ -3800,6 +3810,7 @@ std::vector<MemoryEdgeRecord> MemoryStore::neighbors(const std::string& scopeId,
         "e.recorded_at,e.confidence,e.status,e.superseded_by,e.source_kind,e.source_ref,e.metadata "
         "FROM memory_edge e JOIN walk w ON e.src_id=w.node_id "
         "WHERE e.scope_id=? AND e.status='active' AND e.dormant_at IS NULL "
+        "  AND e.relation<>'via_caminho' "
         "  AND (e.valid_from IS NULL OR e.valid_from <= ?) "
         "  AND (e.valid_to IS NULL OR e.valid_to > ?) "
         "ORDER BY w.depth, e.recorded_at LIMIT 500";
@@ -3857,7 +3868,8 @@ std::vector<MemoryEdgeRecord> MemoryStore::searchEdges(const std::string& scopeI
         "SELECT e.id,e.scope_id,e.src_id,e.dst_id,e.relation,e.value_json,e.valid_from,e.valid_to,"
         "e.recorded_at,e.confidence,e.status,e.superseded_by,e.source_kind,e.source_ref,e.metadata "
         "FROM memory_edge e "
-        "WHERE e.scope_id=? AND e.status='active' AND e.dormant_at IS NULL AND ("
+        "WHERE e.scope_id=? AND e.status='active' AND e.dormant_at IS NULL "
+        "AND e.relation<>'via_caminho' AND ("
         "  e.src_id IN (SELECT node_id FROM memory_node_fts WHERE memory_node_fts MATCH ?) OR "
         "  e.dst_id IN (SELECT node_id FROM memory_node_fts WHERE memory_node_fts MATCH ?) "
         ") ORDER BY e.recorded_at DESC LIMIT ?";
@@ -4119,7 +4131,7 @@ std::string MemoryStore::searchContext(const std::string& scopeId, const std::st
             "JOIN memory_node s ON s.id=e.src_id "
             "LEFT JOIN memory_node d ON d.id=e.dst_id "
             "WHERE e.scope_id=? AND e.status='active' AND e.dormant_at IS NULL "
-            "AND e.relation NOT IN ('HAS_LESSON','CONTRADICTS','SUPERSEDES','GENERALIZES') AND ("
+            "AND e.relation NOT IN ('HAS_LESSON','CONTRADICTS','SUPERSEDES','GENERALIZES','via_caminho') AND ("
             "  e.src_id IN (SELECT node_id FROM memory_node_fts WHERE memory_node_fts MATCH ?) OR "
             "  e.dst_id IN (SELECT node_id FROM memory_node_fts WHERE memory_node_fts MATCH ?) OR "
             "  e.value_json LIKE ?"
@@ -6003,7 +6015,20 @@ bool MemoryStore::setPathState(const std::string& scopeId, const std::string& pa
         lastError_ = sqlite3_errmsg(db_);
         return false;
     }
-    return sqlite3_changes(db_) > 0;
+    const bool pathChanged = sqlite3_changes(db_) > 0;
+    // O atalho e projecao do caminho: acompanha o estado sem virar evidencia.
+    Stmt shortcut;
+    if (prepare(db_, "UPDATE memory_edge SET status=?,valid_to=? "
+                       "WHERE scope_id=? AND relation='via_caminho' "
+                       "AND json_extract(metadata,'$.pathId')=?",
+                 shortcut, error)) {
+        bindText(shortcut.stmt, 1, state == "active" ? "active" : "superseded");
+        bindNullableText(shortcut.stmt, 2, state == "active" ? std::string() : nowIso());
+        bindText(shortcut.stmt, 3, scopeId);
+        bindText(shortcut.stmt, 4, pathId);
+        stepRetry(shortcut.stmt);
+    }
+    return pathChanged;
 }
 
 std::vector<std::string> MemoryStore::pathsForClaim(const std::string& claimId) const {
@@ -6101,6 +6126,96 @@ bool MemoryStore::revalidatePathClaim(const std::string& scopeId, const std::str
         stepRetry(revision.stmt);
     }
     return true;
+}
+
+bool MemoryStore::syncPathShortcut(const std::string& scopeId, const std::string& pathId,
+                                   bool active, const std::string& srcId,
+                                   const std::string& dstId,
+                                   const std::vector<std::string>& claimIds,
+                                   double utility) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty() || pathId.empty()) return false;
+    Stmt existing;
+    std::string error;
+    std::string existingId;
+    if (prepare(db_, "SELECT id FROM memory_edge WHERE scope_id=? AND relation='via_caminho' "
+                       "AND json_extract(metadata,'$.pathId')=? LIMIT 1", existing, error)) {
+        bindText(existing.stmt, 1, scopeId);
+        bindText(existing.stmt, 2, pathId);
+        if (stepRetry(existing.stmt) == SQLITE_ROW) existingId = columnText(existing.stmt, 0);
+    }
+    const std::string now = nowIso();
+    taskforge::Json claimArray = taskforge::Json::array();
+    for (const auto& id : claimIds) claimArray.push_back(id);
+    if (!existingId.empty()) {
+        Stmt update;
+        if (!prepare(db_, "UPDATE memory_edge SET status=?,valid_to=?,metadata=? WHERE id=?",
+                     update, error)) {
+            lastError_ = error;
+            return false;
+        }
+        bindText(update.stmt, 1, active ? "active" : "superseded");
+        bindNullableText(update.stmt, 2, active ? std::string() : now);
+        bindText(update.stmt, 3, taskforge::Json{{"pathId", pathId}, {"derived", true},
+                                                 {"claimIds", claimArray},
+                                                 {"utility", utility}}.dump());
+        bindText(update.stmt, 4, existingId);
+        if (stepRetry(update.stmt) != SQLITE_DONE) {
+            lastError_ = sqlite3_errmsg(db_);
+            return false;
+        }
+        return true;
+    }
+    if (!active || srcId.empty()) return true;
+    const std::string id = "via_" + hashHex(scopeId + "|" + pathId).substr(0, 28);
+    Stmt insert;
+    if (!prepare(db_, "INSERT INTO memory_edge(id,scope_id,src_id,dst_id,relation,value_json,"
+                       "valid_from,valid_to,recorded_at,confidence,status,source_kind,source_ref,"
+                       "edge_hash,metadata) VALUES(?,?,?,?,'via_caminho','{}',?,?,?,?,'active',"
+                       "'path',?,?,?)", insert, error)) {
+        lastError_ = error;
+        return false;
+    }
+    bindText(insert.stmt, 1, id);
+    bindText(insert.stmt, 2, scopeId);
+    bindText(insert.stmt, 3, srcId);
+    bindNullableText(insert.stmt, 4, dstId);
+    bindText(insert.stmt, 5, now);
+    bindNullableText(insert.stmt, 6, "");
+    bindText(insert.stmt, 7, now);
+    sqlite3_bind_double(insert.stmt, 8, std::max(0.0, std::min(1.0, utility)));
+    bindText(insert.stmt, 9, pathId);
+    bindText(insert.stmt, 10, hashHex(scopeId + "|via_caminho|" + pathId));
+    bindText(insert.stmt, 11, taskforge::Json{{"pathId", pathId}, {"derived", true},
+                                              {"claimIds", claimArray},
+                                              {"utility", utility}}.dump());
+    if (stepRetry(insert.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return false;
+    }
+    return true;
+}
+
+taskforge::Json MemoryStore::shortcutForPath(const std::string& scopeId,
+                                             const std::string& pathId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || pathId.empty()) return taskforge::Json::object();
+    Stmt st;
+    std::string error;
+    if (prepare(db_, "SELECT id,status,src_id,dst_id,metadata FROM memory_edge "
+                       "WHERE scope_id=? AND relation='via_caminho' "
+                       "AND json_extract(metadata,'$.pathId')=? LIMIT 1", st, error)) {
+        bindText(st.stmt, 1, scopeId);
+        bindText(st.stmt, 2, pathId);
+        if (stepRetry(st.stmt) == SQLITE_ROW) {
+            return taskforge::Json{{"id", columnText(st.stmt, 0)},
+                                   {"status", columnText(st.stmt, 1)},
+                                   {"srcId", columnText(st.stmt, 2)},
+                                   {"dstId", columnText(st.stmt, 3)},
+                                   {"metadata", columnText(st.stmt, 4)}};
+        }
+    }
+    return taskforge::Json::object();
 }
 
 taskforge::Json MemoryStore::pathSummary(const std::string& scopeId) const {
