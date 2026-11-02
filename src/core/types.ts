@@ -338,6 +338,11 @@ export interface IProjectMemoryConfig extends Partial<INodeMemoryConfig> {
    * Desligado por padrão; a chave fica em `globalDefaults.memory`.
    */
   validatedReinforcement?: boolean;
+  /**
+   * E8: pede ao provedor o cache do prefixo skill + brief (protocolo Anthropic).
+   * Desligado por padrão; a chave fica em `globalDefaults.memory`.
+   */
+  promptCache?: boolean;
 }
 
 export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {
