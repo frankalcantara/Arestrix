@@ -47,6 +47,12 @@ public:
     // query=true aplica o prefixo/instrucao de consulta do modelo.
     virtual bool embed(const std::vector<std::string>& texts, bool query,
                        std::vector<Embedding>& out, std::string& error) = 0;
+    // E14: papel simetrico (facetas/facet similarity), com prefixo e fingerprint
+    // diferentes do papel de recuperacao.
+    virtual bool embedSymmetric(const std::vector<std::string>& texts,
+                                std::vector<Embedding>& out, std::string& error) {
+        return embed(texts, false, out, error);
+    }
 };
 
 class NullEmbeddingProvider : public IEmbeddingProvider {
@@ -73,6 +79,8 @@ public:
     }
     bool embed(const std::vector<std::string>& texts, bool query,
                std::vector<Embedding>& out, std::string& error) override;
+    bool embedSymmetric(const std::vector<std::string>& texts,
+                        std::vector<Embedding>& out, std::string& error) override;
 
 private:
     std::string endpoint() const;
@@ -81,6 +89,7 @@ private:
     EmbeddingConfig config_;
     int dim_ = 0;
     std::string serverRevision_;
+    bool symmetric_ = false;
 };
 
 EmbeddingConfig defaultEmbeddingConfig();
@@ -89,6 +98,7 @@ taskforge::Json embeddingConfigToJson(const EmbeddingConfig& config);
 // Prefixos/instrucoes por modelo (documentados e versionados no fingerprint).
 std::string embeddingQueryPrefix(const std::string& model);
 std::string embeddingDocumentPrefix(const std::string& model);
+std::string embeddingSymmetricPrefix(const std::string& model);
 // Prepara um vetor recebido do servidor: valida dimensoes aceitas pelo modelo,
 // trunca MRL, renormaliza L2 e rejeita NaN/Inf ou vetor degenerado.
 bool prepareEmbeddingVector(const std::string& model, std::vector<float>& values,
@@ -98,6 +108,10 @@ bool prepareEmbeddingVector(const std::string& model, std::vector<float>& values
 // truncamento, prefixos, normalizacao, metrica e versao.
 std::string embeddingFingerprint(const EmbeddingConfig& config, int effectiveDim = 0,
                                  const std::string& revisionOverride = "");
+// Fingerprint do papel simetrico; difere sempre do fingerprint de recuperacao.
+std::string embeddingFingerprintForRole(const EmbeddingConfig& config, bool symmetric,
+                                        int effectiveDim = 0,
+                                        const std::string& revisionOverride = "");
 std::shared_ptr<IEmbeddingProvider> makeEmbeddingProvider(const EmbeddingConfig& config);
 
 } // namespace memory

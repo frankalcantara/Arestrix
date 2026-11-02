@@ -365,6 +365,8 @@ export interface IProjectMemoryConfig extends Partial<INodeMemoryConfig> {
   sources?: Partial<IMemorySourcesConfig>;
   /** E13: extração de afirmações na manutenção (off por padrão). */
   claimExtraction?: boolean | { enabled?: boolean; maxPassages?: number };
+  /** E14: lentes e facetas determinísticas (off por padrão). */
+  lenses?: boolean | { enabled?: boolean };
   extractor?: {
     baseUrl?: string;
     model?: string;
