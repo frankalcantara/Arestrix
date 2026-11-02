@@ -91,9 +91,9 @@ A memória é opcional, local e pertence ao projeto. O modelo atual tem três mo
 | `consult` | Injeta o brief autorizado no prompt e registra hits. Não grava conhecimento. |
 | `learn` | Consulta, grava um episódio e propõe lições ao final da execução. |
 
-Aprender implica salvar, mas nada entra sozinho: lições, fatos, trechos e playbooks nascem como
-proposta ou candidato e só viram conhecimento ativo depois de aprovação no painel **Memória do
-Projeto**. Telemetria fica em `.arestrix/telemetry/telemetry.db`, separada do conhecimento em
+Aprender implica salvar, mas conhecimento derivado exige gate: lições, fatos/claims e playbooks
+nascem como proposta ou candidato e só viram conhecimento ativo depois de aprovação no painel
+**Memória do Projeto**. Fontes e trechos autorizados são ingeridos após a execução e ficam ativos. Telemetria fica em `.arestrix/telemetry/telemetry.db`, separada do conhecimento em
 `.arestrix/memory/memory.db`; limpar sessão ou apagar telemetria não apaga conhecimento.
 
 O brief é montado dentro de `contextBudgetTokens` com lições ativas, fatos, evidências e o estado
@@ -124,13 +124,14 @@ A camada semântica avançada já está no núcleo e no Studio:
 Esses recursos são opt-in. `memory.paths`, `memory.pathServing`, `memory.traversal`,
 `memory.bridges` e `routing.mode` ficam desligados por padrão; a decisão e o A/B estão no
 relatório interno `memoria-avaliacao-v1.md`. O painel **Memória do Projeto** expõe estado,
-propostas, evidências, fontes, facetas, caminhos, conflitos, manutenção, embeddings e o A/B.
+propostas, evidências, fontes, facetas, caminhos, conflitos, manutenção e embeddings; o botão de
+A/B do painel é a pré-visualização do brief (A/B v1). O protocolo completo roda por `memory ab run`.
 
 O agente de pipeline tem `memory_search` (somente leitura), `memory_propose_lesson` (proposta
 pendente) e as ferramentas de estado `memory_state_get`, `memory_state_set`, `memory_state_list` e
 `memory_state_history`. O assistente do Studio tem `memory_inspect`, `memory_search`,
 `memory_review_proposal`, `memory_declare_state_key`, `memory_unpromote_playbook` e
-`memory_retire_path` (as três últimas pedem confirmação).
+`memory_retire_path` (as quatro ações de curadoria pedem confirmação).
 
 O estado de continuação é declarado pelo projeto e fica fora do brief. Escopos: `project`,
 `task_type` e `item`; TTL, CAS, schema JSON e modo `replace`/`versioned` são suportados. O CLI expõe
@@ -141,7 +142,8 @@ feixe. A busca não indexa durante a consulta; **Testar** e **Reindexar** no pai
 explícitas. Perfis prontos: EmbeddingGemma 2 (768 dimensões) e Qwen3-Embedding-4B (768 truncado de
 2560). Sem provedor, a busca continua lexical. O índice guarda um fingerprint de
 endpoint/modelo/dimensão/prefixos; a busca só usa o fingerprint atual. Estados: `ready` (híbrida),
-`stale`/`pending`/`partial`/`failed` (lexical).
+`stale`/`pending`/`failed` caem para lexical; `partial` é híbrida nos itens indexados e lexical
+nos demais.
 
 O painel oferece **Comparar com e sem memória (contexto)**: cria uma cópia consistente com
 `VACUUM INTO`, calcula o fingerprint SHA-256 e mede tokens/caracteres do brief por vértice ativo.
@@ -183,18 +185,16 @@ No **Studio**, abra **Arquivo → Propriedades → Projeto → Modelo e ferramen
 - **Normal**: usa a configuração de memória dos vértices.
 - **A/B: memória OFF neste projeto**: desliga brief e ferramentas de memória em runtime, sem editar
   os vértices.
-- **Registrar métricas mesmo com a memória OFF**: mantém `memory_usage`, outcomes, retries e hits.
 
 Depois rode o mesmo grafo normalmente e consulte **Memória do Projeto → Manutenção**. Para
-automação/CI, as mesmas opções existem como variáveis de ambiente:
+automação/CI, use a variável de runtime e o relatório nativo:
 
 ```bash
-# 1) memória ON no mesmo grafo, gravando métricas
-ARESTRIX_MEMORY_METRICS=1 arestrix-cli run pipelines/main.json --root <projeto>
+# 1) memória ON no mesmo grafo
+arestrix-cli run pipelines/main.json --root <projeto>
 
 # 2) memória OFF no MESMO grafo (sem editar o JSON)
-ARESTRIX_MEMORY_METRICS=1 ARESTRIX_MEMORY_DISABLE=1 \
-  arestrix-cli run pipelines/main.json --root <projeto>
+ARESTRIX_MEMORY_DISABLE=1 arestrix-cli run pipelines/main.json --root <projeto>
 
 # 3) relatório nativo
 arestrix-cli memory report --project <projeto>

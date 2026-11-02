@@ -173,8 +173,8 @@ fully validated release artifact.
 
 Arestrix is configured for [SignPath Foundation](https://signpath.org) code signing. The certificate
 is issued to **SignPath Foundation**, so Windows shows `SignPath Foundation` as the publisher. The
-acceptance and operational details are in [CODE_SIGNING.md](../CODE_SIGNING.md); account and
-repository setup is in [signpath/README.md](../signpath/README.md).
+acceptance and operational details are in [CODE_SIGNING.md](../../CODE_SIGNING.md); account and
+repository setup is in [signpath/README.md](../../signpath/README.md).
 
 The deploy workflow has optional signing steps controlled by `SIGNPATH_ENABLED=true` and a `v*` tag.
 Pushes to `main` keep publishing the rolling `latest` pre-release without signing, so manual approval
@@ -191,7 +191,7 @@ Required repository variables: `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLU
 `SIGNPATH_INSTALLER_ARTIFACT_CONFIG_SLUG`. The API token is the `SIGNPATH_API_TOKEN` secret.
 
 The Inno-generated uninstaller remains unsigned for now because SignPath's GitHub Action is
-asynchronous; this is documented in [signpath/README.md](../signpath/README.md).
+asynchronous; this is documented in [signpath/README.md](../../signpath/README.md).
 
 ## 4.1 Alternative: local PFX/thumbprint signing
 

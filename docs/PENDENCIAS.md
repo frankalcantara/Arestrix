@@ -33,7 +33,7 @@
 - Busca híbrida com fingerprint completo, estados `ready/stale/pending/partial/failed` e fallback
   lexical.
 - Brief guiado por `task_type`, tema e prompt-template; filtro SQL por tema e cache invalidável.
-- Tokens de prompt/cache em `run_usage`.
+- Tokens de prompt/cache em `memory_usage`.
 - Predicados de fato single-valued e multi-valued.
 - A/B v2 com conjunto versionado 12/4/4, ordem sorteada, repetições, deltas pareados e IC 95%.
 - Ferramentas do assistente do Studio: `memory_inspect`, `memory_search`,
@@ -63,8 +63,9 @@ reais. O relatório final está em `tests/fixtures/memory-eval-v1-report.json`.
 
 ### Fora de escopo (não é pendência)
 
-- Extração ou consolidação por LLM; a memória atual é determinística.
-- Sincronização multi-máquina e coordenação de múltiplos workers.
+- A extração de afirmações por modelo local já existe atrás de `memory.claimExtraction`;
+  consolidação/generalização por LLM continua fora do escopo.
+- Sincronização multi-máquina e coordenação de múltiplos workers (fora do escopo desta release).
 - Checkpoint/retomada do grafo.
 - Mudança do protocolo institucional HTTP/MCP.
 - Migração automática de projetos antigos; não há importador legado.
@@ -75,9 +76,10 @@ reais. O relatório final está em `tests/fixtures/memory-eval-v1-report.json`.
 
 O harness está implementado em `memory ab run` e coberto por
 `scripts/e2e_memory_ab.py`: 20 tarefas × 3 repetições × 2 braços, banco
-congelado, validador e `ab-observations.json` com `ab_run_id`, `arm`, `ok`,
-tokens, turnos, custo e latência. O que resta é executá-lo com provedores reais
-e registrar o resultado no relatório.
+congelado, validador e um arquivo `observations-<timestamp>.json` com `runId`,
+`episodeId`, `arm`, `ok`, tokens, turnos e latência. Custo monetário não é
+calculado. O que resta é executá-lo com provedores reais e registrar o resultado
+no relatório.
 
 ### 4.2 Nível institucional no assistente
 

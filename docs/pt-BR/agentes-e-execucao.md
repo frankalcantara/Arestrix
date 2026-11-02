@@ -66,7 +66,7 @@ chamador; não é uma task agendada do Taskflow.
   `inputContext` aos agentes/interações e o artefato de saída do filho é devolvido ao chamador.
   Arestas de chamada e subflows aninhados são rejeitados no v1.
 
-Veja [`examples/06-chamada-agente`](../examples/06-chamada-agente) e
+Veja [`examples/06-chamada-agente`](../../examples/06-chamada-agente) e
 [Grafo e vértices](grafo-e-vertices.md#arestas-de-chamada-delegação).
 
 ### Vértices de interação humana
@@ -93,8 +93,8 @@ booleano, escolha, múltipla escolha, data) e nunca executa HTML ou JavaScript g
 - Timeout, cancelamento e as políticas `fail`/`default`/`abort` são aplicados; sem canal, o vértice
   falha fechado.
 
-Veja [`examples/07-interacao`](../examples/07-interacao) (formulário estático) e
-[`examples/08-formulario-gerado`](../examples/08-formulario-gerado) (formulário gerado), além de
+Veja [`examples/07-interacao`](../../examples/07-interacao) (formulário estático) e
+[`examples/08-formulario-gerado`](../../examples/08-formulario-gerado) (formulário gerado), além de
 [Grafo e vértices](grafo-e-vertices.md#vértices-de-interação).
 
 **Idioma do agente.** Em tempo de execução o agente é configurado no idioma da sua própria constituição: a skill e o template
@@ -173,7 +173,7 @@ Todo pipeline voltado a produzir entregáveis (gráficos vetoriais, relatórios,
   - **Texto / Markdown:** Leitor formatado de documentos técnicos e relatórios com realce de sintaxe e cópia em um clique.
   - **PDF e JSON:** Visualização estruturada com indentação limpa e botão para abertura direta no leitor nativo do sistema operacional.
 - **Aba Artefatos no Painel Inferior:** Ao lado do *Terminal* e da *Telemetria*, a aba *Artefatos* exibe a contagem de entregáveis em tempo real e permite alternar entre visualização gráfica e código, copiar o conteúdo ou abrir a pasta `exports/` no Windows Explorer com um clique.
-- **Operação via Assistente Local (Chat):** O assistente de chat nativo do Studio é integrado ao ciclo de vida de artefatos pelas ferramentas `list_artifacts` e `get_artifact`, sendo capaz de inspecionar a saída produzida e reportar conclusões ao usuário. Ele também tem `memory_inspect` para memória de projeto, workspace e vértice, `memory_search` para consulta somente leitura (híbrida ou travessia em grafo quando ligada), e as ações confirmadas `memory_review_proposal`, `memory_declare_state_key`, `memory_unpromote_playbook` e `memory_retire_path`. O `memory_inspect` inclui propostas, fontes, facetas, caminhos, cobertura, saúde e interruptores; hipóteses de ponte são informativas e não criam arestas automaticamente.
+- **Operação via Assistente Local (Chat):** O assistente de chat nativo do Studio é integrado ao ciclo de vida de artefatos pelas ferramentas `list_artifacts` e `get_artifact`, sendo capaz de inspecionar a saída produzida e reportar conclusões ao usuário. Ele também tem `memory_inspect` para memória de projeto, workspace e vértice, `memory_search` para consulta somente leitura (híbrida ou travessia em grafo quando ligada), e as ações confirmadas `memory_review_proposal`, `memory_declare_state_key`, `memory_unpromote_playbook` e `memory_retire_path`. O `memory_inspect` inclui propostas, fontes, facetas, caminhos, travessia, saúde e interruptores; hipóteses de ponte são informativas e não criam arestas automaticamente.
 
 ## Runner Standalone (Fase 1: Executável Independente)
 

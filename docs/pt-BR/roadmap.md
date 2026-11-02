@@ -86,8 +86,9 @@ Ainda pendente:
 - Visualização completa do grafo cognitivo e edição dos conflitos na UI (a lista de conflitos já
   existe).
 - Consolidação por LLM, `memory_handoff` e aprendizagem recursiva.
-- Coordenação de consolidação entre múltiplos processos/instâncias do serviço institucional.
 - Medição com dados/provedores reais antes de ligar os interruptores experimentais.
+- Coordenação entre múltiplos processos/instâncias do serviço institucional (fora do escopo desta
+  release).
 
 Limitações do serviço institucional e do background:
 

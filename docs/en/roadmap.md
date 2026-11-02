@@ -85,8 +85,8 @@ Still pending:
 - Full cognitive graph visualization and conflict editing in the UI (the conflict list already
   exists).
 - LLM consolidation, `memory_handoff` and recursive learning.
-- Consolidation coordination across multiple service processes/instances.
 - Real-data/provider measurement before enabling the experimental switches.
+- Coordination across multiple service processes/instances (out of scope for this release).
 
 Limitations of the institution service and background worker:
 

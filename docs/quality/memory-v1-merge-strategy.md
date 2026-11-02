@@ -2,8 +2,9 @@
 
 **Decisão:** trem de PRs empilhados, na ordem `E0 → E1 → … → E20`.
 **Base inicial:** `main` em `5bec4aa` (tag `v2.5.0`).
-**Estado atual:** E0–E20 mergeadas em `main` pelo trem de PRs; topo em
-`3d65162`. A correção Linux foi mergeada no PR #22.
+**Estado atual:** E0–E20 mergeadas em `main` pelo trem de PRs; o merge da E20 é
+`3d65162` e o commit documental posterior é `e6cfb5f`. A correção Linux foi
+mergeada no PR #22.
 **Topo da cadeia:** `mem/E20-avaliacao-final`.
 **Estado:** as 21 branches estão publicadas em `origin` e o trem foi concluído.
 

@@ -66,15 +66,14 @@ confere a injeção no system prompt, os filtros, o consumo de API e a persistê
 
 O runtime grava tokens, chamadas, retries, sucesso/falha, contexto e memórias injetadas/usadas.
 No Studio, use **Padrões Globais → Memória → Modo de Medição / A-B**: rode com **Normal** e depois
-com **A/B: memória OFF** + **Registrar métricas**, no mesmo grafo. Para automação:
+com **A/B: memória OFF**, no mesmo grafo. Para automação:
 
 ```bash
-# memória ligada, com métricas
-ARESTRIX_MEMORY_METRICS=1 arestrix-cli run pipelines/main.json --root <projeto>
+# memória ligada
+arestrix-cli run pipelines/main.json --root <projeto>
 
 # memória OFF no mesmo grafo
-ARESTRIX_MEMORY_METRICS=1 ARESTRIX_MEMORY_DISABLE=1 \
-  arestrix-cli run pipelines/main.json --root <projeto>
+ARESTRIX_MEMORY_DISABLE=1 arestrix-cli run pipelines/main.json --root <projeto>
 
 # relatório nativo
 arestrix-cli memory report --project <projeto>

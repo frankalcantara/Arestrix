@@ -172,8 +172,8 @@ na pré-release, mas ainda não é um artefato de release totalmente validado.
 
 O Arestrix está configurado para assinatura de código via [SignPath Foundation](https://signpath.org).
 O certificado é emitido para a **SignPath Foundation**, então o Windows exibe `SignPath Foundation`
-como publisher. Os critérios e a política estão em [CODE_SIGNING.md](../CODE_SIGNING.md); a
-configuração da conta e do repositório está em [signpath/README.md](../signpath/README.md).
+como publisher. Os critérios e a política estão em [CODE_SIGNING.md](../../CODE_SIGNING.md); a
+configuração da conta e do repositório está em [signpath/README.md](../../signpath/README.md).
 
 O workflow de deploy possui etapas opcionais controladas por `SIGNPATH_ENABLED=true` e por uma tag
 `v*`. Pushes na `main` continuam publicando o pré-release `latest` sem assinatura, então a aprovação
@@ -190,7 +190,7 @@ Variáveis necessárias: `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`,
 `SIGNPATH_INSTALLER_ARTIFACT_CONFIG_SLUG`. O token fica no secret `SIGNPATH_API_TOKEN`.
 
 O desinstalador gerado pelo Inno continua sem assinatura por enquanto, porque a GitHub Action da
-SignPath é assíncrona; isso está documentado em [signpath/README.md](../signpath/README.md).
+SignPath é assíncrona; isso está documentado em [signpath/README.md](../../signpath/README.md).
 
 ## 4.1 Alternativa: assinatura local com PFX/thumbprint
 
