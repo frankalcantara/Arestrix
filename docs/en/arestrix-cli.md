@@ -132,6 +132,16 @@ inputs, intent pairs, citation, reuse and tokens per execution. Thresholds can b
 `--min-verdict-rate`, `--min-citation-rate`, `--min-executions`, `--min-distinct-inputs` and
 `--min-reuse-rate`; `--since` limits the period. The result includes the recommended decision.
 
+### `memory trace`
+
+```powershell
+.\arestrix-cli.exe memory trace show <run> <node> --project .\examples\04-memoria --json
+```
+
+Shows the execution retrieval trace: knowledge version consulted, brief and
+search steps, candidates with scores and position, delivered and used items,
+plus truncation counters.
+
 ### `memory prune`
 
 ```powershell

@@ -268,6 +268,23 @@ das execuções que citam um item já citado numa execução anterior do mesmo
 `continue_base_knowledge` (E11–E14, caminhos adiados), `fix_validators` ou
 `insufficient_data`. Os limiares usados ficam gravados no JSON.
 
+### Traços de recuperação
+
+Toda escrita de conhecimento incrementa `knowledge_version` na mesma transação;
+leituras e telemetria não incrementam. Cada execução de vértice com memória grava
+um `memory_trace` com a versão consultada, o brief e as buscas, os candidatos
+com escores lexical/vetorial/fundido, posição e se foram entregues, além dos
+itens efetivamente usados. O traço fecha junto com o episódio e é idempotente por
+`(run_id, node_id)`.
+
+```bash
+arestrix-cli memory trace show <run> <node> --project . --json
+```
+
+Cada consulta guarda até 50 candidatos e cada execução até 8 passos; o excedente
+é contado em `truncatedCandidates`/`truncatedSteps`. A consulta em si é guardada
+como hash, não como texto.
+
 ### Custo por execução
 
 A telemetria registra prompt, saída e os tokens de **prompt cache**: leitura de cache

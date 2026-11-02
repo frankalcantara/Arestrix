@@ -266,6 +266,23 @@ by an earlier execution of the same `task_type`. The result selects one of
 `fix_validators` or `insufficient_data`. The thresholds used are stored in the
 JSON.
 
+### Retrieval traces
+
+Every knowledge write bumps `knowledge_version` in the same transaction; reads
+and telemetry do not. Every memory-enabled vertex execution records a
+`memory_trace` with the version consulted, the brief and searches, candidates
+with lexical/vector/fused scores, position and delivered status, plus the items
+actually used. The trace closes with the episode and is idempotent by
+`(run_id, node_id)`.
+
+```bash
+arestrix-cli memory trace show <run> <node> --project . --json
+```
+
+Each query stores at most 50 candidates and each execution at most 8 steps; the
+overflow is counted in `truncatedCandidates`/`truncatedSteps`. The query itself
+is stored as a hash, not as text.
+
 ### Cost per run
 
 Telemetry records prompt, output and **prompt cache** tokens: cache reads (`cached_tokens`) and cache

@@ -367,6 +367,39 @@ def main() -> int:
         check(float(task.get("reuseRate", 0)) > 0.2, "a taxa de reuso deveria passar do limiar")
         check(len(task.get("intentPairs", [])) == 1, "o template unico deveria gerar um par de intencao")
 
+        conn = sqlite3.connect(f"file:{measurement}?mode=ro", uri=True)
+        try:
+            traces = conn.execute(
+                "SELECT trace_id,run_id,node_id,steps_json,delivered_json,knowledge_version "
+                "FROM memory_trace ORDER BY rowid").fetchall()
+        finally:
+            conn.close()
+        check(len(traces) == 60, f"o piloto deveria ter 60 tracos ON, tem {len(traces)}")
+        if traces:
+            trace_id, trace_run, trace_node, steps_json, delivered_json, version = traces[0]
+            steps = json.loads(steps_json)
+            delivered = json.loads(delivered_json)
+            check(int(version) > 0, "o traco nao aponta para a versao do conhecimento")
+            check(any(step.get("kind") == "brief" for step in steps),
+                  "o traco nao registrou o passo do brief")
+            check(any(candidate.get("delivered") for step in steps
+                      for candidate in step.get("candidates", [])),
+                  "o traco nao marcou nenhum candidato entregue")
+            check(any(item == "ab-lesson-1" for item in delivered),
+                  "a licao entregue nao chegou ao traco")
+            check(all(len(step.get("candidates", [])) <= 50 for step in steps),
+                  "um passo excedeu 50 candidatos")
+            trace_cli = run(cli, [
+                "memory", "trace", "show", trace_run, trace_node,
+                "--root", str(project), "--db", str(measurement), "--json",
+            ], env, 120)
+            check(trace_cli.returncode == 0,
+                  "memory trace show falhou: " + (trace_cli.stdout or "") + (trace_cli.stderr or ""))
+            if trace_cli.returncode == 0:
+                shown = json.loads(trace_cli.stdout)
+                check(shown.get("traceId") == trace_id,
+                      "memory trace show devolveu outro trace")
+
         marker = "[DADOS DE MEMORIA DO PROJETO"
         with_memory = sum(1 for prompt in server.system_prompts if marker in prompt)
         without_memory = sum(1 for prompt in server.system_prompts if marker not in prompt)

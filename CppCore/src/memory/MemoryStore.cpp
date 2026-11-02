@@ -25,8 +25,9 @@ namespace memory {
 namespace {
 
 // Versao do esquema de conhecimento/telemetria. E2=2 (consulted/
-// invalid_citations); E4=3 (memory_evidence autocontida).
-constexpr int kMemorySchemaVersion = 3;
+// invalid_citations); E4=3 (memory_evidence autocontida); E11=4
+// (knowledge_version e memory_trace).
+constexpr int kMemorySchemaVersion = 4;
 
 struct Stmt {
     sqlite3_stmt* stmt = nullptr;
@@ -565,6 +566,29 @@ CREATE TABLE IF NOT EXISTS memory_validation (
 
 -- L2/M0: propostas, embeddings, playbooks e aliases. As tabelas nascem vazias e
 -- nao alteram o comportamento da recuperacao atual.
+CREATE TABLE IF NOT EXISTS memory_trace (
+  trace_id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  run_id TEXT NOT NULL,
+  node_id TEXT NOT NULL,
+  item_id TEXT NOT NULL DEFAULT '',
+  task_type TEXT NOT NULL DEFAULT '',
+  intent_template_hash TEXT NOT NULL DEFAULT '',
+  input_hash TEXT NOT NULL DEFAULT '',
+  knowledge_version INTEGER NOT NULL DEFAULT 0,
+  model TEXT NOT NULL DEFAULT '',
+  tier TEXT NOT NULL DEFAULT '',
+  outcome TEXT NOT NULL DEFAULT '',
+  anchors_json TEXT NOT NULL DEFAULT '[]',
+  steps_json TEXT NOT NULL DEFAULT '[]',
+  delivered_json TEXT NOT NULL DEFAULT '[]',
+  used_json TEXT NOT NULL DEFAULT '[]',
+  truncated_steps INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(scope_id, run_id, node_id)
+);
+
 CREATE TABLE IF NOT EXISTS memory_proposal (
   id TEXT PRIMARY KEY,
   scope_id TEXT NOT NULL REFERENCES memory_scope(id),
@@ -654,6 +678,27 @@ CREATE INDEX IF NOT EXISTS idx_memory_alias_node ON memory_alias(scope_id, node_
 CREATE INDEX IF NOT EXISTS idx_memory_policy_scope ON memory_policy(scope_id, key);
 )SQL", &error)) {
         return false;
+    }
+    if (!exec("INSERT OR IGNORE INTO memory_meta(key,value) VALUES('knowledge_version','0');", &error)) {
+        return false;
+    }
+    {
+        // O contador e incrementado na mesma transacao da escrita: triggers
+        // cobrem insercao, atualizacao e remocao de qualquer tabela de
+        // conhecimento. Telemetria nao tem trigger.
+        const char* tables[] = {"memory_scope", "memory_node", "memory_alias", "memory_edge",
+                                "memory_working", "memory_state", "memory_state_history",
+                                "memory_playbook", "memory_evidence"};
+        std::string triggers;
+        for (const char* table : tables) {
+            for (const char* event : {"INSERT", "UPDATE", "DELETE"}) {
+                triggers += "CREATE TRIGGER IF NOT EXISTS trg_kv_" + std::string(table) + "_" +
+                            event + " AFTER " + event + " ON " + table +
+                            " BEGIN UPDATE memory_meta SET value=CAST(value AS INTEGER)+1 "
+                            "WHERE key='knowledge_version'; END;\n";
+            }
+        }
+        if (!exec(triggers, &error)) return false;
     }
     addColumnIfMissing(db_, "memory_usage", "retries", "INTEGER NOT NULL DEFAULT 0");
     addColumnIfMissing(db_, "memory_usage", "outcome", "TEXT NOT NULL DEFAULT ''");
@@ -4466,6 +4511,250 @@ taskforge::Json MemoryStore::recurrenceReport(const std::string& scopeId, const 
     out["decision"] = decision;
     out["decisionReason"] = reason;
     out["ok"] = true;
+    return out;
+}
+
+long long MemoryStore::knowledgeVersion() const {
+    const std::string value = getMeta("knowledge_version");
+    if (value.empty()) return 0;
+    try {
+        return std::stoll(value);
+    } catch (...) {
+        return 0;
+    }
+}
+
+bool MemoryStore::appendTrace(const MemoryTraceRecord& trace, const taskforge::Json& step,
+                              size_t maxSteps, size_t maxCandidates) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || trace.scopeId.empty() || trace.runId.empty() || trace.nodeId.empty()) return false;
+
+    taskforge::Json cleanStep = step.is_object() ? step : taskforge::Json::object();
+    size_t candidatesDropped = 0;
+    if (cleanStep.contains("candidates") && cleanStep["candidates"].is_array() &&
+        cleanStep["candidates"].size() > maxCandidates) {
+        taskforge::Json kept = taskforge::Json::array();
+        for (size_t i = 0; i < maxCandidates; ++i) kept.push_back(cleanStep["candidates"][i]);
+        candidatesDropped = cleanStep["candidates"].size() - maxCandidates;
+        cleanStep["candidates"] = kept;
+    }
+    cleanStep["truncatedCandidates"] = static_cast<long long>(candidatesDropped);
+
+    std::string traceId = trace.traceId;
+    taskforge::Json steps = taskforge::Json::array();
+    long long version = trace.knowledgeVersion;
+    long long truncatedSteps = 0;
+    Stmt st;
+    std::string error;
+    if (prepare(db_, "SELECT trace_id,steps_json,truncated_steps,knowledge_version FROM memory_trace "
+                       "WHERE scope_id=? AND run_id=? AND node_id=?", st, error)) {
+        bindText(st.stmt, 1, trace.scopeId);
+        bindText(st.stmt, 2, trace.runId);
+        bindText(st.stmt, 3, trace.nodeId);
+        if (stepRetry(st.stmt) == SQLITE_ROW) {
+            traceId = columnText(st.stmt, 0);
+            taskforge::Json existing = parseJsonOrNull(columnText(st.stmt, 1));
+            if (existing.is_array()) steps = std::move(existing);
+            truncatedSteps = columnInt(st.stmt, 2);
+            version = columnInt(st.stmt, 3);
+        }
+    }
+    if (steps.size() < maxSteps) {
+        steps.push_back(cleanStep);
+    } else {
+        ++truncatedSteps;
+    }
+    if (traceId.empty()) traceId = newId("trace");
+
+    const std::string now = nowIso();
+    if (!prepare(db_, "INSERT INTO memory_trace(trace_id,scope_id,run_id,node_id,item_id,task_type,"
+                       "intent_template_hash,input_hash,knowledge_version,model,tier,outcome,"
+                       "anchors_json,steps_json,delivered_json,used_json,truncated_steps,created_at,updated_at) "
+                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                       "ON CONFLICT(scope_id,run_id,node_id) DO UPDATE SET "
+                       "item_id=CASE WHEN excluded.item_id<>'' THEN excluded.item_id ELSE memory_trace.item_id END,"
+                       "task_type=CASE WHEN excluded.task_type<>'' THEN excluded.task_type ELSE memory_trace.task_type END,"
+                       "intent_template_hash=CASE WHEN excluded.intent_template_hash<>'' "
+                       "THEN excluded.intent_template_hash ELSE memory_trace.intent_template_hash END,"
+                       "input_hash=CASE WHEN excluded.input_hash<>'' THEN excluded.input_hash "
+                       "ELSE memory_trace.input_hash END,"
+                       "knowledge_version=CASE WHEN memory_trace.knowledge_version=0 "
+                       "THEN excluded.knowledge_version ELSE memory_trace.knowledge_version END,"
+                       "model=CASE WHEN excluded.model<>'' THEN excluded.model ELSE memory_trace.model END,"
+                       "tier=CASE WHEN excluded.tier<>'' THEN excluded.tier ELSE memory_trace.tier END,"
+                       "outcome=CASE WHEN excluded.outcome<>'' THEN excluded.outcome ELSE memory_trace.outcome END,"
+                       "anchors_json=excluded.anchors_json,"
+                       "steps_json=excluded.steps_json,truncated_steps=excluded.truncated_steps,"
+                       "updated_at=excluded.updated_at", st, error)) {
+        lastError_ = error;
+        return false;
+    }
+    bindText(st.stmt, 1, traceId);
+    bindText(st.stmt, 2, trace.scopeId);
+    bindText(st.stmt, 3, trace.runId);
+    bindText(st.stmt, 4, trace.nodeId);
+    bindText(st.stmt, 5, trace.itemId);
+    bindText(st.stmt, 6, trace.taskType);
+    bindText(st.stmt, 7, trace.intentTemplateHash);
+    bindText(st.stmt, 8, trace.inputHash);
+    sqlite3_bind_int64(st.stmt, 9, version);
+    bindText(st.stmt, 10, trace.model);
+    bindText(st.stmt, 11, trace.tier);
+    bindText(st.stmt, 12, trace.outcome);
+    bindText(st.stmt, 13, trace.anchors.dump());
+    bindText(st.stmt, 14, steps.dump());
+    bindText(st.stmt, 15, trace.delivered.dump());
+    bindText(st.stmt, 16, trace.used.dump());
+    sqlite3_bind_int64(st.stmt, 17, truncatedSteps);
+    bindText(st.stmt, 18, now);
+    bindText(st.stmt, 19, now);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return false;
+    }
+    return true;
+}
+
+bool MemoryStore::closeTrace(const std::string& scopeId, const std::string& runId,
+                             const std::string& nodeId, const std::string& outcome,
+                             const std::string& model, const std::string& tier,
+                             bool memoryEnabled) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty() || runId.empty() || nodeId.empty()) return false;
+
+    taskforge::Json delivered = taskforge::Json::array();
+    taskforge::Json used = taskforge::Json::array();
+    Stmt st;
+    std::string error;
+    if (prepare(db_, "SELECT memory_id,MAX(injected),MAX(used) FROM memory_hit "
+                       "WHERE scope_id=? AND run_id=? AND node_id=? GROUP BY memory_id", st, error)) {
+        bindText(st.stmt, 1, scopeId);
+        bindText(st.stmt, 2, runId);
+        bindText(st.stmt, 3, nodeId);
+        while (stepRetry(st.stmt) == SQLITE_ROW) {
+            if (columnInt(st.stmt, 1) != 0) delivered.push_back(columnText(st.stmt, 0));
+            if (columnInt(st.stmt, 2) != 0) used.push_back(columnText(st.stmt, 0));
+        }
+        sqlite3_finalize(st.stmt);
+        st.stmt = nullptr;
+    }
+
+    std::string itemId;
+    std::string taskType;
+    std::string intentHash;
+    std::string inputHash;
+    if (prepare(db_, "SELECT COALESCE(item_id,''),COALESCE(task_type,''),"
+                       "COALESCE(intent_template_hash,''),COALESCE(input_hash,'') "
+                       "FROM memory_episode WHERE scope_id=? AND run_id=? AND node_id=? "
+                       "ORDER BY rowid DESC LIMIT 1", st, error)) {
+        bindText(st.stmt, 1, scopeId);
+        bindText(st.stmt, 2, runId);
+        bindText(st.stmt, 3, nodeId);
+        if (stepRetry(st.stmt) == SQLITE_ROW) {
+            itemId = columnText(st.stmt, 0);
+            taskType = columnText(st.stmt, 1);
+            intentHash = columnText(st.stmt, 2);
+            inputHash = columnText(st.stmt, 3);
+        }
+        sqlite3_finalize(st.stmt);
+        st.stmt = nullptr;
+    }
+
+    const std::string now = nowIso();
+    const long long version = knowledgeVersion();
+    if (!prepare(db_, "INSERT INTO memory_trace(trace_id,scope_id,run_id,node_id,item_id,task_type,"
+                       "intent_template_hash,input_hash,knowledge_version,model,tier,outcome,"
+                       "anchors_json,steps_json,delivered_json,used_json,truncated_steps,created_at,updated_at) "
+                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'[]','[]',?,?,0,?,?) "
+                       "ON CONFLICT(scope_id,run_id,node_id) DO UPDATE SET "
+                       "item_id=CASE WHEN excluded.item_id<>'' THEN excluded.item_id ELSE memory_trace.item_id END,"
+                       "task_type=CASE WHEN excluded.task_type<>'' THEN excluded.task_type ELSE memory_trace.task_type END,"
+                       "intent_template_hash=CASE WHEN excluded.intent_template_hash<>'' "
+                       "THEN excluded.intent_template_hash ELSE memory_trace.intent_template_hash END,"
+                       "input_hash=CASE WHEN excluded.input_hash<>'' THEN excluded.input_hash ELSE memory_trace.input_hash END,"
+                       "model=excluded.model,tier=excluded.tier,outcome=excluded.outcome,"
+                       "delivered_json=excluded.delivered_json,used_json=excluded.used_json,"
+                       "updated_at=excluded.updated_at", st, error)) {
+        lastError_ = error;
+        return false;
+    }
+    bindText(st.stmt, 1, newId("trace"));
+    bindText(st.stmt, 2, scopeId);
+    bindText(st.stmt, 3, runId);
+    bindText(st.stmt, 4, nodeId);
+    bindText(st.stmt, 5, itemId);
+    bindText(st.stmt, 6, taskType);
+    bindText(st.stmt, 7, intentHash);
+    bindText(st.stmt, 8, inputHash);
+    sqlite3_bind_int64(st.stmt, 9, version);
+    bindText(st.stmt, 10, model);
+    bindText(st.stmt, 11, tier);
+    bindText(st.stmt, 12, outcome);
+    bindText(st.stmt, 13, delivered.dump());
+    bindText(st.stmt, 14, used.dump());
+    bindText(st.stmt, 15, now);
+    bindText(st.stmt, 16, now);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return false;
+    }
+    if (!memoryEnabled) {
+        // Nao apaga um traco ja criado por consulta; apenas evita criar um
+        // vazio quando o vertice realmente nao usou memoria.
+        if (delivered.empty() && used.empty()) {
+            sqlite3_stmt* del = nullptr;
+            if (sqlite3_prepare_v2(db_, "DELETE FROM memory_trace WHERE scope_id=? AND run_id=? "
+                                        "AND node_id=? AND steps_json='[]'", -1, &del, nullptr) == SQLITE_OK) {
+                sqlite3_bind_text(del, 1, scopeId.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text(del, 2, runId.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text(del, 3, nodeId.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_step(del);
+            }
+            if (del) sqlite3_finalize(del);
+        }
+    }
+    return true;
+}
+
+taskforge::Json MemoryStore::getTrace(const std::string& scopeId, const std::string& runId,
+                                      const std::string& nodeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out = taskforge::Json::object();
+    if (!db_ || scopeId.empty() || runId.empty() || nodeId.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT trace_id,run_id,node_id,item_id,task_type,intent_template_hash,"
+                       "input_hash,knowledge_version,model,tier,outcome,anchors_json,steps_json,"
+                       "delivered_json,used_json,truncated_steps,created_at,updated_at "
+                       "FROM memory_trace WHERE scope_id=? AND run_id=? AND node_id=?", st, error)) {
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, runId);
+    bindText(st.stmt, 3, nodeId);
+    if (stepRetry(st.stmt) != SQLITE_ROW) return out;
+    auto array = [&](int index) {
+        taskforge::Json value = parseJsonOrNull(columnText(st.stmt, index));
+        return value.is_array() ? value : taskforge::Json::array();
+    };
+    out["traceId"] = columnText(st.stmt, 0);
+    out["runId"] = columnText(st.stmt, 1);
+    out["nodeId"] = columnText(st.stmt, 2);
+    out["itemId"] = columnText(st.stmt, 3);
+    out["taskType"] = columnText(st.stmt, 4);
+    out["intentTemplateHash"] = columnText(st.stmt, 5);
+    out["inputHash"] = columnText(st.stmt, 6);
+    out["knowledgeVersion"] = columnInt(st.stmt, 7);
+    out["model"] = columnText(st.stmt, 8);
+    out["tier"] = columnText(st.stmt, 9);
+    out["outcome"] = columnText(st.stmt, 10);
+    out["anchors"] = array(11);
+    out["steps"] = array(12);
+    out["delivered"] = array(13);
+    out["used"] = array(14);
+    out["truncatedSteps"] = columnInt(st.stmt, 15);
+    out["createdAt"] = columnText(st.stmt, 16);
+    out["updatedAt"] = columnText(st.stmt, 17);
     return out;
 }
 

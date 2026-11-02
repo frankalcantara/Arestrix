@@ -95,7 +95,9 @@ public:
                            bool includeBlackboard = true,
                            MemoryBriefInfo* info = nullptr,
                            const std::string& taskType = "",
-                           const std::string& intent = "");
+                           const std::string& intent = "",
+                           const std::string& runId = "",
+                           const std::string& nodeId = "");
     void clearLessons(const std::string& projectId);
 
     // Episódios, arestas e métricas.
@@ -130,7 +132,21 @@ public:
     std::string searchContext(const std::string& projectId, const std::string& text,
                               size_t limit = 10,
                               const std::vector<std::string>& domains = {},
-                              std::vector<MemoryHitRef>* hits = nullptr);
+                              std::vector<MemoryHitRef>* hits = nullptr,
+                              const std::string& runId = "",
+                              const std::string& nodeId = "");
+
+    // E11: versao do conhecimento e tracos de recuperacao.
+    long long knowledgeVersion(const std::string& projectId);
+    bool recordTraceStep(const std::string& projectId, const std::string& runId,
+                         const std::string& nodeId, const std::string& itemId,
+                         const std::string& taskType, const std::string& intentTemplateHash,
+                         const std::string& inputHash, const taskforge::Json& step);
+    bool closeTrace(const std::string& projectId, const std::string& runId,
+                    const std::string& nodeId, const std::string& outcome,
+                    const std::string& model, const std::string& tier, bool memoryEnabled);
+    taskforge::Json getTrace(const std::string& projectId, const std::string& runId,
+                             const std::string& nodeId);
 
     // L2/M2: embeddings opcionais e busca hibrida.
     bool configureEmbeddings(const std::string& projectId, const EmbeddingConfig& config);
@@ -285,7 +301,8 @@ private:
     EmbeddingRuntime& embeddingRuntimeLocked(const std::string& projectId);
     bool hybridSearch(const std::string& projectId, const std::string& text, size_t limit,
                       const std::vector<std::string>& domains,
-                      std::vector<MemoryHitRef>* hits, std::string& output);
+                      std::vector<MemoryHitRef>* hits, std::string& output,
+                      taskforge::Json* traceCandidates = nullptr);
     bool configureWorkspaceLocked(const std::string& workspaceId, const std::string& dbPath,
                                   const std::string& parentId, const std::string& name);
     std::string workspaceScope(const std::string& workspaceId) const;
@@ -293,7 +310,8 @@ private:
                                             const std::string& dbPath);
     bool hybridRecall(const std::string& projectId, const std::string& text, size_t limit,
                       const std::vector<std::string>& domains,
-                      std::vector<RankedMemory>& output);
+                      std::vector<RankedMemory>& output,
+                      taskforge::Json* traceCandidates = nullptr);
 
     // Worker de manutencao: o stop ocorre fora de mutex_ para evitar deadlock
     // com uma rodada de consolidacao em andamento.

@@ -25,6 +25,11 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   verdicts in real runs.
 - `memory report` now reads the telemetry database and shows validated/unvalidated runs and
   the approval rate per `task_type`.
+- **Knowledge version and full traces (multigraph plan, E11):** knowledge writes
+  bump a monotonic `knowledge_version` in the same transaction, while telemetry
+  writes do not. Every memory-enabled vertex execution records a trace with the
+  version consulted, brief/search candidates and scores, delivered and used
+  items; `memory trace show <run> <node>` inspects it.
 - **Recurrence milestone (multigraph plan, E10):** episodes record
   `intent_template_hash` (the vertex prompt template, never the user prompt), and
   `memory report --recurrence` reports verdict/approval, distinct inputs, intent
