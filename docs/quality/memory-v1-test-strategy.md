@@ -123,6 +123,20 @@ Execução periódica e antes de release:
 Resultado esperado: fallback lexical, falha fechada ou erro classificado; nunca
 corrupção de índice ou promoção parcial.
 
+Teste real controlado:
+
+```powershell
+py -3 scripts/e2e_memory_deepseek_long.py --keep
+```
+
+O fixture `tests/fixtures/memory-deepseek-long` roda o mesmo agente com memória
+ON e OFF, seis gravações, uma busca e uma resposta final. A memória ON responde
+`ORION-42`; a OFF responde `UNKNOWN`. O script exige `DEEPSEEK_API_KEY`, limita o
+total de tokens e grava `tests/fixtures/memory-deepseek-long-report.json`.
+
+Execução registrada: **22.639 tokens** (ON 14.164 / OFF 8.475), nove chamadas no
+braço ON e oito no OFF; todos os checks passaram.
+
 ### L6 — Desempenho e soak
 
 Medições com dados sintéticos versionados:

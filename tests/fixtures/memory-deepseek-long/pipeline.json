@@ -1,0 +1,88 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "projectId": "memoria-deepseek-long",
+    "graphName": "MemoriaDeepSeekLonga",
+    "description": "Teste real e controlado de interacao longa com memoria ON/OFF",
+    "targetStandard": "C++20",
+    "version": "1.0.0",
+    "compilerConfig": {
+      "compiler": "msvc",
+      "cppStandard": "C++20",
+      "buildSystem": "cmake",
+      "taskflowIncludePath": "third_party/taskflow",
+      "outputBinaryName": "memoria_deepseek_longa",
+      "enableOpenMP": false,
+      "enableCuda": false,
+      "extraFlags": []
+    },
+    "globalDefaults": {
+      "model": {
+        "provider": "deepseek",
+        "model": "deepseek-chat",
+        "skillPath": "",
+        "promptTemplate": ""
+      },
+      "sandbox": {
+        "isolationLevel": "host_direct",
+        "network": "egress_llm_only",
+        "maxMemoryMB": 512,
+        "timeoutSeconds": 180,
+        "readOnlyMounts": [],
+        "readWriteMounts": []
+      },
+      "codeMode": {
+        "allowedTools": ["read", "write"],
+        "customScripts": []
+      },
+      "memory": {
+        "enabled": false,
+        "persistent": false
+      }
+    }
+  },
+  "nodes": [
+    {
+      "id": "agente_longo",
+      "label": "Agente_Longo",
+      "type": "agent",
+      "position": { "x": 0, "y": 0, "z": 0 },
+      "inputs": [
+        { "id": "agente_longo_in_0", "name": "in", "direction": "input", "type": "flow" }
+      ],
+      "outputs": [
+        { "id": "agente_longo_out_0", "name": "out", "direction": "output", "type": "flow" }
+      ],
+      "parameters": {},
+      "customLambdaBody": "",
+      "agentSettings": {
+        "inheritSandbox": true,
+        "inheritModel": false,
+        "model": {
+          "provider": "deepseek",
+          "model": "deepseek-chat",
+          "skillPath": "",
+          "promptTemplate": "Execute um diagnostico longo, uma ferramenta por turno. Primeiro grave artefatos/step1.txt com o texto STEP 1. Depois grave artefatos/step2.txt com STEP 2, artefatos/step3.txt com STEP 3, artefatos/step4.txt com STEP 4, artefatos/step5.txt com STEP 5 e artefatos/step6.txt com STEP 6 (uma gravacao por turno). Em seguida, use memory_search com a consulta \"ORION\" uma vez. Se a busca vier vazia, use o codigo que estiver no contexto de memoria injetado. Depois grave artefatos/final.txt contendo somente o codigo encontrado; se nao houver ferramenta nem codigo no contexto, grave UNKNOWN. Finalize respondendo apenas o conteudo de artefatos/final.txt. Mantenha cada resposta curta."
+        },
+        "inheritCodeMode": false,
+        "codeMode": {
+          "allowedTools": ["read", "write"],
+          "customScripts": []
+        },
+        "inheritMemory": false,
+        "memory": {
+          "enabled": true,
+          "persistent": true,
+          "projectId": "memoria-deepseek-long",
+          "mode": "consult",
+          "theme": "long",
+          "taskType": "long_memory",
+          "contextBudgetTokens": 1200,
+          "maxLessonsPerRun": 5,
+          "maxLessonChars": 2000
+        }
+      }
+    }
+  ],
+  "edges": []
+}

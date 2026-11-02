@@ -1,0 +1,10 @@
+{
+  "projectId": "memoria-deepseek-long",
+  "name": "Memoria DeepSeek Longa",
+  "globalDefaults": {
+    "memory": {
+      "enabled": false,
+      "persistent": false
+    }
+  }
+}
