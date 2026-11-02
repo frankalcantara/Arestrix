@@ -80,7 +80,8 @@ public:
     // Fase A: licao de agente vira proposta pendente; a promocao continua manual.
     std::string proposeLesson(const std::string& projectId, const std::string& domain,
                               const std::string& triggerError, const std::string& lessonRule,
-                              const std::string& sourceItem = "");
+                              const std::string& sourceItem = "",
+                              const std::string& errorClass = "");
     size_t activeLessonCount(const std::string& projectId);
     std::vector<MemoryLesson> getLessons(const std::string& projectId,
                                          const std::string& domain = "");

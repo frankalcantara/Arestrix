@@ -7,6 +7,7 @@
 #include "MemoryStateSchema.hpp"
 #include "MemoryVectorIndex.hpp"
 #include "project/RunnerSecurity.hpp"
+#include "rt/MemoryFailure.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -736,15 +737,25 @@ std::string MemoryService::recordLesson(const std::string& projectId, const std:
 
 std::string MemoryService::proposeLesson(const std::string& projectId, const std::string& domain,
                                          const std::string& triggerError, const std::string& lessonRule,
-                                         const std::string& sourceItem) {
+                                         const std::string& sourceItem,
+                                         const std::string& errorClass) {
     auto* s = ensureStore(projectId);
     if (!s) return "";
     const std::string scope = scopeId(projectId);
+    std::string rule = lessonRule;
+    if (!errorClass.empty()) {
+        // E5: o texto da falha carrega ids/horas/numeros variaveis. Normaliza
+        // antes de gravar para que a deduplicacao por payload funcione.
+        const std::string normalized = rt::normalizeFailureText(rule);
+        if (!normalized.empty()) rule = normalized;
+    }
     taskforge::Json payload{{"domain", domain.empty() ? "geral" : domain},
                             {"triggerError", triggerError},
-                            {"lessonRule", lessonRule}};
+                            {"lessonRule", rule}};
+    if (!errorClass.empty()) payload["errorClass"] = errorClass;
     taskforge::Json evidence = taskforge::Json::array(
         {taskforge::Json{{"kind", "agent"}, {"node", sourceItem}}});
+    if (!errorClass.empty()) evidence.push_back(taskforge::Json{{"kind", "errorClass"}, {"value", errorClass}});
     return s->recordProposal(scope, "lesson", payload, "", evidence, 0.6);
 }
 
