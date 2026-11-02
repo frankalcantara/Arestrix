@@ -142,6 +142,17 @@ Mostra o traço de recuperação da execução: versão do conhecimento consulta
 passos do brief e das buscas, candidatos com escores e posição, itens entregues
 e usados, além das contagens de truncamento.
 
+### `memory claims`
+
+```powershell
+.\arestrix-cli.exe memory claims extract --project .\examples\04-memoria --max-passages 10 --json
+```
+
+Executa a extração de afirmações sob demanda sobre trechos citados em execuções
+aprovadas. Exige `memory.claimExtraction` ligado e `memory.extractor`
+configurado; a manutenção usa o mesmo caminho automaticamente. As propostas
+nascem pendentes e são revisadas por `memory proposals`.
+
 ### `memory prune`
 
 ```powershell

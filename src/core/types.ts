@@ -363,6 +363,18 @@ export interface IProjectMemoryConfig extends Partial<INodeMemoryConfig> {
   promptCache?: boolean;
   /** E12: fontes locais ingeridas após a execução (off por padrão). */
   sources?: Partial<IMemorySourcesConfig>;
+  /** E13: extração de afirmações na manutenção (off por padrão). */
+  claimExtraction?: boolean | { enabled?: boolean; maxPassages?: number };
+  extractor?: {
+    baseUrl?: string;
+    model?: string;
+    revision?: string;
+    promptVersion?: string;
+    schemaVersion?: string;
+    apiKeyEnv?: string;
+    maxItems?: number;
+    timeoutSeconds?: number;
+  };
 }
 
 export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {

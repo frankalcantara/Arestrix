@@ -25,6 +25,18 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   verdicts in real runs.
 - `memory report` now reads the telemetry database and shows validated/unvalidated runs and
   the approval rate per `task_type`.
+- **Claim extraction from cited passages (multigraph plan, E13):** maintenance
+  selects used passages from approved executions, asks a local
+  OpenAI-compatible extractor for JSON claims, validates literal quotes, dates,
+  units, predicates and entity identity, and stores pending `claim` proposals
+  with passage/extractor evidence. Promotion writes a lensed edge and merges or
+  invalidates only temporally overlapping single-valued claims.
+- **Claim extraction from cited passages (multigraph plan, E13):** maintenance
+  selects used passages from approved executions, asks a local
+  OpenAI-compatible extractor for JSON claims, validates literal quotes, dates,
+  units, predicates and entity identity, and stores pending `claim` proposals
+  with passage/extractor evidence. Promotion writes a lensed edge and merges or
+  invalidates only temporally overlapping single-valued claims.
 - **Local sources and passages (multigraph plan, E12):** with
   `memory.sources` enabled, files read by agents and declared paths are ingested
   after execution without an LLM. Markdown, code and text are segmented

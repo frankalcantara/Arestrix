@@ -21,6 +21,15 @@ export function memorySourcesEnabled(
   return memorySourcesConfigOf(config).enabled;
 }
 
+/** E13: a extração de afirmações é opcional e roda só na manutenção. */
+export function claimExtractionEnabled(
+  config?: { claimExtraction?: boolean | { enabled?: boolean } } | null
+): boolean {
+  const value = config?.claimExtraction;
+  if (typeof value === 'boolean') return value;
+  return !!value?.enabled;
+}
+
 /**
  * Mapeia o modelo antigo (enabled/semanticLessons/recordLessons) para o novo
  * modo do vértice. O novo campo `mode` tem precedência quando presente.

@@ -16,6 +16,7 @@ enum class PredicateCardinality {
 PredicateCardinality predicateCardinality(const std::string& predicate);
 bool isSingleValuedPredicate(const std::string& predicate);
 bool isMultiValuedPredicate(const std::string& predicate);
+bool isKnownPredicate(const std::string& predicate);
 
 } // namespace memory
 } // namespace taskforge

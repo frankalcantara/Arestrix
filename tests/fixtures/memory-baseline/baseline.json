@@ -59,6 +59,7 @@
         "rows": {
           "memory_alias": 11,
           "memory_audit": 8,
+          "memory_claim_extraction": 0,
           "memory_edge": 8,
           "memory_embedding": 0,
           "memory_episode": 0,
@@ -86,6 +87,7 @@
         "seeded": {
           "memory_alias": 11,
           "memory_audit": 0,
+          "memory_claim_extraction": 0,
           "memory_edge": 8,
           "memory_embedding": 0,
           "memory_episode": 0,
@@ -113,6 +115,7 @@
         "created": {
           "memory_alias": 0,
           "memory_audit": 8,
+          "memory_claim_extraction": 0,
           "memory_edge": 0,
           "memory_embedding": 0,
           "memory_episode": 0,
@@ -142,6 +145,7 @@
         "rows": {
           "memory_alias": 0,
           "memory_audit": 0,
+          "memory_claim_extraction": 0,
           "memory_edge": 0,
           "memory_embedding": 0,
           "memory_episode": 9,
@@ -169,6 +173,7 @@
         "seeded": {
           "memory_alias": 0,
           "memory_audit": 0,
+          "memory_claim_extraction": 0,
           "memory_edge": 0,
           "memory_embedding": 0,
           "memory_episode": 0,
@@ -196,6 +201,7 @@
         "created": {
           "memory_alias": 0,
           "memory_audit": 0,
+          "memory_claim_extraction": 0,
           "memory_edge": 0,
           "memory_embedding": 0,
           "memory_episode": 9,
@@ -223,8 +229,8 @@
       }
     },
     "schemaFingerprint": {
-      "knowledge": "07d4e8c0708c1205",
-      "telemetry": "07d4e8c0708c1205"
+      "knowledge": "9611311a13148561",
+      "telemetry": "9611311a13148561"
     }
   }
 }

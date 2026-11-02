@@ -15,6 +15,7 @@
 #include "memory/EmbeddingProvider.hpp"
 #include "memory/MemoryConsolidator.hpp"
 #include "memory/MemoryRanker.hpp"
+#include "memory/MemoryClaimExtractor.hpp"
 #include "memory/MemoryStore.hpp"
 #include "util/JsonValue.hpp"
 
@@ -29,6 +30,9 @@ struct MemoryMaintenanceConfig {
     int idleSeconds = 300;
     int episodeThreshold = 20;
     ConsolidationOptions options;
+    // E13: extracao de afirmacoes fora do caminho do agente.
+    ClaimExtractorConfig claimExtractor;
+    size_t claimMaxPassages = 10;
 };
 
 MemoryMaintenanceConfig maintenanceConfigFromJson(const taskforge::Json& value);
@@ -108,6 +112,11 @@ public:
     std::string recordEpisode(const std::string& projectId, const MemoryEpisodeRecord& episode);
     taskforge::Json getEpisode(const std::string& projectId, const std::string& episodeId);
     size_t extractProposals(const std::string& projectId, const std::string& episodeId);
+    // E13: extracao sob demanda, usada pela manutencao e pelos testes. Nunca e
+    // chamada pelo wrapper de execucao do agente.
+    taskforge::Json extractClaims(const std::string& projectId,
+                                  const ClaimExtractorConfig& config,
+                                  size_t maxPassages = 10);
     taskforge::Json listProposals(const std::string& projectId, const std::string& status = "pending",
                                   size_t limit = 100);
     bool promoteProposal(const std::string& projectId, const std::string& proposalId,
