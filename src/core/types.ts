@@ -382,6 +382,19 @@ export interface IProjectMemoryConfig extends Partial<INodeMemoryConfig> {
     minUses?: number;
     maxPaths?: number;
   };
+  /** E17: travessia em feixe quando nenhum caminho cobre a consulta. */
+  traversal?: boolean | {
+    enabled?: boolean;
+    candidateLimit?: number;
+    beamWidth?: number;
+    maxDepth?: number;
+    expandedLimit?: number;
+    maxResults?: number;
+    maxChars?: number;
+    timeBudgetMs?: number;
+    minScore?: number;
+    exact?: boolean;
+  };
   extractor?: {
     baseUrl?: string;
     model?: string;

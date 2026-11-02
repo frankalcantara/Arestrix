@@ -213,6 +213,8 @@ add_library(arestrix_core STATIC
   ${SRC}/memory/MemorySources.cpp
   ${SRC}/memory/MemoryClaimExtractor.cpp
   ${SRC}/memory/MemoryFacets.cpp
+  ${SRC}/memory/MemoryAnchors.cpp
+  ${SRC}/memory/MemoryTraversal.cpp
   ${SRC}/memory/MemoryPaths.cpp
   ${SRC}/memory/MemoryService.cpp
   ${SRC}/memory/MemoryStateSchema.cpp

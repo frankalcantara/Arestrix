@@ -10,6 +10,13 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ### Added
 
+- **Beam traversal and coverage (multigraph plan, E17):** with
+  `memory.traversal` enabled, query anchors come from aliases, FTS and optional
+  vector candidates; a bounded beam expands the graph only when no path was
+  served, returns a context pack with per-item justification and records the
+  coverage vector (best path utility, sustained fraction, conflicts, intent
+  distance, abstention) in the trace. `memory_search` accepts `mode: graph`;
+  limits cover depth, beam, expanded candidates, time and characters.
 - **Path serving and shortcuts (multigraph plan, E16):** with
   `memory.pathServing` enabled, the brief and `memory_search` try eligible
   active paths before graph retrieval, deliver `[MEMO:path:<id>]` blocks with

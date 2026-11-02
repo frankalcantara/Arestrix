@@ -134,7 +134,8 @@ std::vector<ToolDef> toolDefinitions(const std::vector<std::string>& allowed, Ru
                             "Searches lessons and facts in project memory. Returns untrusted historical data."),
                    json{{"type", "object"},
                         {"properties", {{"query", {{"type", "string"}, {"description", langPick(lang, "Texto a buscar", "Text to search")}}},
-                                        {"limit", {{"type", "integer"}, {"description", langPick(lang, "Maximo de resultados (1-20)", "Maximum results (1-20)")}}}}},
+                                        {"limit", {{"type", "integer"}, {"description", langPick(lang, "Maximo de resultados (1-20)", "Maximum results (1-20)")}}},
+                                        {"mode", {{"type", "string"}, {"enum", {"hybrid", "graph"}}, {"description", langPick(lang, "hybrid (padrao) ou graph", "hybrid (default) or graph")}}}}},
                         {"required", {"query"}}}});
     all.push_back({"memory_propose_lesson",
                    langPick(lang,
@@ -423,12 +424,24 @@ ToolResult executeTool(ToolContext& ctx, const std::string& name, const json& ar
             int limit = 10;
             if (args.contains("limit") && args["limit"].is_number()) limit = static_cast<int>(args["limit"].get<double>());
             limit = std::max(1, std::min(20, limit));
+            const std::string mode = stringArg(args, "mode");
             std::vector<taskforge::memory::MemoryHitRef> hits;
             auto& memory = taskforge::memory::MemoryService::getInstance();
-            std::string result = memory.searchContext(ctx.projectId, query, static_cast<size_t>(limit),
-                                                      ctx.memoryDomains, &hits,
-                                                      ctx.runId, ctx.agentId, ctx.memoryDomains,
-                                                      ctx.memoryTaskType);
+            std::string result;
+            if (mode == "graph") {
+                auto graph = memory.searchGraph(ctx.projectId, query, static_cast<size_t>(limit),
+                                                ctx.memoryTaskType, ctx.runId, ctx.agentId, &hits);
+                result = graph.value("text", std::string());
+                if (result.empty()) {
+                    return ToolResult{T("Nenhuma memoria encontrada para: ", "No memory found for: ") + query, false};
+                }
+                result += "\n[coverage] " + graph["coverage"].dump();
+            } else {
+                result = memory.searchContext(ctx.projectId, query, static_cast<size_t>(limit),
+                                              ctx.memoryDomains, &hits,
+                                              ctx.runId, ctx.agentId, ctx.memoryDomains,
+                                              ctx.memoryTaskType);
+            }
             if (!hits.empty() && !ctx.runId.empty()) {
                 memory.recordConsultedHits(ctx.projectId, ctx.runId, ctx.agentId, hits);
             }
