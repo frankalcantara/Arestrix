@@ -414,7 +414,8 @@ CREATE TABLE IF NOT EXISTS memory_episode (
   ab_arm TEXT NOT NULL DEFAULT '',
   ab_repetition INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
-  metadata TEXT NOT NULL DEFAULT '{}'
+  metadata TEXT NOT NULL DEFAULT '{}',
+  intent_template_hash TEXT NOT NULL DEFAULT ''
 );
 
 -- E4: instantaneo autocontido da evidencia. Sem FK para episodio/edge: a
@@ -671,6 +672,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_policy_scope ON memory_policy(scope_id, ke
     addColumnIfMissing(db_, "memory_episode", "outcome", "TEXT NOT NULL DEFAULT ''");
     addColumnIfMissing(db_, "memory_episode", "error_class", "TEXT NOT NULL DEFAULT ''");
     addColumnIfMissing(db_, "memory_episode", "input_hash", "TEXT NOT NULL DEFAULT ''");
+    addColumnIfMissing(db_, "memory_episode", "intent_template_hash", "TEXT NOT NULL DEFAULT ''");
     addColumnIfMissing(db_, "memory_episode", "tool_calls_json", "TEXT NOT NULL DEFAULT '[]'");
     addColumnIfMissing(db_, "memory_episode", "files_touched_json", "TEXT NOT NULL DEFAULT '[]'");
     addColumnIfMissing(db_, "memory_episode", "artifacts_json", "TEXT NOT NULL DEFAULT '[]'");
@@ -1934,8 +1936,8 @@ std::string MemoryStore::recordEpisode(const MemoryEpisodeRecord& episode) {
     if (!prepare(db_, "INSERT INTO memory_episode(id,scope_id,run_id,node_id,item_id,kind,content,sanitized,"
                        "task_type,outcome,error_class,input_hash,tool_calls_json,files_touched_json,"
                        "artifacts_json,evidence_json,success_signals_json,redactions,ab_arm,ab_repetition,"
-                       "created_at,metadata) "
-                       "VALUES(?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", st, error)) {
+                       "created_at,metadata,intent_template_hash) "
+                       "VALUES(?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", st, error)) {
         lastError_ = error;
         return "";
     }
@@ -1962,6 +1964,7 @@ std::string MemoryStore::recordEpisode(const MemoryEpisodeRecord& episode) {
     sqlite3_bind_int64(st.stmt, 19, abRep ? std::atoll(abRep) : 0);
     bindText(st.stmt, 20, nowIso());
     bindText(st.stmt, 21, cleanMetadata.dump());
+    bindText(st.stmt, 22, episode.intentTemplateHash);
     if (stepRetry(st.stmt) != SQLITE_DONE) {
         lastError_ = sqlite3_errmsg(db_);
         return "";
@@ -1997,7 +2000,7 @@ taskforge::Json MemoryStore::getEpisode(const std::string& scopeId, const std::s
     std::string error;
     if (!prepare(db_, "SELECT id,scope_id,run_id,COALESCE(node_id,''),COALESCE(item_id,''),kind,content,sanitized,"
                        "task_type,outcome,error_class,input_hash,tool_calls_json,files_touched_json,artifacts_json,"
-                       "evidence_json,success_signals_json,redactions,created_at,metadata "
+                       "evidence_json,success_signals_json,redactions,created_at,metadata,intent_template_hash "
                        "FROM memory_episode WHERE scope_id=? AND id=?", st, error)) {
         lastError_ = error;
         return out;
@@ -2038,6 +2041,7 @@ taskforge::Json MemoryStore::getEpisode(const std::string& scopeId, const std::s
     if (!metadata.is_object()) metadata = taskforge::Json::object();
     sanitizeJsonInPlace(metadata);
     out["metadata"] = metadata;
+    out["intentTemplateHash"] = sanitizeText(columnText(st.stmt, 20), 128).text;
     return out;
 }
 
@@ -4276,6 +4280,192 @@ taskforge::Json MemoryStore::usageSummary(const std::string& scopeId) const {
         out["failureRuns"] = columnInt(st.stmt, 12);
         out["invalidCitations"] = columnInt(st.stmt, 13);
     }
+    return out;
+}
+
+taskforge::Json MemoryStore::recurrenceReport(const std::string& scopeId, const std::string& since,
+                                              double minVerdictRate, double minCitationRate,
+                                              long long minExecutions, long long minDistinctInputs,
+                                              double minReuseRate) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out = taskforge::Json::object();
+    if (!db_) return out;
+
+    struct Verdict {
+        bool found = false;
+        bool approved = false;
+    };
+    std::map<std::string, Verdict> verdicts;
+    std::map<std::string, long long> tokens;
+    std::map<std::string, std::set<std::string>> citations;
+    auto key = [](const std::string& runId, const std::string& nodeId) {
+        return runId + "\x1f" + nodeId;
+    };
+    std::string error;
+    Stmt st;
+
+    if (prepare(db_, "SELECT run_id,COALESCE(node_id,''),ok FROM memory_validation "
+                       "WHERE scope_id=? ORDER BY rowid", st, error)) {
+        bindText(st.stmt, 1, scopeId);
+        while (stepRetry(st.stmt) == SQLITE_ROW) {
+            Verdict& v = verdicts[key(columnText(st.stmt, 0), columnText(st.stmt, 1))];
+            v.found = true;
+            v.approved = columnInt(st.stmt, 2) != 0;
+        }
+    }
+
+    if (prepare(db_, "SELECT run_id,COALESCE(node_id,''),COALESCE(SUM(total_tokens),0) "
+                       "FROM memory_usage WHERE scope_id=? GROUP BY run_id,node_id", st, error)) {
+        bindText(st.stmt, 1, scopeId);
+        while (stepRetry(st.stmt) == SQLITE_ROW) {
+            tokens[key(columnText(st.stmt, 0), columnText(st.stmt, 1))] = columnInt(st.stmt, 2);
+        }
+    }
+
+    if (prepare(db_, "SELECT run_id,COALESCE(node_id,''),memory_id FROM memory_hit "
+                       "WHERE scope_id=? AND used=1 ORDER BY rowid", st, error)) {
+        bindText(st.stmt, 1, scopeId);
+        while (stepRetry(st.stmt) == SQLITE_ROW) {
+            citations[key(columnText(st.stmt, 0), columnText(st.stmt, 1))]
+                .insert(columnText(st.stmt, 2));
+        }
+    }
+
+    struct EpisodeRow {
+        std::string runId;
+        std::string nodeId;
+        std::string taskType;
+        std::string inputHash;
+        std::string intentHash;
+    };
+    std::vector<EpisodeRow> episodes;
+    const std::string episodeSql =
+        "SELECT run_id,COALESCE(node_id,''),COALESCE(task_type,''),COALESCE(input_hash,''),"
+        "COALESCE(intent_template_hash,'') FROM memory_episode "
+        "WHERE scope_id=? AND kind LIKE 'agent_%'" +
+        std::string(since.empty() ? "" : " AND created_at>=?") + " ORDER BY rowid";
+    if (prepare(db_, episodeSql.c_str(), st, error)) {
+        bindText(st.stmt, 1, scopeId);
+        if (!since.empty()) bindText(st.stmt, 2, since);
+        while (stepRetry(st.stmt) == SQLITE_ROW) {
+            episodes.push_back({columnText(st.stmt, 0), columnText(st.stmt, 1),
+                                columnText(st.stmt, 2), columnText(st.stmt, 3),
+                                columnText(st.stmt, 4)});
+        }
+    }
+
+    struct Stats {
+        long long executions = 0;
+        long long verdicts = 0;
+        long long approved = 0;
+        long long cited = 0;
+        long long reused = 0;
+        long long tokens = 0;
+        std::set<std::string> inputs;
+        std::map<std::string, long long> intents;
+        std::set<std::string> seenCitations;
+    };
+    std::map<std::string, Stats> byTaskType;
+    for (const auto& episode : episodes) {
+        const std::string taskType = episode.taskType.empty() ? "(sem task_type)" : episode.taskType;
+        Stats& stats = byTaskType[taskType];
+        ++stats.executions;
+        if (!episode.inputHash.empty()) stats.inputs.insert(episode.inputHash);
+        ++stats.intents[episode.intentHash];
+        stats.tokens += tokens[key(episode.runId, episode.nodeId)];
+        auto foundVerdict = verdicts.find(key(episode.runId, episode.nodeId));
+        if (foundVerdict != verdicts.end() && foundVerdict->second.found) {
+            ++stats.verdicts;
+            if (foundVerdict->second.approved) ++stats.approved;
+        }
+        auto foundCitations = citations.find(key(episode.runId, episode.nodeId));
+        if (foundCitations != citations.end() && !foundCitations->second.empty()) {
+            ++stats.cited;
+            bool reused = false;
+            for (const auto& id : foundCitations->second) {
+                if (stats.seenCitations.count(id)) reused = true;
+            }
+            if (reused) ++stats.reused;
+            stats.seenCitations.insert(foundCitations->second.begin(), foundCitations->second.end());
+        }
+    }
+
+    taskforge::Json thresholdJson{{"minVerdictRate", minVerdictRate},
+                                  {"minCitationRate", minCitationRate},
+                                  {"minExecutions", minExecutions},
+                                  {"minDistinctInputs", minDistinctInputs},
+                                  {"minReuseRate", minReuseRate}};
+    taskforge::Json taskTypes = taskforge::Json::array();
+    bool allThresholds = !byTaskType.empty();
+    bool verdictCitationOk = !byTaskType.empty();
+    for (auto& [taskType, stats] : byTaskType) {
+        const double verdictRate = stats.executions > 0
+            ? static_cast<double>(stats.verdicts) / static_cast<double>(stats.executions) : 0.0;
+        const double approvalRate = stats.verdicts > 0
+            ? static_cast<double>(stats.approved) / static_cast<double>(stats.verdicts) : 0.0;
+        const double citationRate = stats.executions > 0
+            ? static_cast<double>(stats.cited) / static_cast<double>(stats.executions) : 0.0;
+        const double reuseRate = stats.executions > 0
+            ? static_cast<double>(stats.reused) / static_cast<double>(stats.executions) : 0.0;
+        const bool verdictOk = verdictRate >= minVerdictRate;
+        const bool citationOk = citationRate >= minCitationRate;
+        const bool recurrenceOk = stats.executions >= minExecutions &&
+                                  static_cast<long long>(stats.inputs.size()) >= minDistinctInputs;
+        const bool reuseOk = reuseRate >= minReuseRate;
+
+        taskforge::Json pairs = taskforge::Json::array();
+        for (const auto& [intentHash, count] : stats.intents) {
+            pairs.push_back(taskforge::Json{{"intentTemplateHash", intentHash},
+                                            {"executions", count}});
+        }
+        taskforge::Json task{
+            {"taskType", taskType},
+            {"executions", stats.executions},
+            {"executionsWithVerdict", stats.verdicts},
+            {"verdictRate", verdictRate},
+            {"approved", stats.approved},
+            {"approvalRate", approvalRate},
+            {"distinctInputs", static_cast<long long>(stats.inputs.size())},
+            {"citedExecutions", stats.cited},
+            {"citationRate", citationRate},
+            {"reusedExecutions", stats.reused},
+            {"reuseRate", reuseRate},
+            {"tokens", stats.tokens},
+            {"tokensPerExecution", stats.executions > 0
+                ? static_cast<double>(stats.tokens) / static_cast<double>(stats.executions) : 0.0},
+            {"intentPairs", pairs},
+            {"checks", taskforge::Json{{"verdict", verdictOk},
+                                       {"citation", citationOk},
+                                       {"recurrence", recurrenceOk},
+                                       {"reuse", reuseOk}}},
+            {"ok", verdictOk && citationOk && recurrenceOk && reuseOk}};
+        taskTypes.push_back(task);
+        if (!(verdictOk && citationOk)) verdictCitationOk = false;
+        if (!(verdictOk && citationOk && recurrenceOk && reuseOk)) allThresholds = false;
+    }
+
+    std::string decision = byTaskType.empty() ? "insufficient_data" : "fix_validators";
+    std::string reason = byTaskType.empty()
+        ? "sem episodios de agente no periodo"
+        : "veredito ou citacao abaixo do limiar; corrija validadores e formato de saida antes de seguir";
+    if (verdictCitationOk) {
+        if (allThresholds) {
+            decision = "continue_full";
+            reason = "todos os limiares atingidos; o bloco C completo esta justificado";
+        } else {
+            decision = "continue_base_knowledge";
+            reason = "veredito e citacao atingidos, mas recorrencia ou reuso abaixo; siga E11-E14 e adie caminhos";
+        }
+    }
+
+    out["scopeId"] = scopeId;
+    out["since"] = since;
+    out["thresholds"] = thresholdJson;
+    out["taskTypes"] = taskTypes;
+    out["taskTypeCount"] = static_cast<long long>(taskTypes.size());
+    out["decision"] = decision;
+    out["decisionReason"] = reason;
+    out["ok"] = true;
     return out;
 }
 

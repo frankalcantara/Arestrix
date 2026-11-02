@@ -120,11 +120,17 @@ Diagnostica runtime, toolchain, raiz e presença de chaves de provedor. Chaves s
 ```powershell
 .\arestrix-cli.exe memory report --project .\examples\04-memoria
 .\arestrix-cli.exe memory report --project .\examples\04-memoria --json
+.\arestrix-cli.exe memory report --project .\examples\04-memoria --recurrence --json
 ```
 
 Lê o SQLite nativamente e mostra tokens de prompt/saída, cache lido e cache escrito, chamadas,
 retries, sucesso/falha, contexto e memórias injetadas/usadas. Substitui o `memory_report.py` no fluxo
 de automação; o script Python continua opcional para desenvolvimento.
+
+`--recurrence` produz o marco de recorrência por `task_type`: veredito e aprovação, entradas
+distintas, pares de intenção, citação, reuso e tokens por execução. Os limiares podem ser ajustados
+com `--min-verdict-rate`, `--min-citation-rate`, `--min-executions`, `--min-distinct-inputs` e
+`--min-reuse-rate`; `--since` limita o período. O resultado inclui a decisão recomendada.
 
 ### `memory prune`
 

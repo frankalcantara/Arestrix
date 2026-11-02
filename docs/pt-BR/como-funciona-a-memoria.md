@@ -246,6 +246,28 @@ deltas pareados, IC 95% (t de Student), tokens, turnos, custo e latência, além
 conhecimento antes e depois da medição. `memory ab report` continua disponível para analisar um
 arquivo de observações já coletado.
 
+### Marco de recorrência
+
+A E10 mede se as tarefas se repetem o suficiente para justificar caminhos. O
+episódio grava `intent_template_hash`, o SHA-256 do `promptTemplate` do vértice
+antes da substituição de variáveis. O template é configuração, não o prompt do
+usuário, então esse campo não armazena texto de entrada.
+
+```bash
+arestrix-cli memory report --recurrence --json
+arestrix-cli memory report --recurrence --since 2026-10-01T00:00:00Z \
+  --min-verdict-rate 0.70 --min-citation-rate 0.30 \
+  --min-executions 5 --min-distinct-inputs 3 --min-reuse-rate 0.20
+```
+
+Por `task_type`, o relatório traz execuções, execuções com veredito, taxa de
+aprovação, `input_hash` distintos, pares (`task_type`, `intent_template_hash`),
+taxa de citação, taxa de reuso e tokens por execução. A taxa de reuso é a fração
+das execuções que citam um item já citado numa execução anterior do mesmo
+`task_type`. O resultado aponta uma das decisões: `continue_full`,
+`continue_base_knowledge` (E11–E14, caminhos adiados), `fix_validators` ou
+`insufficient_data`. Os limiares usados ficam gravados no JSON.
+
 ### Custo por execução
 
 A telemetria registra prompt, saída e os tokens de **prompt cache**: leitura de cache
