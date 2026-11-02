@@ -10,6 +10,10 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ### Added
 
+- **Prompt-reduction validation:** `scripts/e2e_memory_prompt_reduction.py`
+  compares a long-context prompt against a short prompt backed by memory. With
+  the same answer quality (`ORION-42`), the memory arm used 3.228 prompt tokens
+  versus 24.718, an 87% reduction, under a token budget guard.
 - **Real-provider memory validation:** `scripts/e2e_memory_deepseek_long.py`
   runs a long DeepSeek interaction with memory ON/OFF over a controlled fixture;
   ON retrieves `ORION-42`, OFF returns `UNKNOWN`, and the report records calls,

@@ -137,6 +137,18 @@ total de tokens e grava `tests/fixtures/memory-deepseek-long-report.json`.
 Execução registrada: **22.639 tokens** (ON 14.164 / OFF 8.475), nove chamadas no
 braço ON e oito no OFF; todos os checks passaram.
 
+Teste de substituição de contexto:
+
+```powershell
+py -3 scripts/e2e_memory_prompt_reduction.py --keep
+```
+
+O braço `full` recebe um manual longo no prompt; o braço `memory` recebe um
+prompt curto e a mesma verdade pela memória. Resultado registrado: **24.718
+tokens de prompt no full contra 3.228 no memory (87% de redução)**, com a mesma
+resposta `ORION-42`. O relatório fica em
+`tests/fixtures/memory-prompt-reduction-report.json`.
+
 ### L6 — Desempenho e soak
 
 Medições com dados sintéticos versionados:
