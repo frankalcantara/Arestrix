@@ -526,6 +526,20 @@ export class GlobalDefaultsModal {
                          value="${defaults.memory?.embeddingDimensions ?? 768}" />
                 </div>
               </div>
+              <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-top: 10px;">
+                <div>
+                  <label class="form-label" for="def-memory-embedding-revision">${t('global_defaults.memory_embedding_revision_label', 'Revisão do modelo (opcional)')}</label>
+                  <input type="text" id="def-memory-embedding-revision" class="form-input" style="font-family: monospace;"
+                         value="${this.escapeHtml(defaults.memory?.embeddingRevision || '')}" placeholder="ex: 2026-10-31" />
+                  <div class="form-hint">${t('global_defaults.memory_embedding_revision_hint', 'Mudar a revisão invalida o índice.')}</div>
+                </div>
+                <div>
+                  <label class="form-label" for="def-memory-embedding-truncate">${t('global_defaults.memory_embedding_truncate_label', 'Dimensão MRL (0 = completa)')}</label>
+                  <input type="number" id="def-memory-embedding-truncate" class="form-input" min="0" max="8192" step="1"
+                         value="${defaults.memory?.embeddingTruncateDim ?? 0}" />
+                  <div class="form-hint">${t('global_defaults.memory_embedding_truncate_hint', 'Gemma: 768/512/256/128; Qwen3: 32-2560.')}</div>
+                </div>
+              </div>
             </div>
 
             <div class="settings-section-card" style="margin-top: 14px;">
@@ -677,9 +691,13 @@ export class GlobalDefaultsModal {
       const model = this.overlay.querySelector<HTMLInputElement>('#def-memory-embedding-model');
       const baseUrl = this.overlay.querySelector<HTMLInputElement>('#def-memory-embedding-base-url');
       const dimensions = this.overlay.querySelector<HTMLInputElement>('#def-memory-embedding-dim');
+      const revision = this.overlay.querySelector<HTMLInputElement>('#def-memory-embedding-revision');
+      const truncate = this.overlay.querySelector<HTMLInputElement>('#def-memory-embedding-truncate');
       if (model) model.value = profile.model;
       if (baseUrl) baseUrl.value = profile.baseUrl;
       if (dimensions) dimensions.value = String(profile.dimensions);
+      if (revision) revision.value = profile.revision;
+      if (truncate) truncate.value = String(profile.truncateDim);
     });
 
     // Abas
@@ -1620,6 +1638,9 @@ export class GlobalDefaultsModal {
       Math.floor(Number((this.overlay.querySelector('#def-memory-embedding-max-chars') as HTMLInputElement)?.value) || 8000)));
     const memEmbeddingDim = Math.max(0, Math.min(8192,
       Math.floor(Number((this.overlay.querySelector('#def-memory-embedding-dim') as HTMLInputElement)?.value) || 768)));
+    const memEmbeddingRevision = (this.overlay.querySelector('#def-memory-embedding-revision') as HTMLInputElement)?.value.trim() || '';
+    const memEmbeddingTruncate = Math.max(0, Math.min(8192,
+      Math.floor(Number((this.overlay.querySelector('#def-memory-embedding-truncate') as HTMLInputElement)?.value) || 0)));
 
     if (memEmbeddingEnabled && !memEmbeddingBaseUrl) {
       const proceed = confirm(t('global_defaults.memory_embedding_no_endpoint_confirm',
@@ -1678,7 +1699,9 @@ export class GlobalDefaultsModal {
         embeddingTimeoutSeconds: 60,
         embeddingBatchSize: memEmbeddingBatch,
         embeddingMaxChars: memEmbeddingMaxChars,
-        embeddingDimensions: memEmbeddingDim
+        embeddingDimensions: memEmbeddingDim,
+        embeddingRevision: memEmbeddingRevision,
+        embeddingTruncateDim: memEmbeddingTruncate
       }
     };
 

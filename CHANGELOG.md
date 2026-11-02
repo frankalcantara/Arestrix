@@ -25,6 +25,11 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   verdicts in real runs.
 - `memory report` now reads the telemetry database and shows validated/unvalidated runs and
   the approval rate per `task_type`.
+- **Embedding representation contract (multigraph plan, E7):** Qwen3-Embedding gets the versioned
+  query instruction and no document prefix; `embeddingRevision` and `embeddingTruncateDim` are
+  configurable and enter the fingerprint. MRL vectors are truncated, renormalized to norm 1 and
+  rejected when NaN/Inf or zero-norm; EmbeddingGemma 2 accepts 768/512/256/128 and Qwen3 32–2560.
+  Ready profiles store 768 dimensions for both models.
 - **Unified effective memory theme (multigraph plan, E6):** explicit `theme`, legacy
   `domains[0]`, active skill name, vertex label and vertex id, resolved by the same
   accent-folding identifier rule in TypeScript and C++. The vertex window shows the theme origin,

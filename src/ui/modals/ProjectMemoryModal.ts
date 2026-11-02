@@ -574,6 +574,7 @@ export class ProjectMemoryModal {
             `${t('project_memory.embedding_model')}: ${emb.model || '-'}`,
             `${t('project_memory.embedding_endpoint')}: ${emb.localBaseUrl || '-'}`,
             `${t('project_memory.embedding_indexed')}: ${Number(emb.indexed || 0)} / ${Number(emb.candidates || 0)} · ${t('project_memory.embedding_pending_count')}: ${Number(emb.pending || 0)}`,
+            `${t('project_memory.embedding_revision', 'Revisão')}: ${emb.revision || '-'} · ${t('project_memory.embedding_truncate', 'Dimensão MRL')}: ${Number(emb.truncateDim || 0)}`,
             `${t('project_memory.embedding_fingerprint', 'Fingerprint')}: ${emb.fingerprintShort || '-'}`
           ];
           if (emb.error) lines.push(`${t('project_memory.embedding_error', 'Erro')}: ${emb.error}`);

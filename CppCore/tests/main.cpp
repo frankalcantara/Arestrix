@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <sstream>
 #include <string>
@@ -1377,6 +1378,8 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
                                                        {"embeddingModel", "test/multilingual-embed"},
                                                        {"embeddingBaseUrl", "http://127.0.0.1:9999/v1"},
                                                        {"embeddingBatchSize", 8},
+                                                       {"embeddingRevision", "rev-1"},
+                                                       {"embeddingTruncateDim", 768},
                                                        {"validatedReinforcement", true},
                                                        {"consolidationMode", "idle"},
                                                        {"consolidationIdleSeconds", 60},
@@ -1419,6 +1422,8 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(src.find("arx_embedding_config.model = \"test/multilingual-embed\";") != std::string::npos);
     CHECK(src.find("arx_embedding_config.baseUrl = \"http://127.0.0.1:9999/v1\";") != std::string::npos);
     CHECK(src.find("arx_embedding_config.batchSize = 8;") != std::string::npos);
+    CHECK(src.find("arx_embedding_config.revision = \"rev-1\";") != std::string::npos);
+    CHECK(src.find("arx_embedding_config.truncateDim = 768;") != std::string::npos);
     CHECK(src.find("ARESTRIX_PROJECT_ROOT") != std::string::npos);
     CHECK(src.find("ARESTRIX_MEMORY_DB") != std::string::npos);
     CHECK(src.find("ARESTRIX_TELEMETRY_DB") != std::string::npos);
@@ -3328,9 +3333,13 @@ TEST(memory_embedding_defaults_use_embeddinggemma2) {
     const auto parsed = embeddingConfigFromJson(taskforge::Json{
         {"embeddingModel", "custom-embed"},
         {"embeddingDimensions", 512},
+        {"embeddingRevision", "rev-2026-10"},
+        {"embeddingTruncateDim", 256},
         {"embeddingEnabled", true}});
     CHECK(parsed.model == "custom-embed");
     CHECK(parsed.dim == 512);
+    CHECK(parsed.revision == "rev-2026-10");
+    CHECK(parsed.truncateDim == 256);
     CHECK(parsed.enabled);
 }
 
@@ -3388,6 +3397,74 @@ TEST(memory_embedding_fingerprint_changes_with_parameters) {
     EmbeddingConfig endpointChanged = base;
     endpointChanged.baseUrl = "http://127.0.0.1:8080/v1";
     CHECK(embeddingFingerprint(endpointChanged, 768) != reference);
+
+    EmbeddingConfig revisionChanged = base;
+    revisionChanged.revision = "rev-2026-10";
+    CHECK(embeddingFingerprint(revisionChanged, 768) != reference);
+    CHECK(embeddingFingerprint(revisionChanged, 768, "rev-2026-10") ==
+          embeddingFingerprint(revisionChanged, 768));
+
+    EmbeddingConfig truncateChanged = base;
+    truncateChanged.truncateDim = 512;
+    CHECK(embeddingFingerprint(truncateChanged, 768) != reference);
+
+    EmbeddingConfig qwen = base;
+    qwen.model = "qwen3-embedding-4b";
+    CHECK(embeddingFingerprint(qwen, 768) !=
+          embeddingFingerprint(base, 768));
+}
+
+TEST(memory_embedding_prefixes_and_mrl_vectors) {
+    using taskforge::memory::embeddingDocumentPrefix;
+    using taskforge::memory::embeddingQueryPrefix;
+    using taskforge::memory::prepareEmbeddingVector;
+
+    const std::string qwenQuery = embeddingQueryPrefix("qwen3-embedding-4b");
+    CHECK(qwenQuery.find("Instruct: Given a task description") != std::string::npos);
+    CHECK(qwenQuery.find("Query:") != std::string::npos);
+    CHECK(embeddingDocumentPrefix("qwen3-embedding-4b").empty());
+    CHECK(embeddingQueryPrefix("embeddinggemma-2") == "task: search result | query: ");
+    CHECK(embeddingDocumentPrefix("embeddinggemma-2") == "title: none | text: ");
+    CHECK(embeddingQueryPrefix("e5-large") == "query: ");
+    CHECK(embeddingDocumentPrefix("e5-large") == "passage: ");
+
+    auto norm = [](const std::vector<float>& values) {
+        double total = 0.0;
+        for (float value : values) total += static_cast<double>(value) * value;
+        return std::sqrt(total);
+    };
+
+    std::vector<float> qwen(2560, 2.0f);
+    int effective = 0;
+    std::string error;
+    CHECK(prepareEmbeddingVector("qwen3-embedding-4b", qwen, 512, 512, effective, error));
+    CHECK(qwen.size() == 512);
+    CHECK(effective == 512);
+    CHECK(std::abs(norm(qwen) - 1.0) < 1e-6);
+
+    std::vector<float> gemma(768, 3.0f);
+    CHECK(prepareEmbeddingVector("embeddinggemma-2", gemma, 128, 128, effective, error));
+    CHECK(gemma.size() == 128);
+    CHECK(effective == 128);
+    CHECK(std::abs(norm(gemma) - 1.0) < 1e-6);
+
+    std::vector<float> invalidGemma(768, 1.0f);
+    CHECK(!prepareEmbeddingVector("embeddinggemma-2", invalidGemma, 300, 300, effective, error));
+    CHECK(!error.empty());
+    std::vector<float> tooShort(2560, 1.0f);
+    CHECK(!prepareEmbeddingVector("qwen3-embedding-4b", tooShort, 16, 16, effective, error));
+    CHECK(!prepareEmbeddingVector("qwen3-embedding-4b", tooShort, 3000, 3000, effective, error));
+
+    std::vector<float> nonFinite(8, 1.0f);
+    nonFinite[3] = std::numeric_limits<float>::quiet_NaN();
+    CHECK(!prepareEmbeddingVector("qwen3-embedding-4b", nonFinite, 8, 8, effective, error));
+    std::vector<float> zero(768, 0.0f);
+    CHECK(!prepareEmbeddingVector("embeddinggemma-2", zero, 128, 128, effective, error));
+
+    std::vector<float> fullQwen(2560, 1.0f);
+    CHECK(!prepareEmbeddingVector("qwen3-embedding-4b", fullQwen, 0, 768, effective, error));
+    CHECK(prepareEmbeddingVector("qwen3-embedding-4b", fullQwen, 0, 0, effective, error));
+    CHECK(effective == 2560);
 }
 
 TEST(memory_embedding_status_tracks_fingerprint) {

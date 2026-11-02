@@ -304,6 +304,10 @@ export interface INodeMemoryConfig {
   embeddingMaxChars?: number;
   /** 0 = descobre a dimensão na primeira resposta. */
   embeddingDimensions?: number;
+  /** Revisão/digest do modelo; muda o fingerprint e força reindexação. */
+  embeddingRevision?: string;
+  /** Dimensão MRL armazenada (0 = vetor completo); trunca e renormaliza. */
+  embeddingTruncateDim?: number;
 }
 
 /**
@@ -361,7 +365,9 @@ export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {
   embeddingTimeoutSeconds: 60,
   embeddingBatchSize: 8,
   embeddingMaxChars: 8000,
-  embeddingDimensions: 768
+  embeddingDimensions: 768,
+  embeddingRevision: '',
+  embeddingTruncateDim: 0
 };
 
 export interface IGlobalPipelineDefaults {

@@ -163,17 +163,29 @@ de cada execução com memória persistente (orçamento padrão de **10 s ou 64 
 manutenção (`idle`/`after_episodes`) e nas ações explícitas **Testar** e **Reindexar** do painel.
 Falha do provedor de embeddings não derruba a execução. Perfis prontos:
 
-| Perfil | Dimensão |
-| :--- | :--- |
-| EmbeddingGemma 2 | 768 |
-| Qwen3-Embedding-4B | 2560 |
+| Perfil | Dimensão armazenada | Observação |
+| :--- | :--- | :--- |
+| EmbeddingGemma 2 | 768 | vetor completo; também aceita 512, 256 e 128 via MRL |
+| Qwen3-Embedding-4B | 768 | truncado de 2560; aceita de 32 a 2560 via MRL |
 
 Sem provedor disponível, a busca continua funcionando no modo lexical.
 
-O índice guarda um **fingerprint** SHA-256 de endpoint, modelo, dimensão efetiva, prefixos de
-consulta/documento, normalização, métrica e versão do índice. A busca só usa vetores do fingerprint
-atual; nunca mistura índices antigos. O status mostra modelo, dimensão, itens indexados, candidatos,
-pendentes e um fingerprint curto, com os estados:
+Cada modelo tem seu prefixo de representação. O **Qwen3** recebe, na consulta, a instrução
+`Instruct: Given a task description, retrieve memory items that help complete it` seguida de
+`Query:`; o documento não recebe prefixo. O **EmbeddingGemma 2** usa prefixos distintos para
+consulta e documento. O texto da instrução é versionado e entra no **fingerprint**: mudá-lo
+invalida o índice.
+
+O campo **revisão do modelo** (`embeddingRevision`) registra o digest/revisão do servidor, quando
+informado; também entra no fingerprint. O **truncamento MRL** (`embeddingTruncateDim`, 0 = vetor
+completo) reduz o vetor e o **renormaliza para norma 1**; vetores com NaN/Inf ou norma zero são
+recusados. Dimensões aceitas: EmbeddingGemma 2 em 768, 512, 256 ou 128; Qwen3 de 32 a 2560.
+
+O índice guarda um **fingerprint** SHA-256 de endpoint, modelo, revisão, dimensão efetiva,
+truncamento, prefixos/instrução, normalização, métrica e versão do índice. A busca só usa vetores
+do fingerprint atual; nunca mistura índices antigos. Mudar modelo, revisão, dimensão, truncamento
+ou instrução deixa o índice `stale` e exige reindexação. O status mostra modelo, dimensão, revisão,
+itens indexados, candidatos, pendentes e um fingerprint curto, com os estados:
 
 | Estado | Significado | Busca |
 | :--- | :--- | :--- |
