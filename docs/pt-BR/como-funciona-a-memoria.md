@@ -372,6 +372,15 @@ o vetor de cobertura: utilidade do melhor caminho, fração sustentada, conflito
 distância de intenção e abstenção. A travessia só lê o grafo e não escreve
 conhecimento.
 
+### Roteamento de modelos
+
+O roteador usa a taxa de validação por `task_type`, com prior Beta, para estimar
+a confiança de um nível local. Em `routing.mode=binary`, ele escolhe entre local
+e fronteira por `p_min` e custo esperado; em `shadow`, registra a decisão sem
+trocar o modelo executado. Afirmações marcadas como somente locais bloqueiam o
+nível de fronteira. Reprovação no validador, abstenção ou conflito podem
+escalar para fronteira, e a decisão fica no traço. O modo padrão é `off`.
+
 ### Traços de recuperação
 
 Toda escrita de conhecimento incrementa `knowledge_version` na mesma transação;

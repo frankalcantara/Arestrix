@@ -10,6 +10,12 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ### Added
 
+- **Model routing (multigraph plan, E18):** `routing.mode` supports `off`,
+  `shadow` and `binary`; decisions use a Beta estimate per `task_type` from
+  validated outcomes, expected cost, a `p_min` threshold and local-only privacy.
+  Binary mode can switch the executed model, shadow records the comparison
+  without changing it, and escalation records the frontier fallback. The switch
+  is off by default.
 - **Beam traversal and coverage (multigraph plan, E17):** with
   `memory.traversal` enabled, query anchors come from aliases, FTS and optional
   vector candidates; a bounded beam expands the graph only when no path was
