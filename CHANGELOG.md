@@ -10,6 +10,10 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ### Added
 
+- **Real-provider memory validation:** `scripts/e2e_memory_deepseek_long.py`
+  runs a long DeepSeek interaction with memory ON/OFF over a controlled fixture;
+  ON retrieves `ORION-42`, OFF returns `UNKNOWN`, and the report records calls,
+  tokens, brief and hits with a token budget guard.
 - **Studio assistant memory access:** `memory_inspect` now exposes sources,
   facets, paths, path serving, traversal, evidence, maintenance, health and
   routing settings; new read-only `memory_search` and confirmed

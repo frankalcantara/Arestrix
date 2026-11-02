@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "scope": "project:memoria-deepseek-long",
+  "lessons": [
+    {
+      "id": "deepseek-long-lesson",
+      "domain": "long",
+      "rule": "O codigo do projeto e ORION-42. Use exatamente esse codigo no arquivo final.",
+      "trigger": "teste longo de memoria",
+      "confidence": 0.99
+    }
+  ],
+  "facts": [],
+  "playbook": {
+    "id": "deepseek-long-playbook",
+    "taskType": "long_memory",
+    "title": "Executar diagnostico longo",
+    "steps": [
+      { "tool": "write", "action": "gravar etapas curtas" },
+      { "tool": "memory_search", "action": "consultar o codigo do projeto" }
+    ],
+    "preconditions": { "theme": "long" },
+    "confidence": 0.8,
+    "status": "candidate"
+  }
+}
