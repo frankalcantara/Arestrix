@@ -9,6 +9,7 @@ below are the next memory work. No item here blocks the current release.
 | Priority | Item | State |
 | :--- | :--- | :--- |
 | High | Context compaction backed by existing memory | Pending |
+| High | Extract memory into the standalone Mnemosyne module and submodule | Assessment complete; migration pending |
 | High | Enable experimental switches only after real-data A/B | Pending |
 | Medium | Institutional memory level in the Studio assistant | Pending |
 | Medium | Real embedding-provider quality/latency validation | Pending |
@@ -76,23 +77,107 @@ add a compacted arm. Keep the same fixture, model and token budget. The test mus
 show both lower prompt size and equal answer quality before the switch is
 enabled by default.
 
-## 2. Experimental switch promotion
+## 2. Standalone Mnemosyne module and submodule
+
+**Repository:** <https://github.com/frankalcantara/Mnemosyne>
+**Status:** repository created, assessment complete, migration not started.
+**Current contents:** only `LICENSE` and `README.md`; there is no usable module
+to pin as a submodule yet.
+
+**Goal.** Make project memory a standalone C++20 library that any harness can
+consume, while Arestrix keeps only its runtime, UI, CLI and assistant adapters.
+
+### Scope boundary
+
+Mnemosyne core should own:
+
+- SQLite schema, migrations and fingerprints;
+- store, knowledge graph, lessons, facts, claims, lenses, facets, sources,
+  passages, paths, shortcuts, traversal and consolidation;
+- lexical/hybrid retrieval and embedding-provider interfaces;
+- telemetry contracts and maintenance interfaces;
+- configuration, scoped storage and access-policy hooks;
+- public headers, versioning, CMake install/export and standalone tests.
+
+Arestrix should own:
+
+- agent loop, tools, Taskflow generator and generated code;
+- CLI, UI, assistant tools and project/workspace configuration;
+- `RunnerSecurity`, environment mapping and application-specific paths;
+- adapters from Arestrix configuration to Mnemosyne configuration.
+
+### Coupling to remove
+
+The current memory tree has 47 files and approximately 15.8k lines. The main
+couplings are:
+
+- `taskforge::Json` and `util/Json*` in public headers;
+- `project/RunnerSecurity` for SHA-256;
+- `rt/Http` in embeddings and the institution service;
+- `rt/MemoryFailure` in the A/B protocol;
+- `MemoryService` singleton, `projectId`, environment variables and workspace
+  paths;
+- generated code including `memory/MemoryService.hpp`;
+- memory tests embedded in the Arestrix monolithic C++ test file.
+
+### Delivery sequence
+
+1. Scaffold Mnemosyne with `include/mnemosyne`, `src`, `tests`, CMake package and
+   versioned public API.
+2. Extract a vertical slice: JSON/hash utilities, schema/store, lexical search
+   and standalone tests.
+3. Add the advanced layers: claims, facets, paths, traversal and bridges.
+4. Introduce an instance-based `mnemosyne::Engine` with injected clock, hasher,
+   embedding provider, telemetry sink and storage path.
+5. Keep an Arestrix compatibility adapter behind `MemoryService`.
+6. Tag Mnemosyne `v0.1.0`, then add it as a Git submodule:
+
+```bash
+git submodule add https://github.com/frankalcantara/Mnemosyne third_party/Mnemosyne
+git submodule update --init --recursive
+```
+
+7. Link `mnemosyne::core` from Arestrix and migrate generated code to the public
+   include path.
+8. Remove the old `CppCore/src/memory` tree only after E0-E20, baseline, A/B and
+   real-provider tests pass through the module.
+
+### Effort
+
+- **MVP extraction** (module compiles, Arestrix consumes it, tests still mostly
+  in Arestrix): **2-3 weeks**.
+- **Production-grade standalone module** (public API, no Arestrix dependencies,
+  install/export, tests, docs, cross-platform): **6-10 weeks**.
+- Main risk is not file moves; it is splitting `MemoryStore.cpp` (~318 KB) and
+  `MemoryService.cpp` (~138 KB) and replacing the singleton/environment
+  assumptions.
+
+### Acceptance criteria
+
+- Mnemosyne builds and tests without the Arestrix source tree.
+- Arestrix builds with Mnemosyne as a pinned submodule and no duplicated memory
+  sources.
+- Public API is documented and has a small harness example.
+- Schema and migration remain compatible with `memory-v1.0.1` databases.
+- Arestrix E0-E20, baseline, A/B and real DeepSeek tests remain green.
+
+## 3. Experimental switch promotion
 
 `memory.pathServing`, `memory.traversal`, `memory.bridges` and
 `routing.mode=binary` remain opt-in. Promotion requires a real-data A/B with a
 quality gain, no security regression and a documented cost budget.
 
-## 3. Real embedding-provider validation
+## 4. Real embedding-provider validation
 
 Profiles, fingerprints and fallback are implemented. Quality, latency and
 failure behavior with real EmbeddingGemma 2 and Qwen3-Embedding-4B endpoints
 still need a recorded run.
 
-## 4. Institutional memory level in the Studio assistant
+## 5. Institutional memory level in the Studio assistant
 
 `memory_inspect` covers project, workspace, vertex and all. The `institution`
 level needs an explicit service status and MCP/token configuration.
 
-## 5. Multi-process maintenance coordination
+## 6. Multi-process maintenance coordination
 
 Out of scope for memory v1. The current worker runs inside the project process.
