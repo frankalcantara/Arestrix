@@ -268,6 +268,26 @@ das execuções que citam um item já citado numa execução anterior do mesmo
 `continue_base_knowledge` (E11–E14, caminhos adiados), `fix_validators` ou
 `insufficient_data`. Os limiares usados ficam gravados no JSON.
 
+### Fontes locais e trechos
+
+Com `globalDefaults.memory.sources` ligado, a memória ingere arquivos de texto,
+Markdown e código **depois** da execução, sem chamar modelo de linguagem:
+
+- arquivos lidos com sucesso pela ferramenta `read`;
+- pastas ou arquivos declarados em `memory.sources.paths`.
+
+A ingestão aplica allowlist de extensões, limite `maxFileBytes` (padrão 512 KiB),
+`maxFiles` (padrão 2.000) por execução, exclusões fixas (`.git`, `node_modules`, `.arestrix`,
+`.workspace/memory`) e sanitização de segredos. O conteúdo é segmentado de forma
+determinística: Markdown por títulos/parágrafos, código por blocos de topo e
+texto em janelas de 1.000 caracteres com sobreposição de 200.
+
+Cada versão da fonte tem `content_hash`; mudanças criam uma nova versão e os
+trechos antigos ficam `superseded`, preservados como evidência. Reingerir o mesmo
+conteúdo é uma operação nula. `memory_search` devolve trechos com
+`[MEMO:psg:<id>]`, caminho e posição; citar o ID marca o trecho como usado. O
+brief não inclui trechos nesta etapa.
+
 ### Traços de recuperação
 
 Toda escrita de conhecimento incrementa `knowledge_version` na mesma transação;

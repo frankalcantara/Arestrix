@@ -329,6 +329,24 @@ export interface IVertexMemorySettings extends Partial<INodeMemoryConfig> {
  * Configuração de memória do projeto: padrões de vértice, busca semântica,
  * manutenção e retenção. A persistência é implícita no projeto.
  */
+/** E12: ingestão de fontes locais sem modelo de linguagem. */
+export interface IMemorySourcesConfig {
+  enabled: boolean;
+  /** Pastas ou arquivos relativos ao workspace. */
+  paths: string[];
+  /** Tamanho máximo por arquivo; padrão 512 KiB. */
+  maxFileBytes: number;
+  /** Limite de arquivos por execução; padrão 500. */
+  maxFiles: number;
+}
+
+export const DEFAULT_MEMORY_SOURCES: IMemorySourcesConfig = {
+  enabled: false,
+  paths: [],
+  maxFileBytes: 512 * 1024,
+  maxFiles: 2000
+};
+
 export interface IProjectMemoryConfig extends Partial<INodeMemoryConfig> {
   mode?: VertexMemoryMode;
   theme?: string;
@@ -343,6 +361,8 @@ export interface IProjectMemoryConfig extends Partial<INodeMemoryConfig> {
    * Desligado por padrão; a chave fica em `globalDefaults.memory`.
    */
   promptCache?: boolean;
+  /** E12: fontes locais ingeridas após a execução (off por padrão). */
+  sources?: Partial<IMemorySourcesConfig>;
 }
 
 export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {

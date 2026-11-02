@@ -1,9 +1,25 @@
 import {
+  DEFAULT_MEMORY_SOURCES,
   DEFAULT_NODE_MEMORY_CONFIG,
+  type IMemorySourcesConfig,
   type INodeMemoryConfig,
   type INodeSkill,
   type VertexMemoryMode
 } from '../types.ts';
+
+/** E12: configuração efetiva de fontes locais. */
+export function memorySourcesConfigOf(
+  config?: Partial<INodeMemoryConfig> | null
+): IMemorySourcesConfig {
+  const sources = (config as { sources?: Partial<IMemorySourcesConfig> } | null)?.sources;
+  return { ...DEFAULT_MEMORY_SOURCES, ...(sources || {}) };
+}
+
+export function memorySourcesEnabled(
+  config?: Partial<INodeMemoryConfig> | null
+): boolean {
+  return memorySourcesConfigOf(config).enabled;
+}
 
 /**
  * Mapeia o modelo antigo (enabled/semanticLessons/recordLessons) para o novo

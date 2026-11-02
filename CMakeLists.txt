@@ -210,6 +210,7 @@ add_library(arestrix_core STATIC
   ${SRC}/memory/MemoryInstitutionService.cpp
   ${SRC}/memory/MemoryInstitutionApi.cpp
   ${SRC}/memory/MemoryStore.cpp
+  ${SRC}/memory/MemorySources.cpp
   ${SRC}/memory/MemoryService.cpp
   ${SRC}/memory/MemoryStateSchema.cpp
   ${SRC}/memory/MemoryPredicates.cpp

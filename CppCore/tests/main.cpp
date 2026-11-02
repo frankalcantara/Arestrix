@@ -34,6 +34,7 @@
 #include "memory/MemoryPredicates.hpp"
 #include "memory/MemoryAbProtocol.hpp"
 #include "memory/MemoryRanker.hpp"
+#include "memory/MemorySources.hpp"
 #include "memory/MemoryVectorIndex.hpp"
 #include "platform/Process.hpp"
 #include "project/OpenableFiles.hpp"
@@ -1403,6 +1404,10 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
                                                 {"allowedKeys", json::array({"resumo"})},
                                                 {"writeKeys", json::array({"resumo", "last_stage"})},
                                                 {"maxLessonsPerRun", 5}, {"maxLessonChars", 1234},
+                                                {"sources", {{"enabled", true},
+                                                            {"paths", json::array({"docs"})},
+                                                            {"maxFileBytes", 4096},
+                                                            {"maxFiles", 7}}},
                                                 {"domains", json::array({"svg_typography"})}}}}}}
                  })},
         {"edges", json::array({json{{"id", "e1"}, {"sourceNodeId", "origem"}, {"sourcePortId", "origem_out"},
@@ -1444,6 +1449,10 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(src.find("memory.recordValidation(projectId, arx_val_record, true)") != std::string::npos);
     CHECK(src.find("\"memoryValidatedReinforcement\":true") != std::string::npos);
     CHECK(src.find("\"memoryPromptCache\":true") != std::string::npos);
+    CHECK(src.find("\"memorySources\":true") != std::string::npos);
+    CHECK(src.find("\"memorySourcePaths\":[\"docs\"]") != std::string::npos);
+    CHECK(src.find("\"memorySourceMaxFileBytes\":4096") != std::string::npos);
+    CHECK(src.find("\"memorySourceMaxFiles\":7") != std::string::npos);
     // E3: indexacao automatica fora da busca, no fim da execucao.
     CHECK(src.find("memory.indexPending(projectId, 10000, 64)") != std::string::npos);
     CHECK(src.find("arx_mem_index();") != std::string::npos);
@@ -4364,6 +4373,120 @@ TEST(memory_trace_records_brief_and_searches_with_limits) {
     CHECK(!trace["delivered"].empty());
     CHECK(trace.value("knowledgeVersion", 0LL) > 0);
     CHECK(trace.value("taskType", std::string()) == "ab");
+
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_sources_segment_ids_and_exclusions_are_deterministic) {
+    using taskforge::memory::MemorySources;
+
+    const std::string markdown = "# Titulo\n\nPrimeiro paragrafo.\n\n## Secao\n\nSegundo paragrafo.";
+    const auto markdownA = MemorySources::segment(markdown, "markdown");
+    const auto markdownB = MemorySources::segment(markdown, "markdown");
+    CHECK(markdownA.size() >= 3);
+    CHECK(markdownA.size() == markdownB.size());
+    for (size_t i = 0; i < markdownA.size(); ++i) {
+        CHECK(markdownA[i].text == markdownB[i].text);
+        CHECK(markdownA[i].start == markdownB[i].start);
+        CHECK(markdownA[i].end == markdownB[i].end);
+    }
+
+    const std::string code =
+        "int alpha() {\n  return 1;\n}\n\n"
+        "int beta() {\n  return 2;\n}\n\n"
+        "class Gamma {\n public:\n  int value = 3;\n};\n";
+    const auto codePassages = MemorySources::segment(code, "code");
+    CHECK(codePassages.size() >= 2);
+    CHECK(codePassages[0].text.find("alpha") != std::string::npos);
+
+    std::string longText;
+    for (int i = 0; i < 60; ++i) longText += "linha de texto com conteudo suficiente. ";
+    const auto textPassages = MemorySources::segment(longText, "text");
+    CHECK(textPassages.size() >= 2);
+    CHECK(textPassages[1].start < textPassages[0].end);   // sobreposicao
+
+    CHECK(MemorySources::kindForUri("docs/guia.md") == "markdown");
+    CHECK(MemorySources::kindForUri("src/main.cpp") == "code");
+    CHECK(MemorySources::kindForUri("notes.txt") == "text");
+    CHECK(MemorySources::kindForUri("image.png").empty());
+    CHECK(MemorySources::isExcluded("node_modules/pkg/a.md"));
+    CHECK(MemorySources::isExcluded(".git/config"));
+    CHECK(MemorySources::isExcluded(".arestrix/memory/memory.db"));
+    CHECK(MemorySources::isExcluded(".workspace/memory/a.md"));
+    CHECK(!MemorySources::isExcluded("docs/guia.md"));
+
+    const std::string sourceId = MemorySources::sourceId("project:s", "docs/guia.md", "hash-1");
+    CHECK(sourceId == MemorySources::sourceId("project:s", "docs/guia.md", "hash-1"));
+    CHECK(sourceId != MemorySources::sourceId("project:s", "docs/guia.md", "hash-2"));
+    CHECK(MemorySources::passageId("hash-1", 0) == MemorySources::passageId("hash-1", 0));
+    CHECK(MemorySources::passageId("hash-1", 0) != MemorySources::passageId("hash-1", 1));
+}
+
+TEST(memory_sources_ingest_versions_search_and_redacts_secrets) {
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-sources-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root / "docs", ec);
+    const std::string projectId = "sources-integration";
+    const fs::path memoryDb = root / "memory.db";
+    const fs::path telemetryDb = root / "telemetry.db";
+    std::string secret = "super";
+    secret += "secret123456789";
+    const fs::path guide = root / "docs" / "guide.md";
+    {
+        std::ofstream out(guide);
+        out << "# Guia\n\nO contraste minimo e 4.5:1.\n\napi_key=" << secret << "\n";
+    }
+
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, memoryDb.string()));
+    CHECK(memory.configureTelemetry(projectId, telemetryDb.string()));
+
+    CHECK(memory.ingestSources(projectId, root.string(), {"docs/guide.md"}, 524288, 50) == 1);
+    auto summary = memory.sourceSummary(projectId);
+    CHECK(summary.value("sources", 0LL) == 1);
+    CHECK(summary.value("passages", 0LL) >= 1);
+    CHECK(memory.ingestSources(projectId, root.string(), {"docs/guide.md"}, 524288, 50) == 0);
+    CHECK(memory.sourceSummary(projectId).value("sources", 0LL) == 1);
+
+    {
+        std::ofstream out(guide, std::ios::app);
+        out << "\n## Nova secao\n\nTexto novo sobre sombras.\n";
+    }
+    CHECK(memory.ingestSources(projectId, root.string(), {"docs/guide.md"}, 524288, 50) == 1);
+    summary = memory.sourceSummary(projectId);
+    CHECK(summary.value("sources", 0LL) == 1);
+    CHECK(summary.value("supersededSources", 0LL) == 1);
+    CHECK(summary.value("supersededPassages", 0LL) >= 1);
+
+    std::vector<taskforge::memory::MemoryHitRef> hits;
+    const std::string found = memory.searchContext(projectId, "contraste minimo", 10, {},
+                                                   &hits, "run-src", "node-src");
+    CHECK(found.find("[MEMO:psg:") != std::string::npos);
+    CHECK(!hits.empty());
+    CHECK(hits[0].kind == "passage");
+    memory.recordConsultedHits(projectId, "run-src", "node-src", hits);
+    memory.markHitsUsed(projectId, "run-src", "node-src", {hits[0].id});
+    CHECK(memory.hitSummary(projectId).value("used", 0LL) >= 1);
+
+    const std::string secretResult = memory.searchContext(projectId, secret, 10, {},
+                                                          nullptr, "run-src-2", "node-src-2");
+    CHECK(secretResult.find(secret) == std::string::npos);
+
+    {
+        taskforge::memory::MemoryStore store(memoryDb.string());
+        std::string storeError;
+        CHECK(store.open(storeError));
+        const auto objects = store.embeddingObjects("project:" + projectId);
+        CHECK(std::any_of(objects.begin(), objects.end(), [](const auto& object) {
+            return object.objectType == "passage";
+        }));
+    }
 
     memory.closeProject(projectId);
     fs::remove_all(root, ec);

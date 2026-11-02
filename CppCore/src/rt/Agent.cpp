@@ -60,7 +60,10 @@ std::vector<std::string> citedMemoryIds(const std::string& text) {
             ++end;
         }
         if (end > start) {
-            const std::string id = text.substr(start, end - start);
+            std::string id = text.substr(start, end - start);
+            // E12: a citacao de trecho e [MEMO:psg:<id>]; o hit guarda o id
+            // fisico do trecho (psg_...), sem o prefixo de tipo.
+            if (id.rfind("psg:", 0) == 0) id = id.substr(4);
             if (std::find(ids.begin(), ids.end(), id) == ids.end()) ids.push_back(id);
         }
         pos = end > start ? end : start;
@@ -147,6 +150,11 @@ struct AgentSpec {
     bool memoryValidatedReinforcement = false;
     // E8: pede cache_control do prefixo skill+brief no protocolo Anthropic.
     bool memoryPromptCache = false;
+    // E12: ingestao de fontes lidas e de pastas declaradas.
+    bool memorySources = false;
+    std::vector<std::string> memorySourcePaths;
+    int memorySourceMaxFileBytes = 524288;
+    int memorySourceMaxFiles = 2000;
     std::vector<std::string> memoryDomains;
     int memoryMaxLessonsPerRun = 20;
     int memoryMaxLessonChars = 4000;
@@ -191,6 +199,14 @@ AgentSpec parseSpec(const json& j, const std::string& nodeId, const std::string&
     s.memoryForceDisabled = j.value("memoryForceDisabled", false);
     s.memoryValidatedReinforcement = j.value("memoryValidatedReinforcement", false);
     s.memoryPromptCache = j.value("memoryPromptCache", false);
+    s.memorySources = j.value("memorySources", false);
+    s.memorySourceMaxFileBytes = j.value("memorySourceMaxFileBytes", 524288);
+    s.memorySourceMaxFiles = j.value("memorySourceMaxFiles", 2000);
+    if (j.contains("memorySourcePaths") && j["memorySourcePaths"].is_array()) {
+        for (const auto& path : j["memorySourcePaths"]) {
+            if (path.is_string()) s.memorySourcePaths.push_back(path.get<std::string>());
+        }
+    }
     if (j.contains("memoryDomains") && j["memoryDomains"].is_array()) {
         for (const auto& d : j["memoryDomains"]) if (d.is_string()) s.memoryDomains.push_back(d.get<std::string>());
     }
@@ -544,6 +560,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     const std::string taskType = !spec.memoryTaskType.empty() ? spec.memoryTaskType : nodeId;
     json runToolCalls = json::array();
     std::vector<std::string> runFiles;
+    std::vector<std::string> runReadFiles;
     std::vector<std::string> runArtifacts;
     auto recordToolCall = [&](const ChatToolCall& call, bool ok) {
         runToolCalls.push_back(json{{"name", call.name}, {"ok", ok}});
@@ -552,6 +569,10 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         if (path.empty()) return;
         if (std::find(runFiles.begin(), runFiles.end(), path) == runFiles.end()) {
             runFiles.push_back(path);
+        }
+        if (ok && call.name == "read" &&
+            std::find(runReadFiles.begin(), runReadFiles.end(), path) == runReadFiles.end()) {
+            runReadFiles.push_back(path);
         }
         if (ok && call.name == "write" &&
             std::find(runArtifacts.begin(), runArtifacts.end(), path) == runArtifacts.end()) {
@@ -627,6 +648,24 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         // conhecimento consultada no inicio da recuperacao.
         memory.closeTrace(spec.memoryProjectId, runId, nodeId, usage.outcome, spec.model,
                           "default", spec.memoryEnabled);
+        // E12: ingestao depois da execucao, sem modelo de linguagem.
+        if (spec.memoryEnabled && spec.memorySources) {
+            std::vector<std::string> sourceUris = runReadFiles;
+            for (const auto& path : spec.memorySourcePaths) {
+                if (std::find(sourceUris.begin(), sourceUris.end(), path) == sourceUris.end()) {
+                    sourceUris.push_back(path);
+                }
+            }
+            if (!sourceUris.empty()) {
+                try {
+                    memory.ingestSources(spec.memoryProjectId, root.string(), sourceUris,
+                                         static_cast<size_t>(std::max(1, spec.memorySourceMaxFileBytes)),
+                                         static_cast<size_t>(std::max(1, spec.memorySourceMaxFiles)));
+                } catch (const std::exception&) {
+                    // A ingestao e acessoria; nunca derruba a execucao.
+                }
+            }
+        }
         // B4: falha de infraestrutura nao vira licao. Falha de tarefa
         // (incluindo task_max_turns) continua gerando proposta.
         if (spec.memoryWriteEnabled && !episodeId.empty() &&

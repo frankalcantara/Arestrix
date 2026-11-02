@@ -25,6 +25,11 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   verdicts in real runs.
 - `memory report` now reads the telemetry database and shows validated/unvalidated runs and
   the approval rate per `task_type`.
+- **Local sources and passages (multigraph plan, E12):** with
+  `memory.sources` enabled, files read by agents and declared paths are ingested
+  after execution without an LLM. Markdown, code and text are segmented
+  deterministically, secrets are redacted, versions are preserved as
+  `superseded`, and `memory_search` returns cited `[MEMO:psg:<id>]` passages.
 - **Knowledge version and full traces (multigraph plan, E11):** knowledge writes
   bump a monotonic `knowledge_version` in the same transaction, while telemetry
   writes do not. Every memory-enabled vertex execution records a trace with the

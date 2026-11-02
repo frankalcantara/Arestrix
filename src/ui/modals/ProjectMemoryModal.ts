@@ -287,6 +287,7 @@ export class ProjectMemoryModal {
                   <button class="btn btn-secondary-pill btn-secondary-office" id="btn-prune-memory">${t('project_memory.btn_prune')}</button>
                 </div>
                 <div class="form-hint" style="margin-top: 6px;">${t('project_memory.retention_hint')}</div>
+                <div class="form-hint" id="memory-sources-status" style="margin-top: 6px;">${t('project_memory.sources_loading', 'Fontes locais: carregando...')}</div>
                 <pre id="memory-ab-report" style="display: none; margin-top: 10px; padding: 10px; border-radius: 6px; background: #f8fafc; color: #0f172a; font-size: 11px; white-space: pre-wrap; max-height: 240px; overflow: auto;"></pre>
               </div>
             </div>
@@ -497,6 +498,7 @@ export class ProjectMemoryModal {
     const usageViewer = this.overlay.querySelector('#memory-usage-viewer');
     const proposalsList = this.overlay.querySelector('#memory-proposals-list');
     const embeddingStatus = this.overlay.querySelector('#memory-embedding-status');
+    const sourcesStatus = this.overlay.querySelector('#memory-sources-status');
     const consolidationStatus = this.overlay.querySelector('#memory-consolidation-status');
     const conflictsList = this.overlay.querySelector('#memory-conflicts-list');
     const playbooksList = this.overlay.querySelector('#memory-playbooks-list');
@@ -698,6 +700,14 @@ export class ProjectMemoryModal {
                     ${t('project_memory.state_hash', 'schema')}: ${this.escapeHtml(String(item.schemaHash || '').slice(0, 12))}
                   </div>
                 </div>`).join('');
+        }
+
+        if (sourcesStatus) {
+          const sourceCounts = data.sources || {};
+          sourcesStatus.textContent = `${t('project_memory.sources_label', 'Fontes locais')}: `
+            + `${Number(sourceCounts.sources || 0)} ${t('project_memory.sources_files', 'arquivo(s)')} · `
+            + `${Number(sourceCounts.passages || 0)} ${t('project_memory.sources_passages', 'trecho(s)')} · `
+            + `${Number(sourceCounts.supersededPassages || 0)} ${t('project_memory.sources_superseded', 'superseded')}`;
         }
 
         // Exibe consumo de API e contexto de memória

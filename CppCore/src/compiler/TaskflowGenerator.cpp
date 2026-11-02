@@ -514,6 +514,26 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
     spec["memoryValidatedReinforcement"] = memory.value("validatedReinforcement", false);
     // E8: cache explicito do prefixo skill+brief no protocolo Anthropic.
     spec["memoryPromptCache"] = memory.value("promptCache", false);
+    // E12: fontes declaradas e ingestao de arquivos lidos.
+    json sourceConfig = memory.value("sources", json::object());
+    bool sourcesEnabled = false;
+    if (sourceConfig.is_boolean()) sourcesEnabled = sourceConfig.get<bool>();
+    else if (sourceConfig.is_object()) sourcesEnabled = sourceConfig.value("enabled", false);
+    spec["memorySources"] = effectiveMemoryEnabled && sourcesEnabled;
+    json sourcePaths = json::array();
+    if (sourceConfig.is_object() && sourceConfig.contains("paths") &&
+        sourceConfig["paths"].is_array()) {
+        for (const auto& path : sourceConfig["paths"]) {
+            if (path.is_string() && !path.get<std::string>().empty()) sourcePaths.push_back(path);
+        }
+    }
+    spec["memorySourcePaths"] = sourcePaths;
+    spec["memorySourceMaxFileBytes"] = static_cast<long long>(std::max(
+        1024, std::min(16 * 1024 * 1024, sourceConfig.is_object()
+            ? sourceConfig.value("maxFileBytes", 524288) : 524288)));
+    spec["memorySourceMaxFiles"] = static_cast<long long>(std::max(
+        1, std::min(5000, sourceConfig.is_object()
+            ? sourceConfig.value("maxFiles", 2000) : 2000)));
     const json memoryDomains = memoryThemesFor(node, memory);
     if (!memoryDomains.empty()) spec["memoryDomains"] = memoryDomains;
     else if (effectiveMemoryEnabled) spec["memoryDomains"] = json::array({node.id});
