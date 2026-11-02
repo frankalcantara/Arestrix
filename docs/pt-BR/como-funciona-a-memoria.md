@@ -265,7 +265,7 @@ aprovação, `input_hash` distintos, pares (`task_type`, `intent_template_hash`)
 taxa de citação, taxa de reuso e tokens por execução. A taxa de reuso é a fração
 das execuções que citam um item já citado numa execução anterior do mesmo
 `task_type`. O resultado aponta uma das decisões: `continue_full`,
-`continue_base_knowledge` (E11–E14, caminhos adiados), `fix_validators` ou
+`continue_base_knowledge` (E11-E14), `fix_validators` ou
 `insufficient_data`. Os limiares usados ficam gravados no JSON.
 
 ### Fontes locais e trechos
@@ -321,6 +321,27 @@ As facetas usam o papel **simétrico** dos embeddings, com prefixo próprio
 fingerprint diferente do papel de recuperação. `memory_search` aceita filtro por
 lentes, derivadas dos temas do vértice, e devolve apenas as arestas daquela
 lente.
+
+### Caminhos canônicos
+
+Com `globalDefaults.memory.paths` ligado, a manutenção consolida traços aprovados
+em caminhos canônicos de afirmações. O consolidador é idempotente por `trace_id`:
+reprocessar o mesmo traço não altera estatísticas. Um caminho nasce como
+`candidate` e só fica `active` depois de um número configurável de entradas
+distintas (`minDistinctInputs`, padrão 3).
+
+A utilidade usa a média Beta com prior (`(sucessos + prior) / (sucessos +
+falhas + 2·prior)`) e decaimento temporal opcional (`mu`). O prior impede que um
+único sucesso chegue a 1,0; traços fora de ordem não geram decaimento negativo.
+Quando uma afirmação dependente é retratada, expira ou deixa de estar ativa, o
+caminho correspondente é suspenso na mesma manutenção. Se todas as dependências
+voltarem a vigorar, ele é reativado; caso contrário, pode ser retirado.
+
+```bash
+arestrix-cli memory paths list --project . --json
+arestrix-cli memory paths show <path> --project . --json
+arestrix-cli memory paths retire <path> --project .
+```
 
 ### Traços de recuperação
 

@@ -262,7 +262,7 @@ approval rate, distinct `input_hash` values, (`task_type`,
 `intent_template_hash`) pairs, citation rate, reuse rate and tokens per
 execution. Reuse is the fraction of executions that cite an item already cited
 by an earlier execution of the same `task_type`. The result selects one of
-`continue_full`, `continue_base_knowledge` (E11–E14, paths deferred),
+`continue_full`, `continue_base_knowledge` (E11-E14),
 `fix_validators` or `insufficient_data`. The thresholds used are stored in the
 JSON.
 
@@ -318,6 +318,27 @@ Facets use the **symmetric** embedding role, with its own prefix (EmbeddingGemma
 `task: sentence similarity`; Qwen3: similarity instruction) and a fingerprint
 distinct from retrieval. `memory_search` accepts a lens filter derived from the
 vertex themes and returns only edges belonging to that lens.
+
+### Canonical paths
+
+With `globalDefaults.memory.paths` enabled, maintenance consolidates approved
+traces into canonical claim paths. Consolidation is idempotent by `trace_id`:
+reprocessing the same trace leaves statistics unchanged. A path starts as
+`candidate` and only becomes `active` after a configurable number of distinct
+inputs (`minDistinctInputs`, default 3).
+
+Utility uses the Beta mean with a prior (`(successes + prior) / (successes +
+failures + 2·prior)`) and optional time decay (`mu`). The prior prevents a single
+success from reaching 1.0; out-of-order traces never produce negative decay.
+When a dependent claim is retracted, expires or stops being active, the path is
+suspended in the same maintenance pass. If all dependencies become valid again,
+it is reactivated; otherwise it can be retired.
+
+```bash
+arestrix-cli memory paths list --project . --json
+arestrix-cli memory paths show <path> --project . --json
+arestrix-cli memory paths retire <path> --project .
+```
 
 ### Retrieval traces
 
