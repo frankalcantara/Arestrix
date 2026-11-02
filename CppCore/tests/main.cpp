@@ -57,6 +57,7 @@
 #include "assistant/AssistantTools.hpp"
 #include "assistant/GraphDocument.hpp"
 #include "rt/ArtifactValidation.hpp"
+#include "rt/ContextCompactor.hpp"
 #include "rt/ModelClient.hpp"
 #include "rt/ModelRouter.hpp"
 #include "rt/MemoryFailure.hpp"
@@ -1645,6 +1646,54 @@ TEST(generator_emits_context_compression_section) {
     graphPlain.fromJson(schema);
     const std::string plainSrc = TaskflowGenerator::generateSource(graphPlain);
     CHECK(plainSrc.find("\"compression\":{}") != std::string::npos);
+}
+
+TEST(generator_emits_memory_context_compaction_switch) {
+    using taskforge::compiler::TaskflowGenerator;
+    auto port = [](const char* id, const char* name, const char* dir, const char* type) {
+        return json{{"id", id}, {"name", name}, {"direction", dir}, {"type", type}};
+    };
+    const json compaction = json{{"enabled", true}, {"keepRecentMessages", 3},
+                                 {"minChars", 250}, {"maxSummaryChars", 900},
+                                 {"maxSummaryTokens", 220}, {"maxItems", 8}};
+    const json memory = json{{"mode", "consult"}, {"contextCompaction", compaction}};
+    const json agentSettings = json{{"inheritMemory", false}, {"memory", memory}};
+    json schema = {
+        {"version", "1.0.0"},
+        {"metadata", {{"graphName", "compaction"}, {"description", ""},
+                      {"targetStandard", "C++20"},
+                      {"compilerConfig", {{"compiler", "msvc"}, {"cppStandard", "C++20"},
+                                          {"buildSystem", "cmake"},
+                                          {"taskflowIncludePath", "third_party/taskflow"},
+                                          {"outputBinaryName", "c"},
+                                          {"enableOpenMP", false}, {"enableCuda", false},
+                                          {"extraFlags", json::array()}}},
+                      {"version", "1"}, {"projectId", "proj-compaction"},
+                      {"globalDefaults", json::object()}}},
+        {"nodes", json::array({
+            json{{"id", "agente"}, {"label", "Agente"}, {"type", "agent"},
+                 {"position", {{"x", 0}, {"y", 0}}},
+                 {"inputs", json::array({port("agente_in", "in", "input", "flow")})},
+                 {"outputs", json::array({port("agente_out", "out", "output", "flow")})},
+                 {"parameters", json::object()}, {"customLambdaBody", ""},
+                 {"agentSettings", agentSettings}}})},
+        {"edges", json::array()}};
+    taskforge::core::Graph graph;
+    graph.fromJson(schema);
+    const std::string src = TaskflowGenerator::generateSource(graph);
+    CHECK(src.find("\"memoryContextCompaction\":true") != std::string::npos);
+    CHECK(src.find("\"memoryCompactionKeepRecent\":3") != std::string::npos);
+    CHECK(src.find("\"memoryCompactionMinChars\":250") != std::string::npos);
+    CHECK(src.find("\"memoryCompactionMaxChars\":900") != std::string::npos);
+    CHECK(src.find("\"memoryCompactionMaxTokens\":220") != std::string::npos);
+    CHECK(src.find("\"memoryCompactionMaxItems\":8") != std::string::npos);
+
+    // Sem contextCompaction, o interruptor chega desligado ao runtime.
+    schema["nodes"][0]["agentSettings"]["memory"] = json{{"mode", "consult"}};
+    taskforge::core::Graph plain;
+    plain.fromJson(schema);
+    const std::string plainSrc = TaskflowGenerator::generateSource(plain);
+    CHECK(plainSrc.find("\"memoryContextCompaction\":false") != std::string::npos);
 }
 
 TEST(memory_store_working_lessons_temporal_and_usage) {
@@ -6075,6 +6124,326 @@ TEST(memory_service_brief_respects_budget) {
     CHECK(zeroInfo.chars == 0 && zeroInfo.estimatedTokens == 0 && !zeroInfo.truncated);
     CHECK(zeroInfo.lessonIds.empty() && zeroInfo.workingKeys.empty());
     memory.closeProject("brief-test");
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_context_compaction_switch_off_keeps_messages_byte_identical) {
+    using taskforge::rt::ChatMessage;
+    using taskforge::rt::CompactionConfig;
+    using taskforge::rt::ContextCompactor;
+
+    std::vector<ChatMessage> messages;
+    ChatMessage task;
+    task.role = "user";
+    task.text = std::string(400, 't');
+    messages.push_back(task);
+    for (int i = 0; i < 6; ++i) {
+        ChatMessage m;
+        m.role = "assistant";
+        m.text = std::string(400, static_cast<char>('a' + i));
+        messages.push_back(m);
+    }
+    CompactionConfig config;
+    config.enabled = false;
+    ContextCompactor compactor(config, [](const std::string&) {
+        return std::vector<taskforge::rt::DurableMemoryItem>{
+            {"lsn_off", "lesson", "regra que nao deve ser usada"}};
+    });
+    const auto result = compactor.compact(messages);
+    CHECK(!result.applied);
+    CHECK(result.fallbackReason == "switch_off");
+    CHECK(result.messages.size() == messages.size());
+    for (size_t i = 0; i < messages.size(); ++i) {
+        CHECK(result.messages[i].toJson().dump() == messages[i].toJson().dump());
+    }
+}
+
+TEST(memory_context_compaction_preserves_task_and_recent_messages) {
+    using taskforge::rt::ChatMessage;
+    using taskforge::rt::CompactionConfig;
+    using taskforge::rt::ContextCompactor;
+
+    std::vector<ChatMessage> messages;
+    ChatMessage task;
+    task.role = "user";
+    task.text = "TAREFA ATUAL";
+    messages.push_back(task);
+    for (int i = 0; i < 8; ++i) {
+        ChatMessage m;
+        m.role = "assistant";
+        m.text = "nota antiga " + std::to_string(i) + " " + std::string(300, 'x');
+        messages.push_back(m);
+    }
+    CompactionConfig config;
+    config.enabled = true;
+    config.keepRecentMessages = 3;
+    config.minHistoryChars = 100;
+    config.maxSummaryChars = 1200;
+    config.maxSummaryTokens = 300;
+    ContextCompactor compactor(config, [](const std::string&) {
+        return std::vector<taskforge::rt::DurableMemoryItem>{
+            {"lsn_task", "lesson", "regra duravel do projeto"}};
+    });
+    const auto result = compactor.compact(messages);
+    CHECK(result.applied);
+    CHECK(result.messages.size() == 5);   // task + bloco + 3 recentes
+    CHECK(result.messages.front().text == "TAREFA ATUAL");
+    CHECK(result.messages[1].text.find("DERIVED SUMMARY") != std::string::npos);
+    CHECK(result.messages[2].text == messages[6].text);
+    CHECK(result.messages[3].text == messages[7].text);
+    CHECK(result.messages[4].text == messages[8].text);
+    CHECK(result.compactedTurns == 5);
+}
+
+TEST(memory_context_compaction_preserves_system_prefix) {
+    using taskforge::rt::ChatMessage;
+    using taskforge::rt::CompactionConfig;
+    using taskforge::rt::ContextCompactor;
+
+    std::vector<ChatMessage> messages;
+    ChatMessage system;
+    system.role = "system";
+    system.text = "SYSTEM PREFIX";
+    messages.push_back(system);
+    ChatMessage task;
+    task.role = "user";
+    task.text = "TAREFA";
+    messages.push_back(task);
+    for (int i = 0; i < 6; ++i) {
+        ChatMessage m;
+        m.role = "assistant";
+        m.text = std::string(500, 's');
+        messages.push_back(m);
+    }
+    CompactionConfig config;
+    config.enabled = true;
+    config.keepRecentMessages = 2;
+    config.minHistoryChars = 100;
+    config.maxSummaryChars = 900;
+    config.maxSummaryTokens = 225;
+    ContextCompactor compactor(config, [](const std::string&) {
+        return std::vector<taskforge::rt::DurableMemoryItem>{
+            {"lsn_system", "lesson", "regra do projeto"}};
+    });
+    const auto result = compactor.compact(messages);
+    CHECK(result.applied);
+    CHECK(result.messages.size() == 5);   // system + task + bloco + 2 recentes
+    CHECK(result.messages[0].role == "system");
+    CHECK(result.messages[0].text == "SYSTEM PREFIX");
+    CHECK(result.messages[1].text == "TAREFA");
+    CHECK(result.messages[2].text.find("DERIVED SUMMARY") != std::string::npos);
+    CHECK(result.messages[3].text == messages[6].text);
+    CHECK(result.messages[4].text == messages[7].text);
+}
+
+TEST(memory_context_compaction_falls_back_without_memory) {
+    using taskforge::rt::ChatMessage;
+    using taskforge::rt::CompactionConfig;
+    using taskforge::rt::ContextCompactor;
+
+    std::vector<ChatMessage> messages;
+    ChatMessage task;
+    task.role = "user";
+    task.text = "tarefa";
+    messages.push_back(task);
+    for (int i = 0; i < 6; ++i) {
+        ChatMessage m;
+        m.role = "assistant";
+        m.text = std::string(500, 'y');
+        messages.push_back(m);
+    }
+    CompactionConfig config;
+    config.enabled = true;
+    config.keepRecentMessages = 2;
+    config.minHistoryChars = 100;
+    ContextCompactor compactor(config, [](const std::string&) {
+        return std::vector<taskforge::rt::DurableMemoryItem>{};
+    });
+    const auto result = compactor.compact(messages);
+    CHECK(!result.applied);
+    CHECK(result.fallbackReason == "insufficient_memory");
+    CHECK(result.messages.size() == messages.size());
+}
+
+TEST(memory_context_compaction_provider_failure_keeps_original) {
+    using taskforge::rt::ChatMessage;
+    using taskforge::rt::CompactionConfig;
+    using taskforge::rt::ContextCompactor;
+
+    std::vector<ChatMessage> messages;
+    ChatMessage task;
+    task.role = "user";
+    task.text = "tarefa";
+    messages.push_back(task);
+    for (int i = 0; i < 6; ++i) {
+        ChatMessage m;
+        m.role = "assistant";
+        m.text = std::string(500, 'z');
+        messages.push_back(m);
+    }
+    CompactionConfig config;
+    config.enabled = true;
+    config.keepRecentMessages = 2;
+    config.minHistoryChars = 100;
+    ContextCompactor compactor(config, [](const std::string&) -> std::vector<taskforge::rt::DurableMemoryItem> {
+        throw std::runtime_error("store indisponivel");
+    });
+    const auto result = compactor.compact(messages);
+    CHECK(!result.applied);
+    CHECK(result.fallbackReason.rfind("provider_error", 0) == 0);
+    CHECK(result.messages.size() == messages.size());
+}
+
+TEST(memory_context_compaction_preserves_memo_ids_and_budget) {
+    using taskforge::rt::ChatMessage;
+    using taskforge::rt::CompactionConfig;
+    using taskforge::rt::ContextCompactor;
+
+    std::vector<ChatMessage> messages;
+    ChatMessage task;
+    task.role = "user";
+    task.text = "tarefa";
+    messages.push_back(task);
+    for (int i = 0; i < 6; ++i) {
+        ChatMessage m;
+        m.role = "assistant";
+        m.text = std::string(500, 'q');
+        messages.push_back(m);
+    }
+    CompactionConfig config;
+    config.enabled = true;
+    config.keepRecentMessages = 2;
+    config.minHistoryChars = 100;
+    config.maxSummaryChars = 700;
+    config.maxSummaryTokens = 175;
+    ContextCompactor compactor(config, [](const std::string&) {
+        return std::vector<taskforge::rt::DurableMemoryItem>{
+            {"lsn_memo", "lesson", "regra citavel"},
+            {"psg_memo", "passage", "trecho citavel"}};
+    });
+    const auto result = compactor.compact(messages);
+    CHECK(result.applied);
+    CHECK(result.messages[1].text.find("[MEMO:lsn_memo]") != std::string::npos);
+    CHECK(result.messages[1].text.find("[MEMO:psg_memo]") != std::string::npos);
+    CHECK(result.messages[1].text.size() <= 700);
+    CHECK(result.messages[1].text.size() <= 175 * 4);
+    CHECK(result.memoryIds.size() == 2);
+    CHECK(result.originalChars > result.compactedChars);
+    CHECK(result.compactedChars == result.messages[1].text.size());
+}
+
+TEST(memory_context_compaction_never_splits_tool_call_pair) {
+    using taskforge::rt::ChatMessage;
+    using taskforge::rt::CompactionConfig;
+    using taskforge::rt::ContextCompactor;
+    using taskforge::rt::ChatToolCall;
+
+    auto toolCall = [](const std::string& id) {
+        ChatToolCall call;
+        call.id = id;
+        call.name = "write";
+        call.args = taskforge::Json{{"path", "artefatos/" + id + ".txt"}};
+        return call;
+    };
+    std::vector<ChatMessage> messages;
+    ChatMessage task;
+    task.role = "user";
+    task.text = "tarefa";
+    messages.push_back(task);
+    for (int i = 0; i < 2; ++i) {
+        ChatMessage assistant;
+        assistant.role = "assistant";
+        assistant.text = "passo " + std::to_string(i);
+        assistant.toolCalls.push_back(toolCall("c" + std::to_string(i)));
+        messages.push_back(assistant);
+        ChatMessage result;
+        result.role = "tool";
+        result.toolCallId = "c" + std::to_string(i);
+        result.text = std::string(400, 'r');
+        messages.push_back(result);
+    }
+    CompactionConfig config;
+    config.enabled = true;
+    config.keepRecentMessages = 2;
+    config.minHistoryChars = 100;
+    config.maxSummaryChars = 800;
+    config.maxSummaryTokens = 200;
+    ContextCompactor compactor(config, [](const std::string&) {
+        return std::vector<taskforge::rt::DurableMemoryItem>{
+            {"lsn_pair", "lesson", "regra de pareamento"}};
+    });
+    const auto result = compactor.compact(messages);
+    CHECK(result.applied);
+    CHECK(result.messages.front().text == "tarefa");
+    for (size_t i = 0; i < result.messages.size(); ++i) {
+        if (result.messages[i].role != "tool") continue;
+        CHECK(i > 0);
+        CHECK(result.messages[i - 1].role == "assistant");
+        CHECK(!result.messages[i - 1].toolCalls.empty());
+    }
+}
+
+TEST(memory_context_compaction_does_not_change_knowledge_or_path_state) {
+    using taskforge::memory::MemoryService;
+    using taskforge::rt::ChatMessage;
+    using taskforge::rt::CompactionConfig;
+    using taskforge::rt::ContextCompactor;
+
+    const fs::path dir = makeTempDir("context-compaction-invariants");
+    const std::string projectId = "compaction-invariants";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (dir / "memory.db").string()));
+    CHECK(!memory.recordLesson(projectId, "long", "trigger", "O codigo e ORION-42").empty());
+    auto* store = memory.store(projectId);
+    CHECK(store != nullptr);
+    const std::string scope = "project:" + projectId;
+    CHECK(!store->ensureNode(scope, "compaction-a", "entity", "Alpha").empty());
+    CHECK(!store->ensureNode(scope, "compaction-b", "entity", "Beta").empty());
+    const std::string edgeId = store->recordEdge(scope, "compaction-a", "compaction-b",
+                                                 "relacao", taskforge::Json(), "", "", 0.8,
+                                                 "active", "claim", "test");
+    CHECK(!edgeId.empty());
+    const std::string pathId = store->upsertPath(scope, "long", "sig", {edgeId}, "intent", "{}");
+    CHECK(!pathId.empty());
+
+    const long long versionBefore = memory.knowledgeVersion(projectId);
+    auto edgeStatus = [&]() {
+        taskforge::memory::MemoryEdgeRecord edge;
+        return store->getEdge(scope, edgeId, edge) ? edge.status : std::string();
+    };
+    const std::string edgeStatusBefore = edgeStatus();
+    const std::string pathStateBefore = memory.getPath(projectId, pathId).value("state", std::string());
+
+    std::vector<ChatMessage> messages;
+    ChatMessage task;
+    task.role = "user";
+    task.text = "tarefa longa";
+    messages.push_back(task);
+    for (int i = 0; i < 6; ++i) {
+        ChatMessage m;
+        m.role = "assistant";
+        m.text = "ORION-42 " + std::string(500, 'k');
+        messages.push_back(m);
+    }
+    CompactionConfig config;
+    config.enabled = true;
+    config.keepRecentMessages = 2;
+    config.minHistoryChars = 100;
+    config.maxSummaryChars = 1200;
+    config.maxSummaryTokens = 300;
+    ContextCompactor compactor(config, [&](const std::string& query) {
+        return taskforge::rt::memoryDurableItems(memory, projectId, {"long"}, "long", query);
+    });
+    const auto result = compactor.compact(messages);
+    CHECK(result.applied);
+    CHECK(!result.memoryIds.empty());
+    CHECK(memory.knowledgeVersion(projectId) == versionBefore);
+    CHECK(edgeStatus() == edgeStatusBefore);
+    CHECK(memory.getPath(projectId, pathId).value("state", std::string()) == pathStateBefore);
+
+    memory.closeProject(projectId);
     std::error_code ec;
     fs::remove_all(dir, ec);
 }

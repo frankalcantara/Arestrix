@@ -10,6 +10,17 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ### Added
 
+- **Memory-backed context compaction:** `memory.contextCompaction` (off by
+  default) lets the agent replace finished turns with a deterministic derived
+  block that keeps `[MEMO:<id>]` citations from active lessons, claims, paths,
+  facets, cited passages and validated traces. The switch preserves the current
+  task, the system prompt and the last N messages, never splits a tool-call pair,
+  sanitizes text before summarizing, and falls back to the original history on
+  empty memory, provider error or budget overflow. The trace records before/after
+  characters and tokens, compacted turns, memory ids and the fallback reason. Real
+  DeepSeek A/B: ON `ORION-42` with 13,780 prompt tokens; compacted `ORION-42` with
+  12,884 (6.5% fewer; 5.5–7.1% across repeated runs), same memory id, no
+  knowledge writes.
 - **Prompt-reduction validation:** `scripts/e2e_memory_prompt_reduction.py`
   compares a long-context prompt against a short prompt backed by memory. With
   the same answer quality (`ORION-42`), the memory arm used 3.228 prompt tokens

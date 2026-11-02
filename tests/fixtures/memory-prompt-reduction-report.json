@@ -3,9 +3,9 @@
   "model": "deepseek-chat",
   "fixture": "tests\\fixtures\\memory-prompt-reduction",
   "expectedCode": "ORION-42",
-  "totalTokens": 28109,
+  "totalTokens": 28085,
   "promptRatioMemoryVsFull": 0.1306,
-  "maxTotalTokens": 30000,
+  "maxTotalTokens": 35000,
   "checks": {
     "fullExitZero": true,
     "memoryExitZero": true,
@@ -20,7 +20,7 @@
   "full": {
     "arm": "full",
     "exitCode": 0,
-    "elapsedSeconds": 14.09,
+    "elapsedSeconds": 13.64,
     "final": "ORION-42",
     "usage": {
       "calls": 2,
@@ -33,26 +33,26 @@
       "used": 0
     },
     "ok": true,
-    "stdoutTail": "y\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"status\":\"tool_call\",\"toolArgs\":\"{\\\"content\\\":\\\"ORION-42\\\",\\\"path\\\":\\\"artefatos/final.txt\\\"}\",\"toolName\":\"write\"},\"timestamp\":1793630618929,\"type\":\"tool_start\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"status\":\"running\",\"toolName\":\"write\",\"toolSuccess\":true},\"timestamp\":1793630618931,\"type\":\"tool_end\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"detail\":\"Turno 2\",\"status\":\"thinking\"},\"timestamp\":1793630618931,\"type\":\"status\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"logLine\":\"ORION-42\"},\"timestamp\":1793630620388,\"type\":\"log\"},\"type\":\"agent:telemetry\"}\n[Agent Agente_Prompt] concluido (tokens: entrada=24718, saida=64, retries=0)\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"cache_write_tokens\":0,\"cached_tokens\":12416,\"calls\":2,\"completion_tokens\":64,\"compression_blocks\":0,\"compression_kinds\":\"\",\"compression_tokens_after\":0,\"compression_tokens_before\":0,\"memory_context_chars\":0,\"memory_enabled\":false,\"prompt_tokens\":24718,\"retries\":0,\"total_tokens\":24782},\"timestamp\":1793630620390,\"type\":\"usage\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"detail\":\"Agente_Prompt\",\"status\":\"settled\"},\"timestamp\":1793630620394,\"type\":\"status\"},\"type\":\"agent:telemetry\"}\n>>> Pipeline concluido com sucesso em 2983 ms.\n[OK] Pipeline concluido em 14025 ms\n",
+    "stdoutTail": "y\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"status\":\"tool_call\",\"toolArgs\":\"{\\\"content\\\":\\\"ORION-42\\\",\\\"path\\\":\\\"artefatos/final.txt\\\"}\",\"toolName\":\"write\"},\"timestamp\":1793638888428,\"type\":\"tool_start\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"status\":\"running\",\"toolName\":\"write\",\"toolSuccess\":true},\"timestamp\":1793638888431,\"type\":\"tool_end\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"detail\":\"Turno 2\",\"status\":\"thinking\"},\"timestamp\":1793638888431,\"type\":\"status\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"logLine\":\"ORION-42\"},\"timestamp\":1793638889657,\"type\":\"log\"},\"type\":\"agent:telemetry\"}\n[Agent Agente_Prompt] concluido (tokens: entrada=24718, saida=64, retries=0)\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"cache_write_tokens\":0,\"cached_tokens\":24320,\"calls\":2,\"completion_tokens\":64,\"compression_blocks\":0,\"compression_kinds\":\"\",\"compression_tokens_after\":0,\"compression_tokens_before\":0,\"memory_context_chars\":0,\"memory_enabled\":false,\"prompt_tokens\":24718,\"retries\":0,\"total_tokens\":24782},\"timestamp\":1793638889660,\"type\":\"usage\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"detail\":\"Agente_Prompt\",\"status\":\"settled\"},\"timestamp\":1793638889664,\"type\":\"status\"},\"type\":\"agent:telemetry\"}\n>>> Pipeline concluido com sucesso em 2529 ms.\n[OK] Pipeline concluido em 13576 ms\n",
     "stderrTail": ""
   },
   "memory": {
     "arm": "memory",
     "exitCode": 0,
-    "elapsedSeconds": 13.78,
+    "elapsedSeconds": 15.52,
     "final": "ORION-42",
     "usage": {
       "calls": 2,
       "promptTokens": 3228,
-      "completionTokens": 99,
-      "totalTokens": 3327,
+      "completionTokens": 75,
+      "totalTokens": 3303,
       "briefChars": 2592,
       "injected": 6,
       "consulted": 0,
       "used": 1
     },
     "ok": true,
-    "stdoutTail": "ent\\\":\\\"ORION-42\\\",\\\"path\\\":\\\"artefatos/final.txt\\\"}\",\"toolName\":\"write\"},\"timestamp\":1793630633326,\"type\":\"tool_start\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"status\":\"running\",\"toolName\":\"write\",\"toolSuccess\":true},\"timestamp\":1793630633329,\"type\":\"tool_end\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"detail\":\"Turno 2\",\"status\":\"thinking\"},\"timestamp\":1793630633329,\"type\":\"status\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"logLine\":\"ORION-42\\n\\n(Fonte: [MEMO:prompt-manual-00]; artefato gravado em `artefatos/final.txt` contendo apenas o código.)\"},\"timestamp\":1793630634356,\"type\":\"log\"},\"type\":\"agent:telemetry\"}\n[Agent Agente_Prompt] concluido (tokens: entrada=3228, saida=99, retries=0)\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"cache_write_tokens\":0,\"cached_tokens\":1408,\"calls\":2,\"completion_tokens\":99,\"compression_blocks\":0,\"compression_kinds\":\"\",\"compression_tokens_after\":0,\"compression_tokens_before\":0,\"memory_context_chars\":2592,\"memory_enabled\":true,\"prompt_tokens\":3228,\"retries\":0,\"total_tokens\":3327},\"timestamp\":1793630634358,\"type\":\"usage\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"detail\":\"Agente_Prompt\",\"status\":\"settled\"},\"timestamp\":1793630634364,\"type\":\"status\"},\"type\":\"agent:telemetry\"}\n>>> Pipeline concluido com sucesso em 2426 ms.\n[OK] Pipeline concluido em 13733 ms\n",
+    "stdoutTail": "nt\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"status\":\"tool_call\",\"toolArgs\":\"{\\\"content\\\":\\\"ORION-42\\\",\\\"path\\\":\\\"artefatos/final.txt\\\"}\",\"toolName\":\"write\"},\"timestamp\":1793638904058,\"type\":\"tool_start\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"status\":\"running\",\"toolName\":\"write\",\"toolSuccess\":true},\"timestamp\":1793638904060,\"type\":\"tool_end\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"detail\":\"Turno 2\",\"status\":\"thinking\"},\"timestamp\":1793638904060,\"type\":\"status\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"logLine\":\"ORION-42 [MEMO:prompt-manual-00]\"},\"timestamp\":1793638905408,\"type\":\"log\"},\"type\":\"agent:telemetry\"}\n[Agent Agente_Prompt] concluido (tokens: entrada=3228, saida=75, retries=0)\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"cache_write_tokens\":0,\"cached_tokens\":2816,\"calls\":2,\"completion_tokens\":75,\"compression_blocks\":0,\"compression_kinds\":\"\",\"compression_tokens_after\":0,\"compression_tokens_before\":0,\"memory_context_chars\":2592,\"memory_enabled\":true,\"prompt_tokens\":3228,\"retries\":0,\"total_tokens\":3303},\"timestamp\":1793638905410,\"type\":\"usage\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_prompt\",\"payload\":{\"detail\":\"Agente_Prompt\",\"status\":\"settled\"},\"timestamp\":1793638905415,\"type\":\"status\"},\"type\":\"agent:telemetry\"}\n>>> Pipeline concluido com sucesso em 2724 ms.\n[OK] Pipeline concluido em 15443 ms\n",
     "stderrTail": ""
   }
 }

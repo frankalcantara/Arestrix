@@ -51,7 +51,9 @@ C++ (`CppCore/tests/main.cpp`):
 - âncoras, travessia, orçamento e cobertura;
 - roteador de modelos e privacidade;
 - pontes e deduplicação;
-- ferramentas do assistente e riscos de confirmação.
+- ferramentas do assistente e riscos de confirmação;
+- compactação de contexto: switch off byte a byte, janela recente, fallback,
+  orçamento, ids `[MEMO:*]` e pareamento `assistant/tool`.
 
 TypeScript/Vitest:
 
@@ -73,7 +75,12 @@ Testes determinísticos que não dependem de um caso específico:
 - `off`/`candidate`/`suspended` nunca são servidos como caminho ativo;
 - bridge hypothesis nunca cria aresta sem decisão explícita;
 - `localOnly` nunca escolhe modelo remoto;
-- nenhum segredo conhecido aparece no brief, telemetria ou proposta.
+- nenhum segredo conhecido aparece no brief, telemetria ou proposta;
+- compactação de contexto não altera `knowledge_version`, estado de claim,
+  suporte de path nem evidência;
+- compactação desligada devolve as mensagens originais sem alteração;
+- o bloco compactado respeita o orçamento de caracteres/tokens e só é aplicado
+  quando é menor que o material removido.
 
 ### L3 — Integração determinística
 
@@ -94,7 +101,8 @@ Cobrem:
 - executor A/B com banco congelado e dois braços;
 - variações lexical, híbrida com fallback, facetas+travessia,
   caminhos+serviço e roteamento shadow;
-- linha de base congelada e schema fingerprint.
+- linha de base congelada e schema fingerprint;
+- compactação de contexto no runtime: fallback, orçamento e trace.
 
 ### L4 — Matriz de plataforma
 
@@ -130,12 +138,17 @@ py -3 scripts/e2e_memory_deepseek_long.py --keep
 ```
 
 O fixture `tests/fixtures/memory-deepseek-long` roda o mesmo agente com memória
-ON e OFF, seis gravações, uma busca e uma resposta final. A memória ON responde
-`ORION-42`; a OFF responde `UNKNOWN`. O script exige `DEEPSEEK_API_KEY`, limita o
+ON, OFF e com compactação. A memória ON responde `ORION-42`; a OFF responde
+`UNKNOWN`. O braço `compacted` liga `memory.contextCompaction`, mantém o mesmo
+fixture, modelo, pergunta e teto, e exige resposta correta, os mesmos ids de
+memória e prompt menor que o braço ON. O script exige `DEEPSEEK_API_KEY`, limita o
 total de tokens e grava `tests/fixtures/memory-deepseek-long-report.json`.
 
-Execução registrada: **22.639 tokens** (ON 14.164 / OFF 8.475), nove chamadas no
-braço ON e oito no OFF; todos os checks passaram.
+Execução registrada: **36.259 tokens** no total; ON 14.253 (13.780 de prompt),
+OFF 8.602 e compacted 13.404 (12.884 de prompt, **6,5% menos** que ON). Os três
+braços terminaram com exit 0; compacted respondeu `ORION-42` e preservou
+`deepseek-long-lesson`, com 18 turnos compactados no trace e nenhum fallback
+final.
 
 Teste de substituição de contexto:
 
@@ -195,6 +208,7 @@ Metas iniciais, sujeitas a calibração com a máquina de referência:
 | Serviço de caminhos | x | x | x |  | x | x |
 | Travessia e cobertura | x | x | x |  | x | x |
 | Roteamento de modelos | x | x |  | x | x | x |
+| Compactação de contexto | x | x | x | x |  | x |
 | Pontes | x | x | x |  |  | x |
 | Assistente do Studio | x | x |  |  |  | x |
 | CLI e migração | x |  | x |  |  | x |
@@ -286,8 +300,11 @@ são proibidos.
 
 ## 9. Lacunas atuais
 
-A pendência de compactação de histórico usando a memória existente está
-registrada em [memory-pending.md](../en/memory-pending.md).
+A compactação de histórico usando a memória existente foi implementada atrás de
+`memory.contextCompaction` (off por padrão) e validada no fixture DeepSeek. Falta
+uma medição A/B mais ampla antes de promover o switch. A pendência de migração
+para o módulo Mnemosyne continua registrada em
+[memory-pending.md](../en/memory-pending.md).
 
 1. Validação com provedores reais ainda não foi executada.
 2. Não há runner macOS na matriz.

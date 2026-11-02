@@ -494,6 +494,17 @@ export class GlobalDefaultsModal {
                        value="${defaults.memory?.contextBudgetTokens ?? 800}" />
               </div>
 
+              <div class="form-group" style="margin-top: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <input type="checkbox" id="def-memory-context-compaction"
+                    ${(defaults.memory?.contextCompaction === true ||
+                       (typeof defaults.memory?.contextCompaction === 'object' &&
+                        !!defaults.memory?.contextCompaction?.enabled)) ? 'checked' : ''} />
+                  <span>${t('global_defaults.memory_context_compaction_label', 'Compactar histórico com memória (experimental)')}</span>
+                </label>
+                <div class="form-hint">${t('global_defaults.memory_context_compaction_hint', 'Substitui turnos antigos por um resumo derivado com referências [MEMO:<id>]. Desligado por padrão; falhas mantêm o histórico original.')}</div>
+              </div>
+
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
                 <div class="form-group">
                   <label class="form-label" for="def-memory-max-lessons">${t('global_defaults.memory_max_lessons_label')}</label>
@@ -1642,6 +1653,11 @@ export class GlobalDefaultsModal {
     const memDefaultTheme = (this.overlay.querySelector('#def-memory-default-theme') as HTMLInputElement)?.value.trim() || '';
     const memBudget = Math.max(0, Math.min(32000,
       Math.floor(Number((this.overlay.querySelector('#def-memory-budget') as HTMLInputElement)?.value) || 800)));
+    const memContextCompaction =
+      (this.overlay.querySelector('#def-memory-context-compaction') as HTMLInputElement)?.checked || false;
+    const existingCompaction = this.graph.getGlobalDefaults().memory?.contextCompaction;
+    const compactionOptions = existingCompaction && typeof existingCompaction === 'object'
+      ? existingCompaction : {};
     const memMaxLessons = Math.max(1, Math.min(500,
       Math.floor(Number((this.overlay.querySelector('#def-memory-max-lessons') as HTMLInputElement)?.value) || 20)));
     const memMaxLessonChars = Math.max(100, Math.min(20000,
@@ -1726,6 +1742,7 @@ export class GlobalDefaultsModal {
         allowedKeys: [],
         writeKeys: [],
         contextBudgetTokens: memBudget,
+        contextCompaction: { ...compactionOptions, enabled: memContextCompaction },
         maxLessonsPerRun: memMaxLessons,
         maxLessonChars: memMaxLessonChars,
         retentionDays: memRetentionDays,
