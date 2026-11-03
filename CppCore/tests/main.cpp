@@ -32,6 +32,8 @@
 #include "memory/MemoryInstitutionService.hpp"
 #include "memory/MemoryPlaybookCompiler.hpp"
 #include "memory/MemoryPredicates.hpp"
+#include "memory/MemoryCatalog.hpp"
+#include "memory/MemoryCanonicalizer.hpp"
 #include "memory/MemoryAbProtocol.hpp"
 #include "memory/MemoryRanker.hpp"
 #include "memory/EmbeddingProvider.hpp"
@@ -5567,7 +5569,10 @@ TEST(memory_predicate_cardinality_controls_fact_overwrite) {
     namespace fs = std::filesystem;
 
     CHECK(isSingleValuedPredicate("PREFERS"));
+    CHECK(!isSingleValuedPredicate("default_model"));
+    taskforge::memory::MemoryCatalog::instance().setMode("off");
     CHECK(isSingleValuedPredicate("default_model"));
+    taskforge::memory::MemoryCatalog::instance().setMode("warn");
     CHECK(isMultiValuedPredicate("USES"));
     CHECK(isMultiValuedPredicate("PRODUCES"));
 
@@ -5579,10 +5584,12 @@ TEST(memory_predicate_cardinality_controls_fact_overwrite) {
     CHECK(store.ensureScope(scope, "project", "", "predicates"));
 
     auto promoteFact = [&](const std::string& subject, const std::string& predicate,
-                           const std::string& object) {
+                           const std::string& object,
+                           const taskforge::Json& qualifiers = taskforge::Json::object()) {
         const std::string proposal = store.recordProposal(
             scope, "fact",
-            taskforge::Json{{"subject", subject}, {"predicate", predicate}, {"object", object}},
+            taskforge::Json{{"subject", subject}, {"predicate", predicate}, {"object", object},
+                            {"qualifiers", qualifiers}},
             "", taskforge::Json::array({taskforge::Json{{"kind", "test"}}}), 0.8);
         std::string promoted;
         std::string promoteError;
@@ -5592,8 +5599,10 @@ TEST(memory_predicate_cardinality_controls_fact_overwrite) {
         return promoted;
     };
 
-    const std::string dark = promoteFact("editor", "PREFERS", "dark");
-    const std::string light = promoteFact("editor", "PREFERS", "light");
+    const std::string dark = promoteFact("editor", "PREFERS", "dark",
+                                         taskforge::Json{{"slot", "editor"}});
+    const std::string light = promoteFact("editor", "PREFERS", "light",
+                                          taskforge::Json{{"slot", "editor"}});
     CHECK(!dark.empty() && !light.empty());
     taskforge::memory::MemoryEdgeRecord darkEdge;
     CHECK(store.getEdge(scope, dark, darkEdge));
@@ -6194,13 +6203,14 @@ TEST(memory_v4_fixture_doctor_reports_planted_violations) {
         }
         return taskforge::Json::object();
     };
-    CHECK(find("functional_overlap").value("violations", 0LL) >= 1);
+    // D11: MENTIONS e PART_OF sao multi; PREFERS sem slot nao e posicao funcional.
+    CHECK(find("functional_overlap").value("violations", 0LL) == 0);
     // A migracao 5 resolve a duplicata do seed antes de criar o indice unico.
     CHECK(find("duplicate_active_edge_hash").value("violations", 0LL) == 0);
     CHECK(find("unknown_predicate_fraction").value("violations", 0LL) >= 1);
     CHECK(find("closure_reasons")["details"].value("closures", 0LL) >= 2);
     CHECK(find("unresolved_derived_inputs").value("violations", 0LL) >= 1);
-    CHECK(knowledge.getMeta("schema_version") == "5");
+    CHECK(knowledge.getMeta("schema_version") == "6");
     CHECK(knowledge.purgeCoverageMissing().empty());
     {
         sqlite3* raw = nullptr;
@@ -6280,12 +6290,14 @@ TEST(memory_write_txn_serializes_functional_promotions) {
         p1 = setup.recordProposal(scope, "claim",
             taskforge::Json{{"subject", "Lia"}, {"subjectId", "e_lia"},
                             {"predicate", "PREFERS"}, {"object", "sugar"},
-                            {"objectId", "e_sugar"}, {"validFrom", "2026-01-01T00:00:00Z"}},
+                            {"objectId", "e_sugar"}, {"validFrom", "2026-01-01T00:00:00Z"},
+                            {"qualifiers", taskforge::Json{{"slot", "drink"}}}},
             "", evidence, 0.8);
         p2 = setup.recordProposal(scope, "claim",
             taskforge::Json{{"subject", "Lia"}, {"subjectId", "e_lia"},
                             {"predicate", "PREFERS"}, {"object", "honey"},
-                            {"objectId", "e_honey"}, {"validFrom", "2026-01-01T00:00:00Z"}},
+                            {"objectId", "e_honey"}, {"validFrom", "2026-01-01T00:00:00Z"},
+                            {"qualifiers", taskforge::Json{{"slot", "drink"}}}},
             "", evidence, 0.8);
         CHECK(!p1.empty());
         CHECK(!p2.empty());
@@ -6526,6 +6538,329 @@ TEST(memory_ingest_source_rolls_back_partial_failure) {
     CHECK(inserted == 0);
     const auto summary = store.sourceSummary(scope);
     CHECK(summary.value("sources", 0LL) == 0);
+    store.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_catalog_fingerprint_alias_context_and_override) {
+    using taskforge::memory::MemoryCatalog;
+    MemoryCatalog catalog;
+    catalog.resetBuiltin();
+    const std::string baseFingerprint = catalog.fingerprint();
+    CHECK(catalog.isKnown("MENTIONS"));
+    CHECK(catalog.isMulti("MENTIONS"));
+    CHECK(catalog.isFunctional("PREFERS"));
+    CHECK(catalog.isStructural("HAS_LESSON"));
+    CHECK(!catalog.isClaimable("CONTRADICTS"));
+    CHECK(catalog.canonicalName("RUNS_ON") == "LOCATED_IN");
+    std::string contextKey;
+    std::string contextError;
+    CHECK(catalog.canonicalContext("LOCATED_IN",
+        taskforge::Json{{"context", "drafting"}}, contextKey, contextError));
+    CHECK(contextKey == "{\"context\":\"draft\"}");
+    CHECK(catalog.canonicalContext("PREFERS",
+        taskforge::Json{{"slot", "beverage"}}, contextKey, contextError));
+    CHECK(contextKey == "{\"slot\":\"drink\"}");
+
+    taskforge::Json project = taskforge::Json::parse(R"JSON({
+      "overrides": [{"name":"HAS_VALUE","cardinality":"multi","reason":"teste"}],
+      "predicates": [{"name":"HAS_VALUE","claimable":true,"cardinality":"multi"}]
+    })JSON");
+    std::string audit;
+    std::string error;
+    CHECK(catalog.mergeJson(project, false, &audit, &error));
+    CHECK(catalog.find("HAS_VALUE")->cardinality == "multi");
+    CHECK(audit.find("HAS_VALUE") != std::string::npos);
+    CHECK(catalog.fingerprint() != baseFingerprint);
+
+    MemoryCatalog rejected;
+    rejected.resetBuiltin();
+    taskforge::Json bad = taskforge::Json::parse(R"JSON({
+      "predicates": [{"name":"HAS_VALUE","claimable":true,"cardinality":"multi"}]
+    })JSON");
+    CHECK(!rejected.mergeJson(bad, false, nullptr, &error));
+    CHECK(error.find("override") != std::string::npos);
+    MemoryCatalog::instance().resetBuiltin();
+    MemoryCatalog::instance().setMode("warn");
+}
+
+TEST(memory_catalog_claim_key_normalization) {
+    using taskforge::memory::MemoryCatalog;
+    MemoryCatalog catalog;
+    catalog.resetBuiltin();
+    std::string a;
+    std::string b;
+    std::string error;
+    CHECK(catalog.canonicalClaimKey("project:x", "s", "MENTIONS", "", "C++", "C++",
+                                    "", "{}", "positive", a, error));
+    CHECK(catalog.canonicalClaimKey("project:x", "s", "MENTIONS", "", "C", "C",
+                                    "", "{}", "positive", b, error));
+    CHECK(a != b);
+    CHECK(catalog.canonicalClaimKey("project:x", "s", "MENTIONS", "", "mint  tea",
+                                    "mint  tea", "", "{}", "positive", a, error));
+    CHECK(catalog.canonicalClaimKey("project:x", "s", "MENTIONS", "", "mint tea",
+                                    "mint tea", "", "{}", "positive", b, error));
+    CHECK(a == b);
+    CHECK(catalog.canonicalClaimKey("project:x", "s", "MEASURES", "", "1500 ms",
+                                    "1500 ms", "", "{}", "positive", a, error));
+    CHECK(catalog.canonicalClaimKey("project:x", "s", "MEASURES", "", "1.5 s",
+                                    "1.5 s", "", "{}", "positive", b, error));
+    CHECK(a == b);
+    CHECK(catalog.canonicalClaimKey("project:x", "s", "MENTIONS", "", "x", "x",
+                                    "", "{\"b\":1,\"a\":2}", "positive", a, error));
+    CHECK(catalog.canonicalClaimKey("project:x", "s", "MENTIONS", "", "x", "x",
+                                    "", "{\"a\":2,\"b\":1}", "positive", b, error));
+    CHECK(a == b);
+    CHECK(catalog.canonicalClaimKey("project:x", "s", "MENTIONS", "e2", "",
+                                    "", "", "{}", "positive", a, error));
+    CHECK(catalog.canonicalClaimKey("project:x", "s", "MENTIONS", "", "e2",
+                                    "e2", "", "{}", "positive", b, error));
+    CHECK(a != b);
+}
+
+TEST(memory_promotion_context_aliases_and_multi_cardinality) {
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryCatalog;
+    MemoryCatalog::instance().resetBuiltin();
+    MemoryCatalog::instance().setMode("warn");
+    const fs::path dir = makeTempDir("memory-catalog-promotion");
+    MemoryStore store((dir / "memory.db").string());
+    std::string error;
+    CHECK(store.open(error));
+    const std::string scope = "project:catalog-promotion";
+    CHECK(store.ensureScope(scope, "project", "", "catalog-promotion"));
+    CHECK(!store.ensureNode(scope, "e_lia", "entity", "Lia").empty());
+    CHECK(!store.ensureNode(scope, "e_model_a", "entity", "model-a").empty());
+    CHECK(!store.ensureNode(scope, "e_model_b", "entity", "model-b").empty());
+    auto promote = [&](const std::string& predicate, const std::string& objectId,
+                       const taskforge::Json& qualifiers) {
+        const std::string proposal = store.recordProposal(
+            scope, "claim",
+            taskforge::Json{{"subject", "Lia"}, {"subjectId", "e_lia"},
+                            {"predicate", predicate}, {"object", objectId},
+                            {"objectId", objectId}, {"qualifiers", qualifiers}},
+            "", taskforge::Json::array({taskforge::Json{{"kind", "test"}}}), 0.8);
+        std::string promoted;
+        std::string promoteError;
+        CHECK(store.promoteProposal(scope, proposal, "test", promoteError, &promoted));
+        CHECK(promoteError.empty());
+        return promoted;
+    };
+    const std::string first = promote("RUNS_ON", "e_model_a",
+                                      taskforge::Json{{"context", "drafting"}});
+    const std::string second = promote("USES_MODEL", "e_model_b",
+                                       taskforge::Json{{"context", "draft"}});
+    CHECK(!first.empty() && !second.empty());
+    taskforge::memory::MemoryEdgeRecord firstEdge;
+    CHECK(store.getEdge(scope, first, firstEdge));
+    CHECK(firstEdge.status == "superseded");
+    size_t located = 0;
+    for (const auto& edge : store.listEdges(scope, "active")) {
+        if (edge.relation == "LOCATED_IN") ++located;
+    }
+    CHECK(located == 1);
+
+    // MENTIONS e multi: duas ocorrencias nao se encerram.
+    const std::string mentionsA = promote("MENTIONS", "e_model_a", taskforge::Json::object());
+    const std::string mentionsB = promote("MENTIONS", "e_model_b", taskforge::Json::object());
+    CHECK(!mentionsA.empty() && !mentionsB.empty());
+    size_t mentions = 0;
+    for (const auto& edge : store.listEdges(scope, "active")) {
+        if (edge.relation == "MENTIONS") ++mentions;
+    }
+    CHECK(mentions == 2);
+    store.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_prefers_requires_slot_context) {
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryCatalog;
+    MemoryCatalog::instance().resetBuiltin();
+    MemoryCatalog::instance().setMode("warn");
+    const fs::path dir = makeTempDir("memory-catalog-prefers");
+    MemoryStore store((dir / "memory.db").string());
+    std::string error;
+    CHECK(store.open(error));
+    const std::string scope = "project:catalog-prefers";
+    CHECK(store.ensureScope(scope, "project", "", "catalog-prefers"));
+    CHECK(!store.ensureNode(scope, "e_lia", "entity", "Lia").empty());
+    CHECK(!store.ensureNode(scope, "e_tea", "entity", "tea").empty());
+    CHECK(!store.ensureNode(scope, "e_coffee", "entity", "coffee").empty());
+    auto promote = [&](const taskforge::Json& qualifiers, const std::string& objectId) {
+        const std::string proposal = store.recordProposal(
+            scope, "claim",
+            taskforge::Json{{"subject", "Lia"}, {"subjectId", "e_lia"},
+                            {"predicate", "PREFERS"}, {"object", objectId},
+                            {"objectId", objectId}, {"qualifiers", qualifiers}},
+            "", taskforge::Json::array({taskforge::Json{{"kind", "test"}}}), 0.8);
+        std::string promoted;
+        std::string promoteError;
+        CHECK(store.promoteProposal(scope, proposal, "test", promoteError, &promoted));
+        return promoted;
+    };
+    const std::string noSlotA = promote(taskforge::Json::object(), "e_tea");
+    const std::string noSlotB = promote(taskforge::Json::object(), "e_coffee");
+    CHECK(!noSlotA.empty() && !noSlotB.empty());
+    taskforge::memory::MemoryEdgeRecord noSlotEdge;
+    CHECK(store.getEdge(scope, noSlotA, noSlotEdge));
+    CHECK(noSlotEdge.status == "active");
+    CHECK(noSlotEdge.metadata.find("missing_context") != std::string::npos);
+    const std::string drinkA = promote(taskforge::Json{{"slot", "beverage"}}, "e_tea");
+    const std::string drinkB = promote(taskforge::Json{{"slot", "drink"}}, "e_coffee");
+    CHECK(!drinkA.empty() && !drinkB.empty());
+    taskforge::memory::MemoryEdgeRecord drinkEdge;
+    CHECK(store.getEdge(scope, drinkA, drinkEdge));
+    CHECK(drinkEdge.status == "superseded");
+    const std::string food = promote(taskforge::Json{{"slot", "food"}}, "e_tea");
+    CHECK(!food.empty());
+    size_t activePrefers = 0;
+    for (const auto& edge : store.listEdges(scope, "active")) {
+        if (edge.relation == "PREFERS") ++activePrefers;
+    }
+    CHECK(activePrefers == 4); // dois sem slot + food + drinkB; drinkA foi encerrado
+    store.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_unknown_and_structural_predicates_modes) {
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryCatalog;
+    MemoryCatalog::instance().resetBuiltin();
+    MemoryCatalog::instance().setMode("warn");
+    const fs::path dir = makeTempDir("memory-catalog-unknown");
+    MemoryStore store((dir / "memory.db").string());
+    std::string error;
+    CHECK(store.open(error));
+    const std::string scope = "project:catalog-unknown";
+    CHECK(store.ensureScope(scope, "project", "", "catalog-unknown"));
+    CHECK(!store.ensureNode(scope, "e_lia", "entity", "Lia").empty());
+    CHECK(!store.ensureNode(scope, "e_tea", "entity", "tea").empty());
+    auto propose = [&](const std::string& predicate) {
+        return store.recordProposal(
+            scope, "claim",
+            taskforge::Json{{"subject", "Lia"}, {"subjectId", "e_lia"},
+                            {"predicate", predicate}, {"object", "tea"},
+                            {"objectId", "e_tea"}},
+            "", taskforge::Json::array({taskforge::Json{{"kind", "test"}}}), 0.8);
+    };
+    std::string promoted;
+    std::string promoteError;
+    const std::string warnProposal = propose("INVENTED_RELATION");
+    CHECK(store.promoteProposal(scope, warnProposal, "test", promoteError, &promoted));
+    taskforge::memory::MemoryEdgeRecord warnEdge;
+    CHECK(store.getEdge(scope, promoted, warnEdge));
+    CHECK(warnEdge.metadata.find("\"catalogStatus\":\"unknown\"") != std::string::npos);
+
+    MemoryCatalog::instance().setMode("strict");
+    const std::string strictProposal = propose("OTHER_INVENTED");
+    CHECK(!store.promoteProposal(scope, strictProposal, "test", promoteError, &promoted));
+    CHECK(promoteError == "unknown_predicate");
+    CHECK(store.listProposals(scope, "unresolved", 10).size() == 1);
+
+    const std::string structuralProposal = propose("CONTRADICTS");
+    CHECK(!store.promoteProposal(scope, structuralProposal, "test", promoteError, &promoted));
+    CHECK(promoteError == "structural_predicate");
+    MemoryCatalog::instance().setMode("warn");
+    store.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_claim_extractor_validates_catalog_and_structural) {
+    using taskforge::memory::ClaimExtractorConfig;
+    using taskforge::memory::MemoryClaimExtractor;
+    using taskforge::memory::MemoryCatalog;
+    MemoryCatalog::instance().resetBuiltin();
+    ClaimExtractorConfig config;
+    config.enabled = true;
+    config.catalogMode = "strict";
+    const std::string response = R"JSON({
+      "claims": [
+        {"subject":"Lia","predicate":"MENTIONS","object":"tea","quote":"tea"},
+        {"subject":"Lia","predicate":"CONTRADICTS","object":"tea","quote":"tea"},
+        {"subject":"Lia","predicate":"INVENTED_RELATION","object":"tea","quote":"tea"}
+      ]
+    })JSON";
+    std::string error;
+    taskforge::Json diagnostics;
+    const auto claims = MemoryClaimExtractor::parseResponse(response, "Lia usa tea.",
+                                                            config, error, &diagnostics);
+    CHECK(claims.size() == 1);
+    CHECK(claims[0].predicate == "MENTIONS");
+    CHECK(diagnostics.value("rejected", 0LL) >= 2);
+    bool sawStructural = false;
+    bool sawUnknown = false;
+    for (const auto& reason : diagnostics["reasons"]) {
+        if (reason.is_string() && reason.str() == "structural_predicate") sawStructural = true;
+        if (reason.is_string() && reason.str() == "unknown_predicate") sawUnknown = true;
+    }
+    CHECK(sawStructural);
+    CHECK(sawUnknown);
+    MemoryCatalog::instance().resetBuiltin();
+}
+
+TEST(memory_support_counts_distinct_source_roots) {
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryCatalog;
+    MemoryCatalog::instance().resetBuiltin();
+    const fs::path dir = makeTempDir("memory-support-roots");
+    MemoryStore store((dir / "memory.db").string());
+    std::string error;
+    CHECK(store.open(error));
+    const std::string scope = "project:support-roots";
+    CHECK(store.ensureScope(scope, "project", "", "support-roots"));
+    CHECK(!store.ensureNode(scope, "s", "entity", "s").empty());
+    CHECK(!store.ensureNode(scope, "o", "entity", "o").empty());
+    const std::string a = store.recordEdge(
+        scope, "s", "o", "MENTIONS", taskforge::Json(),
+        "2026-01-01T00:00:00Z", "", 0.8, "active", "claim", "",
+        taskforge::Json{{"sourceUri", "file://page.md"}, {"sourceHash", "v1"}});
+    CHECK(!a.empty());
+    const std::string b = store.recordEdge(
+        scope, "s", "o", "MENTIONS", taskforge::Json(),
+        "2026-01-01T00:00:00Z", "", 0.8, "active", "claim", "",
+        taskforge::Json{{"sourceUri", "file://other.md"}, {"sourceHash", "v2"}});
+    CHECK(a == b);
+    taskforge::memory::MemoryEdgeRecord edge;
+    CHECK(store.getEdge(scope, a, edge));
+    auto metadata = taskforge::jsonutil::tryParse(edge.metadata);
+    CHECK(metadata && metadata->value("supportRootCount", 0LL) == 2);
+    const std::string claimKey = metadata ? metadata->value("claimKey", std::string()) : "";
+    CHECK(!claimKey.empty());
+    CHECK(store.claimSupportRootCount(scope, claimKey) == 2);
+    store.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_fixture_backfill_and_multi_closures) {
+    using taskforge::memory::MemoryStore;
+    using taskforge::memory::MemoryCatalog;
+    MemoryCatalog::instance().resetBuiltin();
+    MemoryCatalog::instance().setMode("warn");
+    const fs::path dir = makeTempDir("memory-catalog-backfill");
+    const fs::path knowledgePath = dir / "knowledge.db";
+    const fs::path telemetryPath = dir / "telemetry.db";
+    loadFixtureDb(dir, knowledgePath, telemetryPath);
+    MemoryStore store(knowledgePath.string());
+    std::string error;
+    CHECK(store.open(error));
+    const std::string scope = "project:memory-v4";
+    taskforge::memory::MemoryEdgeRecord claim;
+    CHECK(store.getEdge(scope, "e_f86_claim", claim));
+    CHECK(claim.metadata.find("claimKey") != std::string::npos);
+    const auto closures = store.listMultiClosures(scope);
+    CHECK(closures.size() >= 2);
+    std::string reopenError;
+    CHECK(store.reopenEdge(scope, "e_mentions_old", "catalogo multi", reopenError));
+    CHECK(reopenError.empty());
+    taskforge::memory::MemoryEdgeRecord reopened;
+    CHECK(store.getEdge(scope, "e_mentions_old", reopened));
+    CHECK(reopened.status == "active");
     store.close();
     std::error_code ec;
     fs::remove_all(dir, ec);

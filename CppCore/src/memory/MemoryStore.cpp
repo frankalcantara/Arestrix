@@ -1,4 +1,5 @@
 #include "MemoryStore.hpp"
+#include "MemoryCatalog.hpp"
 #include "MemoryPredicates.hpp"
 #include "MemorySanitizer.hpp"
 #include "MemorySources.hpp"
@@ -30,8 +31,8 @@ namespace {
 // Versao do esquema de conhecimento/telemetria. E2=2 (consulted/
 // invalid_citations); E4=3 (memory_evidence autocontida); E11=4
 // (knowledge_version e memory_trace); fix5=5 (WriteTxn, unique edge_hash e
-// memory_operation).
-constexpr int kMemorySchemaVersion = 5;
+// memory_operation); fix5=6 (catalogo, context_key e claim_key).
+constexpr int kMemorySchemaVersion = 6;
 
 // Fase 1: tabelas de conhecimento/telemetria com scope_id que o purge precisa
 // cobrir. memory_tombstone e a unica excecao explicita (Fase 3).
@@ -983,6 +984,9 @@ CREATE INDEX IF NOT EXISTS idx_memory_claim_path_path ON memory_claim_path(path_
     addColumnIfMissing(db_, "memory_edge", "success_count", "INTEGER NOT NULL DEFAULT 0");
     addColumnIfMissing(db_, "memory_edge", "failure_count", "INTEGER NOT NULL DEFAULT 0");
     addColumnIfMissing(db_, "memory_edge", "dormant_at", "TEXT");
+    // Fase 2: identidade da proposicao e chave de contexto canonica.
+    addColumnIfMissing(db_, "memory_edge", "context_key", "TEXT NOT NULL DEFAULT ''");
+    addColumnIfMissing(db_, "memory_edge", "claim_key", "TEXT NOT NULL DEFAULT ''");
     addColumnIfMissing(db_, "memory_playbook", "source_ref", "TEXT");
     addColumnIfMissing(db_, "memory_playbook", "evidence_json", "TEXT NOT NULL DEFAULT '[]'");
     // E2: separa "consultado por busca" de "citado pelo agente" e conta
@@ -1096,6 +1100,100 @@ DELETE FROM memory_hit WHERE rowid NOT IN
         lastError_ = backfillError;
     }
 
+    // Fase 2, migracao 6: a posicao funcional inclui o contexto canonico.
+    int versionForIndex = 0;
+    {
+        const std::string versionText = getMeta("schema_version");
+        if (!versionText.empty()) {
+            try { versionForIndex = std::stoi(versionText); } catch (...) { versionForIndex = 0; }
+        }
+    }
+    if (versionForIndex < 6) {
+        if (!exec("DROP INDEX IF EXISTS idx_memory_edge_functional; "
+                  "CREATE INDEX IF NOT EXISTS idx_memory_edge_functional "
+                  "ON memory_edge(scope_id, src_id, relation, context_key, status, valid_from); "
+                  "CREATE INDEX IF NOT EXISTS idx_memory_edge_claim_key "
+                  "ON memory_edge(scope_id, claim_key);", &error)) {
+            return false;
+        }
+    }
+
+    // Fase 2: backfill de context_key/claim_key nas arestas existentes. A
+    // identidade nova nao reabre nem encerra nada por si so. Roda so na
+    // migracao para nao alterar um banco v6 congelado (A/B).
+    int existingVersion = 0;
+    {
+        const std::string versionText = getMeta("schema_version");
+        if (!versionText.empty()) {
+            try { existingVersion = std::stoi(versionText); } catch (...) { existingVersion = 0; }
+        }
+    }
+    if (existingVersion < 6) {
+        MemoryCatalog& catalog = MemoryCatalog::instance();
+        Stmt pending;
+        std::string backfillError;
+        if (prepare(db_, "SELECT id,scope_id,src_id,COALESCE(dst_id,''),relation,"
+                           "COALESCE(value_json,''),metadata,context_key,claim_key "
+                           "FROM memory_edge WHERE context_key='' OR claim_key=''",
+                     pending, backfillError)) {
+            struct PendingEdge {
+                std::string id, scopeId, srcId, dstId, relation, valueJson, metadata;
+            };
+            std::vector<PendingEdge> rows;
+            while (stepRetry(pending.stmt) == SQLITE_ROW) {
+                rows.push_back({columnText(pending.stmt, 0), columnText(pending.stmt, 1),
+                                columnText(pending.stmt, 2), columnText(pending.stmt, 3),
+                                columnText(pending.stmt, 4), columnText(pending.stmt, 5),
+                                columnText(pending.stmt, 6)});
+            }
+            for (const auto& row : rows) {
+                if (isStructuralPredicate(row.relation)) continue;
+                auto metadataOpt = taskforge::jsonutil::tryParse(row.metadata);
+                taskforge::Json metadata = metadataOpt && metadataOpt->is_object()
+                    ? *metadataOpt : taskforge::Json::object();
+                auto valueOpt = taskforge::jsonutil::tryParse(row.valueJson);
+                taskforge::Json value = valueOpt ? *valueOpt : taskforge::Json();
+                taskforge::Json qualifiers = metadata.contains("qualifiers") &&
+                    metadata["qualifiers"].is_object() ? metadata["qualifiers"] : taskforge::Json::object();
+                std::string contextKey;
+                std::string contextError;
+                catalog.canonicalContext(row.relation, qualifiers, contextKey, contextError);
+                std::string claimKey;
+                std::string keyError;
+                std::string valueText;
+                std::string unit;
+                std::string polarity = "positive";
+                if (value.is_object()) {
+                    valueText = value.value("value", std::string());
+                    unit = value.value("unit", std::string());
+                    polarity = value.value("polarity", std::string("positive"));
+                } else if (value.is_string()) {
+                    valueText = value.str();
+                }
+                if (!catalog.canonicalClaimKey(row.scopeId, row.srcId, row.relation, row.dstId,
+                                               valueText, valueText, unit, contextKey, polarity,
+                                               claimKey, keyError)) {
+                    metadata["claimKeyStatus"] = "uncomputable";
+                }
+                if (!catalog.isKnown(row.relation)) metadata["catalogStatus"] = "unknown";
+                else if (contextError == "missing_context") metadata["catalogStatus"] = "missing_context";
+                if (!contextKey.empty()) metadata["contextKey"] = contextKey;
+                if (!claimKey.empty()) metadata["claimKey"] = claimKey;
+                metadata["catalogFingerprint"] = catalog.fingerprint();
+                Stmt update;
+                std::string updateError;
+                if (prepare(db_, "UPDATE memory_edge SET context_key=?,claim_key=?,metadata=? "
+                                   "WHERE id=?", update, updateError)) {
+                    bindText(update.stmt, 1, contextKey);
+                    bindText(update.stmt, 2, claimKey);
+                    bindText(update.stmt, 3, metadata.dump());
+                    bindText(update.stmt, 4, row.id);
+                    stepRetry(update.stmt);
+                }
+            }
+        }
+    }
+
     // Fase 1, migracao 5: resolve duplicatas ativas antes de impor a unicidade.
     // A mais antiga permanece ativa; as demais viram historia com superseded_by.
     {
@@ -1176,6 +1274,10 @@ DELETE FROM memory_hit WHERE rowid NOT IN
     }
     if (storedVersion < kMemorySchemaVersion) {
         setMeta("schema_version", std::to_string(kMemorySchemaVersion));
+    }
+    if (durableSync_ && getMeta("catalog_fingerprint").empty()) {
+        setMeta("catalog_fingerprint", MemoryCatalog::instance().fingerprint());
+        setMeta("catalog_mode", MemoryCatalog::instance().mode());
     }
     return true;
 }
@@ -2098,7 +2200,9 @@ std::string MemoryStore::recordEdge(const std::string& scopeId, const std::strin
                                     const taskforge::Json& value, const std::string& validFrom,
                                     const std::string& validTo, double confidence,
                                     const std::string& status, const std::string& sourceKind,
-                                    const std::string& sourceRef, const taskforge::Json& metadata) {
+                                    const std::string& sourceRef, const taskforge::Json& metadata,
+                                    const std::string& contextKeyArg,
+                                    const std::string& claimKeyArg) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (!db_) return "";
     std::string txnError;
@@ -2114,6 +2218,77 @@ std::string MemoryStore::recordEdge(const std::string& scopeId, const std::strin
     const std::string valueJson = cleanValue.is_null() ? "" : cleanValue.dump();
     const std::string from = validFrom.empty() ? nowIso() : validFrom;
     const std::string hash = edgeHash(scopeId, srcId, dstId, relation, valueJson, from, validTo);
+
+    MemoryCatalog& catalog = MemoryCatalog::instance();
+    std::string contextKey = contextKeyArg;
+    std::string claimKey = claimKeyArg;
+    std::string catalogStatus;
+    if (!isStructuralPredicate(relation)) {
+        if (!catalog.isKnown(relation)) {
+            catalogStatus = "unknown";
+        } else {
+            taskforge::Json qualifiers = taskforge::Json::object();
+            if (cleanMetadata.is_object() && cleanMetadata.contains("qualifiers") &&
+                cleanMetadata["qualifiers"].is_object()) {
+                qualifiers = cleanMetadata["qualifiers"];
+            }
+            std::string contextError;
+            if (contextKey.empty()) {
+                catalog.canonicalContext(relation, qualifiers, contextKey, contextError);
+            }
+            if (!contextError.empty()) {
+                catalogStatus = contextError == "missing_context" ? "missing_context" : "unknown";
+            }
+        }
+        if (claimKey.empty()) {
+            std::string objectText;
+            std::string valueText;
+            std::string unit;
+            std::string polarity = "positive";
+            if (cleanValue.is_object()) {
+                valueText = cleanValue.value("value", std::string());
+                unit = cleanValue.value("unit", std::string());
+                polarity = cleanValue.value("polarity", std::string("positive"));
+                objectText = valueText;
+            } else if (cleanValue.is_string()) {
+                objectText = cleanValue.str();
+                valueText = objectText;
+            }
+            std::string keyError;
+            if (!catalog.canonicalClaimKey(scopeId, srcId, relation, dstId, objectText,
+                                           valueText, unit, contextKey, polarity, claimKey,
+                                           keyError)) {
+                cleanMetadata["claimKeyStatus"] = "uncomputable";
+            }
+        }
+        cleanMetadata["catalogFingerprint"] = catalog.fingerprint();
+        if (!catalogStatus.empty()) cleanMetadata["catalogStatus"] = catalogStatus;
+        if (!contextKey.empty()) cleanMetadata["contextKey"] = contextKey;
+        if (!claimKey.empty()) {
+            cleanMetadata["claimKey"] = claimKey;
+            std::set<std::string> roots;
+            const std::string currentUri = cleanMetadata.value("sourceUri", std::string());
+            if (!currentUri.empty()) roots.insert(MemorySources::normalizeUri(currentUri));
+            Stmt support;
+            std::string supportError;
+            if (prepare(db_, "SELECT metadata FROM memory_edge WHERE scope_id=? AND claim_key=? "
+                               "AND status='active'", support, supportError)) {
+                bindText(support.stmt, 1, scopeId);
+                bindText(support.stmt, 2, claimKey);
+                while (stepRetry(support.stmt) == SQLITE_ROW) {
+                    auto other = taskforge::jsonutil::tryParse(columnText(support.stmt, 0));
+                    if (other && other->is_object()) {
+                        const std::string uri = other->value("sourceUri", std::string());
+                        if (!uri.empty()) roots.insert(MemorySources::normalizeUri(uri));
+                    }
+                }
+            }
+            taskforge::Json rootsArray = taskforge::Json::array();
+            for (const auto& root : roots) rootsArray.push_back(root);
+            cleanMetadata["supportRoots"] = rootsArray;
+            cleanMetadata["supportRootCount"] = static_cast<long long>(roots.size());
+        }
+    }
     auto attachLens = [&](const std::string& edgeId) {
         std::string lensName = relation;
         if (cleanMetadata.is_object()) {
@@ -2132,6 +2307,41 @@ std::string MemoryStore::recordEdge(const std::string& scopeId, const std::strin
         bindText(existing.stmt, 2, hash);
         if (stepRetry(existing.stmt) == SQLITE_ROW) {
             const std::string existingId = columnText(existing.stmt, 0);
+            if (!claimKey.empty()) {
+                Stmt metadataStmt;
+                std::string metadataError;
+                if (prepare(db_, "SELECT metadata FROM memory_edge WHERE id=?", metadataStmt,
+                            metadataError)) {
+                    bindText(metadataStmt.stmt, 1, existingId);
+                    if (stepRetry(metadataStmt.stmt) == SQLITE_ROW) {
+                        auto parsed = taskforge::jsonutil::tryParse(columnText(metadataStmt.stmt, 0));
+                        taskforge::Json merged = parsed && parsed->is_object()
+                            ? *parsed : taskforge::Json::object();
+                        std::set<std::string> roots;
+                        if (merged.contains("supportRoots") && merged["supportRoots"].is_array()) {
+                            for (const auto& root : merged["supportRoots"]) {
+                                if (root.is_string()) roots.insert(root.str());
+                            }
+                        }
+                        const std::string oldUri = merged.value("sourceUri", std::string());
+                        if (!oldUri.empty()) roots.insert(MemorySources::normalizeUri(oldUri));
+                        const std::string newUri = cleanMetadata.value("sourceUri", std::string());
+                        if (!newUri.empty()) roots.insert(MemorySources::normalizeUri(newUri));
+                        taskforge::Json array = taskforge::Json::array();
+                        for (const auto& root : roots) array.push_back(root);
+                        merged["supportRoots"] = array;
+                        merged["supportRootCount"] = static_cast<long long>(roots.size());
+                        Stmt update;
+                        std::string updateError;
+                        if (prepare(db_, "UPDATE memory_edge SET metadata=? WHERE id=?", update,
+                                    updateError)) {
+                            bindText(update.stmt, 1, merged.dump());
+                            bindText(update.stmt, 2, existingId);
+                            stepRetry(update.stmt);
+                        }
+                    }
+                }
+            }
             attachLens(existingId);
             if (!txn.commit(&txnError)) {
                 lastError_ = txnError;
@@ -2144,8 +2354,8 @@ std::string MemoryStore::recordEdge(const std::string& scopeId, const std::strin
     const std::string id = newId("edge");
     if (testInterleaveHook_) testInterleaveHook_("recordEdge:before_insert");
     Stmt st;
-    if (!prepare(db_, "INSERT INTO memory_edge(id,scope_id,src_id,dst_id,relation,value_json,valid_from,valid_to,recorded_at,confidence,status,source_kind,source_ref,edge_hash,metadata) "
-                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+    if (!prepare(db_, "INSERT INTO memory_edge(id,scope_id,src_id,dst_id,relation,value_json,valid_from,valid_to,recorded_at,confidence,status,source_kind,source_ref,edge_hash,metadata,context_key,claim_key) "
+                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
                        "ON CONFLICT(scope_id,edge_hash) WHERE status='active' DO NOTHING",
                     st, error)) {
         lastError_ = error;
@@ -2166,6 +2376,8 @@ std::string MemoryStore::recordEdge(const std::string& scopeId, const std::strin
     bindNullableText(st.stmt, 13, sourceRef);
     bindText(st.stmt, 14, hash);
     bindText(st.stmt, 15, cleanMetadata.dump());
+    bindText(st.stmt, 16, contextKey);
+    bindText(st.stmt, 17, claimKey);
     if (stepRetry(st.stmt) != SQLITE_DONE) {
         lastError_ = sqlite3_errmsg(db_);
         return "";
@@ -2194,8 +2406,7 @@ std::string MemoryStore::recordEdge(const std::string& scopeId, const std::strin
         return insertedId;
     }
     if (redactions > 0) audit("runtime", "redact", scopeId, "", "edge:" + insertedId);
-    const bool structural = relation == "HAS_LESSON" || relation == "CONTRADICTS" ||
-                            relation == "SUPERSEDES" || relation == "GENERALIZES";
+    const bool structural = isStructuralPredicate(relation);
     if (status == "active" && !structural) {
         MemoryEvidenceRecord evidence;
         evidence.scopeId = scopeId;
@@ -3842,20 +4053,46 @@ bool MemoryStore::promoteProposal(const std::string& scopeId, const std::string&
         }
     } else if (proposal.kind == "claim") {
         const std::string subject = payload.value("subject", std::string());
-        const std::string predicate = payload.value("predicate", std::string());
+        const std::string predicate = canonicalPredicateName(payload.value("predicate", std::string()));
         const std::string object = payload.value("object", std::string());
         const std::string value = payload.value("value", std::string());
         if (subject.empty() || predicate.empty() || (object.empty() && value.empty())) {
             error = "claim promovida sem subject/predicate/object ou value";
             return false;
         }
+        auto markUnresolved = [&](const std::string& reason) {
+            Stmt update;
+            std::string updateError;
+            if (prepare(db_, "UPDATE memory_proposal SET status='unresolved',reviewed_at=?,"
+                               "reviewed_by=? WHERE scope_id=? AND id=? AND status='pending'",
+                         update, updateError)) {
+                bindText(update.stmt, 1, nowIso());
+                bindText(update.stmt, 2, "catalog:" + reason);
+                bindText(update.stmt, 3, scopeId);
+                bindText(update.stmt, 4, proposal.id);
+                stepRetry(update.stmt);
+            }
+            audit("catalog", "unresolved", proposal.id, "", reason);
+            if (!txn.commit(&txnError)) {
+                error = txnError;
+                return false;
+            }
+            error = reason;
+            return false;
+        };
+        if (isStructuralPredicate(predicate)) {
+            return markUnresolved("structural_predicate");
+        }
+        MemoryCatalog& catalog = MemoryCatalog::instance();
+        if (!catalog.isKnown(predicate) && catalog.mode() == "strict") {
+            return markUnresolved("unknown_predicate");
+        }
         std::string subjectId = payload.value("subjectId", std::string());
         if (subjectId.empty()) {
             bool ambiguous = false;
             subjectId = findEntity(scopeId, subject, &ambiguous);
             if (subjectId.empty() || ambiguous) {
-                error = ambiguous ? "subject ambiguo na claim" : "subject inexistente na claim";
-                return false;
+                return markUnresolved(ambiguous ? "ambiguous_subject" : "unknown_subject");
             }
         }
         std::string objectId = payload.value("objectId", std::string());
@@ -3863,8 +4100,7 @@ bool MemoryStore::promoteProposal(const std::string& scopeId, const std::string&
             bool ambiguous = false;
             objectId = findEntity(scopeId, object, &ambiguous);
             if (objectId.empty() || ambiguous) {
-                error = ambiguous ? "object ambiguo na claim" : "object inexistente na claim";
-                return false;
+                return markUnresolved(ambiguous ? "ambiguous_object" : "unknown_object");
             }
         }
         const std::string validFrom = payload.value("validFrom", proposal.createdAt);
@@ -3878,17 +4114,48 @@ bool MemoryStore::promoteProposal(const std::string& scopeId, const std::string&
             {"quote", payload.value("quote", std::string())},
             {"passageId", payload.value("passageId", std::string())},
             {"sourceHash", payload.value("passageHash", std::string())}};
+        taskforge::Json qualifiers = payload.contains("qualifiers") && payload["qualifiers"].is_object()
+            ? payload["qualifiers"] : taskforge::Json::object();
+        std::string contextKey;
+        std::string contextError;
+        const bool contextOk = catalog.canonicalContext(predicate, qualifiers, contextKey,
+                                                        contextError);
+        if (!contextOk && contextError == "missing_context" && catalog.mode() == "strict") {
+            return markUnresolved("missing_context");
+        }
+        std::string claimKey;
+        std::string claimKeyError;
+        const std::string unit = payload.value("unit", std::string());
+        const std::string polarity = payload.value("polarity", std::string("positive"));
+        if (!catalog.canonicalClaimKey(scopeId, subjectId, predicate, objectId, object,
+                                       value, unit, contextKey, polarity, claimKey,
+                                       claimKeyError)) {
+            claimKey.clear();
+        }
         taskforge::Json metadata{
             {"lens", payload.value("lens", std::string())},
             {"claim", true},
-            {"knownPredicate", payload.value("knownPredicate", true)},
+            {"knownPredicate", catalog.isKnown(predicate)},
+            {"canonicalPredicate", predicate},
+            {"catalogFingerprint", catalog.fingerprint()},
             {"extractorFingerprint", payload.value("extractorFingerprint", std::string())},
             {"extractorModel", payload.value("extractorModel", std::string())},
             {"extractorRevision", payload.value("extractorRevision", std::string())},
             {"passageId", payload.value("passageId", std::string())},
             {"sourceUri", payload.value("sourceUri", std::string())},
             {"quote", payload.value("quote", std::string())}};
-        if (payload.value("claim", true) && isSingleValuedPredicate(predicate)) {
+        if (!catalog.isKnown(predicate)) metadata["catalogStatus"] = "unknown";
+        else if (!contextOk && contextError == "missing_context") {
+            metadata["catalogStatus"] = "missing_context";
+        } else {
+            metadata["catalogStatus"] = "ok";
+        }
+        if (!contextKey.empty()) metadata["contextKey"] = contextKey;
+        if (!claimKey.empty()) metadata["claimKey"] = claimKey;
+        else metadata["claimKeyStatus"] = "uncomputable";
+        const bool canClose = contextOk && isSingleValuedPredicate(predicate) &&
+                              payload.value("claim", true);
+        if (canClose) {
             // E13: so encerra valores anteriores quando as validades se
             // sobrepoem; intervalos disjuntos contam historia, nao conflito.
             auto lower = [](const std::string& v) {
@@ -3900,11 +4167,13 @@ bool MemoryStore::promoteProposal(const std::string& scopeId, const std::string&
             Stmt previous;
             std::vector<std::string> previousIds;
             if (prepare(db_, "SELECT id,valid_from,valid_to,dst_id FROM memory_edge "
-                               "WHERE scope_id=? AND src_id=? AND relation=? AND status='active'",
+                               "WHERE scope_id=? AND src_id=? AND relation=? AND context_key=? "
+                               "AND status='active'",
                          previous, error)) {
                 bindText(previous.stmt, 1, scopeId);
                 bindText(previous.stmt, 2, subjectId);
                 bindText(previous.stmt, 3, predicate);
+                bindText(previous.stmt, 4, contextKey);
                 while (stepRetry(previous.stmt) == SQLITE_ROW) {
                     const std::string otherDst = columnText(previous.stmt, 3);
                     if (!objectId.empty() && otherDst == objectId) continue;
@@ -3920,7 +4189,7 @@ bool MemoryStore::promoteProposal(const std::string& scopeId, const std::string&
         }
         promoted = recordEdge(scopeId, subjectId, objectId, predicate, claimValue,
                               validFrom, validTo, proposal.confidence, "active",
-                              "claim", proposal.id, metadata);
+                              "claim", proposal.id, metadata, contextKey, claimKey);
         if (promoted.empty()) {
             error = "falha ao gravar claim promovida";
             return false;
@@ -3939,11 +4208,36 @@ bool MemoryStore::promoteProposal(const std::string& scopeId, const std::string&
         recordEvidence(claimEvidence);
     } else if (proposal.kind == "fact") {
         const std::string subject = payload.value("subject", std::string());
-        const std::string predicate = payload.value("predicate", std::string());
+        const std::string predicate = canonicalPredicateName(payload.value("predicate", std::string()));
         const std::string object = payload.value("object", std::string());
         if (subject.empty() || predicate.empty() || object.empty()) {
             error = "fato promovido sem subject/predicate/object";
             return false;
+        }
+        auto markFactUnresolved = [&](const std::string& reason) {
+            Stmt update;
+            std::string updateError;
+            if (prepare(db_, "UPDATE memory_proposal SET status='unresolved',reviewed_at=?,"
+                               "reviewed_by=? WHERE scope_id=? AND id=? AND status='pending'",
+                         update, updateError)) {
+                bindText(update.stmt, 1, nowIso());
+                bindText(update.stmt, 2, "catalog:" + reason);
+                bindText(update.stmt, 3, scopeId);
+                bindText(update.stmt, 4, proposal.id);
+                stepRetry(update.stmt);
+            }
+            audit("catalog", "unresolved", proposal.id, "", reason);
+            if (!txn.commit(&txnError)) {
+                error = txnError;
+                return false;
+            }
+            error = reason;
+            return false;
+        };
+        if (isStructuralPredicate(predicate)) return markFactUnresolved("structural_predicate");
+        MemoryCatalog& catalog = MemoryCatalog::instance();
+        if (!catalog.isKnown(predicate) && catalog.mode() == "strict") {
+            return markFactUnresolved("unknown_predicate");
         }
         const std::string subjectId = resolveNode(scopeId, subject, "entity");
         const std::string objectId = resolveNode(scopeId, object, "entity");
@@ -3951,29 +4245,46 @@ bool MemoryStore::promoteProposal(const std::string& scopeId, const std::string&
             error = "falha ao criar entidades do fato promovido";
             return false;
         }
+        std::string contextKey;
+        std::string contextError;
+        taskforge::Json factQualifiers = payload.contains("qualifiers") &&
+            payload["qualifiers"].is_object() ? payload["qualifiers"] : taskforge::Json::object();
+        const bool contextOk = catalog.canonicalContext(predicate, factQualifiers,
+                                                        contextKey, contextError);
+        if (!contextOk && contextError == "missing_context" && catalog.mode() == "strict") {
+            return markFactUnresolved("missing_context");
+        }
+        std::string claimKey;
+        std::string claimKeyError;
+        catalog.canonicalClaimKey(scopeId, subjectId, predicate, objectId, object, "",
+                                  "", contextKey, "positive", claimKey, claimKeyError);
 
         Stmt existing;
         if (prepare(db_, "SELECT id FROM memory_edge WHERE scope_id=? AND src_id=? AND dst_id=? "
-                           "AND relation=? AND status='active' LIMIT 1", existing, error)) {
+                           "AND relation=? AND context_key=? AND status='active' LIMIT 1",
+                    existing, error)) {
             bindText(existing.stmt, 1, scopeId);
             bindText(existing.stmt, 2, subjectId);
             bindText(existing.stmt, 3, objectId);
             bindText(existing.stmt, 4, predicate);
+            bindText(existing.stmt, 5, contextKey);
             if (stepRetry(existing.stmt) == SQLITE_ROW) {
                 promoted = columnText(existing.stmt, 0);
             }
         }
-        if (promoted.empty() && isSingleValuedPredicate(predicate)) {
+        if (promoted.empty() && contextOk && isSingleValuedPredicate(predicate)) {
             // C5: um predicado funcional aceita um unico valor ativo. O valor
             // anterior e encerrado, nao apagado, e fica no historico.
             Stmt previous;
             std::vector<std::string> previousIds;
             if (prepare(db_, "SELECT id FROM memory_edge WHERE scope_id=? AND src_id=? AND relation=? "
-                               "AND status='active' AND (dst_id IS NULL OR dst_id<>?)", previous, error)) {
+                               "AND context_key=? AND status='active' AND (dst_id IS NULL OR dst_id<>?)",
+                        previous, error)) {
                 bindText(previous.stmt, 1, scopeId);
                 bindText(previous.stmt, 2, subjectId);
                 bindText(previous.stmt, 3, predicate);
-                bindText(previous.stmt, 4, objectId);
+                bindText(previous.stmt, 4, contextKey);
+                bindText(previous.stmt, 5, objectId);
                 while (stepRetry(previous.stmt) == SQLITE_ROW) {
                     previousIds.push_back(columnText(previous.stmt, 0));
                 }
@@ -3986,9 +4297,16 @@ bool MemoryStore::promoteProposal(const std::string& scopeId, const std::string&
             taskforge::Json metadata = taskforge::Json::object();
             metadata["proposalId"] = proposal.id;
             metadata["evidence"] = evidence;
+            metadata["qualifiers"] = factQualifiers;
+            metadata["canonicalPredicate"] = predicate;
+            metadata["catalogFingerprint"] = catalog.fingerprint();
+            metadata["catalogStatus"] = catalog.isKnown(predicate)
+                ? (contextOk ? "ok" : "missing_context") : "unknown";
+            if (!contextKey.empty()) metadata["contextKey"] = contextKey;
+            if (!claimKey.empty()) metadata["claimKey"] = claimKey;
             promoted = recordEdge(scopeId, subjectId, objectId, predicate, taskforge::Json(),
                                   proposal.createdAt, "", proposal.confidence, "active",
-                                  "promotion", proposal.id, metadata);
+                                  "promotion", proposal.id, metadata, contextKey, claimKey);
         }
         if (promoted.empty()) {
             error = "falha ao gravar fato promovido";
@@ -7470,12 +7788,13 @@ size_t MemoryStore::repairOverlaps(const std::string& scopeId, std::string& erro
         std::string value;
         std::string from;
         std::string to;
+        std::string contextKey;
         bool disputed = false;
     };
     std::vector<EdgeView> edges;
     Stmt st;
     if (!prepare(db_, "SELECT id,src_id,relation,COALESCE(dst_id,''),COALESCE(value_json,''),"
-                       "COALESCE(valid_from,''),COALESCE(valid_to,''),"
+                       "COALESCE(valid_from,''),COALESCE(valid_to,''),COALESCE(context_key,''),"
                        "CASE WHEN metadata LIKE '%\"disputed\":true%' THEN 1 ELSE 0 END "
                        "FROM memory_edge WHERE scope_id=? AND status='active' ORDER BY id",
                  st, error)) {
@@ -7486,7 +7805,8 @@ size_t MemoryStore::repairOverlaps(const std::string& scopeId, std::string& erro
         edges.push_back({columnText(st.stmt, 0), columnText(st.stmt, 1),
                          columnText(st.stmt, 2), columnText(st.stmt, 3),
                          columnText(st.stmt, 4), columnText(st.stmt, 5),
-                         columnText(st.stmt, 6), columnInt(st.stmt, 7) != 0});
+                         columnText(st.stmt, 6), columnText(st.stmt, 7),
+                         columnInt(st.stmt, 8) != 0});
     }
     auto lower = [](const std::string& value) {
         return value.empty() ? std::string("0000-00-00T00:00:00Z") : value;
@@ -7500,8 +7820,10 @@ size_t MemoryStore::repairOverlaps(const std::string& scopeId, std::string& erro
             const auto& a = edges[i];
             const auto& b = edges[j];
             if (a.disputed || b.disputed) continue;
-            if (a.src != b.src || a.relation != b.relation) continue;
+            if (a.src != b.src || a.relation != b.relation || a.contextKey != b.contextKey) continue;
             if (!isSingleValuedPredicate(a.relation)) continue;
+            if (!MemoryCatalog::instance().requiredContextKeys(a.relation).empty() &&
+                a.contextKey.empty()) continue;
             if (a.dst == b.dst && a.value == b.value) continue;
             if (!(lower(a.from) < upper(b.to) && lower(b.from) < upper(a.to))) continue;
             for (const auto& edgeId : {a.id, b.id}) {
@@ -7536,6 +7858,141 @@ size_t MemoryStore::repairOverlaps(const std::string& scopeId, std::string& erro
     return repaired;
 }
 
+taskforge::Json MemoryStore::listMultiClosures(const std::string& scopeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out = taskforge::Json::array();
+    if (!db_) return out;
+    MemoryCatalog& catalog = MemoryCatalog::instance();
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT id,relation,COALESCE(valid_to,''),COALESCE(superseded_by,''),"
+                       "COALESCE(context_key,''),metadata FROM memory_edge "
+                       "WHERE scope_id=? AND status<>'active' "
+                       "AND json_extract(metadata,'$.invalidationReason') IN "
+                       "('claim_conflict','single_valued_predicate') ORDER BY id", st, error)) {
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        const std::string relation = columnText(st.stmt, 1);
+        const std::string contextKey = columnText(st.stmt, 4);
+        const auto* predicate = catalog.find(relation);
+        const bool multi = !predicate || !predicate->claimable ||
+                           predicate->cardinality == "multi";
+        const bool structural = isStructuralPredicate(relation);
+        const bool missingContext = predicate && predicate->claimable &&
+            !predicate->requiredContextKeys.empty() && contextKey.empty();
+        if (!multi && !structural && !missingContext) continue;
+        auto metadata = taskforge::jsonutil::tryParse(columnText(st.stmt, 5));
+        out.push_back(taskforge::Json{
+            {"id", columnText(st.stmt, 0)},
+            {"relation", relation},
+            {"reason", metadata && metadata->is_object()
+                ? metadata->value("invalidationReason", std::string()) : std::string()},
+            {"validTo", columnText(st.stmt, 2)},
+            {"supersededBy", columnText(st.stmt, 3)},
+            {"contextKey", contextKey},
+            {"newCardinality", predicate ? predicate->cardinality : "unknown"}});
+    }
+    return out;
+}
+
+size_t MemoryStore::claimSupportRootCount(const std::string& scopeId,
+                                          const std::string& claimKey) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || claimKey.empty()) return 0;
+    std::set<std::string> roots;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT metadata FROM memory_edge WHERE scope_id=? AND claim_key=? "
+                       "AND status='active'", st, error)) {
+        return 0;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, claimKey);
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        auto metadata = taskforge::jsonutil::tryParse(columnText(st.stmt, 0));
+        if (metadata && metadata->is_object()) {
+            if (metadata->contains("supportRoots") && (*metadata)["supportRoots"].is_array()) {
+                for (const auto& root : (*metadata)["supportRoots"]) {
+                    if (root.is_string()) roots.insert(root.str());
+                }
+            }
+            const std::string uri = metadata->value("sourceUri", std::string());
+            if (!uri.empty()) roots.insert(MemorySources::normalizeUri(uri));
+        }
+    }
+    return roots.size();
+}
+
+bool MemoryStore::reopenEdge(const std::string& scopeId, const std::string& edgeId,
+                             const std::string& reason, std::string& error) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || edgeId.empty()) {
+        error = "aresta invalida";
+        return false;
+    }
+    WriteTxn txn(*this, error);
+    if (!txn.ok()) return false;
+    Stmt load;
+    if (!prepare(db_, "SELECT relation,src_id,COALESCE(dst_id,''),COALESCE(context_key,''),status "
+                       "FROM memory_edge WHERE scope_id=? AND id=?", load, error)) {
+        return false;
+    }
+    bindText(load.stmt, 1, scopeId);
+    bindText(load.stmt, 2, edgeId);
+    if (stepRetry(load.stmt) != SQLITE_ROW) {
+        error = "aresta nao encontrada";
+        return false;
+    }
+    const std::string relation = columnText(load.stmt, 0);
+    const std::string srcId = columnText(load.stmt, 1);
+    const std::string dstId = columnText(load.stmt, 2);
+    const std::string contextKey = columnText(load.stmt, 3);
+    const std::string status = columnText(load.stmt, 4);
+    if (status == "active") {
+        error = "aresta ja esta ativa";
+        return false;
+    }
+    if (isStructuralPredicate(relation)) {
+        error = "predicado estrutural nao pode ser reaberto";
+        return false;
+    }
+    if (isSingleValuedPredicate(relation) && !contextKey.empty()) {
+        Stmt overlap;
+        std::string overlapError;
+        if (prepare(db_, "SELECT id FROM memory_edge WHERE scope_id=? AND src_id=? AND relation=? "
+                           "AND context_key=? AND status='active' AND id<>? LIMIT 1",
+                     overlap, overlapError)) {
+            bindText(overlap.stmt, 1, scopeId);
+            bindText(overlap.stmt, 2, srcId);
+            bindText(overlap.stmt, 3, relation);
+            bindText(overlap.stmt, 4, contextKey);
+            bindText(overlap.stmt, 5, edgeId);
+            if (stepRetry(overlap.stmt) == SQLITE_ROW) {
+                error = "reabertura criaria sobreposicao funcional";
+                return false;
+            }
+        }
+    }
+    Stmt update;
+    if (!prepare(db_, "UPDATE memory_edge SET status='active',valid_to=NULL,superseded_by=NULL,"
+                       "metadata=json_set(json_remove(metadata,'$.invalidationReason'),"
+                       "'$.reopenedAt',?),dormant_at=NULL WHERE id=?",
+                 update, error)) {
+        return false;
+    }
+    bindText(update.stmt, 1, nowIso());
+    bindText(update.stmt, 2, edgeId);
+    if (stepRetry(update.stmt) != SQLITE_DONE) {
+        error = sqlite3_errmsg(db_);
+        return false;
+    }
+    audit("human", "reopen_edge", edgeId, "", reason);
+    if (!txn.commit(&error)) return false;
+    return true;
+}
+
 taskforge::Json MemoryStore::diagnostics(const std::string& scopeId) const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     taskforge::Json checks = taskforge::Json::array();
@@ -7562,13 +8019,14 @@ taskforge::Json MemoryStore::diagnostics(const std::string& scopeId) const {
             std::string value;
             std::string from;
             std::string to;
+            std::string contextKey;
             bool disputed = false;
         };
         std::vector<EdgeView> edges;
         Stmt st;
         std::string error;
         if (prepare(db_, "SELECT id,src_id,relation,COALESCE(dst_id,''),COALESCE(value_json,''),"
-                           "COALESCE(valid_from,''),COALESCE(valid_to,''),"
+                           "COALESCE(valid_from,''),COALESCE(valid_to,''),COALESCE(context_key,''),"
                            "CASE WHEN metadata LIKE '%\"disputed\":true%' THEN 1 ELSE 0 END "
                            "FROM memory_edge WHERE scope_id=? AND status='active' ORDER BY id",
                      st, error)) {
@@ -7577,13 +8035,16 @@ taskforge::Json MemoryStore::diagnostics(const std::string& scopeId) const {
                 edges.push_back({columnText(st.stmt, 0), columnText(st.stmt, 1),
                                  columnText(st.stmt, 2), columnText(st.stmt, 3),
                                  columnText(st.stmt, 4), columnText(st.stmt, 5),
-                                 columnText(st.stmt, 6), columnInt(st.stmt, 7) != 0});
+                                 columnText(st.stmt, 6), columnText(st.stmt, 7),
+                                 columnInt(st.stmt, 8) != 0});
             }
         }
         std::map<std::string, std::vector<const EdgeView*>> groups;
         for (const auto& edge : edges) {
             if (!isSingleValuedPredicate(edge.relation)) continue;
-            groups[edge.src + "\x1f" + edge.relation].push_back(&edge);
+            if (!MemoryCatalog::instance().requiredContextKeys(edge.relation).empty() &&
+                edge.contextKey.empty()) continue;
+            groups[edge.src + "\x1f" + edge.relation + "\x1f" + edge.contextKey].push_back(&edge);
         }
         auto lower = [](const std::string& value) {
             return value.empty() ? std::string("0000-00-00T00:00:00Z") : value;

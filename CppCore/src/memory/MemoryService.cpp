@@ -1,4 +1,6 @@
 #include "MemoryService.hpp"
+#include "MemoryCatalog.hpp"
+#include "MemoryPredicates.hpp"
 #include "MemoryExtractor.hpp"
 #include "MemoryIndexer.hpp"
 #include "MemorySanitizer.hpp"
@@ -231,6 +233,7 @@ MemoryMaintenanceConfig maintenanceConfigFromJson(const taskforge::Json& value) 
             1, std::min<long long>(100000, bridgeSwitch.value("maxDiscarded", 1000))));
     }
     config.claimExtractor = MemoryClaimExtractor::configFromJson(value);
+    MemoryCatalog::instance().setMode(config.claimExtractor.catalogMode);
     if ((config.claimExtractor.enabled || config.lensesEnabled || config.pathsEnabled ||
          config.bridgesEnabled) && !config.enabled) {
         // Extracao, lentes e caminhos sao tarefas de manutencao; liga-las sem
@@ -435,6 +438,38 @@ MemoryStore* MemoryService::ensureTelemetry(const std::string& projectId) {
     return it == telemetry_.end() ? nullptr : it->second.get();
 }
 
+bool MemoryService::configureCatalog(const std::string& projectId, const std::string& mode,
+                                     const std::string& catalogPath, std::string* error) {
+    (void)projectId;
+    MemoryCatalog& catalog = MemoryCatalog::instance();
+    catalog.resetBuiltin();
+    catalog.setMode(mode);
+    if (!catalogPath.empty()) {
+        std::string localError;
+        std::string audit;
+        if (!catalog.loadProjectFile(catalogPath, &audit, &localError)) {
+            if (error) *error = localError;
+            return false;
+        }
+        if (auto* store = existingStore(projectId)) {
+            if (!audit.empty() && audit != "[]") {
+                store->recordAudit("catalog", "catalog_override", projectId, "", audit);
+            }
+        }
+    }
+    if (!catalogPath.empty()) {
+        if (auto* store = existingStore(projectId)) {
+            store->setMeta("catalog_fingerprint", catalog.fingerprint());
+            store->setMeta("catalog_mode", catalog.mode());
+        }
+    }
+    return true;
+}
+
+std::string MemoryService::catalogFingerprint() const {
+    return MemoryCatalog::instance().fingerprint();
+}
+
 bool MemoryService::configure(const std::string& projectId, bool persistent,
                               const std::string& dbPath, bool readOnly) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
@@ -469,8 +504,17 @@ bool MemoryService::configure(const std::string& projectId, bool persistent,
     paths_[id] = path;
     readOnly_[id] = readOnly;
 
-    if (persistent && !readOnly) {
+    if (persistent && !readOnly && path != ":memory:") {
         configureWorkspaceForProjectLocked(id, path);
+        const fs::path catalogPath = fs::path(path).parent_path() / "catalog.json";
+        std::string catalogMode = MemoryCatalog::instance().mode();
+        if (const char* env = std::getenv("ARESTRIX_MEMORY_CATALOG_MODE"); env && *env) {
+            catalogMode = env;
+        }
+        std::string catalogError;
+        configureCatalog(id, catalogMode,
+                         fs::is_regular_file(catalogPath) ? catalogPath.string() : "",
+                         &catalogError);
     }
     return true;
 }
@@ -633,8 +677,7 @@ bool MemoryService::promoteToWorkspace(const std::string& projectId, const std::
     } else if (kind == "fact") {
         MemoryEdgeRecord edge;
         if (!source->getEdge(sourceScope, memoryId, edge) || edge.status != "active" ||
-            edge.relation == "HAS_LESSON" || edge.relation == "CONTRADICTS" ||
-            edge.relation == "SUPERSEDES" || edge.relation == "GENERALIZES") {
+            isStructuralPredicate(edge.relation)) {
             error = "fato nao encontrado ou nao promovivel";
             return false;
         }
@@ -2903,6 +2946,22 @@ size_t MemoryService::repairOverlaps(const std::string& projectId, std::string& 
     return s->repairOverlaps(scopeId(projectId), error);
 }
 
+taskforge::Json MemoryService::listMultiClosures(const std::string& projectId) {
+    auto* s = ensureStore(projectId);
+    return s ? s->listMultiClosures(scopeId(projectId)) : taskforge::Json::array();
+}
+
+bool MemoryService::reopenEdge(const std::string& projectId, const std::string& edgeId,
+                               const std::string& reason, std::string& error) {
+    auto* s = ensureStore(projectId);
+    if (!s) {
+        error = "banco de conhecimento indisponivel";
+        return false;
+    }
+    invalidateBriefCache();
+    return s->reopenEdge(scopeId(projectId), edgeId, reason, error);
+}
+
 taskforge::Json MemoryService::doctor(const std::string& projectId) {
     const std::string scope = scopeId(projectId);
     taskforge::Json checks = taskforge::Json::array();
@@ -2926,7 +2985,9 @@ taskforge::Json MemoryService::doctor(const std::string& projectId) {
         checks.push_back(telemetryCheck);
         if (telemetryCheck.value("violations", 0LL) > 0) ok = false;
     }
-    return taskforge::Json{{"ok", ok}, {"projectId", projectId}, {"checks", checks}};
+    return taskforge::Json{{"ok", ok}, {"projectId", projectId}, {"checks", checks},
+                           {"catalogFingerprint", MemoryCatalog::instance().fingerprint()},
+                           {"catalogMode", MemoryCatalog::instance().mode()}};
 }
 
 taskforge::Json MemoryService::toJson(const std::string& projectId) {

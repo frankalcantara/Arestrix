@@ -22,6 +22,10 @@ struct ClaimExtractorConfig {
     std::string apiKeyEnv = "ARESTRIX_EXTRACTOR_API_KEY";
     int maxItems = 5;
     int timeoutSeconds = 60;
+    std::string catalogMode = "warn";
+    std::string structuredOutput = "auto";   // auto | json_schema | json_object | none
+    std::string protocol = "auto";           // auto | openai | anthropic
+    int maxCatalogPromptTokens = 2000;
 
     std::string fingerprint() const;
 };

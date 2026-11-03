@@ -69,7 +69,7 @@
           "memory_facet": 0,
           "memory_hit": 0,
           "memory_lens": 0,
-          "memory_meta": 2,
+          "memory_meta": 4,
           "memory_node": 11,
           "memory_node_fts": 11,
           "memory_passage": 0,
@@ -108,7 +108,7 @@
           "memory_facet": 0,
           "memory_hit": 0,
           "memory_lens": 0,
-          "memory_meta": 2,
+          "memory_meta": 4,
           "memory_node": 11,
           "memory_node_fts": 11,
           "memory_passage": 0,
@@ -295,8 +295,8 @@
       }
     },
     "schemaFingerprint": {
-      "knowledge": "5f3c69d7dcac5ae8",
-      "telemetry": "5f3c69d7dcac5ae8"
+      "knowledge": "6214a9e1159119c4",
+      "telemetry": "6214a9e1159119c4"
     }
   }
 }

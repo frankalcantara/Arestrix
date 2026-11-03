@@ -53,12 +53,16 @@ def main() -> int:
         if match:
             report["cpp"]["checksPassed"] = int(match.group(1))
             report["cpp"]["checksTotal"] = int(match.group(2))
-    phase1 = ROOT / "tests" / "fixtures" / "memory-fix5-concurrency-phase1.json"
-    if phase1.exists():
-        try:
-            report["phase1Concurrency"] = json.loads(phase1.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as ex:
-            report["phase1Concurrency"] = {"error": str(ex)}
+    for name, filename in (
+        ("phase1Concurrency", "memory-fix5-concurrency-phase1.json"),
+        ("phase2Concurrency", "memory-fix5-concurrency-phase2.json"),
+    ):
+        path = ROOT / "tests" / "fixtures" / filename
+        if path.exists():
+            try:
+                report[name] = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as ex:
+                report[name] = {"error": str(ex)}
     for name, path in (
         ("deepseek", ROOT / "tests" / "fixtures" / "memory-deepseek-long-report.json"),
         ("promptReduction", ROOT / "tests" / "fixtures" / "memory-prompt-reduction-report.json"),

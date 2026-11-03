@@ -48,6 +48,8 @@ telemetria. A raiz do projeto vem de `ARESTRIX_PROJECT_ROOT`.
 | `taskType` | Identidade estável de continuidade; padrão é o id do vértice. |
 | `contextBudgetTokens` | Orçamento do brief; `0` desativa a injeção. |
 | `contextCompaction` | Desligado por padrão. Compacta turnos concluídos em um bloco derivado com referências `[MEMO:<id>]` usando a memória existente; falhas mantêm o histórico original. |
+| `catalog.mode` | `off`, `warn` (padrão) ou `strict`. O catálogo v1 define predicados, cardinalidade, chaves de contexto e unidades; em `strict`, predicado desconhecido/estrutural ou contexto obrigatório ausente vira proposta `unresolved`. |
+| `catalog.path` | Catálogo do projeto, padrão `.arestrix/memory/catalog.json`. O projeto não muda cardinalidade embutida sem `override` auditado. |
 | `maxLessonsPerRun` | Limite de propostas por execução. |
 | `maxLessonChars` | Limite de caracteres por lição/trigger. |
 

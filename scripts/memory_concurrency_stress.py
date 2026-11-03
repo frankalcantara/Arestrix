@@ -67,6 +67,7 @@ def prepare(project: pathlib.Path, proposals: int) -> None:
                 "subject": "Lia", "subjectId": "e_lia", "predicate": "PREFERS",
                 "object": "sugar" if i % 2 == 0 else "honey", "objectId": target,
                 "value": "", "unit": "", "polarity": "positive",
+                "qualifiers": {"slot": "drink"},
                 "claim": True, "knownPredicate": True,
             }, ensure_ascii=False)
             conn.execute(

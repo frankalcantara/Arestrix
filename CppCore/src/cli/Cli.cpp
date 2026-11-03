@@ -495,7 +495,8 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory proposals list|accept|reject [id] --project <pasta> [--status pending|all] [--reason texto] [--json]\n"
                      "arestrix-cli memory embeddings status|test --project <pasta> [--model M] [--base-url URL] [--enable] [--sample texto] [--json]\n"
                      "arestrix-cli memory health --project <pasta> [--json]\n"
-                     "arestrix-cli memory doctor --project <pasta> [--repair-overlaps] [--json]\n"
+                     "arestrix-cli memory doctor --project <pasta> [--repair-overlaps] [--list-multi-closures] [--json]\n"
+                     "arestrix-cli memory reopen --edge <id> --reason <texto> --project <pasta> [--json]\n"
                      "arestrix-cli memory reindex --project <pasta> [--model M] [--base-url URL] [--force] [--json]\n"
                      "arestrix-cli memory consolidate --project <pasta> [--dormant-days N] [--no-decay] [--no-dedup] [--no-generalize] [--json]\n"
                      "arestrix-cli memory workspace init|status --project <pasta> [--workspace-id ID] [--json]\n"
@@ -516,7 +517,7 @@ int runMemory(const std::vector<std::string>& args) {
         command != "consolidate" && command != "workspace" && command != "state" &&
         command != "ab" && command != "trace" && command != "claims" &&
         command != "paths" && command != "bridges" && command != "promote" &&
-        command != "unpromote" && command != "doctor") {
+        command != "unpromote" && command != "doctor" && command != "reopen") {
         std::cerr << "arestrix-cli memory: comando desconhecido: " << command << "\n";
         return kExitUsage;
     }
@@ -648,6 +649,8 @@ int runMemory(const std::vector<std::string>& args) {
     int days = -1;
     bool keepAudit = false;
     bool repairOverlaps = false;
+    bool listMultiClosures = false;
+    std::string reopenEdgeId;
     std::string status = "pending";
     std::string reason;
     std::string embeddingModel;
@@ -700,6 +703,11 @@ int runMemory(const std::vector<std::string>& args) {
         if (a == "--json") opt.json = true;
         else if (a == "--keep-audit") keepAudit = true;
         else if (a == "--repair-overlaps") repairOverlaps = true;
+        else if (a == "--list-multi-closures") listMultiClosures = true;
+        else if (a == "--edge") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --edge\n"; return kExitUsage; }
+            reopenEdgeId = args[++i];
+        }
         else if (a == "--days") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --days\n"; return kExitUsage; }
             try { days = std::stoi(args[++i]); } catch (...) { std::cerr << "--days invalido\n"; return kExitUsage; }
@@ -1126,8 +1134,22 @@ int runMemory(const std::vector<std::string>& args) {
             return 0;
         }
 
+        if (command == "reopen") {
+            if (reopenEdgeId.empty() || reason.empty()) {
+                std::cerr << "arestrix-cli memory reopen: informe --edge e --reason\n";
+                return kExitUsage;
+            }
+            std::string reopenError;
+            const bool ok = memory.reopenEdge(projectId, reopenEdgeId, reason, reopenError);
+            taskforge::Json out{{"ok", ok}, {"edgeId", reopenEdgeId}, {"error", reopenError}};
+            if (opt.json) std::cout << out.dump(2) << "\n";
+            else std::cout << (ok ? "reopen: OK\n" : "reopen: FALHOU: " + reopenError + "\n");
+            return ok ? 0 : kExitConfig;
+        }
+
         if (command == "doctor") {
             taskforge::Json out = memory.doctor(projectId);
+            if (listMultiClosures) out["multiClosures"] = memory.listMultiClosures(projectId);
             if (repairOverlaps) {
                 std::string repairError;
                 const size_t repaired = memory.repairOverlaps(projectId, repairError);

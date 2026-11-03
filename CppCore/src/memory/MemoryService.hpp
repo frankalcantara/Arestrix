@@ -75,6 +75,10 @@ public:
     // dbPath vazio usa ARESTRIX_MEMORY_DB ou .arestrix/memory/memory.db.
     bool configure(const std::string& projectId, bool persistent,
                    const std::string& dbPath = "", bool readOnly = false);
+    // Fase 2: carrega o catalogo embutido + `.arestrix/memory/catalog.json`.
+    bool configureCatalog(const std::string& projectId, const std::string& mode = "warn",
+                          const std::string& catalogPath = "", std::string* error = nullptr);
+    std::string catalogFingerprint() const;
     bool isPersistent(const std::string& projectId) const;
     MemoryStore* store(const std::string& projectId);
     std::string databasePath(const std::string& projectId) const;
@@ -330,6 +334,9 @@ public:
     taskforge::Json doctor(const std::string& projectId);
     // Fase 1: reparo opt-in de sobreposicoes (nao encerra valores).
     size_t repairOverlaps(const std::string& projectId, std::string& error);
+    taskforge::Json listMultiClosures(const std::string& projectId);
+    bool reopenEdge(const std::string& projectId, const std::string& edgeId,
+                    const std::string& reason, std::string& error);
 
     // Estado para UI/export.
     taskforge::Json toJson(const std::string& projectId);

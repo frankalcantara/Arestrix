@@ -26,6 +26,15 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 - Knowledge databases open with `PRAGMA synchronous=FULL`; telemetry keeps
   `NORMAL`. The concurrency stress p95 moved from 0.188 s to 0.203 s against the
   Phase 0 baseline.
+- **Memory fix5 phase 2:** versioned predicate catalog (`predicates.v1.json`)
+  embedded in the binary, D11 cardinality (21 multi, 4 functional, 4 structural),
+  project catalog merge with audited overrides, `context_key` and `claim_key`
+  migration v6, canonical context/claim keys, unknown-predicate `warn`/`strict`
+  behavior, structural predicate rejection, catalog-aware overlap checks,
+  `doctor --list-multi-closures`, `memory reopen`, and catalog/structured-output
+  prompt support in the claim extractor. The 8×500 stress remains at zero
+  overlaps/duplicates with p95 around 0.24 s and the fixture backfill reports
+  the expected multi closures.
 
 ## [2.6.0] - 2026-11-02
 

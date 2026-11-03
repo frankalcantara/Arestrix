@@ -9,6 +9,7 @@ below are the next memory work. No item here blocks the current release.
 | Priority | Item | State |
 | :--- | :--- | :--- |
 | High | Context compaction backed by existing memory | Implemented behind `memory.contextCompaction` (off by default); A/B recorded |
+| High | Versioned predicate catalog and canonical claim identity | Implemented in catalog v1/schema v6; D11 applied; `warn` default and `strict` opt-in |
 | High | Extract memory into the standalone Mnemosyne module and submodule | Assessment complete; migration pending |
 | High | Enable experimental switches only after real-data A/B | Pending |
 | Medium | Institutional memory level in the Studio assistant | Pending |

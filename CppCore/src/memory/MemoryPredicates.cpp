@@ -1,33 +1,20 @@
 #include "MemoryPredicates.hpp"
 
-#include <algorithm>
-#include <cctype>
+#include "MemoryCatalog.hpp"
 
 namespace taskforge {
 namespace memory {
 
-namespace {
-
-std::string normalized(const std::string& value) {
-    std::string out = value;
-    std::transform(out.begin(), out.end(), out.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-    return out;
-}
-
-} // namespace
-
 PredicateCardinality predicateCardinality(const std::string& predicate) {
-    // Predicados que podem acumular varios objetos legitimos.
-    static const char* multiple[] = {
-        "USES", "USES_TOOL", "PRODUCES", "PRODUCES_FILE", "READS", "WRITES",
-        "TOUCHES", "CITES", "INCLUDES", "TAGGED_WITH", "HAS", "DEPENDS_ON"};
-    const std::string key = normalized(predicate);
-    for (const char* candidate : multiple) {
-        if (key == candidate) return PredicateCardinality::Multiple;
+    MemoryCatalog& catalog = MemoryCatalog::instance();
+    const CatalogPredicate* entry = catalog.find(predicate);
+    if (!entry || !entry->claimable) {
+        if (!entry && catalog.mode() == "off") return PredicateCardinality::Single;
+        return PredicateCardinality::Unknown;
     }
-    // Desconhecido = funcional/single-valued: um novo valor encerra o anterior.
-    return PredicateCardinality::Single;
+    if (entry->cardinality == "functional") return PredicateCardinality::Single;
+    if (entry->cardinality == "multi") return PredicateCardinality::Multiple;
+    return PredicateCardinality::Unknown;
 }
 
 bool isSingleValuedPredicate(const std::string& predicate) {
@@ -39,18 +26,19 @@ bool isMultiValuedPredicate(const std::string& predicate) {
 }
 
 bool isKnownPredicate(const std::string& predicate) {
-    static const char* catalog[] = {
-        "USES", "USES_TOOL", "PRODUCES", "PRODUCES_FILE", "READS", "WRITES",
-        "TOUCHES", "CITES", "INCLUDES", "TAGGED_WITH", "HAS", "DEPENDS_ON",
-        "HAS_VALUE", "MEASURES", "LOCATED_IN", "AUTHORED_BY", "REQUIRES",
-        "SUPPORTS", "CONTRADICTS", "SUPERSEDES", "GENERALIZES", "IS_A",
-        "PART_OF", "OWNS", "MANAGES", "PREFERS", "MENTIONS", "DEFINES"
-    };
-    const std::string key = normalized(predicate);
-    for (const char* candidate : catalog) {
-        if (key == candidate) return true;
-    }
-    return false;
+    return MemoryCatalog::instance().isKnown(predicate);
+}
+
+bool isStructuralPredicate(const std::string& predicate) {
+    return MemoryCatalog::instance().isStructural(predicate);
+}
+
+bool isClaimablePredicate(const std::string& predicate) {
+    return MemoryCatalog::instance().isClaimable(predicate);
+}
+
+std::string canonicalPredicateName(const std::string& predicate) {
+    return MemoryCatalog::instance().canonicalName(predicate);
 }
 
 } // namespace memory
