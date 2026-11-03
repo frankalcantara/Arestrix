@@ -58,7 +58,7 @@ arestrix-cli gen <graph.json>
 arestrix-cli check [--project <folder> | <graph.json>] [--require-env NAME]
 arestrix-cli doctor [--project <folder>]
 arestrix-cli env set|reset|list|check
-arestrix-cli memory report|health|trace|claims|paths|bridges|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote|unpromote|state|ab [--project <folder>]
+arestrix-cli memory report|health|doctor|trace|claims|paths|bridges|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote|unpromote|state|ab [--project <folder>]
 arestrix-cli mcp list|test|tools [id]
 arestrix-cli project info|graphs|validate
 arestrix-cli completion powershell|bash|zsh
@@ -141,6 +141,17 @@ inputs, intent pairs, citation, reuse and tokens per execution. Thresholds can b
 Shows operational knowledge and telemetry database status, embedding indexing,
 pending work and access errors. For schema version/fingerprint and table counts,
 use `memory report`.
+
+### `memory doctor`
+
+```powershell
+.\arestrix-cli.exe memory doctor --project .\examples\04-memoria --json
+```
+
+Runs read-only diagnostics: overlapping functional values, duplicate active
+`edge_hash`, unknown-predicate fraction, closures by predicate/reason, derived
+objects with unresolved JSON inputs, and uncited items repeated in rejected
+tasks. The exit code is non-zero when a check has violations.
 
 ### `memory trace`
 

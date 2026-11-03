@@ -325,6 +325,9 @@ public:
                                  const std::string& itemId, const std::string& taskType,
                                  size_t limit);
 
+    // Fase 0: doctor somente leitura do conhecimento e da telemetria.
+    taskforge::Json doctor(const std::string& projectId);
+
     // Estado para UI/export.
     taskforge::Json toJson(const std::string& projectId);
     taskforge::Json toCognitiveJson(const std::string& projectId);

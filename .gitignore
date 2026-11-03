@@ -48,6 +48,8 @@ taskforge-recent-projects.json
 *.sqlite-shm
 # Dumps/backups de bancos nunca entram no Git: a custodia e externa ao Arestrix
 *.sql
+# Fixture SQL versionado da Fase 0 (memory-v4) e revisavel em diff.
+!tests/fixtures/memory-v4/*.sql
 *.dump.json
 *.db.corrupt-*
 /arestrix-blackboard-*.json

@@ -6,6 +6,7 @@
 // lições e métricas de uso de API. A API pública é usada por MemoryService.
 
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -372,6 +373,11 @@ public:
     bool isOpen() const { return db_ != nullptr; }
     bool isReadOnly() const { return readOnly_; }
 
+    // Fase 0: gancho de teste chamado entre a validacao e a escrita. Nulo em
+    // producao; usado pelo TwoConnectionHarness para intercalar dois processos.
+    using TestInterleaveHook = std::function<void(const std::string&)>;
+    void setTestInterleaveHook(TestInterleaveHook hook);
+
     // Deixa uma copia pronta para ser aberta somente leitura: consolida o WAL
     // e volta ao journal em disco, para que medir o hash nao dependa de -wal.
     static bool sealForReadOnly(const std::string& path, std::string& error);
@@ -724,6 +730,8 @@ public:
                                                    const std::string& targetId = "",
                                                    size_t limit = 100) const;
     taskforge::Json evidenceSummary(const std::string& scopeId) const;
+    // Fase 0: verificacoes somente leitura para o doctor. Nao escreve.
+    taskforge::Json diagnostics(const std::string& scopeId) const;
     size_t evidenceCount(const std::string& scopeId, const std::string& targetKind,
                          const std::string& targetId) const;
 
@@ -765,6 +773,7 @@ private:
     size_t maxActiveLessons_ = kMaxActiveLessons;
     bool readOnly_ = false;
     mutable std::string lastError_;
+    TestInterleaveHook testInterleaveHook_;
 };
 
 } // namespace memory

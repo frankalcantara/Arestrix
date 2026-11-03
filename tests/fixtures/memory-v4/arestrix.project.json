@@ -1,0 +1,10 @@
+{
+  "projectId": "memory-v4",
+  "name": "Memory v4 fixture",
+  "globalDefaults": {
+    "memory": {
+      "enabled": false,
+      "persistent": true
+    }
+  }
+}

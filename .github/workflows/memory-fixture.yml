@@ -1,0 +1,28 @@
+name: Memory fixture
+
+# Fase 0 do plano de correção da memória: o fixture SQL memory-v4 e montado em
+# tempo de execução e conferido por um dump canônico. Nenhum .db e versionado.
+
+on:
+  pull_request:
+    paths:
+      - "tests/fixtures/memory-v4/**"
+      - "scripts/memory_fixture_check.py"
+      - ".github/workflows/memory-fixture.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    name: memory-fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Check canonical fixture hash
+        run: python scripts/memory_fixture_check.py
