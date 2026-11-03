@@ -705,6 +705,15 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                   {"cacheWriteTokens", usage.cacheWriteTokens},
                   {"calls", usage.calls}, {"retries", usage.retries},
                   {"memoryEnabled", spec.memoryEnabled}, {"memoryContextChars", usage.memoryContextChars}};
+        const std::string prefixHash = project::RunnerSecurity::sha256(chat.systemCacheable);
+        meta["prefixHash"] = prefixHash;
+        if (!spec.memoryProjectId.empty()) {
+            memory.recordTraceStep(spec.memoryProjectId, runId, nodeId, itemId, taskType,
+                                   intentTemplateHash, inputHash,
+                                   json{{"kind", "prefix"}, {"prefixHash", prefixHash},
+                                        {"cachedTokens", usage.cachedTokens},
+                                        {"cacheWriteTokens", usage.cacheWriteTokens}});
+        }
         json compactionMeta = json::object();
         if (!spec.memoryProjectId.empty() && spec.memoryContextCompaction) {
             json ids = json::array();
@@ -960,6 +969,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
             {"total_tokens", inTokens + outTokens},
             {"cached_tokens", cachedTokens},
             {"cache_write_tokens", cacheWriteTokens},
+            {"prefix_hash", project::RunnerSecurity::sha256(chat.systemCacheable)},
             {"calls", turns},
             {"retries", retries},
             {"memory_enabled", spec.memoryEnabled},

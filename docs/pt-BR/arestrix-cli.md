@@ -58,7 +58,7 @@ arestrix-cli gen <grafo.json>
 arestrix-cli check [--project <pasta> | <grafo.json>] [--require-env NOME]
 arestrix-cli doctor [--project <pasta>]
 arestrix-cli env set|reset|list|check
-arestrix-cli memory report|health|trace|claims|paths|bridges|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote|unpromote|state|ab [--project <pasta>]
+arestrix-cli memory report|health|doctor|trace|claims|paths|bridges|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote|unpromote|state|ab [--project <pasta>]
 arestrix-cli mcp list|test|tools [id]
 arestrix-cli project info|graphs|validate
 arestrix-cli completion powershell|bash|zsh
@@ -141,6 +141,18 @@ com `--min-verdict-rate`, `--min-citation-rate`, `--min-executions`, `--min-dist
 Mostra o estado operacional do banco de conhecimento e da telemetria, incluindo
 indexação de embeddings, pendências e erros de acesso. Para versão/fingerprint do
 esquema e contagens por tabela, use `memory report`.
+
+### `memory doctor`
+
+```powershell
+.\arestrix-cli.exe memory doctor --project .\examples\04-memoria --json
+```
+
+Executa diagnósticos somente leitura: sobreposição de valores funcionais,
+`edge_hash` ativo duplicado, fração de predicados desconhecidos, encerramentos
+por predicado/motivo, derivados com entradas JSON não resolvidas e itens não
+citados que se repetem em tarefas rejeitadas. O código de saída é diferente de
+zero quando há violações.
 
 ### `memory trace`
 

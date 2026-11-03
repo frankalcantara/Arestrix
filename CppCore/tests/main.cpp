@@ -159,6 +159,42 @@ static fs::path makeTempDir(const std::string& tag) {
     return p;
 }
 
+// Fase 0: monta um banco a partir de um script SQL versionado.
+static void execSqlFile(sqlite3* db, const fs::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) throw std::runtime_error("fixture SQL ausente: " + path.string());
+    std::string sql((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    char* error = nullptr;
+    if (sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &error) != SQLITE_OK) {
+        std::string message = error ? error : "erro SQL";
+        sqlite3_free(error);
+        throw std::runtime_error("fixture SQL falhou em " + path.string() + ": " + message);
+    }
+}
+
+static void loadFixtureDb(const fs::path& dir,
+                          const fs::path& knowledgePath,
+                          const fs::path& telemetryPath) {
+    const fs::path fixture = fs::path("tests") / "fixtures" / "memory-v4";
+    for (const auto& pair : {std::make_pair(knowledgePath, std::string("knowledge")),
+                             std::make_pair(telemetryPath, std::string("telemetry"))}) {
+        sqlite3* db = nullptr;
+        if (sqlite3_open(pair.first.string().c_str(), &db) != SQLITE_OK) {
+            if (db) sqlite3_close(db);
+            throw std::runtime_error("nao foi possivel abrir " + pair.first.string());
+        }
+        try {
+            execSqlFile(db, fixture / "schema.sql");
+            execSqlFile(db, fixture / ("seed-" + pair.second + ".sql"));
+        } catch (...) {
+            sqlite3_close(db);
+            throw;
+        }
+        sqlite3_close(db);
+    }
+    (void)dir;
+}
+
 // ---------------------------------------------------------------------------
 // JSON (simdjson)
 // ---------------------------------------------------------------------------
@@ -6124,6 +6160,42 @@ TEST(memory_service_brief_respects_budget) {
     CHECK(zeroInfo.chars == 0 && zeroInfo.estimatedTokens == 0 && !zeroInfo.truncated);
     CHECK(zeroInfo.lessonIds.empty() && zeroInfo.workingKeys.empty());
     memory.closeProject("brief-test");
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_v4_fixture_doctor_reports_planted_violations) {
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-v4-doctor");
+    const fs::path knowledgePath = dir / "knowledge.db";
+    const fs::path telemetryPath = dir / "telemetry.db";
+    loadFixtureDb(dir, knowledgePath, telemetryPath);
+    MemoryStore knowledge(knowledgePath.string());
+    MemoryStore telemetry(telemetryPath.string());
+    std::string error;
+    CHECK(knowledge.open(error));
+    CHECK(telemetry.open(error));
+    const std::string scope = "project:memory-v4";
+    const auto report = knowledge.diagnostics(scope);
+    const auto checks = report.value("checks", taskforge::Json::array());
+    CHECK(checks.size() == 6);
+    auto find = [&](const std::string& id) {
+        for (const auto& check : checks) {
+            if (check.value("id", std::string()) == id) return check;
+        }
+        return taskforge::Json::object();
+    };
+    CHECK(find("functional_overlap").value("violations", 0LL) >= 1);
+    CHECK(find("duplicate_active_edge_hash").value("violations", 0LL) >= 1);
+    CHECK(find("unknown_predicate_fraction").value("violations", 0LL) >= 1);
+    CHECK(find("closure_reasons").value("violations", 0LL) >= 2);
+    CHECK(find("unresolved_derived_inputs").value("violations", 0LL) >= 1);
+    const auto telemetryReport = telemetry.diagnostics(scope);
+    const auto telemetryChecks = telemetryReport.value("checks", taskforge::Json::array());
+    CHECK(telemetryChecks.size() == 6);
+    CHECK(telemetryChecks[5].value("violations", 0LL) >= 1);
+    knowledge.close();
+    telemetry.close();
     std::error_code ec;
     fs::remove_all(dir, ec);
 }

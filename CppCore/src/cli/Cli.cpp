@@ -495,6 +495,7 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory proposals list|accept|reject [id] --project <pasta> [--status pending|all] [--reason texto] [--json]\n"
                      "arestrix-cli memory embeddings status|test --project <pasta> [--model M] [--base-url URL] [--enable] [--sample texto] [--json]\n"
                      "arestrix-cli memory health --project <pasta> [--json]\n"
+                     "arestrix-cli memory doctor --project <pasta> [--json]\n"
                      "arestrix-cli memory reindex --project <pasta> [--model M] [--base-url URL] [--force] [--json]\n"
                      "arestrix-cli memory consolidate --project <pasta> [--dormant-days N] [--no-decay] [--no-dedup] [--no-generalize] [--json]\n"
                      "arestrix-cli memory workspace init|status --project <pasta> [--workspace-id ID] [--json]\n"
@@ -514,7 +515,8 @@ int runMemory(const std::vector<std::string>& args) {
         command != "embeddings" && command != "health" && command != "reindex" &&
         command != "consolidate" && command != "workspace" && command != "state" &&
         command != "ab" && command != "trace" && command != "claims" &&
-        command != "paths" && command != "bridges" && command != "promote" && command != "unpromote") {
+        command != "paths" && command != "bridges" && command != "promote" &&
+        command != "unpromote" && command != "doctor") {
         std::cerr << "arestrix-cli memory: comando desconhecido: " << command << "\n";
         return kExitUsage;
     }
@@ -1120,6 +1122,21 @@ int runMemory(const std::vector<std::string>& args) {
                           << " | modelo " << out.value("model", std::string()) << "\n";
             }
             return 0;
+        }
+
+        if (command == "doctor") {
+            taskforge::Json out = memory.doctor(projectId);
+            if (opt.json) {
+                std::cout << out.dump(2) << "\n";
+            } else {
+                std::cout << (out.value("ok", false) ? "doctor: OK\n" : "doctor: FALHOU\n");
+                for (const auto& check : out.value("checks", taskforge::Json::array())) {
+                    std::cout << "  " << check.value("status", std::string("?"))
+                              << "  " << check.value("id", std::string("?"))
+                              << "  violacoes=" << check.value("violations", 0LL) << "\n";
+                }
+            }
+            return out.value("ok", false) ? 0 : kExitConfig;
         }
 
         if (command == "state") {

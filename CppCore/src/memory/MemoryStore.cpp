@@ -13,6 +13,7 @@
 #include <cstring>
 #include <ctime>
 #include <filesystem>
+#include <map>
 #include <set>
 #include <sstream>
 #include <thread>
@@ -221,6 +222,11 @@ MemoryStore::MemoryStore(std::string path, size_t maxActiveLessons, bool readOnl
     : path_(std::move(path)),
       maxActiveLessons_(maxActiveLessons == 0 ? kMaxActiveLessons : maxActiveLessons),
       readOnly_(readOnly) {}
+
+void MemoryStore::setTestInterleaveHook(TestInterleaveHook hook) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    testInterleaveHook_ = std::move(hook);
+}
 
 MemoryStore::~MemoryStore() {
     close();
@@ -1891,6 +1897,7 @@ std::string MemoryStore::recordEdge(const std::string& scopeId, const std::strin
     }
 
     const std::string id = newId("edge");
+    if (testInterleaveHook_) testInterleaveHook_("recordEdge:before_insert");
     Stmt st;
     if (!prepare(db_, "INSERT INTO memory_edge(id,scope_id,src_id,dst_id,relation,value_json,valid_from,valid_to,recorded_at,confidence,status,source_kind,source_ref,edge_hash,metadata) "
                        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", st, error)) {
@@ -3436,6 +3443,7 @@ bool MemoryStore::promoteProposal(const std::string& scopeId, const std::string&
         error = "proposta sem evidencia nao pode ser promovida";
         return false;
     }
+    if (testInterleaveHook_) testInterleaveHook_("promoteProposal:before_write");
 
     std::string promoted;
     if (proposal.kind == "lesson") {
@@ -7018,6 +7026,255 @@ void MemoryStore::audit(const std::string& actor, const std::string& action,
     bindNullableText(st.stmt, 6, after);
     bindText(st.stmt, 7, nowIso());
     stepRetry(st.stmt);
+}
+
+taskforge::Json MemoryStore::diagnostics(const std::string& scopeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json checks = taskforge::Json::array();
+    if (!db_) {
+        return taskforge::Json{{"ok", false}, {"error", "banco de memoria fechado"},
+                               {"checks", checks}};
+    }
+    auto addCheck = [&](const std::string& id, long long violations,
+                        const taskforge::Json& details) {
+        checks.push_back(taskforge::Json{
+            {"id", id},
+            {"status", violations == 0 ? "ok" : "violations"},
+            {"violations", violations},
+            {"details", details}});
+    };
+
+    // 1. Sobreposicao de valores ativos para predicados funcionais.
+    {
+        struct EdgeView {
+            std::string id;
+            std::string src;
+            std::string relation;
+            std::string dst;
+            std::string value;
+            std::string from;
+            std::string to;
+        };
+        std::vector<EdgeView> edges;
+        Stmt st;
+        std::string error;
+        if (prepare(db_, "SELECT id,src_id,relation,COALESCE(dst_id,''),COALESCE(value_json,''),"
+                           "COALESCE(valid_from,''),COALESCE(valid_to,'') "
+                           "FROM memory_edge WHERE scope_id=? AND status='active' ORDER BY id",
+                     st, error)) {
+            bindText(st.stmt, 1, scopeId);
+            while (stepRetry(st.stmt) == SQLITE_ROW) {
+                edges.push_back({columnText(st.stmt, 0), columnText(st.stmt, 1),
+                                 columnText(st.stmt, 2), columnText(st.stmt, 3),
+                                 columnText(st.stmt, 4), columnText(st.stmt, 5),
+                                 columnText(st.stmt, 6)});
+            }
+        }
+        std::map<std::string, std::vector<const EdgeView*>> groups;
+        for (const auto& edge : edges) {
+            if (!isSingleValuedPredicate(edge.relation)) continue;
+            groups[edge.src + "\x1f" + edge.relation].push_back(&edge);
+        }
+        auto lower = [](const std::string& value) {
+            return value.empty() ? std::string("0000-00-00T00:00:00Z") : value;
+        };
+        auto upper = [](const std::string& value) {
+            return value.empty() ? std::string("9999-12-31T23:59:59Z") : value;
+        };
+        long long violations = 0;
+        taskforge::Json samples = taskforge::Json::array();
+        for (const auto& group : groups) {
+            const auto& list = group.second;
+            for (size_t i = 0; i < list.size(); ++i) {
+                for (size_t j = i + 1; j < list.size(); ++j) {
+                    const auto& a = *list[i];
+                    const auto& b = *list[j];
+                    if (a.dst == b.dst && a.value == b.value) continue;
+                    if (!(lower(a.from) < upper(b.to) && lower(b.from) < upper(a.to))) continue;
+                    ++violations;
+                    if (samples.size() < 20) {
+                        samples.push_back(taskforge::Json{{"a", a.id}, {"b", b.id},
+                                                          {"relation", a.relation}});
+                    }
+                }
+            }
+        }
+        addCheck("functional_overlap", violations, taskforge::Json{{"samples", samples}});
+    }
+
+    // 2. edge_hash ativo duplicado.
+    {
+        Stmt st;
+        std::string error;
+        long long violations = 0;
+        taskforge::Json samples = taskforge::Json::array();
+        if (prepare(db_, "SELECT edge_hash,COUNT(*) FROM memory_edge "
+                           "WHERE scope_id=? AND status='active' GROUP BY edge_hash HAVING COUNT(*)>1",
+                     st, error)) {
+            bindText(st.stmt, 1, scopeId);
+            while (stepRetry(st.stmt) == SQLITE_ROW) {
+                ++violations;
+                if (samples.size() < 20) {
+                    samples.push_back(taskforge::Json{{"edgeHash", columnText(st.stmt, 0)},
+                                                      {"count", columnInt(st.stmt, 1)}});
+                }
+            }
+        }
+        addCheck("duplicate_active_edge_hash", violations,
+                 taskforge::Json{{"samples", samples}});
+    }
+
+    // 3. Fracao de afirmacoes com knownPredicate=false.
+    {
+        long long total = 0;
+        long long unknown = 0;
+        Stmt st;
+        std::string error;
+        if (prepare(db_, "SELECT COUNT(*),"
+                           "COALESCE(SUM(CASE WHEN metadata LIKE '%\"knownPredicate\":false%' "
+                           "THEN 1 ELSE 0 END),0) FROM memory_edge WHERE scope_id=?",
+                     st, error)) {
+            bindText(st.stmt, 1, scopeId);
+            if (stepRetry(st.stmt) == SQLITE_ROW) {
+                total = columnInt(st.stmt, 0);
+                unknown = columnInt(st.stmt, 1);
+            }
+        }
+        addCheck("unknown_predicate_fraction", unknown,
+                 taskforge::Json{{"total", total}, {"unknown", unknown},
+                                 {"fraction", total == 0 ? 0.0 : static_cast<double>(unknown) / total}});
+    }
+
+    // 4. Encerramentos por predicado e motivo.
+    {
+        Stmt st;
+        std::string error;
+        long long violations = 0;
+        taskforge::Json groups = taskforge::Json::array();
+        if (prepare(db_, "SELECT relation,"
+                           "COALESCE(json_extract(metadata,'$.invalidationReason'),''),COUNT(*) "
+                           "FROM memory_edge WHERE scope_id=? AND status<>'active' "
+                           "AND json_extract(metadata,'$.invalidationReason') IS NOT NULL "
+                           "GROUP BY relation,2 ORDER BY relation",
+                     st, error)) {
+            bindText(st.stmt, 1, scopeId);
+            while (stepRetry(st.stmt) == SQLITE_ROW) {
+                ++violations;
+                groups.push_back(taskforge::Json{{"relation", columnText(st.stmt, 0)},
+                                                 {"reason", columnText(st.stmt, 1)},
+                                                 {"count", columnInt(st.stmt, 2)}});
+            }
+        }
+        addCheck("closure_reasons", violations, taskforge::Json{{"groups", groups}});
+    }
+
+    // 5. Derivados com entradas nao resolvidas (aproximacao por JSON).
+    {
+        long long violations = 0;
+        taskforge::Json samples = taskforge::Json::array();
+        auto edgeExists = [&](const std::string& id) {
+            Stmt st;
+            std::string error;
+            if (!prepare(db_, "SELECT 1 FROM memory_edge WHERE scope_id=? AND id=? LIMIT 1", st, error)) {
+                return false;
+            }
+            bindText(st.stmt, 1, scopeId);
+            bindText(st.stmt, 2, id);
+            return stepRetry(st.stmt) == SQLITE_ROW;
+        };
+        auto checkArray = [&](const std::string& kind, const std::string& owner,
+                              const std::string& json) {
+            auto parsed = taskforge::jsonutil::tryParse(json);
+            if (!parsed || !parsed->is_array()) return;
+            for (const auto& item : *parsed) {
+                if (!item.is_string()) continue;
+                if (edgeExists(item.str())) continue;
+                ++violations;
+                if (samples.size() < 20) {
+                    samples.push_back(taskforge::Json{{"kind", kind}, {"owner", owner},
+                                                      {"missing", item.str()}});
+                }
+            }
+        };
+        Stmt facets;
+        std::string error;
+        if (prepare(db_, "SELECT id,supporting_claims_json FROM memory_facet "
+                           "WHERE scope_id=? AND status='active'", facets, error)) {
+            bindText(facets.stmt, 1, scopeId);
+            while (stepRetry(facets.stmt) == SQLITE_ROW) {
+                checkArray("facet", columnText(facets.stmt, 0), columnText(facets.stmt, 1));
+            }
+        }
+        Stmt playbooks;
+        if (prepare(db_, "SELECT id,evidence_json FROM memory_playbook WHERE scope_id=?", playbooks, error)) {
+            bindText(playbooks.stmt, 1, scopeId);
+            while (stepRetry(playbooks.stmt) == SQLITE_ROW) {
+                checkArray("playbook", columnText(playbooks.stmt, 0), columnText(playbooks.stmt, 1));
+            }
+        }
+        Stmt evidence;
+        if (prepare(db_, "SELECT target_kind,target_id FROM memory_evidence WHERE scope_id=?", evidence, error)) {
+            bindText(evidence.stmt, 1, scopeId);
+            while (stepRetry(evidence.stmt) == SQLITE_ROW) {
+                const std::string kind = columnText(evidence.stmt, 0);
+                const std::string id = columnText(evidence.stmt, 1);
+                bool exists = false;
+                Stmt probe;
+                std::string probeError;
+                std::string table;
+                if (kind == "claim" || kind == "fact" || kind == "lesson" || kind == "edge") table = "memory_edge";
+                else if (kind == "playbook") table = "memory_playbook";
+                else if (kind == "episode") table = "memory_episode";
+                else if (kind == "entity") table = "memory_node";
+                else if (kind == "proposal") table = "memory_proposal";
+                if (!table.empty() &&
+                    prepare(db_, "SELECT 1 FROM " + table + " WHERE scope_id=? AND id=? LIMIT 1", probe, probeError)) {
+                    bindText(probe.stmt, 1, scopeId);
+                    bindText(probe.stmt, 2, id);
+                    exists = stepRetry(probe.stmt) == SQLITE_ROW;
+                }
+                if (!exists) {
+                    ++violations;
+                    if (samples.size() < 20) {
+                        samples.push_back(taskforge::Json{{"kind", "evidence"},
+                                                          {"owner", kind + ":" + id},
+                                                          {"missing", id}});
+                    }
+                }
+            }
+        }
+        addCheck("unresolved_derived_inputs", violations, taskforge::Json{{"samples", samples}});
+    }
+
+    // 6. Itens entregues e nao citados que se repetem em tarefas rejeitadas.
+    {
+        Stmt st;
+        std::string error;
+        long long violations = 0;
+        taskforge::Json samples = taskforge::Json::array();
+        if (prepare(db_, "SELECT memory_id,kind,COUNT(*) FROM memory_hit "
+                           "WHERE scope_id=? AND used=0 AND outcome='failure' "
+                           "GROUP BY memory_id,kind HAVING COUNT(*)>1 ORDER BY memory_id",
+                     st, error)) {
+            bindText(st.stmt, 1, scopeId);
+            while (stepRetry(st.stmt) == SQLITE_ROW) {
+                ++violations;
+                if (samples.size() < 20) {
+                    samples.push_back(taskforge::Json{{"memoryId", columnText(st.stmt, 0)},
+                                                      {"kind", columnText(st.stmt, 1)},
+                                                      {"count", columnInt(st.stmt, 2)}});
+                }
+            }
+        }
+        addCheck("uncited_repeated_on_failure", violations,
+                 taskforge::Json{{"samples", samples}});
+    }
+
+    bool ok = true;
+    for (const auto& check : checks) {
+        if (check.value("violations", 0LL) > 0) ok = false;
+    }
+    return taskforge::Json{{"ok", ok}, {"checks", checks}};
 }
 
 } // namespace memory

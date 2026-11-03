@@ -8,6 +8,13 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ## [Unreleased]
 
+### Added
+
+- **Memory fix5 phase 0:** read-only `arestrix-cli memory doctor` with six
+  diagnostics, SQL fixture `tests/fixtures/memory-v4` checked by canonical dump,
+  `prefix_hash` in the trace/episode metadata, two-connection test hook,
+  concurrency stress baseline and `memory-fix5-baseline.json`.
+
 ## [2.6.0] - 2026-11-02
 
 ### Added

@@ -2892,6 +2892,32 @@ bool MemoryService::unpromotePlaybook(const std::string& projectId, const std::s
     return s->unpromotePlaybook(scopeId(projectId), playbookId, reason, error);
 }
 
+taskforge::Json MemoryService::doctor(const std::string& projectId) {
+    const std::string scope = scopeId(projectId);
+    taskforge::Json checks = taskforge::Json::array();
+    bool ok = true;
+    if (auto* knowledge = ensureStore(projectId)) {
+        const auto report = knowledge->diagnostics(scope);
+        const auto list = report.value("checks", taskforge::Json::array());
+        for (size_t i = 0; i < list.size(); ++i) {
+            if (i == 5) continue;   // a verificacao 6 usa a telemetria
+            checks.push_back(list[i]);
+            if (list[i].value("violations", 0LL) > 0) ok = false;
+        }
+    }
+    taskforge::Json telemetryCheck;
+    if (auto* telemetry = telemetryStore(projectId)) {
+        const auto report = telemetry->diagnostics(scope);
+        const auto list = report.value("checks", taskforge::Json::array());
+        if (list.size() > 5) telemetryCheck = list[5];
+    }
+    if (telemetryCheck.is_object()) {
+        checks.push_back(telemetryCheck);
+        if (telemetryCheck.value("violations", 0LL) > 0) ok = false;
+    }
+    return taskforge::Json{{"ok", ok}, {"projectId", projectId}, {"checks", checks}};
+}
+
 taskforge::Json MemoryService::toJson(const std::string& projectId) {
     auto* s = ensureStore(projectId);
     if (!s) return taskforge::Json::object();
