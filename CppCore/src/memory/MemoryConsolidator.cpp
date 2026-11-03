@@ -74,8 +74,7 @@ bool isLesson(const MemoryEdgeRecord& edge) {
 }
 
 bool isMarker(const MemoryEdgeRecord& edge) {
-    return edge.relation == "CONTRADICTS" || edge.relation == "SUPERSEDES" ||
-           edge.relation == "GENERALIZES";
+    return isStructuralPredicate(edge.relation) && edge.relation != "HAS_LESSON";
 }
 
 struct EdgeView {

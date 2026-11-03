@@ -48,6 +48,8 @@ telemetry. The project root comes from `ARESTRIX_PROJECT_ROOT`.
 | `taskType` | Stable continuity identity; defaults to the vertex id. |
 | `contextBudgetTokens` | Brief budget; `0` disables injection. |
 | `contextCompaction` | Off by default. Compacts finished turns into a derived block with `[MEMO:<id>]` references using existing memory; failures keep the original history. |
+| `catalog.mode` | `off`, `warn` (default) or `strict`. The v1 catalog defines predicates, cardinality, context keys and units; in `strict`, an unknown/structural predicate or missing required context becomes an `unresolved` proposal. |
+| `catalog.path` | Project catalog, default `.arestrix/memory/catalog.json`. A project cannot change built-in cardinality without an audited `override`. |
 | `maxLessonsPerRun` | Proposal limit per run. |
 | `maxLessonChars` | Character limit per lesson/trigger. |
 

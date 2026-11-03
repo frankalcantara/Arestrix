@@ -58,7 +58,7 @@ arestrix-cli gen <grafo.json>
 arestrix-cli check [--project <pasta> | <grafo.json>] [--require-env NOME]
 arestrix-cli doctor [--project <pasta>]
 arestrix-cli env set|reset|list|check
-arestrix-cli memory report|health|doctor|trace|claims|paths|bridges|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote|unpromote|state|ab [--project <pasta>]
+arestrix-cli memory report|health|doctor|trace|claims|paths|bridges|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote|unpromote|reopen|state|ab [--project <pasta>]
 arestrix-cli mcp list|test|tools [id]
 arestrix-cli project info|graphs|validate
 arestrix-cli completion powershell|bash|zsh
@@ -154,7 +154,11 @@ por predicado/motivo, derivados com entradas JSON não resolvidas e itens não
 citados que se repetem em tarefas rejeitadas. O código de saída é diferente de
 zero quando há violações. Com `--repair-overlaps`, o comando marca os pares
 funcionais sobrepostos com `metadata.disputed=true` e cria uma aresta
-`CONTRADICTS` entre os objetos; nenhum valor é encerrado automaticamente.
+`CONTRADICTS` entre os objetos; nenhum valor é encerrado automaticamente. Com
+`--list-multi-closures`, lista os encerramentos antigos cujo predicado passou a
+multi, estrutural ou funcional sem o contexto obrigatório. `memory reopen --edge
+<id> --reason <texto>` reabre um deles em transação e recusa uma reabertura que
+criaria sobreposição funcional.
 
 ### `memory trace`
 

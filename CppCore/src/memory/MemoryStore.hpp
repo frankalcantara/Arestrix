@@ -456,6 +456,12 @@ public:
     // Fase 1: marca pares funcionais sobrepostos como disputed e cria
     // CONTRADICTS entre os objetos. Nao encerra nenhum valor.
     size_t repairOverlaps(const std::string& scopeId, std::string& error);
+    // Fase 2: encerramentos antigos de predicados que passaram a multi,
+    // estruturais ou funcionais sem contexto obrigatorio.
+    taskforge::Json listMultiClosures(const std::string& scopeId) const;
+    size_t claimSupportRootCount(const std::string& scopeId, const std::string& claimKey) const;
+    bool reopenEdge(const std::string& scopeId, const std::string& edgeId,
+                    const std::string& reason, std::string& error);
     // Remove telemetria mais antiga que olderThanDays. 0 ou negativo = manter tudo.
     MemoryPruneResult prune(const std::string& scopeId, int olderThanDays);
     // Descarta o banco efemero (:memory:) inteiro e recria o schema.
@@ -572,7 +578,9 @@ public:
                            double confidence = 0.5, const std::string& status = "active",
                            const std::string& sourceKind = "agent",
                            const std::string& sourceRef = "",
-                           const taskforge::Json& metadata = taskforge::Json::object());
+                           const taskforge::Json& metadata = taskforge::Json::object(),
+                           const std::string& contextKey = "",
+                           const std::string& claimKey = "");
     bool invalidateEdge(const std::string& edgeId, const std::string& validTo,
                         const std::string& reason, const std::string& actor = "runtime");
     std::vector<MemoryEdgeRecord> neighbors(const std::string& scopeId,
