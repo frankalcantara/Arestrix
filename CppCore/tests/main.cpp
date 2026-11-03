@@ -380,11 +380,20 @@ TEST(memory_tool_enforces_quota_and_charset) {
     // Duas licoes passam; a terceira e bloqueada pelo limite por execucao.
     ctx.memoryMaxLessonChars = 1000;
     ctx.memoryMaxLessonsPerRun = 2;
+    ++ctx.toolCallSeq;
     CHECK(!taskforge::rt::executeTool(ctx, "memory_propose_lesson",
         {{"domain", "teste"}, {"rule", "regra-um"}, {"trigger", "manual"}}).isError);
+    ++ctx.toolCallSeq;
     CHECK(!taskforge::rt::executeTool(ctx, "memory_propose_lesson",
         {{"domain", "teste"}, {"rule", "regra-dois"}, {"trigger", "manual"}}).isError);
     CHECK(ctx.memoryLessonsWritten == 2);
+    // Repeticao da mesma chave de operacao devolve a proposta existente.
+    ctx.memoryMaxLessonsPerRun = 3;
+    ctx.toolCallSeq = 2;
+    CHECK(!taskforge::rt::executeTool(ctx, "memory_propose_lesson",
+        {{"domain", "teste"}, {"rule", "regra-dois"}, {"trigger", "manual"}}).isError);
+    CHECK(memory.listProposals(pId, "pending", 10).size() == 2);
+    ctx.memoryMaxLessonsPerRun = 2;
     auto limitErr = taskforge::rt::executeTool(ctx, "memory_propose_lesson",
         {{"domain", "teste"}, {"rule", "regra-tres"}, {"trigger", "manual"}});
     CHECK(limitErr.isError);
@@ -6186,16 +6195,338 @@ TEST(memory_v4_fixture_doctor_reports_planted_violations) {
         return taskforge::Json::object();
     };
     CHECK(find("functional_overlap").value("violations", 0LL) >= 1);
-    CHECK(find("duplicate_active_edge_hash").value("violations", 0LL) >= 1);
+    // A migracao 5 resolve a duplicata do seed antes de criar o indice unico.
+    CHECK(find("duplicate_active_edge_hash").value("violations", 0LL) == 0);
     CHECK(find("unknown_predicate_fraction").value("violations", 0LL) >= 1);
-    CHECK(find("closure_reasons").value("violations", 0LL) >= 2);
+    CHECK(find("closure_reasons")["details"].value("closures", 0LL) >= 2);
     CHECK(find("unresolved_derived_inputs").value("violations", 0LL) >= 1);
+    CHECK(knowledge.getMeta("schema_version") == "5");
+    CHECK(knowledge.purgeCoverageMissing().empty());
+    {
+        sqlite3* raw = nullptr;
+        CHECK(sqlite3_open(knowledgePath.string().c_str(), &raw) == SQLITE_OK);
+        sqlite3_stmt* count = nullptr;
+        CHECK(sqlite3_prepare_v2(raw,
+            "SELECT COUNT(*) FROM memory_audit WHERE action='dedupe_edge_hash'",
+            -1, &count, nullptr) == SQLITE_OK);
+        CHECK(sqlite3_step(count) == SQLITE_ROW);
+        CHECK(sqlite3_column_int(count, 0) == 1);
+        sqlite3_finalize(count);
+        sqlite3_close(raw);
+    }
     const auto telemetryReport = telemetry.diagnostics(scope);
     const auto telemetryChecks = telemetryReport.value("checks", taskforge::Json::array());
     CHECK(telemetryChecks.size() == 6);
     CHECK(telemetryChecks[5].value("violations", 0LL) >= 1);
     knowledge.close();
     telemetry.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_write_txn_rolls_back_invalidate_and_insert) {
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-writetxn-rollback");
+    const std::string path = (dir / "memory.db").string();
+    MemoryStore store(path);
+    std::string error;
+    CHECK(store.open(error));
+    const std::string scope = "project:writetxn";
+    CHECK(store.ensureScope(scope, "project", "", "writetxn"));
+    CHECK(!store.ensureNode(scope, "a", "entity", "a").empty());
+    CHECK(!store.ensureNode(scope, "b", "entity", "b").empty());
+    CHECK(!store.ensureNode(scope, "c", "entity", "c").empty());
+    const std::string oldId = store.recordEdge(scope, "a", "b", "PREFERS", taskforge::Json(),
+                                               "", "", 0.8, "active", "test");
+    CHECK(!oldId.empty());
+    {
+        MemoryStore::WriteTxn txn(store, error);
+        CHECK(txn.ok());
+        CHECK(store.invalidateEdge(oldId, "2026-02-01T00:00:00Z", "test"));
+        const std::string newId = store.recordEdge(scope, "a", "c", "PREFERS", taskforge::Json(),
+                                                   "2026-02-01T00:00:00Z", "", 0.8, "active", "test");
+        CHECK(!newId.empty());
+        txn.rollback();
+    }
+    taskforge::memory::MemoryEdgeRecord oldEdge;
+    CHECK(store.getEdge(scope, oldId, oldEdge));
+    CHECK(oldEdge.status == "active");
+    const auto active = store.listEdges(scope, "active");
+    CHECK(std::none_of(active.begin(), active.end(),
+                       [](const taskforge::memory::MemoryEdgeRecord& e) {
+                           return e.dstId == "c" && e.relation == "PREFERS";
+                       }));
+    store.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_write_txn_serializes_functional_promotions) {
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-writetxn-promote");
+    const std::string path = (dir / "memory.db").string();
+    const std::string scope = "project:writetxn-promote";
+    std::string error;
+    std::string p1;
+    std::string p2;
+    {
+        MemoryStore setup(path);
+        CHECK(setup.open(error));
+        CHECK(setup.ensureScope(scope, "project", "", "writetxn-promote"));
+        CHECK(!setup.ensureNode(scope, "e_lia", "entity", "Lia").empty());
+        CHECK(!setup.ensureNode(scope, "e_sugar", "entity", "sugar").empty());
+        CHECK(!setup.ensureNode(scope, "e_honey", "entity", "honey").empty());
+        const auto evidence = taskforge::Json::array({taskforge::Json{{"kind", "test"}}});
+        p1 = setup.recordProposal(scope, "claim",
+            taskforge::Json{{"subject", "Lia"}, {"subjectId", "e_lia"},
+                            {"predicate", "PREFERS"}, {"object", "sugar"},
+                            {"objectId", "e_sugar"}, {"validFrom", "2026-01-01T00:00:00Z"}},
+            "", evidence, 0.8);
+        p2 = setup.recordProposal(scope, "claim",
+            taskforge::Json{{"subject", "Lia"}, {"subjectId", "e_lia"},
+                            {"predicate", "PREFERS"}, {"object", "honey"},
+                            {"objectId", "e_honey"}, {"validFrom", "2026-01-01T00:00:00Z"}},
+            "", evidence, 0.8);
+        CHECK(!p1.empty());
+        CHECK(!p2.empty());
+        setup.close();
+    }
+    MemoryStore a(path);
+    MemoryStore b(path);
+    CHECK(a.open(error));
+    CHECK(b.open(error));
+    a.setTestInterleaveHook([&](const std::string& step) {
+        if (step == "promoteProposal:before_write") {
+            std::this_thread::sleep_for(std::chrono::milliseconds(150));
+        }
+    });
+    std::string errorA;
+    std::string errorB;
+    bool okA = false;
+    bool okB = false;
+    std::thread ta([&]() { okA = a.promoteProposal(scope, p1, "test", errorA); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    std::thread tb([&]() { okB = b.promoteProposal(scope, p2, "test", errorB); });
+    ta.join();
+    tb.join();
+    CHECK(okA || okB);
+    const auto active = a.listEdges(scope, "active");
+    size_t prefers = 0;
+    for (const auto& edge : active) {
+        if (edge.relation == "PREFERS") ++prefers;
+    }
+    CHECK(prefers == 1);
+    const auto report = a.diagnostics(scope);
+    CHECK(report.value("ok", false));
+    a.close();
+    b.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_two_connections_same_edge_return_same_id) {
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-writetxn-same-edge");
+    const std::string path = (dir / "memory.db").string();
+    const std::string scope = "project:same-edge";
+    std::string error;
+    {
+        MemoryStore setup(path);
+        CHECK(setup.open(error));
+        CHECK(setup.ensureScope(scope, "project", "", "same-edge"));
+        CHECK(!setup.ensureNode(scope, "x", "entity", "x").empty());
+        CHECK(!setup.ensureNode(scope, "y", "entity", "y").empty());
+        setup.close();
+    }
+    MemoryStore a(path);
+    MemoryStore b(path);
+    CHECK(a.open(error));
+    CHECK(b.open(error));
+    std::string idA;
+    std::string idB;
+    std::atomic<bool> aStarted{false};
+    a.setTestInterleaveHook([&](const std::string& step) {
+        if (step == "recordEdge:before_insert") {
+            aStarted = true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    });
+    std::thread ta([&]() {
+        idA = a.recordEdge(scope, "x", "y", "MENTIONS", taskforge::Json(),
+                           "2026-01-01T00:00:00Z", "", 0.8, "active", "test");
+    });
+    while (!aStarted) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    std::thread tb([&]() {
+        idB = b.recordEdge(scope, "x", "y", "MENTIONS", taskforge::Json(),
+                           "2026-01-01T00:00:00Z", "", 0.8, "active", "test");
+    });
+    ta.join();
+    tb.join();
+    CHECK(!idA.empty());
+    CHECK(idA == idB);
+    const auto active = a.listEdges(scope, "active");
+    CHECK(std::count_if(active.begin(), active.end(),
+                        [](const taskforge::memory::MemoryEdgeRecord& e) {
+                            return e.relation == "MENTIONS";
+                        }) == 1);
+    a.close();
+    b.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_promote_same_proposal_only_once) {
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-writetxn-same-proposal");
+    const std::string path = (dir / "memory.db").string();
+    const std::string scope = "project:same-proposal";
+    std::string error;
+    std::string proposalId;
+    {
+        MemoryStore setup(path);
+        CHECK(setup.open(error));
+        CHECK(setup.ensureScope(scope, "project", "", "same-proposal"));
+        CHECK(!setup.ensureNode(scope, "e_lia", "entity", "Lia").empty());
+        CHECK(!setup.ensureNode(scope, "e_tea", "entity", "tea").empty());
+        proposalId = setup.recordProposal(scope, "claim",
+            taskforge::Json{{"subject", "Lia"}, {"subjectId", "e_lia"},
+                            {"predicate", "MENTIONS"}, {"object", "tea"},
+                            {"objectId", "e_tea"}},
+            "", taskforge::Json::array({taskforge::Json{{"kind", "test"}}}), 0.8);
+        CHECK(!proposalId.empty());
+        setup.close();
+    }
+    MemoryStore a(path);
+    MemoryStore b(path);
+    CHECK(a.open(error));
+    CHECK(b.open(error));
+    std::string errorA;
+    std::string errorB;
+    bool okA = false;
+    bool okB = false;
+    std::thread ta([&]() { okA = a.promoteProposal(scope, proposalId, "test", errorA); });
+    std::thread tb([&]() { okB = b.promoteProposal(scope, proposalId, "test", errorB); });
+    ta.join();
+    tb.join();
+    CHECK(okA != okB);
+    CHECK((errorA.find("pendente") != std::string::npos ||
+           errorB.find("pendente") != std::string::npos));
+    a.close();
+    b.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_operation_key_is_idempotent) {
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-operation-key");
+    const std::string path = (dir / "memory.db").string();
+    MemoryStore store(path);
+    std::string error;
+    CHECK(store.open(error));
+    const std::string scope = "project:operation";
+    CHECK(store.ensureScope(scope, "project", "", "operation"));
+    const auto payload = taskforge::Json{{"domain", "teste"}, {"rule", "regra"}};
+    const auto evidence = taskforge::Json::array({taskforge::Json{{"kind", "test"}}});
+    const std::string first = store.recordProposal(scope, "lesson", payload, "", evidence, 0.6, "op-1");
+    const std::string repeated = store.recordProposal(scope, "lesson", payload, "", evidence, 0.6, "op-1");
+    CHECK(!first.empty());
+    CHECK(first == repeated);
+    const std::string conflict = store.recordProposal(scope, "lesson",
+        taskforge::Json{{"domain", "teste"}, {"rule", "outra"}}, "", evidence, 0.6, "op-1");
+    CHECK(conflict.empty());
+    CHECK(store.lastError().find("chave de operacao") != std::string::npos);
+    store.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_purge_rolls_back_on_failure) {
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-purge-rollback");
+    const std::string path = (dir / "memory.db").string();
+    const std::string scope = "project:purge-rollback";
+    std::string error;
+    {
+        MemoryStore setup(path);
+        CHECK(setup.open(error));
+        CHECK(setup.ensureScope(scope, "project", "", "purge-rollback"));
+        CHECK(!setup.ensureNode(scope, "a", "entity", "a").empty());
+        CHECK(!setup.ensureNode(scope, "b", "entity", "b").empty());
+        CHECK(!setup.recordEdge(scope, "a", "b", "MENTIONS", taskforge::Json(),
+                                "", "", 0.8, "active", "test").empty());
+        setup.close();
+    }
+    sqlite3* raw = nullptr;
+    CHECK(sqlite3_open(path.c_str(), &raw) == SQLITE_OK);
+    CHECK(sqlite3_exec(raw,
+        "CREATE TRIGGER fail_purge BEFORE DELETE ON memory_edge "
+        "BEGIN SELECT RAISE(ABORT,'purge failure'); END;", nullptr, nullptr, nullptr) == SQLITE_OK);
+    sqlite3_close(raw);
+    MemoryStore store(path);
+    CHECK(store.open(error));
+    CHECK(!store.purge(scope, taskforge::memory::MemoryPurgeOptions{false, false}));
+    const auto active = store.listEdges(scope, "active");
+    CHECK(active.size() == 1);
+    CHECK(store.purgeCoverageMissing().empty());
+    store.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_purge_with_vacuum_runs_after_commit) {
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-purge-vacuum");
+    const std::string path = (dir / "memory.db").string();
+    const std::string scope = "project:purge-vacuum";
+    MemoryStore store(path);
+    std::string error;
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "purge-vacuum"));
+    CHECK(!store.ensureNode(scope, "a", "entity", "a").empty());
+    CHECK(!store.ensureNode(scope, "b", "entity", "b").empty());
+    CHECK(!store.recordEdge(scope, "a", "b", "MENTIONS", taskforge::Json(),
+                            "", "", 0.8, "active", "test").empty());
+    CHECK(store.purge(scope, taskforge::memory::MemoryPurgeOptions{false, true}));
+    CHECK(store.listEdges(scope, "active").empty());
+    store.close();
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+TEST(memory_ingest_source_rolls_back_partial_failure) {
+    using taskforge::memory::MemoryStore;
+    const fs::path dir = makeTempDir("memory-ingest-rollback");
+    const std::string path = (dir / "memory.db").string();
+    const std::string scope = "project:ingest-rollback";
+    MemoryStore store(path);
+    std::string error;
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "ingest-rollback"));
+    taskforge::memory::MemorySourceRecord source;
+    source.scopeId = scope;
+    source.uri = "file://fixture.md";
+    source.contentHash = "hash1";
+    source.kind = "text";
+    source.size = 10;
+    taskforge::memory::MemoryPassageRecord p1;
+    p1.id = "p1";
+    p1.sourceId = "";
+    p1.scopeId = scope;
+    p1.ordinal = 0;
+    p1.text = "um";
+    p1.textHash = "h1";
+    taskforge::memory::MemoryPassageRecord p2 = p1;
+    p2.id = "p2";
+    p2.text = "dois";
+    p2.textHash = "h2";
+    size_t inserted = 0;
+    const std::string id = store.ingestSource(source, {p1, p2}, &inserted, error);
+    CHECK(id.empty());
+    CHECK(inserted == 0);
+    const auto summary = store.sourceSummary(scope);
+    CHECK(summary.value("sources", 0LL) == 0);
+    store.close();
     std::error_code ec;
     fs::remove_all(dir, ec);
 }

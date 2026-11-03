@@ -707,7 +707,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                   {"memoryEnabled", spec.memoryEnabled}, {"memoryContextChars", usage.memoryContextChars}};
         const std::string prefixHash = project::RunnerSecurity::sha256(chat.systemCacheable);
         meta["prefixHash"] = prefixHash;
-        if (!spec.memoryProjectId.empty()) {
+        if (!spec.memoryProjectId.empty() && spec.memoryEnabled) {
             memory.recordTraceStep(spec.memoryProjectId, runId, nodeId, itemId, taskType,
                                    intentTemplateHash, inputHash,
                                    json{{"kind", "prefix"}, {"prefixHash", prefixHash},
@@ -801,6 +801,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
 
     try {
         for (int turn = 1; turn <= spec.maxTurns; ++turn) {
+            tctx.turn = turn;
             if (compressor) {
                 const compress::CompressionStats stats = compressor->apply(chat.messages);
                 if (stats.blocks > 0) {
@@ -929,6 +930,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                     } else if (mcpTools && mcpTools->owns(call.name)) {
                         res = mcpTools->call(call.name, call.args);
                     } else {
+                        ++tctx.toolCallSeq;
                         res = executeTool(tctx, call.name, call.args);
                     }
                     recordToolCall(call, !res.isError);

@@ -1,0 +1,13 @@
+{
+  "processes": 8,
+  "proposals": 500,
+  "elapsedSeconds": 8.5,
+  "failures": 0,
+  "latencySeconds": {
+    "p50": 0.125,
+    "p95": 0.203
+  },
+  "functionalOverlapViolations": 0,
+  "duplicateActiveEdgeHashViolations": 0,
+  "doctorExitCode": 0
+}

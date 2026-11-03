@@ -151,7 +151,10 @@ use `memory report`.
 Runs read-only diagnostics: overlapping functional values, duplicate active
 `edge_hash`, unknown-predicate fraction, closures by predicate/reason, derived
 objects with unresolved JSON inputs, and uncited items repeated in rejected
-tasks. The exit code is non-zero when a check has violations.
+tasks. The exit code is non-zero when a check has violations. With
+`--repair-overlaps`, the command marks overlapping functional pairs as
+`metadata.disputed=true` and creates a `CONTRADICTS` edge between their objects;
+it never closes a value automatically.
 
 ### `memory trace`
 

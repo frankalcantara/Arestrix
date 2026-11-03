@@ -14,6 +14,18 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   diagnostics, SQL fixture `tests/fixtures/memory-v4` checked by canonical dump,
   `prefix_hash` in the trace/episode metadata, two-connection test hook,
   concurrency stress baseline and `memory-fix5-baseline.json`.
+- **Memory fix5 phase 1:** `MemoryStore::WriteTxn` (`BEGIN IMMEDIATE` with
+  savepoints and busy retry), schema v5 with unique active `edge_hash`, atomic
+  `promoteProposal`, `ingestSource`, `importCognitiveJson` and `purge`, operation
+  keys with `memory_operation`, `doctor --repair-overlaps`, and the
+  `memory-fix5-concurrency-phase1.json` result (8×500 promotions, zero
+  overlaps/duplicates).
+
+### Changed
+
+- Knowledge databases open with `PRAGMA synchronous=FULL`; telemetry keeps
+  `NORMAL`. The concurrency stress p95 moved from 0.188 s to 0.203 s against the
+  Phase 0 baseline.
 
 ## [2.6.0] - 2026-11-02
 
