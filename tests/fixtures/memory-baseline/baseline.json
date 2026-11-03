@@ -92,7 +92,8 @@
           "memory_trace": 0,
           "memory_usage": 0,
           "memory_validation": 0,
-          "memory_working": 0
+          "memory_working": 0,
+          "memory_operation": 0
         },
         "seeded": {
           "memory_alias": 11,
@@ -130,7 +131,8 @@
           "memory_trace": 0,
           "memory_usage": 0,
           "memory_validation": 0,
-          "memory_working": 0
+          "memory_working": 0,
+          "memory_operation": 0
         },
         "created": {
           "memory_alias": 0,
@@ -168,7 +170,8 @@
           "memory_trace": 0,
           "memory_usage": 0,
           "memory_validation": 0,
-          "memory_working": 0
+          "memory_working": 0,
+          "memory_operation": 0
         }
       },
       "telemetry": {
@@ -208,7 +211,8 @@
           "memory_trace": 9,
           "memory_usage": 9,
           "memory_validation": 3,
-          "memory_working": 0
+          "memory_working": 0,
+          "memory_operation": 0
         },
         "seeded": {
           "memory_alias": 0,
@@ -246,7 +250,8 @@
           "memory_trace": 0,
           "memory_usage": 0,
           "memory_validation": 0,
-          "memory_working": 0
+          "memory_working": 0,
+          "memory_operation": 0
         },
         "created": {
           "memory_alias": 0,
@@ -284,13 +289,14 @@
           "memory_trace": 9,
           "memory_usage": 9,
           "memory_validation": 3,
-          "memory_working": 0
+          "memory_working": 0,
+          "memory_operation": 0
         }
       }
     },
     "schemaFingerprint": {
-      "knowledge": "c0d0a293458281a8",
-      "telemetry": "c0d0a293458281a8"
+      "knowledge": "5f3c69d7dcac5ae8",
+      "telemetry": "5f3c69d7dcac5ae8"
     }
   }
 }

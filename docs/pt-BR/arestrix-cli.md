@@ -152,7 +152,9 @@ Executa diagnósticos somente leitura: sobreposição de valores funcionais,
 `edge_hash` ativo duplicado, fração de predicados desconhecidos, encerramentos
 por predicado/motivo, derivados com entradas JSON não resolvidas e itens não
 citados que se repetem em tarefas rejeitadas. O código de saída é diferente de
-zero quando há violações.
+zero quando há violações. Com `--repair-overlaps`, o comando marca os pares
+funcionais sobrepostos com `metadata.disputed=true` e cria uma aresta
+`CONTRADICTS` entre os objetos; nenhum valor é encerrado automaticamente.
 
 ### `memory trace`
 

@@ -399,7 +399,7 @@ bool MemoryService::configureTelemetry(const std::string& projectId, const std::
         telemetryPaths_.find(id) != telemetryPaths_.end() && telemetryPaths_.at(id) == path) {
         return true;
     }
-    auto store = std::make_unique<MemoryStore>(path);
+    auto store = std::make_unique<MemoryStore>(path, MemoryStore::kMaxActiveLessons, false, false);
     std::string error;
     if (!store->open(error)) return false;
     if (!store->ensureScope(scopeId(id), "project", "", id)) return false;
@@ -933,7 +933,8 @@ std::string MemoryService::recordLesson(const std::string& projectId, const std:
 std::string MemoryService::proposeLesson(const std::string& projectId, const std::string& domain,
                                          const std::string& triggerError, const std::string& lessonRule,
                                          const std::string& sourceItem,
-                                         const std::string& errorClass) {
+                                         const std::string& errorClass,
+                                         const std::string& operationKey) {
     auto* s = ensureStore(projectId);
     if (!s) return "";
     const std::string scope = scopeId(projectId);
@@ -951,7 +952,7 @@ std::string MemoryService::proposeLesson(const std::string& projectId, const std
     taskforge::Json evidence = taskforge::Json::array(
         {taskforge::Json{{"kind", "agent"}, {"node", sourceItem}}});
     if (!errorClass.empty()) evidence.push_back(taskforge::Json{{"kind", "errorClass"}, {"value", errorClass}});
-    return s->recordProposal(scope, "lesson", payload, "", evidence, 0.6);
+    return s->recordProposal(scope, "lesson", payload, "", evidence, 0.6, operationKey);
 }
 
 std::vector<MemoryLesson> MemoryService::getLessons(const std::string& projectId,
@@ -2890,6 +2891,16 @@ bool MemoryService::unpromotePlaybook(const std::string& projectId, const std::s
         return false;
     }
     return s->unpromotePlaybook(scopeId(projectId), playbookId, reason, error);
+}
+
+size_t MemoryService::repairOverlaps(const std::string& projectId, std::string& error) {
+    auto* s = ensureStore(projectId);
+    if (!s) {
+        error = "banco de conhecimento indisponivel";
+        return 0;
+    }
+    invalidateBriefCache();
+    return s->repairOverlaps(scopeId(projectId), error);
 }
 
 taskforge::Json MemoryService::doctor(const std::string& projectId) {

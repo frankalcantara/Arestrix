@@ -475,8 +475,11 @@ ToolResult executeTool(ToolContext& ctx, const std::string& name, const json& ar
                 return err(T("Dominio nao autorizado para este agente: ", "Domain not authorized for this agent: ") + domain);
             }
             auto& memory = taskforge::memory::MemoryService::getInstance();
+            const std::string operationKey = ctx.runId + "|" + ctx.agentId + "|" +
+                std::to_string(ctx.turn) + "|" + std::to_string(ctx.toolCallSeq);
             std::string id = memory.proposeLesson(
-                ctx.projectId, domain.empty() ? "geral" : domain, trigger, rule, ctx.agentId);
+                ctx.projectId, domain.empty() ? "geral" : domain, trigger, rule,
+                ctx.agentId, "", operationKey);
             if (id.empty()) return err(T("Nao foi possivel registrar a proposta de licao.", "Could not record the lesson proposal."));
             ++ctx.memoryLessonsWritten;
             return ToolResult{T("OK: proposta de licao registrada (", "OK: lesson proposal recorded (") + id + ")", false};

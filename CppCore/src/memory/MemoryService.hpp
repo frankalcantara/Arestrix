@@ -113,7 +113,8 @@ public:
     std::string proposeLesson(const std::string& projectId, const std::string& domain,
                               const std::string& triggerError, const std::string& lessonRule,
                               const std::string& sourceItem = "",
-                              const std::string& errorClass = "");
+                              const std::string& errorClass = "",
+                              const std::string& operationKey = "");
     size_t activeLessonCount(const std::string& projectId);
     std::vector<MemoryLesson> getLessons(const std::string& projectId,
                                          const std::string& domain = "");
@@ -327,6 +328,8 @@ public:
 
     // Fase 0: doctor somente leitura do conhecimento e da telemetria.
     taskforge::Json doctor(const std::string& projectId);
+    // Fase 1: reparo opt-in de sobreposicoes (nao encerra valores).
+    size_t repairOverlaps(const std::string& projectId, std::string& error);
 
     // Estado para UI/export.
     taskforge::Json toJson(const std::string& projectId);

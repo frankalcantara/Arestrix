@@ -362,16 +362,39 @@ public:
     static constexpr size_t kMaxActiveLessons = 5000;
 
     explicit MemoryStore(std::string path, size_t maxActiveLessons = kMaxActiveLessons,
-                         bool readOnly = false);
+                         bool readOnly = false, bool durableSync = true);
     ~MemoryStore();
 
     MemoryStore(const MemoryStore&) = delete;
     MemoryStore& operator=(const MemoryStore&) = delete;
 
+    // Fase 1: envelope RAII de escrita. Em transacao ja aberta (inclusive um
+    // BEGIN cru antigo), usa SAVEPOINT/RELEASE; fora dela, BEGIN IMMEDIATE.
+    class WriteTxn {
+    public:
+        explicit WriteTxn(MemoryStore& store, std::string& error);
+        ~WriteTxn();
+        WriteTxn(const WriteTxn&) = delete;
+        WriteTxn& operator=(const WriteTxn&) = delete;
+
+        bool ok() const { return active_; }
+        bool commit(std::string* error = nullptr);
+        void rollback();
+
+    private:
+        MemoryStore& store_;
+        std::unique_lock<std::recursive_mutex> lock_;
+        int depth_ = 0;
+        bool savepoint_ = false;
+        bool active_ = false;
+        bool finished_ = false;
+    };
+
     bool open(std::string& error);
     void close();
     bool isOpen() const { return db_ != nullptr; }
     bool isReadOnly() const { return readOnly_; }
+    void setDurableCommits(bool durable) { durableSync_ = durable; }
 
     // Fase 0: gancho de teste chamado entre a validacao e a escrita. Nulo em
     // producao; usado pelo TwoConnectionHarness para intercalar dois processos.
@@ -428,6 +451,11 @@ public:
     // Expurgo completo: working, edges, episodes, evidence, nodes, usage, hits e,
     // opcionalmente, auditoria. Com vacuum=true, compacta o arquivo SQLite.
     bool purge(const std::string& scopeId, const MemoryPurgeOptions& options = {});
+    // Fase 1: tabelas com scope_id que ainda nao estao no expurgo. Vazio = cobertura ok.
+    std::vector<std::string> purgeCoverageMissing() const;
+    // Fase 1: marca pares funcionais sobrepostos como disputed e cria
+    // CONTRADICTS entre os objetos. Nao encerra nenhum valor.
+    size_t repairOverlaps(const std::string& scopeId, std::string& error);
     // Remove telemetria mais antiga que olderThanDays. 0 ou negativo = manter tudo.
     MemoryPruneResult prune(const std::string& scopeId, int olderThanDays);
     // Descarta o banco efemero (:memory:) inteiro e recria o schema.
@@ -485,13 +513,15 @@ public:
                                const taskforge::Json& payload,
                                const std::string& sourceEpisodeId,
                                const taskforge::Json& evidence,
-                               double confidence);
+                               double confidence,
+                               const std::string& operationKey = "");
     std::vector<MemoryProposalRecord> listProposals(const std::string& scopeId,
                                                     const std::string& status = "pending",
                                                     size_t limit = 100) const;
     bool promoteProposal(const std::string& scopeId, const std::string& proposalId,
                          const std::string& reviewer, std::string& error,
-                         std::string* promotedId = nullptr);
+                         std::string* promotedId = nullptr,
+                         const std::string& operationKey = "");
     bool rejectProposal(const std::string& scopeId, const std::string& proposalId,
                         const std::string& reviewer, const std::string& reason,
                         std::string& error);
@@ -772,6 +802,8 @@ private:
     std::string path_;
     size_t maxActiveLessons_ = kMaxActiveLessons;
     bool readOnly_ = false;
+    bool durableSync_ = true;
+    int writeTxnDepth_ = 0;
     mutable std::string lastError_;
     TestInterleaveHook testInterleaveHook_;
 };

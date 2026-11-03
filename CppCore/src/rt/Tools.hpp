@@ -62,6 +62,8 @@ struct ToolContext {
     int memoryMaxLessonsPerRun = 20;
     int memoryMaxLessonChars = 4000;
     int memoryLessonsWritten = 0;               // contador por execução do agente
+    int turn = 0;                               // turno corrente da execucao
+    int toolCallSeq = 0;                        // passo monotono por execucao
     std::vector<std::string> allowed;
     RuntimeLang lang = RuntimeLang::Pt;   // idioma do agente (skill + prompt)
 };

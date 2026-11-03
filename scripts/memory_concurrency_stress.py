@@ -47,7 +47,20 @@ def prepare(project: pathlib.Path, proposals: int) -> None:
     conn = sqlite3.connect(db)
     try:
         conn.executescript((FIXTURE / "schema.sql").read_text(encoding="utf-8"))
-        conn.executescript((FIXTURE / "seed-knowledge.sql").read_text(encoding="utf-8"))
+        # Base limpa: o estresse mede apenas as promocoes concorrentes, nao as
+        # violacoes plantadas no fixture de conhecimento.
+        conn.execute(
+            "INSERT INTO memory_scope(id,kind,parent_id,name,created_at,metadata) "
+            "VALUES(?,?,?,?,?,?)",
+            (SCOPE, "project", None, "memory-v4", "2026-01-01T00:00:00Z", "{}"))
+        for node_id, name in (("e_lia", "Lia"), ("e_sugar", "sugar"), ("e_honey", "honey")):
+            conn.execute(
+                "INSERT INTO memory_node(id,scope_id,kind,canonical_name,aliases_json,"
+                "created_at,updated_at,metadata) VALUES(?,?,?,?,?,?,?,?)",
+                (node_id, SCOPE, "entity", name, "[]", "2026-01-01T00:00:00Z",
+                 "2026-01-01T00:00:00Z", "{}"))
+        conn.execute("INSERT OR REPLACE INTO memory_meta(key,value) VALUES('schema_version','4')")
+        conn.execute("INSERT OR REPLACE INTO memory_meta(key,value) VALUES('knowledge_version','1')")
         for i in range(proposals):
             target = "e_sugar" if i % 2 == 0 else "e_honey"
             payload = json.dumps({
@@ -126,9 +139,12 @@ def main() -> int:
         except json.JSONDecodeError:
             doctor_json = {}
         overlaps = 0
+        duplicates = 0
         for check in doctor_json.get("checks", []):
             if check.get("id") == "functional_overlap":
                 overlaps = int(check.get("violations", 0))
+            elif check.get("id") == "duplicate_active_edge_hash":
+                duplicates = int(check.get("violations", 0))
         report = {
             "processes": args.processes,
             "proposals": args.proposals,
@@ -139,10 +155,11 @@ def main() -> int:
                 "p95": round(percentile(durations, 0.95), 4),
             },
             "functionalOverlapViolations": overlaps,
+            "duplicateActiveEdgeHashViolations": duplicates,
             "doctorExitCode": doctor.returncode,
         }
         print(json.dumps(report, ensure_ascii=False, indent=2))
-        return 0 if doctor.returncode == 0 and overlaps == 0 else 1
+        return 0 if overlaps == 0 and duplicates == 0 else 1
     finally:
         if args.keep:
             print(f"temporario: {work}")
