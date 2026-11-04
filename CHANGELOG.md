@@ -30,6 +30,12 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   without it, extraction uses the Studio default model (today, DeepSeek Flash
   4.1 1017 in this installation). A configured but unregistered agent fails
   explicitly instead of silently switching models.
+- **Memory fix5 phase 4:** schema v8 adds `memory_prefix_epoch`; `buildBrief`
+  now exposes a deterministic `stableBlock`, prefix key/identity, epoch and
+  `removalSeqStart`; `briefInfoToJson` carries the delivered id sets to
+  `runAgent`; and the agent checks `memory_removal_log` before every turn,
+  redacting removed items from the system prompt and tool history. The stable
+  block is ordered by `(kind, id)` and independent of utility/volatile context.
 - **Memory fix5 phase 3:** schema v7 adds `memory_lineage`,
   `memory_tombstone`, `memory_job`, `memory_removal_log` and
   `memory_edge.retracted_at`; `memory forget` erases one source version or all

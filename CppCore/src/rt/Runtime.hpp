@@ -64,7 +64,8 @@ private:
 // Devolve o texto final do agente (o codigo gerado pode ignorar).
 std::string runAgent(const std::string& nodeId, const std::string& label, const std::string& specJson,
                      const std::string& runKey = "", const std::string& memoryContext = "",
-                     const std::string& inputContext = "");
+                     const std::string& inputContext = "",
+                     const std::string& deliveredMemoryJson = "");
 
 // Executa um vertice de interacao humana. No 2B1 o canal e o arquivo indicado por
 // ARESTRIX_INTERACTION_ANSWERS (CLI --answers); sem canal, falha fechado (ou usa

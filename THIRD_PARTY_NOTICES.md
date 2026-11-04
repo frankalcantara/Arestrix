@@ -18,6 +18,7 @@ of the components you redistribute.
 | [Monaco Editor](https://github.com/microsoft/monaco-editor) | npm `0.57.0`; submodule `dbf1945` | MIT | Code editor used by the Studio. |
 | [SkillSpector](https://github.com/NVIDIA/SkillSpector) | `v2.12.0-1159-g2b9f4512` | Apache-2.0 | Skill security analysis and static rule reference. |
 | [Cloudflare security-audit-skill](https://github.com/cloudflare/security-audit-skill) | `c1c8a8c` | MIT | Boundary-driven security audit methodology used by the Arestrix Skill Guard. |
+| [Tracy Profiler](https://github.com/wolfpld/tracy) | `v0.14.1-303-g02a825b3` (`02a825b`) | BSD-3-Clause | Real-time nanosecond frame and zone profiler for C++ pipelines and core runtime. |
 | [SQLite](https://sqlite.org) | `3.54.0` amalgamation | Public domain | Embedded persistence. |
 | [ONNX Runtime](https://github.com/microsoft/onnxruntime) | `1.24+` (validated with `1.24.4` DirectML and `1.31.1` CPU) | MIT | Prose-compression inference (`ARESTRIX_WITH_ONNX`). The official installer bundles `onnxruntime.dll`; the default development build does not. |
 | [DirectML](https://github.com/microsoft/DirectML) | `1.15.4` | Microsoft DirectML license (redistributable in apps) | GPU prose acceleration (`ARESTRIX_WITH_ONNX_DML`, Windows). The official installer bundles `DirectML.dll` and `onnxruntime_providers_shared.dll`. |

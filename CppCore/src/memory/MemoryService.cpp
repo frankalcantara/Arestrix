@@ -1459,6 +1459,14 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
 
     if (truncated) brief += "\n[... truncado pelo orcamento de memoria]\n";
     if (info) {
+        MemoryBriefInfo stable;
+        buildStablePrefix(projectId, domains, taskType, maxTokens, &stable);
+        info->stableBlock = stable.stableBlock;
+        info->stableIds = stable.stableIds;
+        info->prefixKey = stable.prefixKey;
+        info->prefixIdentity = stable.prefixIdentity;
+        info->prefixEpoch = stable.prefixEpoch;
+        info->removalSeqStart = stable.removalSeqStart;
         info->chars = brief.size();
         info->estimatedTokens = (brief.size() + 3) / 4;
         info->truncated = truncated;
@@ -1478,6 +1486,104 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
                    traceCandidatesToJson(traceCandidates, delivered));
     }
     return brief;
+}
+
+std::string MemoryService::buildStablePrefix(const std::string& projectId,
+                                             const std::vector<std::string>& domains,
+                                             const std::string& taskType, size_t maxTokens,
+                                             MemoryBriefInfo* info) {
+    auto* s = ensureStore(projectId);
+    if (!s) return std::string();
+    std::string prefixKey = taskType.empty() ? "default" : taskType;
+    std::vector<std::string> sortedDomains = domains;
+    std::sort(sortedDomains.begin(), sortedDomains.end());
+    for (const auto& domain : sortedDomains) prefixKey += "|" + domain;
+    auto lessons = domains.empty() ? s->getLessons(scopeId(projectId))
+                                   : s->getLessonsForDomains(scopeId(projectId), domains);
+    std::sort(lessons.begin(), lessons.end(), [](const MemoryLesson& a, const MemoryLesson& b) {
+        return a.id < b.id;
+    });
+    std::vector<MemoryPlaybookRecord> playbooks;
+    std::vector<std::string> types;
+    if (!taskType.empty()) types.push_back(taskType);
+    for (const auto& domain : sortedDomains) {
+        if (std::find(types.begin(), types.end(), domain) == types.end()) types.push_back(domain);
+    }
+    std::set<std::string> seenPlaybooks;
+    for (const auto& type : types) {
+        for (const auto& playbook : s->listPlaybooks(scopeId(projectId), type, "active", 20)) {
+            if (seenPlaybooks.insert(playbook.id).second) playbooks.push_back(playbook);
+        }
+    }
+    std::sort(playbooks.begin(), playbooks.end(), [](const MemoryPlaybookRecord& a,
+                                                     const MemoryPlaybookRecord& b) {
+        return a.id < b.id;
+    });
+    const size_t budget = maxTokens == 0 ? std::string::npos : maxTokens * 4;
+    std::string out;
+    std::vector<std::string> stableIds;
+    const std::string header = "\n--- [ARESTRIX STABLE MEMORY] ---\n";
+    if (header.size() <= budget) out += header;
+    for (const auto& lesson : lessons) {
+        std::string line = "[LESSON] [MEMO:" + lesson.id + "] (" + lesson.domain + ") " +
+                           lesson.lessonRule + "\n";
+        if (budget != std::string::npos && out.size() + line.size() > budget) break;
+        out += line;
+        stableIds.push_back(lesson.id);
+    }
+    for (const auto& playbook : playbooks) {
+        std::string line = "[PLAYBOOK] [MEMO:" + playbook.id + "] " + playbook.taskType +
+                           ": " + playbook.title + "\n";
+        if (budget != std::string::npos && out.size() + line.size() > budget) break;
+        out += line;
+        stableIds.push_back(playbook.id);
+    }
+    if (info) {
+        info->stableBlock = out;
+        info->stableIds = stableIds;
+        info->prefixKey = prefixKey;
+        info->prefixIdentity = project::RunnerSecurity::sha256(
+            "prefix-v1|" + prefixKey + "|" + project::RunnerSecurity::sha256(out));
+        info->prefixEpoch = s->latestPrefixEpoch(scopeId(projectId), prefixKey);
+        info->removalSeqStart = s->currentRemovalSeq(scopeId(projectId));
+    }
+    return out;
+}
+
+taskforge::Json MemoryService::removedSince(
+    const std::string& projectId, long long removalSeqStart,
+    const std::vector<std::pair<std::string, std::string>>& delivered) {
+    auto* s = ensureStore(projectId);
+    if (!s) return taskforge::Json{{"maxSeq", removalSeqStart}, {"removed", taskforge::Json::array()}};
+    return s->removedSince(scopeId(projectId), removalSeqStart, delivered);
+}
+
+taskforge::Json MemoryService::prefixEpochs(const std::string& projectId,
+                                            const std::string& prefixKey, size_t limit) {
+    auto* s = ensureStore(projectId);
+    return s ? s->listPrefixEpochs(scopeId(projectId), prefixKey, limit)
+             : taskforge::Json::array();
+}
+
+taskforge::Json MemoryService::publishPrefixEpoch(const std::string& projectId,
+                                                  const std::string& prefixKey,
+                                                  const std::string& skillHash,
+                                                  const std::string& promptTemplateHash) {
+    auto* s = ensureStore(projectId);
+    if (!s) return taskforge::Json{{"ok", false}, {"error", "memoria indisponivel"}};
+    MemoryBriefInfo info;
+    buildStablePrefix(projectId, {}, "", 800, &info);
+    const std::string contentHash = project::RunnerSecurity::sha256(info.stableBlock);
+    const std::string identity = project::RunnerSecurity::sha256(
+        "prefix-v1|" + skillHash + "|" + promptTemplateHash + "|" + contentHash);
+    long long epoch = 0;
+    taskforge::Json itemIds = taskforge::Json::array();
+    for (const auto& id : info.stableIds) itemIds.push_back(id);
+    if (!s->publishPrefixEpoch(scopeId(projectId), prefixKey, contentHash, itemIds.dump(), &epoch)) {
+        return taskforge::Json{{"ok", false}, {"error", "falha ao publicar epoca"}};
+    }
+    return taskforge::Json{{"ok", true}, {"epoch", epoch}, {"prefixKey", prefixKey},
+                           {"prefixIdentity", identity}, {"contentHash", contentHash}};
 }
 
 void MemoryService::invalidateBriefCache() {

@@ -1091,8 +1091,9 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
                 body += "    }\n";
                 body += "    if (!arx_mem_ctx.empty()) std::osyncstream(std::cout) << \"[MEMORIA] contexto injetado em \" << " + cppString(label) + " << \"\\n\";\n";
                 std::string runCall = "taskforge::rt::runAgent(" + cppString(node.id) + ", " + cppString(label) + ",\n      " +
-                                      rawLiteral(buildAgentSpec(graph, node).dump()) + ", \"\", arx_mem_ctx" +
-                                      (inputContextExpr.empty() ? "" : ", " + inputContextExpr) + ");";
+                                      rawLiteral(buildAgentSpec(graph, node).dump()) + ", \"\", arx_mem_ctx, " +
+                                      (inputContextExpr.empty() ? "std::string()" : inputContextExpr) +
+                                      ", taskforge::memory::briefInfoToJson(arx_brief_info).dump());";
                 const std::string validationCode = artifactValidationCode(node, mem);
                 if (memLearns) {
                     std::string domain = "geral";

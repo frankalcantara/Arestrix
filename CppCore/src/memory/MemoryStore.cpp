@@ -32,8 +32,8 @@ namespace {
 // invalid_citations); E4=3 (memory_evidence autocontida); E11=4
 // (knowledge_version e memory_trace); fix5=5 (WriteTxn, unique edge_hash e
 // memory_operation); fix5=6 (catalogo, context_key e claim_key); fix5=7
-// (linhagem, lapides, fila de exclusao e retracao).
-constexpr int kMemorySchemaVersion = 7;
+// (linhagem, lapides, fila de exclusao e retracao); fix5=8 (epocas de prefixo).
+constexpr int kMemorySchemaVersion = 8;
 
 // Fase 1: tabelas de conhecimento/telemetria com scope_id que o purge precisa
 // cobrir. memory_tombstone e a unica excecao explicita (Fase 3).
@@ -44,7 +44,7 @@ const char* const kScopedKnowledgeTables[] = {
     "memory_path_schema", "memory_playbook", "memory_policy", "memory_proposal",
     "memory_source", "memory_state", "memory_state_history", "memory_state_key",
     "memory_trace", "memory_usage", "memory_validation", "memory_working",
-    "memory_lineage", "memory_job", "memory_removal_log"};
+    "memory_lineage", "memory_job", "memory_removal_log", "memory_prefix_epoch"};
 
 struct Stmt {
     sqlite3_stmt* stmt = nullptr;
@@ -942,6 +942,20 @@ CREATE TABLE IF NOT EXISTS memory_removal_log (
 );
 CREATE INDEX IF NOT EXISTS idx_memory_removal_log_scope
   ON memory_removal_log(scope_id, removal_seq);
+
+-- Fase 4: uma epoca e um conjunto publicado de itens; os bytes do prefixo
+-- dependem tambem da skill e do molde, nao so desta tabela.
+CREATE TABLE IF NOT EXISTS memory_prefix_epoch (
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  epoch INTEGER NOT NULL,
+  prefix_key TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  item_ids_json TEXT NOT NULL DEFAULT '[]',
+  published_at TEXT NOT NULL,
+  PRIMARY KEY (scope_id, prefix_key, epoch)
+);
+CREATE INDEX IF NOT EXISTS idx_memory_prefix_epoch_latest
+  ON memory_prefix_epoch(scope_id, prefix_key, epoch DESC);
 
 CREATE TABLE IF NOT EXISTS memory_playbook (
   id TEXT PRIMARY KEY,
@@ -2018,6 +2032,7 @@ bool MemoryStore::purge(const std::string& scopeId, const MemoryPurgeOptions& op
     execScoped("DELETE FROM memory_job WHERE scope_id=?", 1);
     execScoped("DELETE FROM memory_lineage WHERE scope_id=?", 1);
     execScoped("DELETE FROM memory_removal_log WHERE scope_id=?", 1);
+    execScoped("DELETE FROM memory_prefix_epoch WHERE scope_id=?", 1);
     if (options.dropTombstones) {
         execScoped("DELETE FROM memory_tombstone WHERE scope_id=?", 1);
     }
@@ -6459,6 +6474,146 @@ taskforge::Json MemoryStore::tombstoneSummary(const std::string& scopeId) const 
         out["byKind"][columnText(st.stmt, 0)] = count;
     }
     out["total"] = total;
+    return out;
+}
+
+taskforge::Json briefInfoToJson(const MemoryBriefInfo& info) {
+    auto array = [](const std::vector<std::string>& values) {
+        taskforge::Json out = taskforge::Json::array();
+        for (const auto& value : values) out.push_back(value);
+        return out;
+    };
+    return taskforge::Json{{"lessonIds", array(info.lessonIds)},
+                           {"factIds", array(info.factIds)},
+                           {"playbookIds", array(info.playbookIds)},
+                           {"pathIds", array(info.pathIds)},
+                           {"pathClaimIds", array(info.pathClaimIds)},
+                           {"traversalIds", array(info.traversalIds)},
+                           {"workingKeys", array(info.workingKeys)},
+                           {"facetIds", array(info.facetIds)},
+                           {"stableIds", array(info.stableIds)},
+                           {"volatileIds", array(info.volatileIds)},
+                           {"stableBlock", info.stableBlock},
+                           {"prefixKey", info.prefixKey},
+                           {"prefixIdentity", info.prefixIdentity},
+                           {"prefixEpoch", info.prefixEpoch},
+                           {"removalSeqStart", info.removalSeqStart}};
+}
+
+long long MemoryStore::currentRemovalSeq(const std::string& scopeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_) return 0;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT COALESCE(MAX(removal_seq),0) FROM memory_removal_log "
+                       "WHERE scope_id=?", st, error)) return 0;
+    bindText(st.stmt, 1, scopeId);
+    return stepRetry(st.stmt) == SQLITE_ROW ? columnInt(st.stmt, 0) : 0;
+}
+
+long long MemoryStore::latestPrefixEpoch(const std::string& scopeId,
+                                         const std::string& prefixKey) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_) return 0;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT COALESCE(MAX(epoch),0) FROM memory_prefix_epoch "
+                       "WHERE scope_id=? AND prefix_key=?", st, error)) return 0;
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, prefixKey);
+    return stepRetry(st.stmt) == SQLITE_ROW ? columnInt(st.stmt, 0) : 0;
+}
+
+bool MemoryStore::publishPrefixEpoch(const std::string& scopeId, const std::string& prefixKey,
+                                     const std::string& contentHash,
+                                     const std::string& itemIdsJson, long long* epoch) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty() || prefixKey.empty()) return false;
+    const long long next = latestPrefixEpoch(scopeId, prefixKey) + 1;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "INSERT INTO memory_prefix_epoch"
+                       "(scope_id,epoch,prefix_key,content_hash,item_ids_json,published_at) "
+                       "VALUES(?,?,?,?,?,?)", st, error)) {
+        lastError_ = error;
+        return false;
+    }
+    bindText(st.stmt, 1, scopeId);
+    sqlite3_bind_int64(st.stmt, 2, next);
+    bindText(st.stmt, 3, prefixKey);
+    bindText(st.stmt, 4, contentHash);
+    bindText(st.stmt, 5, itemIdsJson.empty() ? "[]" : itemIdsJson);
+    bindText(st.stmt, 6, nowIso());
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return false;
+    }
+    if (epoch) *epoch = next;
+    return true;
+}
+
+taskforge::Json MemoryStore::listPrefixEpochs(const std::string& scopeId,
+                                              const std::string& prefixKey,
+                                              size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out = taskforge::Json::array();
+    if (!db_) return out;
+    std::string sql = "SELECT epoch,prefix_key,content_hash,item_ids_json,published_at "
+                      "FROM memory_prefix_epoch WHERE scope_id=?";
+    if (!prefixKey.empty()) sql += " AND prefix_key=?";
+    sql += " ORDER BY epoch DESC LIMIT ?";
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, sql, st, error)) return out;
+    bindText(st.stmt, 1, scopeId);
+    int index = 2;
+    if (!prefixKey.empty()) bindText(st.stmt, index++, prefixKey);
+    sqlite3_bind_int(st.stmt, index, static_cast<int>(std::max<size_t>(1, limit)));
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        out.push_back(taskforge::Json{{"epoch", columnInt(st.stmt, 0)},
+                                      {"prefixKey", columnText(st.stmt, 1)},
+                                      {"contentHash", columnText(st.stmt, 2)},
+                                      {"itemIds", parseJsonOrNull(columnText(st.stmt, 3))},
+                                      {"publishedAt", columnText(st.stmt, 4)}});
+    }
+    return out;
+}
+
+taskforge::Json MemoryStore::removedSince(
+    const std::string& scopeId, long long removalSeqStart,
+    const std::vector<std::pair<std::string, std::string>>& delivered) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out{{"maxSeq", removalSeqStart}, {"scopeRemoval", false},
+                        {"removed", taskforge::Json::array()}};
+    if (!db_) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT removal_seq,item_kind,item_id FROM memory_removal_log "
+                       "WHERE scope_id=? AND removal_seq>? ORDER BY removal_seq", st, error)) {
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    sqlite3_bind_int64(st.stmt, 2, removalSeqStart);
+    long long maxSeq = removalSeqStart;
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        const long long seq = columnInt(st.stmt, 0);
+        maxSeq = std::max(maxSeq, seq);
+        const std::string kind = columnText(st.stmt, 1);
+        const std::string id = columnText(st.stmt, 2);
+        bool hit = kind == "scope";
+        if (hit) out["scopeRemoval"] = true;
+        for (const auto& item : delivered) {
+            if (item.first == kind && item.second == id) {
+                hit = true;
+                break;
+            }
+        }
+        if (hit) {
+            out["removed"].push_back(taskforge::Json{{"kind", kind}, {"id", id},
+                                                     {"seq", seq}});
+        }
+    }
+    out["maxSeq"] = maxSeq;
     return out;
 }
 

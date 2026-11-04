@@ -1522,7 +1522,7 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(src.find("\"memory_search\"") != std::string::npos);
     CHECK(src.find("\"memory_propose_lesson\"") != std::string::npos);
     CHECK(src.find("runAgent(\"agente\", \"Agente\"") != std::string::npos);
-    CHECK(src.find("arx_mem_ctx);") != std::string::npos);
+    CHECK(src.find("arx_mem_ctx, std::string(), taskforge::memory::briefInfoToJson(arx_brief_info).dump()") != std::string::npos);
     CHECK(src.find("catch (const taskforge::rt::AgentFailure& arx_agent_err)") != std::string::npos);
     CHECK(src.find("isInfrastructureErrorClass(arx_agent_err.errorClass())") != std::string::npos);
     CHECK(src.find("catch (const std::exception& arx_mem_err)") != std::string::npos);
@@ -4681,6 +4681,72 @@ TEST(memory_forget_source_retracts_claim_tombstones_and_queues_purge) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_prefix_epoch_publish_and_removed_since) {
+    using taskforge::memory::MemoryStore;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-prefix-epoch-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string scope = "project:prefix-epoch-test";
+    std::string error;
+    MemoryStore store((root / "memory.db").string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "prefix-epoch-test"));
+    long long epoch = 0;
+    CHECK(store.publishPrefixEpoch(scope, "code|geral", "hash-a", "[\"a\"]", &epoch));
+    CHECK(epoch == 1);
+    CHECK(store.publishPrefixEpoch(scope, "code|geral", "hash-b", "[\"a\",\"b\"]", &epoch));
+    CHECK(epoch == 2);
+    CHECK(store.latestPrefixEpoch(scope, "code|geral") == 2);
+    CHECK(store.listPrefixEpochs(scope, "code|geral", 10).size() == 2);
+
+    const std::string subject = store.resolveNode(scope, "Guia", "entity");
+    const std::string object = store.resolveNode(scope, "4.5:1", "value");
+    const std::string edge = store.recordEdge(
+        scope, subject, object, "MENTIONS", taskforge::Json::object(),
+        "2026-01-01", "", 0.8, "active", "claim", "prefix-test");
+    CHECK(!edge.empty());
+    const long long start = store.currentRemovalSeq(scope);
+    CHECK(store.invalidateEdge(edge, "2026-02-01T00:00:00Z", "test", "tester"));
+    const auto removal = store.removedSince(scope, start, {{"edge", edge}});
+    CHECK(removal.value("maxSeq", 0LL) > start);
+    CHECK(removal["removed"].size() == 1);
+    const auto unrelated = store.removedSince(scope, start, {{"edge", "other"}});
+    CHECK(unrelated["removed"].empty());
+    store.close();
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_brief_exposes_stable_block_and_removal_snapshot) {
+    using taskforge::memory::MemoryBriefInfo;
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-stable-prefix-test";
+    const std::string projectId = "stable-prefix-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(!memory.recordLesson(projectId, "code", "t", "regra estavel").empty());
+    MemoryBriefInfo info;
+    const std::string brief = memory.buildBrief(projectId, "pipeline", {"code"}, {}, 800,
+                                                 true, false, &info, "code");
+    CHECK(!brief.empty());
+    CHECK(!info.stableBlock.empty());
+    CHECK(info.stableBlock.find("regra estavel") != std::string::npos);
+    CHECK(info.stableBlock.find("FATO") == std::string::npos);
+    CHECK(!info.stableIds.empty());
+    CHECK(info.removalSeqStart >= 0);
+    MemoryBriefInfo second;
+    const std::string stable = memory.buildStablePrefix(projectId, {"code"}, "code", 800, &second);
+    CHECK(stable == info.stableBlock);
+    CHECK(second.prefixIdentity == info.prefixIdentity);
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_recompile_playbook_uses_surviving_lessons) {
     using taskforge::memory::MemoryStore;
     namespace fs = std::filesystem;
@@ -6649,7 +6715,7 @@ TEST(memory_v4_fixture_doctor_reports_planted_violations) {
     CHECK(find("unknown_predicate_fraction").value("violations", 0LL) >= 1);
     CHECK(find("closure_reasons")["details"].value("closures", 0LL) >= 2);
     CHECK(find("unresolved_derived_inputs").value("violations", 0LL) >= 1);
-    CHECK(knowledge.getMeta("schema_version") == "7");
+    CHECK(knowledge.getMeta("schema_version") == "8");
     CHECK(knowledge.purgeCoverageMissing().empty());
     {
         sqlite3* raw = nullptr;
@@ -11630,3 +11696,4 @@ int main(int argc, char** argv) {
     std::cout << "\n" << (g_total - g_failed) << "/" << g_total << " verificacoes passaram\n";
     return g_failed == 0 ? 0 : 1;
 }
+

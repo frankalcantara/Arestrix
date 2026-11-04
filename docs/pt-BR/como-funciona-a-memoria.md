@@ -342,6 +342,24 @@ de 96 bytes ou mais e não promete encontrar paráfrases. Sem `--async`, `forget
 drena o trabalho antes de retornar e reporta um estado pendente próprio quando o
 banco de telemetria está indisponível.
 
+### Épocas de prefixo e remoções durante a execução
+
+O esquema v8 adiciona `memory_prefix_epoch`. O bloco estável contém apenas
+lições e playbooks ativos, ordenados por `(tipo, id)` e formatados de forma
+determinística, para que utilidade, escores de travessia e estado de trabalho
+não mudem os bytes. `MemoryBriefInfo` carrega o bloco estável, a chave/identidade
+da época, o número da época e `removalSeqStart`; `briefInfoToJson` é o contrato
+consumido pelos pipelines gerados.
+
+Antes de cada requisição ao modelo, o agente chama
+`MemoryService::removedSince` com o conjunto entregue de `(tipo, id)`. Uma
+remoção correspondente reconstrói o prompt sem o item e redige o marcador
+`[MEMO:<id>]` do histórico de ferramentas; uma remoção de `scope` limpa o
+conjunto entregue. A checagem continua ativa mesmo com a publicação de épocas
+desligada, então uma remoção confirmada não volta a ser servida. A tabela de
+época registra o conjunto publicado; provedor e modelo continuam no trace, não
+na identidade do prefixo.
+
 ### Lentes e facetas
 
 Com `globalDefaults.memory.lenses` ligado, a manutenção garante uma lente para
