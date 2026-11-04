@@ -400,7 +400,19 @@ export interface IProjectMemoryConfig extends Partial<INodeMemoryConfig> {
   /** E12: fontes locais ingeridas após a execução (off por padrão). */
   sources?: Partial<IMemorySourcesConfig>;
   /** E13: extração de afirmações na manutenção (off por padrão). */
-  claimExtraction?: boolean | { enabled?: boolean; maxPassages?: number };
+  claimExtraction?: boolean | {
+    enabled?: boolean;
+    maxPassages?: number;
+    maxItems?: number;
+    promptVersion?: string;
+    schemaVersion?: string;
+    /** Agente do Studio ou grafo; ausente usa o modelo padrão do Studio. */
+    agent?: string | {
+      id?: string;
+      graph?: string;
+      node?: string;
+    };
+  };
   /** E14: lentes e facetas determinísticas (off por padrão). */
   lenses?: boolean | { enabled?: boolean };
   /** E15: caminhos canônicos consolidados a partir de traços aprovados. */

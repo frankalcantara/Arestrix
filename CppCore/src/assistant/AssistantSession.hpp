@@ -68,9 +68,17 @@ std::optional<ModelChoice> defaultModelChoice();
 using ModelFn = std::function<rt::ChatReply(const rt::ChatRequest&)>;
 
 // Adaptador único da inteligência do Studio para a memória. A memória não
-// conhece provedor, protocolo, URL ou chave; esta função usa o modelo padrão do
-// Studio e o ModelClient neutro.
+// conhece provedor, protocolo, URL ou chave. O alvo pode ser um agente lógico
+// registrado pelo Studio, um grafo (graph/node) ou, quando o projeto não define
+// nada, o modelo padrão do Studio.
 memory::ClaimIntelligenceFn studioClaimIntelligence();
+
+// Registro dos agentes de memória do Studio. A chave é o `agent.id` ou, quando
+// só há grafo, o caminho em `agent.graph`. O executor do grafo/agente é quem
+// decide como produzir o JSON; a memória só consome ClaimIntelligenceFn.
+void registerStudioClaimAgent(const std::string& id, memory::ClaimIntelligenceFn fn);
+void unregisterStudioClaimAgent(const std::string& id);
+void clearStudioClaimAgents();
 
 struct TurnIO {
     std::function<void(const Json&)> emit;          // evento para a interface

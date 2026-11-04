@@ -306,6 +306,13 @@ a memória envia o trecho, o catálogo resumido e o contrato de saída, e recebe
 A memória não configura provedor, protocolo, URL, chave ou modelo; o agente local
 nunca roda durante a execução do agente.
 
+O projeto escolhe o alvo de inteligência em `memory.claimExtraction.agent`: um id
+de agente do Studio, ou um objeto com `id`, `graph` e `node` para um agente
+baseado em grafo. Sem esse campo, usa o modelo padrão do Studio (hoje, DeepSeek
+Flash 4.1 1017 nesta instalação). Se o campo existir mas o agente não estiver
+registrado, a extração falha explicitamente em vez de trocar de modelo em
+silêncio.
+
 Cada afirmação vira uma proposta `claim` pendente com sujeito, predicado, objeto
 ou valor, unidade, polaridade, qualificadores, validade, lente e `quote`. A
 validação exige JSON válido, `quote` literal no trecho, datas e unidade

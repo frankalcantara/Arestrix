@@ -26,6 +26,10 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 - Claim extraction no longer contains provider/protocol configuration or HTTP
   calls. `MemoryClaimExtractor` delegates to the Studio local agent through
   `ClaimIntelligenceFn`; the local agent owns prompt, provider and model choice.
+  Projects can select an agent or graph with `memory.claimExtraction.agent`;
+  without it, extraction uses the Studio default model (today, DeepSeek Flash
+  4.1 1017 in this installation). A configured but unregistered agent fails
+  explicitly instead of silently switching models.
 - Knowledge databases open with `PRAGMA synchronous=FULL`; telemetry keeps
   `NORMAL`. The concurrency stress p95 moved from 0.188 s to 0.203 s against the
   Phase 0 baseline.

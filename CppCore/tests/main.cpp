@@ -5319,12 +5319,19 @@ TEST(memory_claim_extractor_uses_injected_studio_local_agent) {
     ClaimExtractorConfig config;
     config.enabled = true;
     config.maxItems = 2;
+    config.agent.id = "memory.claims";
+    config.agent.graph = "pipelines/memory-claims.json";
+    config.agent.node = "extract";
     bool sawCatalog = false;
     bool sawSchema = false;
+    bool sawAgent = false;
     MemoryClaimExtractor::setIntelligence(
         [&](const taskforge::memory::ClaimIntelligenceRequest& request) {
             sawCatalog = request.catalog.find("MENTIONS") != std::string::npos;
             sawSchema = request.schemaJson.find("predicates") != std::string::npos;
+            sawAgent = request.agent.id == "memory.claims" &&
+                       request.agent.graph == "pipelines/memory-claims.json" &&
+                       request.agent.node == "extract";
             taskforge::memory::ClaimIntelligenceResult result;
             result.ok = true;
             result.content = R"({"claims":[{"subject":"Lia","predicate":"MENTIONS","object":"tea","quote":"tea"}]})";
@@ -5337,7 +5344,78 @@ TEST(memory_claim_extractor_uses_injected_studio_local_agent) {
     CHECK(claims[0].predicate == "MENTIONS");
     CHECK(sawCatalog);
     CHECK(sawSchema);
+    CHECK(sawAgent);
     MemoryClaimExtractor::setIntelligence(taskforge::assistant::studioClaimIntelligence());
+}
+
+TEST(memory_claim_agent_config_routes_to_registered_studio_agent) {
+    using taskforge::Json;
+    using taskforge::memory::ClaimAgentRef;
+    using taskforge::memory::ClaimExtractorConfig;
+    using taskforge::memory::ClaimIntelligenceRequest;
+    using taskforge::memory::ClaimIntelligenceResult;
+    using taskforge::memory::MemoryClaimExtractor;
+
+    const Json memory = Json::parse(R"JSON({
+      "claimExtraction": {
+        "enabled": true,
+        "agent": {
+          "id": "memory.claims",
+          "graph": "pipelines/memory-claims.json",
+          "node": "extract"
+        }
+      }
+    })JSON");
+    const ClaimExtractorConfig config = MemoryClaimExtractor::configFromJson(memory);
+    CHECK(config.enabled);
+    CHECK(config.agent.id == "memory.claims");
+    CHECK(config.agent.graph == "pipelines/memory-claims.json");
+    CHECK(config.agent.node == "extract");
+
+    bool routed = false;
+    taskforge::assistant::registerStudioClaimAgent(
+        "memory.claims", [&](const ClaimIntelligenceRequest& request) {
+            routed = request.agent.id == "memory.claims" &&
+                     request.agent.graph == "pipelines/memory-claims.json" &&
+                     request.agent.node == "extract";
+            ClaimIntelligenceResult result;
+            result.ok = true;
+            result.content = R"({"claims":[]})";
+            return result;
+        });
+    ClaimIntelligenceRequest request;
+    request.agent = config.agent;
+    const ClaimIntelligenceResult result =
+        taskforge::assistant::studioClaimIntelligence()(request);
+    CHECK(result.ok);
+    CHECK(routed);
+
+    bool graphRouted = false;
+    taskforge::assistant::registerStudioClaimAgent(
+        "pipelines/memory-claims.json", [&](const ClaimIntelligenceRequest& graphRequest) {
+            graphRouted = graphRequest.agent.id.empty() &&
+                          graphRequest.agent.graph == "pipelines/memory-claims.json" &&
+                          graphRequest.agent.node == "extract";
+            ClaimIntelligenceResult graphResult;
+            graphResult.ok = true;
+            graphResult.content = R"({"claims":[]})";
+            return graphResult;
+        });
+    request.agent = ClaimAgentRef{};
+    request.agent.graph = "pipelines/memory-claims.json";
+    request.agent.node = "extract";
+    const ClaimIntelligenceResult graphResult =
+        taskforge::assistant::studioClaimIntelligence()(request);
+    CHECK(graphResult.ok);
+    CHECK(graphRouted);
+
+    taskforge::assistant::clearStudioClaimAgents();
+    request.agent = ClaimAgentRef{};
+    request.agent.id = "missing.agent";
+    const ClaimIntelligenceResult missing =
+        taskforge::assistant::studioClaimIntelligence()(request);
+    CHECK(!missing.ok);
+    CHECK(missing.error.find("nao registrado") != std::string::npos);
 }
 
 TEST(memory_claim_extractor_precision_on_annotated_fifty_passages) {
