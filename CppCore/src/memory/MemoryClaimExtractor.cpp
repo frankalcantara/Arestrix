@@ -91,6 +91,7 @@ bool MemoryClaimExtractor::hasIntelligence() {
 std::string ClaimExtractorConfig::fingerprint() const {
     return project::RunnerSecurity::sha256(
         "claim|" + promptVersion + "|" + schemaVersion + "|" + std::to_string(maxItems) +
+        "|" + agent.id + "|" + agent.graph + "|" + agent.node +
         "|" + MemoryCatalog::instance().fingerprint() + "|" + catalogMode);
 }
 
@@ -106,6 +107,25 @@ ClaimExtractorConfig MemoryClaimExtractor::configFromJson(const taskforge::Json&
         config.maxItems = std::max(1, std::min(20, switchValue.value("maxItems", config.maxItems)));
         config.promptVersion = switchValue.value("promptVersion", config.promptVersion);
         config.schemaVersion = switchValue.value("schemaVersion", config.schemaVersion);
+        if (switchValue.contains("agent")) {
+            const auto& agent = switchValue["agent"];
+            if (agent.is_string()) {
+                config.agent.id = agent.str();
+            } else if (agent.is_object()) {
+                config.agent.id = agent.value("id", std::string());
+                config.agent.graph = agent.value("graph", std::string());
+                config.agent.node = agent.value("node", std::string());
+            }
+        }
+        if (config.agent.id.empty()) {
+            config.agent.id = switchValue.value("agentId", std::string());
+        }
+        if (config.agent.graph.empty()) {
+            config.agent.graph = switchValue.value("agentGraph", std::string());
+        }
+        if (config.agent.node.empty()) {
+            config.agent.node = switchValue.value("agentNode", std::string());
+        }
     }
     if (memory.contains("catalog") && memory["catalog"].is_object()) {
         config.catalogMode = memory["catalog"].value("mode", config.catalogMode);
@@ -263,6 +283,7 @@ std::vector<ClaimDraft> MemoryClaimExtractor::extract(const std::string& passage
     request.passageText = passageText;
     request.catalog = MemoryCatalog::instance().promptLines();
     request.schemaJson = schema.dump();
+    request.agent = config.agent;
     request.maxItems = config.maxItems;
     ClaimIntelligenceResult result = intelligence(request);
     if (!result.ok) {

@@ -179,9 +179,10 @@ e usados, além das contagens de truncamento.
 Executa a extração de afirmações sob demanda sobre trechos citados em execuções
 aprovadas. Exige `memory.claimExtraction` ligado e o agente local do Studio
 disponível; a memória envia o trecho, o catálogo e o contrato de saída, e o
-agente local cuida de provedor/modelo. A manutenção usa o mesmo caminho
-automaticamente. As propostas nascem pendentes e são revisadas por
-`memory proposals`.
+agente local cuida de provedor/modelo. `memory.claimExtraction.agent` pode
+selecionar um agente ou grafo do projeto; sem ele, usa o modelo padrão do Studio.
+A manutenção usa o mesmo caminho automaticamente. As propostas nascem pendentes
+e são revisadas por `memory proposals`.
 
 ### `memory paths`
 

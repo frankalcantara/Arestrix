@@ -18,6 +18,7 @@ struct ClaimExtractorConfig {
     std::string promptVersion = "claim-v1";
     std::string schemaVersion = "claim-schema-v1";
     std::string catalogMode = "warn";
+    ClaimAgentRef agent;
     int maxItems = 5;
 
     std::string fingerprint() const;

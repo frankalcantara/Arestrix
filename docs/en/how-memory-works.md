@@ -304,6 +304,13 @@ intelligence layer: memory sends it the passage, the catalog summary and the
 output contract, and receives JSON back. Memory does not configure provider,
 protocol, URL, key or model; the local agent never runs during agent execution.
 
+A project can choose the intelligence target with
+`memory.claimExtraction.agent`: a Studio agent id, or an object with `id`,
+`graph` and `node` for a graph-backed agent. When the field is absent, the
+Studio default model is used (today, DeepSeek Flash 4.1 1017 in this
+installation). When it is present but the agent is not registered, extraction
+fails explicitly instead of silently falling back to another model.
+
 Each claim becomes a pending `claim` proposal with subject, predicate, object or
 value, unit, polarity, qualifiers, validity, lens and `quote`. Validation
 requires valid JSON, a quote literally present in the passage, parsable dates and

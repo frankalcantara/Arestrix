@@ -258,8 +258,13 @@ taskforge::Json maintenanceConfigToJson(const MemoryMaintenanceConfig& config) {
         {"idleSeconds", config.idleSeconds},
         {"episodeThreshold", config.episodeThreshold},
         {"options", consolidationOptionsToJson(config.options)},
-        {"claimExtraction", taskforge::Json{{"enabled", config.claimExtractor.enabled},
-                                            {"maxPassages", static_cast<long long>(config.claimMaxPassages)}}},
+        {"claimExtraction", taskforge::Json{
+             {"enabled", config.claimExtractor.enabled},
+             {"maxPassages", static_cast<long long>(config.claimMaxPassages)},
+             {"agent", taskforge::Json{
+                  {"id", config.claimExtractor.agent.id},
+                  {"graph", config.claimExtractor.agent.graph},
+                  {"node", config.claimExtractor.agent.node}}}}},
         {"lenses", config.lensesEnabled},
         {"paths", taskforge::Json{{"enabled", config.pathsEnabled},
                                   {"minDistinctInputs", config.pathOptions.minDistinctInputs},
@@ -1748,6 +1753,10 @@ taskforge::Json MemoryService::extractClaims(const std::string& projectId,
     taskforge::Json out{{"ok", true}, {"candidates", 0LL}, {"extracted", 0LL},
                         {"proposed", 0LL}, {"abstained", 0LL}, {"failed", 0LL},
                         {"extractorFingerprint", config.fingerprint()},
+                        {"agent", taskforge::Json{
+                             {"id", config.agent.id},
+                             {"graph", config.agent.graph},
+                             {"node", config.agent.node}}},
                         {"diagnostics", taskforge::Json::array()}};
     if (!config.enabled) {
         out["ok"] = false;

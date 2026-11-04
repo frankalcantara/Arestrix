@@ -7,9 +7,11 @@
 #include <ctime>
 #include <fstream>
 #include <iomanip>
+#include <mutex>
 #include <random>
 #include <sstream>
 #include <system_error>
+#include <unordered_map>
 
 #include "search/SynonymAgent.hpp"
 #include "util/Json.hpp"
@@ -181,33 +183,78 @@ std::optional<ModelChoice> defaultModelChoice() {
     return ModelChoice{m->provider, m->model};
 }
 
+namespace {
+std::mutex g_claimAgentsMutex;
+std::unordered_map<std::string, memory::ClaimIntelligenceFn> g_claimAgents;
+
+std::string claimAgentKey(const memory::ClaimAgentRef& agent) {
+    return !agent.id.empty() ? agent.id : agent.graph;
+}
+
+memory::ClaimIntelligenceResult defaultModelClaimIntelligence(
+    const memory::ClaimIntelligenceRequest& request) {
+    memory::ClaimIntelligenceResult out;
+    auto model = defaultModelChoice();
+    if (!model) {
+        out.error = "modelo padrao do Studio nao configurado";
+        return out;
+    }
+    rt::CompletionRequest req;
+    req.provider = model->provider;
+    req.model = model->model;
+    req.system =
+        "Voce e o agente local do Arestrix Studio. Extraia afirmacoes do trecho "
+        "e responda SOMENTE JSON no contrato pedido. O catalogo e o schema abaixo "
+        "sao limites; nao invente predicados. Uma lista vazia e valida. A citacao "
+        "precisa ser substring literal do trecho.\n\nCatalogo:\n" +
+        request.catalog + "\nSchema:\n" + request.schemaJson;
+    req.user = request.passageText;
+    req.maxTokens = 1200;
+    req.maxAttempts = 3;
+    req.hasTemperature = true;
+    req.temperature = 0.0;
+    rt::CompletionResult result = rt::completeText(req);
+    out.ok = result.ok && !result.text.empty();
+    out.content = result.text;
+    if (!out.ok) out.error = result.error.empty() ? "resposta vazia do agente local" : result.error;
+    return out;
+}
+} // namespace
+
+void registerStudioClaimAgent(const std::string& id, memory::ClaimIntelligenceFn fn) {
+    if (id.empty() || !fn) return;
+    std::lock_guard<std::mutex> lock(g_claimAgentsMutex);
+    g_claimAgents[id] = std::move(fn);
+}
+
+void unregisterStudioClaimAgent(const std::string& id) {
+    std::lock_guard<std::mutex> lock(g_claimAgentsMutex);
+    g_claimAgents.erase(id);
+}
+
+void clearStudioClaimAgents() {
+    std::lock_guard<std::mutex> lock(g_claimAgentsMutex);
+    g_claimAgents.clear();
+}
+
 memory::ClaimIntelligenceFn studioClaimIntelligence() {
     return [](const memory::ClaimIntelligenceRequest& request) {
-        memory::ClaimIntelligenceResult out;
-        auto model = defaultModelChoice();
-        if (!model) {
-            out.error = "modelo padrao do Studio nao configurado";
-            return out;
+        if (request.agent.configured()) {
+            memory::ClaimIntelligenceFn agent;
+            const std::string key = claimAgentKey(request.agent);
+            {
+                std::lock_guard<std::mutex> lock(g_claimAgentsMutex);
+                auto it = g_claimAgents.find(key);
+                if (it != g_claimAgents.end()) agent = it->second;
+            }
+            if (!agent) {
+                memory::ClaimIntelligenceResult out;
+                out.error = "agente de memoria '" + key + "' nao registrado no Studio";
+                return out;
+            }
+            return agent(request);
         }
-        rt::CompletionRequest req;
-        req.provider = model->provider;
-        req.model = model->model;
-        req.system =
-            "Voce e o agente local do Arestrix Studio. Extraia afirmacoes do trecho "
-            "e responda SOMENTE JSON no contrato pedido. O catalogo e o schema abaixo "
-            "sao limites; nao invente predicados. Uma lista vazia e valida. A citacao "
-            "precisa ser substring literal do trecho.\n\nCatalogo:\n" +
-            request.catalog + "\nSchema:\n" + request.schemaJson;
-        req.user = request.passageText;
-        req.maxTokens = 1200;
-        req.maxAttempts = 3;
-        req.hasTemperature = true;
-        req.temperature = 0.0;
-        rt::CompletionResult result = rt::completeText(req);
-        out.ok = result.ok && !result.text.empty();
-        out.content = result.text;
-        if (!out.ok) out.error = result.error.empty() ? "resposta vazia do agente local" : result.error;
-        return out;
+        return defaultModelClaimIntelligence(request);
     };
 }
 
