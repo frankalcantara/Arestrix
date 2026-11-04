@@ -1582,8 +1582,71 @@ taskforge::Json MemoryService::publishPrefixEpoch(const std::string& projectId,
     if (!s->publishPrefixEpoch(scopeId(projectId), prefixKey, contentHash, itemIds.dump(), &epoch)) {
         return taskforge::Json{{"ok", false}, {"error", "falha ao publicar epoca"}};
     }
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        prefixEpochLastPublish_[projectKey(projectId)] = std::chrono::steady_clock::now();
+    }
     return taskforge::Json{{"ok", true}, {"epoch", epoch}, {"prefixKey", prefixKey},
                            {"prefixIdentity", identity}, {"contentHash", contentHash}};
+}
+
+taskforge::Json MemoryService::configurePrefixEpochs(const std::string& projectId,
+                                                     const taskforge::Json& raw) {
+    PrefixEpochConfig config;
+    if (raw.is_boolean()) {
+        config.enabled = raw.get<bool>();
+    } else if (raw.is_object()) {
+        config.enabled = raw.value("enabled", false);
+        config.cacheTtlSeconds = static_cast<int>(std::max<long long>(
+            0, std::min<long long>(86400, raw.value("cacheTtlSeconds", 300))));
+        config.maxPending = static_cast<int>(std::max<long long>(
+            1, std::min<long long>(1000, raw.value("maxPending", 5))));
+        config.minIntervalSeconds = static_cast<int>(std::max<long long>(
+            0, std::min<long long>(86400, raw.value("minIntervalSeconds", 60))));
+    }
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        prefixEpochs_[projectKey(projectId)] = config;
+    }
+    return taskforge::Json{{"enabled", config.enabled},
+                           {"cacheTtlSeconds", config.cacheTtlSeconds},
+                           {"maxPending", config.maxPending},
+                           {"minIntervalSeconds", config.minIntervalSeconds}};
+}
+
+PrefixEpochConfig MemoryService::prefixEpochConfig(const std::string& projectId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    auto it = prefixEpochs_.find(projectKey(projectId));
+    return it == prefixEpochs_.end() ? PrefixEpochConfig{} : it->second;
+}
+
+bool MemoryService::maybePublishPrefixEpoch(const std::string& projectId,
+                                            const std::string& prefixKey,
+                                            const std::string& skillHash,
+                                            const std::string& promptTemplateHash,
+                                            int pendingAdditions, bool removal) {
+    if (removal) {
+        publishPrefixEpoch(projectId, prefixKey, skillHash, promptTemplateHash);
+        return true;
+    }
+    const PrefixEpochConfig config = prefixEpochConfig(projectId);
+    if (!config.enabled) return false;
+    const auto now = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point last{};
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        auto it = prefixEpochLastPublish_.find(projectKey(projectId));
+        if (it != prefixEpochLastPublish_.end()) last = it->second;
+    }
+    const long long elapsed = last.time_since_epoch().count() == 0
+        ? 0 : std::chrono::duration_cast<std::chrono::seconds>(now - last).count();
+    const bool idleDue = last.time_since_epoch().count() != 0 &&
+        elapsed >= config.cacheTtlSeconds;
+    const bool pendingDue = pendingAdditions >= config.maxPending &&
+        (last.time_since_epoch().count() == 0 || elapsed >= config.minIntervalSeconds);
+    if (!idleDue && !pendingDue) return false;
+    publishPrefixEpoch(projectId, prefixKey, skillHash, promptTemplateHash);
+    return true;
 }
 
 void MemoryService::invalidateBriefCache() {

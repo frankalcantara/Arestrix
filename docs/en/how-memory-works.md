@@ -355,7 +355,10 @@ the item and redacts its `[MEMO:<id>]` marker from the tool history; a `scope`
 removal clears the delivered set. The check stays enabled even when epoch
 publication is disabled, so a committed removal cannot be served again. The
 epoch table records the published item set; provider and model remain trace
-data, not prefix identity.
+data, not prefix identity. `memory.prefixEpochs` accepts `enabled`,
+`cacheTtlSeconds`, `maxPending` and `minIntervalSeconds`; generated agents
+publish when the idle TTL expires or when the pending-addition threshold is
+reached after the minimum interval. Removals publish immediately.
 
 ### Lenses and facets
 
