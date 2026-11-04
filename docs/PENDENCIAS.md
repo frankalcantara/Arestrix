@@ -16,6 +16,7 @@
 | Harness de execução do A/B v2 | **Implementado** |
 | Nível `institution` no `memory_inspect` do assistente | Pendente operacional |
 | Validação com provedores reais de embeddings | Pendente operacional |
+| Interface gráfica para configurar o agente de memória | Pendente de produto |
 | Validação de release em máquina limpa / assinatura | Pendente de release |
 
 ## 2. O que está concluído na memória
@@ -91,6 +92,14 @@ status do serviço institucional no `MemoryService` e de configuração explíci
 Os perfis e o fingerprint estão implementados, mas a validação de qualidade e latência com
 EmbeddingGemma 2 e Qwen3-Embedding-4B reais ainda deve ser registrada. O fallback lexical é o
 comportamento seguro quando o provedor não está disponível.
+
+### 4.4 Interface gráfica do agente de memória
+
+O contrato `memory.claimExtraction.agent` já aceita um id de agente do Studio ou
+`{ id, graph, node }` para um agente baseado em grafo. Falta a interface gráfica
+do Studio para escolher esse alvo por projeto, listar os agentes/grafos
+registrados, mostrar o fallback para o modelo padrão e explicar o erro quando o
+alvo configurado não está disponível.
 
 ## 5. Pendências de release
 

@@ -4596,6 +4596,218 @@ TEST(memory_sources_ingest_versions_search_and_redacts_secrets) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_forget_source_retracts_claim_tombstones_and_queues_purge) {
+    using taskforge::memory::MemoryPassageRecord;
+    using taskforge::memory::MemorySourceRecord;
+    using taskforge::memory::MemorySourceSelector;
+    using taskforge::memory::MemoryStore;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-forget-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string scope = "project:forget-test";
+    std::string error;
+    MemoryStore store((root / "memory.db").string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "forget-test"));
+
+    MemorySourceRecord source;
+    source.scopeId = scope;
+    source.uri = "docs/forget.md";
+    source.contentHash = "hash-v1";
+    source.kind = "text";
+    source.size = 120;
+    MemoryPassageRecord passage;
+    passage.id = "psg_forget";
+    passage.scopeId = scope;
+    passage.ordinal = 1;
+    passage.start = 0;
+    passage.end = 120;
+    passage.text = "O contraste minimo e 4.5:1 e o texto continua por mais alguns bytes "
+                   "para permitir a janela de impressao digital.";
+    passage.textHash = "passage-hash";
+    passage.tokens = 30;
+    size_t inserted = 0;
+    const std::string sourceId = store.ingestSource(source, {passage}, &inserted, error);
+    CHECK(!sourceId.empty());
+    CHECK(inserted == 1);
+
+    const std::string subject = store.resolveNode(scope, "Guia", "entity");
+    const std::string object = store.resolveNode(scope, "4.5:1", "value");
+    CHECK(!subject.empty() && !object.empty());
+    const std::string edge = store.recordEdge(
+        scope, subject, object, "HAS_VALUE", taskforge::Json{{"value", "4.5:1"}},
+        "2026-01-01", "", 0.8, "active", "claim", "prop-forget",
+        taskforge::Json{{"passageId", "psg_forget"}, {"sourceUri", "docs/forget.md"}});
+    CHECK(!edge.empty());
+
+    MemorySourceSelector selector;
+    selector.sourceVersionId = sourceId;
+    const auto erased = store.eraseSource(scope, selector, "test", "tester");
+    CHECK(erased.ok);
+    CHECK(erased.claimsRetracted == 1);
+    CHECK(erased.passages == 1);
+    CHECK(erased.jobs == 1);
+    CHECK(store.sourceSummary(scope).value("passages", 0LL) == 0);
+    CHECK(store.jobSummary(scope).value("pending", 0LL) == 1);
+    CHECK(store.tombstoneSummary(scope).value("total", 0LL) >= 3);
+
+    const auto again = store.eraseSource(scope, selector, "test", "tester");
+    CHECK(again.ok);
+    CHECK(again.claimsRetracted == 0);
+
+    std::string ingestError;
+    const std::string reingested = store.ingestSource(source, {passage}, &inserted, ingestError);
+    CHECK(reingested.empty());
+    CHECK(ingestError == "source_forgotten");
+
+    taskforge::memory::MemoryPurgeOptions purgeOptions;
+    purgeOptions.keepAudit = true;
+    purgeOptions.vacuum = false;
+    purgeOptions.dropTombstones = false;
+    CHECK(store.purge(scope, purgeOptions));
+    CHECK(store.tombstoneSummary(scope).value("total", 0LL) >= 1);
+    purgeOptions.dropTombstones = true;
+    CHECK(store.purge(scope, purgeOptions));
+    CHECK(store.tombstoneSummary(scope).value("total", 0LL) == 0);
+
+    store.close();
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_forget_keeps_claim_with_surviving_source_version) {
+    using taskforge::memory::MemoryPassageRecord;
+    using taskforge::memory::MemorySourceRecord;
+    using taskforge::memory::MemorySourceSelector;
+    using taskforge::memory::MemoryStore;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-forget-shared-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string scope = "project:forget-shared-test";
+    std::string error;
+    MemoryStore store((root / "memory.db").string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "forget-shared-test"));
+
+    auto ingest = [&](const std::string& sourceId, const std::string& passageId,
+                      const std::string& hash) {
+        MemorySourceRecord source;
+        source.id = sourceId;
+        source.scopeId = scope;
+        source.uri = "docs/shared.md";
+        source.contentHash = hash;
+        source.kind = "text";
+        MemoryPassageRecord passage;
+        passage.id = passageId;
+        passage.scopeId = scope;
+        passage.ordinal = 1;
+        passage.text = "Texto compartilhado da fonte " + sourceId;
+        passage.textHash = hash + "-passage";
+        size_t inserted = 0;
+        return store.ingestSource(source, {passage}, &inserted, error);
+    };
+    const std::string v1 = ingest("src_v1", "psg_v1", "hash-v1");
+    const std::string v2 = ingest("src_v2", "psg_v2", "hash-v2");
+    CHECK(!v1.empty() && !v2.empty());
+
+    const std::string subject = store.resolveNode(scope, "Guia", "entity");
+    const std::string object = store.resolveNode(scope, "4.5:1", "value");
+    const std::string edge = store.recordEdge(
+        scope, subject, object, "HAS_VALUE", taskforge::Json{{"value", "4.5:1"}},
+        "2026-01-01", "", 0.8, "active", "claim", "prop-shared",
+        taskforge::Json{{"passageId", "psg_v1"}, {"sourceUri", "docs/shared.md"}});
+    CHECK(!edge.empty());
+    CHECK(store.recordLineage(scope, "edge", edge, "passage", "psg_v2"));
+
+    MemorySourceSelector selector;
+    selector.sourceVersionId = v1;
+    const auto erased = store.eraseSource(scope, selector, "test", "tester");
+    CHECK(erased.ok);
+    CHECK(erased.claimsRetracted == 0);
+    taskforge::memory::MemoryEdgeRecord record;
+    CHECK(store.getEdge(scope, edge, record));
+    CHECK(record.status == "active");
+
+    selector.sourceVersionId = v2;
+    const auto erased2 = store.eraseSource(scope, selector, "test", "tester");
+    CHECK(erased2.ok);
+    CHECK(erased2.claimsRetracted == 1);
+    CHECK(store.getEdge(scope, edge, record));
+    CHECK(record.status == "rejected");
+
+    store.close();
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_purge_telemetry_redacts_episode_and_job_completes) {
+    using taskforge::memory::MemoryEpisodeRecord;
+    using taskforge::memory::MemoryPassageRecord;
+    using taskforge::memory::MemorySourceRecord;
+    using taskforge::memory::MemorySourceSelector;
+    using taskforge::memory::MemoryStore;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-telemetry-purge-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string scope = "project:telemetry-purge-test";
+    std::string error;
+    MemoryStore knowledge((root / "memory.db").string());
+    MemoryStore telemetry((root / "telemetry.db").string());
+    CHECK(knowledge.open(error));
+    CHECK(telemetry.open(error));
+    CHECK(knowledge.ensureScope(scope, "project", "", "telemetry-purge-test"));
+    CHECK(telemetry.ensureScope(scope, "project", "", "telemetry-purge-test"));
+
+    MemorySourceRecord source;
+    source.scopeId = scope;
+    source.uri = "docs/telemetry.md";
+    source.contentHash = "hash-telemetry";
+    source.kind = "text";
+    source.size = 180;
+    MemoryPassageRecord passage;
+    passage.id = "psg_telemetry";
+    passage.scopeId = scope;
+    passage.ordinal = 1;
+    passage.text = "Um trecho longo o bastante para gerar janelas de impressao digital e "
+                   "permitir que a limpeza encontre uma copia literal no episodio de telemetria.";
+    passage.textHash = "hash-telemetry-passage";
+    size_t inserted = 0;
+    const std::string sourceId = knowledge.ingestSource(source, {passage}, &inserted, error);
+    CHECK(!sourceId.empty());
+
+    MemorySourceSelector selector;
+    selector.sourceVersionId = sourceId;
+    CHECK(knowledge.eraseSource(scope, selector, "test", "tester").ok);
+    const auto jobs = knowledge.claimJobs(scope, 1, "test-worker", 60);
+    CHECK(jobs.size() == 1);
+    CHECK(jobs[0].kind == "purge_telemetry");
+
+    MemoryEpisodeRecord episode;
+    episode.scopeId = scope;
+    episode.runId = "run-telemetry";
+    episode.nodeId = "node-telemetry";
+    episode.kind = "run";
+    episode.content = "Copia literal: " + passage.text;
+    const std::string episodeId = telemetry.recordEpisode(episode);
+    CHECK(!episodeId.empty());
+    CHECK(telemetry.purgeTelemetry(scope, jobs[0].payloadJson, error));
+    const auto redacted = telemetry.getEpisode(scope, episodeId);
+    CHECK(redacted.value("content", std::string()) == "[apagado]");
+    CHECK(knowledge.completeJob(jobs[0].id));
+    CHECK(knowledge.jobSummary(scope).value("done", 0LL) == 1);
+
+    knowledge.close();
+    telemetry.close();
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_claim_extractor_validates_schema_quote_and_empty_list) {
     using taskforge::memory::ClaimExtractorConfig;
     using taskforge::memory::MemoryClaimExtractor;
@@ -6315,7 +6527,7 @@ TEST(memory_v4_fixture_doctor_reports_planted_violations) {
     CHECK(find("unknown_predicate_fraction").value("violations", 0LL) >= 1);
     CHECK(find("closure_reasons")["details"].value("closures", 0LL) >= 2);
     CHECK(find("unresolved_derived_inputs").value("violations", 0LL) >= 1);
-    CHECK(knowledge.getMeta("schema_version") == "6");
+    CHECK(knowledge.getMeta("schema_version") == "7");
     CHECK(knowledge.purgeCoverageMissing().empty());
     {
         sqlite3* raw = nullptr;

@@ -30,6 +30,14 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   without it, extraction uses the Studio default model (today, DeepSeek Flash
   4.1 1017 in this installation). A configured but unregistered agent fails
   explicitly instead of silently switching models.
+- **Memory fix5 phase 3:** schema v7 adds `memory_lineage`,
+  `memory_tombstone`, `memory_job`, `memory_removal_log` and
+  `memory_edge.retracted_at`; `memory forget` erases one source version or all
+  versions of a URI inside one `WriteTxn`, retracts unsupported claims,
+  tombstones derivations, deletes passages/evidence and queues idempotent
+  `purge_telemetry`, which redacts literal copies of 96+ bytes from episodes.
+  `purge --drop-tombstones` removes tombstones explicitly, and `doctor`
+  coverage now includes the new scoped tables.
 - Knowledge databases open with `PRAGMA synchronous=FULL`; telemetry keeps
   `NORMAL`. The concurrency stress p95 moved from 0.188 s to 0.203 s against the
   Phase 0 baseline.

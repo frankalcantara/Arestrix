@@ -102,7 +102,8 @@ public:
                             const taskforge::Json& delta);
     void clearWorkingItem(const std::string& projectId, const std::string& itemId);
     void clearProject(const std::string& projectId);
-    bool purgeProject(const std::string& projectId, bool keepAudit = false, bool vacuum = true);
+    bool purgeProject(const std::string& projectId, bool keepAudit = false, bool vacuum = true,
+                      bool dropTombstones = false);
     MemoryPruneResult prune(const std::string& projectId, int olderThanDays);
     // Copia consistente do conhecimento para targetPath e fingerprint SHA-256.
     bool freezeKnowledge(const std::string& projectId, const std::string& targetPath,
@@ -196,6 +197,14 @@ public:
                          const std::vector<std::string>& uris, size_t maxFileBytes,
                          size_t maxFiles);
     taskforge::Json sourceSummary(const std::string& projectId);
+    // Fase 3: esquece uma versao/URI e drena a limpeza da telemetria.
+    taskforge::Json forgetSource(const std::string& projectId,
+                                 const MemorySourceSelector& selector,
+                                 const std::string& reason,
+                                 const std::string& requestedBy,
+                                 bool async = false, bool vacuum = false);
+    taskforge::Json drainJobs(const std::string& projectId, size_t maxJobs = 100);
+    taskforge::Json lineageBackfill(const std::string& projectId);
 
     // E11: versao do conhecimento e tracos de recuperacao.
     long long knowledgeVersion(const std::string& projectId);
