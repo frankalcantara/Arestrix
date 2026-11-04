@@ -59,6 +59,13 @@ PathServingConfig pathServingConfigFromJson(const taskforge::Json& value);
 taskforge::Json pathServingConfigToJson(const PathServingConfig& config);
 
 // E17: travessia em feixe quando nenhum caminho cobre a consulta.
+struct PrefixEpochConfig {
+    bool enabled = false;
+    int cacheTtlSeconds = 300;
+    int maxPending = 5;
+    int minIntervalSeconds = 60;
+};
+
 struct TraversalConfig {
     bool enabled = false;
     TraversalOptions options;
@@ -149,6 +156,14 @@ public:
                                        const std::string& prefixKey,
                                        const std::string& skillHash,
                                        const std::string& promptTemplateHash);
+    taskforge::Json configurePrefixEpochs(const std::string& projectId,
+                                          const taskforge::Json& raw);
+    PrefixEpochConfig prefixEpochConfig(const std::string& projectId) const;
+    bool maybePublishPrefixEpoch(const std::string& projectId,
+                                 const std::string& prefixKey,
+                                 const std::string& skillHash,
+                                 const std::string& promptTemplateHash,
+                                 int pendingAdditions, bool removal);
     void clearLessons(const std::string& projectId);
 
     // Episódios, arestas e métricas.
@@ -442,6 +457,8 @@ private:
     std::map<std::string, std::unique_ptr<MaintenanceRuntime>> maintenance_;
     std::map<std::string, PathServingConfig> pathServing_;   // E16
     std::map<std::string, TraversalConfig> traversal_;       // E17
+    std::map<std::string, PrefixEpochConfig> prefixEpochs_;
+    std::map<std::string, std::chrono::steady_clock::time_point> prefixEpochLastPublish_;
 };
 
 } // namespace memory

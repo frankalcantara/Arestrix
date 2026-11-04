@@ -153,6 +153,7 @@ struct AgentSpec {
     bool memoryValidatedReinforcement = false;
     // E8: pede cache_control do prefixo skill+brief no protocolo Anthropic.
     bool memoryPromptCache = false;
+    Json memoryPrefixEpochs = Json(false);
     // E12: ingestao de fontes lidas e de pastas declaradas.
     bool memorySources = false;
     std::vector<std::string> memorySourcePaths;
@@ -210,6 +211,7 @@ AgentSpec parseSpec(const json& j, const std::string& nodeId, const std::string&
     s.memoryForceDisabled = j.value("memoryForceDisabled", false);
     s.memoryValidatedReinforcement = j.value("memoryValidatedReinforcement", false);
     s.memoryPromptCache = j.value("memoryPromptCache", false);
+    if (j.contains("memoryPrefixEpochs")) s.memoryPrefixEpochs = j["memoryPrefixEpochs"];
     s.memorySources = j.value("memorySources", false);
     s.memorySourceMaxFileBytes = j.value("memorySourceMaxFileBytes", 524288);
     s.memorySourceMaxFiles = j.value("memorySourceMaxFiles", 2000);
@@ -514,6 +516,16 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     // runtime que o agente enxerga (contexto de sistema, prompt padrao, descricoes de ferramentas e
     // erros devolvidos a ele) segue esse idioma.
     RuntimeLang lang = detectRuntimeLang(std::vector<std::string>{skillText, spec.promptTemplate});
+    if (!spec.memoryProjectId.empty()) {
+        auto& prefixMemory = memory::MemoryService::getInstance();
+        prefixMemory.configurePrefixEpochs(spec.memoryProjectId, spec.memoryPrefixEpochs);
+        if (spec.memoryEnabled) {
+            prefixMemory.maybePublishPrefixEpoch(
+                spec.memoryProjectId, "default",
+                project::RunnerSecurity::sha256(skillText),
+                project::RunnerSecurity::sha256(spec.promptTemplate), 0, false);
+        }
+    }
 
     // E8: skill + brief formam o prefixo estavel (cacheavel); o contexto de
     // execucao fica separado e nunca e marcado para cache.

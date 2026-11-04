@@ -37,7 +37,10 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   redacting removed items from the system prompt and tool history. The stable
   block is ordered by `(kind, id)` and independent of utility/volatile context.
   Source forget, proposal promotion and edge invalidation publish a new prefix
-  epoch immediately.
+  epoch immediately. `memory.prefixEpochs` accepts `enabled`,
+  `cacheTtlSeconds`, `maxPending` and `minIntervalSeconds`; generated agents
+  configure the policy and publish when the idle TTL or pending threshold is
+  reached.
 - **Memory fix5 phase 3:** schema v7 adds `memory_lineage`,
   `memory_tombstone`, `memory_job`, `memory_removal_log` and
   `memory_edge.retracted_at`; `memory forget` erases one source version or all

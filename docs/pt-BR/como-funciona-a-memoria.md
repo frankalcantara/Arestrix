@@ -358,7 +358,10 @@ remoção correspondente reconstrói o prompt sem o item e redige o marcador
 conjunto entregue. A checagem continua ativa mesmo com a publicação de épocas
 desligada, então uma remoção confirmada não volta a ser servida. A tabela de
 época registra o conjunto publicado; provedor e modelo continuam no trace, não
-na identidade do prefixo.
+na identidade do prefixo. `memory.prefixEpochs` aceita `enabled`,
+`cacheTtlSeconds`, `maxPending` e `minIntervalSeconds`; agentes gerados publicam
+quando o TTL ocioso expira ou quando o limiar de adições pendentes é atingido
+após o intervalo mínimo. Remoções publicam imediatamente.
 
 ### Lentes e facetas
 

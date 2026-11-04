@@ -4743,6 +4743,14 @@ TEST(memory_brief_exposes_stable_block_and_removal_snapshot) {
     const std::string stable = memory.buildStablePrefix(projectId, {"code"}, "code", 800, &second);
     CHECK(stable == info.stableBlock);
     CHECK(second.prefixIdentity == info.prefixIdentity);
+    const auto configured = memory.configurePrefixEpochs(
+        projectId, taskforge::Json{{"enabled", true}, {"cacheTtlSeconds", 0},
+                                   {"maxPending", 2}, {"minIntervalSeconds", 0}});
+    CHECK(configured.value("enabled", false));
+    CHECK(memory.prefixEpochConfig(projectId).maxPending == 2);
+    const auto beforeEpochs = memory.prefixEpochs(projectId, "default", 10).size();
+    CHECK(memory.maybePublishPrefixEpoch(projectId, "default", "skill", "template", 2, false));
+    CHECK(memory.prefixEpochs(projectId, "default", 10).size() == beforeEpochs + 1);
     memory.closeProject(projectId);
     fs::remove_all(root, ec);
 }

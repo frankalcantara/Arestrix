@@ -514,6 +514,7 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
     spec["memoryValidatedReinforcement"] = memory.value("validatedReinforcement", false);
     // E8: cache explicito do prefixo skill+brief no protocolo Anthropic.
     spec["memoryPromptCache"] = memory.value("promptCache", false);
+    spec["memoryPrefixEpochs"] = memory.value("prefixEpochs", json(false));
     // E12: fontes declaradas e ingestao de arquivos lidos.
     json sourceConfig = memory.value("sources", json::object());
     bool sourcesEnabled = false;
