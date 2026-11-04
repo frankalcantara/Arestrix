@@ -1723,6 +1723,7 @@ taskforge::Json MemoryService::forgetSource(const std::string& projectId,
     out["paths"] = MemoryPaths::reconcile(*s, scopeId(projectId), "source_forgotten");
     out["facets"] = MemoryFacets::rebuild(*s, scopeId(projectId),
                                           embeddingConfig(projectId), true);
+    out["prefixEpoch"] = publishPrefixEpoch(projectId, "default", "", "");
     invalidateBriefCache();
     if (!async) {
         out["drain"] = drainJobs(projectId, 100);
@@ -2236,6 +2237,7 @@ bool MemoryService::promoteProposal(const std::string& projectId, const std::str
     if (promoted) {
         invalidateBriefCache();
         MemoryPaths::reconcile(*s, scopeId(projectId), "claim_state_changed");
+        publishPrefixEpoch(projectId, "default", "", "");
     }
     return promoted;
 }
@@ -3086,7 +3088,12 @@ bool MemoryService::invalidateEdge(const std::string& projectId, const std::stri
                                    const std::string& validTo, const std::string& reason,
                                    const std::string& actor) {
     auto* s = ensureStore(projectId);
-    return s && s->invalidateEdge(edgeId, validTo, reason, actor);
+    const bool ok = s && s->invalidateEdge(edgeId, validTo, reason, actor);
+    if (ok) {
+        invalidateBriefCache();
+        publishPrefixEpoch(projectId, "default", "", "");
+    }
+    return ok;
 }
 
 bool MemoryService::recordUsage(const MemoryUsageRecord& usage) {
