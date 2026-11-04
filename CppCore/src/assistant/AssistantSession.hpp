@@ -15,6 +15,7 @@
 
 #include "assistant/AssistantTools.hpp"
 #include "assistant/GraphDocument.hpp"
+#include "memory/ClaimIntelligence.hpp"
 #include "rt/ModelClient.hpp"
 #include "rt/RuntimeLang.hpp"
 #include "util/JsonValue.hpp"
@@ -65,6 +66,11 @@ Json assistantStatus();
 std::optional<ModelChoice> defaultModelChoice();
 
 using ModelFn = std::function<rt::ChatReply(const rt::ChatRequest&)>;
+
+// Adaptador único da inteligência do Studio para a memória. A memória não
+// conhece provedor, protocolo, URL ou chave; esta função usa o modelo padrão do
+// Studio e o ModelClient neutro.
+memory::ClaimIntelligenceFn studioClaimIntelligence();
 
 struct TurnIO {
     std::function<void(const Json&)> emit;          // evento para a interface

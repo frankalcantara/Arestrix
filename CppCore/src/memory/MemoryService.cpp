@@ -1,4 +1,5 @@
 #include "MemoryService.hpp"
+#include "assistant/AssistantSession.hpp"
 #include "MemoryCatalog.hpp"
 #include "MemoryPredicates.hpp"
 #include "MemoryExtractor.hpp"
@@ -267,9 +268,7 @@ taskforge::Json maintenanceConfigToJson(const MemoryMaintenanceConfig& config) {
         {"bridges", taskforge::Json{{"enabled", config.bridgesEnabled},
                                     {"maxProposals", static_cast<long long>(config.bridgeOptions.maxProposals)},
                                     {"maxPerEntity", static_cast<long long>(config.bridgeOptions.maxPerEntity)}}},
-        {"extractor", taskforge::Json{{"model", config.claimExtractor.model},
-                                      {"revision", config.claimExtractor.revision},
-                                      {"baseUrl", config.claimExtractor.baseUrl}}}};
+        {"intelligence", "studio-local"}};
 }
 
 PathServingConfig pathServingConfigFromJson(const taskforge::Json& value) {
@@ -354,6 +353,11 @@ MemoryService::~MemoryService() {
 
 MemoryService& MemoryService::getInstance() {
     static MemoryService instance;
+    static const bool intelligenceRegistered = []() {
+        MemoryClaimExtractor::setIntelligence(assistant::studioClaimIntelligence());
+        return true;
+    }();
+    (void)intelligenceRegistered;
     return instance;
 }
 
@@ -1813,7 +1817,7 @@ taskforge::Json MemoryService::extractClaims(const std::string& projectId,
                 {"passageId", passage.passageId}, {"passageHash", passage.passageHash},
                 {"sourceUri", passage.uri}, {"start", passage.start}, {"end", passage.end},
                 {"extractorFingerprint", config.fingerprint()},
-                {"extractorModel", config.model}, {"extractorRevision", config.revision},
+                {"intelligence", "studio-local"},
                 {"promptVersion", config.promptVersion}, {"schemaVersion", config.schemaVersion}};
             taskforge::Json evidence = taskforge::Json::array({
                 taskforge::Json{{"kind", "passage"},
@@ -1824,8 +1828,7 @@ taskforge::Json MemoryService::extractClaims(const std::string& projectId,
                                 {"end", passage.end},
                                 {"quote", claim.quote},
                                 {"extractorFingerprint", config.fingerprint()},
-                                {"model", config.model},
-                                {"revision", config.revision}}});
+                                {"intelligence", "studio-local"}}});
             if (!s->recordProposal(scope, "claim", payload, "", evidence, 0.6).empty()) {
                 ++proposed;
             }

@@ -5313,6 +5313,33 @@ TEST(model_router_decides_by_confidence_privacy_and_shadow) {
     CHECK(decision.provider == "openai");
 }
 
+TEST(memory_claim_extractor_uses_injected_studio_local_agent) {
+    using taskforge::memory::ClaimExtractorConfig;
+    using taskforge::memory::MemoryClaimExtractor;
+    ClaimExtractorConfig config;
+    config.enabled = true;
+    config.maxItems = 2;
+    bool sawCatalog = false;
+    bool sawSchema = false;
+    MemoryClaimExtractor::setIntelligence(
+        [&](const taskforge::memory::ClaimIntelligenceRequest& request) {
+            sawCatalog = request.catalog.find("MENTIONS") != std::string::npos;
+            sawSchema = request.schemaJson.find("predicates") != std::string::npos;
+            taskforge::memory::ClaimIntelligenceResult result;
+            result.ok = true;
+            result.content = R"({"claims":[{"subject":"Lia","predicate":"MENTIONS","object":"tea","quote":"tea"}]})";
+            return result;
+        });
+    std::string error;
+    const auto claims = MemoryClaimExtractor::extract("Lia usa tea.", config, error);
+    CHECK(error.empty());
+    CHECK(claims.size() == 1);
+    CHECK(claims[0].predicate == "MENTIONS");
+    CHECK(sawCatalog);
+    CHECK(sawSchema);
+    MemoryClaimExtractor::setIntelligence(taskforge::assistant::studioClaimIntelligence());
+}
+
 TEST(memory_claim_extractor_precision_on_annotated_fifty_passages) {
     using taskforge::memory::ClaimExtractorConfig;
     using taskforge::memory::MemoryClaimExtractor;

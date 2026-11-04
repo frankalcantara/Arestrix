@@ -23,6 +23,9 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ### Changed
 
+- Claim extraction no longer contains provider/protocol configuration or HTTP
+  calls. `MemoryClaimExtractor` delegates to the Studio local agent through
+  `ClaimIntelligenceFn`; the local agent owns prompt, provider and model choice.
 - Knowledge databases open with `PRAGMA synchronous=FULL`; telemetry keeps
   `NORMAL`. The concurrency stress p95 moved from 0.188 s to 0.203 s against the
   Phase 0 baseline.
@@ -31,8 +34,8 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   project catalog merge with audited overrides, `context_key` and `claim_key`
   migration v6, canonical context/claim keys, unknown-predicate `warn`/`strict`
   behavior, structural predicate rejection, catalog-aware overlap checks,
-  `doctor --list-multi-closures`, `memory reopen`, and catalog/structured-output
-  prompt support in the claim extractor. The 8×500 stress remains at zero
+  `doctor --list-multi-closures`, `memory reopen`, and a single Studio-local
+  intelligence boundary for claim extraction. The 8×500 stress remains at zero
   overlaps/duplicates with p95 around 0.24 s and the fixture backfill reports
   the expected multi closures.
 

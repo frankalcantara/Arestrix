@@ -1,4 +1,5 @@
 #include "assistant/AssistantSession.hpp"
+#include "rt/Runtime.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -178,6 +179,36 @@ std::optional<ModelChoice> defaultModelChoice() {
     auto m = search::studioDefaultModel();
     if (!m) return std::nullopt;
     return ModelChoice{m->provider, m->model};
+}
+
+memory::ClaimIntelligenceFn studioClaimIntelligence() {
+    return [](const memory::ClaimIntelligenceRequest& request) {
+        memory::ClaimIntelligenceResult out;
+        auto model = defaultModelChoice();
+        if (!model) {
+            out.error = "modelo padrao do Studio nao configurado";
+            return out;
+        }
+        rt::CompletionRequest req;
+        req.provider = model->provider;
+        req.model = model->model;
+        req.system =
+            "Voce e o agente local do Arestrix Studio. Extraia afirmacoes do trecho "
+            "e responda SOMENTE JSON no contrato pedido. O catalogo e o schema abaixo "
+            "sao limites; nao invente predicados. Uma lista vazia e valida. A citacao "
+            "precisa ser substring literal do trecho.\n\nCatalogo:\n" +
+            request.catalog + "\nSchema:\n" + request.schemaJson;
+        req.user = request.passageText;
+        req.maxTokens = 1200;
+        req.maxAttempts = 3;
+        req.hasTemperature = true;
+        req.temperature = 0.0;
+        rt::CompletionResult result = rt::completeText(req);
+        out.ok = result.ok && !result.text.empty();
+        out.content = result.text;
+        if (!out.ok) out.error = result.error.empty() ? "resposta vazia do agente local" : result.error;
+        return out;
+    };
 }
 
 Json assistantStatus() {

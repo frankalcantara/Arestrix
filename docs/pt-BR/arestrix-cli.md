@@ -177,9 +177,11 @@ e usados, além das contagens de truncamento.
 ```
 
 Executa a extração de afirmações sob demanda sobre trechos citados em execuções
-aprovadas. Exige `memory.claimExtraction` ligado e `memory.extractor`
-configurado; a manutenção usa o mesmo caminho automaticamente. As propostas
-nascem pendentes e são revisadas por `memory proposals`.
+aprovadas. Exige `memory.claimExtraction` ligado e o agente local do Studio
+disponível; a memória envia o trecho, o catálogo e o contrato de saída, e o
+agente local cuida de provedor/modelo. A manutenção usa o mesmo caminho
+automaticamente. As propostas nascem pendentes e são revisadas por
+`memory proposals`.
 
 ### `memory paths`
 
