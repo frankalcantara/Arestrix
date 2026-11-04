@@ -18,6 +18,7 @@
 | A/B v2 execution harness | **Implemented** |
 | `institution` level in the assistant `memory_inspect` | Operational pending |
 | Validation with real embedding providers | Operational pending |
+| Studio UI to configure the memory agent | Product pending |
 | Clean-machine release validation / signing | Release pending |
 
 ## 2. Completed memory work
@@ -84,6 +85,13 @@ a `MemoryService` status for the institutional service and explicit MCP/token co
 Profiles and fingerprints are implemented, but quality and latency validation with real
 EmbeddingGemma 2 and Qwen3-Embedding-4B still needs to be recorded. Lexical fallback is the safe
 behavior when no provider is available.
+
+### 4.4 Studio UI for the memory agent
+
+`memory.claimExtraction.agent` already accepts a Studio agent id or
+`{ id, graph, node }` for a graph-backed agent. The Studio UI still needs to
+choose that target per project, list registered agents/graphs, show the default
+model fallback and explain the error when a configured target is unavailable.
 
 ## 5. Release pending items
 

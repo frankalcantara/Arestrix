@@ -14,6 +14,7 @@ below are the next memory work. No item here blocks the current release.
 | High | Enable experimental switches only after real-data A/B | Pending |
 | Medium | Institutional memory level in the Studio assistant | Pending |
 | Medium | Real embedding-provider quality/latency validation | Pending |
+| Medium | Studio UI to configure the memory agent | Pending |
 | Low | Multi-process maintenance coordination | Out of scope for v1 |
 
 ## 1. Context compaction backed by existing memory
@@ -115,6 +116,14 @@ prompt tokens (**6.5% fewer**, 14,253 &rarr; 13,404 total tokens), kept the same
 memory id (`deepseek-long-lesson`) and reported 18 compacted turns. Repeated runs
 measured 5.5% to 7.1% fewer prompt tokens, so the switch stays opt-in until a
 broader real-data A/B covers more task shapes.
+
+## 1.1 Studio UI for the memory agent
+
+The backend contract is ready: `memory.claimExtraction.agent` accepts a Studio
+agent id or `{ id, graph, node }`, and an absent target uses the Studio default
+model. The remaining product work is a Studio screen that lets the project
+choose the target, lists registered agents/graphs, displays the default-model
+fallback and explains an unavailable configured target.
 
 ## 2. Standalone Mnemosyne module and submodule
 
