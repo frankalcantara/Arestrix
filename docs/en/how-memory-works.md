@@ -299,9 +299,10 @@ include passages at this stage.
 
 With `globalDefaults.memory.claimExtraction` enabled, maintenance selects
 passages with `used=1` in approved executions that have not been extracted by
-the current extractor fingerprint. The local model (`memory.extractor`:
-`baseUrl`, `model`, `revision`, prompt/schema versions, `maxItems` and timeout)
-returns JSON and never runs during agent execution.
+the current extractor fingerprint. The **Studio local agent** is the only
+intelligence layer: memory sends it the passage, the catalog summary and the
+output contract, and receives JSON back. Memory does not configure provider,
+protocol, URL, key or model; the local agent never runs during agent execution.
 
 Each claim becomes a pending `claim` proposal with subject, predicate, object or
 value, unit, polarity, qualifiers, validity, lens and `quote`. Validation

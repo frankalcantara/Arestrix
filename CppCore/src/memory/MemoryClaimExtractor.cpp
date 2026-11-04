@@ -3,13 +3,13 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <mutex>
 #include <regex>
 #include <sstream>
 
 #include "MemoryCatalog.hpp"
 #include "MemoryPredicates.hpp"
 #include "project/RunnerSecurity.hpp"
-#include "rt/Http.hpp"
 #include "util/Json.hpp"
 
 namespace taskforge {
@@ -73,11 +73,25 @@ std::string stripFence(std::string value) {
 
 } // namespace
 
+namespace {
+ClaimIntelligenceFn g_intelligence;
+std::mutex g_intelligenceMutex;
+} // namespace
+
+void MemoryClaimExtractor::setIntelligence(ClaimIntelligenceFn intelligence) {
+    std::lock_guard<std::mutex> lock(g_intelligenceMutex);
+    g_intelligence = std::move(intelligence);
+}
+
+bool MemoryClaimExtractor::hasIntelligence() {
+    std::lock_guard<std::mutex> lock(g_intelligenceMutex);
+    return static_cast<bool>(g_intelligence);
+}
+
 std::string ClaimExtractorConfig::fingerprint() const {
     return project::RunnerSecurity::sha256(
-        "claim|" + model + "|" + revision + "|" + promptVersion + "|" + schemaVersion +
-        "|" + std::to_string(maxItems) + "|" + MemoryCatalog::instance().fingerprint() +
-        "|" + catalogMode + "|" + structuredOutput + "|" + protocol);
+        "claim|" + promptVersion + "|" + schemaVersion + "|" + std::to_string(maxItems) +
+        "|" + MemoryCatalog::instance().fingerprint() + "|" + catalogMode);
 }
 
 ClaimExtractorConfig MemoryClaimExtractor::configFromJson(const taskforge::Json& memory) {
@@ -89,27 +103,9 @@ ClaimExtractorConfig MemoryClaimExtractor::configFromJson(const taskforge::Json&
         config.enabled = switchValue.get<bool>();
     } else if (switchValue.is_object()) {
         config.enabled = switchValue.value("enabled", false);
-    }
-    const taskforge::Json extractor = memory.contains("extractor") && memory["extractor"].is_object()
-        ? memory["extractor"] : taskforge::Json::object();
-    if (extractor.is_object()) {
-        config.baseUrl = extractor.value("baseUrl", config.baseUrl);
-        config.model = extractor.value("model", config.model);
-        config.revision = extractor.value("revision", config.revision);
-        config.promptVersion = extractor.value("promptVersion", config.promptVersion);
-        config.schemaVersion = extractor.value("schemaVersion", config.schemaVersion);
-        config.apiKeyEnv = extractor.value("apiKeyEnv", config.apiKeyEnv);
-        config.maxItems = std::max(1, std::min(20, extractor.value("maxItems", config.maxItems)));
-        config.timeoutSeconds = std::max(1, std::min(600,
-            extractor.value("timeoutSeconds", config.timeoutSeconds)));
-        config.protocol = extractor.value("protocol", config.protocol);
-        config.structuredOutput = extractor.value("structuredOutput", config.structuredOutput);
-    }
-    if (switchValue.is_object()) {
-        config.structuredOutput = switchValue.value("structuredOutput", config.structuredOutput);
-        config.protocol = switchValue.value("protocol", config.protocol);
-        config.maxCatalogPromptTokens = std::max(100, std::min(20000,
-            switchValue.value("maxCatalogPromptTokens", config.maxCatalogPromptTokens)));
+        config.maxItems = std::max(1, std::min(20, switchValue.value("maxItems", config.maxItems)));
+        config.promptVersion = switchValue.value("promptVersion", config.promptVersion);
+        config.schemaVersion = switchValue.value("schemaVersion", config.schemaVersion);
     }
     if (memory.contains("catalog") && memory["catalog"].is_object()) {
         config.catalogMode = memory["catalog"].value("mode", config.catalogMode);
@@ -244,167 +240,36 @@ std::vector<ClaimDraft> MemoryClaimExtractor::extract(const std::string& passage
         error = "extracao de afirmacoes desligada";
         return claims;
     }
-    if (config.baseUrl.empty() || config.model.empty()) {
-        error = "extrator sem baseUrl/model";
+    ClaimIntelligenceFn intelligence;
+    {
+        std::lock_guard<std::mutex> lock(g_intelligenceMutex);
+        intelligence = g_intelligence;
+    }
+    if (!intelligence) {
+        error = "agente local do Studio indisponivel para extracao de claims";
         return claims;
     }
-    std::string url = config.baseUrl;
-    while (!url.empty() && url.back() == '/') url.pop_back();
-    const bool anthropic = config.protocol == "anthropic" ||
-        (config.protocol == "auto" && url.find("anthropic") != std::string::npos);
-    if (anthropic) {
-        if (url.size() >= 3 && url.substr(url.size() - 3) == "/v1") {
-            url += "/messages";
-        } else if (url.size() < 12 || url.substr(url.size() - 12) != "/v1/messages") {
-            url += "/v1/messages";
+    taskforge::Json schema = taskforge::Json::object();
+    schema["predicates"] = MemoryCatalog::instance().claimableNames();
+    schema["requiredContextKeys"] = taskforge::Json::object();
+    for (const auto& name : MemoryCatalog::instance().claimableNames()) {
+        taskforge::Json keys = taskforge::Json::array();
+        for (const auto& key : MemoryCatalog::instance().requiredContextKeys(name)) {
+            keys.push_back(key);
         }
-    } else if (url.size() < 18 || url.substr(url.size() - 17) != "/chat/completions") {
-        url += "/chat/completions";
+        schema["requiredContextKeys"][name] = keys;
     }
-    const std::string catalogLines = MemoryCatalog::instance().promptLines();
-    const std::string system =
-        "Extract factual claims from the passage. Return ONLY JSON: "
-        "{\"claims\":[{\"subject\":\"...\",\"subject_type\":\"entity\",\"predicate\":\"USES\","
-        "\"object\":\"...\",\"value\":\"\",\"unit\":\"\",\"polarity\":\"positive\","
-        "\"qualifiers\":{},\"valid_from\":\"\",\"valid_to\":\"\",\"lens\":\"\","
-        "\"quote\":\"exact substring\"}]}. "
-        "An empty claims list is valid. The quote MUST be a literal substring of the passage. "
-        "Use only a claimable predicate from this catalog; never use a structural predicate:\n" +
-        catalogLines;
-    taskforge::Json requestBody{
-        {"model", config.model},
-        {"temperature", 0.0},
-        {"max_tokens", 1200},
-        {"messages", taskforge::Json::array({
-            taskforge::Json{{"role", "system"}, {"content", system}},
-            taskforge::Json{{"role", "user"}, {"content", passageText}}})}};
-    if (config.structuredOutput == "json_schema") {
-        taskforge::Json predicateEnum = taskforge::Json::array();
-        for (const auto& name : MemoryCatalog::instance().claimableNames()) {
-            predicateEnum.push_back(name);
-        }
-        taskforge::Json schema{
-            {"type", "object"},
-            {"additionalProperties", false},
-            {"properties", taskforge::Json{
-                {"claims", taskforge::Json{
-                    {"type", "array"},
-                    {"items", taskforge::Json{
-                        {"type", "object"},
-                        {"additionalProperties", false},
-                        {"properties", taskforge::Json{
-                            {"subject", taskforge::Json{{"type", "string"}}},
-                            {"predicate", taskforge::Json{{"type", "string"},
-                                                          {"enum", predicateEnum}}},
-                            {"object", taskforge::Json{{"type", "string"}}},
-                            {"value", taskforge::Json{{"type", "string"}}},
-                            {"unit", taskforge::Json{{"type", "string"}}},
-                            {"polarity", taskforge::Json{{"type", "string"},
-                                                         {"enum", taskforge::Json::array({"positive", "negative"})}}},
-                            {"qualifiers", taskforge::Json{{"type", "object"}}},
-                            {"valid_from", taskforge::Json{{"type", "string"}}},
-                            {"valid_to", taskforge::Json{{"type", "string"}}},
-                            {"lens", taskforge::Json{{"type", "string"}}},
-                            {"quote", taskforge::Json{{"type", "string"}}}}},
-                        {"required", taskforge::Json::array({"subject", "predicate", "object", "quote"})}}}}}}},
-            {"required", taskforge::Json::array({"claims"})}};
-        requestBody["response_format"] = taskforge::Json{
-            {"type", "json_schema"},
-            {"json_schema", taskforge::Json{{"name", "claims"}, {"strict", true},
-                                            {"schema", schema}}}};
-    } else if (config.structuredOutput == "json_object") {
-        requestBody["response_format"] = taskforge::Json{{"type", "json_object"}};
-    }
-    if (anthropic) {
-        taskforge::Json predicateEnum = taskforge::Json::array();
-        for (const auto& name : MemoryCatalog::instance().claimableNames()) {
-            predicateEnum.push_back(name);
-        }
-        taskforge::Json schema{
-            {"type", "object"},
-            {"properties", taskforge::Json{
-                {"claims", taskforge::Json{
-                    {"type", "array"},
-                    {"items", taskforge::Json{
-                        {"type", "object"},
-                        {"properties", taskforge::Json{
-                            {"subject", taskforge::Json{{"type", "string"}}},
-                            {"predicate", taskforge::Json{{"type", "string"},
-                                                          {"enum", predicateEnum}}},
-                            {"object", taskforge::Json{{"type", "string"}}},
-                            {"value", taskforge::Json{{"type", "string"}}},
-                            {"unit", taskforge::Json{{"type", "string"}}},
-                            {"polarity", taskforge::Json{{"type", "string"},
-                                                         {"enum", taskforge::Json::array({"positive", "negative"})}}},
-                            {"qualifiers", taskforge::Json{{"type", "object"}}},
-                            {"valid_from", taskforge::Json{{"type", "string"}}},
-                            {"valid_to", taskforge::Json{{"type", "string"}}},
-                            {"lens", taskforge::Json{{"type", "string"}}},
-                            {"quote", taskforge::Json{{"type", "string"}}}}},
-                        {"required", taskforge::Json::array({"subject", "predicate", "object", "quote"})}}}}}}},
-            {"required", taskforge::Json::array({"claims"})}};
-        requestBody = taskforge::Json{
-            {"model", config.model},
-            {"max_tokens", 1200},
-            {"temperature", 0.0},
-            {"system", system},
-            {"messages", taskforge::Json::array({
-                taskforge::Json{{"role", "user"}, {"content", passageText}}})},
-            {"tools", taskforge::Json::array({
-                taskforge::Json{{"name", "emit_claims"},
-                                {"description", "Emite as afirmacoes extraidas."},
-                                {"input_schema", schema}}})},
-            {"tool_choice", taskforge::Json{{"type", "tool"}, {"name", "emit_claims"}}}};
-    }
-
-    rt::HttpRequest request;
-    request.method = "POST";
-    request.url = url;
-    request.timeoutSeconds = config.timeoutSeconds;
-    request.headers["Content-Type"] = "application/json";
-    if (anthropic) {
-        request.headers["anthropic-version"] = "2023-06-01";
-    }
-    if (!config.apiKeyEnv.empty()) {
-        const char* key = std::getenv(config.apiKeyEnv.c_str());
-        if (key && *key) {
-            if (anthropic) request.headers["x-api-key"] = key;
-            else request.headers["Authorization"] = std::string("Bearer ") + key;
-        }
-    }
-    request.body = requestBody.dump();
-    rt::HttpResponse response = rt::httpSend(request);
-    if (response.status < 200 || response.status >= 300) {
-        error = "extrator HTTP " + std::to_string(response.status) +
-                (response.error.empty() ? "" : " " + response.error);
+    ClaimIntelligenceRequest request;
+    request.passageText = passageText;
+    request.catalog = MemoryCatalog::instance().promptLines();
+    request.schemaJson = schema.dump();
+    request.maxItems = config.maxItems;
+    ClaimIntelligenceResult result = intelligence(request);
+    if (!result.ok) {
+        error = result.error.empty() ? "agente local falhou na extracao" : result.error;
         return claims;
     }
-    auto parsed = taskforge::jsonutil::tryParse(response.body);
-    if (!parsed || !parsed->is_object()) {
-        error = "resposta HTTP do extrator nao e JSON";
-        return claims;
-    }
-    std::string content;
-    if (parsed->contains("choices") && (*parsed)["choices"].is_array() &&
-        !(*parsed)["choices"].empty()) {
-        const taskforge::Json message = (*parsed)["choices"][0]["message"];
-        if (message.is_object()) content = stringField(message, "content");
-    }
-    if (content.empty() && anthropic && parsed->contains("content") &&
-        (*parsed)["content"].is_array()) {
-        for (const auto& block : (*parsed)["content"]) {
-            if (block.is_object() && block.value("type", std::string()) == "tool_use" &&
-                block.contains("input")) {
-                content = block["input"].dump();
-                break;
-            }
-        }
-    }
-    if (content.empty()) {
-        error = "extrator sem content";
-        return claims;
-    }
-    return parseResponse(content, passageText, config, error, diagnostics);
+    return parseResponse(result.content, passageText, config, error, diagnostics);
 }
 
 } // namespace memory

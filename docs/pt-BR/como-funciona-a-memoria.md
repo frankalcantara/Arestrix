@@ -301,9 +301,10 @@ brief não inclui trechos nesta etapa.
 
 Com `globalDefaults.memory.claimExtraction` ligado, a manutenção escolhe
 trechos com `used=1` em execuções aprovadas, ainda não extraídos pelo fingerprint
-atual do extrator. O modelo local (`memory.extractor`: `baseUrl`, `model`,
-`revision`, versões de prompt/schema, `maxItems` e timeout) devolve JSON e nunca
-roda durante a execução do agente.
+atual do extrator. O **agente local do Studio** é a única camada de inteligência:
+a memória envia o trecho, o catálogo resumido e o contrato de saída, e recebe JSON.
+A memória não configura provedor, protocolo, URL, chave ou modelo; o agente local
+nunca roda durante a execução do agente.
 
 Cada afirmação vira uma proposta `claim` pendente com sujeito, predicado, objeto
 ou valor, unidade, polaridade, qualificadores, validade, lente e `quote`. A
