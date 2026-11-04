@@ -184,6 +184,25 @@ selecionar um agente ou grafo do projeto; sem ele, usa o modelo padrão do Studi
 A manutenção usa o mesmo caminho automaticamente. As propostas nascem pendentes
 e são revisadas por `memory proposals`.
 
+`memory purge --drop-tombstones` remove as lápides do escopo junto com o
+escopo; sem ele, as lápides sobrevivem ao expurgo e continuam bloqueando a
+reingestão automática.
+
+### `memory forget`
+
+```powershell
+.\arestrix-cli.exe memory forget --project .\examples\04-memoria --source docs/guide.md --all-versions --json
+.\arestrix-cli.exe memory forget --project .\examples\04-memoria --source-version <source-version-id> --reason "pedido do usuario"
+```
+
+Apaga uma versão de fonte, ou todas as versões de uma URI com `--all-versions`,
+em uma única transação do conhecimento. Afirmações sustentadas só pela fonte
+apagada são retraídas (`retracted_at` e `status='rejected'`), derivados recebem
+lápide, evidências e trechos são removidos e `purge_telemetry` entra na fila.
+Sem `--async`, o comando drena a fila e redige cópias literais dos episódios;
+`--vacuum` compacta o banco depois da telemetria. O primeiro corte reconhece
+janelas literais de pelo menos 96 bytes, não paráfrases.
+
 ### `memory paths`
 
 ```powershell

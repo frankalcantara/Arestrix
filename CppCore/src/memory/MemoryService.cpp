@@ -921,9 +921,11 @@ void MemoryService::clearProject(const std::string& projectId) {
     purgeProject(projectId, false, true);
 }
 
-bool MemoryService::purgeProject(const std::string& projectId, bool keepAudit, bool vacuum) {
+bool MemoryService::purgeProject(const std::string& projectId, bool keepAudit, bool vacuum,
+                                 bool dropTombstones) {
     MemoryPurgeOptions options;
     options.keepAudit = keepAudit;
+    options.dropTombstones = dropTombstones;
     options.vacuum = vacuum;
     bool ok = true;
     bool any = false;
@@ -1118,8 +1120,11 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
         key += value;
         key += '\x1f';
     };
+    auto* s = ensureStore(projectId);
+    if (!s) return std::string();
     std::string cacheKey;
     appendKey(cacheKey, projectId);
+    appendKey(cacheKey, std::to_string(s->knowledgeVersion()));
     appendKey(cacheKey, itemId);
     appendKey(cacheKey, taskType);
     appendKey(cacheKey, intent);
@@ -1135,8 +1140,6 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
         }
         return cached->second.value;
     }
-    auto* s = ensureStore(projectId);
-    if (!s) return std::string();
 
     std::map<std::string, TraceCandidateData> traceCandidates;
     std::vector<MemoryLesson> selectedLessons;
@@ -1578,6 +1581,120 @@ size_t MemoryService::ingestSources(const std::string& projectId, const std::str
 taskforge::Json MemoryService::sourceSummary(const std::string& projectId) {
     auto* s = existingStore(projectId);
     return s ? s->sourceSummary(scopeId(projectId)) : taskforge::Json::object();
+}
+
+taskforge::Json MemoryService::forgetSource(const std::string& projectId,
+                                            const MemorySourceSelector& selector,
+                                            const std::string& reason,
+                                            const std::string& requestedBy,
+                                            bool async, bool vacuum) {
+    auto* s = ensureStore(projectId);
+    if (!s) return taskforge::Json{{"ok", false}, {"error", "memoria indisponivel"}};
+    const MemoryEraseResult erased =
+        s->eraseSource(scopeId(projectId), selector, reason, requestedBy);
+    taskforge::Json out{{"ok", erased.ok},
+                        {"sourceVersionId", erased.sourceVersionId},
+                        {"uri", erased.uri},
+                        {"sources", static_cast<long long>(erased.sources)},
+                        {"passages", static_cast<long long>(erased.passages)},
+                        {"claimsRetracted", static_cast<long long>(erased.claimsRetracted)},
+                        {"proposals", static_cast<long long>(erased.proposals)},
+                        {"evidenceDeleted", static_cast<long long>(erased.evidenceDeleted)},
+                        {"derivativesTombstoned",
+                         static_cast<long long>(erased.derivativesTombstoned)},
+                        {"jobs", static_cast<long long>(erased.jobs)},
+                        {"passageIds", taskforge::Json::array()},
+                        {"retractedEdgeIds", taskforge::Json::array()},
+                        {"tombstoneIds", taskforge::Json::array()},
+                        {"jobIds", taskforge::Json::array()}};
+    for (const auto& id : erased.passageIds) out["passageIds"].push_back(id);
+    for (const auto& id : erased.retractedEdgeIds) out["retractedEdgeIds"].push_back(id);
+    for (const auto& id : erased.tombstoneIds) out["tombstoneIds"].push_back(id);
+    for (const auto& id : erased.jobIds) out["jobIds"].push_back(id);
+    if (!erased.error.empty()) out["error"] = erased.error;
+    if (!erased.ok) return out;
+    out["paths"] = MemoryPaths::reconcile(*s, scopeId(projectId), "source_forgotten");
+    out["facets"] = MemoryFacets::rebuild(*s, scopeId(projectId),
+                                          embeddingConfig(projectId), true);
+    invalidateBriefCache();
+    if (!async) {
+        out["drain"] = drainJobs(projectId, 100);
+        const auto summary = s->jobSummary(scopeId(projectId));
+        out["pendingJobs"] = summary.value("pending", 0LL) + summary.value("running", 0LL);
+        out["deadJobs"] = summary.value("dead", 0LL);
+        if (out.value("pendingJobs", 0LL) > 0 || out.value("deadJobs", 0LL) > 0) {
+            out["ok"] = false;
+            out["telemetryPending"] = out.value("pendingJobs", 0LL) > 0;
+        }
+    } else {
+        out["async"] = true;
+    }
+    if (vacuum && !async) {
+        std::string vacuumError;
+        if (!s->vacuum(vacuumError)) {
+            out["ok"] = false;
+            out["vacuumError"] = vacuumError;
+        } else {
+            out["vacuumed"] = true;
+        }
+    }
+    return out;
+}
+
+taskforge::Json MemoryService::drainJobs(const std::string& projectId, size_t maxJobs) {
+    auto* s = ensureStore(projectId);
+    if (!s) return taskforge::Json{{"ok", false}, {"error", "memoria indisponivel"}};
+    const std::string scope = scopeId(projectId);
+    auto jobs = s->claimJobs(scope, maxJobs, "memory-service", 120);
+    long long done = 0;
+    long long failed = 0;
+    long long deferred = 0;
+    for (const auto& job : jobs) {
+        std::string error;
+        if (job.kind == "purge_telemetry") {
+            auto* t = ensureTelemetry(projectId);
+            if (!t) {
+                ++deferred;
+                continue;
+            }
+            if (t->purgeTelemetry(scope, job.payloadJson, error)) {
+                s->completeJob(job.id);
+                ++done;
+            } else {
+                s->failJob(job.id, error);
+                ++failed;
+            }
+        } else if (job.kind == "rebuild_facet") {
+            const auto report = MemoryFacets::rebuild(*s, scope, embeddingConfig(projectId), true);
+            if (report.value("ok", false)) {
+                s->completeJob(job.id);
+                ++done;
+            } else {
+                s->failJob(job.id, "rebuild_facet falhou");
+                ++failed;
+            }
+        } else {
+            s->failJob(job.id, "executor de trabalho indisponivel: " + job.kind);
+            ++failed;
+        }
+    }
+    const auto summary = s->jobSummary(scope);
+    return taskforge::Json{{"ok", failed == 0},
+                           {"claimed", static_cast<long long>(jobs.size())},
+                           {"done", done},
+                           {"failed", failed},
+                           {"deferred", deferred},
+                           {"summary", summary}};
+}
+
+taskforge::Json MemoryService::lineageBackfill(const std::string& projectId) {
+    auto* s = ensureStore(projectId);
+    if (!s) return taskforge::Json{{"ok", false}, {"error", "memoria indisponivel"}};
+    taskforge::Json report;
+    const size_t linked = s->backfillLineage(scopeId(projectId), &report);
+    report["ok"] = true;
+    report["linked"] = static_cast<long long>(linked);
+    return report;
 }
 
 long long MemoryService::knowledgeVersion(const std::string& projectId) {
@@ -2997,9 +3114,15 @@ taskforge::Json MemoryService::doctor(const std::string& projectId) {
         checks.push_back(telemetryCheck);
         if (telemetryCheck.value("violations", 0LL) > 0) ok = false;
     }
-    return taskforge::Json{{"ok", ok}, {"projectId", projectId}, {"checks", checks},
-                           {"catalogFingerprint", MemoryCatalog::instance().fingerprint()},
-                           {"catalogMode", MemoryCatalog::instance().mode()}};
+    taskforge::Json out{{"ok", ok}, {"projectId", projectId}, {"checks", checks},
+                        {"catalogFingerprint", MemoryCatalog::instance().fingerprint()},
+                        {"catalogMode", MemoryCatalog::instance().mode()}};
+    if (auto* knowledge = existingStore(projectId)) {
+        out["jobs"] = knowledge->jobSummary(scope);
+        out["tombstones"] = knowledge->tombstoneSummary(scope);
+        out["lineage"] = knowledge->lineageSummary(scope);
+    }
+    return out;
 }
 
 taskforge::Json MemoryService::toJson(const std::string& projectId) {
@@ -3020,6 +3143,8 @@ taskforge::Json MemoryService::toJson(const std::string& projectId) {
     out["sources"] = s->sourceSummary(scopeId(projectId));
     out["facets"] = s->facetSummary(scopeId(projectId));
     out["paths"] = s->pathSummary(scopeId(projectId));
+    out["jobs"] = s->jobSummary(scopeId(projectId));
+    out["tombstones"] = s->tombstoneSummary(scopeId(projectId));
     out["pathRecords"] = listPaths(projectId);
     out["pathServing"] = pathServingConfigToJson(pathServingConfig(projectId));
     out["traversal"] = traversalConfigToJson(traversalConfig(projectId));

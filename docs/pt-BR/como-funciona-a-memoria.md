@@ -324,6 +324,24 @@ extrator no metadata, mais um instantâneo de evidência. Para predicados de val
 único, só valores com validade sobreposta encerram o anterior; intervalos
 disjuntos permanecem como história.
 
+### Esquecendo uma versão de fonte
+
+O esquema v7 adiciona `memory_lineage`, `memory_tombstone`, `memory_job` e
+`memory_removal_log`. `memory forget` resolve uma versão de fonte ou todas as
+versões de uma URI, percorre a linhagem a partir dos trechos e remove o fecho de
+derivação em um único `WriteTxn`: afirmações sustentadas só pela fonte apagada
+são retraídas com `retracted_at` e `status='rejected'`, propostas e derivados
+recebem lápide, evidências e trechos são apagados e o log de remoção ganha uma
+linha por item. A URI recebe uma lápide, então a ingestão automática fica
+bloqueada até existir o caminho explícito `--allow-forgotten`.
+
+A telemetria é limpa pelo trabalho idempotente `purge_telemetry`. O trabalho
+nunca recebe o texto apagado; recebe hashes de janelas deslizantes de 64 bytes e
+redige episódios que contenham cópia literal. O primeiro corte encontra cópias
+de 96 bytes ou mais e não promete encontrar paráfrases. Sem `--async`, `forget`
+drena o trabalho antes de retornar e reporta um estado pendente próprio quando o
+banco de telemetria está indisponível.
+
 ### Lentes e facetas
 
 Com `globalDefaults.memory.lenses` ligado, a manutenção garante uma lente para

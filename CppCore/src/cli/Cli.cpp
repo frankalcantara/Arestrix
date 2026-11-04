@@ -491,7 +491,7 @@ int runMemory(const std::vector<std::string>& args) {
         std::cout << "arestrix-cli memory report [--project <pasta>] [--root <pasta>] [--db <arquivo>] [--json]\n"
                      "arestrix-cli memory report --recurrence [--since <data>] [--min-verdict-rate N] [--min-citation-rate N] [--min-executions N] [--min-distinct-inputs N] [--min-reuse-rate N] [--json]\n"
                      "arestrix-cli memory prune  --project <pasta> [--days N] [--db <arquivo>] [--json]\n"
-                     "arestrix-cli memory purge  --project <pasta> [--keep-audit] [--db <arquivo>] [--json]\n"
+                     "arestrix-cli memory purge  --project <pasta> [--keep-audit] [--drop-tombstones] [--db <arquivo>] [--json]\n"
                      "arestrix-cli memory proposals list|accept|reject [id] --project <pasta> [--status pending|all] [--reason texto] [--json]\n"
                      "arestrix-cli memory embeddings status|test --project <pasta> [--model M] [--base-url URL] [--enable] [--sample texto] [--json]\n"
                      "arestrix-cli memory health --project <pasta> [--json]\n"
@@ -503,6 +503,7 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory state list|declare|get|set --project <pasta> [--key K] [--scope project|task_type|item] [--schema JSON] [--value JSON] [--expected N] [--item ID] [--task-type T] [--max-bytes N] [--ttl N] [--mode replace|versioned] [--keep N] [--json]\n"
                      "arestrix-cli memory trace show <run> <no> --project <pasta> [--json]\n"
                      "arestrix-cli memory claims extract --project <pasta> [--max-passages N] [--json]\n"
+                     "arestrix-cli memory forget (--source-version ID | --source URI) [--all-versions] [--async] [--dry-run] [--vacuum] [--reason texto] --project <pasta> [--json]\n"
                      "arestrix-cli memory paths list|show|retire [id] --project <pasta> [--state S] [--json]\n"
                      "arestrix-cli memory bridges detect --project <pasta> [--max-proposals N] [--max-per-entity N] [--json]\n"
                      "arestrix-cli memory ab validate|order|report --suite <arquivo> [--observations <arquivo>] [--repetitions N] [--seed N] [--json]\n"
@@ -517,7 +518,8 @@ int runMemory(const std::vector<std::string>& args) {
         command != "consolidate" && command != "workspace" && command != "state" &&
         command != "ab" && command != "trace" && command != "claims" &&
         command != "paths" && command != "bridges" && command != "promote" &&
-        command != "unpromote" && command != "doctor" && command != "reopen") {
+        command != "unpromote" && command != "doctor" && command != "reopen" &&
+        command != "forget") {
         std::cerr << "arestrix-cli memory: comando desconhecido: " << command << "\n";
         return kExitUsage;
     }
@@ -648,6 +650,7 @@ int runMemory(const std::vector<std::string>& args) {
     std::string parseError;
     int days = -1;
     bool keepAudit = false;
+    bool dropTombstones = false;
     bool repairOverlaps = false;
     bool listMultiClosures = false;
     std::string reopenEdgeId;
@@ -689,6 +692,12 @@ int runMemory(const std::vector<std::string>& args) {
     long long minExecutions = 5;
     long long minDistinctInputs = 3;
     size_t claimsMaxPassages = 10;
+    std::string forgetSourceVersion;
+    std::string forgetUri;
+    bool forgetAllVersions = false;
+    bool forgetAsync = false;
+    bool forgetDryRun = false;
+    bool forgetVacuum = false;
     size_t bridgeMaxProposals = 5;
     size_t bridgeMaxPerEntity = 1;
     std::string pathState;
@@ -702,6 +711,7 @@ int runMemory(const std::vector<std::string>& args) {
         const std::string& a = args[i];
         if (a == "--json") opt.json = true;
         else if (a == "--keep-audit") keepAudit = true;
+        else if (a == "--drop-tombstones") dropTombstones = true;
         else if (a == "--repair-overlaps") repairOverlaps = true;
         else if (a == "--list-multi-closures") listMultiClosures = true;
         else if (a == "--edge") {
@@ -868,6 +878,20 @@ int runMemory(const std::vector<std::string>& args) {
         else if (a == "--state") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --state\n"; return kExitUsage; }
             pathState = args[++i];
+        } else if (a == "--source-version") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --source-version\n"; return kExitUsage; }
+            forgetSourceVersion = args[++i];
+        } else if (a == "--source") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --source\n"; return kExitUsage; }
+            forgetUri = args[++i];
+        } else if (a == "--all-versions") {
+            forgetAllVersions = true;
+        } else if (a == "--async") {
+            forgetAsync = true;
+        } else if (a == "--dry-run") {
+            forgetDryRun = true;
+        } else if (a == "--vacuum") {
+            forgetVacuum = true;
         } else if (a == "--reason") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --reason\n"; return kExitUsage; }
             reason = args[++i];
@@ -1110,6 +1134,43 @@ int runMemory(const std::vector<std::string>& args) {
                           << " | falhas " << out.value("failed", 0LL) << "\n";
             } else {
                 std::cerr << "Falha na extracao: " << out.value("error", std::string()) << "\n";
+            }
+            return out.value("ok", false) ? 0 : kExitConfig;
+        }
+
+        if (command == "forget") {
+            if (forgetSourceVersion.empty() && forgetUri.empty()) {
+                std::cerr << "informe --source-version ou --source\n";
+                return kExitUsage;
+            }
+            if (forgetDryRun) {
+                taskforge::Json out{{"ok", true},
+                                    {"dryRun", true},
+                                    {"sourceVersionId", forgetSourceVersion},
+                                    {"uri", forgetUri},
+                                    {"allVersions", forgetAllVersions}};
+                if (opt.json) std::cout << out.dump(2) << "\n";
+                else std::cout << "forget: preview " << (forgetUri.empty() ? forgetSourceVersion : forgetUri)
+                               << " (nada foi alterado)\n";
+                return 0;
+            }
+            taskforge::memory::MemorySourceSelector selector;
+            selector.sourceVersionId = forgetSourceVersion;
+            selector.uri = forgetUri;
+            selector.allVersions = forgetAllVersions;
+            taskforge::Json out = memory.forgetSource(
+                projectId, selector,
+                reason.empty() ? "user_request" : reason, "cli", forgetAsync, forgetVacuum);
+            out["projectId"] = projectId;
+            if (opt.json) {
+                std::cout << out.dump(2) << "\n";
+            } else if (out.value("ok", false)) {
+                std::cout << "Forget: fontes=" << out.value("sources", 0LL)
+                          << " trechos=" << out.value("passages", 0LL)
+                          << " claims=" << out.value("claimsRetracted", 0LL)
+                          << " jobs=" << out.value("jobs", 0LL) << "\n";
+            } else {
+                std::cerr << "Forget falhou: " << out.value("error", std::string()) << "\n";
             }
             return out.value("ok", false) ? 0 : kExitConfig;
         }
@@ -1449,7 +1510,7 @@ int runMemory(const std::vector<std::string>& args) {
                           << pruned.usage << " usage removidos.\n";
             }
         } else {
-            const bool ok = memory.purgeProject(projectId, keepAudit, true);
+            const bool ok = memory.purgeProject(projectId, keepAudit, true, dropTombstones);
             if (opt.json) {
                 std::cout << json{{"command", "purge"}, {"database", dbPath.string()}, {"projectId", projectId},
                                   {"ok", ok}, {"keepAudit", keepAudit}}.dump(2) << "\n";

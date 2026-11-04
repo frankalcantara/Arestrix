@@ -184,6 +184,25 @@ agent or graph; without it, the Studio default model is used. Maintenance uses
 the same path automatically. Proposals start pending and are reviewed through
 `memory proposals`.
 
+`memory purge --drop-tombstones` removes the scope's tombstones together with
+the scope; without it, tombstones survive the purge and continue to block
+automatic re-ingestion.
+
+### `memory forget`
+
+```powershell
+.\arestrix-cli.exe memory forget --project .\examples\04-memoria --source docs/guide.md --all-versions --json
+.\arestrix-cli.exe memory forget --project .\examples\04-memoria --source-version <source-version-id> --reason "user request"
+```
+
+Erases one source version, or every version of a URI with `--all-versions`, in
+one knowledge transaction. Claims supported only by the erased source are
+retracted (`retracted_at` plus `status='rejected'`), derivations are tombstoned,
+evidence and passages are deleted, and `purge_telemetry` is queued. Without
+`--async`, the command drains that queue and redacts literal copies from
+episodes; `--vacuum` compacts the database after the telemetry step. The first
+cut recognizes literal windows of at least 96 bytes, not paraphrases.
+
 ### `memory paths`
 
 ```powershell

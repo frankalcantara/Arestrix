@@ -322,6 +322,24 @@ fingerprint in metadata, plus an evidence snapshot. For single-valued predicates
 only values with overlapping validity close the previous one; disjoint intervals
 remain as history.
 
+### Forgetting a source version
+
+Schema v7 adds `memory_lineage`, `memory_tombstone`, `memory_job` and
+`memory_removal_log`. `memory forget` resolves one source version or all
+versions of a URI, walks the lineage from its passages and removes the closed
+derivation set in one `WriteTxn`: claims supported only by the erased source are
+retracted with `retracted_at` and `status='rejected'`, proposals and derived
+objects are tombstoned, evidence and passages are deleted, and the removal log
+gets one row per item. The source URI receives a tombstone, so automatic
+ingestion is blocked until an explicit `--allow-forgotten` path is implemented.
+
+Telemetry is cleaned by the idempotent `purge_telemetry` job. The job never
+receives the erased text; it receives 64-byte rolling-window hashes and redacts
+episodes that contain a literal copy. The first cut finds copies of 96 bytes or
+more and deliberately does not claim to find paraphrases. Without `--async`,
+`forget` drains the job before returning and reports a distinct pending state
+when the telemetry database is unavailable.
+
 ### Lenses and facets
 
 With `globalDefaults.memory.lenses` enabled, maintenance ensures a lens for every

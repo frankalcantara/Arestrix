@@ -102,6 +102,47 @@ struct MemoryEvidenceRecord {
 struct MemoryPurgeOptions {
     bool keepAudit = false;
     bool vacuum = true;
+    bool dropTombstones = false;
+};
+
+// Fase 3: alvo de esquecimento por versao de fonte ou por URI.
+struct MemorySourceSelector {
+    std::string sourceVersionId;
+    std::string uri;
+    bool allVersions = false;
+    bool allowForgotten = false;
+};
+
+struct MemoryEraseResult {
+    bool ok = false;
+    std::string error;
+    std::string sourceVersionId;
+    std::string uri;
+    size_t sources = 0;
+    size_t passages = 0;
+    size_t claimsRetracted = 0;
+    size_t proposals = 0;
+    size_t evidenceDeleted = 0;
+    size_t derivativesTombstoned = 0;
+    size_t jobs = 0;
+    std::vector<std::string> passageIds;
+    std::vector<std::string> retractedEdgeIds;
+    std::vector<std::string> tombstoneIds;
+    std::vector<std::string> jobIds;
+};
+
+struct MemoryJob {
+    std::string id;
+    std::string scopeId;
+    std::string kind;
+    std::string payloadJson;
+    std::string status;
+    int attempts = 0;
+    std::string leaseOwner;
+    std::string leaseUntil;
+    std::string lastError;
+    std::string createdAt;
+    std::string updatedAt;
 };
 
 struct MemoryPruneResult {
@@ -409,6 +450,7 @@ public:
 
     // Copia consistente do banco (VACUUM INTO) para um arquivo novo.
     bool backupTo(const std::string& targetPath, std::string& error);
+    bool vacuum(std::string& error);
 
     // Escopos. O closure inclui o próprio escopo com depth 0.
     bool ensureScope(const std::string& scopeId, const std::string& kind,
@@ -725,7 +767,29 @@ public:
     // E12: ingere uma versao de fonte e pesquisa trechos ativos.
     std::string ingestSource(const MemorySourceRecord& source,
                              const std::vector<MemoryPassageRecord>& passages,
-                             size_t* insertedPassages, std::string& error);
+                             size_t* insertedPassages, std::string& error,
+                             bool allowForgotten = false);
+
+    // Fase 3: linhagem, lapides, fila de trabalhos e exclusao por fonte.
+    bool recordLineage(const std::string& scopeId, const std::string& derivedKind,
+                       const std::string& derivedId, const std::string& inputKind,
+                       const std::string& inputId);
+    size_t backfillLineage(const std::string& scopeId, taskforge::Json* report = nullptr);
+    MemoryEraseResult eraseSource(const std::string& scopeId,
+                                  const MemorySourceSelector& selector,
+                                  const std::string& reason,
+                                  const std::string& requestedBy);
+    std::string enqueueJob(const std::string& scopeId, const std::string& kind,
+                           const taskforge::Json& payload);
+    std::vector<MemoryJob> claimJobs(const std::string& scopeId, size_t limit,
+                                     const std::string& owner, int leaseSeconds);
+    bool completeJob(const std::string& jobId);
+    bool failJob(const std::string& jobId, const std::string& error, int maxAttempts = 5);
+    taskforge::Json jobSummary(const std::string& scopeId) const;
+    taskforge::Json tombstoneSummary(const std::string& scopeId) const;
+    taskforge::Json lineageSummary(const std::string& scopeId) const;
+    bool purgeTelemetry(const std::string& scopeId, const std::string& payloadJson,
+                        std::string& error);
     std::vector<MemoryPassageHit> searchPassages(const std::string& scopeId,
                                                  const std::string& text, size_t limit = 10) const;
     taskforge::Json sourceSummary(const std::string& scopeId) const;
