@@ -188,6 +188,18 @@ e são revisadas por `memory proposals`.
 escopo; sem ele, as lápides sobrevivem ao expurgo e continuam bloqueando a
 reingestão automática.
 
+### `memory sources ingest`
+
+```powershell
+.\arestrix-cli.exe memory sources ingest --project .\examples\04-memoria --path docs/guide.md --json
+.\arestrix-cli.exe memory sources ingest --project .\examples\04-memoria --path docs/guide.md --allow-forgotten
+```
+
+Ingere um caminho do workspace manualmente. Uma URI com lápide é recusada por
+padrão; `--allow-forgotten` remove a lápide da URI com registro em auditoria e
+permite a reingestão manual. A varredura automática de fontes sempre respeita a
+lápide.
+
 ### `memory forget`
 
 ```powershell

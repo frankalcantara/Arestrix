@@ -36,8 +36,10 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   versions of a URI inside one `WriteTxn`, retracts unsupported claims,
   tombstones derivations, deletes passages/evidence and queues idempotent
   `purge_telemetry`, which redacts literal copies of 96+ bytes from episodes.
-  `purge --drop-tombstones` removes tombstones explicitly, and `doctor`
-  coverage now includes the new scoped tables.
+  `purge --drop-tombstones` removes tombstones explicitly, `memory sources
+  ingest --allow-forgotten` is the audited manual re-ingestion path, and
+  `doctor` reports tombstones, jobs and a critical lineage/orphan check.
+  Playbook and consolidated-lesson jobs now have executors.
 - Knowledge databases open with `PRAGMA synchronous=FULL`; telemetry keeps
   `NORMAL`. The concurrency stress p95 moved from 0.188 s to 0.203 s against the
   Phase 0 baseline.

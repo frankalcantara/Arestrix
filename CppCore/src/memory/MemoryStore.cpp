@@ -3613,6 +3613,45 @@ std::string MemoryStore::recordPlaybook(const std::string& scopeId, const std::s
     return id;
 }
 
+taskforge::Json MemoryStore::recompilePlaybook(const std::string& scopeId,
+                                               const std::string& taskType) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out{{"ok", true}, {"created", false}, {"playbookId", ""},
+                        {"reason", ""}};
+    if (!db_ || scopeId.empty()) {
+        out["ok"] = false;
+        out["reason"] = "memoria indisponivel";
+        return out;
+    }
+    const auto lessons = getLessons(scopeId);
+    std::vector<MemoryLesson> selected;
+    for (const auto& lesson : lessons) {
+        if (taskType.empty() || lesson.domain == taskType) selected.push_back(lesson);
+    }
+    if (selected.empty()) selected = lessons;
+    if (selected.size() < 3) {
+        out["reason"] = "insufficient_lessons";
+        return out;
+    }
+    taskforge::Json steps = taskforge::Json::array();
+    taskforge::Json evidence = taskforge::Json::array();
+    for (const auto& lesson : selected) {
+        steps.push_back(lesson.lessonRule);
+        evidence.push_back(taskforge::Json{{"kind", "lesson"}, {"id", lesson.id}});
+    }
+    const std::string id = recordPlaybook(
+        scopeId, taskType, taskType.empty() ? "memoria playbook" : taskType + " playbook",
+        steps, taskforge::Json::object(), 0.6, "candidate", "", evidence);
+    if (id.empty()) {
+        out["ok"] = false;
+        out["reason"] = "record_playbook_failed";
+        return out;
+    }
+    out["created"] = true;
+    out["playbookId"] = id;
+    return out;
+}
+
 std::string MemoryStore::playbookIdBySignature(const std::string& scopeId,
                                                const std::string& taskType,
                                                const std::string& stepsJson) const {
@@ -6916,6 +6955,17 @@ MemoryEraseResult MemoryStore::eraseSource(const std::string& scopeId,
         }
     }
     for (const auto& playbookId : deletedPlaybooks) {
+        std::string taskType;
+        {
+            Stmt query;
+            std::string queryError;
+            if (prepare(db_, "SELECT task_type FROM memory_playbook WHERE id=? AND scope_id=?",
+                        query, queryError)) {
+                bindText(query.stmt, 1, playbookId);
+                bindText(query.stmt, 2, scopeId);
+                if (stepRetry(query.stmt) == SQLITE_ROW) taskType = columnText(query.stmt, 0);
+            }
+        }
         Stmt update;
         std::string error;
         if (!prepare(db_, "UPDATE memory_playbook SET title='[apagado]',steps_json='[]',"
@@ -6931,12 +6981,25 @@ MemoryEraseResult MemoryStore::eraseSource(const std::string& scopeId,
             !insertRemoval("playbook", playbookId, reason)) {
             return fail(lastError_);
         }
+        const std::string job = enqueueJob(
+            scopeId, "recompile_playbook",
+            taskforge::Json{{"playbookId", playbookId}, {"taskType", taskType}});
+        if (!job.empty()) {
+            ++result.jobs;
+            result.jobIds.push_back(job);
+        }
     }
     for (const auto& lessonId : deletedLessons) {
         ++result.derivativesTombstoned;
         if (!insertTombstone("lesson", lessonId, result.uri, "", reason) ||
             !insertRemoval("lesson", lessonId, reason)) {
             return fail(lastError_);
+        }
+        const std::string job = enqueueJob(
+            scopeId, "reconsolidate_lesson", taskforge::Json{{"lessonId", lessonId}});
+        if (!job.empty()) {
+            ++result.jobs;
+            result.jobIds.push_back(job);
         }
     }
     for (const auto& pathId : deletedPaths) {
@@ -6969,6 +7032,7 @@ MemoryEraseResult MemoryStore::eraseSource(const std::string& scopeId,
         result.evidenceDeleted += static_cast<size_t>(sqlite3_changes(db_));
     }
 
+    if (testInterleaveHook_) testInterleaveHook_("eraseSource:before_delete");
     std::vector<std::string> textHashes;
     for (const auto& text : passageTexts) {
         for (const auto& hash : textWindowHashes(text)) textHashes.push_back(hash);
@@ -7040,7 +7104,7 @@ MemoryEraseResult MemoryStore::eraseSource(const std::string& scopeId,
         taskforge::Json{{"itemIds", itemIds}, {"passageIds", passageJson},
                         {"textHashes", hashesJson}, {"reason", reason}});
     if (!jobId.empty()) {
-        result.jobs = 1;
+        ++result.jobs;
         result.jobIds.push_back(jobId);
     }
     audit(requestedBy.empty() ? "forget" : requestedBy, "erase_source", scopeId, "",
@@ -7062,6 +7126,7 @@ std::string MemoryStore::ingestSource(const MemorySourceRecord& source,
                                       size_t* insertedPassages, std::string& error,
                                       bool allowForgotten) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
+    error.clear();
     if (insertedPassages) *insertedPassages = 0;
     if (!db_ || source.scopeId.empty() || source.uri.empty() || source.contentHash.empty()) {
         error = "fonte invalida";

@@ -195,7 +195,7 @@ public:
     // E12: ingestao de fontes e trechos sem modelo de linguagem.
     size_t ingestSources(const std::string& projectId, const std::string& workspaceRoot,
                          const std::vector<std::string>& uris, size_t maxFileBytes,
-                         size_t maxFiles);
+                         size_t maxFiles, bool allowForgotten = false);
     taskforge::Json sourceSummary(const std::string& projectId);
     // Fase 3: esquece uma versao/URI e drena a limpeza da telemetria.
     taskforge::Json forgetSource(const std::string& projectId,

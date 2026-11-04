@@ -581,6 +581,7 @@ public:
                                const std::string& sourceRef = "",
                                const taskforge::Json& evidence = taskforge::Json::array(),
                                long long successCount = 0, long long failureCount = 0);
+    taskforge::Json recompilePlaybook(const std::string& scopeId, const std::string& taskType);
     std::string playbookIdBySignature(const std::string& scopeId, const std::string& taskType,
                                       const std::string& stepsJson) const;
     std::vector<MemoryPlaybookRecord> listPlaybooks(const std::string& scopeId,

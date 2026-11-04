@@ -188,6 +188,18 @@ the same path automatically. Proposals start pending and are reviewed through
 the scope; without it, tombstones survive the purge and continue to block
 automatic re-ingestion.
 
+### `memory sources ingest`
+
+```powershell
+.\arestrix-cli.exe memory sources ingest --project .\examples\04-memoria --path docs/guide.md --json
+.\arestrix-cli.exe memory sources ingest --project .\examples\04-memoria --path docs/guide.md --allow-forgotten
+```
+
+Ingests one workspace path manually. A URI with a tombstone is refused by
+default; `--allow-forgotten` removes the URI tombstone with an audit row and
+allows the manual re-ingestion. Automatic source scans always honor the
+tombstone.
+
 ### `memory forget`
 
 ```powershell

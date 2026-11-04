@@ -1486,7 +1486,7 @@ void MemoryService::invalidateBriefCache() {
 
 size_t MemoryService::ingestSources(const std::string& projectId, const std::string& workspaceRoot,
                                     const std::vector<std::string>& uris, size_t maxFileBytes,
-                                    size_t maxFiles) {
+                                    size_t maxFiles, bool allowForgotten) {
     auto* s = existingStore(projectId);
     if (!s || workspaceRoot.empty() || uris.empty()) return 0;
     std::error_code ec;
@@ -1572,7 +1572,8 @@ size_t MemoryService::ingestSources(const std::string& projectId, const std::str
         }
         std::string ingestError;
         size_t inserted = 0;
-        const std::string sourceId = s->ingestSource(source, passages, &inserted, ingestError);
+        const std::string sourceId = s->ingestSource(source, passages, &inserted, ingestError,
+                                                     allowForgotten);
         if (!sourceId.empty() && inserted > 0) ++changed;
     }
     return changed;
@@ -1671,6 +1672,31 @@ taskforge::Json MemoryService::drainJobs(const std::string& projectId, size_t ma
                 ++done;
             } else {
                 s->failJob(job.id, "rebuild_facet falhou");
+                ++failed;
+            }
+        } else if (job.kind == "recompile_playbook") {
+            const auto payload = taskforge::jsonutil::tryParse(job.payloadJson);
+            const std::string taskType = payload && payload->is_object()
+                ? payload->value("taskType", std::string()) : std::string();
+            const auto report = s->recompilePlaybook(scope, taskType);
+            if (report.value("ok", false)) {
+                s->completeJob(job.id);
+                ++done;
+            } else {
+                s->failJob(job.id, report.value("reason", std::string("recompile falhou")));
+                ++failed;
+            }
+        } else if (job.kind == "reconsolidate_lesson") {
+            taskforge::memory::ConsolidationOptions options;
+            options.generalize = true;
+            std::string consolidateError;
+            const auto report = MemoryConsolidator::run(*s, scope, options, consolidateError);
+            if (report.ok()) {
+                s->completeJob(job.id);
+                ++done;
+            } else {
+                s->failJob(job.id, consolidateError.empty()
+                    ? "reconsolidate_lesson falhou" : consolidateError);
                 ++failed;
             }
         } else {
@@ -3103,6 +3129,17 @@ taskforge::Json MemoryService::doctor(const std::string& projectId) {
             checks.push_back(list[i]);
             if (list[i].value("violations", 0LL) > 0) ok = false;
         }
+        const auto lineage = knowledge->lineageSummary(scope);
+        const long long links = lineage.value("links", 0LL);
+        const long long orphans = lineage.value("orphanEdges", 0LL) +
+            lineage.value("orphanProposals", 0LL) +
+            lineage.value("orphanFacets", 0LL) +
+            lineage.value("orphanPlaybooks", 0LL);
+        const long long violations = links > 0 ? orphans : 0;
+        checks.push_back(taskforge::Json{
+            {"id", "lineage_orphans"}, {"ok", violations == 0},
+            {"critical", true}, {"violations", violations}, {"details", lineage}});
+        if (violations > 0) ok = false;
     }
     taskforge::Json telemetryCheck;
     if (auto* telemetry = telemetryStore(projectId)) {
