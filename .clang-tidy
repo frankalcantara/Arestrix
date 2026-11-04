@@ -19,7 +19,8 @@ Checks: >
   modernize-*,
   -modernize-use-trailing-return-type,
   -modernize-use-nodiscard,
-  performance-*
+  performance-*,
+  concurrency-*
 
 # Apenas headers internos de CppCore serao verificados (ignora third_party)
 HeaderFilterRegex: 'CppCore/src/.*'

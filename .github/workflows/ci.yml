@@ -168,3 +168,110 @@ jobs:
       # Same C++20 build and CTest suite as Windows, using GCC/Clang on Linux.
       - name: Build and test native backend
         run: python CppCore/dev.py --test --no-frontend
+
+  # ---------------------------------------------------------------------------
+  # Static & Dynamic C++ Security Analyzers (Clang-Tidy, Cppcheck, ASan, UBSan, TSan)
+  # ---------------------------------------------------------------------------
+  cpp-static-analysis:
+    name: cpp-static-analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Install LLVM Clang-Tidy & Cppcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang clang-tidy cppcheck cmake ninja-build
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Run Cppcheck static analysis
+        run: |
+          cppcheck --enable=warning,performance,portability \
+                   --inline-suppr \
+                   --error-exitcode=1 \
+                   --suppress=missingIncludeSystem \
+                   --suppress="*:*third_party/*" \
+                   -I CppCore/src \
+                   CppCore/src
+
+      - name: Generate compilation database & run Clang-Tidy security/concurrency checks
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          cmake -S . -B build-tidy -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DARESTRIX_BUILD_STUDIO=OFF \
+            -DARESTRIX_BUILD_TESTS=ON
+          run-clang-tidy -p build-tidy -config-file=.clang-tidy \
+            -warnings-as-errors="clang-analyzer-*,concurrency-*,bugprone-use-after-move,bugprone-dangling-handle,bugprone-string-constructor,cert-err34-c,cert-env33-c,cert-msc50-cpp,cert-msc51-cpp,cppcoreguidelines-slicing" \
+            -quiet "CppCore/src/.*"
+
+  cpp-asan-ubsan:
+    name: cpp-asan-ubsan
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Install Clang and native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm cmake ninja-build
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Build and run CTest with AddressSanitizer + UndefinedBehaviorSanitizer
+        env:
+          CC: clang
+          CXX: clang++
+          ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1:strict_string_checks=1"
+          UBSAN_OPTIONS: "halt_on_error=1:print_stacktrace=1"
+        run: |
+          python CppCore/dev.py --test --no-frontend --sanitizers --build-dir build-asan
+
+  cpp-tsan:
+    name: cpp-tsan
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Install Clang and native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm cmake ninja-build
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Build and run CTest with ThreadSanitizer (Taskflow DAG concurrency)
+        env:
+          CC: clang
+          CXX: clang++
+          TSAN_OPTIONS: "halt_on_error=1:second_deadlock_stack=1"
+        run: |
+          python CppCore/dev.py --test --no-frontend --tsan --build-dir build-tsan

@@ -24,6 +24,8 @@ Exemplos de uso comuns:
     python CppCore/dev.py --full                 # Build + CTest + Vitest + checks + gateway smoke
     python CppCore/dev.py --setup                # Apenas clona e inicializa os submodulos Git
     python CppCore/dev.py --asan                 # Compila com AddressSanitizer ativado
+    python CppCore/dev.py --sanitizers           # Compila com ASan + UBSan ativados
+    python CppCore/dev.py --tsan                 # Compila com ThreadSanitizer ativado (build isolado)
     python CppCore/dev.py --clang-tidy           # Compila executando analise estatica Clang-Tidy
     python CppCore/dev.py --cppcheck             # Compila executando analise estatica Cppcheck
     python CppCore/dev.py --no-hardening         # Desativa as protecoes de memoria estritas
@@ -126,8 +128,10 @@ def find_vcvars():
     return None, None, None
 
 
-def build_backend(run_tests: bool, hardening: bool = True, asan: bool = False, clang_tidy: bool = False, cppcheck: bool = False,
-                  onnx: bool = False, onnx_dml: bool = False, onnx_root: str | None = None):
+def build_backend(run_tests: bool, hardening: bool = True, asan: bool = False, ubsan: bool = False, tsan: bool = False,
+                  clang_tidy: bool = False, cppcheck: bool = False, warnings_as_errors: bool = False,
+                  onnx: bool = False, onnx_dml: bool = False, onnx_root: str | None = None,
+                  build_dir: str | None = None):
     """Configura via CMake e compila os alvos nativos C++20 com as opcoes de seguranca solicitadas.
     
     Parametros:
@@ -136,17 +140,30 @@ def build_backend(run_tests: bool, hardening: bool = True, asan: bool = False, c
                           stack-protector-strong, _FORTIFY_SOURCE=2, RELRO no GCC/Clang).
         asan (bool): Se True, ativa o AddressSanitizer para deteccao em tempo de execucao de
                      use-after-free, estouros de buffer e vazamentos de memoria.
+        ubsan (bool): Se True, ativa o UndefinedBehaviorSanitizer para deteccao de UB em runtime.
+        tsan (bool): Se True, ativa o ThreadSanitizer para deteccao de data races em concorrencia.
         clang_tidy (bool): Se True, integra a analise estatica do Clang-Tidy (.clang-tidy) ao build.
         cppcheck (bool): Se True, integra a analise estatica comportamental do Cppcheck ao build.
+        warnings_as_errors (bool): Se True, trata avisos do compilador como erros fatais (-Werror / /WX).
+        build_dir (str | None): Diretorio de build customizado (relativo a ROOT ou absoluto).
     """
+    if asan and tsan:
+        sys.exit("[Erro] --asan e --tsan sao mutuamente exclusivos. Execute-os em invocacoes separadas.")
+
+    target_build = (pathlib.Path(build_dir) if pathlib.Path(build_dir).is_absolute() else ROOT / build_dir) if build_dir else BUILD
+
     cfg = [
         "-S", str(ROOT),
-        "-B", str(BUILD),
+        "-B", str(target_build),
         "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
         f"-DARESTRIX_ENABLE_HARDENING={'ON' if hardening else 'OFF'}",
         f"-DARESTRIX_ENABLE_ASAN={'ON' if asan else 'OFF'}",
+        f"-DARESTRIX_ENABLE_UBSAN={'ON' if ubsan else 'OFF'}",
+        f"-DARESTRIX_ENABLE_TSAN={'ON' if tsan else 'OFF'}",
         f"-DARESTRIX_ENABLE_CLANG_TIDY={'ON' if clang_tidy else 'OFF'}",
-        f"-DARESTRIX_ENABLE_CPPCHECK={'ON' if cppcheck else 'OFF'}"
+        f"-DARESTRIX_ENABLE_CPPCHECK={'ON' if cppcheck else 'OFF'}",
+        f"-DARESTRIX_WARNINGS_AS_ERRORS={'ON' if warnings_as_errors else 'OFF'}",
     ]
 
     if onnx_dml:
@@ -165,6 +182,15 @@ def build_backend(run_tests: bool, hardening: bool = True, asan: bool = False, c
         if onnx_dml:
             cfg.append("-DARESTRIX_WITH_ONNX_DML=ON")
 
+    # Ambiente de execucao dos testes com flags estritas de parada nos Sanitizers
+    test_env = os.environ.copy()
+    if asan:
+        test_env.setdefault("ASAN_OPTIONS", "detect_leaks=1:abort_on_error=1:strict_string_checks=1")
+    if ubsan:
+        test_env.setdefault("UBSAN_OPTIONS", "halt_on_error=1:print_stacktrace=1")
+    if tsan:
+        test_env.setdefault("TSAN_OPTIONS", "halt_on_error=1:second_deadlock_stack=1")
+
     if IS_WINDOWS:
         # 1. Localiza o Visual Studio e o script de inicializacao das variaveis de ambiente
         vcvars, vs_path, installer = find_vcvars()
@@ -180,17 +206,17 @@ def build_backend(run_tests: bool, hardening: bool = True, asan: bool = False, c
         env_setup = f'set "PATH=%PATH%;{installer};{pathlib.Path(ninja).parent}" && call "{vcvars}" >nul'
         steps = [
             f'"{cmake}" ' + " ".join(f'"{a}"' for a in cfg + gen),
-            f'"{cmake}" --build "{BUILD}"'
+            f'"{cmake}" --build "{target_build}"'
         ]
 
         # 4. Adiciona execucao de testes via ctest.exe se solicitado
         if run_tests:
             ctest = pathlib.Path(cmake).with_name("ctest.exe")
-            steps.append(f'"{ctest}" --test-dir "{BUILD}" --output-on-failure')
+            steps.append(f'"{ctest}" --test-dir "{target_build}" --output-on-failure')
 
         # 5. Executa os passos de configuracao e compilacao
         for s in steps:
-            r = run(f'cmd /c "{env_setup} && {s}"', shell=True, cwd=ROOT)
+            r = run(f'cmd /c "{env_setup} && {s}"', shell=True, cwd=ROOT, env=test_env)
             if r.returncode != 0:
                 sys.exit("[Erro] Falha na compilacao do backend C++ no ambiente MSVC.")
     else:
@@ -200,13 +226,13 @@ def build_backend(run_tests: bool, hardening: bool = True, asan: bool = False, c
             sys.exit("[Erro] CMake nao encontrado no sistema (instale via apt/dnf/brew).")
 
         gen = ["-G", "Ninja"] if shutil.which("ninja") else []
-        for cmd in ([cmake, *cfg, *gen], [cmake, "--build", str(BUILD), "-j"]):
+        for cmd in ([cmake, *cfg, *gen], [cmake, "--build", str(target_build), "-j"]):
             if run(cmd, cwd=ROOT).returncode != 0:
                 sys.exit("[Erro] Falha na compilacao do backend C++.")
 
         # Executa suite de testes se solicitado
         if run_tests:
-            if run(["ctest", "--test-dir", str(BUILD), "--output-on-failure"], cwd=ROOT).returncode != 0:
+            if run(["ctest", "--test-dir", str(target_build), "--output-on-failure"], cwd=ROOT, env=test_env).returncode != 0:
                 sys.exit("[Erro] Testes de C++ falharam no ctest.")
 
     print("[Build] Backend C++ compilado com sucesso.", flush=True)
@@ -292,12 +318,21 @@ Exemplos:
     ap.add_argument("--hardening", action="store_true", default=True, help="Ativa flags de seguranca de memoria e mitigacao de exploracao (padrao: ativado)")
     ap.add_argument("--no-hardening", dest="hardening", action="store_false", help="Desativa flags estritas de hardening de memoria")
     ap.add_argument("--asan", action="store_true", help="Ativa instrumentacao AddressSanitizer (deteccao de use-after-free e buffer overflows)")
+    ap.add_argument("--ubsan", action="store_true", help="Ativa instrumentacao UndefinedBehaviorSanitizer (deteccao de UB em tempo de execucao)")
+    ap.add_argument("--sanitizers", action="store_true", help="Atalho para ativar AddressSanitizer + UndefinedBehaviorSanitizer (--asan --ubsan)")
+    ap.add_argument("--tsan", action="store_true", help="Ativa instrumentacao ThreadSanitizer (deteccao de data races no DAG e threads)")
     ap.add_argument("--clang-tidy", action="store_true", help="Ativa analise estatica Clang-Tidy integrada ao processo de compilacao")
     ap.add_argument("--cppcheck", action="store_true", help="Ativa analise estatica Cppcheck integrada ao processo de compilacao")
+    ap.add_argument("--warnings-as-errors", action="store_true", help="Trata avisos do compilador como erros fatais (-Werror / /WX)")
+    ap.add_argument("--build-dir", default=None, help="Diretorio de build customizado (ex: build-asan, build-tsan, build-tidy)")
     ap.add_argument("--onnx", action="store_true", help="Compila a compressao de prosa com ONNX Runtime (ONNXRUNTIME_ROOT)")
     ap.add_argument("--onnx-dml", action="store_true", help="Compila com ONNX + DirectML (GPU; exige o pacote DirectML)")
     ap.add_argument("--onnx-root", default=None, help="Raiz do ONNX Runtime normalizada (padrao: ONNXRUNTIME_ROOT)")
     args = ap.parse_args()
+
+    if args.sanitizers:
+        args.asan = True
+        args.ubsan = True
 
     if args.full:
         args.test = True
@@ -327,11 +362,15 @@ Exemplos:
             run_tests=args.test,
             hardening=args.hardening,
             asan=args.asan,
+            ubsan=args.ubsan,
+            tsan=args.tsan,
             clang_tidy=args.clang_tidy,
             cppcheck=args.cppcheck,
+            warnings_as_errors=args.warnings_as_errors,
             onnx=args.onnx,
             onnx_dml=args.onnx_dml,
-            onnx_root=args.onnx_root
+            onnx_root=args.onnx_root,
+            build_dir=args.build_dir,
         )
 
     # 3. Passos de verificacao (continuam apos uma falha para agregar o relatorio)

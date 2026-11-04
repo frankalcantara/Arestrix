@@ -99,6 +99,11 @@ if(ARESTRIX_ENABLE_CPPCHECK)
   endif()
 endif()
 
+# Validacao de exclusao mutua: ASan e TSan nao podem coexistir no mesmo binario
+if(ARESTRIX_ENABLE_ASAN AND ARESTRIX_ENABLE_TSAN)
+  message(FATAL_ERROR "[Seguranca] ARESTRIX_ENABLE_ASAN e ARESTRIX_ENABLE_TSAN sao mutuamente exclusivos. Compile-os em diretorios de build separados.")
+endif()
+
 # ---------------------------------------------------------------------------
 # Target de Interface com Flags de Seguranca & Hardening Compartilhadas
 # ---------------------------------------------------------------------------
@@ -125,7 +130,7 @@ if(MSVC)
 
   if(ARESTRIX_ENABLE_ASAN)
     message(STATUS "[Seguranca] AddressSanitizer (MSVC) ativado.")
-    target_compile_options(arestrix_security_flags INTERFACE /fsanitize=address)
+    target_compile_options(arestrix_security_flags INTERFACE /fsanitize=address /Zi)
   endif()
 
   target_compile_definitions(arestrix_security_flags INTERFACE _CRT_SECURE_NO_WARNINGS)
@@ -137,7 +142,12 @@ else()
 
   if(ARESTRIX_ENABLE_HARDENING)
     target_compile_options(arestrix_security_flags INTERFACE
-      $<$<COMPILE_LANGUAGE:CXX>:-fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat=2 -Wformat-security>)
+      $<$<COMPILE_LANGUAGE:CXX>:-fstack-protector-strong -Wformat=2 -Wformat-security>)
+    # _FORTIFY_SOURCE conflita com ASan/TSan e exige otimizacao (> -O0).
+    if(NOT ARESTRIX_ENABLE_ASAN AND NOT ARESTRIX_ENABLE_TSAN)
+      target_compile_options(arestrix_security_flags INTERFACE
+        $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<NOT:$<CONFIG:Debug>>>:-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2>)
+    endif()
     target_link_options(arestrix_security_flags INTERFACE
       -Wl,-z,relro,-z,now -Wl,-z,noexecstack)
   endif()
@@ -149,19 +159,19 @@ else()
 
   if(ARESTRIX_ENABLE_ASAN)
     message(STATUS "[Seguranca] AddressSanitizer (GCC/Clang) ativado.")
-    target_compile_options(arestrix_security_flags INTERFACE -fsanitize=address -fno-omit-frame-pointer)
+    target_compile_options(arestrix_security_flags INTERFACE -fsanitize=address -fno-omit-frame-pointer -g -O1)
     target_link_options(arestrix_security_flags INTERFACE -fsanitize=address)
   endif()
 
   if(ARESTRIX_ENABLE_UBSAN)
     message(STATUS "[Seguranca] UndefinedBehaviorSanitizer ativado.")
-    target_compile_options(arestrix_security_flags INTERFACE -fsanitize=undefined)
-    target_link_options(arestrix_security_flags INTERFACE -fsanitize=undefined)
+    target_compile_options(arestrix_security_flags INTERFACE -fsanitize=undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -g -O1)
+    target_link_options(arestrix_security_flags INTERFACE -fsanitize=undefined -fno-sanitize-recover=all)
   endif()
 
   if(ARESTRIX_ENABLE_TSAN)
     message(STATUS "[Seguranca] ThreadSanitizer ativado.")
-    target_compile_options(arestrix_security_flags INTERFACE -fsanitize=thread)
+    target_compile_options(arestrix_security_flags INTERFACE -fsanitize=thread -fno-omit-frame-pointer -g -O1)
     target_link_options(arestrix_security_flags INTERFACE -fsanitize=thread)
   endif()
 endif()
@@ -182,7 +192,8 @@ add_library(arestrix_gateway_core STATIC
   ${SRC}/gateway/GatewayTypes.cpp
   ${SRC}/gateway/GatewayStore.cpp)
 target_include_directories(arestrix_gateway_core PUBLIC
-  ${SRC}
+  ${SRC})
+target_include_directories(arestrix_gateway_core SYSTEM PUBLIC
   ${TP}/sqlite
   ${TP}/simdjson/singleheader)
 target_link_libraries(arestrix_gateway_core PUBLIC arestrix_core arestrix_security_flags Threads::Threads)
@@ -281,7 +292,8 @@ add_library(arestrix_core STATIC
 
 target_include_directories(arestrix_core PUBLIC
   ${CMAKE_CURRENT_BINARY_DIR}/generated
-  ${SRC}
+  ${SRC})
+target_include_directories(arestrix_core SYSTEM PUBLIC
   ${TP}/sqlite
   ${TP}/simdjson/singleheader
   ${TP}/taskflow)
@@ -385,7 +397,8 @@ add_executable(arestrix-gateway
   ${SRC}/gateway/main.cpp
   ${SRC}/gateway/GatewayServer.cpp)
 target_include_directories(arestrix-gateway PRIVATE
-  ${SRC}
+  ${SRC})
+target_include_directories(arestrix-gateway SYSTEM PRIVATE
   ${TP}/httplib)
 target_compile_definitions(arestrix-gateway PRIVATE ARESTRIX_GATEWAY_VERSION="${ARESTRIX_VERSION}")
 if(WIN32)
@@ -401,7 +414,8 @@ add_executable(arestrix-memory
   ${SRC}/memory/institution_main.cpp
   ${SRC}/memory/MemoryInstitutionServer.cpp)
 target_include_directories(arestrix-memory PRIVATE
-  ${SRC}
+  ${SRC})
+target_include_directories(arestrix-memory SYSTEM PRIVATE
   ${TP}/httplib)
 target_compile_definitions(arestrix-memory PRIVATE ARESTRIX_MEMORY_VERSION="${ARESTRIX_VERSION}")
 if(WIN32)

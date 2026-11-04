@@ -6,7 +6,8 @@ publishes a ready-to-run artifact.
 
 | Workflow | Trigger | What it does |
 | :--- | :--- | :--- |
-| `workflows/ci.yml` | `pull_request`, manual | Quality checks, Vitest + Studio build, native Windows CTest and native Linux CTest. These four jobs are required status checks on `main`. |
+| `workflows/ci.yml` | `pull_request`, manual | Quality checks, Vitest + Studio build, native Windows CTest, native Linux CTest, and C++ static/dynamic security gates (`cpp-static-analysis` with Clang-Tidy/Cppcheck, `cpp-asan-ubsan`, and `cpp-tsan`). The first four jobs are required status checks on `main`. |
+| `workflows/codeql.yml` | push/PR to `main`, weekly schedule (Monday 06:00 UTC), manual | Semantic SAST analysis via GitHub CodeQL (`security-extended` and `security-and-quality`) covering both `c-cpp` (manual CMake/Ninja build) and `javascript-typescript`. |
 | `workflows/deploy.yml` | push to `main`, `v*` tags, manual | Runs the release gate, builds the Windows x64 portable package and publishes it to GitHub Releases (`latest` for `main`, the tag name for releases). |
 | `workflows/check-submodules.yml` | weekly schedule (Monday 08:00 UTC), manual | Compares every submodule gitlink with its upstream branch and opens/updates the `chore/submodule-updates` pull request. Never merges. |
 | `dependabot.yml` | weekly/monthly schedule | Opens grouped npm, GitHub Actions and Git submodule update pull requests. |
@@ -58,6 +59,9 @@ Local equivalents remain `npm run submodule:check` and
 
 The `main-protection` ruleset requires the `quality`, `frontend`,
 `native-windows` and `native-linux` checks and a pull request before merge.
+Additional C++ security jobs (`cpp-static-analysis`, `cpp-asan-ubsan`, `cpp-tsan`
+and CodeQL) run in parallel on every pull request and can be promoted to
+required checks in the ruleset at any time.
 The repository owner has an `always` bypass so urgent fixes and release
 maintenance can still be pushed directly; contributors should use a pull
 request.
@@ -73,6 +77,19 @@ python scripts/release_check.py
 For a faster rehearsal, use `python scripts/release_check.py --skip-e2e` or run
 the individual commands from `.github/workflows/ci.yml` (`npm test`, `npx tsc
 --noEmit`, `python CppCore/dev.py --test --no-frontend`, repository checks).
+
+To run the C++ static analyzers and runtime sanitizers locally:
+
+```bash
+# AddressSanitizer + UndefinedBehaviorSanitizer (isolated build directory)
+python CppCore/dev.py --test --no-frontend --sanitizers --build-dir build-asan
+
+# ThreadSanitizer for Taskflow DAG & concurrency data-race detection (Linux/Clang/GCC)
+python CppCore/dev.py --test --no-frontend --tsan --build-dir build-tsan
+
+# Clang-Tidy & Cppcheck static analysis integrated into CMake build
+python CppCore/dev.py --no-frontend --no-run --clang-tidy --cppcheck --build-dir build-tidy
+```
 
 E2E (`scripts/e2e_tutorial.py`, `scripts/e2e_examples.py`) remains a manual
 promotion step before tagging an official release; the rolling `deploy.yml`
