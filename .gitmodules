@@ -20,3 +20,6 @@
 [submodule "third_party/security-audit-skill"]
 	path = third_party/security-audit-skill
 	url = https://github.com/cloudflare/security-audit-skill
+[submodule "third_party/tracy"]
+	path = third_party/tracy
+	url = https://github.com/wolfpld/tracy

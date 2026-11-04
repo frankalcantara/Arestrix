@@ -340,6 +340,23 @@ more and deliberately does not claim to find paraphrases. Without `--async`,
 `forget` drains the job before returning and reports a distinct pending state
 when the telemetry database is unavailable.
 
+### Prefix epochs and removals during a run
+
+Schema v8 adds `memory_prefix_epoch`. The stable block contains only active
+lessons and playbooks, sorted by `(kind, id)` and formatted deterministically, so
+utility, traversal scores and working state cannot change its bytes. The
+`MemoryBriefInfo` carries the stable block, prefix key/identity/epoch and
+`removalSeqStart`; `briefInfoToJson` is the contract consumed by generated
+pipelines.
+
+Before every model request, the agent calls `MemoryService::removedSince` with
+the delivered `(kind, id)` set. A matching removal rebuilds the prompt without
+the item and redacts its `[MEMO:<id>]` marker from the tool history; a `scope`
+removal clears the delivered set. The check stays enabled even when epoch
+publication is disabled, so a committed removal cannot be served again. The
+epoch table records the published item set; provider and model remain trace
+data, not prefix identity.
+
 ### Lenses and facets
 
 With `globalDefaults.memory.lenses` enabled, maintenance ensures a lens for every

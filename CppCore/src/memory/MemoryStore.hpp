@@ -10,6 +10,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "util/JsonValue.hpp"
@@ -38,10 +39,29 @@ struct MemoryBriefInfo {
     std::vector<std::string> pathClaimIds;
     std::vector<std::string> traversalIds;
     std::vector<std::string> workingKeys;
+    std::vector<std::string> facetIds;
+    std::vector<std::string> stableIds;
+    std::vector<std::string> volatileIds;
+    std::string stableBlock;
+    std::string prefixKey;
+    std::string prefixIdentity;
+    long long prefixEpoch = 0;
+    long long removalSeqStart = 0;
     size_t chars = 0;
     size_t estimatedTokens = 0;
     bool truncated = false;
 };
+
+struct MemoryPrefixEpoch {
+    std::string scopeId;
+    std::string prefixKey;
+    long long epoch = 0;
+    std::string contentHash;
+    std::string itemIdsJson = "[]";
+    std::string publishedAt;
+};
+
+taskforge::Json briefInfoToJson(const MemoryBriefInfo& info);
 
 struct MemoryHitRecord {
     std::string id;
@@ -581,6 +601,7 @@ public:
                                const std::string& sourceRef = "",
                                const taskforge::Json& evidence = taskforge::Json::array(),
                                long long successCount = 0, long long failureCount = 0);
+    taskforge::Json recompilePlaybook(const std::string& scopeId, const std::string& taskType);
     std::string playbookIdBySignature(const std::string& scopeId, const std::string& taskType,
                                       const std::string& stepsJson) const;
     std::vector<MemoryPlaybookRecord> listPlaybooks(const std::string& scopeId,
@@ -788,6 +809,16 @@ public:
     taskforge::Json jobSummary(const std::string& scopeId) const;
     taskforge::Json tombstoneSummary(const std::string& scopeId) const;
     taskforge::Json lineageSummary(const std::string& scopeId) const;
+    long long currentRemovalSeq(const std::string& scopeId) const;
+    long long latestPrefixEpoch(const std::string& scopeId, const std::string& prefixKey) const;
+    bool publishPrefixEpoch(const std::string& scopeId, const std::string& prefixKey,
+                            const std::string& contentHash, const std::string& itemIdsJson,
+                            long long* epoch = nullptr);
+    taskforge::Json listPrefixEpochs(const std::string& scopeId,
+                                     const std::string& prefixKey = "",
+                                     size_t limit = 20) const;
+    taskforge::Json removedSince(const std::string& scopeId, long long removalSeqStart,
+                                 const std::vector<std::pair<std::string, std::string>>& delivered) const;
     bool purgeTelemetry(const std::string& scopeId, const std::string& payloadJson,
                         std::string& error);
     std::vector<MemoryPassageHit> searchPassages(const std::string& scopeId,

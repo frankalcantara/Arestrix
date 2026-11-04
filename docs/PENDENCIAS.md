@@ -1,10 +1,10 @@
 # Pendências do projeto Arestrix
 
-> **Versão:** 2.5.0 · **Atualizado em:** 2026-10-31
+> **Versão:** 2.6.0 · **Atualizado em:** 2026-11-03
 >
 > Documento único de pendências do projeto. O plano de memória (Fases A–C) e o
 > multigrafo avançado (Fase D / E11–E20) estão concluídos. As pendências
-> restantes são operacionais.
+> restantes são operacionais, de performance e de release.
 
 ## 1. Resumo
 
@@ -17,6 +17,9 @@
 | Nível `institution` no `memory_inspect` do assistente | Pendente operacional |
 | Validação com provedores reais de embeddings | Pendente operacional |
 | Interface gráfica para configurar o agente de memória | Pendente de produto |
+| Laço de profiling (Tracy) e correção automática do código gerado via modelo padrão do Studio | Pendente de engenharia / produto |
+| Instrumentação do próprio Arestrix com Tracy e laço de auto-otimização | Pendente de engenharia |
+| Ciclo completo de testes e otimização de performance (C++, TypeScript, etc.) a cada release | Pendente de release |
 | Validação de release em máquina limpa / assinatura | Pendente de release |
 
 ## 2. O que está concluído na memória
@@ -101,8 +104,52 @@ do Studio para escolher esse alvo por projeto, listar os agentes/grafos
 registrados, mostrar o fallback para o modelo padrão e explicar o erro quando o
 alvo configurado não está disponível.
 
+### 4.5 Laço de observação de performance e correção automática no código gerado (Tracy + Modelo Padrão do Studio)
+
+Usar o **Tracy Profiler** (`third_party/tracy`) em um laço fechado de observação de performance e
+autocorreção para os pipelines gerados pelo Arestrix:
+
+- **Instrumentação automática do código gerado**: emitir macros/zonas do Tracy (`ZoneScoped`,
+  `FrameMark`, contadores de memória, locks e eventos de tarefas Taskflow) no código C++20 gerado pelo
+  `TaskflowGenerator`.
+- **Captura e análise de profile**: executar o binário gerado com captura automatizada de traces do
+  Tracy (CLI/headless capture e exportação estatística de zonas críticas, latência por vértice,
+  alocações e contenção de threads).
+- **Correção automática com o modelo padrão do Studio**: enviar o relatório estruturado de gargalos do
+  Tracy e o trecho correspondente do código gerado para o **modelo padrão configurado no Studio**,
+  operando em loop iterativo de diagnóstico → refatoração/otimização → recompilação → re-profile e
+  validação funcional até atingir os critérios de performance sem regressão semântica.
+
+### 4.6 Instrumentação do próprio Arestrix com Tracy e loop de auto-otimização
+
+Incluir o **Tracy Profiler** diretamente no código-fonte do próprio Arestrix (`CppCore` e binários
+`arestrix`, `arestrix-cli`, `arestrix-gateway` e `arestrix-memory`) e usar um laço semelhante de
+observação e otimização contínua:
+
+- **Instrumentação nativa**: cobrir o compilador/gerador Taskflow, runtime de agentes, motor de
+  memória SQLite (busca lexical/híbrida, consolidação, travessia em feixe, ingestão), AI Gateway,
+  cliente/servidor MCP, ponte IPC/WebUI e operações pesadas do Studio.
+- **Loop de observação e correção no próprio Arestrix**: capturar traces reais durante baterias de
+  execução, identificar hotspots e regressões de latência/memória via Tracy e acionar o ciclo assistido
+  pelo modelo padrão para propor, validar e aplicar otimizações no próprio código do Arestrix.
+
 ## 5. Pendências de release
 
+- **Ciclo completo e detalhado de testes e otimização de performance a cada processo de release**:
+  - Integrar ao gate de release (`scripts/release_check.py`) um ciclo obrigatório de profiling,
+    benchmarking detalhado e otimização antes do fechamento de cada versão.
+  - Testar de ponta a ponta **todas as operações em C++, TypeScript e integrações**:
+    - **C++ (`CppCore`)**: geração e compilação de código Taskflow, execução de grafos e subflows,
+      operações do banco e multigrafo de memória SQLite (queries FTS/vetoriais, consolidação,
+      extração, snapshots, travessia e pontes), roteamento e orçamentos do `arestrix-gateway`,
+      endpoints REST/MCP do `arestrix-memory`, sandboxes e serialização JSON (`simdjson`).
+    - **TypeScript / Studio (`src/`)**: operações do motor de grafo em memória (`Graph`, `Validator`),
+      histórico de comandos (`undo`/`redo`), serialização/desserialização de projetos, renderização e
+      interação no canvas WebGL/Three.js e camada SVG (`NodeView`, `ConnectionView`), resolução de
+      escopos de propriedades (`Studio`/`Workspace`/`Project`), auditoria e hashing de skills/MCP e
+      tempo de resposta da interface.
+  - Comparar métricas contra a linha de base da release anterior, bloquear regressões acima do limiar e
+    executar o ciclo de otimização guiado pelo Tracy antes de assinar e empacotar os artefatos.
 - Validação do instalador em máquina limpa, upgrade, uninstall e Intune/SCCM.
 - Assinatura de código via SignPath ou certificado corporativo.
 - Pacote Linux e matriz de CI Linux/macOS.

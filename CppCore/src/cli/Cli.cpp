@@ -504,6 +504,7 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory trace show <run> <no> --project <pasta> [--json]\n"
                      "arestrix-cli memory claims extract --project <pasta> [--max-passages N] [--json]\n"
                      "arestrix-cli memory forget (--source-version ID | --source URI) [--all-versions] [--async] [--dry-run] [--vacuum] [--reason texto] --project <pasta> [--json]\n"
+                     "arestrix-cli memory sources ingest --path <arquivo-ou-pasta> [--allow-forgotten] --project <pasta> [--json]\n"
                      "arestrix-cli memory paths list|show|retire [id] --project <pasta> [--state S] [--json]\n"
                      "arestrix-cli memory bridges detect --project <pasta> [--max-proposals N] [--max-per-entity N] [--json]\n"
                      "arestrix-cli memory ab validate|order|report --suite <arquivo> [--observations <arquivo>] [--repetitions N] [--seed N] [--json]\n"
@@ -519,7 +520,7 @@ int runMemory(const std::vector<std::string>& args) {
         command != "ab" && command != "trace" && command != "claims" &&
         command != "paths" && command != "bridges" && command != "promote" &&
         command != "unpromote" && command != "doctor" && command != "reopen" &&
-        command != "forget") {
+        command != "forget" && command != "sources") {
         std::cerr << "arestrix-cli memory: comando desconhecido: " << command << "\n";
         return kExitUsage;
     }
@@ -527,6 +528,7 @@ int runMemory(const std::vector<std::string>& args) {
     std::string proposalAction;
     std::string proposalId;
     std::string embeddingAction;
+    std::string sourceAction;
     std::string traceRun;
     std::string traceNode;
     std::string pathId;
@@ -557,6 +559,17 @@ int runMemory(const std::vector<std::string>& args) {
         embeddingAction = args[2];
         if (embeddingAction != "status" && embeddingAction != "test") {
             std::cerr << "arestrix-cli memory embeddings: acao desconhecida: " << embeddingAction << "\n";
+            return kExitUsage;
+        }
+        optionStart = 3;
+    } else if (command == "sources") {
+        if (args.size() < 3) {
+            std::cerr << "arestrix-cli memory sources: informe ingest\n";
+            return kExitUsage;
+        }
+        sourceAction = args[2];
+        if (sourceAction != "ingest") {
+            std::cerr << "arestrix-cli memory sources: acao desconhecida: " << sourceAction << "\n";
             return kExitUsage;
         }
         optionStart = 3;
@@ -694,6 +707,8 @@ int runMemory(const std::vector<std::string>& args) {
     size_t claimsMaxPassages = 10;
     std::string forgetSourceVersion;
     std::string forgetUri;
+    std::string sourcePath;
+    bool allowForgotten = false;
     bool forgetAllVersions = false;
     bool forgetAsync = false;
     bool forgetDryRun = false;
@@ -884,6 +899,11 @@ int runMemory(const std::vector<std::string>& args) {
         } else if (a == "--source") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --source\n"; return kExitUsage; }
             forgetUri = args[++i];
+        } else if (a == "--path") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --path\n"; return kExitUsage; }
+            sourcePath = args[++i];
+        } else if (a == "--allow-forgotten") {
+            allowForgotten = true;
         } else if (a == "--all-versions") {
             forgetAllVersions = true;
         } else if (a == "--async") {
@@ -1136,6 +1156,24 @@ int runMemory(const std::vector<std::string>& args) {
                 std::cerr << "Falha na extracao: " << out.value("error", std::string()) << "\n";
             }
             return out.value("ok", false) ? 0 : kExitConfig;
+        }
+
+        if (command == "sources") {
+            if (sourcePath.empty()) {
+                std::cerr << "informe --path\n";
+                return kExitUsage;
+            }
+            const size_t changed = memory.ingestSources(
+                projectId, root.string(), {sourcePath}, 524288, 1, allowForgotten);
+            taskforge::Json out{{"ok", true},
+                                {"command", "sources-ingest"},
+                                {"projectId", projectId},
+                                {"path", sourcePath},
+                                {"changed", static_cast<long long>(changed)},
+                                {"allowForgotten", allowForgotten}};
+            if (opt.json) std::cout << out.dump(2) << "\n";
+            else std::cout << "Fontes ingeridas: " << changed << "\n";
+            return 0;
         }
 
         if (command == "forget") {

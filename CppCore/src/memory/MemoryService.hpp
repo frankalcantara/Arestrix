@@ -136,6 +136,19 @@ public:
                            const std::string& intent = "",
                            const std::string& runId = "",
                            const std::string& nodeId = "");
+    // Fase 4: bloco estavel deterministico e verificacao de remocoes.
+    std::string buildStablePrefix(const std::string& projectId,
+                                  const std::vector<std::string>& domains,
+                                  const std::string& taskType, size_t maxTokens,
+                                  MemoryBriefInfo* info = nullptr);
+    taskforge::Json removedSince(const std::string& projectId, long long removalSeqStart,
+                                 const std::vector<std::pair<std::string, std::string>>& delivered);
+    taskforge::Json prefixEpochs(const std::string& projectId, const std::string& prefixKey = "",
+                                 size_t limit = 20);
+    taskforge::Json publishPrefixEpoch(const std::string& projectId,
+                                       const std::string& prefixKey,
+                                       const std::string& skillHash,
+                                       const std::string& promptTemplateHash);
     void clearLessons(const std::string& projectId);
 
     // Episódios, arestas e métricas.
@@ -195,7 +208,7 @@ public:
     // E12: ingestao de fontes e trechos sem modelo de linguagem.
     size_t ingestSources(const std::string& projectId, const std::string& workspaceRoot,
                          const std::vector<std::string>& uris, size_t maxFileBytes,
-                         size_t maxFiles);
+                         size_t maxFiles, bool allowForgotten = false);
     taskforge::Json sourceSummary(const std::string& projectId);
     // Fase 3: esquece uma versao/URI e drena a limpeza da telemetria.
     taskforge::Json forgetSource(const std::string& projectId,

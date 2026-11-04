@@ -34,6 +34,7 @@ COMPONENTS = {
     "monaco-editor": ("MIT",        "LICENSE.txt", "MIT License"),
     "SkillSpector":  ("Apache-2.0", "LICENSE",     "Apache License"),
     "security-audit-skill": ("MIT", "LICENSE", "MIT License"),
+    "tracy":         ("BSD-3-Clause", "LICENSE",   "3-clause BSD license"),
     "fonts/inter":   ("OFL-1.1",    "OFL-Inter.txt", "SIL Open Font License"),
     "sqlite":        ("blessing",   "LICENSE.md",  "May you do good and not evil"),   # dominio publico
     "httplib":       ("MIT",        "LICENSE",     "MIT License"),
