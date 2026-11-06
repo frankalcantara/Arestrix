@@ -3284,6 +3284,59 @@ std::string MemoryService::recordValidation(const std::string& projectId,
     }
 
     const std::string id = t->recordValidation(copy);
+    // Fase 5: credito fracionario no livro da telemetria. A citacao continua
+    // sendo [MEMO:<id da aresta>]; o evento guarda o item_key resolvido.
+    if (!id.empty() && !copy.runId.empty() && !copy.nodeId.empty()) {
+        std::string taskType;
+        if (!copy.episodeId.empty()) {
+            const taskforge::Json episode = t->getEpisode(scope, copy.episodeId);
+            taskType = episode.value("taskType", std::string());
+        }
+        const auto hits = t->listHits(scope, copy.runId, copy.nodeId);
+        std::set<std::string> citedKeys;
+        std::set<std::string> deliveredKeys;
+        auto* knowledge = existingStore(projectId);
+        auto itemKey = [&](const MemoryHitRecord& hit) {
+            if (hit.kind == "lesson") return "lesson:" + hit.memoryId;
+            if (hit.kind == "playbook") return "playbook:" + hit.memoryId;
+            if (hit.kind == "path") return "path:" + hit.memoryId;
+            if (hit.kind == "passage") return "psg:" + hit.memoryId;
+            if (hit.kind == "facet") return "facet:" + hit.memoryId;
+            if (knowledge && !knowledge->isReadOnly()) {
+                MemoryEdgeRecord edge;
+                if (knowledge->getEdge(scope, hit.memoryId, edge) &&
+                    !edge.claimKey.empty()) {
+                    return edge.claimKey;
+                }
+            }
+            return "edge:" + hit.memoryId;
+        };
+        for (const auto& hit : hits) {
+            const std::string key = itemKey(hit);
+            if (hit.injected || hit.consulted) deliveredKeys.insert(key);
+            if (hit.used) citedKeys.insert(key);
+        }
+        const auto& keys = citedKeys.empty() ? deliveredKeys : citedKeys;
+        if (!keys.empty()) {
+            const double delta = (copy.ok ? 1.0 : -1.0) /
+                static_cast<double>(keys.size());
+            std::vector<MemoryCreditEvent> events;
+            events.reserve(keys.size());
+            for (const auto& key : keys) {
+                MemoryCreditEvent event;
+                event.traceId = t->getTrace(scope, copy.runId, copy.nodeId)
+                    .value("traceId", copy.runId);
+                event.itemKey = key;
+                event.taskType = taskType;
+                event.kind = citedKeys.empty() ? "presence_low_res" : "citation";
+                event.origin = copy.runId;
+                if (copy.ok) event.deltaSuccess = delta;
+                else event.deltaFailure = delta;
+                events.push_back(std::move(event));
+            }
+            t->recordCreditEvents(scope, events);
+        }
+    }
     // E1: com o interruptor ligado, o veredito e o unico caminho de reforco.
     if (reinforce && !id.empty() && !copy.runId.empty() && !copy.nodeId.empty()) {
         if (auto* knowledge = existingStore(projectId); knowledge && !knowledge->isReadOnly()) {

@@ -397,6 +397,11 @@ distintas (`minDistinctInputs`, padrão 3).
 A utilidade usa a média Beta com prior (`(sucessos + prior) / (sucessos +
 falhas + 2·prior)`) e decaimento temporal opcional (`mu`). O prior impede que um
 único sucesso chegue a 1,0; traços fora de ordem não geram decaimento negativo.
+O livro de crédito da telemetria grava cada veredito do validador como evento
+`citation`, dividido entre os itens citados distintos, ou `presence_low_res`,
+dividido entre os entregues quando nada foi citado. Os eventos são idempotentes e
+atualizam `memory_item_utility` na mesma transação; a chave do item resolve
+arestas por `claim_key`.
 Quando uma afirmação dependente é retratada, expira ou deixa de estar ativa, o
 caminho correspondente é suspenso na mesma manutenção. Se todas as dependências
 voltarem a vigorar, ele é reativado; caso contrário, pode ser retirado.

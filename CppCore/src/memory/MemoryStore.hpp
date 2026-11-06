@@ -70,9 +70,24 @@ struct MemoryHitRecord {
     std::string memoryId;
     std::string kind;
     bool injected = false;
+    bool consulted = false;
     bool used = false;
     std::string outcome;
     std::string createdAt;
+};
+
+// Fase 5: evento do livro de credito fracionario.
+struct MemoryCreditEvent {
+    std::string traceId;
+    std::string itemKey;
+    std::string taskType;
+    std::string modelTier;
+    double deltaSuccess = 0.0;
+    double deltaFailure = 0.0;
+    std::string kind;
+    std::string origin;
+    std::string auditId;
+    bool capped = false;
 };
 
 // Referencia de uma memoria devolvida por memory_search, para registrar uso sem
@@ -192,6 +207,7 @@ struct MemoryEdgeRecord {
     long long failureCount = 0;
     double utility = 0.5;
     std::string dormantAt;
+    std::string claimKey;
 };
 
 struct MemoryUsageRecord {
@@ -717,6 +733,16 @@ public:
     // Hits efetivamente usados, para reforcar o conhecimento em outro store.
     std::vector<MemoryHitRef> usedHitRefs(const std::string& scopeId, const std::string& runId,
                                           const std::string& nodeId) const;
+    std::vector<MemoryHitRecord> listHits(const std::string& scopeId,
+                                          const std::string& runId,
+                                          const std::string& nodeId) const;
+    // Fase 5: grava eventos idempotentes e atualiza o agregado na mesma
+    // transacao; usage_version so muda quando ao menos um evento e novo.
+    bool recordCreditEvents(const std::string& scopeId,
+                            const std::vector<MemoryCreditEvent>& events);
+    taskforge::Json utilityFor(const std::string& scopeId, const std::string& itemKey,
+                               const std::string& taskType) const;
+    taskforge::Json creditSummary(const std::string& scopeId) const;
     // Reforco/decay de arestas de conhecimento a partir dos IDs usados.
     bool reinforceFromHits(const std::string& scopeId,
                            const std::vector<std::string>& memoryIds,
