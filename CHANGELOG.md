@@ -43,9 +43,11 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   reached. A skill/template change yields a new `prefix_identity` without
   advancing the epoch when the published content hash is unchanged, and the
   prefix trace step records identity, epoch and `delivered_ids_source`.
-  A confirmed removal publishes a new epoch from the runtime and redaction
-  removes the whole memory line from the system prompt/tool history, not only
-  its marker. `scripts/e2e_memory_removal.py` covers mid-run removal and the
+  With `memory.prefixEpochs` enabled, only the latest published epoch enters
+  the cacheable block; additions after it stay in the dynamic block until the
+  next epoch. A confirmed removal publishes a new epoch from the runtime and
+  redaction removes the whole memory line from the system prompt/tool history,
+  not only its marker. `scripts/e2e_memory_removal.py` covers mid-run removal and the
   following request. `e2e_memory_deepseek_long.py --with-epochs` adds the epoch
   arm and records cached-token ratio and distinct `prefix_hash`/`prefix_identity`
   per node.

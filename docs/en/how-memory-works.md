@@ -344,7 +344,10 @@ when the telemetry database is unavailable.
 
 Schema v8 adds `memory_prefix_epoch`. The stable block contains only active
 lessons and playbooks, sorted by `(kind, id)` and formatted deterministically, so
-utility, traversal scores and working state cannot change its bytes. The
+utility, traversal scores and working state cannot change its bytes. With
+`memory.prefixEpochs` enabled, the stable block is built from the latest
+published epoch; additions made after that epoch stay in the dynamic block until
+the next publication. The
 `MemoryBriefInfo` carries the stable block, prefix key/identity/epoch and
 `removalSeqStart`; `briefInfoToJson` is the contract consumed by generated
 pipelines.
