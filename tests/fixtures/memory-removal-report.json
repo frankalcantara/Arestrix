@@ -1,0 +1,45 @@
+{
+  "project": "memoria-removal-e2e",
+  "lessonId": "deepseek-long-lesson",
+  "requests": 4,
+  "leaks": [],
+  "rebuild": {
+    "deliveredIdsSource": "brief_info",
+    "kind": "memory_removal_rebuild",
+    "prefixEpochPublished": true,
+    "prefixKey": "long_memory|long",
+    "removalSeqStart": 1,
+    "removed": [
+      {
+        "id": "deepseek-long-lesson",
+        "kind": "lesson",
+        "seq": 1
+      }
+    ],
+    "scopeRemoval": false,
+    "truncatedCandidates": 0
+  },
+  "epochs": [
+    {
+      "epoch": 1,
+      "prefixKey": "long_memory|long",
+      "contentHash": "c8f84501ac8ccdafd7d7739b3ba466d1eea0b85615d96e5ef85f6d810483e758",
+      "itemIds": "[]"
+    }
+  ],
+  "checks": {
+    "exitZero": true,
+    "atLeastThreeRequests": true,
+    "firstRequestHasLesson": true,
+    "laterRequestsHaveNoLesson": true,
+    "traceHasRebuild": true,
+    "rebuildMatchesLesson": true,
+    "rebuildSourceIsBrief": true,
+    "epochPublished": true,
+    "epochRecorded": true,
+    "epochWithoutLesson": true
+  },
+  "pass": true,
+  "stdoutTail": "\"},\"timestamp\":1793975372688,\"type\":\"tool_start\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_removal\",\"payload\":{\"status\":\"running\",\"toolName\":\"write\",\"toolSuccess\":true},\"timestamp\":1793975372690,\"type\":\"tool_end\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_removal\",\"payload\":{\"detail\":\"Turno 3\",\"status\":\"thinking\"},\"timestamp\":1793975372690,\"type\":\"status\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_removal\",\"payload\":{\"status\":\"tool_call\",\"toolArgs\":\"{\\\"content\\\":\\\"STEP 2\\\",\\\"path\\\":\\\"artefatos/step2.txt\\\"}\",\"toolName\":\"write\"},\"timestamp\":1793975372698,\"type\":\"tool_start\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_removal\",\"payload\":{\"status\":\"running\",\"toolName\":\"write\",\"toolSuccess\":true},\"timestamp\":1793975372700,\"type\":\"tool_end\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_removal\",\"payload\":{\"detail\":\"Turno 4\",\"status\":\"thinking\"},\"timestamp\":1793975372700,\"type\":\"status\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_removal\",\"payload\":{\"logLine\":\"FIM\"},\"timestamp\":1793975372707,\"type\":\"log\"},\"type\":\"agent:telemetry\"}\n[Agent Agente_Removal] concluido (tokens: entrada=400, saida=80, retries=0)\n[telemetria] {\"event\":{\"nodeId\":\"agente_removal\",\"payload\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"calls\":4,\"completion_tokens\":80,\"compression_blocks\":0,\"compression_kinds\":\"\",\"compression_tokens_after\":0,\"compression_tokens_before\":0,\"memory_context_chars\":387,\"memory_enabled\":true,\"prefix_hash\":\"bde7f48668afbaf1c4f49fbc19529698be7e997723e09cb9649389ab32edfe4f\",\"prompt_tokens\":400,\"retries\":0,\"total_tokens\":480},\"timestamp\":1793975372709,\"type\":\"usage\"},\"type\":\"agent:telemetry\"}\n[telemetria] {\"event\":{\"nodeId\":\"agente_removal\",\"payload\":{\"detail\":\"Agente_Removal\",\"status\":\"settled\"},\"timestamp\":1793975372711,\"type\":\"status\"},\"type\":\"agent:telemetry\"}\n>>> Pipeline concluido com sucesso em 69 ms.\n[OK] Pipeline concluido em 9926 ms\n",
+  "stderrTail": ""
+}
