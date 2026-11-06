@@ -38,6 +38,10 @@ PROJECT_ID = "memoria-removal-e2e"
 SCOPE_ID = "project:" + PROJECT_ID
 LESSON_ID = "deepseek-long-lesson"
 LESSON_TEXT = "ORION-42"
+FACET_ID = "facet_removal_e2e"
+PATH_ID = "path_removal_e2e"
+FACET_TEXT = "A faceta do projeto confirma ORION-42."
+PATH_TEXT = "O caminho do projeto leva a ORION-42."
 
 sys.path.insert(0, str(ROOT / "scripts"))
 import memory_baseline  # noqa: E402
@@ -72,10 +76,65 @@ def initialize_project(cli: pathlib.Path, project: pathlib.Path) -> None:
         raise RuntimeError("falha ao inicializar o projeto: " + result.stderr[-1000:])
 
 
+def seed_removal_artifacts(db_path: pathlib.Path) -> None:
+    now = "2026-11-06T00:00:00Z"
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute(
+            "INSERT OR IGNORE INTO memory_node(id,scope_id,kind,canonical_name,aliases_json,"
+            "created_at,updated_at,metadata) VALUES(?,?,?,?,?,?,?,?)",
+            ("node_removal_e2e", SCOPE_ID, "entity", "ORION", "[]", now, now, "{}"),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO memory_lens(id,scope_id,name,description,version,"
+            "created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+            ("lens_removal_e2e", SCOPE_ID, "removal", "Lente do e2e", 1, now, now),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO memory_facet(id,scope_id,entity_id,lens_id,revision,"
+            "description,supporting_claims_json,claims_hash,status,embedding_fingerprint,"
+            "created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            (FACET_ID, SCOPE_ID, "node_removal_e2e", "lens_removal_e2e", 1,
+             FACET_TEXT, json.dumps([LESSON_ID]), "facet-hash", "active", "",
+             now, now),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO memory_path_schema(id,scope_id,signature,created_at) "
+            "VALUES(?,?,?,?)",
+            ("psch_removal_e2e", SCOPE_ID, "removal-signature", now),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO memory_path(id,scope_id,revision,schema_id,task_type,"
+            "state,intent_sample,access_json,created_at,updated_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (PATH_ID, SCOPE_ID, 1, "psch_removal_e2e", "long_memory", "active",
+             "", "{}", now, now),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO memory_path_stats(path_id,success,failure,last_tau,"
+            "uses,distinct_inputs) VALUES(?,?,?,?,?,?)",
+            (PATH_ID, 9, 0, 0, 9, 9),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO memory_path_claim(path_id,ordinal,claim_id,"
+            "claim_revision) VALUES(?,?,?,?)",
+            (PATH_ID, 0, LESSON_ID, ""),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def make_graph(path: pathlib.Path) -> None:
     graph = json.loads((FIXTURE / "pipeline.json").read_text(encoding="utf-8"))
     graph["metadata"]["projectId"] = PROJECT_ID
     graph["metadata"]["graphName"] = "MemoriaRemocaoE2E"
+    global_memory = graph["metadata"]["globalDefaults"].setdefault("memory", {})
+    global_memory["lenses"] = True
+    global_memory["pathServing"] = {
+        "enabled": True, "minUtility": 0.0, "minUses": 1, "maxPaths": 2,
+    }
     node = graph["nodes"][0]
     node["id"] = "agente_removal"
     node["label"] = "Agente_Removal"
@@ -96,7 +155,7 @@ def make_graph(path: pathlib.Path) -> None:
                     encoding="utf-8")
 
 
-def reject_lesson(db_path: pathlib.Path) -> None:
+def reject_artifacts(db_path: pathlib.Path) -> None:
     now = "2026-11-06T00:00:00Z"
     for attempt in range(20):
         try:
@@ -109,10 +168,23 @@ def reject_lesson(db_path: pathlib.Path) -> None:
                     (now, SCOPE_ID, LESSON_ID),
                 )
                 conn.execute(
-                    "INSERT INTO memory_removal_log"
-                    "(scope_id,item_kind,item_id,reason,created_at) VALUES(?,?,?,?,?)",
-                    (SCOPE_ID, "lesson", LESSON_ID, "e2e-removal", now),
+                    "UPDATE memory_facet SET status='retired',updated_at=? "
+                    "WHERE scope_id=? AND id=?",
+                    (now, SCOPE_ID, FACET_ID),
                 )
+                conn.execute(
+                    "UPDATE memory_path SET state='retired',updated_at=? "
+                    "WHERE scope_id=? AND id=?",
+                    (now, SCOPE_ID, PATH_ID),
+                )
+                for kind, item_id in (("lesson", LESSON_ID),
+                                      ("facet", FACET_ID),
+                                      ("path", PATH_ID)):
+                    conn.execute(
+                        "INSERT INTO memory_removal_log"
+                        "(scope_id,item_kind,item_id,reason,created_at) VALUES(?,?,?,?,?)",
+                        (SCOPE_ID, kind, item_id, "e2e-removal", now),
+                    )
                 conn.commit()
                 return
             finally:
@@ -152,7 +224,7 @@ class MockState:
         if index == 1:
             with self.lock:
                 if not self.removed:
-                    reject_lesson(self.db_path)
+                    reject_artifacts(self.db_path)
                     self.removed = True
             return tool_call("c2", "write",
                              {"path": "artefatos/step1.txt", "content": "STEP 1"})
@@ -271,6 +343,7 @@ def main() -> int:
             memory_baseline.FIXTURE = old_fixture
             memory_baseline.PROJECT_ID = old_project
             memory_baseline.SCOPE_ID = old_scope
+        seed_removal_artifacts(memory_db)
 
         port = free_port()
         state = MockState(memory_db)
@@ -290,9 +363,11 @@ def main() -> int:
 
         telemetry_db = project / ".arestrix" / "telemetry" / "telemetry.db"
         trace = inspect_trace(telemetry_db, memory_db)
+        first_request = request_text(state.requests[0]) if state.requests else ""
         later = [request_text(body) for body in state.requests[2:]]
         leaked = [text for text in later
                   if LESSON_ID in text or LESSON_TEXT in text or
+                  FACET_ID in text or PATH_ID in text or FACET_TEXT in text or
                   "[MEMO:" + LESSON_ID in text]
         rebuild = trace["rebuild"] or {}
         removed_ids = [item.get("id", "") for item in rebuild.get("removed", [])
@@ -301,11 +376,14 @@ def main() -> int:
         checks = {
             "exitZero": result.returncode == 0,
             "atLeastThreeRequests": len(state.requests) >= 3,
-            "firstRequestHasLesson": (LESSON_ID in request_text(state.requests[0])
-                                      if state.requests else False),
+            "firstRequestHasLesson": LESSON_ID in first_request,
+            "firstRequestHasFacet": FACET_ID in first_request,
+            "firstRequestHasPath": PATH_ID in first_request,
             "laterRequestsHaveNoLesson": not leaked,
             "traceHasRebuild": bool(rebuild),
             "rebuildMatchesLesson": LESSON_ID in removed_ids,
+            "rebuildMatchesFacet": FACET_ID in removed_ids,
+            "rebuildMatchesPath": PATH_ID in removed_ids,
             "rebuildSourceIsBrief": rebuild.get("deliveredIdsSource") == "brief_info",
             "epochPublished": bool(rebuild.get("prefixEpochPublished")),
             "epochRecorded": bool(epoch_rows),
