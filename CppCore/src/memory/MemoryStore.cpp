@@ -5750,6 +5750,28 @@ taskforge::Json MemoryStore::creditSummary(const std::string& scopeId) const {
     return out;
 }
 
+double MemoryStore::creditTotalForOrigin(const std::string& scopeId,
+                                         const std::string& itemKey,
+                                         const std::string& taskType,
+                                         const std::string& origin,
+                                         const std::string& since) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || itemKey.empty()) return 0.0;
+    std::string sql = "SELECT COALESCE(SUM(ABS(delta_success)+ABS(delta_failure)),0) "
+                      "FROM memory_credit_event WHERE scope_id=? AND item_key=? "
+                      "AND task_type=? AND origin=?";
+    if (!since.empty()) sql += " AND created_at>=?";
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, sql, st, error)) return 0.0;
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, itemKey);
+    bindText(st.stmt, 3, taskType.empty() ? "*" : taskType);
+    bindText(st.stmt, 4, origin);
+    if (!since.empty()) bindText(st.stmt, 5, since);
+    return stepRetry(st.stmt) == SQLITE_ROW ? sqlite3_column_double(st.stmt, 0) : 0.0;
+}
+
 bool MemoryStore::rebuildItemUtility(const std::string& scopeId) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (!db_ || scopeId.empty()) return false;

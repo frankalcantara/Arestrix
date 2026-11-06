@@ -4542,6 +4542,8 @@ TEST(memory_credit_events_are_idempotent_and_aggregate) {
     events.push_back(first);
     events.push_back(second);
     CHECK(store.recordCreditEvents(scope, events));
+    CHECK(std::abs(store.creditTotalForOrigin(scope, "claim:c1", "t",
+                                              "origin-1", "") - 0.75) < 1e-9);
     const auto summary = store.creditSummary(scope);
     CHECK(summary.value("events", 0LL) == 2);
     CHECK(summary.value("items", 0LL) == 1);
