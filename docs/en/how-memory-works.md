@@ -394,6 +394,11 @@ inputs (`minDistinctInputs`, default 3).
 Utility uses the Beta mean with a prior (`(successes + prior) / (successes +
 failures + 2·prior)`) and optional time decay (`mu`). The prior prevents a single
 success from reaching 1.0; out-of-order traces never produce negative decay.
+The telemetry credit ledger records each validator verdict as a `citation`
+event split across the distinct cited items, or as `presence_low_res` across the
+delivered items when nothing was cited. Events are idempotent and update
+`memory_item_utility` in the same transaction; the item key resolves edges
+through `claim_key`.
 When a dependent claim is retracted, expires or stops being active, the path is
 suspended in the same maintenance pass. If all dependencies become valid again,
 it is reactivated; otherwise it can be retired.

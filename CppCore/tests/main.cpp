@@ -4497,6 +4497,48 @@ TEST(memory_knowledge_version_ignores_usage_columns) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_events_are_idempotent_and_aggregate) {
+    using taskforge::memory::MemoryCreditEvent;
+    using taskforge::memory::MemoryStore;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-credit-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string scope = "project:credit-test";
+    std::string error;
+    MemoryStore store((root / "telemetry.db").string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "credit-test"));
+    std::vector<MemoryCreditEvent> events;
+    MemoryCreditEvent first;
+    first.traceId = "trace-1";
+    first.itemKey = "claim:c1";
+    first.taskType = "t";
+    first.kind = "citation";
+    first.origin = "origin-1";
+    first.deltaSuccess = 0.5;
+    MemoryCreditEvent second = first;
+    second.traceId = "trace-2";
+    second.deltaSuccess = 0.25;
+    events.push_back(first);
+    events.push_back(second);
+    CHECK(store.recordCreditEvents(scope, events));
+    const auto summary = store.creditSummary(scope);
+    CHECK(summary.value("events", 0LL) == 2);
+    CHECK(summary.value("items", 0LL) == 1);
+    const auto utility = store.utilityFor(scope, "claim:c1", "t");
+    CHECK(utility.value("source", std::string()) == "ledger");
+    CHECK(utility.value("s", 0.0) == 0.75);
+    CHECK(std::abs(utility.value("utility", 0.0) - (1.75 / 2.75)) < 1e-9);
+    const std::string usageBefore = store.getMeta("usage_version");
+    CHECK(store.recordCreditEvents(scope, events));
+    CHECK(store.creditSummary(scope).value("events", 0LL) == 2);
+    CHECK(store.getMeta("usage_version") == usageBefore);
+    store.close();
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_trace_records_brief_and_searches_with_limits) {
     using taskforge::memory::MemoryBriefInfo;
     using taskforge::memory::MemoryService;
