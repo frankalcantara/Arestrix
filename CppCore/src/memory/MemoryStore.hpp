@@ -743,6 +743,8 @@ public:
     taskforge::Json utilityFor(const std::string& scopeId, const std::string& itemKey,
                                const std::string& taskType) const;
     taskforge::Json creditSummary(const std::string& scopeId) const;
+    // Reconstroi o agregado a partir dos eventos; idempotente.
+    bool rebuildItemUtility(const std::string& scopeId);
     // Reforco/decay de arestas de conhecimento a partir dos IDs usados.
     bool reinforceFromHits(const std::string& scopeId,
                            const std::vector<std::string>& memoryIds,
