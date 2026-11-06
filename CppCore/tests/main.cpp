@@ -4553,6 +4553,13 @@ TEST(memory_credit_events_are_idempotent_and_aggregate) {
     CHECK(store.recordCreditEvents(scope, events));
     CHECK(store.creditSummary(scope).value("events", 0LL) == 2);
     CHECK(store.getMeta("usage_version") == usageBefore);
+    CHECK(store.rebuildItemUtility(scope));
+    const auto rebuilt = store.creditSummary(scope);
+    CHECK(rebuilt.value("events", 0LL) == summary.value("events", 0LL));
+    CHECK(rebuilt.value("items", 0LL) == summary.value("items", 0LL));
+    CHECK(std::abs(rebuilt.value("success", 0.0) - summary.value("success", 0.0)) < 1e-9);
+    CHECK(std::abs(store.utilityFor(scope, "claim:c1", "t").value("utility", 0.0) -
+                   utility.value("utility", 0.0)) < 1e-9);
     store.close();
     fs::remove_all(root, ec);
 }

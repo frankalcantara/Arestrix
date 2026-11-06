@@ -5612,7 +5612,8 @@ std::vector<MemoryHitRecord> MemoryStore::listHits(const std::string& scopeId,
 bool MemoryStore::recordCreditEvents(const std::string& scopeId,
                                      const std::vector<MemoryCreditEvent>& events) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    if (!db_ || scopeId.empty() || events.empty()) return false;
+    if (!db_ || scopeId.empty()) return false;
+    if (events.empty()) return true;
     std::string txnError;
     WriteTxn txn(*this, txnError);
     if (!txn.ok()) {
@@ -5747,6 +5748,56 @@ taskforge::Json MemoryStore::creditSummary(const std::string& scopeId) const {
     out["lowRes"] = scalar("SELECT COALESCE(SUM(low_res),0) FROM memory_item_utility WHERE scope_id=?")
         .value("value", 0.0);
     return out;
+}
+
+bool MemoryStore::rebuildItemUtility(const std::string& scopeId) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty()) return false;
+    std::string txnError;
+    WriteTxn txn(*this, txnError);
+    if (!txn.ok()) {
+        lastError_ = txnError;
+        return false;
+    }
+    Stmt clear;
+    std::string error;
+    if (!prepare(db_, "DELETE FROM memory_item_utility WHERE scope_id=?", clear, error)) {
+        lastError_ = error;
+        return false;
+    }
+    bindText(clear.stmt, 1, scopeId);
+    if (stepRetry(clear.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return false;
+    }
+    Stmt rebuild;
+    if (!prepare(db_, "INSERT INTO memory_item_utility"
+                       "(scope_id,item_key,task_type,model_tier,s,f,low_res,n_events,updated_at) "
+                       "SELECT scope_id,item_key,task_type,model_tier,"
+                       "SUM(delta_success),SUM(delta_failure),"
+                       "SUM(CASE WHEN kind='presence_low_res' "
+                       "THEN delta_success+delta_failure ELSE 0 END),"
+                       "COUNT(*),MAX(created_at) FROM memory_credit_event "
+                       "WHERE scope_id=? GROUP BY item_key,task_type,model_tier",
+                 rebuild, error)) {
+        lastError_ = error;
+        return false;
+    }
+    bindText(rebuild.stmt, 1, scopeId);
+    if (stepRetry(rebuild.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return false;
+    }
+    if (!exec("INSERT INTO memory_meta(key,value) VALUES('usage_version','1') "
+              "ON CONFLICT(key) DO UPDATE SET value=CAST(value AS INTEGER)+1;", &error)) {
+        lastError_ = error;
+        return false;
+    }
+    if (!txn.commit(&txnError)) {
+        lastError_ = txnError;
+        return false;
+    }
+    return true;
 }
 
 bool MemoryStore::touchHitsLastUsed(const std::string& scopeId,

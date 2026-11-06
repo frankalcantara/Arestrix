@@ -3454,6 +3454,59 @@ std::vector<MemoryValidationRecord> MemoryService::listValidations(const std::st
              : std::vector<MemoryValidationRecord>();
 }
 
+taskforge::Json MemoryService::seedLegacyCredit(const std::string& projectId) {
+    auto* s = ensureStore(projectId);
+    auto* t = ensureTelemetry(projectId);
+    if (!s || !t) return taskforge::Json{{"ok", false}, {"error", "memoria indisponivel"}};
+    if (t->getMeta("legacy_credit_seed") == "1") {
+        return taskforge::Json{{"ok", true}, {"alreadySeeded", true}, {"events", 0LL}};
+    }
+    const std::string scope = scopeId(projectId);
+    std::map<std::string, std::pair<double, double>> totals;
+    for (const auto& edge : s->listEdges(scope, "", 20000)) {
+        if (edge.successCount == 0 && edge.failureCount == 0) continue;
+        const std::string key = edge.claimKey.empty() ? "edge:" + edge.id : edge.claimKey;
+        auto& total = totals[key];
+        total.first += static_cast<double>(edge.successCount);
+        total.second += static_cast<double>(edge.failureCount);
+    }
+    for (const auto& playbook : s->listPlaybooks(scope, "", "", 20000)) {
+        if (playbook.successCount == 0 && playbook.failureCount == 0) continue;
+        auto& total = totals["playbook:" + playbook.id];
+        total.first += static_cast<double>(playbook.successCount);
+        total.second += static_cast<double>(playbook.failureCount);
+    }
+    std::vector<MemoryCreditEvent> events;
+    events.reserve(totals.size());
+    for (const auto& [key, total] : totals) {
+        MemoryCreditEvent event;
+        event.traceId = "legacy:" + key;
+        event.itemKey = key;
+        event.taskType = "*";
+        event.kind = "legacy_seed";
+        event.origin = "legacy";
+        event.deltaSuccess = total.first;
+        event.deltaFailure = total.second;
+        events.push_back(std::move(event));
+    }
+    if (!t->recordCreditEvents(scope, events)) {
+        return taskforge::Json{{"ok", false}, {"error", t->lastError()}};
+    }
+    t->setMeta("legacy_credit_seed", "1");
+    return taskforge::Json{{"ok", true}, {"alreadySeeded", false},
+                           {"events", static_cast<long long>(events.size())}};
+}
+
+taskforge::Json MemoryService::rebuildUtility(const std::string& projectId) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    const std::string scope = scopeId(projectId);
+    if (!t->rebuildItemUtility(scope)) {
+        return taskforge::Json{{"ok", false}, {"error", t->lastError()}};
+    }
+    return taskforge::Json{{"ok", true}, {"summary", t->creditSummary(scope)}};
+}
+
 std::vector<MemoryEvidenceRecord> MemoryService::evidenceFor(const std::string& projectId,
                                                              const std::string& targetKind,
                                                              const std::string& targetId,
