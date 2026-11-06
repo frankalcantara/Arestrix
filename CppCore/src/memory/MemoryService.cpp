@@ -1125,6 +1125,12 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
     std::string cacheKey;
     appendKey(cacheKey, projectId);
     appendKey(cacheKey, std::to_string(s->knowledgeVersion()));
+    std::string cachePrefixKey = taskType.empty() ? "default" : taskType;
+    std::vector<std::string> cacheDomains = domains;
+    std::sort(cacheDomains.begin(), cacheDomains.end());
+    for (const auto& domain : cacheDomains) cachePrefixKey += "|" + domain;
+    appendKey(cacheKey, std::to_string(
+        s->latestPrefixEpoch(scopeId(projectId), cachePrefixKey)));
     appendKey(cacheKey, itemId);
     appendKey(cacheKey, taskType);
     appendKey(cacheKey, intent);
@@ -1491,15 +1497,37 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
 std::string MemoryService::buildStablePrefix(const std::string& projectId,
                                              const std::vector<std::string>& domains,
                                              const std::string& taskType, size_t maxTokens,
-                                             MemoryBriefInfo* info) {
+                                             MemoryBriefInfo* info, bool lockedToEpoch) {
     auto* s = ensureStore(projectId);
     if (!s) return std::string();
     std::string prefixKey = taskType.empty() ? "default" : taskType;
     std::vector<std::string> sortedDomains = domains;
     std::sort(sortedDomains.begin(), sortedDomains.end());
     for (const auto& domain : sortedDomains) prefixKey += "|" + domain;
+    // Fase 4: dentro de uma epoca o prefixo e o conjunto publicado, nao as
+    // licoes vivas. Publicar a proxima epoca usa lockedToEpoch=false para
+    // capturar as adicoes que esperavam no bloco volatil.
+    std::set<std::string> epochIds;
+    bool hasEpoch = false;
+    if (lockedToEpoch && prefixEpochConfig(projectId).enabled) {
+        const auto epochs = s->listPrefixEpochs(scopeId(projectId), prefixKey, 1);
+        if (!epochs.empty()) {
+            hasEpoch = true;
+            const auto& items = epochs[0]["itemIds"];
+            if (items.is_array()) {
+                for (const auto& item : items) {
+                    if (item.is_string()) epochIds.insert(item.str());
+                }
+            }
+        }
+    }
     auto lessons = domains.empty() ? s->getLessons(scopeId(projectId))
                                    : s->getLessonsForDomains(scopeId(projectId), domains);
+    if (hasEpoch) {
+        lessons.erase(std::remove_if(lessons.begin(), lessons.end(),
+            [&](const MemoryLesson& lesson) { return epochIds.count(lesson.id) == 0; }),
+            lessons.end());
+    }
     std::sort(lessons.begin(), lessons.end(), [](const MemoryLesson& a, const MemoryLesson& b) {
         return a.id < b.id;
     });
@@ -1514,6 +1542,11 @@ std::string MemoryService::buildStablePrefix(const std::string& projectId,
         for (const auto& playbook : s->listPlaybooks(scopeId(projectId), type, "active", 20)) {
             if (seenPlaybooks.insert(playbook.id).second) playbooks.push_back(playbook);
         }
+    }
+    if (hasEpoch) {
+        playbooks.erase(std::remove_if(playbooks.begin(), playbooks.end(),
+            [&](const MemoryPlaybookRecord& playbook) { return epochIds.count(playbook.id) == 0; }),
+            playbooks.end());
     }
     std::sort(playbooks.begin(), playbooks.end(), [](const MemoryPlaybookRecord& a,
                                                      const MemoryPlaybookRecord& b) {
@@ -1572,7 +1605,7 @@ taskforge::Json MemoryService::publishPrefixEpoch(const std::string& projectId,
     auto* s = ensureStore(projectId);
     if (!s) return taskforge::Json{{"ok", false}, {"error", "memoria indisponivel"}};
     MemoryBriefInfo info;
-    buildStablePrefix(projectId, {}, "", 800, &info);
+    buildStablePrefix(projectId, {}, "", 800, &info, false);
     const std::string contentHash = project::RunnerSecurity::sha256(info.stableBlock);
     const std::string identity = project::RunnerSecurity::sha256(
         "prefix-v1|" + skillHash + "|" + promptTemplateHash + "|" + contentHash);
@@ -1597,6 +1630,7 @@ taskforge::Json MemoryService::publishPrefixEpoch(const std::string& projectId,
         std::lock_guard<std::recursive_mutex> lock(mutex_);
         prefixEpochLastPublish_[projectKey(projectId)] = std::chrono::steady_clock::now();
     }
+    invalidateBriefCache();
     return taskforge::Json{{"ok", true}, {"created", true}, {"epoch", epoch}, {"prefixKey", prefixKey},
                            {"prefixIdentity", identity}, {"contentHash", contentHash}};
 }
@@ -1642,6 +1676,12 @@ bool MemoryService::maybePublishPrefixEpoch(const std::string& projectId,
     }
     const PrefixEpochConfig config = prefixEpochConfig(projectId);
     if (!config.enabled) return false;
+    // Primeira epoca: sem ela nao existe prefixo estavel publicado para
+    // cachear. A publicacao seguinte continua respeitando TTL/limiar.
+    if (prefixEpochs(projectId, prefixKey, 1).empty()) {
+        return publishPrefixEpoch(projectId, prefixKey, skillHash, promptTemplateHash)
+            .value("created", false);
+    }
     const auto now = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point last{};
     {

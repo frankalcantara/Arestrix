@@ -347,7 +347,9 @@ banco de telemetria está indisponível.
 O esquema v8 adiciona `memory_prefix_epoch`. O bloco estável contém apenas
 lições e playbooks ativos, ordenados por `(tipo, id)` e formatados de forma
 determinística, para que utilidade, escores de travessia e estado de trabalho
-não mudem os bytes. `MemoryBriefInfo` carrega o bloco estável, a chave/identidade
+não mudem os bytes. Com `memory.prefixEpochs` ligado, o bloco estável é
+construído a partir da última época publicada; adições feitas depois dessa
+época ficam no bloco dinâmico até a publicação seguinte. `MemoryBriefInfo` carrega o bloco estável, a chave/identidade
 da época, o número da época e `removalSeqStart`; `briefInfoToJson` é o contrato
 consumido pelos pipelines gerados.
 

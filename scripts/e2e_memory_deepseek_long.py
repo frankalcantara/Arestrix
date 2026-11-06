@@ -295,6 +295,9 @@ def main() -> int:
         checks["epochsOneIdentityPerNode"] = all(
             len(identities) <= 1
             for identities in (epochs["usage"].get("prefixIdentitiesByNode") or {}).values())
+        checks["epochsHasPublishedEpoch"] = any(
+            any(epoch > 0 for epoch in epochs_list)
+            for epochs_list in (epochs["usage"].get("prefixEpochsByNode") or {}).values())
         on_cached = int(on["usage"].get("cachedTokens", 0))
         epochs_cached = int(epochs["usage"].get("cachedTokens", 0))
         cache_ratio = (round(epochs_cached / on_cached, 6)

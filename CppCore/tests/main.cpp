@@ -4779,6 +4779,7 @@ TEST(memory_prefix_epoch_identity_and_stable_order) {
     auto& memory = MemoryService::getInstance();
     memory.closeProject(projectId);
     CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    memory.configurePrefixEpochs(projectId, taskforge::Json{{"enabled", true}});
     CHECK(!memory.recordLesson(projectId, "code", "t", "regra beta").empty());
     CHECK(!memory.recordLesson(projectId, "code", "t", "regra alfa").empty());
     MemoryBriefInfo forward;
@@ -4792,24 +4793,43 @@ TEST(memory_prefix_epoch_identity_and_stable_order) {
     CHECK(memory.buildStablePrefix(projectId, {"code"}, "code", 800, &rebuilt) == stable);
     CHECK(rebuilt.prefixIdentity == forward.prefixIdentity);
 
-    const auto firstPublish = memory.publishPrefixEpoch(projectId, "default", "skill-a", "template");
+    const auto firstPublish = memory.publishPrefixEpoch(projectId, "code|code", "skill-a", "template");
     CHECK(firstPublish.value("created", false));
     const long long epoch = firstPublish.value("epoch", 0LL);
     CHECK(epoch > 0);
     const std::string firstIdentity = firstPublish.value("prefixIdentity", std::string());
-    const auto sameContent = memory.publishPrefixEpoch(projectId, "default", "skill-b", "template");
+    const auto sameContent = memory.publishPrefixEpoch(projectId, "code|code", "skill-b", "template");
     CHECK(!sameContent.value("created", true));
     CHECK(sameContent.value("epoch", 0LL) == epoch);
     CHECK(sameContent.value("prefixIdentity", std::string()) != firstIdentity);
 
     CHECK(!memory.recordLesson(projectId, "code", "t", "regra gama").empty());
-    const auto epochsBefore = memory.prefixEpochs(projectId, "default", 10);
+    const auto epochsBefore = memory.prefixEpochs(projectId, "code|code", 10);
     CHECK(epochsBefore.size() == 1);
     CHECK(epochsBefore[0].value("epoch", 0LL) == epoch);
-    const auto nextPublish = memory.publishPrefixEpoch(projectId, "default", "skill-b", "template");
+    MemoryBriefInfo waiting;
+    const std::string stableBeforePublish =
+        memory.buildStablePrefix(projectId, {"code"}, "code", 800, &waiting);
+    CHECK(stableBeforePublish.find("regra gama") == std::string::npos);
+    CHECK(waiting.prefixEpoch == epoch);
+    MemoryBriefInfo waitingBrief;
+    const std::string volatileBrief = memory.buildBrief(
+        projectId, "pipeline", {"code"}, {}, 800, true, false, &waitingBrief, "code");
+    CHECK(waitingBrief.stableBlock.find("regra gama") == std::string::npos);
+    CHECK(volatileBrief.find("regra gama") != std::string::npos);
+    const auto nextPublish = memory.publishPrefixEpoch(projectId, "code|code", "skill-b", "template");
     CHECK(nextPublish.value("created", false));
     CHECK(nextPublish.value("epoch", 0LL) == epoch + 1);
-    const auto epochsAfter = memory.prefixEpochs(projectId, "default", 10);
+    MemoryBriefInfo afterPublish;
+    const std::string stableAfterPublish =
+        memory.buildStablePrefix(projectId, {"code"}, "code", 800, &afterPublish);
+    CHECK(stableAfterPublish.find("regra gama") != std::string::npos);
+    CHECK(afterPublish.prefixEpoch == epoch + 1);
+    MemoryBriefInfo afterBrief;
+    memory.buildBrief(projectId, "pipeline", {"code"}, {}, 800, true, false,
+                      &afterBrief, "code");
+    CHECK(afterBrief.stableBlock.find("regra gama") != std::string::npos);
+    const auto epochsAfter = memory.prefixEpochs(projectId, "code|code", 10);
     CHECK(epochsAfter.size() == 2);
     bool hasGamma = false;
     for (const auto& id : epochsAfter[0]["itemIds"]) {

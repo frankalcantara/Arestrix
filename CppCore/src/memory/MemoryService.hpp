@@ -147,7 +147,8 @@ public:
     std::string buildStablePrefix(const std::string& projectId,
                                   const std::vector<std::string>& domains,
                                   const std::string& taskType, size_t maxTokens,
-                                  MemoryBriefInfo* info = nullptr);
+                                  MemoryBriefInfo* info = nullptr,
+                                  bool lockedToEpoch = true);
     taskforge::Json removedSince(const std::string& projectId, long long removalSeqStart,
                                  const std::vector<std::pair<std::string, std::string>>& delivered);
     taskforge::Json prefixEpochs(const std::string& projectId, const std::string& prefixKey = "",

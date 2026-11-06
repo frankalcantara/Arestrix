@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
   "phase": "fix5-phase0",
-  "generatedAt": "2026-11-06T14:42:35.978801+00:00",
+  "generatedAt": "2026-11-06T15:28:33.025073+00:00",
   "version": "2.6.0",
   "cpp": {
     "command": [
       "C:\\Projetos\\Arestrix\\build\\arestrix_tests.exe"
     ],
     "exitCode": 0,
-    "seconds": 127.98,
-    "stdoutTail": "t_database\n[MemoryDatabaseGuard] Banco de memoria invalido (file is not a database) colocado em quarentena.\n[  OK  ] memory_database_guard_quarantines_corrupt_database\n[ RUN  ] standalone_runner_service_and_manifest_config\n[Graph] Node added: n1 (Tarefa1)\n[Graph] Node added: ask (Pergunta)\n[  OK  ] standalone_runner_service_and_manifest_config\n[ RUN  ] runner_security_audit_blocks_secrets_fail_closed\n[Graph] Node added: bad_node (LeakNode)\n[  OK  ] runner_security_audit_blocks_secrets_fail_closed\n[ RUN  ] runner_security_cryptographic_signature_fail_closed\n[  OK  ] runner_security_cryptographic_signature_fail_closed\n[ RUN  ] runner_corporate_vault_and_memory_purging\n[  OK  ] runner_corporate_vault_and_memory_purging\n[ RUN  ] runner_enterprise_packaging_wix_msix_and_intune\n[  OK  ] runner_enterprise_packaging_wix_msix_and_intune\n[ RUN  ] github_source_validation\n[  OK  ] github_source_validation\n[ RUN  ] github_source_rejects_invalid_requests\n[  OK  ] github_source_rejects_invalid_requests\n[ RUN  ] github_source_live_manifest\n  [skip] ARESTRIX_GITHUB_LIVE nao definido\n[  OK  ] github_source_live_manifest\n[ RUN  ] github_source_mock_manifest_and_asset\n  [skip] ARESTRIX_TEST_MODE/ARESTRIX_TEST_GITHUB_* nao definidos\n[  OK  ] github_source_mock_manifest_and_asset\n[ RUN  ] context_router_classifies_content\n[  OK  ] context_router_classifies_content\n[ RUN  ] smart_crusher_samples_long_arrays_and_keeps_keys\n[  OK  ] smart_crusher_samples_long_arrays_and_keeps_keys\n[ RUN  ] log_compressor_collapses_repeats_and_keeps_critical\n[  OK  ] log_compressor_collapses_repeats_and_keeps_critical\n[ RUN  ] ccr_store_roundtrip_and_rejects_invalid_tokens\n[  OK  ] ccr_store_roundtrip_and_rejects_invalid_tokens\n[ RUN  ] ccr_store_prunes_across_runs_by_size_and_age\n[  OK  ] ccr_store_prunes_across_runs_by_size_and_age\n[ RUN  ] code_compressor_keeps_signatures_and_collapses_bodies\n[  OK  ] code_compressor_keeps_signatures_and_collapses_bodies\n[ RUN  ] code_compressor_handles_python_indentation\n[  OK  ] code_compressor_handles_python_indentation\n[ RUN  ] context_compressor_compresses_only_tool_messages_with_ccr\n[  OK  ] context_compressor_compresses_only_tool_messages_with_ccr\n[ RUN  ] prose_tokenizer_bpe_bytelevel_offsets\n[  OK  ] prose_tokenizer_bpe_bytelevel_offsets\n[ RUN  ] prose_tokenizer_wordpiece_offsets\n[  OK  ] prose_tokenizer_wordpiece_offsets\n[ RUN  ] prose_tokenizer_rejects_other_models\n[  OK  ] prose_tokenizer_rejects_other_models\n[ RUN  ] prose_compressor_keeps_urls_and_punctuation\n[  OK  ] prose_compressor_keeps_urls_and_punctuation\n[ RUN  ] prose_compressor_is_noop_without_model\n[  OK  ] prose_compressor_is_noop_without_model\n[ RUN  ] prose_compressor_chunks_long_text_into_windows\n[  OK  ] prose_compressor_chunks_long_text_into_windows\n[ RUN  ] prose_compressor_skips_blocks_above_max_tokens_without_truncating\n[  OK  ] prose_compressor_skips_blocks_above_max_tokens_without_truncating\n[ RUN  ] prose_model_manifest_pins_urls_and_hashes\n[  OK  ] prose_model_manifest_pins_urls_and_hashes\n[ RUN  ] prose_model_installer_rejects_unknown_variant\n[  OK  ] prose_model_installer_rejects_unknown_variant\n[ RUN  ] prose_recommendation_picks_variant_by_machine_capacity\n[  OK  ] prose_recommendation_picks_variant_by_machine_capacity\n[ RUN  ] prose_recommendation_picks_discrete_gpu_for_directml\n[  OK  ] prose_recommendation_picks_discrete_gpu_for_directml\n[ RUN  ] context_compressor_skips_code_of_files_being_edited\n[  OK  ] context_compressor_skips_code_of_files_being_edited\n[ RUN  ] context_compressor_is_off_by_default_and_never_touches_last_message\n[  OK  ] context_compressor_is_off_by_default_and_never_touches_last_message\n\n3551/3551 verificacoes passaram\n[MCP] internal: O host do servidor MCP nao e publico (recusado por protecao contra DNS rebinding). o endereco 127.0.0.1 nao e publico\n[GitSyncService] Secret scan guard: Commit bloqueado: detectada chave de API ou segredo em texto puro no projeto. Utilize referencias ${VAR} para variaveis de ambiente.\n",
-    "checksPassed": 3551,
-    "checksTotal": 3551
+    "seconds": 103.81,
+    "stdoutTail": "t_database\n[MemoryDatabaseGuard] Banco de memoria invalido (file is not a database) colocado em quarentena.\n[  OK  ] memory_database_guard_quarantines_corrupt_database\n[ RUN  ] standalone_runner_service_and_manifest_config\n[Graph] Node added: n1 (Tarefa1)\n[Graph] Node added: ask (Pergunta)\n[  OK  ] standalone_runner_service_and_manifest_config\n[ RUN  ] runner_security_audit_blocks_secrets_fail_closed\n[Graph] Node added: bad_node (LeakNode)\n[  OK  ] runner_security_audit_blocks_secrets_fail_closed\n[ RUN  ] runner_security_cryptographic_signature_fail_closed\n[  OK  ] runner_security_cryptographic_signature_fail_closed\n[ RUN  ] runner_corporate_vault_and_memory_purging\n[  OK  ] runner_corporate_vault_and_memory_purging\n[ RUN  ] runner_enterprise_packaging_wix_msix_and_intune\n[  OK  ] runner_enterprise_packaging_wix_msix_and_intune\n[ RUN  ] github_source_validation\n[  OK  ] github_source_validation\n[ RUN  ] github_source_rejects_invalid_requests\n[  OK  ] github_source_rejects_invalid_requests\n[ RUN  ] github_source_live_manifest\n  [skip] ARESTRIX_GITHUB_LIVE nao definido\n[  OK  ] github_source_live_manifest\n[ RUN  ] github_source_mock_manifest_and_asset\n  [skip] ARESTRIX_TEST_MODE/ARESTRIX_TEST_GITHUB_* nao definidos\n[  OK  ] github_source_mock_manifest_and_asset\n[ RUN  ] context_router_classifies_content\n[  OK  ] context_router_classifies_content\n[ RUN  ] smart_crusher_samples_long_arrays_and_keeps_keys\n[  OK  ] smart_crusher_samples_long_arrays_and_keeps_keys\n[ RUN  ] log_compressor_collapses_repeats_and_keeps_critical\n[  OK  ] log_compressor_collapses_repeats_and_keeps_critical\n[ RUN  ] ccr_store_roundtrip_and_rejects_invalid_tokens\n[  OK  ] ccr_store_roundtrip_and_rejects_invalid_tokens\n[ RUN  ] ccr_store_prunes_across_runs_by_size_and_age\n[  OK  ] ccr_store_prunes_across_runs_by_size_and_age\n[ RUN  ] code_compressor_keeps_signatures_and_collapses_bodies\n[  OK  ] code_compressor_keeps_signatures_and_collapses_bodies\n[ RUN  ] code_compressor_handles_python_indentation\n[  OK  ] code_compressor_handles_python_indentation\n[ RUN  ] context_compressor_compresses_only_tool_messages_with_ccr\n[  OK  ] context_compressor_compresses_only_tool_messages_with_ccr\n[ RUN  ] prose_tokenizer_bpe_bytelevel_offsets\n[  OK  ] prose_tokenizer_bpe_bytelevel_offsets\n[ RUN  ] prose_tokenizer_wordpiece_offsets\n[  OK  ] prose_tokenizer_wordpiece_offsets\n[ RUN  ] prose_tokenizer_rejects_other_models\n[  OK  ] prose_tokenizer_rejects_other_models\n[ RUN  ] prose_compressor_keeps_urls_and_punctuation\n[  OK  ] prose_compressor_keeps_urls_and_punctuation\n[ RUN  ] prose_compressor_is_noop_without_model\n[  OK  ] prose_compressor_is_noop_without_model\n[ RUN  ] prose_compressor_chunks_long_text_into_windows\n[  OK  ] prose_compressor_chunks_long_text_into_windows\n[ RUN  ] prose_compressor_skips_blocks_above_max_tokens_without_truncating\n[  OK  ] prose_compressor_skips_blocks_above_max_tokens_without_truncating\n[ RUN  ] prose_model_manifest_pins_urls_and_hashes\n[  OK  ] prose_model_manifest_pins_urls_and_hashes\n[ RUN  ] prose_model_installer_rejects_unknown_variant\n[  OK  ] prose_model_installer_rejects_unknown_variant\n[ RUN  ] prose_recommendation_picks_variant_by_machine_capacity\n[  OK  ] prose_recommendation_picks_variant_by_machine_capacity\n[ RUN  ] prose_recommendation_picks_discrete_gpu_for_directml\n[  OK  ] prose_recommendation_picks_discrete_gpu_for_directml\n[ RUN  ] context_compressor_skips_code_of_files_being_edited\n[  OK  ] context_compressor_skips_code_of_files_being_edited\n[ RUN  ] context_compressor_is_off_by_default_and_never_touches_last_message\n[  OK  ] context_compressor_is_off_by_default_and_never_touches_last_message\n\n3558/3558 verificacoes passaram\n[MCP] internal: O host do servidor MCP nao e publico (recusado por protecao contra DNS rebinding). o endereco 127.0.0.1 nao e publico\n[GitSyncService] Secret scan guard: Commit bloqueado: detectada chave de API ou segredo em texto puro no projeto. Utilize referencias ${VAR} para variaveis de ambiente.\n",
+    "checksPassed": 3558,
+    "checksTotal": 3558
   },
   "baseline": {
     "command": [
@@ -22,7 +22,7 @@
       "--check"
     ],
     "exitCode": 0,
-    "seconds": 19.23,
+    "seconds": 11.39,
     "stdoutTail": "Linha de base da memoria: 3 execucao(oes) de C:\\Projetos\\Arestrix\\tests\\fixtures\\memory-baseline\\pipeline.json\n  conjunto curado: 5 licoes, 3 fatos, 1 playbook\n  execucao 1/3 concluida\n  execucao 2/3 concluida\n  execucao 3/3 concluida\n  execucoes=3 tokens=7314 chamadas=15 brief_chars=6795 hits(inj=39, cons=21, cit_brief=6, cit_busca=0, inv=0)\n  linha de base reproduzida (todos os contadores dentro da tolerancia)\n"
   },
   "ab": {
@@ -31,7 +31,7 @@
       "scripts/e2e_memory_ab.py"
     ],
     "exitCode": 0,
-    "seconds": 64.47,
+    "seconds": 40.64,
     "stdoutTail": "  tarefas=20 repeticoes=3 bracos=2 execucoes=120\n  aprovacao ON=1.00 OFF=1.00 delta=0.00 IC95=[0.00,0.00]\n  conhecimento congelado inalterado: True\nExecutor A/B executado com sucesso ponta a ponta.\n"
   },
   "phase1Concurrency": {
@@ -63,7 +63,7 @@
   "deepseek": {
     "report": "tests\\fixtures\\memory-deepseek-long-report.json",
     "pass": true,
-    "totalTokens": 50315
+    "totalTokens": 51077
   },
   "promptReduction": {
     "report": "tests\\fixtures\\memory-prompt-reduction-report.json",
