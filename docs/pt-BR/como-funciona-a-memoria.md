@@ -361,7 +361,10 @@ desligada, então uma remoção confirmada não volta a ser servida. A tabela de
 na identidade do prefixo. `memory.prefixEpochs` aceita `enabled`,
 `cacheTtlSeconds`, `maxPending` e `minIntervalSeconds`; agentes gerados publicam
 quando o TTL ocioso expira ou quando o limiar de adições pendentes é atingido
-após o intervalo mínimo. Remoções publicam imediatamente.
+após o intervalo mínimo. Remoções publicam imediatamente. Uma mudança de skill
+ou de molde gera uma `prefix_identity` nova no trace sem avançar a época quando
+o hash do conteúdo publicado não mudou; o passo de prefixo registra a
+identidade, a época e `delivered_ids_source`.
 
 ### Lentes e facetas
 

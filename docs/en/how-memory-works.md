@@ -358,7 +358,10 @@ epoch table records the published item set; provider and model remain trace
 data, not prefix identity. `memory.prefixEpochs` accepts `enabled`,
 `cacheTtlSeconds`, `maxPending` and `minIntervalSeconds`; generated agents
 publish when the idle TTL expires or when the pending-addition threshold is
-reached after the minimum interval. Removals publish immediately.
+reached after the minimum interval. Removals publish immediately. A skill or
+template change produces a new `prefix_identity` in the trace without advancing
+the epoch when the published content hash is unchanged; the prefix step records
+the identity, epoch and `delivered_ids_source`.
 
 ### Lenses and facets
 
