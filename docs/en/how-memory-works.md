@@ -401,7 +401,8 @@ delivered items when nothing was cited. Events are idempotent and update
 through `claim_key`. With `memory.utility.source='ledger'`, hybrid recall
 multiplies each candidate score by its ledger utility; `edge` is the default and
 keeps the previous ranking. Legacy edge/playbook counters are imported once as
-`legacy_seed`, and the aggregate can be rebuilt from events.
+`legacy_seed`, and the aggregate can be rebuilt from events with
+`memory utility status|seed|rebuild`.
 When a dependent claim is retracted, expires or stops being active, the path is
 suspended in the same maintenance pass. If all dependencies become valid again,
 it is reactivated; otherwise it can be retired.

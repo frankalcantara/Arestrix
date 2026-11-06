@@ -3507,6 +3507,12 @@ taskforge::Json MemoryService::rebuildUtility(const std::string& projectId) {
     return taskforge::Json{{"ok", true}, {"summary", t->creditSummary(scope)}};
 }
 
+taskforge::Json MemoryService::creditSummary(const std::string& projectId) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    return taskforge::Json{{"ok", true}, {"summary", t->creditSummary(scopeId(projectId))}};
+}
+
 std::vector<MemoryEvidenceRecord> MemoryService::evidenceFor(const std::string& projectId,
                                                              const std::string& targetKind,
                                                              const std::string& targetId,

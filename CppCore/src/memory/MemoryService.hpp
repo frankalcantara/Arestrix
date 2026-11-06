@@ -353,6 +353,7 @@ public:
     // Fase 5: semente unica dos contadores legados e reconstrucao do agregado.
     taskforge::Json seedLegacyCredit(const std::string& projectId);
     taskforge::Json rebuildUtility(const std::string& projectId);
+    taskforge::Json creditSummary(const std::string& projectId);
     // E4: evidencia autocontida, lida do banco de conhecimento (nao da telemetria).
     std::vector<MemoryEvidenceRecord> evidenceFor(const std::string& projectId,
                                                   const std::string& targetKind,
