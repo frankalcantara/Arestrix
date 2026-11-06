@@ -1576,6 +1576,17 @@ taskforge::Json MemoryService::publishPrefixEpoch(const std::string& projectId,
     const std::string contentHash = project::RunnerSecurity::sha256(info.stableBlock);
     const std::string identity = project::RunnerSecurity::sha256(
         "prefix-v1|" + skillHash + "|" + promptTemplateHash + "|" + contentHash);
+    const auto latest = s->listPrefixEpochs(scopeId(projectId), prefixKey, 1);
+    if (!latest.empty() && latest[0].value("contentHash", std::string()) == contentHash) {
+        // Mudanca de skill ou de molde muda a identidade dos bytes, mas nao o
+        // conjunto publicado: a epoca continua a mesma e nenhum cache e pago.
+        return taskforge::Json{{"ok", true},
+                               {"created", false},
+                               {"epoch", latest[0].value("epoch", 0LL)},
+                               {"prefixKey", prefixKey},
+                               {"prefixIdentity", identity},
+                               {"contentHash", contentHash}};
+    }
     long long epoch = 0;
     taskforge::Json itemIds = taskforge::Json::array();
     for (const auto& id : info.stableIds) itemIds.push_back(id);
@@ -1586,7 +1597,7 @@ taskforge::Json MemoryService::publishPrefixEpoch(const std::string& projectId,
         std::lock_guard<std::recursive_mutex> lock(mutex_);
         prefixEpochLastPublish_[projectKey(projectId)] = std::chrono::steady_clock::now();
     }
-    return taskforge::Json{{"ok", true}, {"epoch", epoch}, {"prefixKey", prefixKey},
+    return taskforge::Json{{"ok", true}, {"created", true}, {"epoch", epoch}, {"prefixKey", prefixKey},
                            {"prefixIdentity", identity}, {"contentHash", contentHash}};
 }
 
@@ -1626,8 +1637,8 @@ bool MemoryService::maybePublishPrefixEpoch(const std::string& projectId,
                                             const std::string& promptTemplateHash,
                                             int pendingAdditions, bool removal) {
     if (removal) {
-        publishPrefixEpoch(projectId, prefixKey, skillHash, promptTemplateHash);
-        return true;
+        return publishPrefixEpoch(projectId, prefixKey, skillHash, promptTemplateHash)
+            .value("created", false);
     }
     const PrefixEpochConfig config = prefixEpochConfig(projectId);
     if (!config.enabled) return false;
@@ -1645,8 +1656,8 @@ bool MemoryService::maybePublishPrefixEpoch(const std::string& projectId,
     const bool pendingDue = pendingAdditions >= config.maxPending &&
         (last.time_since_epoch().count() == 0 || elapsed >= config.minIntervalSeconds);
     if (!idleDue && !pendingDue) return false;
-    publishPrefixEpoch(projectId, prefixKey, skillHash, promptTemplateHash);
-    return true;
+    return publishPrefixEpoch(projectId, prefixKey, skillHash, promptTemplateHash)
+        .value("created", false);
 }
 
 void MemoryService::invalidateBriefCache() {

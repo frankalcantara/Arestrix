@@ -63,7 +63,10 @@ def read_usage(project: pathlib.Path) -> dict:
     db = project / ".arestrix" / "telemetry" / "telemetry.db"
     if not db.exists():
         return {"calls": 0, "promptTokens": 0, "completionTokens": 0,
-                "totalTokens": 0, "briefChars": 0, "injected": 0, "consulted": 0,
+                "totalTokens": 0, "briefChars": 0, "cachedTokens": 0,
+                "cacheWriteTokens": 0, "prefixHashes": [], "prefixHashCount": 0,
+                "prefixHashesByNode": {}, "prefixIdentitiesByNode": {},
+                "prefixEpochsByNode": {}, "injected": 0, "consulted": 0,
                 "used": 0, "episodes": 0}
     conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     try:
@@ -90,6 +93,8 @@ def read_usage(project: pathlib.Path) -> dict:
         compaction_trace = None
         prefix_hashes = []
         prefix_hashes_by_node = {}
+        prefix_identities_by_node = {}
+        prefix_epochs_by_node = {}
         try:
             for node_id, steps_json in conn.execute(
                     "SELECT node_id,steps_json FROM memory_trace"):
@@ -105,16 +110,33 @@ def read_usage(project: pathlib.Path) -> dict:
                             prefix_hashes_by_node.setdefault(node_id, [])
                             if prefix_hash not in prefix_hashes_by_node[node_id]:
                                 prefix_hashes_by_node[node_id].append(prefix_hash)
+                        prefix_identity = step.get("prefixIdentity", "")
+                        if prefix_identity:
+                            prefix_identities_by_node.setdefault(node_id, [])
+                            if prefix_identity not in prefix_identities_by_node[node_id]:
+                                prefix_identities_by_node[node_id].append(prefix_identity)
+                        prefix_epochs_by_node.setdefault(node_id, set()).add(
+                            int(step.get("prefixEpoch", 0) or 0))
         except (sqlite3.Error, json.JSONDecodeError):
             compaction_trace = None
             prefix_hashes = []
             prefix_hashes_by_node = {}
+            prefix_identities_by_node = {}
+            prefix_epochs_by_node = {}
         return {
             "calls": int(usage[0] or 0),
             "promptTokens": int(usage[1] or 0),
             "completionTokens": int(usage[2] or 0),
             "totalTokens": int(usage[3] or 0),
             "briefChars": int(usage[4] or 0),
+            "cachedTokens": int(usage[5] or 0),
+            "cacheWriteTokens": int(usage[6] or 0),
+            "prefixHashes": prefix_hashes,
+            "prefixHashCount": len(prefix_hashes),
+            "prefixHashesByNode": prefix_hashes_by_node,
+            "prefixIdentitiesByNode": prefix_identities_by_node,
+            "prefixEpochsByNode": {
+                node: sorted(epochs) for node, epochs in prefix_epochs_by_node.items()},
             "injected": int(hits[0] or 0),
             "consulted": int(hits[1] or 0),
             "used": int(hits[2] or 0),
@@ -270,6 +292,9 @@ def main() -> int:
         checks["epochsOneHashPerNode"] = all(
             len(hashes) <= 1
             for hashes in (epochs["usage"].get("prefixHashesByNode") or {}).values())
+        checks["epochsOneIdentityPerNode"] = all(
+            len(identities) <= 1
+            for identities in (epochs["usage"].get("prefixIdentitiesByNode") or {}).values())
         on_cached = int(on["usage"].get("cachedTokens", 0))
         epochs_cached = int(epochs["usage"].get("cachedTokens", 0))
         cache_ratio = (round(epochs_cached / on_cached, 6)

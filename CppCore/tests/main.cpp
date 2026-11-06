@@ -4768,6 +4768,76 @@ TEST(memory_brief_exposes_stable_block_and_removal_snapshot) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_prefix_epoch_identity_and_stable_order) {
+    using taskforge::memory::MemoryBriefInfo;
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-prefix-identity-test";
+    const std::string projectId = "prefix-identity-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(!memory.recordLesson(projectId, "code", "t", "regra beta").empty());
+    CHECK(!memory.recordLesson(projectId, "code", "t", "regra alfa").empty());
+    MemoryBriefInfo forward;
+    const std::string stable =
+        memory.buildStablePrefix(projectId, {"code"}, "code", 800, &forward);
+    CHECK(!stable.empty());
+    CHECK(std::is_sorted(forward.stableIds.begin(), forward.stableIds.end()));
+    CHECK(stable.find("regra alfa") != std::string::npos);
+    CHECK(stable.find("regra beta") != std::string::npos);
+    MemoryBriefInfo rebuilt;
+    CHECK(memory.buildStablePrefix(projectId, {"code"}, "code", 800, &rebuilt) == stable);
+    CHECK(rebuilt.prefixIdentity == forward.prefixIdentity);
+
+    const auto firstPublish = memory.publishPrefixEpoch(projectId, "default", "skill-a", "template");
+    CHECK(firstPublish.value("created", false));
+    const long long epoch = firstPublish.value("epoch", 0LL);
+    CHECK(epoch > 0);
+    const std::string firstIdentity = firstPublish.value("prefixIdentity", std::string());
+    const auto sameContent = memory.publishPrefixEpoch(projectId, "default", "skill-b", "template");
+    CHECK(!sameContent.value("created", true));
+    CHECK(sameContent.value("epoch", 0LL) == epoch);
+    CHECK(sameContent.value("prefixIdentity", std::string()) != firstIdentity);
+
+    CHECK(!memory.recordLesson(projectId, "code", "t", "regra gama").empty());
+    const auto epochsBefore = memory.prefixEpochs(projectId, "default", 10);
+    CHECK(epochsBefore.size() == 1);
+    CHECK(epochsBefore[0].value("epoch", 0LL) == epoch);
+    const auto nextPublish = memory.publishPrefixEpoch(projectId, "default", "skill-b", "template");
+    CHECK(nextPublish.value("created", false));
+    CHECK(nextPublish.value("epoch", 0LL) == epoch + 1);
+    const auto epochsAfter = memory.prefixEpochs(projectId, "default", 10);
+    CHECK(epochsAfter.size() == 2);
+    bool hasGamma = false;
+    for (const auto& id : epochsAfter[0]["itemIds"]) {
+        const std::string lessonId = id.is_string() ? id.get<std::string>() : std::string();
+        if (lessonId.empty()) continue;
+        for (const auto& lesson : memory.getLessons(projectId, "code")) {
+            if (lesson.id == lessonId && lesson.lessonRule == "regra gama") hasGamma = true;
+        }
+    }
+    CHECK(hasGamma);
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_removal_redaction_covers_facets_paths_and_history) {
+    std::string text =
+        "brief [MEMO:lesson-1]\nsearch [MEMO:psg:abc]\npath [MEMO:path:xyz]\n"
+        "facet [MEMO:facet-1]\nunrelated [MEMO:lesson-2]";
+    taskforge::rt::redactMemoryMarkers(
+        text, {"lesson-1", "psg:abc", "path:xyz", "facet-1"});
+    CHECK(text.find("[MEMO:lesson-1]") == std::string::npos);
+    CHECK(text.find("psg:abc") == std::string::npos);
+    CHECK(text.find("path:xyz") == std::string::npos);
+    CHECK(text.find("facet-1") == std::string::npos);
+    CHECK(text.find("[item removido da memoria]") != std::string::npos);
+    CHECK(text.find("[MEMO:lesson-2]") != std::string::npos);
+}
+
 TEST(memory_recompile_playbook_uses_surviving_lessons) {
     using taskforge::memory::MemoryStore;
     namespace fs = std::filesystem;

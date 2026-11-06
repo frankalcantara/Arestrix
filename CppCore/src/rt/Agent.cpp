@@ -76,6 +76,23 @@ std::vector<std::string> citedMemoryIds(const std::string& text) {
 
 } // namespace
 
+void redactMemoryMarkers(std::string& text, const std::set<std::string>& ids) {
+    for (const auto& id : ids) {
+        if (id.empty()) continue;
+        const std::string marker = "[MEMO:" + id + "]";
+        size_t pos = 0;
+        while ((pos = text.find(marker, pos)) != std::string::npos) {
+            text.replace(pos, marker.size(), "[item removido da memoria]");
+            pos += 26;
+        }
+        pos = 0;
+        while ((pos = text.find(id, pos)) != std::string::npos) {
+            text.replace(pos, id.size(), "[removido]");
+            pos += 10;
+        }
+    }
+}
+
 void init() {
     std::cout << std::unitbuf;
     std::cerr << std::unitbuf;
@@ -390,15 +407,34 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     std::vector<DeliveredRef> delivered;
     long long removalSeqStart = 0;
     std::string deliveredSource = "brief_info";
+    std::string deliveredPrefixKey;
+    long long deliveredPrefixEpoch = 0;
+    auto rememberDelivered = [&](const std::string& kind, const std::string& id) {
+        if (id.empty()) return;
+        const bool seen = std::any_of(delivered.begin(), delivered.end(),
+            [&](const DeliveredRef& ref) { return ref.kind == kind && ref.id == id; });
+        if (!seen) delivered.push_back({kind, id});
+    };
     auto appendDelivered = [&](const Json& values, const std::string& kind) {
         if (!values.is_array()) return;
         for (const auto& value : values) {
-            if (!value.is_string()) continue;
-            const std::string id = value.str();
-            if (id.empty()) continue;
-            const bool seen = std::any_of(delivered.begin(), delivered.end(),
-                [&](const DeliveredRef& ref) { return ref.kind == kind && ref.id == id; });
-            if (!seen) delivered.push_back({kind, id});
+            if (value.is_string()) rememberDelivered(kind, value.str());
+        }
+    };
+    auto appendDeliveredFromText = [&](const std::string& text) {
+        size_t pos = 0;
+        while ((pos = text.find("[MEMO:", pos)) != std::string::npos) {
+            const size_t start = pos + 6;
+            const size_t end = text.find(']', start);
+            if (end == std::string::npos) break;
+            const std::string id = text.substr(start, end - start);
+            std::string kind = "fact";
+            if (id.rfind("psg:", 0) == 0) kind = "passage";
+            else if (id.rfind("path:", 0) == 0) kind = "path";
+            else if (id.rfind("playbook", 0) == 0) kind = "playbook";
+            else if (id.rfind("lesson", 0) == 0) kind = "lesson";
+            rememberDelivered(kind, id);
+            pos = end + 1;
         }
     };
     const auto deliveredJson = jsonutil::tryParse(deliveredMemoryJson);
@@ -418,24 +454,11 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         appendDelivered(deliveredJson->contains("facetIds") ? (*deliveredJson)["facetIds"]
                                                              : Json::array(), "facet");
         removalSeqStart = deliveredJson->value("removalSeqStart", 0LL);
+        deliveredPrefixKey = deliveredJson->value("prefixKey", std::string());
+        deliveredPrefixEpoch = deliveredJson->value("prefixEpoch", 0LL);
     } else if (!memoryContext.empty()) {
         deliveredSource = "parsed";
-        size_t pos = 0;
-        while ((pos = memoryContext.find("[MEMO:", pos)) != std::string::npos) {
-            const size_t start = pos + 6;
-            const size_t end = memoryContext.find(']', start);
-            if (end == std::string::npos) break;
-            const std::string id = memoryContext.substr(start, end - start);
-            std::string kind = "fact";
-            if (id.rfind("psg:", 0) == 0) kind = "passage";
-            else if (id.rfind("path:", 0) == 0) kind = "path";
-            else if (id.rfind("playbook", 0) == 0) kind = "playbook";
-            else if (id.rfind("lesson", 0) == 0) kind = "lesson";
-            const bool seen = std::any_of(delivered.begin(), delivered.end(),
-                [&](const DeliveredRef& ref) { return ref.kind == kind && ref.id == id; });
-            if (!seen) delivered.push_back({kind, id});
-            pos = end + 1;
-        }
+        appendDeliveredFromText(memoryContext);
     }
 
     const std::string loopKey = runKey.empty() ? nodeId : runKey;
@@ -774,13 +797,21 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                   {"calls", usage.calls}, {"retries", usage.retries},
                   {"memoryEnabled", spec.memoryEnabled}, {"memoryContextChars", usage.memoryContextChars}};
         const std::string prefixHash = project::RunnerSecurity::sha256(chat.systemCacheable);
+        const std::string prefixIdentity = project::RunnerSecurity::sha256(
+            "prefix-v1|" + project::RunnerSecurity::sha256(skillText) + "|" +
+            intentTemplateHash + "|" + prefixHash);
         meta["prefixHash"] = prefixHash;
+        meta["prefixIdentity"] = prefixIdentity;
         if (!spec.memoryProjectId.empty() && spec.memoryEnabled) {
+            json prefixStep{{"kind", "prefix"}, {"prefixHash", prefixHash},
+                            {"prefixIdentity", prefixIdentity},
+                            {"prefixEpoch", deliveredPrefixEpoch},
+                            {"deliveredIdsSource", deliveredSource},
+                            {"cachedTokens", usage.cachedTokens},
+                            {"cacheWriteTokens", usage.cacheWriteTokens}};
+            if (!deliveredPrefixKey.empty()) prefixStep["prefixKey"] = deliveredPrefixKey;
             memory.recordTraceStep(spec.memoryProjectId, runId, nodeId, itemId, taskType,
-                                   intentTemplateHash, inputHash,
-                                   json{{"kind", "prefix"}, {"prefixHash", prefixHash},
-                                        {"cachedTokens", usage.cachedTokens},
-                                        {"cacheWriteTokens", usage.cacheWriteTokens}});
+                                   intentTemplateHash, inputHash, prefixStep);
         }
         json compactionMeta = json::object();
         if (!spec.memoryProjectId.empty() && spec.memoryContextCompaction) {
@@ -905,21 +936,16 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                     for (const auto& item : removed) {
                         if (item.is_object()) removedIds.insert(item.value("id", std::string()));
                     }
-                    auto scrub = [&](std::string& text) {
-                        for (const auto& id : removedIds) {
-                            if (id.empty()) continue;
-                            const std::string marker = "[MEMO:" + id + "]";
-                            size_t pos = 0;
-                            while ((pos = text.find(marker, pos)) != std::string::npos) {
-                                text.replace(pos, marker.size(), "[item removido da memoria]");
-                                pos += 26;
-                            }
-                            pos = 0;
-                            while ((pos = text.find(id, pos)) != std::string::npos) {
-                                text.replace(pos, id.size(), "[removido]");
-                                pos += 10;
-                            }
+                    if (scopeRemoval) {
+                        // A linha "scope" nao carrega os ids entregues; sem esta
+                        // expansao o historico de ferramentas ficaria com os
+                        // marcadores de todos os itens do escopo.
+                        for (const auto& ref : delivered) {
+                            if (!ref.id.empty()) removedIds.insert(ref.id);
                         }
+                    }
+                    auto scrub = [&](std::string& text) {
+                        redactMemoryMarkers(text, removedIds);
                     };
                     scrub(chat.systemCacheable);
                     scrub(chat.systemDynamic);
@@ -960,6 +986,12 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                             compactionMemoryIds.end()) {
                             compactionMemoryIds.push_back(id);
                         }
+                        std::string kind = "fact";
+                        if (id.rfind("psg:", 0) == 0) kind = "passage";
+                        else if (id.rfind("path:", 0) == 0) kind = "path";
+                        else if (id.rfind("playbook", 0) == 0) kind = "playbook";
+                        else if (id.rfind("lesson", 0) == 0) kind = "lesson";
+                        rememberDelivered(kind, id);
                     }
                     compactedRequest = chat;
                     compactedRequest.messages = compaction.messages;
@@ -1032,6 +1064,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                     ToolResult res = futures[i].get();
                     const auto& call = t.toolCalls[i];
                     recordToolCall(call, !res.isError);
+                    appendDeliveredFromText(res.content);
                     AgentTelemetryEmitter::emitToolEnd(nodeId, call.name, !res.isError);
                     if (res.isError) {
                         AgentTelemetryEmitter::emitEvent(nodeId, "log",
@@ -1061,6 +1094,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                         res = executeTool(tctx, call.name, call.args);
                     }
                     recordToolCall(call, !res.isError);
+                    appendDeliveredFromText(res.content);
                     AgentTelemetryEmitter::emitToolEnd(nodeId, call.name, !res.isError);
                     if (res.isError) {
                         AgentTelemetryEmitter::emitEvent(nodeId, "log", json{{"logLine", "[" + call.name + "] " + res.content.substr(0, 300)}});
