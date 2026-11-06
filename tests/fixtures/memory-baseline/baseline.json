@@ -15,7 +15,7 @@
   },
   "metrics": {
     "runs": 3,
-    "elapsedSeconds": 12.063,
+    "elapsedSeconds": 13.781,
     "tokens": {
       "prompt": 6465,
       "completion": 849,
@@ -61,6 +61,8 @@
           "memory_audit": 8,
           "memory_claim_extraction": 0,
           "memory_claim_path": 0,
+          "memory_credit_audit": 0,
+          "memory_credit_event": 0,
           "memory_edge": 8,
           "memory_edge_lens": 0,
           "memory_embedding": 0,
@@ -68,6 +70,7 @@
           "memory_evidence": 9,
           "memory_facet": 0,
           "memory_hit": 0,
+          "memory_item_utility": 0,
           "memory_job": 0,
           "memory_lens": 0,
           "memory_lineage": 0,
@@ -98,6 +101,7 @@
           "memory_trace": 0,
           "memory_usage": 0,
           "memory_validation": 0,
+          "memory_validator_audit": 0,
           "memory_working": 0
         },
         "seeded": {
@@ -105,6 +109,8 @@
           "memory_audit": 0,
           "memory_claim_extraction": 0,
           "memory_claim_path": 0,
+          "memory_credit_audit": 0,
+          "memory_credit_event": 0,
           "memory_edge": 8,
           "memory_edge_lens": 0,
           "memory_embedding": 0,
@@ -112,6 +118,7 @@
           "memory_evidence": 9,
           "memory_facet": 0,
           "memory_hit": 0,
+          "memory_item_utility": 0,
           "memory_job": 0,
           "memory_lens": 0,
           "memory_lineage": 0,
@@ -142,6 +149,7 @@
           "memory_trace": 0,
           "memory_usage": 0,
           "memory_validation": 0,
+          "memory_validator_audit": 0,
           "memory_working": 0
         },
         "created": {
@@ -149,6 +157,8 @@
           "memory_audit": 8,
           "memory_claim_extraction": 0,
           "memory_claim_path": 0,
+          "memory_credit_audit": 0,
+          "memory_credit_event": 0,
           "memory_edge": 0,
           "memory_edge_lens": 0,
           "memory_embedding": 0,
@@ -156,6 +166,7 @@
           "memory_evidence": 0,
           "memory_facet": 0,
           "memory_hit": 0,
+          "memory_item_utility": 0,
           "memory_job": 0,
           "memory_lens": 0,
           "memory_lineage": 0,
@@ -186,6 +197,7 @@
           "memory_trace": 0,
           "memory_usage": 0,
           "memory_validation": 0,
+          "memory_validator_audit": 0,
           "memory_working": 0
         }
       },
@@ -195,6 +207,8 @@
           "memory_audit": 0,
           "memory_claim_extraction": 0,
           "memory_claim_path": 0,
+          "memory_credit_audit": 0,
+          "memory_credit_event": 0,
           "memory_edge": 0,
           "memory_edge_lens": 0,
           "memory_embedding": 0,
@@ -202,6 +216,7 @@
           "memory_evidence": 0,
           "memory_facet": 0,
           "memory_hit": 48,
+          "memory_item_utility": 0,
           "memory_job": 0,
           "memory_lens": 0,
           "memory_lineage": 0,
@@ -232,6 +247,7 @@
           "memory_trace": 9,
           "memory_usage": 9,
           "memory_validation": 3,
+          "memory_validator_audit": 0,
           "memory_working": 0
         },
         "seeded": {
@@ -239,6 +255,8 @@
           "memory_audit": 0,
           "memory_claim_extraction": 0,
           "memory_claim_path": 0,
+          "memory_credit_audit": 0,
+          "memory_credit_event": 0,
           "memory_edge": 0,
           "memory_edge_lens": 0,
           "memory_embedding": 0,
@@ -246,6 +264,7 @@
           "memory_evidence": 0,
           "memory_facet": 0,
           "memory_hit": 0,
+          "memory_item_utility": 0,
           "memory_job": 0,
           "memory_lens": 0,
           "memory_lineage": 0,
@@ -276,6 +295,7 @@
           "memory_trace": 0,
           "memory_usage": 0,
           "memory_validation": 0,
+          "memory_validator_audit": 0,
           "memory_working": 0
         },
         "created": {
@@ -283,6 +303,8 @@
           "memory_audit": 0,
           "memory_claim_extraction": 0,
           "memory_claim_path": 0,
+          "memory_credit_audit": 0,
+          "memory_credit_event": 0,
           "memory_edge": 0,
           "memory_edge_lens": 0,
           "memory_embedding": 0,
@@ -290,6 +312,7 @@
           "memory_evidence": 0,
           "memory_facet": 0,
           "memory_hit": 48,
+          "memory_item_utility": 0,
           "memory_job": 0,
           "memory_lens": 0,
           "memory_lineage": 0,
@@ -320,13 +343,14 @@
           "memory_trace": 9,
           "memory_usage": 9,
           "memory_validation": 3,
+          "memory_validator_audit": 0,
           "memory_working": 0
         }
       }
     },
     "schemaFingerprint": {
-      "knowledge": "74acf9414f9e10fa",
-      "telemetry": "74acf9414f9e10fa"
+      "knowledge": "9c84755f34d4b154",
+      "telemetry": "9c84755f34d4b154"
     }
   }
 }

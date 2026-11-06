@@ -33,7 +33,7 @@ namespace {
 // (knowledge_version e memory_trace); fix5=5 (WriteTxn, unique edge_hash e
 // memory_operation); fix5=6 (catalogo, context_key e claim_key); fix5=7
 // (linhagem, lapides, fila de exclusao e retracao); fix5=8 (epocas de prefixo).
-constexpr int kMemorySchemaVersion = 8;
+constexpr int kMemorySchemaVersion = 9;
 
 // Fase 1: tabelas de conhecimento/telemetria com scope_id que o purge precisa
 // cobrir. memory_tombstone e a unica excecao explicita (Fase 3).
@@ -44,7 +44,9 @@ const char* const kScopedKnowledgeTables[] = {
     "memory_path_schema", "memory_playbook", "memory_policy", "memory_proposal",
     "memory_source", "memory_state", "memory_state_history", "memory_state_key",
     "memory_trace", "memory_usage", "memory_validation", "memory_working",
-    "memory_lineage", "memory_job", "memory_removal_log", "memory_prefix_epoch"};
+    "memory_lineage", "memory_job", "memory_removal_log", "memory_prefix_epoch",
+    "memory_credit_event", "memory_item_utility", "memory_credit_audit",
+    "memory_validator_audit"};
 
 struct Stmt {
     sqlite3_stmt* stmt = nullptr;
@@ -957,6 +959,68 @@ CREATE TABLE IF NOT EXISTS memory_prefix_epoch (
 CREATE INDEX IF NOT EXISTS idx_memory_prefix_epoch_latest
   ON memory_prefix_epoch(scope_id, prefix_key, epoch DESC);
 
+-- Fase 5: livro de credito fracionario no banco da telemetria. As tabelas
+-- nascem no mesmo esquema para manter o purge e o backfill uniformes.
+CREATE TABLE IF NOT EXISTS memory_credit_event (
+  id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  trace_id TEXT NOT NULL,
+  item_key TEXT NOT NULL,
+  task_type TEXT NOT NULL DEFAULT '',
+  model_tier TEXT NOT NULL DEFAULT '',
+  delta_success REAL NOT NULL DEFAULT 0,
+  delta_failure REAL NOT NULL DEFAULT 0,
+  kind TEXT NOT NULL,
+  origin TEXT NOT NULL DEFAULT '',
+  capped INTEGER NOT NULL DEFAULT 0,
+  audit_id TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  UNIQUE(trace_id, item_key, kind, audit_id)
+);
+CREATE INDEX IF NOT EXISTS idx_memory_credit_event_scope
+  ON memory_credit_event(scope_id, item_key, task_type);
+CREATE INDEX IF NOT EXISTS idx_memory_credit_event_trace
+  ON memory_credit_event(scope_id, trace_id);
+
+CREATE TABLE IF NOT EXISTS memory_item_utility (
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  item_key TEXT NOT NULL,
+  task_type TEXT NOT NULL DEFAULT '',
+  model_tier TEXT NOT NULL DEFAULT '',
+  s REAL NOT NULL DEFAULT 0,
+  f REAL NOT NULL DEFAULT 0,
+  low_res REAL NOT NULL DEFAULT 0,
+  n_events INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(scope_id, item_key, task_type, model_tier)
+);
+
+CREATE TABLE IF NOT EXISTS memory_credit_audit (
+  id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  trace_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  arms_json TEXT NOT NULL DEFAULT '[]',
+  tokens INTEGER NOT NULL DEFAULT 0,
+  snapshot_ref TEXT NOT NULL DEFAULT '',
+  input_hash TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memory_credit_audit_scope
+  ON memory_credit_audit(scope_id, status, created_at);
+
+CREATE TABLE IF NOT EXISTS memory_validator_audit (
+  id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  validator TEXT NOT NULL,
+  trace_id TEXT NOT NULL,
+  reviewer TEXT NOT NULL DEFAULT '',
+  verdict TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memory_validator_audit_validator
+  ON memory_validator_audit(scope_id, validator, created_at);
+
 CREATE TABLE IF NOT EXISTS memory_playbook (
   id TEXT PRIMARY KEY,
   scope_id TEXT NOT NULL REFERENCES memory_scope(id),
@@ -1029,29 +1093,6 @@ CREATE INDEX IF NOT EXISTS idx_memory_claim_path_path ON memory_claim_path(path_
     }
     if (!exec("INSERT OR IGNORE INTO memory_meta(key,value) VALUES('knowledge_version','0');", &error)) {
         return false;
-    }
-    {
-        // O contador e incrementado na mesma transacao da escrita: triggers
-        // cobrem insercao, atualizacao e remocao de qualquer tabela de
-        // conhecimento. Telemetria nao tem trigger.
-        const char* tables[] = {"memory_scope", "memory_node", "memory_alias", "memory_edge",
-                                "memory_working", "memory_state", "memory_state_history",
-                                "memory_playbook", "memory_evidence", "memory_source",
-                                "memory_passage", "memory_lens", "memory_edge_lens", "memory_facet",
-                                "memory_path_schema", "memory_path", "memory_path_claim",
-                                "memory_path_stats", "memory_path_input", "memory_path_event",
-                                "memory_claim_path", "memory_lineage", "memory_tombstone",
-                                "memory_removal_log"};
-        std::string triggers;
-        for (const char* table : tables) {
-            for (const char* event : {"INSERT", "UPDATE", "DELETE"}) {
-                triggers += "CREATE TRIGGER IF NOT EXISTS trg_kv_" + std::string(table) + "_" +
-                            event + " AFTER " + event + " ON " + table +
-                            " BEGIN UPDATE memory_meta SET value=CAST(value AS INTEGER)+1 "
-                            "WHERE key='knowledge_version'; END;\n";
-            }
-        }
-        if (!exec(triggers, &error)) return false;
     }
     addColumnIfMissing(db_, "memory_usage", "retries", "INTEGER NOT NULL DEFAULT 0");
     addColumnIfMissing(db_, "memory_usage", "outcome", "TEXT NOT NULL DEFAULT ''");
@@ -1387,7 +1428,77 @@ DELETE FROM memory_hit WHERE rowid NOT IN
         try { storedVersion = std::stoi(versionText); } catch (...) { storedVersion = 0; }
     }
     if (storedVersion < kMemorySchemaVersion) {
+        WriteTxn txn(*this, error);
+        if (!txn.ok()) return false;
+        int currentVersion = 0;
+        const std::string currentText = getMeta("schema_version");
+        if (!currentText.empty()) {
+            try { currentVersion = std::stoi(currentText); } catch (...) { currentVersion = 0; }
+        }
+        if (currentVersion < kMemorySchemaVersion) {
+        // Fase 5: knowledge_version so muda quando uma coluna de conhecimento
+        // muda. Contadores de uso, utilidade, last_used e estatisticas de
+        // caminho ficam no banco de conhecimento por compatibilidade, mas nao
+        // invalidam o prefixo nem o cache de brief.
+        const char* allTables[] = {
+            "memory_scope", "memory_node", "memory_alias", "memory_edge",
+            "memory_working", "memory_state", "memory_state_history",
+            "memory_playbook", "memory_evidence", "memory_source",
+            "memory_passage", "memory_lens", "memory_edge_lens", "memory_facet",
+            "memory_path_schema", "memory_path", "memory_path_claim",
+            "memory_path_stats", "memory_path_input", "memory_path_event",
+            "memory_claim_path", "memory_lineage", "memory_tombstone",
+            "memory_removal_log"};
+        std::string drops;
+        for (const char* table : allTables) {
+            for (const char* event : {"INSERT", "UPDATE", "DELETE"}) {
+                drops += "DROP TRIGGER IF EXISTS trg_kv_" + std::string(table) + "_" +
+                         event + ";\n";
+            }
+        }
+        if (!exec(drops, &error)) return false;
+
+        const char* tables[] = {
+            "memory_scope", "memory_node", "memory_alias", "memory_edge",
+            "memory_working", "memory_state", "memory_state_history",
+            "memory_playbook", "memory_evidence", "memory_source",
+            "memory_passage", "memory_lens", "memory_edge_lens", "memory_facet",
+            "memory_path_schema", "memory_path", "memory_path_claim",
+            "memory_path_input", "memory_claim_path", "memory_lineage",
+            "memory_tombstone", "memory_removal_log"};
+        const std::string edgeKnowledgeColumns =
+            "scope_id,src_id,dst_id,relation,value_json,valid_from,valid_to,"
+            "recorded_at,confidence,status,superseded_by,source_kind,source_ref,"
+            "evidence_hash,edge_hash,metadata,context_key,claim_key,dormant_at,retracted_at";
+        const std::string playbookKnowledgeColumns =
+            "scope_id,task_type,title,steps_json,preconditions_json,status,"
+            "source_ref,evidence_json,created_at,updated_at";
+        std::string triggers;
+        auto bump = [](const std::string& name, const std::string& event,
+                       const std::string& table, const std::string& columns) {
+            std::string sql = "CREATE TRIGGER " + name + " AFTER " + event;
+            if (!columns.empty()) sql += " OF " + columns;
+            sql += " ON " + table +
+                   " BEGIN UPDATE memory_meta SET value=CAST(value AS INTEGER)+1 "
+                   "WHERE key='knowledge_version'; END;\n";
+            return sql;
+        };
+        for (const char* table : tables) {
+            const std::string name = std::string("trg_kv_") + table;
+            triggers += bump(name + "_INSERT", "INSERT", table, "");
+            if (std::string(table) == "memory_edge") {
+                triggers += bump(name + "_UPDATE", "UPDATE", table, edgeKnowledgeColumns);
+            } else if (std::string(table) == "memory_playbook") {
+                triggers += bump(name + "_UPDATE", "UPDATE", table, playbookKnowledgeColumns);
+            } else {
+                triggers += bump(name + "_UPDATE", "UPDATE", table, "");
+            }
+            triggers += bump(name + "_DELETE", "DELETE", table, "");
+        }
+        if (!exec(triggers, &error)) return false;
         setMeta("schema_version", std::to_string(kMemorySchemaVersion));
+        }
+        if (!txn.commit(&error)) return false;
     }
     if (durableSync_ && getMeta("catalog_fingerprint").empty()) {
         setMeta("catalog_fingerprint", MemoryCatalog::instance().fingerprint());
