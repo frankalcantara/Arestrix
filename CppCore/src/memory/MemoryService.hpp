@@ -354,6 +354,10 @@ public:
     taskforge::Json seedLegacyCredit(const std::string& projectId);
     taskforge::Json rebuildUtility(const std::string& projectId);
     taskforge::Json creditSummary(const std::string& projectId);
+    // Fase 5: outbox de credito quando a telemetria falha.
+    bool appendCreditOutbox(const std::string& projectId,
+                            const std::vector<MemoryCreditEvent>& events);
+    taskforge::Json drainCreditOutbox(const std::string& projectId);
     // E4: evidencia autocontida, lida do banco de conhecimento (nao da telemetria).
     std::vector<MemoryEvidenceRecord> evidenceFor(const std::string& projectId,
                                                   const std::string& targetKind,

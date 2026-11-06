@@ -4498,6 +4498,38 @@ TEST(memory_knowledge_version_ignores_usage_columns) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_outbox_drains_once) {
+    using taskforge::memory::MemoryCreditEvent;
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-outbox-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "credit-outbox-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    MemoryCreditEvent event;
+    event.traceId = "trace-outbox";
+    event.itemKey = "claim:outbox";
+    event.taskType = "t";
+    event.kind = "citation";
+    event.origin = "origin-outbox";
+    event.deltaSuccess = 0.5;
+    CHECK(memory.appendCreditOutbox(projectId, {event}));
+    const auto drained = memory.drainCreditOutbox(projectId);
+    CHECK(drained.value("ok", false));
+    CHECK(drained.value("drained", 0LL) == 1);
+    const auto summary = memory.creditSummary(projectId);
+    CHECK(summary.value("ok", false));
+    CHECK(summary["summary"].value("events", 0LL) == 1);
+    CHECK(memory.drainCreditOutbox(projectId).value("drained", -1LL) == 0);
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_utility_config_parses_ledger_source) {
     using taskforge::memory::MemoryService;
     auto& memory = MemoryService::getInstance();

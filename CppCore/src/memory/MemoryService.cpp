@@ -3357,6 +3357,7 @@ std::string MemoryService::recordValidation(const std::string& projectId,
                                             bool reinforce) {
     auto* t = ensureTelemetry(projectId);
     if (!t) return "";
+    drainCreditOutbox(projectId);
     MemoryValidationRecord copy = validation;
     if (copy.scopeId.empty()) copy.scopeId = scopeId(projectId);
     const std::string scope = scopeId(projectId);
@@ -3438,7 +3439,9 @@ std::string MemoryService::recordValidation(const std::string& projectId,
                 else event.deltaFailure = effective;
                 events.push_back(std::move(event));
             }
-            t->recordCreditEvents(scope, events);
+            if (!t->recordCreditEvents(scope, events)) {
+                appendCreditOutbox(projectId, events);
+            }
         }
     }
     // E1: com o interruptor ligado, o veredito e o unico caminho de reforco.
@@ -3541,6 +3544,81 @@ taskforge::Json MemoryService::creditSummary(const std::string& projectId) {
     auto* t = ensureTelemetry(projectId);
     if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
     return taskforge::Json{{"ok", true}, {"summary", t->creditSummary(scopeId(projectId))}};
+}
+
+namespace {
+std::string creditOutboxPath(const std::string& telemetryPath) {
+    if (telemetryPath.empty()) return std::string();
+    const fs::path db(telemetryPath);
+    return (db.parent_path() / "credit-outbox.jsonl").string();
+}
+} // namespace
+
+bool MemoryService::appendCreditOutbox(const std::string& projectId,
+                                       const std::vector<MemoryCreditEvent>& events) {
+    if (events.empty()) return true;
+    const std::string path = creditOutboxPath(telemetryDatabasePath(projectId));
+    if (path.empty()) return false;
+    std::error_code ec;
+    fs::create_directories(fs::path(path).parent_path(), ec);
+    std::ofstream out(path, std::ios::binary | std::ios::app);
+    if (!out) return false;
+    for (const auto& event : events) {
+        out << taskforge::Json{
+                   {"traceId", event.traceId},
+                   {"itemKey", event.itemKey},
+                   {"taskType", event.taskType},
+                   {"modelTier", event.modelTier},
+                   {"deltaSuccess", event.deltaSuccess},
+                   {"deltaFailure", event.deltaFailure},
+                   {"kind", event.kind},
+                   {"origin", event.origin},
+                   {"auditId", event.auditId},
+                   {"capped", event.capped}}.dump()
+            << "\n";
+        out.flush();
+    }
+    return out.good();
+}
+
+taskforge::Json MemoryService::drainCreditOutbox(const std::string& projectId) {
+    const std::string path = creditOutboxPath(telemetryDatabasePath(projectId));
+    if (path.empty()) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    std::error_code ec;
+    if (!fs::is_regular_file(path, ec)) {
+        return taskforge::Json{{"ok", true}, {"drained", 0LL}};
+    }
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return taskforge::Json{{"ok", false}, {"error", "outbox ilegivel"}};
+    std::vector<MemoryCreditEvent> events;
+    std::string line;
+    while (std::getline(in, line)) {
+        const auto parsed = taskforge::jsonutil::tryParse(line);
+        if (!parsed || !parsed->is_object()) continue;
+        MemoryCreditEvent event;
+        event.traceId = parsed->value("traceId", std::string());
+        event.itemKey = parsed->value("itemKey", std::string());
+        event.taskType = parsed->value("taskType", std::string());
+        event.modelTier = parsed->value("modelTier", std::string());
+        event.deltaSuccess = parsed->value("deltaSuccess", 0.0);
+        event.deltaFailure = parsed->value("deltaFailure", 0.0);
+        event.kind = parsed->value("kind", std::string());
+        event.origin = parsed->value("origin", std::string());
+        event.auditId = parsed->value("auditId", std::string());
+        event.capped = parsed->value("capped", false);
+        if (!event.traceId.empty() && !event.itemKey.empty()) {
+            events.push_back(std::move(event));
+        }
+    }
+    in.close();
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    if (!t->recordCreditEvents(scopeId(projectId), events)) {
+        return taskforge::Json{{"ok", false}, {"error", t->lastError()}};
+    }
+    fs::remove(path, ec);
+    return taskforge::Json{{"ok", true},
+                           {"drained", static_cast<long long>(events.size())}};
 }
 
 std::vector<MemoryEvidenceRecord> MemoryService::evidenceFor(const std::string& projectId,

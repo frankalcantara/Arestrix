@@ -47,7 +47,8 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   as `legacy_seed`, and `rebuildUtility` rebuilds the aggregate from events.
   `memory utility status|seed|rebuild` exposes the ledger in the CLI. Credit is
   capped per origin and item/class inside `originWindowDays`; excess credit is
-  recorded with zero delta and `capped=1`.
+  recorded with zero delta and `capped=1`. If a telemetry write fails, events
+  go to `credit-outbox.jsonl` and the next validation drains them once.
 - **Memory fix5 phase 4:** schema v8 adds `memory_prefix_epoch`; `buildBrief`
   now exposes a deterministic `stableBlock`, prefix key/identity, epoch and
   `removalSeqStart`; `briefInfoToJson` carries the delivered id sets to
