@@ -40,7 +40,8 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   epoch immediately. `memory.prefixEpochs` accepts `enabled`,
   `cacheTtlSeconds`, `maxPending` and `minIntervalSeconds`; generated agents
   configure the policy and publish when the idle TTL or pending threshold is
-  reached.
+  reached. `e2e_memory_deepseek_long.py --with-epochs` adds the epoch arm and
+  records cached-token ratio and distinct `prefix_hash` per node.
 - **Memory fix5 phase 3:** schema v7 adds `memory_lineage`,
   `memory_tombstone`, `memory_job`, `memory_removal_log` and
   `memory_edge.retracted_at`; `memory forget` erases one source version or all

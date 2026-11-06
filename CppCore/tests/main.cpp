@@ -4743,6 +4743,19 @@ TEST(memory_brief_exposes_stable_block_and_removal_snapshot) {
     const std::string stable = memory.buildStablePrefix(projectId, {"code"}, "code", 800, &second);
     CHECK(stable == info.stableBlock);
     CHECK(second.prefixIdentity == info.prefixIdentity);
+    {
+        taskforge::memory::MemoryStore other((root / "memory.db").string());
+        std::string otherError;
+        CHECK(other.open(otherError));
+        CHECK(other.setWorking("project:" + projectId, "pipeline", "volatile",
+                               taskforge::Json{{"score", 99}}));
+        other.close();
+    }
+    MemoryBriefInfo afterVolatile;
+    const std::string stableAfterVolatile =
+        memory.buildStablePrefix(projectId, {"code"}, "code", 800, &afterVolatile);
+    CHECK(stableAfterVolatile == info.stableBlock);
+    CHECK(afterVolatile.prefixIdentity == info.prefixIdentity);
     const auto configured = memory.configurePrefixEpochs(
         projectId, taskforge::Json{{"enabled", true}, {"cacheTtlSeconds", 0},
                                    {"maxPending", 2}, {"minIntervalSeconds", 0}});

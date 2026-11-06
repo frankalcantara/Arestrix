@@ -39,6 +39,12 @@ COMPACTION = {
     "maxSummaryTokens": 300,
     "maxItems": 12,
 }
+PREFIX_EPOCHS = {
+    "enabled": True,
+    "cacheTtlSeconds": 0,
+    "maxPending": 1,
+    "minIntervalSeconds": 0,
+}
 
 sys.path.insert(0, str(ROOT / "scripts"))
 import memory_baseline  # noqa: E402
@@ -64,7 +70,8 @@ def read_usage(project: pathlib.Path) -> dict:
         usage = conn.execute(
             "SELECT COALESCE(SUM(calls),0),COALESCE(SUM(prompt_tokens),0),"
             "COALESCE(SUM(completion_tokens),0),COALESCE(SUM(total_tokens),0),"
-            "COALESCE(SUM(memory_context_chars),0) FROM memory_usage"
+            "COALESCE(SUM(memory_context_chars),0),COALESCE(SUM(cached_tokens),0),"
+            "COALESCE(SUM(cache_write_tokens),0) FROM memory_usage"
         ).fetchone()
         hits = conn.execute(
             "SELECT COALESCE(SUM(injected),0),COALESCE(SUM(consulted),0),"
@@ -81,13 +88,27 @@ def read_usage(project: pathlib.Path) -> dict:
         except (sqlite3.Error, json.JSONDecodeError):
             compaction = {}
         compaction_trace = None
+        prefix_hashes = []
+        prefix_hashes_by_node = {}
         try:
-            for (steps_json,) in conn.execute("SELECT steps_json FROM memory_trace"):
+            for node_id, steps_json in conn.execute(
+                    "SELECT node_id,steps_json FROM memory_trace"):
                 for step in json.loads(steps_json or "[]"):
-                    if isinstance(step, dict) and step.get("kind") == "context_compaction":
+                    if not isinstance(step, dict):
+                        continue
+                    if step.get("kind") == "context_compaction":
                         compaction_trace = step
+                    if step.get("kind") == "prefix":
+                        prefix_hash = step.get("prefixHash", "")
+                        if prefix_hash:
+                            prefix_hashes.append(prefix_hash)
+                            prefix_hashes_by_node.setdefault(node_id, [])
+                            if prefix_hash not in prefix_hashes_by_node[node_id]:
+                                prefix_hashes_by_node[node_id].append(prefix_hash)
         except (sqlite3.Error, json.JSONDecodeError):
             compaction_trace = None
+            prefix_hashes = []
+            prefix_hashes_by_node = {}
         return {
             "calls": int(usage[0] or 0),
             "promptTokens": int(usage[1] or 0),
@@ -106,7 +127,8 @@ def read_usage(project: pathlib.Path) -> dict:
 
 
 def run_arm(cli: pathlib.Path, arm: str, disabled: bool, keep: bool,
-            timeout: int, compaction: dict | None = None) -> tuple[dict, pathlib.Path | None]:
+            timeout: int, compaction: dict | None = None,
+            prefix_epochs: dict | None = None) -> tuple[dict, pathlib.Path | None]:
     work = pathlib.Path(tempfile.mkdtemp(prefix=f"arestrix-deepseek-{arm}-"))
     project = work / "projeto"
     project.mkdir(parents=True)
@@ -118,6 +140,13 @@ def run_arm(cli: pathlib.Path, arm: str, disabled: bool, keep: bool,
                 continue
             memory = node.setdefault("agentSettings", {}).setdefault("memory", {})
             memory["contextCompaction"] = compaction
+            break
+    if prefix_epochs:
+        for node in graph_data.get("nodes", []):
+            if node.get("type") != "agent":
+                continue
+            memory = node.setdefault("agentSettings", {}).setdefault("memory", {})
+            memory["prefixEpochs"] = prefix_epochs
             break
     graph.write_text(json.dumps(graph_data, ensure_ascii=False, indent=2), encoding="utf-8")
     old_fixture = memory_baseline.FIXTURE
@@ -179,6 +208,8 @@ def main() -> int:
                         help="aborta depois da execucao se ON+OFF+COMPACTED ultrapassar este teto")
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--keep", action="store_true")
+    parser.add_argument("--with-epochs", action="store_true",
+                        help="executa um quarto braco com memory.prefixEpochs e compara cache/prefix_hash")
     parser.add_argument("--no-write-report", action="store_true")
     args = parser.parse_args()
 
@@ -195,8 +226,14 @@ def main() -> int:
     off, off_dir = run_arm(cli, "off", True, args.keep, args.timeout)
     compacted, compacted_dir = run_arm(cli, "compacted", False, args.keep,
                                        args.timeout, COMPACTION)
+    epochs = None
+    epochs_dir = None
+    if args.with_epochs:
+        epochs, epochs_dir = run_arm(cli, "epochs", False, args.keep,
+                                     args.timeout, prefix_epochs=PREFIX_EPOCHS)
     total_tokens = (on["usage"]["totalTokens"] + off["usage"]["totalTokens"] +
-                    compacted["usage"]["totalTokens"])
+                    compacted["usage"]["totalTokens"] +
+                    (epochs["usage"]["totalTokens"] if epochs else 0))
     on_prompt = on["usage"]["promptTokens"]
     compacted_prompt = compacted["usage"]["promptTokens"]
     compaction_info = compacted["usage"].get("contextCompaction") or {}
@@ -225,6 +262,18 @@ def main() -> int:
         "compactedPromptReduced": 0 < compacted_prompt < on_prompt,
         "withinTokenBudget": total_tokens <= args.max_total_tokens,
     }
+    cache_ratio = None
+    if epochs:
+        checks["epochsExitZero"] = epochs["exitCode"] == 0
+        checks["epochsHasCode"] = EXPECTED_CODE in epochs["final"]
+        checks["epochsHasPrefixObservations"] = bool(epochs["usage"]["prefixHashCount"])
+        checks["epochsOneHashPerNode"] = all(
+            len(hashes) <= 1
+            for hashes in (epochs["usage"].get("prefixHashesByNode") or {}).values())
+        on_cached = int(on["usage"].get("cachedTokens", 0))
+        epochs_cached = int(epochs["usage"].get("cachedTokens", 0))
+        cache_ratio = (round(epochs_cached / on_cached, 6)
+                       if on_cached else None)
     report = {
         "provider": "deepseek",
         "model": "deepseek-chat",
@@ -239,11 +288,14 @@ def main() -> int:
                 100.0 * (on_prompt - compacted_prompt) / on_prompt, 2) if on_prompt else 0.0,
         },
         "compactionConfig": COMPACTION,
+        "prefixEpochsConfig": PREFIX_EPOCHS if epochs else None,
+        "epochsCacheRatio": cache_ratio,
         "checks": checks,
         "pass": all(checks.values()),
         "on": on,
         "off": off,
         "compacted": compacted,
+        "epochs": epochs,
     }
     if not args.no_write_report:
         REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n",
@@ -252,8 +304,10 @@ def main() -> int:
                       "tokens": total_tokens,
                       "promptTokens": report["promptTokens"],
                       "compaction": compaction_info,
+                      "epochsCacheRatio": cache_ratio,
                       "onFinal": on["final"], "offFinal": off["final"],
-                      "compactedFinal": compacted["final"]},
+                      "compactedFinal": compacted["final"],
+                      "epochsFinal": epochs["final"] if epochs else None},
                      ensure_ascii=False, indent=2))
     if args.keep:
         if on_dir:
@@ -262,6 +316,8 @@ def main() -> int:
             print(f"OFF temporario: {off_dir}")
         if compacted_dir:
             print(f"COMPACTED temporario: {compacted_dir}")
+        if epochs_dir:
+            print(f"EPOCHS temporario: {epochs_dir}")
     return 0 if report["pass"] else 1
 
 
