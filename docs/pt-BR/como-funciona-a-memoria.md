@@ -407,7 +407,9 @@ o padrão e mantém o ranqueamento anterior. Contadores legados de arestas e
 playbooks são importados uma vez como `legacy_seed`, e o agregado pode ser
 reconstruído a partir dos eventos com `memory utility status|seed|rebuild`.
 O crédito por origem e item/classe é limitado dentro de `originWindowDays`;
-eventos excedentes ficam com delta zero e `capped=1`.
+eventos excedentes ficam com delta zero e `capped=1`. Se a escrita na
+telemetria falhar, os eventos vão para `credit-outbox.jsonl` e são drenados na
+validação seguinte.
 Quando uma afirmação dependente é retratada, expira ou deixa de estar ativa, o
 caminho correspondente é suspenso na mesma manutenção. Se todas as dependências
 voltarem a vigorar, ele é reativado; caso contrário, pode ser retirado.

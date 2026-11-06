@@ -404,6 +404,8 @@ keeps the previous ranking. Legacy edge/playbook counters are imported once as
 `legacy_seed`, and the aggregate can be rebuilt from events with
 `memory utility status|seed|rebuild`. Credit per origin and item/class is capped
 inside `originWindowDays`; excess events keep a zero delta with `capped=1`.
+If a telemetry write fails, credit events are appended to
+`credit-outbox.jsonl` and drained on the next validation.
 When a dependent claim is retracted, expires or stops being active, the path is
 suspended in the same maintenance pass. If all dependencies become valid again,
 it is reactivated; otherwise it can be retired.
