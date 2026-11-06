@@ -77,13 +77,25 @@ std::vector<std::string> citedMemoryIds(const std::string& text) {
 } // namespace
 
 void redactMemoryMarkers(std::string& text, const std::set<std::string>& ids) {
+    const std::string replacement = "[item removido da memoria]\n";
     for (const auto& id : ids) {
         if (id.empty()) continue;
         const std::string marker = "[MEMO:" + id + "]";
         size_t pos = 0;
         while ((pos = text.find(marker, pos)) != std::string::npos) {
-            text.replace(pos, marker.size(), "[item removido da memoria]");
-            pos += 26;
+            // O item inteiro ocupa uma linha nos blocos de memoria e nos
+            // resultados de ferramentas. Remover so o marcador deixaria o
+            // texto da licao/caminho no prompt e no historico.
+            size_t lineStart = text.rfind('\n', pos);
+            lineStart = lineStart == std::string::npos ? 0 : lineStart + 1;
+            size_t lineEnd = text.find('\n', pos + marker.size());
+            if (lineEnd == std::string::npos) {
+                lineEnd = text.size();
+            } else {
+                ++lineEnd;
+            }
+            text.replace(lineStart, lineEnd - lineStart, replacement);
+            pos = lineStart + replacement.size();
         }
         pos = 0;
         while ((pos = text.find(id, pos)) != std::string::npos) {
@@ -961,6 +973,11 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                     }
                     chat.system = chat.systemCacheable + chat.systemDynamic;
                     removalSeqStart = removal.value("maxSeq", removalSeqStart);
+                    const std::string removalPrefixKey = deliveredPrefixKey.empty()
+                        ? "default" : deliveredPrefixKey;
+                    const bool epochPublished = removalMemory.maybePublishPrefixEpoch(
+                        spec.memoryProjectId, removalPrefixKey,
+                        project::RunnerSecurity::sha256(skillText), intentTemplateHash, 0, true);
                     removalMemory.recordTraceStep(
                         spec.memoryProjectId, runId, nodeId, itemId, routingTaskType,
                         intentTemplateHash, "",
@@ -968,7 +985,9 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                              {"scopeRemoval", scopeRemoval},
                              {"removed", removed},
                              {"removalSeqStart", removalSeqStart},
-                             {"deliveredIdsSource", deliveredSource}});
+                             {"deliveredIdsSource", deliveredSource},
+                             {"prefixKey", removalPrefixKey},
+                             {"prefixEpochPublished", epochPublished}});
                 }
             }
             ChatRequest compactedRequest;

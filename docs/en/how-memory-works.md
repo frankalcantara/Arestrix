@@ -351,8 +351,10 @@ pipelines.
 
 Before every model request, the agent calls `MemoryService::removedSince` with
 the delivered `(kind, id)` set. A matching removal rebuilds the prompt without
-the item and redacts its `[MEMO:<id>]` marker from the tool history; a `scope`
-removal clears the delivered set. The check stays enabled even when epoch
+the item and removes the whole memory line carrying its `[MEMO:<id>]` marker
+from the system prompt and tool history; a `scope` removal clears the delivered
+set. A removal that changes the published stable set also publishes a new epoch
+immediately. The check stays enabled even when epoch
 publication is disabled, so a committed removal cannot be served again. The
 epoch table records the published item set; provider and model remain trace
 data, not prefix identity. `memory.prefixEpochs` accepts `enabled`,

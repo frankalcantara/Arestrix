@@ -353,9 +353,11 @@ consumido pelos pipelines gerados.
 
 Antes de cada requisição ao modelo, o agente chama
 `MemoryService::removedSince` com o conjunto entregue de `(tipo, id)`. Uma
-remoção correspondente reconstrói o prompt sem o item e redige o marcador
-`[MEMO:<id>]` do histórico de ferramentas; uma remoção de `scope` limpa o
-conjunto entregue. A checagem continua ativa mesmo com a publicação de épocas
+remoção correspondente reconstrói o prompt sem o item e remove a linha inteira
+de memória que carrega o marcador `[MEMO:<id>]` do system prompt e do histórico
+de ferramentas; uma remoção de `scope` limpa o conjunto entregue. Uma remoção
+que altera o conjunto estável publicado também publica uma época nova
+imediatamente. A checagem continua ativa mesmo com a publicação de épocas
 desligada, então uma remoção confirmada não volta a ser servida. A tabela de
 época registra o conjunto publicado; provedor e modelo continuam no trace, não
 na identidade do prefixo. `memory.prefixEpochs` aceita `enabled`,
