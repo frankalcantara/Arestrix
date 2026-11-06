@@ -1101,6 +1101,10 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
             addTraceCandidate(candidates, id, "fact", 0.0, 0.0, 0.0);
             delivered.insert(id);
         }
+        for (const auto& id : briefInfo.facetIds) {
+            addTraceCandidate(candidates, id, "facet", 0.0, 0.0, 0.0);
+            delivered.insert(id);
+        }
         if (!briefInfo.workingKeys.empty()) {
             const std::string stateId = "state:" + itemId;
             addTraceCandidate(candidates, stateId, "state", 0.0, 0.0, 0.0);
@@ -1228,6 +1232,32 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
             } else {
                 truncated = true;
             }
+        }
+    }
+
+    // Facetas ativas entram como conhecimento volatil quando as lentes estao
+    // ligadas; o id permite remover a linha inteira durante a execucao.
+    if (includeLessons && maintenanceConfig(projectId).lensesEnabled) {
+        std::string facetText;
+        std::vector<std::string> facetIds;
+        for (const auto& facet : s->listFacets(scopeId(projectId))) {
+            if (facet.status != "active" || facet.description.empty()) continue;
+            if (facetIds.size() >= 4) break;
+            const std::string line = "[FACET] [MEMO:" + facet.id + "] " +
+                oneLine(facet.description, 400) + "\n";
+            if (budget != std::string::npos &&
+                brief.size() + facetText.size() + line.size() + 80 > budget) {
+                truncated = true;
+                break;
+            }
+            facetText += line;
+            facetIds.push_back(facet.id);
+            addTraceCandidate(traceCandidates, facet.id, "facet", 0.0, 0.0, 0.0);
+        }
+        if (!facetText.empty()) {
+            const std::string header = "\n--- [ARESTRIX MEMORY: FACETAS] ---\n";
+            brief += header + facetText;
+            if (info) info->facetIds = facetIds;
         }
     }
 
@@ -2009,6 +2039,9 @@ bool MemoryService::recordBriefHits(const std::string& projectId, const std::str
     }
     for (const auto& id : info.traversalIds) {
         ok = t->recordHit(scope, runId, nodeId, id, "fact", true, false) && ok;
+    }
+    for (const auto& id : info.facetIds) {
+        ok = t->recordHit(scope, runId, nodeId, id, "facet", true, false) && ok;
     }
     for (const auto& key : info.workingKeys) {
         ok = t->recordHit(scope, runId, nodeId, "working:" + key, "working", true, false) && ok;

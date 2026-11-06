@@ -350,7 +350,8 @@ published epoch; additions made after that epoch stay in the dynamic block until
 the next publication. The
 `MemoryBriefInfo` carries the stable block, prefix key/identity/epoch and
 `removalSeqStart`; `briefInfoToJson` is the contract consumed by generated
-pipelines.
+pipelines. With lenses enabled, active facets are delivered as volatile lines
+with their `facetIds`; served paths keep their `pathIds` and claim ids.
 
 Before every model request, the agent calls `MemoryService::removedSince` with
 the delivered `(kind, id)` set. A matching removal rebuilds the prompt without

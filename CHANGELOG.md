@@ -47,8 +47,9 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   the cacheable block; additions after it stay in the dynamic block until the
   next epoch. A confirmed removal publishes a new epoch from the runtime and
   redaction removes the whole memory line from the system prompt/tool history,
-  not only its marker. `scripts/e2e_memory_removal.py` covers mid-run removal and the
-  following request. `e2e_memory_deepseek_long.py --with-epochs` adds the epoch
+  not only its marker. `scripts/e2e_memory_removal.py` covers a lesson, an
+  active facet and a served path removed mid-run, with the following request
+  free of all three. `e2e_memory_deepseek_long.py --with-epochs` adds the epoch
   arm and records cached-token ratio and distinct `prefix_hash`/`prefix_identity`
   per node.
 - **Memory fix5 phase 3:** schema v7 adds `memory_lineage`,

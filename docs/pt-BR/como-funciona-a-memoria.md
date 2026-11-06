@@ -351,7 +351,9 @@ não mudem os bytes. Com `memory.prefixEpochs` ligado, o bloco estável é
 construído a partir da última época publicada; adições feitas depois dessa
 época ficam no bloco dinâmico até a publicação seguinte. `MemoryBriefInfo` carrega o bloco estável, a chave/identidade
 da época, o número da época e `removalSeqStart`; `briefInfoToJson` é o contrato
-consumido pelos pipelines gerados.
+consumido pelos pipelines gerados. Com lentes ligadas, facetas ativas são
+entregues como linhas voláteis com seus `facetIds`; caminhos servidos mantêm
+`pathIds` e ids de afirmações.
 
 Antes de cada requisição ao modelo, o agente chama
 `MemoryService::removedSince` com o conjunto entregue de `(tipo, id)`. Uma
