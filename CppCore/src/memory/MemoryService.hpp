@@ -66,6 +66,17 @@ struct PrefixEpochConfig {
     int minIntervalSeconds = 60;
 };
 
+// Fase 5: fonte da utilidade usada no ranqueamento.
+struct MemoryUtilityConfig {
+    std::string source = "edge";   // edge | ledger
+    double priorA = 1.0;
+    double priorB = 1.0;
+    double maxCreditPerOrigin = 1.0;
+    int originWindowDays = 7;
+};
+MemoryUtilityConfig utilityConfigFromJson(const taskforge::Json& value);
+taskforge::Json utilityConfigToJson(const MemoryUtilityConfig& config);
+
 struct TraversalConfig {
     bool enabled = false;
     TraversalOptions options;
@@ -275,6 +286,8 @@ public:
     PathServingConfig pathServingConfig(const std::string& projectId) const;
     bool configureTraversal(const std::string& projectId, const TraversalConfig& config);
     TraversalConfig traversalConfig(const std::string& projectId) const;
+    bool configureUtility(const std::string& projectId, const taskforge::Json& raw);
+    MemoryUtilityConfig utilityConfig(const std::string& projectId) const;
     taskforge::Json searchGraph(const std::string& projectId, const std::string& text,
                                 size_t limit, const std::string& taskType = "",
                                 const std::string& runId = "", const std::string& nodeId = "",
@@ -420,7 +433,8 @@ private:
                       const std::vector<std::string>& domains,
                       std::vector<MemoryHitRef>* hits, std::string& output,
                       taskforge::Json* traceCandidates = nullptr,
-                      const std::vector<std::string>& lenses = {});
+                      const std::vector<std::string>& lenses = {},
+                      const std::string& taskType = "");
     taskforge::Json servePaths(const std::string& projectId, const std::string& taskType,
                                const std::string& intent,
                                const std::vector<std::string>& access);
@@ -433,7 +447,8 @@ private:
                       const std::vector<std::string>& domains,
                       std::vector<RankedMemory>& output,
                       taskforge::Json* traceCandidates = nullptr,
-                      const std::vector<std::string>& lenses = {});
+                      const std::vector<std::string>& lenses = {},
+                      const std::string& taskType = "");
 
     // Worker de manutencao: o stop ocorre fora de mutex_ para evitar deadlock
     // com uma rodada de consolidacao em andamento.
@@ -458,6 +473,7 @@ private:
     std::map<std::string, std::unique_ptr<MaintenanceRuntime>> maintenance_;
     std::map<std::string, PathServingConfig> pathServing_;   // E16
     std::map<std::string, TraversalConfig> traversal_;       // E17
+    std::map<std::string, MemoryUtilityConfig> utility_;      // Fase 5
     std::map<std::string, PrefixEpochConfig> prefixEpochs_;
     std::map<std::string, std::chrono::steady_clock::time_point> prefixEpochLastPublish_;
 };

@@ -352,6 +352,33 @@ taskforge::Json traversalConfigToJson(const TraversalConfig& config) {
         {"exact", config.options.exact}};
 }
 
+MemoryUtilityConfig utilityConfigFromJson(const taskforge::Json& value) {
+    MemoryUtilityConfig config;
+    if (!value.is_object()) return config;
+    const taskforge::Json utility = value.contains("utility") ? value["utility"]
+                                                              : taskforge::Json();
+    if (!utility.is_object()) return config;
+    const std::string source = utility.value("source", "edge");
+    if (source == "ledger") config.source = "ledger";
+    config.priorA = std::max(0.01, std::min(100.0,
+        utility.value("prior", taskforge::Json::object()).value("a", 1.0)));
+    config.priorB = std::max(0.01, std::min(100.0,
+        utility.value("prior", taskforge::Json::object()).value("b", 1.0)));
+    config.maxCreditPerOrigin = std::max(0.0, std::min(1000.0,
+        utility.value("maxCreditPerOrigin", 1.0)));
+    config.originWindowDays = static_cast<int>(std::max<long long>(
+        1, std::min<long long>(3650, utility.value("originWindowDays", 7))));
+    return config;
+}
+
+taskforge::Json utilityConfigToJson(const MemoryUtilityConfig& config) {
+    return taskforge::Json{
+        {"source", config.source},
+        {"prior", taskforge::Json{{"a", config.priorA}, {"b", config.priorB}}},
+        {"maxCreditPerOrigin", config.maxCreditPerOrigin},
+        {"originWindowDays", config.originWindowDays}};
+}
+
 MemoryService::~MemoryService() {
     stopAllMaintenance();
 }
@@ -1394,7 +1421,8 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
         traceQuery = query;
         std::vector<RankedMemory> ranked;
         taskforge::Json hybridCandidates = taskforge::Json::array();
-        if (!query.empty() && hybridRecall(projectId, query, 4, domains, ranked, &hybridCandidates)) {
+        if (!query.empty() && hybridRecall(projectId, query, 4, domains, ranked,
+                                          &hybridCandidates, {}, taskType)) {
             for (const auto& candidate : hybridCandidates) {
                 if (!candidate.is_object()) continue;
                 addTraceCandidate(traceCandidates,
@@ -2471,7 +2499,8 @@ std::string MemoryService::searchContext(const std::string& projectId, const std
         }
     }
 
-    if (hybridSearch(projectId, text, limit, domains, hits, hybrid, &stepCandidates, lenses)) {
+    if (hybridSearch(projectId, text, limit, domains, hits, hybrid, &stepCandidates,
+                     lenses, taskType)) {
         result = std::move(hybrid);
     } else {
         result = s->searchContext(scopeId(projectId), text, limit, domains, hits, lenses);
@@ -2845,6 +2874,20 @@ TraversalConfig MemoryService::traversalConfig(const std::string& projectId) con
     return it == traversal_.end() ? TraversalConfig{} : it->second;
 }
 
+bool MemoryService::configureUtility(const std::string& projectId,
+                                     const taskforge::Json& raw) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    utility_[projectKey(projectId)] = utilityConfigFromJson(raw);
+    invalidateBriefCache();
+    return true;
+}
+
+MemoryUtilityConfig MemoryService::utilityConfig(const std::string& projectId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    auto it = utility_.find(projectKey(projectId));
+    return it == utility_.end() ? MemoryUtilityConfig{} : it->second;
+}
+
 taskforge::Json MemoryService::searchGraph(const std::string& projectId,
                                            const std::string& text, size_t limit,
                                            const std::string& taskType,
@@ -3150,7 +3193,8 @@ bool MemoryService::hybridRecall(const std::string& projectId, const std::string
                                  size_t limit, const std::vector<std::string>& domains,
                                  std::vector<RankedMemory>& output,
                                  taskforge::Json* traceCandidates,
-                                 const std::vector<std::string>& lenses) {
+                                 const std::vector<std::string>& lenses,
+                                 const std::string& taskType) {
     if (text.empty()) return false;
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     auto* s = ensureStore(projectId);
@@ -3195,6 +3239,34 @@ bool MemoryService::hybridRecall(const std::string& projectId, const std::string
             return memory.kind == "fact" && allowed.count(memory.id) == 0;
         }), output.end());
     }
+    if (utilityConfig(projectId).source == "ledger") {
+        if (auto* telemetry = ensureTelemetry(projectId)) {
+            const std::string scope = scopeId(projectId);
+            const std::string lookupTask = taskType.empty() ? "*" : taskType;
+            for (auto& memory : output) {
+                std::string itemKey;
+                if (memory.kind == "lesson") itemKey = "lesson:" + memory.id;
+                else if (memory.kind == "playbook") itemKey = "playbook:" + memory.id;
+                else if (memory.kind == "path") itemKey = "path:" + memory.id;
+                else if (memory.kind == "passage") itemKey = "psg:" + memory.id;
+                else if (memory.kind == "facet") itemKey = "facet:" + memory.id;
+                else {
+                    MemoryEdgeRecord edge;
+                    if (s->getEdge(scope, memory.id, edge) && !edge.claimKey.empty()) {
+                        itemKey = edge.claimKey;
+                    } else {
+                        itemKey = "edge:" + memory.id;
+                    }
+                }
+                const auto utility = telemetry->utilityFor(scope, itemKey, lookupTask);
+                memory.score *= 0.5 + utility.value("utility", 0.5);
+            }
+            std::sort(output.begin(), output.end(), [](const RankedMemory& a, const RankedMemory& b) {
+                if (a.score != b.score) return a.score > b.score;
+                return a.confidence > b.confidence;
+            });
+        }
+    }
     if (traceCandidates) {
         std::map<std::string, TraceCandidateData> traceMap;
         for (size_t i = 0; i < lexical.size(); ++i) {
@@ -3217,9 +3289,11 @@ bool MemoryService::hybridSearch(const std::string& projectId, const std::string
                                  size_t limit, const std::vector<std::string>& domains,
                                  std::vector<MemoryHitRef>* hits, std::string& output,
                                  taskforge::Json* traceCandidates,
-                                 const std::vector<std::string>& lenses) {
+                                 const std::vector<std::string>& lenses,
+                                 const std::string& taskType) {
     std::vector<RankedMemory> ranked;
-    if (!hybridRecall(projectId, text, limit, domains, ranked, traceCandidates, lenses)) return false;
+    if (!hybridRecall(projectId, text, limit, domains, ranked, traceCandidates, lenses, taskType))
+        return false;
     output = formatRanked(ranked, limit, hits);
     return true;
 }
@@ -3545,6 +3619,7 @@ void MemoryService::closeProject(const std::string& projectId) {
     paths_.erase(projectKey(projectId));
     pathServing_.erase(projectKey(projectId));
     traversal_.erase(projectKey(projectId));
+    utility_.erase(projectKey(projectId));
     readOnly_.erase(projectKey(projectId));
     telemetry_.erase(projectKey(projectId));
     telemetryPaths_.erase(projectKey(projectId));

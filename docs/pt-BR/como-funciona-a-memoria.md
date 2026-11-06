@@ -401,7 +401,9 @@ O livro de crédito da telemetria grava cada veredito do validador como evento
 `citation`, dividido entre os itens citados distintos, ou `presence_low_res`,
 dividido entre os entregues quando nada foi citado. Os eventos são idempotentes e
 atualizam `memory_item_utility` na mesma transação; a chave do item resolve
-arestas por `claim_key`.
+arestas por `claim_key`. Com `memory.utility.source='ledger'`, a recuperação
+híbrida multiplica o escore de cada candidato pela utilidade do livro; `edge` é
+o padrão e mantém o ranqueamento anterior.
 Quando uma afirmação dependente é retratada, expira ou deixa de estar ativa, o
 caminho correspondente é suspenso na mesma manutenção. Se todas as dependências
 voltarem a vigorar, ele é reativado; caso contrário, pode ser retirado.
