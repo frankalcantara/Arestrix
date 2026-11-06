@@ -743,6 +743,10 @@ public:
     taskforge::Json utilityFor(const std::string& scopeId, const std::string& itemKey,
                                const std::string& taskType) const;
     taskforge::Json creditSummary(const std::string& scopeId) const;
+    // Soma absoluta de credito de uma origem para item/classe desde `since`.
+    double creditTotalForOrigin(const std::string& scopeId, const std::string& itemKey,
+                                const std::string& taskType, const std::string& origin,
+                                const std::string& since) const;
     // Reconstroi o agregado a partir dos eventos; idempotente.
     bool rebuildItemUtility(const std::string& scopeId);
     // Reforco/decay de arestas de conhecimento a partir dos IDs usados.

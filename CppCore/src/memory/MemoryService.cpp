@@ -51,6 +51,21 @@ std::string isoNow() {
     return std::string(buffer);
 }
 
+std::string isoDaysAgo(int days) {
+    const auto now = std::chrono::system_clock::now() -
+        std::chrono::hours(24 * std::max(0, days));
+    const std::time_t value = std::chrono::system_clock::to_time_t(now);
+    std::tm tm{};
+#ifdef _WIN32
+    gmtime_s(&tm, &value);
+#else
+    gmtime_r(&value, &tm);
+#endif
+    char buffer[32];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &tm);
+    return std::string(buffer);
+}
+
 std::string projectKey(const std::string& projectId) {
     return projectId.empty() ? "default" : projectId;
 }
@@ -3394,18 +3409,33 @@ std::string MemoryService::recordValidation(const std::string& projectId,
         if (!keys.empty()) {
             const double delta = (copy.ok ? 1.0 : -1.0) /
                 static_cast<double>(keys.size());
+            const auto utility = utilityConfig(projectId);
+            const std::string since = isoDaysAgo(utility.originWindowDays);
+            const std::string lookupTask = taskType.empty() ? "*" : taskType;
+            const std::string traceId = t->getTrace(scope, copy.runId, copy.nodeId)
+                .value("traceId", copy.runId);
             std::vector<MemoryCreditEvent> events;
             events.reserve(keys.size());
             for (const auto& key : keys) {
                 MemoryCreditEvent event;
-                event.traceId = t->getTrace(scope, copy.runId, copy.nodeId)
-                    .value("traceId", copy.runId);
+                event.traceId = traceId;
                 event.itemKey = key;
-                event.taskType = taskType;
+                event.taskType = lookupTask;
                 event.kind = citedKeys.empty() ? "presence_low_res" : "citation";
                 event.origin = copy.runId;
-                if (copy.ok) event.deltaSuccess = delta;
-                else event.deltaFailure = delta;
+                double effective = delta;
+                if (utility.maxCreditPerOrigin > 0.0) {
+                    const double used = t->creditTotalForOrigin(
+                        scope, key, lookupTask, copy.runId, since);
+                    const double remaining = std::max(0.0,
+                        utility.maxCreditPerOrigin - used);
+                    if (std::abs(effective) > remaining) {
+                        effective = (effective < 0 ? -1.0 : 1.0) * remaining;
+                        event.capped = true;
+                    }
+                }
+                if (copy.ok) event.deltaSuccess = effective;
+                else event.deltaFailure = effective;
                 events.push_back(std::move(event));
             }
             t->recordCreditEvents(scope, events);
