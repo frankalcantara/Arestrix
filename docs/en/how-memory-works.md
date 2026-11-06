@@ -454,7 +454,9 @@ The default is `off`.
 ### Retrieval traces
 
 Every knowledge write bumps `knowledge_version` in the same transaction; reads
-and telemetry do not. Every memory-enabled vertex execution records a
+and telemetry do not. Usage-only updates (utility, success/failure counters,
+`last_used`, path statistics) no longer bump it, while `status` and
+`dormant_at` still do. Every memory-enabled vertex execution records a
 `memory_trace` with the version consulted, the brief and searches, candidates
 with lexical/vector/fused scores, position and delivered status, plus the items
 actually used. The trace closes with the episode and is idempotent by

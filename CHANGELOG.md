@@ -30,6 +30,14 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   without it, extraction uses the Studio default model (today, DeepSeek Flash
   4.1 1017 in this installation). A configured but unregistered agent fails
   explicitly instead of silently switching models.
+- **Memory fix5 phase 5 (start):** schema v9 adds the telemetry credit tables
+  (`memory_credit_event`, `memory_item_utility`, `memory_credit_audit`,
+  `memory_validator_audit`). `knowledge_version` no longer changes when only
+  usage columns change in `memory_edge` (`utility`, `success_count`,
+  `failure_count`, `last_used`) or `memory_playbook`
+  (`success_count`, `failure_count`, `confidence`); `memory_path_stats` and
+  `memory_path_event` no longer participate in the version trigger. Knowledge
+  columns, `status` and `dormant_at` still invalidate the version.
 - **Memory fix5 phase 4:** schema v8 adds `memory_prefix_epoch`; `buildBrief`
   now exposes a deterministic `stableBlock`, prefix key/identity, epoch and
   `removalSeqStart`; `briefInfoToJson` carries the delivered id sets to

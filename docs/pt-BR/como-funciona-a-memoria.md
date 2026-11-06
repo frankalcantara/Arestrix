@@ -457,7 +457,10 @@ reprovação ainda não é executado pelo runtime. O modo padrão é `off`.
 ### Traços de recuperação
 
 Toda escrita de conhecimento incrementa `knowledge_version` na mesma transação;
-leituras e telemetria não incrementam. Cada execução de vértice com memória grava
+leituras e telemetria não incrementam. Atualizações só de uso (utilidade,
+contadores de sucesso/falha, `last_used`, estatísticas de caminho) não
+incrementam mais, enquanto `status` e `dormant_at` continuam incrementando.
+Cada execução de vértice com memória grava
 um `memory_trace` com a versão consultada, o brief e as buscas, os candidatos
 com escores lexical/vetorial/fundido, posição e se foram entregues, além dos
 itens efetivamente usados. O traço fecha junto com o episódio e é idempotente por

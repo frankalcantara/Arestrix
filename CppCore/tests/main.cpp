@@ -4431,6 +4431,72 @@ TEST(memory_trace_append_close_is_idempotent_and_counts_limits) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_knowledge_version_ignores_usage_columns) {
+    using taskforge::memory::MemoryStore;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-kv-usage-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const fs::path db = root / "memory.db";
+    const std::string scope = "project:kv-usage-test";
+    std::string error;
+    MemoryStore store(db.string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "kv-usage-test"));
+    const std::string subject = store.resolveNode(scope, "Guia", "entity");
+    const std::string object = store.resolveNode(scope, "4.5:1", "value");
+    const std::string edge = store.recordEdge(
+        scope, subject, object, "MENTIONS", taskforge::Json::object(),
+        "2026-01-01", "", 0.8, "active", "claim", "kv-test");
+    CHECK(!edge.empty());
+
+    auto execRaw = [&](const std::string& sql) {
+        sqlite3* raw = nullptr;
+        CHECK(sqlite3_open(db.string().c_str(), &raw) == SQLITE_OK);
+        CHECK(sqlite3_exec(raw, sql.c_str(), nullptr, nullptr, nullptr) == SQLITE_OK);
+        sqlite3_close(raw);
+    };
+
+    const long long edgeVersion = store.knowledgeVersion();
+    execRaw("UPDATE memory_edge SET success_count=success_count+2,"
+            "failure_count=failure_count+1,utility=0.75,last_used='2026-02-01' "
+            "WHERE id='" + edge + "';");
+    CHECK(store.knowledgeVersion() == edgeVersion);
+    execRaw("UPDATE memory_edge SET status='rejected' WHERE id='" + edge + "';");
+    const long long statusVersion = store.knowledgeVersion();
+    CHECK(statusVersion > edgeVersion);
+    execRaw("UPDATE memory_edge SET dormant_at='2026-03-01' WHERE id='" + edge + "';");
+    CHECK(store.knowledgeVersion() > statusVersion);
+
+    execRaw("INSERT INTO memory_playbook(id,scope_id,task_type,title,steps_json,"
+            "preconditions_json,success_count,failure_count,confidence,status,source_ref,"
+            "evidence_json,created_at,updated_at) VALUES('pb-kv','" + scope +
+            "','t','T','[]','{}',0,0,0.5,'active','src','[]','2026-01-01','2026-01-01');");
+    const long long playbookVersion = store.knowledgeVersion();
+    execRaw("UPDATE memory_playbook SET success_count=3,failure_count=1,confidence=0.8 "
+            "WHERE id='pb-kv';");
+    CHECK(store.knowledgeVersion() == playbookVersion);
+    execRaw("UPDATE memory_playbook SET status='candidate' WHERE id='pb-kv';");
+    CHECK(store.knowledgeVersion() > playbookVersion);
+
+    execRaw("INSERT INTO memory_path_schema(id,scope_id,signature,created_at) "
+            "VALUES('psch-kv','" + scope + "','sig','2026-01-01');");
+    execRaw("INSERT INTO memory_path(id,scope_id,revision,schema_id,task_type,state,"
+            "intent_sample,access_json,created_at,updated_at) "
+            "VALUES('path-kv','" + scope + "',1,'psch-kv','t','active','','{}',"
+            "'2026-01-01','2026-01-01');");
+    execRaw("INSERT INTO memory_path_stats(path_id,success,failure,last_tau,uses,"
+            "distinct_inputs) VALUES('path-kv',1,0,0,1,1);");
+    const long long pathVersion = store.knowledgeVersion();
+    execRaw("UPDATE memory_path_stats SET success=9,uses=9,distinct_inputs=9 "
+            "WHERE path_id='path-kv';");
+    CHECK(store.knowledgeVersion() == pathVersion);
+
+    store.close();
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_trace_records_brief_and_searches_with_limits) {
     using taskforge::memory::MemoryBriefInfo;
     using taskforge::memory::MemoryService;
@@ -6826,7 +6892,7 @@ TEST(memory_v4_fixture_doctor_reports_planted_violations) {
     CHECK(find("unknown_predicate_fraction").value("violations", 0LL) >= 1);
     CHECK(find("closure_reasons")["details"].value("closures", 0LL) >= 2);
     CHECK(find("unresolved_derived_inputs").value("violations", 0LL) >= 1);
-    CHECK(knowledge.getMeta("schema_version") == "8");
+    CHECK(knowledge.getMeta("schema_version") == "9");
     CHECK(knowledge.purgeCoverageMissing().empty());
     {
         sqlite3* raw = nullptr;

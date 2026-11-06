@@ -598,8 +598,8 @@ def main():
         except Exception:
             report2 = {}
         check(p_rep2.returncode == 0, "memory report pos-E2 terminou com codigo 0")
-        check(str(report2.get("schemaVersion", {}).get("knowledge", "")) == "8",
-              "o relatorio expoe a versao 8 do esquema")
+        check(str(report2.get("schemaVersion", {}).get("knowledge", "")) == "9",
+              "o relatorio expoe a versao 9 do esquema")
         check(int(report2.get("invalidCitations", 0)) >= 1,
               "o relatorio conta as citacoes invalidas")
         check(int(report2.get("hits", {}).get("citedFromSearch", 0)) >= 1,
