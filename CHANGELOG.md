@@ -45,6 +45,7 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   candidate score by its ledger utility; the default `edge` source preserves the
   previous ranking. `seedLegacyCredit` imports legacy edge/playbook counters once
   as `legacy_seed`, and `rebuildUtility` rebuilds the aggregate from events.
+  `memory utility status|seed|rebuild` exposes the ledger in the CLI.
 - **Memory fix5 phase 4:** schema v8 adds `memory_prefix_epoch`; `buildBrief`
   now exposes a deterministic `stableBlock`, prefix key/identity, epoch and
   `removalSeqStart`; `briefInfoToJson` carries the delivered id sets to

@@ -506,6 +506,7 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory forget (--source-version ID | --source URI) [--all-versions] [--async] [--dry-run] [--vacuum] [--reason texto] --project <pasta> [--json]\n"
                      "arestrix-cli memory sources ingest --path <arquivo-ou-pasta> [--allow-forgotten] --project <pasta> [--json]\n"
                      "arestrix-cli memory paths list|show|retire [id] --project <pasta> [--state S] [--json]\n"
+                     "arestrix-cli memory utility status|seed|rebuild --project <pasta> [--json]\n"
                      "arestrix-cli memory bridges detect --project <pasta> [--max-proposals N] [--max-per-entity N] [--json]\n"
                      "arestrix-cli memory ab validate|order|report --suite <arquivo> [--observations <arquivo>] [--repetitions N] [--seed N] [--json]\n"
                      "arestrix-cli memory ab run --suite <arquivo> --pipeline <grafo> --node <vertice> [--repetitions N] [--seed N] [--root <pasta>] [--db <arquivo>] [--json]\n"
@@ -520,7 +521,7 @@ int runMemory(const std::vector<std::string>& args) {
         command != "ab" && command != "trace" && command != "claims" &&
         command != "paths" && command != "bridges" && command != "promote" &&
         command != "unpromote" && command != "doctor" && command != "reopen" &&
-        command != "forget" && command != "sources") {
+        command != "forget" && command != "sources" && command != "utility") {
         std::cerr << "arestrix-cli memory: comando desconhecido: " << command << "\n";
         return kExitUsage;
     }
@@ -532,6 +533,7 @@ int runMemory(const std::vector<std::string>& args) {
     std::string traceRun;
     std::string traceNode;
     std::string pathId;
+    std::string utilityAction;
     size_t optionStart = 2;
     if (command == "proposals") {
         if (args.size() < 3) {
@@ -615,6 +617,19 @@ int runMemory(const std::vector<std::string>& args) {
             return kExitUsage;
         }
         embeddingAction = args[2];
+        optionStart = 3;
+    } else if (command == "utility") {
+        if (args.size() < 3) {
+            std::cerr << "arestrix-cli memory utility: informe status|seed|rebuild\n";
+            return kExitUsage;
+        }
+        utilityAction = args[2];
+        if (utilityAction != "status" && utilityAction != "seed" &&
+            utilityAction != "rebuild") {
+            std::cerr << "arestrix-cli memory utility: acao desconhecida: "
+                      << utilityAction << "\n";
+            return kExitUsage;
+        }
         optionStart = 3;
     } else if (command == "paths") {
         if (args.size() < 3) {
@@ -1084,6 +1099,15 @@ int runMemory(const std::vector<std::string>& args) {
         if (!memory.configure(projectId, true, dbPath.string())) {
             std::cerr << "Falha ao abrir o banco de memoria: " << dbPath.string() << "\n";
             return kExitConfig;
+        }
+
+        if (command == "utility") {
+            taskforge::Json out;
+            if (utilityAction == "seed") out = memory.seedLegacyCredit(projectId);
+            else if (utilityAction == "rebuild") out = memory.rebuildUtility(projectId);
+            else out = memory.creditSummary(projectId);
+            std::cout << out.dump(2) << "\n";
+            return out.value("ok", false) ? 0 : kExitConfig;
         }
 
         if (command == "paths") {
