@@ -912,6 +912,8 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
         code += "  memory.configureTraversal(projectId, taskforge::memory::traversalConfigFromJson("
                 "taskforge::Json::parse(" +
                 rawLiteral(memorySettings.dump()) + ")));\n";
+        code += "  memory.configureUtility(projectId, taskforge::Json::parse(" +
+                rawLiteral(memorySettings.dump()) + "));\n";
         code += "  if (!arx_mem_readonly) memory.configureMaintenance(projectId, taskforge::memory::maintenanceConfigFromJson("
                 "taskforge::Json::parse(" +
                 rawLiteral(memorySettings.dump()) + ")));\n";

@@ -1475,6 +1475,7 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(src.find("#include \"memory/MemoryService.hpp\"") != std::string::npos);
     CHECK(src.find("memory.configure(projectId, arx_mem_persistent, arx_mem_persistent ? arx_mem_db : std::string(), arx_mem_readonly)") != std::string::npos);
     CHECK(src.find("memory.configureEmbeddings(projectId, arx_embedding_config)") != std::string::npos);
+    CHECK(src.find("memory.configureUtility(projectId, taskforge::Json::parse(") != std::string::npos);
     CHECK(src.find("memory.configureMaintenance(projectId, taskforge::memory::maintenanceConfigFromJson("
                    "taskforge::Json::parse(") != std::string::npos);
     CHECK(src.find("\"consolidationMode\":\"idle\"") != std::string::npos);
@@ -4495,6 +4496,23 @@ TEST(memory_knowledge_version_ignores_usage_columns) {
 
     store.close();
     fs::remove_all(root, ec);
+}
+
+TEST(memory_utility_config_parses_ledger_source) {
+    using taskforge::memory::MemoryService;
+    auto& memory = MemoryService::getInstance();
+    const std::string projectId = "utility-config-test";
+    const auto raw = taskforge::Json::parse(
+        R"({"utility":{"source":"ledger","prior":{"a":2,"b":3},)"
+        R"("maxCreditPerOrigin":1.5,"originWindowDays":14}})");
+    CHECK(memory.configureUtility(projectId, raw));
+    const auto config = memory.utilityConfig(projectId);
+    CHECK(config.source == "ledger");
+    CHECK(config.priorA == 2.0);
+    CHECK(config.priorB == 3.0);
+    CHECK(config.maxCreditPerOrigin == 1.5);
+    CHECK(config.originWindowDays == 14);
+    memory.closeProject(projectId);
 }
 
 TEST(memory_credit_events_are_idempotent_and_aggregate) {

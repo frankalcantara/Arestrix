@@ -41,7 +41,9 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   verdicts now write idempotent `citation` or `presence_low_res` events and
   update `memory_item_utility` in one telemetry transaction; `item_key` resolves
   edges through `claim_key` and prefixes lessons, playbooks, passages, paths and
-  facets.
+  facets. With `memory.utility.source='ledger'`, hybrid recall multiplies each
+  candidate score by its ledger utility; the default `edge` source preserves the
+  previous ranking.
 - **Memory fix5 phase 4:** schema v8 adds `memory_prefix_epoch`; `buildBrief`
   now exposes a deterministic `stableBlock`, prefix key/identity, epoch and
   `removalSeqStart`; `briefInfoToJson` carries the delivered id sets to

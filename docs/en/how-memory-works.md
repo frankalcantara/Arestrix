@@ -398,7 +398,9 @@ The telemetry credit ledger records each validator verdict as a `citation`
 event split across the distinct cited items, or as `presence_low_res` across the
 delivered items when nothing was cited. Events are idempotent and update
 `memory_item_utility` in the same transaction; the item key resolves edges
-through `claim_key`.
+through `claim_key`. With `memory.utility.source='ledger'`, hybrid recall
+multiplies each candidate score by its ledger utility; `edge` is the default and
+keeps the previous ranking.
 When a dependent claim is retracted, expires or stops being active, the path is
 suspended in the same maintenance pass. If all dependencies become valid again,
 it is reactivated; otherwise it can be retired.
