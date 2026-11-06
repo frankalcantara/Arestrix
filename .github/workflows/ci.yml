@@ -130,7 +130,7 @@ jobs:
           python-version: "3.11"
 
       - name: Cache ONNX Runtime + DirectML
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/arestrix-deps/onnxruntime-directml
           key: onnxruntime-directml-ort1.24.4-dml1.15.4
