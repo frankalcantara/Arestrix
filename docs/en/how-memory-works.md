@@ -398,9 +398,9 @@ The telemetry credit ledger records each validator verdict as a `citation`
 event split across the distinct cited items, or as `presence_low_res` across the
 delivered items when nothing was cited. Events are idempotent and update
 `memory_item_utility` in the same transaction; the item key resolves edges
-through `claim_key`. With `memory.utility.source='ledger'`, hybrid recall
-multiplies each candidate score by its ledger utility; `edge` is the default and
-keeps the previous ranking. Legacy edge/playbook counters are imported once as
+through `claim_key`. With `memory.utility.source='ledger'`, hybrid and
+lexical-only recall multiply each candidate score by its ledger utility; `edge`
+is the default and keeps the previous ranking. Legacy edge/playbook counters are imported once as
 `legacy_seed`, and the aggregate can be rebuilt from events with
 `memory utility status|seed|rebuild`. Credit per origin and item/class is capped
 inside `originWindowDays`; excess events keep a zero delta with `capped=1`.

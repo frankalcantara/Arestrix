@@ -2514,9 +2514,65 @@ std::string MemoryService::searchContext(const std::string& projectId, const std
         }
     }
 
+    auto* utilityTelemetry = utilityConfig(projectId).source == "ledger"
+        ? ensureTelemetry(projectId) : nullptr;
     if (hybridSearch(projectId, text, limit, domains, hits, hybrid, &stepCandidates,
                      lenses, taskType)) {
         result = std::move(hybrid);
+    } else if (utilityTelemetry) {
+        // Ranqueamento lexical puro com a utilidade do livro. O caminho `edge`
+        // continua usando o formatador historico.
+        auto lexical = s->lexicalCandidates(scopeId(projectId), text,
+                                            std::max<size_t>(limit * 4, 20), domains);
+        if (!lenses.empty()) {
+            const auto allowedEdges = s->edgeIdsForLenses(scopeId(projectId), lenses);
+            const std::set<std::string> allowed(allowedEdges.begin(), allowedEdges.end());
+            lexical.erase(std::remove_if(lexical.begin(), lexical.end(),
+                [&](const MemorySearchCandidate& candidate) {
+                    return candidate.kind == "fact" && allowed.count(candidate.id) == 0;
+                }), lexical.end());
+        }
+        struct WeightedCandidate {
+            MemorySearchCandidate candidate;
+            double score = 0.0;
+        };
+        std::vector<WeightedCandidate> weighted;
+        std::set<std::string> seen;
+        const std::string lookupTask = taskType.empty() ? "*" : taskType;
+        for (size_t i = 0; i < lexical.size(); ++i) {
+            const std::string key = lexical[i].kind + "|" + lexical[i].id;
+            if (!seen.insert(key).second) continue;
+            const std::string itemKey = itemKeyFor(
+                scopeId(projectId), lexical[i].kind, lexical[i].id, s);
+            const double utility = utilityTelemetry->utilityFor(
+                scopeId(projectId), itemKey, lookupTask).value("utility", 0.5);
+            const double base = 1.0 / (60.0 + static_cast<double>(i + 1));
+            weighted.push_back(WeightedCandidate{lexical[i], base * (0.5 + utility)});
+        }
+        std::sort(weighted.begin(), weighted.end(),
+            [](const WeightedCandidate& a, const WeightedCandidate& b) {
+                if (a.score != b.score) return a.score > b.score;
+                return a.candidate.confidence > b.candidate.confidence;
+            });
+        std::map<std::string, TraceCandidateData> candidates;
+        std::string ledgerResult;
+        size_t emitted = 0;
+        for (const auto& entry : weighted) {
+            if (emitted >= limit) break;
+            const auto& candidate = entry.candidate;
+            const std::string label = candidate.kind == "lesson" ? "LICAO"
+                : candidate.kind == "playbook" ? "PLAYBOOK" : "FATO";
+            ledgerResult += "[" + label + "] [MEMO:" + candidate.id + "] " +
+                candidate.text + "\n";
+            if (hits) hits->push_back(MemoryHitRef{candidate.id, candidate.kind});
+            addTraceCandidate(candidates, candidate.id, candidate.kind,
+                              0.0, 0.0, entry.score);
+            ++emitted;
+        }
+        if (!ledgerResult.empty()) {
+            result = "\n--- [ARESTRIX MEMORIA: BUSCA LEXICAL] ---\n" + ledgerResult;
+        }
+        stepCandidates = traceCandidatesToJson(candidates, {});
     } else {
         result = s->searchContext(scopeId(projectId), text, limit, domains, hits, lenses);
         std::map<std::string, TraceCandidateData> candidates;
@@ -3204,6 +3260,22 @@ taskforge::Json MemoryService::listPlaybooks(const std::string& projectId,
     return out;
 }
 
+std::string MemoryService::itemKeyFor(const std::string& scope, const std::string& kind,
+                                      const std::string& id, MemoryStore* store) {
+    if (kind == "lesson") return "lesson:" + id;
+    if (kind == "playbook") return "playbook:" + id;
+    if (kind == "path") return "path:" + id;
+    if (kind == "passage") return "psg:" + id;
+    if (kind == "facet") return "facet:" + id;
+    if (store && !store->isReadOnly()) {
+        MemoryEdgeRecord edge;
+        if (store->getEdge(scope, id, edge) && !edge.claimKey.empty()) {
+            return edge.claimKey;
+        }
+    }
+    return "edge:" + id;
+}
+
 bool MemoryService::hybridRecall(const std::string& projectId, const std::string& text,
                                  size_t limit, const std::vector<std::string>& domains,
                                  std::vector<RankedMemory>& output,
@@ -3259,20 +3331,7 @@ bool MemoryService::hybridRecall(const std::string& projectId, const std::string
             const std::string scope = scopeId(projectId);
             const std::string lookupTask = taskType.empty() ? "*" : taskType;
             for (auto& memory : output) {
-                std::string itemKey;
-                if (memory.kind == "lesson") itemKey = "lesson:" + memory.id;
-                else if (memory.kind == "playbook") itemKey = "playbook:" + memory.id;
-                else if (memory.kind == "path") itemKey = "path:" + memory.id;
-                else if (memory.kind == "passage") itemKey = "psg:" + memory.id;
-                else if (memory.kind == "facet") itemKey = "facet:" + memory.id;
-                else {
-                    MemoryEdgeRecord edge;
-                    if (s->getEdge(scope, memory.id, edge) && !edge.claimKey.empty()) {
-                        itemKey = edge.claimKey;
-                    } else {
-                        itemKey = "edge:" + memory.id;
-                    }
-                }
+                const std::string itemKey = itemKeyFor(scope, memory.kind, memory.id, s);
                 const auto utility = telemetry->utilityFor(scope, itemKey, lookupTask);
                 memory.score *= 0.5 + utility.value("utility", 0.5);
             }
@@ -3386,23 +3445,8 @@ std::string MemoryService::recordValidation(const std::string& projectId,
         std::set<std::string> citedKeys;
         std::set<std::string> deliveredKeys;
         auto* knowledge = existingStore(projectId);
-        auto itemKey = [&](const MemoryHitRecord& hit) {
-            if (hit.kind == "lesson") return "lesson:" + hit.memoryId;
-            if (hit.kind == "playbook") return "playbook:" + hit.memoryId;
-            if (hit.kind == "path") return "path:" + hit.memoryId;
-            if (hit.kind == "passage") return "psg:" + hit.memoryId;
-            if (hit.kind == "facet") return "facet:" + hit.memoryId;
-            if (knowledge && !knowledge->isReadOnly()) {
-                MemoryEdgeRecord edge;
-                if (knowledge->getEdge(scope, hit.memoryId, edge) &&
-                    !edge.claimKey.empty()) {
-                    return edge.claimKey;
-                }
-            }
-            return "edge:" + hit.memoryId;
-        };
         for (const auto& hit : hits) {
-            const std::string key = itemKey(hit);
+            const std::string key = itemKeyFor(scope, hit.kind, hit.memoryId, knowledge);
             if (hit.injected || hit.consulted) deliveredKeys.insert(key);
             if (hit.used) citedKeys.insert(key);
         }

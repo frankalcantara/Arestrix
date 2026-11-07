@@ -4530,6 +4530,44 @@ TEST(memory_credit_outbox_drains_once) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_lexical_search_uses_ledger_ranking) {
+    using taskforge::memory::MemoryCreditEvent;
+    using taskforge::memory::MemoryHitRef;
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-ledger-lexical-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "ledger-lexical-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    const std::string lessonId =
+        memory.recordLesson(projectId, "code", "t", "regra ledger lexical");
+    CHECK(!lessonId.empty());
+    CHECK(memory.configureUtility(projectId,
+        taskforge::Json::parse(R"({"utility":{"source":"ledger"}})")));
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(telemetry != nullptr);
+    MemoryCreditEvent event;
+    event.traceId = "trace-ledger-lexical";
+    event.itemKey = "lesson:" + lessonId;
+    event.taskType = "code";
+    event.kind = "citation";
+    event.deltaSuccess = 1.0;
+    CHECK(telemetry->recordCreditEvents("project:" + projectId, {event}));
+    std::vector<MemoryHitRef> hits;
+    const std::string result = memory.searchContext(
+        projectId, "ledger", 5, {"code"}, &hits, "run", "node");
+    CHECK(result.find("BUSCA LEXICAL") != std::string::npos);
+    CHECK(result.find(lessonId) != std::string::npos);
+    CHECK(!hits.empty());
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_utility_config_parses_ledger_source) {
     using taskforge::memory::MemoryService;
     auto& memory = MemoryService::getInstance();

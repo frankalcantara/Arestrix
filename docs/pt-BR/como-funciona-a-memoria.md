@@ -402,8 +402,8 @@ O livro de crédito da telemetria grava cada veredito do validador como evento
 dividido entre os entregues quando nada foi citado. Os eventos são idempotentes e
 atualizam `memory_item_utility` na mesma transação; a chave do item resolve
 arestas por `claim_key`. Com `memory.utility.source='ledger'`, a recuperação
-híbrida multiplica o escore de cada candidato pela utilidade do livro; `edge` é
-o padrão e mantém o ranqueamento anterior. Contadores legados de arestas e
+híbrida e a lexical pura multiplicam o escore de cada candidato pela utilidade
+do livro; `edge` é o padrão e mantém o ranqueamento anterior. Contadores legados de arestas e
 playbooks são importados uma vez como `legacy_seed`, e o agregado pode ser
 reconstruído a partir dos eventos com `memory utility status|seed|rebuild`.
 O crédito por origem e item/classe é limitado dentro de `originWindowDays`;
