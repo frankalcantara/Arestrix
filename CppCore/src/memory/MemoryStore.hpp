@@ -90,6 +90,40 @@ struct MemoryCreditEvent {
     bool capped = false;
 };
 
+struct MemoryCreditAuditRecord {
+    std::string id;
+    std::string scopeId;
+    std::string traceId;
+    std::string status = "pending";
+    std::string armsJson = "[]";
+    long long tokens = 0;
+    std::string snapshotRef;
+    std::string inputHash;
+    std::string createdAt;
+};
+
+struct MemoryValidatorAuditRecord {
+    std::string id;
+    std::string scopeId;
+    std::string validator;
+    std::string traceId;
+    std::string reviewer;
+    std::string verdict;   // accepted | rejected
+    std::string createdAt;
+};
+
+struct MemoryTaskSnapshotRecord {
+    std::string traceId;
+    std::string scopeId;
+    std::string inputHash;
+    std::string inputJson = "{}";
+    std::string workspaceKind;
+    std::string workspaceRef;
+    long long bytes = 0;
+    std::string createdAt;
+    std::string expiresAt;
+};
+
 // Referencia de uma memoria devolvida por memory_search, para registrar uso sem
 // depender de ela ter sido injetada no brief.
 struct MemoryHitRef {
@@ -749,6 +783,21 @@ public:
                                 const std::string& since) const;
     // Reconstroi o agregado a partir dos eventos; idempotente.
     bool rebuildItemUtility(const std::string& scopeId);
+    // Fase 5: auditoria por ablacao e divergencia de validador.
+    bool saveCreditAudit(const MemoryCreditAuditRecord& audit);
+    taskforge::Json getCreditAudit(const std::string& scopeId,
+                                   const std::string& traceId) const;
+    taskforge::Json listCreditAudits(const std::string& scopeId, const std::string& status,
+                                     size_t limit = 100) const;
+    std::string recordValidatorAudit(const MemoryValidatorAuditRecord& audit);
+    taskforge::Json validatorAuditStats(const std::string& scopeId,
+                                        const std::string& validator) const;
+    taskforge::Json validatorAuditReport(const std::string& scopeId, size_t limit = 100) const;
+    bool saveTaskSnapshot(const MemoryTaskSnapshotRecord& snapshot);
+    taskforge::Json getTaskSnapshot(const std::string& scopeId,
+                                    const std::string& traceId) const;
+    long long purgeExpiredSnapshots(const std::string& scopeId, const std::string& now);
+    taskforge::Json snapshotSummary(const std::string& scopeId) const;
     // Reforco/decay de arestas de conhecimento a partir dos IDs usados.
     bool reinforceFromHits(const std::string& scopeId,
                            const std::vector<std::string>& memoryIds,

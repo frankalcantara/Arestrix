@@ -51,6 +51,21 @@ std::string isoNow() {
     return std::string(buffer);
 }
 
+std::string isoDaysFromNow(int days) {
+    const auto now = std::chrono::system_clock::now() +
+        std::chrono::hours(24 * std::max(0, days));
+    const std::time_t value = std::chrono::system_clock::to_time_t(now);
+    std::tm tm{};
+#ifdef _WIN32
+    gmtime_s(&tm, &value);
+#else
+    gmtime_r(&value, &tm);
+#endif
+    char buffer[32];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &tm);
+    return std::string(buffer);
+}
+
 std::string isoDaysAgo(int days) {
     const auto now = std::chrono::system_clock::now() -
         std::chrono::hours(24 * std::max(0, days));
@@ -392,6 +407,54 @@ taskforge::Json utilityConfigToJson(const MemoryUtilityConfig& config) {
         {"prior", taskforge::Json{{"a", config.priorA}, {"b", config.priorB}}},
         {"maxCreditPerOrigin", config.maxCreditPerOrigin},
         {"originWindowDays", config.originWindowDays}};
+}
+
+MemoryCreditAuditConfig creditAuditConfigFromJson(const taskforge::Json& value) {
+    MemoryCreditAuditConfig config;
+    if (!value.is_object()) return config;
+    const taskforge::Json audit = value.contains("creditAudit")
+        ? value["creditAudit"] : taskforge::Json();
+    if (!audit.is_object()) return config;
+    config.enabled = audit.value("enabled", false);
+    config.sampleRate = std::max(0.0, std::min(1.0, audit.value("sampleRate", 0.1)));
+    config.minSuspectRejections = static_cast<int>(std::max<long long>(
+        0, std::min<long long>(1000, audit.value("minSuspectRejections", 3))));
+    config.repetitions = static_cast<int>(std::max<long long>(
+        1, std::min<long long>(10, audit.value("repetitions", 2))));
+    config.pairwiseTopM = static_cast<int>(std::max<long long>(
+        0, std::min<long long>(10, audit.value("pairwiseTopM", 3))));
+    config.maxAuditsPerDay = static_cast<int>(std::max<long long>(
+        0, std::min<long long>(1000, audit.value("maxAuditsPerDay", 20))));
+    config.maxTokensPerDay = std::max<long long>(
+        0, std::min<long long>(100000000, audit.value("maxTokensPerDay", 20000)));
+    config.validatorAuditRate = std::max(0.0, std::min(1.0,
+        audit.value("validatorAuditRate", 0.05)));
+    config.minValidatorAudits = static_cast<int>(std::max<long long>(
+        0, std::min<long long>(10000, audit.value("minValidatorAudits", 20))));
+    config.maxValidatorDivergence = std::max(0.0, std::min(1.0,
+        audit.value("maxValidatorDivergence", 0.10)));
+    config.snapshotRetentionDays = static_cast<int>(std::max<long long>(
+        1, std::min<long long>(3650, audit.value("snapshotRetentionDays", 14))));
+    config.maxSnapshotBytes = std::max<long long>(1024,
+        std::min<long long>(10LL * 1024 * 1024 * 1024,
+                            audit.value("maxSnapshotBytes", 50LL * 1024 * 1024)));
+    return config;
+}
+
+taskforge::Json creditAuditConfigToJson(const MemoryCreditAuditConfig& config) {
+    return taskforge::Json{
+        {"enabled", config.enabled},
+        {"sampleRate", config.sampleRate},
+        {"minSuspectRejections", config.minSuspectRejections},
+        {"repetitions", config.repetitions},
+        {"pairwiseTopM", config.pairwiseTopM},
+        {"maxAuditsPerDay", config.maxAuditsPerDay},
+        {"maxTokensPerDay", config.maxTokensPerDay},
+        {"validatorAuditRate", config.validatorAuditRate},
+        {"minValidatorAudits", config.minValidatorAudits},
+        {"maxValidatorDivergence", config.maxValidatorDivergence},
+        {"snapshotRetentionDays", config.snapshotRetentionDays},
+        {"maxSnapshotBytes", config.maxSnapshotBytes}};
 }
 
 MemoryService::~MemoryService() {
@@ -2959,6 +3022,20 @@ MemoryUtilityConfig MemoryService::utilityConfig(const std::string& projectId) c
     return it == utility_.end() ? MemoryUtilityConfig{} : it->second;
 }
 
+bool MemoryService::configureCreditAudit(const std::string& projectId,
+                                         const taskforge::Json& raw) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    creditAudit_[projectKey(projectId)] = creditAuditConfigFromJson(raw);
+    return true;
+}
+
+MemoryCreditAuditConfig MemoryService::creditAuditConfig(
+    const std::string& projectId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    auto it = creditAudit_.find(projectKey(projectId));
+    return it == creditAudit_.end() ? MemoryCreditAuditConfig{} : it->second;
+}
+
 taskforge::Json MemoryService::searchGraph(const std::string& projectId,
                                            const std::string& text, size_t limit,
                                            const std::string& taskType,
@@ -3452,7 +3529,12 @@ std::string MemoryService::recordValidation(const std::string& projectId,
         }
         const auto& keys = citedKeys.empty() ? deliveredKeys : citedKeys;
         if (!keys.empty()) {
-            const double delta = (copy.ok ? 1.0 : -1.0) /
+            double validatorFactor = 1.0;
+            if (!copy.validatorId.empty()) {
+                validatorFactor = t->validatorAuditStats(scope, copy.validatorId)
+                    .value("weight", 1.0);
+            }
+            const double delta = (copy.ok ? 1.0 : -1.0) * validatorFactor /
                 static_cast<double>(keys.size());
             const auto utility = utilityConfig(projectId);
             const std::string since = isoDaysAgo(utility.originWindowDays);
@@ -3506,7 +3588,17 @@ std::string MemoryService::recordValidation(const std::string& projectId,
         if (auto* knowledge = existingStore(projectId); knowledge && !knowledge->isReadOnly()) {
             const taskforge::Json episode = t->getEpisode(scope, copy.episodeId);
             const std::string taskType = episode.value("taskType", std::string());
-            if (copy.ok) {
+            const auto auditConfig = creditAuditConfig(projectId);
+            bool validatorSuspended = false;
+            bool validatorBootstrap = false;
+            if (auditConfig.enabled && !copy.validatorId.empty()) {
+                const auto stats = t->validatorAuditStats(scope, copy.validatorId);
+                const long long audits = stats.value("audits", 0LL);
+                validatorBootstrap = audits < auditConfig.minValidatorAudits;
+                validatorSuspended = stats.value("divergence", 0.0) >
+                    auditConfig.maxValidatorDivergence;
+            }
+            if (copy.ok && !validatorBootstrap && !validatorSuspended) {
                 const auto samples = t->validationGateSamples(scope, taskType, 20);
                 std::string promotedId;
                 std::string reason;
@@ -3588,6 +3680,263 @@ taskforge::Json MemoryService::creditSummary(const std::string& projectId) {
     auto* t = ensureTelemetry(projectId);
     if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
     return taskforge::Json{{"ok", true}, {"summary", t->creditSummary(scopeId(projectId))}};
+}
+
+taskforge::Json MemoryService::runCreditAudit(const std::string& projectId,
+                                              const taskforge::Json& request) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    const std::string scope = scopeId(projectId);
+    const std::string traceId = request.value("traceId", std::string());
+    if (traceId.empty()) {
+        return taskforge::Json{{"ok", false}, {"error", "traceId ausente"}};
+    }
+    const std::string auditId = "credit-audit:" + traceId;
+    const std::string taskType = request.value("taskType", std::string());
+    const std::string validator = request.value("validator", std::string());
+    const double weight = std::max(0.0, std::min(10.0,
+        request.value("weight", validator.empty() ? 1.0 : validatorWeight(projectId, validator))));
+    const int repetitions = std::max(1, request.value("repetitions", 1));
+
+    std::vector<std::string> delivered;
+    std::vector<std::string> cited;
+    if (request.contains("delivered") && request["delivered"].is_array()) {
+        for (const auto& item : request["delivered"]) {
+            if (item.is_string()) delivered.push_back(item.get<std::string>());
+        }
+    }
+    if (request.contains("cited") && request["cited"].is_array()) {
+        for (const auto& item : request["cited"]) {
+            if (item.is_string()) cited.push_back(item.get<std::string>());
+        }
+    }
+
+    bool baselinePresent = false;
+    bool baselineOk = false;
+    bool noMemoryPresent = false;
+    bool noMemoryOk = false;
+    bool infraFailure = false;
+    std::map<std::string, int> itemApprovals;
+    std::map<std::string, std::vector<std::string>> itemSets;
+    std::map<std::string, int> setApprovals;
+    taskforge::Json arms = taskforge::Json::array();
+    if (request.contains("arms") && request["arms"].is_array()) {
+        arms = request["arms"];
+        for (const auto& arm : request["arms"]) {
+            if (!arm.is_object()) continue;
+            const std::string kind = arm.value("kind", std::string());
+            if (arm.value("infra", false)) infraFailure = true;
+            const bool ok = arm.value("ok", false);
+            if (kind == "baseline") {
+                baselinePresent = true;
+                baselineOk = ok;
+            } else if (kind == "no_memory") {
+                noMemoryPresent = true;
+                noMemoryOk = ok;
+            } else if (kind == "ablate" || kind == "pair" || kind == "pairwise") {
+                std::vector<std::string> items;
+                if (arm.contains("items") && arm["items"].is_array()) {
+                    for (const auto& id : arm["items"]) {
+                        if (id.is_string()) items.push_back(id.get<std::string>());
+                    }
+                }
+                if (items.empty()) continue;
+                std::string setKey;
+                for (const auto& id : items) setKey += id + "|";
+                itemSets[setKey] = items;
+                if (ok) {
+                    ++setApprovals[setKey];
+                    for (const auto& id : items) ++itemApprovals[id];
+                }
+            }
+        }
+    }
+    (void)baselinePresent;
+
+    std::vector<std::string> decisive;
+    std::string reason;
+    std::string status;
+    if (infraFailure) {
+        status = "inconclusive";
+        reason = "infra_failure";
+    } else if (baselineOk) {
+        status = "not_rejected";
+        reason = "baseline_approved";
+    } else if (noMemoryPresent && !noMemoryOk) {
+        status = "no_adjustment";
+        reason = "no_memory_also_failed";
+    } else {
+        for (const auto& [setKey, items] : itemSets) {
+            if (items.size() != 1) continue;
+            const int approvals = setApprovals[setKey];
+            if (approvals * 2 > repetitions) decisive.push_back(items.front());
+        }
+        if (decisive.empty() && noMemoryPresent && noMemoryOk) {
+            for (const auto& [setKey, items] : itemSets) {
+                if (items.size() < 2) continue;
+                const int approvals = setApprovals[setKey];
+                if (approvals * 2 > repetitions) {
+                    for (const auto& id : items) decisive.push_back(id);
+                    reason = "pairwise";
+                }
+            }
+        }
+        if (decisive.empty()) {
+            status = "inconclusive";
+            if (reason.empty()) reason = "no_single_reversal";
+        } else {
+            status = "applied";
+            if (reason.empty()) reason = "single_reversal";
+        }
+    }
+
+    std::vector<MemoryCreditEvent> events;
+    std::string origin = "audit:" + traceId;
+    const auto& credited = cited.empty() ? delivered : cited;
+    if (status == "applied" && !credited.empty()) {
+        const double share = weight / static_cast<double>(credited.size());
+        std::set<std::string> unique(credited.begin(), credited.end());
+        for (const auto& key : unique) {
+            MemoryCreditEvent event;
+            event.traceId = traceId;
+            event.itemKey = key;
+            event.taskType = taskType;
+            event.kind = "audit_reversal";
+            event.origin = origin;
+            event.auditId = auditId;
+            event.deltaFailure = -share;
+            events.push_back(std::move(event));
+        }
+        const double assignment = weight / static_cast<double>(decisive.size());
+        for (const auto& key : decisive) {
+            MemoryCreditEvent event;
+            event.traceId = traceId;
+            event.itemKey = key;
+            event.taskType = taskType;
+            event.kind = "audit_assignment";
+            event.origin = origin;
+            event.auditId = auditId;
+            event.deltaFailure = assignment;
+            events.push_back(std::move(event));
+        }
+    }
+
+    MemoryCreditAuditRecord record;
+    record.id = auditId;
+    record.scopeId = scope;
+    record.traceId = traceId;
+    record.status = status;
+    record.armsJson = arms.dump();
+    record.tokens = request.value("tokens", 0LL);
+    record.snapshotRef = request.value("snapshotRef", std::string());
+    record.inputHash = request.value("inputHash", std::string());
+    if (!t->saveCreditAudit(record)) {
+        return taskforge::Json{{"ok", false}, {"error", t->lastError()}};
+    }
+    bool persisted = true;
+    if (!events.empty() && !t->recordCreditEvents(scope, events)) {
+        persisted = appendCreditOutbox(projectId, events);
+    }
+    taskforge::Json applied = taskforge::Json::array();
+    for (const auto& id : decisive) applied.push_back(id);
+    return taskforge::Json{
+        {"ok", persisted},
+        {"auditId", auditId},
+        {"status", status},
+        {"reason", reason},
+        {"decisive", applied},
+        {"events", static_cast<long long>(events.size())},
+        {"tokens", record.tokens}};
+}
+
+taskforge::Json MemoryService::listCreditAudits(const std::string& projectId,
+                                                const std::string& status,
+                                                size_t limit) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    return taskforge::Json{{"ok", true},
+                           {"audits", t->listCreditAudits(scopeId(projectId), status, limit)}};
+}
+
+taskforge::Json MemoryService::recordValidatorAudit(const std::string& projectId,
+                                                    const taskforge::Json& request) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    MemoryValidatorAuditRecord record;
+    record.scopeId = scopeId(projectId);
+    record.validator = request.value("validator", std::string());
+    record.traceId = request.value("traceId", std::string());
+    record.reviewer = request.value("reviewer", std::string());
+    record.verdict = request.value("verdict", std::string());
+    if (record.validator.empty()) {
+        return taskforge::Json{{"ok", false}, {"error", "validator ausente"}};
+    }
+    if (record.verdict != "accepted" && record.verdict != "rejected") {
+        return taskforge::Json{{"ok", false}, {"error", "verdict invalido"}};
+    }
+    const std::string id = t->recordValidatorAudit(record);
+    if (id.empty()) return taskforge::Json{{"ok", false}, {"error", t->lastError()}};
+    return taskforge::Json{{"ok", true}, {"id", id}};
+}
+
+taskforge::Json MemoryService::validatorAuditSummary(const std::string& projectId,
+                                                     const std::string& validator) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    const std::string scope = scopeId(projectId);
+    taskforge::Json out{{"ok", true}};
+    if (!validator.empty()) {
+        out["validator"] = t->validatorAuditStats(scope, validator);
+        return out;
+    }
+    out["validators"] = t->validatorAuditReport(scope);
+    return out;
+}
+
+double MemoryService::validatorWeight(const std::string& projectId,
+                                      const std::string& validator) const {
+    if (validator.empty()) return 1.0;
+    auto* t = const_cast<MemoryService*>(this)->ensureTelemetry(projectId);
+    if (!t) return 1.0;
+    return t->validatorAuditStats(scopeId(projectId), validator).value("weight", 1.0);
+}
+
+taskforge::Json MemoryService::saveTaskSnapshot(const std::string& projectId,
+                                                const taskforge::Json& request) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    const auto config = creditAuditConfig(projectId);
+    MemoryTaskSnapshotRecord snapshot;
+    snapshot.scopeId = scopeId(projectId);
+    snapshot.traceId = request.value("traceId", std::string());
+    snapshot.inputHash = request.value("inputHash", std::string());
+    snapshot.inputJson = request.value("input", taskforge::Json::object()).dump();
+    snapshot.workspaceKind = request.value("workspaceKind", std::string());
+    snapshot.workspaceRef = request.value("workspaceRef", std::string());
+    snapshot.bytes = request.value("bytes", 0LL);
+    snapshot.expiresAt = request.value("expiresAt", std::string());
+    if (snapshot.traceId.empty()) {
+        return taskforge::Json{{"ok", false}, {"error", "traceId ausente"}};
+    }
+    if (snapshot.bytes > config.maxSnapshotBytes) {
+        return taskforge::Json{{"ok", false}, {"reason", "snapshot_too_large"}};
+    }
+    if (snapshot.expiresAt.empty()) {
+        snapshot.expiresAt = isoDaysFromNow(config.snapshotRetentionDays);
+    }
+    if (!t->saveTaskSnapshot(snapshot)) {
+        return taskforge::Json{{"ok", false}, {"error", t->lastError()}};
+    }
+    return taskforge::Json{{"ok", true}, {"snapshot", t->getTaskSnapshot(
+        snapshot.scopeId, snapshot.traceId)}};
+}
+
+taskforge::Json MemoryService::purgeExpiredSnapshots(const std::string& projectId) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    const long long removed = t->purgeExpiredSnapshots(scopeId(projectId), "");
+    return taskforge::Json{{"ok", true}, {"removed", removed},
+                           {"summary", t->snapshotSummary(scopeId(projectId))}};
 }
 
 namespace {

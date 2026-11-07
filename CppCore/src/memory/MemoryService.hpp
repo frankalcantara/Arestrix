@@ -77,6 +77,24 @@ struct MemoryUtilityConfig {
 MemoryUtilityConfig utilityConfigFromJson(const taskforge::Json& value);
 taskforge::Json utilityConfigToJson(const MemoryUtilityConfig& config);
 
+// Fase 5: auditoria por ablacao e divergencia de validador.
+struct MemoryCreditAuditConfig {
+    bool enabled = false;
+    double sampleRate = 0.1;
+    int minSuspectRejections = 3;
+    int repetitions = 2;
+    int pairwiseTopM = 3;
+    int maxAuditsPerDay = 20;
+    long long maxTokensPerDay = 20000;
+    double validatorAuditRate = 0.05;
+    int minValidatorAudits = 20;
+    double maxValidatorDivergence = 0.10;
+    int snapshotRetentionDays = 14;
+    long long maxSnapshotBytes = 50LL * 1024 * 1024;
+};
+MemoryCreditAuditConfig creditAuditConfigFromJson(const taskforge::Json& value);
+taskforge::Json creditAuditConfigToJson(const MemoryCreditAuditConfig& config);
+
 struct TraversalConfig {
     bool enabled = false;
     TraversalOptions options;
@@ -288,6 +306,8 @@ public:
     TraversalConfig traversalConfig(const std::string& projectId) const;
     bool configureUtility(const std::string& projectId, const taskforge::Json& raw);
     MemoryUtilityConfig utilityConfig(const std::string& projectId) const;
+    bool configureCreditAudit(const std::string& projectId, const taskforge::Json& raw);
+    MemoryCreditAuditConfig creditAuditConfig(const std::string& projectId) const;
     taskforge::Json searchGraph(const std::string& projectId, const std::string& text,
                                 size_t limit, const std::string& taskType = "",
                                 const std::string& runId = "", const std::string& nodeId = "",
@@ -354,6 +374,21 @@ public:
     taskforge::Json seedLegacyCredit(const std::string& projectId);
     taskforge::Json rebuildUtility(const std::string& projectId);
     taskforge::Json creditSummary(const std::string& projectId);
+    // Avalia e grava uma auditoria por ablacao a partir dos bracos observados.
+    taskforge::Json runCreditAudit(const std::string& projectId,
+                                   const taskforge::Json& request);
+    taskforge::Json listCreditAudits(const std::string& projectId,
+                                     const std::string& status = "",
+                                     size_t limit = 100);
+    taskforge::Json recordValidatorAudit(const std::string& projectId,
+                                         const taskforge::Json& request);
+    taskforge::Json validatorAuditSummary(const std::string& projectId,
+                                          const std::string& validator = "");
+    double validatorWeight(const std::string& projectId,
+                           const std::string& validator) const;
+    taskforge::Json saveTaskSnapshot(const std::string& projectId,
+                                     const taskforge::Json& request);
+    taskforge::Json purgeExpiredSnapshots(const std::string& projectId);
     // Fase 5: outbox de credito quando a telemetria falha.
     bool appendCreditOutbox(const std::string& projectId,
                             const std::vector<MemoryCreditEvent>& events);
@@ -484,6 +519,7 @@ private:
     std::map<std::string, PathServingConfig> pathServing_;   // E16
     std::map<std::string, TraversalConfig> traversal_;       // E17
     std::map<std::string, MemoryUtilityConfig> utility_;      // Fase 5
+    std::map<std::string, MemoryCreditAuditConfig> creditAudit_; // Fase 5
     std::map<std::string, PrefixEpochConfig> prefixEpochs_;
     std::map<std::string, std::chrono::steady_clock::time_point> prefixEpochLastPublish_;
 };

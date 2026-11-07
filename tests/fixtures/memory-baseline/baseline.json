@@ -15,7 +15,7 @@
   },
   "metrics": {
     "runs": 3,
-    "elapsedSeconds": 10.844,
+    "elapsedSeconds": 12.61,
     "tokens": {
       "prompt": 6465,
       "completion": 849,
@@ -97,6 +97,7 @@
           "memory_state": 0,
           "memory_state_history": 0,
           "memory_state_key": 0,
+          "memory_task_snapshot": 0,
           "memory_tombstone": 0,
           "memory_trace": 0,
           "memory_usage": 0,
@@ -145,6 +146,7 @@
           "memory_state": 0,
           "memory_state_history": 0,
           "memory_state_key": 0,
+          "memory_task_snapshot": 0,
           "memory_tombstone": 0,
           "memory_trace": 0,
           "memory_usage": 0,
@@ -193,6 +195,7 @@
           "memory_state": 0,
           "memory_state_history": 0,
           "memory_state_key": 0,
+          "memory_task_snapshot": 0,
           "memory_tombstone": 0,
           "memory_trace": 0,
           "memory_usage": 0,
@@ -243,6 +246,7 @@
           "memory_state": 0,
           "memory_state_history": 0,
           "memory_state_key": 0,
+          "memory_task_snapshot": 0,
           "memory_tombstone": 0,
           "memory_trace": 9,
           "memory_usage": 9,
@@ -291,6 +295,7 @@
           "memory_state": 0,
           "memory_state_history": 0,
           "memory_state_key": 0,
+          "memory_task_snapshot": 0,
           "memory_tombstone": 0,
           "memory_trace": 0,
           "memory_usage": 0,
@@ -339,6 +344,7 @@
           "memory_state": 0,
           "memory_state_history": 0,
           "memory_state_key": 0,
+          "memory_task_snapshot": 0,
           "memory_tombstone": 0,
           "memory_trace": 9,
           "memory_usage": 9,
@@ -349,8 +355,8 @@
       }
     },
     "schemaFingerprint": {
-      "knowledge": "9c84755f34d4b154",
-      "telemetry": "9c84755f34d4b154"
+      "knowledge": "72d3b92913dbe53d",
+      "telemetry": "72d3b92913dbe53d"
     }
   }
 }

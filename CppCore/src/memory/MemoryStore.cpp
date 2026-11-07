@@ -46,7 +46,7 @@ const char* const kScopedKnowledgeTables[] = {
     "memory_trace", "memory_usage", "memory_validation", "memory_working",
     "memory_lineage", "memory_job", "memory_removal_log", "memory_prefix_epoch",
     "memory_credit_event", "memory_item_utility", "memory_credit_audit",
-    "memory_validator_audit"};
+    "memory_validator_audit", "memory_task_snapshot"};
 
 struct Stmt {
     sqlite3_stmt* stmt = nullptr;
@@ -1020,6 +1020,20 @@ CREATE TABLE IF NOT EXISTS memory_validator_audit (
 );
 CREATE INDEX IF NOT EXISTS idx_memory_validator_audit_validator
   ON memory_validator_audit(scope_id, validator, created_at);
+
+CREATE TABLE IF NOT EXISTS memory_task_snapshot (
+  trace_id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  input_hash TEXT NOT NULL DEFAULT '',
+  input_json TEXT NOT NULL DEFAULT '{}',
+  workspace_kind TEXT NOT NULL DEFAULT '',
+  workspace_ref TEXT NOT NULL DEFAULT '',
+  bytes INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memory_task_snapshot_scope
+  ON memory_task_snapshot(scope_id, expires_at);
 
 CREATE TABLE IF NOT EXISTS memory_playbook (
   id TEXT PRIMARY KEY,
@@ -5820,6 +5834,327 @@ bool MemoryStore::rebuildItemUtility(const std::string& scopeId) {
         return false;
     }
     return true;
+}
+
+bool MemoryStore::saveCreditAudit(const MemoryCreditAuditRecord& audit) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || audit.scopeId.empty() || audit.id.empty()) return false;
+    std::string txnError;
+    WriteTxn txn(*this, txnError);
+    if (!txn.ok()) {
+        lastError_ = txnError;
+        return false;
+    }
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "INSERT INTO memory_credit_audit"
+                 "(id,scope_id,trace_id,status,arms_json,tokens,snapshot_ref,input_hash,created_at) "
+                 "VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET "
+                 "status=excluded.status,arms_json=excluded.arms_json,tokens=excluded.tokens,"
+                 "snapshot_ref=excluded.snapshot_ref,input_hash=excluded.input_hash",
+                 st, error)) {
+        lastError_ = error;
+        return false;
+    }
+    const std::string created = audit.createdAt.empty() ? nowIso() : audit.createdAt;
+    bindText(st.stmt, 1, audit.id);
+    bindText(st.stmt, 2, audit.scopeId);
+    bindText(st.stmt, 3, audit.traceId);
+    bindText(st.stmt, 4, audit.status);
+    bindText(st.stmt, 5, audit.armsJson);
+    sqlite3_bind_int64(st.stmt, 6, audit.tokens);
+    bindText(st.stmt, 7, audit.snapshotRef);
+    bindText(st.stmt, 8, audit.inputHash);
+    bindText(st.stmt, 9, created);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return false;
+    }
+    if (!txn.commit(&txnError)) {
+        lastError_ = txnError;
+        return false;
+    }
+    return true;
+}
+
+taskforge::Json MemoryStore::getCreditAudit(const std::string& scopeId,
+                                            const std::string& traceId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty() || traceId.empty()) return taskforge::Json::object();
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "SELECT id,trace_id,status,arms_json,tokens,snapshot_ref,input_hash,created_at "
+                 "FROM memory_credit_audit WHERE scope_id=? AND trace_id=? "
+                 "ORDER BY created_at DESC LIMIT 1", st, error)) {
+        lastError_ = error;
+        return taskforge::Json::object();
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, traceId);
+    if (stepRetry(st.stmt) != SQLITE_ROW) return taskforge::Json::object();
+    taskforge::Json out{
+        {"id", columnText(st.stmt, 0)},
+        {"traceId", columnText(st.stmt, 1)},
+        {"status", columnText(st.stmt, 2)},
+        {"arms", taskforge::jsonutil::tryParse(columnText(st.stmt, 3))
+                     .value_or(taskforge::Json::array())},
+        {"tokens", sqlite3_column_int64(st.stmt, 4)},
+        {"snapshotRef", columnText(st.stmt, 5)},
+        {"inputHash", columnText(st.stmt, 6)},
+        {"createdAt", columnText(st.stmt, 7)}};
+    return out;
+}
+
+taskforge::Json MemoryStore::listCreditAudits(const std::string& scopeId,
+                                              const std::string& status,
+                                              size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out = taskforge::Json::array();
+    if (!db_ || scopeId.empty()) return out;
+    Stmt st;
+    std::string error;
+    const std::string sql = status.empty()
+        ? "SELECT id,trace_id,status,arms_json,tokens,snapshot_ref,input_hash,created_at "
+          "FROM memory_credit_audit WHERE scope_id=? ORDER BY created_at DESC LIMIT ?"
+        : "SELECT id,trace_id,status,arms_json,tokens,snapshot_ref,input_hash,created_at "
+          "FROM memory_credit_audit WHERE scope_id=? AND status=? "
+          "ORDER BY created_at DESC LIMIT ?";
+    if (!prepare(db_, sql, st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    if (status.empty()) {
+        sqlite3_bind_int64(st.stmt, 2, static_cast<sqlite3_int64>(limit));
+    } else {
+        bindText(st.stmt, 2, status);
+        sqlite3_bind_int64(st.stmt, 3, static_cast<sqlite3_int64>(limit));
+    }
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        out.push_back(taskforge::Json{
+            {"id", columnText(st.stmt, 0)},
+            {"traceId", columnText(st.stmt, 1)},
+            {"status", columnText(st.stmt, 2)},
+            {"arms", taskforge::jsonutil::tryParse(columnText(st.stmt, 3))
+                         .value_or(taskforge::Json::array())},
+            {"tokens", sqlite3_column_int64(st.stmt, 4)},
+            {"snapshotRef", columnText(st.stmt, 5)},
+            {"inputHash", columnText(st.stmt, 6)},
+            {"createdAt", columnText(st.stmt, 7)}});
+    }
+    return out;
+}
+
+std::string MemoryStore::recordValidatorAudit(const MemoryValidatorAuditRecord& audit) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || audit.scopeId.empty() || audit.validator.empty()) return std::string();
+    const std::string id = audit.id.empty() ? newId("vaudit") : audit.id;
+    const std::string created = audit.createdAt.empty() ? nowIso() : audit.createdAt;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "INSERT OR IGNORE INTO memory_validator_audit"
+                 "(id,scope_id,validator,trace_id,reviewer,verdict,created_at) "
+                 "VALUES(?,?,?,?,?,?,?)", st, error)) {
+        lastError_ = error;
+        return std::string();
+    }
+    bindText(st.stmt, 1, id);
+    bindText(st.stmt, 2, audit.scopeId);
+    bindText(st.stmt, 3, audit.validator);
+    bindText(st.stmt, 4, audit.traceId);
+    bindText(st.stmt, 5, audit.reviewer);
+    bindText(st.stmt, 6, audit.verdict);
+    bindText(st.stmt, 7, created);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return std::string();
+    }
+    return id;
+}
+
+taskforge::Json MemoryStore::validatorAuditStats(const std::string& scopeId,
+                                                 const std::string& validator) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out{{"validator", validator}, {"audits", 0LL}, {"rejections", 0LL},
+                        {"divergence", 0.0}, {"wilsonLow", 0.0}, {"wilsonHigh", 1.0},
+                        {"weight", 1.0}};
+    if (!db_ || scopeId.empty() || validator.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "SELECT COUNT(*),SUM(CASE WHEN verdict='rejected' THEN 1 ELSE 0 END) "
+                 "FROM memory_validator_audit WHERE scope_id=? AND validator=?",
+                 st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, validator);
+    if (stepRetry(st.stmt) != SQLITE_ROW) return out;
+    const long long audits = sqlite3_column_int64(st.stmt, 0);
+    const long long rejections = sqlite3_column_type(st.stmt, 1) == SQLITE_NULL
+        ? 0 : sqlite3_column_int64(st.stmt, 1);
+    const double p = audits > 0 ? static_cast<double>(rejections) /
+        static_cast<double>(audits) : 0.0;
+    double lo = 0.0;
+    double hi = 1.0;
+    if (audits > 0) {
+        const double n = static_cast<double>(audits);
+        const double z = 1.959963984540054;
+        const double denom = 1.0 + z * z / n;
+        const double center = (p + z * z / (2.0 * n)) / denom;
+        const double margin = z * std::sqrt(
+            (p * (1.0 - p) + z * z / (4.0 * n)) / n) / denom;
+        lo = std::max(0.0, center - margin);
+        hi = std::min(1.0, center + margin);
+    }
+    out["audits"] = audits;
+    out["rejections"] = rejections;
+    out["divergence"] = p;
+    out["wilsonLow"] = lo;
+    out["wilsonHigh"] = hi;
+    out["weight"] = 1.0 - p;
+    return out;
+}
+
+taskforge::Json MemoryStore::validatorAuditReport(const std::string& scopeId,
+                                                  size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out = taskforge::Json::array();
+    if (!db_ || scopeId.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "SELECT validator,COUNT(*),SUM(CASE WHEN verdict='rejected' THEN 1 ELSE 0 END),"
+                 "MAX(created_at) FROM memory_validator_audit WHERE scope_id=? "
+                 "GROUP BY validator ORDER BY MAX(created_at) DESC LIMIT ?", st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    sqlite3_bind_int64(st.stmt, 2, static_cast<sqlite3_int64>(limit));
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        const std::string validator = columnText(st.stmt, 0);
+        const auto stats = validatorAuditStats(scopeId, validator);
+        out.push_back(taskforge::Json{
+            {"validator", validator},
+            {"audits", sqlite3_column_int64(st.stmt, 1)},
+            {"rejections", sqlite3_column_type(st.stmt, 2) == SQLITE_NULL
+                ? 0LL : sqlite3_column_int64(st.stmt, 2)},
+            {"divergence", stats.value("divergence", 0.0)},
+            {"wilsonLow", stats.value("wilsonLow", 0.0)},
+            {"wilsonHigh", stats.value("wilsonHigh", 1.0)},
+            {"weight", stats.value("weight", 1.0)},
+            {"lastAudit", columnText(st.stmt, 3)}});
+    }
+    return out;
+}
+
+bool MemoryStore::saveTaskSnapshot(const MemoryTaskSnapshotRecord& snapshot) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || snapshot.scopeId.empty() || snapshot.traceId.empty()) return false;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "INSERT INTO memory_task_snapshot"
+                 "(trace_id,scope_id,input_hash,input_json,workspace_kind,workspace_ref,bytes,"
+                 "created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?) "
+                 "ON CONFLICT(trace_id) DO UPDATE SET input_hash=excluded.input_hash,"
+                 "input_json=excluded.input_json,workspace_kind=excluded.workspace_kind,"
+                 "workspace_ref=excluded.workspace_ref,bytes=excluded.bytes,"
+                 "expires_at=excluded.expires_at", st, error)) {
+        lastError_ = error;
+        return false;
+    }
+    const std::string created = snapshot.createdAt.empty() ? nowIso() : snapshot.createdAt;
+    bindText(st.stmt, 1, snapshot.traceId);
+    bindText(st.stmt, 2, snapshot.scopeId);
+    bindText(st.stmt, 3, snapshot.inputHash);
+    bindText(st.stmt, 4, snapshot.inputJson);
+    bindText(st.stmt, 5, snapshot.workspaceKind);
+    bindText(st.stmt, 6, snapshot.workspaceRef);
+    sqlite3_bind_int64(st.stmt, 7, snapshot.bytes);
+    bindText(st.stmt, 8, created);
+    bindText(st.stmt, 9, snapshot.expiresAt);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return false;
+    }
+    return true;
+}
+
+taskforge::Json MemoryStore::getTaskSnapshot(const std::string& scopeId,
+                                             const std::string& traceId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty() || traceId.empty()) return taskforge::Json::object();
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "SELECT trace_id,input_hash,input_json,workspace_kind,workspace_ref,bytes,"
+                 "created_at,expires_at FROM memory_task_snapshot "
+                 "WHERE scope_id=? AND trace_id=?", st, error)) {
+        lastError_ = error;
+        return taskforge::Json::object();
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, traceId);
+    if (stepRetry(st.stmt) != SQLITE_ROW) return taskforge::Json::object();
+    return taskforge::Json{
+        {"traceId", columnText(st.stmt, 0)},
+        {"inputHash", columnText(st.stmt, 1)},
+        {"input", taskforge::jsonutil::tryParse(columnText(st.stmt, 2))
+                      .value_or(taskforge::Json::object())},
+        {"workspaceKind", columnText(st.stmt, 3)},
+        {"workspaceRef", columnText(st.stmt, 4)},
+        {"bytes", sqlite3_column_int64(st.stmt, 5)},
+        {"createdAt", columnText(st.stmt, 6)},
+        {"expiresAt", columnText(st.stmt, 7)}};
+}
+
+long long MemoryStore::purgeExpiredSnapshots(const std::string& scopeId,
+                                             const std::string& now) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty()) return 0;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "DELETE FROM memory_task_snapshot WHERE scope_id=? AND expires_at<?",
+                 st, error)) {
+        lastError_ = error;
+        return 0;
+    }
+    const std::string cutoff = now.empty() ? nowIso() : now;
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, cutoff);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return 0;
+    }
+    return static_cast<long long>(sqlite3_changes(db_));
+}
+
+taskforge::Json MemoryStore::snapshotSummary(const std::string& scopeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out{{"count", 0LL}, {"bytes", 0LL}, {"expired", 0LL}};
+    if (!db_ || scopeId.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "SELECT COUNT(*),COALESCE(SUM(bytes),0),"
+                 "COALESCE(SUM(CASE WHEN expires_at<? THEN 1 ELSE 0 END),0) "
+                 "FROM memory_task_snapshot WHERE scope_id=?", st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    bindText(st.stmt, 1, nowIso());
+    bindText(st.stmt, 2, scopeId);
+    if (stepRetry(st.stmt) != SQLITE_ROW) return out;
+    out["count"] = sqlite3_column_int64(st.stmt, 0);
+    out["bytes"] = sqlite3_column_int64(st.stmt, 1);
+    out["expired"] = sqlite3_column_int64(st.stmt, 2);
+    return out;
 }
 
 bool MemoryStore::touchHitsLastUsed(const std::string& scopeId,

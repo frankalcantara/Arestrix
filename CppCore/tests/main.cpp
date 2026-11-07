@@ -4568,6 +4568,155 @@ TEST(memory_lexical_search_uses_ledger_ranking) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_audit_reassigns_failure_by_ablation) {
+    using taskforge::memory::MemoryCreditEvent;
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-audit-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "credit-audit-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    CHECK(memory.configureCreditAudit(projectId,
+        taskforge::Json::parse(R"({"creditAudit":{"enabled":true}})")));
+    auto* telemetry = memory.telemetryStore(projectId);
+    auto* knowledge = memory.store(projectId);
+    CHECK(telemetry != nullptr);
+    CHECK(knowledge != nullptr);
+    const long long versionBefore = knowledge->knowledgeVersion();
+    const std::string scope = "project:" + projectId;
+    auto credit = [&](const std::string& trace, const std::string& item, const std::string& kind,
+                      double success, double failure) {
+        MemoryCreditEvent event;
+        event.traceId = trace;
+        event.itemKey = item;
+        event.taskType = "class";
+        event.kind = kind;
+        event.origin = "origin";
+        event.deltaSuccess = success;
+        event.deltaFailure = failure;
+        CHECK(telemetry->recordCreditEvents(scope, {event}));
+    };
+    credit("t1", "claim:c71", "citation", 1.0, 0.0);
+    credit("t4b", "claim:c71", "citation", 0.0, 1.0);
+    const auto request = taskforge::Json::parse(R"({
+        "traceId":"t4b",
+        "taskType":"class",
+        "weight":1.0,
+        "delivered":["claim:c52","claim:c71","claim:c86"],
+        "cited":["claim:c71"],
+        "arms":[
+            {"kind":"baseline","ok":false},
+            {"kind":"no_memory","ok":true},
+            {"kind":"ablate","items":["claim:c52"],"ok":false},
+            {"kind":"ablate","items":["claim:c71"],"ok":false},
+            {"kind":"ablate","items":["claim:c86"],"ok":true}
+        ]
+    })");
+    const auto result = memory.runCreditAudit(projectId, request);
+    CHECK(result.value("ok", false));
+    CHECK(result.value("status", std::string()) == "applied");
+    CHECK(result["decisive"].size() == 1);
+    CHECK(result["decisive"][0].get<std::string>() == "claim:c86");
+    const double c71 = telemetry->utilityFor(scope, "claim:c71", "class").value("utility", 0.0);
+    const double c86 = telemetry->utilityFor(scope, "claim:c86", "class").value("utility", 0.0);
+    CHECK(std::abs(c71 - 2.0 / 3.0) < 1e-9);
+    CHECK(std::abs(c86 - 1.0 / 3.0) < 1e-9);
+    CHECK(knowledge->knowledgeVersion() == versionBefore);
+    const long long eventsAfterFirst = telemetry->creditSummary(scope).value("events", 0LL);
+    const auto again = memory.runCreditAudit(projectId, request);
+    CHECK(again.value("ok", false));
+    CHECK(telemetry->creditSummary(scope).value("events", 0LL) == eventsAfterFirst);
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_credit_audit_skips_when_no_memory_fails_or_infra) {
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-audit-skip-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "credit-audit-skip-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    const auto base = taskforge::Json::parse(R"({
+        "traceId":"t4b","taskType":"class","weight":1.0,
+        "delivered":["claim:c52","claim:c71","claim:c86"],"cited":["claim:c71"]
+    })");
+    auto noMemory = base;
+    noMemory["arms"] = taskforge::Json::parse(R"([
+        {"kind":"baseline","ok":false},
+        {"kind":"no_memory","ok":false},
+        {"kind":"ablate","items":["claim:c86"],"ok":true}
+    ])");
+    const auto noAdjust = memory.runCreditAudit(projectId, noMemory);
+    CHECK(noAdjust.value("status", std::string()) == "no_adjustment");
+
+    auto infra = base;
+    infra["arms"] = taskforge::Json::parse(R"([
+        {"kind":"baseline","ok":false},
+        {"kind":"ablate","items":["claim:c86"],"ok":true,"infra":true}
+    ])");
+    const auto inconclusive = memory.runCreditAudit(projectId, infra);
+    CHECK(inconclusive.value("status", std::string()) == "inconclusive");
+    CHECK(inconclusive.value("reason", std::string()) == "infra_failure");
+
+    auto unstable = base;
+    unstable["repetitions"] = 2;
+    unstable["arms"] = taskforge::Json::parse(R"([
+        {"kind":"baseline","ok":false},
+        {"kind":"no_memory","ok":true},
+        {"kind":"ablate","items":["claim:c86"],"ok":true},
+        {"kind":"ablate","items":["claim:c86"],"ok":false}
+    ])");
+    const auto unstableResult = memory.runCreditAudit(projectId, unstable);
+    CHECK(unstableResult.value("status", std::string()) == "inconclusive");
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_validator_audit_computes_wilson_weight) {
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-validator-audit-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "validator-audit-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    for (int i = 0; i < 20; ++i) {
+        const auto result = memory.recordValidatorAudit(projectId, taskforge::Json{
+            {"validator", "v1"},
+            {"traceId", "trace-" + std::to_string(i)},
+            {"reviewer", "human"},
+            {"verdict", i < 3 ? "rejected" : "accepted"}});
+        CHECK(result.value("ok", false));
+    }
+    const auto summary = memory.validatorAuditSummary(projectId, "v1");
+    CHECK(summary.value("ok", false));
+    const auto stats = summary["validator"];
+    CHECK(stats.value("audits", 0LL) == 20);
+    CHECK(stats.value("rejections", 0LL) == 3);
+    CHECK(std::abs(stats.value("divergence", 0.0) - 0.15) < 1e-9);
+    CHECK(std::abs(stats.value("weight", 0.0) - 0.85) < 1e-9);
+    CHECK(stats.value("wilsonLow", 0.0) > 0.04);
+    CHECK(stats.value("wilsonHigh", 0.0) < 0.37);
+    CHECK(std::abs(memory.validatorWeight(projectId, "v1") - 0.85) < 1e-9);
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_utility_config_parses_ledger_source) {
     using taskforge::memory::MemoryService;
     auto& memory = MemoryService::getInstance();
