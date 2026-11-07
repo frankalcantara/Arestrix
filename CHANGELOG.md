@@ -41,9 +41,9 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   verdicts now write idempotent `citation` or `presence_low_res` events and
   update `memory_item_utility` in one telemetry transaction; `item_key` resolves
   edges through `claim_key` and prefixes lessons, playbooks, passages, paths and
-  facets. With `memory.utility.source='ledger'`, hybrid recall multiplies each
-  candidate score by its ledger utility; the default `edge` source preserves the
-  previous ranking. `seedLegacyCredit` imports legacy edge/playbook counters once
+  facets. With `memory.utility.source='ledger'`, hybrid and lexical-only recall
+  multiply each candidate score by its ledger utility; the default `edge` source
+  preserves the previous ranking. `seedLegacyCredit` imports legacy edge/playbook counters once
   as `legacy_seed`, and `rebuildUtility` rebuilds the aggregate from events.
   `memory utility status|seed|rebuild` exposes the ledger in the CLI. Credit is
   capped per origin and item/class inside `originWindowDays`; excess credit is

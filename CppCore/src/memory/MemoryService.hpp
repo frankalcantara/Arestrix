@@ -457,6 +457,8 @@ private:
                       taskforge::Json* traceCandidates = nullptr,
                       const std::vector<std::string>& lenses = {},
                       const std::string& taskType = "");
+    std::string itemKeyFor(const std::string& scope, const std::string& kind,
+                           const std::string& id, MemoryStore* store);
 
     // Worker de manutencao: o stop ocorre fora de mutex_ para evitar deadlock
     // com uma rodada de consolidacao em andamento.
