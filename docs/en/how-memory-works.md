@@ -416,6 +416,9 @@ validator approvals are stored in telemetry, and the estimated divergence uses
 a 95% Wilson interval; `memory.creditAudit.enabled` keeps the current automatic
 promotion until the configured minimum number of reviews is reached. Task
 snapshots are also telemetry-only and are rejected above `maxSnapshotBytes`.
+`memory audit-credit [--status S] [--report]` lists audits, and
+`memory validator-audit [record] --validator V --trace T --verdict
+accepted|rejected` records or summarizes reviewer verdicts.
 When a dependent claim is retracted, expires or stops being active, the path is
 suspended in the same maintenance pass. If all dependencies become valid again,
 it is reactivated; otherwise it can be retired.

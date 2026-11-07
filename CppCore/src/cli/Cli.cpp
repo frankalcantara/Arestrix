@@ -507,6 +507,8 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory sources ingest --path <arquivo-ou-pasta> [--allow-forgotten] --project <pasta> [--json]\n"
                      "arestrix-cli memory paths list|show|retire [id] --project <pasta> [--state S] [--json]\n"
                      "arestrix-cli memory utility status|seed|rebuild --project <pasta> [--json]\n"
+                     "arestrix-cli memory audit-credit [--status S] [--report] [--dry-run] --project <pasta> [--json]\n"
+                     "arestrix-cli memory validator-audit [status|record] [--validator V] [--trace T] [--reviewer R] [--verdict accepted|rejected] --project <pasta> [--json]\n"
                      "arestrix-cli memory bridges detect --project <pasta> [--max-proposals N] [--max-per-entity N] [--json]\n"
                      "arestrix-cli memory ab validate|order|report --suite <arquivo> [--observations <arquivo>] [--repetitions N] [--seed N] [--json]\n"
                      "arestrix-cli memory ab run --suite <arquivo> --pipeline <grafo> --node <vertice> [--repetitions N] [--seed N] [--root <pasta>] [--db <arquivo>] [--json]\n"
@@ -521,7 +523,8 @@ int runMemory(const std::vector<std::string>& args) {
         command != "ab" && command != "trace" && command != "claims" &&
         command != "paths" && command != "bridges" && command != "promote" &&
         command != "unpromote" && command != "doctor" && command != "reopen" &&
-        command != "forget" && command != "sources" && command != "utility") {
+        command != "forget" && command != "sources" && command != "utility" &&
+        command != "audit-credit" && command != "validator-audit") {
         std::cerr << "arestrix-cli memory: comando desconhecido: " << command << "\n";
         return kExitUsage;
     }
@@ -534,6 +537,7 @@ int runMemory(const std::vector<std::string>& args) {
     std::string traceNode;
     std::string pathId;
     std::string utilityAction;
+    std::string validatorAuditAction;
     size_t optionStart = 2;
     if (command == "proposals") {
         if (args.size() < 3) {
@@ -631,6 +635,11 @@ int runMemory(const std::vector<std::string>& args) {
             return kExitUsage;
         }
         optionStart = 3;
+    } else if (command == "validator-audit") {
+        if (args.size() > 2 && (args[2] == "status" || args[2] == "record")) {
+            validatorAuditAction = args[2];
+            optionStart = 3;
+        }
     } else if (command == "paths") {
         if (args.size() < 3) {
             std::cerr << "arestrix-cli memory paths: informe list|show|retire\n";
@@ -737,6 +746,12 @@ int runMemory(const std::vector<std::string>& args) {
     std::string abNodeId;
     int abRepetitions = 3;
     long long abSeed = 42;
+    std::string auditStatusFilter;
+    bool auditReport = false;
+    std::string validatorAuditValidator;
+    std::string validatorAuditTrace;
+    std::string validatorAuditReviewer;
+    std::string validatorAuditVerdict;
     for (size_t i = optionStart; i < args.size(); ++i) {
         const std::string& a = args[i];
         if (a == "--json") opt.json = true;
@@ -903,7 +918,27 @@ int runMemory(const std::vector<std::string>& args) {
         else if (a == "--status") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --status\n"; return kExitUsage; }
             status = args[++i];
-            if (status == "all") status.clear();
+            auditStatusFilter = status;
+            if (status == "all") { status.clear(); auditStatusFilter.clear(); }
+        }
+        else if (a == "--report") {
+            auditReport = true;
+        }
+        else if (a == "--validator") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --validator\n"; return kExitUsage; }
+            validatorAuditValidator = args[++i];
+        }
+        else if (a == "--trace") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --trace\n"; return kExitUsage; }
+            validatorAuditTrace = args[++i];
+        }
+        else if (a == "--reviewer") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --reviewer\n"; return kExitUsage; }
+            validatorAuditReviewer = args[++i];
+        }
+        else if (a == "--verdict") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --verdict\n"; return kExitUsage; }
+            validatorAuditVerdict = args[++i];
         }
         else if (a == "--state") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --state\n"; return kExitUsage; }
@@ -1106,6 +1141,38 @@ int runMemory(const std::vector<std::string>& args) {
             if (utilityAction == "seed") out = memory.seedLegacyCredit(projectId);
             else if (utilityAction == "rebuild") out = memory.rebuildUtility(projectId);
             else out = memory.creditSummary(projectId);
+            std::cout << out.dump(2) << "\n";
+            return out.value("ok", false) ? 0 : kExitConfig;
+        }
+
+        if (command == "audit-credit") {
+            taskforge::Json out =
+                memory.listCreditAudits(projectId, auditStatusFilter, 100);
+            out["dryRun"] = forgetDryRun;
+            if (auditReport && out.contains("audits") && out["audits"].is_array()) {
+                taskforge::Json statuses = taskforge::Json::object();
+                for (const auto& audit : out["audits"]) {
+                    const std::string s = audit.value("status", std::string());
+                    statuses[s] = statuses.value(s, 0LL) + 1;
+                }
+                out["report"] = taskforge::Json{{"byStatus", statuses},
+                                                {"total", out["audits"].size()}};
+            }
+            std::cout << out.dump(2) << "\n";
+            return out.value("ok", false) ? 0 : kExitConfig;
+        }
+
+        if (command == "validator-audit") {
+            taskforge::Json out;
+            if (validatorAuditAction == "record" || !validatorAuditVerdict.empty()) {
+                out = memory.recordValidatorAudit(projectId, taskforge::Json{
+                    {"validator", validatorAuditValidator},
+                    {"traceId", validatorAuditTrace},
+                    {"reviewer", validatorAuditReviewer},
+                    {"verdict", validatorAuditVerdict}});
+            } else {
+                out = memory.validatorAuditSummary(projectId, validatorAuditValidator);
+            }
             std::cout << out.dump(2) << "\n";
             return out.value("ok", false) ? 0 : kExitConfig;
         }
