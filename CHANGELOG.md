@@ -49,6 +49,11 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   capped per origin and item/class inside `originWindowDays`; excess credit is
   recorded with zero delta and `capped=1`. If a telemetry write fails, events
   go to `credit-outbox.jsonl` and the next validation drains them once.
+  Ablation audits can now be evaluated from observed baseline/no-memory/ablate
+  arms: decisive items receive the reassigned failure, infrastructure failures
+  and unstable repetitions stay inconclusive, and repeated audits are
+  idempotent. Validator reviews compute the Wilson interval and weight, and
+  telemetry stores task snapshots with size and expiry checks.
 - **Memory fix5 phase 4:** schema v8 adds `memory_prefix_epoch`; `buildBrief`
   now exposes a deterministic `stableBlock`, prefix key/identity, epoch and
   `removalSeqStart`; `briefInfoToJson` carries the delivered id sets to

@@ -406,6 +406,16 @@ is the default and keeps the previous ranking. Legacy edge/playbook counters are
 inside `originWindowDays`; excess events keep a zero delta with `capped=1`.
 If a telemetry write fails, credit events are appended to
 `credit-outbox.jsonl` and drained on the next validation.
+
+When a rejected task has an ablation audit, the observed baseline, no-memory
+and one-item-removed arms decide the outcome. An item is decisive when removing
+it flips the verdict in the majority of repetitions; the failure is then
+reversed from the cited items and assigned to the decisive one. Infrastructure
+failures and unstable repetitions keep the audit inconclusive. Reviews of
+validator approvals are stored in telemetry, and the estimated divergence uses
+a 95% Wilson interval; `memory.creditAudit.enabled` keeps the current automatic
+promotion until the configured minimum number of reviews is reached. Task
+snapshots are also telemetry-only and are rejected above `maxSnapshotBytes`.
 When a dependent claim is retracted, expires or stops being active, the path is
 suspended in the same maintenance pass. If all dependencies become valid again,
 it is reactivated; otherwise it can be retired.

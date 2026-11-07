@@ -410,6 +410,16 @@ O crédito por origem e item/classe é limitado dentro de `originWindowDays`;
 eventos excedentes ficam com delta zero e `capped=1`. Se a escrita na
 telemetria falhar, os eventos vão para `credit-outbox.jsonl` e são drenados na
 validação seguinte.
+
+Quando uma tarefa rejeitada tem auditoria por ablação, os braços observados
+(baseline, sem memória e com um item removido) decidem o desfecho. Um item é
+decisivo quando sua retirada inverte o veredito na maioria das repetições; a
+falha é devolvida aos itens citados e atribuída ao decisivo. Falha de
+infraestrutura ou repetição instável mantêm a auditoria inconclusiva. Revisões
+de aprovações de validador ficam na telemetria, e a divergência estimada usa
+intervalo de Wilson de 95%; com `memory.creditAudit.enabled`, a promoção
+automática espera o mínimo de revisões configurado. Snapshots de tarefa também
+ficam só na telemetria e são recusados acima de `maxSnapshotBytes`.
 Quando uma afirmação dependente é retratada, expira ou deixa de estar ativa, o
 caminho correspondente é suspenso na mesma manutenção. Se todas as dependências
 voltarem a vigorar, ele é reativado; caso contrário, pode ser retirado.
