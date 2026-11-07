@@ -53,7 +53,9 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   arms: decisive items receive the reassigned failure, infrastructure failures
   and unstable repetitions stay inconclusive, and repeated audits are
   idempotent. Validator reviews compute the Wilson interval and weight, and
-  telemetry stores task snapshots with size and expiry checks.
+  telemetry stores task snapshots with size and expiry checks. The CLI exposes
+  `memory audit-credit` and `memory validator-audit` for listing audits,
+  reporting status counts and recording independent review verdicts.
 - **Memory fix5 phase 4:** schema v8 adds `memory_prefix_epoch`; `buildBrief`
   now exposes a deterministic `stableBlock`, prefix key/identity, epoch and
   `removalSeqStart`; `briefInfoToJson` carries the delivered id sets to

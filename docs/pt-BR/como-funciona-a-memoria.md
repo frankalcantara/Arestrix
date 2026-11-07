@@ -420,6 +420,9 @@ de aprovações de validador ficam na telemetria, e a divergência estimada usa
 intervalo de Wilson de 95%; com `memory.creditAudit.enabled`, a promoção
 automática espera o mínimo de revisões configurado. Snapshots de tarefa também
 ficam só na telemetria e são recusados acima de `maxSnapshotBytes`.
+`memory audit-credit [--status S] [--report]` lista auditorias, e
+`memory validator-audit [record] --validator V --trace T --verdict
+accepted|rejected` grava ou resume os vereditos de revisão.
 Quando uma afirmação dependente é retratada, expira ou deixa de estar ativa, o
 caminho correspondente é suspenso na mesma manutenção. Se todas as dependências
 voltarem a vigorar, ele é reativado; caso contrário, pode ser retirado.
