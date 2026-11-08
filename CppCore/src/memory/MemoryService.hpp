@@ -92,6 +92,10 @@ struct MemoryCreditAuditConfig {
     double maxValidatorDivergence = 0.10;
     int snapshotRetentionDays = 14;
     long long maxSnapshotBytes = 50LL * 1024 * 1024;
+    std::string containerImage;
+    int containerMemoryMB = 512;
+    int containerTimeoutSeconds = 300;
+    int containerPidsLimit = 256;
 };
 MemoryCreditAuditConfig creditAuditConfigFromJson(const taskforge::Json& value);
 taskforge::Json creditAuditConfigToJson(const MemoryCreditAuditConfig& config);
@@ -395,6 +399,8 @@ public:
                            const std::string& validator) const;
     taskforge::Json saveTaskSnapshot(const std::string& projectId,
                                      const taskforge::Json& request);
+    taskforge::Json creditAuditContainerPlan(const std::string& projectId,
+                                             const taskforge::Json& request = taskforge::Json::object());
     taskforge::Json purgeExpiredSnapshots(const std::string& projectId);
     // Fase 5: outbox de credito quando a telemetria falha.
     bool appendCreditOutbox(const std::string& projectId,

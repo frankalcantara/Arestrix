@@ -4782,6 +4782,8 @@ TEST(memory_credit_audit_sampler_uses_executor) {
     memory.setCreditAuditExecutor([&](const CreditAuditExecutionRequest& request) {
         ++calls;
         CHECK(request.traceId == "trace-sampler");
+        CHECK(request.containerPlan.value("networkMode", std::string()) == "none");
+        CHECK(request.containerPlan.value("allowFallbackToHost", true) == false);
         CreditAuditExecutionResult result;
         result.ok = true;
         result.tokens = 10;
@@ -4862,6 +4864,43 @@ TEST(memory_credit_audit_sampler_marks_missing_snapshot) {
     const auto audit = telemetry->getCreditAudit(scope, "trace-no-snapshot");
     CHECK(audit.value("status", std::string()) == "not_auditable");
     CHECK(audit.value("reason", std::string()) == "no_snapshot");
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_credit_audit_container_plan_is_restricted) {
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-audit-container-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "credit-audit-container-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    CHECK(memory.configureCreditAudit(projectId, taskforge::Json::parse(R"({
+        "creditAudit":{"enabled":true,"containerImage":"arestrix/audit:test",
+        "containerMemoryMB":640,"containerTimeoutSeconds":120,"containerPidsLimit":128}
+    })")));
+    const auto plan = memory.creditAuditContainerPlan(
+        projectId, taskforge::Json{{"workspaceRef", "/tmp/arm-a"}});
+    CHECK(plan.value("image", std::string()) == "arestrix/audit:test");
+    CHECK(plan.value("isolation", std::string()) == "container");
+    CHECK(plan.value("networkMode", std::string()) == "none");
+    CHECK(plan.value("rootFilesystem", std::string()) == "read_only");
+    CHECK(plan.value("allowFallbackToHost", true) == false);
+    CHECK(plan.value("memoryMB", 0LL) == 640);
+    CHECK(plan.value("timeoutSeconds", 0LL) == 120);
+    CHECK(plan.value("pidsLimit", 0LL) == 128);
+    CHECK(plan.value("secretsMounted", true) == false);
+    CHECK(plan.value("memoryDatabasesMounted", true) == false);
+    CHECK(plan.value("oneContainerPerArm", false));
+    CHECK(plan["workspace"].value("source", std::string()) == "/tmp/arm-a");
+    CHECK(plan["allowedTools"].size() == 6);
+    CHECK(plan["disabledTools"].size() == 7);
+    CHECK(plan["mcpServers"].size() == 0);
     memory.closeProject(projectId);
     fs::remove_all(root, ec);
 }

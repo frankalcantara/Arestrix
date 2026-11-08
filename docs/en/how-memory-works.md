@@ -431,6 +431,31 @@ sandbox directly. `memory audit-credit --run` executes the sampler and
 `--dry-run` only lists the selected candidates. With audit enabled, each agent
 node writes its pre-brief input to `memory_task_snapshot` at the end of the run;
 episodes that used MCP or `call_agent` are marked `external_effects`.
+
+#### Audit container contract
+
+Every arm of an ablation audit gets its own ephemeral Docker container and its
+own workspace. Nothing is shared between arms: a file written by one arm is not
+visible to another, and all outputs are discarded after the verdict.
+
+| Control | Value |
+| --- | --- |
+| Image | `debian:stable-slim` by default; `ARESTRIX_SANDBOX_IMAGE` or `memory.creditAudit.containerImage` overrides it. |
+| Runtime | `docker run --rm --init`; one container per arm and repetition. |
+| Filesystem | Root filesystem read-only, `/tmp` mounted as `tmpfs`, workspace mounted read-write at `/workspace`. |
+| Workspace source | A copy of the task snapshot, or a git worktree with the saved patch applied. The memory and telemetry databases are never mounted. |
+| Network | `--network=none`. Model calls happen in the host process, never inside the container. |
+| Privileges | `--cap-drop=ALL`, `--security-opt=no-new-privileges`, user `1000:1000`, no host fallback. |
+| Limits | `containerMemoryMB` (default 512), `containerPidsLimit` (default 256) and `containerTimeoutSeconds` (default 300). |
+| Tools | `read`, `write`, `edit`, `validate_svg`, `retrieve` and `bash` (inside the container). |
+| Disabled | `memory_search`, memory write/state tools, `call_agent`, MCP servers and interaction nodes. |
+| Secrets | No provider keys, tokens or user environment variables are injected. |
+| Budget | `maxAuditsPerDay`, `maxTokensPerDay` and, when configured, the `memory-audit` gateway budget. |
+
+`creditAuditContainerPlan()` returns this contract to the registered
+`CreditAuditExecutorFn`. If no container driver is available, the task is not
+auditable instead of silently falling back to the host.
+
 When a dependent claim is retracted, expires or stops being active, the path is
 suspended in the same maintenance pass. If all dependencies become valid again,
 it is reactivated; otherwise it can be retired.

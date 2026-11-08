@@ -475,6 +475,13 @@ MemoryCreditAuditConfig creditAuditConfigFromJson(const taskforge::Json& value) 
     config.maxSnapshotBytes = std::max<long long>(1024,
         std::min<long long>(10LL * 1024 * 1024 * 1024,
                             audit.value("maxSnapshotBytes", 50LL * 1024 * 1024)));
+    config.containerImage = audit.value("containerImage", std::string());
+    config.containerMemoryMB = static_cast<int>(std::max<long long>(
+        64, std::min<long long>(65536, audit.value("containerMemoryMB", 512))));
+    config.containerTimeoutSeconds = static_cast<int>(std::max<long long>(
+        1, std::min<long long>(86400, audit.value("containerTimeoutSeconds", 300))));
+    config.containerPidsLimit = static_cast<int>(std::max<long long>(
+        16, std::min<long long>(4096, audit.value("containerPidsLimit", 256))));
     return config;
 }
 
@@ -491,7 +498,11 @@ taskforge::Json creditAuditConfigToJson(const MemoryCreditAuditConfig& config) {
         {"minValidatorAudits", config.minValidatorAudits},
         {"maxValidatorDivergence", config.maxValidatorDivergence},
         {"snapshotRetentionDays", config.snapshotRetentionDays},
-        {"maxSnapshotBytes", config.maxSnapshotBytes}};
+        {"maxSnapshotBytes", config.maxSnapshotBytes},
+        {"containerImage", config.containerImage},
+        {"containerMemoryMB", config.containerMemoryMB},
+        {"containerTimeoutSeconds", config.containerTimeoutSeconds},
+        {"containerPidsLimit", config.containerPidsLimit}};
 }
 
 MemoryService::~MemoryService() {
@@ -3913,6 +3924,8 @@ taskforge::Json MemoryService::auditCredit(const std::string& projectId,
             snapshot.value("inputHash", std::string()));
         request.snapshot = snapshot;
         request.trace = trace;
+        request.containerPlan = creditAuditContainerPlan(projectId, taskforge::Json{
+            {"workspaceRef", snapshot.value("workspaceRef", std::string())}});
         request.delivered = candidate.delivered;
         request.cited = candidate.cited;
         request.suspectItems = candidate.suspects;
@@ -4173,6 +4186,59 @@ double MemoryService::validatorWeight(const std::string& projectId,
     auto* t = const_cast<MemoryService*>(this)->ensureTelemetry(projectId);
     if (!t) return 1.0;
     return t->validatorAuditStats(scopeId(projectId), validator).value("weight", 1.0);
+}
+
+taskforge::Json MemoryService::creditAuditContainerPlan(
+    const std::string& projectId, const taskforge::Json& request) {
+    const auto config = creditAuditConfig(projectId);
+    std::string image = request.value("image", config.containerImage);
+    if (image.empty()) {
+        const char* envImage = std::getenv("ARESTRIX_SANDBOX_IMAGE");
+        if (envImage && *envImage) image = envImage;
+    }
+    if (image.empty()) image = "debian:stable-slim";
+    const std::string workspaceRef = request.value("workspaceRef", std::string());
+    auto tools = taskforge::Json::array();
+    for (const char* tool : {"read", "write", "edit", "validate_svg", "retrieve", "bash"}) {
+        tools.push_back(tool);
+    }
+    auto disabled = taskforge::Json::array();
+    for (const char* tool : {"memory_search", "memory_propose_lesson", "memory_state_get",
+                             "memory_state_set", "memory_state_list", "memory_state_history",
+                             "call_agent"}) {
+        disabled.push_back(tool);
+    }
+    auto notes = taskforge::Json::array();
+    notes.push_back("model calls happen in the host process, never inside the container");
+    notes.push_back("each arm gets its own ephemeral container and workspace copy");
+    notes.push_back("MCP servers, call_agent, interaction nodes and memory tools are disabled");
+    notes.push_back("container outputs are discarded after the audit");
+    return taskforge::Json{
+        {"image", image},
+        {"isolation", "container"},
+        {"network", "egress_llm_only"},
+        {"networkMode", "none"},
+        {"rootFilesystem", "read_only"},
+        {"tmpfs", taskforge::Json::array({"/tmp"})},
+        {"capDrop", taskforge::Json::array({"ALL"})},
+        {"noNewPrivileges", true},
+        {"pidsLimit", config.containerPidsLimit},
+        {"memoryMB", config.containerMemoryMB},
+        {"timeoutSeconds", config.containerTimeoutSeconds},
+        {"allowFallbackToHost", false},
+        {"workspace", taskforge::Json{{"path", "/workspace"},
+                                      {"source", workspaceRef},
+                                      {"mode", "rw"}}},
+        {"user", "1000:1000"},
+        {"allowedTools", tools},
+        {"disabledTools", disabled},
+        {"mcpServers", taskforge::Json::array()},
+        {"secretsMounted", false},
+        {"memoryDatabasesMounted", false},
+        {"oneContainerPerArm", true},
+        {"discardOutputs", true},
+        {"modelCalls", "host_only"},
+        {"notes", notes}};
 }
 
 taskforge::Json MemoryService::saveTaskSnapshot(const std::string& projectId,
