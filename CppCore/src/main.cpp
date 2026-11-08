@@ -25,6 +25,7 @@
 #include "platform/Process.hpp"
 #include "platform/StudioConsole.hpp"
 #include "rt/Tools.hpp"
+#include "rt/CreditAuditExecutor.hpp"
 #include "mcp/McpClient.hpp"
 #include "native/NativeTools.hpp"
 #include "rt/McpTools.hpp"
@@ -570,9 +571,13 @@ std::string activeMemoryDb(const std::string& projectId) {
 
 bool configureProjectMemory(const std::string& projectId, bool persistent) {
     static const bool auditProbeRegistered = []() {
-        taskforge::memory::MemoryService::getInstance().setCreditAuditContainerProbe([]() {
+        auto& memory = taskforge::memory::MemoryService::getInstance();
+        memory.setCreditAuditContainerProbe([]() {
             return taskforge::sandbox::SandboxManager::instance().isAvailable(
                 taskforge::sandbox::IsolationType::Container);
+        });
+        memory.setCreditAuditExecutor([](const taskforge::memory::CreditAuditExecutionRequest& request) {
+            return taskforge::rt::runCreditAuditInContainers(request);
         });
         return true;
     }();

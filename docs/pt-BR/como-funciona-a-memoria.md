@@ -461,7 +461,13 @@ depois do veredito.
 | Orçamento | `maxAuditsPerDay`, `maxTokensPerDay` e, quando configurado, o budget `memory-audit` do gateway. |
 
 `creditAuditContainerPlan()` entrega esse contrato ao
-`CreditAuditExecutorFn` registrado. `prepareCreditAuditWorkspaces()` copia o
+`CreditAuditExecutorFn` registrado. O executor padrão,
+`rt::runCreditAuditInContainers`, roda um braço baseline, um sem memória e um
+de ablação por item entregue. O comando do braço vem de
+`memory.creditAudit.containerCommand` ou de `ARESTRIX_AUDIT_ARM_COMMAND`, recebe
+a descrição em `ARESTRIX_AUDIT_ARM_JSON` e deve imprimir JSON com `ok`, `infra`
+opcional e `tokens` opcional.
+`prepareCreditAuditWorkspaces()` copia o
 workspace do snapshot uma vez por braço em
 `.arestrix/telemetry/audit-workspaces/<trace>/<arm>/workspace`, pulando
 `.arestrix`, `.git`, saídas de build e caches de dependências; a limpeza remove

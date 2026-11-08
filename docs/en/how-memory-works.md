@@ -455,7 +455,13 @@ visible to another, and all outputs are discarded after the verdict.
 | Budget | `maxAuditsPerDay`, `maxTokensPerDay` and, when configured, the `memory-audit` gateway budget. |
 
 `creditAuditContainerPlan()` returns this contract to the registered
-`CreditAuditExecutorFn`. `prepareCreditAuditWorkspaces()` copies the snapshot
+`CreditAuditExecutorFn`. The default executor,
+`rt::runCreditAuditInContainers`, runs one baseline arm, one no-memory arm and
+one ablation arm per delivered item. It reads the arm command from
+`memory.creditAudit.containerCommand` or `ARESTRIX_AUDIT_ARM_COMMAND`, passes
+the arm description in `ARESTRIX_AUDIT_ARM_JSON`, and expects the command to
+print JSON with `ok`, optional `infra` and optional `tokens`.
+`prepareCreditAuditWorkspaces()` copies the snapshot
 workspace once per arm into
 `.arestrix/telemetry/audit-workspaces/<trace>/<arm>/workspace`, skipping
 `.arestrix`, `.git`, build output and dependency caches; `cleanup...` removes

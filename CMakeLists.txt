@@ -242,6 +242,7 @@ add_library(arestrix_core STATIC
   ${SRC}/rt/Tools.cpp
   ${SRC}/rt/ArtifactValidation.cpp
   ${SRC}/rt/Agent.cpp
+  ${SRC}/rt/CreditAuditExecutor.cpp
   ${SRC}/rt/CallGraph.cpp
   ${SRC}/rt/AsyncCalls.cpp
   ${SRC}/rt/Interaction.cpp
