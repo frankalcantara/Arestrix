@@ -506,7 +506,7 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory forget (--source-version ID | --source URI) [--all-versions] [--async] [--dry-run] [--vacuum] [--reason texto] --project <pasta> [--json]\n"
                      "arestrix-cli memory sources ingest --path <arquivo-ou-pasta> [--allow-forgotten] --project <pasta> [--json]\n"
                      "arestrix-cli memory paths list|show|retire [id] --project <pasta> [--state S] [--json]\n"
-                     "arestrix-cli memory utility status|seed|rebuild --project <pasta> [--json]\n"
+                     "arestrix-cli memory utility status|seed|rebuild|rekey --project <pasta> [--json]\n"
                      "arestrix-cli memory audit-credit [--status S] [--report] [--run] [--dry-run] --project <pasta> [--json]\n"
                      "arestrix-cli memory validator-audit [status|record] [--validator V] [--trace T] [--reviewer R] [--verdict accepted|rejected] --project <pasta> [--json]\n"
                      "arestrix-cli memory bridges detect --project <pasta> [--max-proposals N] [--max-per-entity N] [--json]\n"
@@ -629,7 +629,7 @@ int runMemory(const std::vector<std::string>& args) {
         }
         utilityAction = args[2];
         if (utilityAction != "status" && utilityAction != "seed" &&
-            utilityAction != "rebuild") {
+            utilityAction != "rebuild" && utilityAction != "rekey") {
             std::cerr << "arestrix-cli memory utility: acao desconhecida: "
                       << utilityAction << "\n";
             return kExitUsage;
@@ -1144,6 +1144,7 @@ int runMemory(const std::vector<std::string>& args) {
             taskforge::Json out;
             if (utilityAction == "seed") out = memory.seedLegacyCredit(projectId);
             else if (utilityAction == "rebuild") out = memory.rebuildUtility(projectId);
+            else if (utilityAction == "rekey") out = memory.rekeyCreditItems(projectId);
             else out = memory.creditSummary(projectId);
             std::cout << out.dump(2) << "\n";
             return out.value("ok", false) ? 0 : kExitConfig;

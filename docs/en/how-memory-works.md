@@ -402,7 +402,9 @@ through `claim_key`. With `memory.utility.source='ledger'`, hybrid and
 lexical-only recall multiply each candidate score by its ledger utility; `edge`
 is the default and keeps the previous ranking. Legacy edge/playbook counters are imported once as
 `legacy_seed`, and the aggregate can be rebuilt from events with
-`memory utility status|seed|rebuild`. Credit per origin and item/class is capped
+`memory utility status|seed|rebuild|rekey`. When a later backfill computes a
+`claim_key`, `rekey` moves the old `edge:<id>` events to that key, merges
+duplicate unique events and rebuilds the aggregate. Credit per origin and item/class is capped
 inside `originWindowDays`; excess events keep a zero delta with `capped=1`.
 If a telemetry write fails, credit events are appended to
 `credit-outbox.jsonl` and drained on the next validation.

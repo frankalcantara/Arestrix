@@ -5071,6 +5071,7 @@ std::vector<MemoryEdgeRecord> MemoryStore::listEdges(const std::string& scopeId,
         edge.failureCount = columnInt(st.stmt, 17);
         edge.utility = columnDouble(st.stmt, 18);
         edge.dormantAt = columnText(st.stmt, 19);
+        edge.claimKey = columnText(st.stmt, 20);
         out.push_back(std::move(edge));
     }
     return out;
@@ -5836,6 +5837,124 @@ bool MemoryStore::rebuildItemUtility(const std::string& scopeId) {
         return false;
     }
     return true;
+}
+
+size_t MemoryStore::rekeyCreditItem(const std::string& scopeId,
+                                    const std::string& fromKey,
+                                    const std::string& toKey) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty() || fromKey.empty() || toKey.empty() ||
+        fromKey == toKey) {
+        return 0;
+    }
+    struct Row {
+        std::string id;
+        std::string traceId;
+        std::string taskType;
+        std::string modelTier;
+        double deltaSuccess = 0.0;
+        double deltaFailure = 0.0;
+        std::string kind;
+        std::string origin;
+        bool capped = false;
+        std::string auditId;
+        std::string createdAt;
+    };
+    std::vector<Row> rows;
+    {
+        Stmt st;
+        std::string error;
+        if (!prepare(db_,
+                     "SELECT id,trace_id,task_type,model_tier,delta_success,"
+                     "delta_failure,kind,origin,capped,audit_id,created_at "
+                     "FROM memory_credit_event WHERE scope_id=? AND item_key=?",
+                     st, error)) {
+            lastError_ = error;
+            return 0;
+        }
+        bindText(st.stmt, 1, scopeId);
+        bindText(st.stmt, 2, fromKey);
+        while (stepRetry(st.stmt) == SQLITE_ROW) {
+            Row row;
+            row.id = columnText(st.stmt, 0);
+            row.traceId = columnText(st.stmt, 1);
+            row.taskType = columnText(st.stmt, 2);
+            row.modelTier = columnText(st.stmt, 3);
+            row.deltaSuccess = sqlite3_column_double(st.stmt, 4);
+            row.deltaFailure = sqlite3_column_double(st.stmt, 5);
+            row.kind = columnText(st.stmt, 6);
+            row.origin = columnText(st.stmt, 7);
+            row.capped = sqlite3_column_int(st.stmt, 8) != 0;
+            row.auditId = columnText(st.stmt, 9);
+            row.createdAt = columnText(st.stmt, 10);
+            rows.push_back(std::move(row));
+        }
+    }
+    if (rows.empty()) return 0;
+
+    std::string txnError;
+    WriteTxn txn(*this, txnError);
+    if (!txn.ok()) {
+        lastError_ = txnError;
+        return 0;
+    }
+    Stmt move;
+    Stmt merge;
+    Stmt remove;
+    std::string error;
+    if (!prepare(db_, "UPDATE OR IGNORE memory_credit_event SET item_key=? WHERE id=?", move, error) ||
+        !prepare(db_,
+                 "UPDATE memory_credit_event SET delta_success=delta_success+?,"
+                 "delta_failure=delta_failure+?,capped=CASE WHEN ? THEN 1 ELSE capped END "
+                 "WHERE scope_id=? AND trace_id=? AND item_key=? AND kind=? AND audit_id=?",
+                 merge, error) ||
+        !prepare(db_, "DELETE FROM memory_credit_event WHERE id=?", remove, error)) {
+        lastError_ = error;
+        return 0;
+    }
+    size_t moved = 0;
+    for (const auto& row : rows) {
+        sqlite3_reset(move.stmt);
+        sqlite3_clear_bindings(move.stmt);
+        bindText(move.stmt, 1, toKey);
+        bindText(move.stmt, 2, row.id);
+        if (stepRetry(move.stmt) != SQLITE_DONE) {
+            lastError_ = sqlite3_errmsg(db_);
+            return 0;
+        }
+        if (sqlite3_changes(db_) == 1) {
+            ++moved;
+            continue;
+        }
+        sqlite3_reset(merge.stmt);
+        sqlite3_clear_bindings(merge.stmt);
+        sqlite3_bind_double(merge.stmt, 1, row.deltaSuccess);
+        sqlite3_bind_double(merge.stmt, 2, row.deltaFailure);
+        sqlite3_bind_int(merge.stmt, 3, row.capped ? 1 : 0);
+        bindText(merge.stmt, 4, scopeId);
+        bindText(merge.stmt, 5, row.traceId);
+        bindText(merge.stmt, 6, toKey);
+        bindText(merge.stmt, 7, row.kind);
+        bindText(merge.stmt, 8, row.auditId);
+        if (stepRetry(merge.stmt) != SQLITE_DONE) {
+            lastError_ = sqlite3_errmsg(db_);
+            return 0;
+        }
+        sqlite3_reset(remove.stmt);
+        sqlite3_clear_bindings(remove.stmt);
+        bindText(remove.stmt, 1, row.id);
+        if (stepRetry(remove.stmt) != SQLITE_DONE) {
+            lastError_ = sqlite3_errmsg(db_);
+            return 0;
+        }
+        ++moved;
+    }
+    if (!txn.commit(&txnError)) {
+        lastError_ = txnError;
+        return 0;
+    }
+    if (moved > 0) rebuildItemUtility(scopeId);
+    return moved;
 }
 
 bool MemoryStore::saveCreditAudit(const MemoryCreditAuditRecord& audit) {

@@ -3724,6 +3724,28 @@ taskforge::Json MemoryService::rebuildUtility(const std::string& projectId) {
     return taskforge::Json{{"ok", true}, {"summary", t->creditSummary(scope)}};
 }
 
+taskforge::Json MemoryService::rekeyCreditItems(const std::string& projectId) {
+    auto* s = ensureStore(projectId);
+    auto* t = ensureTelemetry(projectId);
+    if (!s || !t) return taskforge::Json{{"ok", false}, {"error", "memoria indisponivel"}};
+    const std::string scope = scopeId(projectId);
+    size_t moved = 0;
+    size_t edges = 0;
+    for (const auto& edge : s->listEdges(scope, "", 20000)) {
+        if (edge.claimKey.empty()) continue;
+        const std::string from = "edge:" + edge.id;
+        if (from == edge.claimKey) continue;
+        const size_t count = t->rekeyCreditItem(scope, from, edge.claimKey);
+        if (count > 0) {
+            moved += count;
+            ++edges;
+        }
+    }
+    return taskforge::Json{{"ok", true}, {"moved", static_cast<long long>(moved)},
+                           {"edges", static_cast<long long>(edges)},
+                           {"summary", t->creditSummary(scope)}};
+}
+
 taskforge::Json MemoryService::creditSummary(const std::string& projectId) {
     auto* t = ensureTelemetry(projectId);
     if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};

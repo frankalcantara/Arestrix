@@ -378,6 +378,7 @@ public:
     // Fase 5: semente unica dos contadores legados e reconstrucao do agregado.
     taskforge::Json seedLegacyCredit(const std::string& projectId);
     taskforge::Json rebuildUtility(const std::string& projectId);
+    taskforge::Json rekeyCreditItems(const std::string& projectId);
     taskforge::Json creditSummary(const std::string& projectId);
     // Avalia e grava uma auditoria por ablacao a partir dos bracos observados.
     taskforge::Json runCreditAudit(const std::string& projectId,

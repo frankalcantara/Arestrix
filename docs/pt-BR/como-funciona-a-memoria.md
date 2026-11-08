@@ -405,8 +405,10 @@ arestas por `claim_key`. Com `memory.utility.source='ledger'`, a recuperação
 híbrida e a lexical pura multiplicam o escore de cada candidato pela utilidade
 do livro; `edge` é o padrão e mantém o ranqueamento anterior. Contadores legados de arestas e
 playbooks são importados uma vez como `legacy_seed`, e o agregado pode ser
-reconstruído a partir dos eventos com `memory utility status|seed|rebuild`.
-O crédito por origem e item/classe é limitado dentro de `originWindowDays`;
+reconstruído a partir dos eventos com `memory utility status|seed|rebuild|rekey`.
+Quando um backfill posterior calcula um `claim_key`, `rekey` move os eventos
+antigos de `edge:<id>` para essa chave, funde eventos duplicados e reconstrói o
+agregado. O crédito por origem e item/classe é limitado dentro de `originWindowDays`;
 eventos excedentes ficam com delta zero e `capped=1`. Se a escrita na
 telemetria falhar, os eventos vão para `credit-outbox.jsonl` e são drenados na
 validação seguinte.
