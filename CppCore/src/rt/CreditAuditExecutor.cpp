@@ -71,21 +71,38 @@ memory::CreditAuditExecutionResult runCreditAuditInContainers(
         return out;
     }
 
-    std::vector<Arm> arms;
-    arms.push_back({"baseline", "baseline", {}});
-    arms.push_back({"no_memory", "no_memory", {}});
+    std::vector<Arm> singleArms;
+    singleArms.push_back({"baseline", "baseline", {}});
+    singleArms.push_back({"no_memory", "no_memory", {}});
     std::set<std::string> delivered(request.delivered.begin(), request.delivered.end());
     for (const auto& item : delivered) {
-        arms.push_back({itemId("ablate:", item), "ablate", {item}});
+        singleArms.push_back({itemId("ablate:", item), "ablate", {item}});
     }
-    if (arms.size() <= 2) {
+    if (singleArms.size() <= 2) {
         out.error = "no_items";
         return out;
     }
 
+    std::vector<Arm> pairArms;
+    if (request.pairwiseTopM >= 2 && request.suspectItems.size() >= 2) {
+        std::vector<std::string> top;
+        for (const auto& item : request.suspectItems) {
+            if (top.size() >= static_cast<size_t>(request.pairwiseTopM)) break;
+            top.push_back(item);
+        }
+        for (size_t i = 0; i < top.size(); ++i) {
+            for (size_t j = i + 1; j < top.size(); ++j) {
+                pairArms.push_back({itemId("pair:", top[i] + "+" + top[j]),
+                                    "pair", {top[i], top[j]}});
+            }
+        }
+    }
+
+    std::vector<Arm> allArms = singleArms;
+    allArms.insert(allArms.end(), pairArms.begin(), pairArms.end());
     auto& memory = memory::MemoryService::getInstance();
     Json armIds = Json::array();
-    for (const auto& arm : arms) armIds.push_back(arm.id);
+    for (const auto& arm : allArms) armIds.push_back(arm.id);
     const Json prepared = memory.prepareCreditAuditWorkspaces(
         request.projectId, request.traceId, armIds);
     if (!prepared.value("ok", false)) {
@@ -105,13 +122,13 @@ memory::CreditAuditExecutionResult runCreditAuditInContainers(
     }
     const int repetitions = std::max(1, request.repetitions);
     Json resultArms = Json::array();
+    std::map<std::string, int> approvals;
     long long totalTokens = 0;
-    for (const auto& arm : arms) {
+    auto runArm = [&](const Arm& arm) -> bool {
         const auto ws = workspaces.find(arm.id);
         if (ws == workspaces.end()) {
             out.error = "workspace_missing";
-            memory.cleanupCreditAuditWorkspaces(request.projectId, request.traceId);
-            return out;
+            return false;
         }
         for (int repetition = 1; repetition <= repetitions; ++repetition) {
             Json items = Json::array();
@@ -150,6 +167,7 @@ memory::CreditAuditExecutionResult runCreditAuditInContainers(
             const bool ok = parsed.value("ok", result.exitCode == 0);
             const long long tokens = parsed.value("tokens", 0LL);
             totalTokens += tokens;
+            if (ok) ++approvals[arm.id];
             resultArms.push_back(Json{
                 {"kind", arm.kind},
                 {"items", items},
@@ -160,7 +178,30 @@ memory::CreditAuditExecutionResult runCreditAuditInContainers(
                 {"repetition", repetition}});
             if (infra) {
                 // Uma falha de infraestrutura torna a auditoria inconclusiva.
-                break;
+                return true;
+            }
+        }
+        return true;
+    };
+    for (const auto& arm : singleArms) {
+        if (!runArm(arm)) {
+            memory.cleanupCreditAuditWorkspaces(request.projectId, request.traceId);
+            return out;
+        }
+    }
+    const bool noMemoryOk = approvals["no_memory"] * 2 > repetitions;
+    bool singleDecisive = false;
+    for (const auto& arm : singleArms) {
+        if (arm.kind == "ablate" && approvals[arm.id] * 2 > repetitions) {
+            singleDecisive = true;
+            break;
+        }
+    }
+    if (!singleDecisive && noMemoryOk) {
+        for (const auto& arm : pairArms) {
+            if (!runArm(arm)) {
+                memory.cleanupCreditAuditWorkspaces(request.projectId, request.traceId);
+                return out;
             }
         }
     }

@@ -70,7 +70,9 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   `/tmp`, an isolated `/workspace`, no network, dropped capabilities, no host
   fallback, only the six local tools and no secrets or memory databases.
   `rt::runCreditAuditInContainers` executes baseline, no-memory and one
-  ablation arm per delivered item in those containers. The arm command comes
+  ablation arm per delivered item in those containers. When no single ablation
+  flips the verdict and the no-memory arm approves, it also runs pairwise
+  ablations of the top `pairwiseTopM` suspects. The arm command comes
   from `creditAudit.containerCommand` or `ARESTRIX_AUDIT_ARM_COMMAND`, receives
   the arm description in `ARESTRIX_AUDIT_ARM_JSON`, and returns
   `ok`/`infra`/`tokens` as JSON.

@@ -457,7 +457,9 @@ visible to another, and all outputs are discarded after the verdict.
 `creditAuditContainerPlan()` returns this contract to the registered
 `CreditAuditExecutorFn`. The default executor,
 `rt::runCreditAuditInContainers`, runs one baseline arm, one no-memory arm and
-one ablation arm per delivered item. It reads the arm command from
+one ablation arm per delivered item. If no single ablation flips the verdict
+and the no-memory arm approves, it runs pairwise ablations of the top
+`pairwiseTopM` suspects. It reads the arm command from
 `memory.creditAudit.containerCommand` or `ARESTRIX_AUDIT_ARM_COMMAND`, passes
 the arm description in `ARESTRIX_AUDIT_ARM_JSON`, and expects the command to
 print JSON with `ok`, optional `infra` and optional `tokens`.
