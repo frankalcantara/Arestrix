@@ -569,6 +569,14 @@ std::string activeMemoryDb(const std::string& projectId) {
 }
 
 bool configureProjectMemory(const std::string& projectId, bool persistent) {
+    static const bool auditProbeRegistered = []() {
+        taskforge::memory::MemoryService::getInstance().setCreditAuditContainerProbe([]() {
+            return taskforge::sandbox::SandboxManager::instance().isAvailable(
+                taskforge::sandbox::IsolationType::Container);
+        });
+        return true;
+    }();
+    (void)auditProbeRegistered;
     return taskforge::memory::MemoryService::getInstance().configure(
         projectId, persistent, activeMemoryDb(projectId));
 }

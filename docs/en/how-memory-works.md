@@ -457,8 +457,9 @@ visible to another, and all outputs are discarded after the verdict.
 workspace once per arm into
 `.arestrix/telemetry/audit-workspaces/<trace>/<arm>/workspace`, skipping
 `.arestrix`, `.git`, build output and dependency caches; `cleanup...` removes
-the tree after the audit. If no container driver is available, the task is not
-auditable instead of silently falling back to the host.
+the tree after the audit. The runtime registers a container probe backed by
+`SandboxManager`; when Docker is unavailable, the sampler records
+`no_container` and does not fall back to the host.
 
 When a dependent claim is retracted, expires or stops being active, the path is
 suspended in the same maintenance pass. If all dependencies become valid again,

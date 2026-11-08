@@ -3740,12 +3740,19 @@ bool MemoryService::hasCreditAuditExecutor() const {
     return static_cast<bool>(creditAuditExecutor_);
 }
 
+void MemoryService::setCreditAuditContainerProbe(std::function<bool()> probe) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    creditAuditContainerProbe_ = std::move(probe);
+}
+
 taskforge::Json MemoryService::auditCredit(const std::string& projectId,
                                            const taskforge::Json& options) {
     CreditAuditExecutorFn executor;
+    std::function<bool()> containerProbe;
     {
         std::lock_guard<std::recursive_mutex> lock(mutex_);
         executor = creditAuditExecutor_;
+        containerProbe = creditAuditContainerProbe_;
     }
     auto* t = ensureTelemetry(projectId);
     if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
@@ -3759,6 +3766,8 @@ taskforge::Json MemoryService::auditCredit(const std::string& projectId,
         out["reason"] = "disabled";
         return out;
     }
+    const bool containerAvailable = !containerProbe || containerProbe();
+    out["containerAvailable"] = containerAvailable;
     const std::string scope = scopeId(projectId);
     const bool dryRun = options.value("dryRun", false);
     const int limit = std::max(0, std::min(1000,
@@ -3827,31 +3836,35 @@ taskforge::Json MemoryService::auditCredit(const std::string& projectId,
         candidate.suspects.assign(suspects.begin(), suspects.end());
         if (candidate.delivered.empty()) continue;
 
-        const std::string episodeTools = episode.value(
-            "toolCalls", taskforge::Json::array()).dump();
-        if (options.value("externalEffects", false) ||
-            trace.value("externalEffects", false) || trace.value("usedMcp", false) ||
-            episodeTools.find("\"mcp") != std::string::npos ||
-            episodeTools.find("call_agent") != std::string::npos) {
-            candidate.reason = "external_effects";
-        }
-        if (candidate.reason.empty() && !validation.validatorId.empty()) {
-            const auto stats = t->validatorAuditStats(scope, validation.validatorId);
-            if (stats.value("audits", 0LL) >= config.minValidatorAudits &&
-                stats.value("divergence", 0.0) > config.maxValidatorDivergence) {
-                candidate.reason = "validator_suspended";
+        if (!containerAvailable) {
+            candidate.reason = "no_container";
+        } else {
+            const std::string episodeTools = episode.value(
+                "toolCalls", taskforge::Json::array()).dump();
+            if (options.value("externalEffects", false) ||
+                trace.value("externalEffects", false) || trace.value("usedMcp", false) ||
+                episodeTools.find("\"mcp") != std::string::npos ||
+                episodeTools.find("call_agent") != std::string::npos) {
+                candidate.reason = "external_effects";
             }
-        }
-        const auto snapshot = t->getTaskSnapshot(scope, traceId);
-        if (candidate.reason.empty() && snapshot.empty()) {
-            candidate.reason = "no_snapshot";
-        } else if (candidate.reason.empty() &&
-                   snapshot.value("expiresAt", std::string()) < isoNow()) {
-            candidate.reason = "snapshot_expired";
-        } else if (candidate.reason.empty() &&
-                   snapshot.value("input", taskforge::Json::object()).dump().find("[MEMO:") !=
-                       std::string::npos) {
-            candidate.reason = "package_in_input";
+            if (candidate.reason.empty() && !validation.validatorId.empty()) {
+                const auto stats = t->validatorAuditStats(scope, validation.validatorId);
+                if (stats.value("audits", 0LL) >= config.minValidatorAudits &&
+                    stats.value("divergence", 0.0) > config.maxValidatorDivergence) {
+                    candidate.reason = "validator_suspended";
+                }
+            }
+            const auto snapshot = t->getTaskSnapshot(scope, traceId);
+            if (candidate.reason.empty() && snapshot.empty()) {
+                candidate.reason = "no_snapshot";
+            } else if (candidate.reason.empty() &&
+                       snapshot.value("expiresAt", std::string()) < isoNow()) {
+                candidate.reason = "snapshot_expired";
+            } else if (candidate.reason.empty() &&
+                       snapshot.value("input", taskforge::Json::object()).dump().find("[MEMO:") !=
+                           std::string::npos) {
+                candidate.reason = "package_in_input";
+            }
         }
 
         const bool suspect = !candidate.suspects.empty();
