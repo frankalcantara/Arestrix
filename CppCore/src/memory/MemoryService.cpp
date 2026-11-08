@@ -4241,6 +4241,122 @@ taskforge::Json MemoryService::creditAuditContainerPlan(
         {"notes", notes}};
 }
 
+taskforge::Json MemoryService::prepareCreditAuditWorkspaces(
+    const std::string& projectId, const std::string& traceId,
+    const taskforge::Json& arms) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    if (traceId.empty()) return taskforge::Json{{"ok", false}, {"error", "traceId ausente"}};
+    if (!arms.is_array() || arms.empty()) {
+        return taskforge::Json{{"ok", false}, {"error", "arms vazio"}};
+    }
+    const std::string scope = scopeId(projectId);
+    const auto snapshot = t->getTaskSnapshot(scope, traceId);
+    if (snapshot.empty()) {
+        return taskforge::Json{{"ok", false}, {"reason", "no_snapshot"}};
+    }
+    const std::string source = snapshot.value("workspaceRef", std::string());
+    if (source.empty()) {
+        return taskforge::Json{{"ok", false}, {"reason", "no_workspace"}};
+    }
+    std::error_code ec;
+    const fs::path base(source);
+    if (!fs::is_directory(base, ec)) {
+        return taskforge::Json{{"ok", false}, {"reason", "workspace_missing"}};
+    }
+    const fs::path telemetry(telemetryDatabasePath(projectId));
+    if (telemetry.empty()) {
+        return taskforge::Json{{"ok", false}, {"error", "telemetria sem caminho"}};
+    }
+    const fs::path root = telemetry.parent_path() / "audit-workspaces" / safeName(traceId);
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    if (ec) return taskforge::Json{{"ok", false}, {"error", ec.message()}};
+
+    const std::set<std::string> skipped = {
+        ".arestrix", ".git", "node_modules", "build", "build-onnx", "storage",
+        "target", ".venv", "__pycache__", ".cache"};
+    auto copyTree = [&](const fs::path& from, const fs::path& to) -> bool {
+        fs::create_directories(to, ec);
+        if (ec) return false;
+        fs::recursive_directory_iterator it(
+            from, fs::directory_options::skip_permission_denied, ec);
+        const fs::recursive_directory_iterator end;
+        for (; !ec && it != end; it.increment(ec)) {
+            const fs::path rel = fs::relative(it->path(), from, ec);
+            if (ec || rel.empty()) return false;
+            bool skip = false;
+            for (const auto& part : rel) {
+                if (skipped.count(part.string()) != 0) {
+                    skip = true;
+                    break;
+                }
+            }
+            if (skip) {
+                if (it->is_directory(ec)) it.disable_recursion_pending();
+                continue;
+            }
+            if (it->is_symlink(ec)) continue;
+            const fs::path dest = to / rel;
+            if (it->is_directory(ec)) {
+                fs::create_directories(dest, ec);
+            } else if (it->is_regular_file(ec)) {
+                fs::create_directories(dest.parent_path(), ec);
+                if (!ec) fs::copy_file(it->path(), dest,
+                                       fs::copy_options::overwrite_existing, ec);
+            }
+            if (ec) return false;
+        }
+        return !ec;
+    };
+
+    taskforge::Json outArms = taskforge::Json::array();
+    for (const auto& arm : arms) {
+        std::string id;
+        if (arm.is_string()) id = arm.get<std::string>();
+        else if (arm.is_object()) id = arm.value("id", std::string());
+        if (id.empty()) continue;
+        const fs::path armDir = root / safeName(id);
+        const fs::path workspace = armDir / "workspace";
+        const fs::path tmp = armDir / "tmp";
+        if (!copyTree(base, workspace)) {
+            fs::remove_all(root, ec);
+            return taskforge::Json{{"ok", false}, {"error", "workspace_copy_failed"},
+                                   {"arm", id}};
+        }
+        fs::create_directories(tmp, ec);
+        outArms.push_back(taskforge::Json{
+            {"id", id},
+            {"workspace", workspace.string()},
+            {"tmp", tmp.string()},
+            {"mode", "copy"},
+            {"workspaceKind", snapshot.value("workspaceKind", std::string("path"))}});
+    }
+    if (outArms.empty()) {
+        fs::remove_all(root, ec);
+        return taskforge::Json{{"ok", false}, {"error", "arms sem id"}};
+    }
+    const auto plan = creditAuditContainerPlan(projectId, taskforge::Json{
+        {"workspaceRef", root.string()}});
+    return taskforge::Json{{"ok", true}, {"root", root.string()},
+                           {"container", plan}, {"arms", outArms}};
+}
+
+taskforge::Json MemoryService::cleanupCreditAuditWorkspaces(
+    const std::string& projectId, const std::string& traceId) {
+    if (traceId.empty()) return taskforge::Json{{"ok", false}, {"error", "traceId ausente"}};
+    const fs::path telemetry(telemetryDatabasePath(projectId));
+    if (telemetry.empty()) {
+        return taskforge::Json{{"ok", false}, {"error", "telemetria sem caminho"}};
+    }
+    const fs::path root = telemetry.parent_path() / "audit-workspaces" / safeName(traceId);
+    std::error_code ec;
+    const bool existed = fs::exists(root, ec);
+    fs::remove_all(root, ec);
+    if (ec) return taskforge::Json{{"ok", false}, {"error", ec.message()}};
+    return taskforge::Json{{"ok", true}, {"root", root.string()}, {"removed", existed}};
+}
+
 taskforge::Json MemoryService::saveTaskSnapshot(const std::string& projectId,
                                                 const taskforge::Json& request) {
     auto* t = ensureTelemetry(projectId);

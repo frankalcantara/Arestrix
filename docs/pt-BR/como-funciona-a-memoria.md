@@ -459,8 +459,12 @@ depois do veredito.
 | Orçamento | `maxAuditsPerDay`, `maxTokensPerDay` e, quando configurado, o budget `memory-audit` do gateway. |
 
 `creditAuditContainerPlan()` entrega esse contrato ao
-`CreditAuditExecutorFn` registrado. Se não houver driver de contêiner
-disponível, a tarefa não é auditável em vez de cair silenciosamente para o host.
+`CreditAuditExecutorFn` registrado. `prepareCreditAuditWorkspaces()` copia o
+workspace do snapshot uma vez por braço em
+`.arestrix/telemetry/audit-workspaces/<trace>/<arm>/workspace`, pulando
+`.arestrix`, `.git`, saídas de build e caches de dependências; a limpeza remove
+a árvore depois da auditoria. Se não houver driver de contêiner disponível, a
+tarefa não é auditável em vez de cair silenciosamente para o host.
 
 Quando uma afirmação dependente é retratada, expira ou deixa de estar ativa, o
 caminho correspondente é suspenso na mesma manutenção. Se todas as dependências

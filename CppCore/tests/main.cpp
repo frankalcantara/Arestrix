@@ -4905,6 +4905,65 @@ TEST(memory_credit_audit_container_plan_is_restricted) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_audit_prepares_isolated_workspaces) {
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryTaskSnapshotRecord;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-audit-workspace-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    const fs::path base = root / "base";
+    fs::create_directories(base / "src", ec);
+    fs::create_directories(base / ".arestrix", ec);
+    fs::create_directories(base / "node_modules", ec);
+    {
+        std::ofstream out(base / "src" / "a.txt");
+        out << "conteudo";
+    }
+    {
+        std::ofstream out(base / ".arestrix" / "secret.txt");
+        out << "nao copiar";
+    }
+    {
+        std::ofstream out(base / "node_modules" / "x.txt");
+        out << "nao copiar";
+    }
+    const std::string projectId = "audit-workspace-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    CHECK(memory.configureCreditAudit(projectId, taskforge::Json::parse(
+        R"({"creditAudit":{"enabled":true}})")));
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+    MemoryTaskSnapshotRecord snapshot;
+    snapshot.traceId = "trace-ws";
+    snapshot.scopeId = scope;
+    snapshot.workspaceKind = "path";
+    snapshot.workspaceRef = base.string();
+    snapshot.expiresAt = "2999-01-01T00:00:00Z";
+    CHECK(telemetry->saveTaskSnapshot(snapshot));
+    const auto prepared = memory.prepareCreditAuditWorkspaces(
+        projectId, "trace-ws", taskforge::Json::parse(R"(["baseline","ablate:c86"])"));
+    CHECK(prepared.value("ok", false));
+    CHECK(prepared["arms"].size() == 2);
+    const fs::path armA(prepared["arms"][0].value("workspace", std::string()));
+    const fs::path armB(prepared["arms"][1].value("workspace", std::string()));
+    CHECK(armA != armB);
+    CHECK(fs::exists(armA / "src" / "a.txt", ec));
+    CHECK(fs::exists(armB / "src" / "a.txt", ec));
+    CHECK(!fs::exists(armA / ".arestrix", ec));
+    CHECK(!fs::exists(armA / "node_modules", ec));
+    CHECK(prepared["container"].value("networkMode", std::string()) == "none");
+    const auto cleanup = memory.cleanupCreditAuditWorkspaces(projectId, "trace-ws");
+    CHECK(cleanup.value("ok", false));
+    CHECK(!fs::exists(prepared.value("root", std::string()), ec));
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_utility_config_parses_ledger_source) {
     using taskforge::memory::MemoryService;
     auto& memory = MemoryService::getInstance();
