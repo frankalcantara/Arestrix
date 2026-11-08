@@ -428,7 +428,9 @@ auditing those tasks, and stops when `maxAuditsPerDay` or `maxTokensPerDay` is
 reached. The actual arms are produced by the registered
 `CreditAuditExecutorFn`; the memory module never talks to a provider or
 sandbox directly. `memory audit-credit --run` executes the sampler and
-`--dry-run` only lists the selected candidates.
+`--dry-run` only lists the selected candidates. With audit enabled, each agent
+node writes its pre-brief input to `memory_task_snapshot` at the end of the run;
+episodes that used MCP or `call_agent` are marked `external_effects`.
 When a dependent claim is retracted, expires or stops being active, the path is
 suspended in the same maintenance pass. If all dependencies become valid again,
 it is reactivated; otherwise it can be retired.

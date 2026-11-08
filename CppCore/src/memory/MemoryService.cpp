@@ -3816,8 +3816,12 @@ taskforge::Json MemoryService::auditCredit(const std::string& projectId,
         candidate.suspects.assign(suspects.begin(), suspects.end());
         if (candidate.delivered.empty()) continue;
 
+        const std::string episodeTools = episode.value(
+            "toolCalls", taskforge::Json::array()).dump();
         if (options.value("externalEffects", false) ||
-            trace.value("externalEffects", false) || trace.value("usedMcp", false)) {
+            trace.value("externalEffects", false) || trace.value("usedMcp", false) ||
+            episodeTools.find("\"mcp") != std::string::npos ||
+            episodeTools.find("call_agent") != std::string::npos) {
             candidate.reason = "external_effects";
         }
         if (candidate.reason.empty() && !validation.validatorId.empty()) {

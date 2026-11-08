@@ -432,7 +432,10 @@ hash estável fica abaixo de `sampleRate`. Ele registra `no_snapshot`,
 `maxTokensPerDay`. Os braços são produzidos pelo `CreditAuditExecutorFn`
 registrado; o módulo de memória não fala com provedor nem sandbox diretamente.
 `memory audit-credit --run` executa o amostrador e `--dry-run` apenas lista os
-candidatos selecionados.
+candidatos selecionados. Com a auditoria ligada, cada nó de agente grava a
+entrada anterior ao brief em `memory_task_snapshot` no fim da execução;
+episódios que usaram MCP ou `call_agent` ficam marcados como
+`external_effects`.
 Quando uma afirmação dependente é retratada, expira ou deixa de estar ativa, o
 caminho correspondente é suspenso na mesma manutenção. Se todas as dependências
 voltarem a vigorar, ele é reativado; caso contrário, pode ser retirado.
