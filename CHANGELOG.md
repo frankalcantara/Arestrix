@@ -66,6 +66,10 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   per-arm container contract: configurable image, read-only root, `tmpfs` for
   `/tmp`, an isolated `/workspace`, no network, dropped capabilities, no host
   fallback, only the six local tools and no secrets or memory databases.
+  `prepareCreditAuditWorkspaces()` materializes one copied workspace per arm
+  under the telemetry directory, skips `.arestrix`, `.git`, build output and
+  dependency caches, and `cleanupCreditAuditWorkspaces()` removes it after the
+  audit.
 - **Memory fix5 phase 4:** schema v8 adds `memory_prefix_epoch`; `buildBrief`
   now exposes a deterministic `stableBlock`, prefix key/identity, epoch and
   `removalSeqStart`; `briefInfoToJson` carries the delivered id sets to

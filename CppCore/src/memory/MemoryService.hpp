@@ -401,6 +401,12 @@ public:
                                      const taskforge::Json& request);
     taskforge::Json creditAuditContainerPlan(const std::string& projectId,
                                              const taskforge::Json& request = taskforge::Json::object());
+    // Materializa um workspace isolado por braco a partir do snapshot.
+    taskforge::Json prepareCreditAuditWorkspaces(const std::string& projectId,
+                                                 const std::string& traceId,
+                                                 const taskforge::Json& arms);
+    taskforge::Json cleanupCreditAuditWorkspaces(const std::string& projectId,
+                                                 const std::string& traceId);
     taskforge::Json purgeExpiredSnapshots(const std::string& projectId);
     // Fase 5: outbox de credito quando a telemetria falha.
     bool appendCreditOutbox(const std::string& projectId,
