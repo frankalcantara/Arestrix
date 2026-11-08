@@ -5161,6 +5161,124 @@ TEST(memory_credit_audit_container_executor_runs_arms) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_uses_single_claim_key_and_presence_low_res) {
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-credit-claim-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "credit-claim-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    auto* store = memory.store(projectId);
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(store != nullptr);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+    const std::string subject = store->ensureNode(scope, "n-subject", "entity", "Subject");
+    const std::string objectA = store->ensureNode(scope, "n-object-a", "entity", "A");
+    const std::string objectB = store->ensureNode(scope, "n-object-b", "entity", "B");
+    const std::string edgeA = store->recordEdge(
+        scope, subject, objectA, "USES", taskforge::Json(), "", "", 0.8, "active",
+        "claim", "", taskforge::Json::object(), "", "claim:same");
+    const std::string edgeB = store->recordEdge(
+        scope, subject, objectB, "USES", taskforge::Json(), "", "", 0.8, "active",
+        "claim", "", taskforge::Json::object(), "", "claim:same");
+    CHECK(!edgeA.empty());
+    CHECK(!edgeB.empty());
+
+    taskforge::memory::MemoryEpisodeRecord episode;
+    episode.scopeId = scope;
+    episode.runId = "run-claim";
+    episode.nodeId = "node-claim";
+    episode.kind = "task";
+    episode.content = "claim credit";
+    episode.taskType = "class";
+    episode.outcome = "failure";
+    const std::string episodeId = telemetry->recordEpisode(episode);
+    CHECK(!episodeId.empty());
+    CHECK(telemetry->recordHit(scope, "run-claim", "node-claim", edgeA, "fact",
+                                true, true, "failure"));
+    CHECK(telemetry->recordHit(scope, "run-claim", "node-claim", edgeB, "fact",
+                                true, true, "failure"));
+    MemoryValidationRecord validation;
+    validation.scopeId = scope;
+    validation.runId = "run-claim";
+    validation.nodeId = "node-claim";
+    validation.episodeId = episodeId;
+    validation.validatorId = "v1";
+    validation.ok = false;
+    CHECK(!memory.recordValidation(projectId, validation, false).empty());
+    const auto same = telemetry->utilityFor(scope, "claim:same", "class");
+    CHECK(same.value("events", 0LL) == 1);
+    CHECK(std::abs(same.value("f", 0.0) - 1.0) < 1e-9);
+    CHECK(telemetry->utilityFor(scope, "edge:" + edgeA, "class").value("events", -1LL) == 0);
+    CHECK(telemetry->utilityFor(scope, "edge:" + edgeB, "class").value("events", -1LL) == 0);
+
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_credit_presence_low_res_splits_delivered_items) {
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-credit-presence-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "credit-presence-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+    std::vector<std::string> lessons;
+    for (int i = 0; i < 4; ++i) {
+        const std::string id = memory.recordLesson(
+            projectId, "class", "t", "regra " + std::to_string(i));
+        CHECK(!id.empty());
+        lessons.push_back(id);
+    }
+    taskforge::memory::MemoryEpisodeRecord episode;
+    episode.scopeId = scope;
+    episode.runId = "run-presence";
+    episode.nodeId = "node-presence";
+    episode.kind = "task";
+    episode.content = "presence";
+    episode.taskType = "class";
+    episode.outcome = "success";
+    const std::string episodeId = telemetry->recordEpisode(episode);
+    CHECK(!episodeId.empty());
+    for (const auto& id : lessons) {
+        CHECK(telemetry->recordHit(scope, "run-presence", "node-presence", id, "lesson",
+                                    true, false, "success"));
+    }
+    MemoryValidationRecord validation;
+    validation.scopeId = scope;
+    validation.runId = "run-presence";
+    validation.nodeId = "node-presence";
+    validation.episodeId = episodeId;
+    validation.validatorId = "v1";
+    validation.ok = true;
+    CHECK(!memory.recordValidation(projectId, validation, false).empty());
+    for (const auto& id : lessons) {
+        const auto utility = telemetry->utilityFor(scope, "lesson:" + id, "class");
+        CHECK(utility.value("events", 0LL) == 1);
+        CHECK(std::abs(utility.value("s", 0.0) - 0.25) < 1e-9);
+        CHECK(std::abs(utility.value("lowRes", 0.0) - 0.25) < 1e-9);
+    }
+    CHECK(telemetry->creditSummary(scope).value("events", 0LL) == 4);
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_utility_config_parses_ledger_source) {
     using taskforge::memory::MemoryService;
     auto& memory = MemoryService::getInstance();
