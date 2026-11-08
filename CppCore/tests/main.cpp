@@ -5024,6 +5024,52 @@ TEST(memory_credit_audit_prepares_isolated_workspaces) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_rekey_moves_edge_events_to_claim_key) {
+    using taskforge::memory::MemoryCreditEvent;
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-rekey-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "credit-rekey-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    auto* store = memory.store(projectId);
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(store != nullptr);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+    const std::string nodeA = store->ensureNode(scope, "node-a", "entity", "A");
+    const std::string nodeB = store->ensureNode(scope, "node-b", "entity", "B");
+    CHECK(!nodeA.empty());
+    CHECK(!nodeB.empty());
+    const std::string edge = store->recordEdge(
+        scope, nodeA, nodeB, "USES", taskforge::Json(), "", "", 0.5, "active",
+        "agent", "", taskforge::Json::object(), "", "claim:rekey");
+    CHECK(!edge.empty());
+    MemoryCreditEvent event;
+    event.traceId = "trace-rekey";
+    event.itemKey = "edge:" + edge;
+    event.taskType = "class";
+    event.kind = "citation";
+    event.deltaFailure = 1.0;
+    CHECK(telemetry->recordCreditEvents(scope, {event}));
+    const auto result = memory.rekeyCreditItems(projectId);
+    CHECK(result.value("ok", false));
+    CHECK(result.value("moved", 0LL) == 1);
+    const auto rekeyed = telemetry->utilityFor(scope, "claim:rekey", "class");
+    CHECK(rekeyed.value("events", 0LL) == 1);
+    CHECK(std::abs(rekeyed.value("f", 0.0) - 1.0) < 1e-9);
+    CHECK(telemetry->utilityFor(scope, "edge:" + edge, "class").value("events", -1LL) == 0);
+    const auto again = memory.rekeyCreditItems(projectId);
+    CHECK(again.value("moved", -1LL) == 0);
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_utility_config_parses_ledger_source) {
     using taskforge::memory::MemoryService;
     auto& memory = MemoryService::getInstance();

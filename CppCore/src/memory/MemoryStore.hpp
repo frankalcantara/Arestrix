@@ -784,6 +784,10 @@ public:
                                 const std::string& since) const;
     // Reconstroi o agregado a partir dos eventos; idempotente.
     bool rebuildItemUtility(const std::string& scopeId);
+    // Move eventos de edge:<id> para o claim_key quando o backfill calcula a chave.
+    size_t rekeyCreditItem(const std::string& scopeId,
+                           const std::string& fromKey,
+                           const std::string& toKey);
     // Fase 5: auditoria por ablacao e divergencia de validador.
     bool saveCreditAudit(const MemoryCreditAuditRecord& audit);
     taskforge::Json getCreditAudit(const std::string& scopeId,
