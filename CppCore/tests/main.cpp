@@ -5113,8 +5113,10 @@ TEST(memory_credit_audit_container_executor_runs_arms) {
     request.validator = "v1";
     request.inputHash = "input-hash";
     request.containerCommand = "run-arm";
-    request.delivered = {"claim:a", "claim:b"};
+    request.delivered = {"claim:a", "claim:b", "claim:c"};
     request.cited = {"claim:a"};
+    request.suspectItems = {"claim:b", "claim:c"};
+    request.pairwiseTopM = 2;
     request.repetitions = 1;
     auto result = taskforge::rt::runCreditAuditInContainers(
         request,
@@ -5126,18 +5128,35 @@ TEST(memory_credit_audit_container_executor_runs_arms) {
             CHECK(params.policy.network == sb::NetworkAccess::EgressLlmOnly);
             CHECK(!params.policy.allowFallbackToHost);
             CHECK(params.workingDir.find("audit-workspaces") != std::string::npos);
+            const auto payload = taskforge::jsonutil::tryParse(
+                params.envVars.at("ARESTRIX_AUDIT_ARM_JSON"));
+            CHECK(payload && payload->is_object());
+            const std::string kind = payload->value("kind", std::string());
             sb::ExecutionResult res;
             res.exitCode = 0;
-            res.stdoutOutput = R"({"ok":true,"tokens":5})";
+            res.stdoutOutput = (kind == "no_memory" || kind == "pair")
+                ? R"({"ok":true,"tokens":5})"
+                : R"({"ok":false,"tokens":5})";
             return res;
         });
     CHECK(result.ok);
-    CHECK(calls == 4);
+    CHECK(calls == 6);
     CHECK(sawArmEnv);
-    CHECK(result.tokens == 20);
-    CHECK(result.arms.size() == 4);
+    CHECK(result.tokens == 30);
+    CHECK(result.arms.size() == 6);
     CHECK(result.arms[0].value("kind", std::string()) == "baseline");
     CHECK(result.arms[1].value("kind", std::string()) == "no_memory");
+    const auto audit = memory.runCreditAudit(projectId, taskforge::Json{
+        {"traceId", "trace-exec"},
+        {"taskType", "class"},
+        {"validator", "v1"},
+        {"delivered", request.delivered},
+        {"cited", request.cited},
+        {"arms", result.arms},
+        {"tokens", result.tokens}});
+    CHECK(audit.value("ok", false));
+    CHECK(audit.value("status", std::string()) == "applied");
+    CHECK(audit["decisive"].size() == 2);
     memory.closeProject(projectId);
     fs::remove_all(root, ec);
 }
