@@ -20,6 +20,7 @@
 
 #include "compiler/TaskflowGenerator.hpp"
 #include "mcp/McpClient.hpp"
+#include "rt/CreditAuditExecutor.hpp"
 #include "core/Graph.hpp"
 #include "memory/MemoryStore.hpp"
 #include "memory/MemoryService.hpp"
@@ -5066,6 +5067,77 @@ TEST(memory_credit_rekey_moves_edge_events_to_claim_key) {
     CHECK(telemetry->utilityFor(scope, "edge:" + edge, "class").value("events", -1LL) == 0);
     const auto again = memory.rekeyCreditItems(projectId);
     CHECK(again.value("moved", -1LL) == 0);
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_credit_audit_container_executor_runs_arms) {
+    using taskforge::memory::CreditAuditExecutionRequest;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryTaskSnapshotRecord;
+    namespace fs = std::filesystem;
+    namespace sb = taskforge::sandbox;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-audit-executor-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    const fs::path base = root / "base";
+    fs::create_directories(base, ec);
+    {
+        std::ofstream out(base / "input.txt");
+        out << "entrada";
+    }
+    const std::string projectId = "audit-executor-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+    MemoryTaskSnapshotRecord snapshot;
+    snapshot.traceId = "trace-exec";
+    snapshot.scopeId = scope;
+    snapshot.workspaceKind = "path";
+    snapshot.workspaceRef = base.string();
+    snapshot.expiresAt = "2999-01-01T00:00:00Z";
+    CHECK(telemetry->saveTaskSnapshot(snapshot));
+
+    int calls = 0;
+    bool sawArmEnv = false;
+    CreditAuditExecutionRequest request;
+    request.projectId = projectId;
+    request.scopeId = scope;
+    request.traceId = "trace-exec";
+    request.taskType = "class";
+    request.nodeId = "node1";
+    request.validator = "v1";
+    request.inputHash = "input-hash";
+    request.containerCommand = "run-arm";
+    request.delivered = {"claim:a", "claim:b"};
+    request.cited = {"claim:a"};
+    request.repetitions = 1;
+    auto result = taskforge::rt::runCreditAuditInContainers(
+        request,
+        taskforge::rt::CreditAuditContainerExecutorOptions{},
+        [&](const sb::ExecutionParams& params) {
+            ++calls;
+            sawArmEnv = params.envVars.count("ARESTRIX_AUDIT_ARM_JSON") != 0;
+            CHECK(params.policy.isolation == sb::IsolationType::Container);
+            CHECK(params.policy.network == sb::NetworkAccess::EgressLlmOnly);
+            CHECK(!params.policy.allowFallbackToHost);
+            CHECK(params.workingDir.find("audit-workspaces") != std::string::npos);
+            sb::ExecutionResult res;
+            res.exitCode = 0;
+            res.stdoutOutput = R"({"ok":true,"tokens":5})";
+            return res;
+        });
+    CHECK(result.ok);
+    CHECK(calls == 4);
+    CHECK(sawArmEnv);
+    CHECK(result.tokens == 20);
+    CHECK(result.arms.size() == 4);
+    CHECK(result.arms[0].value("kind", std::string()) == "baseline");
+    CHECK(result.arms[1].value("kind", std::string()) == "no_memory");
     memory.closeProject(projectId);
     fs::remove_all(root, ec);
 }

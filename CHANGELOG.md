@@ -69,6 +69,11 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   per-arm container contract: configurable image, read-only root, `tmpfs` for
   `/tmp`, an isolated `/workspace`, no network, dropped capabilities, no host
   fallback, only the six local tools and no secrets or memory databases.
+  `rt::runCreditAuditInContainers` executes baseline, no-memory and one
+  ablation arm per delivered item in those containers. The arm command comes
+  from `creditAudit.containerCommand` or `ARESTRIX_AUDIT_ARM_COMMAND`, receives
+  the arm description in `ARESTRIX_AUDIT_ARM_JSON`, and returns
+  `ok`/`infra`/`tokens` as JSON.
   `prepareCreditAuditWorkspaces()` materializes one copied workspace per arm
   under the telemetry directory, skips `.arestrix`, `.git`, build output and
   dependency caches, and `cleanupCreditAuditWorkspaces()` removes it after the

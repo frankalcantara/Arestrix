@@ -476,6 +476,7 @@ MemoryCreditAuditConfig creditAuditConfigFromJson(const taskforge::Json& value) 
         std::min<long long>(10LL * 1024 * 1024 * 1024,
                             audit.value("maxSnapshotBytes", 50LL * 1024 * 1024)));
     config.containerImage = audit.value("containerImage", std::string());
+    config.containerCommand = audit.value("containerCommand", std::string());
     config.containerMemoryMB = static_cast<int>(std::max<long long>(
         64, std::min<long long>(65536, audit.value("containerMemoryMB", 512))));
     config.containerTimeoutSeconds = static_cast<int>(std::max<long long>(
@@ -500,6 +501,7 @@ taskforge::Json creditAuditConfigToJson(const MemoryCreditAuditConfig& config) {
         {"snapshotRetentionDays", config.snapshotRetentionDays},
         {"maxSnapshotBytes", config.maxSnapshotBytes},
         {"containerImage", config.containerImage},
+        {"containerCommand", config.containerCommand},
         {"containerMemoryMB", config.containerMemoryMB},
         {"containerTimeoutSeconds", config.containerTimeoutSeconds},
         {"containerPidsLimit", config.containerPidsLimit}};
@@ -3957,6 +3959,7 @@ taskforge::Json MemoryService::auditCredit(const std::string& projectId,
         request.validator = candidate.validation.validatorId;
         request.inputHash = trace.value("inputHash",
             snapshot.value("inputHash", std::string()));
+        request.containerCommand = config.containerCommand;
         request.snapshot = snapshot;
         request.trace = trace;
         request.containerPlan = creditAuditContainerPlan(projectId, taskforge::Json{

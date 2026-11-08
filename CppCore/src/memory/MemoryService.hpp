@@ -93,6 +93,7 @@ struct MemoryCreditAuditConfig {
     int snapshotRetentionDays = 14;
     long long maxSnapshotBytes = 50LL * 1024 * 1024;
     std::string containerImage;
+    std::string containerCommand;
     int containerMemoryMB = 512;
     int containerTimeoutSeconds = 300;
     int containerPidsLimit = 256;
