@@ -4717,6 +4717,155 @@ TEST(memory_validator_audit_computes_wilson_weight) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_audit_sampler_uses_executor) {
+    using taskforge::memory::CreditAuditExecutionRequest;
+    using taskforge::memory::CreditAuditExecutionResult;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryTaskSnapshotRecord;
+    using taskforge::memory::MemoryTraceRecord;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-audit-sampler-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "credit-audit-sampler-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    CHECK(memory.configureCreditAudit(projectId, taskforge::Json::parse(
+        R"({"creditAudit":{"enabled":true,"sampleRate":1.0,"maxAuditsPerDay":20,"maxTokensPerDay":100}})")));
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+    MemoryTraceRecord trace;
+    trace.traceId = "trace-sampler";
+    trace.scopeId = scope;
+    trace.runId = "run1";
+    trace.nodeId = "node1";
+    trace.taskType = "class";
+    trace.inputHash = "input-hash";
+    trace.outcome = "failure";
+    CHECK(telemetry->appendTrace(trace, taskforge::Json{{"kind", "test"}}));
+    taskforge::memory::MemoryEpisodeRecord episode;
+    episode.scopeId = scope;
+    episode.runId = "run1";
+    episode.nodeId = "node1";
+    episode.kind = "task";
+    episode.content = "audit sampler task";
+    episode.taskType = "class";
+    episode.outcome = "failure";
+    const std::string episodeId = telemetry->recordEpisode(episode);
+    CHECK(!episodeId.empty());
+    MemoryValidationRecord validation;
+    validation.scopeId = scope;
+    validation.runId = "run1";
+    validation.nodeId = "node1";
+    validation.episodeId = episodeId;
+    validation.validatorId = "v1";
+    validation.ok = false;
+    CHECK(!telemetry->recordValidation(validation).empty());
+    CHECK(telemetry->recordHit(scope, "run1", "node1", "edge:1", "fact",
+                                true, false, "failure"));
+    CHECK(telemetry->recordHit(scope, "run1", "node1", "edge:2", "fact",
+                                true, false, "failure"));
+    MemoryTaskSnapshotRecord snapshot;
+    snapshot.traceId = "trace-sampler";
+    snapshot.scopeId = scope;
+    snapshot.inputHash = "input-hash";
+    snapshot.inputJson = "{}";
+    snapshot.expiresAt = "2999-01-01T00:00:00Z";
+    CHECK(telemetry->saveTaskSnapshot(snapshot));
+
+    int calls = 0;
+    memory.setCreditAuditExecutor([&](const CreditAuditExecutionRequest& request) {
+        ++calls;
+        CHECK(request.traceId == "trace-sampler");
+        CreditAuditExecutionResult result;
+        result.ok = true;
+        result.tokens = 10;
+        result.arms = taskforge::Json::parse(R"([
+            {"kind":"baseline","ok":false},
+            {"kind":"no_memory","ok":true},
+            {"kind":"ablate","items":["edge:2"],"ok":true}
+        ])");
+        return result;
+    });
+    const auto first = memory.auditCredit(projectId);
+    CHECK(first.value("ok", false));
+    CHECK(first.value("selected", 0LL) == 1);
+    CHECK(first.value("applied", 0LL) == 1);
+    CHECK(calls == 1);
+    const auto audit = telemetry->getCreditAudit(scope, "trace-sampler");
+    CHECK(audit.value("status", std::string()) == "applied");
+    const auto second = memory.auditCredit(projectId);
+    CHECK(second.value("ok", false));
+    CHECK(second.value("selected", 0LL) == 0);
+    CHECK(calls == 1);
+    memory.setCreditAuditExecutor({});
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_credit_audit_sampler_marks_missing_snapshot) {
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryTraceRecord;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-audit-reason-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "credit-audit-reason-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    CHECK(memory.configureCreditAudit(projectId, taskforge::Json::parse(
+        R"({"creditAudit":{"enabled":true,"sampleRate":1.0}})")));
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+    MemoryTraceRecord trace;
+    trace.traceId = "trace-no-snapshot";
+    trace.scopeId = scope;
+    trace.runId = "run2";
+    trace.nodeId = "node2";
+    trace.taskType = "class";
+    trace.outcome = "failure";
+    CHECK(telemetry->appendTrace(trace, taskforge::Json{{"kind", "test"}}));
+    taskforge::memory::MemoryEpisodeRecord episode;
+    episode.scopeId = scope;
+    episode.runId = "run2";
+    episode.nodeId = "node2";
+    episode.kind = "task";
+    episode.content = "no snapshot";
+    episode.taskType = "class";
+    episode.outcome = "failure";
+    const std::string episodeId = telemetry->recordEpisode(episode);
+    CHECK(!episodeId.empty());
+    MemoryValidationRecord validation;
+    validation.scopeId = scope;
+    validation.runId = "run2";
+    validation.nodeId = "node2";
+    validation.episodeId = episodeId;
+    validation.validatorId = "v1";
+    validation.ok = false;
+    CHECK(!telemetry->recordValidation(validation).empty());
+    CHECK(telemetry->recordHit(scope, "run2", "node2", "edge:1", "fact",
+                                true, false, "failure"));
+    const auto result = memory.auditCredit(projectId);
+    CHECK(result.value("ok", false));
+    CHECK(result.value("selected", 0LL) == 0);
+    CHECK(result.value("notAuditable", 0LL) == 1);
+    const auto audit = telemetry->getCreditAudit(scope, "trace-no-snapshot");
+    CHECK(audit.value("status", std::string()) == "not_auditable");
+    CHECK(audit.value("reason", std::string()) == "no_snapshot");
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_utility_config_parses_ledger_source) {
     using taskforge::memory::MemoryService;
     auto& memory = MemoryService::getInstance();

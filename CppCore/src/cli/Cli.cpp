@@ -507,7 +507,7 @@ int runMemory(const std::vector<std::string>& args) {
                      "arestrix-cli memory sources ingest --path <arquivo-ou-pasta> [--allow-forgotten] --project <pasta> [--json]\n"
                      "arestrix-cli memory paths list|show|retire [id] --project <pasta> [--state S] [--json]\n"
                      "arestrix-cli memory utility status|seed|rebuild --project <pasta> [--json]\n"
-                     "arestrix-cli memory audit-credit [--status S] [--report] [--dry-run] --project <pasta> [--json]\n"
+                     "arestrix-cli memory audit-credit [--status S] [--report] [--run] [--dry-run] --project <pasta> [--json]\n"
                      "arestrix-cli memory validator-audit [status|record] [--validator V] [--trace T] [--reviewer R] [--verdict accepted|rejected] --project <pasta> [--json]\n"
                      "arestrix-cli memory bridges detect --project <pasta> [--max-proposals N] [--max-per-entity N] [--json]\n"
                      "arestrix-cli memory ab validate|order|report --suite <arquivo> [--observations <arquivo>] [--repetitions N] [--seed N] [--json]\n"
@@ -748,6 +748,7 @@ int runMemory(const std::vector<std::string>& args) {
     long long abSeed = 42;
     std::string auditStatusFilter;
     bool auditReport = false;
+    bool auditRun = false;
     std::string validatorAuditValidator;
     std::string validatorAuditTrace;
     std::string validatorAuditReviewer;
@@ -923,6 +924,9 @@ int runMemory(const std::vector<std::string>& args) {
         }
         else if (a == "--report") {
             auditReport = true;
+        }
+        else if (a == "--run") {
+            auditRun = true;
         }
         else if (a == "--validator") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --validator\n"; return kExitUsage; }
@@ -1146,9 +1150,14 @@ int runMemory(const std::vector<std::string>& args) {
         }
 
         if (command == "audit-credit") {
-            taskforge::Json out =
-                memory.listCreditAudits(projectId, auditStatusFilter, 100);
-            out["dryRun"] = forgetDryRun;
+            taskforge::Json out;
+            if (auditRun || forgetDryRun) {
+                out = memory.auditCredit(projectId,
+                    taskforge::Json{{"dryRun", forgetDryRun}});
+            } else {
+                out = memory.listCreditAudits(projectId, auditStatusFilter, 100);
+                out["dryRun"] = false;
+            }
             if (auditReport && out.contains("audits") && out["audits"].is_array()) {
                 taskforge::Json statuses = taskforge::Json::object();
                 for (const auto& audit : out["audits"]) {

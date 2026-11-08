@@ -423,6 +423,16 @@ ficam só na telemetria e são recusados acima de `maxSnapshotBytes`.
 `memory audit-credit [--status S] [--report]` lista auditorias, e
 `memory validator-audit [record] --validator V --trace T --verdict
 accepted|rejected` grava ou resume os vereditos de revisão.
+
+O amostrador percorre validações rejeitadas recentes, conta itens entregues e
+não citados como suspeitos e seleciona a tarefa quando há suspeito ou quando o
+hash estável fica abaixo de `sampleRate`. Ele registra `no_snapshot`,
+`snapshot_expired`, `package_in_input`, `external_effects` e
+`validator_suspended` em vez de auditar, e para ao atingir `maxAuditsPerDay` ou
+`maxTokensPerDay`. Os braços são produzidos pelo `CreditAuditExecutorFn`
+registrado; o módulo de memória não fala com provedor nem sandbox diretamente.
+`memory audit-credit --run` executa o amostrador e `--dry-run` apenas lista os
+candidatos selecionados.
 Quando uma afirmação dependente é retratada, expira ou deixa de estar ativa, o
 caminho correspondente é suspenso na mesma manutenção. Se todas as dependências
 voltarem a vigorar, ele é reativado; caso contrário, pode ser retirado.

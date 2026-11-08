@@ -419,6 +419,16 @@ snapshots are also telemetry-only and are rejected above `maxSnapshotBytes`.
 `memory audit-credit [--status S] [--report]` lists audits, and
 `memory validator-audit [record] --validator V --trace T --verdict
 accepted|rejected` records or summarizes reviewer verdicts.
+
+The sampler walks recent rejected validations, counts delivered-but-uncited
+items as suspects, and selects a task when it has a suspect or when its stable
+hash falls below `sampleRate`. It records `no_snapshot`, `snapshot_expired`,
+`package_in_input`, `external_effects` and `validator_suspended` instead of
+auditing those tasks, and stops when `maxAuditsPerDay` or `maxTokensPerDay` is
+reached. The actual arms are produced by the registered
+`CreditAuditExecutorFn`; the memory module never talks to a provider or
+sandbox directly. `memory audit-credit --run` executes the sampler and
+`--dry-run` only lists the selected candidates.
 When a dependent claim is retracted, expires or stops being active, the path is
 suspended in the same maintenance pass. If all dependencies become valid again,
 it is reactivated; otherwise it can be retired.

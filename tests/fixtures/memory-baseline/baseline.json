@@ -15,7 +15,7 @@
   },
   "metrics": {
     "runs": 3,
-    "elapsedSeconds": 12.61,
+    "elapsedSeconds": 11.89,
     "tokens": {
       "prompt": 6465,
       "completion": 849,
@@ -355,8 +355,8 @@
       }
     },
     "schemaFingerprint": {
-      "knowledge": "72d3b92913dbe53d",
-      "telemetry": "72d3b92913dbe53d"
+      "knowledge": "c2193597205fc672",
+      "telemetry": "c2193597205fc672"
     }
   }
 }
