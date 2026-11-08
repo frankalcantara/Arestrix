@@ -388,6 +388,7 @@ public:
                                 const taskforge::Json& options = taskforge::Json::object());
     void setCreditAuditExecutor(CreditAuditExecutorFn executor);
     bool hasCreditAuditExecutor() const;
+    void setCreditAuditContainerProbe(std::function<bool()> probe);
     taskforge::Json listCreditAudits(const std::string& projectId,
                                      const std::string& status = "",
                                      size_t limit = 100);
@@ -540,6 +541,7 @@ private:
     std::map<std::string, MemoryUtilityConfig> utility_;      // Fase 5
     std::map<std::string, MemoryCreditAuditConfig> creditAudit_; // Fase 5
     CreditAuditExecutorFn creditAuditExecutor_;
+    std::function<bool()> creditAuditContainerProbe_;
     std::map<std::string, PrefixEpochConfig> prefixEpochs_;
     std::map<std::string, std::chrono::steady_clock::time_point> prefixEpochLastPublish_;
 };

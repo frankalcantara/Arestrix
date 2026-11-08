@@ -69,7 +69,8 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   `prepareCreditAuditWorkspaces()` materializes one copied workspace per arm
   under the telemetry directory, skips `.arestrix`, `.git`, build output and
   dependency caches, and `cleanupCreditAuditWorkspaces()` removes it after the
-  audit.
+  audit. The sampler now checks the registered container probe and records
+  `no_container` instead of auditing when Docker is unavailable.
 - **Memory fix5 phase 4:** schema v8 adds `memory_prefix_epoch`; `buildBrief`
   now exposes a deterministic `stableBlock`, prefix key/identity, epoch and
   `removalSeqStart`; `briefInfoToJson` carries the delivered id sets to

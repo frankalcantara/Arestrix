@@ -4905,6 +4905,66 @@ TEST(memory_credit_audit_container_plan_is_restricted) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_audit_marks_missing_container) {
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryTraceRecord;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-audit-no-container-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "audit-no-container-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    CHECK(memory.configureCreditAudit(projectId, taskforge::Json::parse(
+        R"({"creditAudit":{"enabled":true,"sampleRate":1.0}})")));
+    memory.setCreditAuditContainerProbe([]() { return false; });
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+    MemoryTraceRecord trace;
+    trace.traceId = "trace-no-container";
+    trace.scopeId = scope;
+    trace.runId = "run3";
+    trace.nodeId = "node3";
+    trace.taskType = "class";
+    trace.outcome = "failure";
+    CHECK(telemetry->appendTrace(trace, taskforge::Json{{"kind", "test"}}));
+    taskforge::memory::MemoryEpisodeRecord episode;
+    episode.scopeId = scope;
+    episode.runId = "run3";
+    episode.nodeId = "node3";
+    episode.kind = "task";
+    episode.content = "no container";
+    episode.taskType = "class";
+    episode.outcome = "failure";
+    const std::string episodeId = telemetry->recordEpisode(episode);
+    CHECK(!episodeId.empty());
+    MemoryValidationRecord validation;
+    validation.scopeId = scope;
+    validation.runId = "run3";
+    validation.nodeId = "node3";
+    validation.episodeId = episodeId;
+    validation.validatorId = "v1";
+    validation.ok = false;
+    CHECK(!telemetry->recordValidation(validation).empty());
+    CHECK(telemetry->recordHit(scope, "run3", "node3", "edge:1", "fact",
+                                true, false, "failure"));
+    const auto result = memory.auditCredit(projectId);
+    CHECK(result.value("ok", false));
+    CHECK(result.value("containerAvailable", true) == false);
+    CHECK(result.value("notAuditable", 0LL) == 1);
+    const auto audit = telemetry->getCreditAudit(scope, "trace-no-container");
+    CHECK(audit.value("status", std::string()) == "not_auditable");
+    CHECK(audit.value("reason", std::string()) == "no_container");
+    memory.setCreditAuditContainerProbe({});
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_credit_audit_prepares_isolated_workspaces) {
     using taskforge::memory::MemoryService;
     using taskforge::memory::MemoryTaskSnapshotRecord;

@@ -463,8 +463,9 @@ depois do veredito.
 workspace do snapshot uma vez por braço em
 `.arestrix/telemetry/audit-workspaces/<trace>/<arm>/workspace`, pulando
 `.arestrix`, `.git`, saídas de build e caches de dependências; a limpeza remove
-a árvore depois da auditoria. Se não houver driver de contêiner disponível, a
-tarefa não é auditável em vez de cair silenciosamente para o host.
+a árvore depois da auditoria. O runtime registra uma sonda de contêiner ligada
+ao `SandboxManager`; sem Docker, o amostrador grava `no_container` e não cai
+para o host.
 
 Quando uma afirmação dependente é retratada, expira ou deixa de estar ativa, o
 caminho correspondente é suspenso na mesma manutenção. Se todas as dependências
