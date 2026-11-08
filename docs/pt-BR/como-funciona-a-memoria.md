@@ -436,6 +436,32 @@ candidatos selecionados. Com a auditoria ligada, cada nó de agente grava a
 entrada anterior ao brief em `memory_task_snapshot` no fim da execução;
 episódios que usaram MCP ou `call_agent` ficam marcados como
 `external_effects`.
+
+#### Contrato dos contêineres de auditoria
+
+Cada braço de uma auditoria por ablação recebe seu próprio contêiner Docker
+efêmero e seu próprio workspace. Nada é compartilhado entre braços: um arquivo
+escrito por um braço não é visível no outro, e todas as saídas são descartadas
+depois do veredito.
+
+| Controle | Valor |
+| --- | --- |
+| Imagem | `debian:stable-slim` por padrão; `ARESTRIX_SANDBOX_IMAGE` ou `memory.creditAudit.containerImage` sobrescreve. |
+| Runtime | `docker run --rm --init`; um contêiner por braço e repetição. |
+| Sistema de arquivos | Raiz somente leitura, `/tmp` em `tmpfs`, workspace somente leitura/escrita em `/workspace`. |
+| Origem do workspace | Cópia do snapshot da tarefa, ou worktree git com o patch salvo aplicado. Os bancos de memória e telemetria nunca são montados. |
+| Rede | `--network=none`. As chamadas ao modelo acontecem no processo hospedeiro, nunca dentro do contêiner. |
+| Privilégios | `--cap-drop=ALL`, `--security-opt=no-new-privileges`, usuário `1000:1000`, sem fallback para o host. |
+| Limites | `containerMemoryMB` (padrão 512), `containerPidsLimit` (padrão 256) e `containerTimeoutSeconds` (padrão 300). |
+| Ferramentas | `read`, `write`, `edit`, `validate_svg`, `retrieve` e `bash` (dentro do contêiner). |
+| Desligadas | `memory_search`, ferramentas de escrita/estado da memória, `call_agent`, servidores MCP e nós de interação. |
+| Segredos | Nenhuma chave de provedor, token ou variável de ambiente do usuário é injetada. |
+| Orçamento | `maxAuditsPerDay`, `maxTokensPerDay` e, quando configurado, o budget `memory-audit` do gateway. |
+
+`creditAuditContainerPlan()` entrega esse contrato ao
+`CreditAuditExecutorFn` registrado. Se não houver driver de contêiner
+disponível, a tarefa não é auditável em vez de cair silenciosamente para o host.
+
 Quando uma afirmação dependente é retratada, expira ou deixa de estar ativa, o
 caminho correspondente é suspenso na mesma manutenção. Se todas as dependências
 voltarem a vigorar, ele é reativado; caso contrário, pode ser retirado.

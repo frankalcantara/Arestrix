@@ -62,7 +62,10 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   caps, and delegates arm execution through `CreditAuditExecutorFn`. With
   `memory.creditAudit.enabled`, each agent node stores its pre-brief input as a
   telemetry snapshot, and tasks whose episodes used MCP or `call_agent` are
-  marked `external_effects`.
+  marked `external_effects`. `creditAuditContainerPlan()` defines the
+  per-arm container contract: configurable image, read-only root, `tmpfs` for
+  `/tmp`, an isolated `/workspace`, no network, dropped capabilities, no host
+  fallback, only the six local tools and no secrets or memory databases.
 - **Memory fix5 phase 4:** schema v8 adds `memory_prefix_epoch`; `buildBrief`
   now exposes a deterministic `stableBlock`, prefix key/identity, epoch and
   `removalSeqStart`; `briefInfoToJson` carries the delivered id sets to

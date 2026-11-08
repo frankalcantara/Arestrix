@@ -26,6 +26,7 @@ struct CreditAuditExecutionRequest {
     std::string inputHash;
     taskforge::Json snapshot = taskforge::Json::object();
     taskforge::Json trace = taskforge::Json::object();
+    taskforge::Json containerPlan = taskforge::Json::object();
     std::vector<std::string> delivered;
     std::vector<std::string> cited;
     std::vector<std::string> suspectItems;
