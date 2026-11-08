@@ -96,6 +96,7 @@ struct MemoryCreditAuditRecord {
     std::string traceId;
     std::string status = "pending";
     std::string armsJson = "[]";
+    std::string reason;
     long long tokens = 0;
     std::string snapshotRef;
     std::string inputHash;
@@ -789,6 +790,8 @@ public:
                                    const std::string& traceId) const;
     taskforge::Json listCreditAudits(const std::string& scopeId, const std::string& status,
                                      size_t limit = 100) const;
+    taskforge::Json creditAuditUsage(const std::string& scopeId,
+                                     const std::string& since) const;
     std::string recordValidatorAudit(const MemoryValidatorAuditRecord& audit);
     taskforge::Json validatorAuditStats(const std::string& scopeId,
                                         const std::string& validator) const;

@@ -19,6 +19,7 @@
 #include "memory/MemoryBridges.hpp"
 #include "memory/MemoryPaths.hpp"
 #include "memory/MemoryTraversal.hpp"
+#include "memory/CreditAudit.hpp"
 #include "memory/MemoryStore.hpp"
 #include "util/JsonValue.hpp"
 
@@ -377,6 +378,12 @@ public:
     // Avalia e grava uma auditoria por ablacao a partir dos bracos observados.
     taskforge::Json runCreditAudit(const std::string& projectId,
                                    const taskforge::Json& request);
+    // Amostra tarefas rejeitadas, aplica os limites diarios e delega os bracos
+    // ao executor registrado pelo Studio.
+    taskforge::Json auditCredit(const std::string& projectId,
+                                const taskforge::Json& options = taskforge::Json::object());
+    void setCreditAuditExecutor(CreditAuditExecutorFn executor);
+    bool hasCreditAuditExecutor() const;
     taskforge::Json listCreditAudits(const std::string& projectId,
                                      const std::string& status = "",
                                      size_t limit = 100);
@@ -520,6 +527,7 @@ private:
     std::map<std::string, TraversalConfig> traversal_;       // E17
     std::map<std::string, MemoryUtilityConfig> utility_;      // Fase 5
     std::map<std::string, MemoryCreditAuditConfig> creditAudit_; // Fase 5
+    CreditAuditExecutorFn creditAuditExecutor_;
     std::map<std::string, PrefixEpochConfig> prefixEpochs_;
     std::map<std::string, std::chrono::steady_clock::time_point> prefixEpochLastPublish_;
 };

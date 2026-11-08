@@ -1001,6 +1001,7 @@ CREATE TABLE IF NOT EXISTS memory_credit_audit (
   trace_id TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
   arms_json TEXT NOT NULL DEFAULT '[]',
+  reason TEXT NOT NULL DEFAULT '',
   tokens INTEGER NOT NULL DEFAULT 0,
   snapshot_ref TEXT NOT NULL DEFAULT '',
   input_hash TEXT NOT NULL DEFAULT '',
@@ -1150,6 +1151,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_claim_path_path ON memory_claim_path(path_
     // citacoes de ids que nao foram entregues na execucao.
     addColumnIfMissing(db_, "memory_hit", "consulted", "INTEGER NOT NULL DEFAULT 0");
     addColumnIfMissing(db_, "memory_usage", "invalid_citations", "INTEGER NOT NULL DEFAULT 0");
+    addColumnIfMissing(db_, "memory_credit_audit", "reason", "TEXT NOT NULL DEFAULT ''");
 
     // E4: reconstroi memory_evidence quando ela ainda tem o esquema antigo
     // (edge_id/episode_id com FK). O instantaneo novo nao referencia episodio,
@@ -5849,10 +5851,11 @@ bool MemoryStore::saveCreditAudit(const MemoryCreditAuditRecord& audit) {
     std::string error;
     if (!prepare(db_,
                  "INSERT INTO memory_credit_audit"
-                 "(id,scope_id,trace_id,status,arms_json,tokens,snapshot_ref,input_hash,created_at) "
-                 "VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET "
-                 "status=excluded.status,arms_json=excluded.arms_json,tokens=excluded.tokens,"
-                 "snapshot_ref=excluded.snapshot_ref,input_hash=excluded.input_hash",
+                 "(id,scope_id,trace_id,status,arms_json,reason,tokens,snapshot_ref,input_hash,created_at) "
+                 "VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET "
+                 "status=excluded.status,arms_json=excluded.arms_json,reason=excluded.reason,"
+                 "tokens=excluded.tokens,snapshot_ref=excluded.snapshot_ref,"
+                 "input_hash=excluded.input_hash",
                  st, error)) {
         lastError_ = error;
         return false;
@@ -5863,10 +5866,11 @@ bool MemoryStore::saveCreditAudit(const MemoryCreditAuditRecord& audit) {
     bindText(st.stmt, 3, audit.traceId);
     bindText(st.stmt, 4, audit.status);
     bindText(st.stmt, 5, audit.armsJson);
-    sqlite3_bind_int64(st.stmt, 6, audit.tokens);
-    bindText(st.stmt, 7, audit.snapshotRef);
-    bindText(st.stmt, 8, audit.inputHash);
-    bindText(st.stmt, 9, created);
+    bindText(st.stmt, 6, audit.reason);
+    sqlite3_bind_int64(st.stmt, 7, audit.tokens);
+    bindText(st.stmt, 8, audit.snapshotRef);
+    bindText(st.stmt, 9, audit.inputHash);
+    bindText(st.stmt, 10, created);
     if (stepRetry(st.stmt) != SQLITE_DONE) {
         lastError_ = sqlite3_errmsg(db_);
         return false;
@@ -5885,7 +5889,7 @@ taskforge::Json MemoryStore::getCreditAudit(const std::string& scopeId,
     Stmt st;
     std::string error;
     if (!prepare(db_,
-                 "SELECT id,trace_id,status,arms_json,tokens,snapshot_ref,input_hash,created_at "
+                 "SELECT id,trace_id,status,arms_json,reason,tokens,snapshot_ref,input_hash,created_at "
                  "FROM memory_credit_audit WHERE scope_id=? AND trace_id=? "
                  "ORDER BY created_at DESC LIMIT 1", st, error)) {
         lastError_ = error;
@@ -5900,10 +5904,11 @@ taskforge::Json MemoryStore::getCreditAudit(const std::string& scopeId,
         {"status", columnText(st.stmt, 2)},
         {"arms", taskforge::jsonutil::tryParse(columnText(st.stmt, 3))
                      .value_or(taskforge::Json::array())},
-        {"tokens", sqlite3_column_int64(st.stmt, 4)},
-        {"snapshotRef", columnText(st.stmt, 5)},
-        {"inputHash", columnText(st.stmt, 6)},
-        {"createdAt", columnText(st.stmt, 7)}};
+        {"reason", columnText(st.stmt, 4)},
+        {"tokens", sqlite3_column_int64(st.stmt, 5)},
+        {"snapshotRef", columnText(st.stmt, 6)},
+        {"inputHash", columnText(st.stmt, 7)},
+        {"createdAt", columnText(st.stmt, 8)}};
     return out;
 }
 
@@ -5916,9 +5921,9 @@ taskforge::Json MemoryStore::listCreditAudits(const std::string& scopeId,
     Stmt st;
     std::string error;
     const std::string sql = status.empty()
-        ? "SELECT id,trace_id,status,arms_json,tokens,snapshot_ref,input_hash,created_at "
+        ? "SELECT id,trace_id,status,arms_json,reason,tokens,snapshot_ref,input_hash,created_at "
           "FROM memory_credit_audit WHERE scope_id=? ORDER BY created_at DESC LIMIT ?"
-        : "SELECT id,trace_id,status,arms_json,tokens,snapshot_ref,input_hash,created_at "
+        : "SELECT id,trace_id,status,arms_json,reason,tokens,snapshot_ref,input_hash,created_at "
           "FROM memory_credit_audit WHERE scope_id=? AND status=? "
           "ORDER BY created_at DESC LIMIT ?";
     if (!prepare(db_, sql, st, error)) {
@@ -5939,11 +5944,33 @@ taskforge::Json MemoryStore::listCreditAudits(const std::string& scopeId,
             {"status", columnText(st.stmt, 2)},
             {"arms", taskforge::jsonutil::tryParse(columnText(st.stmt, 3))
                          .value_or(taskforge::Json::array())},
-            {"tokens", sqlite3_column_int64(st.stmt, 4)},
-            {"snapshotRef", columnText(st.stmt, 5)},
-            {"inputHash", columnText(st.stmt, 6)},
-            {"createdAt", columnText(st.stmt, 7)}});
+            {"reason", columnText(st.stmt, 4)},
+            {"tokens", sqlite3_column_int64(st.stmt, 5)},
+            {"snapshotRef", columnText(st.stmt, 6)},
+            {"inputHash", columnText(st.stmt, 7)},
+            {"createdAt", columnText(st.stmt, 8)}});
     }
+    return out;
+}
+
+taskforge::Json MemoryStore::creditAuditUsage(const std::string& scopeId,
+                                              const std::string& since) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out{{"audits", 0LL}, {"tokens", 0LL}};
+    if (!db_ || scopeId.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "SELECT COUNT(*),COALESCE(SUM(tokens),0) FROM memory_credit_audit "
+                 "WHERE scope_id=? AND created_at>=?", st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, since);
+    if (stepRetry(st.stmt) != SQLITE_ROW) return out;
+    out["audits"] = sqlite3_column_int64(st.stmt, 0);
+    out["tokens"] = sqlite3_column_int64(st.stmt, 1);
     return out;
 }
 

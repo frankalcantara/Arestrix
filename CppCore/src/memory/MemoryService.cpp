@@ -66,6 +66,43 @@ std::string isoDaysFromNow(int days) {
     return std::string(buffer);
 }
 
+std::string isoStartOfDay() {
+    const auto now = std::chrono::system_clock::to_time_t(
+        std::chrono::system_clock::now());
+    std::tm tm{};
+#ifdef _WIN32
+    gmtime_s(&tm, &now);
+#else
+    gmtime_r(&now, &tm);
+#endif
+    tm.tm_hour = 0;
+    tm.tm_min = 0;
+    tm.tm_sec = 0;
+#ifdef _WIN32
+    const std::time_t midnight = _mkgmtime(&tm);
+#else
+    const std::time_t midnight = timegm(&tm);
+#endif
+    std::tm utc{};
+#ifdef _WIN32
+    gmtime_s(&utc, &midnight);
+#else
+    gmtime_r(&midnight, &utc);
+#endif
+    char buffer[32];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &utc);
+    return std::string(buffer);
+}
+
+double stableUnitHash(const std::string& text) {
+    uint64_t hash = 1469598103934665603ULL;
+    for (unsigned char c : text) {
+        hash ^= c;
+        hash *= 1099511628211ULL;
+    }
+    return static_cast<double>(hash % 1000000ULL) / 1000000.0;
+}
+
 std::string isoDaysAgo(int days) {
     const auto now = std::chrono::system_clock::now() -
         std::chrono::hours(24 * std::max(0, days));
@@ -3680,6 +3717,239 @@ taskforge::Json MemoryService::creditSummary(const std::string& projectId) {
     auto* t = ensureTelemetry(projectId);
     if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
     return taskforge::Json{{"ok", true}, {"summary", t->creditSummary(scopeId(projectId))}};
+}
+
+void MemoryService::setCreditAuditExecutor(CreditAuditExecutorFn executor) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    creditAuditExecutor_ = std::move(executor);
+}
+
+bool MemoryService::hasCreditAuditExecutor() const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    return static_cast<bool>(creditAuditExecutor_);
+}
+
+taskforge::Json MemoryService::auditCredit(const std::string& projectId,
+                                           const taskforge::Json& options) {
+    CreditAuditExecutorFn executor;
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        executor = creditAuditExecutor_;
+    }
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    const auto config = creditAuditConfig(projectId);
+    taskforge::Json out{{"ok", true}, {"enabled", config.enabled},
+                        {"selected", 0LL}, {"applied", 0LL},
+                        {"notAuditable", 0LL}, {"sampledOut", 0LL},
+                        {"budgetExhausted", 0LL}, {"candidates", taskforge::Json::array()},
+                        {"audits", taskforge::Json::array()}};
+    if (!config.enabled) {
+        out["reason"] = "disabled";
+        return out;
+    }
+    const std::string scope = scopeId(projectId);
+    const bool dryRun = options.value("dryRun", false);
+    const int limit = std::max(0, std::min(1000,
+        options.value("limit", config.maxAuditsPerDay)));
+    const std::string dayStart = isoStartOfDay();
+    const auto usage = t->creditAuditUsage(scope, dayStart);
+    long long auditsToday = usage.value("audits", 0LL);
+    long long tokensToday = usage.value("tokens", 0LL);
+    const auto validations = t->listValidations(scope, "", 500);
+
+    // Primeira passagem: itens entregues, nao citados e recorrentes em falhas.
+    std::map<std::string, int> suspectCounts;
+    for (const auto& validation : validations) {
+        if (validation.ok || validation.runId.empty() || validation.nodeId.empty()) continue;
+        const auto hits = t->listHits(scope, validation.runId, validation.nodeId);
+        for (const auto& hit : hits) {
+            if (!(hit.injected || hit.consulted) || hit.used) continue;
+            const std::string key = itemKeyFor(
+                scope, hit.kind, hit.memoryId, existingStore(projectId));
+            if (!key.empty()) ++suspectCounts[key];
+        }
+    }
+
+    struct Candidate {
+        MemoryValidationRecord validation;
+        std::string traceId;
+        std::string taskType;
+        std::string reason;
+        std::vector<std::string> delivered;
+        std::vector<std::string> cited;
+        std::vector<std::string> suspects;
+    };
+    std::vector<Candidate> candidates;
+    int sampledOut = 0;
+    for (const auto& validation : validations) {
+        if (validation.ok || validation.runId.empty() || validation.nodeId.empty()) continue;
+        const auto trace = t->getTrace(scope, validation.runId, validation.nodeId);
+        const std::string traceId = trace.value("traceId", validation.runId);
+        if (traceId.empty()) continue;
+        if (!t->getCreditAudit(scope, traceId).empty()) continue;
+        auto episode = t->getEpisode(scope, validation.episodeId);
+        Candidate candidate;
+        candidate.validation = validation;
+        candidate.traceId = traceId;
+        candidate.taskType = trace.value("taskType", episode.value("taskType", std::string()));
+        const auto hits = t->listHits(scope, validation.runId, validation.nodeId);
+        std::set<std::string> delivered;
+        std::set<std::string> cited;
+        std::set<std::string> suspects;
+        for (const auto& hit : hits) {
+            const std::string key = itemKeyFor(
+                scope, hit.kind, hit.memoryId, existingStore(projectId));
+            if (key.empty()) continue;
+            if (hit.injected || hit.consulted) delivered.insert(key);
+            if (hit.used) cited.insert(key);
+            if ((hit.injected || hit.consulted) && !hit.used) {
+                const auto it = suspectCounts.find(key);
+                if (it != suspectCounts.end() &&
+                    it->second >= config.minSuspectRejections) {
+                    suspects.insert(key);
+                }
+            }
+        }
+        candidate.delivered.assign(delivered.begin(), delivered.end());
+        candidate.cited.assign(cited.begin(), cited.end());
+        candidate.suspects.assign(suspects.begin(), suspects.end());
+        if (candidate.delivered.empty()) continue;
+
+        if (options.value("externalEffects", false) ||
+            trace.value("externalEffects", false) || trace.value("usedMcp", false)) {
+            candidate.reason = "external_effects";
+        }
+        if (candidate.reason.empty() && !validation.validatorId.empty()) {
+            const auto stats = t->validatorAuditStats(scope, validation.validatorId);
+            if (stats.value("audits", 0LL) >= config.minValidatorAudits &&
+                stats.value("divergence", 0.0) > config.maxValidatorDivergence) {
+                candidate.reason = "validator_suspended";
+            }
+        }
+        const auto snapshot = t->getTaskSnapshot(scope, traceId);
+        if (candidate.reason.empty() && snapshot.empty()) {
+            candidate.reason = "no_snapshot";
+        } else if (candidate.reason.empty() &&
+                   snapshot.value("expiresAt", std::string()) < isoNow()) {
+            candidate.reason = "snapshot_expired";
+        } else if (candidate.reason.empty() &&
+                   snapshot.value("input", taskforge::Json::object()).dump().find("[MEMO:") !=
+                       std::string::npos) {
+            candidate.reason = "package_in_input";
+        }
+
+        const bool suspect = !candidate.suspects.empty();
+        const bool sampled = stableUnitHash(traceId) < config.sampleRate;
+        if (!suspect && !sampled) {
+            ++sampledOut;
+            continue;
+        }
+        candidates.push_back(std::move(candidate));
+    }
+
+    int selected = 0;
+    int processed = 0;
+    int notAuditable = 0;
+    int budgetExhausted = 0;
+    int applied = 0;
+    auto recordStatus = [&](const std::string& traceId, const std::string& status,
+                            const std::string& reason, long long tokens) {
+        MemoryCreditAuditRecord record;
+        record.id = "credit-audit:" + traceId;
+        record.scopeId = scope;
+        record.traceId = traceId;
+        record.status = status;
+        record.reason = reason;
+        record.tokens = tokens;
+        record.armsJson = "[]";
+        return t->saveCreditAudit(record);
+    };
+    for (auto& candidate : candidates) {
+        if (processed >= limit) break;
+        ++processed;
+        if (dryRun) {
+            out["candidates"].push_back(taskforge::Json{
+                {"traceId", candidate.traceId},
+                {"taskType", candidate.taskType},
+                {"delivered", candidate.delivered.size()},
+                {"cited", candidate.cited.size()},
+                {"suspects", candidate.suspects.size()},
+                {"reason", candidate.reason}});
+            ++selected;
+            continue;
+        }
+        if (!candidate.reason.empty()) {
+            if (recordStatus(candidate.traceId, "not_auditable", candidate.reason, 0)) {
+                ++notAuditable;
+            }
+            continue;
+        }
+        if (auditsToday >= config.maxAuditsPerDay ||
+            tokensToday >= config.maxTokensPerDay ||
+            !executor) {
+            const std::string reason = !executor
+                ? "no_executor" : "budget_exhausted";
+            recordStatus(candidate.traceId, "budget_exhausted", reason,
+                         tokensToday >= config.maxTokensPerDay ? tokensToday : 0);
+            ++budgetExhausted;
+            break;
+        }
+        const auto trace = t->getTrace(scope, candidate.validation.runId,
+                                       candidate.validation.nodeId);
+        const auto snapshot = t->getTaskSnapshot(scope, candidate.traceId);
+        CreditAuditExecutionRequest request;
+        request.projectId = projectId;
+        request.scopeId = scope;
+        request.traceId = candidate.traceId;
+        request.taskType = candidate.taskType;
+        request.nodeId = candidate.validation.nodeId;
+        request.validator = candidate.validation.validatorId;
+        request.inputHash = trace.value("inputHash",
+            snapshot.value("inputHash", std::string()));
+        request.snapshot = snapshot;
+        request.trace = trace;
+        request.delivered = candidate.delivered;
+        request.cited = candidate.cited;
+        request.suspectItems = candidate.suspects;
+        request.repetitions = config.repetitions;
+        request.pairwiseTopM = config.pairwiseTopM;
+        const auto result = executor(request);
+        if (!result.ok) {
+            recordStatus(candidate.traceId, "inconclusive", "executor_error",
+                         result.tokens);
+            continue;
+        }
+        if (tokensToday + result.tokens > config.maxTokensPerDay) {
+            recordStatus(candidate.traceId, "budget_exhausted", "max_tokens", result.tokens);
+            ++budgetExhausted;
+            break;
+        }
+        taskforge::Json auditRequest{
+            {"traceId", candidate.traceId},
+            {"taskType", candidate.taskType},
+            {"validator", candidate.validation.validatorId},
+            {"delivered", candidate.delivered},
+            {"cited", candidate.cited},
+            {"arms", result.arms},
+            {"tokens", result.tokens},
+            {"snapshotRef", "snapshot:" + candidate.traceId},
+            {"inputHash", request.inputHash}};
+        const auto audit = runCreditAudit(projectId, auditRequest);
+        if (!audit.value("ok", false)) continue;
+        ++selected;
+        ++auditsToday;
+        tokensToday += result.tokens;
+        out["audits"].push_back(audit);
+        if (audit.value("status", std::string()) == "applied") ++applied;
+    }
+    out["selected"] = selected;
+    out["sampledOut"] = sampledOut;
+    out["notAuditable"] = notAuditable;
+    out["budgetExhausted"] = budgetExhausted;
+    out["applied"] = applied;
+    out["usage"] = taskforge::Json{{"audits", auditsToday}, {"tokens", tokensToday}};
+    return out;
 }
 
 taskforge::Json MemoryService::runCreditAudit(const std::string& projectId,
