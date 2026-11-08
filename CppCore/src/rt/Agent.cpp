@@ -941,6 +941,32 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
         // conhecimento consultada no inicio da recuperacao.
         memory.closeTrace(spec.memoryProjectId, runId, nodeId, usage.outcome, spec.model,
                           "default", spec.memoryEnabled);
+        // Fase 5: com a auditoria ligada, guarda a entrada do no antes do brief
+        // para permitir a reexecucao dos bracos. A escrita e so na telemetria.
+        if (spec.memoryEnabled && !spec.memoryProjectId.empty() &&
+            memory.creditAuditConfig(spec.memoryProjectId).enabled) {
+            try {
+                const json trace = memory.getTrace(spec.memoryProjectId, runId, nodeId);
+                const std::string traceId = trace.value("traceId", std::string());
+                if (!traceId.empty()) {
+                    json snapshotInput = json::object();
+                    if (auto parsed = jsonutil::tryParse(inputContext); parsed) {
+                        snapshotInput = *parsed;
+                    } else {
+                        snapshotInput["text"] = inputContext;
+                    }
+                    memory.saveTaskSnapshot(spec.memoryProjectId, json{
+                        {"traceId", traceId},
+                        {"inputHash", inputHash},
+                        {"input", snapshotInput},
+                        {"workspaceKind", "path"},
+                        {"workspaceRef", root.string()},
+                        {"bytes", static_cast<long long>(inputContext.size())}});
+                }
+            } catch (const std::exception&) {
+                // O snapshot e acessorio; nunca derruba a execucao.
+            }
+        }
         // E12: ingestao depois da execucao, sem modelo de linguagem.
         if (spec.memoryEnabled && spec.memorySources) {
             std::vector<std::string> sourceUris = runReadFiles;

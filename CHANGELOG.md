@@ -59,7 +59,10 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   sampler now selects rejected tasks by suspect items or `sampleRate`, records
   non-auditable reasons (`no_snapshot`, `snapshot_expired`, `package_in_input`,
   `external_effects`, `validator_suspended`), enforces the daily audit/token
-  caps, and delegates arm execution through `CreditAuditExecutorFn`.
+  caps, and delegates arm execution through `CreditAuditExecutorFn`. With
+  `memory.creditAudit.enabled`, each agent node stores its pre-brief input as a
+  telemetry snapshot, and tasks whose episodes used MCP or `call_agent` are
+  marked `external_effects`.
 - **Memory fix5 phase 4:** schema v8 adds `memory_prefix_epoch`; `buildBrief`
   now exposes a deterministic `stableBlock`, prefix key/identity, epoch and
   `removalSeqStart`; `briefInfoToJson` carries the delivered id sets to
