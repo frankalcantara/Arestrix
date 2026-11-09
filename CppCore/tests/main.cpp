@@ -5468,6 +5468,62 @@ TEST(memory_credit_presence_low_res_splits_delivered_items) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_applies_validator_weight) {
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-validator-weight-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "validator-weight-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    for (int i = 0; i < 20; ++i) {
+        const auto audit = memory.recordValidatorAudit(projectId, taskforge::Json{
+            {"validator", "v1"},
+            {"traceId", "trace-" + std::to_string(i)},
+            {"reviewer", "human"},
+            {"verdict", i < 3 ? "rejected" : "accepted"}});
+        CHECK(audit.value("ok", false));
+    }
+    CHECK(std::abs(memory.validatorWeight(projectId, "v1") - 0.85) < 1e-9);
+    const std::string lesson = memory.recordLesson(
+        projectId, "class", "t", "regra com peso");
+    CHECK(!lesson.empty());
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+    taskforge::memory::MemoryEpisodeRecord episode;
+    episode.scopeId = scope;
+    episode.runId = "run-weight";
+    episode.nodeId = "node-weight";
+    episode.kind = "task";
+    episode.content = "weight";
+    episode.taskType = "class";
+    episode.outcome = "success";
+    const std::string episodeId = telemetry->recordEpisode(episode);
+    CHECK(!episodeId.empty());
+    CHECK(telemetry->recordHit(scope, "run-weight", "node-weight", lesson, "lesson",
+                                true, false, "success"));
+    MemoryValidationRecord validation;
+    validation.scopeId = scope;
+    validation.runId = "run-weight";
+    validation.nodeId = "node-weight";
+    validation.episodeId = episodeId;
+    validation.validatorId = "v1";
+    validation.ok = true;
+    CHECK(!memory.recordValidation(projectId, validation, false).empty());
+    const auto utility = telemetry->utilityFor(scope, "lesson:" + lesson, "class");
+    CHECK(utility.value("events", 0LL) == 1);
+    CHECK(std::abs(utility.value("s", 0.0) - 0.85) < 1e-9);
+    CHECK(std::abs(utility.value("lowRes", 0.0) - 0.85) < 1e-9);
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_utility_config_parses_ledger_source) {
     using taskforge::memory::MemoryService;
     auto& memory = MemoryService::getInstance();
