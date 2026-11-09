@@ -5887,6 +5887,82 @@ TEST(memory_credit_caps_ten_approvals_per_origin) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_rekey_old_edge_joins_new_claim) {
+    using taskforge::memory::MemoryCreditEvent;
+    using taskforge::memory::MemoryEdgeRecord;
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-rekey-old-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "rekey-old-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    auto* store = memory.store(projectId);
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(store != nullptr);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+    const std::string subject = store->ensureNode(scope, "old-subject", "entity", "S");
+    const std::string object = store->ensureNode(scope, "old-object", "entity", "O");
+    // Primeiro estado: predicado desconhecido deixa a aresta sem claim_key e
+    // com claimKeyStatus=uncomputable. Esse e o caso das arestas antigas.
+    const std::string oldEdge = store->recordEdge(
+        scope, subject, object, "UNKNOWN_REL", taskforge::Json(), "2026-01-01", "",
+        0.8, "active", "claim", "", taskforge::Json::object(), "");
+    CHECK(!oldEdge.empty());
+    MemoryEdgeRecord before;
+    CHECK(store->getEdge(scope, oldEdge, before));
+    CHECK(before.claimKey.empty());
+    // Backfill posterior: mesma aresta, agora com claim_key explicito.
+    const std::string backfilled = store->recordEdge(
+        scope, subject, object, "UNKNOWN_REL", taskforge::Json(), "2026-01-01", "",
+        0.8, "active", "claim", "", taskforge::Json::object(), "", "claim:joined");
+    CHECK(backfilled == oldEdge);
+    MemoryEdgeRecord after;
+    CHECK(store->getEdge(scope, oldEdge, after));
+    CHECK(after.claimKey == "claim:joined");
+
+    MemoryCreditEvent oldSame;
+    oldSame.traceId = "same-trace";
+    oldSame.itemKey = "edge:" + oldEdge;
+    oldSame.taskType = "class";
+    oldSame.kind = "citation";
+    oldSame.deltaSuccess = 0.5;
+    MemoryCreditEvent newSame;
+    newSame.traceId = "same-trace";
+    newSame.itemKey = "claim:joined";
+    newSame.taskType = "class";
+    newSame.kind = "citation";
+    newSame.deltaSuccess = 0.25;
+    MemoryCreditEvent oldOnly;
+    oldOnly.traceId = "old-only";
+    oldOnly.itemKey = "edge:" + oldEdge;
+    oldOnly.taskType = "class";
+    oldOnly.kind = "citation";
+    oldOnly.deltaFailure = 1.0;
+    CHECK(telemetry->recordCreditEvents(scope, {oldSame, newSame, oldOnly}));
+
+    const auto rekey = memory.rekeyCreditItems(projectId);
+    CHECK(rekey.value("ok", false));
+    CHECK(rekey.value("moved", 0LL) == 2);
+    const auto joined = telemetry->utilityFor(scope, "claim:joined", "class");
+    CHECK(joined.value("events", 0LL) == 2);
+    CHECK(std::abs(joined.value("s", 0.0) - 0.75) < 1e-9);
+    CHECK(std::abs(joined.value("f", 0.0) - 1.0) < 1e-9);
+    CHECK(telemetry->utilityFor(scope, "edge:" + oldEdge, "class")
+        .value("events", -1LL) == 0);
+    const auto summary = telemetry->creditSummary(scope);
+    CHECK(summary.value("events", 0LL) == 2);
+    CHECK(std::abs(summary.value("success", 0.0) - 0.75) < 1e-9);
+    CHECK(std::abs(summary.value("failure", 0.0) - 1.0) < 1e-9);
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_utility_config_parses_ledger_source) {
     using taskforge::memory::MemoryService;
     auto& memory = MemoryService::getInstance();

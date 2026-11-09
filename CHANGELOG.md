@@ -87,7 +87,9 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   Additional coverage keeps utility independent per task class, proves the
   legacy seed is idempotent, and verifies that ten approvals from one origin
   cap at `maxCreditPerOrigin` with nine `capped=1` events while another origin
-  still contributes normally.
+  still contributes normally. A later backfill now updates the existing edge's
+  `claim_key`; `rekey` then merges old `edge:<id>` events into that key,
+  including duplicates from the same trace.
   `prepareCreditAuditWorkspaces()` materializes one copied workspace per arm
   under the telemetry directory, skips `.arestrix`, `.git`, build output and
   dependency caches, and `cleanupCreditAuditWorkspaces()` removes it after the
