@@ -3584,7 +3584,7 @@ std::string MemoryService::recordValidation(const std::string& projectId,
                 validatorFactor = t->validatorAuditStats(scope, copy.validatorId)
                     .value("weight", 1.0);
             }
-            const double delta = (copy.ok ? 1.0 : -1.0) * validatorFactor /
+            const double delta = validatorFactor /
                 static_cast<double>(keys.size());
             const auto utility = utilityConfig(projectId);
             const std::string since = isoDaysAgo(utility.originWindowDays);
@@ -3606,8 +3606,8 @@ std::string MemoryService::recordValidation(const std::string& projectId,
                         scope, key, lookupTask, copy.runId, since);
                     const double remaining = std::max(0.0,
                         utility.maxCreditPerOrigin - used);
-                    if (std::abs(effective) > remaining) {
-                        effective = (effective < 0 ? -1.0 : 1.0) * remaining;
+                    if (effective > remaining) {
+                        effective = remaining;
                         event.capped = true;
                     }
                 }

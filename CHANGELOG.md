@@ -48,9 +48,10 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   `memory utility status|seed|rebuild|rekey` exposes the ledger in the CLI.
   `rekey` moves events recorded as `edge:<id>` to the edge `claim_key` after a
   later backfill computes it, merging duplicates and rebuilding the aggregate.
-  Credit is
-  capped per origin and item/class inside `originWindowDays`; excess credit is
-  recorded with zero delta and `capped=1`. If a telemetry write fails, events
+  Failure events now store the positive failure magnitude; the previous
+  negative delta made a single rejection raise the item utility.
+  Credit is capped per origin and item/class inside `originWindowDays`; excess
+  credit is recorded with zero delta and `capped=1`. If a telemetry write fails, events
   go to `credit-outbox.jsonl` and the next validation drains them once.
   Ablation audits can now be evaluated from observed baseline/no-memory/ablate
   arms: decisive items receive the reassigned failure, infrastructure failures
