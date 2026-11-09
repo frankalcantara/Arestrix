@@ -4780,6 +4780,17 @@ TEST(memory_credit_audit_sampler_uses_executor) {
     CHECK(telemetry->saveTaskSnapshot(snapshot));
 
     int calls = 0;
+    int budgetChecks = 0;
+    int budgetReconciles = 0;
+    memory.setCreditAuditBudget([&](const taskforge::Json& request) {
+        if (request.value("reconcile", false)) {
+            ++budgetReconciles;
+            CHECK(request.value("actualTokens", 0LL) == 10);
+        } else {
+            ++budgetChecks;
+        }
+        return taskforge::Json{{"ok", true}, {"allowed", true}};
+    });
     memory.setCreditAuditExecutor([&](const CreditAuditExecutionRequest& request) {
         ++calls;
         CHECK(request.traceId == "trace-sampler");
@@ -4800,12 +4811,15 @@ TEST(memory_credit_audit_sampler_uses_executor) {
     CHECK(first.value("selected", 0LL) == 1);
     CHECK(first.value("applied", 0LL) == 1);
     CHECK(calls == 1);
+    CHECK(budgetChecks == 1);
+    CHECK(budgetReconciles == 1);
     const auto audit = telemetry->getCreditAudit(scope, "trace-sampler");
     CHECK(audit.value("status", std::string()) == "applied");
     const auto second = memory.auditCredit(projectId);
     CHECK(second.value("ok", false));
     CHECK(second.value("selected", 0LL) == 0);
     CHECK(calls == 1);
+    memory.setCreditAuditBudget({});
     memory.setCreditAuditExecutor({});
     memory.closeProject(projectId);
     fs::remove_all(root, ec);

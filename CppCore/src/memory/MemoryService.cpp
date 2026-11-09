@@ -3769,14 +3769,21 @@ void MemoryService::setCreditAuditContainerProbe(std::function<bool()> probe) {
     creditAuditContainerProbe_ = std::move(probe);
 }
 
+void MemoryService::setCreditAuditBudget(CreditAuditBudgetFn budget) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    creditAuditBudget_ = std::move(budget);
+}
+
 taskforge::Json MemoryService::auditCredit(const std::string& projectId,
                                            const taskforge::Json& options) {
     CreditAuditExecutorFn executor;
     std::function<bool()> containerProbe;
+    CreditAuditBudgetFn budgetHook;
     {
         std::lock_guard<std::recursive_mutex> lock(mutex_);
         executor = creditAuditExecutor_;
         containerProbe = creditAuditContainerProbe_;
+        budgetHook = creditAuditBudget_;
     }
     auto* t = ensureTelemetry(projectId);
     if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
@@ -3947,6 +3954,22 @@ taskforge::Json MemoryService::auditCredit(const std::string& projectId,
             ++budgetExhausted;
             break;
         }
+        const long long estimatedTokens = std::max<long long>(
+            1, config.maxTokensPerDay / std::max(1, config.maxAuditsPerDay));
+        if (budgetHook) {
+            const auto budget = budgetHook(taskforge::Json{
+                {"projectId", projectId},
+                {"maxTokensPerDay", config.maxTokensPerDay},
+                {"estimatedTokens", estimatedTokens},
+                {"actualTokens", 0LL},
+                {"reconcile", false}});
+            if (!budget.value("ok", false) || !budget.value("allowed", true)) {
+                recordStatus(candidate.traceId, "budget_exhausted",
+                             "gateway_budget", 0);
+                ++budgetExhausted;
+                break;
+            }
+        }
         const auto trace = t->getTrace(scope, candidate.validation.runId,
                                        candidate.validation.nodeId);
         const auto snapshot = t->getTaskSnapshot(scope, candidate.traceId);
@@ -3970,6 +3993,14 @@ taskforge::Json MemoryService::auditCredit(const std::string& projectId,
         request.repetitions = config.repetitions;
         request.pairwiseTopM = config.pairwiseTopM;
         const auto result = executor(request);
+        if (budgetHook) {
+            budgetHook(taskforge::Json{
+                {"projectId", projectId},
+                {"maxTokensPerDay", config.maxTokensPerDay},
+                {"estimatedTokens", estimatedTokens},
+                {"actualTokens", result.tokens},
+                {"reconcile", true}});
+        }
         if (!result.ok) {
             recordStatus(candidate.traceId, "inconclusive", "executor_error",
                          result.tokens);

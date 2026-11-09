@@ -76,7 +76,9 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   ablations of the top `pairwiseTopM` suspects. The arm command comes
   from `creditAudit.containerCommand` or `ARESTRIX_AUDIT_ARM_COMMAND`, receives
   the arm description in `ARESTRIX_AUDIT_ARM_JSON`, and returns
-  `ok`/`infra`/`tokens` as JSON.
+  `ok`/`infra`/`tokens` as JSON. With `ARESTRIX_GATEWAY_DB` set, the sampler
+  checks and reconciles a daily `memory-audit:<project>` token budget with
+  `hard_stop`; without a gateway it keeps using the local daily cap.
   `prepareCreditAuditWorkspaces()` materializes one copied workspace per arm
   under the telemetry directory, skips `.arestrix`, `.git`, build output and
   dependency caches, and `cleanupCreditAuditWorkspaces()` removes it after the

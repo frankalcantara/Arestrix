@@ -101,6 +101,8 @@ struct MemoryCreditAuditConfig {
 MemoryCreditAuditConfig creditAuditConfigFromJson(const taskforge::Json& value);
 taskforge::Json creditAuditConfigToJson(const MemoryCreditAuditConfig& config);
 
+using CreditAuditBudgetFn = std::function<taskforge::Json(const taskforge::Json&)>;
+
 struct TraversalConfig {
     bool enabled = false;
     TraversalOptions options;
@@ -391,6 +393,7 @@ public:
     void setCreditAuditExecutor(CreditAuditExecutorFn executor);
     bool hasCreditAuditExecutor() const;
     void setCreditAuditContainerProbe(std::function<bool()> probe);
+    void setCreditAuditBudget(CreditAuditBudgetFn budget);
     taskforge::Json listCreditAudits(const std::string& projectId,
                                      const std::string& status = "",
                                      size_t limit = 100);
@@ -544,6 +547,7 @@ private:
     std::map<std::string, MemoryCreditAuditConfig> creditAudit_; // Fase 5
     CreditAuditExecutorFn creditAuditExecutor_;
     std::function<bool()> creditAuditContainerProbe_;
+    CreditAuditBudgetFn creditAuditBudget_;
     std::map<std::string, PrefixEpochConfig> prefixEpochs_;
     std::map<std::string, std::chrono::steady_clock::time_point> prefixEpochLastPublish_;
 };
