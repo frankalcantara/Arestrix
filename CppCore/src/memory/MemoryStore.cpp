@@ -2593,12 +2593,15 @@ std::string MemoryStore::recordEdge(const std::string& scopeId, const std::strin
                         for (const auto& root : roots) array.push_back(root);
                         merged["supportRoots"] = array;
                         merged["supportRootCount"] = static_cast<long long>(roots.size());
+                        merged["claimKey"] = claimKey;
+                        merged.erase("claimKeyStatus");
                         Stmt update;
                         std::string updateError;
-                        if (prepare(db_, "UPDATE memory_edge SET metadata=? WHERE id=?", update,
-                                    updateError)) {
+                        if (prepare(db_, "UPDATE memory_edge SET metadata=?,claim_key=? WHERE id=?",
+                                    update, updateError)) {
                             bindText(update.stmt, 1, merged.dump());
-                            bindText(update.stmt, 2, existingId);
+                            bindText(update.stmt, 2, claimKey);
+                            bindText(update.stmt, 3, existingId);
                             stepRetry(update.stmt);
                         }
                     }
