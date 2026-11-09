@@ -84,6 +84,8 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   validator weight applied to credit events. A full MG15 T4b scenario now
   checks the 0.500/0.600 before state, the 0.667/0.333 reassignment, idempotent
   replay, no-memory failure, unstable repetitions and infrastructure failure.
+  Additional coverage keeps utility independent per task class and proves the
+  legacy seed is idempotent.
   `prepareCreditAuditWorkspaces()` materializes one copied workspace per arm
   under the telemetry directory, skips `.arestrix`, `.git`, build output and
   dependency caches, and `cleanupCreditAuditWorkspaces()` removes it after the
