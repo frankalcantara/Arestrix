@@ -81,7 +81,9 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   `hard_stop`; without a gateway it keeps using the local daily cap. Tests now
   cover arm-workspace isolation, budget denial, MCP/`call_agent` tasks marked
   `external_effects`, expired snapshots, the snapshot size ceiling and the
-  validator weight applied to credit events.
+  validator weight applied to credit events. A full MG15 T4b scenario now
+  checks the 0.500/0.600 before state, the 0.667/0.333 reassignment, idempotent
+  replay, no-memory failure, unstable repetitions and infrastructure failure.
   `prepareCreditAuditWorkspaces()` materializes one copied workspace per arm
   under the telemetry directory, skips `.arestrix`, `.git`, build output and
   dependency caches, and `cleanupCreditAuditWorkspaces()` removes it after the
