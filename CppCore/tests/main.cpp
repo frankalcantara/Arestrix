@@ -5730,6 +5730,92 @@ TEST(memory_credit_audit_full_t4b_scenario) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_keeps_task_classes_independent) {
+    using taskforge::memory::MemoryCreditEvent;
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-task-class-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "task-class-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+    auto credit = [&](const std::string& trace, const std::string& taskType,
+                      double success, double failure) {
+        MemoryCreditEvent event;
+        event.traceId = trace;
+        event.itemKey = "claim:multi";
+        event.taskType = taskType;
+        event.kind = "citation";
+        event.origin = trace;
+        event.deltaSuccess = success;
+        event.deltaFailure = failure;
+        CHECK(telemetry->recordCreditEvents(scope, {event}));
+    };
+    credit("night-1", "night", 1.0, 0.0);
+    credit("morning-1", "morning", 0.0, 1.0);
+    const auto night = telemetry->utilityFor(scope, "claim:multi", "night");
+    const auto morning = telemetry->utilityFor(scope, "claim:multi", "morning");
+    CHECK(std::abs(night.value("utility", 0.0) - 2.0 / 3.0) < 1e-9);
+    CHECK(std::abs(morning.value("utility", 0.0) - 1.0 / 3.0) < 1e-9);
+    credit("morning-2", "morning", 0.0, 1.0);
+    CHECK(std::abs(telemetry->utilityFor(scope, "claim:multi", "night")
+        .value("utility", 0.0) - 2.0 / 3.0) < 1e-9);
+    CHECK(std::abs(telemetry->utilityFor(scope, "claim:multi", "morning")
+        .value("utility", 0.0) - 0.25) < 1e-9);
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_credit_legacy_seed_is_idempotent) {
+    using taskforge::memory::MemoryService;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-legacy-seed-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "legacy-seed-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    auto* store = memory.store(projectId);
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(store != nullptr);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+    const std::string subject = store->ensureNode(scope, "seed-subject", "entity", "S");
+    const std::string object = store->ensureNode(scope, "seed-object", "entity", "O");
+    const std::string edge = store->recordEdge(
+        scope, subject, object, "USES", taskforge::Json(), "", "", 0.8, "active",
+        "claim", "", taskforge::Json::object(), "", "claim:seed");
+    CHECK(!edge.empty());
+    CHECK(store->reinforceFromHits(scope, {edge}, "success"));
+    CHECK(store->reinforceFromHits(scope, {edge}, "success"));
+    CHECK(store->reinforceFromHits(scope, {edge}, "failure"));
+    const auto first = memory.seedLegacyCredit(projectId);
+    CHECK(first.value("ok", false));
+    CHECK(first.value("alreadySeeded", true) == false);
+    CHECK(first.value("events", 0LL) == 1);
+    const auto utility = telemetry->utilityFor(scope, "claim:seed", "*");
+    CHECK(utility.value("events", 0LL) == 1);
+    CHECK(utility.value("s", 0.0) == 2.0);
+    CHECK(utility.value("f", 0.0) == 1.0);
+    const auto second = memory.seedLegacyCredit(projectId);
+    CHECK(second.value("ok", false));
+    CHECK(second.value("alreadySeeded", false));
+    CHECK(second.value("events", -1LL) == 0);
+    CHECK(telemetry->creditSummary(scope).value("events", 0LL) == 1);
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_utility_config_parses_ledger_source) {
     using taskforge::memory::MemoryService;
     auto& memory = MemoryService::getInstance();
