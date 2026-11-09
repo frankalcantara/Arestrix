@@ -5524,6 +5524,212 @@ TEST(memory_credit_applies_validator_weight) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_audit_full_t4b_scenario) {
+    // F5-T1..F5-T5, F5-T7. Este teste reproduz o caso T4b do MG15 de ponta a
+    // ponta, com contexto suficiente para conferir os numeros do plano:
+    //
+    //   - T1 e T2 aprovados deixam c71, c52 e c04 com historico positivo;
+    //   - T3 e uma falha de infraestrutura e nao pode gerar evento de credito;
+    //   - T4b entrega c52, c71 e c86, cita apenas c71 e e rejeitado;
+    //   - o credito inicial de T4b cai inteiro em c71, porque e o unico citado;
+    //   - a auditoria remove um item por vez e so aprova quando c86 sai;
+    //   - logo c86 e o item decisivo, c71 e inocentado e a falha e transferida.
+    //
+    // Utilidade esperada com prior 1/1: (s+1)/(s+f+2).
+    // Antes: c71=(1+1)/(1+1+2)=0.500, c86=(0+1)/(0+0+2)=0.500,
+    //        c52=c04=(1+1)/(1+1/3+2)=0.600.
+    // Depois: c71=(1+1)/(1+0+2)=0.667, c86=(0+1)/(0+1+2)=0.333.
+    using taskforge::memory::MemoryCreditEvent;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-t4b-full-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "t4b-full-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    CHECK(memory.configureCreditAudit(projectId, taskforge::Json::parse(
+        R"({"creditAudit":{"enabled":true,"sampleRate":1.0,"repetitions":1}})")));
+    auto* store = memory.store(projectId);
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(store != nullptr);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+
+    auto makeClaim = [&](const std::string& claimKey) {
+        const std::string subject = store->ensureNode(scope, "subject", "entity", "Task");
+        const std::string object = store->ensureNode(
+            scope, "object-" + claimKey, "entity", claimKey);
+        CHECK(!subject.empty());
+        CHECK(!object.empty());
+        return store->recordEdge(
+            scope, subject, object, "USES", taskforge::Json(), "", "", 0.8,
+            "active", "claim", "", taskforge::Json::object(), "", claimKey);
+    };
+    const std::string c52 = makeClaim("claim:c52");
+    const std::string c71 = makeClaim("claim:c71");
+    const std::string c86 = makeClaim("claim:c86");
+    const std::string c04 = makeClaim("claim:c04");
+    CHECK(!c52.empty() && !c71.empty() && !c86.empty() && !c04.empty());
+
+    auto seed = [&](const std::string& trace, const std::string& item,
+                    double success, double failure, const std::string& origin) {
+        MemoryCreditEvent event;
+        event.traceId = trace;
+        event.itemKey = item;
+        event.taskType = "class";
+        event.kind = "citation";
+        event.origin = origin;
+        event.deltaSuccess = success;
+        event.deltaFailure = failure;
+        CHECK(telemetry->recordCreditEvents(scope, {event}));
+    };
+    // T1/T2: historico positivo de c71 e um sucesso + um terco de falha em
+    // c52/c04, exatamente os numeros usados pelo plano para o cenario T4b.
+    seed("t1", "claim:c71", 1.0, 0.0, "t1");
+    seed("t2-c52", "claim:c52", 1.0, 1.0 / 3.0, "t2");
+    seed("t2-c04", "claim:c04", 1.0, 1.0 / 3.0, "t2");
+    // T3: falha de infraestrutura nao passa por recordValidation, portanto
+    // nenhum evento de c99 pode existir no livro.
+    CHECK(telemetry->utilityFor(scope, "claim:c99", "class").value("events", -1LL) == 0);
+
+    taskforge::memory::MemoryEpisodeRecord episode;
+    episode.scopeId = scope;
+    episode.runId = "run-t4b";
+    episode.nodeId = "node-t4b";
+    episode.kind = "task";
+    episode.content = "T4b";
+    episode.taskType = "class";
+    episode.outcome = "failure";
+    const std::string episodeId = telemetry->recordEpisode(episode);
+    CHECK(!episodeId.empty());
+    CHECK(telemetry->recordHit(scope, "run-t4b", "node-t4b", c52, "fact",
+                                true, false, "failure"));
+    CHECK(telemetry->recordHit(scope, "run-t4b", "node-t4b", c71, "fact",
+                                true, true, "failure"));
+    CHECK(telemetry->recordHit(scope, "run-t4b", "node-t4b", c86, "fact",
+                                true, false, "failure"));
+    MemoryValidationRecord validation;
+    validation.scopeId = scope;
+    validation.runId = "run-t4b";
+    validation.nodeId = "node-t4b";
+    validation.episodeId = episodeId;
+    validation.validatorId = "v1";
+    validation.ok = false;
+    CHECK(!memory.recordValidation(projectId, validation, false).empty());
+
+    const double before52 = telemetry->utilityFor(scope, "claim:c52", "class")
+        .value("utility", 0.0);
+    const double before71 = telemetry->utilityFor(scope, "claim:c71", "class")
+        .value("utility", 0.0);
+    const double before86 = telemetry->utilityFor(scope, "claim:c86", "class")
+        .value("utility", 0.0);
+    const double before04 = telemetry->utilityFor(scope, "claim:c04", "class")
+        .value("utility", 0.0);
+    CHECK(std::abs(before52 - 0.6) < 1e-9);
+    CHECK(std::abs(before04 - 0.6) < 1e-9);
+    CHECK(std::abs(before71 - 0.5) < 1e-9);
+    CHECK(std::abs(before86 - 0.5) < 1e-9);
+
+    const long long versionBeforeAudit = store->knowledgeVersion();
+    const taskforge::Json request = taskforge::Json::parse(R"({
+        "traceId":"run-t4b",
+        "taskType":"class",
+        "validator":"v1",
+        "weight":1.0,
+        "delivered":["claim:c52","claim:c71","claim:c86"],
+        "cited":["claim:c71"],
+        "repetitions":1,
+        "arms":[
+            {"kind":"baseline","ok":false},
+            {"kind":"no_memory","ok":true},
+            {"kind":"ablate","items":["claim:c52"],"ok":false},
+            {"kind":"ablate","items":["claim:c71"],"ok":false},
+            {"kind":"ablate","items":["claim:c86"],"ok":true}
+        ]
+    })");
+    const auto audit = memory.runCreditAudit(projectId, request);
+    CHECK(audit.value("ok", false));
+    CHECK(audit.value("status", std::string()) == "applied");
+    CHECK(audit["decisive"].size() == 1);
+    CHECK(audit["decisive"][0].get<std::string>() == "claim:c86");
+    CHECK(store->knowledgeVersion() == versionBeforeAudit);
+
+    const double after71 = telemetry->utilityFor(scope, "claim:c71", "class")
+        .value("utility", 0.0);
+    const double after86 = telemetry->utilityFor(scope, "claim:c86", "class")
+        .value("utility", 0.0);
+    const double after52 = telemetry->utilityFor(scope, "claim:c52", "class")
+        .value("utility", 0.0);
+    const double after04 = telemetry->utilityFor(scope, "claim:c04", "class")
+        .value("utility", 0.0);
+    CHECK(std::abs(after71 - 2.0 / 3.0) < 1e-9);
+    CHECK(std::abs(after86 - 1.0 / 3.0) < 1e-9);
+    CHECK(std::abs(after52 - 0.6) < 1e-9);
+    CHECK(std::abs(after04 - 0.6) < 1e-9);
+    const long long eventsAfterFirst = telemetry->creditSummary(scope)
+        .value("events", 0LL);
+
+    // F5-T2: repetir a mesma auditoria nao duplica eventos nem muda a utilidade.
+    const auto again = memory.runCreditAudit(projectId, request);
+    CHECK(again.value("ok", false));
+    CHECK(telemetry->creditSummary(scope).value("events", 0LL) == eventsAfterFirst);
+    CHECK(std::abs(telemetry->utilityFor(scope, "claim:c71", "class")
+        .value("utility", 0.0) - 2.0 / 3.0) < 1e-9);
+
+    // F5-T3: se o braco sem memoria tambem falha, ninguem recebe culpa.
+    const auto noMemoryFails = memory.runCreditAudit(projectId, taskforge::Json{
+        {"traceId", "run-t4b-no-memory"},
+        {"taskType", "class"},
+        {"delivered", request["delivered"]},
+        {"cited", request["cited"]},
+        {"repetitions", 1},
+        {"arms", taskforge::Json::parse(R"([
+            {"kind":"baseline","ok":false},
+            {"kind":"no_memory","ok":false},
+            {"kind":"ablate","items":["claim:c86"],"ok":true}
+        ])")}});
+    CHECK(noMemoryFails.value("status", std::string()) == "no_adjustment");
+    CHECK(telemetry->creditSummary(scope).value("events", 0LL) == eventsAfterFirst);
+
+    // F5-T4: uma inversao em duas repeticoes e instavel, logo inconclusiva.
+    const auto unstable = memory.runCreditAudit(projectId, taskforge::Json{
+        {"traceId", "run-t4b-unstable"},
+        {"taskType", "class"},
+        {"delivered", request["delivered"]},
+        {"cited", request["cited"]},
+        {"repetitions", 2},
+        {"arms", taskforge::Json::parse(R"([
+            {"kind":"baseline","ok":false},
+            {"kind":"no_memory","ok":true},
+            {"kind":"ablate","items":["claim:c86"],"ok":true},
+            {"kind":"ablate","items":["claim:c86"],"ok":false}
+        ])")}});
+    CHECK(unstable.value("status", std::string()) == "inconclusive");
+    CHECK(telemetry->creditSummary(scope).value("events", 0LL) == eventsAfterFirst);
+
+    // F5-T5: falha de infraestrutura em uma reexecucao tambem e inconclusiva.
+    const auto infra = memory.runCreditAudit(projectId, taskforge::Json{
+        {"traceId", "run-t4b-infra"},
+        {"taskType", "class"},
+        {"delivered", request["delivered"]},
+        {"cited", request["cited"]},
+        {"repetitions", 1},
+        {"arms", taskforge::Json::parse(R"([
+            {"kind":"baseline","ok":false},
+            {"kind":"ablate","items":["claim:c86"],"ok":true,"infra":true}
+        ])")}});
+    CHECK(infra.value("status", std::string()) == "inconclusive");
+    CHECK(infra.value("reason", std::string()) == "infra_failure");
+    CHECK(telemetry->creditSummary(scope).value("events", 0LL) == eventsAfterFirst);
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_utility_config_parses_ledger_source) {
     using taskforge::memory::MemoryService;
     auto& memory = MemoryService::getInstance();
