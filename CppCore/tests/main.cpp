@@ -4980,6 +4980,175 @@ TEST(memory_credit_audit_marks_missing_container) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_audit_sampler_stops_on_budget) {
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryTaskSnapshotRecord;
+    using taskforge::memory::MemoryTraceRecord;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-audit-budget-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    const fs::path base = root / "base";
+    fs::create_directories(base, ec);
+    const std::string projectId = "audit-budget-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    CHECK(memory.configureCreditAudit(projectId, taskforge::Json::parse(
+        R"({"creditAudit":{"enabled":true,"sampleRate":1.0,"maxTokensPerDay":100}})")));
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+    MemoryTraceRecord trace;
+    trace.traceId = "trace-budget";
+    trace.scopeId = scope;
+    trace.runId = "run-budget";
+    trace.nodeId = "node-budget";
+    trace.taskType = "class";
+    trace.outcome = "failure";
+    CHECK(telemetry->appendTrace(trace, taskforge::Json{{"kind", "test"}}));
+    taskforge::memory::MemoryEpisodeRecord episode;
+    episode.scopeId = scope;
+    episode.runId = "run-budget";
+    episode.nodeId = "node-budget";
+    episode.kind = "task";
+    episode.content = "budget";
+    episode.taskType = "class";
+    episode.outcome = "failure";
+    const std::string episodeId = telemetry->recordEpisode(episode);
+    CHECK(!episodeId.empty());
+    MemoryValidationRecord validation;
+    validation.scopeId = scope;
+    validation.runId = "run-budget";
+    validation.nodeId = "node-budget";
+    validation.episodeId = episodeId;
+    validation.validatorId = "v1";
+    validation.ok = false;
+    CHECK(!telemetry->recordValidation(validation).empty());
+    CHECK(telemetry->recordHit(scope, "run-budget", "node-budget", "missing-edge",
+                                "fact", true, false, "failure"));
+    MemoryTaskSnapshotRecord snapshot;
+    snapshot.traceId = "trace-budget";
+    snapshot.scopeId = scope;
+    snapshot.workspaceKind = "path";
+    snapshot.workspaceRef = base.string();
+    snapshot.expiresAt = "2999-01-01T00:00:00Z";
+    CHECK(telemetry->saveTaskSnapshot(snapshot));
+    int executorCalls = 0;
+    memory.setCreditAuditBudget([](const taskforge::Json&) {
+        return taskforge::Json{{"ok", true}, {"allowed", false},
+                               {"reason", "gateway_budget"}};
+    });
+    memory.setCreditAuditExecutor([&](const taskforge::memory::CreditAuditExecutionRequest&) {
+        ++executorCalls;
+        return taskforge::memory::CreditAuditExecutionResult{};
+    });
+    const auto result = memory.auditCredit(projectId);
+    CHECK(result.value("ok", false));
+    CHECK(result.value("budgetExhausted", 0LL) == 1);
+    CHECK(result.value("selected", -1LL) == 0);
+    CHECK(executorCalls == 0);
+    const auto audit = telemetry->getCreditAudit(scope, "trace-budget");
+    CHECK(audit.value("status", std::string()) == "budget_exhausted");
+    CHECK(audit.value("reason", std::string()) == "gateway_budget");
+    memory.setCreditAuditBudget({});
+    memory.setCreditAuditExecutor({});
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
+TEST(memory_credit_audit_marks_external_and_expired) {
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryTaskSnapshotRecord;
+    using taskforge::memory::MemoryTraceRecord;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-audit-reasons-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    const fs::path base = root / "base";
+    fs::create_directories(base, ec);
+    const std::string projectId = "audit-reasons-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    CHECK(memory.configureCreditAudit(projectId, taskforge::Json::parse(
+        R"({"creditAudit":{"enabled":true,"sampleRate":1.0,"maxSnapshotBytes":1024}})")));
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+
+    auto addCase = [&](const std::string& traceId, const std::string& runId,
+                       const std::string& nodeId, const taskforge::Json& tools,
+                       const std::string& expiresAt) {
+        MemoryTraceRecord trace;
+        trace.traceId = traceId;
+        trace.scopeId = scope;
+        trace.runId = runId;
+        trace.nodeId = nodeId;
+        trace.taskType = "class";
+        trace.outcome = "failure";
+        CHECK(telemetry->appendTrace(trace, taskforge::Json{{"kind", "test"}}));
+        taskforge::memory::MemoryEpisodeRecord episode;
+        episode.scopeId = scope;
+        episode.runId = runId;
+        episode.nodeId = nodeId;
+        episode.kind = "task";
+        episode.content = "audit reason";
+        episode.taskType = "class";
+        episode.outcome = "failure";
+        episode.toolCalls = tools;
+        const std::string episodeId = telemetry->recordEpisode(episode);
+        CHECK(!episodeId.empty());
+        MemoryValidationRecord validation;
+        validation.scopeId = scope;
+        validation.runId = runId;
+        validation.nodeId = nodeId;
+        validation.episodeId = episodeId;
+        validation.validatorId = "v1";
+        validation.ok = false;
+        CHECK(!telemetry->recordValidation(validation).empty());
+        CHECK(telemetry->recordHit(scope, runId, nodeId, "missing-edge", "fact",
+                                    true, false, "failure"));
+        MemoryTaskSnapshotRecord snapshot;
+        snapshot.traceId = traceId;
+        snapshot.scopeId = scope;
+        snapshot.workspaceKind = "path";
+        snapshot.workspaceRef = base.string();
+        snapshot.expiresAt = expiresAt;
+        CHECK(telemetry->saveTaskSnapshot(snapshot));
+    };
+    addCase("trace-external", "run-ext", "node-ext",
+            taskforge::Json::parse(R"([{"tool":"mcp__demo"}])"),
+            "2999-01-01T00:00:00Z");
+    addCase("trace-expired", "run-exp", "node-exp",
+            taskforge::Json::array(), "2000-01-01T00:00:00Z");
+    const auto result = memory.auditCredit(projectId);
+    CHECK(result.value("ok", false));
+    CHECK(result.value("notAuditable", 0LL) == 2);
+    const auto external = telemetry->getCreditAudit(scope, "trace-external");
+    CHECK(external.value("status", std::string()) == "not_auditable");
+    CHECK(external.value("reason", std::string()) == "external_effects");
+    const auto expired = telemetry->getCreditAudit(scope, "trace-expired");
+    CHECK(expired.value("status", std::string()) == "not_auditable");
+    CHECK(expired.value("reason", std::string()) == "snapshot_expired");
+
+    const auto tooLarge = memory.saveTaskSnapshot(projectId, taskforge::Json{
+        {"traceId", "trace-big"},
+        {"inputHash", "h"},
+        {"input", taskforge::Json::object()},
+        {"workspaceKind", "path"},
+        {"workspaceRef", base.string()},
+        {"bytes", 2048}});
+    CHECK(tooLarge.value("ok", true) == false);
+    CHECK(tooLarge.value("reason", std::string()) == "snapshot_too_large");
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_credit_audit_prepares_isolated_workspaces) {
     using taskforge::memory::MemoryService;
     using taskforge::memory::MemoryTaskSnapshotRecord;
@@ -5031,6 +5200,12 @@ TEST(memory_credit_audit_prepares_isolated_workspaces) {
     CHECK(fs::exists(armB / "src" / "a.txt", ec));
     CHECK(!fs::exists(armA / ".arestrix", ec));
     CHECK(!fs::exists(armA / "node_modules", ec));
+    {
+        std::ofstream out(armA / "src" / "only-a.txt");
+        out << "a";
+    }
+    CHECK(fs::exists(armA / "src" / "only-a.txt", ec));
+    CHECK(!fs::exists(armB / "src" / "only-a.txt", ec));
     CHECK(prepared["container"].value("networkMode", std::string()) == "none");
     const auto cleanup = memory.cleanupCreditAuditWorkspaces(projectId, "trace-ws");
     CHECK(cleanup.value("ok", false));

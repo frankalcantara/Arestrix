@@ -78,7 +78,9 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   the arm description in `ARESTRIX_AUDIT_ARM_JSON`, and returns
   `ok`/`infra`/`tokens` as JSON. With `ARESTRIX_GATEWAY_DB` set, the sampler
   checks and reconciles a daily `memory-audit:<project>` token budget with
-  `hard_stop`; without a gateway it keeps using the local daily cap.
+  `hard_stop`; without a gateway it keeps using the local daily cap. Tests now
+  cover arm-workspace isolation, budget denial, MCP/`call_agent` tasks marked
+  `external_effects`, expired snapshots and the snapshot size ceiling.
   `prepareCreditAuditWorkspaces()` materializes one copied workspace per arm
   under the telemetry directory, skips `.arestrix`, `.git`, build output and
   dependency caches, and `cleanupCreditAuditWorkspaces()` removes it after the
