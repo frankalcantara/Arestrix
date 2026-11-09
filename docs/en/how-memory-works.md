@@ -462,7 +462,10 @@ and the no-memory arm approves, it runs pairwise ablations of the top
 `pairwiseTopM` suspects. It reads the arm command from
 `memory.creditAudit.containerCommand` or `ARESTRIX_AUDIT_ARM_COMMAND`, passes
 the arm description in `ARESTRIX_AUDIT_ARM_JSON`, and expects the command to
-print JSON with `ok`, optional `infra` and optional `tokens`.
+print JSON with `ok`, optional `infra` and optional `tokens`. When
+`ARESTRIX_GATEWAY_DB` is set, the sampler reserves and reconciles tokens in a
+daily `memory-audit:<project>` budget with `hard_stop`; otherwise the local
+`maxTokensPerDay` cap applies.
 `prepareCreditAuditWorkspaces()` copies the snapshot
 workspace once per arm into
 `.arestrix/telemetry/audit-workspaces/<trace>/<arm>/workspace`, skipping

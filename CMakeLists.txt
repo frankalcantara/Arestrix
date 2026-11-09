@@ -455,7 +455,7 @@ if(ARESTRIX_BUILD_STUDIO)
     ${SRC}/project/ProjectManager.cpp
     ${SRC}/pi/PiProjectScanner.cpp
     ${SRC}/platform/StudioConsole.cpp)
-  target_link_libraries(arestrix PRIVATE arestrix_core arestrix_security_flags webui)
+  target_link_libraries(arestrix PRIVATE arestrix_gateway_core arestrix_core arestrix_security_flags webui)
   target_compile_definitions(arestrix PRIVATE ARESTRIX_STUDIO_VERSION="${ARESTRIX_VERSION}")
   if(WIN32)
     arestrix_add_version_info(arestrix "Arestrix Studio" "arestrix.exe" "arestrix")
