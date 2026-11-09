@@ -5743,7 +5743,7 @@ taskforge::Json MemoryStore::utilityFor(const std::string& scopeId,
 
 taskforge::Json MemoryStore::creditSummary(const std::string& scopeId) const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    taskforge::Json out{{"events", 0LL}, {"items", 0LL},
+    taskforge::Json out{{"events", 0LL}, {"items", 0LL}, {"capped", 0LL},
                         {"success", 0.0}, {"failure", 0.0}, {"lowRes", 0.0}};
     if (!db_) return out;
     auto scalar = [&](const char* sql) -> taskforge::Json {
@@ -5756,6 +5756,8 @@ taskforge::Json MemoryStore::creditSummary(const std::string& scopeId) const {
     };
     out["events"] = scalar("SELECT COUNT(*) FROM memory_credit_event WHERE scope_id=?")
         .value("value", 0.0);
+    out["capped"] = scalar("SELECT COUNT(*) FROM memory_credit_event "
+                           "WHERE scope_id=? AND capped=1").value("value", 0.0);
     out["items"] = scalar("SELECT COUNT(*) FROM memory_item_utility WHERE scope_id=?")
         .value("value", 0.0);
     out["success"] = scalar("SELECT COALESCE(SUM(s),0) FROM memory_item_utility WHERE scope_id=?")

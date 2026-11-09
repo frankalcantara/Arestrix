@@ -5816,6 +5816,77 @@ TEST(memory_credit_legacy_seed_is_idempotent) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_caps_ten_approvals_per_origin) {
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryTraceRecord;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-origin-cap-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "origin-cap-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+    const std::string lesson = memory.recordLesson(
+        projectId, "class", "t", "regra limitada por origem");
+    CHECK(!lesson.empty());
+
+    auto approve = [&](const std::string& runId, int index) {
+        const std::string nodeId = "node-" + runId + "-" + std::to_string(index);
+        const std::string traceId = "trace-" + runId + "-" + std::to_string(index);
+        MemoryTraceRecord trace;
+        trace.traceId = traceId;
+        trace.scopeId = scope;
+        trace.runId = runId;
+        trace.nodeId = nodeId;
+        trace.taskType = "class";
+        trace.outcome = "success";
+        CHECK(telemetry->appendTrace(trace, taskforge::Json{{"kind", "test"}}));
+        taskforge::memory::MemoryEpisodeRecord episode;
+        episode.scopeId = scope;
+        episode.runId = runId;
+        episode.nodeId = nodeId;
+        episode.kind = "task";
+        episode.content = "cap";
+        episode.taskType = "class";
+        episode.outcome = "success";
+        const std::string episodeId = telemetry->recordEpisode(episode);
+        CHECK(!episodeId.empty());
+        CHECK(telemetry->recordHit(scope, runId, nodeId, lesson, "lesson",
+                                    true, true, "success"));
+        MemoryValidationRecord validation;
+        validation.scopeId = scope;
+        validation.runId = runId;
+        validation.nodeId = nodeId;
+        validation.episodeId = episodeId;
+        validation.validatorId = "v1";
+        validation.ok = true;
+        CHECK(!memory.recordValidation(projectId, validation, false).empty());
+    };
+    for (int i = 0; i < 10; ++i) approve("run-cap", i);
+    const auto cap = telemetry->utilityFor(scope, "lesson:" + lesson, "class");
+    CHECK(std::abs(cap.value("s", 0.0) - 1.0) < 1e-9);
+    const auto summary = telemetry->creditSummary(scope);
+    CHECK(summary.value("events", 0LL) == 10);
+    CHECK(summary.value("capped", 0LL) == 9);
+    const std::string since = "2000-01-01T00:00:00Z";
+    CHECK(std::abs(telemetry->creditTotalForOrigin(
+        scope, "lesson:" + lesson, "class", "run-cap", since) - 1.0) < 1e-9);
+    approve("run-other", 0);
+    CHECK(std::abs(telemetry->utilityFor(scope, "lesson:" + lesson, "class")
+        .value("s", 0.0) - 2.0) < 1e-9);
+    CHECK(std::abs(telemetry->creditTotalForOrigin(
+        scope, "lesson:" + lesson, "class", "run-other", since) - 1.0) < 1e-9);
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_utility_config_parses_ledger_source) {
     using taskforge::memory::MemoryService;
     auto& memory = MemoryService::getInstance();
