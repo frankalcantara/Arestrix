@@ -300,7 +300,7 @@ jobs:
 
             - `*.zip.sha256`, `*-setup.exe.sha256`, `SHA256SUMS`, `SBOM.json` and
               `release-manifest.json` are attached to this release.
-            - Arestrix uses the [SignPath Foundation](https://signpath.org) for Windows code signing.
+            - Arestrix uses the [SignPath Foundation](https://signpath.org) for code signing of Windows binaries and installers.
               Tagged releases are Authenticode-signed by SignPath Foundation when signing is enabled.
               See the
               [code signing policy](https://github.com/frankalcantara/Arestrix/blob/main/CODE_SIGNING.md)
