@@ -95,7 +95,8 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   coverage for the bootstrap window, divergence suspension and promotion with
   weight 0.95. With audit enabled, playbook demotion ignores rejections whose
   trace already received an applied credit audit, so an exonerated lesson is
-  not counted again.
+  not counted again. A suspect item that is sampled out keeps its utility
+  unchanged and produces no audit row.
   `prepareCreditAuditWorkspaces()` materializes one copied workspace per arm
   under the telemetry directory, skips `.arestrix`, `.git`, build output and
   dependency caches, and `cleanupCreditAuditWorkspaces()` removes it after the

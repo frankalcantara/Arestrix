@@ -6178,6 +6178,61 @@ TEST(memory_credit_adjusted_outcomes_ignore_reattributed_rejection) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_suspect_without_audit_keeps_utility) {
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-suspect-no-audit-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "suspect-no-audit-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    CHECK(memory.configureCreditAudit(projectId, taskforge::Json::parse(
+        R"({"creditAudit":{"enabled":true,"sampleRate":0.0,)"
+        R"("minSuspectRejections":99}})")));
+    const std::string lesson = memory.recordLesson(
+        projectId, "class", "t", "item suspeito sem auditoria");
+    CHECK(!lesson.empty());
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+    taskforge::memory::MemoryEpisodeRecord episode;
+    episode.scopeId = scope;
+    episode.runId = "run-suspect";
+    episode.nodeId = "node-suspect";
+    episode.kind = "task";
+    episode.content = "suspect";
+    episode.taskType = "class";
+    episode.outcome = "failure";
+    const std::string episodeId = telemetry->recordEpisode(episode);
+    CHECK(!episodeId.empty());
+    CHECK(telemetry->recordHit(scope, "run-suspect", "node-suspect", lesson, "lesson",
+                                true, false, "failure"));
+    MemoryValidationRecord validation;
+    validation.scopeId = scope;
+    validation.runId = "run-suspect";
+    validation.nodeId = "node-suspect";
+    validation.episodeId = episodeId;
+    validation.validatorId = "v1";
+    validation.ok = false;
+    CHECK(!memory.recordValidation(projectId, validation, false).empty());
+    const auto before = telemetry->utilityFor(scope, "lesson:" + lesson, "class");
+    CHECK(std::abs(before.value("utility", 0.0) - 1.0 / 3.0) < 1e-9);
+    const auto audit = memory.auditCredit(projectId);
+    CHECK(audit.value("ok", false));
+    CHECK(audit.value("selected", -1LL) == 0);
+    CHECK(audit.value("sampledOut", 0LL) == 1);
+    CHECK(telemetry->getCreditAudit(scope, "run-suspect").empty());
+    const auto after = telemetry->utilityFor(scope, "lesson:" + lesson, "class");
+    CHECK(std::abs(after.value("utility", 0.0) - before.value("utility", 0.0)) < 1e-9);
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_utility_config_parses_ledger_source) {
     using taskforge::memory::MemoryService;
     auto& memory = MemoryService::getInstance();
