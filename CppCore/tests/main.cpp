@@ -5963,6 +5963,38 @@ TEST(memory_credit_rekey_old_edge_joins_new_claim) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_purge_removes_forgotten_item_events) {
+    using taskforge::memory::MemoryCreditEvent;
+    using taskforge::memory::MemoryStore;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-credit-purge-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string scope = "project:credit-purge-test";
+    std::string error;
+    MemoryStore store((root / "telemetry.db").string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "credit-purge-test"));
+    MemoryCreditEvent event;
+    event.traceId = "trace-purge";
+    event.itemKey = "claim:purge";
+    event.taskType = "class";
+    event.kind = "citation";
+    event.deltaFailure = 1.0;
+    CHECK(store.recordCreditEvents(scope, {event}));
+    CHECK(store.creditSummary(scope).value("events", 0LL) == 1);
+    CHECK(store.utilityFor(scope, "claim:purge", "class").value("events", 0LL) == 1);
+    CHECK(store.purgeTelemetry(
+        scope, taskforge::Json{{"creditKeys", taskforge::Json::array({"claim:purge"})}}
+                   .dump(),
+        error));
+    CHECK(store.utilityFor(scope, "claim:purge", "class").value("events", -1LL) == 0);
+    CHECK(store.creditSummary(scope).value("events", 0LL) == 0);
+    store.close();
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_utility_config_parses_ledger_source) {
     using taskforge::memory::MemoryService;
     auto& memory = MemoryService::getInstance();
