@@ -6831,11 +6831,13 @@ TEST(memory_job_lease_expires_and_can_be_reclaimed) {
     CHECK(a.ensureScope(scope, "project", "", "job-lease-test"));
     const std::string job = a.enqueueJob(scope, "purge_telemetry", taskforge::Json::object());
     CHECK(!job.empty());
-    const auto first = a.claimJobs(scope, 1, "worker-a", 1);
+    // Lease de 5s para nao flakar em runners lentos: o segundo worker precisa
+    // enxergar o job ainda ocupado antes de esperar a expiracao.
+    const auto first = a.claimJobs(scope, 1, "worker-a", 5);
     CHECK(first.size() == 1);
-    const auto busy = b.claimJobs(scope, 1, "worker-b", 1);
+    const auto busy = b.claimJobs(scope, 1, "worker-b", 5);
     CHECK(busy.empty());
-    std::this_thread::sleep_for(std::chrono::milliseconds(2200));
+    std::this_thread::sleep_for(std::chrono::milliseconds(5200));
     const auto reclaimed = b.claimJobs(scope, 1, "worker-b", 1);
     CHECK(reclaimed.size() == 1);
     CHECK(reclaimed[0].id == job);
