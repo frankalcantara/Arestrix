@@ -1,6 +1,6 @@
 # Workspaces, memória, skills e MCP
 
-> **Aplica-se a:** Arestrix 2.6 (`2.6.0`) · Última revisão: 2026-11-02
+> **Aplica-se a:** Arestrix 2.7 (`2.7.0`) · Última revisão: 2026-11-10
 
 [English](../en/workspaces-memory-skills-mcp.md) · [Índice](../README.md)
 

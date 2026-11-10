@@ -1,6 +1,6 @@
 # Positioning
 
-> **Applies to:** Arestrix 2.6 (`2.6.0`) · Last reviewed: 2026-11-02
+> **Applies to:** Arestrix 2.7 (`2.7.0`) · Last reviewed: 2026-11-10
 
 ## The problem
 

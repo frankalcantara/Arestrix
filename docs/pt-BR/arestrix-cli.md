@@ -1,6 +1,6 @@
 # `arestrix-cli` — execução sem interface
 
-> **Aplica-se a:** Arestrix 2.6 (`2.6.0`) · Última revisão: 2026-11-02
+> **Aplica-se a:** Arestrix 2.7 (`2.7.0`) · Última revisão: 2026-11-10
 
 [English](../en/arestrix-cli.md) · [Índice](README.md)
 
