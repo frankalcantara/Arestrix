@@ -147,6 +147,14 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   overlaps/duplicates with p95 around 0.24 s and the fixture backfill reports
   the expected multi closures.
 
+### Fixed
+
+- **Memory lineage completeness:** lesson edges, proposals and playbooks now
+  record `memory_lineage` from their claim, episode or agent source, and
+  `backfillLineage` rebuilds those links for existing databases. A project that
+  mixes source ingestion with agent-authored lessons no longer fails `doctor`
+  with orphan lineage.
+
 ## [2.6.0] - 2026-11-02
 
 ### Added

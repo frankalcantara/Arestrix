@@ -6915,6 +6915,86 @@ TEST(memory_forget_keeps_claim_with_surviving_source_version) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_lineage_covers_agent_episode_and_playbook_inputs) {
+    using taskforge::memory::MemoryStore;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-lineage-complete-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string scope = "project:lineage-complete-test";
+    std::string error;
+    MemoryStore store((root / "memory.db").string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "lineage-complete-test"));
+
+    const std::string episode = store.recordEpisode(
+        scope, "run-lineage", "node-lineage", "agent_success", "task", "episodio");
+    CHECK(!episode.empty());
+
+    const std::string proposalFromEpisode = store.recordProposal(
+        scope, "fact", taskforge::Json{{"subject", "Alpha"}, {"predicate", "USES"},
+                                       {"object", "Beta"}},
+        episode, taskforge::Json::array(), 0.7);
+    CHECK(!proposalFromEpisode.empty());
+
+    const std::string proposalFromAgent = store.recordProposal(
+        scope, "lesson",
+        taskforge::Json{{"domain", "svg"}, {"triggerError", "sombra"},
+                        {"lessonRule", "remover sombra"}},
+        "", taskforge::Json::array({taskforge::Json{{"kind", "agent"}, {"node", "agent-1"}}}),
+        0.6);
+    CHECK(!proposalFromAgent.empty());
+
+    const std::string playbook = store.recordPlaybook(
+        scope, "svg", "Playbook de SVG",
+        taskforge::Json::array({taskforge::Json{{"tool", "read"}}}),
+        taskforge::Json::object(), 0.8, "candidate", "episode",
+        taskforge::Json::array({taskforge::Json{{"kind", "episode"},
+                                                {"episodeId", episode},
+                                                {"outcome", "success"}}}),
+        1, 0);
+    CHECK(!playbook.empty());
+
+    const std::string promotedLesson = store.recordLesson(
+        scope, "svg", "sombra", "remover sombra", episode, "promotion");
+    CHECK(!promotedLesson.empty());
+    const std::string agentLesson = store.recordLesson(
+        scope, "svg", "contraste", "garantir contraste", "seed", "agent");
+    CHECK(!agentLesson.empty());
+
+    const auto lineage = store.lineageSummary(scope);
+    CHECK(lineage.value("links", 0LL) >= 5);
+    CHECK(lineage.value("orphanEdges", 0LL) == 0);
+    CHECK(lineage.value("orphanProposals", 0LL) == 0);
+    CHECK(lineage.value("orphanPlaybooks", 0LL) == 0);
+    CHECK(lineage.value("orphanFacets", 0LL) == 0);
+
+    // Bancos antigos podem ter os objetos sem as linhas de linhagem. O
+    // backfill precisa reconstruir as mesmas ligacoes a partir das colunas
+    // de origem e do evidence_json.
+    store.close();
+    sqlite3* raw = nullptr;
+    CHECK(sqlite3_open((root / "memory.db").string().c_str(), &raw) == SQLITE_OK);
+    CHECK(sqlite3_exec(raw, "DELETE FROM memory_lineage", nullptr, nullptr, nullptr) == SQLITE_OK);
+    sqlite3_close(raw);
+
+    MemoryStore reopened((root / "memory.db").string());
+    CHECK(reopened.open(error));
+    const auto beforeBackfill = reopened.lineageSummary(scope);
+    CHECK(beforeBackfill.value("links", 0LL) == 0);
+    CHECK(beforeBackfill.value("orphanEdges", 0LL) > 0);
+    taskforge::Json report;
+    CHECK(reopened.backfillLineage(scope, &report) >= 5);
+    const auto afterBackfill = reopened.lineageSummary(scope);
+    CHECK(afterBackfill.value("orphanEdges", 0LL) == 0);
+    CHECK(afterBackfill.value("orphanProposals", 0LL) == 0);
+    CHECK(afterBackfill.value("orphanPlaybooks", 0LL) == 0);
+    reopened.close();
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_purge_telemetry_redacts_episode_and_job_completes) {
     using taskforge::memory::MemoryEpisodeRecord;
     using taskforge::memory::MemoryPassageRecord;

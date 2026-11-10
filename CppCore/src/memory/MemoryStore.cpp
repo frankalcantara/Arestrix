@@ -2684,9 +2684,22 @@ std::string MemoryStore::recordEdge(const std::string& scopeId, const std::strin
         recordEvidence(evidence);
     }
     attachLens(insertedId);
+    // I5: toda aresta derivada precisa de uma entrada de linhagem. Quando nao
+    // existe passage, usamos a claim ou a origem causal (agente, promocao,
+    // seed) para que o doctor nao trate uma licao de agente como orfa.
+    bool linked = false;
     if (cleanMetadata.is_object()) {
         const std::string passageId = cleanMetadata.value("passageId", std::string());
-        if (!passageId.empty()) recordLineage(scopeId, "edge", insertedId, "passage", passageId);
+        if (!passageId.empty()) {
+            linked = recordLineage(scopeId, "edge", insertedId, "passage", passageId);
+        }
+    }
+    if (!linked && !claimKey.empty()) {
+        linked = recordLineage(scopeId, "edge", insertedId, "claim", claimKey);
+    }
+    if (!linked && !sourceRef.empty()) {
+        linked = recordLineage(scopeId, "edge", insertedId,
+                               sourceKind.empty() ? "source" : sourceKind, sourceRef);
     }
     if (!txn.commit(&txnError)) {
         lastError_ = txnError;
@@ -3769,6 +3782,11 @@ std::string MemoryStore::recordPlaybook(const std::string& scopeId, const std::s
     }
     for (const auto& item : cleanEvidence) {
         if (!item.is_object()) continue;
+        const std::string episodeId = item.value("episodeId", std::string());
+        if (!episodeId.empty()) {
+            recordLineage(scopeId, "playbook", id, "episode", episodeId);
+            continue;
+        }
         const std::string kind = item.value("kind", std::string("edge"));
         const std::string inputId = item.value("id", item.value("edgeId",
             item.value("lessonId", std::string())));
@@ -4242,15 +4260,33 @@ std::string MemoryStore::recordProposal(const std::string& scopeId, const std::s
             return "";
         }
     }
+    bool linked = false;
     if (cleanPayload.is_object()) {
         const std::string passageId = cleanPayload.value("passageId", std::string());
-        if (!passageId.empty()) recordLineage(scopeId, "proposal", id, "passage", passageId);
+        if (!passageId.empty()) {
+            linked = recordLineage(scopeId, "proposal", id, "passage", passageId);
+        }
     }
     if (cleanEvidence.is_array()) {
         for (const auto& item : cleanEvidence) {
             if (!item.is_object()) continue;
             const std::string passageId = item.value("passageId", std::string());
-            if (!passageId.empty()) recordLineage(scopeId, "proposal", id, "passage", passageId);
+            if (!passageId.empty()) {
+                linked = recordLineage(scopeId, "proposal", id, "passage", passageId) || linked;
+            }
+        }
+    }
+    if (!linked && !sourceEpisodeId.empty()) {
+        linked = recordLineage(scopeId, "proposal", id, "episode", sourceEpisodeId);
+    }
+    if (!linked && cleanEvidence.is_array()) {
+        for (const auto& item : cleanEvidence) {
+            if (!item.is_object()) continue;
+            const std::string kind = item.value("kind", std::string());
+            const std::string inputId = item.value("episodeId",
+                item.value("id", item.value("node", std::string())));
+            if (kind.empty() || inputId.empty()) continue;
+            linked = recordLineage(scopeId, "proposal", id, kind, inputId) || linked;
         }
     }
     audit("extractor", "proposal", scopeId, "", kind + ":" + id);
@@ -7088,24 +7124,40 @@ size_t MemoryStore::backfillLineage(const std::string& scopeId, taskforge::Json*
     };
     Stmt edges;
     std::string error;
-    if (prepare(db_, "SELECT id,metadata FROM memory_edge WHERE scope_id=?", edges, error)) {
+    if (prepare(db_, "SELECT id,metadata,claim_key,source_kind,source_ref FROM memory_edge "
+                     "WHERE scope_id=?", edges, error)) {
         bindText(edges.stmt, 1, scopeId);
         while (stepRetry(edges.stmt) == SQLITE_ROW) {
             const auto metadata = parseJsonOrNull(columnText(edges.stmt, 1));
             const std::string passageId = metadata.is_object()
                 ? metadata.value("passageId", std::string()) : std::string();
-            if (passageId.empty() || !link("edge", columnText(edges.stmt, 0), "passage", passageId)) {
-                ++orphans;
+            bool any = false;
+            if (!passageId.empty()) {
+                any = link("edge", columnText(edges.stmt, 0), "passage", passageId);
             }
+            if (!any) {
+                const std::string claimKey = columnText(edges.stmt, 2);
+                if (!claimKey.empty()) any = link("edge", columnText(edges.stmt, 0), "claim", claimKey);
+            }
+            if (!any) {
+                const std::string sourceRef = columnText(edges.stmt, 4);
+                if (!sourceRef.empty()) {
+                    const std::string sourceKind = columnText(edges.stmt, 3);
+                    any = link("edge", columnText(edges.stmt, 0),
+                               sourceKind.empty() ? "source" : sourceKind, sourceRef);
+                }
+            }
+            if (!any) ++orphans;
         }
     }
     Stmt proposals;
-    if (prepare(db_, "SELECT id,payload_json,evidence_json FROM memory_proposal WHERE scope_id=?",
-                proposals, error)) {
+    if (prepare(db_, "SELECT id,payload_json,evidence_json,source_episode_id "
+                     "FROM memory_proposal WHERE scope_id=?", proposals, error)) {
         bindText(proposals.stmt, 1, scopeId);
         while (stepRetry(proposals.stmt) == SQLITE_ROW) {
             const auto payload = parseJsonOrNull(columnText(proposals.stmt, 1));
             const auto evidence = parseJsonOrNull(columnText(proposals.stmt, 2));
+            const std::string sourceEpisodeId = columnText(proposals.stmt, 3);
             std::set<std::string> passages;
             if (payload.is_object()) {
                 const std::string id = payload.value("passageId", std::string());
@@ -7122,6 +7174,19 @@ size_t MemoryStore::backfillLineage(const std::string& scopeId, taskforge::Json*
             bool any = false;
             for (const auto& id : passages) {
                 any = link("proposal", columnText(proposals.stmt, 0), "passage", id) || any;
+            }
+            if (!any && !sourceEpisodeId.empty()) {
+                any = link("proposal", columnText(proposals.stmt, 0), "episode", sourceEpisodeId);
+            }
+            if (!any && evidence.is_array()) {
+                for (const auto& item : evidence) {
+                    if (!item.is_object()) continue;
+                    const std::string kind = item.value("kind", std::string());
+                    const std::string inputId = item.value("episodeId",
+                        item.value("id", item.value("node", std::string())));
+                    if (kind.empty() || inputId.empty()) continue;
+                    any = link("proposal", columnText(proposals.stmt, 0), kind, inputId) || any;
+                }
             }
             if (!any) ++orphans;
         }
@@ -7153,6 +7218,12 @@ size_t MemoryStore::backfillLineage(const std::string& scopeId, taskforge::Json*
             if (evidence.is_array()) {
                 for (const auto& item : evidence) {
                     if (!item.is_object()) continue;
+                    const std::string episodeId = item.value("episodeId", std::string());
+                    if (!episodeId.empty()) {
+                        any = link("playbook", columnText(playbooks.stmt, 0),
+                                   "episode", episodeId) || any;
+                        continue;
+                    }
                     const std::string kind = item.value("kind", std::string("edge"));
                     const std::string id = item.value("id", item.value("edgeId",
                         item.value("lessonId", std::string())));
