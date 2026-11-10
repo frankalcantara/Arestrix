@@ -7507,6 +7507,7 @@ bool MemoryStore::purgeTelemetry(const std::string& scopeId, const std::string& 
     std::set<std::string> itemIds;
     std::set<std::string> passageIds;
     std::set<std::string> hashes;
+    std::set<std::string> creditKeys;
     auto collect = [](const taskforge::Json& value, std::set<std::string>& target) {
         if (!value.is_array()) return;
         for (const auto& item : value) {
@@ -7518,6 +7519,9 @@ bool MemoryStore::purgeTelemetry(const std::string& scopeId, const std::string& 
             passageIds);
     collect(payload.contains("textHashes") ? payload["textHashes"] : taskforge::Json::array(),
             hashes);
+    collect(payload.contains("creditKeys") ? payload["creditKeys"]
+                                           : taskforge::Json::array(),
+            creditKeys);
     std::string txnError;
     WriteTxn txn(*this, txnError);
     if (!txn.ok()) {
@@ -7533,6 +7537,34 @@ bool MemoryStore::purgeTelemetry(const std::string& scopeId, const std::string& 
         bindText(del.stmt, 1, scopeId);
         bindText(del.stmt, 2, id);
         if (stepRetry(del.stmt) != SQLITE_DONE) {
+            error = sqlite3_errmsg(db_);
+            txn.rollback();
+            return false;
+        }
+    }
+    for (const auto& key : creditKeys) {
+        Stmt delEvent;
+        if (!prepare(db_, "DELETE FROM memory_credit_event WHERE scope_id=? AND item_key=?",
+                     delEvent, error)) {
+            txn.rollback();
+            return false;
+        }
+        bindText(delEvent.stmt, 1, scopeId);
+        bindText(delEvent.stmt, 2, key);
+        if (stepRetry(delEvent.stmt) != SQLITE_DONE) {
+            error = sqlite3_errmsg(db_);
+            txn.rollback();
+            return false;
+        }
+        Stmt delUtility;
+        if (!prepare(db_, "DELETE FROM memory_item_utility WHERE scope_id=? AND item_key=?",
+                     delUtility, error)) {
+            txn.rollback();
+            return false;
+        }
+        bindText(delUtility.stmt, 1, scopeId);
+        bindText(delUtility.stmt, 2, key);
+        if (stepRetry(delUtility.stmt) != SQLITE_DONE) {
             error = sqlite3_errmsg(db_);
             txn.rollback();
             return false;
@@ -7672,6 +7704,7 @@ MemoryEraseResult MemoryStore::eraseSource(const std::string& scopeId,
     std::set<std::string> sourceIds;
     std::set<std::string> passageIds;
     std::set<std::string> deletedEdges;
+    std::set<std::string> deletedClaimKeys;
     std::set<std::string> deletedProposals;
     std::set<std::string> deletedFacets;
     std::set<std::string> deletedPlaybooks;
@@ -7884,7 +7917,8 @@ MemoryEraseResult MemoryStore::eraseSource(const std::string& scopeId,
     for (const auto& edgeId : deletedEdges) {
         Stmt query;
         std::string error;
-        if (!prepare(db_, "SELECT status,COALESCE(metadata,'{}'),edge_hash FROM memory_edge "
+        if (!prepare(db_, "SELECT status,COALESCE(metadata,'{}'),edge_hash,"
+                           "COALESCE(claim_key,'') FROM memory_edge "
                            "WHERE id=? AND scope_id=?", query, error)) {
             return fail(error);
         }
@@ -7894,6 +7928,8 @@ MemoryEraseResult MemoryStore::eraseSource(const std::string& scopeId,
         const std::string status = columnText(query.stmt, 0);
         const std::string metadata = columnText(query.stmt, 1);
         const std::string edgeHash = columnText(query.stmt, 2);
+        const std::string claimKey = columnText(query.stmt, 3);
+        if (!claimKey.empty()) deletedClaimKeys.insert(claimKey);
         if (status == "active") {
             Stmt update;
             if (!prepare(db_, "UPDATE memory_edge SET status='rejected',retracted_at=?,"
@@ -8096,13 +8132,22 @@ MemoryEraseResult MemoryStore::eraseSource(const std::string& scopeId,
     for (const auto& id : deletedPlaybooks) itemIds.push_back(id);
     for (const auto& id : deletedLessons) itemIds.push_back(id);
     for (const auto& id : deletedPaths) itemIds.push_back(id);
+    taskforge::Json creditKeyJson = taskforge::Json::array();
+    for (const auto& id : deletedEdges) creditKeyJson.push_back("edge:" + id);
+    for (const auto& key : deletedClaimKeys) creditKeyJson.push_back(key);
+    for (const auto& id : deletedLessons) creditKeyJson.push_back("lesson:" + id);
+    for (const auto& id : deletedPlaybooks) creditKeyJson.push_back("playbook:" + id);
+    for (const auto& id : deletedPaths) creditKeyJson.push_back("path:" + id);
+    for (const auto& id : deletedFacets) creditKeyJson.push_back("facet:" + id);
+    for (const auto& id : passageIds) creditKeyJson.push_back("psg:" + id);
     taskforge::Json passageJson = taskforge::Json::array();
     for (const auto& id : passageIds) passageJson.push_back(id);
     taskforge::Json hashesJson = taskforge::Json::array();
     for (const auto& hash : textHashes) hashesJson.push_back(hash);
     const std::string jobId = enqueueJob(scopeId, "purge_telemetry",
         taskforge::Json{{"itemIds", itemIds}, {"passageIds", passageJson},
-                        {"textHashes", hashesJson}, {"reason", reason}});
+                        {"textHashes", hashesJson}, {"creditKeys", creditKeyJson},
+                        {"reason", reason}});
     if (!jobId.empty()) {
         ++result.jobs;
         result.jobIds.push_back(jobId);
