@@ -110,7 +110,7 @@ Redistributable on Windows.
 
 - a push to `main` updates the rolling
   [`latest`](https://github.com/frankalcantara/Arestrix/releases/tag/latest) pre-release;
-- pushing a `v*` tag publishes or updates the release for that tag;
+- pushing a `v*` tag publishes or updates a stable release for that tag;
 - a manual dispatch follows the selected branch/tag.
 
 The workflow runs the canonical gate (`release_check.py --skip-e2e`), creates the ZIP and the Inno
@@ -166,7 +166,7 @@ Local validation on Windows 11 x64 covered the environment preflight (all option
 silent install with the report written to the setup log, the desktop shortcut default and its
 `/MERGETASKS="!desktopicon"` opt-out, Start menu shortcuts, `App Paths` registration, an in-place
 upgrade preserving user files/projects and a complete uninstall. Clean-machine install, signing and
-Intune/SCCM validation remain pending; the installer is included in the pre-release but is not yet a
+Intune/SCCM validation remain pending; the installer is included in the release but is not yet a
 fully validated release artifact.
 
 ## 4. Code signing with SignPath Foundation

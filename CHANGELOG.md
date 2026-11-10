@@ -8,6 +8,11 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ## [Unreleased]
 
+### Changed
+
+- Tagged `v*` releases are now published as stable GitHub releases; pushes to
+  `main` continue to update the rolling `latest` pre-release.
+
 ## [2.7.0] - 2026-11-10
 
 ### Added
