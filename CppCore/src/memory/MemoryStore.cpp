@@ -3302,6 +3302,36 @@ std::vector<bool> MemoryStore::validationOutcomes(const std::string& scopeId,
     return out;
 }
 
+std::vector<bool> MemoryStore::validationOutcomesAdjusted(
+    const std::string& scopeId, const std::string& taskType, size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<bool> out;
+    if (!db_ || taskType.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "SELECT v.ok FROM memory_validation v "
+                 "JOIN memory_episode e ON e.id=v.episode_id "
+                 "LEFT JOIN memory_trace t ON t.scope_id=v.scope_id "
+                 "AND t.run_id=v.run_id AND t.node_id=v.node_id "
+                 "LEFT JOIN memory_credit_audit a ON a.scope_id=v.scope_id "
+                 "AND a.trace_id=t.trace_id AND a.status='applied' "
+                 "WHERE v.scope_id=? AND e.scope_id=? AND e.task_type=? "
+                 "AND (v.ok=1 OR a.id IS NULL) "
+                 "ORDER BY v.created_at DESC LIMIT ?", st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, scopeId);
+    bindText(st.stmt, 3, taskType);
+    sqlite3_bind_int(st.stmt, 4, static_cast<int>(std::min<size_t>(limit, 1000)));
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        out.push_back(columnInt(st.stmt, 0) != 0);
+    }
+    return out;
+}
+
 std::vector<MemoryValidationRecord> MemoryStore::listValidations(const std::string& scopeId,
                                                                  const std::string& episodeId,
                                                                  size_t limit) const {

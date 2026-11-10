@@ -93,7 +93,9 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   credit keys of forgotten items and removes their credit events and utility
   rows in the same telemetry transaction. The validator gate now has test
   coverage for the bootstrap window, divergence suspension and promotion with
-  weight 0.95.
+  weight 0.95. With audit enabled, playbook demotion ignores rejections whose
+  trace already received an applied credit audit, so an exonerated lesson is
+  not counted again.
   `prepareCreditAuditWorkspaces()` materializes one copied workspace per arm
   under the telemetry directory, skips `.arestrix`, `.git`, build output and
   dependency caches, and `cleanupCreditAuditWorkspaces()` removes it after the
