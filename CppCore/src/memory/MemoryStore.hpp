@@ -671,6 +671,10 @@ public:
                                                         size_t limit = 20) const;
     std::vector<bool> validationOutcomes(const std::string& scopeId, const std::string& taskType,
                                          size_t limit = 10) const;
+    // Exclui rejeicoes cujo trace ja recebeu uma auditoria aplicada.
+    std::vector<bool> validationOutcomesAdjusted(const std::string& scopeId,
+                                                 const std::string& taskType,
+                                                 size_t limit = 10) const;
     // Ativa um candidato apenas com validacao independente e 3 input_hash
     // distintos nas amostras fornecidas pelo banco de telemetria.
     bool autoPromotePlaybook(const std::string& scopeId, const std::string& episodeId,

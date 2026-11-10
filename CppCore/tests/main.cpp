@@ -6096,6 +6096,88 @@ TEST(memory_validator_gate_bootstrap_and_suspension) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_credit_adjusted_outcomes_ignore_reattributed_rejection) {
+    using taskforge::memory::MemoryCreditAuditRecord;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryTraceRecord;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-adjusted-outcomes-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string projectId = "adjusted-outcomes-test";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, (root / "memory.db").string()));
+    CHECK(memory.configureTelemetry(projectId, (root / "telemetry.db").string()));
+    auto* telemetry = memory.telemetryStore(projectId);
+    CHECK(telemetry != nullptr);
+    const std::string scope = "project:" + projectId;
+
+    MemoryTraceRecord trace;
+    trace.traceId = "trace-innocent";
+    trace.scopeId = scope;
+    trace.runId = "run-innocent";
+    trace.nodeId = "node-innocent";
+    trace.taskType = "class";
+    trace.outcome = "failure";
+    CHECK(telemetry->appendTrace(trace, taskforge::Json{{"kind", "test"}}));
+    taskforge::memory::MemoryEpisodeRecord failedEpisode;
+    failedEpisode.scopeId = scope;
+    failedEpisode.runId = "run-innocent";
+    failedEpisode.nodeId = "node-innocent";
+    failedEpisode.kind = "task";
+    failedEpisode.content = "innocent";
+    failedEpisode.taskType = "class";
+    failedEpisode.outcome = "failure";
+    const std::string failedId = telemetry->recordEpisode(failedEpisode);
+    CHECK(!failedId.empty());
+    MemoryValidationRecord failed;
+    failed.scopeId = scope;
+    failed.runId = "run-innocent";
+    failed.nodeId = "node-innocent";
+    failed.episodeId = failedId;
+    failed.validatorId = "v1";
+    failed.ok = false;
+    CHECK(!telemetry->recordValidation(failed).empty());
+    CHECK(telemetry->validationOutcomes(scope, "class", 10).size() == 1);
+    CHECK(telemetry->validationOutcomes(scope, "class", 10)[0] == false);
+
+    MemoryCreditAuditRecord audit;
+    audit.id = "credit-audit:trace-innocent";
+    audit.scopeId = scope;
+    audit.traceId = "trace-innocent";
+    audit.status = "applied";
+    audit.reason = "single_reversal";
+    CHECK(telemetry->saveCreditAudit(audit));
+    CHECK(telemetry->validationOutcomesAdjusted(scope, "class", 10).empty());
+
+    taskforge::memory::MemoryEpisodeRecord okEpisode;
+    okEpisode.scopeId = scope;
+    okEpisode.runId = "run-ok";
+    okEpisode.nodeId = "node-ok";
+    okEpisode.kind = "task";
+    okEpisode.content = "ok";
+    okEpisode.taskType = "class";
+    okEpisode.outcome = "success";
+    const std::string okId = telemetry->recordEpisode(okEpisode);
+    CHECK(!okId.empty());
+    MemoryValidationRecord ok;
+    ok.scopeId = scope;
+    ok.runId = "run-ok";
+    ok.nodeId = "node-ok";
+    ok.episodeId = okId;
+    ok.validatorId = "v1";
+    ok.ok = true;
+    CHECK(!telemetry->recordValidation(ok).empty());
+    const auto adjusted = telemetry->validationOutcomesAdjusted(scope, "class", 10);
+    CHECK(adjusted.size() == 1);
+    CHECK(adjusted[0] == true);
+    memory.closeProject(projectId);
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_utility_config_parses_ledger_source) {
     using taskforge::memory::MemoryService;
     auto& memory = MemoryService::getInstance();
