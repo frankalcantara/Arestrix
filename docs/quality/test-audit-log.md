@@ -28,6 +28,36 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 
 ## Histórico Cronológico de Auditorias
 
+### Rodada #006 - 2026-11-10 (pré-release 2.6.0, correções da memória)
+- **Commit:** árvore de validação pré-release `2.6.0` (hash do merge registrado no GitHub)
+- **Status Geral:** `APROVADO NO ESCOPO AUTOMATIZADO; INSTALADOR E 4 CASOS MANUAIS DE BIBLIOTECAS PENDENTES`
+- **Ambiente de Teste:** Windows 11 (x64) | Node.js v24.11.1 | Vitest v5.0.5 | Vite v8.3.5 | TypeScript v7.0.2 | Visual Studio 2026 / MSVC C++20 | Python 3.11.9
+- **Métricas Globais:** 76 arquivos de teste | 617 testes Vitest | 4.223/4.223 verificações C++ | tutorial E2E + 14 exemplos | execução live com DeepSeek | 0 falhas automatizadas
+
+#### Cobertura desta rodada
+
+| Área | Evidência |
+| :--- | :--- |
+| **Gate oficial de release** | `release_check.py` (sem `--skip-e2e`): frontend, build C++20, CTest, Vitest, version, assets, secrets, skills, licenças, gateway smoke, tutorial e 14 exemplos; 26 artefatos e 131 componentes no SBOM |
+| **Frontend** | `npm test`: 76 arquivos / 617 testes; `npm run build` e `tsc` sem erros |
+| **Nativo C++20** | `arestrix_tests`: 4.223/4.223 verificações, incluindo a nova cobertura de linhagem e backfill |
+| **Memória determinística** | baseline 3× (7.314 tokens, 15 chamadas), `e2e_memory`, remoção, fixture v4, A/B 120 execuções (ON=OFF=1,00), avaliação, estresse 8×500 com 0 falhas e doctor 0, instituição e `memory_fix5_baseline` |
+| **Memória live (DeepSeek)** | `--with-epochs`: `ORION-42` nos braços on/compactado/epochs, `UNKNOWN` no off, razão de cache 1,021053; redução de prompt: 28.110 tokens, razão 0,1308 |
+| **Bibliotecas + GitHub** | `homologation:libraries:live`: 35 testes Vitest, 46/46 C++ mock, 2/2 smoke live; 4 casos manuais pendentes |
+| **CLI e doctor** | `doctor`, `memory doctor/health/report`, `utility status|seed|rebuild|rekey`, `audit-credit --report/--run`, `validator-audit`, `proposals`, `state`, `paths`, `bridges`, `embeddings`, `consolidate` e `check` |
+| **Pacote portátil** | `arestrix-2.6.0-windows-x64.zip`: 89.894.688 bytes, 4.912 arquivos, SHA-256 `1a737029…ea3d7a8` |
+
+#### Achado e correção
+
+O `doctor` de um projeto que mistura ingestão de fontes com lições e propostas de agentes acusava linhagem órfã. A gravação de `memory_lineage` passou a cobrir arestas de lição, propostas e playbooks a partir de claim, episódio ou agente, e `backfillLineage` reconstrói esses vínculos em bancos antigos. O projeto E2E misto passou de 11 órfãos para 13 vínculos e 0 órfãos.
+
+#### Pendências para promoção
+
+- [ ] Instalador Windows: o Inno Setup 6 não está instalado neste ambiente; o pacote portátil foi validado, o `setup.exe` não.
+- [ ] Quatro casos manuais da matriz de Bibliotecas + GitHub.
+- [ ] Instalação limpa, upgrade e desinstalação em máquina Windows.
+- [ ] Assinatura Authenticode via SignPath e validação do instalador assinado.
+
 ### Rodada #005 — 2026-10-28 (release 2.3.0-beta.2)
 - **Commit:** árvore de release `2.3.0-beta.2` (hash registrado no GitHub após o push)
 - **Status Geral:** `APROVADO NO ESCOPO AUTOMATIZADO (GATE COMPLETO COM E2E)`
