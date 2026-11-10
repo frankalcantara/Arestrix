@@ -91,7 +91,9 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   `claim_key`; `rekey` then merges old `edge:<id>` events into that key,
   including duplicates from the same trace. `purge_telemetry` now receives the
   credit keys of forgotten items and removes their credit events and utility
-  rows in the same telemetry transaction.
+  rows in the same telemetry transaction. The validator gate now has test
+  coverage for the bootstrap window, divergence suspension and promotion with
+  weight 0.95.
   `prepareCreditAuditWorkspaces()` materializes one copied workspace per arm
   under the telemetry directory, skips `.arestrix`, `.git`, build output and
   dependency caches, and `cleanupCreditAuditWorkspaces()` removes it after the
