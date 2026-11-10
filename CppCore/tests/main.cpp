@@ -5995,6 +5995,107 @@ TEST(memory_credit_purge_removes_forgotten_item_events) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_validator_gate_bootstrap_and_suspension) {
+    using taskforge::memory::MemoryPlaybookRecord;
+    using taskforge::memory::MemoryService;
+    using taskforge::memory::MemoryValidationRecord;
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-validator-gate-test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    auto& memory = MemoryService::getInstance();
+
+    auto scenario = [&](const std::string& projectId, int reviews,
+                        int rejections) -> std::string {
+        const fs::path dir = root / projectId;
+        fs::create_directories(dir, ec);
+        memory.closeProject(projectId);
+        CHECK(memory.configure(projectId, true, (dir / "memory.db").string()));
+        CHECK(memory.configureTelemetry(projectId, (dir / "telemetry.db").string()));
+        CHECK(memory.configureCreditAudit(projectId, taskforge::Json::parse(
+            R"({"creditAudit":{"enabled":true,"minValidatorAudits":20,)"
+            R"("maxValidatorDivergence":0.10}})")));
+        for (int i = 0; i < reviews; ++i) {
+            const auto audit = memory.recordValidatorAudit(projectId, taskforge::Json{
+                {"validator", "v1"},
+                {"traceId", "review-" + std::to_string(i)},
+                {"reviewer", "human"},
+                {"verdict", i < rejections ? "rejected" : "accepted"}});
+            CHECK(audit.value("ok", false));
+        }
+        auto* store = memory.store(projectId);
+        auto* telemetry = memory.telemetryStore(projectId);
+        CHECK(store != nullptr);
+        CHECK(telemetry != nullptr);
+        const std::string scope = "project:" + projectId;
+        // Tres execucoes aprovadas, com input_hash distinto, formam as
+        // amostras do portao. O episodio atual e o quarto input.
+        for (int i = 0; i < 3; ++i) {
+            taskforge::memory::MemoryEpisodeRecord episode;
+            episode.scopeId = scope;
+            episode.runId = "run-prior-" + std::to_string(i);
+            episode.nodeId = "node-prior-" + std::to_string(i);
+            episode.kind = "task";
+            episode.content = "prior";
+            episode.taskType = "class";
+            episode.outcome = "success";
+            episode.inputHash = "input-" + std::to_string(i);
+            const std::string episodeId = telemetry->recordEpisode(episode);
+            CHECK(!episodeId.empty());
+            MemoryValidationRecord validation;
+            validation.scopeId = scope;
+            validation.runId = episode.runId;
+            validation.nodeId = episode.nodeId;
+            validation.episodeId = episodeId;
+            validation.validatorId = "v1";
+            validation.validatorVersion = "1";
+            validation.ok = true;
+            CHECK(!telemetry->recordValidation(validation).empty());
+        }
+        taskforge::memory::MemoryEpisodeRecord current;
+        current.scopeId = scope;
+        current.runId = "run-current";
+        current.nodeId = "node-current";
+        current.kind = "task";
+        current.content = "current";
+        current.taskType = "class";
+        current.outcome = "success";
+        current.inputHash = "input-current";
+        const std::string currentId = telemetry->recordEpisode(current);
+        CHECK(!currentId.empty());
+        const std::string playbook = store->recordPlaybook(
+            scope, "class", "playbook de teste", taskforge::Json::array(),
+            taskforge::Json::object(), 0.5, "candidate", currentId);
+        CHECK(!playbook.empty());
+        MemoryValidationRecord validation;
+        validation.scopeId = scope;
+        validation.runId = "run-current";
+        validation.nodeId = "node-current";
+        validation.episodeId = currentId;
+        validation.validatorId = "v1";
+        validation.validatorVersion = "1";
+        validation.ok = true;
+        CHECK(!memory.recordValidation(projectId, validation, false).empty());
+        for (const auto& record : store->listPlaybooks(scope, "class", "", 20)) {
+            if (record.id == playbook) return record.status;
+        }
+        return "";
+    };
+
+    // F5-T23: validador novo (0 revisoes) nao promove.
+    CHECK(scenario("gate-bootstrap", 0, 0) == "candidate");
+    // Divergencia 0,15 > 0,10 suspende a promocao automatica.
+    CHECK(scenario("gate-suspended", 20, 3) == "candidate");
+    // Divergencia 0,05 permite promover com peso 0,95.
+    CHECK(scenario("gate-allowed", 20, 1) == "active");
+    CHECK(std::abs(memory.validatorWeight("gate-allowed", "v1") - 0.95) < 1e-9);
+    memory.closeProject("gate-bootstrap");
+    memory.closeProject("gate-suspended");
+    memory.closeProject("gate-allowed");
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_utility_config_parses_ledger_source) {
     using taskforge::memory::MemoryService;
     auto& memory = MemoryService::getInstance();
