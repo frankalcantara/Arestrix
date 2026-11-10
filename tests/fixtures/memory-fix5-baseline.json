@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "phase": "fix5-phase0",
   "generatedAt": "2026-11-10T20:40:05.037630+00:00",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "cpp": {
     "command": [
       "C:\\Projetos\\Arestrix\\build\\arestrix_tests.exe"
