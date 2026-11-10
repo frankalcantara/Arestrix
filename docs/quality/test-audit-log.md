@@ -28,8 +28,8 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 
 ## Histórico Cronológico de Auditorias
 
-### Rodada #006 - 2026-11-10 (pré-release 2.6.0, correções da memória)
-- **Commit:** árvore de validação pré-release `2.6.0` (hash do merge registrado no GitHub)
+### Rodada #006 - 2026-11-10 (pré-release 2.7.0, correções da memória)
+- **Commit:** árvore de validação pré-release `2.7.0` (hash do merge registrado no GitHub)
 - **Status Geral:** `APROVADO NO ESCOPO AUTOMATIZADO; INSTALADOR E 4 CASOS MANUAIS DE BIBLIOTECAS PENDENTES`
 - **Ambiente de Teste:** Windows 11 (x64) | Node.js v24.11.1 | Vitest v5.0.5 | Vite v8.3.5 | TypeScript v7.0.2 | Visual Studio 2026 / MSVC C++20 | Python 3.11.9
 - **Métricas Globais:** 76 arquivos de teste | 617 testes Vitest | 4.223/4.223 verificações C++ | tutorial E2E + 14 exemplos | execução live com DeepSeek | 0 falhas automatizadas
@@ -45,7 +45,7 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 | **Memória live (DeepSeek)** | `--with-epochs`: `ORION-42` nos braços on/compactado/epochs, `UNKNOWN` no off, razão de cache 1,021053; redução de prompt: 28.110 tokens, razão 0,1308 |
 | **Bibliotecas + GitHub** | `homologation:libraries:live`: 35 testes Vitest, 46/46 C++ mock, 2/2 smoke live; 4 casos manuais pendentes |
 | **CLI e doctor** | `doctor`, `memory doctor/health/report`, `utility status|seed|rebuild|rekey`, `audit-credit --report/--run`, `validator-audit`, `proposals`, `state`, `paths`, `bridges`, `embeddings`, `consolidate` e `check` |
-| **Pacote portátil** | `arestrix-2.6.0-windows-x64.zip`: 89.894.688 bytes, 4.912 arquivos, SHA-256 `1a737029…ea3d7a8` |
+| **Pacote portátil (ensaio 2.6.0)** | `arestrix-2.6.0-windows-x64.zip`: 89.894.688 bytes, 4.912 arquivos, SHA-256 `1a737029…ea3d7a8`; o pacote 2.7.0 é gerado pelo workflow de deploy |
 
 #### Achado e correção
 

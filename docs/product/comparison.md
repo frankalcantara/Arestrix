@@ -1,6 +1,6 @@
 # Comparison
 
-> **Applies to:** Arestrix 2.6 (`2.6.0`) · Last reviewed: 2026-11-02
+> **Applies to:** Arestrix 2.7 (`2.7.0`) · Last reviewed: 2026-11-10
 >
 > **Scope:** this is a directional summary based on public documentation and the Arestrix design,
 > not a benchmark. Capabilities and licensing of third-party products change; verify them with the
