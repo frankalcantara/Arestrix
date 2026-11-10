@@ -8,6 +8,8 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-11-10
+
 ### Added
 
 - **Memory fix5 phase 0:** read-only `arestrix-cli memory doctor` with six

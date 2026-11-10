@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "stage": "E0",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "projectId": "memoria-baseline",
   "fixtureHash": "8078b60ac35407ebada5c7066a085064ee8ab8967ab11300c48367b00f110a88",
   "fixtureFiles": {

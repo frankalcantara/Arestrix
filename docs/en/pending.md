@@ -3,7 +3,7 @@
 > Memory-specific pending work, including context compaction backed by existing
 > memory, is tracked in [Memory pending items](memory-pending.md).
 
-> **Version:** 2.6.0 · **Updated:** 2026-11-03
+> **Version:** 2.7.0 · **Updated:** 2026-11-10
 >
 > Single project-wide pending list. The memory implementation plan (Phases A-C) and the advanced
 > multigraph (Phase D / E11-E20) are complete. The remaining items are operational, performance and release tasks.
