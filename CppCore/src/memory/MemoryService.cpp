@@ -3656,7 +3656,9 @@ std::string MemoryService::recordValidation(const std::string& projectId,
                                                copy.validatorId, copy.validatorVersion,
                                                samples, promotedId, reason);
             }
-            const auto outcomes = t->validationOutcomes(scope, taskType, 10);
+            const auto outcomes = auditConfig.enabled
+                ? t->validationOutcomesAdjusted(scope, taskType, 10)
+                : t->validationOutcomes(scope, taskType, 10);
             std::string demoteReason;
             knowledge->autoDemotePlaybooks(scope, taskType, outcomes, demoteReason);
             invalidateBriefCache();

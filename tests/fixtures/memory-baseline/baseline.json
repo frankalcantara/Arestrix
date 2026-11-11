@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "stage": "E0",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "projectId": "memoria-baseline",
   "fixtureHash": "8078b60ac35407ebada5c7066a085064ee8ab8967ab11300c48367b00f110a88",
   "fixtureFiles": {
@@ -15,7 +15,7 @@
   },
   "metrics": {
     "runs": 3,
-    "elapsedSeconds": 11.89,
+    "elapsedSeconds": 13.36,
     "tokens": {
       "prompt": 6465,
       "completion": 849,
@@ -73,7 +73,7 @@
           "memory_item_utility": 0,
           "memory_job": 0,
           "memory_lens": 0,
-          "memory_lineage": 0,
+          "memory_lineage": 6,
           "memory_meta": 4,
           "memory_node": 11,
           "memory_node_fts": 11,
@@ -171,7 +171,7 @@
           "memory_item_utility": 0,
           "memory_job": 0,
           "memory_lens": 0,
-          "memory_lineage": 0,
+          "memory_lineage": 6,
           "memory_meta": 0,
           "memory_node": 0,
           "memory_node_fts": 0,

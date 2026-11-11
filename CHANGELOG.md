@@ -8,6 +8,13 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ## [Unreleased]
 
+### Changed
+
+- Tagged `v*` releases are now published as stable GitHub releases; pushes to
+  `main` continue to update the rolling `latest` pre-release.
+
+## [2.7.0] - 2026-11-10
+
 ### Added
 
 - **Memory fix5 phase 0:** read-only `arestrix-cli memory doctor` with six
@@ -80,7 +87,23 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   checks and reconciles a daily `memory-audit:<project>` token budget with
   `hard_stop`; without a gateway it keeps using the local daily cap. Tests now
   cover arm-workspace isolation, budget denial, MCP/`call_agent` tasks marked
-  `external_effects`, expired snapshots and the snapshot size ceiling.
+  `external_effects`, expired snapshots, the snapshot size ceiling and the
+  validator weight applied to credit events. A full MG15 T4b scenario now
+  checks the 0.500/0.600 before state, the 0.667/0.333 reassignment, idempotent
+  replay, no-memory failure, unstable repetitions and infrastructure failure.
+  Additional coverage keeps utility independent per task class, proves the
+  legacy seed is idempotent, and verifies that ten approvals from one origin
+  cap at `maxCreditPerOrigin` with nine `capped=1` events while another origin
+  still contributes normally. A later backfill now updates the existing edge's
+  `claim_key`; `rekey` then merges old `edge:<id>` events into that key,
+  including duplicates from the same trace. `purge_telemetry` now receives the
+  credit keys of forgotten items and removes their credit events and utility
+  rows in the same telemetry transaction. The validator gate now has test
+  coverage for the bootstrap window, divergence suspension and promotion with
+  weight 0.95. With audit enabled, playbook demotion ignores rejections whose
+  trace already received an applied credit audit, so an exonerated lesson is
+  not counted again. A suspect item that is sampled out keeps its utility
+  unchanged and produces no audit row.
   `prepareCreditAuditWorkspaces()` materializes one copied workspace per arm
   under the telemetry directory, skips `.arestrix`, `.git`, build output and
   dependency caches, and `cleanupCreditAuditWorkspaces()` removes it after the
@@ -130,6 +153,14 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   intelligence boundary for claim extraction. The 8×500 stress remains at zero
   overlaps/duplicates with p95 around 0.24 s and the fixture backfill reports
   the expected multi closures.
+
+### Fixed
+
+- **Memory lineage completeness:** lesson edges, proposals and playbooks now
+  record `memory_lineage` from their claim, episode or agent source, and
+  `backfillLineage` rebuilds those links for existing databases. A project that
+  mixes source ingestion with agent-authored lessons no longer fails `doctor`
+  with orphan lineage.
 
 ## [2.6.0] - 2026-11-02
 

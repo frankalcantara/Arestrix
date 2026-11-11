@@ -1,6 +1,6 @@
 # Pendências do projeto Arestrix
 
-> **Versão:** 2.6.0 · **Atualizado em:** 2026-11-03
+> **Versão:** 2.7.0 · **Atualizado em:** 2026-11-10
 >
 > Documento único de pendências do projeto. O plano de memória (Fases A–C) e o
 > multigrafo avançado (Fase D / E11–E20) estão concluídos. As pendências
