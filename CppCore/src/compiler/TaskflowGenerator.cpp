@@ -541,6 +541,21 @@ json TaskflowGenerator::buildAgentSpec(const core::Graph& graph, const core::Nod
     std::string memoryTaskType = memory.value("taskType", std::string());
     if (memoryTaskType.empty()) memoryTaskType = node.id;
     spec["memoryTaskType"] = memoryTaskType;
+    // Porteiro de politica da memoria (off|shadow|enforce). O provedor/modelo
+    // do gate e configuracao; trocar Jev por local/API nao muda o runtime.
+    spec["memoryGate"] = memory.value("gate", json::object());
+    std::string gateRequiredPattern;
+    if (node.validationRules.is_array()) {
+        for (const auto& rule : node.validationRules) {
+            if (rule.is_object() && rule.contains("contentPattern") &&
+                rule["contentPattern"].is_string()) {
+                gateRequiredPattern = rule["contentPattern"].get<std::string>();
+                if (!gateRequiredPattern.empty()) break;
+            }
+        }
+    }
+    spec["memoryGateRequiredPattern"] = gateRequiredPattern;
+    spec["memoryLocalOnly"] = memory.value("localOnly", false);
     spec["memoryMaxLessonsPerRun"] = std::max(1, std::min(500, memory.value("maxLessonsPerRun", 20)));
     spec["memoryMaxLessonChars"] = std::max(100, std::min(20000, memory.value("maxLessonChars", 4000)));
     // Compactacao do historico com a memoria existente. Desligada por padrao;

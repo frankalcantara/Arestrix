@@ -80,7 +80,7 @@ Windows, ou `~/.config/arestrix/env` no Linux) e nunca as passa por um shell.
 | `anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com` |
 | `google` | `GEMINI_API_KEY` | Endpoint do Gemini compatível com OpenAI |
 | `mistral` | `MISTRAL_API_KEY` | `https://api.mistral.ai/v1` |
-| `jev` | `JEV_API_KEY` (opcional) | `JEV_BASE_URL` é **obrigatória** (qualquer servidor compatível com OpenAI) |
+| `jev` | `JEV_API_KEY` (opcional) | `JEV_BASE_URL`, padrão `https://api.typesafe.ai`; o MemoryGate usa o adaptador tipado `/v1/systemone`, enquanto vértices de agente ainda exigem um servidor compatível com OpenAI |
 | `local` | `LOCAL_LLM_API_KEY` (opcional) | `LOCAL_LLM_BASE_URL`, padrão `http://localhost:11434/v1` (Ollama, llama.cpp, vLLM) |
 
 Qualquer endpoint pode ser substituído com `<PROVEDOR>_BASE_URL`.

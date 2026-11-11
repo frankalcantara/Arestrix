@@ -7,7 +7,10 @@
 > reconstrução do `.workspace` e restauração de padrões já funcionam, e o `workspace.config.json` é
 > lido/gravado em `.workspace/` sem perder propriedades no provisionamento. No Projeto, nome, versão,
 > descrição, pasta de saída, defaults de modelo/sandbox/ferramentas/memória e ambiente já são
-> editáveis, incluindo o caminho do banco SQLite. As Opções do Backstage, a faixa de opções, o alias do
+> editáveis, incluindo o caminho do banco SQLite. A memória ganhou uma seção própria com três
+> cenários (Consultar, Consultar e Decidir, Aprender com aprovação), memória ligada por padrão,
+> estado derivado “Personalizado” e os campos avançados na mesma tela de Propriedades. As Opções
+> do Backstage, a faixa de opções, o alias do
 > Assistente e a aba de configurações do Gerenciador de Projetos já apontam para as telas de
 > Propriedades com deep link de categoria. Os modais de vértice de Sandbox, Modelo, Ferramentas e
 > Memória já usam o shell compartilhado `BaseModal`. O tema global está implementado e segue em
@@ -17,7 +20,7 @@
 > **Objetivo:** criar três telas de propriedades no padrão Office 365 (Studio, Workspace e Projeto),
 > usando um único shell visual e uma única camada de componentes, sem duplicar editores já existentes.
 >
-> **Última revisão:** 2026-10-26.
+> **Última revisão:** 2026-11-11.
 >
 > **Bibliotecas e GitHub:** o desenho específico de fontes, bibliotecas e assets está em
 > [`libraries-plan.md`](libraries-plan.md), que substitui as referências ao `GitHubReposModal`.

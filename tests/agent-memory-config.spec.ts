@@ -16,12 +16,16 @@ describe('Fase 12: Arquitetura de Memória Heterogênea (Opt-in, Persistência e
     });
   });
 
-  describe('1. Memória NÃO é Padrão e NEM Obrigatória (Opt-in)', () => {
-    it('deve inicializar padrões globais com memória desativada (enabled: false) e efêmera (persistent: false)', () => {
+  describe('1. Memória é ligada por padrão com o cenário Consultar e Decidir', () => {
+    it('deve inicializar os padrões globais com memória ativa, consultiva e porteiro enforce', () => {
       const defaults = graph.getGlobalDefaults();
       expect(defaults.memory).toBeDefined();
-      expect(defaults.memory?.enabled).toBe(false);
+      expect(defaults.memory?.enabled).toBe(true);
+      expect(defaults.memory?.mode).toBe('consult');
       expect(defaults.memory?.persistent).toBe(false);
+      expect(defaults.memory?.gate?.mode).toBe('enforce');
+      expect(defaults.memory?.gate?.provider).toBe('jev');
+      expect(defaults.memory?.gate?.model).toBe('jev-latest');
       expect(defaults.memory?.readBlackboard).toBe(false);
       expect(defaults.memory?.writeBlackboard).toBe(false);
       expect(defaults.memory?.semanticLessons).toBe(false);
@@ -57,7 +61,7 @@ describe('Fase 12: Arquitetura de Memória Heterogênea (Opt-in, Persistência e
       expect(graph.getNode('agente_embedding')!.agentSettings?.memory?.embeddingEnabled).toBe(false);
     });
 
-    it('ao criar um nó do tipo agent, deve herdar memória desativada por padrão', () => {
+    it('ao criar um nó do tipo agent, deve herdar a memória ativa por padrão', () => {
       const agentNode = graph.buildNode('node_agente_1', 'Redator de Conteúdo', 'agent', 100, 100);
       graph.addNode(agentNode);
 
@@ -70,8 +74,9 @@ describe('Fase 12: Arquitetura de Memória Heterogênea (Opt-in, Persistência e
         ? globalDefaults.memory
         : retrieved.agentSettings?.memory;
 
-      expect(effectiveMemory?.enabled).toBe(false);
+      expect(effectiveMemory?.enabled).toBe(true);
       expect(effectiveMemory?.persistent).toBe(false);
+      expect(effectiveMemory?.gate?.mode).toBe('enforce');
     });
   });
 
@@ -79,6 +84,11 @@ describe('Fase 12: Arquitetura de Memória Heterogênea (Opt-in, Persistência e
     it('deve permitir que o usuário ative memória apenas para agentes selecionados no projeto', () => {
       // Agente 1: Redator (sem memória, isolado)
       const redator = graph.buildNode('redator', 'Redator Isolado', 'agent', 0, 0);
+      redator.agentSettings = {
+        ...redator.agentSettings!,
+        inheritMemory: false,
+        memory: { ...DEFAULT_NODE_MEMORY_CONFIG, enabled: false }
+      };
       graph.addNode(redator);
 
       // Agente 2: Revisor (com memória ativada, efêmera, lê Blackboard)
@@ -128,9 +138,10 @@ describe('Fase 12: Arquitetura de Memória Heterogênea (Opt-in, Persistência e
       const n2 = graph.getNode('revisor')!;
       const n3 = graph.getNode('auditor')!;
 
-      // Nó 1 permanece desativado
-      expect(n1.agentSettings?.inheritMemory).toBe(true);
-      expect(graph.getGlobalDefaults().memory?.enabled).toBe(false);
+      // Nó 1 tem override explícito desativado; o padrão do projeto é ativo.
+      expect(n1.agentSettings?.inheritMemory).toBe(false);
+      expect(n1.agentSettings?.memory?.enabled).toBe(false);
+      expect(graph.getGlobalDefaults().memory?.enabled).toBe(true);
 
       // Nó 2 tem memória efêmera da sessão
       expect(n2.agentSettings?.inheritMemory).toBe(false);

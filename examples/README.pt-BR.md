@@ -25,6 +25,9 @@ escolha seu modelo, grave sua chave de API e pressione **F5**.
 Os exemplos 3 e 5 são **gerados** por `python scripts/build_examples.py`, então as peças compartilhadas não ficam fora de
 sincronia. Os vértices ainda não executam um grafo aninhado, por isso a composição é achatada em um único pipeline.
 
+Todos os exemplos começam com a memória do projeto **ligada** no cenário **Consultar e Decidir**. Os exemplos 4 e 5
+mantêm o override explícito `learn` (com o porteiro em `shadow`) para demonstrar o aprendizado e o `memory_search`.
+
 Todos os quatorze terminam em **vértices de saída** (`output`): o arquivo produzido é copiado para `exports/` e registrado na
 aba **Artefatos**, com visualização por formato (SVG, Markdown, planilhas, PDF e JSON).
 

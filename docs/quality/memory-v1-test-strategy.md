@@ -306,7 +306,14 @@ uma medição A/B mais ampla antes de promover o switch. A pendência de migraç
 para o módulo Mnemosyne continua registrada em
 [memory-pending.md](../en/memory-pending.md).
 
-1. Validação com provedores reais ainda não foi executada.
+1. O A/B v2 foi executado com DeepSeek real em 2026-11-11, incluindo a variante
+   com validador dependente de memória (ON 1,000 × OFF 0,000; relatórios em
+   `tests/fixtures/memory-ab-live-report.json` e
+   `tests/fixtures/memory-ab-live-value-report.json`). O `memory.gate` foi
+   medido em piloto de 1 repetição (paridade 1,20× tokens, valor 1,000);
+   a confirmação de 3 repetições, a validação de embeddings reais
+   (EmbeddingGemma 2 e Qwen3-Embedding-4B) e a medição dos interruptores
+   experimentais continuam pendentes.
 2. Não há runner macOS na matriz.
 3. O teste de 10 mil traços e o soak de 24 h ainda são metas, não gates.
 4. A cobertura de segurança de prompt injection em bridge hypothesis precisa de
@@ -316,8 +323,10 @@ para o módulo Mnemosyne continua registrada em
 ## 10. Ordem de execução
 
 1. Fechar L0–L3 e a matriz Windows/Linux.
-2. Executar L5 com os provedores reais.
+2. Executar L5 com os provedores reais (DeepSeek e A/B real concluídos em
+   2026-11-11; embeddings reais pendentes).
 3. Rodar L6 e registrar os números.
 4. Executar L7.
-5. Repetir o A/B e decidir os interruptores.
+5. Repetir o A/B (paridade e valor concluídos) e decidir os interruptores com um
+   conjunto de tarefas que exercite caminhos, travessia e pontes.
 6. Só então promover `memory-v1.0` para estável.

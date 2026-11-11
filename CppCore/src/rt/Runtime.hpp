@@ -113,6 +113,9 @@ struct CompletionResult {
     bool ok = false;
     std::string text;
     std::string error;
+    long long inTokens = 0;
+    long long outTokens = 0;
+    long long cachedTokens = 0;
 };
 
 CompletionResult completeText(const CompletionRequest& req);

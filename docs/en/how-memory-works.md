@@ -1,13 +1,14 @@
 # How Arestrix memory works
 
-> **Applies to:** Arestrix 2.6 — last reviewed: 2026-11-02
+> **Applies to:** Arestrix 2.8 — last reviewed: 2026-11-11
 >
-> A one-page guide and reference for project memory. Memory is optional, local and owned by the
-> project. There is no automatic import of old formats.
+> A one-page guide and reference for project memory. Memory is local, owned by the project and
+> on by default; it can be turned off in Properties. There is no automatic import of old formats.
 
 ## 1. Principles
 
-- **Off by default.** No vertex reads or writes knowledge without explicit configuration.
+- **On by default.** New projects start in the **Consult and Decide** scenario; turn it off in
+  File → Properties → Project → Memory. No vertex writes knowledge without `learn`.
 - **Three modes.** `off`, `consult` and `learn`, decided per vertex.
 - **Learning implies saving.** `learn` writes an episode and may propose knowledge; `consult` only reads.
 - **Derived knowledge requires a gate.** Lessons, facts/claims and playbooks go through
@@ -530,6 +531,49 @@ decision without changing the executed model. `memory.localOnly` blocks the
 remote tier for the whole project. The decision is written to the trace;
 automatic escalation after validator failure is not executed by the runtime yet.
 The default is `off`.
+
+### Memory gate
+
+`memory.gate` decides, before the agent loop, whether the vertex should receive
+the brief, query memory through tools, learn, or not use memory at all. It is a
+policy gate, not another reasoning agent: it returns a small typed decision and
+can only choose among pre-approved memory behaviors.
+
+```json
+"memory": {
+  "gate": {
+    "mode": "off | shadow | enforce",
+    "provider": "",
+    "model": "",
+    "maxSearches": 2,
+    "minConfidence": 0.6,
+    "fallback": "brief",
+    "maxBriefChars": 1200
+  }
+}
+```
+
+- `off` keeps the current behavior and adds no overhead.
+- `shadow` records the decision in the trace but does not change the brief or
+  the tools.
+- `enforce` applies the decision: `none` removes the brief and memory tools,
+  `brief` keeps the brief and removes every memory tool, `search` keeps the
+  brief and `memory_search` with a cap, and `learn` preserves lesson proposals.
+- With `provider`/`model` empty the decision is deterministic (lexical overlap
+  plus explicit memory cues). When both are set, a model refines the decision;
+  switching Jev to a local or hosted model is configuration only.
+- `provider: "jev"` uses the native System One adapter (`POST /v1/systemone`,
+  one Choice question, `jev-latest` by default, `JEV_API_KEY`); the real Jev API
+  is typed and is not `/chat/completions`-compatible.
+- `memory.localOnly` skips the model unless `provider` is `local`, so memory
+  text is not sent to a remote gate.
+- If the validator requires a value that exists in the brief, a `none` decision
+  is promoted to `brief`: the gate cannot cause a validation failure by
+  discarding the only source of that value.
+
+The decision is written as a `memory_gate` trace step with mode, decision,
+reason, confidence, latency, source (`off`, `deterministic`, `model` or
+`fallback`), cache hit and the gate provider/model.
 
 ### Retrieval traces
 

@@ -1,6 +1,6 @@
 # Pendências do projeto Arestrix
 
-> **Versão:** 2.7.0 · **Atualizado em:** 2026-11-10
+> **Versão:** 2.8.0 · **Atualizado em:** 2026-11-11
 >
 > Documento único de pendências do projeto. O plano de memória (Fases A–C) e o
 > multigrafo avançado (Fase D / E11–E20) estão concluídos. As pendências
@@ -13,12 +13,14 @@
 | Fases A–C do plano de memória | **Concluídas** |
 | Modos, propostas, telemetria, validação, brief, estado, embeddings e A/B | **Concluídos** |
 | Fase D — multigrafo avançado | **Implementada; interruptores opt-in** |
-| Harness de execução do A/B v2 | **Implementado** |
+| Harness de execução do A/B v2 | **Executado com provedor real em 2026-11-11 (paridade/custo e valor)** |
+| Porteiro de política da memória (`memory.gate`) | **Implementado; piloto A/B de 1 repetição concluído** |
+| Cenários de memória do projeto (Consultar / Consultar e Decidir / Aprender) | **Implementados; memória ligada por padrão** |
 | Nível `institution` no `memory_inspect` do assistente | Pendente operacional |
 | Validação com provedores reais de embeddings | Pendente operacional |
 | Interface gráfica para configurar o agente de memória | Pendente de produto |
-| Laço de profiling (Tracy) e correção automática do código gerado via modelo padrão do Studio | Pendente de engenharia / produto |
-| Instrumentação do próprio Arestrix com Tracy e laço de auto-otimização | Pendente de engenharia |
+| Laço de profiling (Tracy) e correção automática do código gerado via modelo padrão do Studio | Build opcional pronto; loop pendente |
+| Instrumentação do próprio Arestrix com Tracy e laço de auto-otimização | Build opcional pronto; instrumentação pendente |
 | Ciclo completo de testes e otimização de performance (C++, TypeScript, etc.) a cada release | Pendente de release |
 | Validação de release em máquina limpa | Pendente de release |
 
@@ -82,8 +84,78 @@ O harness está implementado em `memory ab run` e coberto por
 `scripts/e2e_memory_ab.py`: 20 tarefas × 3 repetições × 2 braços, banco
 congelado, validador e um arquivo `observations-<timestamp>.json` com `runId`,
 `episodeId`, `arm`, `ok`, tokens, turnos e latência. Custo monetário não é
-calculado. O que resta é executá-lo com provedores reais e registrar o resultado
-no relatório.
+calculado.
+
+Executado com provedor real em **2026-11-11** por
+`scripts/e2e_memory_ab_live.py`: DeepSeek (`deepseek-chat`), 120 execuções e
+banco congelado. Relatório em `tests/fixtures/memory-ab-live-report.json`;
+observações brutas em `tests/fixtures/memory-ab-live/`.
+
+| Métrica | OFF | ON |
+| :--- | ---: | ---: |
+| Aprovação | 60/60 (1,000) | 60/60 (1,000) |
+| Prompt tokens | 99.428 | 298.588 |
+| Prompt em cache | 38.400 | 204.288 |
+| Completion tokens | 46.792 | 78.790 |
+| Total tokens | 146.220 | 377.378 |
+| Turnos médios | 2,00 | 3,52 |
+| Latência média | 6,46 s | 10,95 s |
+
+O conhecimento congelado ficou inalterado e não houve falha de infraestrutura
+nem tarefa inválida. O delta de aprovação foi 0 (IC95 [0,0]) porque o validador
+do piloto não depende da memória. O custo maior do braço ON vem de chamadas
+`memory_search` feitas pelo próprio agente — 20/20 traces no ensaio de 20
+execuções, média de 1,8 busca por trace —, não do brief: o contexto injetado tem
+~451 caracteres em média.
+
+A variante com validador dependente de memória, executada em 2026-11-11 com
+`--memory-dependent`, exige o token `AB-7731`, que só existe em uma lição
+curada. O resultado mostra o sinal de valor: aprovação 60/60 (1,000) no ON contra
+0/60 (0,000) no OFF, delta 1,000 (IC95 [1,000, 1,000]), sem falha de
+infraestrutura nem tarefa inválida. O custo continua maior no ON (2,67× tokens
+totais e 1,62× latência), porque o agente consulta a memória por conta própria; a
+lição é efetivamente usada, mas o efeito é binário por desenho do validador.
+Relatório: `tests/fixtures/memory-ab-live-value-report.json`.
+
+Isso fecha a lacuna de valor da entrega da memória, mas não promove os
+interruptores experimentais: `memory.pathServing`, `memory.traversal`,
+`memory.bridges` e `routing.mode=binary` ainda precisam de uma medição própria,
+com um conjunto de tarefas que exercite caminhos, travessia e pontes. O A/B de
+valor mede a entrega da lição, não a qualidade da recuperação avançada.
+
+### 4.1.1 Porteiro de política da memória (`memory.gate`)
+
+Implementado com os modos `off`, `shadow` e `enforce`, decisão determinística e
+modelo opcional (`provider`/`model`; Jev, local ou API). O gate escolhe entre
+`none`, `brief`, `search` e `learn`, grava um passo `memory_gate` no trace e tem
+um piso de validação: se o validador exige um valor presente no brief, `none` é
+promovido a `brief`. O piloto A/B de 1 repetição em 2026-11-11 mostrou:
+
+| Cenário | Aprovação ON | ON/OFF tokens | ON/OFF latência |
+| :--- | ---: | ---: | ---: |
+| Baseline, paridade | 1,000 | 2,69× | 1,60× |
+| Gate determinístico, paridade | 1,000 | 1,79× | 1,25× |
+| Gate com modelo, paridade | 1,000 | 1,34× | 1,16× |
+| Gate com modelo, valor | 1,000 | 1,47× | 1,19× |
+| Jev, paridade | 1,000 | 1,39× | 1,01× |
+| Jev, valor | 1,000 | 1,51× | 1,03× |
+
+Os números do gate com DeepSeek incluem os tokens e a latência do modelo do gate
+(~9 mil tokens e ~1,3 s por execução); só o agente ficaria em 1,17×/0,96× na
+paridade e 1,28×/0,99× no valor. O Jev gasta ~14 mil tokens e ~270 ms por
+execução.
+
+O gate com DeepSeek tomou 17 decisões `brief`, 2 `none` e 1 `search` na
+paridade, e 19 `brief` + 1 `search` no valor; as tarefas ficaram em 2 turnos.
+Com **Jev** (`jev-latest`, TypeSafe `/v1/systemone`), as decisões foram 13
+`brief`, 6 `none` e 1 `search` na paridade, e 19 `brief` + 1 `search` no valor;
+a latência do gate caiu para **267–270 ms** e o custo ficou em **1,39× tokens /
+1,01× latência** na paridade e **1,51× / 1,03×** no valor, com aprovação
+**1,000 × 0,000**. O Jev foi validado em 1 repetição; a confirmação de 3
+repetições está pendente porque o agente (DeepSeek) ficou lento sob carga, não
+pelo Jev (que respondeu em ~270 ms). A tentativa anterior com DeepSeek no gate
+foi interrompida por latência/limite do provedor (34/120 em 33 min). Detalhes em
+`docs/quality/memory-gate-ab.md`.
 
 ### 4.2 Nível institucional no assistente
 
@@ -99,12 +171,20 @@ comportamento seguro quando o provedor não está disponível.
 ### 4.4 Interface gráfica do agente de memória
 
 O contrato `memory.claimExtraction.agent` já aceita um id de agente do Studio ou
-`{ id, graph, node }` para um agente baseado em grafo. Falta a interface gráfica
-do Studio para escolher esse alvo por projeto, listar os agentes/grafos
-registrados, mostrar o fallback para o modelo padrão e explicar o erro quando o
-alvo configurado não está disponível.
+`{ id, graph, node }` para um agente baseado em grafo. Falta um pré-requisito de
+backend: `registerStudioClaimAgent` só é chamado pelos testes, então
+`studioClaimIntelligence()` devolve `agente de memoria '<chave>' nao registrado no
+Studio` para qualquer alvo configurado em produção. Antes da tela, é preciso
+registrar os agentes/grafos do Studio no `AssistantSession` e expor uma listagem
+para a UI. Só então a tela deve escolher o alvo por projeto, mostrar o fallback
+para o modelo padrão e explicar o erro quando o alvo configurado não está
+disponível. A configuração de memória por projeto (cenários Consultar,
+Consultar e Decidir e Aprender com aprovação) já está implementada em
+Arquivo → Propriedades → Projeto → Memória.
 
 ### 4.5 Laço de observação de performance e correção automática no código gerado (Tracy + Modelo Padrão do Studio)
+
+> Plano detalhado: [`quality/tracy-profiling-plan.md`](quality/tracy-profiling-plan.md).
 
 Usar o **Tracy Profiler** (`third_party/tracy`) em um laço fechado de observação de performance e
 autocorreção para os pipelines gerados pelo Arestrix:
@@ -150,7 +230,10 @@ observação e otimização contínua:
       tempo de resposta da interface.
   - Comparar métricas contra a linha de base da release anterior, bloquear regressões acima do limiar e
     executar o ciclo de otimização guiado pelo Tracy antes de empacotar os artefatos.
-- Validação do instalador em máquina limpa, upgrade, uninstall e Intune/SCCM.
+- Instalador 2.7.0 validado localmente em 2026-11-11: instalação silenciosa em máquina sem
+  Arestrix, smoke dos binários, abertura do Studio, upgrade 2.1.0-beta.1 → 2.7.0 preservando
+  projeto do usuário e desinstalação completa. Faltam uma máquina realmente limpa (apenas o
+  runtime VC++) e Intune/SCCM.
 - Pacote Linux e matriz de CI Linux/macOS.
 - Catálogo remoto assinado.
 

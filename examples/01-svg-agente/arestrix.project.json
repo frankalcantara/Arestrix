@@ -31,13 +31,25 @@
     },
     "memory": {
       "allowedKeys": [],
+      "contextBudgetTokens": 800,
       "domains": [],
-      "enabled": false,
+      "enabled": true,
+      "gate": {
+        "mode": "enforce",
+        "provider": "jev",
+        "model": "jev-latest",
+        "maxSearches": 2,
+        "minConfidence": 0.6,
+        "fallback": "brief",
+        "maxBriefChars": 1200
+      },
+      "mode": "consult",
       "persistent": false,
       "readBlackboard": false,
       "recordLessons": false,
       "semanticLessons": false,
-      "writeBlackboard": false
+      "writeBlackboard": false,
+      "writeKeys": []
     },
     "model": {
       "model": "deepseek-flash",

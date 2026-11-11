@@ -39,6 +39,7 @@
 #include "memory/MemoryRanker.hpp"
 #include "memory/EmbeddingProvider.hpp"
 #include "memory/MemoryClaimExtractor.hpp"
+#include "memory/MemoryGate.hpp"
 #include "memory/MemoryFacets.hpp"
 #include "memory/MemoryAnchors.hpp"
 #include "memory/MemoryBridges.hpp"
@@ -1591,6 +1592,20 @@ TEST(generator_injects_memory_context_for_enabled_agent) {
     CHECK(consultSrc.find("\"memory_state_set\"") == std::string::npos);
     CHECK(consultSrc.find("\"memory_state_get\"") != std::string::npos);
     CHECK(consultSrc.find("catch (const std::exception& arx_mem_err)") == std::string::npos);
+
+    // O portao de politica da memoria chega ao spec do agente com provedor/modelo
+    // configuraveis; trocar Jev por local/API e apenas configuracao.
+    json gateSchema = consultSchema;
+    gateSchema["nodes"][1]["agentSettings"]["memory"]["gate"] = json{
+        {"mode", "enforce"}, {"provider", "jev"}, {"model", "system-one"},
+        {"maxSearches", 2}, {"maxBriefChars", 1200}};
+    taskforge::core::Graph gateGraph;
+    gateGraph.fromJson(gateSchema);
+    std::string gateSrc = TaskflowGenerator::generateSource(gateGraph);
+    CHECK(gateSrc.find("\"memoryGate\":{") != std::string::npos);
+    CHECK(gateSrc.find("\"mode\":\"enforce\"") != std::string::npos);
+    CHECK(gateSrc.find("\"provider\":\"jev\"") != std::string::npos);
+    CHECK(gateSrc.find("\"model\":\"system-one\"") != std::string::npos);
 
     json offModeSchema = modeSchema;
     offModeSchema["nodes"][1]["agentSettings"]["memory"]["mode"] = "off";
@@ -13727,6 +13742,129 @@ TEST(context_compressor_is_off_by_default_and_never_touches_last_message) {
     CHECK(pair[0].text == first.text);
 
     fs::remove_all(root);
+}
+
+TEST(memory_gate_config_and_deterministic_decisions) {
+    using namespace taskforge::memory;
+    MemoryGateConfig off = MemoryGateConfig::fromJson(taskforge::Json(false));
+    CHECK(off.mode == "off");
+    CHECK(!off.enabled());
+
+    MemoryGateConfig config = MemoryGateConfig::fromJson(taskforge::Json{
+        {"mode", "enforce"}, {"provider", "jev"}, {"model", "system-one"},
+        {"maxSearches", 99}, {"minConfidence", 7.0}, {"maxBriefChars", 10}});
+    CHECK(config.mode == "enforce");
+    CHECK(config.provider == "jev");
+    CHECK(config.maxSearches == 10);
+    CHECK(config.minConfidence <= 1.0);
+    CHECK(config.maxBriefChars == 200);
+
+    MemoryGateInput relevant;
+    relevant.projectId = "gate-test";
+    relevant.nodeId = "node";
+    relevant.taskType = "ab";
+    relevant.taskInput = "Inclua o codigo de conformidade no artefato.";
+    relevant.brief = "Inclua o codigo de conformidade AB-7731 no artefato.";
+    relevant.briefChars = relevant.brief.size();
+    MemoryGateDecision search = MemoryGate::decide(relevant, config);
+    CHECK(search.useMemory == "search");
+    CHECK(search.applied);
+    CHECK(search.maxSearches >= 1);
+
+    MemoryGateInput irrelevant = relevant;
+    irrelevant.taskInput = "Calcule a diferenca entre duas datas ISO 8601.";
+    MemoryGateDecision brief = MemoryGate::decide(irrelevant, config);
+    CHECK(brief.useMemory == "brief");
+    CHECK(brief.maxSearches == 0);
+
+    MemoryGateInput empty;
+    empty.taskInput = "qualquer";
+    MemoryGateDecision none = MemoryGate::decide(empty, config);
+    CHECK(none.useMemory == "none");
+
+    MemoryGateConfig shadow = config;
+    shadow.mode = "shadow";
+    MemoryGateDecision shadowDecision = MemoryGate::decide(relevant, shadow);
+    CHECK(shadowDecision.useMemory == "search");
+    CHECK(!shadowDecision.applied);
+
+    MemoryGateConfig briefOnly = config;
+    briefOnly.mode = "brief";
+    MemoryGateDecision briefScenario = MemoryGate::decide(relevant, briefOnly);
+    CHECK(briefScenario.useMemory == "brief");
+    CHECK(briefScenario.applied);
+    CHECK(briefScenario.source == "policy");
+}
+
+TEST(memory_gate_model_decision_and_fallback) {
+    using namespace taskforge::memory;
+    MemoryGateConfig config;
+    config.mode = "enforce";
+    config.provider = "fake";
+    config.model = "fake";
+    config.maxSearches = 2;
+
+    MemoryGateInput input;
+    input.projectId = "gate-model";
+    input.nodeId = "node";
+    input.taskType = "ab";
+    input.taskInput = "Continue a tarefa anterior usando o estado declarado.";
+    input.brief = "O cursor do lote anterior esta em 42.";
+    input.briefChars = input.brief.size();
+
+    int calls = 0;
+    MemoryGateModelFn model = [&](const MemoryGateModelRequest& request) {
+        ++calls;
+        CHECK(request.system.find("JSON") != std::string::npos);
+        MemoryGateModelResult result;
+        result.ok = true;
+        result.text = R"({"useMemory":"search","maxSearches":2,"query":"cursor","reason":"needs_state","confidence":0.91})";
+        return result;
+    };
+    MemoryGateDecision decision = MemoryGate::decide(input, config, model);
+    CHECK(calls == 1);
+    CHECK(decision.source == "model");
+    CHECK(decision.useMemory == "search");
+    CHECK(decision.maxSearches == 2);
+    CHECK(decision.query == "cursor");
+    CHECK(decision.applied);
+
+    // Mesmo input: cache evita nova chamada.
+    MemoryGateDecision cached = MemoryGate::decide(input, config, model);
+    CHECK(calls == 1);
+    CHECK(cached.cached);
+
+    // Saida invalida cai na decisao deterministica, sem quebrar a execucao.
+    MemoryGateInput invalidInput = input;
+    invalidInput.projectId = "gate-invalid";
+    MemoryGateModelFn invalidModel = [&](const MemoryGateModelRequest&) {
+        MemoryGateModelResult result;
+        result.ok = true;
+        result.text = "nao e json";
+        return result;
+    };
+    MemoryGateDecision fallback = MemoryGate::decide(invalidInput, config, invalidModel);
+    CHECK(fallback.source == "fallback");
+    CHECK(fallback.error == "model_output_not_json");
+    CHECK(fallback.useMemory == "brief" || fallback.useMemory == "search");
+
+    // Se o validador exige um token presente no brief, o gate nao pode
+    // descartar o brief mesmo que o modelo diga "none".
+    MemoryGateInput validatorInput = input;
+    validatorInput.projectId = "gate-validator";
+    validatorInput.taskInput = "Cite uma fonte inexistente e deixe o validador reprovar.";
+    validatorInput.brief = "Inclua o codigo de conformidade AB-7731 no artefato.";
+    validatorInput.requiredPattern = "AB-7731";
+    MemoryGateModelFn noneModel = [&](const MemoryGateModelRequest&) {
+        MemoryGateModelResult result;
+        result.ok = true;
+        result.text = R"({"useMemory":"none","maxSearches":0,"reason":"no_lesson","confidence":0.9})";
+        return result;
+    };
+    MemoryGateDecision protectedDecision = MemoryGate::decide(
+        validatorInput, config, noneModel);
+    CHECK(protectedDecision.useMemory == "brief");
+    CHECK(protectedDecision.reason == "validator_requires_brief");
 }
 
 int main(int argc, char** argv) {

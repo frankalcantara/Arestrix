@@ -127,7 +127,8 @@ def find_vcvars():
 
 
 def build_backend(run_tests: bool, hardening: bool = True, asan: bool = False, clang_tidy: bool = False, cppcheck: bool = False,
-                  onnx: bool = False, onnx_dml: bool = False, onnx_root: str | None = None):
+                  onnx: bool = False, onnx_dml: bool = False, onnx_root: str | None = None,
+                  tracy: bool = False):
     """Configura via CMake e compila os alvos nativos C++20 com as opcoes de seguranca solicitadas.
     
     Parametros:
@@ -146,7 +147,8 @@ def build_backend(run_tests: bool, hardening: bool = True, asan: bool = False, c
         f"-DARESTRIX_ENABLE_HARDENING={'ON' if hardening else 'OFF'}",
         f"-DARESTRIX_ENABLE_ASAN={'ON' if asan else 'OFF'}",
         f"-DARESTRIX_ENABLE_CLANG_TIDY={'ON' if clang_tidy else 'OFF'}",
-        f"-DARESTRIX_ENABLE_CPPCHECK={'ON' if cppcheck else 'OFF'}"
+        f"-DARESTRIX_ENABLE_CPPCHECK={'ON' if cppcheck else 'OFF'}",
+        f"-DARESTRIX_ENABLE_TRACY={'ON' if tracy else 'OFF'}"
     ]
 
     if onnx_dml:
@@ -294,6 +296,7 @@ Exemplos:
     ap.add_argument("--asan", action="store_true", help="Ativa instrumentacao AddressSanitizer (deteccao de use-after-free e buffer overflows)")
     ap.add_argument("--clang-tidy", action="store_true", help="Ativa analise estatica Clang-Tidy integrada ao processo de compilacao")
     ap.add_argument("--cppcheck", action="store_true", help="Ativa analise estatica Cppcheck integrada ao processo de compilacao")
+    ap.add_argument("--tracy", action="store_true", help="Compila com o cliente Tracy para perfilamento local (nao usar em release)")
     ap.add_argument("--onnx", action="store_true", help="Compila a compressao de prosa com ONNX Runtime (ONNXRUNTIME_ROOT)")
     ap.add_argument("--onnx-dml", action="store_true", help="Compila com ONNX + DirectML (GPU; exige o pacote DirectML)")
     ap.add_argument("--onnx-root", default=None, help="Raiz do ONNX Runtime normalizada (padrao: ONNXRUNTIME_ROOT)")
@@ -331,7 +334,8 @@ Exemplos:
             cppcheck=args.cppcheck,
             onnx=args.onnx,
             onnx_dml=args.onnx_dml,
-            onnx_root=args.onnx_root
+            onnx_root=args.onnx_root,
+            tracy=args.tracy
         )
 
     # 3. Passos de verificacao (continuam apos uma falha para agregar o relatorio)

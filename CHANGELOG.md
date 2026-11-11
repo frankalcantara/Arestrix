@@ -6,10 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **Beta 2.3**.
 
-## [Unreleased]
+## [2.8.0] - 2026-11-11
 
 ### Added
 
+- Project memory scenarios (**Consult**, **Consult and Decide**, **Learn with
+  approval**) in File → Properties → Project → Memory. Memory is on by default,
+  advanced fields live in the same Properties screen (no separate button), and
+  editing any advanced field derives the internal **Custom** state. Added
+  `memory.gate.mode=brief` for the Consult scenario.
+- `memory.gate` policy gate with `off`, `shadow` and `enforce` modes: a typed
+  `none`/`brief`/`search`/`learn` decision, deterministic relevance plus an
+  optional provider/model (Jev, local or hosted), `memory_gate` trace steps, a
+  search cap and a validator safety floor that never discards a brief containing
+  a required value.
+- Native Jev System One adapter for the gate (`POST /v1/systemone`, one Choice
+  question, `jev-latest` default, `JEV_API_KEY`); the real Jev API is typed and
+  not `/chat/completions`-compatible.
+- Optional Tracy build (`ARESTRIX_ENABLE_TRACY`, `CppCore/dev.py --tracy`) with
+  a first `agent.run` zone and no-op macros when disabled. The full C++ suite
+  passes in both modes and the release configuration stays `OFF`.
+- Live A/B v2 executor (`scripts/e2e_memory_ab_live.py`) and the 2026-11-11
+  DeepSeek run: 120 executions over frozen knowledge, approval 60/60 in both
+  arms. The ON arm cost 2.58x tokens and 1.69x latency because the agent issues
+  its own memory searches; the report is
+  `tests/fixtures/memory-ab-live-report.json`. A memory-dependent variant
+  (token `AB-7731`, only in curated knowledge) scored 60/60 in ON versus 0/60 in
+  OFF (delta 1.000; `tests/fixtures/memory-ab-live-value-report.json`).
+- Automated LIB-M-01 evidence capture
+  (`scripts/capture-libraries-homologation.mjs`): seeded PENDING/APPROVE/REJECT
+  assets, light/dark themes and 1024/1800 px widths.
 - Skill policy upgrades now trigger a Studio modal that lists imported skills
   approved under an older `policyVersion` and re-audits all of them with the
   current Skill Guard. The Windows installer warns when the installed policy
@@ -23,6 +49,16 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ### Changed
 
+- `scripts/build_examples.py` now regenerates only examples 01–05 and preserves
+  06–14; previously it deleted every numbered example before rebuilding.
+- All example projects now inherit the **Consult and Decide** default (memory on,
+  gate in `enforce`). Examples 04 and 05 keep their explicit `learn` override,
+  with the gate in `shadow` so their memory-search/playbook demonstration still
+  behaves as before.
+- Documented that the Studio claim-extraction agent screen is blocked until
+  `registerStudioClaimAgent` is wired for Studio agents/graphs; a configured
+  target currently fails closed with "agente de memoria ... nao registrado no
+  Studio".
 - Tagged `v*` releases are now published as stable GitHub releases; pushes to
   `main` continue to update the rolling `latest` pre-release.
 - SkillSpector reference updated to `e48d771` (v2.12.0-1542) after review;

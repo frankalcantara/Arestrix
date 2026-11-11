@@ -1,13 +1,15 @@
 # Como funciona a memória do Arestrix
 
-> **Aplica-se a:** Arestrix 2.6 — última revisão: 2026-11-02
+> **Aplica-se a:** Arestrix 2.8 — última revisão: 2026-11-11
 >
-> Guia de uma página e referência da memória de projeto. A memória é opcional, local e
-> pertence ao projeto. Não há importação automática de formatos antigos.
+> Guia de uma página e referência da memória de projeto. A memória é local, pertence ao projeto
+> e vem ligada por padrão; pode ser desligada nas Propriedades. Não há importação automática de
+> formatos antigos.
 
 ## 1. Princípios
 
-- **Desligada por padrão.** Nenhum vértice consulta ou grava conhecimento sem configuração explícita.
+- **Ligada por padrão.** O projeto nasce no cenário **Consultar e Decidir**; desligue em
+  Arquivo → Propriedades → Projeto → Memória. Nenhum vértice grava conhecimento sem `learn`.
 - **Três modos.** `off`, `consult` e `learn`. O modo é decidido por vértice.
 - **Aprender implica salvar.** `learn` grava um episódio e pode propor conhecimento; `consult` só lê.
 - **Conhecimento derivado exige gate.** Lições, fatos/claims e playbooks passam por
@@ -535,6 +537,48 @@ e fronteira por `p_min` e custo esperado; em `shadow`, registra a decisão sem
 trocar o modelo executado. `memory.localOnly` bloqueia o nível remoto para o
 projeto inteiro. A decisão fica no traço; o escalonamento automático por
 reprovação ainda não é executado pelo runtime. O modo padrão é `off`.
+
+### Porteiro de política da memória (MemoryGate)
+
+`memory.gate` decide, antes do loop do agente, se o vértice deve receber o brief,
+consultar a memória por ferramentas, aprender ou não usar memória. É um porteiro
+de política, não outro agente de raciocínio: devolve uma decisão tipada e só pode
+escolher entre comportamentos de memória pré-aprovados.
+
+```json
+"memory": {
+  "gate": {
+    "mode": "off | shadow | enforce",
+    "provider": "",
+    "model": "",
+    "maxSearches": 2,
+    "minConfidence": 0.6,
+    "fallback": "brief",
+    "maxBriefChars": 1200
+  }
+}
+```
+
+- `off` mantém o comportamento atual e não adiciona custo.
+- `shadow` registra a decisão no traço, mas não altera brief nem ferramentas.
+- `enforce` aplica: `none` remove o brief e as ferramentas de memória; `brief`
+  mantém o brief e remove todas as ferramentas; `search` mantém o brief e
+  `memory_search` com teto; `learn` preserva propostas de lição.
+- Com `provider`/`model` vazios a decisão é determinística (sobreposição lexical
+  e pistas explícitas de memória). Com ambos preenchidos, um modelo refina a
+  decisão; trocar Jev por modelo local ou de API é apenas configuração.
+- `provider: "jev"` usa o adaptador nativo System One (`POST /v1/systemone`, uma
+  pergunta Choice, `jev-latest` por padrão, `JEV_API_KEY`); o Jev real é tipado e
+  não é compatível com `/chat/completions`.
+- `memory.localOnly` pula o modelo a menos que `provider` seja `local`, para não
+  enviar texto da memória a um porteiro remoto.
+- Se o validador exige um valor que existe no brief, uma decisão `none` é
+  promovida a `brief`: o porteiro não pode causar reprovação descartando a única
+  fonte desse valor.
+
+A decisão é gravada como passo `memory_gate` no traço, com modo, decisão, motivo,
+confiança, latência, origem (`off`, `deterministic`, `model` ou `fallback`), cache
+e provedor/modelo do porteiro.
 
 ### Traços de recuperação
 

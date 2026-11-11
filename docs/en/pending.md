@@ -3,7 +3,7 @@
 > Memory-specific pending work, including context compaction backed by existing
 > memory, is tracked in [Memory pending items](memory-pending.md).
 
-> **Version:** 2.7.0 · **Updated:** 2026-11-10
+> **Version:** 2.8.0 · **Updated:** 2026-11-11
 >
 > Single project-wide pending list. The memory implementation plan (Phases A-C) and the advanced
 > multigraph (Phase D / E11-E20) are complete. The remaining items are operational, performance and release tasks.
@@ -15,12 +15,14 @@
 | Phases A-C of the memory plan | **Complete** |
 | Modes, proposals, telemetry, validation, brief, state, embeddings and A/B | **Complete** |
 | Phase D - advanced multigraph | **Implemented; opt-in switches** |
-| A/B v2 execution harness | **Implemented** |
+| A/B v2 execution harness | **Executed with a real provider on 2026-11-11 (parity/cost and value)** |
+| Memory policy gate (`memory.gate`) | **Implemented; 1-repetition A/B pilot complete** |
+| Project memory scenarios (Consult / Consult and Decide / Learn) | **Implemented; memory on by default** |
 | `institution` level in the assistant `memory_inspect` | Operational pending |
 | Validation with real embedding providers | Operational pending |
 | Studio UI to configure the memory agent | Product pending |
-| Performance profiling (Tracy) and automatic correction loop for generated code via the Studio default model | Engineering / product pending |
-| Instrumentation of Arestrix itself with Tracy and self-optimization loop | Engineering pending |
+| Performance profiling (Tracy) and automatic correction loop for generated code via the Studio default model | Optional build ready; loop pending |
+| Instrumentation of Arestrix itself with Tracy and self-optimization loop | Optional build ready; instrumentation pending |
 | Full, detailed performance testing and optimization cycle (C++, TypeScript, etc.) on every release | Release pending |
 | Clean-machine release validation | Release pending |
 
@@ -75,8 +77,75 @@ The conservative defaults remain: `memory.pathServing`, `memory.traversal`, `mem
 
 The harness is implemented in `memory ab run` and covered by `scripts/e2e_memory_ab.py`: 20 tasks x
 3 repetitions x 2 arms, frozen knowledge, validator and an `observations-<timestamp>.json` file with
-`runId`, `episodeId`, `arm`, `ok`, tokens, turns and latency. Monetary cost is not computed. The
-remaining work is to run it with real providers and record the result in the report.
+`runId`, `episodeId`, `arm`, `ok`, tokens, turns and latency. Monetary cost is not computed.
+
+It was executed against a real provider on **2026-11-11** by
+`scripts/e2e_memory_ab_live.py`: DeepSeek (`deepseek-chat`), 120 executions and frozen knowledge.
+The report is `tests/fixtures/memory-ab-live-report.json`; raw observations are in
+`tests/fixtures/memory-ab-live/`.
+
+| Metric | OFF | ON |
+| :--- | ---: | ---: |
+| Approval | 60/60 (1.000) | 60/60 (1.000) |
+| Prompt tokens | 99,428 | 298,588 |
+| Cached prompt tokens | 38,400 | 204,288 |
+| Completion tokens | 46,792 | 78,790 |
+| Total tokens | 146,220 | 377,378 |
+| Mean turns | 2.00 | 3.52 |
+| Mean latency | 6.46 s | 10.95 s |
+
+Frozen knowledge stayed unchanged and there were no infrastructure failures or invalid tasks. The
+approval delta was 0 (95% CI [0,0]) because the pilot validator does not depend on memory. The
+higher ON cost comes from `memory_search` calls the agent makes on its own — 20/20 traces in the
+20-run pilot, 1.8 searches per trace on average — not from the brief: the injected context averages
+~451 characters.
+
+The memory-dependent variant, executed on 2026-11-11 with `--memory-dependent`,
+requires the `AB-7731` token, which exists only in a curated lesson. It shows the
+value signal: approval 60/60 (1.000) in ON versus 0/60 (0.000) in OFF, delta
+1.000 (95% CI [1.000, 1.000]), with no infrastructure failure or invalid task.
+ON still costs more (2.67x total tokens and 1.62x latency) because the agent
+issues its own memory searches; the lesson is effectively used, but the effect is
+binary by validator design. Report:
+`tests/fixtures/memory-ab-live-value-report.json`.
+
+This closes the value gap for memory delivery, but it does not promote the
+experimental switches: `memory.pathServing`, `memory.traversal`,
+`memory.bridges` and `routing.mode=binary` still need their own measurement with
+a task set that exercises paths, traversal and bridges. The value A/B measures
+lesson delivery, not the quality of advanced retrieval.
+
+### 4.1.1 Memory policy gate (`memory.gate`)
+
+Implemented with `off`, `shadow` and `enforce` modes, a deterministic decision
+and an optional model (`provider`/`model`; Jev, local or API). The gate chooses
+`none`, `brief`, `search` or `learn`, writes a `memory_gate` trace step and has a
+validation floor: if the validator requires a value present in the brief, `none`
+is promoted to `brief`. The 1-repetition A/B pilot on 2026-11-11 showed:
+
+| Scenario | ON approval | ON/OFF tokens | ON/OFF latency |
+| :--- | ---: | ---: | ---: |
+| Baseline, parity | 1.000 | 2.69x | 1.60x |
+| Deterministic gate, parity | 1.000 | 1.79x | 1.25x |
+| Model gate, parity | 1.000 | 1.34x | 1.16x |
+| Model gate, value | 1.000 | 1.47x | 1.19x |
+| Jev gate, parity | 1.000 | 1.39x | 1.01x |
+| Jev gate, value | 1.000 | 1.51x | 1.03x |
+
+The DeepSeek gate figures include the gate model's tokens and latency (~9
+thousand tokens and ~1.3 s per execution); the agent alone would be 1.17x/0.96x
+in parity and 1.28x/0.99x in value. Jev uses ~14 thousand tokens and ~270 ms per
+execution.
+
+The model gate chose `brief` 17 times, `none` twice and `search` once in the
+parity suite, and `brief` 19 times + `search` once in the value suite; tasks
+finished in 2 turns. With **Jev** (`jev-latest`, TypeSafe `/v1/systemone`) the
+decisions were 13 `brief`, 6 `none`, 1 `search` in parity and 19 `brief`, 1
+`search` in value; the value suite kept 1.000 versus 0.000. Jev was validated in
+a 1-repetition pilot; the 3-repetition confirmation is pending because the agent
+provider (DeepSeek) became slow under load, not because of Jev (~270 ms). The
+earlier DeepSeek-gate attempt was interrupted by provider latency/throttling
+(34/120 in 33 min). Details in `docs/quality/memory-gate-ab.md`.
 
 ### 4.2 Institutional level in the assistant
 
@@ -92,11 +161,20 @@ behavior when no provider is available.
 ### 4.4 Studio UI for the memory agent
 
 `memory.claimExtraction.agent` already accepts a Studio agent id or
-`{ id, graph, node }` for a graph-backed agent. The Studio UI still needs to
-choose that target per project, list registered agents/graphs, show the default
-model fallback and explain the error when a configured target is unavailable.
+`{ id, graph, node }` for a graph-backed agent. A backend prerequisite is
+missing: `registerStudioClaimAgent` is only called by tests, so
+`studioClaimIntelligence()` returns `agente de memoria '<key>' nao registrado no
+Studio` for any target configured in production. Before the screen exists, the
+Studio agents/graphs must be registered in `AssistantSession` and exposed as a
+list to the UI. Only then should the screen choose that target per project,
+show the default-model fallback and explain the error when a configured target
+is unavailable. Project-level memory configuration (Consult, Consult and Decide,
+Learn with approval) is already implemented in File → Properties → Project →
+Memory.
 
 ### 4.5 Performance observation and automatic correction loop for generated code (Tracy + Studio default model)
+
+> Detailed plan: [`../quality/tracy-profiling-plan.md`](../quality/tracy-profiling-plan.md).
 
 Use the **Tracy Profiler** (`third_party/tracy`) in a closed performance-observation and
 self-correction loop for pipelines generated by Arestrix:
@@ -141,7 +219,10 @@ observation and optimization loop:
       (`Studio`/`Workspace`/`Project`), skill/MCP auditing and hashing, and UI responsiveness.
   - Compare metrics against the previous release baseline, block regressions above the threshold and
     run the Tracy-guided optimization cycle before packaging release artifacts.
-- Clean-machine installer validation, upgrade, uninstall and Intune/SCCM.
+- The 2.7.0 installer was validated locally on 2026-11-11: silent install on a machine without
+  Arestrix, binary smoke tests, Studio launch, upgrade 2.1.0-beta.1 -> 2.7.0 preserving a user
+  project and full uninstall. A truly clean machine (only the VC++ runtime) and Intune/SCCM are
+  still pending.
 - Linux package and Linux/macOS CI matrix.
 - Signed remote catalog.
 

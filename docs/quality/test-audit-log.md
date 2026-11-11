@@ -28,6 +28,35 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 
 ## Histórico Cronológico de Auditorias
 
+### Rodada #007 - 2026-11-11 (validação pós-2.7.0: A/B live, LIB-M-01 e instalador)
+- **Commit:** árvore de trabalho sobre `0027182` (2.7.0 + scripts de validação e documentação)
+- **Status Geral:** `APROVADO NO ESCOPO AUTOMATIZADO; CONFIRMAÇÃO NATIVA E MÁQUINA LIMPA PENDENTES`
+- **Ambiente de Teste:** Windows 11 (x64) | Inno Setup 6.7.3 | WebView2 157.0.4341.42 | VC++ 14.51.36247.00 | DeepSeek Chat (provedor real)
+
+#### Cobertura desta rodada
+
+| Área | Evidência |
+| :--- | :--- |
+| **A/B v2 real** | `scripts/e2e_memory_ab_live.py`: 20 tarefas × 3 repetições × 2 braços (120 execuções), conhecimento congelado, 0 falhas de infraestrutura e 0 tarefas inválidas; aprovação 60/60 nos dois braços; ON 377.378 tokens e 10,95 s contra OFF 146.220 tokens e 6,46 s |
+| **A/B v2 de valor** | `--memory-dependent` (token `AB-7731`, só no conhecimento curado): 120 execuções; ON 60/60 (1,000) × OFF 0/60 (0,000), delta 1,000 com IC95 [1,000, 1,000]; ON 405.161 tokens e 11,56 s contra OFF 151.539 tokens e 7,12 s; `tests/fixtures/memory-ab-live-value-report.json` |
+| **Tracy F1** | `ARESTRIX_ENABLE_TRACY` e `dev.py --tracy`; build OFF e ON com `4.259/4.259` verificações; cache final em `OFF`; zona `agent.run` em `rt/Profiling.hpp` |
+| **MemoryGate** | `off`/`shadow`/`enforce`; shadow registrou 19 decisões com `applied=false`; com Jev (`jev-latest`, System One): paridade ON 1,000 com 1,39× tokens e 1,01× latência, valor ON 1,000 com 1,51×/1,03×, gate ~270 ms; DeepSeek ficou em 1,34×/1,16× e 1,47×/1,19×; confirmação de 3 repetições pendente por latência do agente |
+| **Cenários de memória** | Propriedades do Projeto → Memória: Consultar (`gate=brief`), Consultar e Decidir (padrão, `gate=enforce` com Jev) e Aprender com aprovação; memória ligada por padrão; “Personalizado” derivado ao alterar campo avançado; sem botão de configuração avançada |
+| **Exemplos migrados** | 14 projetos/pipelines com memória ligada no cenário Consultar e Decidir; exemplos 04/05 mantêm `learn` com gate `shadow`; `e2e_examples.py` passou 14/14 |
+| **Diagnóstico do custo ON** | 20/20 traces do ensaio fizeram `memory_search` (1,8 busca/trace); o brief injetado tem ~451 caracteres. O custo vem das buscas do agente, não do brief |
+| **Bibliotecas LIB-M-01** | `scripts/capture-libraries-homologation.mjs`: temas claro/escuro, 1024/1800 px, árvore com PENDING/APPROVE/REJECT, sem overflow e canvas escuro; capturas em `docs/assets/screenshots/libraries-*.webp` |
+| **Instalador 2.7.0** | `arestrix-2.7.0-windows-x64-setup.exe` (62.866.760 bytes, SHA-256 `f4067105…f3f80a`); instalação silenciosa, `arestrix-cli`/`arestrix-memory` 2.7.0, `project validate`, abertura do Studio, upgrade 2.1.0-beta.1 → 2.7.0 preservando projeto do usuário e desinstalação completa |
+| **Pacote portátil 2.7.0** | `arestrix-2.7.0-windows-x64.zip` (90.100.073 bytes, 4.912 arquivos), SHA-256 `bb88bee8…e327f33` |
+
+#### Pendências para promoção
+
+- [ ] Confirmar LIB-M-01 na aplicação nativa (a evidência desta rodada é da camada web).
+- [ ] LIB-M-03 (instalação limpa/upgrade preservando bibliotecas) e LIB-M-04 (offline após cache).
+- [ ] Instalação em máquina realmente limpa (apenas runtime VC++) e Intune/SCCM.
+- [ ] Medição dos interruptores experimentais (`pathServing`, `traversal`, `bridges`, `routing`) com um conjunto de tarefas próprio.
+- [ ] Confirmação de 3 repetições do `memory.gate` com Jev/local ou janela de menor latência.
+- [ ] Pacote Linux e matriz de CI Linux/macOS.
+
 ### Rodada #006 - 2026-11-10 (pré-release 2.7.0, correções da memória)
 - **Commit:** árvore de validação pré-release `2.7.0` (hash do merge registrado no GitHub)
 - **Status Geral:** `APROVADO NO ESCOPO AUTOMATIZADO; INSTALADOR E 4 CASOS MANUAIS DE BIBLIOTECAS PENDENTES`

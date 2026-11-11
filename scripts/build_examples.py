@@ -18,19 +18,42 @@ import copy
 import json
 import pathlib
 import shutil
+import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "examples"
 FIXTURE = ROOT / "CppCore" / "tests" / "e2e" / "svg-agent"
 STAMP = "2026-10-13T00:00:00Z"
 
+GATE = {
+    "mode": "enforce",
+    "provider": "jev",
+    "model": "jev-latest",
+    "maxSearches": 2,
+    "minConfidence": 0.6,
+    "fallback": "brief",
+    "maxBriefChars": 1200,
+}
+
 DEFAULTS = {
     "model": {"provider": "deepseek", "model": "deepseek-flash", "skillPath": "", "promptTemplate": ""},
     "sandbox": {"isolationLevel": "host_direct", "network": "egress_llm_only", "maxMemoryMB": 512, "timeoutSeconds": 180,
                 "readOnlyMounts": [], "readWriteMounts": []},
     "codeMode": {"allowedTools": ["read", "write"], "customScripts": []},
-    "memory": {"enabled": False, "persistent": False, "readBlackboard": False, "writeBlackboard": False,
-               "semanticLessons": False, "recordLessons": False, "allowedKeys": [], "domains": []},
+    "memory": {
+        "allowedKeys": [],
+        "contextBudgetTokens": 800,
+        "domains": [],
+        "enabled": True,
+        "gate": GATE,
+        "mode": "consult",
+        "persistent": False,
+        "readBlackboard": False,
+        "recordLessons": False,
+        "semanticLessons": False,
+        "writeBlackboard": False,
+        "writeKeys": [],
+    },
 }
 
 
@@ -537,6 +560,7 @@ def build_04():
         "recordLessons": True,
         "domains": ["memoria"],
         "contextBudgetTokens": 400,
+        "gate": {**GATE, "mode": "shadow"},
     }
     edges = [
         edge("semear", 0, "agente"),
@@ -600,6 +624,7 @@ def build_05():
         "recordLessons": True,
         "domains": ["matematica"],
         "contextBudgetTokens": 600,
+        "gate": {**GATE, "mode": "shadow"},
     }
     edges = [
         edge("semear", 0, "pesquisar"),
@@ -723,10 +748,17 @@ def build_03(ex1_graph, ex2_nodes, ex2_edges):
 def main():
     # Os README sao escritos a mao: sobrevivem a regeneracao (o resto de cada pasta e recriado do zero).
     kept = {}
+    kept_workspace = {}
     if OUT.exists():
         for child in OUT.iterdir():
-            if child.is_dir() and child.name[:2].isdigit():
+            # main() so reconstroi 01-05; os demais exemplos sao mantidos.
+            if child.is_dir() and child.name[:2].isdigit() and int(child.name[:2]) <= 5:
                 kept[child.name] = {f.name: f.read_text(encoding="utf-8") for f in child.glob("README*.md")}
+                workspace = child / ".workspace"
+                if workspace.is_dir():
+                    backup = pathlib.Path(tempfile.mkdtemp(prefix=f"arestrix-example-{child.name}-")) / ".workspace"
+                    shutil.copytree(workspace, backup)
+                    kept_workspace[child.name] = backup
                 shutil.rmtree(child)
     ex1 = build_01()
     ex2_nodes, ex2_edges = build_02()
@@ -736,6 +768,11 @@ def main():
     for name, files in kept.items():
         for fname, text in files.items():
             (OUT / name / fname).write_text(text, encoding="utf-8")
+    for name, backup in kept_workspace.items():
+        target = OUT / name / ".workspace"
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(backup, target)
     print("Exemplos gerados em", OUT)
 
 

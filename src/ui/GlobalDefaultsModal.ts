@@ -464,6 +464,7 @@ export class GlobalDefaultsModal {
                   <p class="section-card-desc">${t('global_defaults.memory_section_desc')}</p>
                 </div>
               </div>
+              <div class="form-hint" style="margin-bottom: 12px;">${t('global_defaults.memory_scenario_redirect', 'Para o projeto ativo, use Arquivo → Propriedades → Projeto → Memória.')}</div>
 
               <div class="memory-status-banner badge-memory-persistent" style="margin-bottom: 14px;">
                 <div class="memory-status-icon">🟣</div>
@@ -503,6 +504,35 @@ export class GlobalDefaultsModal {
                   <span>${t('global_defaults.memory_context_compaction_label', 'Compactar histórico com memória (experimental)')}</span>
                 </label>
                 <div class="form-hint">${t('global_defaults.memory_context_compaction_hint', 'Substitui turnos antigos por um resumo derivado com referências [MEMO:<id>]. Desligado por padrão; falhas mantêm o histórico original.')}</div>
+              </div>
+
+              <div class="form-group" style="margin-top: 10px; border-top: 1px solid #edebe9; padding-top: 10px;">
+                <label class="form-label" for="def-memory-gate-mode">${t('global_defaults.memory_gate_title', 'Porteiro de memória (MemoryGate)')}</label>
+                <select id="def-memory-gate-mode" class="form-select">
+                  <option value="off" ${(defaults.memory?.gate?.mode || 'off') === 'off' ? 'selected' : ''}>${t('global_defaults.memory_gate_off', 'Desligado')}</option>
+                  <option value="shadow" ${defaults.memory?.gate?.mode === 'shadow' ? 'selected' : ''}>${t('global_defaults.memory_gate_shadow', 'Shadow (registrar sem aplicar)')}</option>
+                  <option value="enforce" ${defaults.memory?.gate?.mode === 'enforce' ? 'selected' : ''}>${t('global_defaults.memory_gate_enforce', 'Enforce (aplicar decisão)')}</option>
+                </select>
+                <div class="form-hint">${t('global_defaults.memory_gate_hint', 'Decide entre none, brief, search e learn antes do loop do agente. O provedor/modelo é opcional; vazio usa a decisão determinística.')}</div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+                <div class="form-group">
+                  <label class="form-label" for="def-memory-gate-provider">${t('global_defaults.memory_gate_provider', 'Provedor do gate')}</label>
+                  <input type="text" id="def-memory-gate-provider" class="form-input" style="font-family: monospace;"
+                         value="${this.escapeHtml(defaults.memory?.gate?.provider || '')}" placeholder="jev / local / deepseek" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="def-memory-gate-model">${t('global_defaults.memory_gate_model', 'Modelo do gate')}</label>
+                  <input type="text" id="def-memory-gate-model" class="form-input" style="font-family: monospace;"
+                         value="${this.escapeHtml(defaults.memory?.gate?.model || '')}" placeholder="system-one / deepseek-chat" />
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top: 10px;">
+                <label class="form-label" for="def-memory-gate-max-searches">${t('global_defaults.memory_gate_max_searches', 'Máximo de memory_search quando o gate decidir buscar')}</label>
+                <input type="number" id="def-memory-gate-max-searches" class="form-input" min="0" max="10" step="1"
+                       value="${defaults.memory?.gate?.maxSearches ?? 2}" />
               </div>
 
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
@@ -1689,6 +1719,22 @@ export class GlobalDefaultsModal {
     const memEmbeddingRevision = (this.overlay.querySelector('#def-memory-embedding-revision') as HTMLInputElement)?.value.trim() || '';
     const memEmbeddingTruncate = Math.max(0, Math.min(8192,
       Math.floor(Number((this.overlay.querySelector('#def-memory-embedding-truncate') as HTMLInputElement)?.value) || 0)));
+    const memGateMode = ((this.overlay.querySelector('#def-memory-gate-mode') as HTMLSelectElement)?.value
+      || 'off') as 'off' | 'shadow' | 'enforce';
+    const memGateProvider = (this.overlay.querySelector('#def-memory-gate-provider') as HTMLInputElement)?.value.trim() || '';
+    const memGateModel = (this.overlay.querySelector('#def-memory-gate-model') as HTMLInputElement)?.value.trim() || '';
+    const memGateMaxSearches = Math.max(0, Math.min(10,
+      Math.floor(Number((this.overlay.querySelector('#def-memory-gate-max-searches') as HTMLInputElement)?.value) || 2)));
+    const existingGate = this.graph.getGlobalDefaults().memory?.gate || {};
+    const memGate = memGateMode === 'off'
+      ? { ...existingGate, mode: 'off' as const }
+      : {
+          ...existingGate,
+          mode: memGateMode,
+          provider: memGateProvider,
+          model: memGateModel,
+          maxSearches: memGateMaxSearches
+        };
 
     if (memEmbeddingEnabled && !memEmbeddingBaseUrl) {
       const proceed = confirm(t('global_defaults.memory_embedding_no_endpoint_confirm',
@@ -1759,7 +1805,8 @@ export class GlobalDefaultsModal {
         embeddingMaxChars: memEmbeddingMaxChars,
         embeddingDimensions: memEmbeddingDim,
         embeddingRevision: memEmbeddingRevision,
-        embeddingTruncateDim: memEmbeddingTruncate
+        embeddingTruncateDim: memEmbeddingTruncate,
+        gate: memGate
       },
       routing: {
         mode: routingMode,

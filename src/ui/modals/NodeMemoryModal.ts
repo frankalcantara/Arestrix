@@ -281,6 +281,7 @@ export class NodeMemoryModal extends BaseModal {
     }
 
     const memoryConfig: INodeMemoryConfig = {
+      ...(node.agentSettings?.memory || {}),
       enabled: mode !== 'off',
       // Compatibilidade: o runtime deriva o modo de `mode`; persistência é do projeto.
       persistent: false,

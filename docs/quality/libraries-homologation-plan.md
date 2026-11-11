@@ -2,8 +2,12 @@
 
 > **Status:** automação implementada e executada em 2026-10-27 com `status=passed-automated`.
 > **Escopo desta rodada:** Bibliotecas, assets e fonte GitHub.
-> **Pendente para promoção:** 3 casos manuais (tema/tamanhos em revalidação, instalação/upgrade e
-> offline). Navegação por teclado e foco foi aprovada manualmente em 2026-10-27.
+> **Atualização de 2026-11-11:** LIB-M-01 revalidado de forma automatizada na camada web
+> (`scripts/capture-libraries-homologation.mjs`): temas claro/escuro, larguras 1024/1800 px,
+> árvore com assets PENDING/APPROVE/REJECT e canvas escuro. A confirmação na aplicação nativa
+> continua pendente.
+> **Pendente para promoção:** confirmação nativa de tema/tamanhos, instalação/upgrade e offline.
+> Navegação por teclado e foco foi aprovada manualmente em 2026-10-27.
 > **Plano mestre:** [`libraries-plan.md`](./libraries-plan.md), seção 11, Fase 7.
 > **Matriz de release:** [`beta2.3-test-plan.md`](./beta2.3-test-plan.md), seção 2.10.
 
@@ -116,7 +120,7 @@ Estes casos exigem a aplicação nativa e evidência visual. A pasta
 
 | ID | Caso | Critério | Status |
 | :--- | :--- | :--- | :--- |
-| LIB-M-01 | Tema claro/escuro e larguras 1024/1800 px | Árvore, detalhe e seletor legíveis, sem corte ou sobreposição | Reprovado em 2026-10-27: o canvas não seguia o tema e o vértice ficava branco. Correção aplicada; revalidar. |
+| LIB-M-01 | Tema claro/escuro e larguras 1024/1800 px | Árvore, detalhe e seletor legíveis, sem corte ou sobreposição | Reprovado em 2026-10-27. Correção aplicada; **aprovado de forma automatizada na camada web em 2026-11-11** (`scripts/capture-libraries-homologation.mjs`). Falta confirmar na aplicação nativa. |
 | LIB-M-02 | Navegação por teclado e foco visível | Tab/Shift+Tab, Enter, Esc e foco consistente em árvore, detalhe e modal | **Aprovado em 2026-10-27.** |
 | LIB-M-03 | Instalação limpa e upgrade | Instala, abre, preserva projetos e bibliotecas; desinstala sem resíduo crítico | Pendente. |
 | LIB-M-04 | Offline após sincronização/cache | Assets já instalados continuam utilizáveis sem rede; erro de rede é claro | Pendente. |
@@ -124,9 +128,9 @@ Estes casos exigem a aplicação nativa e evidência visual. A pasta
 Checklist mínimo de evidência manual:
 
 - [x] Teclado e foco validados manualmente em 2026-10-27 (LIB-M-02).
-- [ ] Captura da tela de Bibliotecas no Studio em tema claro.
-- [ ] Captura da mesma tela em tema escuro, com canvas e vértices escuros.
-- [ ] Captura da árvore com um asset `PENDING`, um aprovado e um rejeitado.
+- [x] Captura da tela de Bibliotecas no Studio em tema claro (`docs/assets/screenshots/libraries-tree-light.webp`, 2026-11-11).
+- [x] Captura da mesma tela em tema escuro, com canvas e vértices escuros (`docs/assets/screenshots/libraries-tree-dark.webp` e `libraries-canvas-dark.webp`, 2026-11-11).
+- [x] Captura da árvore com um asset `PENDING`, um aprovado e um rejeitado (evidência automatizada de 2026-11-11).
 - [ ] Captura do seletor no agente com asset de biblioteca.
 - [ ] Captura/log da instalação limpa e do upgrade.
 - [ ] Captura/log do uso offline.

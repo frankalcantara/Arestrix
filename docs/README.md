@@ -38,6 +38,8 @@
 | :--- | :--- |
 | [Test audit log](quality/test-audit-log.md) | Chronological test rounds, category breakdown and integrity audits (in Portuguese). |
 | [Beta 2.3 test plan](quality/beta2.3-test-plan.md) | Registered Beta 2.3 scope, pending installer/CI work and the mandatory test matrix (in Portuguese). |
+| [Tracy profiling plan](quality/tracy-profiling-plan.md) | Optional Tracy build, generated-code/core instrumentation and the assisted optimization loop (in Portuguese). |
+| [MemoryGate A/B](quality/memory-gate-ab.md) | Memory policy gate (`off`/`shadow`/`enforce`), provider-agnostic decision and A/B results (in Portuguese). |
 | [Security and governance model](security/governance.md) | Credential handling, integrity verification, sandboxing and deployment boundaries. |
 | [Privacy policy](../PRIVACY.md) | Local data, network access and third-party services. |
 | [Dependency advisories](security/dependency-advisories.md) | Known npm advisories, exposure analysis and mitigation status. |

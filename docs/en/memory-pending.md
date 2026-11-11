@@ -121,9 +121,11 @@ broader real-data A/B covers more task shapes.
 
 The backend contract is ready: `memory.claimExtraction.agent` accepts a Studio
 agent id or `{ id, graph, node }`, and an absent target uses the Studio default
-model. The remaining product work is a Studio screen that lets the project
-choose the target, lists registered agents/graphs, displays the default-model
-fallback and explains an unavailable configured target.
+model. The missing prerequisite is registration: `registerStudioClaimAgent` is
+only called by tests, so any configured target fails with `agente de memoria
+'<key>' nao registrado no Studio`. The Studio must register its agents/graphs in
+`AssistantSession` and expose a list before a screen can choose the target,
+display the default-model fallback and explain an unavailable target.
 
 ## 2. Standalone Mnemosyne module and submodule
 

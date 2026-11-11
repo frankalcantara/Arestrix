@@ -18,7 +18,9 @@ import {
 } from '../src/core/types.ts';
 
 function config(partial: Partial<INodeMemoryConfig>): INodeMemoryConfig {
-  return { ...DEFAULT_NODE_MEMORY_CONFIG, ...partial };
+  const base = { ...DEFAULT_NODE_MEMORY_CONFIG };
+  delete base.mode;
+  return { ...base, ...partial };
 }
 
 describe('modelo de memória v2: modo + tema', () => {

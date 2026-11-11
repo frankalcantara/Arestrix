@@ -236,6 +236,23 @@ seleção, mostra dois cartões de visão geral: o grafo do projeto ativo e o am
 botão de ação leva a etiqueta do escopo: `[Projeto]` para Modelo, Memória e Ferramentas, `[Workspace]` para
 Sandbox, `[Workspace / Projeto]` para Skills.
 
+## Cenários de memória do projeto
+
+A memória vem ligada por padrão. Em **Arquivo → Propriedades → Projeto → Memória** o projeto
+escolhe um de três cenários:
+
+| Cenário | Efeito |
+| :--- | :--- |
+| **Consultar** | Injeta o brief curado e não expõe ferramentas de memória (`gate.mode=brief`). |
+| **Consultar e Decidir** | O brief entra e o porteiro decide `none`/`brief`/`search`; padrão do projeto. |
+| **Aprender com aprovação** | Consulta, decide e registra propostas; nada é promovido sem aprovação. |
+
+Qualquer alteração nos campos avançados da mesma tela transforma o cenário em
+**Personalizado** (estado derivado, não uma quarta opção). Não há botão de “configuração
+avançada”: os campos de brief, porteiro, busca, consolidação e aprendizado ficam na própria
+tela de Propriedades, no menu Arquivo. O painel operacional (conhecimento, lições, estado,
+propostas e conflitos) continua separado.
+
 ## Modais e Arquitetura de Abas Office 365
 
 Todos os modais do Studio seguem o padrão de design corporativo **Microsoft Office 365 (Fluent 2)**:

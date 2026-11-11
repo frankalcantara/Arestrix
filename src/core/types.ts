@@ -424,6 +424,20 @@ export interface IProjectMemoryConfig extends Partial<INodeMemoryConfig> {
   };
   /** E18: impede que esta memória seja enviada a um modelo remoto. */
   localOnly?: boolean;
+  /**
+   * Porteiro de política da memória. `off` mantém o comportamento atual;
+   * `shadow` registra a decisão sem aplicá-la; `enforce` ajusta brief e
+   * ferramentas. O provedor/modelo é configuração: Jev, local ou API.
+   */
+  gate?: {
+    mode?: 'off' | 'brief' | 'shadow' | 'enforce';
+    provider?: string;
+    model?: string;
+    maxSearches?: number;
+    minConfidence?: number;
+    fallback?: 'none' | 'brief' | 'search';
+    maxBriefChars?: number;
+  };
   /** E16: serve caminhos ativos antes da busca no grafo (off até o A/B). */
   pathServing?: boolean | {
     enabled?: boolean;
@@ -465,8 +479,9 @@ export interface IProjectMemoryConfig extends Partial<INodeMemoryConfig> {
 }
 
 export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {
-  enabled: false,
+  enabled: true,
   persistent: false,
+  mode: 'consult',
   readBlackboard: false,
   writeBlackboard: false,
   semanticLessons: false,
@@ -492,6 +507,23 @@ export const DEFAULT_NODE_MEMORY_CONFIG: INodeMemoryConfig = {
   embeddingDimensions: 768,
   embeddingRevision: '',
   embeddingTruncateDim: 0
+};
+
+/**
+ * Padrão de memória do projeto: herda o padrão de vértice e liga o cenário
+ * "Consultar e Decidir" (porteiro Jev com fallback determinístico).
+ */
+export const DEFAULT_PROJECT_MEMORY_CONFIG: IProjectMemoryConfig = {
+  ...DEFAULT_NODE_MEMORY_CONFIG,
+  gate: {
+    mode: 'enforce',
+    provider: 'jev',
+    model: 'jev-latest',
+    maxSearches: 2,
+    minConfidence: 0.6,
+    fallback: 'brief',
+    maxBriefChars: 1200
+  }
 };
 
 export interface IGlobalPipelineDefaults {
@@ -1008,7 +1040,7 @@ export const DEFAULT_PIPELINE_DEFAULTS: IGlobalPipelineDefaults = {
     customScripts: []
   },
   memory: {
-    ...DEFAULT_NODE_MEMORY_CONFIG
+    ...DEFAULT_PROJECT_MEMORY_CONFIG
   },
   compression: {
     enabled: false,

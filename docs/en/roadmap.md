@@ -1,6 +1,6 @@
 # Roadmap and known limitations
 
-> **Applies to:** Arestrix 2.7 (`2.7.0`) · Last reviewed: 2026-11-10
+> **Applies to:** Arestrix 2.8 (`2.8.0`) · Last reviewed: 2026-11-11
 >
 > This page records what is intentionally incomplete and the order we plan to address it. It is not a
 > commitment to dates.
@@ -62,7 +62,8 @@ Implemented in the core:
   telemetry (`.arestrix/telemetry/telemetry.db`).
 - Per-vertex `off`/`consult`/`learn` modes, lessons, `memory_search` and pending
   `memory_propose_lesson` proposals, plus a compiled `contextBudgetTokens` brief ordered by
-  confidence/recency.
+  confidence/recency. Memory is on by default in the **Consult and Decide** scenario; **Consult**
+  and **Learn with approval** live in File → Properties → Project → Memory.
 - Success/failure episodes, `memory_hit` (injected/consulted) and metrics with retries and outcome.
 - Automatic failure proposals (never activated without approval) and examples 04 and 05.
 - API-consumption panel in the UI, native `arestrix-cli memory report`, AI Gateway memory impact and
@@ -84,7 +85,14 @@ Still pending:
 - Full cognitive graph visualization and conflict editing in the UI (the conflict list already
   exists).
 - LLM consolidation, `memory_handoff` and recursive learning.
-- Real-data/provider measurement before enabling the experimental switches.
+- A/B v2 ran against a real DeepSeek provider on 2026-11-11: approval was tied at 1.000 with no
+  infrastructure failures, but the ON arm cost 2.58x tokens and 1.69x latency because the agent
+  issues its own memory searches. The memory-dependent variant (token `AB-7731`) scored 1.000 in
+  ON versus 0.000 in OFF, confirming lesson delivery; real-data measurement of the experimental
+  switches is still pending. The model-based `memory.gate` reduced parity overhead to ~1.34x
+  tokens and ~1.16x latency with DeepSeek, and ~1.39x/1.01x with Jev (~270 ms per decision),
+  while keeping 1.000 on the value suite (1-repetition pilot; 3-repetition confirmation pending
+  because the agent provider was slow).
 - Coordination across multiple service processes/instances (out of scope for this release).
 
 Limitations of the institution service and background worker:
@@ -146,8 +154,9 @@ synchronization with the global Light/Dark/Follow-system theme.
 
 Pending after the `2.3.0-beta.2` pre-release:
 
-- Clean-machine install/upgrade/uninstall, silent install and Intune/SCCM validation, plus the Linux
-  package (5B2).
+- The 2.7.0 installer was validated locally on 2026-11-11 (silent install, upgrade
+  2.1.0-beta.1 -> 2.7.0 and uninstall); a truly clean machine, Intune/SCCM and the Linux
+  package (5B2) remain pending.
 - Windows/Linux CI matrix, signed remote catalog (5C) and the full test matrix in
   [Beta 2.3 test plan](../quality/beta2.3-test-plan.md).
 - Three manual library homologation cases: light/dark sizes, clean install/upgrade and offline use.

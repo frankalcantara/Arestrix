@@ -4,7 +4,7 @@
 >
 > **Versão atual:** `2.3.0-beta.2` (Beta 2.3).
 >
-> **Última revisão:** 2026-10-27.
+> **Última revisão:** 2026-11-11.
 
 Este documento registra o escopo do Beta 2.3 e a matriz de testes que precisa ser concluída para
 promover a pré-release a uma release validada. A versão `2.3.0-beta.2` está no código e é publicada
@@ -122,9 +122,11 @@ como pré-release de desenvolvimento.
 - [x] Build do instalador Inno Setup (`py scripts/package_release.py --installer`) e publicação no CI.
 - [x] Preflight do ambiente: WebView2/VC++ obrigatórios; Git, identidade Git, credencial GitHub,
       MSVC Build Tools e chaves de API reportados sem expor valores.
-- [ ] Instalação limpa em Windows x64 sem dependências ocultas.
+- [x] Instalação limpa em Windows x64 sem dependências ocultas (máquina sem instalação
+      anterior do Arestrix; WebView2 e VC++ presentes).
 - [x] Atalhos (Menu Iniciar/Desktop padrão, com opção de desmarcar) e desinstalação completa validadas localmente.
-- [x] Upgrade sobre a versão anterior preservando projetos/configuração do usuário validado localmente.
+- [x] Upgrade sobre a versão anterior preservando projetos/configuração do usuário validado localmente
+      (2.1.0-beta.1 → 2.7.0 em 2026-11-11).
 - [x] Instalação silenciosa e códigos de saída documentados (`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`; `/MERGETASKS="!desktopicon"` para pular o atalho).
 - [x] Instalação em perfil sem privilégios administrativos (per-user em `%LOCALAPPDATA%\Programs\Arestrix`).
 - [ ] Teste em máquina limpa com apenas o runtime VC++ exigido.
@@ -134,6 +136,12 @@ como pré-release de desenvolvimento.
 > (incluindo detecção de chave de API ausente sem bloquear), instalação silenciosa, atalho de desktop
 > padrão e exclusão opcional, atalhos do Menu Iniciar, entrada `App Paths`, upgrade in-place
 > preservando arquivos/projetos do usuário e desinstalação completa validados (códigos 0).
+>
+> **Revalidação local (2026-11-11, Windows 11 x64, 2.7.0):** instalador gerado pelo pipeline
+> (`arestrix-2.7.0-windows-x64-setup.exe`, 62.866.760 bytes, SHA-256 `f4067105…f3f80a`), instalação
+> silenciosa em máquina sem Arestrix, smoke de `arestrix-cli`/`arestrix-memory` 2.7.0, `project
+> validate`, abertura do Studio, upgrade 2.1.0-beta.1 → 2.7.0 preservando um projeto em
+> `Documents`, e desinstalação completa (pasta, `App Paths`, Menu Iniciar e atalho removidos).
 > Instalação em máquina limpa, Intune/SCCM e pacote Linux continuam pendentes.
 
 ### 2.8 Segurança e integridade
@@ -161,8 +169,8 @@ como pré-release de desenvolvimento.
 - [x] Resiliência: 404, rate limit, commit pin e árvore.
 - [x] Smoke live do manifesto GitHub (`npm run homologation:libraries:live`) em 2026-10-27.
 - [x] Navegação por teclado e foco visível (aprovado manualmente em 2026-10-27).
-- [ ] Tema claro/escuro e larguras 1024/1800 px: canvas e vértices escuros corrigidos;
-      revalidar visualmente.
+- [ ] Tema claro/escuro e larguras 1024/1800 px: **camada web aprovada em 2026-11-11**
+      (`scripts/capture-libraries-homologation.mjs`); falta confirmar na aplicação nativa.
 - [ ] Instalação limpa e upgrade preservando projetos/bibliotecas.
 - [ ] Uso offline após sincronização/cache.
 - [ ] Evidências manuais anexadas (capturas/logs) para os 3 casos pendentes e registro no

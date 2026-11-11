@@ -70,6 +70,7 @@ option(ARESTRIX_ENABLE_TSAN "Ativa ThreadSanitizer (deteccao de data races em mu
 option(ARESTRIX_ENABLE_CLANG_TIDY "Ativa analise estatica Clang-Tidy integrada ao build" OFF)
 option(ARESTRIX_ENABLE_CPPCHECK "Ativa analise estatica Cppcheck integrada ao build" OFF)
 option(ARESTRIX_WARNINGS_AS_ERRORS "Trata avisos do compilador como erros fatais (/WX ou -Werror)" OFF)
+option(ARESTRIX_ENABLE_TRACY "Instrumenta o build com o cliente Tracy (somente desenvolvimento)" OFF)
 
 # Integracao com Clang-Tidy
 if(ARESTRIX_ENABLE_CLANG_TIDY)
@@ -219,6 +220,7 @@ add_library(arestrix_core STATIC
   ${SRC}/memory/MemoryTraversal.cpp
   ${SRC}/memory/MemoryPaths.cpp
   ${SRC}/memory/MemoryService.cpp
+  ${SRC}/memory/MemoryGate.cpp
   ${SRC}/memory/MemoryStateSchema.cpp
   ${SRC}/memory/MemoryPredicates.cpp
   ${SRC}/memory/MemoryAbProtocol.cpp
@@ -242,6 +244,7 @@ add_library(arestrix_core STATIC
   ${SRC}/rt/Tools.cpp
   ${SRC}/rt/ArtifactValidation.cpp
   ${SRC}/rt/Agent.cpp
+  ${SRC}/rt/SystemOne.cpp
   ${SRC}/rt/CreditAuditExecutor.cpp
   ${SRC}/rt/CallGraph.cpp
   ${SRC}/rt/AsyncCalls.cpp
@@ -353,6 +356,23 @@ endif()
 find_package(Threads REQUIRED)
 target_compile_definitions(arestrix_core PRIVATE ARESTRIX_MEMORY_VERSION="${ARESTRIX_VERSION}")
 target_link_libraries(arestrix_core PUBLIC arestrix_security_flags Threads::Threads)
+
+# Perfilamento opcional (somente desenvolvimento). O release usa OFF e nao
+# carrega o cliente Tracy nem o servidor de captura.
+if(ARESTRIX_ENABLE_TRACY)
+  add_library(arestrix_tracy_client STATIC
+    "${CMAKE_SOURCE_DIR}/third_party/tracy/public/TracyClient.cpp")
+  target_include_directories(arestrix_tracy_client PUBLIC
+    "${CMAKE_SOURCE_DIR}/third_party/tracy/public")
+  target_compile_definitions(arestrix_tracy_client PUBLIC TRACY_ENABLE TRACY_ON_DEMAND)
+  target_link_libraries(arestrix_tracy_client PUBLIC Threads::Threads)
+  if(WIN32)
+    target_link_libraries(arestrix_tracy_client PUBLIC ws2_32 dbghelp)
+  endif()
+  target_link_libraries(arestrix_core PUBLIC arestrix_tracy_client)
+  target_compile_definitions(arestrix_core PUBLIC ARESTRIX_TRACY=1)
+  message(STATUS "[Perfil] Tracy habilitado (cliente em modo on-demand)")
+endif()
 if(WIN32)
   target_link_libraries(arestrix_core PUBLIC winhttp ws2_32 advapi32 ole32 shell32 user32 dxgi)
 endif()

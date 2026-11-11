@@ -1,6 +1,7 @@
 #include "rt/Runtime.hpp"
 #include "rt/Trace.hpp"
 #include "memory/MemoryService.hpp"
+#include "memory/MemoryGate.hpp"
 #include "platform/Process.hpp"
 #include "project/RunnerSecurity.hpp"
 
@@ -28,6 +29,8 @@
 #include "rt/McpTools.hpp"
 #include "rt/MemoryFailure.hpp"
 #include "rt/ModelClient.hpp"
+#include "rt/Profiling.hpp"
+#include "rt/SystemOne.hpp"
 #include "rt/ModelRouter.hpp"
 #include "rt/RuntimeLang.hpp"
 #include "rt/Tools.hpp"
@@ -200,6 +203,11 @@ struct AgentSpec {
     int memoryMaxLessonsPerRun = 20;
     int memoryMaxLessonChars = 4000;
     std::string memoryTaskType;
+    std::string memoryMode = "consult";
+    memory::MemoryGateConfig memoryGate;
+    std::string memoryGateRequiredPattern;
+    bool memoryLocalOnly = false;
+    int memoryMaxSearches = -1;
     RoutingConfig routing;
     std::vector<std::string> tools;
     std::vector<std::string> mcpServers;   // ids em .workspace/mcps
@@ -273,6 +281,10 @@ AgentSpec parseSpec(const json& j, const std::string& nodeId, const std::string&
     s.memoryMaxLessonsPerRun = std::max(1, std::min(500, j.value("memoryMaxLessonsPerRun", 20)));
     s.memoryMaxLessonChars = std::max(100, std::min(20000, j.value("memoryMaxLessonChars", 4000)));
     s.memoryTaskType = j.value("memoryTaskType", std::string());
+    s.memoryMode = j.value("memoryMode", std::string("consult"));
+    if (j.contains("memoryGate")) s.memoryGate = memory::MemoryGateConfig::fromJson(j["memoryGate"]);
+    s.memoryGateRequiredPattern = j.value("memoryGateRequiredPattern", std::string());
+    s.memoryLocalOnly = j.value("memoryLocalOnly", false);
     if (j.contains("routing")) s.routing = ModelRouter::configFromJson(j["routing"]);
     if (j.contains("tools") && j["tools"].is_array()) {
         for (const auto& t : j["tools"]) if (t.is_string()) s.tools.push_back(t.get<std::string>());
@@ -394,6 +406,7 @@ std::string summarizeArgs(const json& args) {
 std::string runAgent(const std::string& nodeId, const std::string& label, const std::string& specJson,
                      const std::string& runKey, const std::string& memoryContext,
                      const std::string& inputContext, const std::string& deliveredMemoryJson) {
+    ARX_ZONE_NAMED("agent.run");
     AgentSpec spec = parseSpec(jsonutil::parse(specJson), nodeId, label);
     spec.memoryContext = memoryContext;
 
@@ -520,6 +533,111 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                      {"decision", ModelRouter::decisionToJson(routingDecision)}});
         }
     }
+
+    // Porteiro de politica da memoria: decide entre none/brief/search/learn.
+    // Em shadow, a decisao e registrada mas o comportamento nao muda; em
+    // enforce, as ferramentas e o brief sao ajustados antes do loop.
+    if (spec.memoryGate.enabled() && spec.memoryEnabled && !spec.memoryForceDisabled) {
+        auto removeTool = [&](const char* name) {
+            spec.tools.erase(std::remove(spec.tools.begin(), spec.tools.end(), name),
+                             spec.tools.end());
+        };
+        int lessons = 0, facts = 0, playbooks = 0, paths = 0, facets = 0;
+        for (const auto& ref : delivered) {
+            if (ref.kind == "lesson") ++lessons;
+            else if (ref.kind == "fact" || ref.kind == "path_claim") ++facts;
+            else if (ref.kind == "playbook") ++playbooks;
+            else if (ref.kind == "path") ++paths;
+            else if (ref.kind == "facet") ++facets;
+        }
+        memory::MemoryGateInput gateInput;
+        gateInput.projectId = spec.memoryProjectId;
+        gateInput.nodeId = nodeId;
+        gateInput.taskType = routingTaskType;
+        gateInput.theme = spec.memoryDomains.empty() ? std::string() : spec.memoryDomains.front();
+        gateInput.taskInput = !inputContext.empty()
+            ? inputContext
+            : envOr("ARESTRIX_AB_TASK_INPUT", spec.promptTemplate);
+        gateInput.brief = spec.memoryContext;
+        gateInput.requiredPattern = spec.memoryGateRequiredPattern;
+        gateInput.briefChars = spec.memoryContext.size();
+        gateInput.lessons = lessons;
+        gateInput.facts = facts;
+        gateInput.playbooks = playbooks;
+        gateInput.paths = paths;
+        gateInput.facets = facets;
+        gateInput.memoryModeConsult = spec.memoryMode != "off";
+        gateInput.memoryWriteEnabled = spec.memoryWriteEnabled;
+        gateInput.localOnly = spec.memoryLocalOnly;
+
+        auto gateModel = [&](const memory::MemoryGateModelRequest& request) {
+            if (spec.memoryGate.provider == "jev") {
+                const SystemOneResult result = systemOneMemoryDecision(
+                    spec.memoryGate.model, request.user, spec.memoryGate.maxSearches);
+                return memory::MemoryGateModelResult{
+                    result.ok, result.text, result.error,
+                    result.inTokens, result.outTokens, 0};
+            }
+            CompletionRequest completion;
+            completion.provider = spec.memoryGate.provider;
+            completion.model = spec.memoryGate.model;
+            completion.system = request.system;
+            completion.user = request.user;
+            completion.maxTokens = request.maxTokens;
+            completion.maxAttempts = 1;
+            const CompletionResult result = completeText(completion);
+            return memory::MemoryGateModelResult{
+                result.ok, result.text, result.error,
+                result.inTokens, result.outTokens, result.cachedTokens};
+        };
+
+        const long long gateStart = static_cast<long long>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count());
+        memory::MemoryGateDecision gate = memory::MemoryGate::decide(
+            gateInput, spec.memoryGate, gateModel);
+        gate.latencyMs = static_cast<long long>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count()) - gateStart;
+
+        if (!spec.memoryProjectId.empty()) {
+            memory::MemoryService::getInstance().recordTraceStep(
+                spec.memoryProjectId, runId, nodeId, itemId, routingTaskType,
+                intentTemplateHash, inputHash,
+                json{{"kind", "memory_gate"},
+                     {"mode", spec.memoryGate.mode},
+                     {"decision", gate.toJson()},
+                     {"briefChars", gateInput.briefChars},
+                     {"gateModel", spec.memoryGate.provider + "/" + spec.memoryGate.model}});
+        }
+        if (gate.applied) {
+            if (gate.useMemory == "none") {
+                spec.memoryEnabled = false;
+                spec.memoryWriteEnabled = false;
+                spec.memoryContext.clear();
+                delivered.clear();
+                deliveredStableIds.clear();
+                for (const char* tool : {"memory_search", "memory_propose_lesson",
+                                         "memory_state_get", "memory_state_set",
+                                         "memory_state_list", "memory_state_history"}) {
+                    removeTool(tool);
+                }
+            } else if (gate.useMemory == "brief") {
+                // "Brief apenas": nenhuma ferramenta de memoria no loop.
+                for (const char* tool : {"memory_search", "memory_propose_lesson",
+                                         "memory_state_get", "memory_state_set",
+                                         "memory_state_list", "memory_state_history"}) {
+                    removeTool(tool);
+                }
+            } else if (gate.useMemory == "search") {
+                spec.memoryMaxSearches = gate.maxSearches;
+            }
+        }
+        std::cout << "[MemoryGate " << label << "] " << spec.memoryGate.mode << " -> "
+                  << gate.useMemory << " (" << gate.reason << ", " << gate.source
+                  << (gate.cached ? ", cache" : "") << ")\n";
+    }
+
     int iteration = registerRun(loopKey, spec.maxRuns);
 
     if (spec.model.empty()) {
@@ -803,6 +921,7 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
     int retries = 0;
     const std::string taskType = !spec.memoryTaskType.empty() ? spec.memoryTaskType : nodeId;
     json runToolCalls = json::array();
+    int memorySearchCalls = 0;
     std::vector<std::string> runFiles;
     std::vector<std::string> runReadFiles;
     std::vector<std::string> runArtifacts;
@@ -1191,7 +1310,12 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                 for (auto& call : t.toolCalls) {
                     AgentTelemetryEmitter::emitToolStart(nodeId, call.name, summarizeArgs(call.args));
                     ToolResult res;
-                    if (call.name == "call_agent") {
+                    if (call.name == "memory_search" && spec.memoryMaxSearches >= 0 &&
+                        ++memorySearchCalls > spec.memoryMaxSearches) {
+                        res = ToolResult{
+                            "Limite de memory_search atingido para esta execucao. "
+                            "Use o brief e as ferramentas disponiveis para concluir.", true};
+                    } else if (call.name == "call_agent") {
                         res = (call.args.is_object() && call.args.value("async", false))
                             ? invokeCallAsync(nodeId, runId, callTargets, call.args, lang)
                             : invokeCall(nodeId, runId, callTargets, call.args, lang);
@@ -1309,6 +1433,9 @@ CompletionResult completeText(const CompletionRequest& req) {
     }
     out.text = t.text;
     out.ok = !out.text.empty();
+    out.inTokens = t.inTokens;
+    out.outTokens = t.outTokens;
+    out.cachedTokens = t.cachedTokens;
     if (!out.ok) out.error = "resposta vazia do modelo";
     return out;
 }

@@ -1,0 +1,59 @@
+{
+  "source": "smoke A/B live de 2026-11-11 (20 tarefas x 1 repeticao, 20 traces ON)",
+  "onTraces": 20,
+  "tracesWithSearch": 20,
+  "avgSearchesPerTrace": 1.8,
+  "searchDistribution": {
+    "1": 10,
+    "2": 7,
+    "3": 1,
+    "4": 1,
+    "5": 1
+  },
+  "allDeliveredLesson1": true,
+  "samples": [
+    {
+      "runId": "run-1794403415476-1",
+      "stepKinds": [
+        "brief",
+        "search",
+        "search",
+        "prefix"
+      ],
+      "searches": 2,
+      "briefs": 1,
+      "delivered": [
+        "ab-lesson-1",
+        "ab-lesson-2"
+      ]
+    },
+    {
+      "runId": "run-1794403436356-3",
+      "stepKinds": [
+        "brief",
+        "search",
+        "prefix"
+      ],
+      "searches": 1,
+      "briefs": 1,
+      "delivered": [
+        "ab-lesson-1",
+        "ab-lesson-2"
+      ]
+    },
+    {
+      "runId": "run-1794403457804-5",
+      "stepKinds": [
+        "brief",
+        "search",
+        "prefix"
+      ],
+      "searches": 1,
+      "briefs": 1,
+      "delivered": [
+        "ab-lesson-1",
+        "ab-lesson-2"
+      ]
+    }
+  ]
+}

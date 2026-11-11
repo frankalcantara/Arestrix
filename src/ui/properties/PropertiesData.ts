@@ -5,6 +5,8 @@ import { LibraryRegistry, type LibraryScope } from '../../core/libraries/Library
 import { ProjectLibraryStore } from '../../core/libraries/ProjectLibraryStore.ts';
 import { bindLibraryBrowser, renderLibraryBrowser } from '../libraries/LibraryTree.ts';
 import { DEFAULT_PIPELINE_DEFAULTS } from '../../core/types.ts';
+import { MEMORY_SCENARIOS, memoryScenarioOf } from '../../core/memory/MemoryScenarios.ts';
+import { claimExtractionEnabled, memoryModeOf } from '../../core/memory/MemoryConfig.ts';
 import { sanitizeEnvReferences } from '../../core/env/EnvironmentManager.ts';
 import type { CanvasBackground } from '../../view/CanvasPreferences.ts';
 import type { IProjectSettings, IResolvedSettings, IStudioCredentialsSnapshot, IStudioModelSettings, IStudioSettings, IWorkspaceSettings } from '../../core/settings/types.ts';
@@ -37,6 +39,7 @@ export interface IPropertiesContext {
   saveWorkspace?: (values: Record<string, string>) => Promise<boolean>;
   saveProject?: (values: Record<string, string>) => Promise<boolean>;
   saveProjectDefaults?: (values: Record<string, string>) => Promise<boolean>;
+  saveProjectMemory?: (values: Record<string, string>) => Promise<boolean>;
   saveProjectCompression?: (values: Record<string, string>) => Promise<boolean>;
   saveProjectEnvironment?: (values: Record<string, string>) => Promise<boolean>;
   saveLibraries?: (scope: LibraryScope, values: Record<string, string>) => Promise<boolean>;
@@ -580,6 +583,13 @@ function buildProject(context: IPropertiesContext): IPropertiesScopeConfig {
   const resolvedSandbox = resolved?.sandbox;
   const resolvedCodeMode = resolved?.codeMode;
   const resolvedMemory = resolved?.memory;
+  const memory = ((resolvedMemory?.value || defaults.memory || {}) as Record<string, any>);
+  const memoryScenario = memoryScenarioOf(memory);
+  const memoryScenarioDescription = memoryScenario === 'custom'
+    ? 'Configuração atual não corresponde a um cenário; altere os campos abaixo ou escolha um cenário para voltar.'
+    : (MEMORY_SCENARIOS.find(scenario => scenario.id === memoryScenario)?.description || '');
+  const memoryGate = (memory.gate || {}) as Record<string, any>;
+  const memoryMode = memoryModeOf(memory);
   const safeEnvironment = sanitizeEnvReferences(manifest.environment || {});
   const envKeys = Object.keys(safeEnvironment);
   const pipelines = manifest.pipelines || [];
@@ -713,16 +723,6 @@ function buildProject(context: IPropertiesContext): IPropertiesScopeConfig {
               }).join('')}
             </div>
           </div>
-          <div class="properties-check-grid">
-            <label class="properties-check-row">
-              <input type="checkbox" data-property-input="memoryEnabled" ${(resolvedMemory?.value || defaults.memory)?.enabled ? 'checked' : ''} />
-              <span>${escapeHtml(label('label.memory_enabled', 'Memória ativada'))}</span>
-            </label>
-            <label class="properties-check-row">
-              <input type="checkbox" data-property-input="memoryPersistent" ${(resolvedMemory?.value || defaults.memory)?.persistent ? 'checked' : ''} />
-              <span>${escapeHtml(label('label.memory_persistent', 'Memória persistente'))}</span>
-            </label>
-          </div>
           <p class="properties-hint">${escapeHtml(label('project.defaults_origin_hint', 'Origem efetiva atual: modelo') )} ${originBadge(resolvedModel?.origin || 'project')} · ${escapeHtml(label('label.sandbox', 'Sandbox'))} ${originBadge(resolvedSandbox?.origin || 'project')}</p>
         `,
         save: context.saveProjectDefaults
@@ -730,9 +730,146 @@ function buildProject(context: IPropertiesContext): IPropertiesScopeConfig {
           : undefined,
         actions: [
           { id: 'project.open-local-models', label: label('action.manage_local_models', 'Gerenciar modelos locais'), kind: 'secondary' },
-          { id: 'project.open-http-policy', label: label('action.manage_http_policy', 'Gerenciar allowlist HTTP'), kind: 'secondary' },
-          { id: 'project.open-memory-advanced', label: label('action.manage_memory_advanced', 'Gerenciar memória avançada'), kind: 'secondary' }
+          { id: 'project.open-http-policy', label: label('action.manage_http_policy', 'Gerenciar allowlist HTTP'), kind: 'secondary' }
         ]
+      }),
+      section({
+        id: 'memory',
+        title: label('section.project_memory', 'Memória do Projeto'),
+        description: label('project.memory_desc', 'Cenário de memória do projeto e configuração avançada efetiva.'),
+        icon: 'brain',
+        badge: label('badge.project', 'Projeto'),
+        content: `
+          ${note(label('project.memory_scenario_hint', 'Escolha um cenário. Qualquer alteração nos campos avançados transforma o cenário em Personalizado.'), 'info')}
+          <label class="properties-check-row">
+            <input type="checkbox" data-property-input="memoryEnabled" ${memory.enabled !== false ? 'checked' : ''} />
+            <span>${escapeHtml(label('label.memory_enabled', 'Memória ativa'))}</span>
+          </label>
+          <div class="form-group" style="margin-top: 12px; max-width: 560px;">
+            <label class="form-label" for="properties-project-memory-scenario">${escapeHtml(label('label.memory_scenario', 'Cenário'))}</label>
+            <select id="properties-project-memory-scenario" class="form-select" data-property-input="memoryScenario">
+              ${memoryScenario === 'custom' ? `<option value="custom" selected disabled>${escapeHtml(label('value.memory_scenario_custom', 'Personalizado (configuração atual)'))}</option>` : ''}
+              ${MEMORY_SCENARIOS.map(scenario => `<option value="${scenario.id}" ${memoryScenario === scenario.id ? 'selected' : ''}>${escapeHtml(scenario.title)}</option>`).join('')}
+            </select>
+            <div class="properties-hint" id="properties-project-memory-scenario-description">${escapeHtml(memoryScenarioDescription)}</div>
+          </div>
+          <div class="form-row-grid properties-form-grid" style="margin-top: 12px;">
+            <div class="form-group">
+              <label class="form-label" for="properties-project-memory-mode">${escapeHtml(label('label.memory_mode', 'Modo'))}</label>
+              <select id="properties-project-memory-mode" class="form-select" data-property-input="memoryMode">
+                ${['off', 'consult', 'learn'].map(mode => `<option value="${mode}" ${memoryMode === mode ? 'selected' : ''}>${mode}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="properties-project-memory-budget">${escapeHtml(label('label.memory_budget', 'Orçamento do brief (tokens)'))}</label>
+              <input id="properties-project-memory-budget" class="form-input" type="number" min="0" max="32000" step="100" data-property-input="memoryBudget" value="${Number(memory.contextBudgetTokens ?? 800)}" />
+            </div>
+          </div>
+          <div class="form-row-grid properties-form-grid" style="margin-top: 12px;">
+            <div class="form-group">
+              <label class="form-label" for="properties-project-memory-gate-mode">${escapeHtml(label('label.memory_gate_mode', 'Porteiro (MemoryGate)'))}</label>
+              <select id="properties-project-memory-gate-mode" class="form-select" data-property-input="memoryGateMode">
+                ${['off', 'brief', 'shadow', 'enforce'].map(mode => `<option value="${mode}" ${(memoryGate.mode || 'off') === mode ? 'selected' : ''}>${mode}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="properties-project-memory-gate-max">${escapeHtml(label('label.memory_gate_max_searches', 'Máximo de buscas'))}</label>
+              <input id="properties-project-memory-gate-max" class="form-input" type="number" min="0" max="10" step="1" data-property-input="memoryGateMaxSearches" value="${Number(memoryGate.maxSearches ?? 2)}" />
+            </div>
+          </div>
+          <div class="form-row-grid properties-form-grid" style="margin-top: 12px;">
+            <div class="form-group">
+              <label class="form-label" for="properties-project-memory-gate-provider">${escapeHtml(label('label.memory_gate_provider', 'Provedor do porteiro'))}</label>
+              <input id="properties-project-memory-gate-provider" class="form-input properties-code-input" type="text" data-property-input="memoryGateProvider" value="${escapeHtml(memoryGate.provider || '')}" placeholder="jev / local / deepseek" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="properties-project-memory-gate-model">${escapeHtml(label('label.memory_gate_model', 'Modelo do porteiro'))}</label>
+              <input id="properties-project-memory-gate-model" class="form-input properties-code-input" type="text" data-property-input="memoryGateModel" value="${escapeHtml(memoryGate.model || '')}" placeholder="jev-latest" />
+            </div>
+          </div>
+          <div class="form-row-grid properties-form-grid" style="margin-top: 12px;">
+            <div class="form-group">
+              <label class="form-label" for="properties-project-memory-consolidation">${escapeHtml(label('label.memory_consolidation', 'Consolidação'))}</label>
+              <select id="properties-project-memory-consolidation" class="form-select" data-property-input="memoryConsolidation">
+                ${['off', 'idle', 'after_episodes'].map(mode => `<option value="${mode}" ${(memory.consolidationMode || 'off') === mode ? 'selected' : ''}>${mode}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group" style="display: flex; align-items: end; padding-bottom: 4px;">
+              <label class="properties-check-row">
+                <input type="checkbox" data-property-input="memoryEmbeddings" ${memory.embeddingEnabled ? 'checked' : ''} />
+                <span>${escapeHtml(label('label.memory_embeddings', 'Busca semântica (embeddings)'))}</span>
+              </label>
+            </div>
+          </div>
+          <div class="properties-check-grid" style="margin-top: 12px;">
+            <label class="properties-check-row">
+              <input type="checkbox" data-property-input="memoryLocalOnly" ${memory.localOnly ? 'checked' : ''} />
+              <span>${escapeHtml(label('label.memory_local_only', 'Somente memória local (não enviar a modelo remoto)'))}</span>
+            </label>
+            <label class="properties-check-row">
+              <input type="checkbox" data-property-input="memoryClaimExtraction" ${claimExtractionEnabled(memory) ? 'checked' : ''} />
+              <span>${escapeHtml(label('label.memory_claim_extraction', 'Extração de afirmações'))}</span>
+            </label>
+          </div>
+        `,
+        save: context.saveProjectMemory
+          ? (values) => context.saveProjectMemory!(values)
+          : undefined,
+        bind: (root) => {
+          const scenarioSelect = root.querySelector<HTMLSelectElement>('[data-property-input="memoryScenario"]');
+          if (!scenarioSelect) return;
+          const description = root.querySelector<HTMLElement>('#properties-project-memory-scenario-description');
+          const customText = label(
+            'value.memory_scenario_custom_hint',
+            'Configuração atual não corresponde a um cenário; altere os campos abaixo ou escolha um cenário para voltar.');
+          const field = (name: string) => root.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-property-input="${name}"]`);
+          const setField = (name: string, value: unknown) => {
+            const element = field(name);
+            if (!element) return;
+            if (element instanceof HTMLInputElement && element.type === 'checkbox') {
+              element.checked = Boolean(value);
+            } else {
+              element.value = String(value ?? '');
+            }
+          };
+          const markCustom = () => {
+            if (!scenarioSelect.querySelector('option[value="custom"]')) {
+              const option = document.createElement('option');
+              option.value = 'custom';
+              option.textContent = label('value.memory_scenario_custom', 'Personalizado (configuração atual)');
+              scenarioSelect.appendChild(option);
+            }
+            scenarioSelect.value = 'custom';
+            if (description) description.textContent = customText;
+          };
+          scenarioSelect.addEventListener('change', () => {
+            const preset = MEMORY_SCENARIOS.find(scenario => scenario.id === scenarioSelect.value);
+            if (!preset) return;
+            if (description) description.textContent = preset.description;
+            const gate = (preset.memory.gate || {}) as Record<string, unknown>;
+            setField('memoryMode', preset.memory.mode || 'consult');
+            setField('memoryBudget', preset.memory.contextBudgetTokens ?? 800);
+            setField('memoryGateMode', gate.mode || 'off');
+            setField('memoryGateProvider', gate.provider || '');
+            setField('memoryGateModel', gate.model || '');
+            setField('memoryGateMaxSearches', gate.maxSearches ?? 2);
+            setField('memoryConsolidation', preset.memory.consolidationMode || 'off');
+            setField('memoryEmbeddings', Boolean(preset.memory.embeddingEnabled));
+            setField('memoryLocalOnly', Boolean(preset.memory.localOnly));
+            setField('memoryClaimExtraction', Boolean(preset.memory.claimExtraction));
+          });
+          const advanced = new Set([
+            'memoryMode', 'memoryBudget', 'memoryGateMode', 'memoryGateProvider',
+            'memoryGateModel', 'memoryGateMaxSearches', 'memoryConsolidation',
+            'memoryEmbeddings', 'memoryLocalOnly', 'memoryClaimExtraction'
+          ]);
+          root.querySelectorAll<HTMLElement>('[data-property-input]').forEach(element => {
+            const name = element.getAttribute('data-property-input') || '';
+            if (!advanced.has(name)) return;
+            element.addEventListener('change', markCustom);
+            element.addEventListener('input', markCustom);
+          });
+        }
       }),
       section({
         id: 'compression',

@@ -1,6 +1,6 @@
 # Roadmap e limitações conhecidas
 
-> **Aplica-se a:** Arestrix 2.7 (`2.7.0`) · Última revisão: 2026-11-10
+> **Aplica-se a:** Arestrix 2.8 (`2.8.0`) · Última revisão: 2026-11-11
 >
 > Esta página registra o que está intencionalmente incompleto e a ordem planejada para resolver. Não é
 > um compromisso de datas.
@@ -63,7 +63,9 @@ Implementado no núcleo:
   telemetria separada (`.arestrix/telemetry/telemetry.db`).
 - Modos por vértice `off`/`consult`/`learn`, lições, `memory_search` e propostas pendentes via
   `memory_propose_lesson`, além de brief compilado com `contextBudgetTokens`, ordenado por
-  confiança/recência.
+  confiança/recência. A memória vem ligada por padrão no cenário **Consultar e Decidir**; os
+  cenários **Consultar** e **Aprender com aprovação** ficam em Arquivo → Propriedades → Projeto →
+  Memória.
 - Episódios de sucesso/falha, `memory_hit` (injetado/consultado) e métricas com retries e outcome.
 - Propostas automáticas de falha (nunca ativadas sem aprovação) e exemplos 04 e 05.
 - Painel de consumo na UI, relatório nativo `arestrix-cli memory report`, impacto no AI Gateway e
@@ -85,7 +87,14 @@ Ainda pendente:
 - Visualização completa do grafo cognitivo e edição dos conflitos na UI (a lista de conflitos já
   existe).
 - Consolidação por LLM, `memory_handoff` e aprendizagem recursiva.
-- Medição com dados/provedores reais antes de ligar os interruptores experimentais.
+- A/B v2 executado com DeepSeek real em 2026-11-11: aprovação empatada em 1,000, sem falha de
+  infraestrutura, mas o braço ON custou 2,58× tokens e 1,69× latência por causa de buscas de
+  memória feitas pelo próprio agente. A variante com validador dependente de memória (token
+  `AB-7731`) mostrou 1,000 no ON contra 0,000 no OFF, confirmando a entrega da lição; a medição
+  dos interruptores experimentais com dados reais continua pendente. O `memory.gate` com modelo
+  reduziu o overhead de paridade para ~1,34× tokens e ~1,16× latência com DeepSeek, e ~1,39×/1,01×
+  com Jev (~270 ms por decisão), mantendo 1,000 no valor (piloto de 1 repetição; confirmação de
+  3 repetições pendente por latência do agente).
 - Coordenação entre múltiplos processos/instâncias do serviço institucional (fora do escopo desta
   release).
 
@@ -150,8 +159,9 @@ Claro/Escuro/Seguir o sistema.
 
 Pendente após a pré-release `2.3.0-beta.2`:
 
-- Instalação/upgrade/uninstall em máquina limpa, instalação silenciosa e validação em Intune/SCCM,
-  além do pacote Linux (5B2).
+- Instalador 2.7.0 validado localmente em 2026-11-11 (instalação silenciosa, upgrade
+  2.1.0-beta.1 → 2.7.0 e uninstall); faltam máquina realmente limpa, Intune/SCCM e o pacote
+  Linux (5B2).
 - Matriz de CI Windows/Linux, catálogo remoto assinado (5C) e a matriz completa em
   [Plano de testes do Beta 2.3](../quality/beta2.3-test-plan.md).
 - Três casos manuais de homologação das bibliotecas: tema/tamanhos, instalação limpa/upgrade e uso

@@ -235,6 +235,22 @@ shows two overview cards, one for the active project graph and one for the works
 Each action button carries its scope tag: `[Project]` for Model, Memory and Tools, `[Workspace]` for Sandbox,
 `[Workspace / Project]` for Skills.
 
+## Project memory scenarios
+
+Memory is on by default. In **File → Properties → Project → Memory** the project chooses one of
+three scenarios:
+
+| Scenario | Effect |
+| :--- | :--- |
+| **Consult** | Injects the curated brief and exposes no memory tools (`gate.mode=brief`). |
+| **Consult and Decide** | The brief is injected and the gate decides `none`/`brief`/`search`; project default. |
+| **Learn with approval** | Consults, decides and records proposals; nothing is promoted without approval. |
+
+Changing any advanced field on the same screen turns the scenario into **Custom** (a derived
+state, not a fourth option). There is no “advanced configuration” button: brief, gate, search,
+consolidation and learning fields live in the Properties screen itself, under the File menu.
+The operational panel (knowledge, lessons, state, proposals and conflicts) remains separate.
+
 ## Modals and Office 365 Tab Architecture
 
 All Studio dialogs adhere to the **Microsoft Office 365 (Fluent 2)** corporate design system:

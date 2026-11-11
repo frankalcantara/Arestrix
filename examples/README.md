@@ -25,6 +25,9 @@ choose your model, set your API key, press **F5**.
 Examples 3 and 5 are **generated** by `python scripts/build_examples.py`, so the shared pieces do not drift apart.
 Vertices cannot yet execute a nested graph, so the composition is flattened into a single pipeline.
 
+All examples start with project memory **on** in the **Consult and Decide** scenario. Examples 4 and 5 keep
+their explicit `learn` override (with the gate in `shadow`) to demonstrate learning and `memory_search`.
+
 All fourteen end in **output vertices**: the produced file is copied to `exports/` and registered in the **Artifacts** tab,
 with a viewer per format (SVG, Markdown, spreadsheets, PDF and JSON).
 

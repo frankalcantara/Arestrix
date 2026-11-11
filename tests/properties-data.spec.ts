@@ -48,11 +48,22 @@ describe('PropertiesData', () => {
   it('builds the three scopes with their expected sections', () => {
     expect(buildPropertiesScopeConfig('studio', context).sections.map(s => s.id)).toEqual(['general', 'studio-model', 'credentials', 'integrations', 'libraries', 'advanced']);
     expect(buildPropertiesScopeConfig('workspace', context).sections.map(s => s.id)).toEqual(['general', 'catalogs', 'libraries', 'sandbox', 'security', 'memory', 'advanced']);
-    expect(buildPropertiesScopeConfig('project', context).sections.map(s => s.id)).toEqual(['general', 'pipelines', 'defaults', 'compression', 'libraries', 'environment', 'git', 'runner', 'advanced']);
+    expect(buildPropertiesScopeConfig('project', context).sections.map(s => s.id)).toEqual(['general', 'pipelines', 'defaults', 'memory', 'compression', 'libraries', 'environment', 'git', 'runner', 'advanced']);
   });
 
-  it('projects the context compression section with safe defaults and the CCR location', () => {
+  it('projects the project memory scenario and advanced gate fields', () => {
     const project = buildPropertiesScopeConfig('project', context);
+    const memory = project.sections.find(section => section.id === 'memory');
+    expect(memory).toBeDefined();
+    expect(memory!.content).toContain('data-property-input="memoryScenario"');
+    expect(memory!.content).toContain('Consultar e Decidir');
+    expect(memory!.content).toContain('data-property-input="memoryGateMode"');
+    expect(memory!.content).toContain('data-property-input="memoryGateProvider"');
+    expect(memory!.content).toContain('data-property-input="memoryGateModel"');
+    expect(memory!.content).toContain('data-property-input="memoryEnabled"');
+  });
+
+  it('projects the context compression section with safe defaults and the CCR location', () => {    const project = buildPropertiesScopeConfig('project', context);
     const compression = project.sections.find(section => section.id === 'compression');
     expect(compression).toBeDefined();
     expect(compression!.content).toContain('data-property-input="compressionEnabled"');

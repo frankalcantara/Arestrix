@@ -17,6 +17,7 @@ import { StudioModelStore } from '../../core/settings/StudioModelStore.ts';
 import { StudioCredentialsStore } from '../../core/settings/StudioCredentialsStore.ts';
 import { WorkspaceSettingsStore } from '../../core/settings/WorkspaceSettingsStore.ts';
 import { sanitizeEnvReferences } from '../../core/env/EnvironmentManager.ts';
+import { memoryScenarioPreset, type MemoryScenarioId } from '../../core/memory/MemoryScenarios.ts';
 import type { IProjectSettings, IStudioCredentialsSnapshot, IStudioModelSettings, IStudioSettings, IWorkspaceSettings } from '../../core/settings/types.ts';
 import { PropertiesWindow } from './PropertiesWindow.ts';
 import { buildPropertiesScopeConfig, type IPropertiesContext } from './PropertiesData.ts';
@@ -59,6 +60,7 @@ export class PropertiesController {
       saveWorkspace: values => this.saveWorkspace(values),
       saveProject: values => this.saveProject(values),
       saveProjectDefaults: values => this.saveProjectDefaults(values),
+      saveProjectMemory: values => this.saveProjectMemory(values),
       saveProjectCompression: values => this.saveProjectCompression(values),
       saveProjectEnvironment: values => this.saveProjectEnvironment(values),
       saveLibraries: (scope, values) => this.saveLibraries(scope, values),
@@ -197,10 +199,11 @@ export class PropertiesController {
   private async saveProjectDefaults(values: Record<string, string>): Promise<boolean> {
     const tools = ['write', 'edit', 'read', 'bash', 'validate_svg']
       .filter(tool => values[`tool_${tool}`] === 'true');
-    const memory = {
-      enabled: values.memoryEnabled === 'true',
-      persistent: values.memoryPersistent === 'true'
-    };
+    const loaded = await this.projectStore.load();
+    const currentMemory = (loaded.defaults?.memory || {}) as Record<string, any>;
+    const memory = { ...currentMemory };
+    if (values.memoryEnabled !== undefined) memory.enabled = values.memoryEnabled === 'true';
+    if (values.memoryPersistent !== undefined) memory.persistent = values.memoryPersistent === 'true';
     return this.projectStore.saveDefaults({
       model: {
         provider: (values.provider || 'deepseek') as any,
@@ -217,6 +220,59 @@ export class PropertiesController {
       } as any,
       memory: memory as any
     });
+  }
+
+  private async saveProjectMemory(values: Record<string, string>): Promise<boolean> {
+    const loaded = await this.projectStore.load();
+    const current = (loaded.defaults?.memory || {}) as Record<string, any>;
+    const scenario = values.memoryScenario as MemoryScenarioId | 'custom' | undefined;
+    const preset = scenario && scenario !== 'custom' ? memoryScenarioPreset(scenario) : {};
+    const base = (scenario && scenario !== 'custom' ? preset : current) as Record<string, any>;
+    const clamp = (value: number, min: number, max: number, fallback: number) => {
+      if (!Number.isFinite(value)) return fallback;
+      return Math.max(min, Math.min(max, Math.floor(value)));
+    };
+    const gateMode = values.memoryGateMode || base.gate?.mode || current.gate?.mode || 'off';
+    const gate = {
+      ...(current.gate || {}),
+      ...(base.gate || {}),
+      mode: ['off', 'brief', 'shadow', 'enforce'].includes(gateMode) ? gateMode : 'off',
+      provider: (values.memoryGateProvider ?? base.gate?.provider ?? current.gate?.provider ?? '').trim(),
+      model: (values.memoryGateModel ?? base.gate?.model ?? current.gate?.model ?? '').trim(),
+      maxSearches: clamp(
+        Number(values.memoryGateMaxSearches ?? base.gate?.maxSearches ?? current.gate?.maxSearches ?? 2),
+        0, 10, 2)
+    };
+    const mode = values.memoryMode || base.mode || current.mode || 'consult';
+    const claim = typeof current.claimExtraction === 'object' && current.claimExtraction
+      ? current.claimExtraction
+      : {};
+    const memory = {
+      ...current,
+      ...(scenario && scenario !== 'custom' ? preset : {}),
+      enabled: values.memoryEnabled !== undefined
+        ? values.memoryEnabled === 'true'
+        : current.enabled !== false,
+      mode: ['off', 'consult', 'learn'].includes(mode) ? mode : 'consult',
+      contextBudgetTokens: clamp(
+        Number(values.memoryBudget ?? base.contextBudgetTokens ?? current.contextBudgetTokens ?? 800),
+        0, 32000, 800),
+      gate,
+      consolidationMode: values.memoryConsolidation
+        ?? base.consolidationMode
+        ?? current.consolidationMode
+        ?? 'off',
+      embeddingEnabled: values.memoryEmbeddings !== undefined
+        ? values.memoryEmbeddings === 'true'
+        : Boolean(current.embeddingEnabled),
+      localOnly: values.memoryLocalOnly !== undefined
+        ? values.memoryLocalOnly === 'true'
+        : Boolean(current.localOnly),
+      claimExtraction: values.memoryClaimExtraction === 'true'
+        ? { ...claim, enabled: true }
+        : false
+    };
+    return this.projectStore.saveDefaults({ memory: memory as any });
   }
 
   /**
@@ -517,9 +573,6 @@ export class PropertiesController {
         return;
       case 'project.open-http-policy':
         globalEventBus.emit('modal:open-global-tools');
-        return;
-      case 'project.open-memory-advanced':
-        globalEventBus.emit('modal:open-global-memory');
         return;
       case 'studio.open-libraries':
       case 'studio.open-github':
