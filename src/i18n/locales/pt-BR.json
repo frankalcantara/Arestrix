@@ -1948,6 +1948,22 @@
     "opt_hermes_3_8b": "Hermes 3 (Llama 3.1 8B)",
     "opt_openhermes_25_7b": "OpenHermes 2.5 (Mistral 7B)"
   },
+  "skill_revalidation": {
+    "title": "Política de validação de skills atualizada",
+    "subtitle": "Reauditoria necessária após mudança da política",
+    "intro_title": "A política de segurança foi atualizada.",
+    "intro": "As skills importadas abaixo foram aprovadas com uma política antiga. Reaudite todas para voltar a usá-las nos grafos.",
+    "list_title": "Skills importadas com política antiga ({{count}})",
+    "pending_badge": "PENDENTE",
+    "unresolved_badge": "NÃO ENCONTRADA",
+    "result": "{{revalidated}} de {{total}} revalidadas: {{approved}} aprovadas, {{caution}} com atenção, {{rejected}} rejeitadas, {{unresolved}} não encontradas.",
+    "unresolved_hint": "As skills não encontradas precisam ser abertas no projeto de origem e auditadas pelo editor.",
+    "btn_revalidate": "Revalidar todas",
+    "btn_later": "Depois",
+    "btn_close": "Fechar",
+    "running": "Reauditando skills...",
+    "empty": "Nenhuma skill importada precisa de reauditoria nesta política."
+  },
   "validator": {
     "orphan": "Nó isolado \"{{label}}\" ({{id}}) não possui conexões.",
     "missing_branch": "Nó de condição \"{{label}}\" tem o ramo \"{{name}}\" desconectado.",

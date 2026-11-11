@@ -113,6 +113,8 @@ O `.github/workflows/deploy.yml` compila e publica o pacote portátil pelo GitHu
 - o push de uma tag `v*` publica ou atualiza um release estável daquela tag;
 - a execução manual segue a branch/tag selecionada.
 
+A pasta de staging grava `skill-policy-version.txt`. No upgrade, o instalador compara o arquivo com o da instalação anterior e mostra um aviso quando a política de skills mudou; em seguida, o Studio abre o modal de revalidação das skills importadas.
+
 O workflow roda o gate canônico (`release_check.py --skip-e2e`), gera o ZIP e o instalador Inno Setup
 com `package_release.py --installer`, e anexa ao release o arquivo, `.zip.sha256`, `*-setup.exe`,
 `*-setup.exe.sha256`, `SHA256SUMS`, `SBOM.json`, `release-manifest.json` e `release-report.json`. A

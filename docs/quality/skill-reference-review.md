@@ -149,6 +149,8 @@ No Studio, reabra cada skill importada e execute **Auditar com SkillSpector** (o
 camadas locais). No workspace, o auditor grava a nova entrada com `policyVersion`,
 `referenceVersions` e `auditCycles`.
 
+Quando a `policyVersion` muda, o Studio abre automaticamente o modal de revalidação de skills importadas na próxima inicialização. O instalador Windows detecta a diferença pelo arquivo `skill-policy-version.txt` da instalação anterior e mostra o aviso antes de copiar os arquivos.
+
 ## 4. Critérios de aprovação da revisão
 
 - [ ] Commit, tree e `SKILL.md` das duas referências conferem com o lock.

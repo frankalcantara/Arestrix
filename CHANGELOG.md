@@ -8,6 +8,13 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ## [Unreleased]
 
+### Added
+
+- Skill policy upgrades now trigger a Studio modal that lists imported skills
+  approved under an older `policyVersion` and re-audits all of them with the
+  current Skill Guard. The Windows installer warns when the installed policy
+  differs and records `skill-policy-version.txt` for the next upgrade.
+
 ### Changed
 
 - Tagged `v*` releases are now published as stable GitHub releases; pushes to
