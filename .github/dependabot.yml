@@ -22,6 +22,12 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # Let fresh action releases settle before they can enter a Dependabot PR.
+    # Combined with the lockfile, this keeps a compromised upstream release from
+    # reaching a release build on the same day it is published. `github-actions`
+    # only supports `default-days` (Dependabot's own default is 3 days).
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3
     groups:
       actions-minor-patch:
