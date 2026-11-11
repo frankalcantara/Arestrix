@@ -33,14 +33,16 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 - GitHub Actions dependencies are pinned through
   `.github/workflows/actions.lock` (`gh actions-lock`). Workflows keep readable
   tags while CI and the release pipeline run the exact locked commit, including
-  transitive dependencies. `ci.yml` gains an advisory `lockfile` job that fails
-  when the lockfile drifts from the workflows, and the `github-actions`
-  Dependabot ecosystem now waits 7 days before proposing a fresh action release.
+  transitive dependencies. `ci.yml` gains a `lockfile` job that fails when the
+  lockfile drifts from the workflows, now required for merges into `main`, and
+  the `github-actions` Dependabot ecosystem now waits 7 days before proposing a
+  fresh action release.
 - Workflows are audited by `zizmor` (pinned `1.32.0`, `npm run check:workflows`)
-  in a new advisory CI job. It covers what the lockfile does not: excessive
-  permissions, credential persistence, template injection and cache poisoning.
-  Two `cache-poisoning` findings in `deploy.yml` are suppressed with a written
-  justification; the residual risk is documented in `.github/AUTOMATION.md`.
+  in a new CI job, also required for merges into `main`. It covers what the
+  lockfile does not: excessive permissions, credential persistence, template
+  injection and cache poisoning. Two `cache-poisoning` findings in `deploy.yml`
+  are suppressed with a written justification; the residual risk is documented in
+  `.github/AUTOMATION.md`.
 
 ## [2.8.0] - 2026-11-11
 
