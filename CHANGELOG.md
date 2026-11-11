@@ -12,6 +12,8 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 - Tagged `v*` releases are now published as stable GitHub releases; pushes to
   `main` continue to update the rolling `latest` pre-release.
+- SkillSpector reference updated to `e48d771` (v2.12.0-1542) after review;
+  `policyVersion` was recomputed and no local rule changes were required.
 
 ## [2.7.0] - 2026-11-10
 
