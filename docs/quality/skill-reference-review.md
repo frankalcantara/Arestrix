@@ -1,6 +1,6 @@
 # Revisão das referências de validação de skills
 
-> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Última revisão: 2026-10-28
+> **Aplica-se a:** Arestrix 2.7 (`2.7.0`) · Última revisão: 2026-11-10
 >
 > Este documento define o processo obrigatório sempre que uma das referências de segurança de skills
 > for atualizada. O lock em `src/core/skills/skill-validation-policy.json` é a fonte de verdade
@@ -169,3 +169,9 @@ camadas locais). No workspace, o auditor grava a nova entrada com `policyVersion
 - Atualização de referência sem revisão humana: **não entra**.
 - Dúvida sobre comportamento sensível: `CAUTION` ou `REJECT`, nunca `APPROVE` por reputação.
 - Divergência entre doc e código: o lock e os testes são a fonte; a doc é corrigida no mesmo PR.
+
+## 6. Histórico de revisões
+
+| Data | Referência | Commit | Decisão | Notas |
+| :--- | :--- | :--- | :--- | :--- |
+| 2026-11-10 | `nvidia-skillspector` | `e48d771` | aprovada | Diff `2b9f451..e48d771`: correções de cobertura de containers ZIP, parsing de Markdown/YAML/shell e PowerShell, escopo lexical de taint, admissão de batches LLM e limites de recurso; `skills/skill-inspector/SKILL.md` e o contrato local permanecem inalterados; nenhuma regra local nova; `policyVersion` recalculado sem mudança de `ruleSetVersion`. |
