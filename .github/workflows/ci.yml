@@ -199,3 +199,32 @@ jobs:
 
       - name: Verify lockfile
         run: gh actions-lock --verify
+
+  # Static audit of the workflow definitions themselves: excessive permissions,
+  # token persistence, template injection, cache/artifact poisoning. This is the
+  # complement of `lockfile`, which only proves the action code is the code that
+  # was reviewed, not that the workflow handles tokens and PR code safely.
+  # Advisory for now, like `lockfile`; see .github/AUTOMATION.md.
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # Pinned by hand, like the gh-actions-lock pin above: the linter is part of
+      # the gate, so it cannot itself float. v1.32.0 is the first release that
+      # understands actions.lock; older ones demand SHA pins instead.
+      - name: Install zizmor
+        run: pipx install zizmor==1.32.0
+
+      # Informational findings stay advisory (they are shown locally by
+      # `npm run check:workflows`); low and above fail the job.
+      - name: Audit workflows
+        run: zizmor --min-severity=low --format=github .github/workflows

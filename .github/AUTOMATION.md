@@ -6,7 +6,7 @@ publishes a ready-to-run artifact.
 
 | Workflow | Trigger | What it does |
 | :--- | :--- | :--- |
-| `workflows/ci.yml` | `pull_request`, manual | Quality checks, Vitest + Studio build, native Windows CTest, native Linux CTest and lockfile verification. The four build jobs are required status checks on `main`; `lockfile` is advisory. |
+| `workflows/ci.yml` | `pull_request`, manual | Quality checks, Vitest + Studio build, native Windows CTest, native Linux CTest, lockfile verification and a `zizmor` audit of the workflows. The four build jobs are required status checks on `main`; `lockfile` and `zizmor` are advisory. |
 | `workflows/deploy.yml` | push to `main`, `v*` tags, manual | Runs the release gate, builds the Windows x64 portable package and publishes it to GitHub Releases (`latest` for `main`, the tag name for stable tag releases). |
 | `workflows/check-submodules.yml` | weekly schedule (Monday 08:00 UTC), manual | Compares every submodule gitlink with its upstream branch and opens/updates the `chore/submodule-updates` pull request. Never merges. |
 | `dependabot.yml` | weekly/monthly schedule | Opens grouped npm, GitHub Actions and Git submodule update pull requests. |
@@ -68,6 +68,45 @@ Reusable workflows called at `jobs.<id>.uses` from another repository (none here
 container images (none here), the runner image, npm dependencies and git
 submodules. Those keep their own controls: `npm ci`, the submodule workflow
 above and `npm run check:skill-references` for reference skills.
+
+## Workflow linting (zizmor)
+
+The lockfile answers "is this the action code the one I reviewed?". It says
+nothing about whether a workflow handles the token, the caches or pull-request
+code safely. [`zizmor`](https://docs.zizmor.sh/) covers that half: excessive
+permissions, credential persistence, template injection, cache and artifact
+poisoning, dangerous triggers.
+
+`ci.yml` runs it in the `zizmor` job, pinned to `1.32.0` with `pipx`. That
+version floor matters: earlier releases do not understand `actions.lock` and
+demand SHA pins, which would contradict the lockfile. Like the extension pin, it
+is bumped by hand and not managed by Dependabot.
+
+- Gate policy: `--min-severity=low`. Low and above fail the job; informational
+  findings stay advisory and do not fail anything.
+- Local run: `npm run check:workflows` (same command as CI, needs `uv`). Add
+  `--min-severity=informational` to also see the informational findings.
+- `zizmor` suppresses `unpinned-uses` when a lockfile is present, so the two
+  mechanisms do not fight.
+
+### Documented suppressions
+
+`deploy.yml` carries two `# zizmor: ignore[cache-poisoning]` comments. They are
+not an oversight: caches written by a `pull_request` run are scoped to the PR
+merge ref and cannot be restored by a push to `main` or a tag, so only runs with
+push access to `main` can write the keys `deploy.yml` reads.
+
+One residual risk stays open and is *not* covered by that reasoning: on a cache
+hit, `scripts/fetch_onnxruntime.py` returns early when the manifest and the
+expected files are present, so the SHA-256 checks of the packages are skipped. A
+poisoned cache would therefore bypass the hash pin. Closing it means hashing the
+extracted files on every reuse, or dropping the cache from the release path —
+worth doing if the write access to `main` ever grows beyond the owner.
+
+`superfluous-actions` (informational) still suggests replacing
+`softprops/action-gh-release` with `gh release create`. That would remove one
+third-party action from the release path; it is a rewrite of the publish step and
+has not been done.
 
 ## Submodule updates
 
@@ -131,6 +170,15 @@ python scripts/release_check.py
 For a faster rehearsal, use `python scripts/release_check.py --skip-e2e` or run
 the individual commands from `.github/workflows/ci.yml` (`npm test`, `npx tsc
 --noEmit`, `python CppCore/dev.py --test --no-frontend`, repository checks).
+
+The two workflow-security checks are not part of `release_check.py` because they
+need network access (GitHub API) and extra tooling; run them directly when you
+touch `.github/workflows/`:
+
+```bash
+gh actions-lock --verify     # lockfile in sync with the workflows
+npm run check:workflows      # zizmor, needs uv
+```
 
 E2E (`scripts/e2e_tutorial.py`, `scripts/e2e_examples.py`) remains a manual
 promotion step before tagging an official release; the rolling `deploy.yml`
