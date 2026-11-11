@@ -113,6 +113,8 @@ Redistributable on Windows.
 - pushing a `v*` tag publishes or updates a stable release for that tag;
 - a manual dispatch follows the selected branch/tag.
 
+The staging folder records `skill-policy-version.txt`. On upgrade, the installer compares it with the previous installation and shows a warning when the skill policy changed; Studio then opens the revalidation modal for imported skills.
+
 The workflow runs the canonical gate (`release_check.py --skip-e2e`), creates the ZIP and the Inno
 Setup installer with `package_release.py --installer`, and attaches the archive, `.zip.sha256`,
 `*-setup.exe`, `*-setup.exe.sha256`, `SHA256SUMS`, `SBOM.json`, `release-manifest.json` and

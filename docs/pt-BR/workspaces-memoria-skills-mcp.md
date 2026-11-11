@@ -260,7 +260,7 @@ O Arestrix mantém o skill próprio **`arestrix-skill-guard`** em
 [`.agents/skills/arestrix-skill-guard/SKILL.md`](../../.agents/skills/arestrix-skill-guard/SKILL.md), que
 combina as duas referências e define o contrato de veredito. A política efetiva é versionada por
 `policyVersion`; o cache do ledger só vale enquanto a skill, as referências e as regras forem as mesmas.
-Atualizou uma referência ou uma regra, a skill volta a `PENDING` e precisa ser reauditada.
+Atualizou uma referência ou uma regra, a skill volta a `PENDING` e precisa ser reauditada. Na inicialização, o Studio abre um modal de revalidação com as skills importadas aprovadas sob a política antiga e reaudita todas em uma ação. Skills ausentes do projeto atual ficam listadas para reauditoria manual. O instalador Windows compara o `skill-policy-version.txt` da instalação anterior e avisa no upgrade quando a política mudou.
 
 O scanner local enxerga o `SKILL.md`, o prompt e as ferramentas declaradas; scripts e anexos de um
 repositório de skills continuam exigindo revisão manual pelo `arestrix-skill-guard`.

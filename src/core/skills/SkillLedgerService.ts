@@ -196,6 +196,20 @@ export class SkillLedgerService {
   }
 
   /**
+   * Entradas auditadas sob uma política anterior. Elas continuam armazenadas,
+   * mas não são aceitas pela política atual e precisam de reauditoria.
+   */
+  public getStaleEntries(policyVersion: string = CURRENT_SKILL_POLICY_VERSION): ISkillLedgerEntry[] {
+    const stale: ISkillLedgerEntry[] = [];
+    for (const entry of this.entries.values()) {
+      if (!entry.policyVersion || entry.policyVersion !== policyVersion) {
+        stale.push(entry);
+      }
+    }
+    return stale.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }
+
+  /**
    * Registra ou atualiza formalmente o veredito de auditoria de uma skill.
    */
   public recordAudit(entry: ISkillLedgerEntry): void {

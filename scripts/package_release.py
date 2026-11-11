@@ -12,6 +12,7 @@ O pacote preserva o layout esperado pelo Studio e pelo BuildService:
   third_party/simdjson/         headers do simdjson
   examples/, docs/              exemplos e documentacao
   .agents/skills/               skills de desenvolvimento, incluindo arestrix-skill-guard
+  skill-policy-version.txt      policyVersion usada para detectar reauditoria no upgrade
   package-manifest.json, SHA256SUMS, SBOM.json
 
 Requer que o gate de release (ou ao menos release_manifest.py) tenha gerado
@@ -62,6 +63,19 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def skill_policy_version() -> str:
+    """Le a policyVersion efetiva do lock de referencias de skills."""
+    policy_path = ROOT / "src" / "core" / "skills" / "skill-validation-policy.json"
+    try:
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise SystemExit(f"[package] policy de skills invalida: {error}")
+    version = str(policy.get("policyVersion", "")).strip()
+    if not re.fullmatch(r"[0-9a-f]{64}", version):
+        raise SystemExit("[package] policyVersion de skills ausente ou invalida.")
+    return version
 
 
 def ignore_generated(directory: str, names: list[str]) -> set[str]:
@@ -141,7 +155,8 @@ def numeric_version(version: str) -> str:
     return f"{match.group(1)}.{match.group(2)}.{match.group(3)}.0"
 
 
-def build_windows_installer(stage: Path, release_dir: Path, version: str, arch: str) -> Path:
+def build_windows_installer(stage: Path, release_dir: Path, version: str, arch: str,
+                            policy_version: str) -> Path:
     """Compila o instalador Inno Setup a partir do staging ja validado."""
     if os.name != "nt":
         raise SystemExit("[installer] o instalador Inno Setup so pode ser gerado no Windows.")
@@ -159,6 +174,7 @@ def build_windows_installer(stage: Path, release_dir: Path, version: str, arch: 
         f"/DAppVersion={version}",
         f"/DAppVersionNumeric={numeric_version(version)}",
         f"/DAppArch={arch}",
+        f"/DSkillPolicyVersion={policy_version}",
         f"/DStageDir={stage}",
         f"/DOutputDir={release_dir}",
         f"/DOutputBaseFilename={output_base}",
@@ -446,6 +462,7 @@ def main() -> int:
 
     system, arch = platform_slug()
     version = (ROOT / "version.txt").read_text(encoding="utf-8").strip()
+    policy_version = skill_policy_version()
     commit = run_git("rev-parse", "HEAD")
     dirty = bool(run_git("status", "--porcelain"))
     if dirty and not args.allow_dirty:
@@ -499,6 +516,13 @@ def main() -> int:
         for name in ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "CODE_SIGNING.md", "PRIVACY.md", "version.txt"):
             shutil.copy2(ROOT / name, stage / name)
 
+        # O instalador compara este arquivo da versao anterior com a policy
+        # embutida no novo setup para avisar sobre skills que precisam de
+        # reauditoria. Tambem entra no pacote portatil e nos manifests.
+        (stage / "skill-policy-version.txt").write_text(
+            policy_version + "\n", encoding="utf-8", newline="\n"
+        )
+
         write_portable_readme(stage, version, system)
         write_launchers(stage, system)
         if not args.skip_smoke:
@@ -507,7 +531,7 @@ def main() -> int:
             shutil.rmtree(stage / "workspace", ignore_errors=True)
         write_manifests(stage, version, commit, dirty, system, arch)
 
-        installer = build_windows_installer(stage, release_dir, version, arch) if args.installer else None
+        installer = build_windows_installer(stage, release_dir, version, arch, policy_version) if args.installer else None
 
         formats = [args.format] if args.format and args.format != "both" else (
             ["zip", "tar.gz"] if args.format == "both" else (["zip"] if system == "windows" else ["tar.gz"])

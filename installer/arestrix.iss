@@ -36,6 +36,10 @@
   #define IconFile "arestrix.ico"
 #endif
 
+#ifndef SkillPolicyVersion
+  #define SkillPolicyVersion "unknown"
+#endif
+
 #define AppName "Arestrix"
 #define AppPublisher "Frank de Alcantara"
 #define AppURL "https://github.com/frankalcantara/Arestrix"
@@ -106,6 +110,8 @@ brazilianportuguese.ApiKeyName=Chave de API de provedor
 english.ApiKeyName=Provider API key
 brazilianportuguese.DownloadHint=Download:
 english.DownloadHint=Download:
+brazilianportuguese.SkillPolicyChanged=A política de validação de habilidades mudou desde a versão instalada. As habilidades importadas foram aprovadas com uma política antiga e precisam ser revalidadas no Studio. Ao abrir o Arestrix, siga o aviso de revalidação para auditar todas elas.
+english.SkillPolicyChanged=The skill validation policy changed since the installed version. Imported skills were approved under an older policy and must be revalidated in Studio. When Arestrix opens, follow the revalidation prompt to audit all of them.
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
@@ -309,6 +315,38 @@ begin
   NeedsAttention := not (GitOk and GitIdOk and GitHubOk and MsvcOk and ApiOk);
   Result := Report;
   Log('Preflight report:' + #13#10 + Report);
+end;
+
+function ReadTrimmedTextFile(const FileName: string): string;
+var
+  Contents: AnsiString;
+begin
+  if FileExists(FileName) and LoadStringFromFile(FileName, Contents) then
+    Result := Trim(Contents)
+  else
+    Result := '';
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  OldPolicy, NewPolicy: string;
+begin
+  if CurStep <> ssInstall then
+    Exit;
+
+  // UsePreviousAppDir keeps {app} on the existing installation, so this file
+  // describes the policy that approved the skills already on disk.
+  if not FileExists(ExpandConstant('{app}\arestrix.exe')) then
+    Exit;
+
+  OldPolicy := ReadTrimmedTextFile(ExpandConstant('{app}\skill-policy-version.txt'));
+  NewPolicy := '{#SkillPolicyVersion}';
+  if (OldPolicy = '') or (OldPolicy <> NewPolicy) then
+  begin
+    Log('Skill policy changed: installed=' + OldPolicy + ' new=' + NewPolicy);
+    if not WizardSilent then
+      MsgBox(CustomMessage('SkillPolicyChanged'), mbInformation, MB_OK);
+  end;
 end;
 
 function InitializeSetup(): Boolean;

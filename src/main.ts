@@ -20,6 +20,7 @@ import { NodeToolsModal } from './ui/modals/NodeToolsModal.ts';
 import { NodeMemoryModal } from './ui/modals/NodeMemoryModal.ts';
 import { NodeSkillsModal } from './ui/modals/NodeSkillsModal.ts';
 import { SkillEditorModal } from './ui/modals/SkillEditorModal.ts';
+import { SkillRevalidationModal } from './ui/modals/SkillRevalidationModal.ts';
 import { InteractionModal } from './ui/modals/InteractionModal.ts';
 import { ProjectManager } from './core/ProjectManager.ts';
 import { StatusBar } from './ui/StatusBar.ts';
@@ -100,6 +101,7 @@ function bootstrap() {
   const nodeMemoryModal = new NodeMemoryModal(graph);
   const nodeSkillsModal = new NodeSkillsModal(graph, globalEventBus);
   const skillEditorModal = new SkillEditorModal(graph);
+  const skillRevalidationModal = new SkillRevalidationModal(graph, globalEventBus);
   const interactionModal = new InteractionModal();
 
   // Dicionario de sinonimos da busca: gerado em segundo plano para cada idioma sem dicionario
@@ -119,6 +121,7 @@ function bootstrap() {
   globalEventBus.on('node:open-memory-modal', (nodeId: string) => nodeMemoryModal.open(nodeId));
   globalEventBus.on('node:open-skills-modal', (nodeId: string, initialTab?: any) => nodeSkillsModal.open(nodeId, initialTab));
   globalEventBus.on('node:open-skill-editor', (opts: any) => skillEditorModal.openSkill(opts));
+  globalEventBus.on('skills:revalidation-requested', () => { skillRevalidationModal.openIfNeeded(); });
   globalEventBus.on('pipeline:interaction', (request: any) => interactionModal.open(request));
   globalEventBus.on('pipeline:interaction-timeout', (requestId: string) => interactionModal.closeIf(requestId));
   globalEventBus.on('pipeline:interaction-closed', (data: any) => {
@@ -199,6 +202,10 @@ function bootstrap() {
     }
   };
   initializeApplicationState();
+
+  // O ledger de skills é global e não depende do projeto atual. Antecipe o
+  // aviso para que ele apareça mesmo quando a restauração do projeto demora.
+  setTimeout(() => { skillRevalidationModal.openIfNeeded(); }, 1200);
 
   // 9. Bridge de Telemetria de Agentes em Tempo Real (Fase 10)
   const onTelemetryHandler = (data: any) => {

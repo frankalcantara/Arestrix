@@ -1948,6 +1948,22 @@
     "opt_hermes_3_8b": "Hermes 3 (Llama 3.1 8B)",
     "opt_openhermes_25_7b": "OpenHermes 2.5 (Mistral 7B)"
   },
+  "skill_revalidation": {
+    "title": "Skill validation policy updated",
+    "subtitle": "Revalidation required after the policy change",
+    "intro_title": "The security policy has been updated.",
+    "intro": "The imported skills below were approved under an older policy. Revalidate all of them to use them in graphs again.",
+    "list_title": "Imported skills with an old policy ({{count}})",
+    "pending_badge": "PENDING",
+    "unresolved_badge": "NOT FOUND",
+    "result": "{{revalidated}} of {{total}} revalidated: {{approved}} approved, {{caution}} caution, {{rejected}} rejected, {{unresolved}} not found.",
+    "unresolved_hint": "Skills that were not found must be opened in their source project and audited in the editor.",
+    "btn_revalidate": "Revalidate all",
+    "btn_later": "Later",
+    "btn_close": "Close",
+    "running": "Revalidating skills...",
+    "empty": "No imported skill needs revalidation under this policy."
+  },
   "validator": {
     "orphan": "Isolated node \"{{label}}\" ({{id}}) has no connections.",
     "missing_branch": "Condition node \"{{label}}\" has disconnected branch \"{{name}}\".",
