@@ -25,6 +25,9 @@
 #include "platform/Process.hpp"
 #include "platform/StudioConsole.hpp"
 #include "rt/Tools.hpp"
+#include "rt/CreditAuditExecutor.hpp"
+#include "gateway/GatewayStore.hpp"
+#include "gateway/GatewayTypes.hpp"
 #include "mcp/McpClient.hpp"
 #include "native/NativeTools.hpp"
 #include "rt/McpTools.hpp"
@@ -569,6 +572,60 @@ std::string activeMemoryDb(const std::string& projectId) {
 }
 
 bool configureProjectMemory(const std::string& projectId, bool persistent) {
+    static const bool auditProbeRegistered = []() {
+        auto& memory = taskforge::memory::MemoryService::getInstance();
+        memory.setCreditAuditContainerProbe([]() {
+            return taskforge::sandbox::SandboxManager::instance().isAvailable(
+                taskforge::sandbox::IsolationType::Container);
+        });
+        memory.setCreditAuditExecutor([](const taskforge::memory::CreditAuditExecutionRequest& request) {
+            return taskforge::rt::runCreditAuditInContainers(request);
+        });
+        memory.setCreditAuditBudget([](const taskforge::Json& request) {
+            const char* db = std::getenv("ARESTRIX_GATEWAY_DB");
+            if (!db || !*db) {
+                return taskforge::Json{{"ok", true}, {"allowed", true},
+                                       {"mode", "local"}};
+            }
+            taskforge::gateway::GatewayStore store;
+            std::string error;
+            if (!store.open(db, error) || !store.initSchema(error)) {
+                return taskforge::Json{{"ok", false}, {"error", error}};
+            }
+            const std::string project = request.value("projectId", std::string());
+            const std::string keyId = "memory-audit:" + project;
+            const long long limit = request.value("maxTokensPerDay", 20000LL);
+            if (!store.setBudget("key", keyId, "daily", -1.0, limit, true, 0.8, error)) {
+                return taskforge::Json{{"ok", false}, {"error", error}};
+            }
+            taskforge::gateway::RequestContext context;
+            context.requestId = "memory-audit";
+            context.keyId = keyId;
+            context.project = project;
+            context.runner = "memory-audit";
+            if (request.value("reconcile", false)) {
+                taskforge::gateway::TokenUsage usage;
+                usage.input = request.value("actualTokens", 0LL);
+                if (!store.reconcile(context, usage, 0.0, 0.0,
+                                     request.value("estimatedTokens", 0LL), error)) {
+                    return taskforge::Json{{"ok", false}, {"error", error}};
+                }
+                return taskforge::Json{{"ok", true}, {"allowed", true},
+                                       {"mode", "gateway"}};
+            }
+            taskforge::gateway::BudgetDecision decision;
+            if (!store.checkAndReserve(context, 0.0,
+                                       request.value("estimatedTokens", 0LL),
+                                       decision, error)) {
+                return taskforge::Json{{"ok", false}, {"error", error}};
+            }
+            return taskforge::Json{{"ok", true}, {"allowed", decision.allowed},
+                                   {"reason", decision.reason},
+                                   {"mode", "gateway"}};
+        });
+        return true;
+    }();
+    (void)auditProbeRegistered;
     return taskforge::memory::MemoryService::getInstance().configure(
         projectId, persistent, activeMemoryDb(projectId));
 }

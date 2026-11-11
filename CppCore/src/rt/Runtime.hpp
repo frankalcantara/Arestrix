@@ -11,6 +11,7 @@
 
 #include <exception>
 #include <filesystem>
+#include <set>
 #include <string>
 
 namespace taskforge {
@@ -66,6 +67,10 @@ std::string runAgent(const std::string& nodeId, const std::string& label, const 
                      const std::string& runKey = "", const std::string& memoryContext = "",
                      const std::string& inputContext = "",
                      const std::string& deliveredMemoryJson = "");
+
+// Fase 4: remove dos blocos de prompt/historico os marcadores e ids de itens
+// entregues que foram removidos da memoria durante a execucao.
+void redactMemoryMarkers(std::string& text, const std::set<std::string>& ids);
 
 // Executa um vertice de interacao humana. No 2B1 o canal e o arquivo indicado por
 // ARESTRIX_INTERACTION_ANSWERS (CLI --answers); sem canal, falha fechado (ou usa

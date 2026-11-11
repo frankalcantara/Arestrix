@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <b>2.6.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentation</a>
+  <b>2.7.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentation</a>
 </p>
 
 <p align="center">
@@ -51,7 +51,7 @@ Download the ready-to-run **Windows x64** build from
 The CLI is installed with the Studio (`arestrix-cli.exe`). Compiling pipelines additionally requires
 the MSVC Build Tools ("Desktop development with C++"); the package does not bundle a compiler.
 Every build ships `SHA256SUMS`, `SBOM.json` and a per-file `package-manifest.json`. `latest` is a
-rolling pre-release built from `main`; version tags publish their own release.
+rolling pre-release built from `main`; version tags publish stable releases.
 
 ## What is Arestrix?
 
@@ -186,7 +186,7 @@ python scripts/e2e_examples.py
 
 ## Project status
 
-**Arestrix 2.6.0** is the current release (2026-11-02). The Studio runs on Windows and Linux;
+**Arestrix 2.7.0** is the current release (2026-11-10). The Studio runs on Windows and Linux;
 programs generated from a graph currently target Windows. APIs, file formats and command-line flags
 may still change between minor releases. See the [changelog](CHANGELOG.md) for the current
 limitations. The Windows installer and code signing are included; clean-machine validation, the

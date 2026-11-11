@@ -51,6 +51,73 @@ std::string isoNow() {
     return std::string(buffer);
 }
 
+std::string isoDaysFromNow(int days) {
+    const auto now = std::chrono::system_clock::now() +
+        std::chrono::hours(24 * std::max(0, days));
+    const std::time_t value = std::chrono::system_clock::to_time_t(now);
+    std::tm tm{};
+#ifdef _WIN32
+    gmtime_s(&tm, &value);
+#else
+    gmtime_r(&value, &tm);
+#endif
+    char buffer[32];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &tm);
+    return std::string(buffer);
+}
+
+std::string isoStartOfDay() {
+    const auto now = std::chrono::system_clock::to_time_t(
+        std::chrono::system_clock::now());
+    std::tm tm{};
+#ifdef _WIN32
+    gmtime_s(&tm, &now);
+#else
+    gmtime_r(&now, &tm);
+#endif
+    tm.tm_hour = 0;
+    tm.tm_min = 0;
+    tm.tm_sec = 0;
+#ifdef _WIN32
+    const std::time_t midnight = _mkgmtime(&tm);
+#else
+    const std::time_t midnight = timegm(&tm);
+#endif
+    std::tm utc{};
+#ifdef _WIN32
+    gmtime_s(&utc, &midnight);
+#else
+    gmtime_r(&midnight, &utc);
+#endif
+    char buffer[32];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &utc);
+    return std::string(buffer);
+}
+
+double stableUnitHash(const std::string& text) {
+    uint64_t hash = 1469598103934665603ULL;
+    for (unsigned char c : text) {
+        hash ^= c;
+        hash *= 1099511628211ULL;
+    }
+    return static_cast<double>(hash % 1000000ULL) / 1000000.0;
+}
+
+std::string isoDaysAgo(int days) {
+    const auto now = std::chrono::system_clock::now() -
+        std::chrono::hours(24 * std::max(0, days));
+    const std::time_t value = std::chrono::system_clock::to_time_t(now);
+    std::tm tm{};
+#ifdef _WIN32
+    gmtime_s(&tm, &value);
+#else
+    gmtime_r(&value, &tm);
+#endif
+    char buffer[32];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &tm);
+    return std::string(buffer);
+}
+
 std::string projectKey(const std::string& projectId) {
     return projectId.empty() ? "default" : projectId;
 }
@@ -350,6 +417,94 @@ taskforge::Json traversalConfigToJson(const TraversalConfig& config) {
         {"timeBudgetMs", config.options.timeBudgetMs},
         {"minScore", config.options.minScore},
         {"exact", config.options.exact}};
+}
+
+MemoryUtilityConfig utilityConfigFromJson(const taskforge::Json& value) {
+    MemoryUtilityConfig config;
+    if (!value.is_object()) return config;
+    const taskforge::Json utility = value.contains("utility") ? value["utility"]
+                                                              : taskforge::Json();
+    if (!utility.is_object()) return config;
+    const std::string source = utility.value("source", "edge");
+    if (source == "ledger") config.source = "ledger";
+    config.priorA = std::max(0.01, std::min(100.0,
+        utility.value("prior", taskforge::Json::object()).value("a", 1.0)));
+    config.priorB = std::max(0.01, std::min(100.0,
+        utility.value("prior", taskforge::Json::object()).value("b", 1.0)));
+    config.maxCreditPerOrigin = std::max(0.0, std::min(1000.0,
+        utility.value("maxCreditPerOrigin", 1.0)));
+    config.originWindowDays = static_cast<int>(std::max<long long>(
+        1, std::min<long long>(3650, utility.value("originWindowDays", 7))));
+    return config;
+}
+
+taskforge::Json utilityConfigToJson(const MemoryUtilityConfig& config) {
+    return taskforge::Json{
+        {"source", config.source},
+        {"prior", taskforge::Json{{"a", config.priorA}, {"b", config.priorB}}},
+        {"maxCreditPerOrigin", config.maxCreditPerOrigin},
+        {"originWindowDays", config.originWindowDays}};
+}
+
+MemoryCreditAuditConfig creditAuditConfigFromJson(const taskforge::Json& value) {
+    MemoryCreditAuditConfig config;
+    if (!value.is_object()) return config;
+    const taskforge::Json audit = value.contains("creditAudit")
+        ? value["creditAudit"] : taskforge::Json();
+    if (!audit.is_object()) return config;
+    config.enabled = audit.value("enabled", false);
+    config.sampleRate = std::max(0.0, std::min(1.0, audit.value("sampleRate", 0.1)));
+    config.minSuspectRejections = static_cast<int>(std::max<long long>(
+        0, std::min<long long>(1000, audit.value("minSuspectRejections", 3))));
+    config.repetitions = static_cast<int>(std::max<long long>(
+        1, std::min<long long>(10, audit.value("repetitions", 2))));
+    config.pairwiseTopM = static_cast<int>(std::max<long long>(
+        0, std::min<long long>(10, audit.value("pairwiseTopM", 3))));
+    config.maxAuditsPerDay = static_cast<int>(std::max<long long>(
+        0, std::min<long long>(1000, audit.value("maxAuditsPerDay", 20))));
+    config.maxTokensPerDay = std::max<long long>(
+        0, std::min<long long>(100000000, audit.value("maxTokensPerDay", 20000)));
+    config.validatorAuditRate = std::max(0.0, std::min(1.0,
+        audit.value("validatorAuditRate", 0.05)));
+    config.minValidatorAudits = static_cast<int>(std::max<long long>(
+        0, std::min<long long>(10000, audit.value("minValidatorAudits", 20))));
+    config.maxValidatorDivergence = std::max(0.0, std::min(1.0,
+        audit.value("maxValidatorDivergence", 0.10)));
+    config.snapshotRetentionDays = static_cast<int>(std::max<long long>(
+        1, std::min<long long>(3650, audit.value("snapshotRetentionDays", 14))));
+    config.maxSnapshotBytes = std::max<long long>(1024,
+        std::min<long long>(10LL * 1024 * 1024 * 1024,
+                            audit.value("maxSnapshotBytes", 50LL * 1024 * 1024)));
+    config.containerImage = audit.value("containerImage", std::string());
+    config.containerCommand = audit.value("containerCommand", std::string());
+    config.containerMemoryMB = static_cast<int>(std::max<long long>(
+        64, std::min<long long>(65536, audit.value("containerMemoryMB", 512))));
+    config.containerTimeoutSeconds = static_cast<int>(std::max<long long>(
+        1, std::min<long long>(86400, audit.value("containerTimeoutSeconds", 300))));
+    config.containerPidsLimit = static_cast<int>(std::max<long long>(
+        16, std::min<long long>(4096, audit.value("containerPidsLimit", 256))));
+    return config;
+}
+
+taskforge::Json creditAuditConfigToJson(const MemoryCreditAuditConfig& config) {
+    return taskforge::Json{
+        {"enabled", config.enabled},
+        {"sampleRate", config.sampleRate},
+        {"minSuspectRejections", config.minSuspectRejections},
+        {"repetitions", config.repetitions},
+        {"pairwiseTopM", config.pairwiseTopM},
+        {"maxAuditsPerDay", config.maxAuditsPerDay},
+        {"maxTokensPerDay", config.maxTokensPerDay},
+        {"validatorAuditRate", config.validatorAuditRate},
+        {"minValidatorAudits", config.minValidatorAudits},
+        {"maxValidatorDivergence", config.maxValidatorDivergence},
+        {"snapshotRetentionDays", config.snapshotRetentionDays},
+        {"maxSnapshotBytes", config.maxSnapshotBytes},
+        {"containerImage", config.containerImage},
+        {"containerCommand", config.containerCommand},
+        {"containerMemoryMB", config.containerMemoryMB},
+        {"containerTimeoutSeconds", config.containerTimeoutSeconds},
+        {"containerPidsLimit", config.containerPidsLimit}};
 }
 
 MemoryService::~MemoryService() {
@@ -1101,6 +1256,10 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
             addTraceCandidate(candidates, id, "fact", 0.0, 0.0, 0.0);
             delivered.insert(id);
         }
+        for (const auto& id : briefInfo.facetIds) {
+            addTraceCandidate(candidates, id, "facet", 0.0, 0.0, 0.0);
+            delivered.insert(id);
+        }
         if (!briefInfo.workingKeys.empty()) {
             const std::string stateId = "state:" + itemId;
             addTraceCandidate(candidates, stateId, "state", 0.0, 0.0, 0.0);
@@ -1125,6 +1284,12 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
     std::string cacheKey;
     appendKey(cacheKey, projectId);
     appendKey(cacheKey, std::to_string(s->knowledgeVersion()));
+    std::string cachePrefixKey = taskType.empty() ? "default" : taskType;
+    std::vector<std::string> cacheDomains = domains;
+    std::sort(cacheDomains.begin(), cacheDomains.end());
+    for (const auto& domain : cacheDomains) cachePrefixKey += "|" + domain;
+    appendKey(cacheKey, std::to_string(
+        s->latestPrefixEpoch(scopeId(projectId), cachePrefixKey)));
     appendKey(cacheKey, itemId);
     appendKey(cacheKey, taskType);
     appendKey(cacheKey, intent);
@@ -1222,6 +1387,32 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
             } else {
                 truncated = true;
             }
+        }
+    }
+
+    // Facetas ativas entram como conhecimento volatil quando as lentes estao
+    // ligadas; o id permite remover a linha inteira durante a execucao.
+    if (includeLessons && maintenanceConfig(projectId).lensesEnabled) {
+        std::string facetText;
+        std::vector<std::string> facetIds;
+        for (const auto& facet : s->listFacets(scopeId(projectId))) {
+            if (facet.status != "active" || facet.description.empty()) continue;
+            if (facetIds.size() >= 4) break;
+            const std::string line = "[FACET] [MEMO:" + facet.id + "] " +
+                oneLine(facet.description, 400) + "\n";
+            if (budget != std::string::npos &&
+                brief.size() + facetText.size() + line.size() + 80 > budget) {
+                truncated = true;
+                break;
+            }
+            facetText += line;
+            facetIds.push_back(facet.id);
+            addTraceCandidate(traceCandidates, facet.id, "facet", 0.0, 0.0, 0.0);
+        }
+        if (!facetText.empty()) {
+            const std::string header = "\n--- [ARESTRIX MEMORY: FACETAS] ---\n";
+            brief += header + facetText;
+            if (info) info->facetIds = facetIds;
         }
     }
 
@@ -1358,7 +1549,8 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
         traceQuery = query;
         std::vector<RankedMemory> ranked;
         taskforge::Json hybridCandidates = taskforge::Json::array();
-        if (!query.empty() && hybridRecall(projectId, query, 4, domains, ranked, &hybridCandidates)) {
+        if (!query.empty() && hybridRecall(projectId, query, 4, domains, ranked,
+                                          &hybridCandidates, {}, taskType)) {
             for (const auto& candidate : hybridCandidates) {
                 if (!candidate.is_object()) continue;
                 addTraceCandidate(traceCandidates,
@@ -1491,15 +1683,37 @@ std::string MemoryService::buildBrief(const std::string& projectId, const std::s
 std::string MemoryService::buildStablePrefix(const std::string& projectId,
                                              const std::vector<std::string>& domains,
                                              const std::string& taskType, size_t maxTokens,
-                                             MemoryBriefInfo* info) {
+                                             MemoryBriefInfo* info, bool lockedToEpoch) {
     auto* s = ensureStore(projectId);
     if (!s) return std::string();
     std::string prefixKey = taskType.empty() ? "default" : taskType;
     std::vector<std::string> sortedDomains = domains;
     std::sort(sortedDomains.begin(), sortedDomains.end());
     for (const auto& domain : sortedDomains) prefixKey += "|" + domain;
+    // Fase 4: dentro de uma epoca o prefixo e o conjunto publicado, nao as
+    // licoes vivas. Publicar a proxima epoca usa lockedToEpoch=false para
+    // capturar as adicoes que esperavam no bloco volatil.
+    std::set<std::string> epochIds;
+    bool hasEpoch = false;
+    if (lockedToEpoch && prefixEpochConfig(projectId).enabled) {
+        const auto epochs = s->listPrefixEpochs(scopeId(projectId), prefixKey, 1);
+        if (!epochs.empty()) {
+            hasEpoch = true;
+            const auto& items = epochs[0]["itemIds"];
+            if (items.is_array()) {
+                for (const auto& item : items) {
+                    if (item.is_string()) epochIds.insert(item.str());
+                }
+            }
+        }
+    }
     auto lessons = domains.empty() ? s->getLessons(scopeId(projectId))
                                    : s->getLessonsForDomains(scopeId(projectId), domains);
+    if (hasEpoch) {
+        lessons.erase(std::remove_if(lessons.begin(), lessons.end(),
+            [&](const MemoryLesson& lesson) { return epochIds.count(lesson.id) == 0; }),
+            lessons.end());
+    }
     std::sort(lessons.begin(), lessons.end(), [](const MemoryLesson& a, const MemoryLesson& b) {
         return a.id < b.id;
     });
@@ -1514,6 +1728,11 @@ std::string MemoryService::buildStablePrefix(const std::string& projectId,
         for (const auto& playbook : s->listPlaybooks(scopeId(projectId), type, "active", 20)) {
             if (seenPlaybooks.insert(playbook.id).second) playbooks.push_back(playbook);
         }
+    }
+    if (hasEpoch) {
+        playbooks.erase(std::remove_if(playbooks.begin(), playbooks.end(),
+            [&](const MemoryPlaybookRecord& playbook) { return epochIds.count(playbook.id) == 0; }),
+            playbooks.end());
     }
     std::sort(playbooks.begin(), playbooks.end(), [](const MemoryPlaybookRecord& a,
                                                      const MemoryPlaybookRecord& b) {
@@ -1572,18 +1791,99 @@ taskforge::Json MemoryService::publishPrefixEpoch(const std::string& projectId,
     auto* s = ensureStore(projectId);
     if (!s) return taskforge::Json{{"ok", false}, {"error", "memoria indisponivel"}};
     MemoryBriefInfo info;
-    buildStablePrefix(projectId, {}, "", 800, &info);
+    buildStablePrefix(projectId, {}, "", 800, &info, false);
     const std::string contentHash = project::RunnerSecurity::sha256(info.stableBlock);
     const std::string identity = project::RunnerSecurity::sha256(
         "prefix-v1|" + skillHash + "|" + promptTemplateHash + "|" + contentHash);
+    const auto latest = s->listPrefixEpochs(scopeId(projectId), prefixKey, 1);
+    if (!latest.empty() && latest[0].value("contentHash", std::string()) == contentHash) {
+        // Mudanca de skill ou de molde muda a identidade dos bytes, mas nao o
+        // conjunto publicado: a epoca continua a mesma e nenhum cache e pago.
+        return taskforge::Json{{"ok", true},
+                               {"created", false},
+                               {"epoch", latest[0].value("epoch", 0LL)},
+                               {"prefixKey", prefixKey},
+                               {"prefixIdentity", identity},
+                               {"contentHash", contentHash}};
+    }
     long long epoch = 0;
     taskforge::Json itemIds = taskforge::Json::array();
     for (const auto& id : info.stableIds) itemIds.push_back(id);
     if (!s->publishPrefixEpoch(scopeId(projectId), prefixKey, contentHash, itemIds.dump(), &epoch)) {
         return taskforge::Json{{"ok", false}, {"error", "falha ao publicar epoca"}};
     }
-    return taskforge::Json{{"ok", true}, {"epoch", epoch}, {"prefixKey", prefixKey},
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        prefixEpochLastPublish_[projectKey(projectId)] = std::chrono::steady_clock::now();
+    }
+    invalidateBriefCache();
+    return taskforge::Json{{"ok", true}, {"created", true}, {"epoch", epoch}, {"prefixKey", prefixKey},
                            {"prefixIdentity", identity}, {"contentHash", contentHash}};
+}
+
+taskforge::Json MemoryService::configurePrefixEpochs(const std::string& projectId,
+                                                     const taskforge::Json& raw) {
+    PrefixEpochConfig config;
+    if (raw.is_boolean()) {
+        config.enabled = raw.get<bool>();
+    } else if (raw.is_object()) {
+        config.enabled = raw.value("enabled", false);
+        config.cacheTtlSeconds = static_cast<int>(std::max<long long>(
+            0, std::min<long long>(86400, raw.value("cacheTtlSeconds", 300))));
+        config.maxPending = static_cast<int>(std::max<long long>(
+            1, std::min<long long>(1000, raw.value("maxPending", 5))));
+        config.minIntervalSeconds = static_cast<int>(std::max<long long>(
+            0, std::min<long long>(86400, raw.value("minIntervalSeconds", 60))));
+    }
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        prefixEpochs_[projectKey(projectId)] = config;
+    }
+    return taskforge::Json{{"enabled", config.enabled},
+                           {"cacheTtlSeconds", config.cacheTtlSeconds},
+                           {"maxPending", config.maxPending},
+                           {"minIntervalSeconds", config.minIntervalSeconds}};
+}
+
+PrefixEpochConfig MemoryService::prefixEpochConfig(const std::string& projectId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    auto it = prefixEpochs_.find(projectKey(projectId));
+    return it == prefixEpochs_.end() ? PrefixEpochConfig{} : it->second;
+}
+
+bool MemoryService::maybePublishPrefixEpoch(const std::string& projectId,
+                                            const std::string& prefixKey,
+                                            const std::string& skillHash,
+                                            const std::string& promptTemplateHash,
+                                            int pendingAdditions, bool removal) {
+    if (removal) {
+        return publishPrefixEpoch(projectId, prefixKey, skillHash, promptTemplateHash)
+            .value("created", false);
+    }
+    const PrefixEpochConfig config = prefixEpochConfig(projectId);
+    if (!config.enabled) return false;
+    // Primeira epoca: sem ela nao existe prefixo estavel publicado para
+    // cachear. A publicacao seguinte continua respeitando TTL/limiar.
+    if (prefixEpochs(projectId, prefixKey, 1).empty()) {
+        return publishPrefixEpoch(projectId, prefixKey, skillHash, promptTemplateHash)
+            .value("created", false);
+    }
+    const auto now = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point last{};
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        auto it = prefixEpochLastPublish_.find(projectKey(projectId));
+        if (it != prefixEpochLastPublish_.end()) last = it->second;
+    }
+    const long long elapsed = last.time_since_epoch().count() == 0
+        ? 0 : std::chrono::duration_cast<std::chrono::seconds>(now - last).count();
+    const bool idleDue = last.time_since_epoch().count() != 0 &&
+        elapsed >= config.cacheTtlSeconds;
+    const bool pendingDue = pendingAdditions >= config.maxPending &&
+        (last.time_since_epoch().count() == 0 || elapsed >= config.minIntervalSeconds);
+    if (!idleDue && !pendingDue) return false;
+    return publishPrefixEpoch(projectId, prefixKey, skillHash, promptTemplateHash)
+        .value("created", false);
 }
 
 void MemoryService::invalidateBriefCache() {
@@ -1723,6 +2023,7 @@ taskforge::Json MemoryService::forgetSource(const std::string& projectId,
     out["paths"] = MemoryPaths::reconcile(*s, scopeId(projectId), "source_forgotten");
     out["facets"] = MemoryFacets::rebuild(*s, scopeId(projectId),
                                           embeddingConfig(projectId), true);
+    out["prefixEpoch"] = publishPrefixEpoch(projectId, "default", "", "");
     invalidateBriefCache();
     if (!async) {
         out["drain"] = drainJobs(projectId, 100);
@@ -1894,6 +2195,9 @@ bool MemoryService::recordBriefHits(const std::string& projectId, const std::str
     }
     for (const auto& id : info.traversalIds) {
         ok = t->recordHit(scope, runId, nodeId, id, "fact", true, false) && ok;
+    }
+    for (const auto& id : info.facetIds) {
+        ok = t->recordHit(scope, runId, nodeId, id, "facet", true, false) && ok;
     }
     for (const auto& key : info.workingKeys) {
         ok = t->recordHit(scope, runId, nodeId, "working:" + key, "working", true, false) && ok;
@@ -2236,6 +2540,7 @@ bool MemoryService::promoteProposal(const std::string& projectId, const std::str
     if (promoted) {
         invalidateBriefCache();
         MemoryPaths::reconcile(*s, scopeId(projectId), "claim_state_changed");
+        publishPrefixEpoch(projectId, "default", "", "");
     }
     return promoted;
 }
@@ -2322,8 +2627,65 @@ std::string MemoryService::searchContext(const std::string& projectId, const std
         }
     }
 
-    if (hybridSearch(projectId, text, limit, domains, hits, hybrid, &stepCandidates, lenses)) {
+    auto* utilityTelemetry = utilityConfig(projectId).source == "ledger"
+        ? ensureTelemetry(projectId) : nullptr;
+    if (hybridSearch(projectId, text, limit, domains, hits, hybrid, &stepCandidates,
+                     lenses, taskType)) {
         result = std::move(hybrid);
+    } else if (utilityTelemetry) {
+        // Ranqueamento lexical puro com a utilidade do livro. O caminho `edge`
+        // continua usando o formatador historico.
+        auto lexical = s->lexicalCandidates(scopeId(projectId), text,
+                                            std::max<size_t>(limit * 4, 20), domains);
+        if (!lenses.empty()) {
+            const auto allowedEdges = s->edgeIdsForLenses(scopeId(projectId), lenses);
+            const std::set<std::string> allowed(allowedEdges.begin(), allowedEdges.end());
+            lexical.erase(std::remove_if(lexical.begin(), lexical.end(),
+                [&](const MemorySearchCandidate& candidate) {
+                    return candidate.kind == "fact" && allowed.count(candidate.id) == 0;
+                }), lexical.end());
+        }
+        struct WeightedCandidate {
+            MemorySearchCandidate candidate;
+            double score = 0.0;
+        };
+        std::vector<WeightedCandidate> weighted;
+        std::set<std::string> seen;
+        const std::string lookupTask = taskType.empty() ? "*" : taskType;
+        for (size_t i = 0; i < lexical.size(); ++i) {
+            const std::string key = lexical[i].kind + "|" + lexical[i].id;
+            if (!seen.insert(key).second) continue;
+            const std::string itemKey = itemKeyFor(
+                scopeId(projectId), lexical[i].kind, lexical[i].id, s);
+            const double utility = utilityTelemetry->utilityFor(
+                scopeId(projectId), itemKey, lookupTask).value("utility", 0.5);
+            const double base = 1.0 / (60.0 + static_cast<double>(i + 1));
+            weighted.push_back(WeightedCandidate{lexical[i], base * (0.5 + utility)});
+        }
+        std::sort(weighted.begin(), weighted.end(),
+            [](const WeightedCandidate& a, const WeightedCandidate& b) {
+                if (a.score != b.score) return a.score > b.score;
+                return a.candidate.confidence > b.candidate.confidence;
+            });
+        std::map<std::string, TraceCandidateData> candidates;
+        std::string ledgerResult;
+        size_t emitted = 0;
+        for (const auto& entry : weighted) {
+            if (emitted >= limit) break;
+            const auto& candidate = entry.candidate;
+            const std::string label = candidate.kind == "lesson" ? "LICAO"
+                : candidate.kind == "playbook" ? "PLAYBOOK" : "FATO";
+            ledgerResult += "[" + label + "] [MEMO:" + candidate.id + "] " +
+                candidate.text + "\n";
+            if (hits) hits->push_back(MemoryHitRef{candidate.id, candidate.kind});
+            addTraceCandidate(candidates, candidate.id, candidate.kind,
+                              0.0, 0.0, entry.score);
+            ++emitted;
+        }
+        if (!ledgerResult.empty()) {
+            result = "\n--- [ARESTRIX MEMORIA: BUSCA LEXICAL] ---\n" + ledgerResult;
+        }
+        stepCandidates = traceCandidatesToJson(candidates, {});
     } else {
         result = s->searchContext(scopeId(projectId), text, limit, domains, hits, lenses);
         std::map<std::string, TraceCandidateData> candidates;
@@ -2696,6 +3058,34 @@ TraversalConfig MemoryService::traversalConfig(const std::string& projectId) con
     return it == traversal_.end() ? TraversalConfig{} : it->second;
 }
 
+bool MemoryService::configureUtility(const std::string& projectId,
+                                     const taskforge::Json& raw) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    utility_[projectKey(projectId)] = utilityConfigFromJson(raw);
+    invalidateBriefCache();
+    return true;
+}
+
+MemoryUtilityConfig MemoryService::utilityConfig(const std::string& projectId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    auto it = utility_.find(projectKey(projectId));
+    return it == utility_.end() ? MemoryUtilityConfig{} : it->second;
+}
+
+bool MemoryService::configureCreditAudit(const std::string& projectId,
+                                         const taskforge::Json& raw) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    creditAudit_[projectKey(projectId)] = creditAuditConfigFromJson(raw);
+    return true;
+}
+
+MemoryCreditAuditConfig MemoryService::creditAuditConfig(
+    const std::string& projectId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    auto it = creditAudit_.find(projectKey(projectId));
+    return it == creditAudit_.end() ? MemoryCreditAuditConfig{} : it->second;
+}
+
 taskforge::Json MemoryService::searchGraph(const std::string& projectId,
                                            const std::string& text, size_t limit,
                                            const std::string& taskType,
@@ -2997,11 +3387,28 @@ taskforge::Json MemoryService::listPlaybooks(const std::string& projectId,
     return out;
 }
 
+std::string MemoryService::itemKeyFor(const std::string& scope, const std::string& kind,
+                                      const std::string& id, MemoryStore* store) {
+    if (kind == "lesson") return "lesson:" + id;
+    if (kind == "playbook") return "playbook:" + id;
+    if (kind == "path") return "path:" + id;
+    if (kind == "passage") return "psg:" + id;
+    if (kind == "facet") return "facet:" + id;
+    if (store && !store->isReadOnly()) {
+        MemoryEdgeRecord edge;
+        if (store->getEdge(scope, id, edge) && !edge.claimKey.empty()) {
+            return edge.claimKey;
+        }
+    }
+    return "edge:" + id;
+}
+
 bool MemoryService::hybridRecall(const std::string& projectId, const std::string& text,
                                  size_t limit, const std::vector<std::string>& domains,
                                  std::vector<RankedMemory>& output,
                                  taskforge::Json* traceCandidates,
-                                 const std::vector<std::string>& lenses) {
+                                 const std::vector<std::string>& lenses,
+                                 const std::string& taskType) {
     if (text.empty()) return false;
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     auto* s = ensureStore(projectId);
@@ -3046,6 +3453,21 @@ bool MemoryService::hybridRecall(const std::string& projectId, const std::string
             return memory.kind == "fact" && allowed.count(memory.id) == 0;
         }), output.end());
     }
+    if (utilityConfig(projectId).source == "ledger") {
+        if (auto* telemetry = ensureTelemetry(projectId)) {
+            const std::string scope = scopeId(projectId);
+            const std::string lookupTask = taskType.empty() ? "*" : taskType;
+            for (auto& memory : output) {
+                const std::string itemKey = itemKeyFor(scope, memory.kind, memory.id, s);
+                const auto utility = telemetry->utilityFor(scope, itemKey, lookupTask);
+                memory.score *= 0.5 + utility.value("utility", 0.5);
+            }
+            std::sort(output.begin(), output.end(), [](const RankedMemory& a, const RankedMemory& b) {
+                if (a.score != b.score) return a.score > b.score;
+                return a.confidence > b.confidence;
+            });
+        }
+    }
     if (traceCandidates) {
         std::map<std::string, TraceCandidateData> traceMap;
         for (size_t i = 0; i < lexical.size(); ++i) {
@@ -3068,9 +3490,11 @@ bool MemoryService::hybridSearch(const std::string& projectId, const std::string
                                  size_t limit, const std::vector<std::string>& domains,
                                  std::vector<MemoryHitRef>* hits, std::string& output,
                                  taskforge::Json* traceCandidates,
-                                 const std::vector<std::string>& lenses) {
+                                 const std::vector<std::string>& lenses,
+                                 const std::string& taskType) {
     std::vector<RankedMemory> ranked;
-    if (!hybridRecall(projectId, text, limit, domains, ranked, traceCandidates, lenses)) return false;
+    if (!hybridRecall(projectId, text, limit, domains, ranked, traceCandidates, lenses, taskType))
+        return false;
     output = formatRanked(ranked, limit, hits);
     return true;
 }
@@ -3086,7 +3510,12 @@ bool MemoryService::invalidateEdge(const std::string& projectId, const std::stri
                                    const std::string& validTo, const std::string& reason,
                                    const std::string& actor) {
     auto* s = ensureStore(projectId);
-    return s && s->invalidateEdge(edgeId, validTo, reason, actor);
+    const bool ok = s && s->invalidateEdge(edgeId, validTo, reason, actor);
+    if (ok) {
+        invalidateBriefCache();
+        publishPrefixEpoch(projectId, "default", "", "");
+    }
+    return ok;
 }
 
 bool MemoryService::recordUsage(const MemoryUsageRecord& usage) {
@@ -3114,6 +3543,7 @@ std::string MemoryService::recordValidation(const std::string& projectId,
                                             bool reinforce) {
     auto* t = ensureTelemetry(projectId);
     if (!t) return "";
+    drainCreditOutbox(projectId);
     MemoryValidationRecord copy = validation;
     if (copy.scopeId.empty()) copy.scopeId = scopeId(projectId);
     const std::string scope = scopeId(projectId);
@@ -3130,6 +3560,66 @@ std::string MemoryService::recordValidation(const std::string& projectId,
     }
 
     const std::string id = t->recordValidation(copy);
+    // Fase 5: credito fracionario no livro da telemetria. A citacao continua
+    // sendo [MEMO:<id da aresta>]; o evento guarda o item_key resolvido.
+    if (!id.empty() && !copy.runId.empty() && !copy.nodeId.empty()) {
+        std::string taskType;
+        if (!copy.episodeId.empty()) {
+            const taskforge::Json episode = t->getEpisode(scope, copy.episodeId);
+            taskType = episode.value("taskType", std::string());
+        }
+        const auto hits = t->listHits(scope, copy.runId, copy.nodeId);
+        std::set<std::string> citedKeys;
+        std::set<std::string> deliveredKeys;
+        auto* knowledge = existingStore(projectId);
+        for (const auto& hit : hits) {
+            const std::string key = itemKeyFor(scope, hit.kind, hit.memoryId, knowledge);
+            if (hit.injected || hit.consulted) deliveredKeys.insert(key);
+            if (hit.used) citedKeys.insert(key);
+        }
+        const auto& keys = citedKeys.empty() ? deliveredKeys : citedKeys;
+        if (!keys.empty()) {
+            double validatorFactor = 1.0;
+            if (!copy.validatorId.empty()) {
+                validatorFactor = t->validatorAuditStats(scope, copy.validatorId)
+                    .value("weight", 1.0);
+            }
+            const double delta = validatorFactor /
+                static_cast<double>(keys.size());
+            const auto utility = utilityConfig(projectId);
+            const std::string since = isoDaysAgo(utility.originWindowDays);
+            const std::string lookupTask = taskType.empty() ? "*" : taskType;
+            const std::string traceId = t->getTrace(scope, copy.runId, copy.nodeId)
+                .value("traceId", copy.runId);
+            std::vector<MemoryCreditEvent> events;
+            events.reserve(keys.size());
+            for (const auto& key : keys) {
+                MemoryCreditEvent event;
+                event.traceId = traceId;
+                event.itemKey = key;
+                event.taskType = lookupTask;
+                event.kind = citedKeys.empty() ? "presence_low_res" : "citation";
+                event.origin = copy.runId;
+                double effective = delta;
+                if (utility.maxCreditPerOrigin > 0.0) {
+                    const double used = t->creditTotalForOrigin(
+                        scope, key, lookupTask, copy.runId, since);
+                    const double remaining = std::max(0.0,
+                        utility.maxCreditPerOrigin - used);
+                    if (effective > remaining) {
+                        effective = remaining;
+                        event.capped = true;
+                    }
+                }
+                if (copy.ok) event.deltaSuccess = effective;
+                else event.deltaFailure = effective;
+                events.push_back(std::move(event));
+            }
+            if (!t->recordCreditEvents(scope, events)) {
+                appendCreditOutbox(projectId, events);
+            }
+        }
+    }
     // E1: com o interruptor ligado, o veredito e o unico caminho de reforco.
     if (reinforce && !id.empty() && !copy.runId.empty() && !copy.nodeId.empty()) {
         if (auto* knowledge = existingStore(projectId); knowledge && !knowledge->isReadOnly()) {
@@ -3148,7 +3638,17 @@ std::string MemoryService::recordValidation(const std::string& projectId,
         if (auto* knowledge = existingStore(projectId); knowledge && !knowledge->isReadOnly()) {
             const taskforge::Json episode = t->getEpisode(scope, copy.episodeId);
             const std::string taskType = episode.value("taskType", std::string());
-            if (copy.ok) {
+            const auto auditConfig = creditAuditConfig(projectId);
+            bool validatorSuspended = false;
+            bool validatorBootstrap = false;
+            if (auditConfig.enabled && !copy.validatorId.empty()) {
+                const auto stats = t->validatorAuditStats(scope, copy.validatorId);
+                const long long audits = stats.value("audits", 0LL);
+                validatorBootstrap = audits < auditConfig.minValidatorAudits;
+                validatorSuspended = stats.value("divergence", 0.0) >
+                    auditConfig.maxValidatorDivergence;
+            }
+            if (copy.ok && !validatorBootstrap && !validatorSuspended) {
                 const auto samples = t->validationGateSamples(scope, taskType, 20);
                 std::string promotedId;
                 std::string reason;
@@ -3156,7 +3656,9 @@ std::string MemoryService::recordValidation(const std::string& projectId,
                                                copy.validatorId, copy.validatorVersion,
                                                samples, promotedId, reason);
             }
-            const auto outcomes = t->validationOutcomes(scope, taskType, 10);
+            const auto outcomes = auditConfig.enabled
+                ? t->validationOutcomesAdjusted(scope, taskType, 10)
+                : t->validationOutcomes(scope, taskType, 10);
             std::string demoteReason;
             knowledge->autoDemotePlaybooks(scope, taskType, outcomes, demoteReason);
             invalidateBriefCache();
@@ -3171,6 +3673,872 @@ std::vector<MemoryValidationRecord> MemoryService::listValidations(const std::st
     auto* t = ensureTelemetry(projectId);
     return t ? t->listValidations(scopeId(projectId), episodeId, limit)
              : std::vector<MemoryValidationRecord>();
+}
+
+taskforge::Json MemoryService::seedLegacyCredit(const std::string& projectId) {
+    auto* s = ensureStore(projectId);
+    auto* t = ensureTelemetry(projectId);
+    if (!s || !t) return taskforge::Json{{"ok", false}, {"error", "memoria indisponivel"}};
+    if (t->getMeta("legacy_credit_seed") == "1") {
+        return taskforge::Json{{"ok", true}, {"alreadySeeded", true}, {"events", 0LL}};
+    }
+    const std::string scope = scopeId(projectId);
+    std::map<std::string, std::pair<double, double>> totals;
+    for (const auto& edge : s->listEdges(scope, "", 20000)) {
+        if (edge.successCount == 0 && edge.failureCount == 0) continue;
+        const std::string key = edge.claimKey.empty() ? "edge:" + edge.id : edge.claimKey;
+        auto& total = totals[key];
+        total.first += static_cast<double>(edge.successCount);
+        total.second += static_cast<double>(edge.failureCount);
+    }
+    for (const auto& playbook : s->listPlaybooks(scope, "", "", 20000)) {
+        if (playbook.successCount == 0 && playbook.failureCount == 0) continue;
+        auto& total = totals["playbook:" + playbook.id];
+        total.first += static_cast<double>(playbook.successCount);
+        total.second += static_cast<double>(playbook.failureCount);
+    }
+    std::vector<MemoryCreditEvent> events;
+    events.reserve(totals.size());
+    for (const auto& [key, total] : totals) {
+        MemoryCreditEvent event;
+        event.traceId = "legacy:" + key;
+        event.itemKey = key;
+        event.taskType = "*";
+        event.kind = "legacy_seed";
+        event.origin = "legacy";
+        event.deltaSuccess = total.first;
+        event.deltaFailure = total.second;
+        events.push_back(std::move(event));
+    }
+    if (!t->recordCreditEvents(scope, events)) {
+        return taskforge::Json{{"ok", false}, {"error", t->lastError()}};
+    }
+    t->setMeta("legacy_credit_seed", "1");
+    return taskforge::Json{{"ok", true}, {"alreadySeeded", false},
+                           {"events", static_cast<long long>(events.size())}};
+}
+
+taskforge::Json MemoryService::rebuildUtility(const std::string& projectId) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    const std::string scope = scopeId(projectId);
+    if (!t->rebuildItemUtility(scope)) {
+        return taskforge::Json{{"ok", false}, {"error", t->lastError()}};
+    }
+    return taskforge::Json{{"ok", true}, {"summary", t->creditSummary(scope)}};
+}
+
+taskforge::Json MemoryService::rekeyCreditItems(const std::string& projectId) {
+    auto* s = ensureStore(projectId);
+    auto* t = ensureTelemetry(projectId);
+    if (!s || !t) return taskforge::Json{{"ok", false}, {"error", "memoria indisponivel"}};
+    const std::string scope = scopeId(projectId);
+    size_t moved = 0;
+    size_t edges = 0;
+    for (const auto& edge : s->listEdges(scope, "", 20000)) {
+        if (edge.claimKey.empty()) continue;
+        const std::string from = "edge:" + edge.id;
+        if (from == edge.claimKey) continue;
+        const size_t count = t->rekeyCreditItem(scope, from, edge.claimKey);
+        if (count > 0) {
+            moved += count;
+            ++edges;
+        }
+    }
+    return taskforge::Json{{"ok", true}, {"moved", static_cast<long long>(moved)},
+                           {"edges", static_cast<long long>(edges)},
+                           {"summary", t->creditSummary(scope)}};
+}
+
+taskforge::Json MemoryService::creditSummary(const std::string& projectId) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    return taskforge::Json{{"ok", true}, {"summary", t->creditSummary(scopeId(projectId))}};
+}
+
+void MemoryService::setCreditAuditExecutor(CreditAuditExecutorFn executor) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    creditAuditExecutor_ = std::move(executor);
+}
+
+bool MemoryService::hasCreditAuditExecutor() const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    return static_cast<bool>(creditAuditExecutor_);
+}
+
+void MemoryService::setCreditAuditContainerProbe(std::function<bool()> probe) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    creditAuditContainerProbe_ = std::move(probe);
+}
+
+void MemoryService::setCreditAuditBudget(CreditAuditBudgetFn budget) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    creditAuditBudget_ = std::move(budget);
+}
+
+taskforge::Json MemoryService::auditCredit(const std::string& projectId,
+                                           const taskforge::Json& options) {
+    CreditAuditExecutorFn executor;
+    std::function<bool()> containerProbe;
+    CreditAuditBudgetFn budgetHook;
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        executor = creditAuditExecutor_;
+        containerProbe = creditAuditContainerProbe_;
+        budgetHook = creditAuditBudget_;
+    }
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    const auto config = creditAuditConfig(projectId);
+    taskforge::Json out{{"ok", true}, {"enabled", config.enabled},
+                        {"selected", 0LL}, {"applied", 0LL},
+                        {"notAuditable", 0LL}, {"sampledOut", 0LL},
+                        {"budgetExhausted", 0LL}, {"candidates", taskforge::Json::array()},
+                        {"audits", taskforge::Json::array()}};
+    if (!config.enabled) {
+        out["reason"] = "disabled";
+        return out;
+    }
+    const bool containerAvailable = !containerProbe || containerProbe();
+    out["containerAvailable"] = containerAvailable;
+    const std::string scope = scopeId(projectId);
+    const bool dryRun = options.value("dryRun", false);
+    const int limit = std::max(0, std::min(1000,
+        options.value("limit", config.maxAuditsPerDay)));
+    const std::string dayStart = isoStartOfDay();
+    const auto usage = t->creditAuditUsage(scope, dayStart);
+    long long auditsToday = usage.value("audits", 0LL);
+    long long tokensToday = usage.value("tokens", 0LL);
+    const auto validations = t->listValidations(scope, "", 500);
+
+    // Primeira passagem: itens entregues, nao citados e recorrentes em falhas.
+    std::map<std::string, int> suspectCounts;
+    for (const auto& validation : validations) {
+        if (validation.ok || validation.runId.empty() || validation.nodeId.empty()) continue;
+        const auto hits = t->listHits(scope, validation.runId, validation.nodeId);
+        for (const auto& hit : hits) {
+            if (!(hit.injected || hit.consulted) || hit.used) continue;
+            const std::string key = itemKeyFor(
+                scope, hit.kind, hit.memoryId, existingStore(projectId));
+            if (!key.empty()) ++suspectCounts[key];
+        }
+    }
+
+    struct Candidate {
+        MemoryValidationRecord validation;
+        std::string traceId;
+        std::string taskType;
+        std::string reason;
+        std::vector<std::string> delivered;
+        std::vector<std::string> cited;
+        std::vector<std::string> suspects;
+    };
+    std::vector<Candidate> candidates;
+    int sampledOut = 0;
+    for (const auto& validation : validations) {
+        if (validation.ok || validation.runId.empty() || validation.nodeId.empty()) continue;
+        const auto trace = t->getTrace(scope, validation.runId, validation.nodeId);
+        const std::string traceId = trace.value("traceId", validation.runId);
+        if (traceId.empty()) continue;
+        if (!t->getCreditAudit(scope, traceId).empty()) continue;
+        auto episode = t->getEpisode(scope, validation.episodeId);
+        Candidate candidate;
+        candidate.validation = validation;
+        candidate.traceId = traceId;
+        candidate.taskType = trace.value("taskType", episode.value("taskType", std::string()));
+        const auto hits = t->listHits(scope, validation.runId, validation.nodeId);
+        std::set<std::string> delivered;
+        std::set<std::string> cited;
+        std::set<std::string> suspects;
+        for (const auto& hit : hits) {
+            const std::string key = itemKeyFor(
+                scope, hit.kind, hit.memoryId, existingStore(projectId));
+            if (key.empty()) continue;
+            if (hit.injected || hit.consulted) delivered.insert(key);
+            if (hit.used) cited.insert(key);
+            if ((hit.injected || hit.consulted) && !hit.used) {
+                const auto it = suspectCounts.find(key);
+                if (it != suspectCounts.end() &&
+                    it->second >= config.minSuspectRejections) {
+                    suspects.insert(key);
+                }
+            }
+        }
+        candidate.delivered.assign(delivered.begin(), delivered.end());
+        candidate.cited.assign(cited.begin(), cited.end());
+        candidate.suspects.assign(suspects.begin(), suspects.end());
+        if (candidate.delivered.empty()) continue;
+
+        if (!containerAvailable) {
+            candidate.reason = "no_container";
+        } else {
+            const std::string episodeTools = episode.value(
+                "toolCalls", taskforge::Json::array()).dump();
+            if (options.value("externalEffects", false) ||
+                trace.value("externalEffects", false) || trace.value("usedMcp", false) ||
+                episodeTools.find("\"mcp") != std::string::npos ||
+                episodeTools.find("call_agent") != std::string::npos) {
+                candidate.reason = "external_effects";
+            }
+            if (candidate.reason.empty() && !validation.validatorId.empty()) {
+                const auto stats = t->validatorAuditStats(scope, validation.validatorId);
+                if (stats.value("audits", 0LL) >= config.minValidatorAudits &&
+                    stats.value("divergence", 0.0) > config.maxValidatorDivergence) {
+                    candidate.reason = "validator_suspended";
+                }
+            }
+            const auto snapshot = t->getTaskSnapshot(scope, traceId);
+            if (candidate.reason.empty() && snapshot.empty()) {
+                candidate.reason = "no_snapshot";
+            } else if (candidate.reason.empty() &&
+                       snapshot.value("expiresAt", std::string()) < isoNow()) {
+                candidate.reason = "snapshot_expired";
+            } else if (candidate.reason.empty() &&
+                       snapshot.value("input", taskforge::Json::object()).dump().find("[MEMO:") !=
+                           std::string::npos) {
+                candidate.reason = "package_in_input";
+            }
+        }
+
+        const bool suspect = !candidate.suspects.empty();
+        const bool sampled = stableUnitHash(traceId) < config.sampleRate;
+        if (!suspect && !sampled) {
+            ++sampledOut;
+            continue;
+        }
+        candidates.push_back(std::move(candidate));
+    }
+
+    int selected = 0;
+    int processed = 0;
+    int notAuditable = 0;
+    int budgetExhausted = 0;
+    int applied = 0;
+    auto recordStatus = [&](const std::string& traceId, const std::string& status,
+                            const std::string& reason, long long tokens) {
+        MemoryCreditAuditRecord record;
+        record.id = "credit-audit:" + traceId;
+        record.scopeId = scope;
+        record.traceId = traceId;
+        record.status = status;
+        record.reason = reason;
+        record.tokens = tokens;
+        record.armsJson = "[]";
+        return t->saveCreditAudit(record);
+    };
+    for (auto& candidate : candidates) {
+        if (processed >= limit) break;
+        ++processed;
+        if (dryRun) {
+            out["candidates"].push_back(taskforge::Json{
+                {"traceId", candidate.traceId},
+                {"taskType", candidate.taskType},
+                {"delivered", candidate.delivered.size()},
+                {"cited", candidate.cited.size()},
+                {"suspects", candidate.suspects.size()},
+                {"reason", candidate.reason}});
+            ++selected;
+            continue;
+        }
+        if (!candidate.reason.empty()) {
+            if (recordStatus(candidate.traceId, "not_auditable", candidate.reason, 0)) {
+                ++notAuditable;
+            }
+            continue;
+        }
+        if (auditsToday >= config.maxAuditsPerDay ||
+            tokensToday >= config.maxTokensPerDay ||
+            !executor) {
+            const std::string reason = !executor
+                ? "no_executor" : "budget_exhausted";
+            recordStatus(candidate.traceId, "budget_exhausted", reason,
+                         tokensToday >= config.maxTokensPerDay ? tokensToday : 0);
+            ++budgetExhausted;
+            break;
+        }
+        const long long estimatedTokens = std::max<long long>(
+            1, config.maxTokensPerDay / std::max(1, config.maxAuditsPerDay));
+        if (budgetHook) {
+            const auto budget = budgetHook(taskforge::Json{
+                {"projectId", projectId},
+                {"maxTokensPerDay", config.maxTokensPerDay},
+                {"estimatedTokens", estimatedTokens},
+                {"actualTokens", 0LL},
+                {"reconcile", false}});
+            if (!budget.value("ok", false) || !budget.value("allowed", true)) {
+                recordStatus(candidate.traceId, "budget_exhausted",
+                             "gateway_budget", 0);
+                ++budgetExhausted;
+                break;
+            }
+        }
+        const auto trace = t->getTrace(scope, candidate.validation.runId,
+                                       candidate.validation.nodeId);
+        const auto snapshot = t->getTaskSnapshot(scope, candidate.traceId);
+        CreditAuditExecutionRequest request;
+        request.projectId = projectId;
+        request.scopeId = scope;
+        request.traceId = candidate.traceId;
+        request.taskType = candidate.taskType;
+        request.nodeId = candidate.validation.nodeId;
+        request.validator = candidate.validation.validatorId;
+        request.inputHash = trace.value("inputHash",
+            snapshot.value("inputHash", std::string()));
+        request.containerCommand = config.containerCommand;
+        request.snapshot = snapshot;
+        request.trace = trace;
+        request.containerPlan = creditAuditContainerPlan(projectId, taskforge::Json{
+            {"workspaceRef", snapshot.value("workspaceRef", std::string())}});
+        request.delivered = candidate.delivered;
+        request.cited = candidate.cited;
+        request.suspectItems = candidate.suspects;
+        request.repetitions = config.repetitions;
+        request.pairwiseTopM = config.pairwiseTopM;
+        const auto result = executor(request);
+        if (budgetHook) {
+            budgetHook(taskforge::Json{
+                {"projectId", projectId},
+                {"maxTokensPerDay", config.maxTokensPerDay},
+                {"estimatedTokens", estimatedTokens},
+                {"actualTokens", result.tokens},
+                {"reconcile", true}});
+        }
+        if (!result.ok) {
+            recordStatus(candidate.traceId, "inconclusive", "executor_error",
+                         result.tokens);
+            continue;
+        }
+        if (tokensToday + result.tokens > config.maxTokensPerDay) {
+            recordStatus(candidate.traceId, "budget_exhausted", "max_tokens", result.tokens);
+            ++budgetExhausted;
+            break;
+        }
+        taskforge::Json auditRequest{
+            {"traceId", candidate.traceId},
+            {"taskType", candidate.taskType},
+            {"validator", candidate.validation.validatorId},
+            {"delivered", candidate.delivered},
+            {"cited", candidate.cited},
+            {"arms", result.arms},
+            {"tokens", result.tokens},
+            {"snapshotRef", "snapshot:" + candidate.traceId},
+            {"inputHash", request.inputHash}};
+        const auto audit = runCreditAudit(projectId, auditRequest);
+        if (!audit.value("ok", false)) continue;
+        ++selected;
+        ++auditsToday;
+        tokensToday += result.tokens;
+        out["audits"].push_back(audit);
+        if (audit.value("status", std::string()) == "applied") ++applied;
+    }
+    out["selected"] = selected;
+    out["sampledOut"] = sampledOut;
+    out["notAuditable"] = notAuditable;
+    out["budgetExhausted"] = budgetExhausted;
+    out["applied"] = applied;
+    out["usage"] = taskforge::Json{{"audits", auditsToday}, {"tokens", tokensToday}};
+    return out;
+}
+
+taskforge::Json MemoryService::runCreditAudit(const std::string& projectId,
+                                              const taskforge::Json& request) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    const std::string scope = scopeId(projectId);
+    const std::string traceId = request.value("traceId", std::string());
+    if (traceId.empty()) {
+        return taskforge::Json{{"ok", false}, {"error", "traceId ausente"}};
+    }
+    const std::string auditId = "credit-audit:" + traceId;
+    const std::string taskType = request.value("taskType", std::string());
+    const std::string validator = request.value("validator", std::string());
+    const double weight = std::max(0.0, std::min(10.0,
+        request.value("weight", validator.empty() ? 1.0 : validatorWeight(projectId, validator))));
+    const int repetitions = std::max(1, request.value("repetitions", 1));
+
+    std::vector<std::string> delivered;
+    std::vector<std::string> cited;
+    if (request.contains("delivered") && request["delivered"].is_array()) {
+        for (const auto& item : request["delivered"]) {
+            if (item.is_string()) delivered.push_back(item.get<std::string>());
+        }
+    }
+    if (request.contains("cited") && request["cited"].is_array()) {
+        for (const auto& item : request["cited"]) {
+            if (item.is_string()) cited.push_back(item.get<std::string>());
+        }
+    }
+
+    bool baselinePresent = false;
+    bool baselineOk = false;
+    bool noMemoryPresent = false;
+    bool noMemoryOk = false;
+    bool infraFailure = false;
+    std::map<std::string, int> itemApprovals;
+    std::map<std::string, std::vector<std::string>> itemSets;
+    std::map<std::string, int> setApprovals;
+    taskforge::Json arms = taskforge::Json::array();
+    if (request.contains("arms") && request["arms"].is_array()) {
+        arms = request["arms"];
+        for (const auto& arm : request["arms"]) {
+            if (!arm.is_object()) continue;
+            const std::string kind = arm.value("kind", std::string());
+            if (arm.value("infra", false)) infraFailure = true;
+            const bool ok = arm.value("ok", false);
+            if (kind == "baseline") {
+                baselinePresent = true;
+                baselineOk = ok;
+            } else if (kind == "no_memory") {
+                noMemoryPresent = true;
+                noMemoryOk = ok;
+            } else if (kind == "ablate" || kind == "pair" || kind == "pairwise") {
+                std::vector<std::string> items;
+                if (arm.contains("items") && arm["items"].is_array()) {
+                    for (const auto& id : arm["items"]) {
+                        if (id.is_string()) items.push_back(id.get<std::string>());
+                    }
+                }
+                if (items.empty()) continue;
+                std::string setKey;
+                for (const auto& id : items) setKey += id + "|";
+                itemSets[setKey] = items;
+                if (ok) {
+                    ++setApprovals[setKey];
+                    for (const auto& id : items) ++itemApprovals[id];
+                }
+            }
+        }
+    }
+    (void)baselinePresent;
+
+    std::vector<std::string> decisive;
+    std::string reason;
+    std::string status;
+    if (infraFailure) {
+        status = "inconclusive";
+        reason = "infra_failure";
+    } else if (baselineOk) {
+        status = "not_rejected";
+        reason = "baseline_approved";
+    } else if (noMemoryPresent && !noMemoryOk) {
+        status = "no_adjustment";
+        reason = "no_memory_also_failed";
+    } else {
+        for (const auto& [setKey, items] : itemSets) {
+            if (items.size() != 1) continue;
+            const int approvals = setApprovals[setKey];
+            if (approvals * 2 > repetitions) decisive.push_back(items.front());
+        }
+        if (decisive.empty() && noMemoryPresent && noMemoryOk) {
+            for (const auto& [setKey, items] : itemSets) {
+                if (items.size() < 2) continue;
+                const int approvals = setApprovals[setKey];
+                if (approvals * 2 > repetitions) {
+                    for (const auto& id : items) decisive.push_back(id);
+                    reason = "pairwise";
+                }
+            }
+        }
+        if (decisive.empty()) {
+            status = "inconclusive";
+            if (reason.empty()) reason = "no_single_reversal";
+        } else {
+            status = "applied";
+            if (reason.empty()) reason = "single_reversal";
+        }
+    }
+
+    std::vector<MemoryCreditEvent> events;
+    std::string origin = "audit:" + traceId;
+    const auto& credited = cited.empty() ? delivered : cited;
+    if (status == "applied" && !credited.empty()) {
+        const double share = weight / static_cast<double>(credited.size());
+        std::set<std::string> unique(credited.begin(), credited.end());
+        for (const auto& key : unique) {
+            MemoryCreditEvent event;
+            event.traceId = traceId;
+            event.itemKey = key;
+            event.taskType = taskType;
+            event.kind = "audit_reversal";
+            event.origin = origin;
+            event.auditId = auditId;
+            event.deltaFailure = -share;
+            events.push_back(std::move(event));
+        }
+        const double assignment = weight / static_cast<double>(decisive.size());
+        for (const auto& key : decisive) {
+            MemoryCreditEvent event;
+            event.traceId = traceId;
+            event.itemKey = key;
+            event.taskType = taskType;
+            event.kind = "audit_assignment";
+            event.origin = origin;
+            event.auditId = auditId;
+            event.deltaFailure = assignment;
+            events.push_back(std::move(event));
+        }
+    }
+
+    MemoryCreditAuditRecord record;
+    record.id = auditId;
+    record.scopeId = scope;
+    record.traceId = traceId;
+    record.status = status;
+    record.armsJson = arms.dump();
+    record.tokens = request.value("tokens", 0LL);
+    record.snapshotRef = request.value("snapshotRef", std::string());
+    record.inputHash = request.value("inputHash", std::string());
+    if (!t->saveCreditAudit(record)) {
+        return taskforge::Json{{"ok", false}, {"error", t->lastError()}};
+    }
+    bool persisted = true;
+    if (!events.empty() && !t->recordCreditEvents(scope, events)) {
+        persisted = appendCreditOutbox(projectId, events);
+    }
+    taskforge::Json applied = taskforge::Json::array();
+    for (const auto& id : decisive) applied.push_back(id);
+    return taskforge::Json{
+        {"ok", persisted},
+        {"auditId", auditId},
+        {"status", status},
+        {"reason", reason},
+        {"decisive", applied},
+        {"events", static_cast<long long>(events.size())},
+        {"tokens", record.tokens}};
+}
+
+taskforge::Json MemoryService::listCreditAudits(const std::string& projectId,
+                                                const std::string& status,
+                                                size_t limit) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    return taskforge::Json{{"ok", true},
+                           {"audits", t->listCreditAudits(scopeId(projectId), status, limit)}};
+}
+
+taskforge::Json MemoryService::recordValidatorAudit(const std::string& projectId,
+                                                    const taskforge::Json& request) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    MemoryValidatorAuditRecord record;
+    record.scopeId = scopeId(projectId);
+    record.validator = request.value("validator", std::string());
+    record.traceId = request.value("traceId", std::string());
+    record.reviewer = request.value("reviewer", std::string());
+    record.verdict = request.value("verdict", std::string());
+    if (record.validator.empty()) {
+        return taskforge::Json{{"ok", false}, {"error", "validator ausente"}};
+    }
+    if (record.verdict != "accepted" && record.verdict != "rejected") {
+        return taskforge::Json{{"ok", false}, {"error", "verdict invalido"}};
+    }
+    const std::string id = t->recordValidatorAudit(record);
+    if (id.empty()) return taskforge::Json{{"ok", false}, {"error", t->lastError()}};
+    return taskforge::Json{{"ok", true}, {"id", id}};
+}
+
+taskforge::Json MemoryService::validatorAuditSummary(const std::string& projectId,
+                                                     const std::string& validator) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    const std::string scope = scopeId(projectId);
+    taskforge::Json out{{"ok", true}};
+    if (!validator.empty()) {
+        out["validator"] = t->validatorAuditStats(scope, validator);
+        return out;
+    }
+    out["validators"] = t->validatorAuditReport(scope);
+    return out;
+}
+
+double MemoryService::validatorWeight(const std::string& projectId,
+                                      const std::string& validator) const {
+    if (validator.empty()) return 1.0;
+    auto* t = const_cast<MemoryService*>(this)->ensureTelemetry(projectId);
+    if (!t) return 1.0;
+    return t->validatorAuditStats(scopeId(projectId), validator).value("weight", 1.0);
+}
+
+taskforge::Json MemoryService::creditAuditContainerPlan(
+    const std::string& projectId, const taskforge::Json& request) {
+    const auto config = creditAuditConfig(projectId);
+    std::string image = request.value("image", config.containerImage);
+    if (image.empty()) {
+        const char* envImage = std::getenv("ARESTRIX_SANDBOX_IMAGE");
+        if (envImage && *envImage) image = envImage;
+    }
+    if (image.empty()) image = "debian:stable-slim";
+    const std::string workspaceRef = request.value("workspaceRef", std::string());
+    auto tools = taskforge::Json::array();
+    for (const char* tool : {"read", "write", "edit", "validate_svg", "retrieve", "bash"}) {
+        tools.push_back(tool);
+    }
+    auto disabled = taskforge::Json::array();
+    for (const char* tool : {"memory_search", "memory_propose_lesson", "memory_state_get",
+                             "memory_state_set", "memory_state_list", "memory_state_history",
+                             "call_agent"}) {
+        disabled.push_back(tool);
+    }
+    auto notes = taskforge::Json::array();
+    notes.push_back("model calls happen in the host process, never inside the container");
+    notes.push_back("each arm gets its own ephemeral container and workspace copy");
+    notes.push_back("MCP servers, call_agent, interaction nodes and memory tools are disabled");
+    notes.push_back("container outputs are discarded after the audit");
+    return taskforge::Json{
+        {"image", image},
+        {"isolation", "container"},
+        {"network", "egress_llm_only"},
+        {"networkMode", "none"},
+        {"rootFilesystem", "read_only"},
+        {"tmpfs", taskforge::Json::array({"/tmp"})},
+        {"capDrop", taskforge::Json::array({"ALL"})},
+        {"noNewPrivileges", true},
+        {"pidsLimit", config.containerPidsLimit},
+        {"memoryMB", config.containerMemoryMB},
+        {"timeoutSeconds", config.containerTimeoutSeconds},
+        {"allowFallbackToHost", false},
+        {"workspace", taskforge::Json{{"path", "/workspace"},
+                                      {"source", workspaceRef},
+                                      {"mode", "rw"}}},
+        {"user", "1000:1000"},
+        {"allowedTools", tools},
+        {"disabledTools", disabled},
+        {"mcpServers", taskforge::Json::array()},
+        {"secretsMounted", false},
+        {"memoryDatabasesMounted", false},
+        {"oneContainerPerArm", true},
+        {"discardOutputs", true},
+        {"modelCalls", "host_only"},
+        {"notes", notes}};
+}
+
+taskforge::Json MemoryService::prepareCreditAuditWorkspaces(
+    const std::string& projectId, const std::string& traceId,
+    const taskforge::Json& arms) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    if (traceId.empty()) return taskforge::Json{{"ok", false}, {"error", "traceId ausente"}};
+    if (!arms.is_array() || arms.empty()) {
+        return taskforge::Json{{"ok", false}, {"error", "arms vazio"}};
+    }
+    const std::string scope = scopeId(projectId);
+    const auto snapshot = t->getTaskSnapshot(scope, traceId);
+    if (snapshot.empty()) {
+        return taskforge::Json{{"ok", false}, {"reason", "no_snapshot"}};
+    }
+    const std::string source = snapshot.value("workspaceRef", std::string());
+    if (source.empty()) {
+        return taskforge::Json{{"ok", false}, {"reason", "no_workspace"}};
+    }
+    std::error_code ec;
+    const fs::path base(source);
+    if (!fs::is_directory(base, ec)) {
+        return taskforge::Json{{"ok", false}, {"reason", "workspace_missing"}};
+    }
+    const fs::path telemetry(telemetryDatabasePath(projectId));
+    if (telemetry.empty()) {
+        return taskforge::Json{{"ok", false}, {"error", "telemetria sem caminho"}};
+    }
+    const fs::path root = telemetry.parent_path() / "audit-workspaces" / safeName(traceId);
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    if (ec) return taskforge::Json{{"ok", false}, {"error", ec.message()}};
+
+    const std::set<std::string> skipped = {
+        ".arestrix", ".git", "node_modules", "build", "build-onnx", "storage",
+        "target", ".venv", "__pycache__", ".cache"};
+    auto copyTree = [&](const fs::path& from, const fs::path& to) -> bool {
+        fs::create_directories(to, ec);
+        if (ec) return false;
+        fs::recursive_directory_iterator it(
+            from, fs::directory_options::skip_permission_denied, ec);
+        const fs::recursive_directory_iterator end;
+        for (; !ec && it != end; it.increment(ec)) {
+            const fs::path rel = fs::relative(it->path(), from, ec);
+            if (ec || rel.empty()) return false;
+            bool skip = false;
+            for (const auto& part : rel) {
+                if (skipped.count(part.string()) != 0) {
+                    skip = true;
+                    break;
+                }
+            }
+            if (skip) {
+                if (it->is_directory(ec)) it.disable_recursion_pending();
+                continue;
+            }
+            if (it->is_symlink(ec)) continue;
+            const fs::path dest = to / rel;
+            if (it->is_directory(ec)) {
+                fs::create_directories(dest, ec);
+            } else if (it->is_regular_file(ec)) {
+                fs::create_directories(dest.parent_path(), ec);
+                if (!ec) fs::copy_file(it->path(), dest,
+                                       fs::copy_options::overwrite_existing, ec);
+            }
+            if (ec) return false;
+        }
+        return !ec;
+    };
+
+    taskforge::Json outArms = taskforge::Json::array();
+    for (const auto& arm : arms) {
+        std::string id;
+        if (arm.is_string()) id = arm.get<std::string>();
+        else if (arm.is_object()) id = arm.value("id", std::string());
+        if (id.empty()) continue;
+        const fs::path armDir = root / safeName(id);
+        const fs::path workspace = armDir / "workspace";
+        const fs::path tmp = armDir / "tmp";
+        if (!copyTree(base, workspace)) {
+            fs::remove_all(root, ec);
+            return taskforge::Json{{"ok", false}, {"error", "workspace_copy_failed"},
+                                   {"arm", id}};
+        }
+        fs::create_directories(tmp, ec);
+        outArms.push_back(taskforge::Json{
+            {"id", id},
+            {"workspace", workspace.string()},
+            {"tmp", tmp.string()},
+            {"mode", "copy"},
+            {"workspaceKind", snapshot.value("workspaceKind", std::string("path"))}});
+    }
+    if (outArms.empty()) {
+        fs::remove_all(root, ec);
+        return taskforge::Json{{"ok", false}, {"error", "arms sem id"}};
+    }
+    const auto plan = creditAuditContainerPlan(projectId, taskforge::Json{
+        {"workspaceRef", root.string()}});
+    return taskforge::Json{{"ok", true}, {"root", root.string()},
+                           {"container", plan}, {"arms", outArms}};
+}
+
+taskforge::Json MemoryService::cleanupCreditAuditWorkspaces(
+    const std::string& projectId, const std::string& traceId) {
+    if (traceId.empty()) return taskforge::Json{{"ok", false}, {"error", "traceId ausente"}};
+    const fs::path telemetry(telemetryDatabasePath(projectId));
+    if (telemetry.empty()) {
+        return taskforge::Json{{"ok", false}, {"error", "telemetria sem caminho"}};
+    }
+    const fs::path root = telemetry.parent_path() / "audit-workspaces" / safeName(traceId);
+    std::error_code ec;
+    const bool existed = fs::exists(root, ec);
+    fs::remove_all(root, ec);
+    if (ec) return taskforge::Json{{"ok", false}, {"error", ec.message()}};
+    return taskforge::Json{{"ok", true}, {"root", root.string()}, {"removed", existed}};
+}
+
+taskforge::Json MemoryService::saveTaskSnapshot(const std::string& projectId,
+                                                const taskforge::Json& request) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    const auto config = creditAuditConfig(projectId);
+    MemoryTaskSnapshotRecord snapshot;
+    snapshot.scopeId = scopeId(projectId);
+    snapshot.traceId = request.value("traceId", std::string());
+    snapshot.inputHash = request.value("inputHash", std::string());
+    snapshot.inputJson = request.value("input", taskforge::Json::object()).dump();
+    snapshot.workspaceKind = request.value("workspaceKind", std::string());
+    snapshot.workspaceRef = request.value("workspaceRef", std::string());
+    snapshot.bytes = request.value("bytes", 0LL);
+    snapshot.expiresAt = request.value("expiresAt", std::string());
+    if (snapshot.traceId.empty()) {
+        return taskforge::Json{{"ok", false}, {"error", "traceId ausente"}};
+    }
+    if (snapshot.bytes > config.maxSnapshotBytes) {
+        return taskforge::Json{{"ok", false}, {"reason", "snapshot_too_large"}};
+    }
+    if (snapshot.expiresAt.empty()) {
+        snapshot.expiresAt = isoDaysFromNow(config.snapshotRetentionDays);
+    }
+    if (!t->saveTaskSnapshot(snapshot)) {
+        return taskforge::Json{{"ok", false}, {"error", t->lastError()}};
+    }
+    return taskforge::Json{{"ok", true}, {"snapshot", t->getTaskSnapshot(
+        snapshot.scopeId, snapshot.traceId)}};
+}
+
+taskforge::Json MemoryService::purgeExpiredSnapshots(const std::string& projectId) {
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    const long long removed = t->purgeExpiredSnapshots(scopeId(projectId), "");
+    return taskforge::Json{{"ok", true}, {"removed", removed},
+                           {"summary", t->snapshotSummary(scopeId(projectId))}};
+}
+
+namespace {
+std::string creditOutboxPath(const std::string& telemetryPath) {
+    if (telemetryPath.empty()) return std::string();
+    const fs::path db(telemetryPath);
+    return (db.parent_path() / "credit-outbox.jsonl").string();
+}
+} // namespace
+
+bool MemoryService::appendCreditOutbox(const std::string& projectId,
+                                       const std::vector<MemoryCreditEvent>& events) {
+    if (events.empty()) return true;
+    const std::string path = creditOutboxPath(telemetryDatabasePath(projectId));
+    if (path.empty()) return false;
+    std::error_code ec;
+    fs::create_directories(fs::path(path).parent_path(), ec);
+    std::ofstream out(path, std::ios::binary | std::ios::app);
+    if (!out) return false;
+    for (const auto& event : events) {
+        out << taskforge::Json{
+                   {"traceId", event.traceId},
+                   {"itemKey", event.itemKey},
+                   {"taskType", event.taskType},
+                   {"modelTier", event.modelTier},
+                   {"deltaSuccess", event.deltaSuccess},
+                   {"deltaFailure", event.deltaFailure},
+                   {"kind", event.kind},
+                   {"origin", event.origin},
+                   {"auditId", event.auditId},
+                   {"capped", event.capped}}.dump()
+            << "\n";
+        out.flush();
+    }
+    return out.good();
+}
+
+taskforge::Json MemoryService::drainCreditOutbox(const std::string& projectId) {
+    const std::string path = creditOutboxPath(telemetryDatabasePath(projectId));
+    if (path.empty()) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    std::error_code ec;
+    if (!fs::is_regular_file(path, ec)) {
+        return taskforge::Json{{"ok", true}, {"drained", 0LL}};
+    }
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return taskforge::Json{{"ok", false}, {"error", "outbox ilegivel"}};
+    std::vector<MemoryCreditEvent> events;
+    std::string line;
+    while (std::getline(in, line)) {
+        const auto parsed = taskforge::jsonutil::tryParse(line);
+        if (!parsed || !parsed->is_object()) continue;
+        MemoryCreditEvent event;
+        event.traceId = parsed->value("traceId", std::string());
+        event.itemKey = parsed->value("itemKey", std::string());
+        event.taskType = parsed->value("taskType", std::string());
+        event.modelTier = parsed->value("modelTier", std::string());
+        event.deltaSuccess = parsed->value("deltaSuccess", 0.0);
+        event.deltaFailure = parsed->value("deltaFailure", 0.0);
+        event.kind = parsed->value("kind", std::string());
+        event.origin = parsed->value("origin", std::string());
+        event.auditId = parsed->value("auditId", std::string());
+        event.capped = parsed->value("capped", false);
+        if (!event.traceId.empty() && !event.itemKey.empty()) {
+            events.push_back(std::move(event));
+        }
+    }
+    in.close();
+    auto* t = ensureTelemetry(projectId);
+    if (!t) return taskforge::Json{{"ok", false}, {"error", "telemetria indisponivel"}};
+    if (!t->recordCreditEvents(scopeId(projectId), events)) {
+        return taskforge::Json{{"ok", false}, {"error", t->lastError()}};
+    }
+    fs::remove(path, ec);
+    return taskforge::Json{{"ok", true},
+                           {"drained", static_cast<long long>(events.size())}};
 }
 
 std::vector<MemoryEvidenceRecord> MemoryService::evidenceFor(const std::string& projectId,
@@ -3338,6 +4706,7 @@ void MemoryService::closeProject(const std::string& projectId) {
     paths_.erase(projectKey(projectId));
     pathServing_.erase(projectKey(projectId));
     traversal_.erase(projectKey(projectId));
+    utility_.erase(projectKey(projectId));
     readOnly_.erase(projectKey(projectId));
     telemetry_.erase(projectKey(projectId));
     telemetryPaths_.erase(projectKey(projectId));

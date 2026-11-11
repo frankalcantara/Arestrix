@@ -110,7 +110,7 @@ O `.github/workflows/deploy.yml` compila e publica o pacote portátil pelo GitHu
 
 - um push para a `main` atualiza o pré-release contínuo
   [`latest`](https://github.com/frankalcantara/Arestrix/releases/tag/latest);
-- o push de uma tag `v*` publica ou atualiza o release daquela tag;
+- o push de uma tag `v*` publica ou atualiza um release estável daquela tag;
 - a execução manual segue a branch/tag selecionada.
 
 O workflow roda o gate canônico (`release_check.py --skip-e2e`), gera o ZIP e o instalador Inno Setup
@@ -166,7 +166,7 @@ detectados), instalação silenciosa com relatório no log do setup, atalho de d
 exclusão com `/MERGETASKS="!desktopicon"`, atalhos do Menu Iniciar, registro em `App Paths`, upgrade
 sobre a instalação anterior preservando arquivos/projetos do usuário e desinstalação completa.
 Instalação em máquina limpa, assinatura e Intune/SCCM ainda estão pendentes; o instalador é incluído
-na pré-release, mas ainda não é um artefato de release totalmente validado.
+no release, mas ainda não é um artefato de release totalmente validado.
 
 ## 4. Assinatura com SignPath Foundation
 

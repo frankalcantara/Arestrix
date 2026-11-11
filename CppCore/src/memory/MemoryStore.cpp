@@ -33,7 +33,7 @@ namespace {
 // (knowledge_version e memory_trace); fix5=5 (WriteTxn, unique edge_hash e
 // memory_operation); fix5=6 (catalogo, context_key e claim_key); fix5=7
 // (linhagem, lapides, fila de exclusao e retracao); fix5=8 (epocas de prefixo).
-constexpr int kMemorySchemaVersion = 8;
+constexpr int kMemorySchemaVersion = 9;
 
 // Fase 1: tabelas de conhecimento/telemetria com scope_id que o purge precisa
 // cobrir. memory_tombstone e a unica excecao explicita (Fase 3).
@@ -44,7 +44,9 @@ const char* const kScopedKnowledgeTables[] = {
     "memory_path_schema", "memory_playbook", "memory_policy", "memory_proposal",
     "memory_source", "memory_state", "memory_state_history", "memory_state_key",
     "memory_trace", "memory_usage", "memory_validation", "memory_working",
-    "memory_lineage", "memory_job", "memory_removal_log", "memory_prefix_epoch"};
+    "memory_lineage", "memory_job", "memory_removal_log", "memory_prefix_epoch",
+    "memory_credit_event", "memory_item_utility", "memory_credit_audit",
+    "memory_validator_audit", "memory_task_snapshot"};
 
 struct Stmt {
     sqlite3_stmt* stmt = nullptr;
@@ -957,6 +959,83 @@ CREATE TABLE IF NOT EXISTS memory_prefix_epoch (
 CREATE INDEX IF NOT EXISTS idx_memory_prefix_epoch_latest
   ON memory_prefix_epoch(scope_id, prefix_key, epoch DESC);
 
+-- Fase 5: livro de credito fracionario no banco da telemetria. As tabelas
+-- nascem no mesmo esquema para manter o purge e o backfill uniformes.
+CREATE TABLE IF NOT EXISTS memory_credit_event (
+  id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  trace_id TEXT NOT NULL,
+  item_key TEXT NOT NULL,
+  task_type TEXT NOT NULL DEFAULT '',
+  model_tier TEXT NOT NULL DEFAULT '',
+  delta_success REAL NOT NULL DEFAULT 0,
+  delta_failure REAL NOT NULL DEFAULT 0,
+  kind TEXT NOT NULL,
+  origin TEXT NOT NULL DEFAULT '',
+  capped INTEGER NOT NULL DEFAULT 0,
+  audit_id TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  UNIQUE(trace_id, item_key, kind, audit_id)
+);
+CREATE INDEX IF NOT EXISTS idx_memory_credit_event_scope
+  ON memory_credit_event(scope_id, item_key, task_type);
+CREATE INDEX IF NOT EXISTS idx_memory_credit_event_trace
+  ON memory_credit_event(scope_id, trace_id);
+
+CREATE TABLE IF NOT EXISTS memory_item_utility (
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  item_key TEXT NOT NULL,
+  task_type TEXT NOT NULL DEFAULT '',
+  model_tier TEXT NOT NULL DEFAULT '',
+  s REAL NOT NULL DEFAULT 0,
+  f REAL NOT NULL DEFAULT 0,
+  low_res REAL NOT NULL DEFAULT 0,
+  n_events INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(scope_id, item_key, task_type, model_tier)
+);
+
+CREATE TABLE IF NOT EXISTS memory_credit_audit (
+  id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  trace_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  arms_json TEXT NOT NULL DEFAULT '[]',
+  reason TEXT NOT NULL DEFAULT '',
+  tokens INTEGER NOT NULL DEFAULT 0,
+  snapshot_ref TEXT NOT NULL DEFAULT '',
+  input_hash TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memory_credit_audit_scope
+  ON memory_credit_audit(scope_id, status, created_at);
+
+CREATE TABLE IF NOT EXISTS memory_validator_audit (
+  id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  validator TEXT NOT NULL,
+  trace_id TEXT NOT NULL,
+  reviewer TEXT NOT NULL DEFAULT '',
+  verdict TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memory_validator_audit_validator
+  ON memory_validator_audit(scope_id, validator, created_at);
+
+CREATE TABLE IF NOT EXISTS memory_task_snapshot (
+  trace_id TEXT PRIMARY KEY,
+  scope_id TEXT NOT NULL REFERENCES memory_scope(id),
+  input_hash TEXT NOT NULL DEFAULT '',
+  input_json TEXT NOT NULL DEFAULT '{}',
+  workspace_kind TEXT NOT NULL DEFAULT '',
+  workspace_ref TEXT NOT NULL DEFAULT '',
+  bytes INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memory_task_snapshot_scope
+  ON memory_task_snapshot(scope_id, expires_at);
+
 CREATE TABLE IF NOT EXISTS memory_playbook (
   id TEXT PRIMARY KEY,
   scope_id TEXT NOT NULL REFERENCES memory_scope(id),
@@ -1030,29 +1109,6 @@ CREATE INDEX IF NOT EXISTS idx_memory_claim_path_path ON memory_claim_path(path_
     if (!exec("INSERT OR IGNORE INTO memory_meta(key,value) VALUES('knowledge_version','0');", &error)) {
         return false;
     }
-    {
-        // O contador e incrementado na mesma transacao da escrita: triggers
-        // cobrem insercao, atualizacao e remocao de qualquer tabela de
-        // conhecimento. Telemetria nao tem trigger.
-        const char* tables[] = {"memory_scope", "memory_node", "memory_alias", "memory_edge",
-                                "memory_working", "memory_state", "memory_state_history",
-                                "memory_playbook", "memory_evidence", "memory_source",
-                                "memory_passage", "memory_lens", "memory_edge_lens", "memory_facet",
-                                "memory_path_schema", "memory_path", "memory_path_claim",
-                                "memory_path_stats", "memory_path_input", "memory_path_event",
-                                "memory_claim_path", "memory_lineage", "memory_tombstone",
-                                "memory_removal_log"};
-        std::string triggers;
-        for (const char* table : tables) {
-            for (const char* event : {"INSERT", "UPDATE", "DELETE"}) {
-                triggers += "CREATE TRIGGER IF NOT EXISTS trg_kv_" + std::string(table) + "_" +
-                            event + " AFTER " + event + " ON " + table +
-                            " BEGIN UPDATE memory_meta SET value=CAST(value AS INTEGER)+1 "
-                            "WHERE key='knowledge_version'; END;\n";
-            }
-        }
-        if (!exec(triggers, &error)) return false;
-    }
     addColumnIfMissing(db_, "memory_usage", "retries", "INTEGER NOT NULL DEFAULT 0");
     addColumnIfMissing(db_, "memory_usage", "outcome", "TEXT NOT NULL DEFAULT ''");
     addColumnIfMissing(db_, "memory_edge", "utility", "REAL NOT NULL DEFAULT 0.5");
@@ -1095,6 +1151,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_claim_path_path ON memory_claim_path(path_
     // citacoes de ids que nao foram entregues na execucao.
     addColumnIfMissing(db_, "memory_hit", "consulted", "INTEGER NOT NULL DEFAULT 0");
     addColumnIfMissing(db_, "memory_usage", "invalid_citations", "INTEGER NOT NULL DEFAULT 0");
+    addColumnIfMissing(db_, "memory_credit_audit", "reason", "TEXT NOT NULL DEFAULT ''");
 
     // E4: reconstroi memory_evidence quando ela ainda tem o esquema antigo
     // (edge_id/episode_id com FK). O instantaneo novo nao referencia episodio,
@@ -1387,7 +1444,77 @@ DELETE FROM memory_hit WHERE rowid NOT IN
         try { storedVersion = std::stoi(versionText); } catch (...) { storedVersion = 0; }
     }
     if (storedVersion < kMemorySchemaVersion) {
+        WriteTxn txn(*this, error);
+        if (!txn.ok()) return false;
+        int currentVersion = 0;
+        const std::string currentText = getMeta("schema_version");
+        if (!currentText.empty()) {
+            try { currentVersion = std::stoi(currentText); } catch (...) { currentVersion = 0; }
+        }
+        if (currentVersion < kMemorySchemaVersion) {
+        // Fase 5: knowledge_version so muda quando uma coluna de conhecimento
+        // muda. Contadores de uso, utilidade, last_used e estatisticas de
+        // caminho ficam no banco de conhecimento por compatibilidade, mas nao
+        // invalidam o prefixo nem o cache de brief.
+        const char* allTables[] = {
+            "memory_scope", "memory_node", "memory_alias", "memory_edge",
+            "memory_working", "memory_state", "memory_state_history",
+            "memory_playbook", "memory_evidence", "memory_source",
+            "memory_passage", "memory_lens", "memory_edge_lens", "memory_facet",
+            "memory_path_schema", "memory_path", "memory_path_claim",
+            "memory_path_stats", "memory_path_input", "memory_path_event",
+            "memory_claim_path", "memory_lineage", "memory_tombstone",
+            "memory_removal_log"};
+        std::string drops;
+        for (const char* table : allTables) {
+            for (const char* event : {"INSERT", "UPDATE", "DELETE"}) {
+                drops += "DROP TRIGGER IF EXISTS trg_kv_" + std::string(table) + "_" +
+                         event + ";\n";
+            }
+        }
+        if (!exec(drops, &error)) return false;
+
+        const char* tables[] = {
+            "memory_scope", "memory_node", "memory_alias", "memory_edge",
+            "memory_working", "memory_state", "memory_state_history",
+            "memory_playbook", "memory_evidence", "memory_source",
+            "memory_passage", "memory_lens", "memory_edge_lens", "memory_facet",
+            "memory_path_schema", "memory_path", "memory_path_claim",
+            "memory_path_input", "memory_claim_path", "memory_lineage",
+            "memory_tombstone", "memory_removal_log"};
+        const std::string edgeKnowledgeColumns =
+            "scope_id,src_id,dst_id,relation,value_json,valid_from,valid_to,"
+            "recorded_at,confidence,status,superseded_by,source_kind,source_ref,"
+            "evidence_hash,edge_hash,metadata,context_key,claim_key,dormant_at,retracted_at";
+        const std::string playbookKnowledgeColumns =
+            "scope_id,task_type,title,steps_json,preconditions_json,status,"
+            "source_ref,evidence_json,created_at,updated_at";
+        std::string triggers;
+        auto bump = [](const std::string& name, const std::string& event,
+                       const std::string& table, const std::string& columns) {
+            std::string sql = "CREATE TRIGGER " + name + " AFTER " + event;
+            if (!columns.empty()) sql += " OF " + columns;
+            sql += " ON " + table +
+                   " BEGIN UPDATE memory_meta SET value=CAST(value AS INTEGER)+1 "
+                   "WHERE key='knowledge_version'; END;\n";
+            return sql;
+        };
+        for (const char* table : tables) {
+            const std::string name = std::string("trg_kv_") + table;
+            triggers += bump(name + "_INSERT", "INSERT", table, "");
+            if (std::string(table) == "memory_edge") {
+                triggers += bump(name + "_UPDATE", "UPDATE", table, edgeKnowledgeColumns);
+            } else if (std::string(table) == "memory_playbook") {
+                triggers += bump(name + "_UPDATE", "UPDATE", table, playbookKnowledgeColumns);
+            } else {
+                triggers += bump(name + "_UPDATE", "UPDATE", table, "");
+            }
+            triggers += bump(name + "_DELETE", "DELETE", table, "");
+        }
+        if (!exec(triggers, &error)) return false;
         setMeta("schema_version", std::to_string(kMemorySchemaVersion));
+        }
+        if (!txn.commit(&error)) return false;
     }
     if (durableSync_ && getMeta("catalog_fingerprint").empty()) {
         setMeta("catalog_fingerprint", MemoryCatalog::instance().fingerprint());
@@ -2466,12 +2593,15 @@ std::string MemoryStore::recordEdge(const std::string& scopeId, const std::strin
                         for (const auto& root : roots) array.push_back(root);
                         merged["supportRoots"] = array;
                         merged["supportRootCount"] = static_cast<long long>(roots.size());
+                        merged["claimKey"] = claimKey;
+                        merged.erase("claimKeyStatus");
                         Stmt update;
                         std::string updateError;
-                        if (prepare(db_, "UPDATE memory_edge SET metadata=? WHERE id=?", update,
-                                    updateError)) {
+                        if (prepare(db_, "UPDATE memory_edge SET metadata=?,claim_key=? WHERE id=?",
+                                    update, updateError)) {
                             bindText(update.stmt, 1, merged.dump());
-                            bindText(update.stmt, 2, existingId);
+                            bindText(update.stmt, 2, claimKey);
+                            bindText(update.stmt, 3, existingId);
                             stepRetry(update.stmt);
                         }
                     }
@@ -2554,9 +2684,22 @@ std::string MemoryStore::recordEdge(const std::string& scopeId, const std::strin
         recordEvidence(evidence);
     }
     attachLens(insertedId);
+    // I5: toda aresta derivada precisa de uma entrada de linhagem. Quando nao
+    // existe passage, usamos a claim ou a origem causal (agente, promocao,
+    // seed) para que o doctor nao trate uma licao de agente como orfa.
+    bool linked = false;
     if (cleanMetadata.is_object()) {
         const std::string passageId = cleanMetadata.value("passageId", std::string());
-        if (!passageId.empty()) recordLineage(scopeId, "edge", insertedId, "passage", passageId);
+        if (!passageId.empty()) {
+            linked = recordLineage(scopeId, "edge", insertedId, "passage", passageId);
+        }
+    }
+    if (!linked && !claimKey.empty()) {
+        linked = recordLineage(scopeId, "edge", insertedId, "claim", claimKey);
+    }
+    if (!linked && !sourceRef.empty()) {
+        linked = recordLineage(scopeId, "edge", insertedId,
+                               sourceKind.empty() ? "source" : sourceKind, sourceRef);
     }
     if (!txn.commit(&txnError)) {
         lastError_ = txnError;
@@ -3172,6 +3315,36 @@ std::vector<bool> MemoryStore::validationOutcomes(const std::string& scopeId,
     return out;
 }
 
+std::vector<bool> MemoryStore::validationOutcomesAdjusted(
+    const std::string& scopeId, const std::string& taskType, size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<bool> out;
+    if (!db_ || taskType.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "SELECT v.ok FROM memory_validation v "
+                 "JOIN memory_episode e ON e.id=v.episode_id "
+                 "LEFT JOIN memory_trace t ON t.scope_id=v.scope_id "
+                 "AND t.run_id=v.run_id AND t.node_id=v.node_id "
+                 "LEFT JOIN memory_credit_audit a ON a.scope_id=v.scope_id "
+                 "AND a.trace_id=t.trace_id AND a.status='applied' "
+                 "WHERE v.scope_id=? AND e.scope_id=? AND e.task_type=? "
+                 "AND (v.ok=1 OR a.id IS NULL) "
+                 "ORDER BY v.created_at DESC LIMIT ?", st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, scopeId);
+    bindText(st.stmt, 3, taskType);
+    sqlite3_bind_int(st.stmt, 4, static_cast<int>(std::min<size_t>(limit, 1000)));
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        out.push_back(columnInt(st.stmt, 0) != 0);
+    }
+    return out;
+}
+
 std::vector<MemoryValidationRecord> MemoryStore::listValidations(const std::string& scopeId,
                                                                  const std::string& episodeId,
                                                                  size_t limit) const {
@@ -3609,6 +3782,11 @@ std::string MemoryStore::recordPlaybook(const std::string& scopeId, const std::s
     }
     for (const auto& item : cleanEvidence) {
         if (!item.is_object()) continue;
+        const std::string episodeId = item.value("episodeId", std::string());
+        if (!episodeId.empty()) {
+            recordLineage(scopeId, "playbook", id, "episode", episodeId);
+            continue;
+        }
         const std::string kind = item.value("kind", std::string("edge"));
         const std::string inputId = item.value("id", item.value("edgeId",
             item.value("lessonId", std::string())));
@@ -4082,15 +4260,33 @@ std::string MemoryStore::recordProposal(const std::string& scopeId, const std::s
             return "";
         }
     }
+    bool linked = false;
     if (cleanPayload.is_object()) {
         const std::string passageId = cleanPayload.value("passageId", std::string());
-        if (!passageId.empty()) recordLineage(scopeId, "proposal", id, "passage", passageId);
+        if (!passageId.empty()) {
+            linked = recordLineage(scopeId, "proposal", id, "passage", passageId);
+        }
     }
     if (cleanEvidence.is_array()) {
         for (const auto& item : cleanEvidence) {
             if (!item.is_object()) continue;
             const std::string passageId = item.value("passageId", std::string());
-            if (!passageId.empty()) recordLineage(scopeId, "proposal", id, "passage", passageId);
+            if (!passageId.empty()) {
+                linked = recordLineage(scopeId, "proposal", id, "passage", passageId) || linked;
+            }
+        }
+    }
+    if (!linked && !sourceEpisodeId.empty()) {
+        linked = recordLineage(scopeId, "proposal", id, "episode", sourceEpisodeId);
+    }
+    if (!linked && cleanEvidence.is_array()) {
+        for (const auto& item : cleanEvidence) {
+            if (!item.is_object()) continue;
+            const std::string kind = item.value("kind", std::string());
+            const std::string inputId = item.value("episodeId",
+                item.value("id", item.value("node", std::string())));
+            if (kind.empty() || inputId.empty()) continue;
+            linked = recordLineage(scopeId, "proposal", id, kind, inputId) || linked;
         }
     }
     audit("extractor", "proposal", scopeId, "", kind + ":" + id);
@@ -4837,6 +5033,7 @@ std::vector<MemoryEdgeRecord> MemoryStore::incidentEdges(const std::string& scop
         edge.failureCount = columnInt(st.stmt, 17);
         edge.utility = columnDouble(st.stmt, 18);
         edge.dormantAt = columnText(st.stmt, 19);
+        edge.claimKey = columnText(st.stmt, 20);
         out.push_back(std::move(edge));
     }
     return out;
@@ -4906,7 +5103,8 @@ std::vector<MemoryEdgeRecord> MemoryStore::listEdges(const std::string& scopeId,
     std::string sql = "SELECT id,scope_id,src_id,COALESCE(dst_id,''),relation,COALESCE(value_json,''),"
                       "COALESCE(valid_from,''),COALESCE(valid_to,''),recorded_at,confidence,status,"
                       "COALESCE(superseded_by,''),source_kind,COALESCE(source_ref,''),metadata,"
-                      "COALESCE(last_used,''),success_count,failure_count,utility,COALESCE(dormant_at,'') "
+                      "COALESCE(last_used,''),success_count,failure_count,utility,"
+                      "COALESCE(dormant_at,''),COALESCE(claim_key,'') "
                       "FROM memory_edge WHERE scope_id=?";
     if (!status.empty()) sql += " AND status=?";
     sql += " ORDER BY recorded_at,id LIMIT ?";
@@ -4942,6 +5140,7 @@ std::vector<MemoryEdgeRecord> MemoryStore::listEdges(const std::string& scopeId,
         edge.failureCount = columnInt(st.stmt, 17);
         edge.utility = columnDouble(st.stmt, 18);
         edge.dormantAt = columnText(st.stmt, 19);
+        edge.claimKey = columnText(st.stmt, 20);
         out.push_back(std::move(edge));
     }
     return out;
@@ -5460,6 +5659,718 @@ std::vector<MemoryHitRef> MemoryStore::usedHitRefs(const std::string& scopeId, c
     while (stepRetry(st.stmt) == SQLITE_ROW) {
         out.push_back(MemoryHitRef{columnText(st.stmt, 0), columnText(st.stmt, 1)});
     }
+    return out;
+}
+
+std::vector<MemoryHitRecord> MemoryStore::listHits(const std::string& scopeId,
+                                                   const std::string& runId,
+                                                   const std::string& nodeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<MemoryHitRecord> out;
+    if (!db_) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "SELECT id,run_id,node_id,memory_id,kind,injected,consulted,used,"
+                       "outcome,created_at FROM memory_hit WHERE scope_id=? AND run_id=? "
+                       "AND node_id=? ORDER BY created_at,id", st, error)) {
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, runId);
+    bindText(st.stmt, 3, nodeId);
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        MemoryHitRecord hit;
+        hit.id = columnText(st.stmt, 0);
+        hit.runId = columnText(st.stmt, 1);
+        hit.nodeId = columnText(st.stmt, 2);
+        hit.memoryId = columnText(st.stmt, 3);
+        hit.kind = columnText(st.stmt, 4);
+        hit.injected = columnInt(st.stmt, 5) != 0;
+        hit.consulted = columnInt(st.stmt, 6) != 0;
+        hit.used = columnInt(st.stmt, 7) != 0;
+        hit.outcome = columnText(st.stmt, 8);
+        hit.createdAt = columnText(st.stmt, 9);
+        out.push_back(std::move(hit));
+    }
+    return out;
+}
+
+bool MemoryStore::recordCreditEvents(const std::string& scopeId,
+                                     const std::vector<MemoryCreditEvent>& events) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty()) return false;
+    if (events.empty()) return true;
+    std::string txnError;
+    WriteTxn txn(*this, txnError);
+    if (!txn.ok()) {
+        lastError_ = txnError;
+        return false;
+    }
+    Stmt insert;
+    std::string error;
+    if (!prepare(db_, "INSERT OR IGNORE INTO memory_credit_event"
+                       "(id,scope_id,trace_id,item_key,task_type,model_tier,"
+                       "delta_success,delta_failure,kind,origin,capped,audit_id,created_at) "
+                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", insert, error)) {
+        lastError_ = error;
+        return false;
+    }
+    Stmt aggregate;
+    if (!prepare(db_, "INSERT INTO memory_item_utility"
+                       "(scope_id,item_key,task_type,model_tier,s,f,low_res,n_events,updated_at) "
+                       "VALUES(?,?,?,?,?,?,?,1,?) "
+                       "ON CONFLICT(scope_id,item_key,task_type,model_tier) DO UPDATE SET "
+                       "s=s+excluded.s,f=f+excluded.f,low_res=low_res+excluded.low_res,"
+                       "n_events=n_events+1,updated_at=excluded.updated_at", aggregate, error)) {
+        lastError_ = error;
+        return false;
+    }
+    const std::string now = nowIso();
+    bool changed = false;
+    for (const auto& event : events) {
+        if (event.traceId.empty() || event.itemKey.empty()) continue;
+        sqlite3_reset(insert.stmt);
+        sqlite3_clear_bindings(insert.stmt);
+        bindText(insert.stmt, 1, newId("credit"));
+        bindText(insert.stmt, 2, scopeId);
+        bindText(insert.stmt, 3, event.traceId);
+        bindText(insert.stmt, 4, event.itemKey);
+        bindText(insert.stmt, 5, event.taskType);
+        bindText(insert.stmt, 6, event.modelTier);
+        sqlite3_bind_double(insert.stmt, 7, event.deltaSuccess);
+        sqlite3_bind_double(insert.stmt, 8, event.deltaFailure);
+        bindText(insert.stmt, 9, event.kind);
+        bindText(insert.stmt, 10, event.origin);
+        sqlite3_bind_int(insert.stmt, 11, event.capped ? 1 : 0);
+        bindText(insert.stmt, 12, event.auditId);
+        bindText(insert.stmt, 13, now);
+        if (stepRetry(insert.stmt) != SQLITE_DONE) {
+            lastError_ = sqlite3_errmsg(db_);
+            return false;
+        }
+        if (sqlite3_changes(db_) == 0) continue;   // evento ja existia
+        const double lowRes = event.kind == "presence_low_res"
+            ? event.deltaSuccess + event.deltaFailure : 0.0;
+        sqlite3_reset(aggregate.stmt);
+        sqlite3_clear_bindings(aggregate.stmt);
+        bindText(aggregate.stmt, 1, scopeId);
+        bindText(aggregate.stmt, 2, event.itemKey);
+        bindText(aggregate.stmt, 3, event.taskType.empty() ? "*" : event.taskType);
+        bindText(aggregate.stmt, 4, event.modelTier);
+        sqlite3_bind_double(aggregate.stmt, 5, event.deltaSuccess);
+        sqlite3_bind_double(aggregate.stmt, 6, event.deltaFailure);
+        sqlite3_bind_double(aggregate.stmt, 7, lowRes);
+        bindText(aggregate.stmt, 8, now);
+        if (stepRetry(aggregate.stmt) != SQLITE_DONE) {
+            lastError_ = sqlite3_errmsg(db_);
+            return false;
+        }
+        changed = true;
+    }
+    if (changed && !exec("INSERT INTO memory_meta(key,value) VALUES('usage_version','1') "
+                         "ON CONFLICT(key) DO UPDATE SET "
+                         "value=CAST(value AS INTEGER)+1;", &error)) {
+        lastError_ = error;
+        return false;
+    }
+    if (!txn.commit(&txnError)) {
+        lastError_ = txnError;
+        return false;
+    }
+    return true;
+}
+
+taskforge::Json MemoryStore::utilityFor(const std::string& scopeId,
+                                        const std::string& itemKey,
+                                        const std::string& taskType) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out{{"source", "prior"}, {"utility", 0.5},
+                        {"s", 0.0}, {"f", 0.0}, {"lowRes", 0.0}, {"events", 0LL}};
+    if (!db_ || scopeId.empty() || itemKey.empty()) return out;
+    for (const std::string& type : {taskType, std::string("*")}) {
+        Stmt st;
+        std::string error;
+        if (!prepare(db_, "SELECT s,f,low_res,n_events FROM memory_item_utility "
+                           "WHERE scope_id=? AND item_key=? AND task_type=? "
+                           "AND model_tier='' LIMIT 1", st, error)) continue;
+        bindText(st.stmt, 1, scopeId);
+        bindText(st.stmt, 2, itemKey);
+        bindText(st.stmt, 3, type);
+        if (stepRetry(st.stmt) != SQLITE_ROW) continue;
+        const double s = sqlite3_column_double(st.stmt, 0);
+        const double f = sqlite3_column_double(st.stmt, 1);
+        out["source"] = type == taskType ? "ledger" : "legacy_seed";
+        out["s"] = s;
+        out["f"] = f;
+        out["lowRes"] = sqlite3_column_double(st.stmt, 2);
+        out["events"] = columnInt(st.stmt, 3);
+        out["utility"] = (s + 1.0) / (s + f + 2.0);
+        return out;
+    }
+    return out;
+}
+
+taskforge::Json MemoryStore::creditSummary(const std::string& scopeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out{{"events", 0LL}, {"items", 0LL}, {"capped", 0LL},
+                        {"success", 0.0}, {"failure", 0.0}, {"lowRes", 0.0}};
+    if (!db_) return out;
+    auto scalar = [&](const char* sql) -> taskforge::Json {
+        Stmt st;
+        std::string error;
+        if (!prepare(db_, sql, st, error)) return taskforge::Json();
+        bindText(st.stmt, 1, scopeId);
+        if (stepRetry(st.stmt) != SQLITE_ROW) return taskforge::Json();
+        return taskforge::Json{{"value", sqlite3_column_double(st.stmt, 0)}};
+    };
+    out["events"] = scalar("SELECT COUNT(*) FROM memory_credit_event WHERE scope_id=?")
+        .value("value", 0.0);
+    out["capped"] = scalar("SELECT COUNT(*) FROM memory_credit_event "
+                           "WHERE scope_id=? AND capped=1").value("value", 0.0);
+    out["items"] = scalar("SELECT COUNT(*) FROM memory_item_utility WHERE scope_id=?")
+        .value("value", 0.0);
+    out["success"] = scalar("SELECT COALESCE(SUM(s),0) FROM memory_item_utility WHERE scope_id=?")
+        .value("value", 0.0);
+    out["failure"] = scalar("SELECT COALESCE(SUM(f),0) FROM memory_item_utility WHERE scope_id=?")
+        .value("value", 0.0);
+    out["lowRes"] = scalar("SELECT COALESCE(SUM(low_res),0) FROM memory_item_utility WHERE scope_id=?")
+        .value("value", 0.0);
+    return out;
+}
+
+double MemoryStore::creditTotalForOrigin(const std::string& scopeId,
+                                         const std::string& itemKey,
+                                         const std::string& taskType,
+                                         const std::string& origin,
+                                         const std::string& since) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || itemKey.empty()) return 0.0;
+    std::string sql = "SELECT COALESCE(SUM(ABS(delta_success)+ABS(delta_failure)),0) "
+                      "FROM memory_credit_event WHERE scope_id=? AND item_key=? "
+                      "AND task_type=? AND origin=?";
+    if (!since.empty()) sql += " AND created_at>=?";
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, sql, st, error)) return 0.0;
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, itemKey);
+    bindText(st.stmt, 3, taskType.empty() ? "*" : taskType);
+    bindText(st.stmt, 4, origin);
+    if (!since.empty()) bindText(st.stmt, 5, since);
+    return stepRetry(st.stmt) == SQLITE_ROW ? sqlite3_column_double(st.stmt, 0) : 0.0;
+}
+
+bool MemoryStore::rebuildItemUtility(const std::string& scopeId) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty()) return false;
+    std::string txnError;
+    WriteTxn txn(*this, txnError);
+    if (!txn.ok()) {
+        lastError_ = txnError;
+        return false;
+    }
+    Stmt clear;
+    std::string error;
+    if (!prepare(db_, "DELETE FROM memory_item_utility WHERE scope_id=?", clear, error)) {
+        lastError_ = error;
+        return false;
+    }
+    bindText(clear.stmt, 1, scopeId);
+    if (stepRetry(clear.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return false;
+    }
+    Stmt rebuild;
+    if (!prepare(db_, "INSERT INTO memory_item_utility"
+                       "(scope_id,item_key,task_type,model_tier,s,f,low_res,n_events,updated_at) "
+                       "SELECT scope_id,item_key,task_type,model_tier,"
+                       "SUM(delta_success),SUM(delta_failure),"
+                       "SUM(CASE WHEN kind='presence_low_res' "
+                       "THEN delta_success+delta_failure ELSE 0 END),"
+                       "COUNT(*),MAX(created_at) FROM memory_credit_event "
+                       "WHERE scope_id=? GROUP BY item_key,task_type,model_tier",
+                 rebuild, error)) {
+        lastError_ = error;
+        return false;
+    }
+    bindText(rebuild.stmt, 1, scopeId);
+    if (stepRetry(rebuild.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return false;
+    }
+    if (!exec("INSERT INTO memory_meta(key,value) VALUES('usage_version','1') "
+              "ON CONFLICT(key) DO UPDATE SET value=CAST(value AS INTEGER)+1;", &error)) {
+        lastError_ = error;
+        return false;
+    }
+    if (!txn.commit(&txnError)) {
+        lastError_ = txnError;
+        return false;
+    }
+    return true;
+}
+
+size_t MemoryStore::rekeyCreditItem(const std::string& scopeId,
+                                    const std::string& fromKey,
+                                    const std::string& toKey) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty() || fromKey.empty() || toKey.empty() ||
+        fromKey == toKey) {
+        return 0;
+    }
+    struct Row {
+        std::string id;
+        std::string traceId;
+        std::string taskType;
+        std::string modelTier;
+        double deltaSuccess = 0.0;
+        double deltaFailure = 0.0;
+        std::string kind;
+        std::string origin;
+        bool capped = false;
+        std::string auditId;
+        std::string createdAt;
+    };
+    std::vector<Row> rows;
+    {
+        Stmt st;
+        std::string error;
+        if (!prepare(db_,
+                     "SELECT id,trace_id,task_type,model_tier,delta_success,"
+                     "delta_failure,kind,origin,capped,audit_id,created_at "
+                     "FROM memory_credit_event WHERE scope_id=? AND item_key=?",
+                     st, error)) {
+            lastError_ = error;
+            return 0;
+        }
+        bindText(st.stmt, 1, scopeId);
+        bindText(st.stmt, 2, fromKey);
+        while (stepRetry(st.stmt) == SQLITE_ROW) {
+            Row row;
+            row.id = columnText(st.stmt, 0);
+            row.traceId = columnText(st.stmt, 1);
+            row.taskType = columnText(st.stmt, 2);
+            row.modelTier = columnText(st.stmt, 3);
+            row.deltaSuccess = sqlite3_column_double(st.stmt, 4);
+            row.deltaFailure = sqlite3_column_double(st.stmt, 5);
+            row.kind = columnText(st.stmt, 6);
+            row.origin = columnText(st.stmt, 7);
+            row.capped = sqlite3_column_int(st.stmt, 8) != 0;
+            row.auditId = columnText(st.stmt, 9);
+            row.createdAt = columnText(st.stmt, 10);
+            rows.push_back(std::move(row));
+        }
+    }
+    if (rows.empty()) return 0;
+
+    std::string txnError;
+    WriteTxn txn(*this, txnError);
+    if (!txn.ok()) {
+        lastError_ = txnError;
+        return 0;
+    }
+    Stmt move;
+    Stmt merge;
+    Stmt remove;
+    std::string error;
+    if (!prepare(db_, "UPDATE OR IGNORE memory_credit_event SET item_key=? WHERE id=?", move, error) ||
+        !prepare(db_,
+                 "UPDATE memory_credit_event SET delta_success=delta_success+?,"
+                 "delta_failure=delta_failure+?,capped=CASE WHEN ? THEN 1 ELSE capped END "
+                 "WHERE scope_id=? AND trace_id=? AND item_key=? AND kind=? AND audit_id=?",
+                 merge, error) ||
+        !prepare(db_, "DELETE FROM memory_credit_event WHERE id=?", remove, error)) {
+        lastError_ = error;
+        return 0;
+    }
+    size_t moved = 0;
+    for (const auto& row : rows) {
+        sqlite3_reset(move.stmt);
+        sqlite3_clear_bindings(move.stmt);
+        bindText(move.stmt, 1, toKey);
+        bindText(move.stmt, 2, row.id);
+        if (stepRetry(move.stmt) != SQLITE_DONE) {
+            lastError_ = sqlite3_errmsg(db_);
+            return 0;
+        }
+        if (sqlite3_changes(db_) == 1) {
+            ++moved;
+            continue;
+        }
+        sqlite3_reset(merge.stmt);
+        sqlite3_clear_bindings(merge.stmt);
+        sqlite3_bind_double(merge.stmt, 1, row.deltaSuccess);
+        sqlite3_bind_double(merge.stmt, 2, row.deltaFailure);
+        sqlite3_bind_int(merge.stmt, 3, row.capped ? 1 : 0);
+        bindText(merge.stmt, 4, scopeId);
+        bindText(merge.stmt, 5, row.traceId);
+        bindText(merge.stmt, 6, toKey);
+        bindText(merge.stmt, 7, row.kind);
+        bindText(merge.stmt, 8, row.auditId);
+        if (stepRetry(merge.stmt) != SQLITE_DONE) {
+            lastError_ = sqlite3_errmsg(db_);
+            return 0;
+        }
+        sqlite3_reset(remove.stmt);
+        sqlite3_clear_bindings(remove.stmt);
+        bindText(remove.stmt, 1, row.id);
+        if (stepRetry(remove.stmt) != SQLITE_DONE) {
+            lastError_ = sqlite3_errmsg(db_);
+            return 0;
+        }
+        ++moved;
+    }
+    if (!txn.commit(&txnError)) {
+        lastError_ = txnError;
+        return 0;
+    }
+    if (moved > 0) rebuildItemUtility(scopeId);
+    return moved;
+}
+
+bool MemoryStore::saveCreditAudit(const MemoryCreditAuditRecord& audit) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || audit.scopeId.empty() || audit.id.empty()) return false;
+    std::string txnError;
+    WriteTxn txn(*this, txnError);
+    if (!txn.ok()) {
+        lastError_ = txnError;
+        return false;
+    }
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "INSERT INTO memory_credit_audit"
+                 "(id,scope_id,trace_id,status,arms_json,reason,tokens,snapshot_ref,input_hash,created_at) "
+                 "VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET "
+                 "status=excluded.status,arms_json=excluded.arms_json,reason=excluded.reason,"
+                 "tokens=excluded.tokens,snapshot_ref=excluded.snapshot_ref,"
+                 "input_hash=excluded.input_hash",
+                 st, error)) {
+        lastError_ = error;
+        return false;
+    }
+    const std::string created = audit.createdAt.empty() ? nowIso() : audit.createdAt;
+    bindText(st.stmt, 1, audit.id);
+    bindText(st.stmt, 2, audit.scopeId);
+    bindText(st.stmt, 3, audit.traceId);
+    bindText(st.stmt, 4, audit.status);
+    bindText(st.stmt, 5, audit.armsJson);
+    bindText(st.stmt, 6, audit.reason);
+    sqlite3_bind_int64(st.stmt, 7, audit.tokens);
+    bindText(st.stmt, 8, audit.snapshotRef);
+    bindText(st.stmt, 9, audit.inputHash);
+    bindText(st.stmt, 10, created);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return false;
+    }
+    if (!txn.commit(&txnError)) {
+        lastError_ = txnError;
+        return false;
+    }
+    return true;
+}
+
+taskforge::Json MemoryStore::getCreditAudit(const std::string& scopeId,
+                                            const std::string& traceId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty() || traceId.empty()) return taskforge::Json::object();
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "SELECT id,trace_id,status,arms_json,reason,tokens,snapshot_ref,input_hash,created_at "
+                 "FROM memory_credit_audit WHERE scope_id=? AND trace_id=? "
+                 "ORDER BY created_at DESC LIMIT 1", st, error)) {
+        lastError_ = error;
+        return taskforge::Json::object();
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, traceId);
+    if (stepRetry(st.stmt) != SQLITE_ROW) return taskforge::Json::object();
+    taskforge::Json out{
+        {"id", columnText(st.stmt, 0)},
+        {"traceId", columnText(st.stmt, 1)},
+        {"status", columnText(st.stmt, 2)},
+        {"arms", taskforge::jsonutil::tryParse(columnText(st.stmt, 3))
+                     .value_or(taskforge::Json::array())},
+        {"reason", columnText(st.stmt, 4)},
+        {"tokens", sqlite3_column_int64(st.stmt, 5)},
+        {"snapshotRef", columnText(st.stmt, 6)},
+        {"inputHash", columnText(st.stmt, 7)},
+        {"createdAt", columnText(st.stmt, 8)}};
+    return out;
+}
+
+taskforge::Json MemoryStore::listCreditAudits(const std::string& scopeId,
+                                              const std::string& status,
+                                              size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out = taskforge::Json::array();
+    if (!db_ || scopeId.empty()) return out;
+    Stmt st;
+    std::string error;
+    const std::string sql = status.empty()
+        ? "SELECT id,trace_id,status,arms_json,reason,tokens,snapshot_ref,input_hash,created_at "
+          "FROM memory_credit_audit WHERE scope_id=? ORDER BY created_at DESC LIMIT ?"
+        : "SELECT id,trace_id,status,arms_json,reason,tokens,snapshot_ref,input_hash,created_at "
+          "FROM memory_credit_audit WHERE scope_id=? AND status=? "
+          "ORDER BY created_at DESC LIMIT ?";
+    if (!prepare(db_, sql, st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    if (status.empty()) {
+        sqlite3_bind_int64(st.stmt, 2, static_cast<sqlite3_int64>(limit));
+    } else {
+        bindText(st.stmt, 2, status);
+        sqlite3_bind_int64(st.stmt, 3, static_cast<sqlite3_int64>(limit));
+    }
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        out.push_back(taskforge::Json{
+            {"id", columnText(st.stmt, 0)},
+            {"traceId", columnText(st.stmt, 1)},
+            {"status", columnText(st.stmt, 2)},
+            {"arms", taskforge::jsonutil::tryParse(columnText(st.stmt, 3))
+                         .value_or(taskforge::Json::array())},
+            {"reason", columnText(st.stmt, 4)},
+            {"tokens", sqlite3_column_int64(st.stmt, 5)},
+            {"snapshotRef", columnText(st.stmt, 6)},
+            {"inputHash", columnText(st.stmt, 7)},
+            {"createdAt", columnText(st.stmt, 8)}});
+    }
+    return out;
+}
+
+taskforge::Json MemoryStore::creditAuditUsage(const std::string& scopeId,
+                                              const std::string& since) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out{{"audits", 0LL}, {"tokens", 0LL}};
+    if (!db_ || scopeId.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "SELECT COUNT(*),COALESCE(SUM(tokens),0) FROM memory_credit_audit "
+                 "WHERE scope_id=? AND created_at>=?", st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, since);
+    if (stepRetry(st.stmt) != SQLITE_ROW) return out;
+    out["audits"] = sqlite3_column_int64(st.stmt, 0);
+    out["tokens"] = sqlite3_column_int64(st.stmt, 1);
+    return out;
+}
+
+std::string MemoryStore::recordValidatorAudit(const MemoryValidatorAuditRecord& audit) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || audit.scopeId.empty() || audit.validator.empty()) return std::string();
+    const std::string id = audit.id.empty() ? newId("vaudit") : audit.id;
+    const std::string created = audit.createdAt.empty() ? nowIso() : audit.createdAt;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "INSERT OR IGNORE INTO memory_validator_audit"
+                 "(id,scope_id,validator,trace_id,reviewer,verdict,created_at) "
+                 "VALUES(?,?,?,?,?,?,?)", st, error)) {
+        lastError_ = error;
+        return std::string();
+    }
+    bindText(st.stmt, 1, id);
+    bindText(st.stmt, 2, audit.scopeId);
+    bindText(st.stmt, 3, audit.validator);
+    bindText(st.stmt, 4, audit.traceId);
+    bindText(st.stmt, 5, audit.reviewer);
+    bindText(st.stmt, 6, audit.verdict);
+    bindText(st.stmt, 7, created);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return std::string();
+    }
+    return id;
+}
+
+taskforge::Json MemoryStore::validatorAuditStats(const std::string& scopeId,
+                                                 const std::string& validator) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out{{"validator", validator}, {"audits", 0LL}, {"rejections", 0LL},
+                        {"divergence", 0.0}, {"wilsonLow", 0.0}, {"wilsonHigh", 1.0},
+                        {"weight", 1.0}};
+    if (!db_ || scopeId.empty() || validator.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "SELECT COUNT(*),SUM(CASE WHEN verdict='rejected' THEN 1 ELSE 0 END) "
+                 "FROM memory_validator_audit WHERE scope_id=? AND validator=?",
+                 st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, validator);
+    if (stepRetry(st.stmt) != SQLITE_ROW) return out;
+    const long long audits = sqlite3_column_int64(st.stmt, 0);
+    const long long rejections = sqlite3_column_type(st.stmt, 1) == SQLITE_NULL
+        ? 0 : sqlite3_column_int64(st.stmt, 1);
+    const double p = audits > 0 ? static_cast<double>(rejections) /
+        static_cast<double>(audits) : 0.0;
+    double lo = 0.0;
+    double hi = 1.0;
+    if (audits > 0) {
+        const double n = static_cast<double>(audits);
+        const double z = 1.959963984540054;
+        const double denom = 1.0 + z * z / n;
+        const double center = (p + z * z / (2.0 * n)) / denom;
+        const double margin = z * std::sqrt(
+            (p * (1.0 - p) + z * z / (4.0 * n)) / n) / denom;
+        lo = std::max(0.0, center - margin);
+        hi = std::min(1.0, center + margin);
+    }
+    out["audits"] = audits;
+    out["rejections"] = rejections;
+    out["divergence"] = p;
+    out["wilsonLow"] = lo;
+    out["wilsonHigh"] = hi;
+    out["weight"] = 1.0 - p;
+    return out;
+}
+
+taskforge::Json MemoryStore::validatorAuditReport(const std::string& scopeId,
+                                                  size_t limit) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out = taskforge::Json::array();
+    if (!db_ || scopeId.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "SELECT validator,COUNT(*),SUM(CASE WHEN verdict='rejected' THEN 1 ELSE 0 END),"
+                 "MAX(created_at) FROM memory_validator_audit WHERE scope_id=? "
+                 "GROUP BY validator ORDER BY MAX(created_at) DESC LIMIT ?", st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    bindText(st.stmt, 1, scopeId);
+    sqlite3_bind_int64(st.stmt, 2, static_cast<sqlite3_int64>(limit));
+    while (stepRetry(st.stmt) == SQLITE_ROW) {
+        const std::string validator = columnText(st.stmt, 0);
+        const auto stats = validatorAuditStats(scopeId, validator);
+        out.push_back(taskforge::Json{
+            {"validator", validator},
+            {"audits", sqlite3_column_int64(st.stmt, 1)},
+            {"rejections", sqlite3_column_type(st.stmt, 2) == SQLITE_NULL
+                ? 0LL : sqlite3_column_int64(st.stmt, 2)},
+            {"divergence", stats.value("divergence", 0.0)},
+            {"wilsonLow", stats.value("wilsonLow", 0.0)},
+            {"wilsonHigh", stats.value("wilsonHigh", 1.0)},
+            {"weight", stats.value("weight", 1.0)},
+            {"lastAudit", columnText(st.stmt, 3)}});
+    }
+    return out;
+}
+
+bool MemoryStore::saveTaskSnapshot(const MemoryTaskSnapshotRecord& snapshot) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || snapshot.scopeId.empty() || snapshot.traceId.empty()) return false;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "INSERT INTO memory_task_snapshot"
+                 "(trace_id,scope_id,input_hash,input_json,workspace_kind,workspace_ref,bytes,"
+                 "created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?) "
+                 "ON CONFLICT(trace_id) DO UPDATE SET input_hash=excluded.input_hash,"
+                 "input_json=excluded.input_json,workspace_kind=excluded.workspace_kind,"
+                 "workspace_ref=excluded.workspace_ref,bytes=excluded.bytes,"
+                 "expires_at=excluded.expires_at", st, error)) {
+        lastError_ = error;
+        return false;
+    }
+    const std::string created = snapshot.createdAt.empty() ? nowIso() : snapshot.createdAt;
+    bindText(st.stmt, 1, snapshot.traceId);
+    bindText(st.stmt, 2, snapshot.scopeId);
+    bindText(st.stmt, 3, snapshot.inputHash);
+    bindText(st.stmt, 4, snapshot.inputJson);
+    bindText(st.stmt, 5, snapshot.workspaceKind);
+    bindText(st.stmt, 6, snapshot.workspaceRef);
+    sqlite3_bind_int64(st.stmt, 7, snapshot.bytes);
+    bindText(st.stmt, 8, created);
+    bindText(st.stmt, 9, snapshot.expiresAt);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return false;
+    }
+    return true;
+}
+
+taskforge::Json MemoryStore::getTaskSnapshot(const std::string& scopeId,
+                                             const std::string& traceId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty() || traceId.empty()) return taskforge::Json::object();
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "SELECT trace_id,input_hash,input_json,workspace_kind,workspace_ref,bytes,"
+                 "created_at,expires_at FROM memory_task_snapshot "
+                 "WHERE scope_id=? AND trace_id=?", st, error)) {
+        lastError_ = error;
+        return taskforge::Json::object();
+    }
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, traceId);
+    if (stepRetry(st.stmt) != SQLITE_ROW) return taskforge::Json::object();
+    return taskforge::Json{
+        {"traceId", columnText(st.stmt, 0)},
+        {"inputHash", columnText(st.stmt, 1)},
+        {"input", taskforge::jsonutil::tryParse(columnText(st.stmt, 2))
+                      .value_or(taskforge::Json::object())},
+        {"workspaceKind", columnText(st.stmt, 3)},
+        {"workspaceRef", columnText(st.stmt, 4)},
+        {"bytes", sqlite3_column_int64(st.stmt, 5)},
+        {"createdAt", columnText(st.stmt, 6)},
+        {"expiresAt", columnText(st.stmt, 7)}};
+}
+
+long long MemoryStore::purgeExpiredSnapshots(const std::string& scopeId,
+                                             const std::string& now) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (!db_ || scopeId.empty()) return 0;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_, "DELETE FROM memory_task_snapshot WHERE scope_id=? AND expires_at<?",
+                 st, error)) {
+        lastError_ = error;
+        return 0;
+    }
+    const std::string cutoff = now.empty() ? nowIso() : now;
+    bindText(st.stmt, 1, scopeId);
+    bindText(st.stmt, 2, cutoff);
+    if (stepRetry(st.stmt) != SQLITE_DONE) {
+        lastError_ = sqlite3_errmsg(db_);
+        return 0;
+    }
+    return static_cast<long long>(sqlite3_changes(db_));
+}
+
+taskforge::Json MemoryStore::snapshotSummary(const std::string& scopeId) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    taskforge::Json out{{"count", 0LL}, {"bytes", 0LL}, {"expired", 0LL}};
+    if (!db_ || scopeId.empty()) return out;
+    Stmt st;
+    std::string error;
+    if (!prepare(db_,
+                 "SELECT COUNT(*),COALESCE(SUM(bytes),0),"
+                 "COALESCE(SUM(CASE WHEN expires_at<? THEN 1 ELSE 0 END),0) "
+                 "FROM memory_task_snapshot WHERE scope_id=?", st, error)) {
+        lastError_ = error;
+        return out;
+    }
+    bindText(st.stmt, 1, nowIso());
+    bindText(st.stmt, 2, scopeId);
+    if (stepRetry(st.stmt) != SQLITE_ROW) return out;
+    out["count"] = sqlite3_column_int64(st.stmt, 0);
+    out["bytes"] = sqlite3_column_int64(st.stmt, 1);
+    out["expired"] = sqlite3_column_int64(st.stmt, 2);
     return out;
 }
 
@@ -6213,24 +7124,40 @@ size_t MemoryStore::backfillLineage(const std::string& scopeId, taskforge::Json*
     };
     Stmt edges;
     std::string error;
-    if (prepare(db_, "SELECT id,metadata FROM memory_edge WHERE scope_id=?", edges, error)) {
+    if (prepare(db_, "SELECT id,metadata,claim_key,source_kind,source_ref FROM memory_edge "
+                     "WHERE scope_id=?", edges, error)) {
         bindText(edges.stmt, 1, scopeId);
         while (stepRetry(edges.stmt) == SQLITE_ROW) {
             const auto metadata = parseJsonOrNull(columnText(edges.stmt, 1));
             const std::string passageId = metadata.is_object()
                 ? metadata.value("passageId", std::string()) : std::string();
-            if (passageId.empty() || !link("edge", columnText(edges.stmt, 0), "passage", passageId)) {
-                ++orphans;
+            bool any = false;
+            if (!passageId.empty()) {
+                any = link("edge", columnText(edges.stmt, 0), "passage", passageId);
             }
+            if (!any) {
+                const std::string claimKey = columnText(edges.stmt, 2);
+                if (!claimKey.empty()) any = link("edge", columnText(edges.stmt, 0), "claim", claimKey);
+            }
+            if (!any) {
+                const std::string sourceRef = columnText(edges.stmt, 4);
+                if (!sourceRef.empty()) {
+                    const std::string sourceKind = columnText(edges.stmt, 3);
+                    any = link("edge", columnText(edges.stmt, 0),
+                               sourceKind.empty() ? "source" : sourceKind, sourceRef);
+                }
+            }
+            if (!any) ++orphans;
         }
     }
     Stmt proposals;
-    if (prepare(db_, "SELECT id,payload_json,evidence_json FROM memory_proposal WHERE scope_id=?",
-                proposals, error)) {
+    if (prepare(db_, "SELECT id,payload_json,evidence_json,source_episode_id "
+                     "FROM memory_proposal WHERE scope_id=?", proposals, error)) {
         bindText(proposals.stmt, 1, scopeId);
         while (stepRetry(proposals.stmt) == SQLITE_ROW) {
             const auto payload = parseJsonOrNull(columnText(proposals.stmt, 1));
             const auto evidence = parseJsonOrNull(columnText(proposals.stmt, 2));
+            const std::string sourceEpisodeId = columnText(proposals.stmt, 3);
             std::set<std::string> passages;
             if (payload.is_object()) {
                 const std::string id = payload.value("passageId", std::string());
@@ -6247,6 +7174,19 @@ size_t MemoryStore::backfillLineage(const std::string& scopeId, taskforge::Json*
             bool any = false;
             for (const auto& id : passages) {
                 any = link("proposal", columnText(proposals.stmt, 0), "passage", id) || any;
+            }
+            if (!any && !sourceEpisodeId.empty()) {
+                any = link("proposal", columnText(proposals.stmt, 0), "episode", sourceEpisodeId);
+            }
+            if (!any && evidence.is_array()) {
+                for (const auto& item : evidence) {
+                    if (!item.is_object()) continue;
+                    const std::string kind = item.value("kind", std::string());
+                    const std::string inputId = item.value("episodeId",
+                        item.value("id", item.value("node", std::string())));
+                    if (kind.empty() || inputId.empty()) continue;
+                    any = link("proposal", columnText(proposals.stmt, 0), kind, inputId) || any;
+                }
             }
             if (!any) ++orphans;
         }
@@ -6278,6 +7218,12 @@ size_t MemoryStore::backfillLineage(const std::string& scopeId, taskforge::Json*
             if (evidence.is_array()) {
                 for (const auto& item : evidence) {
                     if (!item.is_object()) continue;
+                    const std::string episodeId = item.value("episodeId", std::string());
+                    if (!episodeId.empty()) {
+                        any = link("playbook", columnText(playbooks.stmt, 0),
+                                   "episode", episodeId) || any;
+                        continue;
+                    }
                     const std::string kind = item.value("kind", std::string("edge"));
                     const std::string id = item.value("id", item.value("edgeId",
                         item.value("lessonId", std::string())));
@@ -6662,6 +7608,7 @@ bool MemoryStore::purgeTelemetry(const std::string& scopeId, const std::string& 
     std::set<std::string> itemIds;
     std::set<std::string> passageIds;
     std::set<std::string> hashes;
+    std::set<std::string> creditKeys;
     auto collect = [](const taskforge::Json& value, std::set<std::string>& target) {
         if (!value.is_array()) return;
         for (const auto& item : value) {
@@ -6673,6 +7620,9 @@ bool MemoryStore::purgeTelemetry(const std::string& scopeId, const std::string& 
             passageIds);
     collect(payload.contains("textHashes") ? payload["textHashes"] : taskforge::Json::array(),
             hashes);
+    collect(payload.contains("creditKeys") ? payload["creditKeys"]
+                                           : taskforge::Json::array(),
+            creditKeys);
     std::string txnError;
     WriteTxn txn(*this, txnError);
     if (!txn.ok()) {
@@ -6688,6 +7638,34 @@ bool MemoryStore::purgeTelemetry(const std::string& scopeId, const std::string& 
         bindText(del.stmt, 1, scopeId);
         bindText(del.stmt, 2, id);
         if (stepRetry(del.stmt) != SQLITE_DONE) {
+            error = sqlite3_errmsg(db_);
+            txn.rollback();
+            return false;
+        }
+    }
+    for (const auto& key : creditKeys) {
+        Stmt delEvent;
+        if (!prepare(db_, "DELETE FROM memory_credit_event WHERE scope_id=? AND item_key=?",
+                     delEvent, error)) {
+            txn.rollback();
+            return false;
+        }
+        bindText(delEvent.stmt, 1, scopeId);
+        bindText(delEvent.stmt, 2, key);
+        if (stepRetry(delEvent.stmt) != SQLITE_DONE) {
+            error = sqlite3_errmsg(db_);
+            txn.rollback();
+            return false;
+        }
+        Stmt delUtility;
+        if (!prepare(db_, "DELETE FROM memory_item_utility WHERE scope_id=? AND item_key=?",
+                     delUtility, error)) {
+            txn.rollback();
+            return false;
+        }
+        bindText(delUtility.stmt, 1, scopeId);
+        bindText(delUtility.stmt, 2, key);
+        if (stepRetry(delUtility.stmt) != SQLITE_DONE) {
             error = sqlite3_errmsg(db_);
             txn.rollback();
             return false;
@@ -6827,6 +7805,7 @@ MemoryEraseResult MemoryStore::eraseSource(const std::string& scopeId,
     std::set<std::string> sourceIds;
     std::set<std::string> passageIds;
     std::set<std::string> deletedEdges;
+    std::set<std::string> deletedClaimKeys;
     std::set<std::string> deletedProposals;
     std::set<std::string> deletedFacets;
     std::set<std::string> deletedPlaybooks;
@@ -7039,7 +8018,8 @@ MemoryEraseResult MemoryStore::eraseSource(const std::string& scopeId,
     for (const auto& edgeId : deletedEdges) {
         Stmt query;
         std::string error;
-        if (!prepare(db_, "SELECT status,COALESCE(metadata,'{}'),edge_hash FROM memory_edge "
+        if (!prepare(db_, "SELECT status,COALESCE(metadata,'{}'),edge_hash,"
+                           "COALESCE(claim_key,'') FROM memory_edge "
                            "WHERE id=? AND scope_id=?", query, error)) {
             return fail(error);
         }
@@ -7049,6 +8029,8 @@ MemoryEraseResult MemoryStore::eraseSource(const std::string& scopeId,
         const std::string status = columnText(query.stmt, 0);
         const std::string metadata = columnText(query.stmt, 1);
         const std::string edgeHash = columnText(query.stmt, 2);
+        const std::string claimKey = columnText(query.stmt, 3);
+        if (!claimKey.empty()) deletedClaimKeys.insert(claimKey);
         if (status == "active") {
             Stmt update;
             if (!prepare(db_, "UPDATE memory_edge SET status='rejected',retracted_at=?,"
@@ -7251,13 +8233,22 @@ MemoryEraseResult MemoryStore::eraseSource(const std::string& scopeId,
     for (const auto& id : deletedPlaybooks) itemIds.push_back(id);
     for (const auto& id : deletedLessons) itemIds.push_back(id);
     for (const auto& id : deletedPaths) itemIds.push_back(id);
+    taskforge::Json creditKeyJson = taskforge::Json::array();
+    for (const auto& id : deletedEdges) creditKeyJson.push_back("edge:" + id);
+    for (const auto& key : deletedClaimKeys) creditKeyJson.push_back(key);
+    for (const auto& id : deletedLessons) creditKeyJson.push_back("lesson:" + id);
+    for (const auto& id : deletedPlaybooks) creditKeyJson.push_back("playbook:" + id);
+    for (const auto& id : deletedPaths) creditKeyJson.push_back("path:" + id);
+    for (const auto& id : deletedFacets) creditKeyJson.push_back("facet:" + id);
+    for (const auto& id : passageIds) creditKeyJson.push_back("psg:" + id);
     taskforge::Json passageJson = taskforge::Json::array();
     for (const auto& id : passageIds) passageJson.push_back(id);
     taskforge::Json hashesJson = taskforge::Json::array();
     for (const auto& hash : textHashes) hashesJson.push_back(hash);
     const std::string jobId = enqueueJob(scopeId, "purge_telemetry",
         taskforge::Json{{"itemIds", itemIds}, {"passageIds", passageJson},
-                        {"textHashes", hashesJson}, {"reason", reason}});
+                        {"textHashes", hashesJson}, {"creditKeys", creditKeyJson},
+                        {"reason", reason}});
     if (!jobId.empty()) {
         ++result.jobs;
         result.jobIds.push_back(jobId);
