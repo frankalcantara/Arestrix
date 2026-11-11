@@ -7,6 +7,9 @@
 > de paridade e de valor do A/B v2.
 > **Referências:** `docs/pt-BR/como-funciona-a-memoria.md`, `docs/PENDENCIAS.md` §4.1.
 
+> **Versão consolidada:** [Resultados dos testes de memória](../pt-BR/resultados-testes-memoria.md) ·
+> [English](../en/memory-test-results.md).
+
 ## Veredito
 
 O gate com modelo reduz a paridade de **2,69× para 1,39× tokens** e de **1,60× para

@@ -58,7 +58,7 @@ arestrix-cli gen <graph.json>
 arestrix-cli check [--project <folder> | <graph.json>] [--require-env NAME]
 arestrix-cli doctor [--project <folder>]
 arestrix-cli env set|reset|list|check
-arestrix-cli memory report|health|doctor|trace|claims|paths|bridges|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote|unpromote|reopen|state|ab [--project <folder>]
+arestrix-cli memory report|brief|route|health|doctor|trace|claims|paths|bridges|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote|unpromote|reopen|state|ab [--project <folder>]
 arestrix-cli mcp list|test|tools [id]
 arestrix-cli project info|graphs|validate
 arestrix-cli completion powershell|bash|zsh
@@ -214,6 +214,29 @@ evidence and passages are deleted, and `purge_telemetry` is queued. Without
 `--async`, the command drains that queue and redacts literal copies from
 episodes; `--vacuum` compacts the database after the telemetry step. The first
 cut recognizes literal windows of at least 96 bytes, not paraphrases.
+
+### `memory brief`
+
+```powershell
+.\arestrix-cli.exe memory brief --project .\examples\04-memoria --task-type revisar_contraste --intent "Review the component contrast" --theme design --budget 4000 --json
+```
+
+Shows exactly the brief the runtime would inject, without calling a model. The
+command configures `pathServing` and `traversal` from the manifest
+`globalDefaults.memory` and returns `chars`, `pathIds`, `pathClaimIds`,
+`traversalIds` and the other ids in `info`. Useful for diagnosing why an item
+entered the context or stayed out.
+
+### `memory route`
+
+```powershell
+.\arestrix-cli.exe memory route --project .\examples\04-memoria --pipeline .\examples\04-memoria\pipelines\main.json --task-type revisar_contraste --json
+```
+
+Applies the same `ModelRouter` decision used by the runtime, reading
+`metadata.globalDefaults.routing` from the pipeline and the project validation
+statistics. In `shadow`, the decision is recorded but the executed tier stays
+current; in `binary`, the chosen tier replaces provider/model.
 
 ### `memory paths`
 

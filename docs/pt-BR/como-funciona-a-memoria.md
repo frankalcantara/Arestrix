@@ -511,9 +511,11 @@ caminho. O interruptor permanece desligado até o A/B ser registrado.
 
 Quando nenhum caminho cobre a consulta, `globalDefaults.memory.traversal` liga
 uma travessia limitada a partir de âncoras resolvidas por alias, FTS e
-candidatos vetoriais. A busca usa largura de feixe, profundidade, candidatos,
-tempo e caracteres limitados; itens inelegíveis nunca entram no top-k e ciclos
-não repetem nós. `memory_search` aceita `mode: "graph"` para esse caminho.
+candidatos vetoriais. Quando a consulta inteira não é um alias, o resolvedor
+tokeniza o prompt e tenta os termos relevantes antes de abster. A busca usa
+largura de feixe, profundidade, candidatos, tempo e caracteres limitados; itens
+inelegíveis nunca entram no top-k e ciclos não repetem nós. `memory_search`
+aceita `mode: "graph"` para esse caminho.
 
 O pacote devolve cada item com fonte, validade e justificativa, e grava no traço
 o vetor de cobertura: utilidade do melhor caminho, fração sustentada, conflitos,

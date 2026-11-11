@@ -39,6 +39,7 @@
 #include "project/RunnerSecurity.hpp"
 #include "rt/MemoryFailure.hpp"
 #include "rt/McpTools.hpp"
+#include "rt/ModelRouter.hpp"
 #include "rt/compress/CodeCompressor.hpp"
 #include "rt/compress/ContentRouter.hpp"
 #include "rt/compress/LogCompressor.hpp"
@@ -489,6 +490,8 @@ std::string sqliteText(sqlite3_stmt* stmt, int index) {
 int runMemory(const std::vector<std::string>& args) {
     if (args.size() < 2 || args[1] == "--help" || args[1] == "-h") {
         std::cout << "arestrix-cli memory report [--project <pasta>] [--root <pasta>] [--db <arquivo>] [--json]\n"
+                     "arestrix-cli memory brief --project <pasta> [--task-type T] [--intent texto] [--theme T] [--budget N] [--item ID] [--json]\n"
+                     "arestrix-cli memory route --pipeline <grafo> --task-type T --project <pasta> [--json]\n"
                      "arestrix-cli memory report --recurrence [--since <data>] [--min-verdict-rate N] [--min-citation-rate N] [--min-executions N] [--min-distinct-inputs N] [--min-reuse-rate N] [--json]\n"
                      "arestrix-cli memory prune  --project <pasta> [--days N] [--db <arquivo>] [--json]\n"
                      "arestrix-cli memory purge  --project <pasta> [--keep-audit] [--drop-tombstones] [--db <arquivo>] [--json]\n"
@@ -518,6 +521,7 @@ int runMemory(const std::vector<std::string>& args) {
     }
     const std::string command = args[1];
     if (command != "report" && command != "prune" && command != "purge" && command != "proposals" &&
+        command != "brief" && command != "route" &&
         command != "embeddings" && command != "health" && command != "reindex" &&
         command != "consolidate" && command != "workspace" && command != "state" &&
         command != "ab" && command != "trace" && command != "claims" &&
@@ -753,6 +757,9 @@ int runMemory(const std::vector<std::string>& args) {
     std::string validatorAuditTrace;
     std::string validatorAuditReviewer;
     std::string validatorAuditVerdict;
+    std::string briefIntent;
+    long long briefBudget = 4000;
+    std::vector<std::string> briefThemes;
     for (size_t i = optionStart; i < args.size(); ++i) {
         const std::string& a = args[i];
         if (a == "--json") opt.json = true;
@@ -826,6 +833,18 @@ int runMemory(const std::vector<std::string>& args) {
         else if (a == "--task-type") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --task-type\n"; return kExitUsage; }
             stateTaskType = args[++i];
+        }
+        else if (a == "--intent") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --intent\n"; return kExitUsage; }
+            briefIntent = args[++i];
+        }
+        else if (a == "--theme") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --theme\n"; return kExitUsage; }
+            briefThemes.push_back(args[++i]);
+        }
+        else if (a == "--budget") {
+            if (i + 1 >= args.size()) { std::cerr << "faltou --budget\n"; return kExitUsage; }
+            try { briefBudget = std::stoll(args[++i]); } catch (...) { std::cerr << "--budget invalido\n"; return kExitUsage; }
         }
         else if (a == "--max-bytes") {
             if (i + 1 >= args.size()) { std::cerr << "faltou --max-bytes\n"; return kExitUsage; }
@@ -1148,6 +1167,101 @@ int runMemory(const std::vector<std::string>& args) {
             else out = memory.creditSummary(projectId);
             std::cout << out.dump(2) << "\n";
             return out.value("ok", false) ? 0 : kExitConfig;
+        }
+
+        if (command == "brief") {
+            const taskforge::Json settings = memorySettings.is_object()
+                ? memorySettings : taskforge::Json::object();
+            memory.configurePathServing(
+                projectId, taskforge::memory::pathServingConfigFromJson(settings));
+            memory.configureTraversal(
+                projectId, taskforge::memory::traversalConfigFromJson(settings));
+            taskforge::memory::MemoryBriefInfo info;
+            const std::string itemId = stateItem.empty() ? "pipeline" : stateItem;
+            const std::string brief = memory.buildBrief(
+                projectId, itemId, briefThemes, {},
+                static_cast<size_t>(std::max<long long>(0, briefBudget)),
+                true, false, &info, stateTaskType, briefIntent);
+            taskforge::Json themes = taskforge::Json::array();
+            for (const auto& theme : briefThemes) themes.push_back(theme);
+            taskforge::Json out{
+                {"ok", true}, {"projectId", projectId},
+                {"taskType", stateTaskType}, {"intent", briefIntent},
+                {"themes", themes}, {"budget", briefBudget},
+                {"brief", brief}, {"chars", static_cast<long long>(brief.size())},
+                {"info", taskforge::memory::briefInfoToJson(info)}};
+            if (opt.json) {
+                std::cout << out.dump(2) << "\n";
+            } else {
+                const auto infoJson = out["info"];
+                std::cout << "Brief: " << brief.size() << " chars | caminhos "
+                          << infoJson["pathIds"].size() << " | travessia "
+                          << infoJson["traversalIds"].size() << " | licoes "
+                          << infoJson["lessonIds"].size() << "\n";
+                if (!brief.empty()) std::cout << brief;
+            }
+            return 0;
+        }
+
+        if (command == "route") {
+            if (stateTaskType.empty()) {
+                std::cerr << "memory route: informe --task-type\n";
+                return kExitUsage;
+            }
+            if (abPipelinePath.empty()) {
+                std::cerr << "memory route: informe --pipeline\n";
+                return kExitUsage;
+            }
+            taskforge::Json pipeline;
+            std::string pipelineError;
+            if (!readJsonFile(abPipelinePath, pipeline, pipelineError)) {
+                std::cerr << "Falha ao ler --pipeline: " << pipelineError << "\n";
+                return kExitConfig;
+            }
+            taskforge::Json routing = taskforge::Json::object();
+            taskforge::Json model = taskforge::Json::object();
+            if (pipeline.contains("metadata") && pipeline["metadata"].is_object()) {
+                const auto& metadata = pipeline["metadata"];
+                if (metadata.contains("globalDefaults") &&
+                    metadata["globalDefaults"].is_object()) {
+                    const auto& defaults = metadata["globalDefaults"];
+                    if (defaults.contains("routing") && defaults["routing"].is_object()) {
+                        routing = defaults["routing"];
+                    }
+                    if (defaults.contains("model") && defaults["model"].is_object()) {
+                        model = defaults["model"];
+                    }
+                }
+            }
+            const auto config = taskforge::rt::ModelRouter::configFromJson(routing);
+            const auto statsJson = memory.routingStats(projectId, stateTaskType);
+            taskforge::rt::RoutingStats stats;
+            stats.success = statsJson.value("success", 0LL);
+            stats.failure = statsJson.value("failure", 0LL);
+            stats.coverage = statsJson.value("coverage", 0.0);
+            taskforge::rt::ModelTier executed{
+                "current",
+                model.value("provider", std::string("deepseek")),
+                model.value("model", std::string("deepseek-flash")),
+                1.0};
+            const auto decision = taskforge::rt::ModelRouter::decide(stats, config, &executed);
+            taskforge::Json out{
+                {"ok", true}, {"projectId", projectId},
+                {"taskType", stateTaskType},
+                {"stats", taskforge::Json{{"success", stats.success},
+                                          {"failure", stats.failure},
+                                          {"coverage", stats.coverage}}},
+                {"decision", taskforge::rt::ModelRouter::decisionToJson(decision)}};
+            if (opt.json) {
+                std::cout << out.dump(2) << "\n";
+            } else {
+                std::cout << "Rota: " << decision.tier << " | "
+                          << decision.provider << "/" << decision.model
+                          << " | confianca " << decision.confidence
+                          << " | custo " << decision.expectedCost
+                          << " | " << decision.reason << "\n";
+            }
+            return 0;
         }
 
         if (command == "audit-credit") {

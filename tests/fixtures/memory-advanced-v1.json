@@ -1,0 +1,174 @@
+{
+  "schema": 1,
+  "name": "memory-advanced-v1",
+  "description": "Corpus de mecanismos para caminhos, travessia, pontes e roteamento.",
+  "seed": 20261111,
+  "projectId": "memoria-avancada",
+  "tasks": [
+    {
+      "id": "path-contrast",
+      "kind": "brief",
+      "taskType": "revisar_contraste",
+      "intent": "Revisar o contraste do componente",
+      "themes": ["design"],
+      "budget": 4000,
+      "expect": ["path-guia", "claim-guia-contraste", "claim-contraste-wcag"],
+      "forbid": []
+    },
+    {
+      "id": "path-expired",
+      "kind": "brief",
+      "taskType": "revisar_expirado",
+      "intent": "Revisar contraste expirado",
+      "themes": ["design"],
+      "budget": 4000,
+      "expect": [],
+      "forbid": ["path-expirado", "claim-expirado"]
+    },
+    {
+      "id": "traversal-chain",
+      "kind": "brief",
+      "taskType": "rastrear_origem",
+      "intent": "Guia de contraste: rastrear a origem da regra",
+      "themes": ["design"],
+      "budget": 4000,
+      "expect": ["claim-chain-1", "claim-chain-2", "claim-chain-3"],
+      "forbid": ["claim-chain-local"]
+    },
+    {
+      "id": "traversal-no-anchor",
+      "kind": "brief",
+      "taskType": "rastrear_sem_ancora",
+      "intent": "consulta sem ancora",
+      "themes": ["design"],
+      "budget": 4000,
+      "expect": [],
+      "forbid": ["claim-chain-1", "claim-chain-2", "claim-chain-3"]
+    },
+    {
+      "id": "bridge-cross-lens",
+      "kind": "bridges",
+      "entity": "Guia",
+      "lenses": ["contraste", "tipografia"],
+      "claims": ["claim-guia-contraste", "claim-tipografia"]
+    },
+    {
+      "id": "bridge-same-lens",
+      "kind": "bridges",
+      "forbidEntity": "Relatorio"
+    },
+    {
+      "id": "bridge-access-mismatch",
+      "kind": "bridges",
+      "forbidEntity": "Chave"
+    },
+    {
+      "id": "routing-local",
+      "kind": "route",
+      "taskType": "rotear_local",
+      "expectTier": "local_large"
+    },
+    {
+      "id": "routing-frontier",
+      "kind": "route",
+      "taskType": "rotear_frontier",
+      "expectTier": "frontier"
+    },
+    {
+      "id": "routing-cold",
+      "kind": "route",
+      "taskType": "rotear_cold",
+      "expectTier": "frontier",
+      "expectReason": "insufficient_data"
+    }
+  ],
+  "variants": {
+    "baseline": {
+      "memory": {}
+    },
+    "path_serving": {
+      "memory": {
+        "paths": { "enabled": true, "minDistinctInputs": 1 },
+        "pathServing": {
+          "enabled": true,
+          "minUtility": 0.5,
+          "minUses": 1,
+          "maxPaths": 2
+        }
+      }
+    },
+    "traversal": {
+      "memory": {
+        "traversal": {
+          "enabled": true,
+          "beamWidth": 4,
+          "maxDepth": 3,
+          "maxResults": 16,
+          "timeBudgetMs": 1000
+        }
+      }
+    },
+    "bridges": {
+      "memory": {
+        "bridges": {
+          "enabled": true,
+          "maxProposals": 5,
+          "maxPerEntity": 1
+        }
+      }
+    },
+    "routing_shadow": {
+      "memory": {},
+      "routing": {
+        "mode": "shadow",
+        "pMin": 0.5,
+        "tiers": {
+          "localLarge": { "provider": "deepseek", "model": "deepseek-flash", "cost": 0.2 },
+          "frontier": { "provider": "deepseek", "model": "deepseek-flash", "cost": 1.0 }
+        }
+      }
+    },
+    "routing_binary": {
+      "memory": {},
+      "routing": {
+        "mode": "binary",
+        "pMin": 0.5,
+        "tiers": {
+          "localLarge": { "provider": "deepseek", "model": "deepseek-flash", "cost": 0.2 },
+          "frontier": { "provider": "deepseek", "model": "deepseek-flash", "cost": 1.0 }
+        }
+      }
+    },
+    "all_on": {
+      "memory": {
+        "paths": { "enabled": true, "minDistinctInputs": 1 },
+        "pathServing": {
+          "enabled": true,
+          "minUtility": 0.5,
+          "minUses": 1,
+          "maxPaths": 2
+        },
+        "traversal": {
+          "enabled": true,
+          "beamWidth": 4,
+          "maxDepth": 3,
+          "maxResults": 16,
+          "timeBudgetMs": 1000
+        },
+        "bridges": {
+          "enabled": true,
+          "maxProposals": 5,
+          "maxPerEntity": 1
+        }
+      },
+      "routing": {
+        "mode": "binary",
+        "pMin": 0.5,
+        "tiers": {
+          "localLarge": { "provider": "deepseek", "model": "deepseek-flash", "cost": 0.2 },
+          "frontier": { "provider": "deepseek", "model": "deepseek-flash", "cost": 1.0 }
+        }
+      }
+    }
+  }
+}

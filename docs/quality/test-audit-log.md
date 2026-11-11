@@ -44,6 +44,7 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 | **Cenários de memória** | Propriedades do Projeto → Memória: Consultar (`gate=brief`), Consultar e Decidir (padrão, `gate=enforce` com Jev) e Aprender com aprovação; memória ligada por padrão; “Personalizado” derivado ao alterar campo avançado; sem botão de configuração avançada |
 | **Exemplos migrados** | 14 projetos/pipelines com memória ligada no cenário Consultar e Decidir; exemplos 04/05 mantêm `learn` com gate `shadow`; `e2e_examples.py` passou 14/14 |
 | **Diagnóstico do custo ON** | 20/20 traces do ensaio fizeram `memory_search` (1,8 busca/trace); o brief injetado tem ~451 caracteres. O custo vem das buscas do agente, não do brief |
+| **Interruptores avançados** | `scripts/memory_advanced_eval.py`: 10 tarefas × 7 variantes × 3 repetições, sem modelo. `pathServing` recall/precisão 1,000; `traversal` recall 1,000/precisão 0,500; `bridges` 1 hipótese e 0 arestas; `routing.shadow` mantém o tier e `binary` escolhe local/fronteira. Relatório em `docs/quality/memory-advanced-ab.md` · [consolidado](../pt-BR/resultados-testes-memoria.md) |
 | **Bibliotecas LIB-M-01** | `scripts/capture-libraries-homologation.mjs`: temas claro/escuro, 1024/1800 px, árvore com PENDING/APPROVE/REJECT, sem overflow e canvas escuro; capturas em `docs/assets/screenshots/libraries-*.webp` |
 | **Instalador 2.7.0** | `arestrix-2.7.0-windows-x64-setup.exe` (62.866.760 bytes, SHA-256 `f4067105…f3f80a`); instalação silenciosa, `arestrix-cli`/`arestrix-memory` 2.7.0, `project validate`, abertura do Studio, upgrade 2.1.0-beta.1 → 2.7.0 preservando projeto do usuário e desinstalação completa |
 | **Pacote portátil 2.7.0** | `arestrix-2.7.0-windows-x64.zip` (90.100.073 bytes, 4.912 arquivos), SHA-256 `bb88bee8…e327f33` |
@@ -53,7 +54,8 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 - [ ] Confirmar LIB-M-01 na aplicação nativa (a evidência desta rodada é da camada web).
 - [ ] LIB-M-03 (instalação limpa/upgrade preservando bibliotecas) e LIB-M-04 (offline após cache).
 - [ ] Instalação em máquina realmente limpa (apenas runtime VC++) e Intune/SCCM.
-- [ ] Medição dos interruptores experimentais (`pathServing`, `traversal`, `bridges`, `routing`) com um conjunto de tarefas próprio.
+- [x] Medição de mecanismos dos interruptores experimentais (`pathServing`, `traversal`, `bridges`, `routing`) com corpus próprio.
+- [ ] Repetir o corpus de interruptores em projetos reais e medir qualidade/custo de `routing.mode=binary` com o modelo escolhido.
 - [ ] Confirmação de 3 repetições do `memory.gate` com Jev/local ou janela de menor latência.
 - [ ] Pacote Linux e matriz de CI Linux/macOS.
 

@@ -38,6 +38,7 @@
 - [Memory v1 test strategy](../quality/memory-v1-test-strategy.md) - layers, matrix, gates and evidence.
 - [Memory v1 merge strategy](../quality/memory-v1-merge-strategy.md) - PR train and rollback.
 - [Tracy profiling plan](../quality/tracy-profiling-plan.md) - optional build, instrumentation and assisted optimization (in Portuguese).
+- [Memory test results](memory-test-results.md) - baseline, E20 regression, live parity/value A/B, the policy gate and advanced-switch measurements, with limitations and evidence.
 - [MemoryGate A/B](../quality/memory-gate-ab.md) - memory policy gate, shadow/enforce modes and A/B results (in Portuguese).
 - [Test audit log](../quality/test-audit-log.md)
 - [Skill reference review](../quality/skill-reference-review.md)

@@ -58,7 +58,7 @@ arestrix-cli gen <grafo.json>
 arestrix-cli check [--project <pasta> | <grafo.json>] [--require-env NOME]
 arestrix-cli doctor [--project <pasta>]
 arestrix-cli env set|reset|list|check
-arestrix-cli memory report|health|doctor|trace|claims|paths|bridges|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote|unpromote|reopen|state|ab [--project <pasta>]
+arestrix-cli memory report|brief|route|health|doctor|trace|claims|paths|bridges|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote|unpromote|reopen|state|ab [--project <pasta>]
 arestrix-cli mcp list|test|tools [id]
 arestrix-cli project info|graphs|validate
 arestrix-cli completion powershell|bash|zsh
@@ -214,6 +214,29 @@ lápide, evidências e trechos são removidos e `purge_telemetry` entra na fila.
 Sem `--async`, o comando drena a fila e redige cópias literais dos episódios;
 `--vacuum` compacta o banco depois da telemetria. O primeiro corte reconhece
 janelas literais de pelo menos 96 bytes, não paráfrases.
+
+### `memory brief`
+
+```powershell
+.\arestrix-cli.exe memory brief --project .\examples\04-memoria --task-type revisar_contraste --intent "Revisar o contraste do componente" --theme design --budget 4000 --json
+```
+
+Mostra exatamente o brief que o runtime injetaria, sem chamar modelo. O comando
+configura `pathServing` e `traversal` a partir de `globalDefaults.memory` do
+manifesto e devolve `chars`, `pathIds`, `pathClaimIds`, `traversalIds` e os
+demais ids em `info`. Util para diagnosticar por que um item entrou ou nao no
+contexto.
+
+### `memory route`
+
+```powershell
+.\arestrix-cli.exe memory route --project .\examples\04-memoria --pipeline .\examples\04-memoria\pipelines\main.json --task-type revisar_contraste --json
+```
+
+Aplica a mesma decisao do `ModelRouter` usada pelo runtime, lendo
+`metadata.globalDefaults.routing` do pipeline e as estatisticas de validacao do
+projeto. Em `shadow`, a decisao e registrada mas o tier executado continua o
+atual; em `binary`, o tier escolhido substitui provider/model.
 
 ### `memory paths`
 

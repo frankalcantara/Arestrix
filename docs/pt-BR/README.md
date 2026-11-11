@@ -30,6 +30,7 @@
 - [Plano de testes do Beta 2.3](../quality/beta2.3-test-plan.md) - escopo registrado, instalador/assinatura/CI pendentes e matriz obrigatória.
 - [Estratégia de testes da memória v1](../quality/memory-v1-test-strategy.md) - camadas, matriz, Gates e evidências.
 - [Estratégia de merge da memória v1](../quality/memory-v1-merge-strategy.md) - trem de PRs e rollback.
+- [Resultados dos testes de memória](resultados-testes-memoria.md) - linha de base, regressão E20, A/B live de paridade e valor, gate e interruptores avançados, com limitações e evidências.
 - [Registro de auditoria de testes](../quality/test-audit-log.md)
 - [Revisão das referências de skills](../quality/skill-reference-review.md)
 - [Modelo de segurança e governança](../security/governance.md)

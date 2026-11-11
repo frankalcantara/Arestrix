@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **Beta 2.3**.
 
+## [Unreleased]
+
+### Added
+
+- `arestrix-cli memory brief`: prints the exact runtime brief for a task type,
+  intent, theme and budget, with delivered path/traversal ids, without calling a
+  model. `arestrix-cli memory route`: applies the runtime `ModelRouter` decision
+  from a pipeline's `globalDefaults.routing` and the project validation stats.
+- Curated advanced-switch corpus (`tests/fixtures/memory-advanced-v1.json`) and
+  deterministic harness (`scripts/memory_advanced_eval.py`) covering path
+  serving, beam traversal, interdomain bridge hypotheses and local/frontier
+  routing. Report: `docs/quality/memory-advanced-ab.md`.
+
+### Fixed
+
+- Beam traversal now resolves anchors from natural-language queries by
+  tokenizing the prompt when the whole phrase is not a canonical alias. Before
+  this, a normal `taskType + prompt` query usually abstained.
+- `routing.mode=shadow` with no validation history now records the frontier
+  suggestion but keeps executing the current tier; it no longer switches to the
+  frontier while in shadow.
+
 ## [2.8.0] - 2026-11-11
 
 ### Added

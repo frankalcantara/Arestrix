@@ -5,6 +5,8 @@
 > Documento único de pendências do projeto. O plano de memória (Fases A–C) e o
 > multigrafo avançado (Fase D / E11–E20) estão concluídos. As pendências
 > restantes são operacionais, de performance e de release.
+>
+> Resultados consolidados: [Resultados dos testes de memória](pt-BR/resultados-testes-memoria.md).
 
 ## 1. Resumo
 
@@ -16,6 +18,7 @@
 | Harness de execução do A/B v2 | **Executado com provedor real em 2026-11-11 (paridade/custo e valor)** |
 | Porteiro de política da memória (`memory.gate`) | **Implementado; piloto A/B de 1 repetição concluído** |
 | Cenários de memória do projeto (Consultar / Consultar e Decidir / Aprender) | **Implementados; memória ligada por padrão** |
+| Interruptores experimentais (`pathServing`, `traversal`, `bridges`, `routing.mode`) | **Mecanismos medidos em corpus curado; padrões seguem `off`** |
 | Nível `institution` no `memory_inspect` do assistente | Pendente operacional |
 | Validação com provedores reais de embeddings | Pendente operacional |
 | Interface gráfica para configurar o agente de memória | Pendente de produto |
@@ -117,11 +120,9 @@ totais e 1,62× latência), porque o agente consulta a memória por conta própr
 lição é efetivamente usada, mas o efeito é binário por desenho do validador.
 Relatório: `tests/fixtures/memory-ab-live-value-report.json`.
 
-Isso fecha a lacuna de valor da entrega da memória, mas não promove os
-interruptores experimentais: `memory.pathServing`, `memory.traversal`,
-`memory.bridges` e `routing.mode=binary` ainda precisam de uma medição própria,
-com um conjunto de tarefas que exercite caminhos, travessia e pontes. O A/B de
-valor mede a entrega da lição, não a qualidade da recuperação avançada.
+Isso fecha a lacuna de valor da entrega da memória. Os interruptores
+experimentais têm medição de mecanismos própria na seção 4.1.2; o A/B de valor
+continua medindo a entrega da lição, não a qualidade da recuperação avançada.
 
 ### 4.1.1 Porteiro de política da memória (`memory.gate`)
 
@@ -156,6 +157,33 @@ repetições está pendente porque o agente (DeepSeek) ficou lento sob carga, n�
 pelo Jev (que respondeu em ~270 ms). A tentativa anterior com DeepSeek no gate
 foi interrompida por latência/limite do provedor (34/120 em 33 min). Detalhes em
 `docs/quality/memory-gate-ab.md`.
+
+### 4.1.2 Interruptores avançados: medição de mecanismos
+
+O corpus `tests/fixtures/memory-advanced-v1.json` e o harness
+`scripts/memory_advanced_eval.py` medem os quatro interruptores sem chamada de
+modelo, sobre banco congelado e 10 tarefas (caminho, caminho expirado, cadeia de
+travessia, consulta sem âncora, três casos de ponte e três de roteamento). Cada
+tarefa roda em uma cópia do template, em 3 repetições.
+
+| Cenário | Resultado |
+| :--- | :--- |
+| `pathServing` | tarefa de caminho: recall 1,000 e precisão 1,000; baseline 0,000 |
+| `traversal` | cadeia de 3 saltos: recall 1,000 e precisão 0,500; baseline 0,000 |
+| `bridges` | 1 hipótese correta (`Guia`, lentes `contraste`/`tipografia`), 0 arestas criadas; casos de mesma lente e acesso incompatível não propostos |
+| `routing.mode=shadow` | decisão registrada, tier executado permanece `current` |
+| `routing.mode=binary` | `local_large` com confiança alta, `frontier` com confiança baixa e `frontier` sem histórico |
+| `all_on` | todas as tarefas positivas aprovadas, nenhum item proibido injetado |
+
+A medição revelou e corrigiu dois defeitos: a travessia não resolvia âncoras de
+prompts em linguagem natural (agora tokeniza a consulta quando a frase inteira
+não é um alias) e o modo `shadow` trocava o tier executado quando não havia
+histórico (agora mantém o tier atual e apenas registra a sugestão).
+
+Decisão: os mecanismos estão validados, mas os padrões continuam `off`. A
+promoção ainda exige repetir o corpus em projetos reais e um A/B de qualidade e
+custo com o modelo escolhido. Relatório reproduzível:
+`docs/quality/memory-advanced-ab.md`.
 
 ### 4.2 Nível institucional no assistente
 

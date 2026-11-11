@@ -262,6 +262,12 @@ def run_e2e() -> list[str]:
             continue
         if not verify_step(label, [sys.executable, str(script)]):
             failed.append(label)
+    advanced = ROOT / "scripts" / "memory_advanced_eval.py"
+    if not advanced.exists():
+        print(f"[Verify] {advanced.name} ausente; pulando.")
+    elif not verify_step("e2e advanced memory",
+                         [sys.executable, str(advanced), "--check", "--runs", "3"]):
+        failed.append("e2e advanced memory")
     return failed
 
 

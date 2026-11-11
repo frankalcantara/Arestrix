@@ -7,6 +7,8 @@
 >
 > Single project-wide pending list. The memory implementation plan (Phases A-C) and the advanced
 > multigraph (Phase D / E11-E20) are complete. The remaining items are operational, performance and release tasks.
+>
+> Consolidated results: [Memory test results](memory-test-results.md).
 
 ## 1. Summary
 
@@ -18,6 +20,7 @@
 | A/B v2 execution harness | **Executed with a real provider on 2026-11-11 (parity/cost and value)** |
 | Memory policy gate (`memory.gate`) | **Implemented; 1-repetition A/B pilot complete** |
 | Project memory scenarios (Consult / Consult and Decide / Learn) | **Implemented; memory on by default** |
+| Experimental switches (`pathServing`, `traversal`, `bridges`, `routing.mode`) | **Mechanisms measured on a curated corpus; defaults stay `off`** |
 | `institution` level in the assistant `memory_inspect` | Operational pending |
 | Validation with real embedding providers | Operational pending |
 | Studio UI to configure the memory agent | Product pending |
@@ -109,11 +112,35 @@ issues its own memory searches; the lesson is effectively used, but the effect i
 binary by validator design. Report:
 `tests/fixtures/memory-ab-live-value-report.json`.
 
-This closes the value gap for memory delivery, but it does not promote the
-experimental switches: `memory.pathServing`, `memory.traversal`,
-`memory.bridges` and `routing.mode=binary` still need their own measurement with
-a task set that exercises paths, traversal and bridges. The value A/B measures
-lesson delivery, not the quality of advanced retrieval.
+This closes the value gap for memory delivery. The advanced switches have their
+own mechanism measurement in section 4.1.2; the value A/B still measures lesson
+delivery, not the quality of advanced retrieval.
+
+### 4.1.2 Advanced switches: mechanism measurement
+
+The corpus `tests/fixtures/memory-advanced-v1.json` and the harness
+`scripts/memory_advanced_eval.py` measure the four switches without a model
+call, over frozen knowledge and 10 tasks (path, expired path, three-hop
+traversal chain, no-anchor query, three bridge cases and three routing cases).
+Each task runs on a copy of the template, with 3 repetitions.
+
+| Scenario | Result |
+| :--- | :--- |
+| `pathServing` | path task: recall 1.000 and precision 1.000; baseline 0.000 |
+| `traversal` | three-hop chain: recall 1.000 and precision 0.500; baseline 0.000 |
+| `bridges` | 1 correct hypothesis (`Guia`, lenses `contraste`/`tipografia`), 0 edges created; same-lens and incompatible-access cases were not proposed |
+| `routing.mode=shadow` | decision recorded, executed tier stays `current` |
+| `routing.mode=binary` | `local_large` at high confidence, `frontier` at low confidence and `frontier` without history |
+| `all_on` | every positive task passed and no forbidden item was injected |
+
+The measurement found and fixed two defects: traversal did not resolve anchors
+from natural-language prompts (it now tokenizes the query when the whole phrase
+is not an alias) and `shadow` switched the executed tier when there was no
+history (it now keeps the current tier and only records the suggestion).
+
+Decision: the mechanisms are validated, but defaults stay `off`. Promotion still
+requires repeating the corpus on real projects and a quality/cost A/B with the
+chosen model. Reproducible report: `docs/quality/memory-advanced-ab.md`.
 
 ### 4.1.1 Memory policy gate (`memory.gate`)
 

@@ -504,9 +504,11 @@ stays off until the A/B result is recorded.
 
 When no path covers the query, `globalDefaults.memory.traversal` enables a
 bounded traversal from anchors resolved by alias, FTS and optional vector
-candidates. The search limits beam width, depth, expanded candidates, time and
-characters; ineligible items never enter the top-k and cycles do not repeat
-nodes. `memory_search` accepts `mode: "graph"` for this route.
+candidates. When the whole query is not an alias, the resolver tokenizes the
+prompt and tries the relevant terms before abstaining. The search limits beam
+width, depth, expanded candidates, time and characters; ineligible items never
+enter the top-k and cycles do not repeat nodes. `memory_search` accepts
+`mode: "graph"` for this route.
 
 The pack returns each item with source, validity and justification, and records
 the coverage vector in the trace: best path utility, sustained fraction,

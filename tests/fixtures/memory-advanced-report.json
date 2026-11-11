@@ -1,0 +1,1553 @@
+{
+  "schema": 1,
+  "name": "memory-advanced-v1",
+  "seed": 20261111,
+  "projectId": "memoria-avancada",
+  "runs": 3,
+  "tasks": [
+    {
+      "id": "path-contrast",
+      "kind": "brief",
+      "taskType": "revisar_contraste",
+      "intent": "Revisar o contraste do componente",
+      "themes": [
+        "design"
+      ],
+      "budget": 4000,
+      "expect": [
+        "path-guia",
+        "claim-guia-contraste",
+        "claim-contraste-wcag"
+      ],
+      "forbid": []
+    },
+    {
+      "id": "path-expired",
+      "kind": "brief",
+      "taskType": "revisar_expirado",
+      "intent": "Revisar contraste expirado",
+      "themes": [
+        "design"
+      ],
+      "budget": 4000,
+      "expect": [],
+      "forbid": [
+        "path-expirado",
+        "claim-expirado"
+      ]
+    },
+    {
+      "id": "traversal-chain",
+      "kind": "brief",
+      "taskType": "rastrear_origem",
+      "intent": "Guia de contraste: rastrear a origem da regra",
+      "themes": [
+        "design"
+      ],
+      "budget": 4000,
+      "expect": [
+        "claim-chain-1",
+        "claim-chain-2",
+        "claim-chain-3"
+      ],
+      "forbid": [
+        "claim-chain-local"
+      ]
+    },
+    {
+      "id": "traversal-no-anchor",
+      "kind": "brief",
+      "taskType": "rastrear_sem_ancora",
+      "intent": "consulta sem ancora",
+      "themes": [
+        "design"
+      ],
+      "budget": 4000,
+      "expect": [],
+      "forbid": [
+        "claim-chain-1",
+        "claim-chain-2",
+        "claim-chain-3"
+      ]
+    },
+    {
+      "id": "bridge-cross-lens",
+      "kind": "bridges",
+      "entity": "Guia",
+      "lenses": [
+        "contraste",
+        "tipografia"
+      ],
+      "claims": [
+        "claim-guia-contraste",
+        "claim-tipografia"
+      ]
+    },
+    {
+      "id": "bridge-same-lens",
+      "kind": "bridges",
+      "forbidEntity": "Relatorio"
+    },
+    {
+      "id": "bridge-access-mismatch",
+      "kind": "bridges",
+      "forbidEntity": "Chave"
+    },
+    {
+      "id": "routing-local",
+      "kind": "route",
+      "taskType": "rotear_local",
+      "expectTier": "local_large"
+    },
+    {
+      "id": "routing-frontier",
+      "kind": "route",
+      "taskType": "rotear_frontier",
+      "expectTier": "frontier"
+    },
+    {
+      "id": "routing-cold",
+      "kind": "route",
+      "taskType": "rotear_cold",
+      "expectTier": "frontier",
+      "expectReason": "insufficient_data"
+    }
+  ],
+  "variants": {
+    "baseline": {
+      "memory": {}
+    },
+    "path_serving": {
+      "memory": {
+        "paths": {
+          "enabled": true,
+          "minDistinctInputs": 1
+        },
+        "pathServing": {
+          "enabled": true,
+          "minUtility": 0.5,
+          "minUses": 1,
+          "maxPaths": 2
+        }
+      }
+    },
+    "traversal": {
+      "memory": {
+        "traversal": {
+          "enabled": true,
+          "beamWidth": 4,
+          "maxDepth": 3,
+          "maxResults": 16,
+          "timeBudgetMs": 1000
+        }
+      }
+    },
+    "bridges": {
+      "memory": {
+        "bridges": {
+          "enabled": true,
+          "maxProposals": 5,
+          "maxPerEntity": 1
+        }
+      }
+    },
+    "routing_shadow": {
+      "memory": {},
+      "routing": {
+        "mode": "shadow",
+        "pMin": 0.5,
+        "tiers": {
+          "localLarge": {
+            "provider": "deepseek",
+            "model": "deepseek-flash",
+            "cost": 0.2
+          },
+          "frontier": {
+            "provider": "deepseek",
+            "model": "deepseek-flash",
+            "cost": 1.0
+          }
+        }
+      }
+    },
+    "routing_binary": {
+      "memory": {},
+      "routing": {
+        "mode": "binary",
+        "pMin": 0.5,
+        "tiers": {
+          "localLarge": {
+            "provider": "deepseek",
+            "model": "deepseek-flash",
+            "cost": 0.2
+          },
+          "frontier": {
+            "provider": "deepseek",
+            "model": "deepseek-flash",
+            "cost": 1.0
+          }
+        }
+      }
+    },
+    "all_on": {
+      "memory": {
+        "paths": {
+          "enabled": true,
+          "minDistinctInputs": 1
+        },
+        "pathServing": {
+          "enabled": true,
+          "minUtility": 0.5,
+          "minUses": 1,
+          "maxPaths": 2
+        },
+        "traversal": {
+          "enabled": true,
+          "beamWidth": 4,
+          "maxDepth": 3,
+          "maxResults": 16,
+          "timeBudgetMs": 1000
+        },
+        "bridges": {
+          "enabled": true,
+          "maxProposals": 5,
+          "maxPerEntity": 1
+        }
+      },
+      "routing": {
+        "mode": "binary",
+        "pMin": 0.5,
+        "tiers": {
+          "localLarge": {
+            "provider": "deepseek",
+            "model": "deepseek-flash",
+            "cost": 0.2
+          },
+          "frontier": {
+            "provider": "deepseek",
+            "model": "deepseek-flash",
+            "cost": 1.0
+          }
+        }
+      }
+    }
+  },
+  "results": {
+    "baseline": {
+      "path-contrast": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 62.719,
+        "briefCharsMean": 0.0,
+        "positive": true,
+        "recallMean": 0.0,
+        "precisionMean": 0.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [
+          "claim-contraste-wcag",
+          "claim-guia-contraste",
+          "path-guia"
+        ],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "path-expired": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 47.661,
+        "briefCharsMean": 0.0,
+        "positive": false,
+        "recallMean": 1.0,
+        "precisionMean": 1.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "traversal-chain": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 59.653,
+        "briefCharsMean": 0.0,
+        "positive": true,
+        "recallMean": 0.0,
+        "precisionMean": 0.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [
+          "claim-chain-1",
+          "claim-chain-2",
+          "claim-chain-3"
+        ],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "traversal-no-anchor": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 48.686,
+        "briefCharsMean": 0.0,
+        "positive": false,
+        "recallMean": 1.0,
+        "precisionMean": 1.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "bridge-cross-lens": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 4.926,
+        "enabled": false,
+        "proposedMean": 0.0,
+        "entities": [],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "bridge-same-lens": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 4.588,
+        "enabled": false,
+        "proposedMean": 0.0,
+        "entities": [],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "bridge-access-mismatch": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 5.464,
+        "enabled": false,
+        "proposedMean": 0.0,
+        "entities": [],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "routing-local": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 63.199,
+        "tiers": [
+          "current"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "routing_off"
+        ],
+        "confidenceMean": 0.5,
+        "expectedCostMean": 0.0
+      },
+      "routing-frontier": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 66.604,
+        "tiers": [
+          "current"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "routing_off"
+        ],
+        "confidenceMean": 0.5,
+        "expectedCostMean": 0.0
+      },
+      "routing-cold": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 54.889,
+        "tiers": [
+          "current"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "routing_off"
+        ],
+        "confidenceMean": 0.5,
+        "expectedCostMean": 0.0
+      }
+    },
+    "path_serving": {
+      "path-contrast": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 54.009,
+        "briefCharsMean": 422.0,
+        "positive": true,
+        "recallMean": 1.0,
+        "precisionMean": 1.0,
+        "delivered": [
+          "claim-contraste-wcag",
+          "claim-guia-contraste",
+          "path-guia"
+        ],
+        "matched": [
+          "claim-contraste-wcag",
+          "claim-guia-contraste",
+          "path-guia"
+        ],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": true,
+        "traversalUsed": false
+      },
+      "path-expired": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 62.078,
+        "briefCharsMean": 0.0,
+        "positive": false,
+        "recallMean": 1.0,
+        "precisionMean": 1.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "traversal-chain": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 51.406,
+        "briefCharsMean": 0.0,
+        "positive": true,
+        "recallMean": 0.0,
+        "precisionMean": 0.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [
+          "claim-chain-1",
+          "claim-chain-2",
+          "claim-chain-3"
+        ],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "traversal-no-anchor": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 73.888,
+        "briefCharsMean": 0.0,
+        "positive": false,
+        "recallMean": 1.0,
+        "precisionMean": 1.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "bridge-cross-lens": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 6.567,
+        "enabled": false,
+        "proposedMean": 0.0,
+        "entities": [],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "bridge-same-lens": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 6.262,
+        "enabled": false,
+        "proposedMean": 0.0,
+        "entities": [],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "bridge-access-mismatch": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 7.027,
+        "enabled": false,
+        "proposedMean": 0.0,
+        "entities": [],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "routing-local": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 54.543,
+        "tiers": [
+          "current"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "routing_off"
+        ],
+        "confidenceMean": 0.5,
+        "expectedCostMean": 0.0
+      },
+      "routing-frontier": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 61.447,
+        "tiers": [
+          "current"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "routing_off"
+        ],
+        "confidenceMean": 0.5,
+        "expectedCostMean": 0.0
+      },
+      "routing-cold": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 71.96,
+        "tiers": [
+          "current"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "routing_off"
+        ],
+        "confidenceMean": 0.5,
+        "expectedCostMean": 0.0
+      }
+    },
+    "traversal": {
+      "path-contrast": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 53.197,
+        "briefCharsMean": 0.0,
+        "positive": true,
+        "recallMean": 0.0,
+        "precisionMean": 0.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [
+          "claim-contraste-wcag",
+          "claim-guia-contraste",
+          "path-guia"
+        ],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "path-expired": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 50.974,
+        "briefCharsMean": 0.0,
+        "positive": false,
+        "recallMean": 1.0,
+        "precisionMean": 1.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "traversal-chain": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 66.06,
+        "briefCharsMean": 736.0,
+        "positive": true,
+        "recallMean": 1.0,
+        "precisionMean": 0.5,
+        "delivered": [
+          "claim-chain-1",
+          "claim-chain-2",
+          "claim-chain-3",
+          "claim-contraste-wcag",
+          "claim-guia-contraste",
+          "claim-tipografia"
+        ],
+        "matched": [
+          "claim-chain-1",
+          "claim-chain-2",
+          "claim-chain-3"
+        ],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": true
+      },
+      "traversal-no-anchor": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 57.725,
+        "briefCharsMean": 0.0,
+        "positive": false,
+        "recallMean": 1.0,
+        "precisionMean": 1.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "bridge-cross-lens": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 6.369,
+        "enabled": false,
+        "proposedMean": 0.0,
+        "entities": [],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "bridge-same-lens": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 5.495,
+        "enabled": false,
+        "proposedMean": 0.0,
+        "entities": [],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "bridge-access-mismatch": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 5.124,
+        "enabled": false,
+        "proposedMean": 0.0,
+        "entities": [],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "routing-local": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 67.057,
+        "tiers": [
+          "current"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "routing_off"
+        ],
+        "confidenceMean": 0.5,
+        "expectedCostMean": 0.0
+      },
+      "routing-frontier": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 48.311,
+        "tiers": [
+          "current"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "routing_off"
+        ],
+        "confidenceMean": 0.5,
+        "expectedCostMean": 0.0
+      },
+      "routing-cold": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 50.626,
+        "tiers": [
+          "current"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "routing_off"
+        ],
+        "confidenceMean": 0.5,
+        "expectedCostMean": 0.0
+      }
+    },
+    "bridges": {
+      "path-contrast": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 59.25,
+        "briefCharsMean": 0.0,
+        "positive": true,
+        "recallMean": 0.0,
+        "precisionMean": 0.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [
+          "claim-contraste-wcag",
+          "claim-guia-contraste",
+          "path-guia"
+        ],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "path-expired": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 41.183,
+        "briefCharsMean": 0.0,
+        "positive": false,
+        "recallMean": 1.0,
+        "precisionMean": 1.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "traversal-chain": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 42.916,
+        "briefCharsMean": 0.0,
+        "positive": true,
+        "recallMean": 0.0,
+        "precisionMean": 0.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [
+          "claim-chain-1",
+          "claim-chain-2",
+          "claim-chain-3"
+        ],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "traversal-no-anchor": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 55.049,
+        "briefCharsMean": 0.0,
+        "positive": false,
+        "recallMean": 1.0,
+        "precisionMean": 1.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "bridge-cross-lens": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 66.261,
+        "enabled": true,
+        "proposedMean": 1.0,
+        "entities": [
+          "Guia"
+        ],
+        "proposalFound": true,
+        "claimsFound": true,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "bridge-same-lens": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 76.474,
+        "enabled": true,
+        "proposedMean": 1.0,
+        "entities": [
+          "Guia"
+        ],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "bridge-access-mismatch": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 66.796,
+        "enabled": true,
+        "proposedMean": 1.0,
+        "entities": [
+          "Guia"
+        ],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "routing-local": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 58.806,
+        "tiers": [
+          "current"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "routing_off"
+        ],
+        "confidenceMean": 0.5,
+        "expectedCostMean": 0.0
+      },
+      "routing-frontier": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 69.457,
+        "tiers": [
+          "current"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "routing_off"
+        ],
+        "confidenceMean": 0.5,
+        "expectedCostMean": 0.0
+      },
+      "routing-cold": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 64.368,
+        "tiers": [
+          "current"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "routing_off"
+        ],
+        "confidenceMean": 0.5,
+        "expectedCostMean": 0.0
+      }
+    },
+    "routing_shadow": {
+      "path-contrast": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 77.902,
+        "briefCharsMean": 0.0,
+        "positive": true,
+        "recallMean": 0.0,
+        "precisionMean": 0.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [
+          "claim-contraste-wcag",
+          "claim-guia-contraste",
+          "path-guia"
+        ],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "path-expired": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 46.358,
+        "briefCharsMean": 0.0,
+        "positive": false,
+        "recallMean": 1.0,
+        "precisionMean": 1.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "traversal-chain": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 59.511,
+        "briefCharsMean": 0.0,
+        "positive": true,
+        "recallMean": 0.0,
+        "precisionMean": 0.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [
+          "claim-chain-1",
+          "claim-chain-2",
+          "claim-chain-3"
+        ],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "traversal-no-anchor": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 45.245,
+        "briefCharsMean": 0.0,
+        "positive": false,
+        "recallMean": 1.0,
+        "precisionMean": 1.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "bridge-cross-lens": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 5.958,
+        "enabled": false,
+        "proposedMean": 0.0,
+        "entities": [],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "bridge-same-lens": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 5.429,
+        "enabled": false,
+        "proposedMean": 0.0,
+        "entities": [],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "bridge-access-mismatch": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 5.739,
+        "enabled": false,
+        "proposedMean": 0.0,
+        "entities": [],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "routing-local": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 63.88,
+        "tiers": [
+          "current"
+        ],
+        "shadowTiers": [
+          "local_large"
+        ],
+        "shadow": true,
+        "reasons": [
+          "shadow:local_large"
+        ],
+        "confidenceMean": 0.8333,
+        "expectedCostMean": 0.3667
+      },
+      "routing-frontier": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 51.987,
+        "tiers": [
+          "current"
+        ],
+        "shadowTiers": [
+          "frontier"
+        ],
+        "shadow": true,
+        "reasons": [
+          "shadow:frontier"
+        ],
+        "confidenceMean": 0.1667,
+        "expectedCostMean": 1.0
+      },
+      "routing-cold": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 54.73,
+        "tiers": [
+          "current"
+        ],
+        "shadowTiers": [
+          "frontier"
+        ],
+        "shadow": true,
+        "reasons": [
+          "shadow:frontier"
+        ],
+        "confidenceMean": 0.5,
+        "expectedCostMean": 1.0
+      }
+    },
+    "routing_binary": {
+      "path-contrast": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 55.611,
+        "briefCharsMean": 0.0,
+        "positive": true,
+        "recallMean": 0.0,
+        "precisionMean": 0.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [
+          "claim-contraste-wcag",
+          "claim-guia-contraste",
+          "path-guia"
+        ],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "path-expired": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 43.105,
+        "briefCharsMean": 0.0,
+        "positive": false,
+        "recallMean": 1.0,
+        "precisionMean": 1.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "traversal-chain": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 61.138,
+        "briefCharsMean": 0.0,
+        "positive": true,
+        "recallMean": 0.0,
+        "precisionMean": 0.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [
+          "claim-chain-1",
+          "claim-chain-2",
+          "claim-chain-3"
+        ],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "traversal-no-anchor": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 43.48,
+        "briefCharsMean": 0.0,
+        "positive": false,
+        "recallMean": 1.0,
+        "precisionMean": 1.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "bridge-cross-lens": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 5.985,
+        "enabled": false,
+        "proposedMean": 0.0,
+        "entities": [],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "bridge-same-lens": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 5.707,
+        "enabled": false,
+        "proposedMean": 0.0,
+        "entities": [],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "bridge-access-mismatch": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 5.999,
+        "enabled": false,
+        "proposedMean": 0.0,
+        "entities": [],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "routing-local": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 65.841,
+        "tiers": [
+          "local_large"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "local_confidence"
+        ],
+        "confidenceMean": 0.8333,
+        "expectedCostMean": 0.3667
+      },
+      "routing-frontier": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 50.18,
+        "tiers": [
+          "frontier"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "frontier_expected_cost"
+        ],
+        "confidenceMean": 0.1667,
+        "expectedCostMean": 1.0
+      },
+      "routing-cold": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 62.575,
+        "tiers": [
+          "frontier"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "insufficient_data"
+        ],
+        "confidenceMean": 0.5,
+        "expectedCostMean": 1.0
+      }
+    },
+    "all_on": {
+      "path-contrast": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 45.772,
+        "briefCharsMean": 422.0,
+        "positive": true,
+        "recallMean": 1.0,
+        "precisionMean": 1.0,
+        "delivered": [
+          "claim-contraste-wcag",
+          "claim-guia-contraste",
+          "path-guia"
+        ],
+        "matched": [
+          "claim-contraste-wcag",
+          "claim-guia-contraste",
+          "path-guia"
+        ],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": true,
+        "traversalUsed": false
+      },
+      "path-expired": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 58.352,
+        "briefCharsMean": 0.0,
+        "positive": false,
+        "recallMean": 1.0,
+        "precisionMean": 1.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "traversal-chain": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 47.016,
+        "briefCharsMean": 736.0,
+        "positive": true,
+        "recallMean": 1.0,
+        "precisionMean": 0.5,
+        "delivered": [
+          "claim-chain-1",
+          "claim-chain-2",
+          "claim-chain-3",
+          "claim-contraste-wcag",
+          "claim-guia-contraste",
+          "claim-tipografia"
+        ],
+        "matched": [
+          "claim-chain-1",
+          "claim-chain-2",
+          "claim-chain-3"
+        ],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": true
+      },
+      "traversal-no-anchor": {
+        "ok": true,
+        "runs": 3,
+        "kind": "brief",
+        "latencyMsMean": 62.064,
+        "briefCharsMean": 0.0,
+        "positive": false,
+        "recallMean": 1.0,
+        "precisionMean": 1.0,
+        "delivered": [],
+        "matched": [],
+        "missing": [],
+        "forbiddenFound": [],
+        "pathServed": false,
+        "traversalUsed": false
+      },
+      "bridge-cross-lens": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 59.004,
+        "enabled": true,
+        "proposedMean": 1.0,
+        "entities": [
+          "Guia"
+        ],
+        "proposalFound": true,
+        "claimsFound": true,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "bridge-same-lens": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 74.683,
+        "enabled": true,
+        "proposedMean": 1.0,
+        "entities": [
+          "Guia"
+        ],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "bridge-access-mismatch": {
+        "ok": true,
+        "runs": 3,
+        "kind": "bridges",
+        "latencyMsMean": 60.774,
+        "enabled": true,
+        "proposedMean": 1.0,
+        "entities": [
+          "Guia"
+        ],
+        "proposalFound": false,
+        "claimsFound": false,
+        "forbiddenFound": false,
+        "edgeDeltaMax": 0
+      },
+      "routing-local": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 62.426,
+        "tiers": [
+          "local_large"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "local_confidence"
+        ],
+        "confidenceMean": 0.8333,
+        "expectedCostMean": 0.3667
+      },
+      "routing-frontier": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 48.934,
+        "tiers": [
+          "frontier"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "frontier_expected_cost"
+        ],
+        "confidenceMean": 0.1667,
+        "expectedCostMean": 1.0
+      },
+      "routing-cold": {
+        "ok": true,
+        "runs": 3,
+        "kind": "route",
+        "latencyMsMean": 63.997,
+        "tiers": [
+          "frontier"
+        ],
+        "shadowTiers": [
+          ""
+        ],
+        "shadow": false,
+        "reasons": [
+          "insufficient_data"
+        ],
+        "confidenceMean": 0.5,
+        "expectedCostMean": 1.0
+      }
+    }
+  },
+  "summaries": {
+    "baseline": {
+      "briefTasks": 4,
+      "positiveTasks": 2,
+      "negativeTasks": 2,
+      "positiveRecallMean": 0.0,
+      "precisionMean": 0.0,
+      "negativePass": true,
+      "forbiddenTotal": 0,
+      "briefCharsMean": 0.0,
+      "pathServedTasks": 0,
+      "traversalTasks": 0
+    },
+    "path_serving": {
+      "briefTasks": 4,
+      "positiveTasks": 2,
+      "negativeTasks": 2,
+      "positiveRecallMean": 0.5,
+      "precisionMean": 0.5,
+      "negativePass": true,
+      "forbiddenTotal": 0,
+      "briefCharsMean": 105.5,
+      "pathServedTasks": 1,
+      "traversalTasks": 0
+    },
+    "traversal": {
+      "briefTasks": 4,
+      "positiveTasks": 2,
+      "negativeTasks": 2,
+      "positiveRecallMean": 0.5,
+      "precisionMean": 0.25,
+      "negativePass": true,
+      "forbiddenTotal": 0,
+      "briefCharsMean": 184.0,
+      "pathServedTasks": 0,
+      "traversalTasks": 1
+    },
+    "bridges": {
+      "briefTasks": 4,
+      "positiveTasks": 2,
+      "negativeTasks": 2,
+      "positiveRecallMean": 0.0,
+      "precisionMean": 0.0,
+      "negativePass": true,
+      "forbiddenTotal": 0,
+      "briefCharsMean": 0.0,
+      "pathServedTasks": 0,
+      "traversalTasks": 0
+    },
+    "routing_shadow": {
+      "briefTasks": 4,
+      "positiveTasks": 2,
+      "negativeTasks": 2,
+      "positiveRecallMean": 0.0,
+      "precisionMean": 0.0,
+      "negativePass": true,
+      "forbiddenTotal": 0,
+      "briefCharsMean": 0.0,
+      "pathServedTasks": 0,
+      "traversalTasks": 0
+    },
+    "routing_binary": {
+      "briefTasks": 4,
+      "positiveTasks": 2,
+      "negativeTasks": 2,
+      "positiveRecallMean": 0.0,
+      "precisionMean": 0.0,
+      "negativePass": true,
+      "forbiddenTotal": 0,
+      "briefCharsMean": 0.0,
+      "pathServedTasks": 0,
+      "traversalTasks": 0
+    },
+    "all_on": {
+      "briefTasks": 4,
+      "positiveTasks": 2,
+      "negativeTasks": 2,
+      "positiveRecallMean": 1.0,
+      "precisionMean": 0.75,
+      "negativePass": true,
+      "forbiddenTotal": 0,
+      "briefCharsMean": 289.5,
+      "pathServedTasks": 1,
+      "traversalTasks": 1
+    }
+  },
+  "acceptance": {
+    "baselinePathRecallZero": true,
+    "pathServingRecallOne": true,
+    "pathServingPrecisionOne": true,
+    "pathExpiredNotServed": true,
+    "baselineTraversalRecallZero": true,
+    "traversalRecallOne": true,
+    "traversalPrecisionAtLeastHalf": true,
+    "traversalNoAnchorClean": true,
+    "traversalAccessClean": true,
+    "bridgeProposalFound": true,
+    "bridgeClaimsFound": true,
+    "bridgeSameLensClean": true,
+    "bridgeAccessClean": true,
+    "bridgeNoEdgeCreation": true,
+    "routingBinaryLocal": true,
+    "routingBinaryFrontier": true,
+    "routingBinaryCold": true,
+    "routingShadowLocal": true,
+    "routingShadowKeepsCurrent": true,
+    "routingShadowColdKeepsCurrent": true,
+    "allOnPath": true,
+    "allOnTraversal": true,
+    "allOnBridge": true,
+    "allOnRouting": true
+  },
+  "accepted": true
+}

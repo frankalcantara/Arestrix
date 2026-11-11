@@ -7720,6 +7720,36 @@ TEST(memory_traversal_beam_finds_path_and_respects_budget_and_access) {
     fs::remove_all(root, ec);
 }
 
+TEST(memory_anchors_resolve_natural_language_query) {
+    using taskforge::memory::MemoryAnchors;
+    using taskforge::memory::MemoryStore;
+    namespace fs = std::filesystem;
+
+    const fs::path root = fs::temp_directory_path() / "arestrix-memory-anchors-query";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root, ec);
+    const std::string scope = "project:anchors-query";
+    std::string error;
+    MemoryStore store((root / "memory.db").string());
+    CHECK(store.open(error));
+    CHECK(store.ensureScope(scope, "project", "", "anchors-query"));
+    const std::string start = store.resolveNode(scope, "Guia", "entity");
+    const std::string next = store.resolveNode(scope, "Passo 1", "entity");
+    const std::string edge = store.recordEdge(
+        scope, start, next, "DERIVA_DE", taskforge::Json::object(),
+        "2026-01-01", "", 0.9, "active", "claim", "anchors",
+        taskforge::Json{{"claim", true}, {"lens", "origem"}});
+    CHECK(!edge.empty());
+
+    const auto anchors = MemoryAnchors::resolve(
+        store, scope, "Guia de contraste: rastrear a origem da regra", 5);
+    CHECK(!anchors.empty());
+    CHECK(anchors[0].id == start);
+    store.close();
+    fs::remove_all(root, ec);
+}
+
 TEST(memory_paths_exploration_fraction_and_thompson_bounds) {
     using taskforge::memory::MemoryPaths;
     size_t explored = 0;
@@ -7778,6 +7808,14 @@ TEST(model_router_decides_by_confidence_privacy_and_shadow) {
     decision = ModelRouter::decide(good, shadow, &current);
     CHECK(decision.shadow);
     CHECK(decision.shadowTier == "local_large");
+    CHECK(decision.provider == "openai");
+    CHECK(decision.model == "gpt-current");
+
+    RoutingStats cold;
+    decision = ModelRouter::decide(cold, shadow, &current);
+    CHECK(decision.shadow);
+    CHECK(decision.tier == "current");
+    CHECK(decision.shadowTier == "frontier");
     CHECK(decision.provider == "openai");
     CHECK(decision.model == "gpt-current");
 

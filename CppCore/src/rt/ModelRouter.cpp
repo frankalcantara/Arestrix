@@ -99,6 +99,16 @@ RoutingDecision ModelRouter::decide(const RoutingStats& stats, const RoutingConf
     }
     const long long total = stats.success + stats.failure;
     if (total <= 0) {
+        if (config.mode == "shadow") {
+            // Sem dados, shadow ainda pode sugerir o frontier, mas a execucao
+            // continua no tier atual.
+            decision.shadow = true;
+            decision.shadowTier = config.frontier.name;
+            select(decision, fallback, "shadow:" + config.frontier.name);
+            decision.confidence = 0.5;
+            decision.expectedCost = config.frontier.cost;
+            return decision;
+        }
         select(decision, config.frontier, "insufficient_data");
         decision.confidence = 0.5;
         decision.expectedCost = config.frontier.cost;
