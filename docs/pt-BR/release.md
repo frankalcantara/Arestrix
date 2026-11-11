@@ -1,9 +1,8 @@
 # Gate de release e artefatos
 
-> **Fase 5A.** Esta é a camada de validação reproduzível antes do empacotamento e da assinatura.
-> O instalador Windows em Inno Setup e o workflow SignPath Foundation estão implementados; aprovação
-> da conta SignPath, validação em máquina limpa, pacote Linux, CI Linux e catálogo remoto assinado
-> continuam pendentes; veja o [roadmap](roadmap.md).
+> **Fase 5A.** Esta é a camada de validação reproduzível antes do empacotamento.
+> O instalador Windows em Inno Setup está implementado; validação em máquina limpa, pacote Linux,
+> CI Linux e catálogo remoto assinado continuam pendentes; veja o [roadmap](roadmap.md).
 
 ## 1. Prepare uma árvore limpa
 
@@ -167,36 +166,12 @@ A validação local em Windows 11 x64 cobriu o preflight do ambiente (todos os i
 detectados), instalação silenciosa com relatório no log do setup, atalho de desktop padrão e sua
 exclusão com `/MERGETASKS="!desktopicon"`, atalhos do Menu Iniciar, registro em `App Paths`, upgrade
 sobre a instalação anterior preservando arquivos/projetos do usuário e desinstalação completa.
-Instalação em máquina limpa, assinatura e Intune/SCCM ainda estão pendentes; o instalador é incluído
+Instalação em máquina limpa e Intune/SCCM ainda estão pendentes; o instalador é incluído
 no release, mas ainda não é um artefato de release totalmente validado.
 
-## 4. Assinatura com SignPath Foundation
+## 4. Alternativa: assinatura local com PFX/thumbprint
 
-O Arestrix está configurado para assinatura de código via [SignPath Foundation](https://signpath.org).
-O certificado é emitido para a **SignPath Foundation**, então o Windows exibe `SignPath Foundation`
-como publisher. Os critérios e a política estão em [CODE_SIGNING.md](../../CODE_SIGNING.md); a
-configuração da conta e do repositório está em [signpath/README.md](../../signpath/README.md).
-
-O workflow de deploy possui etapas opcionais controladas por `SIGNPATH_ENABLED=true` e por uma tag
-`v*`. Pushes na `main` continuam publicando o pré-release `latest` sem assinatura, então a aprovação
-manual só é necessária em releases tagueadas. As etapas:
-
-1. enviam os quatro executáveis sem assinatura e solicitam a assinatura;
-2. aguardam a aprovação manual no SignPath, baixam e verificam os binários assinados;
-3. regeneram o manifesto de release com os hashes assinados;
-4. geram o ZIP portátil e o instalador a partir dos binários assinados;
-5. enviam o setup para uma segunda solicitação de assinatura, verificam e reescrevem o sidecar `.sha256`.
-
-Variáveis necessárias: `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`,
-`SIGNPATH_SIGNING_POLICY_SLUG`, `SIGNPATH_BINARIES_ARTIFACT_CONFIG_SLUG` e
-`SIGNPATH_INSTALLER_ARTIFACT_CONFIG_SLUG`. O token fica no secret `SIGNPATH_API_TOKEN`.
-
-O desinstalador gerado pelo Inno continua sem assinatura por enquanto, porque a GitHub Action da
-SignPath é assíncrona; isso está documentado em [signpath/README.md](../../signpath/README.md).
-
-## 4.1 Alternativa: assinatura local com PFX/thumbprint
-
-Depois do gate aprovado, assine os executáveis com um certificado corporativo local:
+O release automatizado publica artefatos sem assinatura. O script abaixo é uma etapa manual opcional para organizações que possuem certificado de assinatura de código próprio. Depois do gate aprovado, assine os executáveis com um certificado corporativo local:
 
 ```powershell
 $env:ARESTRIX_SIGN_PFX = "C:\secrets\arestrix.pfx"
@@ -209,10 +184,8 @@ Como alternativa, use `ARESTRIX_SIGN_THUMBPRINT` para um certificado instalado e
 
 ## 5. Fora da fase 5A
 
-- Aprovação da conta/projeto SignPath Foundation e primeira release assinada (workflow implementado).
 - Instalador Windows Inno Setup implementado (5B2 parcial; validação em máquina limpa, upgrade,
   uninstall, instalação silenciosa e Intune/SCCM ainda pendentes) e pacote Linux (5B2).
-- Certificado/HSM próprio da empresa e assinatura do desinstalador do Inno.
 - E2E no caminho automatizado de release e matriz de CI no macOS.
 - Catálogo remoto assinado (Ed25519/minisign) e hospedagem.
 

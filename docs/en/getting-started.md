@@ -246,7 +246,7 @@ Alternatively, use `ARESTRIX_SIGN_THUMBPRINT` for a certificate in the `My` stor
 Runtime upgrades are controlled by the embedded manifest: when Arestrix moves to a new version, the new
 `llama.cpp` build is downloaded, verified and older versions are removed. A signed remote catalog
 (Ed25519/minisign) still depends on a key pair and hosting decision; until then the catalog is embedded in the
-signed application binary.
+application binary.
 
 The pinned binary manifest lives at `CppCore/runtime/llama.manifest.json` and uses official
 `llama.cpp b11669`, which already includes the native `llama-server` router mode (`--models-preset`).

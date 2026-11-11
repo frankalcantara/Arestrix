@@ -32,11 +32,10 @@
 
 ### Distribution
 
-- The final code-signing certificate/HSM and the signed release execution are pending.
 - The portable package (5B1) is implemented. Installer packaging (MSI/WiX, MSIX or Inno Setup; Linux
   AppImage/deb/tarball) is pending in 5B2.
 - A signed remote catalog/manifest (Ed25519/minisign) is not implemented. The embedded catalog is
-  protected by the signed application binary; remote updates need a key pair and hosting decision.
+  protected by the application binary; remote updates need a key pair and hosting decision.
 - Runtime upgrades are tied to an application version because the manifest is embedded.
 
 ### AI Gateway
@@ -149,7 +148,6 @@ Pending after the `2.3.0-beta.2` pre-release:
 
 - Clean-machine install/upgrade/uninstall, silent install and Intune/SCCM validation, plus the Linux
   package (5B2).
-- SignPath account/project approval, first signed release and signing of the Inno uninstaller.
 - Windows/Linux CI matrix, signed remote catalog (5C) and the full test matrix in
   [Beta 2.3 test plan](../quality/beta2.3-test-plan.md).
 - Three manual library homologation cases: light/dark sizes, clean install/upgrade and offline use.
@@ -169,7 +167,6 @@ Pending after the `2.2.0-beta.1` pre-release:
 
 - Clean-machine install/upgrade/uninstall, silent install and Intune/SCCM validation, plus the Linux
   package (5B2).
-- SignPath account/project approval, first signed release and signing of the Inno uninstaller.
 - Windows/Linux CI matrix, signed remote catalog (5C) and the full test matrix in
   [Beta 2.3 test plan](../quality/beta2.3-test-plan.md).
 - Remaining contrast review for secondary legacy editors and final Studio homologation.
@@ -181,7 +178,7 @@ through the deploy workflow.
 
 Already delivered for the Beta 2.1 line: closed call graph, interactions, generated forms, parallel
 calls, callable subflow, flow Call vertex, notifications, async `call_result`, open trace, release
-gate, portable package, Windows Inno Setup installer, SignPath Foundation integration, canvas
+gate, portable package, Windows Inno Setup installer, canvas
 appearance preferences, execution-focused console/HUD behavior, the consolidated SVG visual layer
 with per-vertex run records, and the Office 365 ribbon refresh across all tabs.
 
@@ -189,8 +186,6 @@ Pending after the `2.1.0-beta.1` pre-release:
 
 - Clean-machine install/upgrade/uninstall, silent install and Intune/SCCM validation, plus the Linux
   package (5B2).
-- SignPath account/project approval, first signed release and signing of the Inno uninstaller.
-  Company certificate migration is a later step.
 - Windows/Linux CI matrix, signed remote catalog (5C) and the full test matrix in
   [Beta 2.3 test plan](../quality/beta2.3-test-plan.md).
 - Manual Studio homologation and publication of checksums, SBOM, notices and release notes.
@@ -203,7 +198,6 @@ Pending after the `2.1.0-beta.1` pre-release:
 
 2. **Final distribution**
    - Choose and implement installer packaging.
-   - Procure/configure the code-signing certificate and sign release artifacts in CI.
    - Define the catalog signing key pair, custody, rotation and hosting.
    - Publish checksums, notices and release notes.
 

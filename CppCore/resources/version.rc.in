@@ -1,5 +1,5 @@
 // Version metadata for Arestrix Windows executables.
-// Configured by CMake from version.txt; enforced by the SignPath artifact configuration.
+// Configured by CMake from version.txt; used by the Windows package metadata.
 #include <windows.h>
 
 VS_VERSION_INFO VERSIONINFO

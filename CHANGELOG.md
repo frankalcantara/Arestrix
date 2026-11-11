@@ -15,6 +15,12 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   current Skill Guard. The Windows installer warns when the installed policy
   differs and records `skill-policy-version.txt` for the next upgrade.
 
+### Removed
+
+- The external code-signing integration, its artifact configurations and policy
+  document were removed. Releases are published unsigned and signing is no
+  longer a release blocker.
+
 ### Changed
 
 - Tagged `v*` releases are now published as stable GitHub releases; pushes to
@@ -638,14 +644,8 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ### Added
 
-- SignPath Foundation code-signing integration: artifact configurations for the four Windows
-  executables and the Inno Setup installer, optional signing steps in the deploy workflow (skipped
-  until `SIGNPATH_ENABLED=true`), signature verification, signed-artifact reinstall and post-signing
-  hash refresh. The certificate is issued to SignPath Foundation, not to the maintainer; the policy is
-  in `CODE_SIGNING.md` and the account setup in `signpath/README.md`. The generated uninstaller
-  remains unsigned until synchronous Inno signing is available.
 - Windows PE version metadata (`ProductName`, `ProductVersion`, `FileVersion`, `CompanyName`) for all
-  shipped executables, required by SignPath metadata restrictions.
+  shipped executables, required by Windows packaging metadata.
 - Windows Inno Setup installer (5B2, work in progress): `scripts/package_release.py --installer`
   builds a per-user setup from the validated staging tree and runs an environment preflight:
   WebView2/VC++ are hard requirements; Git, Git identity, GitHub credential, MSVC Build Tools and
@@ -676,12 +676,10 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ### Known limitations
 
-- `2.1.0-beta.1` is a development pre-release. The Windows installer and SignPath integration are
+- `2.1.0-beta.1` is a development pre-release. The Windows installer is
   included, but clean-machine install/upgrade/uninstall, silent install and Intune/SCCM validation
   remain pending. Linux packages, the signed remote catalog and the full acceptance matrix in
   [docs/quality/beta2-test-plan.md](docs/quality/beta2-test-plan.md) also remain pending.
-- Tagged releases are signed when `SIGNPATH_ENABLED=true` and the SignPath variables/secrets are
-  configured; otherwise the workflow publishes unsigned artifacts.
 
 ## [2.0.0-beta.1] - 2026-10-26
 
@@ -1004,7 +1002,7 @@ Beta 1.5 focuses on local AI models and enterprise usage governance.
 ### Known limitations
 
 - Linux end-to-end validation and CI remain pending.
-- Final distribution (code-signing certificate, remote signed catalog, installer packaging) remains
+- Final distribution (remote signed catalog, installer packaging) remains
   pending and depends on external key/certificate decisions.
 - `arestrix-gateway` is single-node SQLite, without streaming, web admin or SSO; TLS is delegated to
   a reverse proxy.

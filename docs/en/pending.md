@@ -22,7 +22,7 @@
 | Performance profiling (Tracy) and automatic correction loop for generated code via the Studio default model | Engineering / product pending |
 | Instrumentation of Arestrix itself with Tracy and self-optimization loop | Engineering pending |
 | Full, detailed performance testing and optimization cycle (C++, TypeScript, etc.) on every release | Release pending |
-| Clean-machine release validation / signing | Release pending |
+| Clean-machine release validation | Release pending |
 
 ## 2. Completed memory work
 
@@ -140,9 +140,8 @@ observation and optimization loop:
       SVG layer rendering and interactions (`NodeView`, `ConnectionView`), property scope resolution
       (`Studio`/`Workspace`/`Project`), skill/MCP auditing and hashing, and UI responsiveness.
   - Compare metrics against the previous release baseline, block regressions above the threshold and
-    run the Tracy-guided optimization cycle before signing and packaging release artifacts.
+    run the Tracy-guided optimization cycle before packaging release artifacts.
 - Clean-machine installer validation, upgrade, uninstall and Intune/SCCM.
-- Code signing via SignPath or a corporate certificate.
 - Linux package and Linux/macOS CI matrix.
 - Signed remote catalog.
 

@@ -250,7 +250,7 @@ repositório.
 A atualização do runtime é controlada pelo manifesto embutido: quando o Arestrix sobe de versão, a nova
 versão do `llama.cpp` é baixada, verificada e as versões antigas são removidas. Catálogo remoto assinado
 (Ed25519/minisign) ainda depende da definição de par de chaves e hospedagem; até lá o catálogo é embutido no
-binário assinado.
+binário.
 
 O manifesto de binários pinados fica em `CppCore/runtime/llama.manifest.json` e usa o build oficial
 `llama.cpp b11669`, que já inclui o modo router nativo do `llama-server` (`--models-preset`).

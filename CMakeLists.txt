@@ -10,8 +10,8 @@ message(STATUS "Arestrix ${ARESTRIX_VERSION}")
 
 # ---------------------------------------------------------------------------
 # Metadados de versao dos executaveis Windows (ProductName/ProductVersion/
-# FileVersion). A SignPath Foundation exige esses atributos nos binarios
-# assinados; o Inno Setup tambem usa o mesmo esquema.
+# FileVersion). O empacotamento Windows exige esses atributos nos binarios
+# O Inno Setup tambem usa o mesmo esquema.
 # ---------------------------------------------------------------------------
 if(WIN32)
   set(ARESTRIX_VERSION_RC_COMMA

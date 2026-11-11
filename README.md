@@ -189,18 +189,16 @@ python scripts/e2e_examples.py
 **Arestrix 2.7.0** is the current release (2026-11-10). The Studio runs on Windows and Linux;
 programs generated from a graph currently target Windows. APIs, file formats and command-line flags
 may still change between minor releases. See the [changelog](CHANGELOG.md) for the current
-limitations. The Windows installer and code signing are included; clean-machine validation, the
+limitations. The Windows installer is included; clean-machine validation, the
 Linux package and the full test matrix are still pending. Track them in the
 [test audit log](docs/quality/test-audit-log.md) and the
-[Beta 2.3 test plan](docs/quality/beta2.3-test-plan.md). Windows artifacts are signed by
-[SignPath Foundation](https://signpath.org) when signing is enabled; see the
-[code signing policy](CODE_SIGNING.md).
+[Beta 2.3 test plan](docs/quality/beta2.3-test-plan.md).
 
 ## Security
 
 - Report vulnerabilities privately according to [SECURITY.md](SECURITY.md).
 - Read the [security and governance model](docs/security/governance.md).
-- Read the [code signing policy](CODE_SIGNING.md) and [privacy policy](PRIVACY.md).
+- Read the [privacy policy](PRIVACY.md).
 - Check [dependency advisories](docs/security/dependency-advisories.md) before upgrading npm
   packages.
 - Third-party components and licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
