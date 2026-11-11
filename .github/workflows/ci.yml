@@ -2,8 +2,9 @@ name: CI
 
 # Pull-request validation. The Windows portable release pipeline lives in
 # deploy.yml; this workflow is the pre-merge gate (quality, frontend, native
-# Windows and native Linux). The four job names are required status checks on
-# main, so keep them stable. `lockfile` is a fifth, advisory job.
+# Windows and native Linux) plus the two workflow-security gates (lockfile and
+# zizmor). All six job names are required status checks on main, so keep them
+# stable.
 
 on:
   pull_request:
@@ -175,10 +176,10 @@ jobs:
         run: python CppCore/dev.py --test --no-frontend
 
   # Fails when .github/workflows/actions.lock is out of sync with the workflows,
-  # or when a locked pin no longer verifies upstream. Advisory for now: it is
-  # deliberately not one of the required checks in `main-protection` (see
-  # .github/AUTOMATION.md), so a transient upstream/API problem cannot block a
-  # release. Promote it once it has a clean track record.
+  # or when a locked pin no longer verifies upstream. Required on main: the
+  # check is read-only and fail-closed, so a stale lockfile must stop the merge
+  # rather than reach a release. It talks to the GitHub API, so if upstream is
+  # having an outage the owner bypass in AUTOMATION.md is the escape hatch.
   lockfile:
     name: lockfile
     runs-on: ubuntu-latest
@@ -204,7 +205,7 @@ jobs:
   # token persistence, template injection, cache/artifact poisoning. This is the
   # complement of `lockfile`, which only proves the action code is the code that
   # was reviewed, not that the workflow handles tokens and PR code safely.
-  # Advisory for now, like `lockfile`; see .github/AUTOMATION.md.
+  # Required on main, alongside `lockfile`; see .github/AUTOMATION.md.
   zizmor:
     name: zizmor
     runs-on: ubuntu-latest

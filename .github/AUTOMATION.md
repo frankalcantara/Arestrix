@@ -6,7 +6,7 @@ publishes a ready-to-run artifact.
 
 | Workflow | Trigger | What it does |
 | :--- | :--- | :--- |
-| `workflows/ci.yml` | `pull_request`, manual | Quality checks, Vitest + Studio build, native Windows CTest, native Linux CTest, lockfile verification and a `zizmor` audit of the workflows. The four build jobs are required status checks on `main`; `lockfile` and `zizmor` are advisory. |
+| `workflows/ci.yml` | `pull_request`, manual | Quality checks, Vitest + Studio build, native Windows CTest, native Linux CTest, lockfile verification and a `zizmor` audit of the workflows. All six jobs are required status checks on `main`. |
 | `workflows/deploy.yml` | push to `main`, `v*` tags, manual | Runs the release gate, builds the Windows x64 portable package and publishes it to GitHub Releases (`latest` for `main`, the tag name for stable tag releases). |
 | `workflows/check-submodules.yml` | weekly schedule (Monday 08:00 UTC), manual | Compares every submodule gitlink with its upstream branch and opens/updates the `chore/submodule-updates` pull request. Never merges. |
 | `dependabot.yml` | weekly/monthly schedule | Opens grouped npm, GitHub Actions and Git submodule update pull requests. |
@@ -59,8 +59,10 @@ that line, so bump it by hand after reviewing the
 [releases](https://github.com/github/gh-actions-lock/releases), then run
 `gh actions-lock` again and commit the result.
 
-`lockfile` is intentionally **not** in the `main-protection` ruleset yet. Run it
-advisory until it has a clean track record, then add it as a required check.
+`lockfile` is a required status check on `main`. Both this job and `zizmor` talk
+to the GitHub API, so a real upstream outage can leave a pull request blocked;
+the owner bypass on `main-protection` is the escape hatch, and a red check should
+be fixed forward rather than bypassed for convenience.
 
 ### What the lockfile does not cover
 
@@ -77,10 +79,11 @@ code safely. [`zizmor`](https://docs.zizmor.sh/) covers that half: excessive
 permissions, credential persistence, template injection, cache and artifact
 poisoning, dangerous triggers.
 
-`ci.yml` runs it in the `zizmor` job, pinned to `1.32.0` with `pipx`. That
-version floor matters: earlier releases do not understand `actions.lock` and
-demand SHA pins, which would contradict the lockfile. Like the extension pin, it
-is bumped by hand and not managed by Dependabot.
+`ci.yml` runs it in the `zizmor` job, pinned to `1.32.0` with `pipx`, and the job
+is a required check on `main`. That version floor matters: earlier releases do
+not understand `actions.lock` and demand SHA pins, which would contradict the
+lockfile. Like the extension pin, it is bumped by hand and not managed by
+Dependabot.
 
 - Gate policy: `--min-severity=low`. Low and above fail the job; informational
   findings stay advisory and do not fail anything.
@@ -154,10 +157,10 @@ Local equivalents remain `npm run submodule:check` and
 ## Branch rules
 
 The `main-protection` ruleset requires the `quality`, `frontend`,
-`native-windows` and `native-linux` checks and a pull request before merge.
-The repository owner has an `always` bypass so urgent fixes and release
-maintenance can still be pushed directly; contributors should use a pull
-request.
+`native-windows`, `native-linux`, `lockfile` and `zizmor` checks and a pull
+request before merge, and the branch must be up to date with `main`. The
+repository owner has an `always` bypass so urgent fixes and release maintenance
+can still be pushed directly; contributors should use a pull request.
 
 ## Local equivalents
 
