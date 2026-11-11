@@ -34,7 +34,7 @@
 ## Operations
 
 - [Roadmap and known limitations](roadmap.md) - delivered scope, gaps and next steps.
-- [Beta 2.3 test plan](../quality/beta2.3-test-plan.md) - registered scope, pending installer/signing/CI and the mandatory test matrix (in Portuguese).
+- [Beta 2.3 test plan](../quality/beta2.3-test-plan.md) - registered scope, pending installer/CI and the mandatory test matrix (in Portuguese).
 - [Memory v1 test strategy](../quality/memory-v1-test-strategy.md) - layers, matrix, gates and evidence.
 - [Memory v1 merge strategy](../quality/memory-v1-merge-strategy.md) - PR train and rollback.
 - [Test audit log](../quality/test-audit-log.md)

@@ -32,11 +32,10 @@
 
 ### Distribuição
 
-- Certificado/HSM de assinatura de código e execução da assinatura dos artefatos finais estão pendentes.
 - O pacote portátil (5B1) está implementado. O empacotamento de instalador (MSI/WiX, MSIX ou Inno
   Setup; AppImage/deb/tarball no Linux) está pendente na 5B2.
 - Catálogo/manifesto remoto assinado (Ed25519/minisign) não foi implementado. O catálogo embutido é
-  protegido pelo binário assinado; atualizações remotas exigem par de chaves e decisão de hospedagem.
+  protegido pelo binário; atualizações remotas exigem par de chaves e decisão de hospedagem.
 - Atualizações de runtime dependem de uma nova versão do aplicativo, porque o manifesto é embutido.
 
 ### AI Gateway
@@ -153,8 +152,6 @@ Pendente após a pré-release `2.3.0-beta.2`:
 
 - Instalação/upgrade/uninstall em máquina limpa, instalação silenciosa e validação em Intune/SCCM,
   além do pacote Linux (5B2).
-- Aprovação da conta/projeto SignPath, primeira release assinada e assinatura do desinstalador do
-  Inno.
 - Matriz de CI Windows/Linux, catálogo remoto assinado (5C) e a matriz completa em
   [Plano de testes do Beta 2.3](../quality/beta2.3-test-plan.md).
 - Três casos manuais de homologação das bibliotecas: tema/tamanhos, instalação limpa/upgrade e uso
@@ -176,8 +173,6 @@ Pendente após a pré-release `2.2.0-beta.1`:
 
 - Instalação/upgrade/uninstall em máquina limpa, instalação silenciosa e validação em Intune/SCCM,
   além do pacote Linux (5B2).
-- Aprovação da conta/projeto SignPath, primeira release assinada e assinatura do desinstalador do
-  Inno.
 - Matriz de CI Windows/Linux, catálogo remoto assinado (5C) e a matriz completa em
   [Plano de testes do Beta 2.3](../quality/beta2.3-test-plan.md).
 - Revisão final de contraste dos editores legados secundários e homologação do Studio.
@@ -189,8 +184,7 @@ desenvolvimento pelo workflow de deploy.
 
 Já entregue para a linha Beta 2.1: grafo de chamadas fechado, interações, formulários gerados,
 chamadas paralelas, subflow chamável, vértice Call em fluxo, notificações, `call_result` assíncrono,
-trace aberto, gate de release, pacote portátil, instalador Windows Inno Setup, integração SignPath
-Foundation, preferência de aparência do canvas, comportamento de console/HUD durante execução, a
+trace aberto, gate de release, pacote portátil, instalador Windows Inno Setup, preferência de aparência do canvas, comportamento de console/HUD durante execução, a
 consolidação da camada visual SVG com o novo registro de execução por vértice e o refresh do ribbon
 no padrão Office 365 em todas as abas.
 
@@ -198,8 +192,6 @@ Pendente após a pré-release `2.1.0-beta.1`:
 
 - Instalação/upgrade/uninstall em máquina limpa, instalação silenciosa e validação em Intune/SCCM,
   além do pacote Linux (5B2).
-- Aprovação da conta/projeto SignPath, primeira release assinada e assinatura do desinstalador do
-  Inno. Migração para certificado de empresa fica para depois.
 - Matriz de CI Windows/Linux, catálogo remoto assinado (5C) e a matriz completa em
   [Plano de testes do Beta 2.3](../quality/beta2.3-test-plan.md).
 - Homologação manual do Studio e publicação de checksums, SBOM, notices e notas de release.
@@ -212,7 +204,6 @@ Pendente após a pré-release `2.1.0-beta.1`:
 
 2. **Distribuição final**
    - Escolher e implementar o empacotamento do instalador.
-   - Obter/configurar o certificado de assinatura e assinar os artefatos no CI.
    - Definir par de chaves, custódia, rotação e hospedagem do catálogo assinado.
    - Publicar checksums, notices e notas de release.
 

@@ -37,9 +37,8 @@
 | Document | Description |
 | :--- | :--- |
 | [Test audit log](quality/test-audit-log.md) | Chronological test rounds, category breakdown and integrity audits (in Portuguese). |
-| [Beta 2.3 test plan](quality/beta2.3-test-plan.md) | Registered Beta 2.3 scope, pending installer/signing/CI work and the mandatory test matrix (in Portuguese). |
+| [Beta 2.3 test plan](quality/beta2.3-test-plan.md) | Registered Beta 2.3 scope, pending installer/CI work and the mandatory test matrix (in Portuguese). |
 | [Security and governance model](security/governance.md) | Credential handling, integrity verification, sandboxing and deployment boundaries. |
-| [Code signing policy](../CODE_SIGNING.md) | SignPath Foundation signing, roles, artifact scope and verification. |
 | [Privacy policy](../PRIVACY.md) | Local data, network access and third-party services. |
 | [Dependency advisories](security/dependency-advisories.md) | Known npm advisories, exposure analysis and mitigation status. |
 | [Release gate and artifacts](en/release.md) · [Gate de release](pt-BR/release.md) | Reproducible validation, SHA-256 manifest and SBOM before distribution. |

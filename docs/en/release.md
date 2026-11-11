@@ -1,9 +1,8 @@
 # Release gate and artifacts
 
-> **Phase 5A.** This is the reproducible validation layer before installer packaging and signing.
-> The Windows Inno Setup installer and the SignPath Foundation workflow are implemented; SignPath
-> account approval, clean-machine validation, Linux package, Linux CI and the signed remote catalog
-> remain pending. See the [roadmap](roadmap.md).
+> **Phase 5A.** This is the reproducible validation layer before installer packaging.
+> The Windows Inno Setup installer is implemented; clean-machine validation, Linux package,
+> Linux CI and the signed remote catalog remain pending. See the [roadmap](roadmap.md).
 
 ## 1. Prepare a clean tree
 
@@ -167,37 +166,13 @@ The installer:
 Local validation on Windows 11 x64 covered the environment preflight (all optional items detected),
 silent install with the report written to the setup log, the desktop shortcut default and its
 `/MERGETASKS="!desktopicon"` opt-out, Start menu shortcuts, `App Paths` registration, an in-place
-upgrade preserving user files/projects and a complete uninstall. Clean-machine install, signing and
+upgrade preserving user files/projects and a complete uninstall. Clean-machine install and
 Intune/SCCM validation remain pending; the installer is included in the release but is not yet a
 fully validated release artifact.
 
-## 4. Code signing with SignPath Foundation
+## 4. Alternative: local PFX/thumbprint signing
 
-Arestrix is configured for [SignPath Foundation](https://signpath.org) code signing. The certificate
-is issued to **SignPath Foundation**, so Windows shows `SignPath Foundation` as the publisher. The
-acceptance and operational details are in [CODE_SIGNING.md](../../CODE_SIGNING.md); account and
-repository setup is in [signpath/README.md](../../signpath/README.md).
-
-The deploy workflow has optional signing steps controlled by `SIGNPATH_ENABLED=true` and a `v*` tag.
-Pushes to `main` keep publishing the rolling `latest` pre-release without signing, so manual approval
-is required only for tagged releases. The signing steps:
-
-1. upload the four unsigned executables and submit them for signing;
-2. wait for manual approval in SignPath, download and verify the signed binaries;
-3. rebuild the release manifest with the signed hashes;
-4. build the portable ZIP and installer from the signed binaries;
-5. submit the setup for a second signing request, verify it and rewrite its SHA-256 sidecar.
-
-Required repository variables: `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`,
-`SIGNPATH_SIGNING_POLICY_SLUG`, `SIGNPATH_BINARIES_ARTIFACT_CONFIG_SLUG` and
-`SIGNPATH_INSTALLER_ARTIFACT_CONFIG_SLUG`. The API token is the `SIGNPATH_API_TOKEN` secret.
-
-The Inno-generated uninstaller remains unsigned for now because SignPath's GitHub Action is
-asynchronous; this is documented in [signpath/README.md](../../signpath/README.md).
-
-## 4.1 Alternative: local PFX/thumbprint signing
-
-After the gate passes, sign the executables with a local corporate certificate:
+The automated release publishes unsigned artifacts. The script below is an optional manual step for organizations that have their own code-signing certificate. After the gate passes, sign the executables with a local corporate certificate:
 
 ```powershell
 $env:ARESTRIX_SIGN_PFX = "C:\secrets\arestrix.pfx"
@@ -210,10 +185,8 @@ Alternatively use `ARESTRIX_SIGN_THUMBPRINT` for a certificate installed in `My`
 
 ## 5. Not in phase 5A
 
-- SignPath Foundation account/project approval and the first signed release (workflow implemented).
 - Windows Inno Setup installer implemented (5B2 partial; clean-machine install, upgrade, uninstall,
   silent install and Intune/SCCM validation still pending) and the Linux package (5B2).
-- A company-owned certificate/HSM and signing of the Inno uninstaller.
 - E2E in the automated release path and a macOS CI matrix.
 - Signed remote catalog (Ed25519/minisign) and hosting.
 

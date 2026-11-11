@@ -4,9 +4,6 @@
 >
 > **Versão atual:** `2.3.0-beta.2` (Beta 2.3).
 >
-> **Gate:** instalador 5B2 e assinatura/CI 5C implementados; validação em máquina limpa, pacote Linux
-> e a matriz completa 2.1-2.10 ainda pendentes.
->
 > **Última revisão:** 2026-10-27.
 
 Este documento registra o escopo do Beta 2.3 e a matriz de testes que precisa ser concluída para
@@ -53,13 +50,8 @@ como pré-release de desenvolvimento.
 - [ ] **5B2 — instalador Windows:** Inno Setup implementado; faltam instalação limpa, upgrade,
       uninstall, atalhos, modo silencioso e validação em Intune/SCCM.
 - [ ] **5B2 — pacote Linux:** AppImage, `.deb` ou tarball instalável, com dependências documentadas.
-- [ ] **5C — assinatura:** SignPath Foundation integrado no workflow (binários + instalador); faltam
-      aprovação da conta/projeto, secrets e primeira release assinada. Certificado/HSM próprio e
-      assinatura do desinstalador ficam para depois.
 - [ ] **5C — CI:** matriz Windows/Linux, build nativo, CTest, Vitest, E2E, gateway smoke e release gate.
   - [x] Matriz Windows/Linux com CTest, Vitest e checks no `ci.yml`; gate e gateway smoke no `deploy.yml`.
-  - [x] Assinatura SignPath Foundation integrada ao `deploy.yml` (binários, instalador, verificação e hashes).
-  - [ ] Aprovação SignPath, primeira release assinada, E2E no CI e promoção automatizada por tag.
 - [ ] **5C — catálogo remoto assinado:** par de chaves, custódia, rotação e hospedagem.
 - [ ] **Distribuição:** publicar checksums, SBOM, notices e notas de release.
 - [ ] **Testes e homologação** da matriz abaixo.
@@ -134,7 +126,6 @@ como pré-release de desenvolvimento.
 - [x] Atalhos (Menu Iniciar/Desktop padrão, com opção de desmarcar) e desinstalação completa validadas localmente.
 - [x] Upgrade sobre a versão anterior preservando projetos/configuração do usuário validado localmente.
 - [x] Instalação silenciosa e códigos de saída documentados (`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`; `/MERGETASKS="!desktopicon"` para pular o atalho).
-- [ ] Assinatura Authenticode de todos os executáveis.
 - [x] Instalação em perfil sem privilégios administrativos (per-user em `%LOCALAPPDATA%\Programs\Arestrix`).
 - [ ] Teste em máquina limpa com apenas o runtime VC++ exigido.
 - [ ] Linux: pacote equivalente com dependências e caminhos de dados documentados.
@@ -143,14 +134,14 @@ como pré-release de desenvolvimento.
 > (incluindo detecção de chave de API ausente sem bloquear), instalação silenciosa, atalho de desktop
 > padrão e exclusão opcional, atalhos do Menu Iniciar, entrada `App Paths`, upgrade in-place
 > preservando arquivos/projetos do usuário e desinstalação completa validados (códigos 0).
-> Instalação em máquina limpa, assinatura, Intune/SCCM e pacote Linux continuam pendentes.
+> Instalação em máquina limpa, Intune/SCCM e pacote Linux continuam pendentes.
 
 ### 2.8 Segurança e integridade
 
 - [ ] Nenhuma chave real em binários, logs, exemplos, trace, notificações ou SBOM.
 - [ ] `ARESTRIX_HOME` e caminhos de runtime confinados.
-- [ ] Assinatura/checksum verificados no fluxo de release.
-- [ ] Política fail-closed de gateway/interação/assinatura revalidada.
+- [ ] Checksums verificados no fluxo de release.
+- [ ] Política fail-closed de gateway/interação revalidada.
 - [ ] Dependências e avisos revisados em `docs/security/dependency-advisories.md`.
 
 ### 2.9 Homologação manual do Studio
@@ -185,7 +176,7 @@ A pré-release Beta 2.3 pode ser promovida quando:
 1. Todos os itens obrigatórios de 2.1–2.10 estiverem verdes no mesmo commit.
 2. O gate de release tiver `dirty=false` e `status=passed`.
 3. O instalador 5B2 e o pacote portátil tiverem sido testados em máquina limpa.
-4. Os artefatos estiverem assinados, com checksums e SBOM publicados.
+4. Os artefatos tiverem checksums e SBOM publicados.
 5. Não houver falha P0/P1 conhecida.
 6. A versão for atualizada para `2.3.0-beta.2` em `version.txt`, `package.json`,
    `package-lock.json`, `CHANGELOG.md` e banners de documentação.
@@ -195,10 +186,9 @@ A pré-release Beta 2.3 pode ser promovida quando:
 
 - Tecnologia do instalador Windows: WiX v4, Inno Setup ou MSIX.
 - Formato Linux prioritário: AppImage, `.deb` ou tarball.
-- Certificado/HSM de assinatura e custódia da chave.
 - Estratégia de catálogo remoto assinado e hospedagem.
 
 ## 5. Registro de bloqueio
 
 O 5B2 não foi iniciado em 2026-10-24. A prioridade imediata é executar e consolidar a matriz de
-testes acima antes de retomar instalador, assinatura e CI.
+testes acima antes de retomar instalador e CI.

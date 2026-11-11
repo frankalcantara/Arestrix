@@ -20,7 +20,7 @@
 | Laço de profiling (Tracy) e correção automática do código gerado via modelo padrão do Studio | Pendente de engenharia / produto |
 | Instrumentação do próprio Arestrix com Tracy e laço de auto-otimização | Pendente de engenharia |
 | Ciclo completo de testes e otimização de performance (C++, TypeScript, etc.) a cada release | Pendente de release |
-| Validação de release em máquina limpa / assinatura | Pendente de release |
+| Validação de release em máquina limpa | Pendente de release |
 
 ## 2. O que está concluído na memória
 
@@ -149,9 +149,8 @@ observação e otimização contínua:
       escopos de propriedades (`Studio`/`Workspace`/`Project`), auditoria e hashing de skills/MCP e
       tempo de resposta da interface.
   - Comparar métricas contra a linha de base da release anterior, bloquear regressões acima do limiar e
-    executar o ciclo de otimização guiado pelo Tracy antes de assinar e empacotar os artefatos.
+    executar o ciclo de otimização guiado pelo Tracy antes de empacotar os artefatos.
 - Validação do instalador em máquina limpa, upgrade, uninstall e Intune/SCCM.
-- Assinatura de código via SignPath ou certificado corporativo.
 - Pacote Linux e matriz de CI Linux/macOS.
 - Catálogo remoto assinado.
 
