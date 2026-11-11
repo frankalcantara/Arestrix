@@ -344,18 +344,30 @@ when the telemetry database is unavailable.
 
 Schema v8 adds `memory_prefix_epoch`. The stable block contains only active
 lessons and playbooks, sorted by `(kind, id)` and formatted deterministically, so
-utility, traversal scores and working state cannot change its bytes. The
+utility, traversal scores and working state cannot change its bytes. With
+`memory.prefixEpochs` enabled, the stable block is built from the latest
+published epoch; additions made after that epoch stay in the dynamic block until
+the next publication. The
 `MemoryBriefInfo` carries the stable block, prefix key/identity/epoch and
 `removalSeqStart`; `briefInfoToJson` is the contract consumed by generated
-pipelines.
+pipelines. With lenses enabled, active facets are delivered as volatile lines
+with their `facetIds`; served paths keep their `pathIds` and claim ids.
 
 Before every model request, the agent calls `MemoryService::removedSince` with
 the delivered `(kind, id)` set. A matching removal rebuilds the prompt without
-the item and redacts its `[MEMO:<id>]` marker from the tool history; a `scope`
-removal clears the delivered set. The check stays enabled even when epoch
+the item and removes the whole memory line carrying its `[MEMO:<id>]` marker
+from the system prompt and tool history; a `scope` removal clears the delivered
+set. A removal that changes the published stable set also publishes a new epoch
+immediately. The check stays enabled even when epoch
 publication is disabled, so a committed removal cannot be served again. The
 epoch table records the published item set; provider and model remain trace
-data, not prefix identity.
+data, not prefix identity. `memory.prefixEpochs` accepts `enabled`,
+`cacheTtlSeconds`, `maxPending` and `minIntervalSeconds`; generated agents
+publish when the idle TTL expires or when the pending-addition threshold is
+reached after the minimum interval. Removals publish immediately. A skill or
+template change produces a new `prefix_identity` in the trace without advancing
+the epoch when the published content hash is unchanged; the prefix step records
+the identity, epoch and `delivered_ids_source`.
 
 ### Lenses and facets
 
@@ -382,6 +394,86 @@ inputs (`minDistinctInputs`, default 3).
 Utility uses the Beta mean with a prior (`(successes + prior) / (successes +
 failures + 2·prior)`) and optional time decay (`mu`). The prior prevents a single
 success from reaching 1.0; out-of-order traces never produce negative decay.
+The telemetry credit ledger records each validator verdict as a `citation`
+event split across the distinct cited items, or as `presence_low_res` across the
+delivered items when nothing was cited. Events are idempotent and update
+`memory_item_utility` in the same transaction; the item key resolves edges
+through `claim_key`. With `memory.utility.source='ledger'`, hybrid and
+lexical-only recall multiply each candidate score by its ledger utility; `edge`
+is the default and keeps the previous ranking. Legacy edge/playbook counters are imported once as
+`legacy_seed`, and the aggregate can be rebuilt from events with
+`memory utility status|seed|rebuild|rekey`. When a later backfill computes a
+`claim_key`, `rekey` moves the old `edge:<id>` events to that key, merges
+duplicate unique events and rebuilds the aggregate. Credit per origin and item/class is capped
+inside `originWindowDays`; excess events keep a zero delta with `capped=1`.
+If a telemetry write fails, credit events are appended to
+`credit-outbox.jsonl` and drained on the next validation.
+
+When a rejected task has an ablation audit, the observed baseline, no-memory
+and one-item-removed arms decide the outcome. An item is decisive when removing
+it flips the verdict in the majority of repetitions; the failure is then
+reversed from the cited items and assigned to the decisive one. Infrastructure
+failures and unstable repetitions keep the audit inconclusive. Reviews of
+validator approvals are stored in telemetry, and the estimated divergence uses
+a 95% Wilson interval; `memory.creditAudit.enabled` keeps the current automatic
+promotion until the configured minimum number of reviews is reached. Task
+snapshots are also telemetry-only and are rejected above `maxSnapshotBytes`.
+`memory audit-credit [--status S] [--report]` lists audits, and
+`memory validator-audit [record] --validator V --trace T --verdict
+accepted|rejected` records or summarizes reviewer verdicts.
+
+The sampler walks recent rejected validations, counts delivered-but-uncited
+items as suspects, and selects a task when it has a suspect or when its stable
+hash falls below `sampleRate`. It records `no_snapshot`, `snapshot_expired`,
+`package_in_input`, `external_effects` and `validator_suspended` instead of
+auditing those tasks, and stops when `maxAuditsPerDay` or `maxTokensPerDay` is
+reached. The actual arms are produced by the registered
+`CreditAuditExecutorFn`; the memory module never talks to a provider or
+sandbox directly. `memory audit-credit --run` executes the sampler and
+`--dry-run` only lists the selected candidates. With audit enabled, each agent
+node writes its pre-brief input to `memory_task_snapshot` at the end of the run;
+episodes that used MCP or `call_agent` are marked `external_effects`.
+
+#### Audit container contract
+
+Every arm of an ablation audit gets its own ephemeral Docker container and its
+own workspace. Nothing is shared between arms: a file written by one arm is not
+visible to another, and all outputs are discarded after the verdict.
+
+| Control | Value |
+| --- | --- |
+| Image | `debian:stable-slim` by default; `ARESTRIX_SANDBOX_IMAGE` or `memory.creditAudit.containerImage` overrides it. |
+| Runtime | `docker run --rm --init`; one container per arm and repetition. |
+| Filesystem | Root filesystem read-only, `/tmp` mounted as `tmpfs`, workspace mounted read-write at `/workspace`. |
+| Workspace source | A copy of the task snapshot, or a git worktree with the saved patch applied. The memory and telemetry databases are never mounted. |
+| Network | `--network=none`. Model calls happen in the host process, never inside the container. |
+| Privileges | `--cap-drop=ALL`, `--security-opt=no-new-privileges`, user `1000:1000`, no host fallback. |
+| Limits | `containerMemoryMB` (default 512), `containerPidsLimit` (default 256) and `containerTimeoutSeconds` (default 300). |
+| Tools | `read`, `write`, `edit`, `validate_svg`, `retrieve` and `bash` (inside the container). |
+| Disabled | `memory_search`, memory write/state tools, `call_agent`, MCP servers and interaction nodes. |
+| Secrets | No provider keys, tokens or user environment variables are injected. |
+| Budget | `maxAuditsPerDay`, `maxTokensPerDay` and, when configured, the `memory-audit` gateway budget. |
+
+`creditAuditContainerPlan()` returns this contract to the registered
+`CreditAuditExecutorFn`. The default executor,
+`rt::runCreditAuditInContainers`, runs one baseline arm, one no-memory arm and
+one ablation arm per delivered item. If no single ablation flips the verdict
+and the no-memory arm approves, it runs pairwise ablations of the top
+`pairwiseTopM` suspects. It reads the arm command from
+`memory.creditAudit.containerCommand` or `ARESTRIX_AUDIT_ARM_COMMAND`, passes
+the arm description in `ARESTRIX_AUDIT_ARM_JSON`, and expects the command to
+print JSON with `ok`, optional `infra` and optional `tokens`. When
+`ARESTRIX_GATEWAY_DB` is set, the sampler reserves and reconciles tokens in a
+daily `memory-audit:<project>` budget with `hard_stop`; otherwise the local
+`maxTokensPerDay` cap applies.
+`prepareCreditAuditWorkspaces()` copies the snapshot
+workspace once per arm into
+`.arestrix/telemetry/audit-workspaces/<trace>/<arm>/workspace`, skipping
+`.arestrix`, `.git`, build output and dependency caches; `cleanup...` removes
+the tree after the audit. The runtime registers a container probe backed by
+`SandboxManager`; when Docker is unavailable, the sampler records
+`no_container` and does not fall back to the host.
+
 When a dependent claim is retracted, expires or stops being active, the path is
 suspended in the same maintenance pass. If all dependencies become valid again,
 it is reactivated; otherwise it can be retired.
@@ -442,7 +534,9 @@ The default is `off`.
 ### Retrieval traces
 
 Every knowledge write bumps `knowledge_version` in the same transaction; reads
-and telemetry do not. Every memory-enabled vertex execution records a
+and telemetry do not. Usage-only updates (utility, success/failure counters,
+`last_used`, path statistics) no longer bump it, while `status` and
+`dormant_at` still do. Every memory-enabled vertex execution records a
 `memory_trace` with the version consulted, the brief and searches, candidates
 with lexical/vector/fused scores, position and delivered status, plus the items
 actually used. The trace closes with the episode and is idempotent by

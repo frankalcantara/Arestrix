@@ -2,7 +2,7 @@
   "name": "arestrix",
   "description": "Arestrix - Visual Node Graph Orchestrator for Concurrent Multi-Agent Pipelines with Taskflow C++20 and Three.js",
   "private": true,
-  "version": "2.6.0",
+  "version": "2.7.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -39,17 +39,17 @@
   },
   "dependencies": {
     "@hpcc-js/wasm": "^2.36.0",
-    "lucide": "^1.61.0",
+    "lucide": "^1.70.0",
     "monaco-editor": "^0.57.0",
-    "three": "^0.186.1"
+    "three": "^0.187.0"
   },
   "devDependencies": {
-    "@types/three": "^0.186.0",
+    "@types/three": "^0.187.0",
     "puppeteer-core": "^25.16.0",
     "typescript": "^7.0.2",
-    "vite": "^8.3.5",
+    "vite": "^8.3.6",
     "vite-plugin-singlefile": "^2.3.4",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   },
   "overrides": {
     "dompurify": "^3.4.17"

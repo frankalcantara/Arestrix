@@ -347,18 +347,30 @@ banco de telemetria está indisponível.
 O esquema v8 adiciona `memory_prefix_epoch`. O bloco estável contém apenas
 lições e playbooks ativos, ordenados por `(tipo, id)` e formatados de forma
 determinística, para que utilidade, escores de travessia e estado de trabalho
-não mudem os bytes. `MemoryBriefInfo` carrega o bloco estável, a chave/identidade
+não mudem os bytes. Com `memory.prefixEpochs` ligado, o bloco estável é
+construído a partir da última época publicada; adições feitas depois dessa
+época ficam no bloco dinâmico até a publicação seguinte. `MemoryBriefInfo` carrega o bloco estável, a chave/identidade
 da época, o número da época e `removalSeqStart`; `briefInfoToJson` é o contrato
-consumido pelos pipelines gerados.
+consumido pelos pipelines gerados. Com lentes ligadas, facetas ativas são
+entregues como linhas voláteis com seus `facetIds`; caminhos servidos mantêm
+`pathIds` e ids de afirmações.
 
 Antes de cada requisição ao modelo, o agente chama
 `MemoryService::removedSince` com o conjunto entregue de `(tipo, id)`. Uma
-remoção correspondente reconstrói o prompt sem o item e redige o marcador
-`[MEMO:<id>]` do histórico de ferramentas; uma remoção de `scope` limpa o
-conjunto entregue. A checagem continua ativa mesmo com a publicação de épocas
+remoção correspondente reconstrói o prompt sem o item e remove a linha inteira
+de memória que carrega o marcador `[MEMO:<id>]` do system prompt e do histórico
+de ferramentas; uma remoção de `scope` limpa o conjunto entregue. Uma remoção
+que altera o conjunto estável publicado também publica uma época nova
+imediatamente. A checagem continua ativa mesmo com a publicação de épocas
 desligada, então uma remoção confirmada não volta a ser servida. A tabela de
 época registra o conjunto publicado; provedor e modelo continuam no trace, não
-na identidade do prefixo.
+na identidade do prefixo. `memory.prefixEpochs` aceita `enabled`,
+`cacheTtlSeconds`, `maxPending` e `minIntervalSeconds`; agentes gerados publicam
+quando o TTL ocioso expira ou quando o limiar de adições pendentes é atingido
+após o intervalo mínimo. Remoções publicam imediatamente. Uma mudança de skill
+ou de molde gera uma `prefix_identity` nova no trace sem avançar a época quando
+o hash do conteúdo publicado não mudou; o passo de prefixo registra a
+identidade, a época e `delivered_ids_source`.
 
 ### Lentes e facetas
 
@@ -385,6 +397,88 @@ distintas (`minDistinctInputs`, padrão 3).
 A utilidade usa a média Beta com prior (`(sucessos + prior) / (sucessos +
 falhas + 2·prior)`) e decaimento temporal opcional (`mu`). O prior impede que um
 único sucesso chegue a 1,0; traços fora de ordem não geram decaimento negativo.
+O livro de crédito da telemetria grava cada veredito do validador como evento
+`citation`, dividido entre os itens citados distintos, ou `presence_low_res`,
+dividido entre os entregues quando nada foi citado. Os eventos são idempotentes e
+atualizam `memory_item_utility` na mesma transação; a chave do item resolve
+arestas por `claim_key`. Com `memory.utility.source='ledger'`, a recuperação
+híbrida e a lexical pura multiplicam o escore de cada candidato pela utilidade
+do livro; `edge` é o padrão e mantém o ranqueamento anterior. Contadores legados de arestas e
+playbooks são importados uma vez como `legacy_seed`, e o agregado pode ser
+reconstruído a partir dos eventos com `memory utility status|seed|rebuild|rekey`.
+Quando um backfill posterior calcula um `claim_key`, `rekey` move os eventos
+antigos de `edge:<id>` para essa chave, funde eventos duplicados e reconstrói o
+agregado. O crédito por origem e item/classe é limitado dentro de `originWindowDays`;
+eventos excedentes ficam com delta zero e `capped=1`. Se a escrita na
+telemetria falhar, os eventos vão para `credit-outbox.jsonl` e são drenados na
+validação seguinte.
+
+Quando uma tarefa rejeitada tem auditoria por ablação, os braços observados
+(baseline, sem memória e com um item removido) decidem o desfecho. Um item é
+decisivo quando sua retirada inverte o veredito na maioria das repetições; a
+falha é devolvida aos itens citados e atribuída ao decisivo. Falha de
+infraestrutura ou repetição instável mantêm a auditoria inconclusiva. Revisões
+de aprovações de validador ficam na telemetria, e a divergência estimada usa
+intervalo de Wilson de 95%; com `memory.creditAudit.enabled`, a promoção
+automática espera o mínimo de revisões configurado. Snapshots de tarefa também
+ficam só na telemetria e são recusados acima de `maxSnapshotBytes`.
+`memory audit-credit [--status S] [--report]` lista auditorias, e
+`memory validator-audit [record] --validator V --trace T --verdict
+accepted|rejected` grava ou resume os vereditos de revisão.
+
+O amostrador percorre validações rejeitadas recentes, conta itens entregues e
+não citados como suspeitos e seleciona a tarefa quando há suspeito ou quando o
+hash estável fica abaixo de `sampleRate`. Ele registra `no_snapshot`,
+`snapshot_expired`, `package_in_input`, `external_effects` e
+`validator_suspended` em vez de auditar, e para ao atingir `maxAuditsPerDay` ou
+`maxTokensPerDay`. Os braços são produzidos pelo `CreditAuditExecutorFn`
+registrado; o módulo de memória não fala com provedor nem sandbox diretamente.
+`memory audit-credit --run` executa o amostrador e `--dry-run` apenas lista os
+candidatos selecionados. Com a auditoria ligada, cada nó de agente grava a
+entrada anterior ao brief em `memory_task_snapshot` no fim da execução;
+episódios que usaram MCP ou `call_agent` ficam marcados como
+`external_effects`.
+
+#### Contrato dos contêineres de auditoria
+
+Cada braço de uma auditoria por ablação recebe seu próprio contêiner Docker
+efêmero e seu próprio workspace. Nada é compartilhado entre braços: um arquivo
+escrito por um braço não é visível no outro, e todas as saídas são descartadas
+depois do veredito.
+
+| Controle | Valor |
+| --- | --- |
+| Imagem | `debian:stable-slim` por padrão; `ARESTRIX_SANDBOX_IMAGE` ou `memory.creditAudit.containerImage` sobrescreve. |
+| Runtime | `docker run --rm --init`; um contêiner por braço e repetição. |
+| Sistema de arquivos | Raiz somente leitura, `/tmp` em `tmpfs`, workspace somente leitura/escrita em `/workspace`. |
+| Origem do workspace | Cópia do snapshot da tarefa, ou worktree git com o patch salvo aplicado. Os bancos de memória e telemetria nunca são montados. |
+| Rede | `--network=none`. As chamadas ao modelo acontecem no processo hospedeiro, nunca dentro do contêiner. |
+| Privilégios | `--cap-drop=ALL`, `--security-opt=no-new-privileges`, usuário `1000:1000`, sem fallback para o host. |
+| Limites | `containerMemoryMB` (padrão 512), `containerPidsLimit` (padrão 256) e `containerTimeoutSeconds` (padrão 300). |
+| Ferramentas | `read`, `write`, `edit`, `validate_svg`, `retrieve` e `bash` (dentro do contêiner). |
+| Desligadas | `memory_search`, ferramentas de escrita/estado da memória, `call_agent`, servidores MCP e nós de interação. |
+| Segredos | Nenhuma chave de provedor, token ou variável de ambiente do usuário é injetada. |
+| Orçamento | `maxAuditsPerDay`, `maxTokensPerDay` e, quando configurado, o budget `memory-audit` do gateway. |
+
+`creditAuditContainerPlan()` entrega esse contrato ao
+`CreditAuditExecutorFn` registrado. O executor padrão,
+`rt::runCreditAuditInContainers`, roda um braço baseline, um sem memória e um
+de ablação por item entregue. Se nenhuma ablação isolada inverter o veredito e
+o braço sem memória aprovar, ele roda ablações de pares com os primeiros
+`pairwiseTopM` suspeitos. O comando do braço vem de
+`memory.creditAudit.containerCommand` ou de `ARESTRIX_AUDIT_ARM_COMMAND`, recebe
+a descrição em `ARESTRIX_AUDIT_ARM_JSON` e deve imprimir JSON com `ok`, `infra`
+opcional e `tokens` opcional. Com `ARESTRIX_GATEWAY_DB`, o amostrador reserva e
+reconcilia tokens em um budget diário `memory-audit:<project>` com `hard_stop`;
+sem gateway, vale o teto local `maxTokensPerDay`.
+`prepareCreditAuditWorkspaces()` copia o
+workspace do snapshot uma vez por braço em
+`.arestrix/telemetry/audit-workspaces/<trace>/<arm>/workspace`, pulando
+`.arestrix`, `.git`, saídas de build e caches de dependências; a limpeza remove
+a árvore depois da auditoria. O runtime registra uma sonda de contêiner ligada
+ao `SandboxManager`; sem Docker, o amostrador grava `no_container` e não cai
+para o host.
+
 Quando uma afirmação dependente é retratada, expira ou deixa de estar ativa, o
 caminho correspondente é suspenso na mesma manutenção. Se todas as dependências
 voltarem a vigorar, ele é reativado; caso contrário, pode ser retirado.
@@ -445,7 +539,10 @@ reprovação ainda não é executado pelo runtime. O modo padrão é `off`.
 ### Traços de recuperação
 
 Toda escrita de conhecimento incrementa `knowledge_version` na mesma transação;
-leituras e telemetria não incrementam. Cada execução de vértice com memória grava
+leituras e telemetria não incrementam. Atualizações só de uso (utilidade,
+contadores de sucesso/falha, `last_used`, estatísticas de caminho) não
+incrementam mais, enquanto `status` e `dormant_at` continuam incrementando.
+Cada execução de vértice com memória grava
 um `memory_trace` com a versão consultada, o brief e as buscas, os candidatos
 com escores lexical/vetorial/fundido, posição e se foram entregues, além dos
 itens efetivamente usados. O traço fecha junto com o episódio e é idempotente por

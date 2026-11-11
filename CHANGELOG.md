@@ -8,6 +8,13 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 
 ## [Unreleased]
 
+### Changed
+
+- Tagged `v*` releases are now published as stable GitHub releases; pushes to
+  `main` continue to update the rolling `latest` pre-release.
+
+## [2.7.0] - 2026-11-10
+
 ### Added
 
 - **Memory fix5 phase 0:** read-only `arestrix-cli memory doctor` with six
@@ -30,12 +37,100 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   without it, extraction uses the Studio default model (today, DeepSeek Flash
   4.1 1017 in this installation). A configured but unregistered agent fails
   explicitly instead of silently switching models.
+- **Memory fix5 phase 5 (start):** schema v9 adds the telemetry credit tables
+  (`memory_credit_event`, `memory_item_utility`, `memory_credit_audit`,
+  `memory_validator_audit`). `knowledge_version` no longer changes when only
+  usage columns change in `memory_edge` (`utility`, `success_count`,
+  `failure_count`, `last_used`) or `memory_playbook`
+  (`success_count`, `failure_count`, `confidence`); `memory_path_stats` and
+  `memory_path_event` no longer participate in the version trigger. Knowledge
+  columns, `status` and `dormant_at` still invalidate the version. Validator
+  verdicts now write idempotent `citation` or `presence_low_res` events and
+  update `memory_item_utility` in one telemetry transaction; `item_key` resolves
+  edges through `claim_key` and prefixes lessons, playbooks, passages, paths and
+  facets. With `memory.utility.source='ledger'`, hybrid and lexical-only recall
+  multiply each candidate score by its ledger utility; the default `edge` source
+  preserves the previous ranking. `seedLegacyCredit` imports legacy edge/playbook counters once
+  as `legacy_seed`, and `rebuildUtility` rebuilds the aggregate from events.
+  `memory utility status|seed|rebuild|rekey` exposes the ledger in the CLI.
+  `rekey` moves events recorded as `edge:<id>` to the edge `claim_key` after a
+  later backfill computes it, merging duplicates and rebuilding the aggregate.
+  Failure events now store the positive failure magnitude; the previous
+  negative delta made a single rejection raise the item utility.
+  Credit is capped per origin and item/class inside `originWindowDays`; excess
+  credit is recorded with zero delta and `capped=1`. If a telemetry write fails, events
+  go to `credit-outbox.jsonl` and the next validation drains them once.
+  Ablation audits can now be evaluated from observed baseline/no-memory/ablate
+  arms: decisive items receive the reassigned failure, infrastructure failures
+  and unstable repetitions stay inconclusive, and repeated audits are
+  idempotent. Validator reviews compute the Wilson interval and weight, and
+  telemetry stores task snapshots with size and expiry checks. The CLI exposes
+  `memory audit-credit` and `memory validator-audit` for listing audits,
+  reporting status counts and recording independent review verdicts. The audit
+  sampler now selects rejected tasks by suspect items or `sampleRate`, records
+  non-auditable reasons (`no_snapshot`, `snapshot_expired`, `package_in_input`,
+  `external_effects`, `validator_suspended`), enforces the daily audit/token
+  caps, and delegates arm execution through `CreditAuditExecutorFn`. With
+  `memory.creditAudit.enabled`, each agent node stores its pre-brief input as a
+  telemetry snapshot, and tasks whose episodes used MCP or `call_agent` are
+  marked `external_effects`. `creditAuditContainerPlan()` defines the
+  per-arm container contract: configurable image, read-only root, `tmpfs` for
+  `/tmp`, an isolated `/workspace`, no network, dropped capabilities, no host
+  fallback, only the six local tools and no secrets or memory databases.
+  `rt::runCreditAuditInContainers` executes baseline, no-memory and one
+  ablation arm per delivered item in those containers. When no single ablation
+  flips the verdict and the no-memory arm approves, it also runs pairwise
+  ablations of the top `pairwiseTopM` suspects. The arm command comes
+  from `creditAudit.containerCommand` or `ARESTRIX_AUDIT_ARM_COMMAND`, receives
+  the arm description in `ARESTRIX_AUDIT_ARM_JSON`, and returns
+  `ok`/`infra`/`tokens` as JSON. With `ARESTRIX_GATEWAY_DB` set, the sampler
+  checks and reconciles a daily `memory-audit:<project>` token budget with
+  `hard_stop`; without a gateway it keeps using the local daily cap. Tests now
+  cover arm-workspace isolation, budget denial, MCP/`call_agent` tasks marked
+  `external_effects`, expired snapshots, the snapshot size ceiling and the
+  validator weight applied to credit events. A full MG15 T4b scenario now
+  checks the 0.500/0.600 before state, the 0.667/0.333 reassignment, idempotent
+  replay, no-memory failure, unstable repetitions and infrastructure failure.
+  Additional coverage keeps utility independent per task class, proves the
+  legacy seed is idempotent, and verifies that ten approvals from one origin
+  cap at `maxCreditPerOrigin` with nine `capped=1` events while another origin
+  still contributes normally. A later backfill now updates the existing edge's
+  `claim_key`; `rekey` then merges old `edge:<id>` events into that key,
+  including duplicates from the same trace. `purge_telemetry` now receives the
+  credit keys of forgotten items and removes their credit events and utility
+  rows in the same telemetry transaction. The validator gate now has test
+  coverage for the bootstrap window, divergence suspension and promotion with
+  weight 0.95. With audit enabled, playbook demotion ignores rejections whose
+  trace already received an applied credit audit, so an exonerated lesson is
+  not counted again. A suspect item that is sampled out keeps its utility
+  unchanged and produces no audit row.
+  `prepareCreditAuditWorkspaces()` materializes one copied workspace per arm
+  under the telemetry directory, skips `.arestrix`, `.git`, build output and
+  dependency caches, and `cleanupCreditAuditWorkspaces()` removes it after the
+  audit. The sampler now checks the registered container probe and records
+  `no_container` instead of auditing when Docker is unavailable.
 - **Memory fix5 phase 4:** schema v8 adds `memory_prefix_epoch`; `buildBrief`
   now exposes a deterministic `stableBlock`, prefix key/identity, epoch and
   `removalSeqStart`; `briefInfoToJson` carries the delivered id sets to
   `runAgent`; and the agent checks `memory_removal_log` before every turn,
   redacting removed items from the system prompt and tool history. The stable
   block is ordered by `(kind, id)` and independent of utility/volatile context.
+  Source forget, proposal promotion and edge invalidation publish a new prefix
+  epoch immediately. `memory.prefixEpochs` accepts `enabled`,
+  `cacheTtlSeconds`, `maxPending` and `minIntervalSeconds`; generated agents
+  configure the policy and publish when the idle TTL or pending threshold is
+  reached. A skill/template change yields a new `prefix_identity` without
+  advancing the epoch when the published content hash is unchanged, and the
+  prefix trace step records identity, epoch and `delivered_ids_source`.
+  With `memory.prefixEpochs` enabled, only the latest published epoch enters
+  the cacheable block; additions after it stay in the dynamic block until the
+  next epoch. A confirmed removal publishes a new epoch from the runtime and
+  redaction removes the whole memory line from the system prompt/tool history,
+  not only its marker. `scripts/e2e_memory_removal.py` covers a lesson, an
+  active facet and a served path removed mid-run, with the following request
+  free of all three. `e2e_memory_deepseek_long.py --with-epochs` adds the epoch
+  arm and records cached-token ratio and distinct `prefix_hash`/`prefix_identity`
+  per node.
 - **Memory fix5 phase 3:** schema v7 adds `memory_lineage`,
   `memory_tombstone`, `memory_job`, `memory_removal_log` and
   `memory_edge.retracted_at`; `memory forget` erases one source version or all
@@ -58,6 +153,14 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   intelligence boundary for claim extraction. The 8×500 stress remains at zero
   overlaps/duplicates with p95 around 0.24 s and the fixture backfill reports
   the expected multi closures.
+
+### Fixed
+
+- **Memory lineage completeness:** lesson edges, proposals and playbooks now
+  record `memory_lineage` from their claim, episode or agent source, and
+  `backfillLineage` rebuilds those links for existing databases. A project that
+  mixes source ingestion with agent-authored lessons no longer fails `doctor`
+  with orphan lineage.
 
 ## [2.6.0] - 2026-11-02
 

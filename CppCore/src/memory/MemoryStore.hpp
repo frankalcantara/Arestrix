@@ -70,9 +70,59 @@ struct MemoryHitRecord {
     std::string memoryId;
     std::string kind;
     bool injected = false;
+    bool consulted = false;
     bool used = false;
     std::string outcome;
     std::string createdAt;
+};
+
+// Fase 5: evento do livro de credito fracionario.
+struct MemoryCreditEvent {
+    std::string traceId;
+    std::string itemKey;
+    std::string taskType;
+    std::string modelTier;
+    double deltaSuccess = 0.0;
+    double deltaFailure = 0.0;
+    std::string kind;
+    std::string origin;
+    std::string auditId;
+    bool capped = false;
+};
+
+struct MemoryCreditAuditRecord {
+    std::string id;
+    std::string scopeId;
+    std::string traceId;
+    std::string status = "pending";
+    std::string armsJson = "[]";
+    std::string reason;
+    long long tokens = 0;
+    std::string snapshotRef;
+    std::string inputHash;
+    std::string createdAt;
+};
+
+struct MemoryValidatorAuditRecord {
+    std::string id;
+    std::string scopeId;
+    std::string validator;
+    std::string traceId;
+    std::string reviewer;
+    std::string verdict;   // accepted | rejected
+    std::string createdAt;
+};
+
+struct MemoryTaskSnapshotRecord {
+    std::string traceId;
+    std::string scopeId;
+    std::string inputHash;
+    std::string inputJson = "{}";
+    std::string workspaceKind;
+    std::string workspaceRef;
+    long long bytes = 0;
+    std::string createdAt;
+    std::string expiresAt;
 };
 
 // Referencia de uma memoria devolvida por memory_search, para registrar uso sem
@@ -192,6 +242,7 @@ struct MemoryEdgeRecord {
     long long failureCount = 0;
     double utility = 0.5;
     std::string dormantAt;
+    std::string claimKey;
 };
 
 struct MemoryUsageRecord {
@@ -620,6 +671,10 @@ public:
                                                         size_t limit = 20) const;
     std::vector<bool> validationOutcomes(const std::string& scopeId, const std::string& taskType,
                                          size_t limit = 10) const;
+    // Exclui rejeicoes cujo trace ja recebeu uma auditoria aplicada.
+    std::vector<bool> validationOutcomesAdjusted(const std::string& scopeId,
+                                                 const std::string& taskType,
+                                                 size_t limit = 10) const;
     // Ativa um candidato apenas com validacao independente e 3 input_hash
     // distintos nas amostras fornecidas pelo banco de telemetria.
     bool autoPromotePlaybook(const std::string& scopeId, const std::string& episodeId,
@@ -717,6 +772,43 @@ public:
     // Hits efetivamente usados, para reforcar o conhecimento em outro store.
     std::vector<MemoryHitRef> usedHitRefs(const std::string& scopeId, const std::string& runId,
                                           const std::string& nodeId) const;
+    std::vector<MemoryHitRecord> listHits(const std::string& scopeId,
+                                          const std::string& runId,
+                                          const std::string& nodeId) const;
+    // Fase 5: grava eventos idempotentes e atualiza o agregado na mesma
+    // transacao; usage_version so muda quando ao menos um evento e novo.
+    bool recordCreditEvents(const std::string& scopeId,
+                            const std::vector<MemoryCreditEvent>& events);
+    taskforge::Json utilityFor(const std::string& scopeId, const std::string& itemKey,
+                               const std::string& taskType) const;
+    taskforge::Json creditSummary(const std::string& scopeId) const;
+    // Soma absoluta de credito de uma origem para item/classe desde `since`.
+    double creditTotalForOrigin(const std::string& scopeId, const std::string& itemKey,
+                                const std::string& taskType, const std::string& origin,
+                                const std::string& since) const;
+    // Reconstroi o agregado a partir dos eventos; idempotente.
+    bool rebuildItemUtility(const std::string& scopeId);
+    // Move eventos de edge:<id> para o claim_key quando o backfill calcula a chave.
+    size_t rekeyCreditItem(const std::string& scopeId,
+                           const std::string& fromKey,
+                           const std::string& toKey);
+    // Fase 5: auditoria por ablacao e divergencia de validador.
+    bool saveCreditAudit(const MemoryCreditAuditRecord& audit);
+    taskforge::Json getCreditAudit(const std::string& scopeId,
+                                   const std::string& traceId) const;
+    taskforge::Json listCreditAudits(const std::string& scopeId, const std::string& status,
+                                     size_t limit = 100) const;
+    taskforge::Json creditAuditUsage(const std::string& scopeId,
+                                     const std::string& since) const;
+    std::string recordValidatorAudit(const MemoryValidatorAuditRecord& audit);
+    taskforge::Json validatorAuditStats(const std::string& scopeId,
+                                        const std::string& validator) const;
+    taskforge::Json validatorAuditReport(const std::string& scopeId, size_t limit = 100) const;
+    bool saveTaskSnapshot(const MemoryTaskSnapshotRecord& snapshot);
+    taskforge::Json getTaskSnapshot(const std::string& scopeId,
+                                    const std::string& traceId) const;
+    long long purgeExpiredSnapshots(const std::string& scopeId, const std::string& now);
+    taskforge::Json snapshotSummary(const std::string& scopeId) const;
     // Reforco/decay de arestas de conhecimento a partir dos IDs usados.
     bool reinforceFromHits(const std::string& scopeId,
                            const std::vector<std::string>& memoryIds,

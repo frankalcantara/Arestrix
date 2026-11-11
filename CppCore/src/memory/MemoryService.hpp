@@ -19,6 +19,7 @@
 #include "memory/MemoryBridges.hpp"
 #include "memory/MemoryPaths.hpp"
 #include "memory/MemoryTraversal.hpp"
+#include "memory/CreditAudit.hpp"
 #include "memory/MemoryStore.hpp"
 #include "util/JsonValue.hpp"
 
@@ -59,6 +60,49 @@ PathServingConfig pathServingConfigFromJson(const taskforge::Json& value);
 taskforge::Json pathServingConfigToJson(const PathServingConfig& config);
 
 // E17: travessia em feixe quando nenhum caminho cobre a consulta.
+struct PrefixEpochConfig {
+    bool enabled = false;
+    int cacheTtlSeconds = 300;
+    int maxPending = 5;
+    int minIntervalSeconds = 60;
+};
+
+// Fase 5: fonte da utilidade usada no ranqueamento.
+struct MemoryUtilityConfig {
+    std::string source = "edge";   // edge | ledger
+    double priorA = 1.0;
+    double priorB = 1.0;
+    double maxCreditPerOrigin = 1.0;
+    int originWindowDays = 7;
+};
+MemoryUtilityConfig utilityConfigFromJson(const taskforge::Json& value);
+taskforge::Json utilityConfigToJson(const MemoryUtilityConfig& config);
+
+// Fase 5: auditoria por ablacao e divergencia de validador.
+struct MemoryCreditAuditConfig {
+    bool enabled = false;
+    double sampleRate = 0.1;
+    int minSuspectRejections = 3;
+    int repetitions = 2;
+    int pairwiseTopM = 3;
+    int maxAuditsPerDay = 20;
+    long long maxTokensPerDay = 20000;
+    double validatorAuditRate = 0.05;
+    int minValidatorAudits = 20;
+    double maxValidatorDivergence = 0.10;
+    int snapshotRetentionDays = 14;
+    long long maxSnapshotBytes = 50LL * 1024 * 1024;
+    std::string containerImage;
+    std::string containerCommand;
+    int containerMemoryMB = 512;
+    int containerTimeoutSeconds = 300;
+    int containerPidsLimit = 256;
+};
+MemoryCreditAuditConfig creditAuditConfigFromJson(const taskforge::Json& value);
+taskforge::Json creditAuditConfigToJson(const MemoryCreditAuditConfig& config);
+
+using CreditAuditBudgetFn = std::function<taskforge::Json(const taskforge::Json&)>;
+
 struct TraversalConfig {
     bool enabled = false;
     TraversalOptions options;
@@ -140,7 +184,8 @@ public:
     std::string buildStablePrefix(const std::string& projectId,
                                   const std::vector<std::string>& domains,
                                   const std::string& taskType, size_t maxTokens,
-                                  MemoryBriefInfo* info = nullptr);
+                                  MemoryBriefInfo* info = nullptr,
+                                  bool lockedToEpoch = true);
     taskforge::Json removedSince(const std::string& projectId, long long removalSeqStart,
                                  const std::vector<std::pair<std::string, std::string>>& delivered);
     taskforge::Json prefixEpochs(const std::string& projectId, const std::string& prefixKey = "",
@@ -149,6 +194,14 @@ public:
                                        const std::string& prefixKey,
                                        const std::string& skillHash,
                                        const std::string& promptTemplateHash);
+    taskforge::Json configurePrefixEpochs(const std::string& projectId,
+                                          const taskforge::Json& raw);
+    PrefixEpochConfig prefixEpochConfig(const std::string& projectId) const;
+    bool maybePublishPrefixEpoch(const std::string& projectId,
+                                 const std::string& prefixKey,
+                                 const std::string& skillHash,
+                                 const std::string& promptTemplateHash,
+                                 int pendingAdditions, bool removal);
     void clearLessons(const std::string& projectId);
 
     // Episódios, arestas e métricas.
@@ -259,6 +312,10 @@ public:
     PathServingConfig pathServingConfig(const std::string& projectId) const;
     bool configureTraversal(const std::string& projectId, const TraversalConfig& config);
     TraversalConfig traversalConfig(const std::string& projectId) const;
+    bool configureUtility(const std::string& projectId, const taskforge::Json& raw);
+    MemoryUtilityConfig utilityConfig(const std::string& projectId) const;
+    bool configureCreditAudit(const std::string& projectId, const taskforge::Json& raw);
+    MemoryCreditAuditConfig creditAuditConfig(const std::string& projectId) const;
     taskforge::Json searchGraph(const std::string& projectId, const std::string& text,
                                 size_t limit, const std::string& taskType = "",
                                 const std::string& runId = "", const std::string& nodeId = "",
@@ -321,6 +378,46 @@ public:
     std::vector<MemoryValidationRecord> listValidations(const std::string& projectId,
                                                         const std::string& episodeId = "",
                                                         size_t limit = 100);
+    // Fase 5: semente unica dos contadores legados e reconstrucao do agregado.
+    taskforge::Json seedLegacyCredit(const std::string& projectId);
+    taskforge::Json rebuildUtility(const std::string& projectId);
+    taskforge::Json rekeyCreditItems(const std::string& projectId);
+    taskforge::Json creditSummary(const std::string& projectId);
+    // Avalia e grava uma auditoria por ablacao a partir dos bracos observados.
+    taskforge::Json runCreditAudit(const std::string& projectId,
+                                   const taskforge::Json& request);
+    // Amostra tarefas rejeitadas, aplica os limites diarios e delega os bracos
+    // ao executor registrado pelo Studio.
+    taskforge::Json auditCredit(const std::string& projectId,
+                                const taskforge::Json& options = taskforge::Json::object());
+    void setCreditAuditExecutor(CreditAuditExecutorFn executor);
+    bool hasCreditAuditExecutor() const;
+    void setCreditAuditContainerProbe(std::function<bool()> probe);
+    void setCreditAuditBudget(CreditAuditBudgetFn budget);
+    taskforge::Json listCreditAudits(const std::string& projectId,
+                                     const std::string& status = "",
+                                     size_t limit = 100);
+    taskforge::Json recordValidatorAudit(const std::string& projectId,
+                                         const taskforge::Json& request);
+    taskforge::Json validatorAuditSummary(const std::string& projectId,
+                                          const std::string& validator = "");
+    double validatorWeight(const std::string& projectId,
+                           const std::string& validator) const;
+    taskforge::Json saveTaskSnapshot(const std::string& projectId,
+                                     const taskforge::Json& request);
+    taskforge::Json creditAuditContainerPlan(const std::string& projectId,
+                                             const taskforge::Json& request = taskforge::Json::object());
+    // Materializa um workspace isolado por braco a partir do snapshot.
+    taskforge::Json prepareCreditAuditWorkspaces(const std::string& projectId,
+                                                 const std::string& traceId,
+                                                 const taskforge::Json& arms);
+    taskforge::Json cleanupCreditAuditWorkspaces(const std::string& projectId,
+                                                 const std::string& traceId);
+    taskforge::Json purgeExpiredSnapshots(const std::string& projectId);
+    // Fase 5: outbox de credito quando a telemetria falha.
+    bool appendCreditOutbox(const std::string& projectId,
+                            const std::vector<MemoryCreditEvent>& events);
+    taskforge::Json drainCreditOutbox(const std::string& projectId);
     // E4: evidencia autocontida, lida do banco de conhecimento (nao da telemetria).
     std::vector<MemoryEvidenceRecord> evidenceFor(const std::string& projectId,
                                                   const std::string& targetKind,
@@ -404,7 +501,8 @@ private:
                       const std::vector<std::string>& domains,
                       std::vector<MemoryHitRef>* hits, std::string& output,
                       taskforge::Json* traceCandidates = nullptr,
-                      const std::vector<std::string>& lenses = {});
+                      const std::vector<std::string>& lenses = {},
+                      const std::string& taskType = "");
     taskforge::Json servePaths(const std::string& projectId, const std::string& taskType,
                                const std::string& intent,
                                const std::vector<std::string>& access);
@@ -417,7 +515,10 @@ private:
                       const std::vector<std::string>& domains,
                       std::vector<RankedMemory>& output,
                       taskforge::Json* traceCandidates = nullptr,
-                      const std::vector<std::string>& lenses = {});
+                      const std::vector<std::string>& lenses = {},
+                      const std::string& taskType = "");
+    std::string itemKeyFor(const std::string& scope, const std::string& kind,
+                           const std::string& id, MemoryStore* store);
 
     // Worker de manutencao: o stop ocorre fora de mutex_ para evitar deadlock
     // com uma rodada de consolidacao em andamento.
@@ -442,6 +543,13 @@ private:
     std::map<std::string, std::unique_ptr<MaintenanceRuntime>> maintenance_;
     std::map<std::string, PathServingConfig> pathServing_;   // E16
     std::map<std::string, TraversalConfig> traversal_;       // E17
+    std::map<std::string, MemoryUtilityConfig> utility_;      // Fase 5
+    std::map<std::string, MemoryCreditAuditConfig> creditAudit_; // Fase 5
+    CreditAuditExecutorFn creditAuditExecutor_;
+    std::function<bool()> creditAuditContainerProbe_;
+    CreditAuditBudgetFn creditAuditBudget_;
+    std::map<std::string, PrefixEpochConfig> prefixEpochs_;
+    std::map<std::string, std::chrono::steady_clock::time_point> prefixEpochLastPublish_;
 };
 
 } // namespace memory
