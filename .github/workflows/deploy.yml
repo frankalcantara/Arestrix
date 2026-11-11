@@ -38,6 +38,9 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node.js
+        # zizmor: ignore[cache-poisoning] deploy runs only on push to main and
+        # tags; caches written by pull_request runs are scoped to the PR merge
+        # ref and cannot be restored here. See .github/AUTOMATION.md.
         uses: actions/setup-node@v7.1.0
         with:
           node-version: 24
@@ -55,6 +58,8 @@ jobs:
       # pinned by version and SHA-256 in scripts/fetch_onnxruntime.py; the cache
       # keeps the ~36 MB extracted runtime between runs.
       - name: Cache ONNX Runtime + DirectML
+        # zizmor: ignore[cache-poisoning] same reasoning as setup-node above:
+        # only runs with push access to main can write this key.
         uses: actions/cache@v6.1.0
         with:
           path: ${{ runner.temp }}/arestrix-deps/onnxruntime-directml
