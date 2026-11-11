@@ -71,6 +71,10 @@ Output/
 # Notas de sessao do agente (dados pessoais de ambiente: nunca versionar)
 continue-aqui.mcp
 
+# Saidas locais de trabalho do agente (nao fazem parte do produto)
+/Claude outputs/
+/scripts/agent_crawler/
+
 # Modelos e pesos de IA locais
 *.gguf
 *.safetensors
