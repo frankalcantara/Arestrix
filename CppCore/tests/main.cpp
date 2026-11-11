@@ -4219,12 +4219,14 @@ TEST(memory_state_ttl_expires_on_read) {
     memory.closeProject(pId);
     CHECK(memory.configure(pId, true, (root / "memory.db").string()));
     std::string error;
+    // TTL de 5s para nao flakar em runners lentos: a leitura imediata precisa
+    // acontecer antes da expiracao mesmo com o runner sob carga.
     CHECK(memory.declareStateKey(pId, "short", "project", taskforge::Json::object(),
-                                 1024, 1, "replace", 3, error));
+                                 1024, 5, "replace", 3, error));
     CHECK(memory.setState(pId, "short", "", "",
                           taskforge::Json::parse(R"({"v":1})"), false, 0, error).value("ok", false));
     CHECK(memory.getState(pId, "short", "", "", error).value("found", false));
-    std::this_thread::sleep_for(std::chrono::milliseconds(3100));
+    std::this_thread::sleep_for(std::chrono::milliseconds(5200));
     const auto expired = memory.getState(pId, "short", "", "", error);
     CHECK(!expired.value("found", true));
     CHECK(expired.value("expired", false));

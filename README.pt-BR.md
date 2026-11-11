@@ -51,7 +51,7 @@ Baixe o build **Windows x64** pronto em
 O CLI é instalado junto com o Studio (`arestrix-cli.exe`). Para compilar pipelines, instale também o
 MSVC Build Tools ("Desenvolvimento para Desktop com C++"); o pacote não inclui compilador. Cada build
 publica `SHA256SUMS`, `SBOM.json` e `package-manifest.json` com hash por arquivo. `latest` é um
-pré-release contínuo gerado a partir da `main`; tags de versão publicam releases próprios.
+pré-release contínuo gerado a partir da `main`; tags de versão publicam releases estáveis.
 
 ## O que é o Arestrix?
 
