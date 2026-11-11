@@ -3,7 +3,7 @@ name: CI
 # Pull-request validation. The Windows portable release pipeline lives in
 # deploy.yml; this workflow is the pre-merge gate (quality, frontend, native
 # Windows and native Linux). The four job names are required status checks on
-# main, so keep them stable.
+# main, so keep them stable. `lockfile` is a fifth, advisory job.
 
 on:
   pull_request:
@@ -27,12 +27,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -41,7 +42,7 @@ jobs:
         run: npm ci
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.11"
 
@@ -70,12 +71,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -96,12 +98,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.11"
 
@@ -120,17 +123,18 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.11"
 
       - name: Cache ONNX Runtime + DirectML
-        uses: actions/cache@v6
+        uses: actions/cache@v6.1.0
         with:
           path: ${{ runner.temp }}/arestrix-deps/onnxruntime-directml
           key: onnxruntime-directml-ort1.24.4-dml1.15.4
@@ -151,9 +155,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Install native build tools
         run: |
@@ -161,10 +166,36 @@ jobs:
           sudo apt-get install -y build-essential cmake ninja-build
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.11"
 
       # Same C++20 build and CTest suite as Windows, using GCC/Clang on Linux.
       - name: Build and test native backend
         run: python CppCore/dev.py --test --no-frontend
+
+  # Fails when .github/workflows/actions.lock is out of sync with the workflows,
+  # or when a locked pin no longer verifies upstream. Advisory for now: it is
+  # deliberately not one of the required checks in `main-protection` (see
+  # .github/AUTOMATION.md), so a transient upstream/API problem cannot block a
+  # release. Promote it once it has a clean track record.
+  lockfile:
+    name: lockfile
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      # The action pins themselves are only trustworthy if the tool that checks
+      # them is pinned too, hence --pin. Bump it by hand (see AUTOMATION.md).
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install gh-actions-lock
+        run: gh extension install github/gh-actions-lock --pin v0.4.1
+
+      - name: Verify lockfile
+        run: gh actions-lock --verify

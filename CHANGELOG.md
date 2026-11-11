@@ -28,6 +28,15 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   suggestion but keeps executing the current tier; it no longer switches to the
   frontier while in shadow.
 
+### Security
+
+- GitHub Actions dependencies are pinned through
+  `.github/workflows/actions.lock` (`gh actions-lock`). Workflows keep readable
+  tags while CI and the release pipeline run the exact locked commit, including
+  transitive dependencies. `ci.yml` gains an advisory `lockfile` job that fails
+  when the lockfile drifts from the workflows, and the `github-actions`
+  Dependabot ecosystem now waits 7 days before proposing a fresh action release.
+
 ## [2.8.0] - 2026-11-11
 
 ### Added

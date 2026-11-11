@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - name: Checkout default branch with submodules
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           submodules: recursive
@@ -52,7 +52,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: 24
 
@@ -71,7 +71,7 @@ jobs:
 
       - name: Upload submodule report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: submodule-updates
           path: |
@@ -84,7 +84,7 @@ jobs:
         # Runs when there is an update, and also after a clean check so an
         # obsolete `chore/submodule-updates` pull request is closed automatically.
         if: env.HAS_UPDATES == 'true' || steps.check.outcome == 'success'
-        uses: peter-evans/create-pull-request@v8
+        uses: peter-evans/create-pull-request@v8.1.3
         with:
           # Prefer the PAT so the PR runs ci.yml; fall back to the workflow token.
           token: ${{ secrets.SUBMODULE_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
