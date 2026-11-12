@@ -23,6 +23,11 @@ import {
   serializedTemplateToAssetPayload,
   templateAssetId
 } from './adapters/templateAssetAdapter.ts';
+import {
+  createPipelineAsset,
+  pipelineAssetId,
+  serializedPipelineToAssetPayload
+} from './adapters/pipelineAssetAdapter.ts';
 import type { ISerializedTemplatePlugin } from '../templates/AgentTemplateTypes.ts';
 import {
   assetPayloadToMcpConfig,
@@ -418,24 +423,31 @@ export class LibraryService {
     const audit = this.gate.auditTemplate(template);
     if (audit.verdict === 'REJECT') return null;
 
-    const id = templateAssetId(library.id, template.id || Date.now().toString(36));
-    const asset = createTemplateAsset({
+    const isPipeline = template.assetKind === 'pipeline';
+    const id = isPipeline
+      ? pipelineAssetId(library.id, template.id || Date.now().toString(36))
+      : templateAssetId(library.id, template.id || Date.now().toString(36));
+    const base = {
       id,
       libraryId: library.id,
-      name: options.name?.trim() || template.name || 'Template de vértice',
-      description: template.description || 'Template de vértice importado do catálogo.',
-      category: template.category || 'Plugins Customizados',
+      name: options.name?.trim() || template.name || (isPipeline ? 'Pipeline' : 'Template de vértice'),
+      description: template.description || (isPipeline
+        ? 'Pipeline empacotado como agente visual.'
+        : 'Template de vértice importado do catálogo.'),
+      category: template.category || (isPipeline ? 'Agentes' : 'Plugins Customizados'),
       version: template.version || '1.0.0',
       license: 'MIT',
-      payload: serializedTemplateToAssetPayload(template),
       audit,
       provenance: {
-        sourceKind: 'workspace',
+        sourceKind: 'workspace' as const,
         sourceId: 'user',
         authority: 'user',
         importedAt: new Date().toISOString()
       }
-    });
+    };
+    const asset = isPipeline
+      ? createPipelineAsset({ ...base, payload: serializedPipelineToAssetPayload(template) })
+      : createTemplateAsset({ ...base, payload: serializedTemplateToAssetPayload(template) });
 
     const saved = this.registry.upsertAsset(asset);
     if (!saved) return null;
@@ -752,9 +764,18 @@ export class LibraryService {
     return { ok: true, asset: saved, audit };
   }
 
-  private emptyPayloadForKind(kind: 'skill' | 'mcp'): ILibraryAssetPayload {
+  private emptyPayloadForKind(kind: 'skill' | 'mcp' | 'pipeline'): ILibraryAssetPayload {
     if (kind === 'skill') {
       return { kind: 'skill', markdownContent: '', systemPrompt: '', tools: [] };
+    }
+    if (kind === 'pipeline') {
+      return {
+        kind: 'pipeline',
+        template: {
+          id: '', name: '', taskType: 'subflow', description: '',
+          inputs: [], outputs: [], lambdaBodyTemplate: ''
+        }
+      };
     }
     return { kind: 'mcp', transport: 'stdio', command: '', args: [] };
   }
@@ -930,7 +951,7 @@ export class LibraryService {
     const now = new Date().toISOString();
 
     for (const [index, asset] of snapshot.assets.entries()) {
-      if (!asset || (asset.payload?.kind !== 'skill' && asset.payload?.kind !== 'mcp' && asset.payload?.kind !== 'agent-template')) continue;
+      if (!asset || (asset.payload?.kind !== 'skill' && asset.payload?.kind !== 'mcp' && asset.payload?.kind !== 'agent-template' && asset.payload?.kind !== 'pipeline')) continue;
       const payload = this.mergePayload(asset.payload);
       const audit = this.auditPayload(asset.id || `import-${index}`, asset.name || 'Asset', asset, payload);
       const decision = this.gate.canInstall(audit, { allowCaution: true });
@@ -1084,6 +1105,7 @@ export class LibraryService {
   private createAssetForPayload(base: Record<string, any>, payload: ILibraryAssetPayload): ILibraryAsset {
     if (payload.kind === 'skill') return createSkillAsset({ ...(base as any), payload });
     if (payload.kind === 'agent-template') return createTemplateAsset({ ...(base as any), payload });
+    if (payload.kind === 'pipeline') return createPipelineAsset({ ...(base as any), payload });
     return createMcpAsset({ ...(base as any), payload });
   }
 
@@ -1106,6 +1128,14 @@ export class LibraryService {
       return {
         kind: 'agent-template',
         template: JSON.parse(JSON.stringify(templatePatch.template || current.template))
+      };
+    }
+
+    if (current.kind === 'pipeline') {
+      const pipelinePatch = (patch && patch.kind === 'pipeline' ? patch : {}) as Partial<typeof current>;
+      return {
+        kind: 'pipeline',
+        template: JSON.parse(JSON.stringify(pipelinePatch.template || current.template))
       };
     }
 
@@ -1141,6 +1171,10 @@ export class LibraryService {
     }
 
     if (payload.kind === 'agent-template') {
+      return this.gate.auditTemplate(payload.template);
+    }
+
+    if (payload.kind === 'pipeline') {
       return this.gate.auditTemplate(payload.template);
     }
 

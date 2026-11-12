@@ -952,6 +952,7 @@
     "btn_export": "Exportar Catálogo",
     "btn_export_tip": "Exporta todos os templates registrados para JSON",
     "btn_library": "Bibliotecas",
+    "btn_library_pipelines": "Pipelines",
     "btn_library_tip": "Inserir um template salvo em uma biblioteca",
     "btn_save_library": "Salvar na biblioteca",
     "btn_delete": "Excluir",
@@ -959,6 +960,8 @@
     "confirm_preset": "O grafo atual será substituído pela arquitetura completa de agentes. Continuar?",
     "library_title": "Inserir template da biblioteca",
     "library_subtitle": "O template será registrado no catálogo e inserido no grafo.",
+    "library_pipeline_title": "Inserir pipeline da biblioteca",
+    "library_pipeline_subtitle": "O pipeline será empacotado como um único agente visual.",
     "library_saved": "Template salvo na biblioteca com auditoria.",
     "library_save_failed": "Não foi possível salvar o template na biblioteca.",
     "library_inserted": "Template \"{{name}}\" inserido no grafo.",
@@ -1721,6 +1724,7 @@
     "empty_library": "Nenhum asset deste tipo. Importe um catálogo.",
     "empty_detail": "Selecione um asset na árvore. Se a biblioteca estiver vazia, importe o catálogo nas Propriedades.",
     "empty_template_detail": "Nenhum template nesta biblioteca. Salve um template do catálogo de vértices na biblioteca.",
+    "empty_pipeline_detail": "Nenhum pipeline nesta biblioteca. Salve o pipeline atual ou importe um projeto.",
     "download": "Baixar e auditar",
     "download_hint": "O conteúdo só é baixado agora, depois da seleção, e passa por auditoria antes de ser incluído.",
     "downloaded": "Asset baixado e auditado com sucesso.",
@@ -1743,6 +1747,7 @@
     "import_result": "{{imported}} assets importados; {{rejected}} rejeitados.",
     "kind_builtin": "Embutida",
     "kind_template": "Template",
+    "kind_pipeline": "Pipeline",
     "kind_local": "Local"
   },
   "node_skills": {

@@ -7,7 +7,7 @@ import type { ILibraryAsset, ILibraryEntry, LibraryAuditVerdict } from '../../co
 import { t } from '../../i18n/index.ts';
 
 export interface ILibraryPickerOptions {
-  kind: 'skill' | 'mcp' | 'agent-template';
+  kind: 'skill' | 'mcp' | 'agent-template' | 'pipeline';
   projectId?: string;
   title?: string;
   subtitle?: string;
@@ -58,7 +58,7 @@ export class LibraryPickerModal extends BaseModal {
     this.state = { search: '' };
 
     // O catálogo de MCPs vive no Workspace; garante a biblioteca antes de abrir.
-    if ((options.kind === 'mcp' || options.kind === 'agent-template')
+    if ((options.kind === 'mcp' || options.kind === 'agent-template' || options.kind === 'pipeline')
       && !this.registry.list('workspace').some(library => !library.isBuiltin)) {
       this.service.ensureWorkspaceLibrary();
     }
@@ -264,12 +264,14 @@ export class LibraryPickerModal extends BaseModal {
     const asset = this.selectedAsset();
     const library = this.state.selectedLibraryId ? this.registry.get(this.state.selectedLibraryId) : undefined;
     if (!asset) {
-      const canImportCatalog = this.options?.kind !== 'agent-template';
+      const canImportCatalog = this.options?.kind !== 'agent-template' && this.options?.kind !== 'pipeline';
       return `
         <div class="properties-library-empty">
           ${this.escapeHtml(this.options?.kind === 'agent-template'
             ? lbl('empty_template_detail', 'Nenhum template nesta biblioteca. Salve um template do catálogo de vértices na biblioteca.')
-            : lbl('empty_detail', 'Selecione um asset na árvore. Se a biblioteca estiver vazia, importe o catálogo nas Propriedades.'))}
+            : this.options?.kind === 'pipeline'
+              ? lbl('empty_pipeline_detail', 'Nenhum pipeline nesta biblioteca. Salve o pipeline atual ou importe um projeto.')
+              : lbl('empty_detail', 'Selecione um asset na árvore. Se a biblioteca estiver vazia, importe o catálogo nas Propriedades.'))}
           ${canImportCatalog ? `<div class="properties-library-actions">
             <button type="button" class="btn btn-secondary-office" data-picker-import="${this.escapeHtml(library?.id || '')}">${this.escapeHtml(lbl('import_catalog', 'Importar catálogo'))}</button>
           </div>` : ''}
@@ -283,7 +285,9 @@ export class LibraryPickerModal extends BaseModal {
         ? (asset.payload.template.assetKind === 'pipeline'
           ? `Pipeline · ${asset.payload.template.childGraph?.nodes?.length ?? 0} nós`
           : `Template · ${asset.payload.template.taskType}`)
-        : `${asset.payload.transport.toUpperCase()} · ${asset.payload.command || asset.payload.url || ''}`;
+        : asset.payload.kind === 'pipeline'
+          ? `Pipeline · ${asset.payload.template.childGraph?.nodes?.length ?? 0} nós`
+          : `${asset.payload.transport.toUpperCase()} · ${asset.payload.command || asset.payload.url || ''}`;
     const canSelect = asset.audit.verdict !== 'REJECT' && asset.audit.verdict !== 'PENDING';
     const needsDownload = Boolean(asset.remote) && (
       asset.audit.verdict === 'PENDING'
@@ -300,7 +304,9 @@ export class LibraryPickerModal extends BaseModal {
               ? (asset.payload.kind === 'agent-template' && asset.payload.template.assetKind === 'pipeline'
                 ? lbl('kind_pipeline', 'Pipeline')
                 : lbl('kind_template', 'Template'))
-              : 'MCP', 'accent')}
+              : asset.kind === 'pipeline'
+                ? lbl('kind_pipeline', 'Pipeline')
+                : 'MCP', 'accent')}
             ${badge(this.escapeHtml(asset.audit.verdict), verdictTone(asset.audit.verdict))}
             ${badge(asset.status === 'installed' ? lbl('installed', 'Instalado') : lbl('available', 'Disponível'), asset.status === 'installed' ? 'success' : 'neutral')}
           </div>

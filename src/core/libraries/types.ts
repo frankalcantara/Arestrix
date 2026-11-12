@@ -12,7 +12,7 @@ import type { ISerializedTemplatePlugin } from '../templates/AgentTemplateTypes.
 export type LibraryScope = 'studio' | 'workspace' | 'project';
 export type LibraryKind = 'builtin' | 'local' | 'repository';
 export type LibrarySourceKind = 'builtin' | 'github' | 'local-folder' | 'workspace';
-export type LibraryAssetKind = 'skill' | 'mcp' | 'agent-template' | 'graph-template';
+export type LibraryAssetKind = 'skill' | 'mcp' | 'agent-template' | 'pipeline';
 export type LibraryTrust = 'official' | 'verified' | 'community' | 'local';
 export type LibraryAssetStatus = 'available' | 'installed' | 'pinned' | 'disabled';
 export type LibraryAuditVerdict = 'APPROVE' | 'CAUTION' | 'REJECT' | 'PENDING';
@@ -103,7 +103,12 @@ export interface IAgentTemplatePayload {
   template: ISerializedTemplatePlugin;
 }
 
-export type ILibraryAssetPayload = ISkillAssetPayload | IMcpAssetPayload | IAgentTemplatePayload;
+export interface IPipelineAssetPayload {
+  kind: 'pipeline';
+  template: ISerializedTemplatePlugin;
+}
+
+export type ILibraryAssetPayload = ISkillAssetPayload | IMcpAssetPayload | IAgentTemplatePayload | IPipelineAssetPayload;
 
 export interface ILibraryAsset {
   id: string;

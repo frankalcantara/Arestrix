@@ -952,6 +952,7 @@
     "btn_export": "Export Catalog",
     "btn_export_tip": "Exports all registered templates to JSON",
     "btn_library": "Libraries",
+    "btn_library_pipelines": "Pipelines",
     "btn_library_tip": "Insert a template saved in a library",
     "btn_save_library": "Save to library",
     "btn_delete": "Delete",
@@ -959,6 +960,8 @@
     "confirm_preset": "The current graph will be replaced by the full agent architecture. Continue?",
     "library_title": "Insert template from library",
     "library_subtitle": "The template is registered in the catalog and inserted into the graph.",
+    "library_pipeline_title": "Insert pipeline from library",
+    "library_pipeline_subtitle": "The pipeline is packaged as a single visual agent.",
     "library_saved": "Template saved to the library with audit.",
     "library_save_failed": "Could not save the template to the library.",
     "library_inserted": "Template \"{{name}}\" inserted into the graph.",
@@ -1721,6 +1724,7 @@
     "empty_library": "No asset of this kind. Import a catalog.",
     "empty_detail": "Select an asset in the tree. If the library is empty, import the catalog in Properties.",
     "empty_template_detail": "No template in this library. Save a vertex-catalog template to the library.",
+    "empty_pipeline_detail": "No pipeline in this library. Save the current pipeline or import a project.",
     "download": "Download and audit",
     "download_hint": "The content is downloaded only now, after selection, and is audited before being added.",
     "downloaded": "Asset downloaded and audited successfully.",
@@ -1743,6 +1747,7 @@
     "import_result": "{{imported}} assets imported; {{rejected}} rejected.",
     "kind_builtin": "Built-in",
     "kind_template": "Template",
+    "kind_pipeline": "Pipeline",
     "kind_local": "Local"
   },
   "node_skills": {

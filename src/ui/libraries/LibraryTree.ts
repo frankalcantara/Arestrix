@@ -13,7 +13,7 @@ interface ILibraryBrowserState {
   selectedLibraryId?: string;
   selectedAssetId?: string;
   search: string;
-  kind: 'all' | 'skill' | 'mcp' | 'agent-template';
+  kind: 'all' | 'skill' | 'mcp' | 'agent-template' | 'pipeline';
 }
 
 const stateByRoot = new WeakMap<HTMLElement, ILibraryBrowserState>();
@@ -54,6 +54,7 @@ function kindLabel(kind: LibraryAssetKind): string {
   if (kind === 'skill') return lbl('kind_skill', 'Skill');
   if (kind === 'mcp') return lbl('kind_mcp', 'MCP');
   if (kind === 'agent-template') return lbl('kind_agent_template', 'Template de agente');
+  if (kind === 'pipeline') return lbl('kind_pipeline', 'Pipeline');
   return lbl('kind_graph_template', 'Template de grafo');
 }
 
@@ -292,6 +293,7 @@ export function renderLibraryBrowser(options: ILibraryBrowserOptions): string {
             <option value="skill">${esc(lbl('tree_filter_skills', 'Skills'))}</option>
             <option value="mcp">${esc(lbl('tree_filter_mcps', 'MCPs'))}</option>
             <option value="agent-template">${esc(lbl('tree_filter_templates', 'Templates'))}</option>
+            <option value="pipeline">${esc(lbl('tree_filter_pipelines', 'Pipelines'))}</option>
           </select>
         </div>
         <div class="properties-library-tree" data-library-tree>
@@ -365,7 +367,7 @@ export function bindLibraryBrowser(root: HTMLElement, options: ILibraryBrowserOp
   });
 
   filter?.addEventListener('change', () => {
-    state.kind = filter.value === 'skill' || filter.value === 'mcp' || filter.value === 'agent-template'
+    state.kind = filter.value === 'skill' || filter.value === 'mcp' || filter.value === 'agent-template' || filter.value === 'pipeline'
       ? filter.value
       : 'all';
     rerender();

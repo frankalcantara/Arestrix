@@ -215,6 +215,33 @@ describe('LibraryService - importação, derivação e instalação', () => {
     expect(invalid).toBeNull();
   });
 
+  it('salva pipelines como tipo de asset próprio na biblioteca', async () => {
+    const pipeline = {
+      id: 'pipeline_service_test',
+      name: 'Pipeline de Teste',
+      taskType: 'subflow' as const,
+      description: 'Pipeline empacotado',
+      inputs: [{ name: 'in', type: 'flow' as const }],
+      outputs: [{ name: 'out', type: 'flow' as const }],
+      lambdaBodyTemplate: '',
+      assetKind: 'pipeline' as const,
+      presentation: 'agent' as const,
+      presetLocked: true,
+      childGraph: {
+        version: '1.0.0',
+        metadata: { graphName: 'Pipeline de Teste' } as any,
+        nodes: [{ id: 'n1', type: 'static', position: { x: 0, y: 0 }, inputs: [], outputs: [], parameters: {} } as any],
+        edges: []
+      }
+    };
+
+    const asset = await service.saveTemplateToLibrary(pipeline, { scope: 'workspace' });
+    expect(asset?.kind).toBe('pipeline');
+    expect(asset?.payload.kind).toBe('pipeline');
+    expect(asset?.payload.kind === 'pipeline' && asset.payload.template.childGraph?.nodes?.length).toBe(1);
+    expect(asset?.category).toBe('Agentes');
+  });
+
   it('clona uma biblioteca e mantém vínculo com a origem', async () => {
     const imported = await service.importBuiltinSkills();
     const clone = await service.cloneLibrary('library-arestrix', 'Biblioteca Clonada', 'workspace');

@@ -170,7 +170,7 @@ export class LibraryRegistry {
   public upsertAsset(asset: ILibraryAsset): ILibraryAsset | null {
     if (!asset || !asset.id || !asset.libraryId || !asset.payload) return null;
     if (!this.get(asset.libraryId)) return null;
-    if (asset.payload.kind !== 'skill' && asset.payload.kind !== 'mcp' && asset.payload.kind !== 'agent-template') return null;
+    if (asset.payload.kind !== 'skill' && asset.payload.kind !== 'mcp' && asset.payload.kind !== 'agent-template' && asset.payload.kind !== 'pipeline') return null;
 
     // IDs viram nomes de pasta/arquivo em .workspace: nunca aceitar ':' (Windows).
     const safeId = String(asset.id).replace(/[:]+/g, '-');
@@ -309,7 +309,8 @@ export class LibraryRegistry {
       asset &&
       typeof asset.id === 'string' &&
       typeof asset.libraryId === 'string' &&
-      (asset.payload?.kind === 'skill' || asset.payload?.kind === 'mcp' || asset.payload?.kind === 'agent-template') &&
+      (asset.payload?.kind === 'skill' || asset.payload?.kind === 'mcp' ||
+       asset.payload?.kind === 'agent-template' || asset.payload?.kind === 'pipeline') &&
       asset.audit &&
       typeof asset.audit.hash === 'string'
     );
@@ -404,16 +405,28 @@ export class LibraryRegistry {
       const libraryIds = new Set(['library-arestrix', ...this.libraries.map(library => library.id)]);
       this.assets = Array.isArray(rawAssets)
         ? rawAssets
-          .map(asset => ({
-            ...asset,
-            id: typeof asset?.id === 'string' ? asset.id.replace(/[:]+/g, '-') : asset?.id,
-            derivedFrom: asset?.derivedFrom
-              ? {
-                  ...asset.derivedFrom,
-                  assetId: String(asset.derivedFrom.assetId || '').replace(/[:]+/g, '-')
-                }
-              : undefined
-          }))
+          .map(asset => {
+            const normalized = {
+              ...asset,
+              id: typeof asset?.id === 'string' ? asset.id.replace(/[:]+/g, '-') : asset?.id,
+              derivedFrom: asset?.derivedFrom
+                ? {
+                    ...asset.derivedFrom,
+                    assetId: String(asset.derivedFrom.assetId || '').replace(/[:]+/g, '-')
+                  }
+                : undefined
+            };
+            // Migração: pipelines antigos foram salvos como agent-template com assetKind.
+            if (normalized.payload?.kind === 'agent-template' &&
+                normalized.payload.template?.assetKind === 'pipeline') {
+              normalized.kind = 'pipeline';
+              normalized.payload = {
+                kind: 'pipeline',
+                template: normalized.payload.template
+              };
+            }
+            return normalized;
+          })
           .filter(asset => this.isValidAsset(asset) && libraryIds.has(asset.libraryId))
         : [];
 

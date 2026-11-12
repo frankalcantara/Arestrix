@@ -102,6 +102,11 @@ export class TemplateModal {
             <button id="btn-library-templates" class="btn btn-secondary-pill" title="${t('template_modal.btn_library_tip', 'Inserir um template salvo em uma biblioteca')}">
               ${t('template_modal.btn_library', 'Bibliotecas')}
             </button>
+            ${this.activeCategory === 'Agentes' ? `
+              <button id="btn-library-pipelines" class="btn btn-secondary-pill" title="${t('template_modal.btn_library_pipelines', 'Inserir um pipeline da biblioteca como agente')}">
+                ${t('template_modal.btn_library_pipelines', 'Pipelines')}
+              </button>
+            ` : ''}
             <button id="btn-import-plugin" class="btn btn-secondary-pill" title="${t('template_modal.btn_import_tip')}">
               ${t('template_modal.btn_import')}
             </button>
@@ -358,6 +363,35 @@ export class TemplateModal {
             severity: 'success',
             title: t('template_modal.library_title', 'Inserir template da biblioteca'),
             message: t('template_modal.library_inserted', 'Template "{{name}}" inserido no grafo.', { name: asset.name })
+          });
+        }
+      });
+    });
+
+    // Inserir pipeline vindo da biblioteca como agente
+    this.overlay.querySelector('#btn-library-pipelines')?.addEventListener('click', () => {
+      if (!this.libraryPicker) this.libraryPicker = new LibraryPickerModal();
+      this.libraryPicker.open({
+        kind: 'pipeline',
+        projectId: this.graph.getProjectId(),
+        title: t('template_modal.library_pipeline_title', 'Inserir pipeline da biblioteca'),
+        subtitle: t('template_modal.library_pipeline_subtitle', 'O pipeline será empacotado como um único agente visual.'),
+        onSelect: async (asset) => {
+          if (asset.payload.kind !== 'pipeline') return;
+          const result = this.registry.importTemplatesFromJSON(JSON.stringify(asset.payload.template));
+          if (result.success === 0) {
+            alert(t('template_modal.library_insert_failed', 'Não foi possível importar o template: {{errors}}', { errors: result.errors.join('; ') }));
+            return;
+          }
+          const importedTemplate = this.registry.getTemplate(asset.payload.template.id);
+          this.activeCategory = 'Agentes';
+          this.render();
+          if (importedTemplate) this.insertPipelineAsAgent(importedTemplate);
+          this.hide();
+          globalEventBus.emit('notification:show', {
+            severity: 'success',
+            title: t('template_modal.library_pipeline_title', 'Inserir pipeline da biblioteca'),
+            message: t('template_modal.pipeline_inserted', 'Pipeline "{{name}}" inserido como agente visual.', { name: asset.name })
           });
         }
       });

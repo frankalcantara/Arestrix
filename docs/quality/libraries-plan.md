@@ -37,12 +37,13 @@
 > **Fase 4.3 entregue (pipeline como agente):** o pipeline atual pode ser salvo
 > na biblioteca pela seção **Agentes**, um `pipelines/*.json` de outro projeto
 > pode ser importado diretamente, e a pasta de outro projeto pode ser
-> selecionada para localizar `pipelines/main.json`. A importação cria um único
-> vértice com apresentação de `agent` e um subflow interno oculto. O runtime
-> continua usando o mecanismo existente de call/subflow: a interface vê um
-> agente, mas o grafo permanece um pipeline internamente. Pipelines com subflows
-> aninhados ou chamadas internas são rejeitados na importação com mensagem
-> explícita até a limitação v1 do gerador ser removida.
+> selecionada para localizar `pipelines/main.json`. O asset usa o tipo próprio
+> `pipeline` (não mais `agent-template`) e a importação cria um único vértice
+> com apresentação de `agent` e um subflow interno oculto. O runtime continua
+> usando o mecanismo existente de call/subflow: a interface vê um agente, mas o
+> grafo permanece um pipeline internamente. Pipelines com subflows aninhados ou
+> chamadas internas são rejeitados na importação com mensagem explícita até a
+> limitação v1 do gerador ser removida.
 >
 > **Fase 5 entregue:** fonte GitHub real via endpoint C++ `fetch_library_source`, commit pin,
 > leitura de manifesto/árvore sem baixar blobs, sincronização de candidatos como `PENDING`,
