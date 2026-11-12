@@ -551,6 +551,7 @@ export class Inspector {
               <strong>${t('inspector.node_view.pipeline_agent_title', 'Agente composto (pipeline)')}</strong>
               <div>${t('inspector.node_view.pipeline_agent_desc', 'Este vértice representa um pipeline/projeto completo. A interface o mostra como agente; internamente ele executa o pipeline empacotado.')}</div>
             </div>
+            ${this.renderPipelineAgentSection(node)}
           ` : ''}
 
           ${(node.type === 'subflow' || node.type === 'module') ? `
@@ -846,6 +847,7 @@ export class Inspector {
     if (node.type === 'output') this.bindOutputSection(node);
     if (node.type === 'agent' || node.type === 'call') this.bindCallSection();
     if (node.type === 'call') this.bindFlowCallSection(node);
+    if (node.presentation === 'agent') this.bindPipelineAgentSection(node);
     if (node.type === 'interaction') this.bindInteractionSection(node);
 
     // Sincronizar Lambda
@@ -1558,6 +1560,29 @@ export class Inspector {
     `;
   }
 
+  private renderPipelineAgentSection(node: INodeData): string {
+    const settings = node.callSettings ?? defaultCallVertexSettings();
+    const source = settings.source ?? { kind: 'previous', path: '' };
+    return `
+      <div class="form-group" style="border-left: 3px solid #6366f1; padding-left: 8px; margin-top: 8px;">
+        <label class="form-label" for="pipeline-agent-input">${t('inspector.calls.pipeline_input', 'Entrada do pipeline')}</label>
+        <textarea id="pipeline-agent-input" class="form-textarea" rows="3"
+          placeholder="${t('inspector.calls.pipeline_input_placeholder', 'Texto enviado ao pipeline quando ele for executado')}">${this.escapeHtml(settings.input ?? '')}</textarea>
+        <label class="form-label" for="pipeline-agent-source" style="margin-top: 8px;">${t('inspector.calls.pipeline_source', 'Origem da entrada')}</label>
+        <select id="pipeline-agent-source" class="form-select">
+          <option value="previous" ${source.kind === 'previous' ? 'selected' : ''}>${t('inspector.calls.source_previous', 'Vértice anterior')}</option>
+          <option value="file" ${source.kind === 'file' ? 'selected' : ''}>${t('inspector.calls.source_file', 'Arquivo')}</option>
+          <option value="none" ${source.kind === 'none' ? 'selected' : ''}>${t('inspector.calls.source_none', 'Nenhuma')}</option>
+        </select>
+        ${source.kind === 'file' ? `
+          <input id="pipeline-agent-source-path" class="form-input" style="margin-top: 6px;" value="${this.escapeHtml(source.path ?? '')}"
+            placeholder="${t('inspector.calls.pipeline_source_path', 'Caminho relativo do arquivo de entrada')}" />
+        ` : ''}
+        <div class="office-field-hint">${t('inspector.calls.pipeline_input_hint', 'A entrada é passada ao pipeline empacotado. O resultado é gravado em .arestrix/out e entregue ao próximo vértice.')}</div>
+      </div>
+    `;
+  }
+
   private renderFlowCallSection(node: INodeData): string {
     const settings = node.callSettings ?? defaultCallVertexSettings();
     const source = settings.source ?? { kind: 'previous', path: '' };
@@ -1588,6 +1613,29 @@ export class Inspector {
         <input type="text" id="call-source-path" class="form-input code-font" value="${this.escapeHtml(source.path ?? '')}" placeholder="workspace/entrada.txt" />
       </div>
     `;
+  }
+
+  private bindPipelineAgentSection(node: INodeData): void {
+    const input = this.container.querySelector('#pipeline-agent-input') as HTMLTextAreaElement | null;
+    input?.addEventListener('change', () => {
+      this.updateCallVertexSettings(node, settings => { settings.input = input.value; }, 'Alterar entrada do pipeline');
+    });
+
+    const kind = this.container.querySelector('#pipeline-agent-source') as HTMLSelectElement | null;
+    kind?.addEventListener('change', () => {
+      this.updateCallVertexSettings(node, settings => {
+        settings.source = { ...(settings.source ?? {}), kind: kind.value as 'previous' | 'file' | 'none' };
+      }, 'Alterar origem da entrada do pipeline');
+      const fresh = this.graph.getNode(node.id);
+      if (fresh) this.renderNode(fresh);
+    });
+
+    const path = this.container.querySelector('#pipeline-agent-source-path') as HTMLInputElement | null;
+    path?.addEventListener('change', () => {
+      this.updateCallVertexSettings(node, settings => {
+        settings.source = { ...(settings.source ?? { kind: 'previous' }), path: path.value.trim() };
+      }, 'Alterar arquivo de entrada do pipeline');
+    });
   }
 
   private bindFlowCallSection(node: INodeData): void {

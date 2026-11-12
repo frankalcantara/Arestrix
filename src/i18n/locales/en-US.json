@@ -720,6 +720,16 @@
       "native_tag": "native, instant",
       "disabled": "disabled"
     },
+    "calls": {
+      "pipeline_input": "Pipeline input",
+      "pipeline_input_placeholder": "Text sent to the pipeline when it runs",
+      "pipeline_source": "Input source",
+      "source_previous": "Previous vertex",
+      "source_file": "File",
+      "source_none": "None",
+      "pipeline_source_path": "Relative path of the input file",
+      "pipeline_input_hint": "The input is passed to the packaged pipeline. The result is written to .arestrix/out and handed to the next vertex."
+    },
     "interaction": {
       "pending": "Execution: safe modal in the Studio or headless answers with --answers.",
       "schema_source": "Form source",

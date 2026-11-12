@@ -720,6 +720,16 @@
       "native_tag": "nativo, instantâneo",
       "disabled": "desabilitado"
     },
+    "calls": {
+      "pipeline_input": "Entrada do pipeline",
+      "pipeline_input_placeholder": "Texto enviado ao pipeline quando ele for executado",
+      "pipeline_source": "Origem da entrada",
+      "source_previous": "Vértice anterior",
+      "source_file": "Arquivo",
+      "source_none": "Nenhuma",
+      "pipeline_source_path": "Caminho relativo do arquivo de entrada",
+      "pipeline_input_hint": "A entrada é passada ao pipeline empacotado. O resultado é gravado em .arestrix/out e entregue ao próximo vértice."
+    },
     "interaction": {
       "pending": "Execução: modal seguro no Studio ou respostas headless com --answers.",
       "schema_source": "Origem do formulário",
