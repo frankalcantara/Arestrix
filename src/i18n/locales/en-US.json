@@ -733,7 +733,11 @@
       "pipeline_parameters": "Pipeline parameters",
       "pipeline_parameter_placeholder": "New parameter name",
       "add_parameter": "Add parameter",
-      "remove_parameter": "Remove parameter"
+      "remove_parameter": "Remove parameter",
+      "param_type_string": "Text",
+      "param_type_number": "Number",
+      "param_type_boolean": "Boolean",
+      "param_type_list": "List"
     },
     "interaction": {
       "pending": "Execution: safe modal in the Studio or headless answers with --answers.",

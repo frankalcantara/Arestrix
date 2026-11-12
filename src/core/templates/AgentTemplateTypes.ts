@@ -17,10 +17,18 @@ export type AgentTemplateCategory =
   | 'Síntese & Orquestração'
   | 'Plugins Customizados';
 
+export type PipelineParameterType = 'string' | 'number' | 'boolean' | 'list';
+
 export interface IPipelineInterface {
   input: { name: string; description?: string };
   /** Campos adicionais; o runtime recebe { input, parameters } em JSON quando houver algum. */
-  inputs?: Array<{ name: string; description?: string; required?: boolean; defaultValue?: string }>;
+  inputs?: Array<{
+    name: string;
+    type?: PipelineParameterType;
+    description?: string;
+    required?: boolean;
+    defaultValue?: string | number | boolean;
+  }>;
   outputs: Array<{ name: string; description?: string; sourcePath?: string }>;
 }
 

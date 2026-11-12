@@ -46,10 +46,10 @@
 > nomeada do pipeline e as saídas extraídas dos vértices de saída. O subflow
 > devolve um resultado JSON estruturado e o runtime grava um arquivo por saída,
 > além do resultado combinado, sem mostrar o call/subflow interno. O agente
-> visual também permite adicionar parâmetros nomeados; eles são enviados em JSON
-> junto com a entrada principal. Pipelines com subflows aninhados ou chamadas
-> internas são rejeitados na importação com mensagem explícita até a limitação
-> v1 do gerador ser removida.
+> visual também permite adicionar parâmetros nomeados e tipados (texto, número,
+> booleano e lista); eles são enviados em JSON junto com a entrada principal.
+> Pipelines com subflows aninhados ou chamadas internas são rejeitados na
+> importação com mensagem explícita até a limitação v1 do gerador ser removida.
 >
 > **Fase 5 entregue:** fonte GitHub real via endpoint C++ `fetch_library_source`, commit pin,
 > leitura de manifesto/árvore sem baixar blobs, sincronização de candidatos como `PENDING`,

@@ -55,7 +55,7 @@ export interface ICallVertexSettings {
   /** De onde vem o input quando `input` está vazio. */
   source?: { kind: 'previous' | 'file' | 'none'; path?: string };
   /** Campos nomeados do pipeline; enviados junto com o input principal. */
-  pipelineInputs?: Record<string, string>;
+  pipelineInputs?: Record<string, string | number | boolean | string[]>;
 }
 
 export function defaultCallVertexSettings(): ICallVertexSettings {
@@ -791,7 +791,13 @@ export interface INodeData {
   /** Interface declarada do pipeline empacotado (entrada e saídas nomeadas). */
   pipelineInterface?: {
     input: { name: string; description?: string };
-    inputs?: Array<{ name: string; description?: string; required?: boolean; defaultValue?: string }>;
+    inputs?: Array<{
+      name: string;
+      type?: 'string' | 'number' | 'boolean' | 'list';
+      description?: string;
+      required?: boolean;
+      defaultValue?: string | number | boolean;
+    }>;
     outputs: Array<{ name: string; description?: string; sourcePath?: string }>;
   };
   requiredHeaders?: string[]; // Headers C++20 adicionais requeridos por este agente

@@ -1586,19 +1586,45 @@ export class Inspector {
         ${(iface?.inputs || []).length > 0 ? `
           <div style="margin-top: 10px;">
             <strong class="form-label">${t('inspector.calls.pipeline_parameters', 'Parâmetros do pipeline')}</strong>
-            ${(iface?.inputs || []).map((param) => `
-              <div class="pipeline-param-row" style="display:flex; gap:6px; align-items:center; margin-top:6px;">
-                <input class="form-input" data-pipeline-param-value="${this.escapeHtml(param.name)}"
-                  value="${this.escapeHtml(settings.pipelineInputs?.[param.name] ?? param.defaultValue ?? '')}"
-                  placeholder="${this.escapeHtml(param.description || param.name)}" style="flex:1;" />
-                <button type="button" class="btn btn-secondary" data-pipeline-param-remove="${this.escapeHtml(param.name)}" title="${t('inspector.calls.remove_parameter', 'Remover parâmetro')}">×</button>
-              </div>
-            `).join('')}
+            ${(iface?.inputs || []).map((param) => {
+              const type = param.type || 'string';
+              const raw = settings.pipelineInputs?.[param.name] ?? param.defaultValue ?? '';
+              const value = Array.isArray(raw) ? raw.join(', ') : String(raw);
+              if (type === 'boolean') {
+                return `
+                  <div class="pipeline-param-row" style="display:flex; gap:8px; align-items:center; margin-top:6px;">
+                    <label style="flex:1; display:flex; gap:6px; align-items:center;">
+                      <input type="checkbox" data-pipeline-param-checkbox="${this.escapeHtml(param.name)}"
+                        ${raw === true || raw === 'true' ? 'checked' : ''} />
+                      <span>${this.escapeHtml(param.name)}</span>
+                    </label>
+                    <button type="button" class="btn btn-secondary" data-pipeline-param-remove="${this.escapeHtml(param.name)}" title="${t('inspector.calls.remove_parameter', 'Remover parâmetro')}">×</button>
+                  </div>
+                `;
+              }
+              return `
+                <div class="pipeline-param-row" style="display:flex; gap:6px; align-items:center; margin-top:6px;">
+                  <input class="form-input" data-pipeline-param-value="${this.escapeHtml(param.name)}"
+                    data-pipeline-param-type="${type}"
+                    type="${type === 'number' ? 'number' : 'text'}"
+                    value="${this.escapeHtml(value)}"
+                    placeholder="${this.escapeHtml(param.description || param.name)}" style="flex:1;" />
+                  <span class="office-field-hint" style="min-width:52px;">${this.escapeHtml(type)}</span>
+                  <button type="button" class="btn btn-secondary" data-pipeline-param-remove="${this.escapeHtml(param.name)}" title="${t('inspector.calls.remove_parameter', 'Remover parâmetro')}">×</button>
+                </div>
+              `;
+            }).join('')}
           </div>
         ` : ''}
         <div style="display:flex; gap:6px; align-items:center; margin-top:8px;">
           <input id="new-pipeline-param-name" class="form-input" style="flex:1;"
             placeholder="${t('inspector.calls.pipeline_parameter_placeholder', 'Nome do novo parâmetro')}" />
+          <select id="new-pipeline-param-type" class="form-select" style="width:110px;">
+            <option value="string">${t('inspector.calls.param_type_string', 'Texto')}</option>
+            <option value="number">${t('inspector.calls.param_type_number', 'Número')}</option>
+            <option value="boolean">${t('inspector.calls.param_type_boolean', 'Booleano')}</option>
+            <option value="list">${t('inspector.calls.param_type_list', 'Lista')}</option>
+          </select>
           <button type="button" id="btn-add-pipeline-param" class="btn btn-secondary">
             ${t('inspector.calls.add_parameter', 'Adicionar parâmetro')}
           </button>
@@ -1670,10 +1696,26 @@ export class Inspector {
     this.container.querySelectorAll<HTMLInputElement>('[data-pipeline-param-value]').forEach(input => {
       input.addEventListener('change', () => {
         const name = input.getAttribute('data-pipeline-param-value');
+        const type = input.getAttribute('data-pipeline-param-type') || 'string';
         if (!name) return;
         this.updateCallVertexSettings(node, settings => {
-          settings.pipelineInputs = { ...(settings.pipelineInputs || {}), [name]: input.value };
+          let value: string | number | boolean | string[] = input.value;
+          if (type === 'number') value = input.value.trim() === '' ? 0 : Number(input.value);
+          else if (type === 'list') {
+            value = input.value.split(',').map(part => part.trim()).filter(Boolean);
+          }
+          settings.pipelineInputs = { ...(settings.pipelineInputs || {}), [name]: value };
         }, 'Alterar parâmetro do pipeline');
+      });
+    });
+
+    this.container.querySelectorAll<HTMLInputElement>('[data-pipeline-param-checkbox]').forEach(input => {
+      input.addEventListener('change', () => {
+        const name = input.getAttribute('data-pipeline-param-checkbox');
+        if (!name) return;
+        this.updateCallVertexSettings(node, settings => {
+          settings.pipelineInputs = { ...(settings.pipelineInputs || {}), [name]: input.checked };
+        }, 'Alterar parâmetro booleano do pipeline');
       });
     });
 
@@ -1693,12 +1735,15 @@ export class Inspector {
 
     this.container.querySelector('#btn-add-pipeline-param')?.addEventListener('click', () => {
       const field = this.container.querySelector('#new-pipeline-param-name') as HTMLInputElement | null;
+      const typeField = this.container.querySelector('#new-pipeline-param-type') as HTMLSelectElement | null;
       const name = field?.value.trim();
       if (!name) return;
+      const type = (typeField?.value || 'string') as 'string' | 'number' | 'boolean' | 'list';
       this.updatePipelineAgentConfig(node, settings => {
-        settings.pipelineInputs = { ...(settings.pipelineInputs || {}), [name]: '' };
+        const initial = type === 'boolean' ? false : type === 'number' ? 0 : '';
+        settings.pipelineInputs = { ...(settings.pipelineInputs || {}), [name]: initial };
       }, iface => {
-        iface.inputs = [...(iface.inputs || []), { name, description: name }];
+        iface.inputs = [...(iface.inputs || []), { name, type, description: name }];
       }, 'Adicionar parâmetro do pipeline');
       if (field) field.value = '';
       const fresh = this.graph.getNode(node.id);
