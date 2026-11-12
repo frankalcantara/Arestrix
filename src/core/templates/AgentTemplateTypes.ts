@@ -1,4 +1,4 @@
-import { TaskflowNodeType, IGraphSchema } from '../types.ts';
+import { TaskflowNodeType, IGraphSchema, INodeAgentSettings } from '../types.ts';
 
 export interface ITemplateParameterDef {
   label: string;
@@ -8,19 +8,30 @@ export interface ITemplateParameterDef {
   options?: string[]; // Para tipo select
 }
 
+export type AgentTemplateCategory =
+  | 'Agentes'
+  | 'IA & Inferência'
+  | 'Concorrência & Filas'
+  | 'Armazenamento & Dados'
+  | 'Visão & Processamento'
+  | 'Síntese & Orquestração'
+  | 'Plugins Customizados';
+
 export interface IAgentTemplate {
   id: string;
   name: string;
-  category: 'IA & Inferência' | 'Concorrência & Filas' | 'Armazenamento & Dados' | 'Visão & Processamento' | 'Síntese & Orquestração' | 'Plugins Customizados';
+  category: AgentTemplateCategory;
   icon: string;
   taskType: TaskflowNodeType;
   description: string;
-  inputs: Array<{ name: string; type: 'flow' | 'data'; dataType?: string }>;
-  outputs: Array<{ name: string; type: 'flow' | 'data'; dataType?: string; conditionBranchIndex?: number }>;
+  inputs: Array<{ name: string; type: 'flow' | 'data' | 'call'; dataType?: string }>;
+  outputs: Array<{ name: string; type: 'flow' | 'data' | 'call'; dataType?: string; conditionBranchIndex?: number }>;
   parameters: Record<string, ITemplateParameterDef>;
   requiredHeaders?: string[];
   generateLambdaBody: (params: Record<string, any>, label: string) => string;
   createChildGraph?: (label: string, params: Record<string, any>) => IGraphSchema;
+  /** Configuração completa do agente; obrigatória para taskType === 'agent'. */
+  agentSettings?: INodeAgentSettings;
   isCustomPlugin?: boolean;
   author?: string;
   version?: string;
@@ -33,11 +44,13 @@ export interface ISerializedTemplatePlugin {
   icon?: string;
   taskType: TaskflowNodeType;
   description: string;
-  inputs: Array<{ name: string; type: 'flow' | 'data'; dataType?: string }>;
-  outputs: Array<{ name: string; type: 'flow' | 'data'; conditionBranchIndex?: number }>;
+  inputs: Array<{ name: string; type: 'flow' | 'data' | 'call'; dataType?: string }>;
+  outputs: Array<{ name: string; type: 'flow' | 'data' | 'call'; conditionBranchIndex?: number }>;
   parameters?: Record<string, ITemplateParameterDef>;
   requiredHeaders?: string[];
   lambdaBodyTemplate: string;
+  /** Configuração do agente preservada no round-trip catálogo → biblioteca → grafo. */
+  agentSettings?: INodeAgentSettings;
   author?: string;
   version?: string;
 }

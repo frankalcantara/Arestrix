@@ -111,7 +111,7 @@ export class NodeContextMenu {
     const res = AgentTemplateRegistry.getInstance().saveNodeAsTemplate(node);
     let message: string;
     if (res.status === 'created') {
-      message = t('context_menu.template_saved', 'Template "{{name}}" salvo em Plugins Customizados.', { name: res.template.name });
+      message = t('context_menu.template_saved', 'Template "{{name}}" salvo em {{category}}.', { name: res.template.name, category: res.template.category });
     } else if (res.status === 'duplicate') {
       message = t('context_menu.template_duplicate', 'Já existe no catálogo um template equivalente: "{{name}}". Nada foi incluído.', { name: res.existing.name });
     } else {

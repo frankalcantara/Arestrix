@@ -1,11 +1,38 @@
-import { IAgentTemplate, ISerializedTemplatePlugin, ITemplateParameterDef } from './AgentTemplateTypes.ts';
+import { IAgentTemplate, ISerializedTemplatePlugin, ITemplateParameterDef, AgentTemplateCategory } from './AgentTemplateTypes.ts';
 import { BUILTIN_TEMPLATES } from './BuiltinTemplates.ts';
-import { INodeData, IPort } from '../types.ts';
+import { INodeData, INodeAgentSettings, IPort } from '../types.ts';
 
 export type SaveNodeAsTemplateResult =
   | { status: 'created'; template: IAgentTemplate }
   | { status: 'duplicate'; existing: IAgentTemplate }
   | { status: 'unsupported'; reason: string };
+
+function deepClone<T>(value: T): T {
+  return value === undefined ? value : JSON.parse(JSON.stringify(value)) as T;
+}
+
+function stableValue(value: any): any {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value && typeof value === 'object') {
+    const out: Record<string, any> = {};
+    Object.keys(value).sort().forEach(key => { out[key] = stableValue(value[key]); });
+    return out;
+  }
+  return value;
+}
+
+function stableJson(value: any): string {
+  return JSON.stringify(stableValue(value ?? null));
+}
+
+function defaultAgentSettings(): INodeAgentSettings {
+  return {
+    inheritSandbox: true,
+    inheritModel: true,
+    inheritCodeMode: true,
+    inheritMemory: true
+  };
+}
 
 function portSignature(ports: Array<{ name: string; type: string }>): string {
   // Compara nome, tipo e ordem; instantiateNode não preserva dataType nas saídas
@@ -153,6 +180,10 @@ export class AgentTemplateRegistry {
       requiredHeaders: tpl.requiredHeaders
     };
 
+    if (tpl.taskType === 'agent') {
+      nodeData.agentSettings = deepClone(tpl.agentSettings) ?? defaultAgentSettings();
+    }
+
     if (tpl.createChildGraph) {
       nodeData.childGraph = tpl.createChildGraph(label, parameters);
     }
@@ -172,6 +203,8 @@ export class AgentTemplateRegistry {
       if (tpl.taskType !== node.type) continue;
       if (portSignature(tpl.inputs) !== inSig || portSignature(tpl.outputs) !== outSig) continue;
       if (paramSignature(tpl.parameters) !== pSig) continue;
+      if (tpl.taskType === 'agent' &&
+          stableJson(tpl.agentSettings ?? null) !== stableJson(node.agentSettings ?? null)) continue;
       try {
         if (tpl.generateLambdaBody({ ...node.parameters }, node.label) === (node.customLambdaBody ?? '')) {
           return tpl;
@@ -196,6 +229,7 @@ export class AgentTemplateRegistry {
 
     const lambda = node.customLambdaBody ?? '';
     const bodyTemplate = node.label ? lambda.split(node.label).join('${label}') : lambda;
+    const isAgent = node.type === 'agent';
 
     const parameters: Record<string, ITemplateParameterDef> = {};
     Object.entries(node.parameters).forEach(([k, v]) => {
@@ -215,19 +249,22 @@ export class AgentTemplateRegistry {
     const template: IAgentTemplate = {
       id,
       name: node.label,
-      category: 'Plugins Customizados',
-      icon: '🧩',
+      category: isAgent ? 'Agentes' : 'Plugins Customizados',
+      icon: isAgent ? '🤖' : '🧩',
       taskType: node.type,
-      description: `Template salvo a partir do vértice "${node.label}"`,
-      inputs: node.inputs.map(p => ({ name: p.name, type: p.type as 'flow' | 'data', dataType: p.dataType })),
+      description: isAgent
+        ? `Agente salvo a partir do vértice "${node.label}"`
+        : `Template salvo a partir do vértice "${node.label}"`,
+      inputs: node.inputs.map(p => ({ name: p.name, type: p.type as 'flow' | 'data' | 'call', dataType: p.dataType })),
       outputs: node.outputs.map(p => ({
         name: p.name,
-        type: p.type as 'flow' | 'data',
+        type: p.type as 'flow' | 'data' | 'call',
         dataType: p.dataType,
         conditionBranchIndex: p.conditionBranchIndex
       })),
       parameters,
       requiredHeaders: node.requiredHeaders,
+      agentSettings: isAgent ? (deepClone(node.agentSettings) ?? defaultAgentSettings()) : undefined,
       isCustomPlugin: true,
       author: 'Usuário Arestrix',
       version: '1.0.0',
@@ -288,8 +325,9 @@ export class AgentTemplateRegistry {
           const tpl: IAgentTemplate = {
             id: item.id,
             name: item.name,
-            category: (item.category as any) || 'Plugins Customizados',
-            icon: item.icon || '🧩',
+            category: (item.category as AgentTemplateCategory) ||
+              (item.taskType === 'agent' ? 'Agentes' : 'Plugins Customizados'),
+            icon: item.icon || (item.taskType === 'agent' ? '🤖' : '🧩'),
             taskType: item.taskType,
             description: item.description || 'Plugin importado dinamicamente',
             inputs: item.inputs || [{ name: 'in', type: 'flow' }],
@@ -299,10 +337,14 @@ export class AgentTemplateRegistry {
             ] : [{ name: 'out', type: 'flow' }]),
             parameters: item.parameters || {},
             requiredHeaders: item.requiredHeaders || ['<syncstream>'],
+            agentSettings: item.agentSettings
+              ? deepClone(item.agentSettings)
+              : (item.taskType === 'agent' ? defaultAgentSettings() : undefined),
             isCustomPlugin: true,
             author: item.author || 'Usuário Arestrix',
             version: item.version || '1.0.0',
             generateLambdaBody: (params, label) => {
+              if (item.taskType === 'agent' && !item.lambdaBodyTemplate) return '';
               let body = item.lambdaBodyTemplate || '// Plugin de Tarefa Customizado\nstd::cout << "[Plugin] ' + label + '\\n";';
               // Substitui placeholders ${params.xxx} ou ${label}
               body = body.replace(/\${label}/g, label);
@@ -347,6 +389,7 @@ export class AgentTemplateRegistry {
       parameters: tpl.parameters,
       requiredHeaders: tpl.requiredHeaders,
       lambdaBodyTemplate: sampleLambda,
+      agentSettings: tpl.agentSettings ? deepClone(tpl.agentSettings) : undefined,
       author: tpl.author,
       version: tpl.version
     };

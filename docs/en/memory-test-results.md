@@ -217,7 +217,7 @@ search remained the fallback. Report:
 | Check | Result |
 | :--- | :--- |
 | C++ suite | 4,289/4,289 checks passed, including the anchor and router tests |
-| Vitest | 630/630 |
+| Vitest | 635/635 |
 | End-to-end tutorial | passed |
 | Examples 01–14 | 14/14 passed |
 | Advanced corpus (`--check`) | reproduced |

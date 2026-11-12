@@ -11,6 +11,7 @@ import { globalEventBus } from '../core/EventBus.ts';
 
 const CATEGORY_MAP: { id: string; labelKey: string }[] = [
   { id: 'Todos', labelKey: 'template_modal.cat_all' },
+  { id: 'Agentes', labelKey: 'template_modal.cat_agents' },
   { id: 'IA & Inferência', labelKey: 'template_modal.cat_ai' },
   { id: 'Concorrência & Filas', labelKey: 'template_modal.cat_concurrency' },
   { id: 'Armazenamento & Dados', labelKey: 'template_modal.cat_storage' },
@@ -116,7 +117,9 @@ export class TemplateModal {
               <div class="templates-empty">
                 <div class="empty-icon">🔍</div>
                 <div class="empty-title">${t('template_modal.empty_title')}</div>
-                <div class="empty-desc">${t('template_modal.empty_desc')}</div>
+                <div class="empty-desc">${this.activeCategory === 'Agentes'
+                  ? t('template_modal.empty_agents_desc', 'Salve um vértice agente como template ou adicione um agente da biblioteca.')
+                  : t('template_modal.empty_desc')}</div>
               </div>
             ` : filtered.map(tpl => this.renderTemplateCard(tpl)).join('')}
           </div>
@@ -144,6 +147,15 @@ export class TemplateModal {
     this.bindEvents();
   }
 
+  private memoryModeLabel(mode?: string): string {
+    switch (mode) {
+      case 'consult': return t('template_modal.memory_consult', 'Consultar');
+      case 'learn': return t('template_modal.memory_learn', 'Aprender');
+      case 'off': return t('template_modal.memory_off', 'Desligada');
+      default: return t('template_modal.memory_inherit', 'Herdar');
+    }
+  }
+
   private renderTemplateCard(tpl: IAgentTemplate): string {
     const paramKeys = Object.keys(tpl.parameters);
     const paramSummary = paramKeys.length > 0 
@@ -165,6 +177,23 @@ export class TemplateModal {
 
         <p class="template-desc">${this.escapeHtml(tpl.description)}</p>
 
+        ${tpl.taskType === 'agent' ? `
+          <div class="template-meta-row">
+            <div class="meta-item">
+              <span class="meta-label">${t('template_modal.meta_skills', 'Skills:')}</span>
+              <span class="meta-value">${tpl.agentSettings?.skills?.length ?? 0}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">${t('template_modal.meta_memory', 'Memória:')}</span>
+              <span class="meta-value">${this.escapeHtml(this.memoryModeLabel(tpl.agentSettings?.memory?.mode))}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">${t('template_modal.meta_tools', 'Ferramentas:')}</span>
+              <span class="meta-value">${tpl.agentSettings?.codeMode?.allowedTools?.length ?? 0}</span>
+            </div>
+          </div>
+        ` : ''}
+
         <div class="template-meta-row">
           <div class="meta-item">
             <span class="meta-label">${t('template_modal.meta_inputs')}</span>
@@ -181,12 +210,19 @@ export class TemplateModal {
         </div>
 
         <div class="template-card-footer">
-          <button class="btn-toggle-code" data-code-id="${tpl.id}">
-            ${t('template_modal.view_cpp')}
-          </button>
-          ${tpl.isCustomPlugin ? `
+          ${tpl.taskType !== 'agent' ? `
+            <button class="btn-toggle-code" data-code-id="${tpl.id}">
+              ${t('template_modal.view_cpp')}
+            </button>
+          ` : ''}
+          ${(tpl.isCustomPlugin || tpl.taskType === 'agent') ? `
             <button class="btn btn-secondary btn-save-library" data-save-library-id="${tpl.id}">
               ${t('template_modal.btn_save_library', 'Salvar na biblioteca')}
+            </button>
+          ` : ''}
+          ${tpl.isCustomPlugin ? `
+            <button class="btn btn-secondary btn-delete-template" data-delete-id="${tpl.id}">
+              ${t('template_modal.btn_delete', 'Excluir')}
             </button>
           ` : ''}
           <button class="btn btn-primary btn-insert-node" data-insert-id="${tpl.id}">
@@ -293,7 +329,7 @@ export class TemplateModal {
             alert(t('template_modal.library_insert_failed', 'Não foi possível importar o template: {{errors}}', { errors: result.errors.join('; ') }));
             return;
           }
-          this.activeCategory = 'Plugins Customizados';
+          this.activeCategory = this.registry.getTemplate(asset.payload.template.id)?.category || 'Agentes';
           this.render();
           this.insertTemplateNode(asset.payload.template.id);
           this.hide();
@@ -325,6 +361,21 @@ export class TemplateModal {
       });
     });
 
+    // Excluir template customizado
+    this.overlay.querySelectorAll('.btn-delete-template').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = (btn as HTMLElement).getAttribute('data-delete-id');
+        const tpl = id ? this.registry.getTemplate(id) : undefined;
+        if (!id || !tpl) return;
+        const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
+          ? true
+          : window.confirm(t('template_modal.confirm_delete', 'Excluir o template "{{name}}"?', { name: tpl.name }));
+        if (!confirmed) return;
+        this.registry.unregisterTemplate(id);
+        this.render();
+      });
+    });
+
     // Ver o C++20 do template em janela somente leitura
     this.overlay.querySelectorAll('.btn-toggle-code').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -336,6 +387,10 @@ export class TemplateModal {
 
     // Preset Arquitetura Completa
     this.overlay.querySelector('#btn-preset-pipeline')?.addEventListener('click', () => {
+      const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
+        ? true
+        : window.confirm(t('template_modal.confirm_preset', 'O grafo atual será substituído pela arquitetura completa de agentes. Continuar?'));
+      if (!confirmed) return;
       this.instantiateCompleteMultiAgentPreset();
       this.hide();
     });

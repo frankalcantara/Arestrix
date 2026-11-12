@@ -75,7 +75,10 @@ export class LibraryAuditGate {
       || typeof template.id !== 'string' || !template.id.trim()
       || typeof template.name !== 'string' || !template.name.trim()
       || typeof template.taskType !== 'string' || !template.taskType.trim()
-      || typeof template.lambdaBodyTemplate !== 'string';
+      || typeof template.lambdaBodyTemplate !== 'string'
+      || (template.agentSettings !== undefined &&
+          (template.agentSettings === null || typeof template.agentSettings !== 'object' ||
+           Array.isArray(template.agentSettings)));
 
     if (invalid) {
       return {
@@ -84,7 +87,7 @@ export class LibraryAuditGate {
         policyVersion: 'template-schema-v1',
         auditedAt: new Date().toISOString(),
         hash: sha256(JSON.stringify(template || {})),
-        findings: ['Esquema de template inválido: id, name, taskType e lambdaBodyTemplate são obrigatórios.'],
+        findings: ['Esquema de template inválido: id, name, taskType e lambdaBodyTemplate são obrigatórios; agentSettings, quando presente, deve ser um objeto.'],
         warnings: []
       };
     }
@@ -105,13 +108,17 @@ export class LibraryAuditGate {
     findings.push('Esquema básico do template válido.');
     findings.push(`Tipo de tarefa declarado: ${template.taskType}.`);
     findings.push('Corpo C++ tratado como texto; o template não é executado durante a auditoria.');
+    if (template.agentSettings) {
+      findings.push('Configuração de agente presente; prompt, skills, memória e ferramentas serão importados como configuração declarativa.');
+    }
 
     if (/\b(?:system|popen|_popen|CreateProcess[AW]?|ShellExecute[AW]?|exec[lv]?p?e?)\s*\(/i.test(body)) {
       warnings.push('Template contém chamada de criação/execução de processo no corpo C++.');
       riskScore += 40;
     }
-    if (/\b(?:password|passwd|secret|api[_-]?key|token)\s*=\s*["'][^"']+["']/i.test(body)) {
-      warnings.push('Possível segredo literal embutido no corpo do template.');
+    const settingsText = template.agentSettings ? JSON.stringify(template.agentSettings) : '';
+    if (/\b(?:password|passwd|secret|api[_-]?key|token)\s*[:=]\s*["'][^"']+["']/i.test(body + '\n' + settingsText)) {
+      warnings.push('Possível segredo literal embutido no corpo ou na configuração do agente.');
       riskScore += 30;
     }
     if (/https?:\/\//i.test(body)) {
@@ -120,7 +127,7 @@ export class LibraryAuditGate {
     }
 
     const verdict: ILibraryAssetAudit['verdict'] = warnings.length > 0 ? 'CAUTION' : 'APPROVE';
-    const hash = sha256(JSON.stringify({
+    const hashPayload: Record<string, unknown> = {
       id: template.id,
       name: template.name,
       taskType: template.taskType,
@@ -129,7 +136,9 @@ export class LibraryAuditGate {
       parameters: template.parameters || {},
       requiredHeaders: template.requiredHeaders || [],
       lambdaBodyTemplate: body
-    }));
+    };
+    if (template.agentSettings) hashPayload.agentSettings = template.agentSettings;
+    const hash = sha256(JSON.stringify(hashPayload));
 
     return {
       verdict,

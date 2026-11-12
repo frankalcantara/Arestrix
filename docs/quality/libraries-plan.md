@@ -25,6 +25,16 @@
 > ação **Salvar na biblioteca** no catálogo de vértices, **Bibliotecas** no `TemplateModal` e
 > detecção de atualização de derivados no vértice com confirmação e reauditoria.
 >
+> **Fase 4.2 entregue (agentes):** agentes prontos na categoria **Agentes**, com
+> `agentSettings` completo no round-trip (prompt, modelo preferencial, memória, skills,
+> ferramentas e validação), três agentes embutidos, auditoria incluindo a configuração do
+> agente no hash, salvamento na biblioteca e exclusão de templates customizados. O preset de
+> arquitetura completa agora pede confirmação antes de substituir o grafo.
+>
+> **Fase 4.3 pendente (pipeline como agente):** pipeline/projeto importado será exibido como
+> um único vértice **agente apenas na interface**, mantendo internamente o grafo/subflow
+> original.
+>
 > **Fase 5 entregue:** fonte GitHub real via endpoint C++ `fetch_library_source`, commit pin,
 > leitura de manifesto/árvore sem baixar blobs, sincronização de candidatos como `PENDING`,
 > download sob demanda em quarentena lógica, auditoria e promoção somente após o veredito.

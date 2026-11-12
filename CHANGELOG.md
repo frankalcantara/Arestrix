@@ -34,6 +34,13 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   EmbeddingGemma 2 reached recall@1 0.875 and 134 ms p50; Qwen3 at 768 reached
   0.813 and 8.5 s on CPU. Both passed `embeddings test` and 4/4 reindexing.
   Report: `docs/quality/memory-embeddings-live.md`.
+- Ready-made agent templates in the Node Library with a dedicated **Agents**
+  category. Agent templates preserve the full `agentSettings` round-trip
+  (prompt, preferred model, memory, skills, tools and validation rules), can be
+  saved to the asset library, and are audited with the agent configuration in
+  the hash. The first built-ins are the Document Analyst, Content Reviewer and
+  Research Synthesizer. Custom templates can be deleted from the library and
+  the full-agent preset now asks for confirmation before replacing the graph.
 - Claim-extraction agent selector in File → Properties → Project → Memory. The
   active pipeline's agent nodes are registered in `AssistantSession` and listed
   through `memory_claim_agents`; the target is stored as `{ id, graph, node }`,

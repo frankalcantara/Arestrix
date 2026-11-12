@@ -78,4 +78,31 @@ describe('LibraryAuditGate - gate único de assets', () => {
     expect(gate.canInstall(pending).ok).toBe(false);
     expect(gate.canInstall(rejected, { allowCaution: true }).ok).toBe(false);
   });
+
+  it('inclui a configuração do agente no hash e no veredito do template', () => {
+    const base = {
+      id: 'agent-audit',
+      name: 'Agente Auditado',
+      taskType: 'agent' as const,
+      lambdaBodyTemplate: '',
+      inputs: [{ name: 'in', type: 'flow' as const }],
+      outputs: [{ name: 'out', type: 'flow' as const }],
+      agentSettings: {
+        inheritSandbox: true,
+        inheritModel: false,
+        model: { promptTemplate: 'Prompt seguro' },
+        inheritCodeMode: true,
+        inheritMemory: true,
+        skills: []
+      }
+    };
+    const first = gate.auditTemplate(base);
+    const second = gate.auditTemplate({
+      ...base,
+      agentSettings: { ...base.agentSettings, model: { promptTemplate: 'Prompt diferente' } }
+    });
+    expect(first.verdict).not.toBe('REJECT');
+    expect(first.hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(first.hash).not.toBe(second.hash);
+  });
 });

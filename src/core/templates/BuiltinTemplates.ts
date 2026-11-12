@@ -344,5 +344,134 @@ stream.synchronize();
 
 std::osyncstream(std::cout) << "[CUDA] Grafo de kernel disparado (" << ${grid} << "x" << ${block} << " threads)\\n";`;
     }
+  },
+  {
+    id: 'agent_document_analyst',
+    name: 'Analista de Documentos',
+    category: 'Agentes',
+    icon: '📄',
+    taskType: 'agent',
+    description: 'Lê documentos do projeto, extrai fatos e entrega um resumo estruturado com fontes. Usa memória de projeto e ferramentas de leitura e escrita.',
+    inputs: [
+      { name: 'in', type: 'flow' },
+      { name: 'prompt_in', type: 'data', dataType: 'std::string' }
+    ],
+    outputs: [
+      { name: 'out', type: 'flow' },
+      { name: 'artifact_out', type: 'data', dataType: 'std::string' },
+      { name: 'call', type: 'call' }
+    ],
+    parameters: {},
+    requiredHeaders: ['<syncstream>'],
+    agentSettings: {
+      inheritSandbox: true,
+      inheritModel: false,
+      model: {
+        promptTemplate: 'Você é um analista de documentos. Leia apenas as fontes indicadas, separe fatos de opiniões, registre a origem de cada afirmação e entregue um resumo curto em Markdown. Quando faltar evidência, diga explicitamente o que não foi encontrado.'
+      },
+      inheritCodeMode: false,
+      codeMode: {
+        allowedTools: ['read', 'write', 'edit'],
+        customScripts: []
+      },
+      inheritMemory: false,
+      memory: { mode: 'consult', theme: 'documentos' },
+      skills: [{
+        id: 'builtin-document-analysis',
+        name: 'Análise de documentos com fontes',
+        description: 'Extrai fatos, decisões e pendências de documentos, mantendo a origem.',
+        markdownContent: '# Análise de documentos\n\n1. Liste as fontes lidas.\n2. Separe fatos, decisões e pendências.\n3. Cite o arquivo e o trecho de cada fato.\n4. Não invente dados ausentes.',
+        systemPrompt: 'Analise documentos com rastreabilidade e sem especulação.',
+        tools: ['read', 'write', 'edit']
+      }],
+      activeSkillId: 'builtin-document-analysis'
+    },
+    generateLambdaBody: () => ''
+  },
+  {
+    id: 'agent_content_reviewer',
+    name: 'Revisor de Conteúdo',
+    category: 'Agentes',
+    icon: '✍️',
+    taskType: 'agent',
+    description: 'Revisa textos corporativos para clareza, consistência e tom, sem alterar fatos ou promessas. Entrega a versão revisada e uma lista curta de mudanças.',
+    inputs: [
+      { name: 'in', type: 'flow' },
+      { name: 'prompt_in', type: 'data', dataType: 'std::string' }
+    ],
+    outputs: [
+      { name: 'out', type: 'flow' },
+      { name: 'artifact_out', type: 'data', dataType: 'std::string' },
+      { name: 'call', type: 'call' }
+    ],
+    parameters: {},
+    requiredHeaders: ['<syncstream>'],
+    agentSettings: {
+      inheritSandbox: true,
+      inheritModel: false,
+      model: {
+        promptTemplate: 'Você é um revisor de conteúdo corporativo. Preserve fatos, números, nomes e compromissos. Melhore clareza, coesão e tom. Entregue primeiro o texto revisado e depois uma lista objetiva do que mudou.'
+      },
+      inheritCodeMode: false,
+      codeMode: {
+        allowedTools: ['read', 'write', 'edit'],
+        customScripts: []
+      },
+      inheritMemory: false,
+      memory: { mode: 'consult', theme: 'conteudo' },
+      skills: [{
+        id: 'builtin-content-review',
+        name: 'Revisão de conteúdo corporativo',
+        description: 'Melhora clareza e consistência sem inventar fatos.',
+        markdownContent: '# Revisão de conteúdo\n\n- Preserve fatos, números e nomes.\n- Remova ambiguidade e repetição.\n- Mantenha o tom adequado ao público.\n- Registre as mudanças materiais.',
+        systemPrompt: 'Revise sem alterar o significado ou os compromissos do texto.',
+        tools: ['read', 'write', 'edit']
+      }],
+      activeSkillId: 'builtin-content-review'
+    },
+    generateLambdaBody: () => ''
+  },
+  {
+    id: 'agent_research_synthesizer',
+    name: 'Pesquisador e Sintetizador',
+    category: 'Agentes',
+    icon: '🔎',
+    taskType: 'agent',
+    description: 'Organiza fontes fornecidas, compara perspectivas e produz uma síntese com lacunas e próximos passos. Não busca na web sozinho; usa as fontes e ferramentas disponíveis no projeto.',
+    inputs: [
+      { name: 'in', type: 'flow' },
+      { name: 'prompt_in', type: 'data', dataType: 'std::string' }
+    ],
+    outputs: [
+      { name: 'out', type: 'flow' },
+      { name: 'artifact_out', type: 'data', dataType: 'std::string' },
+      { name: 'call', type: 'call' }
+    ],
+    parameters: {},
+    requiredHeaders: ['<syncstream>'],
+    agentSettings: {
+      inheritSandbox: true,
+      inheritModel: false,
+      model: {
+        promptTemplate: 'Você é um pesquisador e sintetizador. Trabalhe apenas com as fontes disponíveis no projeto. Compare perspectivas, destaque convergências e divergências, liste lacunas e proponha próximos passos. Cite a origem de cada conclusão.'
+      },
+      inheritCodeMode: false,
+      codeMode: {
+        allowedTools: ['read', 'write', 'edit'],
+        customScripts: []
+      },
+      inheritMemory: false,
+      memory: { mode: 'consult', theme: 'pesquisa' },
+      skills: [{
+        id: 'builtin-research-synthesis',
+        name: 'Síntese de pesquisa com lacunas',
+        description: 'Compara fontes e separa evidência, interpretação e lacunas.',
+        markdownContent: '# Síntese de pesquisa\n\n1. Mapeie as fontes.\n2. Separe evidência de interpretação.\n3. Compare convergências e divergências.\n4. Liste lacunas e próximos passos.',
+        systemPrompt: 'Sintetize com rastreabilidade e sem extrapolar as fontes.',
+        tools: ['read', 'write', 'edit']
+      }],
+      activeSkillId: 'builtin-research-synthesis'
+    },
+    generateLambdaBody: () => ''
   }
 ];

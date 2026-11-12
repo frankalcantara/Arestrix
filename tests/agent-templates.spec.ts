@@ -155,6 +155,62 @@ describe('Fase 4: Catalogo de Templates de Agentes & Sistema de Plugins Dinamico
       expect(parsed.length).toBeGreaterThanOrEqual(6);
     });
   });
+
+  describe('4. Agentes prontos e round-trip de agentSettings', () => {
+    it('deve listar agentes embutidos na categoria Agentes', () => {
+      const agent = registry.getTemplate('agent_document_analyst');
+      expect(agent).toBeDefined();
+      expect(agent?.taskType).toBe('agent');
+      expect(agent?.category).toBe('Agentes');
+      expect(agent?.agentSettings?.model?.promptTemplate).toContain('analista');
+      expect(agent?.agentSettings?.skills?.length).toBe(1);
+    });
+
+    it('deve preservar agentSettings ao instanciar e isolar o template', () => {
+      const node = registry.instantiateNode('agent_document_analyst', 'Meu_Analista');
+      expect(node.type).toBe('agent');
+      expect(node.agentSettings?.model?.promptTemplate).toContain('analista');
+      expect(node.agentSettings?.skills?.[0]?.id).toBe('builtin-document-analysis');
+
+      node.agentSettings!.model!.promptTemplate = 'prompt alterado';
+      expect(registry.getTemplate('agent_document_analyst')?.agentSettings?.model?.promptTemplate)
+        .not.toBe('prompt alterado');
+    });
+
+    it('deve salvar um agente customizado com configuração completa e detectar duplicata', () => {
+      const node = registry.instantiateNode('agent_content_reviewer', 'Revisor_Custom');
+      node.agentSettings!.model!.promptTemplate = 'Prompt específico do revisor customizado';
+
+      const saved = registry.saveNodeAsTemplate(node);
+      expect(saved.status).toBe('created');
+      if (saved.status !== 'created') return;
+      expect(saved.template.category).toBe('Agentes');
+      expect(saved.template.agentSettings?.model?.promptTemplate).toBe('Prompt específico do revisor customizado');
+
+      const restored = registry.instantiateNode(saved.template.id, 'Revisor_Restaurado');
+      expect(restored.agentSettings?.model?.promptTemplate).toBe('Prompt específico do revisor customizado');
+      expect(restored.agentSettings?.skills?.length).toBe(1);
+
+      expect(registry.saveNodeAsTemplate({ ...node, id: 'outro_agente' }).status).toBe('duplicate');
+      registry.unregisterTemplate(saved.template.id);
+    });
+
+    it('deve exportar e importar agentSettings sem perder a configuração', () => {
+      const json = registry.exportTemplateAsJSON('agent_research_synthesizer');
+      expect(json).not.toBeNull();
+      const serialized = JSON.parse(json!);
+      expect(serialized.agentSettings?.model?.promptTemplate).toContain('pesquisador');
+
+      const importedJson = JSON.stringify({ ...serialized, id: 'imported_research_agent' });
+      const result = registry.importTemplatesFromJSON(importedJson);
+      expect(result.success).toBe(1);
+      const imported = registry.instantiateNode('imported_research_agent', 'Pesquisador_Importado');
+      expect(imported.type).toBe('agent');
+      expect(imported.customLambdaBody).toBe('');
+      expect(imported.agentSettings?.model?.promptTemplate).toContain('pesquisador');
+      registry.unregisterTemplate('imported_research_agent');
+    });
+  });
 });
 
 describe('Salvar vértice como template', () => {
