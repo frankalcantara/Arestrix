@@ -729,7 +729,11 @@
       "source_none": "Nenhuma",
       "pipeline_source_path": "Caminho relativo do arquivo de entrada",
       "pipeline_input_hint": "A entrada é passada ao pipeline empacotado. O resultado é gravado em .arestrix/out e entregue ao próximo vértice.",
-      "pipeline_outputs": "Saídas do pipeline"
+      "pipeline_outputs": "Saídas do pipeline",
+      "pipeline_parameters": "Parâmetros do pipeline",
+      "pipeline_parameter_placeholder": "Nome do novo parâmetro",
+      "add_parameter": "Adicionar parâmetro",
+      "remove_parameter": "Remover parâmetro"
     },
     "interaction": {
       "pending": "Execução: modal seguro no Studio ou respostas headless com --answers.",

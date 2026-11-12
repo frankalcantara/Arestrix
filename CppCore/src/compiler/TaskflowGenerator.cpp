@@ -1152,6 +1152,8 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
         } else if (node.type == core::TaskflowNodeType::Call) {
             const json& cs = node.callSettings;
             const std::string fixedInput = cs.is_object() ? cs.value("input", std::string()) : std::string();
+            const std::string pipelineInputs = cs.is_object() && cs.contains("pipelineInputs") &&
+                cs["pipelineInputs"].is_object() ? cs["pipelineInputs"].dump() : std::string("{}");
             json source = json::object();
             const bool hasSource = cs.is_object() && cs.contains("source") && cs["source"].is_object();
             source["kind"] = hasSource ? cs["source"].value("kind", std::string("previous")) : std::string("previous");
@@ -1163,7 +1165,8 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
             }
             source["from"] = from;
             body = "taskforge::rt::runFlowCall(" + cppString(node.id) + ", " + cppString(label) + ",\n    " +
-                   rawLiteral(source.dump()) + ", " + cppString(fixedInput) + ");";
+                   rawLiteral(source.dump()) + ", " + cppString(fixedInput) + ", " +
+                   cppString(pipelineInputs) + ");";
         } else if (node.type == core::TaskflowNodeType::Output) {
             std::string src = "";
             std::string dst = "";

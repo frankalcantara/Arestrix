@@ -1583,6 +1583,26 @@ export class Inspector {
             placeholder="${t('inspector.calls.pipeline_source_path', 'Caminho relativo do arquivo de entrada')}" />
         ` : ''}
         <div class="office-field-hint">${t('inspector.calls.pipeline_input_hint', 'A entrada é passada ao pipeline empacotado. O resultado é gravado em .arestrix/out e entregue ao próximo vértice.')}</div>
+        ${(iface?.inputs || []).length > 0 ? `
+          <div style="margin-top: 10px;">
+            <strong class="form-label">${t('inspector.calls.pipeline_parameters', 'Parâmetros do pipeline')}</strong>
+            ${(iface?.inputs || []).map((param) => `
+              <div class="pipeline-param-row" style="display:flex; gap:6px; align-items:center; margin-top:6px;">
+                <input class="form-input" data-pipeline-param-value="${this.escapeHtml(param.name)}"
+                  value="${this.escapeHtml(settings.pipelineInputs?.[param.name] ?? param.defaultValue ?? '')}"
+                  placeholder="${this.escapeHtml(param.description || param.name)}" style="flex:1;" />
+                <button type="button" class="btn btn-secondary" data-pipeline-param-remove="${this.escapeHtml(param.name)}" title="${t('inspector.calls.remove_parameter', 'Remover parâmetro')}">×</button>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+        <div style="display:flex; gap:6px; align-items:center; margin-top:8px;">
+          <input id="new-pipeline-param-name" class="form-input" style="flex:1;"
+            placeholder="${t('inspector.calls.pipeline_parameter_placeholder', 'Nome do novo parâmetro')}" />
+          <button type="button" id="btn-add-pipeline-param" class="btn btn-secondary">
+            ${t('inspector.calls.add_parameter', 'Adicionar parâmetro')}
+          </button>
+        </div>
         ${outputs.length > 0 ? `
           <div class="office-field-hint" style="margin-top: 8px;">
             <strong>${t('inspector.calls.pipeline_outputs', 'Saídas do pipeline')}:</strong>
@@ -1646,6 +1666,68 @@ export class Inspector {
         settings.source = { ...(settings.source ?? { kind: 'previous' }), path: path.value.trim() };
       }, 'Alterar arquivo de entrada do pipeline');
     });
+
+    this.container.querySelectorAll<HTMLInputElement>('[data-pipeline-param-value]').forEach(input => {
+      input.addEventListener('change', () => {
+        const name = input.getAttribute('data-pipeline-param-value');
+        if (!name) return;
+        this.updateCallVertexSettings(node, settings => {
+          settings.pipelineInputs = { ...(settings.pipelineInputs || {}), [name]: input.value };
+        }, 'Alterar parâmetro do pipeline');
+      });
+    });
+
+    this.container.querySelectorAll<HTMLElement>('[data-pipeline-param-remove]').forEach(button => {
+      button.addEventListener('click', () => {
+        const name = button.getAttribute('data-pipeline-param-remove');
+        if (!name) return;
+        this.updatePipelineAgentConfig(node, settings => {
+          if (settings.pipelineInputs) delete settings.pipelineInputs[name];
+        }, iface => {
+          iface.inputs = (iface.inputs || []).filter(input => input.name !== name);
+        }, 'Remover parâmetro do pipeline');
+        const fresh = this.graph.getNode(node.id);
+        if (fresh) this.renderNode(fresh);
+      });
+    });
+
+    this.container.querySelector('#btn-add-pipeline-param')?.addEventListener('click', () => {
+      const field = this.container.querySelector('#new-pipeline-param-name') as HTMLInputElement | null;
+      const name = field?.value.trim();
+      if (!name) return;
+      this.updatePipelineAgentConfig(node, settings => {
+        settings.pipelineInputs = { ...(settings.pipelineInputs || {}), [name]: '' };
+      }, iface => {
+        iface.inputs = [...(iface.inputs || []), { name, description: name }];
+      }, 'Adicionar parâmetro do pipeline');
+      if (field) field.value = '';
+      const fresh = this.graph.getNode(node.id);
+      if (fresh) this.renderNode(fresh);
+    });
+  }
+
+  private updatePipelineAgentConfig(
+    node: INodeData,
+    mutateSettings: (settings: ICallVertexSettings) => void,
+    mutateInterface: (iface: NonNullable<INodeData['pipelineInterface']>) => void,
+    description: string
+  ): void {
+    const oldSettings = JSON.parse(JSON.stringify(node.callSettings ?? defaultCallVertexSettings())) as ICallVertexSettings;
+    const oldInterface = JSON.parse(JSON.stringify(node.pipelineInterface ?? {
+      input: { name: 'Entrada' },
+      outputs: []
+    })) as NonNullable<INodeData['pipelineInterface']>;
+    const newSettings = JSON.parse(JSON.stringify(oldSettings)) as ICallVertexSettings;
+    const newInterface = JSON.parse(JSON.stringify(oldInterface)) as NonNullable<INodeData['pipelineInterface']>;
+    mutateSettings(newSettings);
+    mutateInterface(newInterface);
+    this.graph.commandManager.execute(new UpdateNodeCommand(
+      this.graph,
+      node.id,
+      { callSettings: oldSettings, pipelineInterface: oldInterface },
+      { callSettings: newSettings, pipelineInterface: newInterface },
+      description
+    ));
   }
 
   private bindFlowCallSection(node: INodeData): void {

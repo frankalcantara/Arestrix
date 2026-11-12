@@ -19,6 +19,8 @@ export type AgentTemplateCategory =
 
 export interface IPipelineInterface {
   input: { name: string; description?: string };
+  /** Campos adicionais; o runtime recebe { input, parameters } em JSON quando houver algum. */
+  inputs?: Array<{ name: string; description?: string; required?: boolean; defaultValue?: string }>;
   outputs: Array<{ name: string; description?: string; sourcePath?: string }>;
 }
 

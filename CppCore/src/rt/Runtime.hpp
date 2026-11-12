@@ -83,7 +83,8 @@ std::string runInteraction(const std::string& nodeId, const std::string& label,
 // resposta e gravada em .arestrix/out/<nodeId>.txt e devolvida ao fluxo.
 // Lanca std::runtime_error se a chamada falhar (nao ha agente para tratar o erro).
 std::string runFlowCall(const std::string& nodeId, const std::string& label,
-                        const std::string& sourceJson, const std::string& fixedInput);
+                        const std::string& sourceJson, const std::string& fixedInput,
+                        const std::string& pipelineInputsJson = "{}");
 
 // Espera as chamadas assincronas ainda pendentes antes de encerrar o processo.
 // O main gerado chama isto; subflows nativos nao chamam (evita espera aninhada).

@@ -386,7 +386,8 @@ ToolResult invokeCallAtDepth(const std::string& callerId, const std::string& cal
 }
 
 std::string runFlowCall(const std::string& nodeId, const std::string& label,
-                        const std::string& sourceJson, const std::string& fixedInput) {
+                        const std::string& sourceJson, const std::string& fixedInput,
+                        const std::string& pipelineInputsJson) {
     const std::vector<CallTarget> targets = callTargetsFor(nodeId);
     if (targets.empty()) {
         throw std::runtime_error("Vertice Call '" + label + "' sem alvo chamavel declarado.");
@@ -400,6 +401,13 @@ std::string runFlowCall(const std::string& nodeId, const std::string& label,
         auto source = jsonutil::tryParse(sourceJson);
         if (!source || !source->is_object()) source = Json{{"kind", "none"}};
         input = gatherNodeInput(*source, label);
+    }
+    auto pipelineInputs = jsonutil::tryParse(pipelineInputsJson);
+    if (pipelineInputs && pipelineInputs->is_object() && !pipelineInputs->empty()) {
+        taskforge::Json combined = taskforge::Json::object();
+        combined["input"] = input;
+        combined["parameters"] = *pipelineInputs;
+        input = combined.dump();
     }
 
     static std::atomic<unsigned long long> flowCallSequence{0};
