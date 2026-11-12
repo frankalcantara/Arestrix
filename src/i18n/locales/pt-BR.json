@@ -778,6 +778,21 @@
       "sqlite_label": "Banco SQLite",
       "hint_tip": "Dica: Clique em qualquer vértice no canvas para inspecionar parâmetros, código lambda C++20, governança de IA e isolamento em Sandbox."
     },
+    "library": {
+      "current": "Origem: biblioteca · versão {{version}} (atualizada)",
+      "update_available": "Atualização disponível",
+      "update_versions": "Versão {{from}} → {{to}}",
+      "update_warning": "A atualização substitui a configuração atual deste vértice pela versão da biblioteca.",
+      "update_button": "Atualizar da biblioteca",
+      "confirm_update": "Atualizar este vértice para a versão {{version}} da biblioteca? A configuração local será substituída.",
+      "update_command": "Atualizar vértice da biblioteca",
+      "update_internal_command": "Atualizar pipeline interno",
+      "updated": "Vértice atualizado para a versão {{version}}.",
+      "diff_nodes": "Nós: +{{added}} / -{{removed}} / {{changed}} alterados",
+      "diff_edges": "Conexões: +{{added}} / -{{removed}}",
+      "diff_params": "Parâmetros: +{{added}} / -{{removed}}",
+      "diff_settings": "Configuração alterada: {{fields}}"
+    },
     "node_view": {
       "label_name": "Rótulo / Nome do Vértice",
       "unique_id": "Identificador Único (ID)",

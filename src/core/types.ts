@@ -788,6 +788,16 @@ export interface INodeData {
   hidden?: boolean;
   /** Apresentação visual de um pipeline/projeto composto como agente. */
   presentation?: 'agent';
+  /**
+   * Origem do vértice em um asset de biblioteca. Permite detectar e aplicar
+   * atualizações sem alterar o asset original.
+   */
+  librarySource?: {
+    libraryId: string;
+    assetId: string;
+    hash: string;
+    version: string;
+  };
   /** Interface declarada do pipeline empacotado (entrada e saídas nomeadas). */
   pipelineInterface?: {
     input: { name: string; description?: string };

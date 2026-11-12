@@ -317,8 +317,10 @@ export class LibraryPickerModal extends BaseModal {
       <div class="properties-library-meta">
         <div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('source', 'Origem')}</span><span class="properties-library-meta-value">${this.escapeHtml(asset.provenance.sourceKind)} · ${this.escapeHtml(asset.provenance.authority || '')}</span></div>
         <div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('license', 'Licença')}</span><span class="properties-library-meta-value">${this.escapeHtml(asset.license)}</span></div>
+        <div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('version', 'Versão')}</span><span class="properties-library-meta-value">${this.escapeHtml(asset.version)}</span></div>
         <div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('content', 'Conteúdo')}</span><span class="properties-library-meta-value">${this.escapeHtml(payload)}</span></div>
         <div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('risk', 'Risco')}</span><span class="properties-library-meta-value">${asset.audit.riskScore}/100</span></div>
+        ${asset.changelog ? `<div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('changelog', 'Alteração')}</span><span class="properties-library-meta-value">${this.escapeHtml(asset.changelog)}</span></div>` : ''}
         ${asset.remote ? `<div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('remote_path', 'Caminho remoto')}</span><span class="properties-library-meta-value">${this.escapeHtml(asset.remote.path)}</span></div>` : ''}
       </div>
       ${needsDownload ? `

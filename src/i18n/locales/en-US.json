@@ -778,6 +778,21 @@
       "sqlite_label": "SQLite Database",
       "hint_tip": "Tip: Click any vertex on the canvas to inspect parameters, C++20 lambda code, AI governance and Sandbox isolation."
     },
+    "library": {
+      "current": "Source: library · version {{version}} (up to date)",
+      "update_available": "Update available",
+      "update_versions": "Version {{from}} → {{to}}",
+      "update_warning": "Updating replaces this vertex's current configuration with the library version.",
+      "update_button": "Update from library",
+      "confirm_update": "Update this vertex to library version {{version}}? The local configuration will be replaced.",
+      "update_command": "Update vertex from library",
+      "update_internal_command": "Update internal pipeline",
+      "updated": "Vertex updated to version {{version}}.",
+      "diff_nodes": "Nodes: +{{added}} / -{{removed}} / {{changed}} changed",
+      "diff_edges": "Edges: +{{added}} / -{{removed}}",
+      "diff_params": "Parameters: +{{added}} / -{{removed}}",
+      "diff_settings": "Changed settings: {{fields}}"
+    },
     "node_view": {
       "label_name": "Vertex Label / Name",
       "unique_id": "Unique Identifier (ID)",

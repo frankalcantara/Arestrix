@@ -8,6 +8,7 @@ import { ModalWindowManager, IModalWindowController } from './modals/ModalWindow
 import { t, onLocaleChange } from '../i18n/index.ts';
 import { LibraryPickerModal } from './libraries/LibraryPickerModal.ts';
 import { LibraryService } from '../core/libraries/LibraryService.ts';
+import type { ILibraryAsset } from '../core/libraries/types.ts';
 import { globalEventBus } from '../core/EventBus.ts';
 import { selectProjectPipelineFiles } from '../core/templates/ProjectPipelineImport.ts';
 
@@ -356,8 +357,9 @@ export class TemplateModal {
           this.activeCategory = this.registry.getTemplate(asset.payload.template.id)?.category || 'Agentes';
           this.render();
           const importedTemplate = this.registry.getTemplate(asset.payload.template.id);
-          if (importedTemplate?.assetKind === 'pipeline') this.insertPipelineAsAgent(importedTemplate);
-          else this.insertTemplateNode(asset.payload.template.id);
+          const source = this.librarySourceForAsset(asset);
+          if (importedTemplate?.assetKind === 'pipeline') this.insertPipelineAsAgent(importedTemplate, source);
+          else this.insertTemplateNode(asset.payload.template.id, source);
           this.hide();
           globalEventBus.emit('notification:show', {
             severity: 'success',
@@ -386,7 +388,7 @@ export class TemplateModal {
           const importedTemplate = this.registry.getTemplate(asset.payload.template.id);
           this.activeCategory = 'Agentes';
           this.render();
-          if (importedTemplate) this.insertPipelineAsAgent(importedTemplate);
+          if (importedTemplate) this.insertPipelineAsAgent(importedTemplate, this.librarySourceForAsset(asset));
           this.hide();
           globalEventBus.emit('notification:show', {
             severity: 'success',
@@ -606,7 +608,7 @@ export class TemplateModal {
     });
   }
 
-  private insertTemplateNode(templateId: string): void {
+  private insertTemplateNode(templateId: string, source?: INodeData['librarySource']): void {
     const center = this.viewport.getCameraCenter();
     const existingCount = this.graph.getAllNodes().length;
     const offset = (existingCount % 5) * 40;
@@ -614,6 +616,7 @@ export class TemplateModal {
     const y = Math.round((center.y - offset) / 10) * 10;
 
     const node = this.registry.instantiateNode(templateId, undefined, x, y);
+    if (source) node.librarySource = { ...source };
     const cmd = new AddNodeCommand(this.graph, node);
     this.graph.commandManager.execute(cmd);
 
@@ -621,11 +624,20 @@ export class TemplateModal {
     this.viewport.selectNode(node.id);
   }
 
+  private librarySourceForAsset(asset: ILibraryAsset): NonNullable<INodeData['librarySource']> {
+    return {
+      libraryId: asset.libraryId,
+      assetId: asset.id,
+      hash: asset.audit.hash,
+      version: asset.version
+    };
+  }
+
   /**
    * Pipeline importado como agente: um único vértice visível (tipo Call com
    * apresentação de agente) executa um subflow interno oculto.
    */
-  private insertPipelineAsAgent(tpl: IAgentTemplate): void {
+  private insertPipelineAsAgent(tpl: IAgentTemplate, source?: INodeData['librarySource']): void {
     if (!tpl.childGraph) return;
     const center = this.viewport.getCameraCenter();
     const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
@@ -664,6 +676,7 @@ export class TemplateModal {
       presetLocked: true,
       presentation: 'agent',
       pipelineInterface: tpl.pipelineInterface ? JSON.parse(JSON.stringify(tpl.pipelineInterface)) : undefined,
+      librarySource: source ? { ...source } : undefined,
       requiredHeaders: tpl.requiredHeaders
     };
 

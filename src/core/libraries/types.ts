@@ -110,6 +110,13 @@ export interface IPipelineAssetPayload {
 
 export type ILibraryAssetPayload = ISkillAssetPayload | IMcpAssetPayload | IAgentTemplatePayload | IPipelineAssetPayload;
 
+export interface ILibraryAssetRelease {
+  version: string;
+  hash: string;
+  at: string;
+  note?: string;
+}
+
 export interface ILibraryAsset {
   id: string;
   libraryId: string;
@@ -123,6 +130,10 @@ export interface ILibraryAsset {
   provenance: ILibraryAssetProvenance;
   audit: ILibraryAssetAudit;
   payload: ILibraryAssetPayload;
+  /** Nota da última alteração de conteúdo. */
+  changelog?: string;
+  /** Versões anteriores, da mais antiga para a mais recente. */
+  history?: ILibraryAssetRelease[];
   /** Metadados do blob remoto; o conteúdo só é baixado sob demanda. */
   remote?: {
     path: string;

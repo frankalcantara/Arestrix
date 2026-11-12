@@ -413,7 +413,17 @@ export class LibraryService {
   /** Salva um template de vértice do catálogo na biblioteca, com auditoria. */
   public async saveTemplateToLibrary(
     template: ISerializedTemplatePlugin,
-    options: { libraryId?: string; scope?: LibraryScope; name?: string } = {}
+    options: {
+      libraryId?: string;
+      scope?: LibraryScope;
+      name?: string;
+      /** Atualiza um asset existente em vez de criar outro pelo id do template. */
+      assetId?: string;
+      /** Versão explícita; sem ela, um conteúdo alterado recebe bump de patch. */
+      version?: string;
+      /** Nota exibida no histórico da versão. */
+      changelog?: string;
+    } = {}
   ): Promise<ILibraryAsset | null> {
     const library = options.libraryId
       ? this.registry.get(options.libraryId)
@@ -424,21 +434,35 @@ export class LibraryService {
     if (audit.verdict === 'REJECT') return null;
 
     const isPipeline = template.assetKind === 'pipeline';
-    const id = isPipeline
+    const defaultId = isPipeline
       ? pipelineAssetId(library.id, template.id || Date.now().toString(36))
       : templateAssetId(library.id, template.id || Date.now().toString(36));
+    const id = options.assetId?.trim() || defaultId;
+    const existing = this.registry.getAsset(id);
+
+    const contentChanged = !existing
+      || existing.audit.hash !== audit.hash
+      || (Boolean(options.version) && options.version !== existing.version);
+    const version = options.version
+      || (existing ? (contentChanged ? this.bumpPatchVersion(existing.version) : existing.version) : (template.version || '1.0.0'));
+    const changelog = contentChanged
+      ? (options.changelog?.trim() || (existing ? 'Atualização de conteúdo.' : 'Versão inicial.'))
+      : existing?.changelog;
+    const now = new Date().toISOString();
+
     const base = {
       id,
-      libraryId: library.id,
+      libraryId: existing?.libraryId || library.id,
       name: options.name?.trim() || template.name || (isPipeline ? 'Pipeline' : 'Template de vértice'),
       description: template.description || (isPipeline
         ? 'Pipeline empacotado como agente visual.'
         : 'Template de vértice importado do catálogo.'),
       category: template.category || (isPipeline ? 'Agentes' : 'Plugins Customizados'),
-      version: template.version || '1.0.0',
-      license: 'MIT',
+      version,
+      license: existing?.license || 'MIT',
       audit,
       provenance: {
+        ...(existing?.provenance || {}),
         sourceKind: 'workspace' as const,
         sourceId: 'user',
         authority: 'user',
@@ -448,6 +472,24 @@ export class LibraryService {
     const asset = isPipeline
       ? createPipelineAsset({ ...base, payload: serializedPipelineToAssetPayload(template) })
       : createTemplateAsset({ ...base, payload: serializedTemplateToAssetPayload(template) });
+
+    asset.createdAt = existing?.createdAt || now;
+    asset.updatedAt = now;
+    asset.changelog = changelog;
+    if (contentChanged) {
+      const previous = existing?.history ? [...existing.history] : [];
+      if (existing && !previous.some(release => release.version === existing.version && release.hash === existing.audit.hash)) {
+        previous.push({
+          version: existing.version,
+          hash: existing.audit.hash,
+          at: existing.updatedAt,
+          note: existing.changelog
+        });
+      }
+      asset.history = [...previous, { version, hash: audit.hash, at: now, note: changelog }];
+    } else {
+      asset.history = existing?.history;
+    }
 
     const saved = this.registry.upsertAsset(asset);
     if (!saved) return null;
@@ -1188,6 +1230,18 @@ export class LibraryService {
       ...this.gate.auditMcp(config),
       policyVersion: MCP_AUDIT_POLICY_VERSION
     };
+  }
+
+  /** Incrementa o patch de uma versão semver; versões livres viram sufixo `.N`. */
+  private bumpPatchVersion(version: string): string {
+    const match = /^(\d+)\.(\d+)\.(\d+)(.*)$/.exec(version || '');
+    if (match) {
+      return `${match[1]}.${match[2]}.${Number(match[3]) + 1}${match[4]}`;
+    }
+    const base = (version || '1.0.0').trim();
+    const suffix = /^(.*?)(?:\.(\d+))?$/.exec(base);
+    if (!suffix) return `${base}.1`;
+    return `${suffix[1]}.${Number(suffix[2] || 0) + 1}`;
   }
 
   private buildDerivedId(libraryId: string, source: ILibraryAsset, name: string): string {

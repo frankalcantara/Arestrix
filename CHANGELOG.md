@@ -63,6 +63,14 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   JSON object alongside the primary input. Packaged pipelines may now contain
   nested subflows and internal call edges: the generator emits prefixed native
   functions and namespaces recursively, with a maximum nesting depth.
+- Library asset versioning and updates. Saving changed content under the same
+  asset keeps its identity and bumps the patch version, recording the previous
+  release in `history` and a `changelog` note. Vertices inserted from a library
+  keep `librarySource` (`libraryId`, `assetId`, `hash`, `version`); when the asset
+  hash changes, the Inspector shows the old and new versions and an **Update from
+  library** action. Updating a composed pipeline replaces the visible interface,
+  reconciles typed parameters, rebuilds output ports and updates the hidden
+  internal subflow in one undoable command, without touching the library asset.
 - Claim-extraction agent selector in File → Properties → Project → Memory. The
   active pipeline's agent nodes are registered in `AssistantSession` and listed
   through `memory_claim_agents`; the target is stored as `{ id, graph, node }`,

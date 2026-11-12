@@ -3,6 +3,10 @@ import { INodeData, IPort, ISwitchSettings, SwitchMode, defaultSwitchSettings, I
 import { EventBus } from '../core/EventBus.ts';
 import { RemoveNodeCommand, RemoveEdgeCommand, UpdateNodeCommand, CompoundCommand, AddNodeCommand } from '../core/history/GraphCommands.ts';
 import { AgentTemplateRegistry } from '../core/templates/AgentTemplateRegistry.ts';
+import { LibraryService } from '../core/libraries/LibraryService.ts';
+import type { ILibraryAsset } from '../core/libraries/types.ts';
+import { diffAgentSettings, diffGraphSchemas } from '../core/libraries/AssetDelta.ts';
+import type { ISerializedTemplatePlugin } from '../core/templates/AgentTemplateTypes.ts';
 import { t, translateMcpError } from '../i18n/index.ts';
 
 /**
@@ -553,6 +557,7 @@ export class Inspector {
             </div>
             ${this.renderPipelineAgentSection(node)}
           ` : ''}
+          ${this.renderLibraryUpdate(node)}
 
           ${(node.type === 'subflow' || node.type === 'module') ? `
             <div class="form-group">
@@ -848,6 +853,7 @@ export class Inspector {
     if (node.type === 'agent' || node.type === 'call') this.bindCallSection();
     if (node.type === 'call') this.bindFlowCallSection(node);
     if (node.presentation === 'agent') this.bindPipelineAgentSection(node);
+    this.bindLibraryUpdateSection(node);
     if (node.type === 'interaction') this.bindInteractionSection(node);
 
     // Sincronizar Lambda
@@ -1637,6 +1643,336 @@ export class Inspector {
         ` : ''}
       </div>
     `;
+  }
+
+  private libraryService(): LibraryService {
+    return LibraryService.getInstance();
+  }
+
+  private renderLibraryUpdate(node: INodeData): string {
+    const source = node.librarySource;
+    if (!source) return '';
+    let asset: ILibraryAsset | undefined;
+    try {
+      asset = this.libraryService().getAsset(source.assetId);
+    } catch {
+      return '';
+    }
+    if (!asset) return '';
+
+    if (asset.audit.hash === source.hash) {
+      return `
+        <div class="office-field-hint" style="margin-top: 8px;">
+          ${t('inspector.library.current', 'Origem: biblioteca · versão {{version}} (atualizada)', { version: source.version })}
+        </div>
+      `;
+    }
+
+    return `
+      <div class="properties-note properties-note--warning" style="margin-top: 8px;">
+        <strong>${t('inspector.library.update_available', 'Atualização disponível')}</strong>
+        <div>${t('inspector.library.update_versions', 'Versão {{from}} → {{to}}', { from: source.version, to: asset.version })}</div>
+        ${this.describeLibraryDelta(node, asset)}
+        ${asset.changelog ? `<div style="margin-top: 4px;">${this.escapeHtml(asset.changelog)}</div>` : ''}
+        <div style="margin-top: 4px;">${t('inspector.library.update_warning', 'A atualização substitui a configuração atual deste vértice pela versão da biblioteca.')}</div>
+        <button id="btn-update-library-asset" class="btn btn-secondary" style="margin-top: 8px;">
+          ${t('inspector.library.update_button', 'Atualizar da biblioteca')}
+        </button>
+      </div>
+    `;
+  }
+
+  private describeLibraryDelta(node: INodeData, asset: ILibraryAsset): string {
+    const template = this.assetTemplate(asset);
+    if (!template) return '';
+    const isPipeline = node.presentation === 'agent' || template.assetKind === 'pipeline';
+    if (isPipeline) {
+      const edge = this.graph.getAllEdges().find(item => item.sourceNodeId === node.id && item.kind === 'call');
+      const internal = edge ? this.graph.getNode(edge.targetNodeId) : undefined;
+      const delta = diffGraphSchemas(internal?.childGraph, template.childGraph);
+      const oldNames = new Set((node.pipelineInterface?.inputs || []).map(input => input.name));
+      const newNames = new Set((template.pipelineInterface?.inputs || []).map(input => input.name));
+      const paramsAdded = [...newNames].filter(name => !oldNames.has(name)).length;
+      const paramsRemoved = [...oldNames].filter(name => !newNames.has(name)).length;
+      const parts: string[] = [];
+      if (delta.nodesAdded || delta.nodesRemoved || delta.nodesChanged) {
+        parts.push(t('inspector.library.diff_nodes', 'Nós: +{{added}} / -{{removed}} / {{changed}} alterados', {
+          added: String(delta.nodesAdded),
+          removed: String(delta.nodesRemoved),
+          changed: String(delta.nodesChanged)
+        }));
+      }
+      if (delta.edgesAdded || delta.edgesRemoved) {
+        parts.push(t('inspector.library.diff_edges', 'Conexões: +{{added}} / -{{removed}}', {
+          added: String(delta.edgesAdded),
+          removed: String(delta.edgesRemoved)
+        }));
+      }
+      if (paramsAdded || paramsRemoved) {
+        parts.push(t('inspector.library.diff_params', 'Parâmetros: +{{added}} / -{{removed}}', {
+          added: String(paramsAdded),
+          removed: String(paramsRemoved)
+        }));
+      }
+      return parts.length > 0
+        ? `<div class="office-field-hint" style="margin-top: 4px;">${this.escapeHtml(parts.join(' · '))}</div>`
+        : '';
+    }
+
+    const fields = diffAgentSettings(node.agentSettings, template.agentSettings);
+    return fields.length > 0
+      ? `<div class="office-field-hint" style="margin-top: 4px;">${this.escapeHtml(t('inspector.library.diff_settings', 'Configuração alterada: {{fields}}', { fields: fields.join(', ') }))}</div>`
+      : '';
+  }
+
+  private bindLibraryUpdateSection(node: INodeData): void {
+    this.container.querySelector('#btn-update-library-asset')?.addEventListener('click', () => {
+      const source = node.librarySource;
+      if (!source) return;
+      const asset = this.libraryService().getAsset(source.assetId);
+      if (!asset) return;
+      const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
+        ? true
+        : window.confirm(t(
+          'inspector.library.confirm_update',
+          'Atualizar este vértice para a versão {{version}} da biblioteca? A configuração local será substituída.',
+          { version: asset.version }
+        ));
+      if (!confirmed) return;
+      this.applyLibraryAssetUpdate(node, asset);
+    });
+  }
+
+  private applyLibraryAssetUpdate(node: INodeData, asset: ILibraryAsset): void {
+    const template = this.assetTemplate(asset);
+    if (!template) return;
+    if (node.presentation === 'agent' || template.assetKind === 'pipeline') {
+      this.applyPipelineAssetUpdate(node, asset, template);
+    } else {
+      this.applyAgentPresetUpdate(node, asset, template);
+    }
+  }
+
+  private assetTemplate(asset: ILibraryAsset): ISerializedTemplatePlugin | undefined {
+    if (asset.payload.kind === 'pipeline') return asset.payload.template;
+    if (asset.payload.kind === 'agent-template') return asset.payload.template;
+    return undefined;
+  }
+
+  private applyPipelineAssetUpdate(
+    node: INodeData,
+    asset: ILibraryAsset,
+    template: ISerializedTemplatePlugin
+  ): void {
+    if (!template.childGraph) return;
+
+    const edge = this.graph.getAllEdges().find(item => item.sourceNodeId === node.id && item.kind === 'call');
+    const internal = edge ? this.graph.getNode(edge.targetNodeId) : undefined;
+    const nextInterface = this.cloneJson(template.pipelineInterface ?? node.pipelineInterface ?? {
+      input: { name: 'Entrada' },
+      outputs: []
+    });
+    const nextSettings = this.cloneJson(node.callSettings ?? defaultCallVertexSettings());
+    nextSettings.pipelineInputs = this.mergePipelineInputs(nextSettings.pipelineInputs, nextInterface.inputs);
+
+    const { ports, removedPortIds } = this.buildUpdatedPipelinePorts(node, nextInterface.outputs ?? []);
+    const librarySource = {
+      libraryId: asset.libraryId,
+      assetId: asset.id,
+      hash: asset.audit.hash,
+      version: asset.version
+    };
+    const commands: Array<UpdateNodeCommand | RemoveEdgeCommand> = [
+      new UpdateNodeCommand(
+        this.graph,
+        node.id,
+        {
+          outputs: node.outputs,
+          pipelineInterface: node.pipelineInterface,
+          callSettings: node.callSettings,
+          templateId: node.templateId,
+          presetId: node.presetId,
+          librarySource: node.librarySource
+        },
+        {
+          outputs: ports,
+          pipelineInterface: nextInterface,
+          callSettings: nextSettings,
+          templateId: template.id,
+          presetId: template.id,
+          librarySource
+        },
+        t('inspector.library.update_command', 'Atualizar vértice da biblioteca')
+      )
+    ];
+
+    if (internal) {
+      commands.push(new UpdateNodeCommand(
+        this.graph,
+        internal.id,
+        {
+          childGraph: internal.childGraph,
+          pipelineInterface: internal.pipelineInterface,
+          label: internal.label,
+          requiredHeaders: internal.requiredHeaders
+        },
+        {
+          childGraph: this.cloneJson(template.childGraph),
+          pipelineInterface: this.cloneJson(nextInterface),
+          label: `${template.name} · pipeline`,
+          requiredHeaders: template.requiredHeaders
+        },
+        t('inspector.library.update_internal_command', 'Atualizar pipeline interno')
+      ));
+    }
+
+    for (const removedPortId of removedPortIds) {
+      for (const edgeToRemove of this.graph.getAllEdges()) {
+        if (edgeToRemove.sourceNodeId === node.id && edgeToRemove.sourcePortId === removedPortId) {
+          commands.push(new RemoveEdgeCommand(this.graph, edgeToRemove.id));
+        }
+      }
+    }
+
+    this.graph.commandManager.execute(new CompoundCommand(
+      t('inspector.library.update_command', 'Atualizar vértice da biblioteca'),
+      commands
+    ));
+    const fresh = this.graph.getNode(node.id);
+    if (fresh) this.renderNode(fresh);
+    this.bus.emit('notification:show', {
+      severity: 'success',
+      title: t('inspector.library.update_available', 'Atualização disponível'),
+      message: t('inspector.library.updated', 'Vértice atualizado para a versão {{version}}.', { version: asset.version })
+    });
+  }
+
+  private applyAgentPresetUpdate(
+    node: INodeData,
+    asset: ILibraryAsset,
+    template: ISerializedTemplatePlugin
+  ): void {
+    const nextSettings = template.agentSettings
+      ? this.cloneJson(template.agentSettings)
+      : node.agentSettings;
+    this.graph.commandManager.execute(new UpdateNodeCommand(
+      this.graph,
+      node.id,
+      {
+        agentSettings: node.agentSettings,
+        requiredHeaders: node.requiredHeaders,
+        presetId: node.presetId,
+        presetLocked: node.presetLocked,
+        librarySource: node.librarySource
+      },
+      {
+        agentSettings: nextSettings,
+        requiredHeaders: template.requiredHeaders ?? node.requiredHeaders,
+        presetId: template.id,
+        presetLocked: template.presetLocked !== false,
+        librarySource: {
+          libraryId: asset.libraryId,
+          assetId: asset.id,
+          hash: asset.audit.hash,
+          version: asset.version
+        }
+      },
+      t('inspector.library.update_command', 'Atualizar vértice da biblioteca')
+    ));
+    const fresh = this.graph.getNode(node.id);
+    if (fresh) this.renderNode(fresh);
+    this.bus.emit('notification:show', {
+      severity: 'success',
+      title: t('inspector.library.update_available', 'Atualização disponível'),
+      message: t('inspector.library.updated', 'Vértice atualizado para a versão {{version}}.', { version: asset.version })
+    });
+  }
+
+  private buildUpdatedPipelinePorts(
+    node: INodeData,
+    outputs: NonNullable<INodeData['pipelineInterface']>['outputs']
+  ): { ports: IPort[]; removedPortIds: string[] } {
+    const ports: IPort[] = [];
+    const usedIds = new Set<string>();
+    const usedDataNames = new Set<string>();
+    const flowOut = node.outputs.find(port => port.type === 'flow');
+    const callOut = node.outputs.find(port => port.type === 'call');
+    if (flowOut) {
+      ports.push(flowOut);
+      usedIds.add(flowOut.id);
+    }
+
+    for (const [index, output] of outputs.entries()) {
+      const existing = node.outputs.find(port =>
+        port.type === 'data'
+        && port.name === output.name
+        && !usedDataNames.has(port.name)
+        && !usedIds.has(port.id)
+      );
+      if (existing) {
+        ports.push(existing);
+        usedDataNames.add(existing.name);
+        usedIds.add(existing.id);
+        continue;
+      }
+
+      let id = `${node.id}_out_data_${index}`;
+      let suffix = 1;
+      while (usedIds.has(id)) {
+        id = `${node.id}_out_data_${index}_${suffix++}`;
+      }
+      ports.push({
+        id,
+        name: output.name,
+        direction: 'output',
+        type: 'data',
+        dataType: 'std::string'
+      });
+      usedIds.add(id);
+      usedDataNames.add(output.name);
+    }
+
+    if (callOut) {
+      ports.push(callOut);
+      usedIds.add(callOut.id);
+    }
+
+    const removedPortIds = node.outputs
+      .filter(port => port.type === 'data' && !usedIds.has(port.id))
+      .map(port => port.id);
+
+    return { ports, removedPortIds };
+  }
+
+  private mergePipelineInputs(
+    current: ICallVertexSettings['pipelineInputs'],
+    parameters: NonNullable<INodeData['pipelineInterface']>['inputs']
+  ): ICallVertexSettings['pipelineInputs'] {
+    const next: Record<string, string | number | boolean | string[]> = {};
+    for (const parameter of parameters ?? []) {
+      const type = parameter.type || 'string';
+      const existing = current?.[parameter.name];
+      if (existing !== undefined && this.pipelineValueMatchesType(existing, type)) {
+        next[parameter.name] = existing;
+      } else {
+        next[parameter.name] = type === 'boolean' ? false : type === 'number' ? 0 : type === 'list' ? [] : '';
+      }
+    }
+    return Object.keys(next).length > 0 ? next : undefined;
+  }
+
+  private pipelineValueMatchesType(
+    value: string | number | boolean | string[],
+    type: 'string' | 'number' | 'boolean' | 'list'
+  ): boolean {
+    if (type === 'number') return typeof value === 'number';
+    if (type === 'boolean') return typeof value === 'boolean';
+    if (type === 'list') return Array.isArray(value);
+    return typeof value === 'string';
+  }
+
+  private cloneJson<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value)) as T;
   }
 
   private renderFlowCallSection(node: INodeData): string {

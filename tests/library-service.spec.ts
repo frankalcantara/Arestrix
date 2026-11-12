@@ -242,6 +242,53 @@ describe('LibraryService - importação, derivação e instalação', () => {
     expect(asset?.category).toBe('Agentes');
   });
 
+  it('versiona um asset quando o conteúdo muda e mantém histórico', async () => {
+    const pipeline = {
+      id: 'pipeline_version_test',
+      name: 'Pipeline Versionado',
+      taskType: 'subflow' as const,
+      description: 'Pipeline com histórico',
+      inputs: [{ name: 'in', type: 'flow' as const }],
+      outputs: [{ name: 'out', type: 'flow' as const }],
+      lambdaBodyTemplate: '',
+      assetKind: 'pipeline' as const,
+      presentation: 'agent' as const,
+      presetLocked: true,
+      childGraph: {
+        version: '1.0.0',
+        metadata: { graphName: 'Pipeline Versionado' } as any,
+        nodes: [{ id: 'n1', type: 'static', position: { x: 0, y: 0 }, inputs: [], outputs: [], parameters: {} } as any],
+        edges: []
+      }
+    };
+
+    const first = await service.saveTemplateToLibrary(pipeline, { scope: 'workspace' });
+    expect(first?.version).toBe('1.0.0');
+    expect(first?.history?.length).toBe(1);
+
+    const unchanged = await service.saveTemplateToLibrary(pipeline, { scope: 'workspace' });
+    expect(unchanged?.version).toBe('1.0.0');
+    expect(unchanged?.history?.length).toBe(1);
+
+    const changed = await service.saveTemplateToLibrary({
+      ...pipeline,
+      childGraph: {
+        ...pipeline.childGraph,
+        nodes: [
+          ...pipeline.childGraph.nodes,
+          { id: 'n2', type: 'static', position: { x: 100, y: 0 }, inputs: [], outputs: [], parameters: {} } as any
+        ]
+      }
+    }, { scope: 'workspace', changelog: 'Novo nó no pipeline.' });
+
+    expect(changed?.version).toBe('1.0.1');
+    expect(changed?.changelog).toBe('Novo nó no pipeline.');
+    expect(changed?.history?.length).toBe(2);
+    expect(changed?.history?.[0].version).toBe('1.0.0');
+    expect(changed?.history?.[1].version).toBe('1.0.1');
+    expect(changed?.audit.hash).not.toBe(first?.audit.hash);
+  });
+
   it('clona uma biblioteca e mantém vínculo com a origem', async () => {
     const imported = await service.importBuiltinSkills();
     const clone = await service.cloneLibrary('library-arestrix', 'Biblioteca Clonada', 'workspace');

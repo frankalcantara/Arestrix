@@ -52,6 +52,15 @@
 > gerador emite funções nativas e namespaces com prefixos recursivos, com limite
 > de profundidade.
 >
+> **Fase 4.4 entregue (versionamento e atualização):** o salvamento de conteúdo
+> alterado no mesmo asset incrementa a versão de patch, registra `changelog` e
+> mantém o histórico de releases. Vértices inseridos da biblioteca guardam
+> `librarySource` com `libraryId`, `assetId`, hash e versão; quando o hash muda,
+> o Inspetor mostra “Atualização disponível”, compara as versões e aplica a
+> atualização em um comando desfazível. Em pipelines compostos, a atualização
+> substitui a interface visível, reconcilia parâmetros tipados, reconstrói as
+> portas de saída e atualiza o subflow interno oculto sem alterar o asset.
+>
 > **Fase 5 entregue:** fonte GitHub real via endpoint C++ `fetch_library_source`, commit pin,
 > leitura de manifesto/árvore sem baixar blobs, sincronização de candidatos como `PENDING`,
 > download sob demanda em quarentena lógica, auditoria e promoção somente após o veredito.
