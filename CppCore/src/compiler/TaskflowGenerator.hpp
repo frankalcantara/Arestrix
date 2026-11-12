@@ -14,10 +14,13 @@ public:
     // (rt/Runtime.hpp) em vez de apenas imprimir mensagens.
     // `inputContextExpr` e usado pelo gerador de subflow para injetar o payload do chamador
     // como inputContext dos agentes/interacoes; vazio mantem o fluxo normal.
-    static std::string generateSource(const core::Graph& graph, const std::string& inputContextExpr = "");
+    static std::string generateSource(const core::Graph& graph, const std::string& inputContextExpr = "",
+                                      const std::string& subflowPrefix = "");
 
     // Fontes das funcoes nativas dos subflows chamaveis (arquivo logico -> conteudo C++).
-    static std::map<std::string, std::string> generateSubflowSources(const core::Graph& graph);
+    static std::map<std::string, std::string> generateSubflowSources(const core::Graph& graph,
+                                                                     const std::string& subflowPrefix = "",
+                                                                     size_t depth = 0);
 
     // Skills embutidas nos nos (sem arquivo .md) precisam virar arquivos no workspace
     // para o runtime le-las: devolve caminho relativo -> conteudo Markdown.

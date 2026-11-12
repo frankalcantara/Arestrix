@@ -216,7 +216,7 @@ search remained the fallback. Report:
 
 | Check | Result |
 | :--- | :--- |
-| C++ suite | 4,295/4,295 checks passed, including the anchor and router tests |
+| C++ suite | 4,299/4,299 checks passed, including the anchor and router tests |
 | Vitest | 641/641 |
 | End-to-end tutorial | passed |
 | Examples 01–14 | 14/14 passed |

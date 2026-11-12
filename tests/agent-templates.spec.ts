@@ -284,8 +284,10 @@ describe('Fase 4: Catalogo de Templates de Agentes & Sistema de Plugins Dinamico
 
       const withCall = graph.toJSON();
       withCall.edges.push({ id: 'call-1', sourceNodeId: 'x', sourcePortId: 'x_out', targetNodeId: 'x', targetPortId: 'x_in', kind: 'call' });
-      expect(() => registry.importGraphAsPipelineTemplate(withCall, 'Com chamada'))
-        .toThrow(/arestas de chamada/);
+      const callPipeline = registry.importGraphAsPipelineTemplate(withCall, 'Com chamada');
+      expect(callPipeline.assetKind).toBe('pipeline');
+      expect(callPipeline.childGraph?.edges?.some(edge => edge.kind === 'call')).toBe(true);
+      registry.unregisterTemplate(callPipeline.id);
 
       const withNested = graph.toJSON();
       withNested.nodes.push({
@@ -293,8 +295,10 @@ describe('Fase 4: Catalogo de Templates de Agentes & Sistema de Plugins Dinamico
         inputs: [], outputs: [], parameters: {},
         childGraph: { version: '1.0.0', metadata: {} as any, nodes: [{ id: 'inner' } as any], edges: [] }
       });
-      expect(() => registry.importGraphAsPipelineTemplate(withNested, 'Com subflow'))
-        .toThrow(/subflows aninhados/);
+      const nestedPipeline = registry.importGraphAsPipelineTemplate(withNested, 'Com subflow');
+      expect(nestedPipeline.assetKind).toBe('pipeline');
+      expect(nestedPipeline.childGraph?.nodes?.some(node => node.type === 'subflow')).toBe(true);
+      registry.unregisterTemplate(nestedPipeline.id);
     });
   });
 });

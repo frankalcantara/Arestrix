@@ -48,8 +48,9 @@
 > além do resultado combinado, sem mostrar o call/subflow interno. O agente
 > visual também permite adicionar parâmetros nomeados e tipados (texto, número,
 > booleano e lista); eles são enviados em JSON junto com a entrada principal.
-> Pipelines com subflows aninhados ou chamadas internas são rejeitados na
-> importação com mensagem explícita até a limitação v1 do gerador ser removida.
+> O pipeline empacotado agora aceita subflows aninhados e chamadas internas: o
+> gerador emite funções nativas e namespaces com prefixos recursivos, com limite
+> de profundidade.
 >
 > **Fase 5 entregue:** fonte GitHub real via endpoint C++ `fetch_library_source`, commit pin,
 > leitura de manifesto/árvore sem baixar blobs, sincronização de candidatos como `PENDING`,

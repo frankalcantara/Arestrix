@@ -457,8 +457,8 @@ std::string skillAssetPath(const std::string& nodeId) {
     return ".arestrix/skills/" + TaskflowGenerator::sanitizeIdentifier(nodeId) + ".md";
 }
 
-std::string subflowFunctionName(size_t index, const std::string& id) {
-    return "arx_subflow_" + std::to_string(index) + "_" + TaskflowGenerator::sanitizeIdentifier(id);
+std::string subflowFunctionName(size_t index, const std::string& id, const std::string& prefix = "") {
+    return "arx_subflow_" + prefix + std::to_string(index) + "_" + TaskflowGenerator::sanitizeIdentifier(id);
 }
 
 bool isSubflowTarget(const core::NodeData& node) {
@@ -682,7 +682,8 @@ std::map<std::string, std::string> TaskflowGenerator::collectSkillAssets(const c
 // ---------------------------------------------------------------------------
 // Pipeline simples
 // ---------------------------------------------------------------------------
-std::string TaskflowGenerator::generateSource(const core::Graph& graph, const std::string& inputContextExpr) {
+std::string TaskflowGenerator::generateSource(const core::Graph& graph, const std::string& inputContextExpr,
+                                              const std::string& subflowPrefix) {
     const auto& meta = graph.getMetadata();
     const auto& nodes = graph.getNodes();
     const auto ids = sortedNodeIds(graph);
@@ -858,7 +859,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
         code += "[[maybe_unused]] static const char* arx_callers = " + rawLiteral(callers.dump()) + ";\n\n";
     }
     for (size_t i = 0; i < subflowTargets.size(); ++i) {
-        code += "extern \"C\" const char* " + subflowFunctionName(i, subflowTargets[i]) + "_run(const char*);\n";
+        code += "extern \"C\" const char* " + subflowFunctionName(i, subflowTargets[i], subflowPrefix) + "_run(const char*);\n";
     }
     if (!subflowTargets.empty()) code += "\n";
 
@@ -957,7 +958,7 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
         code += "  taskforge::rt::setCallRegistry(arx_callables, arx_callers);\n\n";
     }
     for (size_t i = 0; i < subflowTargets.size(); ++i) {
-        const std::string fn = subflowFunctionName(i, subflowTargets[i]);
+        const std::string fn = subflowFunctionName(i, subflowTargets[i], subflowPrefix);
         code += "  taskforge::rt::registerSubflow(" + cppString(subflowTargets[i]) + ", [](const std::string& input) {\n";
         code += "    const char* result = " + fn + "_run(input.c_str());\n";
         code += "    if (!result) throw std::runtime_error(\"Subflow falhou.\");\n";
@@ -1324,7 +1325,12 @@ std::string TaskflowGenerator::generateSource(const core::Graph& graph, const st
 // ---------------------------------------------------------------------------
 // Subflows chamaveis: cada alvo vira uma funcao nativa no mesmo executavel.
 // ---------------------------------------------------------------------------
-std::map<std::string, std::string> TaskflowGenerator::generateSubflowSources(const core::Graph& graph) {
+std::map<std::string, std::string> TaskflowGenerator::generateSubflowSources(const core::Graph& graph,
+                                                                             const std::string& subflowPrefix,
+                                                                             size_t depth) {
+    if (depth > 8) {
+        throw std::runtime_error("Subflows aninhados excedem a profundidade maxima (8).");
+    }
     std::set<std::string> targets;
     for (const auto* edge : sortedEdges(graph)) {
         if (edge->kind != core::EdgeKind::Call) continue;
@@ -1349,22 +1355,12 @@ std::map<std::string, std::string> TaskflowGenerator::generateSubflowSources(con
         if (child.getNodes().empty()) {
             throw std::runtime_error("Subflow chamavel vazio: " + targetId);
         }
-        for (const auto& [edgeId, edge] : child.getEdges()) {
-            (void)edgeId;
-            if (edge.kind == core::EdgeKind::Call) {
-                throw std::runtime_error("Subflow '" + targetId + "' nao pode conter arestas de chamada aninhadas (v1).");
-            }
-        }
-        for (const auto& pair : child.getNodes()) {
-            if (pair.second.type == core::TaskflowNodeType::Subflow ||
-                pair.second.type == core::TaskflowNodeType::Module) {
-                throw std::runtime_error("Subflow '" + targetId + "' nao pode conter subflows aninhados (v1).");
-            }
-        }
 
-        const std::string fn = subflowFunctionName(index, targetId);
+        const std::string fn = subflowFunctionName(index, targetId, subflowPrefix);
         const std::string ns = fn;
-        std::string childSource = generateSource(child, "arx_subflow_input");
+        const std::string childPrefix = subflowPrefix + "n" + std::to_string(index) + "_" +
+            sanitizeIdentifier(targetId) + "_";
+        std::string childSource = generateSource(child, "arx_subflow_input", childPrefix);
         const std::string anchor = "struct AgentContext {";
         const size_t anchorPos = childSource.find(anchor);
         if (anchorPos == std::string::npos) {
@@ -1470,6 +1466,11 @@ std::map<std::string, std::string> TaskflowGenerator::generateSubflowSources(con
         code += "// Subflow " + targetId + "\n";
         code += childSource;
         code += wrapper.str();
+        auto nested = generateSubflowSources(child, childPrefix, depth + 1);
+        for (const auto& [nestedName, nestedSource] : nested) {
+            (void)nestedName;
+            code += nestedSource;
+        }
         ++index;
     }
 

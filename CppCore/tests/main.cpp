@@ -858,6 +858,73 @@ TEST(subflow_callable_emits_native_function) {
     }
 }
 
+TEST(nested_subflow_callable_emits_prefixed_functions) {
+    using taskforge::compiler::TaskflowGenerator;
+    json grandchildSchema = {
+        {"version", "1.0.0"},
+        {"metadata", {{"graphName", "Grandchild"}, {"projectId", "test"}, {"targetStandard", "C++20"}}},
+        {"nodes", json::array({
+            json{{"id", "grand_task"}, {"label", "GrandTask"}, {"type", "static"},
+                 {"position", {{"x", 0}, {"y", 0}}},
+                 {"inputs", json::array()}, {"outputs", json::array()},
+                 {"parameters", json::object()}, {"customLambdaBody", "std::cout << \"grand\\n\";"}}
+        })},
+        {"edges", json::array()}
+    };
+    json childSchema = {
+        {"version", "1.0.0"},
+        {"metadata", {{"graphName", "Child"}, {"projectId", "test"}, {"targetStandard", "C++20"}}},
+        {"nodes", json::array({
+            json{{"id", "child_caller"}, {"label", "ChildCaller"}, {"type", "agent"},
+                 {"position", {{"x", 0}, {"y", 0}}},
+                 {"inputs", json::array()},
+                 {"outputs", json::array({json{{"id", "child_out_call"}, {"name", "call"}, {"direction", "output"}, {"type", "call"}}})},
+                 {"parameters", json::object()}, {"customLambdaBody", ""}},
+            json{{"id", "grandchild"}, {"label", "GrandchildNode"}, {"type", "subflow"},
+                 {"position", {{"x", 300}, {"y", 0}}},
+                 {"inputs", json::array()}, {"outputs", json::array()},
+                 {"parameters", json::object()}, {"customLambdaBody", ""},
+                 {"childGraph", grandchildSchema}}
+        })},
+        {"edges", json::array({
+            json{{"id", "child_call_grand"}, {"sourceNodeId", "child_caller"}, {"sourcePortId", "child_out_call"},
+                 {"targetNodeId", "grandchild"}, {"targetPortId", "grandchild_in"}, {"kind", "call"},
+                 {"callSettings", {{"maxCalls", 1}, {"onError", "fail"}}}}
+        })}
+    };
+    json schema = {
+        {"version", "1.0.0"},
+        {"metadata", {{"graphName", "Parent"}, {"projectId", "test"}, {"targetStandard", "C++20"}}},
+        {"nodes", json::array({
+            json{{"id", "caller"}, {"label", "Caller"}, {"type", "agent"},
+                 {"position", {{"x", 0}, {"y", 0}}},
+                 {"inputs", json::array()},
+                 {"outputs", json::array({json{{"id", "caller_out_call"}, {"name", "call"}, {"direction", "output"}, {"type", "call"}}})},
+                 {"parameters", json::object()}, {"customLambdaBody", ""}},
+            json{{"id", "child"}, {"label", "Child"}, {"type", "subflow"},
+                 {"position", {{"x", 300}, {"y", 0}}},
+                 {"inputs", json::array()}, {"outputs", json::array()},
+                 {"parameters", json::object()}, {"customLambdaBody", ""},
+                 {"childGraph", childSchema}}
+        })},
+        {"edges", json::array({
+            json{{"id", "call_child"}, {"sourceNodeId", "caller"}, {"sourcePortId", "caller_out_call"},
+                 {"targetNodeId", "child"}, {"targetPortId", "child_in"}, {"kind", "call"},
+                 {"callSettings", {{"maxCalls", 1}, {"onError", "fail"}}}}
+        })}
+    };
+    taskforge::core::Graph graph;
+    graph.fromJson(schema);
+    auto sources = TaskflowGenerator::generateSubflowSources(graph);
+    CHECK(sources.count("subflows.cpp") == 1);
+    if (sources.count("subflows.cpp")) {
+        const std::string& code = sources["subflows.cpp"];
+        CHECK(code.find("arx_subflow_0_child") != std::string::npos);
+        CHECK(code.find("arx_subflow_n0_child_0_grandchild") != std::string::npos);
+        CHECK(code.find("namespace arx_subflow_n0_child_0_grandchild") != std::string::npos);
+    }
+}
+
 TEST(pipeline_subflow_emits_structured_outputs) {
     using taskforge::compiler::TaskflowGenerator;
     json childSchema = {
