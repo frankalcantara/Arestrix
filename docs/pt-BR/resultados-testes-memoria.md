@@ -213,7 +213,7 @@ lexical permaneceu como fallback. Relatório:
 
 | Verificação | Resultado |
 | :--- | :--- |
-| Suíte C++ | 4.289/4.289 verificações aprovadas, incluindo os testes de âncoras e do roteador |
+| Suíte C++ | 4.295/4.295 verificações aprovadas, incluindo os testes de âncoras e do roteador |
 | Vitest | 641/641 |
 | Tutorial ponta a ponta | aprovado |
 | Exemplos 01–14 | 14/14 aprovados |

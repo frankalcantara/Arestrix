@@ -858,6 +858,63 @@ TEST(subflow_callable_emits_native_function) {
     }
 }
 
+TEST(pipeline_subflow_emits_structured_outputs) {
+    using taskforge::compiler::TaskflowGenerator;
+    json childSchema = {
+        {"version", "1.0.0"},
+        {"metadata", {{"graphName", "PipelineChild"}, {"projectId", "test"}, {"targetStandard", "C++20"}}},
+        {"nodes", json::array({
+            json{{"id", "produce"}, {"label", "Produce"}, {"type", "static"},
+                 {"position", {{"x", 0}, {"y", 0}}},
+                 {"inputs", json::array()}, {"outputs", json::array()},
+                 {"parameters", json::object()}, {"customLambdaBody", "std::cout << \"ok\\n\";"}},
+            json{{"id", "deliver"}, {"label", "Relatorio"}, {"type", "output"},
+                 {"position", {{"x", 300}, {"y", 0}}},
+                 {"inputs", json::array()}, {"outputs", json::array()},
+                 {"parameters", json::object()}, {"customLambdaBody", ""},
+                 {"outputSettings", json{{"sourcePath", ".arestrix/out/produce.txt"}}}}
+        })},
+        {"edges", json::array()}
+    };
+    json pipelineInterface = {
+        {"input", json{{"name", "Entrada"}}},
+        {"outputs", json::array({json{{"name", "Relatorio"}, {"path", ".arestrix/out/produce.txt"}}})}
+    };
+    json schema = {
+        {"version", "1.0.0"},
+        {"metadata", {{"graphName", "Parent"}, {"projectId", "test"}, {"targetStandard", "C++20"}}},
+        {"nodes", json::array({
+            json{{"id", "caller"}, {"label", "Caller"}, {"type", "call"},
+                 {"position", {{"x", 0}, {"y", 0}}},
+                 {"inputs", json::array()},
+                 {"outputs", json::array({json{{"id", "caller_out_call"}, {"name", "call"}, {"direction", "output"}, {"type", "call"}}})},
+                 {"parameters", json::object()}, {"customLambdaBody", ""}},
+            json{{"id", "child"}, {"label", "Child"}, {"type", "subflow"},
+                 {"position", {{"x", 300}, {"y", 0}}},
+                 {"inputs", json::array()}, {"outputs", json::array()},
+                 {"parameters", json::object()}, {"customLambdaBody", ""},
+                 {"childGraph", childSchema}, {"pipelineInterface", pipelineInterface}}
+        })},
+        {"edges", json::array({
+            json{{"id", "call_child"}, {"sourceNodeId", "caller"}, {"sourcePortId", "caller_out_call"},
+                 {"targetNodeId", "child"}, {"targetPortId", "child_in"}, {"kind", "call"},
+                 {"callSettings", {{"maxCalls", 1}, {"onError", "fail"}}}}
+        })}
+    };
+    taskforge::core::Graph graph;
+    graph.fromJson(schema);
+    auto sources = TaskflowGenerator::generateSubflowSources(graph);
+    CHECK(sources.count("subflows.cpp") == 1);
+    if (sources.count("subflows.cpp")) {
+        const std::string& code = sources["subflows.cpp"];
+        CHECK(code.find("arx_pipeline") != std::string::npos);
+        CHECK(code.find("kind") != std::string::npos);
+        CHECK(code.find("outputs") != std::string::npos);
+        CHECK(code.find("Relatorio") != std::string::npos);
+        CHECK(code.find("arx_outputs.push_back") != std::string::npos);
+    }
+}
+
 TEST(call_vertex_compiles_flow_call) {
     using taskforge::compiler::TaskflowGenerator;
     auto port = [](const std::string& id, const std::string& dir, const std::string& type) {

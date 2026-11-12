@@ -1377,7 +1377,12 @@ std::map<std::string, std::string> TaskflowGenerator::generateSubflowSources(con
                             "int arx_main(int argc, char* argv[], const std::string& arx_subflow_input) {");
         childSource += "\n} // namespace " + ns + "\n\n";
 
-        std::vector<std::pair<std::string, std::string>> outputPaths;
+        struct SubflowOutput {
+            std::string name;
+            std::string first;
+            std::string second;
+        };
+        std::vector<SubflowOutput> outputPaths;
         bool hasOutputNode = false;
         for (const auto& pair : child.getNodes()) {
             const auto& childNode = pair.second;
@@ -1389,7 +1394,11 @@ std::map<std::string, std::string> TaskflowGenerator::generateSubflowSources(con
                 src = childNode.outputSettings.value("sourcePath", std::string());
                 dst = childNode.outputSettings.value("destinationPath", std::string());
             }
-            if (!src.empty() || !dst.empty()) outputPaths.emplace_back(src, dst);
+            if (!src.empty() || !dst.empty()) {
+                outputPaths.push_back({
+                    childNode.label.empty() ? childNode.id : childNode.label, src, dst
+                });
+            }
         }
         if (!hasOutputNode) {
             for (const auto& pair : child.getNodes()) {
@@ -1397,10 +1406,18 @@ std::map<std::string, std::string> TaskflowGenerator::generateSubflowSources(con
                 if (childNode.type == core::TaskflowNodeType::Agent ||
                     childNode.type == core::TaskflowNodeType::Interaction ||
                     childNode.type == core::TaskflowNodeType::Mcp) {
-                    outputPaths.emplace_back(".arestrix/out/" + childNode.id + ".txt", std::string());
+                    outputPaths.push_back({
+                        childNode.label.empty() ? childNode.id : childNode.label,
+                        ".arestrix/out/" + childNode.id + ".txt",
+                        std::string()
+                    });
                 }
             }
         }
+
+        const bool structuredPipeline = node.pipelineInterface.is_object() &&
+            node.pipelineInterface.contains("outputs") &&
+            node.pipelineInterface["outputs"].is_array();
 
         std::ostringstream wrapper;
         wrapper << "extern \"C\" const char* " << fn << "_run(const char* input) {\n";
@@ -1408,19 +1425,43 @@ std::map<std::string, std::string> TaskflowGenerator::generateSubflowSources(con
         wrapper << "  if (" << ns << "::arx_main(0, nullptr, arx_input) != 0) return nullptr;\n";
         wrapper << "  static thread_local std::string arx_result;\n";
         wrapper << "  arx_result.clear();\n";
-        wrapper << "  auto arx_append = [&](const std::string& first, const std::string& second) {\n";
-        wrapper << "    if (arx_result.size() >= 16000 || (first.empty() && second.empty())) return;\n";
+        wrapper << "  auto arx_read_output = [&](const std::string& first, const std::string& second) -> std::string {\n";
+        wrapper << "    if (first.empty() && second.empty()) return std::string();\n";
         wrapper << "    std::ifstream in(first.empty() ? second : first, std::ios::binary);\n";
         wrapper << "    if (!in && !second.empty()) in.open(second, std::ios::binary);\n";
-        wrapper << "    if (!in) return;\n";
-        wrapper << "    std::ostringstream data; data << in.rdbuf(); std::string text = data.str();\n";
-        wrapper << "    if (text.size() > 16000 - arx_result.size()) text.resize(16000 - arx_result.size());\n";
-        wrapper << "    arx_result += text;\n";
+        wrapper << "    if (!in) return std::string();\n";
+        wrapper << "    std::ostringstream data; data << in.rdbuf(); return data.str();\n";
         wrapper << "  };\n";
-        for (const auto& [first, second] : outputPaths) {
-            wrapper << "  arx_append(" << cppString(first) << ", " << cppString(second) << ");\n";
+        if (structuredPipeline) {
+            wrapper << "  taskforge::Json arx_pipeline = taskforge::Json::object();\n";
+            wrapper << "  arx_pipeline[\"kind\"] = \"pipeline\";\n";
+            wrapper << "  taskforge::Json arx_outputs = taskforge::Json::array();\n";
         }
-        wrapper << "  return arx_result.c_str();\n";
+        for (const auto& output : outputPaths) {
+            wrapper << "  {\n";
+            wrapper << "    std::string arx_content = arx_read_output(" << cppString(output.first) << ", "
+                    << cppString(output.second) << ");\n";
+            wrapper << "    if (arx_result.size() < 16000 && !arx_content.empty()) {\n";
+            wrapper << "      std::string arx_chunk = arx_content;\n";
+            wrapper << "      if (arx_chunk.size() > 16000 - arx_result.size()) arx_chunk.resize(16000 - arx_result.size());\n";
+            wrapper << "      arx_result += arx_chunk;\n";
+            wrapper << "    }\n";
+            if (structuredPipeline) {
+                const std::string path = !output.first.empty() ? output.first : output.second;
+                wrapper << "    arx_outputs.push_back(taskforge::Json{{\"name\", " << cppString(output.name)
+                        << "}, {\"path\", " << cppString(path) << "}, {\"content\", arx_content}});\n";
+            }
+            wrapper << "  }\n";
+        }
+        if (structuredPipeline) {
+            wrapper << "  arx_pipeline[\"output\"] = arx_result;\n";
+            wrapper << "  arx_pipeline[\"outputs\"] = arx_outputs;\n";
+            wrapper << "  static thread_local std::string arx_structured;\n";
+            wrapper << "  arx_structured = arx_pipeline.dump();\n";
+            wrapper << "  return arx_structured.c_str();\n";
+        } else {
+            wrapper << "  return arx_result.c_str();\n";
+        }
         wrapper << "}\n\n";
 
         code += "// Subflow " + targetId + "\n";

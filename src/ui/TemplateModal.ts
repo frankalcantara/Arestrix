@@ -648,6 +648,13 @@ export class TemplateModal {
       inputs: [{ id: callInputId, name: 'in', direction: 'input', type: 'flow' }],
       outputs: [
         { id: callOutputId, name: 'out', direction: 'output', type: 'flow' },
+        ...(tpl.pipelineInterface?.outputs || []).map((output, index) => ({
+          id: `${callId}_out_data_${index}`,
+          name: output.name,
+          direction: 'output' as const,
+          type: 'data' as const,
+          dataType: 'std::string'
+        })),
         { id: callPortId, name: 'call', direction: 'output', type: 'call' }
       ],
       parameters: {},
@@ -669,6 +676,7 @@ export class TemplateModal {
       outputs: [{ id: targetOutputId, name: 'out', direction: 'output', type: 'flow' }],
       parameters: {},
       childGraph: JSON.parse(JSON.stringify(tpl.childGraph)),
+      pipelineInterface: tpl.pipelineInterface ? JSON.parse(JSON.stringify(tpl.pipelineInterface)) : undefined,
       hidden: true,
       requiredHeaders: tpl.requiredHeaders
     };

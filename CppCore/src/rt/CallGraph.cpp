@@ -8,6 +8,7 @@
 #include "util/Json.hpp"
 
 #include <atomic>
+#include <cctype>
 #include <cstdlib>
 #include <map>
 #include <mutex>
@@ -35,6 +36,21 @@ struct Registry {
 Registry& registry() {
     static Registry instance;
     return instance;
+}
+
+std::string outputSlug(const std::string& name) {
+    std::string slug;
+    slug.reserve(name.size());
+    for (char c : name) {
+        const unsigned char uc = static_cast<unsigned char>(c);
+        if (std::isalnum(uc)) slug.push_back(static_cast<char>(std::tolower(uc)));
+        else if (c == '-' || c == '_') slug.push_back(c);
+        else if (!slug.empty() && slug.back() != '_') slug.push_back('_');
+    }
+    while (!slug.empty() && slug.back() == '_') slug.pop_back();
+    if (slug.empty()) slug = "output";
+    if (slug.size() > 48) slug.resize(48);
+    return slug;
 }
 
 int envLimit(const char* name, int fallback) {
@@ -407,6 +423,14 @@ std::string runFlowCall(const std::string& nodeId, const std::string& label,
         auto inner = jsonutil::tryParse(text);
         if (inner && inner->is_object() && inner->contains("text") && (*inner)["text"].is_string()) {
             text = (*inner)["text"].str();
+        }
+    }
+    if (kind == "pipeline" && parsed->contains("outputs") && (*parsed)["outputs"].is_array()) {
+        for (const auto& output : (*parsed)["outputs"]) {
+            if (!output.is_object()) continue;
+            const std::string name = output.value("name", std::string("output"));
+            const std::string content = output.value("content", std::string());
+            writeNodeOutput(nodeId + "." + outputSlug(name), content);
         }
     }
     writeNodeOutput(nodeId, text);
