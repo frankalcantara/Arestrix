@@ -774,6 +774,7 @@
       "agent_settings_title": "Advanced Agent Settings",
       "preset_agent_title": "Pre-configured agent",
       "preset_agent_desc": "This configuration came from the library and is read-only. To customise it, create a new agent vertex.",
+      "derive_preset": "Duplicate and edit",
       "pipeline_agent_title": "Composite agent (pipeline)",
       "pipeline_agent_desc": "This vertex represents a complete pipeline/project. The interface shows it as an agent; internally it runs the packaged pipeline.",
       "card_sandbox_title": "Sandbox & Isolation",

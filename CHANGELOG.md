@@ -40,10 +40,12 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   saved to the asset library, and are audited with the agent configuration in
   the hash. Library agents are inserted as **pre-configured** vertices: they use
   the normal `agent` runtime but their configuration is read-only in the
-  Inspector, keeping them distinct from the editable agent vertices. The first
-  built-ins are the Document Analyst, Content Reviewer and Research Synthesizer.
-  Custom templates can be deleted from the library and the full-agent preset now
-  asks for confirmation before replacing the graph.
+  Inspector, keeping them distinct from the editable agent vertices. A
+  pre-configured agent can be duplicated into an editable derived vertex without
+  changing the library preset. The first built-ins are the Document Analyst,
+  Content Reviewer and Research Synthesizer. Custom templates can be deleted
+  from the library and the full-agent preset now asks for confirmation before
+  replacing the graph.
 - Pipeline/project composition as a library asset. From the **Agents** section,
   the current pipeline can be saved to the library, another project's
   `pipelines/*.json` can be imported, or a project folder can be selected and

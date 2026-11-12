@@ -774,6 +774,7 @@
       "agent_settings_title": "Configurações Avançadas do Agente",
       "preset_agent_title": "Agente pré-configurado",
       "preset_agent_desc": "Esta configuração veio da biblioteca e é somente leitura. Para personalizar, crie um novo vértice agente.",
+      "derive_preset": "Duplicar e editar",
       "pipeline_agent_title": "Agente composto (pipeline)",
       "pipeline_agent_desc": "Este vértice representa um pipeline/projeto completo. A interface o mostra como agente; internamente ele executa o pipeline empacotado.",
       "card_sandbox_title": "Sandbox & Isolamento",

@@ -1,7 +1,7 @@
 import { Graph } from '../core/Graph.ts';
 import { INodeData, IPort, ISwitchSettings, SwitchMode, defaultSwitchSettings, IMcpVertexSettings, defaultMcpSettings, IOutputSettings, defaultOutputSettings, OutputArtifactType, defaultCallSettings, IInteractionSettings, IFormField, FormFieldType, defaultInteractionSettings, ICallVertexSettings, defaultCallVertexSettings } from '../core/types.ts';
 import { EventBus } from '../core/EventBus.ts';
-import { RemoveNodeCommand, RemoveEdgeCommand, UpdateNodeCommand, CompoundCommand } from '../core/history/GraphCommands.ts';
+import { RemoveNodeCommand, RemoveEdgeCommand, UpdateNodeCommand, CompoundCommand, AddNodeCommand } from '../core/history/GraphCommands.ts';
 import { AgentTemplateRegistry } from '../core/templates/AgentTemplateRegistry.ts';
 import { t, translateMcpError } from '../i18n/index.ts';
 
@@ -370,6 +370,25 @@ export class Inspector {
   /**
    * Renderiza propriedades gerais do diagrama quando nenhum nó está selecionado
    */
+  private derivePresetAgent(node: INodeData): void {
+    const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+    const copy: INodeData = JSON.parse(JSON.stringify(node));
+    copy.id = `${node.id}_edit_${stamp}`;
+    copy.label = `${node.label} (editável)`;
+    copy.position = {
+      x: node.position.x + 40,
+      y: node.position.y + 40,
+      z: node.position.z ?? 0
+    };
+    copy.presetLocked = false;
+    delete copy.presetId;
+    delete copy.templateId;
+    copy.inputs = copy.inputs.map((port, index) => ({ ...port, id: `${copy.id}_in_${index}` }));
+    copy.outputs = copy.outputs.map((port, index) => ({ ...port, id: `${copy.id}_out_${index}` }));
+    this.graph.commandManager.execute(new AddNodeCommand(this.graph, copy));
+    this.bus.emit('node:selected', copy);
+  }
+
   private renderEmpty(): void {
     const meta = this.graph.getMetadata();
     const hiddenIds = new Set(this.graph.getAllNodes().filter(n => n.hidden).map(n => n.id));
@@ -589,6 +608,11 @@ export class Inspector {
             <div class="properties-note properties-note--info" style="margin-bottom: 10px;">
               <strong>${t('inspector.node_view.preset_agent_title', 'Agente pré-configurado')}</strong>
               <div>${t('inspector.node_view.preset_agent_desc', 'Esta configuração veio da biblioteca e é somente leitura. Para personalizar, crie um novo vértice agente.')}</div>
+              ${node.presentation !== 'agent' ? `
+                <button id="btn-derive-preset-agent" class="btn btn-secondary" style="margin-top: 8px;">
+                  ${t('inspector.node_view.derive_preset', 'Duplicar e editar')}
+                </button>
+              ` : ''}
             </div>
           ` : ''}
 
@@ -692,6 +716,9 @@ export class Inspector {
     });
     this.container.querySelector('#btn-open-node-skills')?.addEventListener('click', () => {
       this.bus.emit('node:open-skills-modal', node.id);
+    });
+    this.container.querySelector('#btn-derive-preset-agent')?.addEventListener('click', () => {
+      this.derivePresetAgent(node);
     });
 
     // Subflow
