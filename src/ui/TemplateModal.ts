@@ -413,19 +413,29 @@ export class TemplateModal {
 
     // Salvar o pipeline atual como ativo composto (apresentado como agente)
     this.overlay.querySelector('#btn-save-pipeline-library')?.addEventListener('click', () => {
-      const template = this.registry.saveGraphAsPipelineTemplate(this.graph);
-      const json = this.registry.exportTemplateAsJSON(template.id);
-      if (!json) return;
-      void this.libraryService.saveTemplateToLibrary(JSON.parse(json), { scope: 'workspace' }).then(asset => {
-        globalEventBus.emit('notification:show', {
-          severity: asset ? 'success' : 'warning',
-          title: t('template_modal.btn_save_pipeline', 'Salvar pipeline atual na biblioteca'),
-          message: asset
-            ? t('template_modal.pipeline_saved', 'Pipeline salvo na biblioteca como agente visual.')
-            : t('template_modal.pipeline_save_failed', 'Não foi possível salvar o pipeline na biblioteca.')
+      try {
+        const template = this.registry.saveGraphAsPipelineTemplate(this.graph);
+        const json = this.registry.exportTemplateAsJSON(template.id);
+        if (!json) return;
+        void this.libraryService.saveTemplateToLibrary(JSON.parse(json), { scope: 'workspace' }).then(asset => {
+          globalEventBus.emit('notification:show', {
+            severity: asset ? 'success' : 'warning',
+            title: t('template_modal.btn_save_pipeline', 'Salvar pipeline atual na biblioteca'),
+            message: asset
+              ? t('template_modal.pipeline_saved', 'Pipeline salvo na biblioteca como agente visual.')
+              : t('template_modal.pipeline_save_failed', 'Não foi possível salvar o pipeline na biblioteca.')
+          });
+          if (asset) this.render();
         });
-        if (asset) this.render();
-      });
+      } catch (error: any) {
+        globalEventBus.emit('notification:show', {
+          severity: 'error',
+          title: t('template_modal.btn_save_pipeline', 'Salvar pipeline atual na biblioteca'),
+          message: t('template_modal.pipeline_pack_failed', 'Não foi possível empacotar o pipeline: {{error}}', {
+            error: error?.message || String(error)
+          })
+        });
+      }
     });
 
     // Importar um pipeline de outro projeto como ativo composto

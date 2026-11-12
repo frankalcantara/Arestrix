@@ -982,6 +982,7 @@
     "btn_import_pipeline": "Import pipeline (.json)",
     "pipeline_imported": "Pipeline imported and saved to the library.",
     "pipeline_import_failed": "Could not import the pipeline: {{error}}",
+    "pipeline_pack_failed": "Could not package the pipeline: {{error}}",
     "pipeline_saved": "Pipeline saved to the library as a visual agent.",
     "pipeline_save_failed": "Could not save the pipeline to the library.",
     "pipeline_inserted": "Pipeline \"{{name}}\" inserted as a visual agent.",

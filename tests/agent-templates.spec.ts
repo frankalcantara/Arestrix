@@ -278,6 +278,20 @@ describe('Fase 4: Catalogo de Templates de Agentes & Sistema de Plugins Dinamico
 
       expect(() => registry.importGraphAsPipelineTemplate({} as any, 'Inválido'))
         .toThrow(/nodes e edges/);
+
+      const withCall = graph.toJSON();
+      withCall.edges.push({ id: 'call-1', sourceNodeId: 'x', sourcePortId: 'x_out', targetNodeId: 'x', targetPortId: 'x_in', kind: 'call' });
+      expect(() => registry.importGraphAsPipelineTemplate(withCall, 'Com chamada'))
+        .toThrow(/arestas de chamada/);
+
+      const withNested = graph.toJSON();
+      withNested.nodes.push({
+        id: 'nested', label: 'Nested', type: 'subflow', position: { x: 0, y: 0 },
+        inputs: [], outputs: [], parameters: {},
+        childGraph: { version: '1.0.0', metadata: {} as any, nodes: [{ id: 'inner' } as any], edges: [] }
+      });
+      expect(() => registry.importGraphAsPipelineTemplate(withNested, 'Com subflow'))
+        .toThrow(/subflows aninhados/);
     });
   });
 });

@@ -302,6 +302,13 @@ export class AgentTemplateRegistry {
     if (schema.nodes.length === 0) {
       throw new Error('Pipeline vazio: não há vértices para importar.');
     }
+    if (schema.edges.some(edge => edge.kind === 'call')) {
+      throw new Error('Este pipeline contém arestas de chamada internas. O empacotamento v1 ainda não suporta chamadas dentro do pipeline.');
+    }
+    if (schema.nodes.some(node => (node.type === 'subflow' || node.type === 'module') &&
+        Array.isArray(node.childGraph?.nodes) && node.childGraph!.nodes.length > 0)) {
+      throw new Error('Este pipeline contém subflows aninhados. O empacotamento v1 ainda não suporta subflows dentro do pipeline.');
+    }
     const metadata = schema.metadata;
     let id: string;
     do {

@@ -39,7 +39,9 @@
 > pode ser importado diretamente. A importação cria um único vértice com
 > apresentação de `agent` e um subflow interno oculto. O runtime continua usando
 > o mecanismo existente de call/subflow: a interface vê um agente, mas o grafo
-> permanece um pipeline internamente.
+> permanece um pipeline internamente. Pipelines com subflows aninhados ou
+> chamadas internas são rejeitados na importação com mensagem explícita até a
+> limitação v1 do gerador ser removida.
 >
 > **Fase 5 entregue:** fonte GitHub real via endpoint C++ `fetch_library_source`, commit pin,
 > leitura de manifesto/árvore sem baixar blobs, sincronização de candidatos como `PENDING`,
