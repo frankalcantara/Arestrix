@@ -268,6 +268,11 @@ def run_e2e() -> list[str]:
     elif not verify_step("e2e advanced memory",
                          [sys.executable, str(advanced), "--check", "--runs", "3"]):
         failed.append("e2e advanced memory")
+    claim_agent = ROOT / "scripts" / "e2e_memory_claim_agent.py"
+    if not claim_agent.exists():
+        print(f"[Verify] {claim_agent.name} ausente; pulando.")
+    elif not verify_step("e2e claim agent", [sys.executable, str(claim_agent)]):
+        failed.append("e2e claim agent")
     return failed
 
 

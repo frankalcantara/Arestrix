@@ -18,6 +18,12 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   deterministic harness (`scripts/memory_advanced_eval.py`) covering path
   serving, beam traversal, interdomain bridge hypotheses and local/frontier
   routing. Report: `docs/quality/memory-advanced-ab.md`.
+- Claim-extraction agent selector in File → Properties → Project → Memory. The
+  active pipeline's agent nodes are registered in `AssistantSession` and listed
+  through `memory_claim_agents`; the target is stored as `{ id, graph, node }`,
+  with an explicit default-model fallback. `memory claims extract` registers the
+  project pipeline before running, and the extraction uses one model call
+  without tools so `--json` output stays clean.
 
 ### Fixed
 

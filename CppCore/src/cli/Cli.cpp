@@ -27,6 +27,7 @@
 #include <unistd.h>
 #endif
 
+#include "assistant/AssistantSession.hpp"
 #include "build/BuildService.hpp"
 #include "compiler/TaskflowGenerator.hpp"
 #include "core/Graph.hpp"
@@ -1352,6 +1353,16 @@ int runMemory(const std::vector<std::string>& args) {
         }
 
         if (command == "claims") {
+            std::error_code pipelineEc;
+            const fs::path pipelinePath = root / "pipelines" / "main.json";
+            if (fs::is_regular_file(pipelinePath, pipelineEc)) {
+                taskforge::Json graph;
+                std::string graphError;
+                if (readJsonFile(pipelinePath, graph, graphError)) {
+                    taskforge::assistant::registerStudioClaimAgentsFromGraph(
+                        graph, "pipelines/main.json");
+                }
+            }
             auto config = taskforge::memory::MemoryClaimExtractor::configFromJson(memorySettings);
             if (!config.enabled) {
                 std::cerr << "memory.claimExtraction esta desligado\n";

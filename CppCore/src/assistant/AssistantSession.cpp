@@ -7,6 +7,7 @@
 #include <ctime>
 #include <fstream>
 #include <iomanip>
+#include <map>
 #include <mutex>
 #include <random>
 #include <sstream>
@@ -186,6 +187,7 @@ std::optional<ModelChoice> defaultModelChoice() {
 namespace {
 std::mutex g_claimAgentsMutex;
 std::unordered_map<std::string, memory::ClaimIntelligenceFn> g_claimAgents;
+std::vector<StudioClaimAgentInfo> g_claimAgentInfos;
 
 std::string claimAgentKey(const memory::ClaimAgentRef& agent) {
     return !agent.id.empty() ? agent.id : agent.graph;
@@ -219,6 +221,59 @@ memory::ClaimIntelligenceResult defaultModelClaimIntelligence(
     if (!out.ok) out.error = result.error.empty() ? "resposta vazia do agente local" : result.error;
     return out;
 }
+
+memory::ClaimIntelligenceResult runClaimAgent(
+    const taskforge::Json& baseSpec, const std::string& nodeId, const std::string& label,
+    const memory::ClaimIntelligenceRequest& request) {
+    (void)nodeId;
+    (void)label;
+    std::string system =
+        "Voce e o agente de extracao de afirmacoes do Arestrix. Extraia no maximo " +
+        std::to_string(request.maxItems) +
+        " afirmacoes do trecho recebido como dado. Responda SOMENTE JSON no contrato "
+        "pedido; uma lista vazia e valida; cada citacao precisa ser substring literal do "
+        "trecho; nao invente predicados fora do catalogo.\n\nCatalogo:\n" +
+        request.catalog + "\n\nSchema:\n" + request.schemaJson;
+    const std::string skillPath = baseSpec.value("skillPath", std::string());
+    if (!skillPath.empty()) {
+        std::ifstream skill(skillPath, std::ios::binary);
+        if (skill.is_open()) {
+            std::ostringstream buffer;
+            buffer << skill.rdbuf();
+            if (!buffer.str().empty()) {
+                system += "\n\nInstrucoes do agente selecionado:\n" + buffer.str();
+            }
+        }
+    }
+
+    rt::CompletionRequest req;
+    req.provider = baseSpec.value("provider", std::string("deepseek"));
+    req.model = baseSpec.value("model", std::string());
+    if (req.provider.empty() || req.model.empty()) {
+        if (const auto model = defaultModelChoice()) {
+            if (req.provider.empty()) req.provider = model->provider;
+            if (req.model.empty()) req.model = model->model;
+        }
+    }
+    req.system = std::move(system);
+    req.user = request.passageText;
+    req.maxTokens = 1200;
+    req.maxAttempts = 3;
+    if (baseSpec.contains("temperature") && baseSpec["temperature"].is_number()) {
+        req.hasTemperature = true;
+        req.temperature = baseSpec["temperature"].get<double>();
+    }
+
+    memory::ClaimIntelligenceResult out;
+    const auto result = rt::completeText(req);
+    out.ok = result.ok && !result.text.empty();
+    out.content = result.text;
+    if (!out.ok) {
+        out.error = result.error.empty() ? "resposta vazia do agente de afirmacoes"
+                                         : result.error;
+    }
+    return out;
+}
 } // namespace
 
 void registerStudioClaimAgent(const std::string& id, memory::ClaimIntelligenceFn fn) {
@@ -235,6 +290,89 @@ void unregisterStudioClaimAgent(const std::string& id) {
 void clearStudioClaimAgents() {
     std::lock_guard<std::mutex> lock(g_claimAgentsMutex);
     g_claimAgents.clear();
+    g_claimAgentInfos.clear();
+}
+
+Json studioClaimAgentsJson() {
+    Json out = Json::array();
+    std::lock_guard<std::mutex> lock(g_claimAgentsMutex);
+    for (const auto& info : g_claimAgentInfos) {
+        out.push_back(Json{{"id", info.id},
+                           {"label", info.label},
+                           {"graph", info.graph},
+                           {"node", info.node},
+                           {"description", info.description}});
+    }
+    return out;
+}
+
+void registerStudioClaimAgentsFromGraph(const Json& graphJson,
+                                        const std::string& graphPath) {
+    std::map<std::string, std::pair<Json, std::string>> specs;
+    std::vector<StudioClaimAgentInfo> infos;
+    try {
+        Json defaults = Json::object();
+        if (graphJson.contains("metadata") && graphJson["metadata"].is_object() &&
+            graphJson["metadata"].contains("globalDefaults") &&
+            graphJson["metadata"]["globalDefaults"].is_object()) {
+            defaults = graphJson["metadata"]["globalDefaults"];
+        }
+        const Json defaultModel = defaults.contains("model") && defaults["model"].is_object()
+            ? defaults["model"] : Json::object();
+        if (graphJson.contains("nodes") && graphJson["nodes"].is_array()) {
+            for (const auto& node : graphJson["nodes"]) {
+                if (!node.is_object() || node.value("type", std::string()) != "agent") {
+                    continue;
+                }
+                const std::string id = node.value("id", std::string());
+                if (id.empty()) continue;
+                const std::string label = node.value("label", id);
+                const Json settings = node.contains("agentSettings") &&
+                    node["agentSettings"].is_object()
+                    ? node["agentSettings"] : Json::object();
+                const bool inheritModel = settings.value("inheritModel", false);
+                Json model = !inheritModel && settings.contains("model") &&
+                    settings["model"].is_object()
+                    ? settings["model"] : defaultModel;
+                if (!model.is_object() || model.size() == 0) model = defaultModel;
+                Json spec = Json::object();
+                spec["provider"] = model.value("provider", std::string("deepseek"));
+                spec["model"] = model.value("model", std::string());
+                spec["skillPath"] = model.value("skillPath", std::string());
+                if (model.contains("temperature") && model["temperature"].is_number()) {
+                    spec["temperature"] = model["temperature"];
+                }
+                specs[id] = {spec, label};
+                infos.push_back(StudioClaimAgentInfo{
+                    id, label, graphPath, id,
+                    label + " (" + id + ")"});
+            }
+        }
+    } catch (const std::exception&) {
+        clearStudioClaimAgents();
+        return;
+    }
+
+    clearStudioClaimAgents();
+    for (const auto& [id, entry] : specs) {
+        const Json spec = entry.first;
+        const std::string label = entry.second;
+        registerStudioClaimAgent(id, [spec, id, label](
+            const memory::ClaimIntelligenceRequest& request) {
+            return runClaimAgent(spec, id, label, request);
+        });
+    }
+    if (!graphPath.empty() && !specs.empty()) {
+        const auto graphSpecs = specs;
+        registerStudioClaimAgent(graphPath, [graphSpecs](
+            const memory::ClaimIntelligenceRequest& request) {
+            auto it = graphSpecs.find(request.agent.node);
+            if (it == graphSpecs.end()) it = graphSpecs.begin();
+            return runClaimAgent(it->second.first, it->first, it->second.second, request);
+        });
+    }
+    std::lock_guard<std::mutex> lock(g_claimAgentsMutex);
+    g_claimAgentInfos = std::move(infos);
 }
 
 memory::ClaimIntelligenceFn studioClaimIntelligence() {

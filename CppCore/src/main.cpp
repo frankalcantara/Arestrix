@@ -1237,11 +1237,14 @@ void ui_call_mcp_tool(webui::window::event* e) {
 }
 
 // Wrapper de comunicação JS -> C++ (Criar Projeto)
+void refreshStudioClaimAgentsFromActiveProject();
+
 void ui_create_project(webui::window::event* e) {
     std::string jsonStr = e->get_string();
     try {
         auto manifest = taskforge::jsonutil::parse(jsonStr).get<taskforge::project::ProjectManifest>();
         bool ok = taskforge::project::ProjectManager::getInstance().createProject(manifest);
+        if (ok) refreshStudioClaimAgentsFromActiveProject();
         e->return_bool(ok);
     } catch (const std::exception& ex) {
         std::cerr << "[C++ Erro] ui_create_project: " << ex.what() << "\n";
@@ -1253,6 +1256,7 @@ void ui_create_project(webui::window::event* e) {
 void ui_load_project(webui::window::event* e) {
     std::string pathOrDir = e->get_string();
     bool ok = taskforge::project::ProjectManager::getInstance().loadProject(pathOrDir);
+    if (ok) refreshStudioClaimAgentsFromActiveProject();
     e->return_bool(ok);
 }
 
@@ -3041,6 +3045,7 @@ public:
             return std::nullopt;
         }
         auto current = pm.getCurrentProject();
+        refreshStudioClaimAgentsFromActiveProject();
         return readMainGraph(current.rootPath, current);
     }
 
@@ -3051,6 +3056,7 @@ public:
             return std::nullopt;
         }
         auto current = pm.getCurrentProject();
+        refreshStudioClaimAgentsFromActiveProject();
         return readMainGraph(current.rootPath, current);
     }
 
@@ -3065,6 +3071,7 @@ public:
             return false;
         }
         f << schema.dump();
+        taskforge::assistant::registerStudioClaimAgentsFromGraph(schema, "pipelines/main.json");
         return true;
     }
 
@@ -3331,6 +3338,11 @@ void ui_assistant_status(webui::window::event* e) {
     e->return_string(taskforge::assistant::assistantStatus().dump());
 }
 
+void ui_memory_claim_agents(webui::window::event* e) {
+    refreshStudioClaimAgentsFromActiveProject();
+    e->return_string(taskforge::assistant::studioClaimAgentsJson().dump());
+}
+
 void ui_assistant_sessions(webui::window::event* e) {
     e->return_string(SessionStore(assistantProjectRoot()).list().dump());
 }
@@ -3370,6 +3382,7 @@ void ui_assistant_send(webui::window::event* e) {
         auto loaded = sessionId.empty() ? std::nullopt : store.load(sessionId);
         taskforge::assistant::Session session = loaded ? *loaded : SessionStore::create();
         taskforge::Json graph = req.contains("graph") ? req.at("graph") : taskforge::Json();
+        taskforge::assistant::registerStudioClaimAgentsFromGraph(graph, "pipelines/main.json");
         std::string locale = req.value("locale", std::string("pt-BR"));
 
         std::thread([session, root, text, graph, locale]() mutable {
@@ -3440,6 +3453,27 @@ void ui_assistant_cancel(webui::window::event* e) {
 }
 
 } // namespace
+
+void refreshStudioClaimAgentsFromActiveProject() {
+    auto& pm = taskforge::project::ProjectManager::getInstance();
+    if (!pm.hasActiveProject()) {
+        taskforge::assistant::clearStudioClaimAgents();
+        return;
+    }
+    const auto current = pm.getCurrentProject();
+    taskforge::Json graph = taskforge::Json::object();
+    std::error_code ec;
+    const std::filesystem::path file =
+        std::filesystem::path(current.rootPath) / "pipelines" / "main.json";
+    if (std::filesystem::is_regular_file(file, ec)) {
+        auto parsed = taskforge::jsonutil::tryParse(taskforge::jsonutil::readFile(file));
+        if (parsed && parsed->is_object()) graph = *parsed;
+    }
+    if (!graph.is_object()) {
+        graph = taskforge::assistant::GraphDocument::emptySchema(current.name, current.projectId);
+    }
+    taskforge::assistant::registerStudioClaimAgentsFromGraph(graph, "pipelines/main.json");
+}
 
 
 int main(int argc, char** argv) {
@@ -3562,6 +3596,7 @@ int main(int argc, char** argv) {
     win.bind("stop_pipeline", ui_stop_pipeline);
     win.bind("answer_interaction", ui_answer_interaction);
     win.bind("assistant_status", ui_assistant_status);
+    win.bind("memory_claim_agents", ui_memory_claim_agents);
     win.bind("assistant_sessions", ui_assistant_sessions);
     win.bind("assistant_session_load", ui_assistant_session_load);
     win.bind("assistant_session_delete", ui_assistant_session_delete);

@@ -7936,6 +7936,43 @@ TEST(memory_claim_agent_config_routes_to_registered_studio_agent) {
     CHECK(missing.error.find("nao registrado") != std::string::npos);
 }
 
+TEST(memory_claim_agents_from_graph_are_listed) {
+    using taskforge::Json;
+    const Json graph = Json::parse(R"JSON({
+      "version": "1.0.0",
+      "metadata": {
+        "graphName": "ClaimUi",
+        "projectId": "claim-ui",
+        "globalDefaults": {}
+      },
+      "nodes": [
+        {
+          "id": "claims",
+          "label": "Agente de Claims",
+          "type": "agent",
+          "position": {"x": 0, "y": 0},
+          "inputs": [],
+          "outputs": [],
+          "agentSettings": {
+            "model": {"provider": "local", "model": "local-claims"},
+            "memory": {"enabled": false}
+          }
+        }
+      ],
+      "edges": []
+    })JSON");
+    taskforge::assistant::registerStudioClaimAgentsFromGraph(
+        graph, "pipelines/main.json");
+    const Json agents = taskforge::assistant::studioClaimAgentsJson();
+    CHECK(agents.size() == 1);
+    CHECK(agents[0].value("id", std::string()) == "claims");
+    CHECK(agents[0].value("label", std::string()) == "Agente de Claims");
+    CHECK(agents[0].value("graph", std::string()) == "pipelines/main.json");
+    CHECK(agents[0].value("node", std::string()) == "claims");
+    taskforge::assistant::clearStudioClaimAgents();
+    CHECK(taskforge::assistant::studioClaimAgentsJson().size() == 0);
+}
+
 TEST(memory_claim_extractor_precision_on_annotated_fifty_passages) {
     using taskforge::memory::ClaimExtractorConfig;
     using taskforge::memory::MemoryClaimExtractor;

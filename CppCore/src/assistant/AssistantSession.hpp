@@ -80,6 +80,23 @@ void registerStudioClaimAgent(const std::string& id, memory::ClaimIntelligenceFn
 void unregisterStudioClaimAgent(const std::string& id);
 void clearStudioClaimAgents();
 
+// Alvos que a UI pode oferecer para a extracao de afirmacoes. Cada agente do
+// grafo ativo vira uma entrada; o alvo guarda o id do vertice, o caminho do
+// pipeline e o no, para que o projeto possa ser reaberto em outra maquina.
+struct StudioClaimAgentInfo {
+    std::string id;
+    std::string label;
+    std::string graph;
+    std::string node;
+    std::string description;
+};
+
+// Reconstroi o registro a partir do grafo do projeto. A chamada e idempotente:
+// troca os alvos anteriores pelos agentes do grafo recebido.
+void registerStudioClaimAgentsFromGraph(const taskforge::Json& graph,
+                                        const std::string& graphPath);
+taskforge::Json studioClaimAgentsJson();
+
 struct TurnIO {
     std::function<void(const Json&)> emit;          // evento para a interface
     std::function<bool(const Json&)> confirm;       // bloqueia ate o usuario responder; true = aceitou

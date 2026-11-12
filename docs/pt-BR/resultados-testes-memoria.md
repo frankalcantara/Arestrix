@@ -146,10 +146,11 @@ havia histórico (agora mantém o tier atual e apenas registra a sugestão).
 | Verificação | Resultado |
 | :--- | :--- |
 | Suíte C++ | aprovada, incluindo os testes de âncoras e do roteador |
-| Vitest | 629/629 |
+| Vitest | 630/630 |
 | Tutorial ponta a ponta | aprovado |
 | Exemplos 01–14 | 14/14 aprovados |
 | Corpus avançado (`--check`) | reproduzido |
+| Agente de claims (registro + extração) | e2e com provedor falso: 1 candidato, 1 extraído, 1 proposta, 0 falhas |
 | `check:secrets` | nenhum segredo ou dado pessoal |
 | `check:version` | 2.8.0 consistente |
 
@@ -175,9 +176,11 @@ havia histórico (agora mantém o tier atual e apenas registra a sugestão).
 8. **Embeddings reais.** Perfis e fingerprint existem, mas a validação de
    qualidade e latência com EmbeddingGemma 2 e Qwen3-Embedding-4B reais ainda
    deve ser registrada; o fallback lexical é o comportamento seguro.
-9. **UI do agente de extração de claims.** O contrato existe, mas
-   `registerStudioClaimAgent` só é chamado nos testes; qualquer alvo configurado
-   em produção falha com “agente de memoria ... nao registrado no Studio”.
+9. **UI do agente de extração de claims.** O registro/listagem, o seletor em
+   Propriedades, o salvamento por projeto e a extração via CLI estão
+   implementados e cobertos pelo e2e. Falta apenas a validação manual na janela
+   do Studio (trocar o alvo, salvar e reabrir o projeto).
+
 10. **Uma máquina.** Sincronização multi-máquina e coordenação de múltiplos
     workers continuam fora do escopo desta release.
 11. **Custo monetário.** Os relatórios medem tokens e latência, não preço em

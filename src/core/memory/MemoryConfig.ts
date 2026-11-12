@@ -38,6 +38,34 @@ export function claimExtractionEnabled(
   return !!value?.enabled;
 }
 
+export interface ClaimAgentTarget {
+  id?: string;
+  graph?: string;
+  node?: string;
+}
+
+/**
+ * Converte o valor do seletor de agente de claims para o contrato do projeto.
+ * Vazio remove o alvo (modelo padrao do Studio); JSON invalido tambem e tratado
+ * como ausencia de alvo, para o runtime falhar fechado em vez de apontar para
+ * um id arbitrario.
+ */
+export function claimAgentTargetFromForm(value: string | undefined): ClaimAgentTarget | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+    const target: ClaimAgentTarget = {};
+    for (const key of ['id', 'graph', 'node'] as const) {
+      const item = parsed[key];
+      if (typeof item === 'string' && item.trim()) target[key] = item.trim();
+    }
+    return Object.keys(target).length ? target : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** E15: os caminhos só são consolidados quando explicitamente ligados. */
 export function pathsEnabled(
   config?: { paths?: boolean | { enabled?: boolean } } | null

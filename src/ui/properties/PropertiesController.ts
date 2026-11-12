@@ -18,6 +18,7 @@ import { StudioCredentialsStore } from '../../core/settings/StudioCredentialsSto
 import { WorkspaceSettingsStore } from '../../core/settings/WorkspaceSettingsStore.ts';
 import { sanitizeEnvReferences } from '../../core/env/EnvironmentManager.ts';
 import { memoryScenarioPreset, type MemoryScenarioId } from '../../core/memory/MemoryScenarios.ts';
+import { claimAgentTargetFromForm } from '../../core/memory/MemoryConfig.ts';
 import type { IProjectSettings, IStudioCredentialsSnapshot, IStudioModelSettings, IStudioSettings, IWorkspaceSettings } from '../../core/settings/types.ts';
 import { PropertiesWindow } from './PropertiesWindow.ts';
 import { buildPropertiesScopeConfig, type IPropertiesContext } from './PropertiesData.ts';
@@ -247,6 +248,9 @@ export class PropertiesController {
     const claim = typeof current.claimExtraction === 'object' && current.claimExtraction
       ? current.claimExtraction
       : {};
+    const claimAgent = values.memoryClaimAgent !== undefined
+      ? claimAgentTargetFromForm(values.memoryClaimAgent)
+      : claim.agent;
     const memory = {
       ...current,
       ...(scenario && scenario !== 'custom' ? preset : {}),
@@ -269,7 +273,7 @@ export class PropertiesController {
         ? values.memoryLocalOnly === 'true'
         : Boolean(current.localOnly),
       claimExtraction: values.memoryClaimExtraction === 'true'
-        ? { ...claim, enabled: true }
+        ? { ...claim, enabled: true, ...(claimAgent ? { agent: claimAgent } : {}) }
         : false
     };
     return this.projectStore.saveDefaults({ memory: memory as any });

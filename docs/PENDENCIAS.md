@@ -21,7 +21,7 @@
 | Interruptores experimentais (`pathServing`, `traversal`, `bridges`, `routing.mode`) | **Mecanismos medidos em corpus curado; padrões seguem `off`** |
 | Nível `institution` no `memory_inspect` do assistente | Pendente operacional |
 | Validação com provedores reais de embeddings | Pendente operacional |
-| Interface gráfica para configurar o agente de memória | Pendente de produto |
+| Interface gráfica para configurar o agente de memória | **Implementada; validação manual no Studio pendente** |
 | Laço de profiling (Tracy) e correção automática do código gerado via modelo padrão do Studio | Build opcional pronto; loop pendente |
 | Instrumentação do próprio Arestrix com Tracy e laço de auto-otimização | Build opcional pronto; instrumentação pendente |
 | Ciclo completo de testes e otimização de performance (C++, TypeScript, etc.) a cada release | Pendente de release |
@@ -198,17 +198,18 @@ comportamento seguro quando o provedor não está disponível.
 
 ### 4.4 Interface gráfica do agente de memória
 
-O contrato `memory.claimExtraction.agent` já aceita um id de agente do Studio ou
-`{ id, graph, node }` para um agente baseado em grafo. Falta um pré-requisito de
-backend: `registerStudioClaimAgent` só é chamado pelos testes, então
-`studioClaimIntelligence()` devolve `agente de memoria '<chave>' nao registrado no
-Studio` para qualquer alvo configurado em produção. Antes da tela, é preciso
-registrar os agentes/grafos do Studio no `AssistantSession` e expor uma listagem
-para a UI. Só então a tela deve escolher o alvo por projeto, mostrar o fallback
-para o modelo padrão e explicar o erro quando o alvo configurado não está
-disponível. A configuração de memória por projeto (cenários Consultar,
-Consultar e Decidir e Aprender com aprovação) já está implementada em
-Arquivo → Propriedades → Projeto → Memória.
+O alvo `memory.claimExtraction.agent` agora é registrado a partir dos agentes do
+pipeline ativo no `AssistantSession`, exposto pela listagem
+`memory_claim_agents` e editável em Arquivo → Propriedades → Projeto → Memória,
+com fallback explícito para o modelo padrão e aviso quando o alvo salvo não
+existe no pipeline atual. O CLI `memory claims extract` também registra o
+pipeline do projeto antes de executar.
+
+A validação automatizada cobre o registro/listagem e um e2e de extração com
+provedor HTTP falso (`scripts/e2e_memory_claim_agent.py`): o agente escolhido
+recebe o trecho, o catálogo e o schema, e a proposta de claim é gravada. Falta
+apenas a validação manual na janela do Studio (abrir Propriedades, trocar o alvo,
+salvar e reabrir o projeto).
 
 ### 4.5 Laço de observação de performance e correção automática no código gerado (Tracy + Modelo Padrão do Studio)
 

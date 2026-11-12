@@ -180,8 +180,9 @@ Runs claim extraction on demand over passages cited by approved executions. It
 requires `memory.claimExtraction` enabled and the Studio local agent available;
 memory sends the passage, catalog and output contract, and the local agent owns
 provider/model details. `memory.claimExtraction.agent` may select a project
-agent or graph; without it, the Studio default model is used. Maintenance uses
-the same path automatically. Proposals start pending and are reviewed through
+agent or graph; without it, the Studio default model is used. The command
+registers the agents from `pipelines/main.json` before running. Maintenance
+uses the same path automatically. Proposals start pending and are reviewed through
 `memory proposals`.
 
 `memory purge --drop-tombstones` removes the scope's tombstones together with

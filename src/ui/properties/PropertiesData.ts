@@ -584,6 +584,19 @@ function buildProject(context: IPropertiesContext): IPropertiesScopeConfig {
   const resolvedCodeMode = resolved?.codeMode;
   const resolvedMemory = resolved?.memory;
   const memory = ((resolvedMemory?.value || defaults.memory || {}) as Record<string, any>);
+  const claimAgentConfig = typeof memory.claimExtraction === 'object' && memory.claimExtraction
+    ? (memory.claimExtraction as Record<string, any>).agent
+    : undefined;
+  const claimAgentValue = claimAgentConfig
+    ? JSON.stringify(typeof claimAgentConfig === 'string'
+        ? { id: claimAgentConfig }
+        : claimAgentConfig)
+    : '';
+  const claimAgentLabel = claimAgentConfig
+    ? String((typeof claimAgentConfig === 'string'
+        ? claimAgentConfig
+        : claimAgentConfig.id || claimAgentConfig.graph || ''))
+    : '';
   const memoryScenario = memoryScenarioOf(memory);
   const memoryScenarioDescription = memoryScenario === 'custom'
     ? 'Configuração atual não corresponde a um cenário; altere os campos abaixo ou escolha um cenário para voltar.'
@@ -811,6 +824,14 @@ function buildProject(context: IPropertiesContext): IPropertiesScopeConfig {
               <span>${escapeHtml(label('label.memory_claim_extraction', 'Extração de afirmações'))}</span>
             </label>
           </div>
+          <div class="form-group" style="margin-top: 12px; max-width: 640px;">
+            <label class="form-label" for="properties-project-memory-claim-agent">${escapeHtml(label('label.memory_claim_agent', 'Agente de extração de afirmações'))}</label>
+            <select id="properties-project-memory-claim-agent" class="form-select" data-property-input="memoryClaimAgent">
+              <option value="">${escapeHtml(label('value.memory_claim_agent_default', 'Modelo padrão do Studio'))}</option>
+              ${claimAgentValue ? `<option value="${escapeHtml(claimAgentValue)}" selected>${escapeHtml(claimAgentLabel || label('value.memory_claim_agent_configured', 'Alvo configurado'))}</option>` : ''}
+            </select>
+            <div class="properties-hint" id="properties-project-memory-claim-agent-status">${escapeHtml(label('value.memory_claim_agent_loading', 'Carregando agentes do projeto...'))}</div>
+          </div>
         `,
         save: context.saveProjectMemory
           ? (values) => context.saveProjectMemory!(values)
@@ -818,6 +839,75 @@ function buildProject(context: IPropertiesContext): IPropertiesScopeConfig {
         bind: (root) => {
           const scenarioSelect = root.querySelector<HTMLSelectElement>('[data-property-input="memoryScenario"]');
           if (!scenarioSelect) return;
+          const claimAgentSelect = root.querySelector<HTMLSelectElement>('[data-property-input="memoryClaimAgent"]');
+          const claimAgentStatus = root.querySelector<HTMLElement>('#properties-project-memory-claim-agent-status');
+          const claimToggle = root.querySelector<HTMLInputElement>('[data-property-input="memoryClaimExtraction"]');
+          const syncClaimAgent = () => {
+            if (claimAgentSelect) claimAgentSelect.disabled = !claimToggle?.checked;
+          };
+          syncClaimAgent();
+          claimToggle?.addEventListener('change', syncClaimAgent);
+          if (claimAgentSelect) {
+            const webui = typeof window !== 'undefined' ? (window as any).webui : null;
+            const parse = (raw: any) => (typeof raw === 'string' ? JSON.parse(raw) : raw);
+            if (!webui || typeof webui.call !== 'function') {
+              if (claimAgentStatus) {
+                claimAgentStatus.textContent = label(
+                  'value.desktop_only', 'Disponível no app desktop');
+              }
+            } else {
+              const currentValue = claimAgentSelect.value;
+              Promise.resolve(webui.call('memory_claim_agents'))
+                .then((raw: any) => {
+                  const agents = parse(raw);
+                  const list = Array.isArray(agents) ? agents : [];
+                  const defaultLabel = label(
+                    'value.memory_claim_agent_default', 'Modelo padrão do Studio');
+                  const options = [`<option value="">${escapeHtml(defaultLabel)}</option>`];
+                  const values = new Set<string>();
+                  for (const agent of list) {
+                    const value = JSON.stringify({
+                      id: String(agent?.id || ''),
+                      graph: String(agent?.graph || ''),
+                      node: String(agent?.node || '')
+                    });
+                    values.add(value);
+                    const text = String(agent?.label || agent?.id || agent?.node || '');
+                    options.push(`<option value="${escapeHtml(value)}">${escapeHtml(text)}</option>`);
+                  }
+                  claimAgentSelect.innerHTML = options.join('');
+                  if (currentValue && !values.has(currentValue)) {
+                    const option = document.createElement('option');
+                    option.value = currentValue;
+                    option.textContent = label(
+                      'value.memory_claim_agent_unavailable',
+                      'Alvo configurado (não encontrado no projeto)');
+                    claimAgentSelect.appendChild(option);
+                  }
+                  claimAgentSelect.value = currentValue;
+                  if (claimAgentStatus) {
+                    claimAgentStatus.textContent = currentValue && !values.has(currentValue)
+                      ? label(
+                          'value.memory_claim_agent_unavailable_hint',
+                          'O alvo salvo não existe no pipeline atual. O runtime falha fechado até ele ser registrado.')
+                      : list.length
+                        ? label('value.memory_claim_agent_count', 'Agentes disponíveis: {count}')
+                          .replace('{count}', String(list.length))
+                        : label(
+                            'value.memory_claim_agent_none',
+                            'Nenhum agente no pipeline atual; será usado o modelo padrão do Studio.');
+                  }
+                  syncClaimAgent();
+                })
+                .catch(() => {
+                  if (claimAgentStatus) {
+                    claimAgentStatus.textContent = label(
+                      'value.memory_claim_agent_load_failed',
+                      'Não foi possível carregar os agentes do projeto.');
+                  }
+                });
+            }
+          }
           const description = root.querySelector<HTMLElement>('#properties-project-memory-scenario-description');
           const customText = label(
             'value.memory_scenario_custom_hint',
@@ -857,11 +947,13 @@ function buildProject(context: IPropertiesContext): IPropertiesScopeConfig {
             setField('memoryEmbeddings', Boolean(preset.memory.embeddingEnabled));
             setField('memoryLocalOnly', Boolean(preset.memory.localOnly));
             setField('memoryClaimExtraction', Boolean(preset.memory.claimExtraction));
+            syncClaimAgent();
           });
           const advanced = new Set([
             'memoryMode', 'memoryBudget', 'memoryGateMode', 'memoryGateProvider',
             'memoryGateModel', 'memoryGateMaxSearches', 'memoryConsolidation',
-            'memoryEmbeddings', 'memoryLocalOnly', 'memoryClaimExtraction'
+            'memoryEmbeddings', 'memoryLocalOnly', 'memoryClaimExtraction',
+            'memoryClaimAgent'
           ]);
           root.querySelectorAll<HTMLElement>('[data-property-input]').forEach(element => {
             const name = element.getAttribute('data-property-input') || '';

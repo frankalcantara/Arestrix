@@ -60,6 +60,8 @@ describe('PropertiesData', () => {
     expect(memory!.content).toContain('data-property-input="memoryGateMode"');
     expect(memory!.content).toContain('data-property-input="memoryGateProvider"');
     expect(memory!.content).toContain('data-property-input="memoryGateModel"');
+    expect(memory!.content).toContain('data-property-input="memoryClaimAgent"');
+    expect(memory!.content).toContain('properties-project-memory-claim-agent');
     expect(memory!.content).toContain('data-property-input="memoryEnabled"');
   });
 

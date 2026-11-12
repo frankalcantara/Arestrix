@@ -148,10 +148,11 @@ history (it now keeps the current tier and only records the suggestion).
 | Check | Result |
 | :--- | :--- |
 | C++ suite | passed, including the anchor and router tests |
-| Vitest | 629/629 |
+| Vitest | 630/630 |
 | End-to-end tutorial | passed |
 | Examples 01–14 | 14/14 passed |
 | Advanced corpus (`--check`) | reproduced |
+| Claim agent (registration + extraction) | e2e with a fake provider: 1 candidate, 1 extracted, 1 proposal, 0 failures |
 | `check:secrets` | no secret or personal data |
 | `check:version` | 2.8.0 consistent |
 
@@ -177,9 +178,11 @@ history (it now keeps the current tier and only records the suggestion).
 8. **Real embeddings.** Profiles and fingerprints exist, but quality and latency
    validation with real EmbeddingGemma 2 and Qwen3-Embedding-4B models is still
    pending; lexical fallback remains the safe behaviour.
-9. **Claim-extraction agent UI.** The contract exists, but
-   `registerStudioClaimAgent` is only called in tests; any configured production
-   target fails with “agente de memoria ... nao registrado no Studio”.
+9. **Claim-extraction agent UI.** Registration/listing, the Properties selector,
+   per-project saving and CLI extraction are implemented and covered by the e2e.
+   Only manual validation in the Studio window remains (change the target, save
+   and reopen the project).
+
 10. **Single machine.** Multi-machine synchronisation and multi-worker
     coordination remain out of scope for this release.
 11. **Monetary cost.** Reports measure tokens and latency, not dollar price or

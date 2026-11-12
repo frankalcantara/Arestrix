@@ -23,7 +23,7 @@
 | Experimental switches (`pathServing`, `traversal`, `bridges`, `routing.mode`) | **Mechanisms measured on a curated corpus; defaults stay `off`** |
 | `institution` level in the assistant `memory_inspect` | Operational pending |
 | Validation with real embedding providers | Operational pending |
-| Studio UI to configure the memory agent | Product pending |
+| Studio UI to configure the memory agent | **Implemented; manual Studio validation pending** |
 | Performance profiling (Tracy) and automatic correction loop for generated code via the Studio default model | Optional build ready; loop pending |
 | Instrumentation of Arestrix itself with Tracy and self-optimization loop | Optional build ready; instrumentation pending |
 | Full, detailed performance testing and optimization cycle (C++, TypeScript, etc.) on every release | Release pending |
@@ -187,17 +187,18 @@ behavior when no provider is available.
 
 ### 4.4 Studio UI for the memory agent
 
-`memory.claimExtraction.agent` already accepts a Studio agent id or
-`{ id, graph, node }` for a graph-backed agent. A backend prerequisite is
-missing: `registerStudioClaimAgent` is only called by tests, so
-`studioClaimIntelligence()` returns `agente de memoria '<key>' nao registrado no
-Studio` for any target configured in production. Before the screen exists, the
-Studio agents/graphs must be registered in `AssistantSession` and exposed as a
-list to the UI. Only then should the screen choose that target per project,
-show the default-model fallback and explain the error when a configured target
-is unavailable. Project-level memory configuration (Consult, Consult and Decide,
-Learn with approval) is already implemented in File → Properties → Project →
-Memory.
+The `memory.claimExtraction.agent` target is now registered from the active
+pipeline's agent nodes in `AssistantSession`, exposed through the
+`memory_claim_agents` list and editable in File -> Properties -> Project -> Memory,
+with an explicit default-model fallback and a warning when the saved target no
+longer exists in the current pipeline. The `memory claims extract` CLI also
+registers the project pipeline before running.
+
+Automated validation covers registration/listing and an extraction e2e with a
+fake HTTP provider (`scripts/e2e_memory_claim_agent.py`): the selected agent
+receives the passage, catalog and schema, and the claim proposal is stored. Only
+manual validation in the Studio window remains (open Properties, change the
+target, save and reopen the project).
 
 ### 4.5 Performance observation and automatic correction loop for generated code (Tracy + Studio default model)
 
