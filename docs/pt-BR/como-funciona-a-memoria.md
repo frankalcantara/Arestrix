@@ -651,8 +651,7 @@ Qwen3-Embedding-4B truncado para 768 teve 0,813 e 8,5 s em CPU. Nos dois, o
 A memória, portanto, reduz o contexto **estático** que o projeto precisa enviar.
 A compactação de contexto agora também reduz o **histórico da conversa** de uma
 execução longa, mas o interruptor continua desligado por padrão até uma medição
-mais ampla com dados reais. O trabalho restante está registrado em
-[memory-pending.md](../en/memory-pending.md).
+mais ampla. O trabalho restante está registrado no [roadmap](roadmap.md).
 
 ## 9. Retenção, segurança e escopo
 
@@ -740,6 +739,7 @@ fontes/trechos, afirmações, lentes/facetas, caminhos, serviço de caminhos, tr
 pontes. Os interruptores novos continuam opt-in e desligados por padrão; a avaliação final está
 registrada em `tests/fixtures/memory-eval-v1-report.json`.
 
-A validação com provedores reais e a coordenação multi-processo são pendências operacionais. O
-harness do A/B está implementado em `memory ab run` e roda com o provedor simulado no e2e. Consulte
-[`PENDENCIAS.md`](../PENDENCIAS.md).
+A validação com embeddings reais foi concluída em endpoint local; ainda faltam
+um endpoint de produção, dados de cliente e coordenação multi-processo. O
+harness do A/B está implementado em `memory ab run` e roda com o provedor
+simulado no e2e. Consulte o [roadmap](roadmap.md).

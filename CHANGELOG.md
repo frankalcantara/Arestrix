@@ -482,7 +482,7 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 ### Pending
 
 - The memory plan (Phases A-C) is complete. Phase D (advanced multigraph: facets, domain knowledge,
-  claim paths and model routing) is a separate program outside this plan. See `docs/PENDENCIAS.md`.
+  claim paths and model routing) is a separate program outside this plan. See `docs/en/roadmap.md`.
 - The A/B execution harness, institution level in the Studio assistant and live embedding-provider
   validation are tracked there as operational pendings.
 

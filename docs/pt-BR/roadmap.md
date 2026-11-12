@@ -1,6 +1,6 @@
 # Roadmap e limitações conhecidas
 
-> **Aplica-se a:** Arestrix 2.8 (`2.8.0`) · Última revisão: 2026-11-11
+> **Aplica-se a:** Arestrix 2.8 (`2.8.0`) · Última revisão: 2026-11-12
 >
 > Esta página registra o que está intencionalmente incompleto e a ordem planejada para resolver. Não é
 > um compromisso de datas.
@@ -29,6 +29,19 @@
 - Os caminhos Linux existem, mas build, download/extração do runtime, router e gateway ainda não têm
   teste end-to-end no Linux.
 - O CI está desativado durante a estabilização da beta; a matriz de release ainda não é automatizada.
+
+### Performance e profiling (Tracy)
+
+- **F1 concluído:** build opcional `ARESTRIX_ENABLE_TRACY` (padrão `OFF`),
+  `CppCore/dev.py --tracy`, cliente Tracy estático e zona `agent.run` em
+  `CppCore/src/rt/Profiling.hpp`.
+- **F2–F5 pendentes:** zonas no código C++20 gerado pelo `TaskflowGenerator`;
+  instrumentação do núcleo (agente, memória, gateway, MCP e ponte WebUI);
+  captura headless com `tracy-capture`/`tracy-csvexport` e relatório
+  `scripts/profile_report.py`; e laço assistido pelo modelo padrão do Studio.
+- O ciclo obrigatório de profiling e benchmarking ainda não faz parte do gate de
+  release.
+- Plano detalhado: [`quality/tracy-profiling-plan.md`](../quality/tracy-profiling-plan.md).
 
 ### Distribuição
 
@@ -99,6 +112,10 @@ Ainda pendente:
   repetições com Jev foi concluída em 2026-11-12.
 - Coordenação entre múltiplos processos/instâncias do serviço institucional (fora do escopo desta
   release).
+- Validação de embeddings concluída em endpoint local; falta um endpoint de produção e dados de
+  cliente.
+- Extração do núcleo de memória para o módulo standalone Mnemosyne (avaliação concluída; migração
+  pendente).
 
 Limitações do serviço institucional e do background:
 

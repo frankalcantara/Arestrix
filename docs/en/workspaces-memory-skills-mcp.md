@@ -167,7 +167,8 @@ explicit, evidence-backed and audited. The project reads authorized workspace kn
 workspace does not read the project's private memory.
 
 The complete guide, with configuration, retention, security and a quick reference, is in
-[How memory works](how-memory-works.md). Deployment status is in [Pending items](pending.md).
+[How memory works](how-memory-works.md). Deployment status and gaps are in the
+[roadmap](roadmap.md).
 
 ### Examples
 

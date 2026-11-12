@@ -3,7 +3,9 @@
 > **Status:** F1 (build opcional) implementado e validado em 2026-11-11; F2–F5 pendentes.
 > **Escopo:** código C++20 gerado pelo `TaskflowGenerator` e o próprio Arestrix
 > (`CppCore`, `arestrix`, `arestrix-cli`, `arestrix-gateway` e `arestrix-memory`).
-> **Referências:** `docs/en/pending.md` §4.5–4.6 e `docs/PENDENCIAS.md` §4.5–4.6.
+> **Referências:** [`../pt-BR/roadmap.md`](../pt-BR/roadmap.md) §Performance e
+> profiling (Tracy) e [`../en/roadmap.md`](../en/roadmap.md) §Performance and
+> profiling (Tracy).
 
 ## 1. Objetivo
 

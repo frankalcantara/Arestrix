@@ -5,7 +5,7 @@
 > concluída em 2026-11-12 com Jev.
 > **Escopo:** porteiro de política da memória (`memory.gate`) e sua medição nas suítes
 > de paridade e de valor do A/B v2.
-> **Referências:** `docs/pt-BR/como-funciona-a-memoria.md`, `docs/PENDENCIAS.md` §4.1.
+> **Referências:** `docs/pt-BR/como-funciona-a-memoria.md`, `docs/pt-BR/roadmap.md`.
 
 > **Versão consolidada:** [Resultados dos testes de memória](../pt-BR/resultados-testes-memoria.md) ·
 > [English](../en/memory-test-results.md).

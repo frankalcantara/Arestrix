@@ -19,7 +19,6 @@
 | Run without the UI (CI, servers) | [`arestrix-cli`](en/arestrix-cli.md) | [`arestrix-cli`](pt-BR/arestrix-cli.md) |
 | Workspaces, memory, skills and MCP | [Workspaces, memory and MCP](en/workspaces-memory-skills-mcp.md) | [Workspaces, memória e MCP](pt-BR/workspaces-memoria-skills-mcp.md) |
 | How memory works in detail | [How memory works](en/how-memory-works.md) | [Como funciona a memória](pt-BR/como-funciona-a-memoria.md) |
-| Project-wide pending items | [Pending items](en/pending.md) | [Pendências](PENDENCIAS.md) |
 | Tour the interface | [Interface](en/interface.md) | [Interface](pt-BR/interface.md) |
 | Build, test and contribute | [Development](en/development.md) | [Desenvolvimento](pt-BR/desenvolvimento.md) |
 | Visual identity | [Brand](en/brand.md) | [Marca](pt-BR/marca.md) |

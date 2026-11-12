@@ -643,8 +643,8 @@ reindexing. Report:
 
 Memory reduces the **static** context a project must send. Context compaction now
 also reduces the **conversation history** of one long run, but the switch remains
-off by default until broader real-data measurement. The remaining work is tracked
-in [memory-pending.md](memory-pending.md).
+off by default until broader measurement. The remaining work is tracked in the
+[roadmap](roadmap.md).
 
 ## 9. Retention, security and scope
 
@@ -730,6 +730,7 @@ sources/passages, claims, lenses/facets, paths, path serving, traversal, routing
 switches remain opt-in and off by default; the final evaluation is recorded in
 `tests/fixtures/memory-eval-v1-report.json`.
 
-Validation with real providers and multi-process coordination are operational pending items. The A/B
-harness is implemented in `memory ab run` and runs with the simulated provider in the e2e. See
-[`pending.md`](pending.md).
+Real embedding validation is complete on a local endpoint; a production endpoint,
+customer data and multi-process coordination are still pending. The A/B harness
+is implemented in `memory ab run` and runs with the simulated provider in the
+e2e. See the [roadmap](roadmap.md).

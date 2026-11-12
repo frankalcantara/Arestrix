@@ -303,8 +303,8 @@ são proibidos.
 A compactação de histórico usando a memória existente foi implementada atrás de
 `memory.contextCompaction` (off por padrão) e validada no fixture DeepSeek. Falta
 uma medição A/B mais ampla antes de promover o switch. A pendência de migração
-para o módulo Mnemosyne continua registrada em
-[memory-pending.md](../en/memory-pending.md).
+para o módulo Mnemosyne continua registrada no
+[roadmap](../pt-BR/roadmap.md).
 
 1. O A/B v2 foi executado com DeepSeek real em 2026-11-11, incluindo a variante
    com validador dependente de memória (ON 1,000 × OFF 0,000; relatórios em

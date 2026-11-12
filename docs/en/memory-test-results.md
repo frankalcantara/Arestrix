@@ -14,7 +14,7 @@
 > [`routing-binary-ab.md`](../quality/routing-binary-ab.md) and
 > [`memory-embeddings-live.md`](../quality/memory-embeddings-live.md).
 >
-> **Operational pending items and limitations:** [`pending.md`](pending.md).
+> **Operational pending items and limitations:** [`roadmap.md`](roadmap.md).
 
 ## 1. Executive summary
 

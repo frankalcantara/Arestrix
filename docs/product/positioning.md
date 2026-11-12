@@ -56,6 +56,6 @@ Arestrix treats an agent pipeline as a **program**, not as a hosted automation:
 Arestrix 2.5 is the current release. The Studio runs on Windows and Linux, but programs generated
 from a graph currently target Windows. APIs, file formats and command-line flags may change before
 general availability. See the [changelog](../../CHANGELOG.md) for current limitations and
-[pending items](../en/pending.md) for the remaining operational work.
+[roadmap and known limitations](../en/roadmap.md) for the remaining operational work.
 
 For a factual comparison with other approaches, see [Comparison](comparison.md).

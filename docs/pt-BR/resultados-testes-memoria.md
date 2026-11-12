@@ -14,7 +14,7 @@
 > [`routing-binary-ab.md`](../quality/routing-binary-ab.md) e
 > [`memory-embeddings-live.md`](../quality/memory-embeddings-live.md).
 >
-> **Pendências e limitações operacionais:** [`PENDENCIAS.md`](../PENDENCIAS.md).
+> **Pendências e limitações operacionais:** [`roadmap.md`](roadmap.md).
 
 ## 1. Resumo executivo
 

@@ -106,7 +106,8 @@ graph canvas; Arestrix validates it, generates C++20 source and compiles it with
   The advanced multigraph is implemented as opt-in: sources/passages, validated claims, lenses and
   facets, canonical paths with serving and shortcuts, bounded beam traversal, local/frontier routing
   and interdomain bridge hypotheses. Telemetry lives in a separate database. The experimental
-  switches remain off pending real-data measurement. See [pending items](docs/en/pending.md) and
+  switches remain off; measurement is complete on the curated corpus, the 14 examples and the real
+  embedding endpoints. See [roadmap and known limitations](docs/en/roadmap.md) and
   [how memory works](docs/en/how-memory-works.md).
 - **Arestrix Library** - audited skill, MCP and template assets with Studio, Workspace and Project
   scopes, project pins, built-in/workspace imports and a native GitHub source with commit pin,

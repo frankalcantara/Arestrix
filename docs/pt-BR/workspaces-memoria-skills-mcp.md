@@ -167,8 +167,8 @@ promoção é explícita, exige evidência e é auditada. O projeto lê o worksp
 workspace não lê a memória privada do projeto.
 
 O guia completo, com configuração, retenção, segurança e referência rápida, está em
-[Como funciona a memória](como-funciona-a-memoria.md). O estado da implantação está em
-[Pendências](../PENDENCIAS.md).
+[Como funciona a memória](como-funciona-a-memoria.md). O estado da implantação e as lacunas estão no
+[roadmap](roadmap.md).
 
 ### Exemplos
 
