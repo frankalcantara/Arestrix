@@ -18,7 +18,7 @@
 | Modes, proposals, telemetry, validation, brief, state, embeddings and A/B | **Complete** |
 | Phase D - advanced multigraph | **Implemented; opt-in switches** |
 | A/B v2 execution harness | **Executed with a real provider on 2026-11-11 (parity/cost and value)** |
-| Memory policy gate (`memory.gate`) | **Implemented; 1-repetition A/B pilot complete** |
+| Memory policy gate (`memory.gate`) | **Implemented; 3-repetition A/B complete** |
 | Project memory scenarios (Consult / Consult and Decide / Learn) | **Implemented; memory on by default** |
 | Experimental switches (`pathServing`, `traversal`, `bridges`, `routing.mode`) | **Mechanisms measured on a curated corpus; defaults stay `off`** |
 | `institution` level in the assistant `memory_inspect` | Operational pending |
@@ -148,7 +148,8 @@ Implemented with `off`, `shadow` and `enforce` modes, a deterministic decision
 and an optional model (`provider`/`model`; Jev, local or API). The gate chooses
 `none`, `brief`, `search` or `learn`, writes a `memory_gate` trace step and has a
 validation floor: if the validator requires a value present in the brief, `none`
-is promoted to `brief`. The 1-repetition A/B pilot on 2026-11-11 showed:
+is promoted to `brief`. The historical 1-repetition pilot (2026-11-11) remains
+as a reference; the 3-repetition confirmation completed on 2026-11-12 with Jev.
 
 | Scenario | ON approval | ON/OFF tokens | ON/OFF latency |
 | :--- | ---: | ---: | ---: |
@@ -164,15 +165,27 @@ thousand tokens and ~1.3 s per execution); the agent alone would be 1.17x/0.96x
 in parity and 1.28x/0.99x in value. Jev uses ~14 thousand tokens and ~270 ms per
 execution.
 
-The model gate chose `brief` 17 times, `none` twice and `search` once in the
-parity suite, and `brief` 19 times + `search` once in the value suite; tasks
-finished in 2 turns. With **Jev** (`jev-latest`, TypeSafe `/v1/systemone`) the
-decisions were 13 `brief`, 6 `none`, 1 `search` in parity and 19 `brief`, 1
-`search` in value; the value suite kept 1.000 versus 0.000. Jev was validated in
-a 1-repetition pilot; the 3-repetition confirmation is pending because the agent
-provider (DeepSeek) became slow under load, not because of Jev (~270 ms). The
-earlier DeepSeek-gate attempt was interrupted by provider latency/throttling
-(34/120 in 33 min). Details in `docs/quality/memory-gate-ab.md`.
+In the historical pilot, the DeepSeek gate chose `brief` 17 times, `none` twice
+and `search` once in parity, and `brief` 19 times + `search` once in value; Jev
+(`jev-latest`, TypeSafe `/v1/systemone`) chose 13 `brief`, 6 `none`, 1 `search`
+in parity and 19 `brief`, 1 `search` in value.
+
+**Confirmation (3 repetitions, 2026-11-12)**
+
+20 tasks × 2 arms × 3 repetitions = 120 executions per suite; 0 infrastructure
+failures, 0 invalid tasks and unchanged frozen knowledge.
+
+| Scenario | ON approval | ON/OFF tokens | ON/OFF latency | ON total | OFF total |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| Jev, parity | 1.000 | 1.48x | 1.08x | 215,381 (173,453 agent + 41,928 gate) | 145,623 |
+| Jev, value | **1.000 vs 0.000** | 1.58x | 1.09x | 238,059 (193,311 agent + 44,748 gate) | 151,129 |
+
+Decisions: parity 39 `brief`, 18 `none` and 3 `search`; value 57 `brief` and 3
+`search`. Average gate latency: 271.6 ms in parity and 420.3 ms in value. The
+parity approval delta was 0 (95% CI [0, 0]); the value delta was 1.000
+(95% CI [1.000, 1.000]). The confirmation closes the pilot gap; gate defaults
+remain opt-in and production promotion still requires the quality/cost A/B with
+the chosen model. Details in `docs/quality/memory-gate-ab.md`.
 
 ### 4.2 Institutional level in the assistant
 

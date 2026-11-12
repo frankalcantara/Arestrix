@@ -26,7 +26,7 @@ de produção.
 | Avaliação E20 | regressão entre variantes | 8 casos, 5 variantes, todas completas | as variantes produziram métricas idênticas; não exercitam os interruptores |
 | A/B live — paridade | custo sem depender da memória | aprovação 1,000 × 1,000; 2,58× tokens; 1,69× latência | 20 tarefas curadas; sem dados de cliente |
 | A/B live — valor | acerto quando a memória é necessária | aprovação 1,000 × 0,000; delta 1,000; 2,67× tokens; 1,62× latência | efeito binário por desenho do validador |
-| `memory.gate` | reduzir buscas e custo sem perder acerto | Jev: 1,39×/1,51× tokens e 1,01×/1,03× latência, aprovação 1,000 | piloto de 1 repetição; 3 repetições pendentes |
+| `memory.gate` | reduzir buscas e custo sem perder acerto | Jev: 1,48×/1,58× tokens e 1,08×/1,09× latência, aprovação 1,000 | 3 repetições; dados curados |
 | Interruptores avançados | caminhos, travessia, pontes e roteamento | caminho 1,000/1,000; travessia 1,000/0,500; 1 ponte e 0 arestas; roteamento coerente | corpus curado; precisão da travessia ainda é 0,500 |
 
 ## 2. Linha de base e regressão
@@ -92,23 +92,21 @@ O A/B de valor mede a entrega da lição, não a qualidade da recuperação avan
 ## 4. Porteiro de política (`memory.gate`)
 
 O gate decide entre `none`, `brief`, `search` e `learn` antes do laço do agente.
-O piloto usou 20 tarefas × 2 braços × 1 repetição em cada cenário. Os tokens do
-ON incluem o modelo do gate.
+A confirmação de 3 repetições (2026-11-12) usou 20 tarefas × 2 braços × 3
+repetições = 120 execuções por suíte, com 0 falhas de infraestrutura, 0 tarefas
+inválidas e conhecimento congelado inalterado.
 
-| Cenário | Aprovação ON | ON/OFF tokens | ON/OFF latência |
-| :--- | ---: | ---: | ---: |
-| Sem gate, paridade | 1,000 | 2,69× | 1,60× |
-| Gate determinístico, paridade | 1,000 | 1,79× | 1,25× |
-| Gate + modelo, paridade | 1,000 | 1,34× | 1,16× |
-| Gate + modelo, valor | 1,000 | 1,47× | 1,19× |
-| Jev, paridade | 1,000 | 1,39× | 1,01× |
-| Jev, valor | 1,000 | 1,51× | 1,03× |
+| Cenário | Aprovação ON | ON/OFF tokens | ON/OFF latência | ON total | OFF total |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| Jev, paridade | 1,000 | 1,48× | 1,08× | 215.381 (173.453 agente + 41.928 gate) | 145.623 |
+| Jev, valor | **1,000 × 0,000** | 1,58× | 1,09× | 238.059 (193.311 agente + 44.748 gate) | 151.129 |
 
-O modelo do gate com DeepSeek consumiu ~9 mil tokens e ~1,3 s por execução. O
-Jev respondeu em **267–270 ms**, com ~13–14 mil tokens de entrada e ~920 de
-saída por suíte. O Jev tomou 13 `brief`, 6 `none` e 1 `search` na paridade; 19
-`brief` + 1 `search` no valor. Todas as 20 decisões de cada suíte vieram do
-modelo, sem fallback.
+O piloto histórico de 1 repetição, com DeepSeek e gate determinístico, permanece
+em `docs/quality/memory-gate-ab.md`; a tabela acima é a confirmação com Jev. O
+gate tomou 39 `brief`, 18 `none` e 3 `search` na paridade, e 57 `brief` + 3
+`search` no valor. A latência média do gate foi 271,6 ms na paridade e 420,3 ms
+no valor. O delta de aprovação foi 0 na paridade (IC95 [0,0]) e 1,000 no valor
+(IC95 [1,000,1,000]).
 
 O piso de validação foi necessário: no caso `fail-fonte`, o modelo escolheu
 `none`, mas o validador exigia `AB-7731`, presente apenas no brief; o piso
@@ -159,9 +157,9 @@ havia histórico (agora mantém o tier atual e apenas registra a sugestão).
 1. **A/B live com dados curados.** As 20 tarefas e o conhecimento congelado não
    substituem projetos reais de cliente; os resultados mostram direção, não
    generalização.
-2. **Gate com 1 repetição.** A confirmação de 3 repetições foi interrompida duas
-   vezes pela latência do agente DeepSeek, não pelo Jev. O piloto registrado é de
-   1 repetição; a repetição pendente precisa de provedor estável ou modelo local.
+2. **Latência variável do provedor.** O gate Jev foi confirmado em 3 repetições,
+   mas o agente DeepSeek ainda varia; tokens e latência podem mudar com o
+   provedor escolhido.
 3. **Valor binário.** O validador da suíte de valor exige um token que só existe
    na lição curada; isso prova a entrega, mas não mede gradação de qualidade.
 4. **Roteamento sem A/B de qualidade.** `routing.mode=binary` foi validado como

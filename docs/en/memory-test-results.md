@@ -26,7 +26,7 @@ production model.
 | E20 evaluation | regression across variants | 8 cases, 5 variants, all complete | the variants produced identical metrics; they do not exercise the switches |
 | Live A/B — parity | cost when memory is not required | approval 1.000 vs 1.000; 2.58x tokens; 1.69x latency | 20 curated tasks; no customer data |
 | Live A/B — value | accuracy when memory is required | approval 1.000 vs 0.000; delta 1.000; 2.67x tokens; 1.62x latency | binary effect by validator design |
-| `memory.gate` | reduce searches and cost without losing accuracy | Jev: 1.39x/1.51x tokens and 1.01x/1.03x latency, approval 1.000 | 1-repetition pilot; 3 repetitions pending |
+| `memory.gate` | reduce searches and cost without losing accuracy | Jev: 1.48x/1.58x tokens and 1.08x/1.09x latency, approval 1.000 | 3 repetitions; curated data |
 | Advanced switches | paths, traversal, bridges and routing | path 1.000/1.000; traversal 1.000/0.500; 1 bridge and 0 edges; coherent routing | curated corpus; traversal precision is still 0.500 |
 
 ## 2. Baseline and regression
@@ -94,23 +94,21 @@ The value A/B measures lesson delivery, not advanced retrieval quality.
 ## 4. Memory policy gate (`memory.gate`)
 
 The gate decides between `none`, `brief`, `search` and `learn` before the agent
-loop. The pilot used 20 tasks × 2 arms × 1 repetition in each scenario. ON tokens
-include the gate model.
+loop. The 3-repetition confirmation (2026-11-12) used 20 tasks × 2 arms × 3
+repetitions = 120 executions per suite, with 0 infrastructure failures, 0 invalid
+tasks and unchanged frozen knowledge.
 
-| Scenario | ON approval | ON/OFF tokens | ON/OFF latency |
-| :--- | ---: | ---: | ---: |
-| No gate, parity | 1.000 | 2.69x | 1.60x |
-| Deterministic gate, parity | 1.000 | 1.79x | 1.25x |
-| Gate + model, parity | 1.000 | 1.34x | 1.16x |
-| Gate + model, value | 1.000 | 1.47x | 1.19x |
-| Jev, parity | 1.000 | 1.39x | 1.01x |
-| Jev, value | 1.000 | 1.51x | 1.03x |
+| Scenario | ON approval | ON/OFF tokens | ON/OFF latency | ON total | OFF total |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| Jev, parity | 1.000 | 1.48x | 1.08x | 215,381 (173,453 agent + 41,928 gate) | 145,623 |
+| Jev, value | **1.000 vs 0.000** | 1.58x | 1.09x | 238,059 (193,311 agent + 44,748 gate) | 151,129 |
 
-The DeepSeek gate model consumed ~9k tokens and ~1.3 s per execution. Jev
-responded in **267–270 ms**, with ~13–14k input tokens and ~920 output tokens per
-suite. Jev chose 13 `brief`, 6 `none` and 1 `search` in parity; 19 `brief` + 1
-`search` in value. All 20 decisions in each suite came from the model, with no
-fallback.
+The historical 1-repetition pilot with DeepSeek and the deterministic gate
+remains in `docs/quality/memory-gate-ab.md`; the table above is the Jev
+confirmation. The gate chose 39 `brief`, 18 `none` and 3 `search` in parity, and
+57 `brief` + 3 `search` in value. Average gate latency was 271.6 ms in parity and
+420.3 ms in value. The approval delta was 0 in parity (95% CI [0, 0]) and 1.000
+in value (95% CI [1.000, 1.000]).
 
 The validation floor was necessary: in the `fail-fonte` case the model chose
 `none`, but the validator required `AB-7731`, present only in the brief; the
@@ -161,9 +159,9 @@ history (it now keeps the current tier and only records the suggestion).
 1. **Live A/B with curated data.** The 20 tasks and frozen knowledge do not
    replace real customer projects; the results show direction, not
    generalisation.
-2. **One-repetition gate.** The 3-repetition confirmation was interrupted twice
-   by DeepSeek agent latency, not by Jev. The recorded pilot has 1 repetition;
-   the pending repetition needs a stable provider or a local model.
+2. **Variable provider latency.** The Jev gate is confirmed with 3 repetitions,
+   but the DeepSeek agent still varies; tokens and latency can change with the
+   chosen provider.
 3. **Binary value.** The value validator requires a token that exists only in the
    curated lesson; this proves delivery, but does not measure quality gradation.
 4. **Routing without a quality A/B.** `routing.mode=binary` was validated as a

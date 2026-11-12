@@ -16,7 +16,7 @@
 | Modos, propostas, telemetria, validação, brief, estado, embeddings e A/B | **Concluídos** |
 | Fase D — multigrafo avançado | **Implementada; interruptores opt-in** |
 | Harness de execução do A/B v2 | **Executado com provedor real em 2026-11-11 (paridade/custo e valor)** |
-| Porteiro de política da memória (`memory.gate`) | **Implementado; piloto A/B de 1 repetição concluído** |
+| Porteiro de política da memória (`memory.gate`) | **Implementado; A/B de 3 repetições concluído** |
 | Cenários de memória do projeto (Consultar / Consultar e Decidir / Aprender) | **Implementados; memória ligada por padrão** |
 | Interruptores experimentais (`pathServing`, `traversal`, `bridges`, `routing.mode`) | **Mecanismos medidos em corpus curado; padrões seguem `off`** |
 | Nível `institution` no `memory_inspect` do assistente | Pendente operacional |
@@ -130,7 +130,9 @@ Implementado com os modos `off`, `shadow` e `enforce`, decisão determinística 
 modelo opcional (`provider`/`model`; Jev, local ou API). O gate escolhe entre
 `none`, `brief`, `search` e `learn`, grava um passo `memory_gate` no trace e tem
 um piso de validação: se o validador exige um valor presente no brief, `none` é
-promovido a `brief`. O piloto A/B de 1 repetição em 2026-11-11 mostrou:
+promovido a `brief`. O piloto histórico de 1 repetição (2026-11-11) permanece
+como referência; a confirmação de 3 repetições foi concluída em 2026-11-12 com
+Jev.
 
 | Cenário | Aprovação ON | ON/OFF tokens | ON/OFF latência |
 | :--- | ---: | ---: | ---: |
@@ -146,17 +148,27 @@ Os números do gate com DeepSeek incluem os tokens e a latência do modelo do ga
 paridade e 1,28×/0,99× no valor. O Jev gasta ~14 mil tokens e ~270 ms por
 execução.
 
-O gate com DeepSeek tomou 17 decisões `brief`, 2 `none` e 1 `search` na
-paridade, e 19 `brief` + 1 `search` no valor; as tarefas ficaram em 2 turnos.
-Com **Jev** (`jev-latest`, TypeSafe `/v1/systemone`), as decisões foram 13
-`brief`, 6 `none` e 1 `search` na paridade, e 19 `brief` + 1 `search` no valor;
-a latência do gate caiu para **267–270 ms** e o custo ficou em **1,39× tokens /
-1,01× latência** na paridade e **1,51× / 1,03×** no valor, com aprovação
-**1,000 × 0,000**. O Jev foi validado em 1 repetição; a confirmação de 3
-repetições está pendente porque o agente (DeepSeek) ficou lento sob carga, não
-pelo Jev (que respondeu em ~270 ms). A tentativa anterior com DeepSeek no gate
-foi interrompida por latência/limite do provedor (34/120 em 33 min). Detalhes em
-`docs/quality/memory-gate-ab.md`.
+No piloto histórico, o gate com DeepSeek tomou 17 decisões `brief`, 2 `none` e 1
+`search` na paridade, e 19 `brief` + 1 `search` no valor; com **Jev**
+(`jev-latest`, TypeSafe `/v1/systemone`) foram 13 `brief`, 6 `none` e 1 `search`
+na paridade, e 19 `brief` + 1 `search` no valor.
+
+**Confirmação (3 repetições, 2026-11-12)**
+
+20 tarefas × 2 braços × 3 repetições = 120 execuções por suíte; 0 falhas de
+infraestrutura, 0 tarefas inválidas e conhecimento congelado inalterado.
+
+| Cenário | Aprovação ON | ON/OFF tokens | ON/OFF latência | ON total | OFF total |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| Jev, paridade | 1,000 | 1,48× | 1,08× | 215.381 (173.453 agente + 41.928 gate) | 145.623 |
+| Jev, valor | **1,000 × 0,000** | 1,58× | 1,09× | 238.059 (193.311 agente + 44.748 gate) | 151.129 |
+
+Decisões: paridade 39 `brief`, 18 `none` e 3 `search`; valor 57 `brief` e 3
+`search`. Latência média do gate: 271,6 ms na paridade e 420,3 ms no valor. O
+delta de aprovação na paridade foi 0 (IC95 [0,0]); no valor, 1,000
+(IC95 [1,000,1,000]). A confirmação fecha a lacuna do piloto; os padrões do gate
+continuam opt-in e a promoção para produção ainda exige o A/B de qualidade/custo
+com o modelo escolhido. Detalhes em `docs/quality/memory-gate-ab.md`.
 
 ### 4.1.2 Interruptores avançados: medição de mecanismos
 

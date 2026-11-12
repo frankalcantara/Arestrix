@@ -1,8 +1,8 @@
 # MemoryGate — desenho e A/B
 
 > **Status:** implementado com `off`, `shadow` e `enforce`; piloto A/B de 1 repetição
-> concluído em 2026-11-11 com DeepSeek e com Jev. A confirmação de 3 repetições está pendente:
-> o Jev responde em ~270 ms, mas o agente (DeepSeek) ficou lento sob carga.
+> concluído em 2026-11-11 com DeepSeek e com Jev, e confirmação de 3 repetições
+> concluída em 2026-11-12 com Jev.
 > **Escopo:** porteiro de política da memória (`memory.gate`) e sua medição nas suítes
 > de paridade e de valor do A/B v2.
 > **Referências:** `docs/pt-BR/como-funciona-a-memoria.md`, `docs/PENDENCIAS.md` §4.1.
@@ -12,13 +12,12 @@
 
 ## Veredito
 
-O gate com modelo reduz a paridade de **2,69× para 1,39× tokens** e de **1,60× para
-1,01× latência** com Jev, mantendo **1,000** de aprovação. No valor, **1,51× tokens**
-e **1,03× latência**, com **1,000 × 0,000** de aprovação. Com DeepSeek os números
-ficam em 1,34×/1,16× e 1,47×/1,19×. O gate determinístico fica em 1,79×/1,25×.
-O `shadow` registra sem alterar. O Jev responde em ~270 ms; o DeepSeek em ~1,3 s.
-Piloto de 1 repetição; a confirmação de 3 repetições está pendente por latência
-do agente (DeepSeek), não do Jev.
+O gate com modelo reduz a paridade de **2,69× para 1,48× tokens** e de **1,60× para
+1,08× latência** com Jev em 3 repetições, mantendo **1,000** de aprovação. No valor,
+**1,58× tokens** e **1,09× latência**, com **1,000 × 0,000** de aprovação. Com
+DeepSeek os números do piloto de 1 repetição ficam em 1,34×/1,16× e 1,47×/1,19×.
+O gate determinístico fica em 1,79×/1,25×. O `shadow` registra sem alterar. O Jev
+responde em ~270–420 ms; o DeepSeek em ~1,3 s.
 
 ## 1. Hipótese
 
@@ -115,7 +114,7 @@ adaptador System One. `JEV_API_KEY` está configurada; `JEV_BASE_URL` usa o
 padrão `https://api.typesafe.ai`. O caminho local continua sendo configuração,
 sem mudança de código.
 
-## 5. Piloto (1 repetição)
+## 5. Piloto histórico (1 repetição)
 
 | Cenário | Aprovação ON | ON tokens | OFF tokens | ON/OFF | Latência ON/OFF |
 | :--- | ---: | ---: | ---: | ---: | ---: |
@@ -156,16 +155,25 @@ Decisões: **13 `brief`, 6 `none`, 1 `search`** na paridade; **19 `brief`, 1
 `search`** no valor. O gate com Jev é mais rápido que o DeepSeek e mantém 100%
 no valor; o custo total fica em 1,39×/1,51×, contra 2,58×/2,67× sem gate.
 
-## 6. Confirmação (3 repetições)
+## 6. Confirmação (3 repetições, 2026-11-12)
 
-A primeira tentativa de confirmação foi feita com DeepSeek e interrompida após
-34/120 execuções em ~33 min, por latência/limite do provedor. A segunda foi
-reiniciada com o Jev no gate, mas o **agente** (DeepSeek) também ficou lento sob
-carga: 23/120 em ~5 min. O Jev em si respondeu em ~270 ms e todas as 20 decisões
-de cada suíte vieram do modelo, sem fallback. A confirmação de 3 repetições fica
-pendente; o piloto de 1 repetição acima é o resultado registrado.
+A confirmação foi concluída com Jev: 20 tarefas × 2 braços × 3 repetições = 120
+execuções por suíte, com 0 falhas de infraestrutura, 0 tarefas inválidas e
+conhecimento congelado inalterado.
 
-Para reproduzir a confirmação:
+| Cenário | Aprovação ON | ON tokens | OFF tokens | ON/OFF tokens | Latência ON/OFF |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| Jev, paridade | 1,000 | 173.453 + 41.928 | 145.623 | 1,48× | 7,13/6,57 s |
+| Jev, valor | **1,000 × 0,000** | 193.311 + 44.748 | 151.129 | 1,58× | 7,58/6,93 s |
+
+Os tokens do ON somam o agente e o gate; a latência inclui a chamada do gate. As
+decisões foram 39 `brief`, 18 `none` e 3 `search` na paridade, e 57 `brief` + 3
+`search` no valor. O gate Jev respondeu em 271,6 ms na paridade e 420,3 ms no
+valor. O delta de aprovação foi 0 na paridade (IC95 [0,0]) e 1,000 no valor
+(IC95 [1,000,1,000]). O piloto de 1 repetição da seção 5 permanece como
+referência histórica.
+
+Para reproduzir:
 
 ```powershell
 py -3 scripts/e2e_memory_ab_live.py --repetitions 3 --gate-mode enforce `

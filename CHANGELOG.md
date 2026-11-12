@@ -24,6 +24,11 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   with an explicit default-model fallback. `memory claims extract` registers the
   project pipeline before running, and the extraction uses one model call
   without tools so `--json` output stays clean.
+- MemoryGate 3-repetition A/B confirmation with Jev: 120 executions per suite;
+  parity approval 1.000 with 1.48x tokens and 1.08x latency, value approval
+  1.000 vs 0.000 with 1.58x tokens and 1.09x latency. Reports:
+  `tests/fixtures/memory-ab-live-gate-enforce-jev-report.json` and
+  `tests/fixtures/memory-ab-live-value-gate-enforce-jev-report.json`.
 
 ### Fixed
 

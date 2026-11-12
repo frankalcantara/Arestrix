@@ -40,7 +40,7 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 | **A/B v2 real** | `scripts/e2e_memory_ab_live.py`: 20 tarefas × 3 repetições × 2 braços (120 execuções), conhecimento congelado, 0 falhas de infraestrutura e 0 tarefas inválidas; aprovação 60/60 nos dois braços; ON 377.378 tokens e 10,95 s contra OFF 146.220 tokens e 6,46 s |
 | **A/B v2 de valor** | `--memory-dependent` (token `AB-7731`, só no conhecimento curado): 120 execuções; ON 60/60 (1,000) × OFF 0/60 (0,000), delta 1,000 com IC95 [1,000, 1,000]; ON 405.161 tokens e 11,56 s contra OFF 151.539 tokens e 7,12 s; `tests/fixtures/memory-ab-live-value-report.json` |
 | **Tracy F1** | `ARESTRIX_ENABLE_TRACY` e `dev.py --tracy`; build OFF e ON com `4.259/4.259` verificações; cache final em `OFF`; zona `agent.run` em `rt/Profiling.hpp` |
-| **MemoryGate** | `off`/`shadow`/`enforce`; shadow registrou 19 decisões com `applied=false`; com Jev (`jev-latest`, System One): paridade ON 1,000 com 1,39× tokens e 1,01× latência, valor ON 1,000 com 1,51×/1,03×, gate ~270 ms; DeepSeek ficou em 1,34×/1,16× e 1,47×/1,19×; confirmação de 3 repetições pendente por latência do agente |
+| **MemoryGate** | `off`/`shadow`/`enforce`; shadow registrou 19 decisões com `applied=false`; com Jev (`jev-latest`, System One), confirmação de 3 repetições: paridade ON 1,000 com 1,48× tokens e 1,08× latência, valor ON 1,000 × 0,000 com 1,58×/1,09×, gate 271,6/420,3 ms, 120 execuções por suíte; DeepSeek histórico em 1,34×/1,16× e 1,47×/1,19× |
 | **Cenários de memória** | Propriedades do Projeto → Memória: Consultar (`gate=brief`), Consultar e Decidir (padrão, `gate=enforce` com Jev) e Aprender com aprovação; memória ligada por padrão; “Personalizado” derivado ao alterar campo avançado; sem botão de configuração avançada |
 | **Exemplos migrados** | 14 projetos/pipelines com memória ligada no cenário Consultar e Decidir; exemplos 04/05 mantêm `learn` com gate `shadow`; `e2e_examples.py` passou 14/14 |
 | **Diagnóstico do custo ON** | 20/20 traces do ensaio fizeram `memory_search` (1,8 busca/trace); o brief injetado tem ~451 caracteres. O custo vem das buscas do agente, não do brief |
@@ -57,7 +57,7 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 - [ ] Instalação em máquina realmente limpa (apenas runtime VC++) e Intune/SCCM.
 - [x] Medição de mecanismos dos interruptores experimentais (`pathServing`, `traversal`, `bridges`, `routing`) com corpus próprio.
 - [ ] Repetir o corpus de interruptores em projetos reais e medir qualidade/custo de `routing.mode=binary` com o modelo escolhido.
-- [ ] Confirmação de 3 repetições do `memory.gate` com Jev/local ou janela de menor latência.
+- [x] Confirmação de 3 repetições do `memory.gate` com Jev (`run 2026-11-12`, 120 execuções por suíte).
 - [ ] Pacote Linux e matriz de CI Linux/macOS.
 
 ### Rodada #006 - 2026-11-10 (pré-release 2.7.0, correções da memória)
