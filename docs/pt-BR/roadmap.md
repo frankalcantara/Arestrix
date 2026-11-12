@@ -166,6 +166,14 @@ Duas decisões registradas:
   escolheu. O que os dois compartilham é "decisão do runtime, não do modelo"; o que falta é o veto
   dentro do loop.
 
+## Release 2.8 (atual)
+
+A versão `2.8.0` teve o gate automatizado aprovado em 2026-11-12 no commit `b805585`, com árvore
+limpa, 650 testes Vitest, 4.299 verificações C++, tutorial + 14 exemplos e artefatos regenerados.
+A promoção continua bloqueada por instalação limpa/upgrade, pacote Linux, CI obrigatório, catálogo
+remoto assinado e homologação manual. Matriz:
+[`quality/release-test-plan.md`](../quality/release-test-plan.md).
+
 ## Beta 2.3 (pré-release)
 
 A linha Beta 2.3 está versionada como `2.3.0-beta.2` e é publicada como pré-release de

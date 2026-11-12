@@ -29,6 +29,39 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 
 ## Histórico Cronológico de Auditorias
 
+### Rodada #008 - 2026-11-12 (gate de release 2.8 limpo)
+
+- **Commit:** `b805585a1a4722c567dcdfbd1891227c8527343a` (árvore limpa).
+- **Status Geral:** `APROVADO NO ESCOPO AUTOMATIZADO; DISTRIBUIÇÃO E HOMOLOGAÇÃO MANUAL PENDENTES`
+- **Ambiente de Teste:** Windows 11 (x64) | Node.js v24.11.1 | Vitest v5.0.5 | Vite v8.3.5 |
+  Visual Studio 2026 / MSVC C++20 | Python 3.11.9
+- **Métricas Globais:** 82 arquivos / 650 testes Vitest | 4.299/4.299 C++ | tutorial + 14 exemplos |
+  25 artefatos | 131 componentes no SBOM | 0 falhas
+
+#### Cobertura desta rodada
+
+| Área | Evidência |
+| :--- | :--- |
+| **Gate completo** | `py scripts/release_check.py` (inclui `--full --e2e`): `status=passed`, `dirty=false`, `dirtyAfter=false` |
+| **Frontend** | `npm test`: 82 arquivos / 650 testes; `tsc` limpo; `npm run build` aprovado |
+| **Nativo C++20** | CTest 1/1; 4.299/4.299 verificações; build com `ARESTRIX_ENABLE_HARDENING=ON` |
+| **Checks estáticos** | version, local assets, secrets, skill references e licenças de terceiros |
+| **E2E** | tutorial, 14 exemplos, memória avançada e agente de claims |
+| **Bibliotecas** | `homologation:libraries:live` e captura web LIB-M-01; 2 casos manuais pendentes |
+| **Artefatos** | `release-manifest.json`, `SHA256SUMS` (25/25 verificados) e `SBOM.json` |
+| **Plano canônico** | [`release-test-plan.md`](release-test-plan.md) |
+
+#### Pendências para promoção
+
+- [ ] Instalação limpa, upgrade e desinstalação do candidato 2.8.0.
+- [ ] Intune/SCCM e perfil sem privilégios administrativos no candidato 2.8.0.
+- [ ] Pacote Linux e E2E Linux.
+- [ ] Matriz de CI obrigatória na proteção da `main` (hoje `required_status_checks=null`).
+- [ ] Catálogo remoto assinado e hospedagem.
+- [ ] LIB-M-03, LIB-M-04, confirmação nativa de LIB-M-01 e captura do seletor.
+- [ ] Homologação manual do Studio.
+- [ ] Publicação de checksums, SBOM, notices e notas de release.
+
 ### Rodada #007 - 2026-11-11/12 (validação pós-2.7.0 e 2.8.0: A/B live, LIB-M-01, gate e roteamento)
 - **Commit:** árvore de trabalho sobre `ff44b63` (2.8.0 + scripts e documentação)
 - **Status Geral:** `APROVADO NO ESCOPO AUTOMATIZADO; CONFIRMAÇÃO NATIVA, PROJETOS REAIS E MÁQUINA LIMPA PENDENTES`

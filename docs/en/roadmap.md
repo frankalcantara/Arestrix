@@ -162,6 +162,14 @@ Two recorded decisions:
   and enforces order. A hook intercepts the lifecycle and can deny an action the model chose. What
   they share is "runtime decision, not model decision"; what is missing is the veto inside the loop.
 
+## Release 2.8 (current)
+
+Version `2.8.0` passed the automated gate on 2026-11-12 at commit `b805585`, with a clean tree,
+650 Vitest tests, 4,299 C++ checks, the tutorial + 14 examples and regenerated artifacts. Promotion
+is still blocked by clean install/upgrade, the Linux package, mandatory CI, the signed remote
+catalog and manual homologation. Matrix:
+[`quality/release-test-plan.md`](../quality/release-test-plan.md).
+
 ## Beta 2.3 (pre-release)
 
 The Beta 2.3 line is versioned as `2.3.0-beta.2` and is published as a development pre-release

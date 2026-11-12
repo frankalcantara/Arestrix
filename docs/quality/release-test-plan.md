@@ -1,7 +1,7 @@
 # Plano de testes de release — Arestrix 2.8
 
-> **Status:** núcleo automatizado verde em 2026-11-12; evidência de release, distribuição e
-> homologação manual ainda pendentes.
+> **Status:** gate completo aprovado em **2026-11-12** no commit `b805585`, com árvore limpa e
+> artefatos de release regenerados. Distribuição, Linux e homologação manual continuam pendentes.
 >
 > **Versão atual:** `2.8.0` (2026-11-11).
 >
@@ -23,7 +23,7 @@ limpa, Linux ou homologação visual.
 | E2E | tutorial + **14 exemplos** | Verde na última execução registrada |
 | Bibliotecas | `homologation:libraries:live`: **passed-automated**; 58 Vitest, 46/46 C++ mock, 2/2 live, captura web LIB-M-01 | Verde no escopo automatizado; 2 manuais pendentes |
 | Segurança | `check:secrets` limpo; `npm audit` com **0 vulnerabilidades**; `dependency-advisories.md` revisado | Verde |
-| Release gate | `release/release-report.json` é de 2026-11-11, commit `2147b74`, `dirty=true` | **Desatualizado** |
+| Release gate | `release/release-report.json` de 2026-11-12, commit `b805585`, `status=passed`, `dirty=false`; 25 artefatos e 131 componentes no SBOM | **Verde** |
 | Distribuição | Instalador 2.7.0 validado localmente; 2.8.0 ainda não | Pendente |
 | Linux | Build, runtime, router, gateway e pacote | Pendente |
 | CI | `deploy.yml` verde em pushes recentes; proteção da `main` sem required status checks | Enforcement pendente |
@@ -31,9 +31,9 @@ limpa, Linux ou homologação visual.
 
 ## 2. Bloqueios para promoção
 
-- [ ] Rodar o gate completo em árvore limpa no commit candidato:
-      `py scripts/release_check.py --full --e2e`.
-- [ ] Gerar `release-report.json`, `release-manifest.json`, `SHA256SUMS` e `SBOM.json` no mesmo
+- [x] Rodar o gate completo em árvore limpa no commit candidato:
+      `py scripts/release_check.py` (o script já inclui `--full --e2e`).
+- [x] Gerar `release-report.json`, `release-manifest.json`, `SHA256SUMS` e `SBOM.json` no mesmo
       commit, com `status=passed` e `dirty=false`.
 - [ ] Validar instalação limpa, upgrade e desinstalação da versão 2.8.0 em máquina sem Arestrix.
 - [ ] Validar Intune/SCCM e instalação silenciosa no candidato 2.8.0.
@@ -49,21 +49,21 @@ limpa, Linux ou homologação visual.
 
 ### 3.1 Gate local reproduzível
 
-- [ ] `py scripts/release_check.py --full --e2e` no commit candidato.
-- [ ] `release/release-report.json` com `status=passed` e `dirty=false`.
-- [ ] `release/release-manifest.json`, `SHA256SUMS` e `SBOM.json` gerados no mesmo commit.
-- [ ] Conferir `SHA256SUMS` com `sha256sum -c`/`Get-FileHash`.
+- [x] `py scripts/release_check.py` no commit candidato (`b805585`, 2026-11-12).
+- [x] `release/release-report.json` com `status=passed` e `dirty=false`.
+- [x] `release/release-manifest.json`, `SHA256SUMS` e `SBOM.json` gerados no mesmo commit.
+- [x] Conferir `SHA256SUMS` com `Get-FileHash`: 25 artefatos, 0 divergências.
 
-> A última execução registrada do gate é anterior ao HEAD atual e foi feita com árvore suja. Não use
-> esses artefatos como evidência de release.
+> Evidência local em `release/` (ignorada pelo Git). O relatório registra
+> `commit=b805585a1a4722c567dcdfbd1891227c8527343a`, `dirty=false` e `dirtyAfter=false`.
 
 ### 3.2 Checks estáticos
 
-- [ ] `npm run check:version`.
-- [ ] `npm run check:local-assets`.
+- [x] `npm run check:version` — 2.8.0 consistente.
+- [x] `npm run check:local-assets` — 5 modelos, 2 verificados; llama.cpp b11669.
 - [x] `npm run check:secrets` — 2026-11-12.
-- [ ] `npm run check:skill-references`.
-- [ ] `python scripts/check_third_party_licenses.py`.
+- [x] `npm run check:skill-references` — lock, regras e referências íntegras.
+- [x] `python scripts/check_third_party_licenses.py` — 8 submódulos e 22 dependências npm.
 - [x] `npx tsc --noEmit` — 2026-11-12.
 - [x] `npm run build` — 2026-11-12.
 
@@ -79,8 +79,8 @@ limpa, Linux ou homologação visual.
 ### 3.4 Backend nativo
 
 - [x] C++ **4.299/4.299** verificações.
-- [ ] `py CppCore/dev.py --test --no-frontend` / CTest no commit candidato.
-- [ ] Compilação com hardening (`/GS`, `/guard:cf`, `/sdl` ou stack protector/RELRO).
+- [x] `py CppCore/dev.py --full --e2e` / CTest no commit `b805585` (1/1 CTest, 104,6 s).
+- [x] Compilação com hardening (`/GS`, `/guard:cf`, `/sdl`; `ARESTRIX_ENABLE_HARDENING=ON`).
 - [ ] Opcional antes do release: `--asan`, `--clang-tidy`, `--cppcheck`.
 
 ### 3.5 E2E
@@ -88,6 +88,8 @@ limpa, Linux ou homologação visual.
 - [x] `py scripts/e2e_tutorial.py` na última execução registrada.
 - [x] `py scripts/e2e_examples.py` — **14 exemplos**.
 - [x] `py scripts/e2e_memory_institution.py` — HTTP/MCP, papéis e fail-closed.
+- [x] `py scripts/memory_advanced_eval.py --check --runs 3` — 7 variantes, 10 tarefas.
+- [x] `py scripts/e2e_memory_claim_agent.py` — 1 candidato, 1 extraído, 1 proposta.
 - [x] Exemplos 06–12: chamadas, interação, formulário, paralelismo, subflow, Call e async.
 - [x] Nenhum segredo, caminho pessoal ou artefato gerado em `examples/`.
 
@@ -122,7 +124,7 @@ limpa, Linux ou homologação visual.
 - [x] `npm audit` com **0 vulnerabilidades** em 2026-11-12.
 - [x] Nenhuma chave real em binários, logs, exemplos, trace, notificações ou SBOM na última revisão.
 - [ ] `ARESTRIX_HOME` e caminhos de runtime confinados.
-- [ ] Checksums verificados no fluxo de release.
+- [x] Checksums verificados no fluxo de release — 25/25 em 2026-11-12.
 - [ ] Política fail-closed de gateway/interação revalidada.
 - [x] Dependências e avisos revisados em `docs/security/dependency-advisories.md`.
 
