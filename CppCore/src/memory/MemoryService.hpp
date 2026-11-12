@@ -343,6 +343,7 @@ public:
     void closeWorkspace(const std::string& workspaceId);
     std::string workspaceIdForProject(const std::string& projectId);
     taskforge::Json workspaceStatus(const std::string& projectId);
+    taskforge::Json institutionStatus(const std::string& projectId);
     bool promoteToWorkspace(const std::string& projectId, const std::string& kind,
                             const std::string& memoryId,
                             const taskforge::Json& evidence,

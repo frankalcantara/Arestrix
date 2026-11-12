@@ -794,6 +794,63 @@ taskforge::Json MemoryService::workspaceStatus(const std::string& projectId) {
         {"aliases", summary.value("aliases", 0LL)}};
 }
 
+taskforge::Json MemoryService::institutionStatus(const std::string& projectId) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    const std::string workspaceId = workspaceIdForProject(projectId);
+    if (workspaceId.empty()) {
+        return taskforge::Json{{"configured", false},
+                               {"projectId", projectId},
+                               {"reason", "workspace_not_configured"}};
+    }
+    auto* store = workspaceStore(workspaceId);
+    if (!store) {
+        return taskforge::Json{{"configured", false},
+                               {"projectId", projectId},
+                               {"workspaceId", workspaceId},
+                               {"reason", "workspace_not_open"}};
+    }
+    const std::string workspaceScopeId = workspaceScope(workspaceId);
+    // O escopo institucional e o pai explicito do workspace no banco local.
+    // O servico institucional remoto continua separado e autenticado por token;
+    // aqui expomos apenas o recorte local ja promovido para o workspace.
+    const auto cognitive = store->toCognitiveJson(workspaceScopeId);
+    std::string institutionScope;
+    std::string institutionName;
+    if (cognitive.contains("scopes") && cognitive["scopes"].is_array()) {
+        for (const auto& scope : cognitive["scopes"]) {
+            if (!scope.is_object()) continue;
+            if (scope.value("kind", std::string()) != "institution") continue;
+            institutionScope = scope.value("id", std::string());
+            institutionName = scope.value("name", std::string());
+            break;
+        }
+    }
+    if (institutionScope.empty()) {
+        return taskforge::Json{{"configured", false},
+                               {"projectId", projectId},
+                               {"workspaceId", workspaceId},
+                               {"scope", workspaceScopeId},
+                               {"reason", "institution_not_configured"}};
+    }
+    auto summary = store->consolidationSummary(institutionScope);
+    const std::string institutionId = institutionScope.rfind("institution:", 0) == 0
+        ? institutionScope.substr(std::string("institution:").size())
+        : institutionScope;
+    return taskforge::Json{
+        {"configured", true},
+        {"projectId", projectId},
+        {"workspaceId", workspaceId},
+        {"institutionId", institutionId},
+        {"name", institutionName.empty() ? institutionId : institutionName},
+        {"scope", institutionScope},
+        {"database", workspacePaths_[workspaceId]},
+        {"lessons", static_cast<long long>(store->activeLessonCount(institutionScope))},
+        {"playbooks", static_cast<long long>(
+            store->listPlaybooks(institutionScope, "", "active", 1000).size())},
+        {"activeEdges", summary.value("active", 0LL)},
+        {"aliases", summary.value("aliases", 0LL)}};
+}
+
 bool MemoryService::promoteToWorkspace(const std::string& projectId, const std::string& kind,
                                        const std::string& memoryId,
                                        const taskforge::Json& evidence,

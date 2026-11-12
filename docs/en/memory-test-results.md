@@ -1,14 +1,17 @@
 # Memory test results
 
-> **Applies to:** Arestrix 2.8 (`2.8.0`) · **Last reviewed:** 2026-11-11
+> **Applies to:** Arestrix 2.8 (`2.8.0`) · **Last reviewed:** 2026-11-12
 >
 > **Scope:** results from the memory campaigns — baseline, regression
 > evaluation, live A/B for parity and value, the memory policy gate
 > (`memory.gate`) and the advanced switches (`pathServing`, `traversal`,
-> `bridges` and `routing.mode`).
+> `bridges` and `routing.mode`), including the corpus derived from the 14
+> examples and the real binary-routing A/B.
 >
-> **Details:** [`memory-gate-ab.md`](../quality/memory-gate-ab.md) and
-> [`memory-advanced-ab.md`](../quality/memory-advanced-ab.md).
+> **Details:** [`memory-gate-ab.md`](../quality/memory-gate-ab.md),
+> [`memory-advanced-ab.md`](../quality/memory-advanced-ab.md),
+> [`memory-examples-advanced-ab.md`](../quality/memory-examples-advanced-ab.md) and
+> [`routing-binary-ab.md`](../quality/routing-binary-ab.md).
 >
 > **Operational pending items and limitations:** [`pending.md`](pending.md).
 
@@ -16,9 +19,11 @@
 
 Memory delivers measurable value, but it costs more tokens and latency when the
 agent decides to consult it on its own. `memory.gate` reduces that cost without
-losing accuracy in the pilot. The advanced switches work as mechanisms, but the
-defaults stay off until they are measured on real projects and with the
-production model.
+losing accuracy in the pilot. The advanced switches work as mechanisms on the
+curated corpus and on the corpus derived from the 14 examples; the real
+binary-routing A/B confirmed quality parity and a 26.5% saving against the
+frontier, but it did not beat the local model. Defaults stay off until they are
+measured on real customer projects.
 
 | Campaign | What it measures | Recorded result | Main limitation |
 | :--- | :--- | :--- | :--- |
@@ -27,7 +32,9 @@ production model.
 | Live A/B — parity | cost when memory is not required | approval 1.000 vs 1.000; 2.58x tokens; 1.69x latency | 20 curated tasks; no customer data |
 | Live A/B — value | accuracy when memory is required | approval 1.000 vs 0.000; delta 1.000; 2.67x tokens; 1.62x latency | binary effect by validator design |
 | `memory.gate` | reduce searches and cost without losing accuracy | Jev: 1.48x/1.58x tokens and 1.08x/1.09x latency, approval 1.000 | 3 repetitions; curated data |
-| Advanced switches | paths, traversal, bridges and routing | path 1.000/1.000; traversal 1.000/0.500; 1 bridge and 0 edges; coherent routing | curated corpus; traversal precision is still 0.500 |
+| Switches — curated corpus | paths, traversal, bridges and routing | path 1.000/1.000; traversal 1.000/0.500; 1 bridge and 0 edges; coherent routing | curated corpus; traversal precision is still 0.500 |
+| Switches — 14 examples | mechanisms over derived projects | path 1.000/1.000; traversal 1.000/0.300–1.000; 5 bridge proposals and 0 edges; correct routing on all 14 | corpus derived from examples, not customer data |
+| Real binary routing | quality and cost with two models | approval 1.000 on all 3 arms; 20,444.40 vs 27,805.00 for the frontier; 8 local and 6 frontier decisions | quality tied with local; 7 tasks and 2 repetitions |
 
 ## 2. Baseline and regression
 
@@ -141,34 +148,80 @@ from natural-language prompts (it now tokenizes the query when the whole phrase
 is not an alias), and `shadow` switched the executed tier when there was no
 history (it now keeps the current tier and only records the suggestion).
 
+### 5.1 Corpus derived from the 14 examples
+
+Because no real customer projects are available, the
+`scripts/memory_examples_eval.py` harness copies each of the 14 projects under
+`examples/`, seeds the database from the pipelines and measures the switches
+without a model call. The original project is not modified. There are 3
+repetitions per project; the corpus is **derived from the examples**, not
+customer data.
+
+| Scenario | Result on the 14 projects |
+| :--- | :--- |
+| `pathServing` | recall 1.000 and precision 1.000 on all |
+| `traversal` | recall 1.000 on all; precision between 0.300 and 1.000 |
+| `bridges` | 5 projects with natural bridge structure (`06`, `09`, `10`, `11`, `12`), 5 correct proposals and **0 edges created** |
+| `routing.mode=shadow` | decision recorded and `current` tier kept on all 14 |
+| `routing.mode=binary` | `local_large` at high confidence, `frontier` at low confidence and `frontier` without history on all 14 |
+
+Traversal precision varies because the pack includes claims related to the same
+anchor beyond the target. The behaviour is acceptable as context, but it still
+needs ranking or pruning. Report:
+[`memory-examples-advanced-ab.md`](../quality/memory-examples-advanced-ab.md).
+
+### 5.2 Real binary routing
+
+The routing A/B used 7 tasks (4 easy and 3 hard), 2 repetitions and real calls
+to the `deepseek` provider: `deepseek-flash` as the local tier and
+`deepseek-v4-pro` as the frontier. Weighted cost applies 0.2 to local tokens and
+1.0 to frontier tokens.
+
+| Arm | Approval | Tokens | Weighted cost | Average latency | Decisions |
+| :--- | ---: | ---: | ---: | ---: | :--- |
+| local | 1.000 | 18,819 | 3,763.80 | 14,963 ms | — |
+| frontier | 1.000 | 27,805 | 27,805.00 | 25,679 ms | — |
+| binary | 1.000 | 28,458 | 20,444.40 | 20,447 ms | 8 `local_large`, 6 `frontier` |
+
+Binary routing was **26.5% below the frontier** in weighted cost, but it cost
+**5.43x the local arm**. There was no quality gain: the local model also passed
+the hard tasks. The measured value is cost, not quality; promotion to the
+default therefore still requires a larger corpus and production telemetry.
+Report: [`routing-binary-ab.md`](../quality/routing-binary-ab.md).
+
 ## 6. Integration and release tests
 
 | Check | Result |
 | :--- | :--- |
-| C++ suite | passed, including the anchor and router tests |
+| C++ suite | 4,289/4,289 checks passed, including the anchor and router tests |
 | Vitest | 630/630 |
 | End-to-end tutorial | passed |
 | Examples 01–14 | 14/14 passed |
 | Advanced corpus (`--check`) | reproduced |
+| 14-example corpus (`--check`) | reproduced |
 | Claim agent (registration + extraction) | e2e with a fake provider: 1 candidate, 1 extracted, 1 proposal, 0 failures |
 | `check:secrets` | no secret or personal data |
 | `check:version` | 2.8.0 consistent |
 
 ## 7. Remaining limitations
 
-1. **Live A/B with curated data.** The 20 tasks and frozen knowledge do not
-   replace real customer projects; the results show direction, not
-   generalisation.
+1. **Live A/B with curated data and a derived corpus.** The 20 tasks, the
+   curated corpus and the 14 examples do not replace real customer projects; the
+   examples are copied and seeded by the harness, not customer data. The results
+   show direction, not generalisation.
 2. **Variable provider latency.** The Jev gate is confirmed with 3 repetitions,
    but the DeepSeek agent still varies; tokens and latency can change with the
    chosen provider.
 3. **Binary value.** The value validator requires a token that exists only in the
    curated lesson; this proves delivery, but does not measure quality gradation.
-4. **Routing without a quality A/B.** `routing.mode=binary` was validated as a
-   decision mechanism, not as model selection with real cost and quality.
+4. **Routing with quality parity.** The real `routing.mode=binary` A/B had
+   approval 1.000 on all three arms and a 26.5% saving against the frontier, but
+   the local model also passed the hard tasks. There was no quality gain, binary
+   cost 5.43x the local arm, and the corpus has 7 tasks and 2 repetitions.
 5. **Traversal precision.** The three-hop chain had recall 1.000 and precision
-   0.500: the pack includes claims related to the same anchor beyond the target.
-   This is acceptable as context, but still needs ranking or pruning work.
+   0.500 on the curated corpus; on the 14 examples precision ranged from 0.300
+   to 1.000. The pack includes claims related to the same anchor beyond the
+   target. This is acceptable as context, but still needs ranking or pruning work.
 6. **Path cold start.** `pathServing` depends on paths consolidated from approved
    traces; new projects have no paths until usage accumulates.
 7. **Bridges are hypotheses.** The detector creates no edges; promotion is manual
@@ -206,6 +259,13 @@ py -3 scripts/e2e_memory_ab_live.py --repetitions 1 --memory-dependent `
 # Advanced switches (deterministic, no model)
 py -3 scripts/memory_advanced_eval.py --write --runs 3
 py -3 scripts/memory_advanced_eval.py --check --runs 3
+
+# Switches over the 14 examples (deterministic, no model)
+py -3 scripts/memory_examples_eval.py --write --runs 3
+
+# Binary routing with real calls (requires provider and key)
+py -3 scripts/routing_binary_eval.py --write --repetitions 2
+py -3 scripts/routing_binary_eval.py --check --repetitions 2
 ```
 
 ## 9. Evidence
@@ -222,5 +282,9 @@ py -3 scripts/memory_advanced_eval.py --check --runs 3
 | Jev gate — value | `tests/fixtures/memory-ab-live-value-gate-enforce-jev-report.json` |
 | Advanced switches | `tests/fixtures/memory-advanced-report.json` |
 | Advanced corpus | `tests/fixtures/memory-advanced-v1.json` |
+| Switches on the 14 examples | `tests/fixtures/memory-examples-advanced-report.json` |
+| Real binary routing | `tests/fixtures/routing-binary-report.json` |
 | Gate report | `docs/quality/memory-gate-ab.md` |
 | Switch report | `docs/quality/memory-advanced-ab.md` |
+| Examples report | `docs/quality/memory-examples-advanced-ab.md` |
+| Routing report | `docs/quality/routing-binary-ab.md` |

@@ -136,7 +136,9 @@ O agente de pipeline tem `memory_search` (somente leitura), `memory_propose_less
 pendente) e as ferramentas de estado `memory_state_get`, `memory_state_set`, `memory_state_list` e
 `memory_state_history`. O assistente do Studio tem `memory_inspect`, `memory_search`,
 `memory_review_proposal`, `memory_declare_state_key`, `memory_unpromote_playbook` e
-`memory_retire_path` (as quatro ações de curadoria pedem confirmação).
+`memory_retire_path` (as quatro ações de curadoria pedem confirmação). O nível
+`institution` do `memory_inspect` mostra o escopo institucional local quando o workspace tem um pai
+institucional; sem ele, retorna `configured=false`.
 
 O estado de continuação é declarado pelo projeto e fica fora do brief. Escopos: `project`,
 `task_type` e `item`; TTL, CAS, schema JSON e modo `replace`/`versioned` são suportados. O CLI expõe
@@ -228,7 +230,9 @@ inteiramente em C++: nenhum Python ou processo JS participa da execução do gra
 - A generalização/consolidação por LLM e a coordenação de manutenção entre múltiplos processos
   continuam fora do escopo desta versão.
 - Os interruptores de caminhos, serviço de caminhos, travessia, pontes e roteamento permanecem
-  desligados por padrão até medição com dados reais.
+  desligados por padrão. O corpus curado, o corpus derivado dos 14 exemplos e o A/B real do
+  roteamento binário estão concluídos, mas ainda faltam projetos reais de cliente para justificar
+  a ativação.
 - `memory_handoff` continua fora do escopo.
 
 ## Skills

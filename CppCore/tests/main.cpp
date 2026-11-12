@@ -8562,6 +8562,37 @@ TEST(memory_workspace_promotion_and_isolation) {
     fs::remove_all(dir, ec);
 }
 
+TEST(memory_institution_status_reads_workspace_parent) {
+    using taskforge::memory::MemoryService;
+    const fs::path dir = makeTempDir("memory-institution-status");
+    const fs::path projectDb = dir / "projeto" / ".arestrix" / "memory" / "memory.db";
+    const fs::path workspaceDb = dir / "projeto" / ".workspace" / "memory" / "memory.db";
+    const std::string projectId = "institution-project";
+    const std::string workspaceId = "institution-workspace";
+    auto& memory = MemoryService::getInstance();
+    memory.closeProject(projectId);
+    CHECK(memory.configure(projectId, true, projectDb.string()));
+    CHECK(memory.configureWorkspace(workspaceId, workspaceDb.string(),
+                                    "institution:acme", "acme"));
+    CHECK(memory.configureProjectWorkspace(projectId, workspaceId,
+                                           workspaceDb.string()));
+    auto* store = memory.workspaceStore(workspaceId);
+    CHECK(store != nullptr);
+    CHECK(!store->recordLesson("institution:acme", "compartilhado", "manual",
+                               "REGRA-INSTITUCIONAL", "seed").empty());
+
+    const auto status = memory.institutionStatus(projectId);
+    CHECK(status.value("configured", false));
+    CHECK(status.value("institutionId", std::string()) == "acme");
+    CHECK(status.value("scope", std::string()) == "institution:acme");
+    CHECK(status.value("lessons", 0LL) >= 1);
+
+    memory.closeProject(projectId);
+    memory.closeWorkspace(workspaceId);
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
 TEST(memory_institution_auth_policy_and_isolation) {
     using taskforge::memory::MemoryInstitutionService;
     using taskforge::memory::MemoryRole;
@@ -11334,7 +11365,9 @@ struct FakeAssistantHost : taskforge::assistant::AssistantHost {
         return json{{"project", json{{"projectId", "p1"}, {"lessons", 3},
                                      {"proposals", json::array({json{{"id", "prop-1"}, {"kind", "lesson"}}})},
                                      {"embedding", json{{"state", "ready"}}}}},
-                    {"workspace", json{{"configured", true}, {"lessons", 2}}}};
+                    {"workspace", json{{"configured", true}, {"lessons", 2}}},
+                    {"institution", json{{"configured", true}, {"institutionId", "acme"},
+                                         {"lessons", 5}}}};
     }
     json memorySearch(const std::string& query, int limit, const std::string& mode,
                       const std::string&, std::string&) override {
@@ -11561,6 +11594,15 @@ TEST(assistant_memory_tools_inspect_and_review) {
     CHECK(levels.value("level", std::string()) == "all");
     CHECK(levels["project"].value("lessons", 0LL) == 3);
     CHECK(levels["workspace"].value("configured", false));
+    CHECK(levels["institution"].value("configured", false));
+    CHECK(levels["institution"].value("institutionId", std::string()) == "acme");
+
+    auto institution = as::executeAssistantTool(
+        doc, host, RuntimeLang::Pt, "memory_inspect", json{{"level", "institution"}});
+    CHECK(!institution.result.isError);
+    auto institutionJson = taskforge::jsonutil::parse(institution.result.content);
+    CHECK(institutionJson.value("level", std::string()) == "institution");
+    CHECK(institutionJson["institution"].value("lessons", 0LL) == 5);
 
     auto vertex = as::executeAssistantTool(doc, host, RuntimeLang::Pt, "memory_inspect",
                                            json{{"level", "vertex"}, {"node_id", "agent-1"}});

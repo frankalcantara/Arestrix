@@ -3186,7 +3186,8 @@ public:
             }
         }
         return taskforge::Json{{"project", projectOut},
-                               {"workspace", memory.workspaceStatus(projectId)}};
+                               {"workspace", memory.workspaceStatus(projectId)},
+                               {"institution", memory.institutionStatus(projectId)}};
     }
 
     taskforge::Json memorySearch(const std::string& query, int limit,

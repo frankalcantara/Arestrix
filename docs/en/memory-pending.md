@@ -11,8 +11,8 @@ below are the next memory work. No item here blocks the current release.
 | High | Context compaction backed by existing memory | Implemented behind `memory.contextCompaction` (off by default); A/B recorded |
 | High | Versioned predicate catalog and canonical claim identity | Implemented in catalog v1/schema v6; D11 applied; `warn` default and `strict` opt-in |
 | High | Extract memory into the standalone Mnemosyne module and submodule | Assessment complete; migration pending |
-| High | Enable experimental switches only after real-data A/B | Pending |
-| Medium | Institutional memory level in the Studio assistant | Pending |
+| High | Enable experimental switches only after real-data A/B | Curated corpus, 14-example corpus and real binary-routing A/B complete; opt-in; real customer corpus pending |
+| Medium | Institutional memory level in the Studio assistant | Implemented; reads the workspace institution scope |
 | Medium | Real embedding-provider quality/latency validation | Pending |
 | Medium | Studio UI to configure the memory agent | Implemented and validated in the Studio |
 | Low | Multi-process maintenance coordination | Out of scope for v1 |
@@ -223,8 +223,14 @@ git submodule update --init --recursive
 ## 3. Experimental switch promotion
 
 `memory.pathServing`, `memory.traversal`, `memory.bridges` and
-`routing.mode=binary` remain opt-in. Promotion requires a real-data A/B with a
-quality gain, no security regression and a documented cost budget.
+`routing.mode=binary` remain opt-in. The curated corpus, the corpus derived from
+the 14 examples and the real binary-routing A/B are complete. The routing A/B
+had quality parity (1.000 on all three arms) and a 26.5% cost saving against the
+frontier, but no quality gain over the local model. Promotion still requires real
+customer projects, a larger corpus, no security regression and a documented cost
+budget. Reports: `docs/quality/memory-advanced-ab.md`,
+`docs/quality/memory-examples-advanced-ab.md` and
+`docs/quality/routing-binary-ab.md`.
 
 ## 4. Real embedding-provider validation
 
@@ -234,8 +240,11 @@ still need a recorded run.
 
 ## 5. Institutional memory level in the Studio assistant
 
-`memory_inspect` covers project, workspace, vertex and all. The `institution`
-level needs an explicit service status and MCP/token configuration.
+`memory_inspect` covers project, workspace, institution, vertex and all. The
+`institution` level reads the local `institution:<id>` scope from the workspace
+database when the workspace has an institutional parent. Without that scope it
+returns `configured=false` with `reason=institution_not_configured`; the remote
+`arestrix-memory` service remains separate and token-authenticated.
 
 ## 6. Multi-process maintenance coordination
 

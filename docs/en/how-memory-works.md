@@ -609,8 +609,10 @@ The reproducible evaluation compares lexical, hybrid fallback, facets +
 traversal, paths + serving and routing in `shadow`, always over the same frozen
 knowledge and budget. The report records tokens, calls, brief, hits and
 fingerprints. No experimental switch becomes enabled by default: `pathServing`,
-`traversal`, `routing.mode` and `bridges` remain `off` until a real-data
-measurement shows a justified gain and cost.
+`traversal`, `routing.mode` and `bridges` remain `off`. The curated corpus, the
+corpus derived from the 14 examples and the real binary-routing A/B are complete,
+but a real customer measurement is still needed to justify enabling them by
+default.
 
 ## 8.2 Real-provider validation
 

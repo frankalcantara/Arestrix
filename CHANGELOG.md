@@ -18,12 +18,26 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   deterministic harness (`scripts/memory_advanced_eval.py`) covering path
   serving, beam traversal, interdomain bridge hypotheses and local/frontier
   routing. Report: `docs/quality/memory-advanced-ab.md`.
+- Corpus derived from the 14 projects under `examples/` and deterministic
+  harness (`scripts/memory_examples_eval.py`), with 3 repetitions per project.
+  It measures path serving, traversal, bridges and routing without changing the
+  original projects. Report: `docs/quality/memory-examples-advanced-ab.md`.
+- Real binary-routing A/B (`scripts/routing_binary_eval.py`) with
+  `deepseek-flash` as the local tier and `deepseek-v4-pro` as the frontier:
+  7 tasks, 2 repetitions, approval 1.000 on all arms, weighted cost 20,444.40
+  for binary vs 27,805.00 for frontier (26.5% lower) and 5.43x the local arm.
+  Quality was tied with the local model. Report:
+  `docs/quality/routing-binary-ab.md`.
 - Claim-extraction agent selector in File → Properties → Project → Memory. The
   active pipeline's agent nodes are registered in `AssistantSession` and listed
   through `memory_claim_agents`; the target is stored as `{ id, graph, node }`,
   with an explicit default-model fallback. `memory claims extract` registers the
   project pipeline before running, and the extraction uses one model call
   without tools so `--json` output stays clean.
+- Assistant `memory_inspect` now exposes the `institution` level. It reads the
+  local `institution:<id>` scope from the workspace database when the workspace
+  has an institutional parent, and returns `configured=false` with a reason
+  otherwise; the remote `arestrix-memory` service remains token-authenticated.
 - MemoryGate 3-repetition A/B confirmation with Jev: 120 executions per suite;
   parity approval 1.000 with 1.48x tokens and 1.08x latency, value approval
   1.000 vs 0.000 with 1.58x tokens and 1.09x latency. Reports:

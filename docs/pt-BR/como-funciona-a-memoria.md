@@ -615,8 +615,10 @@ A avaliação reproduzível compara lexical, híbrida com fallback, facetas +
 travessia, caminhos + serviço e roteamento em `shadow`, sempre sobre o mesmo
 conhecimento congelado e orçamento. O relatório registra tokens, chamadas,
 brief, hits e fingerprints. Nenhum interruptor experimental passa a ligado por
-padrão: `pathServing`, `traversal`, `routing.mode` e `bridges` continuam `off`
-até uma medição com dados reais mostrar ganho e custo justificados.
+padrão: `pathServing`, `traversal`, `routing.mode` e `bridges` continuam `off`.
+O corpus curado, o corpus derivado dos 14 exemplos e o A/B real do roteamento
+binário estão concluídos, mas ainda falta uma medição em projetos reais de
+cliente para justificar a ativação por padrão.
 
 ## 8.2 Validação com provedor real
 

@@ -1,14 +1,17 @@
 # Resultados dos testes de memória
 
-> **Aplica-se a:** Arestrix 2.8 (`2.8.0`) · **Última revisão:** 2026-11-11
+> **Aplica-se a:** Arestrix 2.8 (`2.8.0`) · **Última revisão:** 2026-11-12
 >
 > **Escopo:** resultados das campanhas de memória — linha de base, avaliação de
 > regressão, A/B live de paridade e valor, porteiro de política (`memory.gate`) e
 > interruptores avançados (`pathServing`, `traversal`, `bridges` e
-> `routing.mode`).
+> `routing.mode`), incluindo o corpus derivado dos 14 exemplos e o A/B real do
+> roteamento binário.
 >
-> **Detalhes:** [`memory-gate-ab.md`](../quality/memory-gate-ab.md) e
-> [`memory-advanced-ab.md`](../quality/memory-advanced-ab.md).
+> **Detalhes:** [`memory-gate-ab.md`](../quality/memory-gate-ab.md),
+> [`memory-advanced-ab.md`](../quality/memory-advanced-ab.md),
+> [`memory-examples-advanced-ab.md`](../quality/memory-examples-advanced-ab.md) e
+> [`routing-binary-ab.md`](../quality/routing-binary-ab.md).
 >
 > **Pendências e limitações operacionais:** [`PENDENCIAS.md`](../PENDENCIAS.md).
 
@@ -16,9 +19,11 @@
 
 A memória entrega valor mensurável, mas custa mais tokens e latência quando o
 agente decide consultá-la sozinho. O `memory.gate` reduz esse custo sem perder
-acerto no piloto. Os interruptores avançados funcionam como mecanismos, mas os
-padrões continuam desligados até uma medição com projetos reais e com o modelo
-de produção.
+acerto no piloto. Os interruptores avançados funcionam como mecanismos nos
+corpora curado e derivado dos 14 exemplos; o roteamento binário real confirmou
+paridade de qualidade e economia de 26,5% contra a fronteira, mas ainda não
+superou o modelo local. Os padrões continuam desligados até a medição em
+projetos reais de cliente.
 
 | Campanha | O que mede | Resultado registrado | Limitação principal |
 | :--- | :--- | :--- | :--- |
@@ -27,7 +32,9 @@ de produção.
 | A/B live — paridade | custo sem depender da memória | aprovação 1,000 × 1,000; 2,58× tokens; 1,69× latência | 20 tarefas curadas; sem dados de cliente |
 | A/B live — valor | acerto quando a memória é necessária | aprovação 1,000 × 0,000; delta 1,000; 2,67× tokens; 1,62× latência | efeito binário por desenho do validador |
 | `memory.gate` | reduzir buscas e custo sem perder acerto | Jev: 1,48×/1,58× tokens e 1,08×/1,09× latência, aprovação 1,000 | 3 repetições; dados curados |
-| Interruptores avançados | caminhos, travessia, pontes e roteamento | caminho 1,000/1,000; travessia 1,000/0,500; 1 ponte e 0 arestas; roteamento coerente | corpus curado; precisão da travessia ainda é 0,500 |
+| Interruptores — corpus curado | caminhos, travessia, pontes e roteamento | caminho 1,000/1,000; travessia 1,000/0,500; 1 ponte e 0 arestas; roteamento coerente | corpus curado; precisão da travessia ainda é 0,500 |
+| Interruptores — 14 exemplos | mecanismos sobre projetos derivados | caminho 1,000/1,000; travessia 1,000/0,300–1,000; 5 pontes propostas e 0 arestas; roteamento correto nos 14 | corpus derivado dos exemplos, não dados de cliente |
+| Roteamento binário real | qualidade e custo com dois modelos | aprovação 1,000 nos 3 braços; 20.444,40 contra 27.805,00 da fronteira; 8 decisões local e 6 frontier | qualidade empatada com o local; 7 tarefas e 2 repetições |
 
 ## 2. Linha de base e regressão
 
@@ -139,34 +146,80 @@ de prompts em linguagem natural (agora tokeniza a consulta quando a frase
 inteira não é um alias) e o modo `shadow` trocava o tier executado quando não
 havia histórico (agora mantém o tier atual e apenas registra a sugestão).
 
+### 5.1 Corpus derivado dos 14 exemplos
+
+Como não há projetos reais de cliente disponíveis, o harness
+`scripts/memory_examples_eval.py` copia cada um dos 14 projetos de `examples/`,
+semeia o banco a partir dos pipelines e mede os interruptores sem chamada de
+modelo. O projeto original não é alterado. São 3 repetições por projeto; o
+corpus é **derivado dos exemplos**, não dado de cliente.
+
+| Cenário | Resultado nos 14 projetos |
+| :--- | :--- |
+| `pathServing` | recall 1,000 e precisão 1,000 em todos |
+| `traversal` | recall 1,000 em todos; precisão entre 0,300 e 1,000 |
+| `bridges` | 5 projetos com estrutura natural de ponte (`06`, `09`, `10`, `11`, `12`), 5 propostas corretas e **0 arestas criadas** |
+| `routing.mode=shadow` | decisão registrada e tier `current` mantido nos 14 |
+| `routing.mode=binary` | `local_large` com confiança alta, `frontier` com confiança baixa e `frontier` sem histórico nos 14 |
+
+A precisão da travessia varia porque o pacote inclui afirmações relacionadas ao
+mesmo anchor além do alvo. O comportamento é aceitável como contexto, mas ainda
+pede ranking ou poda. Relatório:
+[`memory-examples-advanced-ab.md`](../quality/memory-examples-advanced-ab.md).
+
+### 5.2 Roteamento binário real
+
+O A/B de roteamento usou 7 tarefas (4 fáceis e 3 difíceis), 2 repetições e
+chamadas reais ao provedor `deepseek`: `deepseek-flash` como nível local e
+`deepseek-v4-pro` como fronteira. O custo ponderado aplica 0,2 ao token local e
+1,0 ao token de fronteira.
+
+| Braço | Aprovação | Tokens | Custo ponderado | Latência média | Decisões |
+| :--- | ---: | ---: | ---: | ---: | :--- |
+| local | 1,000 | 18.819 | 3.763,80 | 14.963 ms | — |
+| frontier | 1,000 | 27.805 | 27.805,00 | 25.679 ms | — |
+| binary | 1,000 | 28.458 | 20.444,40 | 20.447 ms | 8 `local_large`, 6 `frontier` |
+
+O binário ficou **26,5% abaixo da fronteira** em custo ponderado, mas custou
+**5,43× o local**. Não houve ganho de qualidade: o modelo local acertou também
+as tarefas difíceis. O valor medido está no custo, não na qualidade; por isso a
+promoção para padrão continua exigindo um corpus maior e telemetria de produção.
+Relatório: [`routing-binary-ab.md`](../quality/routing-binary-ab.md).
+
 ## 6. Testes de integração e release
 
 | Verificação | Resultado |
 | :--- | :--- |
-| Suíte C++ | aprovada, incluindo os testes de âncoras e do roteador |
+| Suíte C++ | 4.289/4.289 verificações aprovadas, incluindo os testes de âncoras e do roteador |
 | Vitest | 630/630 |
 | Tutorial ponta a ponta | aprovado |
 | Exemplos 01–14 | 14/14 aprovados |
 | Corpus avançado (`--check`) | reproduzido |
+| Corpus dos 14 exemplos (`--check`) | reproduzido |
 | Agente de claims (registro + extração) | e2e com provedor falso: 1 candidato, 1 extraído, 1 proposta, 0 falhas |
 | `check:secrets` | nenhum segredo ou dado pessoal |
 | `check:version` | 2.8.0 consistente |
 
 ## 7. Limitações ainda enfrentadas
 
-1. **A/B live com dados curados.** As 20 tarefas e o conhecimento congelado não
-   substituem projetos reais de cliente; os resultados mostram direção, não
-   generalização.
+1. **A/B live com dados curados e corpus derivado.** As 20 tarefas, o corpus
+   curado e os 14 exemplos não substituem projetos reais de cliente; os exemplos
+   são copiados e semeados pelo harness, não são dados de cliente. Os resultados
+   mostram direção, não generalização.
 2. **Latência variável do provedor.** O gate Jev foi confirmado em 3 repetições,
    mas o agente DeepSeek ainda varia; tokens e latência podem mudar com o
    provedor escolhido.
 3. **Valor binário.** O validador da suíte de valor exige um token que só existe
    na lição curada; isso prova a entrega, mas não mede gradação de qualidade.
-4. **Roteamento sem A/B de qualidade.** `routing.mode=binary` foi validado como
-   mecanismo de decisão, não como escolha de modelo com custo e qualidade reais.
+4. **Roteamento com paridade de qualidade.** O A/B real do `routing.mode=binary`
+   teve aprovação 1,000 nos três braços e economia de 26,5% contra a fronteira,
+   mas o modelo local também acertou as tarefas difíceis. Não houve ganho de
+   qualidade, o binário custou 5,43× o local, e o corpus tem 7 tarefas e 2
+   repetições.
 5. **Precisão da travessia.** A cadeia de 3 saltos teve recall 1,000 e precisão
-   0,500: o pacote inclui afirmações relacionadas ao mesmo anchor além do alvo.
-   É aceitável como contexto, mas ainda pede ajuste de ranking ou poda.
+   0,500 no corpus curado; nos 14 exemplos a precisão ficou entre 0,300 e 1,000.
+   O pacote inclui afirmações relacionadas ao mesmo anchor além do alvo. É
+   aceitável como contexto, mas ainda pede ajuste de ranking ou poda.
 6. **Cold start de caminhos.** `pathServing` depende de caminhos consolidados a
    partir de traços aprovados; projetos novos não têm caminhos até acumular uso.
 7. **Pontes são hipóteses.** O detector não cria arestas; a promoção é manual e
@@ -203,6 +256,13 @@ py -3 scripts/e2e_memory_ab_live.py --repetitions 1 --memory-dependent `
 # Interruptores avançados (determinístico, sem modelo)
 py -3 scripts/memory_advanced_eval.py --write --runs 3
 py -3 scripts/memory_advanced_eval.py --check --runs 3
+
+# Interruptores sobre os 14 exemplos (determinístico, sem modelo)
+py -3 scripts/memory_examples_eval.py --write --runs 3
+
+# Roteamento binário com chamadas reais (requer provedor e chave)
+py -3 scripts/routing_binary_eval.py --write --repetitions 2
+py -3 scripts/routing_binary_eval.py --check --repetitions 2
 ```
 
 ## 9. Evidências
@@ -219,5 +279,9 @@ py -3 scripts/memory_advanced_eval.py --check --runs 3
 | Gate Jev — valor | `tests/fixtures/memory-ab-live-value-gate-enforce-jev-report.json` |
 | Interruptores avançados | `tests/fixtures/memory-advanced-report.json` |
 | Corpus avançado | `tests/fixtures/memory-advanced-v1.json` |
+| Interruptores nos 14 exemplos | `tests/fixtures/memory-examples-advanced-report.json` |
+| Roteamento binário real | `tests/fixtures/routing-binary-report.json` |
 | Relatório do gate | `docs/quality/memory-gate-ab.md` |
 | Relatório dos interruptores | `docs/quality/memory-advanced-ab.md` |
+| Relatório dos exemplos | `docs/quality/memory-examples-advanced-ab.md` |
+| Relatório do roteamento | `docs/quality/routing-binary-ab.md` |

@@ -136,7 +136,9 @@ The pipeline agent has `memory_search` (read-only), `memory_propose_lesson` (pen
 the state tools `memory_state_get`, `memory_state_set`, `memory_state_list` and
 `memory_state_history`. The Studio assistant has `memory_inspect`, `memory_search`,
 `memory_review_proposal`, `memory_declare_state_key`, `memory_unpromote_playbook` and
-`memory_retire_path` (the four curation actions ask for confirmation).
+`memory_retire_path` (the four curation actions ask for confirmation). The
+`institution` level of `memory_inspect` shows the local institution scope when the workspace has an
+institutional parent; without it, it returns `configured=false`.
 
 Continuation state is declared by the project and stays outside the brief. Scopes: `project`,
 `task_type` and `item`; TTL, CAS, JSON schema and `replace`/`versioned` are supported. The CLI exposes
@@ -226,8 +228,9 @@ Python or JS process participates in graph execution.
   the panel shows conflicts, paths, facets, sources and consolidation state.
 - LLM generalization/consolidation and background coordination across multiple
   processes/instances remain out of scope for this version.
-- Paths, path serving, traversal, bridges and routing stay off by default until real-data
-  measurement justifies enabling them.
+- Paths, path serving, traversal, bridges and routing stay off by default. The curated corpus,
+  the 14-example corpus and the real binary-routing A/B are complete, but real customer projects
+  are still needed to justify enabling them.
 - `memory_handoff` remains out of scope.
 
 ## Skills

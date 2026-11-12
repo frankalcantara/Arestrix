@@ -1,6 +1,6 @@
 # Pendências do projeto Arestrix
 
-> **Versão:** 2.8.0 · **Atualizado em:** 2026-11-11
+> **Versão:** 2.8.0 · **Atualizado em:** 2026-11-12
 >
 > Documento único de pendências do projeto. O plano de memória (Fases A–C) e o
 > multigrafo avançado (Fase D / E11–E20) estão concluídos. As pendências
@@ -18,8 +18,8 @@
 | Harness de execução do A/B v2 | **Executado com provedor real em 2026-11-11 (paridade/custo e valor)** |
 | Porteiro de política da memória (`memory.gate`) | **Implementado; A/B de 3 repetições concluído** |
 | Cenários de memória do projeto (Consultar / Consultar e Decidir / Aprender) | **Implementados; memória ligada por padrão** |
-| Interruptores experimentais (`pathServing`, `traversal`, `bridges`, `routing.mode`) | **Mecanismos medidos em corpus curado; padrões seguem `off`** |
-| Nível `institution` no `memory_inspect` do assistente | Pendente operacional |
+| Interruptores experimentais (`pathServing`, `traversal`, `bridges`, `routing.mode`) | **Mecanismos medidos em corpus curado e nos 14 exemplos; roteamento binário com A/B real; padrões seguem `off`** |
+| Nível `institution` no `memory_inspect` do assistente | **Implementado; leitura do escopo institucional do workspace** |
 | Validação com provedores reais de embeddings | Pendente operacional |
 | Interface gráfica para configurar o agente de memória | **Implementada e validada no Studio** |
 | Laço de profiling (Tracy) e correção automática do código gerado via modelo padrão do Studio | Build opcional pronto; loop pendente |
@@ -67,8 +67,11 @@ medição reproduzível. Já existem no núcleo e no Studio:
    hipóteses interdomínio.
 
 Os padrões continuam conservadores: `memory.pathServing`, `memory.traversal`,
-`memory.bridges` e `routing.mode` ficam desligados até uma medição com dados
-reais. O relatório final está em `tests/fixtures/memory-eval-v1-report.json`.
+`memory.bridges` e `routing.mode` ficam desligados. A medição em corpus curado,
+o corpus derivado dos 14 exemplos e o A/B real do roteamento binário estão
+concluídos, mas ainda faltam projetos reais de cliente. Relatórios:
+`docs/quality/memory-advanced-ab.md`, `docs/quality/memory-examples-advanced-ab.md`
+e `docs/quality/routing-binary-ab.md`.
 
 ### Fora de escopo (não é pendência)
 
@@ -192,15 +195,52 @@ prompts em linguagem natural (agora tokeniza a consulta quando a frase inteira
 não é um alias) e o modo `shadow` trocava o tier executado quando não havia
 histórico (agora mantém o tier atual e apenas registra a sugestão).
 
+#### Corpus derivado dos 14 exemplos
+
+`scripts/memory_examples_eval.py` copia cada projeto de `examples/`, semeia o
+banco a partir dos pipelines e mede os interruptores sem chamada de modelo, em 3
+repetições. O original não é alterado; o corpus é derivado dos exemplos, não é
+dado de cliente.
+
+| Cenário | Resultado nos 14 projetos |
+| :--- | :--- |
+| `pathServing` | recall 1,000 e precisão 1,000 em todos |
+| `traversal` | recall 1,000 em todos; precisão entre 0,300 e 1,000 |
+| `bridges` | 5 projetos com estrutura natural (`06`, `09`, `10`, `11`, `12`), 5 propostas corretas e 0 arestas criadas |
+| `routing.mode=shadow` | decisão registrada e tier `current` mantido nos 14 |
+| `routing.mode=binary` | `local_large` com confiança alta, `frontier` com confiança baixa e `frontier` sem histórico nos 14 |
+
+Relatório: `docs/quality/memory-examples-advanced-ab.md`.
+
+#### Roteamento binário real
+
+O A/B usou 7 tarefas (4 fáceis e 3 difíceis), 2 repetições e chamadas reais ao
+provedor `deepseek`: `deepseek-flash` no nível local e `deepseek-v4-pro` na
+fronteira. O custo ponderado aplica 0,2 ao token local e 1,0 ao de fronteira.
+
+| Braço | Aprovação | Tokens | Custo ponderado | Latência média | Decisões |
+| :--- | ---: | ---: | ---: | ---: | :--- |
+| local | 1,000 | 18.819 | 3.763,80 | 14.963 ms | — |
+| frontier | 1,000 | 27.805 | 27.805,00 | 25.679 ms | — |
+| binary | 1,000 | 28.458 | 20.444,40 | 20.447 ms | 8 `local_large`, 6 `frontier` |
+
+O binário ficou 26,5% abaixo da fronteira em custo ponderado, mas custou 5,43×
+o local. Não houve ganho de qualidade: o modelo local acertou também as tarefas
+difíceis. Relatório: `docs/quality/routing-binary-ab.md`.
+
 Decisão: os mecanismos estão validados, mas os padrões continuam `off`. A
-promoção ainda exige repetir o corpus em projetos reais e um A/B de qualidade e
-custo com o modelo escolhido. Relatório reproduzível:
-`docs/quality/memory-advanced-ab.md`.
+promoção ainda exige projetos reais de cliente e um corpus maior. O A/B do
+roteamento binário mediu custo, não ganho de qualidade; o local foi suficiente
+para todas as tarefas deste conjunto.
 
 ### 4.2 Nível institucional no assistente
 
-`memory_inspect` cobre `project`, `workspace`, `vertex` e `all`. O nível `institution` depende de um
-status do serviço institucional no `MemoryService` e de configuração explícita de MCP/token.
+`memory_inspect` agora cobre `project`, `workspace`, `institution`, `vertex` e `all`. O nível
+`institution` lê o escopo `institution:<id>` já presente no banco do workspace, quando o workspace
+foi configurado com um pai institucional. Sem esse escopo, a resposta é `configured=false` com
+`reason=institution_not_configured`; o serviço institucional remoto (`arestrix-memory`) continua
+separado e autenticado por token. A leitura é somente de status e contagens: lições, playbooks,
+arestas ativas, aliases e caminho do banco.
 
 ### 4.3 Provedores reais de embeddings
 
@@ -296,4 +336,6 @@ A Fase D foi concluída com:
 6. documentação PT/EN atualizada.
 
 Os padrões permanecem conservadores: os interruptores novos só devem ser
-ligados após medição com dados reais.
+ligados após medição em projetos reais de cliente. O corpus curado, o corpus
+derivado dos 14 exemplos e o A/B real do roteamento binário estão concluídos,
+mas não substituem dados de cliente.

@@ -88,11 +88,12 @@ Still pending:
 - A/B v2 ran against a real DeepSeek provider on 2026-11-11: approval was tied at 1.000 with no
   infrastructure failures, but the ON arm cost 2.58x tokens and 1.69x latency because the agent
   issues its own memory searches. The memory-dependent variant (token `AB-7731`) scored 1.000 in
-  ON versus 0.000 in OFF, confirming lesson delivery; real-data measurement of the experimental
-  switches is still pending. The model-based `memory.gate` reduced parity overhead to ~1.34x
-  tokens and ~1.16x latency with DeepSeek, and ~1.39x/1.01x with Jev (~270 ms per decision),
-  while keeping 1.000 on the value suite (1-repetition pilot; 3-repetition confirmation pending
-  because the agent provider was slow).
+  ON versus 0.000 in OFF, confirming lesson delivery. The switch measurement is complete on the
+  curated corpus and the 14 examples; the real binary-routing A/B (7 tasks, 2 repetitions) had
+  quality parity and cost 26.5% below the frontier, but 5.43x the local arm. Real customer projects
+  are still pending. The model-based `memory.gate` reduced parity overhead to ~1.34x tokens and
+  ~1.16x latency with DeepSeek, and ~1.39x/1.01x with Jev (~270 ms per decision), while keeping
+  1.000 on the value suite; the 3-repetition Jev confirmation completed on 2026-11-12.
 - Coordination across multiple service processes/instances (out of scope for this release).
 
 Limitations of the institution service and background worker:

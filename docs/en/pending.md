@@ -3,7 +3,7 @@
 > Memory-specific pending work, including context compaction backed by existing
 > memory, is tracked in [Memory pending items](memory-pending.md).
 
-> **Version:** 2.8.0 · **Updated:** 2026-11-11
+> **Version:** 2.8.0 · **Updated:** 2026-11-12
 >
 > Single project-wide pending list. The memory implementation plan (Phases A-C) and the advanced
 > multigraph (Phase D / E11-E20) are complete. The remaining items are operational, performance and release tasks.
@@ -20,8 +20,8 @@
 | A/B v2 execution harness | **Executed with a real provider on 2026-11-11 (parity/cost and value)** |
 | Memory policy gate (`memory.gate`) | **Implemented; 3-repetition A/B complete** |
 | Project memory scenarios (Consult / Consult and Decide / Learn) | **Implemented; memory on by default** |
-| Experimental switches (`pathServing`, `traversal`, `bridges`, `routing.mode`) | **Mechanisms measured on a curated corpus; defaults stay `off`** |
-| `institution` level in the assistant `memory_inspect` | Operational pending |
+| Experimental switches (`pathServing`, `traversal`, `bridges`, `routing.mode`) | **Mechanisms measured on a curated corpus and the 14 examples; real binary-routing A/B; defaults stay `off`** |
+| `institution` level in the assistant `memory_inspect` | **Implemented; reads the workspace institution scope** |
 | Validation with real embedding providers | Operational pending |
 | Studio UI to configure the memory agent | **Implemented and validated in the Studio** |
 | Performance profiling (Tracy) and automatic correction loop for generated code via the Studio default model | Optional build ready; loop pending |
@@ -62,8 +62,10 @@ Phase D was implemented in E11-E20 with opt-in switches and reproducible measure
 5. **Routing and bridges** — local/frontier decisions by `task_type` and interdomain hypotheses.
 
 The conservative defaults remain: `memory.pathServing`, `memory.traversal`, `memory.bridges` and
-`routing.mode` stay off until real-data measurement. The final report is
-`tests/fixtures/memory-eval-v1-report.json`.
+`routing.mode` stay off. The curated corpus, the corpus derived from the 14 examples and the real
+binary-routing A/B are complete, but real customer projects are still missing. Reports:
+`docs/quality/memory-advanced-ab.md`, `docs/quality/memory-examples-advanced-ab.md` and
+`docs/quality/routing-binary-ab.md`.
 
 ### Out of scope (not pending)
 
@@ -138,9 +140,44 @@ from natural-language prompts (it now tokenizes the query when the whole phrase
 is not an alias) and `shadow` switched the executed tier when there was no
 history (it now keeps the current tier and only records the suggestion).
 
+#### Corpus derived from the 14 examples
+
+`scripts/memory_examples_eval.py` copies each project under `examples/`, seeds
+the database from the pipelines and measures the switches without a model call,
+with 3 repetitions. The original is not modified; the corpus is derived from the
+examples, not customer data.
+
+| Scenario | Result on the 14 projects |
+| :--- | :--- |
+| `pathServing` | recall 1.000 and precision 1.000 on all |
+| `traversal` | recall 1.000 on all; precision between 0.300 and 1.000 |
+| `bridges` | 5 projects with natural structure (`06`, `09`, `10`, `11`, `12`), 5 correct proposals and 0 edges created |
+| `routing.mode=shadow` | decision recorded and `current` tier kept on all 14 |
+| `routing.mode=binary` | `local_large` at high confidence, `frontier` at low confidence and `frontier` without history on all 14 |
+
+Report: `docs/quality/memory-examples-advanced-ab.md`.
+
+#### Real binary routing
+
+The A/B used 7 tasks (4 easy and 3 hard), 2 repetitions and real calls to the
+`deepseek` provider: `deepseek-flash` on the local tier and `deepseek-v4-pro` on
+the frontier. Weighted cost applies 0.2 to local tokens and 1.0 to frontier
+tokens.
+
+| Arm | Approval | Tokens | Weighted cost | Average latency | Decisions |
+| :--- | ---: | ---: | ---: | ---: | :--- |
+| local | 1.000 | 18,819 | 3,763.80 | 14,963 ms | — |
+| frontier | 1.000 | 27,805 | 27,805.00 | 25,679 ms | — |
+| binary | 1.000 | 28,458 | 20,444.40 | 20,447 ms | 8 `local_large`, 6 `frontier` |
+
+Binary routing was 26.5% below the frontier in weighted cost, but it cost 5.43x
+the local arm. There was no quality gain: the local model also passed the hard
+tasks. Report: `docs/quality/routing-binary-ab.md`.
+
 Decision: the mechanisms are validated, but defaults stay `off`. Promotion still
-requires repeating the corpus on real projects and a quality/cost A/B with the
-chosen model. Reproducible report: `docs/quality/memory-advanced-ab.md`.
+requires real customer projects and a larger corpus. The binary-routing A/B
+measured cost, not a quality gain; the local tier was sufficient for every task
+in this set.
 
 ### 4.1.1 Memory policy gate (`memory.gate`)
 
@@ -189,8 +226,12 @@ the chosen model. Details in `docs/quality/memory-gate-ab.md`.
 
 ### 4.2 Institutional level in the assistant
 
-`memory_inspect` covers `project`, `workspace`, `vertex` and `all`. The `institution` level depends on
-a `MemoryService` status for the institutional service and explicit MCP/token configuration.
+`memory_inspect` now covers `project`, `workspace`, `institution`, `vertex` and `all`. The
+`institution` level reads the `institution:<id>` scope already present in the workspace database
+when the workspace was configured with an institutional parent. Without that scope, the response is
+`configured=false` with `reason=institution_not_configured`; the remote institutional service
+(`arestrix-memory`) remains separate and token-authenticated. The read is status and counts only:
+lessons, playbooks, active edges, aliases and the database path.
 
 ### 4.3 Real embedding providers
 
@@ -281,4 +322,6 @@ Phase D is complete with:
 5. green unit, integration, E2E and baseline tests;
 6. updated PT/EN documentation.
 
-The new switches stay conservative and should only be enabled after real-data measurement.
+The new switches stay conservative and should only be enabled after measurement on real customer
+projects. The curated corpus, the 14-example corpus and the real binary-routing A/B are complete,
+but they do not replace customer data.

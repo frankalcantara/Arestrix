@@ -1,6 +1,6 @@
 # Registro de Auditoria e Integridade de Testes (Test Audit Log)
 
-> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Última revisão: 2026-10-28
+> **Aplica-se a:** Arestrix 2.8 (`2.8.0`) · Última revisão: 2026-11-12
 
 Este documento registra o histórico cronológico das rodadas de testes automatizados, verificações de segurança e auditorias de integridade do **Arestrix**, organizadas da **mais recente para a mais antiga**.
 
@@ -28,9 +28,9 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 
 ## Histórico Cronológico de Auditorias
 
-### Rodada #007 - 2026-11-11 (validação pós-2.7.0: A/B live, LIB-M-01 e instalador)
-- **Commit:** árvore de trabalho sobre `0027182` (2.7.0 + scripts de validação e documentação)
-- **Status Geral:** `APROVADO NO ESCOPO AUTOMATIZADO; CONFIRMAÇÃO NATIVA E MÁQUINA LIMPA PENDENTES`
+### Rodada #007 - 2026-11-11/12 (validação pós-2.7.0 e 2.8.0: A/B live, LIB-M-01, gate e roteamento)
+- **Commit:** árvore de trabalho sobre `ff44b63` (2.8.0 + scripts e documentação)
+- **Status Geral:** `APROVADO NO ESCOPO AUTOMATIZADO; CONFIRMAÇÃO NATIVA, PROJETOS REAIS E MÁQUINA LIMPA PENDENTES`
 - **Ambiente de Teste:** Windows 11 (x64) | Inno Setup 6.7.3 | WebView2 157.0.4341.42 | VC++ 14.51.36247.00 | DeepSeek Chat (provedor real)
 
 #### Cobertura desta rodada
@@ -42,21 +42,26 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 | **Tracy F1** | `ARESTRIX_ENABLE_TRACY` e `dev.py --tracy`; build OFF e ON com `4.259/4.259` verificações; cache final em `OFF`; zona `agent.run` em `rt/Profiling.hpp` |
 | **MemoryGate** | `off`/`shadow`/`enforce`; shadow registrou 19 decisões com `applied=false`; com Jev (`jev-latest`, System One), confirmação de 3 repetições: paridade ON 1,000 com 1,48× tokens e 1,08× latência, valor ON 1,000 × 0,000 com 1,58×/1,09×, gate 271,6/420,3 ms, 120 execuções por suíte; DeepSeek histórico em 1,34×/1,16× e 1,47×/1,19× |
 | **Cenários de memória** | Propriedades do Projeto → Memória: Consultar (`gate=brief`), Consultar e Decidir (padrão, `gate=enforce` com Jev) e Aprender com aprovação; memória ligada por padrão; “Personalizado” derivado ao alterar campo avançado; sem botão de configuração avançada |
+| **Nível institucional** | `memory_inspect` aceita `institution` e inclui o nível em `all`; `MemoryService::institutionStatus` lê o escopo `institution:<id>` pai do workspace e retorna lições, playbooks, arestas, aliases e banco; sem escopo, `configured=false` com `institution_not_configured`; testes C++ de status e do assistente passaram |
 | **Exemplos migrados** | 14 projetos/pipelines com memória ligada no cenário Consultar e Decidir; exemplos 04/05 mantêm `learn` com gate `shadow`; `e2e_examples.py` passou 14/14 |
 | **Diagnóstico do custo ON** | 20/20 traces do ensaio fizeram `memory_search` (1,8 busca/trace); o brief injetado tem ~451 caracteres. O custo vem das buscas do agente, não do brief |
-| **Interruptores avançados** | `scripts/memory_advanced_eval.py`: 10 tarefas × 7 variantes × 3 repetições, sem modelo. `pathServing` recall/precisão 1,000; `traversal` recall 1,000/precisão 0,500; `bridges` 1 hipótese e 0 arestas; `routing.shadow` mantém o tier e `binary` escolhe local/fronteira. Relatório em `docs/quality/memory-advanced-ab.md` · [consolidado](../pt-BR/resultados-testes-memoria.md) |
+| **Interruptores avançados** | `scripts/memory_advanced_eval.py`: 10 tarefas × 7 variantes × 3 repetições, sem modelo. `pathServing` recall/precisão 1,000; `traversal` recall 1,000/precisão 0,500; `bridges` 1 hipótese e 0 arestas; `routing.shadow` mantém o tier e `binary` escolhe local/fronteira. `scripts/memory_examples_eval.py`: 14 projetos × 3 repetições; caminho 1,000/1,000; travessia recall 1,000 e precisão 0,300–1,000; 5 pontes propostas e 0 arestas; roteamento correto nos 14. Relatórios em `docs/quality/memory-advanced-ab.md` e `docs/quality/memory-examples-advanced-ab.md` · [consolidado](../pt-BR/resultados-testes-memoria.md) |
+| **Roteamento binário real** | `scripts/routing_binary_eval.py`: 7 tarefas × 2 repetições × 3 braços com `deepseek-flash` (local) e `deepseek-v4-pro` (fronteira); aprovação 1,000 nos três; local 18.819 tokens/3.763,80; frontier 27.805/27.805,00; binary 28.458/20.444,40, com 8 decisões `local_large` e 6 `frontier`; binário 26,5% abaixo da fronteira e 5,43× o local; `tests/fixtures/routing-binary-report.json` |
 | **Agente de claims** | `scripts/e2e_memory_claim_agent.py`: pipeline temporário, agente registrado, provedor HTTP falso; 1 candidato, 1 extraído, 1 proposta, 0 falhas; seletor em Propriedades e salvamento `{id, graph, node}`; validação manual no Studio: 3 agentes listados, `Especialista_A` persistiu após reabrir e o bug de ordem de chaves JSON foi corrigido |
 | **Bibliotecas LIB-M-01** | `scripts/capture-libraries-homologation.mjs`: temas claro/escuro, 1024/1800 px, árvore com PENDING/APPROVE/REJECT, sem overflow e canvas escuro; capturas em `docs/assets/screenshots/libraries-*.webp` |
 | **Instalador 2.7.0** | `arestrix-2.7.0-windows-x64-setup.exe` (62.866.760 bytes, SHA-256 `f4067105…f3f80a`); instalação silenciosa, `arestrix-cli`/`arestrix-memory` 2.7.0, `project validate`, abertura do Studio, upgrade 2.1.0-beta.1 → 2.7.0 preservando projeto do usuário e desinstalação completa |
 | **Pacote portátil 2.7.0** | `arestrix-2.7.0-windows-x64.zip` (90.100.073 bytes, 4.912 arquivos), SHA-256 `bb88bee8…e327f33` |
+
+- **Métricas Globais (2026-11-12):** 79 arquivos de teste | 630 testes Vitest | 4.289/4.289 verificações C++ | tutorial E2E + 14 exemplos | 0 falhas automatizadas
 
 #### Pendências para promoção
 
 - [ ] Confirmar LIB-M-01 na aplicação nativa (a evidência desta rodada é da camada web).
 - [ ] LIB-M-03 (instalação limpa/upgrade preservando bibliotecas) e LIB-M-04 (offline após cache).
 - [ ] Instalação em máquina realmente limpa (apenas runtime VC++) e Intune/SCCM.
-- [x] Medição de mecanismos dos interruptores experimentais (`pathServing`, `traversal`, `bridges`, `routing`) com corpus próprio.
-- [ ] Repetir o corpus de interruptores em projetos reais e medir qualidade/custo de `routing.mode=binary` com o modelo escolhido.
+- [x] Medição de mecanismos dos interruptores experimentais (`pathServing`, `traversal`, `bridges`, `routing`) com corpus próprio e com os 14 exemplos.
+- [x] Medição de qualidade/custo de `routing.mode=binary` com o modelo escolhido (7 tarefas, 2 repetições; paridade de qualidade e custo abaixo da fronteira).
+- [ ] Repetir o corpus de interruptores em projetos reais de cliente; os 14 exemplos são um corpus derivado, não dados de cliente.
 - [x] Confirmação de 3 repetições do `memory.gate` com Jev (`run 2026-11-12`, 120 execuções por suíte).
 - [ ] Pacote Linux e matriz de CI Linux/macOS.
 

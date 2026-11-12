@@ -90,11 +90,13 @@ Ainda pendente:
 - A/B v2 executado com DeepSeek real em 2026-11-11: aprovação empatada em 1,000, sem falha de
   infraestrutura, mas o braço ON custou 2,58× tokens e 1,69× latência por causa de buscas de
   memória feitas pelo próprio agente. A variante com validador dependente de memória (token
-  `AB-7731`) mostrou 1,000 no ON contra 0,000 no OFF, confirmando a entrega da lição; a medição
-  dos interruptores experimentais com dados reais continua pendente. O `memory.gate` com modelo
-  reduziu o overhead de paridade para ~1,34× tokens e ~1,16× latência com DeepSeek, e ~1,39×/1,01×
-  com Jev (~270 ms por decisão), mantendo 1,000 no valor (piloto de 1 repetição; confirmação de
-  3 repetições pendente por latência do agente).
+  `AB-7731`) mostrou 1,000 no ON contra 0,000 no OFF, confirmando a entrega da lição. A medição
+  dos interruptores foi concluída no corpus curado e nos 14 exemplos; o A/B real de roteamento
+  binário (7 tarefas, 2 repetições) teve paridade de qualidade e custo 26,5% abaixo da fronteira,
+  mas 5,43× o local. A medição em projetos reais de cliente continua pendente. O `memory.gate` com
+  modelo reduziu o overhead de paridade para ~1,34× tokens e ~1,16× latência com DeepSeek, e
+  ~1,39×/1,01× com Jev (~270 ms por decisão), mantendo 1,000 no valor; a confirmação de 3
+  repetições com Jev foi concluída em 2026-11-12.
 - Coordenação entre múltiplos processos/instâncias do serviço institucional (fora do escopo desta
   release).
 

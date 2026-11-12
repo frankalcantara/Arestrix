@@ -1,0 +1,1016 @@
+{
+  "schema": 1,
+  "name": "routing-binary-v1",
+  "provider": "deepseek",
+  "localModel": "deepseek-flash",
+  "frontierModel": "deepseek-v4-pro",
+  "repetitions": 2,
+  "executedAt": "2026-11-12T12:09:47+00:00",
+  "arms": {
+    "local": {
+      "n": 14,
+      "approved": 14,
+      "approval": 1.0,
+      "promptTokens": 16563,
+      "completionTokens": 2256,
+      "totalTokens": 18819,
+      "weightedCost": 3763.8,
+      "avgLatencyMs": 14963.07,
+      "byDifficulty": {
+        "easy": {
+          "n": 8,
+          "approved": 8,
+          "approval": 1.0
+        },
+        "hard": {
+          "n": 6,
+          "approved": 6,
+          "approval": 1.0
+        }
+      },
+      "routing": {}
+    },
+    "frontier": {
+      "n": 14,
+      "approved": 14,
+      "approval": 1.0,
+      "promptTokens": 21975,
+      "completionTokens": 5830,
+      "totalTokens": 27805,
+      "weightedCost": 27805.0,
+      "avgLatencyMs": 25678.68,
+      "byDifficulty": {
+        "easy": {
+          "n": 8,
+          "approved": 8,
+          "approval": 1.0
+        },
+        "hard": {
+          "n": 6,
+          "approved": 6,
+          "approval": 1.0
+        }
+      },
+      "routing": {}
+    },
+    "binary": {
+      "n": 14,
+      "approved": 14,
+      "approval": 1.0,
+      "promptTokens": 21776,
+      "completionTokens": 6682,
+      "totalTokens": 28458,
+      "weightedCost": 20444.4,
+      "avgLatencyMs": 20446.7,
+      "byDifficulty": {
+        "easy": {
+          "n": 8,
+          "approved": 8,
+          "approval": 1.0
+        },
+        "hard": {
+          "n": 6,
+          "approved": 6,
+          "approval": 1.0
+        }
+      },
+      "routing": {
+        "local_large": 8,
+        "frontier": 6
+      }
+    }
+  },
+  "checks": {
+    "localApprovalOnEasy": true,
+    "frontierApprovalOnHard": true,
+    "binaryQualityNotBelowLocal": true,
+    "binaryCostBelowFrontier": true,
+    "binaryUsesBothTiers": true,
+    "binaryUsesFrontierOnHard": true,
+    "binaryUsesLocalOnEasy": true,
+    "noInfraErrors": true
+  },
+  "pass": true,
+  "observations": [
+    {
+      "arm": "local",
+      "task": "easy-sum",
+      "difficulty": "easy",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "4",
+      "elapsedMs": 14292.14,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1124,
+        "completionTokens": 109,
+        "totalTokens": 1233,
+        "cachedTokens": 640,
+        "avgLatencyMs": 3165.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "local",
+      "task": "easy-sum",
+      "difficulty": "easy",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "4",
+      "elapsedMs": 14770.97,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1109,
+        "completionTokens": 97,
+        "totalTokens": 1206,
+        "cachedTokens": 640,
+        "avgLatencyMs": 2464.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "local",
+      "task": "easy-capital",
+      "difficulty": "easy",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "Paris",
+      "elapsedMs": 14494.91,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1118,
+        "completionTokens": 108,
+        "totalTokens": 1226,
+        "cachedTokens": 640,
+        "avgLatencyMs": 2433.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "local",
+      "task": "easy-capital",
+      "difficulty": "easy",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "Paris",
+      "elapsedMs": 16357.87,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1207,
+        "completionTokens": 198,
+        "totalTokens": 1405,
+        "cachedTokens": 640,
+        "avgLatencyMs": 3298.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "local",
+      "task": "easy-product",
+      "difficulty": "easy",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "42",
+      "elapsedMs": 15622.5,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1113,
+        "completionTokens": 98,
+        "totalTokens": 1211,
+        "cachedTokens": 640,
+        "avgLatencyMs": 2859.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "local",
+      "task": "easy-product",
+      "difficulty": "easy",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "42",
+      "elapsedMs": 14739.05,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1114,
+        "completionTokens": 99,
+        "totalTokens": 1213,
+        "cachedTokens": 640,
+        "avgLatencyMs": 2529.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "local",
+      "task": "easy-sky",
+      "difficulty": "easy",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "azul",
+      "elapsedMs": 14556.54,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1159,
+        "completionTokens": 149,
+        "totalTokens": 1308,
+        "cachedTokens": 768,
+        "avgLatencyMs": 2571.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "local",
+      "task": "easy-sky",
+      "difficulty": "easy",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "Azul",
+      "elapsedMs": 14099.24,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1170,
+        "completionTokens": 153,
+        "totalTokens": 1323,
+        "cachedTokens": 768,
+        "avgLatencyMs": 2751.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "local",
+      "task": "hard-product",
+      "difficulty": "hard",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "121932631112635269",
+      "elapsedMs": 15371.73,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1214,
+        "completionTokens": 194,
+        "totalTokens": 1408,
+        "cachedTokens": 640,
+        "avgLatencyMs": 3154.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "local",
+      "task": "hard-product",
+      "difficulty": "hard",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "121932631112635269",
+      "elapsedMs": 16582.25,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1433,
+        "completionTokens": 413,
+        "totalTokens": 1846,
+        "cachedTokens": 896,
+        "avgLatencyMs": 3912.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "local",
+      "task": "hard-recurrence",
+      "difficulty": "hard",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "155",
+      "elapsedMs": 14108.19,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1204,
+        "completionTokens": 177,
+        "totalTokens": 1381,
+        "cachedTokens": 896,
+        "avgLatencyMs": 2563.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "local",
+      "task": "hard-recurrence",
+      "difficulty": "hard",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "155",
+      "elapsedMs": 14802.95,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1215,
+        "completionTokens": 144,
+        "totalTokens": 1359,
+        "cachedTokens": 896,
+        "avgLatencyMs": 2558.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "local",
+      "task": "hard-fib",
+      "difficulty": "hard",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "6765",
+      "elapsedMs": 14882.71,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1194,
+        "completionTokens": 163,
+        "totalTokens": 1357,
+        "cachedTokens": 892,
+        "avgLatencyMs": 2505.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "local",
+      "task": "hard-fib",
+      "difficulty": "hard",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "6765",
+      "elapsedMs": 14801.89,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1189,
+        "completionTokens": 154,
+        "totalTokens": 1343,
+        "cachedTokens": 892,
+        "avgLatencyMs": 2813.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "frontier",
+      "task": "easy-sum",
+      "difficulty": "easy",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "4",
+      "elapsedMs": 16983.15,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1271,
+        "completionTokens": 125,
+        "totalTokens": 1396,
+        "cachedTokens": 1024,
+        "avgLatencyMs": 5185.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "frontier",
+      "task": "easy-sum",
+      "difficulty": "easy",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "4",
+      "elapsedMs": 16328.03,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1258,
+        "completionTokens": 123,
+        "totalTokens": 1381,
+        "cachedTokens": 1024,
+        "avgLatencyMs": 4982.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "frontier",
+      "task": "easy-capital",
+      "difficulty": "easy",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "Paris",
+      "elapsedMs": 26411.34,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1251,
+        "completionTokens": 111,
+        "totalTokens": 1362,
+        "cachedTokens": 1024,
+        "avgLatencyMs": 14101.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "frontier",
+      "task": "easy-capital",
+      "difficulty": "easy",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "Paris",
+      "elapsedMs": 23042.19,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1257,
+        "completionTokens": 116,
+        "totalTokens": 1373,
+        "cachedTokens": 1024,
+        "avgLatencyMs": 11242.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "frontier",
+      "task": "easy-product",
+      "difficulty": "easy",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "42",
+      "elapsedMs": 23061.04,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1250,
+        "completionTokens": 92,
+        "totalTokens": 1342,
+        "cachedTokens": 1024,
+        "avgLatencyMs": 11770.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "frontier",
+      "task": "easy-product",
+      "difficulty": "easy",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "42",
+      "elapsedMs": 22823.64,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1260,
+        "completionTokens": 118,
+        "totalTokens": 1378,
+        "cachedTokens": 1024,
+        "avgLatencyMs": 10909.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "frontier",
+      "task": "easy-sky",
+      "difficulty": "easy",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "azul",
+      "elapsedMs": 24633.02,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1299,
+        "completionTokens": 153,
+        "totalTokens": 1452,
+        "cachedTokens": 1152,
+        "avgLatencyMs": 11990.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "frontier",
+      "task": "easy-sky",
+      "difficulty": "easy",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "azul",
+      "elapsedMs": 23136.79,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1290,
+        "completionTokens": 139,
+        "totalTokens": 1429,
+        "cachedTokens": 1152,
+        "avgLatencyMs": 10825.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "frontier",
+      "task": "hard-product",
+      "difficulty": "hard",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "121932631112635269",
+      "elapsedMs": 43489.45,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 3211,
+        "completionTokens": 2087,
+        "totalTokens": 5298,
+        "cachedTokens": 3072,
+        "avgLatencyMs": 31162.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "frontier",
+      "task": "hard-product",
+      "difficulty": "hard",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "121932631112635269",
+      "elapsedMs": 41324.88,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 3085,
+        "completionTokens": 1943,
+        "totalTokens": 5028,
+        "cachedTokens": 2944,
+        "avgLatencyMs": 29421.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "frontier",
+      "task": "hard-recurrence",
+      "difficulty": "hard",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "155",
+      "elapsedMs": 18911.35,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1362,
+        "completionTokens": 167,
+        "totalTokens": 1529,
+        "cachedTokens": 1152,
+        "avgLatencyMs": 6034.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "frontier",
+      "task": "hard-recurrence",
+      "difficulty": "hard",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "155",
+      "elapsedMs": 24265.89,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1415,
+        "completionTokens": 219,
+        "totalTokens": 1634,
+        "cachedTokens": 1024,
+        "avgLatencyMs": 10931.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "frontier",
+      "task": "hard-fib",
+      "difficulty": "hard",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "6765",
+      "elapsedMs": 30804.72,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1391,
+        "completionTokens": 228,
+        "totalTokens": 1619,
+        "cachedTokens": 1024,
+        "avgLatencyMs": 18372.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "frontier",
+      "task": "hard-fib",
+      "difficulty": "hard",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "6765",
+      "elapsedMs": 24286.01,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1375,
+        "completionTokens": 209,
+        "totalTokens": 1584,
+        "cachedTokens": 1024,
+        "avgLatencyMs": 11635.0
+      },
+      "routing": {},
+      "error": ""
+    },
+    {
+      "arm": "binary",
+      "task": "easy-sum",
+      "difficulty": "easy",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "4",
+      "elapsedMs": 15349.99,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1117,
+        "completionTokens": 99,
+        "totalTokens": 1216,
+        "cachedTokens": 640,
+        "avgLatencyMs": 2477.0
+      },
+      "routing": {
+        "local_large": 1
+      },
+      "error": ""
+    },
+    {
+      "arm": "binary",
+      "task": "easy-sum",
+      "difficulty": "easy",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "4",
+      "elapsedMs": 15507.87,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1114,
+        "completionTokens": 108,
+        "totalTokens": 1222,
+        "cachedTokens": 640,
+        "avgLatencyMs": 2783.0
+      },
+      "routing": {
+        "local_large": 1
+      },
+      "error": ""
+    },
+    {
+      "arm": "binary",
+      "task": "easy-capital",
+      "difficulty": "easy",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "Paris",
+      "elapsedMs": 15587.14,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1127,
+        "completionTokens": 123,
+        "totalTokens": 1250,
+        "cachedTokens": 640,
+        "avgLatencyMs": 2770.0
+      },
+      "routing": {
+        "local_large": 1
+      },
+      "error": ""
+    },
+    {
+      "arm": "binary",
+      "task": "easy-capital",
+      "difficulty": "easy",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "Paris",
+      "elapsedMs": 16726.29,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1128,
+        "completionTokens": 119,
+        "totalTokens": 1247,
+        "cachedTokens": 640,
+        "avgLatencyMs": 2407.0
+      },
+      "routing": {
+        "local_large": 1
+      },
+      "error": ""
+    },
+    {
+      "arm": "binary",
+      "task": "easy-product",
+      "difficulty": "easy",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "42",
+      "elapsedMs": 17930.54,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1185,
+        "completionTokens": 174,
+        "totalTokens": 1359,
+        "cachedTokens": 768,
+        "avgLatencyMs": 3223.0
+      },
+      "routing": {
+        "local_large": 1
+      },
+      "error": ""
+    },
+    {
+      "arm": "binary",
+      "task": "easy-product",
+      "difficulty": "easy",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "42",
+      "elapsedMs": 16374.95,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1111,
+        "completionTokens": 101,
+        "totalTokens": 1212,
+        "cachedTokens": 640,
+        "avgLatencyMs": 2946.0
+      },
+      "routing": {
+        "local_large": 1
+      },
+      "error": ""
+    },
+    {
+      "arm": "binary",
+      "task": "easy-sky",
+      "difficulty": "easy",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "azul",
+      "elapsedMs": 16071.02,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1137,
+        "completionTokens": 117,
+        "totalTokens": 1254,
+        "cachedTokens": 640,
+        "avgLatencyMs": 2725.0
+      },
+      "routing": {
+        "local_large": 1
+      },
+      "error": ""
+    },
+    {
+      "arm": "binary",
+      "task": "easy-sky",
+      "difficulty": "easy",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "Azul",
+      "elapsedMs": 16070.04,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1137,
+        "completionTokens": 120,
+        "totalTokens": 1257,
+        "cachedTokens": 640,
+        "avgLatencyMs": 3683.0
+      },
+      "routing": {
+        "local_large": 1
+      },
+      "error": ""
+    },
+    {
+      "arm": "binary",
+      "task": "hard-product",
+      "difficulty": "hard",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "121932631112635269",
+      "elapsedMs": 59073.82,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 5195,
+        "completionTokens": 4058,
+        "totalTokens": 9253,
+        "cachedTokens": 4992,
+        "avgLatencyMs": 46714.0
+      },
+      "routing": {
+        "frontier": 1
+      },
+      "error": ""
+    },
+    {
+      "arm": "binary",
+      "task": "hard-product",
+      "difficulty": "hard",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "121932631112635269",
+      "elapsedMs": 26479.24,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 2002,
+        "completionTokens": 860,
+        "totalTokens": 2862,
+        "cachedTokens": 1024,
+        "avgLatencyMs": 13936.0
+      },
+      "routing": {
+        "frontier": 1
+      },
+      "error": ""
+    },
+    {
+      "arm": "binary",
+      "task": "hard-recurrence",
+      "difficulty": "hard",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "155",
+      "elapsedMs": 18114.69,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1387,
+        "completionTokens": 185,
+        "totalTokens": 1572,
+        "cachedTokens": 1152,
+        "avgLatencyMs": 6012.0
+      },
+      "routing": {
+        "frontier": 1
+      },
+      "error": ""
+    },
+    {
+      "arm": "binary",
+      "task": "hard-recurrence",
+      "difficulty": "hard",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "155",
+      "elapsedMs": 18760.05,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1393,
+        "completionTokens": 195,
+        "totalTokens": 1588,
+        "cachedTokens": 1024,
+        "avgLatencyMs": 5853.0
+      },
+      "routing": {
+        "frontier": 1
+      },
+      "error": ""
+    },
+    {
+      "arm": "binary",
+      "task": "hard-fib",
+      "difficulty": "hard",
+      "repetition": 0,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "6765",
+      "elapsedMs": 18121.52,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1394,
+        "completionTokens": 235,
+        "totalTokens": 1629,
+        "cachedTokens": 1024,
+        "avgLatencyMs": 4856.0
+      },
+      "routing": {
+        "frontier": 1
+      },
+      "error": ""
+    },
+    {
+      "arm": "binary",
+      "task": "hard-fib",
+      "difficulty": "hard",
+      "repetition": 1,
+      "exitCode": 0,
+      "pipelineOk": true,
+      "answerOk": true,
+      "answer": "6765",
+      "elapsedMs": 16086.68,
+      "usage": {
+        "calls": 1,
+        "promptTokens": 1349,
+        "completionTokens": 188,
+        "totalTokens": 1537,
+        "cachedTokens": 1152,
+        "avgLatencyMs": 4054.0
+      },
+      "routing": {
+        "frontier": 1
+      },
+      "error": ""
+    }
+  ],
+  "pilot": {
+    "easy-sum": 1,
+    "easy-capital": 1,
+    "easy-product": 1,
+    "easy-sky": 1,
+    "hard-product": 1,
+    "hard-recurrence": 1,
+    "hard-fib": 1
+  },
+  "elapsedSeconds": 969.24
+}
