@@ -17,6 +17,11 @@ export type AgentTemplateCategory =
   | 'Síntese & Orquestração'
   | 'Plugins Customizados';
 
+export interface IPipelineInterface {
+  input: { name: string; description?: string };
+  outputs: Array<{ name: string; description?: string; sourcePath?: string }>;
+}
+
 export interface IAgentTemplate {
   id: string;
   name: string;
@@ -35,6 +40,7 @@ export interface IAgentTemplate {
   /** Pipeline/projeto empacotado como ativo de biblioteca. */
   assetKind?: 'vertex' | 'agent' | 'pipeline';
   childGraph?: IGraphSchema;
+  pipelineInterface?: IPipelineInterface;
   /** Apresentação visual: pipeline aparece como agente no canvas. */
   presentation?: 'agent';
   /** Agente de biblioteca pronto: configuração travada na interface. */
@@ -60,6 +66,7 @@ export interface ISerializedTemplatePlugin {
   agentSettings?: INodeAgentSettings;
   assetKind?: 'vertex' | 'agent' | 'pipeline';
   childGraph?: IGraphSchema;
+  pipelineInterface?: IPipelineInterface;
   presentation?: 'agent';
   /** Agente de biblioteca pronto: configuração travada na interface. */
   presetLocked?: boolean;

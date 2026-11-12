@@ -656,6 +656,7 @@ export class TemplateModal {
       presetId: tpl.id,
       presetLocked: true,
       presentation: 'agent',
+      pipelineInterface: tpl.pipelineInterface ? JSON.parse(JSON.stringify(tpl.pipelineInterface)) : undefined,
       requiredHeaders: tpl.requiredHeaders
     };
 

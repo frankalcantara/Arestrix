@@ -1563,11 +1563,15 @@ export class Inspector {
   private renderPipelineAgentSection(node: INodeData): string {
     const settings = node.callSettings ?? defaultCallVertexSettings();
     const source = settings.source ?? { kind: 'previous', path: '' };
+    const iface = node.pipelineInterface;
+    const inputName = iface?.input.name || t('inspector.calls.pipeline_input', 'Entrada do pipeline');
+    const inputDescription = iface?.input.description || t('inspector.calls.pipeline_input_placeholder', 'Texto enviado ao pipeline quando ele for executado');
+    const outputs = iface?.outputs || [];
     return `
       <div class="form-group" style="border-left: 3px solid #6366f1; padding-left: 8px; margin-top: 8px;">
-        <label class="form-label" for="pipeline-agent-input">${t('inspector.calls.pipeline_input', 'Entrada do pipeline')}</label>
+        <label class="form-label" for="pipeline-agent-input">${this.escapeHtml(inputName)}</label>
         <textarea id="pipeline-agent-input" class="form-textarea" rows="3"
-          placeholder="${t('inspector.calls.pipeline_input_placeholder', 'Texto enviado ao pipeline quando ele for executado')}">${this.escapeHtml(settings.input ?? '')}</textarea>
+          placeholder="${this.escapeHtml(inputDescription)}">${this.escapeHtml(settings.input ?? '')}</textarea>
         <label class="form-label" for="pipeline-agent-source" style="margin-top: 8px;">${t('inspector.calls.pipeline_source', 'Origem da entrada')}</label>
         <select id="pipeline-agent-source" class="form-select">
           <option value="previous" ${source.kind === 'previous' ? 'selected' : ''}>${t('inspector.calls.source_previous', 'Vértice anterior')}</option>
@@ -1579,6 +1583,12 @@ export class Inspector {
             placeholder="${t('inspector.calls.pipeline_source_path', 'Caminho relativo do arquivo de entrada')}" />
         ` : ''}
         <div class="office-field-hint">${t('inspector.calls.pipeline_input_hint', 'A entrada é passada ao pipeline empacotado. O resultado é gravado em .arestrix/out e entregue ao próximo vértice.')}</div>
+        ${outputs.length > 0 ? `
+          <div class="office-field-hint" style="margin-top: 8px;">
+            <strong>${t('inspector.calls.pipeline_outputs', 'Saídas do pipeline')}:</strong>
+            ${outputs.map(output => `<div>• ${this.escapeHtml(output.name)}${output.description ? ` — ${this.escapeHtml(output.description)}` : ''}</div>`).join('')}
+          </div>
+        ` : ''}
       </div>
     `;
   }

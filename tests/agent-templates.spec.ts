@@ -242,11 +242,14 @@ describe('Fase 4: Catalogo de Templates de Agentes & Sistema de Plugins Dinamico
       expect(pipeline.taskType).toBe('subflow');
       expect(pipeline.presentation).toBe('agent');
       expect(pipeline.presetLocked).toBe(true);
+      expect(pipeline.pipelineInterface?.input.name).toBe('Entrada');
+      expect(pipeline.pipelineInterface?.outputs[0]?.name).toBe('Saída');
       expect(pipeline.childGraph?.nodes?.length).toBe(2);
 
       const serialized = JSON.parse(registry.exportTemplateAsJSON(pipeline.id)!);
       expect(serialized.assetKind).toBe('pipeline');
       expect(serialized.childGraph.nodes.length).toBe(2);
+      expect(serialized.pipelineInterface.outputs[0].name).toBe('Saída');
       expect(serialized.presentation).toBe('agent');
 
       const imported = registry.importTemplatesFromJSON(JSON.stringify({

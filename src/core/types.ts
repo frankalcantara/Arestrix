@@ -786,6 +786,11 @@ export interface INodeData {
   hidden?: boolean;
   /** Apresentação visual de um pipeline/projeto composto como agente. */
   presentation?: 'agent';
+  /** Interface declarada do pipeline empacotado (entrada e saídas nomeadas). */
+  pipelineInterface?: {
+    input: { name: string; description?: string };
+    outputs: Array<{ name: string; description?: string; sourcePath?: string }>;
+  };
   requiredHeaders?: string[]; // Headers C++20 adicionais requeridos por este agente
   agentSettings?: INodeAgentSettings;
   switchSettings?: ISwitchSettings; // só para vértices do tipo 'switch'

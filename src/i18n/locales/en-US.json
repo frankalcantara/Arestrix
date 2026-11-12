@@ -728,7 +728,8 @@
       "source_file": "File",
       "source_none": "None",
       "pipeline_source_path": "Relative path of the input file",
-      "pipeline_input_hint": "The input is passed to the packaged pipeline. The result is written to .arestrix/out and handed to the next vertex."
+      "pipeline_input_hint": "The input is passed to the packaged pipeline. The result is written to .arestrix/out and handed to the next vertex.",
+      "pipeline_outputs": "Pipeline outputs"
     },
     "interaction": {
       "pending": "Execution: safe modal in the Studio or headless answers with --answers.",

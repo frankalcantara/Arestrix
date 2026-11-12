@@ -1,4 +1,4 @@
-import { IAgentTemplate, ISerializedTemplatePlugin, ITemplateParameterDef, AgentTemplateCategory } from './AgentTemplateTypes.ts';
+import { IAgentTemplate, ISerializedTemplatePlugin, ITemplateParameterDef, AgentTemplateCategory, IPipelineInterface } from './AgentTemplateTypes.ts';
 import { BUILTIN_TEMPLATES } from './BuiltinTemplates.ts';
 import { INodeData, INodeAgentSettings, IPort, IGraphSchema } from '../types.ts';
 import type { Graph } from '../Graph.ts';
@@ -32,6 +32,22 @@ function defaultAgentSettings(): INodeAgentSettings {
     inheritModel: true,
     inheritCodeMode: true,
     inheritMemory: true
+  };
+}
+
+function buildPipelineInterface(schema: IGraphSchema): IPipelineInterface {
+  const outputs = schema.nodes
+    .filter(node => node.type === 'output')
+    .map(node => ({
+      name: node.label || node.id,
+      description: node.outputSettings?.artifactType
+        ? `Saída (${node.outputSettings.artifactType})`
+        : 'Saída do pipeline',
+      sourcePath: node.outputSettings?.sourcePath
+    }));
+  return {
+    input: { name: 'Entrada', description: 'Texto ou JSON enviado ao pipeline' },
+    outputs: outputs.length > 0 ? outputs : [{ name: 'Resultado', description: 'Resultado do pipeline' }]
   };
 }
 
@@ -187,6 +203,7 @@ export class AgentTemplateRegistry {
       nodeData.presetLocked = tpl.presetLocked !== false;
     }
     if (tpl.childGraph) nodeData.childGraph = deepClone(tpl.childGraph);
+    if (tpl.pipelineInterface) nodeData.pipelineInterface = deepClone(tpl.pipelineInterface);
     if (tpl.presentation === 'agent') nodeData.presentation = 'agent';
 
     if (tpl.createChildGraph) {
@@ -326,6 +343,7 @@ export class AgentTemplateRegistry {
       outputs: [{ name: 'out', type: 'flow' }],
       parameters: {},
       childGraph: deepClone(schema),
+      pipelineInterface: buildPipelineInterface(schema),
       assetKind: 'pipeline',
       presentation: 'agent',
       presetLocked: true,
@@ -406,6 +424,7 @@ export class AgentTemplateRegistry {
               : (item.taskType === 'agent' ? defaultAgentSettings() : undefined),
             assetKind: item.assetKind,
             childGraph: item.childGraph ? deepClone(item.childGraph) : undefined,
+            pipelineInterface: item.pipelineInterface ? deepClone(item.pipelineInterface) : undefined,
             presentation: item.presentation,
             presetLocked: item.taskType === 'agent' || item.assetKind === 'pipeline'
               ? (item.presetLocked !== false) : undefined,
@@ -461,6 +480,7 @@ export class AgentTemplateRegistry {
       agentSettings: tpl.agentSettings ? deepClone(tpl.agentSettings) : undefined,
       assetKind: tpl.assetKind,
       childGraph: tpl.childGraph ? deepClone(tpl.childGraph) : undefined,
+      pipelineInterface: tpl.pipelineInterface ? deepClone(tpl.pipelineInterface) : undefined,
       presentation: tpl.presentation,
       presetLocked: tpl.presetLocked,
       author: tpl.author,
