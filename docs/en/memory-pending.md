@@ -14,7 +14,7 @@ below are the next memory work. No item here blocks the current release.
 | High | Enable experimental switches only after real-data A/B | Pending |
 | Medium | Institutional memory level in the Studio assistant | Pending |
 | Medium | Real embedding-provider quality/latency validation | Pending |
-| Medium | Studio UI to configure the memory agent | Pending |
+| Medium | Studio UI to configure the memory agent | Implemented; manual Studio validation pending |
 | Low | Multi-process maintenance coordination | Out of scope for v1 |
 
 ## 1. Context compaction backed by existing memory
@@ -119,13 +119,19 @@ broader real-data A/B covers more task shapes.
 
 ## 1.1 Studio UI for the memory agent
 
-The backend contract is ready: `memory.claimExtraction.agent` accepts a Studio
-agent id or `{ id, graph, node }`, and an absent target uses the Studio default
-model. The missing prerequisite is registration: `registerStudioClaimAgent` is
-only called by tests, so any configured target fails with `agente de memoria
-'<key>' nao registrado no Studio`. The Studio must register its agents/graphs in
-`AssistantSession` and expose a list before a screen can choose the target,
-display the default-model fallback and explain an unavailable target.
+The target is implemented end to end. The active pipeline's agent nodes are
+registered in `AssistantSession` and exposed through `memory_claim_agents`; the
+Properties screen (File -> Properties -> Project -> Memory) saves
+`memory.claimExtraction.agent` as `{ id, graph, node }`, shows the Studio
+default-model fallback and warns when the saved target is unavailable. The
+`memory claims extract` CLI registers `pipelines/main.json` before running.
+
+The extraction uses one model call without tools, keeping the selected agent's
+provider/model/skill and producing clean `--json` output. Automated coverage
+includes the registry/list test and `scripts/e2e_memory_claim_agent.py` with a
+fake provider (one candidate, one extracted claim, one proposal, zero failures).
+Only manual validation in the Studio window remains: change the target, save
+and reopen the project.
 
 ## 2. Standalone Mnemosyne module and submodule
 
