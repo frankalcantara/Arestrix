@@ -73,6 +73,14 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   internal subflow in one undoable command, without touching the library asset.
   The library picker lists the release history, and **Publish version** saves the
   current pipeline as a new version of an existing editable pipeline asset.
+- Library license and commercial-entitlement foundation. GitHub sources now
+  normalize SPDX aliases and validate the manifest license against a normalized
+  allowlist (including expressions such as `MIT OR Apache-2.0`). Assets created
+  by the user normalize their declared license. Assets can declare an optional
+  `access.requiresEntitlement` policy; offline entitlements are Ed25519-signed
+  claims verified with WebCrypto, and `LibraryService.checkAssetEntitlement`
+  evaluates product, tier, asset scope and expiry. Assets without the policy
+  remain fully usable, so existing libraries are unaffected.
 - Claim-extraction agent selector in File → Properties → Project → Memory. The
   active pipeline's agent nodes are registered in `AssistantSession` and listed
   through `memory_claim_agents`; the target is stored as `{ id, graph, node }`,

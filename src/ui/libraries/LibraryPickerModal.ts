@@ -309,6 +309,7 @@ export class LibraryPickerModal extends BaseModal {
                 : 'MCP', 'accent')}
             ${badge(this.escapeHtml(asset.audit.verdict), verdictTone(asset.audit.verdict))}
             ${badge(asset.status === 'installed' ? lbl('installed', 'Instalado') : lbl('available', 'Disponível'), asset.status === 'installed' ? 'success' : 'neutral')}
+            ${asset.access?.requiresEntitlement ? badge(lbl('requires_entitlement', 'Requer licença'), 'warning') : ''}
           </div>
         </div>
         <div class="properties-library-detail-breadcrumb">${this.escapeHtml(library?.name || '')}</div>

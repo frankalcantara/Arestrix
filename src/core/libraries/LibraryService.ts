@@ -8,6 +8,8 @@ import { LibraryAuditGate } from './LibraryAuditGate.ts';
 import { LibraryStore } from './LibraryStore.ts';
 import { GitHubSourceAdapter } from './sources/GitHubSourceAdapter.ts';
 import { sha256 } from '../hash.ts';
+import { normalizeLicense, normalizeLicenseAllowlist, validateLicense } from './LicensePolicy.ts';
+import { evaluateAssetEntitlement, verifyEntitlement } from './Entitlement.ts';
 import {
   builtinSkillToAsset,
   createSkillAsset,
@@ -44,6 +46,7 @@ import type {
   ILibraryImportResult,
   ILibraryInstallResult,
   ILibrarySnapshot,
+  ILibrarySignedEntitlement,
   ILibrarySource,
   ILibrarySyncResult,
   ISkillAssetPayload,
@@ -110,6 +113,25 @@ export class LibraryService {
     const asset = this.getAssetForSkill(skill);
     if (!asset || !skill.derivedFrom) return false;
     return asset.audit.hash !== skill.derivedFrom.hash;
+  }
+
+  /**
+   * Verifica o acesso comercial de um asset. Assets sem `access.requiresEntitlement`
+   * continuam livres; a ausência de entitlement só bloqueia quando o asset exige.
+   */
+  public async checkAssetEntitlement(
+    assetId: string,
+    entitlement: ILibrarySignedEntitlement | undefined,
+    publicKeyPem: string
+  ): Promise<{ allowed: boolean; reason: string }> {
+    const asset = this.registry.getAsset(assetId);
+    if (!asset) return { allowed: false, reason: 'Asset não encontrado.' };
+    if (!asset.access?.requiresEntitlement) {
+      return { allowed: true, reason: 'Asset sem exigência de entitlement.' };
+    }
+    if (!entitlement) return { allowed: false, reason: 'Entitlement ausente.' };
+    const check = await verifyEntitlement(entitlement, publicKeyPem);
+    return evaluateAssetEntitlement(asset, check);
   }
 
   /**
@@ -293,6 +315,7 @@ export class LibraryService {
     };
 
     const asset = this.createAssetForPayload(base, payload);
+    asset.access = source.access ? { ...source.access } : undefined;
 
     const saved = this.registry.upsertAsset({ ...asset, status: 'available' });
     if (!saved) return null;
@@ -423,6 +446,8 @@ export class LibraryService {
       version?: string;
       /** Nota exibida no histórico da versão. */
       changelog?: string;
+      /** Licença declarada; normalizada para SPDX quando possível. */
+      license?: string;
     } = {}
   ): Promise<ILibraryAsset | null> {
     const library = options.libraryId
@@ -452,6 +477,8 @@ export class LibraryService {
       ? (options.changelog?.trim() || (existing ? 'Atualização de conteúdo.' : 'Versão inicial.'))
       : existing?.changelog;
     const now = new Date().toISOString();
+    const license = normalizeLicense(options.license || existing?.license || 'MIT');
+    if (license === 'NOASSERTION' || license.length > 128) return null;
 
     const base = {
       id,
@@ -462,7 +489,7 @@ export class LibraryService {
         : 'Template de vértice importado do catálogo.'),
       category: template.category || (isPipeline ? 'Agentes' : 'Plugins Customizados'),
       version,
-      license: existing?.license || 'MIT',
+      license,
       audit,
       provenance: {
         ...(existing?.provenance || {}),
@@ -479,6 +506,7 @@ export class LibraryService {
     asset.createdAt = existing?.createdAt || now;
     asset.updatedAt = now;
     asset.changelog = changelog;
+    asset.access = existing?.access ? { ...existing.access } : undefined;
     if (contentChanged) {
       const previous = existing?.history ? [...existing.history] : [];
       if (existing && !previous.some(release => release.version === existing.version && release.hash === existing.audit.hash)) {
@@ -546,8 +574,8 @@ export class LibraryService {
         ref
       },
       licenseAllowlist: options.licenseAllowlist?.length
-        ? [...options.licenseAllowlist]
-        : ['MIT', 'Apache-2.0', 'BSD-3-Clause', 'BSD-2-Clause', 'ISC']
+        ? normalizeLicenseAllowlist(options.licenseAllowlist)
+        : normalizeLicenseAllowlist(undefined)
     };
 
     this.registry.upsertSource(source);
@@ -587,12 +615,11 @@ export class LibraryService {
       return empty(manifest.errorCode || 'github_sync_failed', manifest.error || 'Falha ao sincronizar a fonte GitHub.');
     }
 
-    const license = manifest.license || 'NOASSERTION';
-    const allowlist = source.licenseAllowlist?.length
-      ? source.licenseAllowlist
-      : ['MIT', 'Apache-2.0', 'BSD-3-Clause', 'BSD-2-Clause', 'ISC'];
-    if (!allowlist.includes(license)) {
-      return empty('github_license_not_allowed', `Licença "${license}" não está na allowlist da fonte.`);
+    const license = normalizeLicense(manifest.license || 'NOASSERTION');
+    const allowlist = normalizeLicenseAllowlist(source.licenseAllowlist);
+    const licenseCheck = validateLicense(license, allowlist);
+    if (!licenseCheck.ok) {
+      return empty('github_license_not_allowed', licenseCheck.reason || `Licença "${license}" não está na allowlist da fonte.`);
     }
 
     let library = options.libraryId

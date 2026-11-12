@@ -1762,6 +1762,7 @@
     "search": "Buscar assets...",
     "select": "Incluir",
     "derive": "Duplicar e editar",
+    "requires_entitlement": "Requer licença",
     "create_new": "Criar novo",
     "no_libraries": "Nenhuma biblioteca liberada. Importe um catálogo nas Propriedades.",
     "empty_library": "Nenhum asset deste tipo. Importe um catálogo.",

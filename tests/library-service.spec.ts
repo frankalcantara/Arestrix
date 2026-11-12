@@ -289,6 +289,20 @@ describe('LibraryService - importação, derivação e instalação', () => {
     expect(changed?.audit.hash).not.toBe(first?.audit.hash);
   });
 
+  it('normaliza a licença declarada ao salvar um template', async () => {
+    const asset = await service.saveTemplateToLibrary({
+      id: 'custom_template_license',
+      name: 'Template com Licença',
+      taskType: 'agent' as const,
+      description: 'Template com licença normalizada',
+      inputs: [{ name: 'in', type: 'flow' as const }],
+      outputs: [{ name: 'out', type: 'flow' as const }],
+      lambdaBodyTemplate: '// licença'
+    }, { scope: 'workspace', license: 'Apache 2.0' });
+
+    expect(asset?.license).toBe('Apache-2.0');
+  });
+
   it('publica uma nova versão em um asset existente pelo assetId', async () => {
     const pipeline = {
       id: 'pipeline_publish_test',

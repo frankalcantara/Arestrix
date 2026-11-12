@@ -117,6 +117,35 @@ export interface ILibraryAssetRelease {
   note?: string;
 }
 
+export type LibraryCommercialTier = 'free' | 'pro' | 'enterprise';
+
+/** Declaração de acesso comercial de um asset; ausente significa uso livre. */
+export interface ILibraryAccessPolicy {
+  requiresEntitlement?: boolean;
+  productId?: string;
+  tier?: LibraryCommercialTier;
+}
+
+export interface ILibraryEntitlementClaim {
+  productId: string;
+  subject: string;
+  tier: LibraryCommercialTier;
+  /** Quando presente, a licença vale apenas para estes assets. */
+  assetIds?: string[];
+  seats?: number;
+  issuedAt: string;
+  expiresAt?: string;
+  features?: string[];
+}
+
+export interface ILibrarySignedEntitlement {
+  format: 'arestrix-entitlement';
+  version: 1;
+  claim: ILibraryEntitlementClaim;
+  /** Assinatura Ed25519 em base64url sobre o JSON canônico da claim. */
+  signature: string;
+}
+
 export interface ILibraryAsset {
   id: string;
   libraryId: string;
@@ -130,6 +159,8 @@ export interface ILibraryAsset {
   provenance: ILibraryAssetProvenance;
   audit: ILibraryAssetAudit;
   payload: ILibraryAssetPayload;
+  /** Política comercial; ausente mantém o asset utilizável sem entitlement. */
+  access?: ILibraryAccessPolicy;
   /** Nota da última alteração de conteúdo. */
   changelog?: string;
   /** Versões anteriores, da mais antiga para a mais recente. */

@@ -1762,6 +1762,7 @@
     "search": "Search assets...",
     "select": "Add",
     "derive": "Duplicate and edit",
+    "requires_entitlement": "License required",
     "create_new": "Create new",
     "no_libraries": "No library released. Import a catalog in Properties.",
     "empty_library": "No asset of this kind. Import a catalog.",

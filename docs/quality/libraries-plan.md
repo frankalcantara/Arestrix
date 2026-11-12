@@ -63,6 +63,14 @@
 > Biblioteca lista o histórico de versões e a ação **Publicar versão** salva o
 > pipeline atual como nova versão de um asset editável já existente.
 >
+> **Fase 4.5 entregue (fundação comercial):** licenças de fontes GitHub são
+> normalizadas para SPDX e validadas contra a allowlist da fonte, incluindo
+> expressões `AND`/`OR`/`WITH`; ativos do usuário também normalizam a licença
+> declarada. O modelo de asset ganhou `access.requiresEntitlement` opcional e a
+> verificação offline de entitlements assinados com Ed25519 via WebCrypto,
+> cobrindo produto, tier, escopo por asset e expiração. Assets sem política
+> comercial continuam livres, sem bloqueio retroativo.
+>
 > **Fase 5 entregue:** fonte GitHub real via endpoint C++ `fetch_library_source`, commit pin,
 > leitura de manifesto/árvore sem baixar blobs, sincronização de candidatos como `PENDING`,
 > download sob demanda em quarentena lógica, auditoria e promoção somente após o veredito.
