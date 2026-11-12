@@ -6,12 +6,13 @@
 > evaluation, live A/B for parity and value, the memory policy gate
 > (`memory.gate`) and the advanced switches (`pathServing`, `traversal`,
 > `bridges` and `routing.mode`), including the corpus derived from the 14
-> examples and the real binary-routing A/B.
+> examples, the real binary-routing A/B and the real embedding validation.
 >
 > **Details:** [`memory-gate-ab.md`](../quality/memory-gate-ab.md),
 > [`memory-advanced-ab.md`](../quality/memory-advanced-ab.md),
-> [`memory-examples-advanced-ab.md`](../quality/memory-examples-advanced-ab.md) and
-> [`routing-binary-ab.md`](../quality/routing-binary-ab.md).
+> [`memory-examples-advanced-ab.md`](../quality/memory-examples-advanced-ab.md),
+> [`routing-binary-ab.md`](../quality/routing-binary-ab.md) and
+> [`memory-embeddings-live.md`](../quality/memory-embeddings-live.md).
 >
 > **Operational pending items and limitations:** [`pending.md`](pending.md).
 
@@ -35,6 +36,7 @@ measured on real customer projects.
 | Switches — curated corpus | paths, traversal, bridges and routing | path 1.000/1.000; traversal 1.000/0.500; 1 bridge and 0 edges; coherent routing | curated corpus; traversal precision is still 0.500 |
 | Switches — 14 examples | mechanisms over derived projects | path 1.000/1.000; traversal 1.000/0.300–1.000; 5 bridge proposals and 0 edges; correct routing on all 14 | corpus derived from examples, not customer data |
 | Real binary routing | quality and cost with two models | approval 1.000 on all 3 arms; 20,444.40 vs 27,805.00 for the frontier; 8 local and 6 frontier decisions | quality tied with local; 7 tasks and 2 repetitions |
+| Real embeddings | quality and latency with two models | Gemma 2: recall@1 0.875 and @3 1.000, query p50 134 ms; Qwen 768: 0.813/1.000, p50 8.5 s; 4/4 reindexed on both | 16-document corpus; Qwen on CPU; local endpoint, not production |
 
 ## 2. Baseline and regression
 
@@ -189,6 +191,27 @@ the hard tasks. The measured value is cost, not quality; promotion to the
 default therefore still requires a larger corpus and production telemetry.
 Report: [`routing-binary-ab.md`](../quality/routing-binary-ab.md).
 
+### 5.3 Real embeddings
+
+The validation used a local OpenAI-compatible endpoint with the real models.
+The corpus has 16 pt-BR documents and 16 mixed pt-BR/en queries, with 3
+repetitions. EmbeddingGemma 2 ran on the GPU; Qwen3-Embedding-4B ran on CPU
+because the 4B model does not fit in the 4 GB GPU.
+
+| Model | Dimensions | Recall@1 | Recall@3 | MRR@10 | Query p50 | Index/doc |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| EmbeddingGemma 2 | 768 | **0.875** | **1.000** | **0.938** | **134 ms** | **56 ms** |
+| Qwen3-Embedding-4B (768) | 2560 → 768 | 0.813 | 1.000 | 0.906 | 8,474 ms | 9,627 ms |
+| Qwen3-Embedding-4B (2560) | 2560 | 0.875 | 1.000 | 0.927 | 8,411 ms | 8,918 ms |
+| Lexical BM25 | — | 0.813 | 0.938 | 0.865 | — | — |
+
+EmbeddingGemma 2 had the best top-1 and the lowest latency. Full Qwen3 tied on
+recall@1, but truncation to 768 dropped to the lexical level on this corpus.
+The integration passed on both models: `embeddings test` and 4/4 reindexing with
+no failures. With the endpoint down, the test returned `ok=false` and lexical
+search remained the fallback. Report:
+[`memory-embeddings-live.md`](../quality/memory-embeddings-live.md).
+
 ## 6. Integration and release tests
 
 | Check | Result |
@@ -226,9 +249,11 @@ Report: [`routing-binary-ab.md`](../quality/routing-binary-ab.md).
    traces; new projects have no paths until usage accumulates.
 7. **Bridges are hypotheses.** The detector creates no edges; promotion is manual
    and requires human review.
-8. **Real embeddings.** Profiles and fingerprints exist, but quality and latency
-   validation with real EmbeddingGemma 2 and Qwen3-Embedding-4B models is still
-   pending; lexical fallback remains the safe behaviour.
+8. **Real embeddings.** Validation with EmbeddingGemma 2 and
+   Qwen3-Embedding-4B is complete on a local endpoint and a 16-document corpus.
+   The 4B Qwen model ran on CPU and was expensive (8.5 s per query);
+   EmbeddingGemma 2 had the best cost-benefit. A production endpoint and
+   customer data are still missing.
 9. **Claim-extraction agent UI.** Registration/listing, the Properties selector,
    per-project saving, CLI extraction and manual Studio validation are complete.
    Validation found and fixed a saved-target comparison bug caused by JSON key
@@ -266,6 +291,12 @@ py -3 scripts/memory_examples_eval.py --write --runs 3
 # Binary routing with real calls (requires provider and key)
 py -3 scripts/routing_binary_eval.py --write --repetitions 2
 py -3 scripts/routing_binary_eval.py --check --repetitions 2
+
+# Real embeddings (requires an OpenAI-compatible endpoint)
+py -3 scripts/memory_embeddings_eval.py --base-url http://127.0.0.1:18081/v1 `
+  --model embeddinggemma-2 --repetitions 3
+py -3 scripts/memory_embeddings_eval.py --base-url http://127.0.0.1:18082/v1 `
+  --model qwen3-embedding-4b --truncate-dim 768 --repetitions 3
 ```
 
 ## 9. Evidence
@@ -284,7 +315,9 @@ py -3 scripts/routing_binary_eval.py --check --repetitions 2
 | Advanced corpus | `tests/fixtures/memory-advanced-v1.json` |
 | Switches on the 14 examples | `tests/fixtures/memory-examples-advanced-report.json` |
 | Real binary routing | `tests/fixtures/routing-binary-report.json` |
+| Real embeddings | `tests/fixtures/memory-embeddings-live-report.json` |
 | Gate report | `docs/quality/memory-gate-ab.md` |
 | Switch report | `docs/quality/memory-advanced-ab.md` |
 | Examples report | `docs/quality/memory-examples-advanced-ab.md` |
 | Routing report | `docs/quality/routing-binary-ab.md` |
+| Embeddings report | `docs/quality/memory-embeddings-live.md` |

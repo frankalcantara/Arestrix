@@ -634,6 +634,13 @@ receives a long manual in the prompt; the other receives a short prompt and the
 same truth from memory. Both answered `ORION-42`. The context arm used 24,718
 prompt tokens; the memory arm used 3,228, an 87% reduction.
 
+**Real embeddings** (`scripts/memory_embeddings_eval.py`): EmbeddingGemma 2 and
+Qwen3-Embedding-4B were measured on a local endpoint with 16 documents and 16
+queries. EmbeddingGemma 2 reached recall@1 0.875 and 134 ms p50; Qwen3 at 768
+reached 0.813 and 8.5 s on CPU. Both passed `embeddings test` and 4/4
+reindexing. Report:
+[`memory-embeddings-live.md`](../quality/memory-embeddings-live.md).
+
 Memory reduces the **static** context a project must send. Context compaction now
 also reduces the **conversation history** of one long run, but the switch remains
 off by default until broader real-data measurement. The remaining work is tracked

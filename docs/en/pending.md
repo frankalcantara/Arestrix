@@ -22,7 +22,7 @@
 | Project memory scenarios (Consult / Consult and Decide / Learn) | **Implemented; memory on by default** |
 | Experimental switches (`pathServing`, `traversal`, `bridges`, `routing.mode`) | **Mechanisms measured on a curated corpus and the 14 examples; real binary-routing A/B; defaults stay `off`** |
 | `institution` level in the assistant `memory_inspect` | **Implemented; reads the workspace institution scope** |
-| Validation with real embedding providers | Operational pending |
+| Validation with real embedding providers | **Complete with EmbeddingGemma 2 and Qwen3-Embedding-4B on a local endpoint; production endpoint still missing** |
 | Studio UI to configure the memory agent | **Implemented and validated in the Studio** |
 | Performance profiling (Tracy) and automatic correction loop for generated code via the Studio default model | Optional build ready; loop pending |
 | Instrumentation of Arestrix itself with Tracy and self-optimization loop | Optional build ready; instrumentation pending |
@@ -235,9 +235,25 @@ lessons, playbooks, active edges, aliases and the database path.
 
 ### 4.3 Real embedding providers
 
-Profiles and fingerprints are implemented, but quality and latency validation with real
-EmbeddingGemma 2 and Qwen3-Embedding-4B still needs to be recorded. Lexical fallback is the safe
-behavior when no provider is available.
+Quality and latency validation completed on 2026-11-12 with both real models on
+a local OpenAI-compatible endpoint. The corpus has 16 pt-BR documents and 16
+mixed pt-BR/en queries, with 3 repetitions.
+
+| Model | Dimensions | Recall@1 | Recall@3 | Query p50 |
+| :--- | ---: | ---: | ---: | ---: |
+| EmbeddingGemma 2 | 768 | 0.875 | 1.000 | 134 ms |
+| Qwen3-Embedding-4B (768) | 2560 → 768 | 0.813 | 1.000 | 8,474 ms |
+| Qwen3-Embedding-4B (2560) | 2560 | 0.875 | 1.000 | 8,411 ms |
+| Lexical BM25 | — | 0.813 | 0.938 | — |
+
+EmbeddingGemma 2 had the best top-1 and the lowest latency. Full Qwen3 tied on
+recall@1, but truncation to 768 dropped to the lexical level on this corpus and
+the 4B model ran on CPU (8.5 s per query). Integration passed on both:
+`embeddings test` and 4/4 reindexing with no failures. With the endpoint down,
+the test returned `ok=false` and lexical search remained the safe fallback.
+Report: `docs/quality/memory-embeddings-live.md`; evidence:
+`tests/fixtures/memory-embeddings-live-report.json`. A production endpoint and
+customer data are still missing.
 
 ### 4.4 Studio UI for the memory agent
 

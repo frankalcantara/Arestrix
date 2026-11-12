@@ -20,7 +20,7 @@
 | Cenários de memória do projeto (Consultar / Consultar e Decidir / Aprender) | **Implementados; memória ligada por padrão** |
 | Interruptores experimentais (`pathServing`, `traversal`, `bridges`, `routing.mode`) | **Mecanismos medidos em corpus curado e nos 14 exemplos; roteamento binário com A/B real; padrões seguem `off`** |
 | Nível `institution` no `memory_inspect` do assistente | **Implementado; leitura do escopo institucional do workspace** |
-| Validação com provedores reais de embeddings | Pendente operacional |
+| Validação com provedores reais de embeddings | **Concluída com EmbeddingGemma 2 e Qwen3-Embedding-4B em endpoint local; falta endpoint de produção** |
 | Interface gráfica para configurar o agente de memória | **Implementada e validada no Studio** |
 | Laço de profiling (Tracy) e correção automática do código gerado via modelo padrão do Studio | Build opcional pronto; loop pendente |
 | Instrumentação do próprio Arestrix com Tracy e laço de auto-otimização | Build opcional pronto; instrumentação pendente |
@@ -244,9 +244,25 @@ arestas ativas, aliases e caminho do banco.
 
 ### 4.3 Provedores reais de embeddings
 
-Os perfis e o fingerprint estão implementados, mas a validação de qualidade e latência com
-EmbeddingGemma 2 e Qwen3-Embedding-4B reais ainda deve ser registrada. O fallback lexical é o
-comportamento seguro quando o provedor não está disponível.
+A validação de qualidade e latência foi concluída em 2026-11-12 com os dois
+modelos reais em um endpoint local OpenAI-compatible. O corpus tem 16 documentos
+em pt-BR e 16 consultas mistas pt-BR/en, com 3 repetições.
+
+| Modelo | Dimensões | Recall@1 | Recall@3 | Consulta p50 |
+| :--- | ---: | ---: | ---: | ---: |
+| EmbeddingGemma 2 | 768 | 0,875 | 1,000 | 134 ms |
+| Qwen3-Embedding-4B (768) | 2560 → 768 | 0,813 | 1,000 | 8.474 ms |
+| Qwen3-Embedding-4B (2560) | 2560 | 0,875 | 1,000 | 8.411 ms |
+| Lexical BM25 | — | 0,813 | 0,938 | — |
+
+O EmbeddingGemma 2 teve o melhor top-1 e a menor latência. O Qwen3 completo
+empatou no recall@1, mas o truncamento para 768 caiu ao nível lexical neste
+corpus e o modelo de 4B rodou em CPU (8,5 s por consulta). A integração passou
+nos dois: `embeddings test` e reindexação 4/4, sem falhas. Com o endpoint
+desligado, o teste retornou `ok=false` e a busca lexical permaneceu como fallback
+seguro. Relatório: `docs/quality/memory-embeddings-live.md`; evidência:
+`tests/fixtures/memory-embeddings-live-report.json`. Ainda falta validar um
+endpoint de produção e dados de cliente.
 
 ### 4.4 Interface gráfica do agente de memória
 

@@ -28,6 +28,12 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   for binary vs 27,805.00 for frontier (26.5% lower) and 5.43x the local arm.
   Quality was tied with the local model. Report:
   `docs/quality/routing-binary-ab.md`.
+- Real embedding validation with EmbeddingGemma 2 and Qwen3-Embedding-4B on a
+  local OpenAI-compatible endpoint, plus a reproducible quality/latency harness
+  (`scripts/memory_embeddings_eval.py`). On a 16-document corpus,
+  EmbeddingGemma 2 reached recall@1 0.875 and 134 ms p50; Qwen3 at 768 reached
+  0.813 and 8.5 s on CPU. Both passed `embeddings test` and 4/4 reindexing.
+  Report: `docs/quality/memory-embeddings-live.md`.
 - Claim-extraction agent selector in File → Properties → Project → Memory. The
   active pipeline's agent nodes are registered in `AssistantSession` and listed
   through `memory_claim_agents`; the target is stored as `{ id, graph, node }`,

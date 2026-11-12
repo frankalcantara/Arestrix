@@ -5,13 +5,14 @@
 > **Escopo:** resultados das campanhas de memória — linha de base, avaliação de
 > regressão, A/B live de paridade e valor, porteiro de política (`memory.gate`) e
 > interruptores avançados (`pathServing`, `traversal`, `bridges` e
-> `routing.mode`), incluindo o corpus derivado dos 14 exemplos e o A/B real do
-> roteamento binário.
+> `routing.mode`), incluindo o corpus derivado dos 14 exemplos, o A/B real do
+> roteamento binário e a validação de embeddings reais.
 >
 > **Detalhes:** [`memory-gate-ab.md`](../quality/memory-gate-ab.md),
 > [`memory-advanced-ab.md`](../quality/memory-advanced-ab.md),
-> [`memory-examples-advanced-ab.md`](../quality/memory-examples-advanced-ab.md) e
-> [`routing-binary-ab.md`](../quality/routing-binary-ab.md).
+> [`memory-examples-advanced-ab.md`](../quality/memory-examples-advanced-ab.md),
+> [`routing-binary-ab.md`](../quality/routing-binary-ab.md) e
+> [`memory-embeddings-live.md`](../quality/memory-embeddings-live.md).
 >
 > **Pendências e limitações operacionais:** [`PENDENCIAS.md`](../PENDENCIAS.md).
 
@@ -35,6 +36,7 @@ projetos reais de cliente.
 | Interruptores — corpus curado | caminhos, travessia, pontes e roteamento | caminho 1,000/1,000; travessia 1,000/0,500; 1 ponte e 0 arestas; roteamento coerente | corpus curado; precisão da travessia ainda é 0,500 |
 | Interruptores — 14 exemplos | mecanismos sobre projetos derivados | caminho 1,000/1,000; travessia 1,000/0,300–1,000; 5 pontes propostas e 0 arestas; roteamento correto nos 14 | corpus derivado dos exemplos, não dados de cliente |
 | Roteamento binário real | qualidade e custo com dois modelos | aprovação 1,000 nos 3 braços; 20.444,40 contra 27.805,00 da fronteira; 8 decisões local e 6 frontier | qualidade empatada com o local; 7 tarefas e 2 repetições |
+| Embeddings reais | qualidade e latência com dois modelos | Gemma 2: recall@1 0,875 e @3 1,000, consulta p50 134 ms; Qwen 768: 0,813/1,000, p50 8,5 s; reindex 4/4 nos dois | corpus de 16 documentos; Qwen em CPU; endpoint local, não de produção |
 
 ## 2. Linha de base e regressão
 
@@ -186,6 +188,27 @@ as tarefas difíceis. O valor medido está no custo, não na qualidade; por isso
 promoção para padrão continua exigindo um corpus maior e telemetria de produção.
 Relatório: [`routing-binary-ab.md`](../quality/routing-binary-ab.md).
 
+### 5.3 Embeddings reais
+
+A validação usou um endpoint local OpenAI-compatible com os modelos reais. O
+corpus tem 16 documentos em pt-BR e 16 consultas mistas pt-BR/en, com 3
+repetições. O EmbeddingGemma 2 rodou em GPU; o Qwen3-Embedding-4B rodou em CPU
+porque o modelo de 4B não cabe nos 4 GB da GPU.
+
+| Modelo | Dimensões | Recall@1 | Recall@3 | MRR@10 | Consulta p50 | Índice/doc |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| EmbeddingGemma 2 | 768 | **0,875** | **1,000** | **0,938** | **134 ms** | **56 ms** |
+| Qwen3-Embedding-4B (768) | 2560 → 768 | 0,813 | 1,000 | 0,906 | 8.474 ms | 9.627 ms |
+| Qwen3-Embedding-4B (2560) | 2560 | 0,875 | 1,000 | 0,927 | 8.411 ms | 8.918 ms |
+| Lexical BM25 | — | 0,813 | 0,938 | 0,865 | — | — |
+
+O EmbeddingGemma 2 teve o melhor top-1 e a menor latência. O Qwen3 completo
+empatou no recall@1, mas o truncamento para 768 caiu para o nível lexical neste
+corpus. A integração passou nos dois modelos: `embeddings test` e reindexação
+4/4, sem falhas. Com o endpoint desligado, o teste retornou `ok=false` e a busca
+lexical permaneceu como fallback. Relatório:
+[`memory-embeddings-live.md`](../quality/memory-embeddings-live.md).
+
 ## 6. Testes de integração e release
 
 | Verificação | Resultado |
@@ -224,9 +247,11 @@ Relatório: [`routing-binary-ab.md`](../quality/routing-binary-ab.md).
    partir de traços aprovados; projetos novos não têm caminhos até acumular uso.
 7. **Pontes são hipóteses.** O detector não cria arestas; a promoção é manual e
    exige revisão humana.
-8. **Embeddings reais.** Perfis e fingerprint existem, mas a validação de
-   qualidade e latência com EmbeddingGemma 2 e Qwen3-Embedding-4B reais ainda
-   deve ser registrada; o fallback lexical é o comportamento seguro.
+8. **Embeddings reais.** A validação com EmbeddingGemma 2 e Qwen3-Embedding-4B
+   foi concluída em endpoint local e corpus de 16 documentos. O Qwen3 de 4B
+   rodou em CPU e ficou caro (8,5 s por consulta); o EmbeddingGemma 2 foi o
+   melhor custo-benefício. Ainda falta um endpoint de produção e dados de
+   cliente.
 9. **UI do agente de extração de claims.** Registro/listagem, seletor em
    Propriedades, salvamento por projeto, extração via CLI e validação manual no
    Studio estão concluídos. A validação encontrou e corrigiu um bug de comparação
@@ -263,6 +288,12 @@ py -3 scripts/memory_examples_eval.py --write --runs 3
 # Roteamento binário com chamadas reais (requer provedor e chave)
 py -3 scripts/routing_binary_eval.py --write --repetitions 2
 py -3 scripts/routing_binary_eval.py --check --repetitions 2
+
+# Embeddings reais (requer endpoint OpenAI-compatible)
+py -3 scripts/memory_embeddings_eval.py --base-url http://127.0.0.1:18081/v1 `
+  --model embeddinggemma-2 --repetitions 3
+py -3 scripts/memory_embeddings_eval.py --base-url http://127.0.0.1:18082/v1 `
+  --model qwen3-embedding-4b --truncate-dim 768 --repetitions 3
 ```
 
 ## 9. Evidências
@@ -281,7 +312,9 @@ py -3 scripts/routing_binary_eval.py --check --repetitions 2
 | Corpus avançado | `tests/fixtures/memory-advanced-v1.json` |
 | Interruptores nos 14 exemplos | `tests/fixtures/memory-examples-advanced-report.json` |
 | Roteamento binário real | `tests/fixtures/routing-binary-report.json` |
+| Embeddings reais | `tests/fixtures/memory-embeddings-live-report.json` |
 | Relatório do gate | `docs/quality/memory-gate-ab.md` |
 | Relatório dos interruptores | `docs/quality/memory-advanced-ab.md` |
 | Relatório dos exemplos | `docs/quality/memory-examples-advanced-ab.md` |
 | Relatório do roteamento | `docs/quality/routing-binary-ab.md` |
+| Relatório dos embeddings | `docs/quality/memory-embeddings-live.md` |

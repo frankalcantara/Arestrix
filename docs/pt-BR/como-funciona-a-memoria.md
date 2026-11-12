@@ -641,6 +641,13 @@ recebe um manual longo no prompt; o outro recebe um prompt curto e a mesma
 verdade pela memória. Os dois responderam `ORION-42`. O braço com contexto usou
 24.718 tokens de prompt; o braço com memória usou 3.228, uma redução de 87%.
 
+**Embeddings reais** (`scripts/memory_embeddings_eval.py`): EmbeddingGemma 2 e
+Qwen3-Embedding-4B foram medidos em um endpoint local com 16 documentos e 16
+consultas. O EmbeddingGemma 2 teve recall@1 0,875 e consulta p50 de 134 ms; o
+Qwen3-Embedding-4B truncado para 768 teve 0,813 e 8,5 s em CPU. Nos dois, o
+`embeddings test` e a reindexação 4/4 passaram. Relatório:
+[`memory-embeddings-live.md`](../quality/memory-embeddings-live.md).
+
 A memória, portanto, reduz o contexto **estático** que o projeto precisa enviar.
 A compactação de contexto agora também reduz o **histórico da conversa** de uma
 execução longa, mas o interruptor continua desligado por padrão até uma medição

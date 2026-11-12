@@ -13,7 +13,7 @@ below are the next memory work. No item here blocks the current release.
 | High | Extract memory into the standalone Mnemosyne module and submodule | Assessment complete; migration pending |
 | High | Enable experimental switches only after real-data A/B | Curated corpus, 14-example corpus and real binary-routing A/B complete; opt-in; real customer corpus pending |
 | Medium | Institutional memory level in the Studio assistant | Implemented; reads the workspace institution scope |
-| Medium | Real embedding-provider quality/latency validation | Pending |
+| Medium | Real embedding-provider quality/latency validation | Complete with EmbeddingGemma 2 and Qwen3-Embedding-4B on a local endpoint; production endpoint pending |
 | Medium | Studio UI to configure the memory agent | Implemented and validated in the Studio |
 | Low | Multi-process maintenance coordination | Out of scope for v1 |
 
@@ -234,9 +234,14 @@ budget. Reports: `docs/quality/memory-advanced-ab.md`,
 
 ## 4. Real embedding-provider validation
 
-Profiles, fingerprints and fallback are implemented. Quality, latency and
-failure behavior with real EmbeddingGemma 2 and Qwen3-Embedding-4B endpoints
-still need a recorded run.
+Quality and latency validation completed on 2026-11-12 with EmbeddingGemma 2 and
+Qwen3-Embedding-4B on a local OpenAI-compatible endpoint. On a 16-document,
+16-query corpus with 3 repetitions, EmbeddingGemma 2 reached recall@1 0.875 and
+query p50 134 ms; Qwen3-Embedding-4B truncated to 768 reached 0.813 and 8.5 s on
+CPU. Both passed `embeddings test` and 4/4 reindexing. A production endpoint and
+customer data still need a recorded run. Report:
+`docs/quality/memory-embeddings-live.md`; evidence:
+`tests/fixtures/memory-embeddings-live-report.json`.
 
 ## 5. Institutional memory level in the Studio assistant
 

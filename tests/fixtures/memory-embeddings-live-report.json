@@ -1,0 +1,136 @@
+{
+  "schema": "arestrix.memory.embeddings-live.v1",
+  "generatedAt": "2026-11-12T14:20:00Z",
+  "environment": {
+    "os": "Windows 11 x64",
+    "python": "3.11.9",
+    "torch": "2.9.1+cu126",
+    "transformers": "5.22.2",
+    "sentenceTransformers": "6.3.0",
+    "gpu": "NVIDIA GeForce GTX 1650 4 GB",
+    "adapter": "local OpenAI-compatible /v1/embeddings endpoint"
+  },
+  "corpus": {
+    "documents": 16,
+    "queries": 16,
+    "languages": "documents in pt-BR; queries mixed pt-BR/en",
+    "repetitions": 3
+  },
+  "failureMode": {
+    "endpoint": "http://127.0.0.1:18099/v1",
+    "ok": false,
+    "error": "Falha de transporte (erro WinHTTP 12029)",
+    "latencyMs": 2052,
+    "fallback": "lexical search remains the safe path when the embedding endpoint is unavailable"
+  },
+  "arms": {
+    "embeddinggemma-2": {
+      "model": "embeddinggemma-2",
+      "modelId": "google/embeddinggemma-2",
+      "revision": "f9972ac22e696a105c482202646979e33e4b5a1e",
+      "device": "cuda float16",
+      "sourceDim": 768,
+      "dim": 768,
+      "prefixes": {
+        "query": "task: search result | query: ",
+        "document": "title: none | text: "
+      },
+      "quality": {
+        "queries": 16,
+        "recallAt1": 0.875,
+        "recallAt3": 1.0,
+        "mrrAt10": 0.9375,
+        "indexBatchMs": 895.602,
+        "indexPerDocMs": 55.975,
+        "queryLatencyMs": {
+          "p50": 133.777,
+          "p95": 178.621,
+          "mean": 137.134,
+          "samples": 48
+        }
+      },
+      "lexical": {
+        "queries": 16,
+        "recallAt1": 0.8125,
+        "recallAt3": 0.9375,
+        "mrrAt10": 0.8646
+      },
+      "integration": {
+        "test": {
+          "ok": true,
+          "dim": 768,
+          "values": 768,
+          "latencyMs": 1016
+        },
+        "reindex": {
+          "ok": true,
+          "candidates": 4,
+          "indexed": 4,
+          "failed": 0,
+          "pending": 0,
+          "fingerprint": "f3038ef0984ccd0acbd3304fa630ddf1eee707254ac91b7994f06ca6a8c83832"
+        },
+        "status": {
+          "state": "ready",
+          "indexed": 4,
+          "pending": 0,
+          "dim": 768
+        }
+      }
+    },
+    "qwen3-embedding-4b": {
+      "model": "qwen3-embedding-4b",
+      "modelId": "Qwen/Qwen3-Embedding-4B",
+      "revision": "5cf2132abc99cad020ac570b19d031efec650f2b",
+      "device": "cpu bfloat16",
+      "sourceDim": 2560,
+      "dim": 768,
+      "prefixes": {
+        "query": " Instruct: Given a task description, retrieve memory items that help complete it\nQuery:  ",
+        "document": ""
+      },
+      "quality": {
+        "queries": 16,
+        "recallAt1": 0.8125,
+        "recallAt3": 1.0,
+        "mrrAt10": 0.9062,
+        "indexBatchMs": 154035.104,
+        "indexPerDocMs": 9627.194,
+        "queryLatencyMs": {
+          "p50": 8473.865,
+          "p95": 10981.995,
+          "mean": 8627.025,
+          "samples": 48
+        }
+      },
+      "lexical": {
+        "queries": 16,
+        "recallAt1": 0.8125,
+        "recallAt3": 0.9375,
+        "mrrAt10": 0.8646
+      },
+      "integration": {
+        "test": {
+          "ok": true,
+          "dim": 768,
+          "values": 768,
+          "latencyMs": 8724
+        },
+        "reindex": {
+          "ok": true,
+          "candidates": 4,
+          "indexed": 4,
+          "failed": 0,
+          "pending": 0,
+          "fingerprint": "9288584cce540c876c524d92daceac4598704ee8d5adbff95c37d6a456727220"
+        }
+      }
+    }
+  },
+  "limitations": [
+    "Small curated corpus (16 documents, 16 queries); not a public benchmark.",
+    "The models run through a local OpenAI-compatible adapter, not a vendor production endpoint.",
+    "EmbeddingGemma 2 ran on the GPU; Qwen3-Embedding-4B ran on CPU because the 4 GB GPU cannot hold the 4B model.",
+    "Quality is measured on this corpus only and does not replace customer data."
+  ]
+}
