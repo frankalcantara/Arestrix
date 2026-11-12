@@ -499,7 +499,7 @@ export class Inspector {
 
           <div class="form-group">
             <label class="form-label">${t('inspector.node_view.taskflow_type')}</label>
-            <select id="node-type-select" class="form-select">
+            <select id="node-type-select" class="form-select" ${node.presetLocked ? 'disabled' : ''}>
               <option value="static" ${node.type === 'static' ? 'selected' : ''}>Static Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Deterministico' : 'Deterministic'})</option>
               <option value="mcp" ${node.type === 'mcp' ? 'selected' : ''}>MCP (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Ferramenta externa' : 'External tool'})</option>
               <option value="switch" ${node.type === 'switch' ? 'selected' : ''}>Switch (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Seleção multivia' : 'Multiway selection'})</option>
@@ -576,8 +576,15 @@ export class Inspector {
             <span>${t('inspector.node_view.agent_settings_title')}</span>
           </div>
 
+          ${node.presetLocked ? `
+            <div class="properties-note properties-note--info" style="margin-bottom: 10px;">
+              <strong>${t('inspector.node_view.preset_agent_title', 'Agente pré-configurado')}</strong>
+              <div>${t('inspector.node_view.preset_agent_desc', 'Esta configuração veio da biblioteca e é somente leitura. Para personalizar, crie um novo vértice agente.')}</div>
+            </div>
+          ` : ''}
+
           <div class="agent-command-grid">
-            <button class="agent-command-card" id="btn-open-node-sandbox">
+            <button class="agent-command-card" id="btn-open-node-sandbox" ${node.presetLocked ? 'disabled' : ''}>
               <span class="cmd-icon">🛡️</span>
               <div class="cmd-details">
                 <span class="cmd-name">${t('inspector.node_view.card_sandbox_title')} <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">🛠️ Workspace</span></span>
@@ -585,7 +592,7 @@ export class Inspector {
               </div>
             </button>
 
-            <button class="agent-command-card" id="btn-open-node-model">
+            <button class="agent-command-card" id="btn-open-node-model" ${node.presetLocked ? 'disabled' : ''}>
               <span class="cmd-icon">🧠</span>
               <div class="cmd-details">
                 <span class="cmd-name">${t('inspector.node_view.card_model_title')} <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">📦 Projeto</span></span>
@@ -593,7 +600,7 @@ export class Inspector {
               </div>
             </button>
 
-            <button class="agent-command-card" id="btn-open-node-tools">
+            <button class="agent-command-card" id="btn-open-node-tools" ${node.presetLocked ? 'disabled' : ''}>
               <span class="cmd-icon">🔧</span>
               <div class="cmd-details">
                 <span class="cmd-name">${t('inspector.node_view.card_tools_title')} <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">🛠️ / 📦</span></span>
@@ -601,7 +608,7 @@ export class Inspector {
               </div>
             </button>
 
-            <button class="agent-command-card" id="btn-open-node-memory">
+            <button class="agent-command-card" id="btn-open-node-memory" ${node.presetLocked ? 'disabled' : ''}>
               <span class="cmd-icon">💾</span>
               <div class="cmd-details">
                 <span class="cmd-name">${t('inspector.node_view.card_memory_title')} <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">📦 Projeto</span></span>
@@ -609,7 +616,7 @@ export class Inspector {
               </div>
             </button>
 
-            <button class="agent-command-card" id="btn-open-node-skills">
+            <button class="agent-command-card" id="btn-open-node-skills" ${node.presetLocked ? 'disabled' : ''}>
               <span class="cmd-icon">📜</span>
               <div class="cmd-details">
                 <span class="cmd-name">${t('inspector.node_view.card_skills_title')} <span class="badge-inherited" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">🛠️ / 📦</span></span>

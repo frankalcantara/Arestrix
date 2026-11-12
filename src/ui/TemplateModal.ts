@@ -170,6 +170,7 @@ export class TemplateModal {
             <div class="template-name">${this.escapeHtml(tpl.name)}</div>
             <div class="template-badges">
               <span class="inspector-badge badge-${tpl.taskType}">${tpl.taskType.toUpperCase()}</span>
+              ${tpl.taskType === 'agent' ? `<span class="plugin-custom-badge">${t('template_modal.preset_badge', 'PRÉ-CONFIGURADO')}</span>` : ''}
               ${tpl.isCustomPlugin ? `<span class="plugin-custom-badge">${t('template_modal.dynamic_plugin_badge')}</span>` : ''}
             </div>
           </div>

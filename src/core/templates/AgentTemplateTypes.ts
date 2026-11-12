@@ -32,6 +32,8 @@ export interface IAgentTemplate {
   createChildGraph?: (label: string, params: Record<string, any>) => IGraphSchema;
   /** Configuração completa do agente; obrigatória para taskType === 'agent'. */
   agentSettings?: INodeAgentSettings;
+  /** Agente de biblioteca pronto: configuração travada na interface. */
+  presetLocked?: boolean;
   isCustomPlugin?: boolean;
   author?: string;
   version?: string;
@@ -51,6 +53,8 @@ export interface ISerializedTemplatePlugin {
   lambdaBodyTemplate: string;
   /** Configuração do agente preservada no round-trip catálogo → biblioteca → grafo. */
   agentSettings?: INodeAgentSettings;
+  /** Agente de biblioteca pronto: configuração travada na interface. */
+  presetLocked?: boolean;
   author?: string;
   version?: string;
 }

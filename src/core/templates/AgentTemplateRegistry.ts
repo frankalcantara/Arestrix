@@ -182,6 +182,8 @@ export class AgentTemplateRegistry {
 
     if (tpl.taskType === 'agent') {
       nodeData.agentSettings = deepClone(tpl.agentSettings) ?? defaultAgentSettings();
+      nodeData.presetId = tpl.id;
+      nodeData.presetLocked = tpl.presetLocked !== false;
     }
 
     if (tpl.createChildGraph) {
@@ -265,6 +267,7 @@ export class AgentTemplateRegistry {
       parameters,
       requiredHeaders: node.requiredHeaders,
       agentSettings: isAgent ? (deepClone(node.agentSettings) ?? defaultAgentSettings()) : undefined,
+      presetLocked: isAgent ? true : undefined,
       isCustomPlugin: true,
       author: 'Usuário Arestrix',
       version: '1.0.0',
@@ -340,6 +343,7 @@ export class AgentTemplateRegistry {
             agentSettings: item.agentSettings
               ? deepClone(item.agentSettings)
               : (item.taskType === 'agent' ? defaultAgentSettings() : undefined),
+            presetLocked: item.taskType === 'agent' ? (item.presetLocked !== false) : undefined,
             isCustomPlugin: true,
             author: item.author || 'Usuário Arestrix',
             version: item.version || '1.0.0',
@@ -390,6 +394,7 @@ export class AgentTemplateRegistry {
       requiredHeaders: tpl.requiredHeaders,
       lambdaBodyTemplate: sampleLambda,
       agentSettings: tpl.agentSettings ? deepClone(tpl.agentSettings) : undefined,
+      presetLocked: tpl.presetLocked,
       author: tpl.author,
       version: tpl.version
     };

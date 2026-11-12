@@ -779,6 +779,11 @@ export interface INodeData {
   criticalSectionId?: string; // ID da CriticalSection associada, se houver
   childGraph?: IGraphSchema;  // Subgrafo hierárquico aninhado (Subflow / Module)
   templateId?: string;        // ID do template de origem (opcional)
+  /** Agente de biblioteca pré-configurado; a configuração é somente leitura na UI. */
+  presetId?: string;
+  presetLocked?: boolean;
+  /** Apresentação visual de um pipeline/projeto composto como agente. */
+  presentation?: 'agent';
   requiredHeaders?: string[]; // Headers C++20 adicionais requeridos por este agente
   agentSettings?: INodeAgentSettings;
   switchSettings?: ISwitchSettings; // só para vértices do tipo 'switch'

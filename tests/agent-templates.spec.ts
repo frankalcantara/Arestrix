@@ -169,6 +169,8 @@ describe('Fase 4: Catalogo de Templates de Agentes & Sistema de Plugins Dinamico
     it('deve preservar agentSettings ao instanciar e isolar o template', () => {
       const node = registry.instantiateNode('agent_document_analyst', 'Meu_Analista');
       expect(node.type).toBe('agent');
+      expect(node.presetId).toBe('agent_document_analyst');
+      expect(node.presetLocked).toBe(true);
       expect(node.agentSettings?.model?.promptTemplate).toContain('analista');
       expect(node.agentSettings?.skills?.[0]?.id).toBe('builtin-document-analysis');
 
@@ -185,9 +187,11 @@ describe('Fase 4: Catalogo de Templates de Agentes & Sistema de Plugins Dinamico
       expect(saved.status).toBe('created');
       if (saved.status !== 'created') return;
       expect(saved.template.category).toBe('Agentes');
+      expect(saved.template.presetLocked).toBe(true);
       expect(saved.template.agentSettings?.model?.promptTemplate).toBe('Prompt específico do revisor customizado');
 
       const restored = registry.instantiateNode(saved.template.id, 'Revisor_Restaurado');
+      expect(restored.presetLocked).toBe(true);
       expect(restored.agentSettings?.model?.promptTemplate).toBe('Prompt específico do revisor customizado');
       expect(restored.agentSettings?.skills?.length).toBe(1);
 
@@ -207,6 +211,7 @@ describe('Fase 4: Catalogo de Templates de Agentes & Sistema de Plugins Dinamico
       const imported = registry.instantiateNode('imported_research_agent', 'Pesquisador_Importado');
       expect(imported.type).toBe('agent');
       expect(imported.customLambdaBody).toBe('');
+      expect(imported.presetLocked).toBe(true);
       expect(imported.agentSettings?.model?.promptTemplate).toContain('pesquisador');
       registry.unregisterTemplate('imported_research_agent');
     });

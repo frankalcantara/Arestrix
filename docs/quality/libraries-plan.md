@@ -28,8 +28,11 @@
 > **Fase 4.2 entregue (agentes):** agentes prontos na categoria **Agentes**, com
 > `agentSettings` completo no round-trip (prompt, modelo preferencial, memória, skills,
 > ferramentas e validação), três agentes embutidos, auditoria incluindo a configuração do
-> agente no hash, salvamento na biblioteca e exclusão de templates customizados. O preset de
-> arquitetura completa agora pede confirmação antes de substituir o grafo.
+> agente no hash, salvamento na biblioteca e exclusão de templates customizados. Agentes de
+> biblioteca entram como **pré-configurados** (`presetLocked`): usam o runtime normal de
+> `agent`, mas a configuração é somente leitura no Inspetor; os vértices `agent` criados
+> manualmente continuam editáveis. O preset de arquitetura completa agora pede confirmação
+> antes de substituir o grafo.
 >
 > **Fase 4.3 pendente (pipeline como agente):** pipeline/projeto importado será exibido como
 > um único vértice **agente apenas na interface**, mantendo internamente o grafo/subflow
