@@ -220,6 +220,11 @@ Pending after the `2.1.0-beta.1` pre-release:
 
 ## Next steps
 
+> **Active next step in the general roadmap:** item 1 (**Linux + CI**). On the
+> library front, the active next step is finishing the **Phase 7 manual
+> homologation**. Item 6 (**commercial layer**) is **deferred by product
+> decision** and should not be started now.
+
 1. **Linux + CI**
    - End-to-end Linux build, runtime install, llama.cpp extraction, router and gateway tests.
    - CI matrix for Windows/Linux and automated catalog/manifest validation.
@@ -244,6 +249,18 @@ Pending after the `2.1.0-beta.1` pre-release:
    - First-run wizard with hardware-based recommendation.
    - Richer diagnostics for GPU/driver/model failures.
    - One-click switch between managed local runtime and external Ollama/LM Studio/vLLM.
+
+6. **Commercial library layer — deferred (do not start now)**
+   - Foundation already implemented: SPDX normalization, license allowlist and
+     offline Ed25519 entitlement verification.
+   - Pending product decisions: commercial model (free/pro/enterprise, seats),
+     trust anchor and key rotation, storage for the public key and entitlements.
+   - Pending implementation: activation/management UI, enforcement on selection
+     and execution, packaged-graph protection, and catalog/marketplace.
+   - Full checklist:
+     [`quality/libraries-plan.md`](../quality/libraries-plan.md#fase-8-comercial).
+   - Entitlement format:
+     [`quality/library-entitlements.md`](../quality/library-entitlements.md).
 
 ## Trust boundary
 

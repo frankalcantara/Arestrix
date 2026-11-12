@@ -3,6 +3,13 @@
 > **Status:** análise concluída; plano aprovado em parte (decisões 1, 2, 3, 6, 8 e 11 registradas
 > na seção 14). **Fases 1, 2, 3, 4, 5 e 6 implementadas em 2026-10-27.**
 >
+> **Próximo passo ativo desta frente:** concluir a **Fase 7 — homologação manual**
+> (3 casos restantes). A **Fase 8 — camada comercial** está registrada abaixo e
+> **adiada por decisão de produto**: não iniciar agora.
+>
+> **Adiado:** Fase 8 — licença, entitlement, proteção do grafo e marketplace.
+> A fundação técnica já existe (SPDX + entitlement Ed25519), mas sem enforcement.
+>
 > **Fase 1 entregue:** catálogo embutido renomeado para “Biblioteca Arestrix”, URLs fictícias
 > removidas, importação da biblioteca passando pelo Skill Guard, seção **Bibliotecas** em
 > Studio/Workspace com criação de biblioteca e cadastro de fonte, e o evento
@@ -95,7 +102,7 @@
 > (skills, MCPs, templates de agente e de grafo), gerenciado exclusivamente nas telas de
 > Propriedades e consumido por um seletor único na criação e edição de agentes e grafos.
 >
-> **Última revisão:** 2026-10-27.
+> **Última revisão:** 2026-11-12.
 >
 > **Substitui, para o tema GitHub/bibliotecas:** a decisão 5 e as referências ao
 > `GitHubReposModal` em [`properties-screens-plan.md`](properties-screens-plan.md).
@@ -847,7 +854,45 @@ grava o conteúdo em quarentena antes da validação.
   enquanto os 3 casos manuais restantes e o gate de release não estiverem verdes.
 - Detalhes e matriz em [`libraries-homologation-plan.md`](./libraries-homologation-plan.md).
 
-**Ordem de grandeza:** 29–41 dias de desenvolvimento, sem retrabalho de homologação.
+<a id="fase-8-comercial"></a>
+### Fase 8 — Camada comercial das bibliotecas — **adiada; não iniciar agora**
+
+**Decisão (2026-11-12):** a comercialização fica para depois. A fundação técnica
+já implementada cobre normalização SPDX, allowlist de licenças e verificação
+offline de entitlements Ed25519; o que falta é produto, política e enforcement.
+
+Itens para retomar:
+
+- [ ] Definir o modelo comercial: free/pro/enterprise, por assento ou por
+      organização, limites e upgrades.
+- [ ] Definir a trust anchor: par de chaves Ed25519/minisign, custódia, rotação,
+      revogação e chave pública distribuída na instalação.
+- [ ] Definir onde armazenar a chave pública e os entitlements (Workspace,
+      projeto ou configuração da instalação).
+- [ ] Criar UI de ativação/gestão de licença, com sujeito, tier, validade,
+      assentos e assets cobertos.
+- [ ] Aplicar enforcement na seleção, inserção e execução de assets que exijam
+      entitlement; manter assets livres sem bloqueio.
+- [ ] Proteger o grafo empacotado contra leitura/edição casual, com formato
+      versionado e hash canônico.
+- [ ] Definir catálogo/marketplace, publicação, assinatura de terceiros e
+      política de confiança.
+- [ ] Cobrir revogação, expiração, modo offline e rotação de chaves com testes
+      de segurança.
+- [ ] Atualizar a documentação comercial e os critérios de release.
+
+**Pré-requisito para retomar:** decisão de produto sobre o modelo comercial e a
+trust anchor. Até lá, não bloquear nenhum asset existente nem alterar o fluxo
+atual de biblioteca.
+
+**Critério de conclusão:** um asset comercial só pode ser inserido/executado com
+entitlement válido; assets sem política continuam funcionando offline; a chave
+privada nunca é distribuída.
+
+**Ordem de grandeza da Fase 8:** 10–15 dias de desenvolvimento, depois das decisões de
+produto e da definição das chaves.
+
+**Ordem de grandeza das fases 1–7:** 29–41 dias de desenvolvimento, sem retrabalho de homologação.
 
 ---
 
@@ -959,7 +1004,11 @@ grava o conteúdo em quarentena antes da validação.
 
 ---
 
-## 15. Fora de escopo
+## 15. Fora de escopo desta entrega
+
+> A camada comercial (licença, entitlement, proteção do grafo e marketplace) está
+> registrada na **Fase 8**, adiada por decisão de produto. Os itens abaixo valem
+> para a entrega atual da biblioteca.
 
 - Marketplace público de bibliotecas com upload/assinatura de terceiros.
 - Execução remota de skills ou MCPs sem instalação local.

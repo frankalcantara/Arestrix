@@ -227,6 +227,11 @@ Pendente após a pré-release `2.1.0-beta.1`:
 
 ## Próximos passos
 
+> **Próximo passo ativo no roadmap geral:** item 1 (**Linux + CI**). Na frente de
+> bibliotecas, o próximo passo ativo é concluir a **homologação manual da Fase 7**.
+> O item 6 (**camada comercial**) está **adiado por decisão de produto** e não deve
+> ser iniciado agora.
+
 1. **Linux + CI**
    - Build Linux, instalação do runtime, extração do llama.cpp, router e gateway end-to-end.
    - Matriz Windows/Linux e validação automatizada de catálogo/manifesto.
@@ -251,6 +256,19 @@ Pendente após a pré-release `2.1.0-beta.1`:
    - Wizard de primeira execução com recomendação por hardware.
    - Diagnóstico melhor para falhas de GPU/driver/modelo.
    - Alternância com um clique entre runtime local gerenciado e Ollama/LM Studio/vLLM externos.
+
+6. **Camada comercial das bibliotecas — adiada (não iniciar agora)**
+   - Fundação já implementada: normalização SPDX, allowlist de licenças e
+     verificação offline de entitlements Ed25519.
+   - Pendente de decisão: modelo comercial (free/pro/enterprise, assentos),
+     trust anchor e rotação de chaves, armazenamento de chave pública e
+     entitlements.
+   - Pendente de implementação: UI de ativação/gestão, enforcement na seleção e
+     execução, proteção do grafo empacotado e catálogo/marketplace.
+   - Checklist completo:
+     [`quality/libraries-plan.md`](../quality/libraries-plan.md#fase-8-comercial).
+   - Formato de entitlement:
+     [`quality/library-entitlements.md`](../quality/library-entitlements.md).
 
 ## Fronteira de confiança
 
