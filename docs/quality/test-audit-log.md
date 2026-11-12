@@ -68,6 +68,20 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 - [x] Confirmação de 3 repetições do `memory.gate` com Jev (`run 2026-11-12`, 120 execuções por suíte).
 - [ ] Pacote Linux e matriz de CI Linux/macOS.
 
+#### Atualização da Fase 7 — 2026-11-12
+
+| Área | Evidência |
+| :--- | :--- |
+| **Gate integrado** | `npm run homologation:libraries:live`: 11 arquivos Vitest / 58 testes, 46/46 C++ com mock, 2/2 smoke live e captura web LIB-M-01 integrada; `status=passed-automated`, `pendingManual=2` |
+| **UI web LIB-M-01** | Captura headless em temas claro/escuro, larguras 1024/1800 px, árvore com PENDING/APPROVE/REJECT, sem overflow e canvas escuro; relatório `lib-m-01.json` em `release/homologation/2026-11-12T21-55-01-125Z-149461b1/` |
+| **Correções do runner** | Logs da matriz agora apontam para arquivos existentes; smoke live opcional não rebaixa mais o status; `--no-native` continua `partial`; `--no-ui` disponível |
+
+- [x] LIB-M-01 aprovado na camada web pelo gate (confirmação nativa pendente).
+- [x] LIB-M-02 aprovado manualmente em 2026-10-27.
+- [ ] LIB-M-03 (instalação limpa/upgrade preservando bibliotecas).
+- [ ] LIB-M-04 (offline após sincronização/cache).
+- [ ] Confirmação nativa de tema/tamanhos e captura do seletor no agente.
+
 ### Rodada #006 - 2026-11-10 (pré-release 2.7.0, correções da memória)
 - **Commit:** árvore de validação pré-release `2.7.0` (hash do merge registrado no GitHub)
 - **Status Geral:** `APROVADO NO ESCOPO AUTOMATIZADO; INSTALADOR E 4 CASOS MANUAIS DE BIBLIOTECAS PENDENTES`

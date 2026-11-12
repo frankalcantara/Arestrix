@@ -20,6 +20,7 @@ const root = process.cwd();
 const args = new Set(process.argv.slice(2));
 const live = args.has('--live');
 const skipNative = args.has('--no-native');
+const ui = !args.has('--no-ui');
 const startedAt = new Date();
 const startedMs = Date.now();
 
@@ -95,13 +96,21 @@ const vitestArgs = [
   'tests/library-github.spec.ts',
   'tests/library-audit-gate.spec.ts',
   'tests/library-registry.spec.ts',
+  'tests/library-service.spec.ts',
   'tests/library-tree.spec.ts',
   'tests/libraries-properties.spec.ts',
   'tests/project-library-store.spec.ts',
+  'tests/license-entitlement.spec.ts',
+  'tests/asset-delta.spec.ts',
   'tests/i18n.spec.ts'
 ];
 
-const frontendOk = await runStage('Frontend e integração (Vitest)', process.execPath, [vitestPath, ...vitestArgs]);
+const FRONTEND_STAGE = 'Frontend e integracao Vitest';
+const FRONTEND_LOG = 'frontend-e-integracao-vitest.log';
+const NATIVE_STAGE = 'C++ mock GitHub';
+const NATIVE_LOG = 'c-mock-github.log';
+
+const frontendOk = await runStage(FRONTEND_STAGE, process.execPath, [vitestPath, ...vitestArgs]);
 
 const functionalCases = [
   ['LIB-F-01', 'Catálogo embutido e biblioteca Arestrix'],
@@ -117,7 +126,7 @@ const functionalCases = [
 ];
 
 for (const [id, description] of functionalCases) {
-  addCase(id, 'Funcional', description, 'automated', frontendOk ? 'passed' : 'failed', 'frontend-e-integracao-vitest.log');
+  addCase(id, 'Funcional', description, 'automated', frontendOk ? 'passed' : 'failed', FRONTEND_LOG);
 }
 
 let nativeOk = false;
@@ -126,16 +135,16 @@ if (!skipNative) {
   const native = natives.map(candidate => path.join(root, candidate)).find(existsSync);
   if (!native) {
     writeFileSync(
-      path.join(evidenceDir, 'c-mock-github-.log'),
+      path.join(evidenceDir, NATIVE_LOG),
       'Binário C++ não encontrado. Compile build/arestrix_tests.\n',
       'utf8'
     );
-    recordStage('C++ (mock GitHub)', { status: 1, durationMs: 0 });
+    recordStage(NATIVE_STAGE, { status: 1, durationMs: 0 });
     console.error('[homologation] Binário C++ não encontrado. Compile build/arestrix_tests.');
   } else {
     const mock = await startMockGitHubServer();
     try {
-      nativeOk = await runStage('C++ (mock GitHub)', native, ['--filter=github_source'], {
+      nativeOk = await runStage(NATIVE_STAGE, native, ['--filter=github_source'], {
         ARESTRIX_TEST_MODE: '1',
         ARESTRIX_TEST_GITHUB_API_BASE: mock.url,
         ARESTRIX_TEST_GITHUB_RAW_BASE: `${mock.url}/raw`
@@ -167,7 +176,7 @@ for (const [id, description, source] of securityCases) {
     description,
     'automated',
     ok ? 'passed' : (source === 'native' && skipNative ? 'skipped' : 'failed'),
-    source === 'native' ? 'cpp-mock-github.log' : 'frontend-e-integracao-vitest.log'
+    source === 'native' ? NATIVE_LOG : FRONTEND_LOG
   );
 }
 
@@ -178,7 +187,7 @@ const resilienceCases = [
   ['LIB-R-04', 'Commit pin e árvore estáveis']
 ];
 for (const [id, description] of resilienceCases) {
-  addCase(id, 'Resiliência', description, 'automated', nativeOk ? 'passed' : (skipNative ? 'skipped' : 'failed'), 'cpp-mock-github.log');
+  addCase(id, 'Resiliência', description, 'automated', nativeOk ? 'passed' : (skipNative ? 'skipped' : 'failed'), NATIVE_LOG);
 }
 
 let liveOk = false;
@@ -199,22 +208,58 @@ addCase(
   live && !skipNative ? (liveOk ? 'passed' : 'failed') : 'skipped',
   'cpp-smoke-github-live.log'
 );
+if (!live || skipNative) {
+  writeFileSync(
+    path.join(evidenceDir, 'cpp-smoke-github-live.log'),
+    `Smoke live não executado (${!live ? '--live ausente' : '--no-native'}).\n`,
+    'utf8'
+  );
+}
+
+const UI_STAGE = 'UI web LIB-M-01';
+const UI_LOG = 'ui-web-lib-m-01.log';
+const browserCandidates = process.platform === 'win32'
+  ? [
+      'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+    ]
+  : [];
+const hasBrowser = browserCandidates.some(candidate => existsSync(candidate));
+const hasDist = existsSync(path.join(root, 'dist', 'index.html'));
+let uiAttempted = false;
+let uiOk = false;
+if (ui && hasBrowser && hasDist) {
+  uiAttempted = true;
+  uiOk = await runStage(UI_STAGE, process.execPath, [
+    path.join(root, 'scripts', 'capture-libraries-homologation.mjs'),
+    `--out=${evidenceDir}`,
+    `--run-id=${runId}`
+  ]);
+} else if (ui) {
+  console.warn('[homologation] UI web ignorada: navegador ou dist/index.html ausente.');
+}
 
 const manualCases = [
-  ['LIB-M-01', 'UI claro/escuro e 1024/1800 px'],
-  ['LIB-M-02', 'Navegação por teclado e foco visível'],
-  ['LIB-M-03', 'Instalação limpa e upgrade preservando projetos'],
-  ['LIB-M-04', 'Offline após sincronização/cache']
+  [
+    'LIB-M-01',
+    'UI web claro/escuro e 1024/1800 px',
+    uiOk ? 'passed' : (uiAttempted ? 'failed' : 'pending'),
+    uiOk ? 'lib-m-01.json' : (uiAttempted ? UI_LOG : 'checklist manual')
+  ],
+  ['LIB-M-02', 'Navegação por teclado e foco visível', 'passed', 'manual 2026-10-27'],
+  ['LIB-M-03', 'Instalação limpa e upgrade preservando projetos', 'pending', 'checklist manual'],
+  ['LIB-M-04', 'Offline após sincronização/cache', 'pending', 'checklist manual']
 ];
-for (const [id, description] of manualCases) {
-  addCase(id, 'Manual', description, 'manual', 'pending', 'checklist manual');
+for (const [id, description, manualStatus, evidence] of manualCases) {
+  addCase(id, 'Manual', description, 'manual', manualStatus, evidence);
 }
 
 const finishedAt = new Date();
-const failedAutomated = matrix.some(item => item.type === 'automated' && item.status === 'failed');
-const skippedAutomated = matrix.some(item => item.type === 'automated' && item.status === 'skipped');
+const failedAutomated = matrix.some(item => item.status === 'failed');
+const optionalSkipped = matrix.filter(item => item.status === 'skipped').map(item => item.id);
 const pendingManual = matrix.filter(item => item.status === 'pending').length;
-const status = failedAutomated ? 'failed' : skippedAutomated ? 'partial' : 'passed-automated';
+const requiredSkipped = skipNative;
+const status = failedAutomated ? 'failed' : requiredSkipped ? 'partial' : 'passed-automated';
 
 const environment = {
   runId,
@@ -230,17 +275,20 @@ const environment = {
   appBinary: existsSync(path.join(root, platform() === 'win32' ? 'build/arestrix.exe' : 'build/arestrix')),
   testBinary: existsSync(path.join(root, platform() === 'win32' ? 'build/arestrix_tests.exe' : 'build/arestrix_tests')),
   live,
-  skipNative
+  skipNative,
+  ui: uiAttempted,
+  uiOk
 };
 
 const report = {
   status,
-  releaseReady: !failedAutomated && pendingManual === 0,
+  releaseReady: !failedAutomated && pendingManual === 0 && (live ? liveOk : false),
   scope: 'Bibliotecas + fonte GitHub',
   environment,
   stages,
   matrix,
-  pendingManual
+  pendingManual,
+  optionalSkipped
 };
 
 writeFileSync(path.join(evidenceDir, 'environment.json'), JSON.stringify(environment, null, 2), 'utf8');

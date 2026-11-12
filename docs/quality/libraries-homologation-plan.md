@@ -2,10 +2,11 @@
 
 > **Status:** automação implementada e executada em 2026-10-27 com `status=passed-automated`.
 > **Escopo desta rodada:** Bibliotecas, assets e fonte GitHub.
-> **Atualização de 2026-11-11:** LIB-M-01 revalidado de forma automatizada na camada web
-> (`scripts/capture-libraries-homologation.mjs`): temas claro/escuro, larguras 1024/1800 px,
-> árvore com assets PENDING/APPROVE/REJECT e canvas escuro. A confirmação na aplicação nativa
-> continua pendente.
+> **Atualização de 2026-11-12:** o gate `npm run homologation:libraries` passou a executar
+> automaticamente o caso LIB-M-01 (captura de UI web em temas claro/escuro e larguras 1024/1800 px),
+> além de Vitest, C++ com mock e smoke live opcional. A matriz agora reflete LIB-M-01 aprovado na
+> camada web e LIB-M-02 aprovado manualmente. Restam **LIB-M-03 (instalação/upgrade)** e
+> **LIB-M-04 (offline)**, além da confirmação de LIB-M-01 na aplicação nativa.
 > **Pendente para promoção:** confirmação nativa de tema/tamanhos, instalação/upgrade e offline.
 > Navegação por teclado e foco foi aprovada manualmente em 2026-10-27.
 > **Plano mestre:** [`libraries-plan.md`](./libraries-plan.md), seção 11, Fase 7.
@@ -120,7 +121,7 @@ Estes casos exigem a aplicação nativa e evidência visual. A pasta
 
 | ID | Caso | Critério | Status |
 | :--- | :--- | :--- | :--- |
-| LIB-M-01 | Tema claro/escuro e larguras 1024/1800 px | Árvore, detalhe e seletor legíveis, sem corte ou sobreposição | Reprovado em 2026-10-27. Correção aplicada; **aprovado de forma automatizada na camada web em 2026-11-11** (`scripts/capture-libraries-homologation.mjs`). Falta confirmar na aplicação nativa. |
+| LIB-M-01 | Tema claro/escuro e larguras 1024/1800 px | Árvore, detalhe e seletor legíveis, sem corte ou sobreposição | Reprovado em 2026-10-27. Correção aplicada; **aprovado de forma automatizada na camada web em 2026-11-12**, agora dentro de `npm run homologation:libraries`. Falta confirmar na aplicação nativa. |
 | LIB-M-02 | Navegação por teclado e foco visível | Tab/Shift+Tab, Enter, Esc e foco consistente em árvore, detalhe e modal | **Aprovado em 2026-10-27.** |
 | LIB-M-03 | Instalação limpa e upgrade | Instala, abre, preserva projetos e bibliotecas; desinstala sem resíduo crítico | Pendente. |
 | LIB-M-04 | Offline após sincronização/cache | Assets já instalados continuam utilizáveis sem rede; erro de rede é claro | Pendente. |
@@ -130,7 +131,7 @@ Checklist mínimo de evidência manual:
 - [x] Teclado e foco validados manualmente em 2026-10-27 (LIB-M-02).
 - [x] Captura da tela de Bibliotecas no Studio em tema claro (`docs/assets/screenshots/libraries-tree-light.webp`, 2026-11-11).
 - [x] Captura da mesma tela em tema escuro, com canvas e vértices escuros (`docs/assets/screenshots/libraries-tree-dark.webp` e `libraries-canvas-dark.webp`, 2026-11-11).
-- [x] Captura da árvore com um asset `PENDING`, um aprovado e um rejeitado (evidência automatizada de 2026-11-11).
+- [x] Captura da árvore com um asset `PENDING`, um aprovado e um rejeitado (evidência automatizada de 2026-11-12 no gate).
 - [ ] Captura do seletor no agente com asset de biblioteca.
 - [ ] Captura/log da instalação limpa e do upgrade.
 - [ ] Captura/log do uso offline.
@@ -155,7 +156,7 @@ homologação ou ao artefato de release, não commitadas.
 ## 7. Como executar
 
 ```bash
-# Gate determinístico completo (frontend + C++ com mock)
+# Gate determinístico completo (Vitest + C++ com mock + captura web LIB-M-01)
 npm run homologation:libraries
 
 # Inclui o manifesto real do GitHub
@@ -163,6 +164,9 @@ npm run homologation:libraries:live
 
 # Apenas frontend, em ambiente sem binário nativo
 node scripts/homologation-libraries.mjs --no-native
+
+# Pula a captura web (ambiente sem navegador ou dist)
+node scripts/homologation-libraries.mjs --no-ui
 ```
 
 O runner não compila nada por conta própria. Antes da execução nativa, o binário
@@ -188,7 +192,8 @@ A Fase 7 pode ser considerada concluída quando:
 
 - O mock não substitui o GitHub real para reprodutibilidade de rate limit, redirects e mudanças de
   contrato; por isso o smoke live é separado.
-- O runner não controla a WebView nem captura screenshots; os casos de UI continuam manuais.
+- O runner controla o preview web para LIB-M-01, mas não a WebView nativa; a confirmação nativa de
+  tema/tamanhos continua manual.
 - O mock não testa autenticação com PAT nem repositórios privados; isso permanece fora do MVP.
 - O tempo de execução nativo depende do build local e do cache do sistema; a matriz registra logs,
   não benchmarks.

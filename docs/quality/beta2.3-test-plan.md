@@ -164,17 +164,17 @@ como pré-release de desenvolvimento.
 ### 2.10 Bibliotecas + fonte GitHub
 
 - [x] `npm run homologation:libraries` com `status=passed-automated` no commit candidato.
-- [x] Matriz, ambiente, logs e requisições do mock em `release/homologation/<runId>/`.
+- [x] Matriz, ambiente, logs, requisições do mock e captura web LIB-M-01 em `release/homologation/<runId>/`.
 - [x] Segurança adversarial: skill hostil, `CAUTION`, licença, path traversal e tamanho.
 - [x] Resiliência: 404, rate limit, commit pin e árvore.
-- [x] Smoke live do manifesto GitHub (`npm run homologation:libraries:live`) em 2026-10-27.
+- [x] Smoke live do manifesto GitHub (`npm run homologation:libraries:live`) em 2026-11-12.
 - [x] Navegação por teclado e foco visível (aprovado manualmente em 2026-10-27).
-- [ ] Tema claro/escuro e larguras 1024/1800 px: **camada web aprovada em 2026-11-11**
-      (`scripts/capture-libraries-homologation.mjs`); falta confirmar na aplicação nativa.
+- [x] Tema claro/escuro e larguras 1024/1800 px na camada web: captura integrada ao gate em
+      2026-11-12. A confirmação na aplicação nativa permanece recomendada.
 - [ ] Instalação limpa e upgrade preservando projetos/bibliotecas.
 - [ ] Uso offline após sincronização/cache.
-- [ ] Evidências manuais anexadas (capturas/logs) para os 3 casos pendentes e registro no
-      `test-audit-log.md`.
+- [ ] Evidências manuais anexadas (capturas/logs) para os 2 casos pendentes e confirmação nativa
+      de tema, com registro no `test-audit-log.md`.
 - Plano detalhado: [`libraries-homologation-plan.md`](./libraries-homologation-plan.md).
 
 ## 3. Critérios de aceite para promoção

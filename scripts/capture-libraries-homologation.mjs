@@ -21,8 +21,12 @@ import { resolve } from 'node:path';
 
 const PORT = Number(process.argv.find(arg => arg.startsWith('--port='))?.split('=')[1] || 4175);
 const BASE_URL = `http://localhost:${PORT}`;
-const RUN_ID = new Date().toISOString().replace(/[:.]/g, '-');
-const OUT_DIR = resolve('release', 'homologation', RUN_ID);
+const RUN_ID = process.argv.find(arg => arg.startsWith('--run-id='))?.split('=').slice(1).join('=')
+  || new Date().toISOString().replace(/[:.]/g, '-');
+const OUT_ARG = process.argv.find(arg => arg.startsWith('--out='))?.split('=').slice(1).join('=');
+const OUT_DIR = OUT_ARG
+  ? resolve(OUT_ARG)
+  : resolve('release', 'homologation', RUN_ID);
 const SHOTS_DIR = resolve(OUT_DIR, 'screenshots');
 mkdirSync(SHOTS_DIR, { recursive: true });
 
@@ -194,8 +198,29 @@ try {
   });
   const page = await browser.newPage();
   page.on('pageerror', error => console.error('[LIB-M-01] PAGE ERROR:', error.message));
+  page.on('response', response => {
+    if (response.status() >= 400) {
+      console.error(`[LIB-M-01] HTTP ${response.status()}: ${response.url()}`);
+    }
+  });
   page.on('console', message => {
     if (message.type() === 'error') console.error('[LIB-M-01] CONSOLE:', message.text());
+  });
+  await page.setRequestInterception(true);
+  page.on('request', request => {
+    try {
+      if (new URL(request.url()).pathname === '/webui.js') {
+        request.respond({
+          status: 200,
+          contentType: 'application/javascript',
+          body: '/* host bridge ausente no preview web */'
+        });
+        return;
+      }
+    } catch {
+      // URL inválida: deixa o request seguir e falhar normalmente.
+    }
+    request.continue();
   });
   await page.evaluateOnNewDocument(seed => {
     const theme = localStorage.getItem('arx_test_theme') === 'dark' ? 'dark' : 'light';

@@ -4,7 +4,9 @@
 > na seção 14). **Fases 1, 2, 3, 4, 5 e 6 implementadas em 2026-10-27.**
 >
 > **Próximo passo ativo desta frente:** concluir a **Fase 7 — homologação manual**
-> (3 casos restantes). A **Fase 8 — camada comercial** está registrada abaixo e
+> dos 2 casos restantes (instalação/upgrade e offline), além da confirmação
+> nativa de tema/tamanhos. A captura web de LIB-M-01 e o caso de teclado/foco já
+> estão cobertos. A **Fase 8 — camada comercial** está registrada abaixo e
 > **adiada por decisão de produto**: não iniciar agora.
 >
 > **Adiado:** Fase 8 — licença, entitlement, proteção do grafo e marketplace.
@@ -93,8 +95,9 @@
 > `npm run test:libraries:live` inclui um manifesto real do GitHub.
 >
 > **Fase 7 (parcial):** `npm run homologation:libraries` executa o gate determinístico com mock
-> GitHub local, gera relatório/matriz/logs e deixa 3 casos manuais pendentes (teclado/foco já
-> aprovado). Ver
+> GitHub local, o smoke live opcional e a captura web de LIB-M-01 (temas e larguras), gerando
+> relatório/matriz/logs. Restam 2 casos manuais (instalação/upgrade e offline) e a confirmação
+> nativa de tema/tamanhos. Ver
 > [`libraries-homologation-plan.md`](./libraries-homologation-plan.md).
 >
 > **Objetivo:** substituir o uso atual do GitHub como “catálogo improvisado” por um conceito
@@ -846,12 +849,13 @@ grava o conteúdo em quarentena antes da validação.
 ### Fase 7 — Homologação (3–5 dias) — **automação concluída; manual pendente**
 
 - `npm run homologation:libraries`: gate determinístico com Vitest + C++ contra mock GitHub local
-  (`ARESTRIX_TEST_MODE=1`, bases apenas em loopback), relatório, matriz, ambiente e logs.
+  (`ARESTRIX_TEST_MODE=1`, bases apenas em loopback), captura web de LIB-M-01, relatório, matriz,
+  ambiente e logs.
 - `npm run homologation:libraries:live`: acrescenta o smoke real do GitHub.
-- Teclado/foco aprovado em 2026-10-27. Pendentes: revalidar tema/tamanhos após a correção de
-  canvas/vértices, instalação limpa/upgrade e offline.
+- Teclado/foco aprovado em 2026-10-27. LIB-M-01 aprovado na camada web em 2026-11-12. Pendentes:
+  confirmação nativa de tema/tamanhos, instalação limpa/upgrade e offline.
 - **Critério:** gate de release aprovado. O status `passed-automated` não promove o Beta 2.3
-  enquanto os 3 casos manuais restantes e o gate de release não estiverem verdes.
+  enquanto os 2 casos manuais restantes e a confirmação nativa não estiverem verdes.
 - Detalhes e matriz em [`libraries-homologation-plan.md`](./libraries-homologation-plan.md).
 
 <a id="fase-8-comercial"></a>
