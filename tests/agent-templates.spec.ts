@@ -259,6 +259,26 @@ describe('Fase 4: Catalogo de Templates de Agentes & Sistema de Plugins Dinamico
       expect(template?.childGraph?.nodes?.length).toBe(2);
       registry.unregisterTemplate('imported_pipeline_agent');
     });
+
+    it('deve importar um pipeline de outro projeto e rejeitar JSON estruturalmente inválido', () => {
+      graph.addNode({
+        id: 'x',
+        label: 'Agente',
+        type: 'agent',
+        position: { x: 0, y: 0 },
+        inputs: [],
+        outputs: [],
+        parameters: {}
+      });
+      const imported = registry.importGraphAsPipelineTemplate(graph.toJSON(), 'Pipeline Externo');
+      expect(imported.assetKind).toBe('pipeline');
+      expect(imported.name).toBe('Pipeline Externo');
+      expect(imported.childGraph?.nodes?.length).toBe(1);
+      registry.unregisterTemplate(imported.id);
+
+      expect(() => registry.importGraphAsPipelineTemplate({} as any, 'Inválido'))
+        .toThrow(/nodes e edges/);
+    });
   });
 });
 

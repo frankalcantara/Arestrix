@@ -87,6 +87,10 @@ export class TemplateModal {
               <button id="btn-save-pipeline-library" class="btn btn-secondary-pill" title="${t('template_modal.btn_save_pipeline')}">
                 ${t('template_modal.btn_save_pipeline')}
               </button>
+              <button id="btn-import-pipeline-library" class="btn btn-secondary-pill" title="${t('template_modal.btn_import_pipeline')}">
+                ${t('template_modal.btn_import_pipeline')}
+              </button>
+              <input type="file" id="pipeline-file-input" accept=".json,application/json" style="display: none;" />
             ` : ''}
           </div>
           <div class="template-action-right">
@@ -422,6 +426,46 @@ export class TemplateModal {
         });
         if (asset) this.render();
       });
+    });
+
+    // Importar um pipeline de outro projeto como ativo composto
+    const pipelineInput = this.overlay.querySelector('#pipeline-file-input') as HTMLInputElement | null;
+    this.overlay.querySelector('#btn-import-pipeline-library')?.addEventListener('click', () => {
+      pipelineInput?.click();
+    });
+    pipelineInput?.addEventListener('change', () => {
+      const file = pipelineInput.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const text = String(event.target?.result || '');
+          const schema = JSON.parse(text);
+          const template = this.registry.importGraphAsPipelineTemplate(schema, file.name.replace(/\.json$/i, ''));
+          const json = this.registry.exportTemplateAsJSON(template.id);
+          const asset = json
+            ? await this.libraryService.saveTemplateToLibrary(JSON.parse(json), { scope: 'workspace' })
+            : null;
+          if (!asset) throw new Error('auditoria rejeitou o pipeline');
+          globalEventBus.emit('notification:show', {
+            severity: 'success',
+            title: t('template_modal.btn_import_pipeline', 'Importar pipeline (.json)'),
+            message: t('template_modal.pipeline_imported', 'Pipeline importado e salvo na biblioteca.')
+          });
+          this.render();
+        } catch (error: any) {
+          globalEventBus.emit('notification:show', {
+            severity: 'error',
+            title: t('template_modal.btn_import_pipeline', 'Importar pipeline (.json)'),
+            message: t('template_modal.pipeline_import_failed', 'Não foi possível importar o pipeline: {{error}}', {
+              error: error?.message || String(error)
+            })
+          });
+        } finally {
+          pipelineInput.value = '';
+        }
+      };
+      reader.readAsText(file);
     });
 
     // Exportar Catálogo

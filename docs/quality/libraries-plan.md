@@ -35,7 +35,8 @@
 > antes de substituir o grafo.
 >
 > **Fase 4.3 entregue (pipeline como agente):** o pipeline atual pode ser salvo
-> na biblioteca pela seção **Agentes**; a importação cria um único vértice com
+> na biblioteca pela seção **Agentes**, e um `pipelines/*.json` de outro projeto
+> pode ser importado diretamente. A importação cria um único vértice com
 > apresentação de `agent` e um subflow interno oculto. O runtime continua usando
 > o mecanismo existente de call/subflow: a interface vê um agente, mas o grafo
 > permanece um pipeline internamente.

@@ -287,7 +287,22 @@ export class AgentTemplateRegistry {
    * subflow composto.
    */
   public saveGraphAsPipelineTemplate(graph: Graph, name?: string): IAgentTemplate {
-    const metadata = graph.getMetadata();
+    return this.importGraphAsPipelineTemplate(graph.toJSON(), name);
+  }
+
+  /**
+   * Importa um `pipelines/*.json` de outro projeto como ativo de pipeline.
+   * O grafo é validado estruturalmente e guardado como snapshot imutável.
+   */
+  public importGraphAsPipelineTemplate(schema: IGraphSchema, name?: string): IAgentTemplate {
+    if (!schema || typeof schema !== 'object' ||
+        !Array.isArray(schema.nodes) || !Array.isArray(schema.edges)) {
+      throw new Error('Pipeline inválido: o JSON precisa conter arrays nodes e edges.');
+    }
+    if (schema.nodes.length === 0) {
+      throw new Error('Pipeline vazio: não há vértices para importar.');
+    }
+    const metadata = schema.metadata;
     let id: string;
     do {
       id = `pipeline_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
@@ -295,15 +310,15 @@ export class AgentTemplateRegistry {
 
     const template: IAgentTemplate = {
       id,
-      name: name?.trim() || metadata.graphName || 'Pipeline',
+      name: name?.trim() || metadata?.graphName || 'Pipeline',
       category: 'Agentes',
       icon: '🧠',
       taskType: 'subflow',
-      description: metadata.description || 'Pipeline completo empacotado como agente visual.',
+      description: metadata?.description || 'Pipeline completo empacotado como agente visual.',
       inputs: [{ name: 'in', type: 'flow' }],
       outputs: [{ name: 'out', type: 'flow' }],
       parameters: {},
-      childGraph: deepClone(graph.toJSON()) as IGraphSchema,
+      childGraph: deepClone(schema),
       assetKind: 'pipeline',
       presentation: 'agent',
       presetLocked: true,

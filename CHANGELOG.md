@@ -45,10 +45,11 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   Custom templates can be deleted from the library and the full-agent preset now
   asks for confirmation before replacing the graph.
 - Pipeline/project composition as a library asset. From the **Agents** section,
-  the current pipeline can be saved to the library; importing it creates one
-  visible vertex with the `agent` presentation backed by a hidden internal
-  subflow. The runtime keeps using the existing call/subflow mechanism, so the
-  canvas shows an agent while the graph remains a pipeline internally.
+  the current pipeline can be saved to the library, or another project's
+  `pipelines/*.json` can be imported; importing it creates one visible vertex
+  with the `agent` presentation backed by a hidden internal subflow. The runtime
+  keeps using the existing call/subflow mechanism, so the canvas shows an agent
+  while the graph remains a pipeline internally.
 - Claim-extraction agent selector in File → Properties → Project → Memory. The
   active pipeline's agent nodes are registered in `AssistantSession` and listed
   through `memory_claim_agents`; the target is stored as `{ id, graph, node }`,
