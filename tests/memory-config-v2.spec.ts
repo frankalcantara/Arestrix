@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   activeSkillNameOf,
   applyMemoryMode,
+  claimAgentKeyFromValue,
   claimAgentTargetFromForm,
   EMBEDDING_PROFILES,
   embeddingProfileFor,
@@ -160,5 +161,16 @@ describe('modelo de memória v2: modo + tema', () => {
       .toEqual({ id: 'claims' });
     expect(claimAgentTargetFromForm(JSON.stringify({ id: '', graph: '  ', node: '' })))
       .toBeUndefined();
+    expect(claimAgentKeyFromValue(JSON.stringify({
+      graph: 'pipelines/main.json',
+      node: 'extrator',
+      id: 'claims'
+    }))).toBe(claimAgentKeyFromValue(JSON.stringify({
+      id: 'claims',
+      graph: 'pipelines/main.json',
+      node: 'extrator'
+    })));
+    expect(claimAgentKeyFromValue('')).toBe('');
+    expect(claimAgentKeyFromValue('valor-invalido')).toBe('valor-invalido');
   });
 });

@@ -50,6 +50,21 @@ export interface ClaimAgentTarget {
  * como ausencia de alvo, para o runtime falhar fechado em vez de apontar para
  * um id arbitrario.
  */
+/** Chave estavel para comparar o mesmo alvo sem depender da ordem das chaves JSON. */
+export function claimAgentKeyFromValue(value: string | undefined): string {
+  if (!value) return '';
+  try {
+    const parsed = JSON.parse(value);
+    return JSON.stringify({
+      id: String(parsed?.id || ''),
+      graph: String(parsed?.graph || ''),
+      node: String(parsed?.node || '')
+    });
+  } catch {
+    return value;
+  }
+}
+
 export function claimAgentTargetFromForm(value: string | undefined): ClaimAgentTarget | undefined {
   if (!value) return undefined;
   try {

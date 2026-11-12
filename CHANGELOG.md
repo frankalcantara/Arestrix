@@ -33,6 +33,9 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
 - `routing.mode=shadow` with no validation history now records the frontier
   suggestion but keeps executing the current tier; it no longer switches to the
   frontier while in shadow.
+- The claim-extraction target selector now compares saved targets semantically,
+  so a valid `{ id, graph, node }` is not reported as missing when the JSON keys
+  are serialized in another order.
 
 ### Security
 

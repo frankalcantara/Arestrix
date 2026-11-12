@@ -6,7 +6,7 @@ import { ProjectLibraryStore } from '../../core/libraries/ProjectLibraryStore.ts
 import { bindLibraryBrowser, renderLibraryBrowser } from '../libraries/LibraryTree.ts';
 import { DEFAULT_PIPELINE_DEFAULTS } from '../../core/types.ts';
 import { MEMORY_SCENARIOS, memoryScenarioOf } from '../../core/memory/MemoryScenarios.ts';
-import { claimExtractionEnabled, memoryModeOf } from '../../core/memory/MemoryConfig.ts';
+import { claimAgentKeyFromValue, claimExtractionEnabled, memoryModeOf } from '../../core/memory/MemoryConfig.ts';
 import { sanitizeEnvReferences } from '../../core/env/EnvironmentManager.ts';
 import type { CanvasBackground } from '../../view/CanvasPreferences.ts';
 import type { IProjectSettings, IResolvedSettings, IStudioCredentialsSnapshot, IStudioModelSettings, IStudioSettings, IWorkspaceSettings } from '../../core/settings/types.ts';
@@ -857,6 +857,7 @@ function buildProject(context: IPropertiesContext): IPropertiesScopeConfig {
               }
             } else {
               const currentValue = claimAgentSelect.value;
+              const currentKey = claimAgentKeyFromValue(currentValue);
               Promise.resolve(webui.call('memory_claim_agents'))
                 .then((raw: any) => {
                   const agents = parse(raw);
@@ -865,18 +866,21 @@ function buildProject(context: IPropertiesContext): IPropertiesScopeConfig {
                     'value.memory_claim_agent_default', 'Modelo padrão do Studio');
                   const options = [`<option value="">${escapeHtml(defaultLabel)}</option>`];
                   const values = new Set<string>();
+                  const valueByKey = new Map<string, string>();
                   for (const agent of list) {
                     const value = JSON.stringify({
                       id: String(agent?.id || ''),
                       graph: String(agent?.graph || ''),
                       node: String(agent?.node || '')
                     });
-                    values.add(value);
+                    const key = claimAgentKeyFromValue(value);
+                    values.add(key);
+                    valueByKey.set(key, value);
                     const text = String(agent?.label || agent?.id || agent?.node || '');
                     options.push(`<option value="${escapeHtml(value)}">${escapeHtml(text)}</option>`);
                   }
                   claimAgentSelect.innerHTML = options.join('');
-                  if (currentValue && !values.has(currentValue)) {
+                  if (currentValue && !values.has(currentKey)) {
                     const option = document.createElement('option');
                     option.value = currentValue;
                     option.textContent = label(
@@ -884,9 +888,9 @@ function buildProject(context: IPropertiesContext): IPropertiesScopeConfig {
                       'Alvo configurado (não encontrado no projeto)');
                     claimAgentSelect.appendChild(option);
                   }
-                  claimAgentSelect.value = currentValue;
+                  claimAgentSelect.value = valueByKey.get(currentKey) ?? currentValue;
                   if (claimAgentStatus) {
-                    claimAgentStatus.textContent = currentValue && !values.has(currentValue)
+                    claimAgentStatus.textContent = currentValue && !values.has(currentKey)
                       ? label(
                           'value.memory_claim_agent_unavailable_hint',
                           'O alvo salvo não existe no pipeline atual. O runtime falha fechado até ele ser registrado.')

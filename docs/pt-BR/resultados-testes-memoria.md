@@ -176,10 +176,10 @@ havia histórico (agora mantém o tier atual e apenas registra a sugestão).
 8. **Embeddings reais.** Perfis e fingerprint existem, mas a validação de
    qualidade e latência com EmbeddingGemma 2 e Qwen3-Embedding-4B reais ainda
    deve ser registrada; o fallback lexical é o comportamento seguro.
-9. **UI do agente de extração de claims.** O registro/listagem, o seletor em
-   Propriedades, o salvamento por projeto e a extração via CLI estão
-   implementados e cobertos pelo e2e. Falta apenas a validação manual na janela
-   do Studio (trocar o alvo, salvar e reabrir o projeto).
+9. **UI do agente de extração de claims.** Registro/listagem, seletor em
+   Propriedades, salvamento por projeto, extração via CLI e validação manual no
+   Studio estão concluídos. A validação encontrou e corrigiu um bug de comparação
+   do alvo salvo causado pela ordem das chaves JSON.
 
 10. **Uma máquina.** Sincronização multi-máquina e coordenação de múltiplos
     workers continuam fora do escopo desta release.

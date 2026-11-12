@@ -23,7 +23,7 @@
 | Experimental switches (`pathServing`, `traversal`, `bridges`, `routing.mode`) | **Mechanisms measured on a curated corpus; defaults stay `off`** |
 | `institution` level in the assistant `memory_inspect` | Operational pending |
 | Validation with real embedding providers | Operational pending |
-| Studio UI to configure the memory agent | **Implemented; manual Studio validation pending** |
+| Studio UI to configure the memory agent | **Implemented and validated in the Studio** |
 | Performance profiling (Tracy) and automatic correction loop for generated code via the Studio default model | Optional build ready; loop pending |
 | Instrumentation of Arestrix itself with Tracy and self-optimization loop | Optional build ready; instrumentation pending |
 | Full, detailed performance testing and optimization cycle (C++, TypeScript, etc.) on every release | Release pending |
@@ -194,11 +194,14 @@ with an explicit default-model fallback and a warning when the saved target no
 longer exists in the current pipeline. The `memory claims extract` CLI also
 registers the project pipeline before running.
 
+Manual validation in the Studio is complete: the screen lists the pipeline's
+three agents, enables the selector when extraction is on, saves
+`{ id, graph, node }` and restores the selection after reopening the project.
+The target comparison was also fixed so it no longer depends on JSON key order.
+
 Automated validation covers registration/listing and an extraction e2e with a
 fake HTTP provider (`scripts/e2e_memory_claim_agent.py`): the selected agent
-receives the passage, catalog and schema, and the claim proposal is stored. Only
-manual validation in the Studio window remains (open Properties, change the
-target, save and reopen the project).
+receives the passage, catalog and schema, and the claim proposal is stored.
 
 ### 4.5 Performance observation and automatic correction loop for generated code (Tracy + Studio default model)
 

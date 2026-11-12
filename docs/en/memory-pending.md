@@ -14,7 +14,7 @@ below are the next memory work. No item here blocks the current release.
 | High | Enable experimental switches only after real-data A/B | Pending |
 | Medium | Institutional memory level in the Studio assistant | Pending |
 | Medium | Real embedding-provider quality/latency validation | Pending |
-| Medium | Studio UI to configure the memory agent | Implemented; manual Studio validation pending |
+| Medium | Studio UI to configure the memory agent | Implemented and validated in the Studio |
 | Low | Multi-process maintenance coordination | Out of scope for v1 |
 
 ## 1. Context compaction backed by existing memory
@@ -119,19 +119,22 @@ broader real-data A/B covers more task shapes.
 
 ## 1.1 Studio UI for the memory agent
 
-The target is implemented end to end. The active pipeline's agent nodes are
-registered in `AssistantSession` and exposed through `memory_claim_agents`; the
-Properties screen (File -> Properties -> Project -> Memory) saves
-`memory.claimExtraction.agent` as `{ id, graph, node }`, shows the Studio
-default-model fallback and warns when the saved target is unavailable. The
-`memory claims extract` CLI registers `pipelines/main.json` before running.
+The target is implemented end to end and was validated in the Studio. The active
+pipeline's agent nodes are registered in `AssistantSession` and exposed through
+`memory_claim_agents`; the Properties screen (File -> Properties -> Project ->
+Memory) saves `memory.claimExtraction.agent` as `{ id, graph, node }`, shows the
+Studio default-model fallback and warns when the saved target is unavailable.
+The `memory claims extract` CLI registers `pipelines/main.json` before running.
+
+Manual validation on 2026-11-12 listed the three agents from the sample
+pipeline, enabled the selector, saved `Especialista_A`, reopened the project and
+restored the same selection. That check found a JSON key-order bug in the saved
+target comparison; it is fixed and covered by the unit tests.
 
 The extraction uses one model call without tools, keeping the selected agent's
 provider/model/skill and producing clean `--json` output. Automated coverage
-includes the registry/list test and `scripts/e2e_memory_claim_agent.py` with a
-fake provider (one candidate, one extracted claim, one proposal, zero failures).
-Only manual validation in the Studio window remains: change the target, save
-and reopen the project.
+also includes `scripts/e2e_memory_claim_agent.py` with a fake provider (one
+candidate, one extracted claim, one proposal, zero failures).
 
 ## 2. Standalone Mnemosyne module and submodule
 

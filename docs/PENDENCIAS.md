@@ -21,7 +21,7 @@
 | Interruptores experimentais (`pathServing`, `traversal`, `bridges`, `routing.mode`) | **Mecanismos medidos em corpus curado; padrões seguem `off`** |
 | Nível `institution` no `memory_inspect` do assistente | Pendente operacional |
 | Validação com provedores reais de embeddings | Pendente operacional |
-| Interface gráfica para configurar o agente de memória | **Implementada; validação manual no Studio pendente** |
+| Interface gráfica para configurar o agente de memória | **Implementada e validada no Studio** |
 | Laço de profiling (Tracy) e correção automática do código gerado via modelo padrão do Studio | Build opcional pronto; loop pendente |
 | Instrumentação do próprio Arestrix com Tracy e laço de auto-otimização | Build opcional pronto; instrumentação pendente |
 | Ciclo completo de testes e otimização de performance (C++, TypeScript, etc.) a cada release | Pendente de release |
@@ -205,11 +205,14 @@ com fallback explícito para o modelo padrão e aviso quando o alvo salvo não
 existe no pipeline atual. O CLI `memory claims extract` também registra o
 pipeline do projeto antes de executar.
 
+A validação manual foi concluída no Studio: a tela lista os três agentes do
+pipeline, habilita o seletor ao ligar a extração, salva `{ id, graph, node }` e
+restaura a seleção ao reabrir o projeto. A comparação do alvo também foi
+corrigida para não depender da ordem das chaves JSON.
+
 A validação automatizada cobre o registro/listagem e um e2e de extração com
 provedor HTTP falso (`scripts/e2e_memory_claim_agent.py`): o agente escolhido
-recebe o trecho, o catálogo e o schema, e a proposta de claim é gravada. Falta
-apenas a validação manual na janela do Studio (abrir Propriedades, trocar o alvo,
-salvar e reabrir o projeto).
+recebe o trecho, o catálogo e o schema, e a proposta de claim é gravada.
 
 ### 4.5 Laço de observação de performance e correção automática no código gerado (Tracy + Modelo Padrão do Studio)
 

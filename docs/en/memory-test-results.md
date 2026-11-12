@@ -179,9 +179,9 @@ history (it now keeps the current tier and only records the suggestion).
    validation with real EmbeddingGemma 2 and Qwen3-Embedding-4B models is still
    pending; lexical fallback remains the safe behaviour.
 9. **Claim-extraction agent UI.** Registration/listing, the Properties selector,
-   per-project saving and CLI extraction are implemented and covered by the e2e.
-   Only manual validation in the Studio window remains (change the target, save
-   and reopen the project).
+   per-project saving, CLI extraction and manual Studio validation are complete.
+   Validation found and fixed a saved-target comparison bug caused by JSON key
+   order.
 
 10. **Single machine.** Multi-machine synchronisation and multi-worker
     coordination remain out of scope for this release.
