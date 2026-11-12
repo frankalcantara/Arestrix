@@ -180,7 +180,8 @@ A Fase 7 pode ser considerada concluída quando:
 
 1. `npm run homologation:libraries` termina com `status=passed-automated` (sem `--no-native`);
 2. o mesmo commit tem `npx tsc --noEmit`, `npm test`, C++ completo e `npm run build` verdes;
-3. os 3 casos manuais pendentes têm evidência anexada; LIB-M-02 já está aprovado;
+3. os 2 casos manuais pendentes (LIB-M-03 e LIB-M-04) têm evidência anexada, e LIB-M-01
+   tem confirmação nativa registrada; LIB-M-02 já está aprovado;
 4. o smoke live foi executado ao menos uma vez no commit candidato;
 5. não há falha P0/P1 conhecida;
 6. o resultado entra no `test-audit-log.md` e na seção 2.10 do plano Beta 2.3.

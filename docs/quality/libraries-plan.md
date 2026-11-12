@@ -846,7 +846,7 @@ grava o conteúdo em quarentena antes da validação.
 - `--no-native` para ambientes sem binário C++.
 - **Critério:** um comando valida o ciclo principal de ponta a ponta.
 
-### Fase 7 — Homologação (3–5 dias) — **automação concluída; manual pendente**
+### Fase 7 — Homologação (3–5 dias) — **automação concluída; 2 casos manuais pendentes**
 
 - `npm run homologation:libraries`: gate determinístico com Vitest + C++ contra mock GitHub local
   (`ARESTRIX_TEST_MODE=1`, bases apenas em loopback), captura web de LIB-M-01, relatório, matriz,
