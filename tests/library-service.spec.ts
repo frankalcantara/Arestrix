@@ -289,6 +289,50 @@ describe('LibraryService - importação, derivação e instalação', () => {
     expect(changed?.audit.hash).not.toBe(first?.audit.hash);
   });
 
+  it('publica uma nova versão em um asset existente pelo assetId', async () => {
+    const pipeline = {
+      id: 'pipeline_publish_test',
+      name: 'Pipeline Publicado',
+      taskType: 'subflow' as const,
+      description: 'Pipeline para publicação',
+      inputs: [{ name: 'in', type: 'flow' as const }],
+      outputs: [{ name: 'out', type: 'flow' as const }],
+      lambdaBodyTemplate: '',
+      assetKind: 'pipeline' as const,
+      presentation: 'agent' as const,
+      presetLocked: true,
+      childGraph: {
+        version: '1.0.0',
+        metadata: { graphName: 'Pipeline Publicado' } as any,
+        nodes: [{ id: 'n1', type: 'static', position: { x: 0, y: 0 }, inputs: [], outputs: [], parameters: {} } as any],
+        edges: []
+      }
+    };
+    const first = await service.saveTemplateToLibrary(pipeline, { scope: 'workspace' });
+    expect(first).not.toBeNull();
+
+    const published = await service.saveTemplateToLibrary({
+      ...pipeline,
+      id: 'pipeline_publish_test_v2',
+      childGraph: {
+        ...pipeline.childGraph,
+        nodes: [
+          ...pipeline.childGraph.nodes,
+          { id: 'n2', type: 'static', position: { x: 100, y: 0 }, inputs: [], outputs: [], parameters: {} } as any
+        ]
+      }
+    }, {
+      assetId: first!.id,
+      scope: 'workspace',
+      changelog: 'Publicado pelo teste.'
+    });
+
+    expect(published?.id).toBe(first!.id);
+    expect(published?.version).toBe('1.0.1');
+    expect(published?.changelog).toBe('Publicado pelo teste.');
+    expect(published?.payload.kind === 'pipeline' && published.payload.template.id).toBe('pipeline_publish_test_v2');
+  });
+
   it('clona uma biblioteca e mantém vínculo com a origem', async () => {
     const imported = await service.importBuiltinSkills();
     const clone = await service.cloneLibrary('library-arestrix', 'Biblioteca Clonada', 'workspace');

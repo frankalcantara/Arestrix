@@ -323,6 +323,16 @@ export class LibraryPickerModal extends BaseModal {
         ${asset.changelog ? `<div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('changelog', 'Alteração')}</span><span class="properties-library-meta-value">${this.escapeHtml(asset.changelog)}</span></div>` : ''}
         ${asset.remote ? `<div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('remote_path', 'Caminho remoto')}</span><span class="properties-library-meta-value">${this.escapeHtml(asset.remote.path)}</span></div>` : ''}
       </div>
+      ${(asset.history?.length || 0) > 0 ? `
+        <div class="properties-library-history">
+          <div class="properties-library-meta-label">${lbl('history', 'Histórico de versões')}</div>
+          ${[...asset.history!].slice(-4).reverse().map(release => `
+            <div class="properties-library-meta-item">
+              <span class="properties-library-meta-value">v${this.escapeHtml(release.version)}${release.note ? ` · ${this.escapeHtml(release.note)}` : ''}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
       ${needsDownload ? `
         <div class="properties-library-actions">
           <button type="button" class="btn btn-primary-office" data-picker-download="${this.escapeHtml(asset.id)}">${this.escapeHtml(lbl('download', 'Baixar e auditar'))}</button>

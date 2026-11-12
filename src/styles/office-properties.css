@@ -756,6 +756,12 @@
   background: var(--modal-surface-2);
 }
 
+.properties-library-history {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
 .properties-library-meta-label {
   display: block;
   margin-bottom: 3px;

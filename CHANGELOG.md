@@ -71,6 +71,8 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   library** action. Updating a composed pipeline replaces the visible interface,
   reconciles typed parameters, rebuilds output ports and updates the hidden
   internal subflow in one undoable command, without touching the library asset.
+  The library picker lists the release history, and **Publish version** saves the
+  current pipeline as a new version of an existing editable pipeline asset.
 - Claim-extraction agent selector in File → Properties → Project → Memory. The
   active pipeline's agent nodes are registered in `AssistantSession` and listed
   through `memory_claim_agents`; the target is stored as `{ id, graph, node }`,

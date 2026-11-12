@@ -54,7 +54,7 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 | **Instalador 2.7.0** | `arestrix-2.7.0-windows-x64-setup.exe` (62.866.760 bytes, SHA-256 `f4067105…f3f80a`); instalação silenciosa, `arestrix-cli`/`arestrix-memory` 2.7.0, `project validate`, abertura do Studio, upgrade 2.1.0-beta.1 → 2.7.0 preservando projeto do usuário e desinstalação completa |
 | **Pacote portátil 2.7.0** | `arestrix-2.7.0-windows-x64.zip` (90.100.073 bytes, 4.912 arquivos), SHA-256 `bb88bee8…e327f33` |
 
-- **Métricas Globais (2026-11-12):** 81 arquivos de teste | 644 testes Vitest | 4.299/4.299 verificações C++ | tutorial E2E + 14 exemplos | 0 falhas automatizadas
+- **Métricas Globais (2026-11-12):** 81 arquivos de teste | 645 testes Vitest | 4.299/4.299 verificações C++ | tutorial E2E + 14 exemplos | 0 falhas automatizadas
 
 #### Pendências para promoção
 

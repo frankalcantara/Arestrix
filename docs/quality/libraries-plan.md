@@ -59,7 +59,9 @@
 > o Inspetor mostra “Atualização disponível”, compara as versões e aplica a
 > atualização em um comando desfazível. Em pipelines compostos, a atualização
 > substitui a interface visível, reconcilia parâmetros tipados, reconstrói as
-> portas de saída e atualiza o subflow interno oculto sem alterar o asset.
+> portas de saída e atualiza o subflow interno oculto sem alterar o asset. A
+> Biblioteca lista o histórico de versões e a ação **Publicar versão** salva o
+> pipeline atual como nova versão de um asset editável já existente.
 >
 > **Fase 5 entregue:** fonte GitHub real via endpoint C++ `fetch_library_source`, commit pin,
 > leitura de manifesto/árvore sem baixar blobs, sincronização de candidatos como `PENDING`,

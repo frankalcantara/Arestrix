@@ -439,6 +439,9 @@ export class LibraryService {
       : templateAssetId(library.id, template.id || Date.now().toString(36));
     const id = options.assetId?.trim() || defaultId;
     const existing = this.registry.getAsset(id);
+    if (existing && existing.provenance.authority !== 'user') {
+      return null;
+    }
 
     const contentChanged = !existing
       || existing.audit.hash !== audit.hash

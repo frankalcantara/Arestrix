@@ -92,6 +92,9 @@ export class TemplateModal {
               <button id="btn-import-pipeline-library" class="btn btn-secondary-pill" title="${t('template_modal.btn_import_pipeline')}">
                 ${t('template_modal.btn_import_pipeline')}
               </button>
+              <button id="btn-publish-pipeline-version" class="btn btn-secondary-pill" title="${t('template_modal.btn_publish_version_tip', 'Publicar o pipeline atual como nova versão de um asset da biblioteca')}">
+                ${t('template_modal.btn_publish_version', 'Publicar versão')}
+              </button>
               <button id="btn-import-project-agent" class="btn btn-secondary-pill" title="${t('template_modal.btn_import_project')}">
                 ${t('template_modal.btn_import_project')}
               </button>
@@ -517,6 +520,59 @@ export class TemplateModal {
         }
       };
       reader.readAsText(file);
+    });
+
+    // Publicar o pipeline atual como nova versão de um asset da biblioteca
+    this.overlay.querySelector('#btn-publish-pipeline-version')?.addEventListener('click', () => {
+      if (!this.libraryPicker) this.libraryPicker = new LibraryPickerModal();
+      this.libraryPicker.open({
+        kind: 'pipeline',
+        projectId: this.graph.getProjectId(),
+        title: t('template_modal.publish_version_title', 'Publicar nova versão'),
+        subtitle: t('template_modal.publish_version_subtitle', 'Escolha o pipeline da biblioteca que receberá o pipeline atual como nova versão.'),
+        onSelect: async (asset) => {
+          if (asset.payload.kind !== 'pipeline') return;
+          const note = typeof window !== 'undefined' && typeof window.prompt === 'function'
+            ? window.prompt(
+              t('template_modal.publish_version_prompt', 'Descreva a alteração desta versão (opcional):'),
+              ''
+            )
+            : '';
+          if (note === null) return;
+
+          let template: IAgentTemplate | undefined;
+          try {
+            template = this.registry.saveGraphAsPipelineTemplate(this.graph, asset.name);
+            const json = this.registry.exportTemplateAsJSON(template.id);
+            if (!json) throw new Error('não foi possível serializar o pipeline atual');
+            const updated = await this.libraryService.saveTemplateToLibrary(JSON.parse(json), {
+              assetId: asset.id,
+              name: asset.name,
+              changelog: note.trim() || t('template_modal.publish_version_default_note', 'Publicado a partir do pipeline atual.')
+            });
+            if (!updated) throw new Error('o asset não pertence a uma biblioteca editável');
+            globalEventBus.emit('notification:show', {
+              severity: 'success',
+              title: t('template_modal.publish_version_title', 'Publicar nova versão'),
+              message: t('template_modal.publish_version_success', 'Versão {{version}} publicada para "{{name}}".', {
+                version: updated.version,
+                name: updated.name
+              })
+            });
+            this.render();
+          } catch (error: any) {
+            globalEventBus.emit('notification:show', {
+              severity: 'error',
+              title: t('template_modal.publish_version_title', 'Publicar nova versão'),
+              message: t('template_modal.publish_version_failed', 'Não foi possível publicar a versão: {{error}}', {
+                error: error?.message || String(error)
+              })
+            });
+          } finally {
+            if (template) this.registry.unregisterTemplate(template.id);
+          }
+        }
+      });
     });
 
     // Importar a pasta de outro projeto, usando pipelines/main.json
