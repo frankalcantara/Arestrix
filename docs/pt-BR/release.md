@@ -1,8 +1,10 @@
 # Gate de release e artefatos
 
 > **Fase 5A.** Esta é a camada de validação reproduzível antes do empacotamento.
-> O instalador Windows em Inno Setup está implementado; validação em máquina limpa, pacote Linux,
-> CI Linux e catálogo remoto assinado continuam pendentes; veja o [roadmap](roadmap.md).
+> O instalador Windows em Inno Setup está implementado; a matriz de release 2.8, a validação em
+> máquina limpa, o pacote Linux, o CI obrigatório e o catálogo remoto assinado continuam pendentes;
+> veja o [plano de testes de release 2.8](../quality/release-test-plan.md) e o
+> [roadmap](roadmap.md).
 
 ## 1. Prepare uma árvore limpa
 

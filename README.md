@@ -182,7 +182,7 @@ python scripts/e2e_examples.py
 | [Examples](examples/README.md) | Fourteen runnable projects, from a two-agent pipeline to callable subflows, flow Call vertices, asynchronous and parallel calls, generated forms, project memory, web research and reversible context compression. |
 | [Test audit log](docs/quality/test-audit-log.md) | Chronological test rounds and integrity audits. |
 | [Release gate](docs/en/release.md) | Reproducible validation, SHA-256 manifest and SBOM before distribution. |
-| [Beta 2.3 test plan](docs/quality/beta2.3-test-plan.md) | Registered Beta 2.3 scope and remaining acceptance tests (in Portuguese). |
+| [Release 2.8 test plan](docs/quality/release-test-plan.md) | Current release matrix, evidence and remaining acceptance tests (in Portuguese). |
 | [Changelog](CHANGELOG.md) | Release history, changes and known limitations. |
 
 ## Project status
@@ -193,7 +193,7 @@ may still change between minor releases. See the [changelog](CHANGELOG.md) for t
 limitations. The Windows installer is included; clean-machine validation, the
 Linux package and the full test matrix are still pending. Track them in the
 [test audit log](docs/quality/test-audit-log.md) and the
-[Beta 2.3 test plan](docs/quality/beta2.3-test-plan.md).
+[Release 2.8 test plan](docs/quality/release-test-plan.md).
 
 ## Security
 

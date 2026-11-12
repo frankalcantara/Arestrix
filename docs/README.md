@@ -36,7 +36,7 @@
 | Document | Description |
 | :--- | :--- |
 | [Test audit log](quality/test-audit-log.md) | Chronological test rounds, category breakdown and integrity audits (in Portuguese). |
-| [Beta 2.3 test plan](quality/beta2.3-test-plan.md) | Registered Beta 2.3 scope, pending installer/CI work and the mandatory test matrix (in Portuguese). |
+| [Release 2.8 test plan](quality/release-test-plan.md) | Current release matrix, automated evidence and remaining acceptance tests (in Portuguese). |
 | [Tracy profiling plan](quality/tracy-profiling-plan.md) | Optional Tracy build, generated-code/core instrumentation and the assisted optimization loop (in Portuguese). |
 | [Memory test results](en/memory-test-results.md) · [Resultados dos testes de memória](pt-BR/resultados-testes-memoria.md) | Baseline, E20 regression, live parity/value A/B, `memory.gate` and advanced-switch measurements, with limitations and evidence. |
 | [MemoryGate A/B](quality/memory-gate-ab.md) | Memory policy gate (`off`/`shadow`/`enforce`), provider-agnostic decision and A/B results (in Portuguese). |

@@ -28,7 +28,9 @@
 - Local runtime and gateway have been validated end-to-end on **Windows** only.
 - The Linux code paths exist, but the Linux build, runtime download/extraction, router and gateway are
   not yet covered by an end-to-end test.
-- CI is intentionally disabled during beta stabilization; the release matrix is not yet automated.
+- The `ci.yml` and `deploy.yml` workflows exist; `deploy.yml` runs on pushes to `main`, but `main`
+  branch protection does not require status checks. The Windows/Linux matrix is not mandatory and the
+  pull-request CI does not block merges or direct pushes.
 
 ### Performance and profiling (Tracy)
 
@@ -177,8 +179,9 @@ Pending after the `2.3.0-beta.2` pre-release:
   2.1.0-beta.1 -> 2.7.0 and uninstall); a truly clean machine, Intune/SCCM and the Linux
   package (5B2) remain pending.
 - Windows/Linux CI matrix, signed remote catalog (5C) and the full test matrix in
-  [Beta 2.3 test plan](../quality/beta2.3-test-plan.md).
-- Three manual library homologation cases: light/dark sizes, clean install/upgrade and offline use.
+  [Release 2.8 test plan](../quality/release-test-plan.md).
+- Two manual library homologation cases: clean install/upgrade and offline use. Theme/sizes was
+  approved in the web layer and runs in the automated gate; native confirmation remains.
 
 ## Beta 2.2 (previous pre-release)
 
@@ -196,7 +199,7 @@ Pending after the `2.2.0-beta.1` pre-release:
 - Clean-machine install/upgrade/uninstall, silent install and Intune/SCCM validation, plus the Linux
   package (5B2).
 - Windows/Linux CI matrix, signed remote catalog (5C) and the full test matrix in
-  [Beta 2.3 test plan](../quality/beta2.3-test-plan.md).
+  [Release 2.8 test plan](../quality/release-test-plan.md).
 - Remaining contrast review for secondary legacy editors and final Studio homologation.
 
 ## Beta 2.1 (previous pre-release)
@@ -215,7 +218,7 @@ Pending after the `2.1.0-beta.1` pre-release:
 - Clean-machine install/upgrade/uninstall, silent install and Intune/SCCM validation, plus the Linux
   package (5B2).
 - Windows/Linux CI matrix, signed remote catalog (5C) and the full test matrix in
-  [Beta 2.3 test plan](../quality/beta2.3-test-plan.md).
+  [Release 2.8 test plan](../quality/release-test-plan.md).
 - Manual Studio homologation and publication of checksums, SBOM, notices and release notes.
 
 ## Next steps

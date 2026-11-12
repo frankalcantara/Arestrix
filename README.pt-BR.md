@@ -181,7 +181,7 @@ python scripts/e2e_examples.py
 | [Validação de skills](docs/quality/skill-reference-review.md) | Arestrix Skill Guard: NVIDIA SkillSpector + Cloudflare security-audit, lock e revisão de referências. |
 | [Exemplos](examples/README.pt-BR.md) | Quatorze projetos executáveis, de um pipeline de dois agentes a subflows chamáveis, vértices Call, chamadas assíncronas e paralelas, formulários gerados, memória de projeto, pesquisa web e compactação reversível de contexto. |
 | [Registro de auditoria de testes](docs/quality/test-audit-log.md) | Rodadas cronológicas de testes e auditorias de integridade. |
-| [Plano de testes do Beta 2.3](docs/quality/beta2.3-test-plan.md) | Escopo registrado e critérios de aceite pendentes. |
+| [Plano de testes de release 2.8](docs/quality/release-test-plan.md) | Matriz atual, evidências e critérios de aceite pendentes. |
 | [Changelog](CHANGELOG.md) | Histórico de releases, mudanças e limitações conhecidas. |
 
 ## Status do projeto
@@ -191,7 +191,7 @@ programas gerados a partir de um grafo atualmente têm o Windows como alvo. APIs
 arquivo e flags de linha de comando ainda podem mudar entre releases menores. Consulte o
 [changelog](CHANGELOG.md) para as limitações atuais. O instalador Windows está incluído; validação em máquina limpa, pacote Linux e a matriz completa de testes ainda estão
 pendentes. Acompanhe no [registro de auditoria de testes](docs/quality/test-audit-log.md) e no
-[plano de testes do Beta 2.3](docs/quality/beta2.3-test-plan.md). Os artefatos Windows são publicados com hashes e manifesto; consulte a [política de privacidade](PRIVACY.md).
+[plano de testes de release 2.8](docs/quality/release-test-plan.md). Os artefatos Windows são publicados com hashes e manifesto; consulte a [política de privacidade](PRIVACY.md).
 
 ## Segurança
 

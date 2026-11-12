@@ -26,7 +26,7 @@
 ## Operação
 
 - [Roadmap e limitações conhecidas](roadmap.md) - escopo entregue, lacunas e próximos passos.
-- [Plano de testes do Beta 2.3](../quality/beta2.3-test-plan.md) - escopo registrado, instalador/assinatura/CI pendentes e matriz obrigatória.
+- [Plano de testes de release 2.8](../quality/release-test-plan.md) - matriz atual, evidências e critérios de aceite pendentes.
 - [Estratégia de testes da memória v1](../quality/memory-v1-test-strategy.md) - camadas, matriz, Gates e evidências.
 - [Estratégia de merge da memória v1](../quality/memory-v1-merge-strategy.md) - trem de PRs e rollback.
 - [Resultados dos testes de memória](resultados-testes-memoria.md) - linha de base, regressão E20, A/B live de paridade e valor, gate e interruptores avançados, com limitações e evidências.

@@ -1,21 +1,17 @@
 # npm dependency advisories
 
-Last reviewed: 2026-10-31.
+Last reviewed: 2026-11-12.
 
-As of 2026-10-16, `npm audit` reports **3 high-severity vulnerabilities**, all from the same
-advisory: [`braces` GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)
-(stack exhaustion with deeply nested patterns). No fixed release is available upstream.
-`npm audit fix --force` would downgrade `vite-plugin-singlefile` to `0.9.0`, which breaks the
-single-file build and is not an acceptable mitigation.
+## Current status
 
-## Exposure
+`npm audit` reports **0 vulnerabilities** (0 low, 0 moderate, 0 high, 0 critical) on
+2026-11-12.
 
-`braces` is reachable only through the **build chain**:
-
-`vite-plugin-singlefile` → `micromatch` → `braces`
-
-It processes glob patterns from the project's own files at build time. It is not shipped in the
-distributed application and does not process untrusted input at runtime.
+The previous review (2026-10-31) reported three high-severity advisories from
+[`braces` GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)
+(stack exhaustion with deeply nested patterns). That path is no longer reported by the current
+dependency tree. Re-check it after any change to `vite-plugin-singlefile`, `micromatch` or the
+build chain.
 
 ## History and mitigations
 
@@ -26,13 +22,14 @@ distributed application and does not process untrusted input at runtime.
       advisories). `monaco-editor` 0.57.0 still pins 3.4.15, which is its latest release.
 - [x] `monaco-editor` was already on the latest release (0.57.0); the override covers the gap.
 - [x] Validated after the updates: `npx tsc --noEmit`, the frontend test suite and `npm run build`.
+- [x] 2026-11-12: `npm audit` clean; `npm test` 82 files / 650 tests and `npm run build` green.
 
 ## Verification
 
 - Run `npm audit` after every dependency update and update this file.
-- Track a `braces` release that fixes GHSA-vfj7-8cjw-p6xm. When it is available, apply it through
-  an override (`"braces": ">=x.y.z"`) or through a new `micromatch` / `vite-plugin-singlefile`
-  release.
+- Track a `braces` release that fixes GHSA-vfj7-8cjw-p6xm if it reappears. When available, apply it
+  through an override (`"braces": ">=x.y.z"`) or through a new `micromatch` /
+  `vite-plugin-singlefile` release.
 - Re-evaluate the `dompurify` override when `monaco-editor` is upgraded.
 - Do not silence audit failures in CI. If a temporary exception is required, link it to an issue
   and record an expiry date here.

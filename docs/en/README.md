@@ -33,7 +33,7 @@
 ## Operations
 
 - [Roadmap and known limitations](roadmap.md) - delivered scope, gaps and next steps.
-- [Beta 2.3 test plan](../quality/beta2.3-test-plan.md) - registered scope, pending installer/CI and the mandatory test matrix (in Portuguese).
+- [Release 2.8 test plan](../quality/release-test-plan.md) - current release matrix, evidence and remaining acceptance tests (in Portuguese).
 - [Memory v1 test strategy](../quality/memory-v1-test-strategy.md) - layers, matrix, gates and evidence.
 - [Memory v1 merge strategy](../quality/memory-v1-merge-strategy.md) - PR train and rollback.
 - [Tracy profiling plan](../quality/tracy-profiling-plan.md) - optional build, instrumentation and assisted optimization (in Portuguese).

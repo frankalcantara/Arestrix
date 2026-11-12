@@ -1,8 +1,9 @@
 # Release gate and artifacts
 
 > **Phase 5A.** This is the reproducible validation layer before installer packaging.
-> The Windows Inno Setup installer is implemented; clean-machine validation, Linux package,
-> Linux CI and the signed remote catalog remain pending. See the [roadmap](roadmap.md).
+> The Windows Inno Setup installer is implemented; the 2.8 release matrix, clean-machine validation,
+> Linux package, mandatory CI and the signed remote catalog remain pending. See the
+> [release 2.8 test plan](../quality/release-test-plan.md) and the [roadmap](roadmap.md).
 
 ## 1. Prepare a clean tree
 

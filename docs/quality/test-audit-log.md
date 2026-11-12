@@ -4,8 +4,9 @@
 
 Este documento registra o histórico cronológico das rodadas de testes automatizados, verificações de segurança e auditorias de integridade do **Arestrix**, organizadas da **mais recente para a mais antiga**.
 
-> O Beta 2.3 está registrado como pré-release. O instalador foi implementado; a matriz
-> obrigatória e as validações pendentes estão em [Plano de testes do Beta 2.3](beta2.3-test-plan.md).
+> O Beta 2.3 está registrado como histórico. A matriz canônica atual é o
+> [Plano de testes de release 2.8](release-test-plan.md); o instalador foi implementado e as
+> validações pendentes estão nesse documento.
 
 O Arestrix adota a filosofia de integridade estrita (*fail-closed*): nenhuma funcionalidade é considerada concluída ou pronta para ambiente corporativo sem aprovação completa em todas as categorias de validação.
 
@@ -143,7 +144,7 @@ O `doctor` de um projeto que mistura ingestão de fontes com lições e proposta
 #### Pendências para promoção
 
 - [ ] Instalação limpa, upgrade e desinstalação em máquina Windows.
-- [ ] Matriz manual 2.1-2.10 do [Plano de testes do Beta 2.3](beta2.3-test-plan.md).
+- [ ] Matriz manual do [Plano de testes de release 2.8](release-test-plan.md).
 
 ### Rodada #004 — 2026-10-27 (release 2.3.0-beta.1)
 - **Commit:** árvore de release `2.3.0-beta.1` (hash registrado no GitHub após o push)

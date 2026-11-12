@@ -28,7 +28,9 @@
 - Runtime local e gateway foram validados ponta a ponta apenas no **Windows**.
 - Os caminhos Linux existem, mas build, download/extração do runtime, router e gateway ainda não têm
   teste end-to-end no Linux.
-- O CI está desativado durante a estabilização da beta; a matriz de release ainda não é automatizada.
+- Os workflows `ci.yml` e `deploy.yml` existem; o `deploy.yml` roda em pushes para `main`, mas a
+  proteção da `main` ainda não exige status checks. A matriz Windows/Linux não é obrigatória e o CI
+  de pull request não bloqueia merges nem pushes diretos.
 
 ### Performance e profiling (Tracy)
 
@@ -182,9 +184,9 @@ Pendente após a pré-release `2.3.0-beta.2`:
   2.1.0-beta.1 → 2.7.0 e uninstall); faltam máquina realmente limpa, Intune/SCCM e o pacote
   Linux (5B2).
 - Matriz de CI Windows/Linux, catálogo remoto assinado (5C) e a matriz completa em
-  [Plano de testes do Beta 2.3](../quality/beta2.3-test-plan.md).
-- Três casos manuais de homologação das bibliotecas: tema/tamanhos, instalação limpa/upgrade e uso
-  offline.
+  [Release 2.8 test plan](../quality/release-test-plan.md).
+- Dois casos manuais de homologação das bibliotecas: instalação limpa/upgrade e uso offline.
+  Tema/tamanhos foi aprovado na camada web e roda no gate automatizado; falta a confirmação nativa.
 
 ## Beta 2.2 (pré-release anterior)
 
@@ -203,7 +205,7 @@ Pendente após a pré-release `2.2.0-beta.1`:
 - Instalação/upgrade/uninstall em máquina limpa, instalação silenciosa e validação em Intune/SCCM,
   além do pacote Linux (5B2).
 - Matriz de CI Windows/Linux, catálogo remoto assinado (5C) e a matriz completa em
-  [Plano de testes do Beta 2.3](../quality/beta2.3-test-plan.md).
+  [Release 2.8 test plan](../quality/release-test-plan.md).
 - Revisão final de contraste dos editores legados secundários e homologação do Studio.
 
 ## Beta 2.1 (pré-release anterior)
@@ -222,7 +224,7 @@ Pendente após a pré-release `2.1.0-beta.1`:
 - Instalação/upgrade/uninstall em máquina limpa, instalação silenciosa e validação em Intune/SCCM,
   além do pacote Linux (5B2).
 - Matriz de CI Windows/Linux, catálogo remoto assinado (5C) e a matriz completa em
-  [Plano de testes do Beta 2.3](../quality/beta2.3-test-plan.md).
+  [Release 2.8 test plan](../quality/release-test-plan.md).
 - Homologação manual do Studio e publicação de checksums, SBOM, notices e notas de release.
 
 ## Próximos passos

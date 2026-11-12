@@ -10,7 +10,7 @@
 > **Pendente para promoção:** confirmação nativa de tema/tamanhos, instalação/upgrade e offline.
 > Navegação por teclado e foco foi aprovada manualmente em 2026-10-27.
 > **Plano mestre:** [`libraries-plan.md`](./libraries-plan.md), seção 11, Fase 7.
-> **Matriz de release:** [`beta2.3-test-plan.md`](./beta2.3-test-plan.md), seção 2.10.
+> **Matriz de release:** [`release-test-plan.md`](./release-test-plan.md), seção 3.6 e homologação manual.
 
 ## 1. Objetivo
 
@@ -23,7 +23,7 @@ Demonstrar, de forma repetível no mesmo commit, que o fluxo de Bibliotecas:
 5. rejeita conteúdo hostil, licença proibida, path traversal e excesso de tamanho;
 6. responde de forma estável a 404, rate limit e limite de tamanho;
 7. preserva o comportamento offline e a migração legada;
-8. produz evidências auditáveis para a promoção do Beta 2.3.
+8. produz evidências auditáveis para a promoção do release 2.8.
 
 Esta rodada **não** substitui a homologação manual de interface nem a instalação em máquina limpa.
 Ela fecha o gate determinístico e deixa os itens manuais explicitamente pendentes.
@@ -32,7 +32,7 @@ Ela fecha o gate determinístico e deixa os itens manuais explicitamente pendent
 
 | Camada | O que valida | Como | Quando falha |
 | :--- | :--- | :--- | :--- |
-| Frontend/integração | Modelo, store, serviço, gate, árvore, seletor, pins, migração e i18n | Vitest, 8 arquivos focados | Bloqueia a rodada |
+| Frontend/integração | Modelo, store, serviço, gate, árvore, seletor, pins, migração, licença, entitlement e i18n | Vitest, 11 arquivos focados (58 testes) | Bloqueia a rodada |
 | Nativo/mock | URL, commit pin, árvore, licença, download, 404, rate limit e tamanho | C++ com GitHub falso em loopback | Bloqueia a rodada |
 | Live opcional | Contrato real do GitHub público | `fetch_library_source` contra `octocat/Hello-World` | Falha separada; não mascarado pelo mock |
 
@@ -145,8 +145,10 @@ Cada execução cria `release/homologation/<runId>/` com:
 | `environment.json` | Commit, dirty tree, SO, Node, binários e opções |
 | `homologation-report.json` | Status, estágios, matriz e pendências manuais |
 | `matrix.csv` | Matriz achatada para conferência rápida |
-| `frontend-e-integracao-vitest-.log` | Saída do Vitest |
-| `c-mock-github-.log` | Saída do C++ com mock |
+| `frontend-e-integracao-vitest.log` | Saída do Vitest |
+| `c-mock-github.log` | Saída do C++ com mock |
+| `ui-web-lib-m-01.log` | Saída da captura web LIB-M-01 |
+| `lib-m-01.json` + `screenshots/` | Relatório e capturas de tema/tamanhos |
 | `mock-github-requests.json` | Requisições recebidas pelo mock |
 | `cpp-smoke-github-live.log` | Saída do smoke live, quando `--live` |
 
@@ -184,7 +186,7 @@ A Fase 7 pode ser considerada concluída quando:
    tem confirmação nativa registrada; LIB-M-02 já está aprovado;
 4. o smoke live foi executado ao menos uma vez no commit candidato;
 5. não há falha P0/P1 conhecida;
-6. o resultado entra no `test-audit-log.md` e na seção 2.10 do plano Beta 2.3.
+6. o resultado entra no `test-audit-log.md` e na seção 3.6 do plano de release 2.8.
 
 `status=passed-automated` **não** é aprovação de release. A promoção continua bloqueada enquanto
 `pendingManual > 0` e enquanto o gate de release não tiver `dirty=false`.

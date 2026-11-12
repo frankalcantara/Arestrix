@@ -854,7 +854,7 @@ grava o conteúdo em quarentena antes da validação.
 - `npm run homologation:libraries:live`: acrescenta o smoke real do GitHub.
 - Teclado/foco aprovado em 2026-10-27. LIB-M-01 aprovado na camada web em 2026-11-12. Pendentes:
   confirmação nativa de tema/tamanhos, instalação limpa/upgrade e offline.
-- **Critério:** gate de release aprovado. O status `passed-automated` não promove o Beta 2.3
+- **Critério:** gate de release aprovado. O status `passed-automated` não promove o release 2.8
   enquanto os 2 casos manuais restantes e a confirmação nativa não estiverem verdes.
 - Detalhes e matriz em [`libraries-homologation-plan.md`](./libraries-homologation-plan.md).
 
