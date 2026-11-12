@@ -32,6 +32,11 @@ export interface IAgentTemplate {
   createChildGraph?: (label: string, params: Record<string, any>) => IGraphSchema;
   /** Configuração completa do agente; obrigatória para taskType === 'agent'. */
   agentSettings?: INodeAgentSettings;
+  /** Pipeline/projeto empacotado como ativo de biblioteca. */
+  assetKind?: 'vertex' | 'agent' | 'pipeline';
+  childGraph?: IGraphSchema;
+  /** Apresentação visual: pipeline aparece como agente no canvas. */
+  presentation?: 'agent';
   /** Agente de biblioteca pronto: configuração travada na interface. */
   presetLocked?: boolean;
   isCustomPlugin?: boolean;
@@ -53,6 +58,9 @@ export interface ISerializedTemplatePlugin {
   lambdaBodyTemplate: string;
   /** Configuração do agente preservada no round-trip catálogo → biblioteca → grafo. */
   agentSettings?: INodeAgentSettings;
+  assetKind?: 'vertex' | 'agent' | 'pipeline';
+  childGraph?: IGraphSchema;
+  presentation?: 'agent';
   /** Agente de biblioteca pronto: configuração travada na interface. */
   presetLocked?: boolean;
   author?: string;

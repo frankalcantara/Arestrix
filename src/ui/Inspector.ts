@@ -372,8 +372,10 @@ export class Inspector {
    */
   private renderEmpty(): void {
     const meta = this.graph.getMetadata();
-    const nodeCount = this.graph.getAllNodes().length;
-    const edgeCount = this.graph.getAllEdges().length;
+    const hiddenIds = new Set(this.graph.getAllNodes().filter(n => n.hidden).map(n => n.id));
+    const nodeCount = this.graph.getAllNodes().filter(n => !n.hidden).length;
+    const edgeCount = this.graph.getAllEdges()
+      .filter(e => !hiddenIds.has(e.sourceNodeId) && !hiddenIds.has(e.targetNodeId)).length;
 
     this.container.innerHTML = `
       <div class="office-task-pane-header">
@@ -499,7 +501,7 @@ export class Inspector {
 
           <div class="form-group">
             <label class="form-label">${t('inspector.node_view.taskflow_type')}</label>
-            <select id="node-type-select" class="form-select" ${node.presetLocked ? 'disabled' : ''}>
+            <select id="node-type-select" class="form-select" ${(node.presetLocked || node.presentation === 'agent') ? 'disabled' : ''}>
               <option value="static" ${node.type === 'static' ? 'selected' : ''}>Static Task (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Deterministico' : 'Deterministic'})</option>
               <option value="mcp" ${node.type === 'mcp' ? 'selected' : ''}>MCP (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Ferramenta externa' : 'External tool'})</option>
               <option value="switch" ${node.type === 'switch' ? 'selected' : ''}>Switch (${t('inspector.node_view.label_name').includes('Rótulo') ? 'Seleção multivia' : 'Multiway selection'})</option>
@@ -525,6 +527,13 @@ export class Inspector {
             </div>
           </div>
 
+          ${node.presentation === 'agent' ? `
+            <div class="properties-note properties-note--info" style="margin-top: 8px;">
+              <strong>${t('inspector.node_view.pipeline_agent_title', 'Agente composto (pipeline)')}</strong>
+              <div>${t('inspector.node_view.pipeline_agent_desc', 'Este vértice representa um pipeline/projeto completo. A interface o mostra como agente; internamente ele executa o pipeline empacotado.')}</div>
+            </div>
+          ` : ''}
+
           ${(node.type === 'subflow' || node.type === 'module') ? `
             <div class="form-group">
               <button id="btn-dive-subflow" class="btn btn-dive-action">
@@ -536,8 +545,8 @@ export class Inspector {
           ${node.type === 'switch' ? this.renderSwitchSection(node) : ''}
           ${node.type === 'mcp' ? this.renderMcpSection(node) : ''}
           ${node.type === 'output' ? this.renderOutputSection(node) : ''}
-          ${(node.type === 'agent' || node.type === 'call') ? this.renderCallSection(node) : ''}
-          ${node.type === 'call' ? this.renderFlowCallSection(node) : ''}
+          ${(node.type === 'agent' || node.type === 'call') && node.presentation !== 'agent' ? this.renderCallSection(node) : ''}
+          ${node.type === 'call' && node.presentation !== 'agent' ? this.renderFlowCallSection(node) : ''}
           ${node.type === 'interaction' ? this.renderInteractionSection(node) : ''}
 
           <!-- Seção de Parâmetros do Template / Agente -->

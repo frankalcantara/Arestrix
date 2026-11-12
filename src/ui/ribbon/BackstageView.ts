@@ -923,8 +923,8 @@ export class BackstageView {
                 <h4 class="backstage-card-title" style="margin: 0; min-width: 0;"><span class="backstage-card-icon">${ribbonIcon('subflow', 18)}</span><span class="backstage-card-title-text">${t('backstage.info.card_graph')}</span></h4>
                 <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">📦 ${t('backstage.info.scope_proj')}</span>
               </div>
-              <p style="margin-bottom: 8px;"><strong>${t('backstage.info.active_nodes')}</strong> ${this.graph.getAllNodes().length}</p>
-              <p style="margin-bottom: 8px;"><strong>${t('backstage.info.edges_links')}</strong> ${this.graph.getAllEdges().length}</p>
+              <p style="margin-bottom: 8px;"><strong>${t('backstage.info.active_nodes')}</strong> ${this.graph.getAllNodes().filter(n => !n.hidden).length}</p>
+              <p style="margin-bottom: 8px;"><strong>${t('backstage.info.edges_links')}</strong> ${this.graph.getAllEdges().filter(e => !this.graph.getNode(e.sourceNodeId)?.hidden && !this.graph.getNode(e.targetNodeId)?.hidden).length}</p>
               <p style="margin-bottom: 8px;"><strong>${t('backstage.info.registered_pipelines')}</strong> ${proj.pipelines ? proj.pipelines.length : 0}</p>
             </div>
 

@@ -78,7 +78,10 @@ export class LibraryAuditGate {
       || typeof template.lambdaBodyTemplate !== 'string'
       || (template.agentSettings !== undefined &&
           (template.agentSettings === null || typeof template.agentSettings !== 'object' ||
-           Array.isArray(template.agentSettings)));
+           Array.isArray(template.agentSettings)))
+      || (template.childGraph !== undefined &&
+          (template.childGraph === null || typeof template.childGraph !== 'object' ||
+           Array.isArray(template.childGraph)));
 
     if (invalid) {
       return {
@@ -111,6 +114,9 @@ export class LibraryAuditGate {
     if (template.agentSettings) {
       findings.push('Configuração de agente presente; prompt, skills, memória e ferramentas serão importados como configuração declarativa.');
     }
+    if (template.childGraph) {
+      findings.push('Pipeline composto presente; o grafo será importado como subflow e apresentado como um único agente na interface.');
+    }
 
     if (/\b(?:system|popen|_popen|CreateProcess[AW]?|ShellExecute[AW]?|exec[lv]?p?e?)\s*\(/i.test(body)) {
       warnings.push('Template contém chamada de criação/execução de processo no corpo C++.');
@@ -138,6 +144,7 @@ export class LibraryAuditGate {
       lambdaBodyTemplate: body
     };
     if (template.agentSettings) hashPayload.agentSettings = template.agentSettings;
+    if (template.childGraph) hashPayload.childGraph = template.childGraph;
     const hash = sha256(JSON.stringify(hashPayload));
 
     return {

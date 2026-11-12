@@ -215,6 +215,50 @@ describe('Fase 4: Catalogo de Templates de Agentes & Sistema de Plugins Dinamico
       expect(imported.agentSettings?.model?.promptTemplate).toContain('pesquisador');
       registry.unregisterTemplate('imported_research_agent');
     });
+
+    it('deve empacotar um pipeline como agente visual e preservar o grafo', () => {
+      graph.addNode({
+        id: 'a',
+        label: 'Entrada',
+        type: 'agent',
+        position: { x: 0, y: 0 },
+        inputs: [{ id: 'a_in', name: 'in', direction: 'input', type: 'flow' }],
+        outputs: [{ id: 'a_out', name: 'out', direction: 'output', type: 'flow' }],
+        parameters: {}
+      });
+      graph.addNode({
+        id: 'b',
+        label: 'Saída',
+        type: 'output',
+        position: { x: 200, y: 0 },
+        inputs: [{ id: 'b_in', name: 'data_in', direction: 'input', type: 'data' }],
+        outputs: [{ id: 'b_out', name: 'out', direction: 'output', type: 'flow' }],
+        parameters: {}
+      });
+      graph.createEdge('a', 'a_out', 'b', 'b_in');
+
+      const pipeline = registry.saveGraphAsPipelineTemplate(graph, 'Pipeline de Teste');
+      expect(pipeline.assetKind).toBe('pipeline');
+      expect(pipeline.taskType).toBe('subflow');
+      expect(pipeline.presentation).toBe('agent');
+      expect(pipeline.presetLocked).toBe(true);
+      expect(pipeline.childGraph?.nodes?.length).toBe(2);
+
+      const serialized = JSON.parse(registry.exportTemplateAsJSON(pipeline.id)!);
+      expect(serialized.assetKind).toBe('pipeline');
+      expect(serialized.childGraph.nodes.length).toBe(2);
+      expect(serialized.presentation).toBe('agent');
+
+      const imported = registry.importTemplatesFromJSON(JSON.stringify({
+        ...serialized,
+        id: 'imported_pipeline_agent'
+      }));
+      expect(imported.success).toBe(1);
+      const template = registry.getTemplate('imported_pipeline_agent');
+      expect(template?.assetKind).toBe('pipeline');
+      expect(template?.childGraph?.nodes?.length).toBe(2);
+      registry.unregisterTemplate('imported_pipeline_agent');
+    });
   });
 });
 

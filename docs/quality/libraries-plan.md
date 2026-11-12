@@ -34,9 +34,11 @@
 > manualmente continuam editáveis. O preset de arquitetura completa agora pede confirmação
 > antes de substituir o grafo.
 >
-> **Fase 4.3 pendente (pipeline como agente):** pipeline/projeto importado será exibido como
-> um único vértice **agente apenas na interface**, mantendo internamente o grafo/subflow
-> original.
+> **Fase 4.3 entregue (pipeline como agente):** o pipeline atual pode ser salvo
+> na biblioteca pela seção **Agentes**; a importação cria um único vértice com
+> apresentação de `agent` e um subflow interno oculto. O runtime continua usando
+> o mecanismo existente de call/subflow: a interface vê um agente, mas o grafo
+> permanece um pipeline internamente.
 >
 > **Fase 5 entregue:** fonte GitHub real via endpoint C++ `fetch_library_source`, commit pin,
 > leitura de manifesto/árvore sem baixar blobs, sincronização de candidatos como `PENDING`,

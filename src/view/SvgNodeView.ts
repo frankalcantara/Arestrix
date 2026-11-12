@@ -115,7 +115,8 @@ export class SvgNodeView {
     const h = this.height;
     const b = THEME.nodeBody;
     const r = b.borderRadius;
-    const typeTheme = THEME.nodeTypes[this.nodeData.type] || THEME.nodeTypes.static;
+    const visualType = this.nodeData.presentation === 'agent' ? 'agent' : this.nodeData.type;
+    const typeTheme = THEME.nodeTypes[visualType] || THEME.nodeTypes.static;
 
     // 1. Anel externo de seleção / execução
     this.selectionRing = document.createElementNS(SVG_NS, 'rect');
@@ -245,7 +246,8 @@ export class SvgNodeView {
     const contrastColor = getContrastTextColor(headerHex);
 
     // Ícone do tipo de tarefa
-    const typeIconDef = NODE_TYPE_ICONS[this.nodeData.type] ?? NODE_TYPE_ICONS.static;
+    const visualType = this.nodeData.presentation === 'agent' ? 'agent' : this.nodeData.type;
+    const typeIconDef = NODE_TYPE_ICONS[visualType] ?? NODE_TYPE_ICONS.static;
     const iconSize = 16;
     this.headerIconGroup = createLucideSvgElement(typeIconDef.icon, iconSize, contrastColor, 2.2);
     this.headerIconGroup.setAttribute(

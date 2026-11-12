@@ -39,7 +39,7 @@ export class GraphvizGenerator {
     dot += `  labelloc="t"\n\n`;
 
     // Nós
-    nodes.forEach(node => {
+    nodes.filter(node => !node.hidden).forEach(node => {
       dot += this.generateNodeDot(node);
     });
 
@@ -49,7 +49,7 @@ export class GraphvizGenerator {
     edges.forEach(edge => {
       const srcNode = graph.getNode(edge.sourceNodeId);
       const tgtNode = graph.getNode(edge.targetNodeId);
-      if (!srcNode || !tgtNode) return;
+      if (!srcNode || !tgtNode || srcNode.hidden || tgtNode.hidden) return;
 
       const srcPort = srcNode.outputs.find(p => p.id === edge.sourcePortId);
       
@@ -83,8 +83,9 @@ export class GraphvizGenerator {
     let color = '#3b82f6';
     let fontColor = '#ffffff';
     let label = node.label.replace(/"/g, '\\"');
+    const visualType = node.presentation === 'agent' ? 'agent' : node.type;
 
-    switch (node.type) {
+    switch (visualType) {
       case 'static': color = '#3b82f6'; break;
       case 'condition': color = '#ff7828'; break;
       case 'switch': color = '#b45309'; break;
@@ -99,13 +100,13 @@ export class GraphvizGenerator {
 
     // Para subflows, podemos indicar no rótulo
     let extra = '';
-    if (node.type === 'subflow' || node.type === 'module') {
+    if (visualType === 'subflow' || visualType === 'module') {
       extra = '\\n(Subgraph)';
-    } else if (node.type === 'cuda') {
+    } else if (visualType === 'cuda') {
       extra = '\\n(GPU Kernel)';
-    } else if (node.type === 'agent') {
+    } else if (visualType === 'agent') {
       extra = '\\n(Code Mode Agent)';
-    } else if (node.type === 'output') {
+    } else if (visualType === 'output') {
       extra = '\\n(Output / Artifact)';
     }
 

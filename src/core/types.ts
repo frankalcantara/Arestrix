@@ -782,6 +782,8 @@ export interface INodeData {
   /** Agente de biblioteca pré-configurado; a configuração é somente leitura na UI. */
   presetId?: string;
   presetLocked?: boolean;
+  /** Nó interno de um pipeline composto; não aparece no canvas. */
+  hidden?: boolean;
   /** Apresentação visual de um pipeline/projeto composto como agente. */
   presentation?: 'agent';
   requiredHeaders?: string[]; // Headers C++20 adicionais requeridos por este agente

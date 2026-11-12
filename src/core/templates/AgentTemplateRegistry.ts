@@ -1,6 +1,7 @@
 import { IAgentTemplate, ISerializedTemplatePlugin, ITemplateParameterDef, AgentTemplateCategory } from './AgentTemplateTypes.ts';
 import { BUILTIN_TEMPLATES } from './BuiltinTemplates.ts';
-import { INodeData, INodeAgentSettings, IPort } from '../types.ts';
+import { INodeData, INodeAgentSettings, IPort, IGraphSchema } from '../types.ts';
+import type { Graph } from '../Graph.ts';
 
 export type SaveNodeAsTemplateResult =
   | { status: 'created'; template: IAgentTemplate }
@@ -185,6 +186,8 @@ export class AgentTemplateRegistry {
       nodeData.presetId = tpl.id;
       nodeData.presetLocked = tpl.presetLocked !== false;
     }
+    if (tpl.childGraph) nodeData.childGraph = deepClone(tpl.childGraph);
+    if (tpl.presentation === 'agent') nodeData.presentation = 'agent';
 
     if (tpl.createChildGraph) {
       nodeData.childGraph = tpl.createChildGraph(label, parameters);
@@ -267,6 +270,7 @@ export class AgentTemplateRegistry {
       parameters,
       requiredHeaders: node.requiredHeaders,
       agentSettings: isAgent ? (deepClone(node.agentSettings) ?? defaultAgentSettings()) : undefined,
+      assetKind: isAgent ? 'agent' : 'vertex',
       presetLocked: isAgent ? true : undefined,
       isCustomPlugin: true,
       author: 'Usuário Arestrix',
@@ -275,6 +279,41 @@ export class AgentTemplateRegistry {
     };
     this.registerTemplate(template);
     return { status: 'created', template };
+  }
+
+  /**
+   * Empacota o grafo inteiro como um ativo de pipeline. Na interface ele é
+   * apresentado como um único vértice agente; internamente continua sendo um
+   * subflow composto.
+   */
+  public saveGraphAsPipelineTemplate(graph: Graph, name?: string): IAgentTemplate {
+    const metadata = graph.getMetadata();
+    let id: string;
+    do {
+      id = `pipeline_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+    } while (this.templates.has(id));
+
+    const template: IAgentTemplate = {
+      id,
+      name: name?.trim() || metadata.graphName || 'Pipeline',
+      category: 'Agentes',
+      icon: '🧠',
+      taskType: 'subflow',
+      description: metadata.description || 'Pipeline completo empacotado como agente visual.',
+      inputs: [{ name: 'in', type: 'flow' }],
+      outputs: [{ name: 'out', type: 'flow' }],
+      parameters: {},
+      childGraph: deepClone(graph.toJSON()) as IGraphSchema,
+      assetKind: 'pipeline',
+      presentation: 'agent',
+      presetLocked: true,
+      isCustomPlugin: true,
+      author: 'Usuário Arestrix',
+      version: '1.0.0',
+      generateLambdaBody: () => ''
+    };
+    this.registerTemplate(template);
+    return template;
   }
 
   /**
@@ -343,12 +382,16 @@ export class AgentTemplateRegistry {
             agentSettings: item.agentSettings
               ? deepClone(item.agentSettings)
               : (item.taskType === 'agent' ? defaultAgentSettings() : undefined),
-            presetLocked: item.taskType === 'agent' ? (item.presetLocked !== false) : undefined,
+            assetKind: item.assetKind,
+            childGraph: item.childGraph ? deepClone(item.childGraph) : undefined,
+            presentation: item.presentation,
+            presetLocked: item.taskType === 'agent' || item.assetKind === 'pipeline'
+              ? (item.presetLocked !== false) : undefined,
             isCustomPlugin: true,
             author: item.author || 'Usuário Arestrix',
             version: item.version || '1.0.0',
             generateLambdaBody: (params, label) => {
-              if (item.taskType === 'agent' && !item.lambdaBodyTemplate) return '';
+              if ((item.taskType === 'agent' || item.assetKind === 'pipeline') && !item.lambdaBodyTemplate) return '';
               let body = item.lambdaBodyTemplate || '// Plugin de Tarefa Customizado\nstd::cout << "[Plugin] ' + label + '\\n";';
               // Substitui placeholders ${params.xxx} ou ${label}
               body = body.replace(/\${label}/g, label);
@@ -394,6 +437,9 @@ export class AgentTemplateRegistry {
       requiredHeaders: tpl.requiredHeaders,
       lambdaBodyTemplate: sampleLambda,
       agentSettings: tpl.agentSettings ? deepClone(tpl.agentSettings) : undefined,
+      assetKind: tpl.assetKind,
+      childGraph: tpl.childGraph ? deepClone(tpl.childGraph) : undefined,
+      presentation: tpl.presentation,
       presetLocked: tpl.presetLocked,
       author: tpl.author,
       version: tpl.version

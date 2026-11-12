@@ -478,6 +478,7 @@ export class Viewport {
   }
 
   private onNodeAdded(nodeData: INodeData): void {
+    if (nodeData.hidden) return;
     if (this.nodeViews.has(nodeData.id)) return;
 
     const nodeView = new NodeView(nodeData, this.svgNodesLayer, this.interactionManager.getTooltip());
@@ -961,6 +962,9 @@ export class Viewport {
 
   private onEdgeAdded(edgeData: IEdgeData): void {
     if (this.connectionViews.has(edgeData.id)) return;
+    const source = this.graph.getNode(edgeData.sourceNodeId);
+    const target = this.graph.getNode(edgeData.targetNodeId);
+    if (source?.hidden || target?.hidden) return;
 
     const connView = new ConnectionView(edgeData);
     this.connectionViews.set(edgeData.id, connView);
@@ -1188,7 +1192,7 @@ export class Viewport {
   }
 
   public zoomToFit(): void {
-    const nodes = this.graph.getAllNodes();
+    const nodes = this.graph.getAllNodes().filter(n => !n.hidden);
     if (nodes.length === 0) {
       this.cameraController.reset();
       return;

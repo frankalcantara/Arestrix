@@ -280,7 +280,9 @@ export class LibraryPickerModal extends BaseModal {
     const payload = asset.payload.kind === 'skill'
       ? `${asset.payload.tools.length} ${lbl('tools', 'ferramentas')}`
       : asset.payload.kind === 'agent-template'
-        ? `Template · ${asset.payload.template.taskType}`
+        ? (asset.payload.template.assetKind === 'pipeline'
+          ? `Pipeline · ${asset.payload.template.childGraph?.nodes?.length ?? 0} nós`
+          : `Template · ${asset.payload.template.taskType}`)
         : `${asset.payload.transport.toUpperCase()} · ${asset.payload.command || asset.payload.url || ''}`;
     const canSelect = asset.audit.verdict !== 'REJECT' && asset.audit.verdict !== 'PENDING';
     const needsDownload = Boolean(asset.remote) && (
@@ -294,7 +296,11 @@ export class LibraryPickerModal extends BaseModal {
         <div>
           <div class="properties-library-detail-title">${this.escapeHtml(asset.name)}</div>
           <div class="properties-library-detail-subtitle">
-            ${badge(asset.kind === 'skill' ? 'Skill' : asset.kind === 'agent-template' ? lbl('kind_template', 'Template') : 'MCP', 'accent')}
+            ${badge(asset.kind === 'skill' ? 'Skill' : asset.kind === 'agent-template'
+              ? (asset.payload.kind === 'agent-template' && asset.payload.template.assetKind === 'pipeline'
+                ? lbl('kind_pipeline', 'Pipeline')
+                : lbl('kind_template', 'Template'))
+              : 'MCP', 'accent')}
             ${badge(this.escapeHtml(asset.audit.verdict), verdictTone(asset.audit.verdict))}
             ${badge(asset.status === 'installed' ? lbl('installed', 'Instalado') : lbl('available', 'Disponível'), asset.status === 'installed' ? 'success' : 'neutral')}
           </div>

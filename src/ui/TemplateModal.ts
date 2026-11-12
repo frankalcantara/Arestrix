@@ -2,7 +2,8 @@ import { AgentTemplateRegistry } from '../core/templates/AgentTemplateRegistry.t
 import { IAgentTemplate } from '../core/templates/AgentTemplateTypes.ts';
 import { Graph } from '../core/Graph.ts';
 import { Viewport } from '../view/Viewport.ts';
-import { AddNodeCommand } from '../core/history/GraphCommands.ts';
+import { AddNodeCommand, AddEdgeCommand, CompoundCommand } from '../core/history/GraphCommands.ts';
+import { INodeData, IEdgeData, defaultCallSettings, defaultCallVertexSettings } from '../core/types.ts';
 import { ModalWindowManager, IModalWindowController } from './modals/ModalWindowManager.ts';
 import { t, onLocaleChange } from '../i18n/index.ts';
 import { LibraryPickerModal } from './libraries/LibraryPickerModal.ts';
@@ -82,6 +83,11 @@ export class TemplateModal {
             <button id="btn-preset-pipeline" class="btn btn-preset-action" title="${t('template_modal.btn_preset_tip')}">
               ${t('template_modal.btn_preset')}
             </button>
+            ${this.activeCategory === 'Agentes' ? `
+              <button id="btn-save-pipeline-library" class="btn btn-secondary-pill" title="${t('template_modal.btn_save_pipeline')}">
+                ${t('template_modal.btn_save_pipeline')}
+              </button>
+            ` : ''}
           </div>
           <div class="template-action-right">
             <button id="btn-library-templates" class="btn btn-secondary-pill" title="${t('template_modal.btn_library_tip', 'Inserir um template salvo em uma biblioteca')}">
@@ -170,8 +176,9 @@ export class TemplateModal {
             <div class="template-name">${this.escapeHtml(tpl.name)}</div>
             <div class="template-badges">
               <span class="inspector-badge badge-${tpl.taskType}">${tpl.taskType.toUpperCase()}</span>
+              ${tpl.assetKind === 'pipeline' ? `<span class="plugin-custom-badge">${t('template_modal.pipeline_badge', 'PIPELINE')}</span>` : ''}
               ${tpl.taskType === 'agent' ? `<span class="plugin-custom-badge">${t('template_modal.preset_badge', 'PRÉ-CONFIGURADO')}</span>` : ''}
-              ${tpl.isCustomPlugin ? `<span class="plugin-custom-badge">${t('template_modal.dynamic_plugin_badge')}</span>` : ''}
+              ${tpl.isCustomPlugin && tpl.assetKind !== 'pipeline' ? `<span class="plugin-custom-badge">${t('template_modal.dynamic_plugin_badge')}</span>` : ''}
             </div>
           </div>
         </div>
@@ -211,7 +218,7 @@ export class TemplateModal {
         </div>
 
         <div class="template-card-footer">
-          ${tpl.taskType !== 'agent' ? `
+          ${(tpl.taskType !== 'agent' && tpl.assetKind !== 'pipeline') ? `
             <button class="btn-toggle-code" data-code-id="${tpl.id}">
               ${t('template_modal.view_cpp')}
             </button>
@@ -309,7 +316,9 @@ export class TemplateModal {
       btn.addEventListener('click', (e) => {
         const tplId = (e.currentTarget as HTMLElement).getAttribute('data-insert-id');
         if (tplId) {
-          this.insertTemplateNode(tplId);
+          const tpl = this.registry.getTemplate(tplId);
+          if (tpl?.assetKind === 'pipeline') this.insertPipelineAsAgent(tpl);
+          else this.insertTemplateNode(tplId);
           this.hide();
         }
       });
@@ -332,7 +341,9 @@ export class TemplateModal {
           }
           this.activeCategory = this.registry.getTemplate(asset.payload.template.id)?.category || 'Agentes';
           this.render();
-          this.insertTemplateNode(asset.payload.template.id);
+          const importedTemplate = this.registry.getTemplate(asset.payload.template.id);
+          if (importedTemplate?.assetKind === 'pipeline') this.insertPipelineAsAgent(importedTemplate);
+          else this.insertTemplateNode(asset.payload.template.id);
           this.hide();
           globalEventBus.emit('notification:show', {
             severity: 'success',
@@ -396,6 +407,23 @@ export class TemplateModal {
       this.hide();
     });
 
+    // Salvar o pipeline atual como ativo composto (apresentado como agente)
+    this.overlay.querySelector('#btn-save-pipeline-library')?.addEventListener('click', () => {
+      const template = this.registry.saveGraphAsPipelineTemplate(this.graph);
+      const json = this.registry.exportTemplateAsJSON(template.id);
+      if (!json) return;
+      void this.libraryService.saveTemplateToLibrary(JSON.parse(json), { scope: 'workspace' }).then(asset => {
+        globalEventBus.emit('notification:show', {
+          severity: asset ? 'success' : 'warning',
+          title: t('template_modal.btn_save_pipeline', 'Salvar pipeline atual na biblioteca'),
+          message: asset
+            ? t('template_modal.pipeline_saved', 'Pipeline salvo na biblioteca como agente visual.')
+            : t('template_modal.pipeline_save_failed', 'Não foi possível salvar o pipeline na biblioteca.')
+        });
+        if (asset) this.render();
+      });
+    });
+
     // Exportar Catálogo
     this.overlay.querySelector('#btn-export-catalog')?.addEventListener('click', () => {
       const json = this.registry.exportAllTemplatesAsJSON();
@@ -449,6 +477,83 @@ export class TemplateModal {
 
     // Seleciona o nó inserido
     this.viewport.selectNode(node.id);
+  }
+
+  /**
+   * Pipeline importado como agente: um único vértice visível (tipo Call com
+   * apresentação de agente) executa um subflow interno oculto.
+   */
+  private insertPipelineAsAgent(tpl: IAgentTemplate): void {
+    if (!tpl.childGraph) return;
+    const center = this.viewport.getCameraCenter();
+    const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+    const callId = `pipeline_agent_${tpl.id}_${stamp}`;
+    const targetId = `pipeline_internal_${tpl.id}_${stamp}`;
+    const x = Math.round(center.x / 10) * 10;
+    const y = Math.round(center.y / 10) * 10;
+
+    const callInputId = `${callId}_in`;
+    const callOutputId = `${callId}_out`;
+    const callPortId = `${callId}_out_call`;
+    const targetInputId = `${targetId}_in`;
+    const targetOutputId = `${targetId}_out`;
+
+    const visible: INodeData = {
+      id: callId,
+      label: tpl.name,
+      type: 'call',
+      position: { x, y, z: 0 },
+      inputs: [{ id: callInputId, name: 'in', direction: 'input', type: 'flow' }],
+      outputs: [
+        { id: callOutputId, name: 'out', direction: 'output', type: 'flow' },
+        { id: callPortId, name: 'call', direction: 'output', type: 'call' }
+      ],
+      parameters: {},
+      callSettings: defaultCallVertexSettings(),
+      templateId: tpl.id,
+      presetId: tpl.id,
+      presetLocked: true,
+      presentation: 'agent',
+      requiredHeaders: tpl.requiredHeaders
+    };
+
+    const internal: INodeData = {
+      id: targetId,
+      label: `${tpl.name} · pipeline`,
+      type: 'subflow',
+      position: { x: x + 600, y: y + 240, z: 0 },
+      inputs: [{ id: targetInputId, name: 'in', direction: 'input', type: 'flow' }],
+      outputs: [{ id: targetOutputId, name: 'out', direction: 'output', type: 'flow' }],
+      parameters: {},
+      childGraph: JSON.parse(JSON.stringify(tpl.childGraph)),
+      hidden: true,
+      requiredHeaders: tpl.requiredHeaders
+    };
+
+    const edge: IEdgeData = {
+      id: `edge_${callId}_${callPortId}_to_${targetId}_${targetInputId}`,
+      sourceNodeId: callId,
+      sourcePortId: callPortId,
+      targetNodeId: targetId,
+      targetPortId: targetInputId,
+      kind: 'call',
+      callSettings: defaultCallSettings()
+    };
+
+    this.graph.commandManager.execute(new CompoundCommand(
+      t('template_modal.pipeline_inserted', 'Pipeline "{{name}}" inserido como agente visual.', { name: tpl.name }),
+      [
+        new AddNodeCommand(this.graph, visible),
+        new AddNodeCommand(this.graph, internal),
+        new AddEdgeCommand(this.graph, edge)
+      ]
+    ));
+    this.viewport.selectNode(visible.id);
+    globalEventBus.emit('notification:show', {
+      severity: 'success',
+      title: t('template_modal.pipeline_badge', 'PIPELINE'),
+      message: t('template_modal.pipeline_inserted', 'Pipeline "{{name}}" inserido como agente visual.', { name: tpl.name })
+    });
   }
 
   public instantiateCompleteMultiAgentPreset(): void {

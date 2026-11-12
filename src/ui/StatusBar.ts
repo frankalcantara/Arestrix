@@ -180,8 +180,10 @@ export class StatusBar {
    * (mesma conta dos selos INÍCIO/FIM): com duas trilhas disjuntas o contador mostra 2.
    */
   private updateStats(): void {
-    const nodeCount = this.graph.getAllNodes().length;
-    const edgeCount = this.graph.getAllEdges().length;
+    const hiddenIds = new Set(this.graph.getAllNodes().filter(n => n.hidden).map(n => n.id));
+    const nodeCount = this.graph.getAllNodes().filter(n => !n.hidden).length;
+    const edgeCount = this.graph.getAllEdges()
+      .filter(e => !hiddenIds.has(e.sourceNodeId) && !hiddenIds.has(e.targetNodeId)).length;
     const trailCount = computeFlowRoles(this.graph).starts.length;
 
     const stats = t('statusbar.stats', { nodes: nodeCount, edges: edgeCount });
