@@ -45,8 +45,9 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   Custom templates can be deleted from the library and the full-agent preset now
   asks for confirmation before replacing the graph.
 - Pipeline/project composition as a library asset. From the **Agents** section,
-  the current pipeline can be saved to the library, or another project's
-  `pipelines/*.json` can be imported; importing it creates one visible vertex
+  the current pipeline can be saved to the library, another project's
+  `pipelines/*.json` can be imported, or a project folder can be selected and
+  its `pipelines/main.json` is used; importing it creates one visible vertex
   with the `agent` presentation backed by a hidden internal subflow. The runtime
   keeps using the existing call/subflow mechanism, so the canvas shows an agent
   while the graph remains a pipeline internally. Imports with nested subflows or

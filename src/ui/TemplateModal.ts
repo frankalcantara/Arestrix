@@ -9,6 +9,7 @@ import { t, onLocaleChange } from '../i18n/index.ts';
 import { LibraryPickerModal } from './libraries/LibraryPickerModal.ts';
 import { LibraryService } from '../core/libraries/LibraryService.ts';
 import { globalEventBus } from '../core/EventBus.ts';
+import { selectProjectPipelineFiles } from '../core/templates/ProjectPipelineImport.ts';
 
 const CATEGORY_MAP: { id: string; labelKey: string }[] = [
   { id: 'Todos', labelKey: 'template_modal.cat_all' },
@@ -90,7 +91,11 @@ export class TemplateModal {
               <button id="btn-import-pipeline-library" class="btn btn-secondary-pill" title="${t('template_modal.btn_import_pipeline')}">
                 ${t('template_modal.btn_import_pipeline')}
               </button>
+              <button id="btn-import-project-agent" class="btn btn-secondary-pill" title="${t('template_modal.btn_import_project')}">
+                ${t('template_modal.btn_import_project')}
+              </button>
               <input type="file" id="pipeline-file-input" accept=".json,application/json" style="display: none;" />
+              <input type="file" id="project-folder-input" webkitdirectory directory multiple style="display: none;" />
             ` : ''}
           </div>
           <div class="template-action-right">
@@ -476,6 +481,55 @@ export class TemplateModal {
         }
       };
       reader.readAsText(file);
+    });
+
+    // Importar a pasta de outro projeto, usando pipelines/main.json
+    const projectInput = this.overlay.querySelector('#project-folder-input') as HTMLInputElement | null;
+    this.overlay.querySelector('#btn-import-project-agent')?.addEventListener('click', () => {
+      projectInput?.click();
+    });
+    projectInput?.addEventListener('change', () => {
+      void (async () => {
+        try {
+          const files = Array.from(projectInput.files || []);
+          const selection = selectProjectPipelineFiles(files);
+          if (!selection.pipeline) {
+            throw new Error('a pasta não contém pipelines/main.json nem outro pipeline .json');
+          }
+          let projectName = selection.rootName;
+          if (selection.manifest) {
+            try {
+              const manifest = JSON.parse(await selection.manifest.text());
+              projectName = manifest.name || manifest.projectName || projectName;
+            } catch {
+              // manifesto inválido não impede usar o pipeline; o nome da pasta basta
+            }
+          }
+          const schema = JSON.parse(await selection.pipeline.text());
+          const template = this.registry.importGraphAsPipelineTemplate(schema, projectName);
+          const json = this.registry.exportTemplateAsJSON(template.id);
+          const asset = json
+            ? await this.libraryService.saveTemplateToLibrary(JSON.parse(json), { scope: 'workspace' })
+            : null;
+          if (!asset) throw new Error('auditoria rejeitou o projeto');
+          globalEventBus.emit('notification:show', {
+            severity: 'success',
+            title: t('template_modal.btn_import_project', 'Importar projeto (pasta)'),
+            message: t('template_modal.project_imported', 'Projeto importado como agente visual e salvo na biblioteca.')
+          });
+          this.render();
+        } catch (error: any) {
+          globalEventBus.emit('notification:show', {
+            severity: 'error',
+            title: t('template_modal.btn_import_project', 'Importar projeto (pasta)'),
+            message: t('template_modal.project_import_failed', 'Não foi possível importar o projeto: {{error}}', {
+              error: error?.message || String(error)
+            })
+          });
+        } finally {
+          projectInput.value = '';
+        }
+      })();
     });
 
     // Exportar Catálogo
