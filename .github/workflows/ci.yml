@@ -171,9 +171,28 @@ jobs:
         with:
           python-version: "3.11"
 
+      # Needed by the gateway smoke test (Node script) and by the E2E
+      # harnesses. The frontend job already covers npm ci + Vitest + build.
+      - name: Set up Node.js
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+
       # Same C++20 build and CTest suite as Windows, using GCC/Clang on Linux.
       - name: Build and test native backend
         run: python CppCore/dev.py --test --no-frontend
+
+      # Runs the gateway on loopback against a fake OpenAI upstream: 200, 402
+      # budget enforcement, /metrics and /v1/usage.
+      - name: Gateway smoke
+        run: node scripts/gateway-smoke.mjs
+
+      # The E2E harnesses compile the generated pipelines with GCC and drive
+      # them against a local fake LLM; no provider key or network access.
+      - name: End-to-end tutorial and examples
+        run: |
+          python3 scripts/e2e_tutorial.py
+          python3 scripts/e2e_examples.py
 
   # Fails when .github/workflows/actions.lock is out of sync with the workflows,
   # or when a locked pin no longer verifies upstream. Required on main: the
