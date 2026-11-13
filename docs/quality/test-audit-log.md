@@ -28,9 +28,9 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 
 ## Histórico Cronológico de Auditorias
 
-### Rodada #008 - 2026-11-13 (validação de release Linux 2.8.0)
+### Rodada #008 - 2026-11-13 (validação e release Linux 2.9.0)
 
-- **Commit:** branch `chore/linux-release-validation` sobre `ff44b63` (2.8.0)
+- **Commit:** branch `chore/linux-release-validation` sobre `ff44b63` (pós-2.8.0), publicado como `v2.9.0`
 - **Status Geral:** `APROVADO NO ESCOPO AUTOMATIZADO, GUI E PACOTE LOCAL; CI REMOTO E EMPACOTAMENTO LINUX NO CI PENDENTES`
 - **Ambiente de Teste:** Ubuntu 24.04.5 LTS em WSL2 (kernel 6.6.87.2) | GCC 13.3.0 | CMake 3.28.3 | Ninja 1.11.1 | Node.js 24.22.3 | npm 11.19.1 | Python 3.12.3 | WSLg (`DISPLAY=:0`)
 
@@ -45,7 +45,7 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 | **Tutorial e exemplos** | `scripts/e2e_tutorial.py` exit 0 e `scripts/e2e_examples.py` exit 0 (14 exemplos em 180,97 s; o exemplo 05 é pulado sem `KEENABLE_API`, como documentado) |
 | **Memória** | `e2e_memory_claim_agent.py`, `memory_advanced_eval.py --check --runs 3` (7 variantes × 10 tarefas × 3 repetições) e `e2e_memory_institution.py` aprovados |
 | **Studio (GUI real)** | Janela GTK/WebKit criada em WSLg, título `Arestrix Studio - Visual Taskflow C++20 Studio`, 800×600, UI carregada e renderizada; captura em [linux-wslg-studio.png](../assets/screenshots/linux-wslg-studio.png). `GDK_BACKEND=x11` foi usado apenas para inspecionar a janela via X11 |
-| **Pacote Linux** | `arestrix-2.8.0-linux-x64.tar.gz` (cerca de 79 MB); `sha256sum -c` do manifesto OK, extração em `/tmp/arestrix-linux-smoke`, `arestrix-cli version` = 2.8.0, `project validate --project examples/01-svg-agente` OK e `SHA256SUMS` do pacote OK |
+| **Pacote Linux** | `arestrix-2.9.0-linux-x64.tar.gz` (cerca de 79 MB); `sha256sum -c` do manifesto OK, extração em `/tmp/arestrix-linux-smoke`, `arestrix-cli version` = 2.9.0, `project validate --project examples/01-svg-agente` OK e `SHA256SUMS` do pacote OK |
 | **CI e Git** | `.gitignore` passou a ignorar os binários nativos da raiz; job `native-linux` ganhou Node.js, gateway smoke e E2E de tutorial/exemplos; ruleset `main-protection` exige `quality`, `frontend`, `native-windows`, `native-linux`, `lockfile` e `zizmor` |
 
 #### Achado e correção

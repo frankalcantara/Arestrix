@@ -1,6 +1,6 @@
 # How Arestrix memory works
 
-> **Applies to:** Arestrix 2.8 — last reviewed: 2026-11-11
+> **Applies to:** Arestrix 2.9 — last reviewed: 2026-11-13
 >
 > A one-page guide and reference for project memory. Memory is local, owned by the project and
 > on by default; it can be turned off in Properties. There is no automatic import of old formats.
