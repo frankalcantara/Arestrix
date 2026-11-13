@@ -49,8 +49,10 @@ como pré-release de desenvolvimento.
 
 - [ ] **5B2 — instalador Windows:** Inno Setup implementado; faltam instalação limpa, upgrade,
       uninstall, atalhos, modo silencioso e validação em Intune/SCCM.
-- [x] **5B2 — pacote Linux:** tarball `linux-x64` gerado, extraído e validado fora do checkout
-      (Ubuntu 24.04/WSL2, 2026-11-13); `.deb`/AppImage não implementados nesta fase.
+- [x] **5B2 — pacote Linux:** tarball `linux-x64` e `.deb` amd64 (layout em `/usr/lib/arestrix`,
+      atalhos em `/usr/bin`, entrada `.desktop`, ícones hicolor e docs Debian) gerados, extraídos e
+      executados fora do checkout (Ubuntu 24.04/WSL2, 2026-11-13); `desktop-file-validate` OK.
+      AppImage não implementado.
 - [x] **5C — CI:** matriz Windows/Linux, build nativo, CTest, Vitest, E2E, gateway smoke e release gate.
   - [x] Matriz Windows/Linux com CTest, Vitest e checks no `ci.yml`; gate e gateway smoke no `deploy.yml`.
   - [x] `native-linux` com gateway smoke e E2E de tutorial/exemplos; check obrigatório no ruleset.
@@ -132,8 +134,8 @@ como pré-release de desenvolvimento.
 - [x] Instalação silenciosa e códigos de saída documentados (`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`; `/MERGETASKS="!desktopicon"` para pular o atalho).
 - [x] Instalação em perfil sem privilégios administrativos (per-user em `%LOCALAPPDATA%\Programs\Arestrix`).
 - [ ] Teste em máquina limpa com apenas o runtime VC++ exigido.
-- [x] Linux: tarball portátil com dependências e caminhos de dados documentados; janela validada em
-      WSLg com GTK 3/WebKitGTK 4.1. `.deb`/AppImage continuam fora desta fase.
+- [x] Linux: tarball portátil e `.deb` com dependências e caminhos de dados documentados; janela
+      validada em WSLg com GTK 3/WebKitGTK 4.1. AppImage continua fora desta fase.
 
 > **Validação local (2026-10-26, Windows 11 x64):** build do instalador, preflight do ambiente
 > (incluindo detecção de chave de API ausente sem bloquear), instalação silenciosa, atalho de desktop

@@ -22,21 +22,26 @@ pipelines; o pacote nao inclui MSVC/GCC.
 Uso:
   python scripts/package_release.py
   python scripts/package_release.py --installer
+  python scripts/package_release.py --format deb
   python scripts/package_release.py --format both --allow-dirty
   python scripts/package_release.py --skip-smoke --keep-stage
 
 O instalador Windows (--installer) usa o Inno Setup 6 e e gerado a partir do
 mesmo staging do pacote portatil; requer ISCC.exe no PATH (ou variavel ISCC).
+O pacote Debian (--format deb) so pode ser gerado no Linux e instala o layout
+portatil em /usr/lib/arestrix, com atalhos em /usr/bin e entrada no menu.
 """
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import os
 import platform
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tarfile
@@ -444,10 +449,317 @@ def create_archive(stage: Path, output: Path, archive_format: str) -> Path:
     return target
 
 
+# --- Pacote Debian -----------------------------------------------------------
+#
+# O .deb instala exatamente o layout portatil em /usr/lib/arestrix, que e a
+# raiz procurada pelo Studio e pelo BuildService, e expoe os binarios em
+# /usr/bin por symlink. As dependencias refletem os simbolos versionados
+# (GLIBC/GLIBCXX) realmente referenciados pelos binarios; create_deb recusa
+# gerar um pacote cujo metadado esteja abaixo do que os binarios exigem.
+
+DEB_PACKAGE = "arestrix"
+DEB_INSTALL_DIR = Path("usr/lib/arestrix")
+DEB_BINARIES = ("arestrix", "arestrix-cli", "arestrix-gateway", "arestrix-memory")
+DEB_ARCHITECTURES = {"x64": "amd64", "arm64": "arm64"}
+DEB_DEPENDS = "libc6 (>= 2.38), libstdc++6 (>= 13), libgcc-s1"
+DEB_RECOMMENDS = "libgtk-3-0t64 | libgtk-3-0, libwebkit2gtk-4.1-0, g++ | clang"
+DEB_MAINTAINER = "Frank Coelho de Alcantara <frank.alcantara@gmail.com>"
+DEB_HOMEPAGE = "https://github.com/frankalcantara/Arestrix"
+DEB_MIN_GLIBC = "2.38"
+DEB_MIN_GLIBCXX = "3.4.32"
+
+
+def debian_version(version: str) -> str:
+    """Converte SemVer em versao Debian (pré-release usa ~, nao -)."""
+    return version.replace("-", "~", 1)
+
+
+def _version_tuple(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in re.findall(r"\d+", text))
+
+
+def binary_requirements(install_dir: Path) -> tuple[str, str]:
+    """Le a maior GLIBC e GLIBCXX referenciada pelos binarios empacotados."""
+    objdump = shutil.which("objdump")
+    if not objdump:
+        return DEB_MIN_GLIBC, DEB_MIN_GLIBCXX
+
+    glibc: tuple[int, ...] = ()
+    glibcxx: tuple[int, ...] = ()
+    for name in DEB_BINARIES:
+        binary = install_dir / name
+        result = subprocess.run(
+            [objdump, "-T", str(binary)], capture_output=True, text=True, timeout=120
+        )
+        if result.returncode != 0:
+            continue
+        for token in re.findall(r"\bGLIBC(?:XX)?_[0-9][0-9.]*", result.stdout):
+            family, _, version = token.rpartition("_")
+            parsed = _version_tuple(version)
+            if family == "GLIBC" and parsed > glibc:
+                glibc = parsed
+            elif family == "GLIBCXX" and parsed > glibcxx:
+                glibcxx = parsed
+
+    required_glibc = ".".join(str(part) for part in glibc) or DEB_MIN_GLIBC
+    required_glibcxx = ".".join(str(part) for part in glibcxx) or DEB_MIN_GLIBCXX
+    return required_glibc, required_glibcxx
+
+
+def verify_deb_dependencies(install_dir: Path) -> None:
+    required_glibc, required_glibcxx = binary_requirements(install_dir)
+    if _version_tuple(required_glibc) > _version_tuple(DEB_MIN_GLIBC):
+        raise SystemExit(
+            f"[deb] os binarios exigem GLIBC {required_glibc}, mas o control declara "
+            f"libc6 (>= {DEB_MIN_GLIBC}); atualize DEB_DEPENDS."
+        )
+    if _version_tuple(required_glibcxx) > _version_tuple(DEB_MIN_GLIBCXX):
+        raise SystemExit(
+            f"[deb] os binarios exigem GLIBCXX {required_glibcxx}, mas o control declara "
+            f"libstdc++6 (>= 13); atualize DEB_DEPENDS."
+        )
+    print(f"[deb] simbolos: GLIBC <= {required_glibc}, GLIBCXX <= {required_glibcxx}")
+
+
+def extract_ico_pngs(path: Path) -> dict[int, bytes]:
+    """Extrai os PNGs embutidos em um .ico (16..256 px, 32 bpp)."""
+    data = path.read_bytes()
+    if len(data) < 6 or data[:4] != b"\x00\x00\x01\x00":
+        raise SystemExit(f"[deb] icone ICO invalido: {path}")
+    count = struct.unpack_from("<H", data, 4)[0]
+    images: dict[int, bytes] = {}
+    for index in range(count):
+        entry = 6 + index * 16
+        if entry + 16 > len(data):
+            break
+        width, _height, _colors, _reserved, _planes, _bpp, size, offset = struct.unpack_from(
+            "<BBBBHHII", data, entry
+        )
+        width = width or 256
+        payload = data[offset:offset + size]
+        if payload.startswith(b"\x89PNG\r\n\x1a\n"):
+            images[width] = payload
+    if not images:
+        raise SystemExit(f"[deb] nenhum PNG encontrado em {path}")
+    return images
+
+
+def write_deb_docs(root: Path, product_version: str) -> None:
+    doc = root / "usr" / "share" / "doc" / DEB_PACKAGE
+    doc.mkdir(parents=True, exist_ok=True)
+    for name in ("README.md", "CHANGELOG.md", "PRIVACY.md", "THIRD_PARTY_NOTICES.md", "SBOM.json"):
+        (doc / name).symlink_to(f"../../../lib/{DEB_PACKAGE}/{name}")
+
+    copyright_text = f"""Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Arestrix
+Source: {DEB_HOMEPAGE}
+
+Files: *
+Copyright: 2026 Frank de Alcantara
+License: MIT
+ On Debian systems the complete text of the MIT license is available in
+ /usr/share/common-licenses/MIT.
+ .
+ Third-party components bundled with Arestrix keep their own licenses; see
+ THIRD_PARTY_NOTICES.md in this directory for the complete inventory.
+"""
+    (doc / "copyright").write_text(copyright_text, encoding="utf-8", newline="\n")
+
+    epoch = os.environ.get("SOURCE_DATE_EPOCH", "")
+    if epoch.isdigit():
+        stamp = datetime.fromtimestamp(int(epoch), timezone.utc)
+    else:
+        stamp = datetime.now(timezone.utc)
+    changelog = (
+        f"{DEB_PACKAGE} ({debian_version(product_version)}) unstable; urgency=medium\n"
+        "\n"
+        f"  * Release {product_version}.\n"
+        "\n"
+        f" -- {DEB_MAINTAINER}  {stamp.strftime('%a, %d %b %Y %H:%M:%S +0000')}\n"
+    )
+    (doc / "changelog.Debian.gz").write_bytes(gzip.compress(changelog.encode("utf-8"), mtime=0))
+
+
+def write_deb_desktop_entry(root: Path) -> None:
+    applications = root / "usr" / "share" / "applications"
+    applications.mkdir(parents=True, exist_ok=True)
+    entry = """[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Arestrix
+GenericName=AI Agent Pipeline Studio
+Comment=Design, compile and run AI agent pipelines
+Exec=arestrix %U
+TryExec=arestrix
+Icon=arestrix
+Terminal=false
+Categories=Development;IDE;
+Keywords=AI;agents;pipeline;workflow;C++;
+StartupNotify=true
+"""
+    path = applications / "arestrix.desktop"
+    path.write_text(entry, encoding="utf-8", newline="\n")
+    path.chmod(0o644)
+
+    images = extract_ico_pngs(ROOT / "installer" / "arestrix.ico")
+    for width, payload in images.items():
+        target = root / "usr" / "share" / "icons" / "hicolor" / f"{width}x{width}" / "apps" / "arestrix.png"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(payload)
+        target.chmod(0o644)
+    pixmap = root / "usr" / "share" / "pixmaps" / "arestrix.png"
+    pixmap.parent.mkdir(parents=True, exist_ok=True)
+    largest = images[max(images)]
+    pixmap.write_bytes(largest)
+    pixmap.chmod(0o644)
+
+
+def deb_control(root: Path, product_version: str, deb_arch: str) -> str:
+    install_dir = root / DEB_INSTALL_DIR
+    installed_bytes = sum(
+        path.stat().st_size
+        for path in install_dir.rglob("*")
+        if path.is_file() and not path.is_symlink()
+    )
+    installed_size = max(1, (installed_bytes + 1023) // 1024)
+    return f"""Package: {DEB_PACKAGE}
+Version: {debian_version(product_version)}
+Section: devel
+Priority: optional
+Architecture: {deb_arch}
+Maintainer: {DEB_MAINTAINER}
+Installed-Size: {installed_size}
+Depends: {DEB_DEPENDS}
+Recommends: {DEB_RECOMMENDS}
+Homepage: {DEB_HOMEPAGE}
+Description: visual studio and native compiler for AI agent pipelines
+ Arestrix is a desktop studio and native C++20 compiler for AI agent
+ workflows. Pipelines are drawn on a graph canvas, validated, generated as
+ C++20 source and compiled with Taskflow into a standalone parallel runner.
+ .
+ This package installs the Studio, the arestrix-cli command line, the AI
+ Gateway and the memory maintenance tools. Compiling pipelines also requires
+ a C++20 compiler such as g++ (>= 11) or clang++ (>= 14).
+"""
+
+
+def create_deb(stage: Path, release_dir: Path, product_version: str, smoke: bool = True) -> Path:
+    """Monta e valida o pacote Debian a partir do staging portatil."""
+    if platform.system().lower() != "linux":
+        raise SystemExit("[deb] o pacote Debian so pode ser gerado no Linux.")
+    dpkg_deb = shutil.which("dpkg-deb")
+    if not dpkg_deb:
+        raise SystemExit("[deb] dpkg-deb nao encontrado; instale dpkg-dev.")
+
+    system, arch = platform_slug()
+    deb_arch = DEB_ARCHITECTURES.get(arch, arch)
+    install_dir = stage  # o staging ja tem o layout que o Studio espera
+
+    deb_parent = Path(tempfile.mkdtemp(prefix="arestrix-deb-", dir=str(release_dir)))
+    root = deb_parent / DEB_PACKAGE
+    try:
+        target_install = root / DEB_INSTALL_DIR
+        target_install.parent.mkdir(parents=True)
+        shutil.copytree(install_dir, target_install, symlinks=True)
+
+        (root / "DEBIAN").mkdir()
+        (root / "DEBIAN" / "control").write_text(
+            deb_control(root, product_version, deb_arch), encoding="utf-8", newline="\n"
+        )
+        for item in (root / "DEBIAN").iterdir():
+            item.chmod(0o644)
+
+        bin_dir = root / "usr" / "bin"
+        bin_dir.mkdir(parents=True)
+        for name in DEB_BINARIES:
+            (bin_dir / name).symlink_to(f"../lib/{DEB_PACKAGE}/{name}")
+
+        write_deb_desktop_entry(root)
+        write_deb_docs(root, product_version)
+        verify_deb_dependencies(target_install)
+
+        target = release_dir / f"{DEB_PACKAGE}_{debian_version(product_version)}_{deb_arch}.deb"
+        result = subprocess.run(
+            [dpkg_deb, "--build", "--root-owner-group", str(root), str(target)],
+            capture_output=True, text=True, timeout=300,
+        )
+        if result.returncode != 0:
+            print(result.stderr[-4000:], file=sys.stderr)
+            raise SystemExit("[deb] dpkg-deb --build falhou")
+        if not target.is_file():
+            raise SystemExit("[deb] pacote nao foi gerado")
+
+        if smoke:
+            smoke_test_deb(target, product_version)
+        return target
+    finally:
+        shutil.rmtree(deb_parent, ignore_errors=True)
+
+
+def smoke_test_deb(package: Path, product_version: str) -> None:
+    """Inspeciona, extrai e executa o .deb fora do checkout."""
+    dpkg_deb = shutil.which("dpkg-deb")
+    assert dpkg_deb is not None
+    info = subprocess.run([dpkg_deb, "--info", str(package)], capture_output=True, text=True, timeout=120)
+    if info.returncode != 0:
+        print(info.stderr[-4000:], file=sys.stderr)
+        raise SystemExit("[deb] dpkg-deb --info falhou")
+    if f"Version: {debian_version(product_version)}" not in info.stdout:
+        raise SystemExit("[deb] versao do pacote nao corresponde ao version.txt")
+
+    with tempfile.TemporaryDirectory(prefix="arestrix-deb-smoke-") as temporary:
+        extract = subprocess.run(
+            [dpkg_deb, "-x", str(package), temporary], capture_output=True, text=True, timeout=300
+        )
+        if extract.returncode != 0:
+            print(extract.stderr[-4000:], file=sys.stderr)
+            raise SystemExit("[deb] dpkg-deb -x falhou")
+
+        root = Path(temporary)
+        cli = root / DEB_INSTALL_DIR / "arestrix-cli"
+        memory = root / DEB_INSTALL_DIR / "arestrix-memory"
+        example = root / DEB_INSTALL_DIR / "examples" / "01-svg-agente"
+        commands = (
+            [str(cli), "version"],
+            [str(cli), "project", "validate", "--project", str(example), "--json"],
+            [str(memory), "version"],
+        )
+        for command in commands:
+            result = subprocess.run(command, cwd=temporary, capture_output=True, text=True, timeout=120)
+            if result.returncode != 0:
+                print(result.stdout[-3000:])
+                print(result.stderr[-3000:], file=sys.stderr)
+                raise SystemExit(f"[deb] smoke test falhou: {' '.join(command)}")
+        version_output = subprocess.run(
+            [str(cli), "version"], cwd=temporary, capture_output=True, text=True, timeout=120
+        ).stdout
+        if product_version not in version_output:
+            raise SystemExit(f"[deb] arestrix-cli reportou versao inesperada: {version_output.strip()}")
+
+        for name in DEB_BINARIES:
+            link = root / "usr" / "bin" / name
+            if not link.is_symlink() or not link.exists():
+                raise SystemExit(f"[deb] atalho ausente ou quebrado: {link}")
+
+        desktop = root / "usr" / "share" / "applications" / "arestrix.desktop"
+        validator = shutil.which("desktop-file-validate")
+        if validator:
+            checked = subprocess.run(
+                [validator, str(desktop)], capture_output=True, text=True, timeout=120
+            )
+            if checked.returncode != 0:
+                print(checked.stdout[-4000:])
+                print(checked.stderr[-4000:], file=sys.stderr)
+                raise SystemExit("[deb] desktop-file-validate reprovou a entrada .desktop")
+        else:
+            print("[deb] aviso: desktop-file-validate ausente; entrada .desktop nao validada")
+        print(f"[deb] smoke ok: {package.name} extraido e executado fora do checkout")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Cria pacote portatil do Arestrix")
     parser.add_argument("--output", default="release", help="diretorio de saida (padrao: release)")
-    parser.add_argument("--format", choices=["zip", "tar.gz", "both"], default=None,
+    parser.add_argument("--format", choices=["zip", "tar.gz", "deb", "both"], default=None,
                         help="formato do arquivo (padrao: zip no Windows, tar.gz nos demais)")
     parser.add_argument("--installer", action="store_true",
                         help="gera o instalador Windows com Inno Setup a partir do mesmo staging")
@@ -536,8 +848,19 @@ def main() -> int:
         formats = [args.format] if args.format and args.format != "both" else (
             ["zip", "tar.gz"] if args.format == "both" else (["zip"] if system == "windows" else ["tar.gz"])
         )
+        if args.format == "both" and system == "linux":
+            formats = ["tar.gz", "deb"]
+        if args.format == "both" and system == "macos":
+            formats = ["tar.gz"]
+        if "deb" in formats and system != "linux":
+            raise SystemExit("[deb] o pacote Debian so pode ser gerado no Linux.")
         base = release_dir / f"arestrix-{version}-{system}-{arch}"
-        archives = [create_archive(stage, base, fmt) for fmt in formats]
+        archives = []
+        for fmt in formats:
+            if fmt == "deb":
+                archives.append(create_deb(stage, release_dir, version, smoke=not args.skip_smoke))
+            else:
+                archives.append(create_archive(stage, base, fmt))
         for archive in archives:
             digest = sha256(archive)
             Path(str(archive) + ".sha256").write_text(

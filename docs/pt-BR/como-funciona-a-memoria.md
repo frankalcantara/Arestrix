@@ -1,6 +1,6 @@
 # Como funciona a memória do Arestrix
 
-> **Aplica-se a:** Arestrix 2.9 — última revisão: 2026-11-13
+> **Aplica-se a:** Arestrix 2.10 — última revisão: 2026-11-13
 >
 > Guia de uma página e referência da memória de projeto. A memória é local, pertence ao projeto
 > e vem ligada por padrão; pode ser desligada nas Propriedades. Não há importação automática de

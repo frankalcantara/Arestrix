@@ -194,6 +194,18 @@ jobs:
           python3 scripts/e2e_tutorial.py
           python3 scripts/e2e_examples.py
 
+      # Validates the Debian packaging from the same native build and frontend
+      # bundle used by the release: dpkg-deb --info/-x, CLI + memory smoke
+      # tests on the extracted tree and desktop-file-validate. The package is
+      # not uploaded from pull requests.
+      - name: Debian package
+        run: |
+          sudo apt-get install -y desktop-file-utils
+          npm ci
+          npm run build
+          python3 scripts/release_manifest.py
+          python3 scripts/package_release.py --format deb
+
   # Fails when .github/workflows/actions.lock is out of sync with the workflows,
   # or when a locked pin no longer verifies upstream. Required on main: the
   # check is read-only and fail-closed, so a stale lockfile must stop the merge

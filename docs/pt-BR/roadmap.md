@@ -1,6 +1,6 @@
 # Roadmap e limitações conhecidas
 
-> **Aplica-se a:** Arestrix 2.9 (`2.9.0`) · Última revisão: 2026-11-13
+> **Aplica-se a:** Arestrix 2.10 (`2.10.0`) · Última revisão: 2026-11-13
 >
 > Esta página registra o que está intencionalmente incompleto e a ordem planejada para resolver. Não é
 > um compromisso de datas.
@@ -31,14 +31,16 @@
   em WSLg. Evidências no [gate de release](release.md) e no
   [registro de auditoria](../quality/test-audit-log.md).
 - O job `native-linux` é check obrigatório (ruleset `main-protection`) e cobre build nativo, CTest,
-  gateway smoke e E2E de tutorial/exemplos no `ci.yml`.
-- A matriz de release ainda não cobre macOS e não há job de empacotamento Linux no CI.
+  gateway smoke, E2E de tutorial/exemplos e build/smoke do pacote `.deb` no `ci.yml`.
+- A matriz de release ainda não cobre macOS; o CI valida o `.deb`, mas nenhum job publica artefatos
+  Linux automaticamente.
 
 ### Distribuição
 
-- O pacote portátil (5B1) está implementado; o tarball `linux-x64` foi gerado, extraído e validado
-  fora do checkout em 2026-11-13. Instaladores `.deb`/AppImage não foram implementados: o tarball é
-  o formato Linux aceito nesta fase.
+- O pacote portátil (5B1) e o pacote Debian (5B2 Linux) estão implementados. O tarball `linux-x64`
+  e o `.deb` amd64 foram gerados, extraídos e validados fora do checkout em 2026-11-13; o `.deb`
+  instala em `/usr/lib/arestrix`, cria atalhos em `/usr/bin` e adiciona uma entrada no menu. O
+  AppImage continua pendente.
 - Catálogo/manifesto remoto assinado (Ed25519/minisign) não foi implementado. O catálogo embutido é
   protegido pelo binário; atualizações remotas exigem par de chaves e decisão de hospedagem.
 - Atualizações de runtime dependem de uma nova versão do aplicativo, porque o manifesto é embutido.
@@ -215,11 +217,12 @@ Pendente após a pré-release `2.1.0-beta.1`:
 
 1. **Linux + CI**
    - [x] Build Linux, runtime llama.cpp em CPU, router, gateway e E2E.
-   - [x] Tarball `linux-x64` e job `native-linux` com gateway smoke e E2E.
-   - [ ] Matriz macOS e validação automatizada do catálogo/manifesto.
+   - [x] Tarball `linux-x64`, pacote `.deb` amd64 e job `native-linux` com gateway smoke, E2E e
+         empacotamento Debian.
+   - [ ] AppImage, matriz macOS e validação automatizada do catálogo/manifesto.
 
 2. **Distribuição final**
-   - Escolher e implementar o empacotamento do instalador.
+   - Implementar o AppImage e concluir a validação em máquina limpa dos instaladores.
    - Definir par de chaves, custódia, rotação e hospedagem do catálogo assinado.
    - Publicar checksums, notices e notas de release.
 

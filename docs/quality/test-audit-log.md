@@ -28,6 +28,31 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 
 ## Histórico Cronológico de Auditorias
 
+### Rodada #009 - 2026-11-13 (pacote Debian 2.10.0)
+
+- **Commit:** branch `feat/deb-package` sobre `34e439a`; publicado como `v2.10.0`
+- **Release:** [v2.10.0](https://github.com/frankalcantara/Arestrix/releases/tag/v2.10.0) (Windows x64, Linux x64 e `.deb` amd64)
+- **Status Geral:** `APROVADO NO ESCOPO AUTOMATIZADO E DE EMPACOTAMENTO; INSTALAÇÃO VIA APT EM MÁQUINA LIMPA E APPIMAGE PENDENTES`
+- **Ambiente de Teste:** Ubuntu 24.04.5 LTS em WSL2 | GCC 13.3.0 | dpkg-deb 1.22.6 | Python 3.12.3 | Node.js 24.22.3
+
+#### Cobertura desta rodada
+
+| Área | Evidência |
+| :--- | :--- |
+| **Empacotamento `.deb`** | `python3 scripts/package_release.py --format deb`: staging portátil copiado para `/usr/lib/arestrix`, `control` gerado, symlinks em `/usr/bin`, entrada `.desktop`, ícones hicolor (16–256 px) e docs Debian; `dpkg-deb --build --root-owner-group` com sucesso |
+| **Metadados** | `dpkg-deb --info`: `Version: 2.10.0`, `Architecture: amd64`, `Installed-Size` calculado a partir do layout instalado, `Depends: libc6 (>= 2.38), libstdc++6 (>= 13), libgcc-s1` e `Recommends: libgtk-3-0t64 \| libgtk-3-0, libwebkit2gtk-4.1-0, g++ \| clang`; símbolos lidos dos binários: `GLIBC <= 2.38` e `GLIBCXX <= 3.4.32` |
+| **Extração e execução** | `dpkg-deb -x` em `/tmp/opencode/deb-extract`; `arestrix-cli version` = 2.10.0, `project validate` em `examples/01-svg-agente` OK, `arestrix-memory version` = 2.10.0, `arestrix-gateway --help` OK e `SHA256SUMS` interno OK |
+| **Atalhos e integração** | Os quatro symlinks de `/usr/bin` resolvem para `/usr/lib/arestrix`; `desktop-file-validate` aprovou `arestrix.desktop`; `changelog.Debian.gz` e `copyright` presentes em `/usr/share/doc/arestrix` |
+| **CI** | O job `native-linux` passou a instalar `desktop-file-utils`, compilar o frontend, gerar o manifesto e executar `package_release.py --format deb`, repetindo o smoke em cada pull request |
+| **Gate de release** | `release_check.py` completo (com E2E) em árvore limpa antes do tag; `release-report.json` com `status=passed` e `dirty=false` |
+
+#### Pendências para promoção
+
+- [ ] Instalar o `.deb` com `apt`/`dpkg` em máquina limpa (sem `sudo` nesta rodada; a validação usou `dpkg-deb -x` e execução fora do checkout).
+- [ ] Empacotar e validar o AppImage.
+- [ ] Publicar o `.deb` e o tarball Linux no GitHub Release (o workflow de tag publica apenas Windows).
+- [ ] Repetir a validação em máquina limpa do instalador Windows e a matriz macOS.
+
 ### Rodada #008 - 2026-11-13 (validação e release Linux 2.9.0)
 
 - **Commit:** branch `chore/linux-release-validation` sobre `ff44b63` (pós-2.8.0); merge `fb073a0`, publicado como `v2.9.0`
