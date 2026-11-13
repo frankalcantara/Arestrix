@@ -3641,21 +3641,33 @@ int main(int argc, char** argv) {
         uiIndex = projectRoot / "CppCore" / "ui" / "index.html";
     }
 
+    // No Linux, o FastWebUI tenta abrir o navegador antes do WebView e considera
+    // `xdg-open` bem-sucedido quando ele sai com 0. Em ambientes onde o xdg-open
+    // nao abre nada (WSL sem interoperabilidade), a janela GTK nunca era criada.
+    // Tentamos o WebView primeiro e mantemos o navegador como fallback para
+    // maquinas sem GTK 3/WebKitGTK 4.1. No Windows o comportamento nao muda.
+    auto showUi = [&win](const std::string& content) {
+#if defined(__linux__)
+        if (win.show_wv(content)) return;
+#endif
+        win.show(content);
+    };
+
     if (std::filesystem::exists(distIndex)) {
         std::cout << "[C++] Servindo a UI oficial: " << distIndex.string() << std::endl;
         bool rootOk = win.set_root_folder(distDir.string());
         if (rootOk) {
-            win.show("index.html");
+            showUi("index.html");
         } else {
-            win.show("dist/index.html");
+            showUi("dist/index.html");
         }
     } else if (std::filesystem::exists(uiIndex)) {
         std::cout << "[C++] Servindo UI de desenvolvimento: " << uiIndex.string() << std::endl;
         win.set_root_folder(uiIndex.parent_path().string());
-        win.show("index.html");
+        showUi("index.html");
     } else {
         std::cerr << "[C++ Erro] index.html nao foi encontrado em dist/ ou ui/." << std::endl;
-        win.show("<html><head><title>Arestrix</title><style>body{font-family:Segoe UI,sans-serif;padding:2rem;background:#0f172a;color:#f8fafc;text-align:center;}</style></head><body><h1>Arestrix Studio</h1><p>Frontend nao encontrado em dist/index.html.</p><p>Execute <code>npm run build</code> na pasta raiz do projeto.</p></body></html>");
+        showUi("<html><head><title>Arestrix</title><style>body{font-family:Segoe UI,sans-serif;padding:2rem;background:#0f172a;color:#f8fafc;text-align:center;}</style></head><body><h1>Arestrix Studio</h1><p>Frontend nao encontrado em dist/index.html.</p><p>Execute <code>npm run build</code> na pasta raiz do projeto.</p></body></html>");
     }
 
     webui::wait();
