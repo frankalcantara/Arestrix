@@ -108,7 +108,9 @@ dele, o sistema pode criar:
 - **proposta de lição** (`memory_propose_lesson`) quando o agente declara uma regra;
 - **proposta automática de falha** quando a tarefa falha (o validador reprova ou o agente estoura
   `maxTurns`);
-- **candidato de playbook** quando há sequência suficiente de passos bem-sucedidos.
+- **candidato de playbook** quando há sequência suficiente de passos bem-sucedidos;
+- **fatos, entidades e um `summary` estruturado** a partir das ferramentas, arquivos e artefatos
+  de uma execução bem-sucedida.
 
 Falhas de infraestrutura são classificadas por `errorClass` enumerado — transporte/timeout,
 429, 5xx, autenticação/chave, gateway/orçamento, configuração, sandbox/ferramenta ou cancelamento —
@@ -116,6 +118,25 @@ e **não** geram proposta de lição. O agente lança `AgentFailure` com essa cl
 consulta a classe, nunca o texto da exceção. `task_max_turns` é falha da tarefa, não de
 infraestrutura. O texto da proposta é normalizado antes da deduplicação: UUIDs, datas/horas e
 números longos viram marcadores, então duas falhas iguais com ids diferentes geram uma proposta só.
+
+### Extração determinística do episódio
+
+Ao final de uma execução `learn` que não seja falha de infraestrutura, o runtime chama o
+`MemoryExtractor` sobre o episódio gravado. Essa etapa não usa modelo de linguagem e não
+promove nada: ela apenas cria propostas pendentes.
+
+- **Falha de tarefa:** uma proposta de lição `Evitar falha em <task_type>: <erro>`, com
+  `domain`, `triggerError` e `lessonRule`. A confiança parte de 0,2 (0,3 com artefatos).
+- **Sucesso:** fatos `USES_TOOL` para cada ferramenta bem-sucedida, entidades de ferramenta
+  (`entityKind=tool`), fatos `PRODUCES` para cada artefato, um rascunho de playbook com a
+  sequência de ferramentas e um `summary` estruturado com `taskType`, `outcome`, `tools`,
+  `filesTouched` e `artifacts`. A confiança parte de 0,7 (0,8 com artefatos).
+- Cada proposta carrega `episodeId`, `runId`, `nodeId` e `outcome` como evidência. O extrator
+  deduplica payloads idênticos e limita o episódio a 20 propostas.
+- O `MemoryPlaybookCompiler` também observa a assinatura de ferramentas: sucesso cria (0,6)
+  ou atualiza (+0,1) o playbook daquela assinatura; falha reduz a confiança de um playbook
+  existente (−0,15). A ativação continua sendo decidida pelo gate de playbooks, nunca pelo
+  extrator.
 
 ### Validação de artefato
 
@@ -153,6 +174,45 @@ Fatos também têm **cardinalidade de predicado**. Predicados de acumulação �
 aceitam vários objetos ativos. Predicados funcionais e desconhecidos são single-valued: promover um
 novo valor encerra o anterior (`superseded`, com histórico), em vez de deixar dois valores ativos.
 O detector de contradições ignora predicados multi-valued.
+
+### Consolidação, decay e `dormant`
+
+A consolidação é uma passada de manutenção, não uma operação de busca. Ela é **opt-in**:
+`memory.consolidationMode` aceita `off` (padrão), `idle` (depois de
+`consolidationIdleSeconds`, padrão 300 s sem atividade) e `after_episodes` (depois de
+`consolidationEpisodeThreshold`, padrão 20 episódios). O comando
+`arestrix-cli memory consolidate --project .` executa a mesma passada sob demanda.
+
+A passada é determinística e **não apaga conhecimento**: rebaixa itens para `candidate`,
+`superseded` ou `dormant`, preserva evidência e grava auditoria. Ela:
+
+1. **Expira fatos** cuja `validTo` já passou: o fato vira `superseded`, com histórico.
+2. **Deduplica lições** do mesmo domínio com texto normalizado igual ou similaridade de
+   tokens ≥ `nearDuplicateSimilarity` (padrão 0,9). A vencedora é a de maior confiança
+   (a mais antiga em caso de empate); as demais viram `superseded`, com evidência fundida.
+   Quando os objetos diferem, o nome duplicado vira alias do canônico e uma aresta
+   `SUPERSEDES` é registrada.
+3. **Deduplica fatos** com mesmo sujeito, predicado, objeto/valor e domínio.
+4. **Detecta contradições** em predicados funcionais com validade sobreposta: a vencedora
+   fica ativa com confiança ×0,95; as perdedoras viram `candidate` com ×0,8 e arestas
+   `CONTRADICTS`. Predicados multi-valued são ignorados. Lições só conflitam no mesmo
+   domínio e mesmo `triggerError`, com polaridade oposta e similaridade ≥ 0,6.
+5. **Aplica decay:** fatos/arestas sem uso desde a gravação ou o último uso por
+   `dormantAfterDays` (padrão 180) recebem `dormant_at`, motivo `unused` e confiança ×0,9.
+   Lições e marcadores estruturais não decaem. Um uso bem-sucedido reativa o item e soma
+   utilidade; um uso malsucedido reduz a utilidade. Itens dormentes não entram no brief nem
+   na busca normal.
+6. **Generaliza lições:** a partir de `generalizeMinSources` (padrão 3) lições do mesmo
+   domínio, cria um nó `Resumo: <domínio>` e arestas `GENERALIZES` com confiança 0,8. É
+   idempotente e não substitui as lições originais.
+
+O relatório traz `duplicates`, `contradictions`, `expired`, `dormant`, `aliases`,
+`generalizations` e `errors`. A CLI aceita `--dormant-days N`, `--no-decay`, `--no-dedup`,
+`--no-generalize`, `--no-conflicts` e `--no-expire`.
+
+Com `memory.consolidationMode` diferente de `off`, a manutenção também reindexa embeddings,
+extrai claims (quando `claimExtraction` está ligado) e reconstrói facetas, caminhos e pontes
+conforme os interruptores. A busca nunca executa a consolidação no caminho de leitura.
 
 ## 6. Ferramentas do agente
 
