@@ -188,8 +188,9 @@ python scripts/e2e_examples.py
 O **Arestrix 2.8.0** é o release atual (2026-11-11). O Studio roda no Windows e no Linux;
 programas gerados a partir de um grafo atualmente têm o Windows como alvo. APIs, formatos de
 arquivo e flags de linha de comando ainda podem mudar entre releases menores. Consulte o
-[changelog](CHANGELOG.md) para as limitações atuais. O instalador Windows está incluído; validação em máquina limpa, pacote Linux e a matriz completa de testes ainda estão
-pendentes. Acompanhe no [registro de auditoria de testes](docs/quality/test-audit-log.md) e no
+[changelog](CHANGELOG.md) para as limitações atuais. O instalador Windows está incluído e o tarball
+portátil Linux é gerado e validado; validação em máquina limpa, instaladores Linux `.deb`/AppImage e a
+matriz macOS ainda estão pendentes. Acompanhe no [registro de auditoria de testes](docs/quality/test-audit-log.md) e no
 [plano de testes do Beta 2.3](docs/quality/beta2.3-test-plan.md). Os artefatos Windows são publicados com hashes e manifesto; consulte a [política de privacidade](PRIVACY.md).
 
 ## Segurança

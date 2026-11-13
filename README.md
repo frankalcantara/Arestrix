@@ -189,8 +189,9 @@ python scripts/e2e_examples.py
 **Arestrix 2.8.0** is the current release (2026-11-11). The Studio runs on Windows and Linux;
 programs generated from a graph currently target Windows. APIs, file formats and command-line flags
 may still change between minor releases. See the [changelog](CHANGELOG.md) for the current
-limitations. The Windows installer is included; clean-machine validation, the
-Linux package and the full test matrix are still pending. Track them in the
+limitations. The Windows installer is included and the Linux portable tarball is generated and
+validated; clean-machine validation, Linux `.deb`/AppImage installers and the macOS matrix are still
+pending. Track them in the
 [test audit log](docs/quality/test-audit-log.md) and the
 [Beta 2.3 test plan](docs/quality/beta2.3-test-plan.md).
 

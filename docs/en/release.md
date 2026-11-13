@@ -1,8 +1,9 @@
 # Release gate and artifacts
 
-> **Phase 5A.** This is the reproducible validation layer before installer packaging.
-> The Windows Inno Setup installer is implemented; clean-machine validation, Linux package,
-> Linux CI and the signed remote catalog remain pending. See the [roadmap](roadmap.md).
+> **Phase 5A/5B1.** This is the reproducible validation layer before installer packaging.
+> The Windows Inno Setup installer is implemented; the Linux portable tarball was generated and
+> validated on Ubuntu 24.04 (WSL2) on 2026-11-13. Clean-machine Windows validation, `.deb`/AppImage
+> installers and the signed remote catalog remain pending. See the [roadmap](roadmap.md).
 
 ## 1. Prepare a clean tree
 
@@ -103,6 +104,13 @@ The generated archive is `release/arestrix-<version>-<platform>-<arch>.zip` on W
 MSVC/GCC. Compiling pipelines on the target still requires a C++20 compiler and the Visual C++
 Redistributable on Windows.
 
+On Linux, `arestrix-<version>-linux-x64.tar.gz` was generated, verified with `sha256sum -c`,
+extracted to `/tmp` and validated outside the checkout with `arestrix-cli version`, `project
+validate` on `examples/01-svg-agente` and a `SHA256SUMS` check (Ubuntu 24.04/WSL2, 2026-11-13). The
+Studio window needs GTK 3 and WebKitGTK 4.1; on Linux it tries the WebView first and falls back to
+the default browser when those libraries are missing. CLI, gateway and the CPU local runtime work
+without those libraries.
+
 ## 3.2 Automated portable deploy (Windows)
 
 `.github/workflows/deploy.yml` builds and publishes the portable package from GitHub Actions:
@@ -186,7 +194,8 @@ Alternatively use `ARESTRIX_SIGN_THUMBPRINT` for a certificate installed in `My`
 ## 5. Not in phase 5A
 
 - Windows Inno Setup installer implemented (5B2 partial; clean-machine install, upgrade, uninstall,
-  silent install and Intune/SCCM validation still pending) and the Linux package (5B2).
+  silent install and Intune/SCCM validation still pending) and the Linux portable `.tar.gz` package
+  validated; `.deb`/AppImage installers are not implemented.
 - E2E in the automated release path and a macOS CI matrix.
 - Signed remote catalog (Ed25519/minisign) and hosting.
 

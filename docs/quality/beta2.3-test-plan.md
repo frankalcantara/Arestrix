@@ -49,9 +49,11 @@ como pré-release de desenvolvimento.
 
 - [ ] **5B2 — instalador Windows:** Inno Setup implementado; faltam instalação limpa, upgrade,
       uninstall, atalhos, modo silencioso e validação em Intune/SCCM.
-- [ ] **5B2 — pacote Linux:** AppImage, `.deb` ou tarball instalável, com dependências documentadas.
-- [ ] **5C — CI:** matriz Windows/Linux, build nativo, CTest, Vitest, E2E, gateway smoke e release gate.
+- [x] **5B2 — pacote Linux:** tarball `linux-x64` gerado, extraído e validado fora do checkout
+      (Ubuntu 24.04/WSL2, 2026-11-13); `.deb`/AppImage não implementados nesta fase.
+- [x] **5C — CI:** matriz Windows/Linux, build nativo, CTest, Vitest, E2E, gateway smoke e release gate.
   - [x] Matriz Windows/Linux com CTest, Vitest e checks no `ci.yml`; gate e gateway smoke no `deploy.yml`.
+  - [x] `native-linux` com gateway smoke e E2E de tutorial/exemplos; check obrigatório no ruleset.
 - [ ] **5C — catálogo remoto assinado:** par de chaves, custódia, rotação e hospedagem.
 - [ ] **Distribuição:** publicar checksums, SBOM, notices e notas de release.
 - [ ] **Testes e homologação** da matriz abaixo.
@@ -130,7 +132,8 @@ como pré-release de desenvolvimento.
 - [x] Instalação silenciosa e códigos de saída documentados (`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`; `/MERGETASKS="!desktopicon"` para pular o atalho).
 - [x] Instalação em perfil sem privilégios administrativos (per-user em `%LOCALAPPDATA%\Programs\Arestrix`).
 - [ ] Teste em máquina limpa com apenas o runtime VC++ exigido.
-- [ ] Linux: pacote equivalente com dependências e caminhos de dados documentados.
+- [x] Linux: tarball portátil com dependências e caminhos de dados documentados; janela validada em
+      WSLg com GTK 3/WebKitGTK 4.1. `.deb`/AppImage continuam fora desta fase.
 
 > **Validação local (2026-10-26, Windows 11 x64):** build do instalador, preflight do ambiente
 > (incluindo detecção de chave de API ausente sem bloquear), instalação silenciosa, atalho de desktop
@@ -142,7 +145,8 @@ como pré-release de desenvolvimento.
 > silenciosa em máquina sem Arestrix, smoke de `arestrix-cli`/`arestrix-memory` 2.7.0, `project
 > validate`, abertura do Studio, upgrade 2.1.0-beta.1 → 2.7.0 preservando um projeto em
 > `Documents`, e desinstalação completa (pasta, `App Paths`, Menu Iniciar e atalho removidos).
-> Instalação em máquina limpa, Intune/SCCM e pacote Linux continuam pendentes.
+> Instalação em máquina limpa, Intune/SCCM continuam pendentes. O pacote Linux em tarball foi
+> validado em Ubuntu 24.04/WSL2 (2026-11-13); instaladores `.deb`/AppImage não foram implementados.
 
 ### 2.8 Segurança e integridade
 
@@ -193,7 +197,8 @@ A pré-release Beta 2.3 pode ser promovida quando:
 ## 4. Decisões abertas
 
 - Tecnologia do instalador Windows: WiX v4, Inno Setup ou MSIX.
-- Formato Linux prioritário: AppImage, `.deb` ou tarball.
+- Formato Linux: tarball `.tar.gz` validado nesta fase; `.deb`/AppImage ficam para quando houver
+  requisito explícito de produto.
 - Estratégia de catálogo remoto assinado e hospedagem.
 
 ## 5. Registro de bloqueio

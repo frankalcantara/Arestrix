@@ -1,8 +1,9 @@
 # Gate de release e artefatos
 
-> **Fase 5A.** Esta é a camada de validação reproduzível antes do empacotamento.
-> O instalador Windows em Inno Setup está implementado; validação em máquina limpa, pacote Linux,
-> CI Linux e catálogo remoto assinado continuam pendentes; veja o [roadmap](roadmap.md).
+> **Fase 5A/5B1.** Esta é a camada de validação reproduzível antes do empacotamento.
+> O instalador Windows em Inno Setup está implementado; o tarball portátil Linux foi gerado e
+> validado em Ubuntu 24.04 (WSL2) em 2026-11-13. Validação em máquina limpa Windows, instaladores
+> `.deb`/AppImage e catálogo remoto assinado continuam pendentes; veja o [roadmap](roadmap.md).
 
 ## 1. Prepare uma árvore limpa
 
@@ -103,6 +104,13 @@ Linux/macOS; `--format both` cria os dois. O pacote portátil **não** inclui MS
 pipelines no destino ainda é necessário um compilador C++20 e o Visual C++ Redistributable no
 Windows.
 
+No Linux, o pacote `arestrix-<versão>-linux-x64.tar.gz` foi gerado, verificado com
+`sha256sum -c`, extraído em `/tmp` e validado fora do checkout com `arestrix-cli version`,
+`project validate` em `examples/01-svg-agente` e checagem de `SHA256SUMS` (Ubuntu 24.04/WSL2,
+2026-11-13). A janela do Studio exige GTK 3 e WebKitGTK 4.1; no Linux ela tenta o WebView
+primeiro e usa o navegador padrão como fallback quando essas bibliotecas não estão presentes.
+CLI, gateway e runtime local em CPU funcionam sem essas bibliotecas.
+
 ## 3.2 Deploy portátil automatizado (Windows)
 
 O `.github/workflows/deploy.yml` compila e publica o pacote portátil pelo GitHub Actions:
@@ -185,7 +193,8 @@ Como alternativa, use `ARESTRIX_SIGN_THUMBPRINT` para um certificado instalado e
 ## 5. Fora da fase 5A
 
 - Instalador Windows Inno Setup implementado (5B2 parcial; validação em máquina limpa, upgrade,
-  uninstall, instalação silenciosa e Intune/SCCM ainda pendentes) e pacote Linux (5B2).
+  uninstall, instalação silenciosa e Intune/SCCM ainda pendentes) e pacote Linux portátil em
+  `.tar.gz` validado; instaladores `.deb`/AppImage não implementados.
 - E2E no caminho automatizado de release e matriz de CI no macOS.
 - Catálogo remoto assinado (Ed25519/minisign) e hospedagem.
 
