@@ -106,7 +106,9 @@ may create:
 
 - a **lesson proposal** (`memory_propose_lesson`) when the agent states a rule;
 - an **automatic failure proposal** when the task fails (validator rejection or `maxTurns`);
-- a **playbook candidate** when there is enough evidence of a successful sequence.
+- a **playbook candidate** when there is enough evidence of a successful sequence;
+- **facts, entities and a structured `summary`** from the tools, files and artifacts of a
+  successful run.
 
 Infrastructure failures are classified by an enumerated `errorClass` — transport/timeout, 429,
 5xx, auth/key, gateway/budget, configuration, sandbox/tool or cancellation — and do **not** create
@@ -114,6 +116,25 @@ a lesson proposal. The agent throws `AgentFailure` with that class; the generate
 class, never the exception text. `task_max_turns` is a task failure, not infrastructure. The
 proposal text is normalized before deduplication: UUIDs, timestamps and long numbers become
 placeholders, so two identical failures with different IDs produce a single proposal.
+
+### Deterministic episode extraction
+
+At the end of a `learn` run that is not an infrastructure failure, the runtime calls
+`MemoryExtractor` on the stored episode. This step uses no language model and promotes
+nothing: it only creates pending proposals.
+
+- **Task failure:** a lesson proposal `Avoid failure in <task_type>: <error>`, with `domain`,
+  `triggerError` and `lessonRule`. Confidence starts at 0.2 (0.3 with artifacts).
+- **Success:** `USES_TOOL` facts for each successful tool, tool entities
+  (`entityKind=tool`), `PRODUCES` facts for each artifact, a playbook draft with the tool
+  sequence and a structured `summary` with `taskType`, `outcome`, `tools`, `filesTouched`
+  and `artifacts`. Confidence starts at 0.7 (0.8 with artifacts).
+- Every proposal carries `episodeId`, `runId`, `nodeId` and `outcome` as evidence. The
+  extractor deduplicates identical payloads and limits the episode to 20 proposals.
+- `MemoryPlaybookCompiler` also observes the tool signature: success creates (0.6) or
+  updates (+0.1) the playbook for that signature; failure lowers the confidence of an
+  existing playbook (−0.15). Activation remains the playbook gate's decision, never the
+  extractor's.
 
 ### Artifact validation
 
@@ -148,6 +169,45 @@ Facts also have **predicate cardinality**. Accumulation predicates — `USES`, `
 accept multiple active objects. Functional and unknown predicates are single-valued: promoting a
 new value ends the previous one (`superseded`, with history) instead of leaving two active values.
 The contradiction detector ignores multi-valued predicates.
+
+### Consolidation, decay and `dormant`
+
+Consolidation is a maintenance pass, not a search operation. It is **opt-in**:
+`memory.consolidationMode` accepts `off` (default), `idle` (after
+`consolidationIdleSeconds`, default 300 s without activity) and `after_episodes` (after
+`consolidationEpisodeThreshold`, default 20 episodes). The
+`arestrix-cli memory consolidate --project .` command runs the same pass on demand.
+
+The pass is deterministic and **does not delete knowledge**: it demotes items to
+`candidate`, `superseded` or `dormant`, preserves evidence and writes an audit record. It:
+
+1. **Expires facts** whose `validTo` has passed: the fact becomes `superseded`, with history.
+2. **Deduplicates lessons** in the same domain with equal normalized text or token
+   similarity ≥ `nearDuplicateSimilarity` (default 0.9). The winner has the highest
+   confidence (oldest on a tie); the others become `superseded`, with merged evidence. When
+   the objects differ, the duplicate name becomes an alias of the canonical one and a
+   `SUPERSEDES` edge is recorded.
+3. **Deduplicates facts** with the same subject, predicate, object/value and domain.
+4. **Detects contradictions** in functional predicates with overlapping validity: the winner
+   stays active with confidence ×0.95; losers become `candidate` with ×0.8 and `CONTRADICTS`
+   edges. Multi-valued predicates are ignored. Lessons only conflict in the same domain and
+   same `triggerError`, with opposite polarity and similarity ≥ 0.6.
+5. **Applies decay:** facts/edges unused since they were recorded or last used for
+   `dormantAfterDays` (default 180) get `dormant_at`, reason `unused`, and confidence ×0.9.
+   Lessons and structural markers do not decay. A successful use reactivates the item and
+   adds utility; a failed use lowers utility. Dormant items are not served in the brief or
+   normal search.
+6. **Generalizes lessons:** once `generalizeMinSources` (default 3) lessons in a domain
+   exist, it creates a `Resumo: <domain>` node and `GENERALIZES` edges with confidence 0.8.
+   It is idempotent and does not replace the original lessons.
+
+The report includes `duplicates`, `contradictions`, `expired`, `dormant`, `aliases`,
+`generalizations` and `errors`. The CLI accepts `--dormant-days N`, `--no-decay`,
+`--no-dedup`, `--no-generalize`, `--no-conflicts` and `--no-expire`.
+
+With `memory.consolidationMode` other than `off`, maintenance also reindexes embeddings,
+extracts claims (when `claimExtraction` is enabled) and rebuilds facets, paths and bridges
+according to their switches. Search never runs consolidation on the read path.
 
 ## 6. Agent tools
 
