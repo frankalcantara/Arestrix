@@ -1,9 +1,10 @@
 # Release gate and artifacts
 
-> **Phase 5A/5B1.** This is the reproducible validation layer before installer packaging.
-> The Windows Inno Setup installer is implemented; the Linux portable tarball was generated and
-> validated on Ubuntu 24.04 (WSL2) on 2026-11-13. Clean-machine Windows validation, `.deb`/AppImage
-> installers and the signed remote catalog remain pending. See the [roadmap](roadmap.md).
+> **Phase 5A/5B1/5B2.** This is the reproducible validation layer before installer packaging.
+> The Windows Inno Setup installer and the Linux Debian package are implemented; the portable tarball
+> and the `.deb` were generated and validated on Ubuntu 24.04 (WSL2) on 2026-11-13. Clean-machine
+> Windows validation, the AppImage and the signed remote catalog remain pending. See the
+> [roadmap](roadmap.md).
 
 ## 1. Prepare a clean tree
 
@@ -100,9 +101,9 @@ It runs `arestrix-cli version` and `arestrix-cli project validate` against an ex
 archiving the package. A clean tree is required by default.
 
 The generated archive is `release/arestrix-<version>-<platform>-<arch>.zip` on Windows or
-`.tar.gz` on Linux/macOS; `--format both` creates both. The portable package does **not** include
-MSVC/GCC. Compiling pipelines on the target still requires a C++20 compiler and the Visual C++
-Redistributable on Windows.
+`.tar.gz` on Linux/macOS; on Linux, `--format both` creates the tarball and the `.deb`. The portable
+package does **not** include MSVC/GCC. Compiling pipelines on the target still requires a C++20
+compiler and the Visual C++ Redistributable on Windows.
 
 On Linux, `arestrix-<version>-linux-x64.tar.gz` was generated, verified with `sha256sum -c`,
 extracted to `/tmp` and validated outside the checkout with `arestrix-cli version`, `project
@@ -129,8 +130,9 @@ Setup installer with `package_release.py --installer`, and attaches the archive,
 (`start-arestrix.bat`); no development checkout is needed.
 
 Pull requests run the pre-merge gate in `.github/workflows/ci.yml`: quality/static checks, Vitest +
-Studio build, native Windows CTest and native Linux CTest. The four jobs are required status checks
-on `main`, and Dependabot keeps npm, GitHub Actions and Git submodules current. Submodule pointers
+Studio build, native Windows CTest and native Linux build/CTest/`.deb` packaging. The six jobs
+(`quality`, `frontend`, `native-windows`, `native-linux`, `lockfile` and `zizmor`) are required
+status checks on `main`, and Dependabot keeps npm, GitHub Actions and Git submodules current. Submodule pointers
 only move through a reviewed pull request: the weekly `Submodule updates` workflow compares each
 pinned gitlink with its upstream branch and opens `chore/submodule-updates` (see
 [`../../.github/AUTOMATION.md`](../../.github/AUTOMATION.md)).
@@ -178,6 +180,43 @@ upgrade preserving user files/projects and a complete uninstall. Clean-machine i
 Intune/SCCM validation remain pending; the installer is included in the release but is not yet a
 fully validated release artifact.
 
+## 3.4 Debian package (phase 5B2 Linux)
+
+On Linux, the Debian package is built from the same staging folder:
+
+```bash
+python3 scripts/package_release.py --format deb
+# or together with the tarball:
+python3 scripts/package_release.py --format both
+```
+
+The output is `release/arestrix_<version>_amd64.deb` (pre-release versions replace `-` with `~`, as
+the Debian convention requires) with a `.sha256` sidecar. The package:
+
+- installs the portable layout under `/usr/lib/arestrix` (Studio, CLI, gateway, memory tools, UI,
+  runtime, examples, headers and documentation);
+- creates `arestrix`, `arestrix-cli`, `arestrix-gateway` and `arestrix-memory` symlinks in `/usr/bin`;
+- adds `/usr/share/applications/arestrix.desktop` and 16 to 256 px hicolor icons;
+- installs `copyright`, `changelog.Debian.gz` and links to the README, CHANGELOG and SBOM under
+  `/usr/share/doc/arestrix`;
+- declares `Depends: libc6 (>= 2.38), libstdc++6 (>= 13), libgcc-s1` and recommends
+  `libgtk-3-0t64 | libgtk-3-0`, `libwebkit2gtk-4.1-0` and `g++ | clang`. The builder reads the
+  GLIBC/GLIBCXX symbols referenced by the binaries and refuses to package when `control` understates
+  them.
+
+Local install:
+
+```bash
+sudo apt install ./release/arestrix_2.10.0_amd64.deb
+arestrix-cli version
+```
+
+In CI, the `native-linux` job builds the frontend, generates the manifest and runs the same
+packaging on every pull request. Local validation covers `dpkg-deb --info`, `dpkg-deb -x`, running
+`arestrix-cli`/`arestrix-memory` and `project validate` on the extracted tree, checking the symlinks
+and `desktop-file-validate`. A real `apt`/`dpkg` install on a clean machine and the AppImage remain
+pending.
+
 ## 4. Alternative: local PFX/thumbprint signing
 
 The automated release publishes unsigned artifacts. The script below is an optional manual step for organizations that have their own code-signing certificate. After the gate passes, sign the executables with a local corporate certificate:
@@ -194,8 +233,8 @@ Alternatively use `ARESTRIX_SIGN_THUMBPRINT` for a certificate installed in `My`
 ## 5. Not in phase 5A
 
 - Windows Inno Setup installer implemented (5B2 partial; clean-machine install, upgrade, uninstall,
-  silent install and Intune/SCCM validation still pending) and the Linux portable `.tar.gz` package
-  validated; `.deb`/AppImage installers are not implemented.
+  silent install and Intune/SCCM validation still pending), the Linux portable `.tar.gz` and Debian
+  `.deb` packages validated; the AppImage is not implemented.
 - E2E in the automated release path and a macOS CI matrix.
 - Signed remote catalog (Ed25519/minisign) and hosting.
 
