@@ -1,6 +1,6 @@
 # Registro de Auditoria e Integridade de Testes (Test Audit Log)
 
-> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Última revisão: 2026-10-28
+> **Aplica-se a:** Arestrix Beta 2.3 (`2.3.0-beta.2`) · Última revisão: 2026-11-13
 
 Este documento registra o histórico cronológico das rodadas de testes automatizados, verificações de segurança e auditorias de integridade do **Arestrix**, organizadas da **mais recente para a mais antiga**.
 
@@ -27,6 +27,38 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 ---
 
 ## Histórico Cronológico de Auditorias
+
+### Rodada #008 - 2026-11-13 (validação e release Linux 2.9.0)
+
+- **Commit:** branch `chore/linux-release-validation` sobre `ff44b63` (pós-2.8.0), publicado como `v2.9.0`
+- **Status Geral:** `APROVADO NO ESCOPO AUTOMATIZADO, GUI E PACOTE LOCAL; CI REMOTO E EMPACOTAMENTO LINUX NO CI PENDENTES`
+- **Ambiente de Teste:** Ubuntu 24.04.5 LTS em WSL2 (kernel 6.6.87.2) | GCC 13.3.0 | CMake 3.28.3 | Ninja 1.11.1 | Node.js 24.22.3 | npm 11.19.1 | Python 3.12.3 | WSLg (`DISPLAY=:0`)
+
+#### Cobertura desta rodada
+
+| Área | Evidência |
+| :--- | :--- |
+| **Build nativo e CTest** | `python3 CppCore/dev.py --test --no-frontend`: CTest 1/1 em 142,45 s, com hardening ativo e binários exportados na raiz |
+| **Frontend** | `npm ci`, `npm test` (630 testes em 79 arquivos), `npm run build` (Vite) e `npx tsc --noEmit` sem erros; `dev.py --check` aprovado |
+| **Gateway** | `python3 CppCore/dev.py --gateway-smoke`: 200 no upstream falso, 402 no estouro de budget, métricas e `/v1/usage` OK |
+| **Runtime local (CPU)** | llama.cpp `b11669` `linux-x64-cpu` (17.851.611 bytes) baixado pela API, SHA-256 conferido, extração e execução; Qwen2.5-0.5B Q4_K_M (397.808.192 bytes) com SHA-256 OK; `GET /models` 200 e `POST /chat/completions` 200 (`Ok!`) em loopback |
+| **Tutorial e exemplos** | `scripts/e2e_tutorial.py` exit 0 e `scripts/e2e_examples.py` exit 0 (14 exemplos em 180,97 s; o exemplo 05 é pulado sem `KEENABLE_API`, como documentado) |
+| **Memória** | `e2e_memory_claim_agent.py`, `memory_advanced_eval.py --check --runs 3` (7 variantes × 10 tarefas × 3 repetições) e `e2e_memory_institution.py` aprovados |
+| **Studio (GUI real)** | Janela GTK/WebKit criada em WSLg, título `Arestrix Studio - Visual Taskflow C++20 Studio`, 800×600, UI carregada e renderizada; captura em [linux-wslg-studio.png](../assets/screenshots/linux-wslg-studio.png). `GDK_BACKEND=x11` foi usado apenas para inspecionar a janela via X11 |
+| **Pacote Linux** | `arestrix-2.9.0-linux-x64.tar.gz` (cerca de 79 MB); `sha256sum -c` do manifesto OK, extração em `/tmp/arestrix-linux-smoke`, `arestrix-cli version` = 2.9.0, `project validate --project examples/01-svg-agente` OK e `SHA256SUMS` do pacote OK |
+| **CI e Git** | `.gitignore` passou a ignorar os binários nativos da raiz; job `native-linux` ganhou Node.js, gateway smoke e E2E de tutorial/exemplos; ruleset `main-protection` exige `quality`, `frontend`, `native-windows`, `native-linux`, `lockfile` e `zizmor` |
+
+#### Achado e correção
+
+No Linux, o FastWebUI tenta abrir o navegador antes do WebView e considera `xdg-open` bem-sucedido quando o processo sai com código 0. No WSL sem interoperabilidade, o `xdg-open` chama o `wslview`, falha sem abrir nada e ainda assim retorna 0; o Studio ficava em modo navegador, sem janela. `CppCore/src/main.cpp` agora tenta o WebView (GTK 3 + WebKitGTK 4.1) primeiro no Linux e mantém `win.show()` como fallback para máquinas sem essas bibliotecas. O caminho do Windows não foi alterado.
+
+#### Pendências para promoção
+
+- [ ] Confirmar o job `native-linux` verde no GitHub Actions (a validação local não substitui a execução remota; não houve push nesta rodada).
+- [ ] Capturar a janela pelo backend Wayland do WSLg; a evidência desta rodada usa a janela X11 (`GDK_BACKEND=x11`).
+- [ ] Instaladores Linux `.deb`/AppImage: não implementados; o tarball é o formato aceito nesta fase.
+- [ ] Job de empacotamento Linux no CI e matriz macOS.
+- [ ] Repetir a instalação limpa, upgrade e desinstalação do instalador Windows.
 
 ### Rodada #007 - 2026-11-11 (validação pós-2.7.0: A/B live, LIB-M-01 e instalador)
 - **Commit:** árvore de trabalho sobre `0027182` (2.7.0 + scripts de validação e documentação)
@@ -58,7 +90,7 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 - [x] Medição de mecanismos dos interruptores experimentais (`pathServing`, `traversal`, `bridges`, `routing`) com corpus próprio.
 - [ ] Repetir o corpus de interruptores em projetos reais e medir qualidade/custo de `routing.mode=binary` com o modelo escolhido.
 - [x] Confirmação de 3 repetições do `memory.gate` com Jev (`run 2026-11-12`, 120 execuções por suíte).
-- [ ] Pacote Linux e matriz de CI Linux/macOS.
+- [x] Pacote Linux validado em Ubuntu 24.04/WSL2 (Rodada #008); matriz de CI Linux está no `native-linux`, macOS continua pendente.
 
 ### Rodada #006 - 2026-11-10 (pré-release 2.7.0, correções da memória)
 - **Commit:** árvore de validação pré-release `2.7.0` (hash do merge registrado no GitHub)

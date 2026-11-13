@@ -1,6 +1,6 @@
 # Pendências do projeto Arestrix
 
-> **Versão:** 2.8.0 · **Atualizado em:** 2026-11-11
+> **Versão:** 2.9.0 · **Atualizado em:** 2026-11-13
 >
 > Documento único de pendências do projeto. O plano de memória (Fases A–C) e o
 > multigrafo avançado (Fase D / E11–E20) estão concluídos. As pendências
@@ -278,7 +278,7 @@ observação e otimização contínua:
   Arestrix, smoke dos binários, abertura do Studio, upgrade 2.1.0-beta.1 → 2.7.0 preservando
   projeto do usuário e desinstalação completa. Faltam uma máquina realmente limpa (apenas o
   runtime VC++) e Intune/SCCM.
-- Pacote Linux e matriz de CI Linux/macOS.
+- Pacote Linux validado (tarball `linux-x64`) e CI Linux no job `native-linux`; matriz macOS pendente.
 - Catálogo remoto assinado.
 
 ## 6. Fase D encerrada
