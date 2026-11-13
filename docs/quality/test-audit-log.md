@@ -30,7 +30,8 @@ Para garantir clareza executiva e cobertura técnica aprofundada, as suítes de 
 
 ### Rodada #008 - 2026-11-13 (validação e release Linux 2.9.0)
 
-- **Commit:** branch `chore/linux-release-validation` sobre `ff44b63` (pós-2.8.0), publicado como `v2.9.0`
+- **Commit:** branch `chore/linux-release-validation` sobre `ff44b63` (pós-2.8.0); merge `fb073a0`, publicado como `v2.9.0`
+- **Release:** [v2.9.0](https://github.com/frankalcantara/Arestrix/releases/tag/v2.9.0) (Windows x64 e Linux x64)
 - **Status Geral:** `APROVADO NO ESCOPO AUTOMATIZADO, GUI E PACOTE LOCAL; CI REMOTO E EMPACOTAMENTO LINUX NO CI PENDENTES`
 - **Ambiente de Teste:** Ubuntu 24.04.5 LTS em WSL2 (kernel 6.6.87.2) | GCC 13.3.0 | CMake 3.28.3 | Ninja 1.11.1 | Node.js 24.22.3 | npm 11.19.1 | Python 3.12.3 | WSLg (`DISPLAY=:0`)
 
