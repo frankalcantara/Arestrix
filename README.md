@@ -38,20 +38,24 @@
 
 ## Try it without building
 
-Download the ready-to-run **Windows x64** build from
-[**Releases → latest**](https://github.com/frankalcantara/Arestrix/releases/tag/latest):
+Download the ready-to-run **Windows x64** or **Linux x64** build from
+[**Releases**](https://github.com/frankalcantara/Arestrix/releases/latest):
 
-- **Installer (recommended):** run `arestrix-<version>-windows-x64-setup.exe`. It installs per user
-  in `%LOCALAPPDATA%\Programs\Arestrix` without administrator rights and checks WebView2, the
-  Visual C++ Redistributable, Git/GitHub credentials, MSVC Build Tools and provider API keys without
-  exposing their values.
-- **Portable:** extract the ZIP to any folder and run `start-arestrix.bat`. The extracted folder
-  becomes `ARESTRIX_HOME`.
+- **Windows installer (recommended):** run `arestrix-<version>-windows-x64-setup.exe`. It installs
+  per user in `%LOCALAPPDATA%\Programs\Arestrix` without administrator rights and checks WebView2,
+  the Visual C++ Redistributable, Git/GitHub credentials, MSVC Build Tools and provider API keys
+  without exposing their values.
+- **Windows portable:** extract the ZIP to any folder and run `start-arestrix.bat`. The extracted
+  folder becomes `ARESTRIX_HOME`.
+- **Linux:** verify `arestrix-<version>-linux-x64.tar.gz.sha256`, extract the tarball and run
+  `./arestrix`. The Studio window needs GTK 3 and WebKitGTK 4.1; the CLI, gateway and CPU runtime
+  work without them.
 
 The CLI is installed with the Studio (`arestrix-cli.exe`). Compiling pipelines additionally requires
 the MSVC Build Tools ("Desktop development with C++"); the package does not bundle a compiler.
-Every build ships `SHA256SUMS`, `SBOM.json` and a per-file `package-manifest.json`. `latest` is a
-rolling pre-release built from `main`; version tags publish stable releases.
+Every build ships `SHA256SUMS`, `SBOM.json` and a per-file `package-manifest.json`. The rolling
+`latest` pre-release carries the Windows build from `main`; version tags publish stable Windows and
+Linux releases.
 
 ## What is Arestrix?
 

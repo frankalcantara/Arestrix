@@ -38,20 +38,24 @@
 
 ## Teste sem compilar
 
-Baixe o build **Windows x64** pronto em
-[**Releases → latest**](https://github.com/frankalcantara/Arestrix/releases/tag/latest):
+Baixe o build **Windows x64** ou **Linux x64** pronto em
+[**Releases**](https://github.com/frankalcantara/Arestrix/releases/latest):
 
-- **Instalador (recomendado):** execute `arestrix-<versão>-windows-x64-setup.exe`. Ele instala por
-  usuário em `%LOCALAPPDATA%\Programs\Arestrix`, sem privilégios administrativos, e verifica WebView2,
-  Visual C++ Redistributable, Git/credencial GitHub, MSVC Build Tools e chaves de API sem expor os
-  valores.
-- **Portátil:** extraia o ZIP em qualquer pasta e execute `start-arestrix.bat`. A pasta extraída vira
-  o `ARESTRIX_HOME`.
+- **Instalador Windows (recomendado):** execute `arestrix-<versão>-windows-x64-setup.exe`. Ele instala
+  por usuário em `%LOCALAPPDATA%\Programs\Arestrix`, sem privilégios administrativos, e verifica
+  WebView2, Visual C++ Redistributable, Git/credencial GitHub, MSVC Build Tools e chaves de API sem
+  expor os valores.
+- **Portátil Windows:** extraia o ZIP em qualquer pasta e execute `start-arestrix.bat`. A pasta
+  extraída vira o `ARESTRIX_HOME`.
+- **Linux:** confira `arestrix-<versão>-linux-x64.tar.gz.sha256`, extraia o tarball e execute
+  `./arestrix`. A janela do Studio exige GTK 3 e WebKitGTK 4.1; CLI, gateway e runtime em CPU
+  funcionam sem elas.
 
 O CLI é instalado junto com o Studio (`arestrix-cli.exe`). Para compilar pipelines, instale também o
 MSVC Build Tools ("Desenvolvimento para Desktop com C++"); o pacote não inclui compilador. Cada build
-publica `SHA256SUMS`, `SBOM.json` e `package-manifest.json` com hash por arquivo. `latest` é um
-pré-release contínuo gerado a partir da `main`; tags de versão publicam releases estáveis.
+publica `SHA256SUMS`, `SBOM.json` e `package-manifest.json` com hash por arquivo. O `latest` é um
+pré-release contínuo com o build Windows gerado a partir da `main`; tags de versão publicam releases
+estáveis para Windows e Linux.
 
 ## O que é o Arestrix?
 
