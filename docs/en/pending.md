@@ -3,7 +3,7 @@
 > Memory-specific pending work, including context compaction backed by existing
 > memory, is tracked in [Memory pending items](memory-pending.md).
 
-> **Version:** 2.9.0 · **Updated:** 2026-11-13
+> **Version:** 2.10.0 · **Updated:** 2026-11-13
 >
 > Single project-wide pending list. The memory implementation plan (Phases A-C) and the advanced
 > multigraph (Phase D / E11-E20) are complete. The remaining items are operational, performance and release tasks.
@@ -267,7 +267,8 @@ observation and optimization loop:
   Arestrix, binary smoke tests, Studio launch, upgrade 2.1.0-beta.1 -> 2.7.0 preserving a user
   project and full uninstall. A truly clean machine (only the VC++ runtime) and Intune/SCCM are
   still pending.
-- Linux package validated (`linux-x64` tarball) and Linux CI in the `native-linux` job; macOS matrix pending.
+- Linux package validated (`linux-x64` tarball and amd64 `.deb`) and Linux CI in the `native-linux`
+  job, which also builds the `.deb`; AppImage and macOS matrix pending.
 - Signed remote catalog.
 
 ## 6. Phase D closed

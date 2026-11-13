@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **Beta 2.3**.
 
+## [2.10.0] - 2026-11-13
+
+### Added
+
+- Debian package (`arestrix_<version>_amd64.deb`) built from the same validated
+  staging tree as the portable package. It installs the portable layout in
+  `/usr/lib/arestrix`, exposes `arestrix`, `arestrix-cli`, `arestrix-gateway`
+  and `arestrix-memory` in `/usr/bin`, adds a desktop entry and hicolor icons,
+  and ships Debian documentation (`copyright`, `changelog.Debian.gz` and links
+  to the README, CHANGELOG and SBOM). `package_release.py --format deb` builds
+  it; `--format both` produces the Linux tarball and the `.deb`. The builder
+  validates the package with `dpkg-deb --info`, `dpkg-deb -x`, CLI/memory smoke
+  tests on the extracted tree and `desktop-file-validate`. The `native-linux`
+  CI job now builds and validates the `.deb` on every pull request.
+- Linux install instructions for Debian/Ubuntu in both READMEs and the release
+  guide.
+
+### Changed
+
+- Debian metadata declares `libc6 (>= 2.38)`, `libstdc++6 (>= 13)` and
+  `libgcc-s1`, with GTK 3/WebKitGTK 4.1 and a C++ compiler as recommends. The
+  builder reads the GLIBC/GLIBCXX symbols referenced by the binaries and
+  refuses to package when `control` understates them.
+
 ## [2.9.0] - 2026-11-13
 
 ### Added

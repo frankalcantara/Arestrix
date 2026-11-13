@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <b>2.9.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentação</a>
+  <b>2.10.0</b> &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a> &nbsp;·&nbsp; <a href="docs/README.md">Documentação</a>
 </p>
 
 <p align="center">
@@ -47,12 +47,15 @@ Baixe o build **Windows x64** ou **Linux x64** pronto em
   expor os valores.
 - **Portátil Windows:** extraia o ZIP em qualquer pasta e execute `start-arestrix.bat`. A pasta
   extraída vira o `ARESTRIX_HOME`.
-- **Linux:** confira `arestrix-<versão>-linux-x64.tar.gz.sha256`, extraia o tarball e execute
-  `./arestrix`. A janela do Studio exige GTK 3 e WebKitGTK 4.1; CLI, gateway e runtime em CPU
-  funcionam sem elas.
+- **Linux (Debian/Ubuntu):** instale `arestrix_<versão>_amd64.deb` com
+  `sudo apt install ./arestrix_<versão>_amd64.deb`. Ele instala em `/usr/lib/arestrix`, coloca
+  `arestrix` no `PATH` e adiciona uma entrada no menu; a janela do Studio exige GTK 3 e WebKitGTK 4.1.
+- **Linux portátil:** confira `arestrix-<versão>-linux-x64.tar.gz.sha256`, extraia o tarball e
+  execute `./arestrix`. CLI, gateway e runtime em CPU funcionam sem GTK/WebKit.
 
-O CLI é instalado junto com o Studio (`arestrix-cli.exe`). Para compilar pipelines, instale também o
-MSVC Build Tools ("Desenvolvimento para Desktop com C++"); o pacote não inclui compilador. Cada build
+No Windows, o CLI é instalado junto com o Studio (`arestrix-cli.exe`); o `.deb` coloca
+`arestrix-cli` no `PATH`. Para compilar pipelines, instale também o compilador da plataforma (MSVC
+Build Tools no Windows, g++/clang++ no Linux); o pacote não inclui compilador. Cada build
 publica `SHA256SUMS`, `SBOM.json` e `package-manifest.json` com hash por arquivo. O `latest` é um
 pré-release contínuo com o build Windows gerado a partir da `main`; tags de versão publicam releases
 estáveis para Windows e Linux.
@@ -189,12 +192,12 @@ python scripts/e2e_examples.py
 
 ## Status do projeto
 
-O **Arestrix 2.9.0** é o release atual (2026-11-13). O Studio roda no Windows e no Linux;
-programas gerados a partir de um grafo atualmente têm o Windows como alvo. APIs, formatos de
-arquivo e flags de linha de comando ainda podem mudar entre releases menores. Consulte o
-[changelog](CHANGELOG.md) para as limitações atuais. O instalador Windows está incluído e o tarball
-portátil Linux é gerado e validado; validação em máquina limpa, instaladores Linux `.deb`/AppImage e a
-matriz macOS ainda estão pendentes. Acompanhe no [registro de auditoria de testes](docs/quality/test-audit-log.md) e no
+O **Arestrix 2.10.0** é o release atual (2026-11-13). O Studio roda no Windows e no Linux;
+os pipelines gerados compilam com o toolchain da plataforma. APIs, formatos de arquivo e flags de
+linha de comando ainda podem mudar entre releases menores. Consulte o
+[changelog](CHANGELOG.md) para as limitações atuais. O instalador Windows e o tarball e o `.deb`
+Linux são gerados e validados; validação em máquina limpa, o AppImage Linux e a matriz macOS ainda
+estão pendentes. Acompanhe no [registro de auditoria de testes](docs/quality/test-audit-log.md) e no
 [plano de testes do Beta 2.3](docs/quality/beta2.3-test-plan.md). Os artefatos Windows são publicados com hashes e manifesto; consulte a [política de privacidade](PRIVACY.md).
 
 ## Segurança

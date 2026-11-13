@@ -1,6 +1,6 @@
 # Roadmap and known limitations
 
-> **Applies to:** Arestrix 2.9 (`2.9.0`) · Last reviewed: 2026-11-13
+> **Applies to:** Arestrix 2.10 (`2.10.0`) · Last reviewed: 2026-11-13
 >
 > This page records what is intentionally incomplete and the order we plan to address it. It is not a
 > commitment to dates.
@@ -31,14 +31,16 @@
   under WSLg. Evidence in the [release gate](release.md) and the
   [test audit log](../quality/test-audit-log.md).
 - The `native-linux` job is a required check (ruleset `main-protection`) and covers the native build,
-  CTest, gateway smoke and the tutorial/examples E2E in `ci.yml`.
-- The release matrix does not cover macOS yet and there is no Linux packaging job in CI.
+  CTest, gateway smoke, the tutorial/examples E2E and the `.deb` build/smoke in `ci.yml`.
+- The release matrix does not cover macOS yet; CI validates the `.deb`, but no job publishes Linux
+  artifacts automatically.
 
 ### Distribution
 
-- The portable package (5B1) is implemented; the `linux-x64` tarball was generated, extracted and
-  validated outside the checkout on 2026-11-13. `.deb`/AppImage installers were not implemented: the
-  tarball is the accepted Linux format for this phase.
+- The portable package (5B1) and the Debian package (5B2 Linux) are implemented. The `linux-x64`
+  tarball and the amd64 `.deb` were generated, extracted and validated outside the checkout on
+  2026-11-13; the `.deb` installs under `/usr/lib/arestrix`, creates `/usr/bin` shortcuts and adds a
+  desktop entry. The AppImage remains pending.
 - A signed remote catalog/manifest (Ed25519/minisign) is not implemented. The embedded catalog is
   protected by the application binary; remote updates need a key pair and hosting decision.
 - Runtime upgrades are tied to an application version because the manifest is embedded.
@@ -208,11 +210,12 @@ Pending after the `2.1.0-beta.1` pre-release:
 
 1. **Linux + CI**
    - [x] Linux build, CPU llama.cpp runtime, router, gateway and E2E.
-   - [x] `linux-x64` tarball and a `native-linux` job with gateway smoke and E2E.
-   - [ ] macOS matrix and automated catalog/manifest validation.
+   - [x] `linux-x64` tarball, amd64 `.deb` and a `native-linux` job with gateway smoke, E2E and
+         Debian packaging.
+   - [ ] AppImage, macOS matrix and automated catalog/manifest validation.
 
 2. **Final distribution**
-   - Choose and implement installer packaging.
+   - Implement the AppImage and finish clean-machine validation of the installers.
    - Define the catalog signing key pair, custody, rotation and hosting.
    - Publish checksums, notices and release notes.
 
