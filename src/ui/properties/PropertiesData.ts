@@ -11,6 +11,7 @@ import { sanitizeEnvReferences } from '../../core/env/EnvironmentManager.ts';
 import type { CanvasBackground } from '../../view/CanvasPreferences.ts';
 import type { IProjectSettings, IResolvedSettings, IStudioCredentialsSnapshot, IStudioModelSettings, IStudioSettings, IWorkspaceSettings } from '../../core/settings/types.ts';
 import { t } from '../../i18n/index.ts';
+import type { IGitStatusResult } from '../../core/git/GitSyncManager.ts';
 import type {
   IPropertiesScopeConfig,
   IPropertySection,
@@ -36,6 +37,8 @@ export interface IPropertiesContext {
   saveStudio?: (values: Record<string, string>) => Promise<boolean>;
   saveStudioModel?: (values: Record<string, string>) => Promise<boolean>;
   saveStudioCredentials?: (values: Record<string, string>) => Promise<boolean>;
+  saveStudioGit?: (values: Record<string, string>) => Promise<boolean>;
+  gitStatus?: IGitStatusResult;
   saveWorkspace?: (values: Record<string, string>) => Promise<boolean>;
   saveProject?: (values: Record<string, string>) => Promise<boolean>;
   saveProjectDefaults?: (values: Record<string, string>) => Promise<boolean>;
@@ -252,6 +255,8 @@ function buildStudio(context: IPropertiesContext): IPropertiesScopeConfig {
     || (hasWindow ? (localStorage.getItem('arestrix_canvas_background') || 'light') : 'light');
   const sources = context.libraryRegistry?.listSources() || [];
   const enabledSources = sources.filter(source => source.enabled);
+  const gitStatus = context.gitStatus;
+  const gitAuthenticated = !!gitStatus?.accountUsername || (gitStatus?.gcmAccounts?.length ?? 0) > 0;
 
   return {
     scope: 'studio',
@@ -379,6 +384,58 @@ function buildStudio(context: IPropertiesContext): IPropertiesScopeConfig {
         ]
       }),
       section({
+        id: 'git-account',
+        title: label('section.git_account', 'Conta Git'),
+        description: label('studio.git_account_desc', 'Identidade do Git e autenticação no cofre do sistema operacional.'),
+        icon: 'git',
+        badge: label('badge.global', 'Global'),
+        content: `
+          ${note(label('studio.git_identity_hint', 'A senha ou token permanece exclusivamente no Git Credential Manager. A identidade abaixo é global e vale para todos os projetos.'), 'info')}
+          <div class="properties-form-grid">
+            <div class="form-row-grid">
+              <div class="form-group">
+                <label class="form-label" for="properties-git-user-name">${escapeHtml(label('label.git_user_name', 'Nome do usuário (user.name)'))}</label>
+                <input id="properties-git-user-name" class="form-input" type="text" data-property-input="userName" value="${escapeHtml(gitStatus?.userName || '')}" placeholder="${escapeHtml(label('studio.git_user_name_placeholder', 'Nome exibido nos commits'))}" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="properties-git-user-email">${escapeHtml(label('label.git_user_email', 'E-mail do usuário (user.email)'))}</label>
+                <input id="properties-git-user-email" class="form-input" type="email" data-property-input="userEmail" value="${escapeHtml(gitStatus?.userEmail || '')}" placeholder="usuario@example.com" />
+              </div>
+            </div>
+          </div>
+          ${grid([
+            row(label('label.git_installed', 'Git'), toneBadge(
+              gitStatus?.gitInstalled
+                ? `${label('value.installed', 'Instalado')}${gitStatus.gitVersion ? ' ' + gitStatus.gitVersion : ''}`
+                : label('value.git_not_installed', 'Não instalado'),
+              gitStatus?.gitInstalled ? 'success' : 'danger'
+            )),
+            row(label('label.git_identity_status', 'Identidade'), toneBadge(
+              gitStatus?.isIdentityConfigured ? label('value.configured', 'Configurada') : label('value.not_configured', 'Não configurada'),
+              gitStatus?.isIdentityConfigured ? 'success' : 'warning'
+            )),
+            row(label('label.git_authenticated_account', 'Conta autenticada'), gitStatus?.accountUsername
+              ? toneBadge(gitStatus.accountUsername, 'success')
+              : toneBadge(label('value.git_not_authenticated', 'Não autenticada'), 'warning')),
+            row(label('label.git_vault_accounts', 'Contas no cofre'), (gitStatus?.gcmAccounts?.length ?? 0) > 0
+              ? gitStatus!.gcmAccounts.map(account => toneBadge(account, 'neutral')).join(' ')
+              : muted(label('value.git_no_accounts', 'Nenhuma conta')))
+          ])}
+        `,
+        save: context.saveStudioGit
+          ? (values) => context.saveStudioGit!(values)
+          : undefined,
+        actions: [
+          {
+            id: 'studio.git-login',
+            label: gitAuthenticated
+              ? label('action.git_switch_account', 'Trocar conta')
+              : label('action.git_login', 'Efetuar login'),
+            kind: 'primary'
+          }
+        ]
+      }),
+      section({
         id: 'integrations',
         title: label('section.integrations', 'Integrações'),
         description: label('studio.integrations_desc', 'Conta Git, fontes de repositório e bibliotecas de assets.'),
@@ -388,7 +445,9 @@ function buildStudio(context: IPropertiesContext): IPropertiesScopeConfig {
           ${grid([
             row(label('label.github_repositories', 'Fontes de repositório'), `${escapeHtml(String(enabledSources.length))} / ${escapeHtml(String(sources.length))} ${label('value.active_plural', 'ativas')}`),
             row(label('label.libraries', 'Bibliotecas'), escapeHtml(String((context.libraryRegistry?.list('studio') || []).length))),
-            row(label('label.git_identity', 'Identidade Git'), toneBadge(label('value.managed_elsewhere', 'Gerenciada em conta Git'), 'neutral'))
+            row(label('label.git_identity', 'Identidade Git'), gitStatus?.isIdentityConfigured
+              ? toneBadge(`${gitStatus.userName || ''}${gitStatus.userEmail ? ` <${gitStatus.userEmail}>` : ''}`.trim() || label('value.configured', 'Configurada'), 'success')
+              : toneBadge(label('value.not_configured', 'Não configurada'), 'warning'))
           ])}
           ${list(enabledSources.map(source => `${escapeHtml(source.name)} <span class="properties-inline-code">${escapeHtml(source.github?.repo || '—')}</span>`), label('value.none', 'Nenhum item configurado.'))}
         `,

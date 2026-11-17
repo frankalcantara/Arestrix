@@ -46,7 +46,7 @@ const context = {
 
 describe('PropertiesData', () => {
   it('builds the three scopes with their expected sections', () => {
-    expect(buildPropertiesScopeConfig('studio', context).sections.map(s => s.id)).toEqual(['general', 'studio-model', 'credentials', 'integrations', 'libraries', 'advanced']);
+    expect(buildPropertiesScopeConfig('studio', context).sections.map(s => s.id)).toEqual(['general', 'studio-model', 'credentials', 'git-account', 'integrations', 'libraries', 'advanced']);
     expect(buildPropertiesScopeConfig('workspace', context).sections.map(s => s.id)).toEqual(['general', 'catalogs', 'libraries', 'sandbox', 'security', 'memory', 'advanced']);
     expect(buildPropertiesScopeConfig('project', context).sections.map(s => s.id)).toEqual(['general', 'pipelines', 'defaults', 'memory', 'compression', 'libraries', 'environment', 'git', 'runner', 'advanced']);
   });
@@ -89,6 +89,34 @@ describe('PropertiesData', () => {
     const credentials = studio.sections.find(section => section.id === 'credentials');
     expect(credentials).toBeDefined();
     expect(credentials?.content).toContain('Nenhum valor secreto');
+  });
+
+  it('expõe a conta Git global nas Propriedades do Studio', () => {
+    const contextWithGit = {
+      ...context,
+      gitStatus: {
+        gitInstalled: true,
+        gitVersion: '2.51.0',
+        userName: 'Frank Coelho de Alcantara',
+        userEmail: 'usuario@example.com',
+        accountUsername: 'frankalcantara',
+        isIdentityConfigured: true,
+        gcmAccounts: ['frankalcantara'],
+        isRepo: false,
+        hasUncommittedChanges: false
+      },
+      saveStudioGit: async () => true
+    } as unknown as IPropertiesContext;
+
+    const studio = buildPropertiesScopeConfig('studio', contextWithGit);
+    const git = studio.sections.find(section => section.id === 'git-account');
+
+    expect(git).toBeDefined();
+    expect(git?.content).toContain('data-property-input="userName"');
+    expect(git?.content).toContain('data-property-input="userEmail"');
+    expect(git?.content).toContain('frankalcantara');
+    expect(git?.actions?.some(action => action.id === 'studio.git-login')).toBe(true);
+    expect(typeof git?.save).toBe('function');
   });
 
   it('expõe criação de bibliotecas e cadastro de fontes nas Propriedades', () => {

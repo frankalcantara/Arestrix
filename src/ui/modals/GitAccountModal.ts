@@ -30,6 +30,7 @@ export class GitAccountModal extends BaseModal {
   private timedPushIntervalMinutes: number = 10;
   private gitEnabled: boolean = false;
   private isProcessing: boolean = false;
+  private isAuthenticating: boolean = false;
   private feedbackMessage: string | null = null;
   private feedbackType: 'success' | 'error' | 'info' = 'info';
 
@@ -57,6 +58,7 @@ export class GitAccountModal extends BaseModal {
   public override async open(): Promise<void> {
     this.feedbackMessage = null;
     this.isProcessing = false;
+    this.isAuthenticating = false;
     const proj = this.projectManager.getCurrentProject();
     const gitConfig = proj.git || {
       enabled: true,
@@ -83,7 +85,32 @@ export class GitAccountModal extends BaseModal {
 
     super.open();
     await this.loadData();
+    this.applyDetectedUsername();
+    this.syncRemoteUrlWithFields();
+    this.render();
+  }
 
+  private getDetectedUsername(): string {
+    if (!this.currentStatus) return '';
+    if (this.provider === 'github') {
+      return this.currentStatus.accountUsername || this.currentStatus.gcmAccounts?.[0] || '';
+    }
+    return this.currentStatus.gcmAccounts?.[0] || '';
+  }
+
+  private isAuthenticated(): boolean {
+    if ((this.currentStatus?.gcmAccounts?.length ?? 0) > 0) return true;
+    return this.provider === 'github' && !!this.currentStatus?.accountUsername;
+  }
+
+  private getAuthenticatedAccount(): string {
+    if (this.provider === 'github' && this.currentStatus?.accountUsername) {
+      return this.currentStatus.accountUsername;
+    }
+    return this.currentStatus?.gcmAccounts?.[0] || this.getDetectedUsername();
+  }
+
+  private applyDetectedUsername(): void {
     // A conta remota é o login da conta (ex.: frankalcantara), nunca o nome de
     // exibição do git config (user.name), que costuma ter espaços e quebra a URL.
     const detectedUsername = this.getDetectedUsername();
@@ -98,15 +125,6 @@ export class GitAccountModal extends BaseModal {
       }
       this.username = detectedUsername;
     }
-    this.render();
-  }
-
-  private getDetectedUsername(): string {
-    if (!this.currentStatus) return '';
-    if (this.provider === 'github') {
-      return this.currentStatus.accountUsername || this.currentStatus.gcmAccounts?.[0] || '';
-    }
-    return this.currentStatus.gcmAccounts?.[0] || '';
   }
 
   private isAccountLogin(value: string): boolean {
@@ -122,6 +140,37 @@ export class GitAccountModal extends BaseModal {
     } catch {
       const sshMatch = remoteUrl.match(/^[^@]+@[^:]+:([^/]+)\//);
       return sshMatch ? sshMatch[1] : '';
+    }
+  }
+
+  private sanitizeRepoName(name: string): string {
+    let clean = '';
+    for (const c of (name || '')) {
+      if (/[A-Za-z0-9._-]/.test(c)) clean += c;
+      else if (c === ' ') clean += '-';
+    }
+    clean = clean.replace(/^[.-]+/, '').replace(/[.-]+$/, '');
+    return clean || 'arestrix-project';
+  }
+
+  private buildComposedRemoteUrl(
+    serverUrl: string = this.serverUrl,
+    username: string = this.username,
+    repositoryName: string = this.repositoryName
+  ): string {
+    const user = (username || '').trim();
+    if (!this.isAccountLogin(user)) return '';
+    const host = ((serverUrl || 'https://github.com').trim().replace(/\/+$/, '')) || 'https://github.com';
+    const repo = this.sanitizeRepoName((repositoryName || '').trim());
+    return `${host}/${user}/${repo}.git`;
+  }
+
+  private syncRemoteUrlWithFields(): void {
+    // A URL remota é sempre derivada dos campos; qualquer valor antigo ou
+    // sobrescrito manualmente é descartado para não gravar uma URL divergente.
+    const composed = this.buildComposedRemoteUrl();
+    if (!composed || this.remoteUrl !== composed) {
+      this.remoteUrl = '';
     }
   }
 
@@ -167,8 +216,7 @@ export class GitAccountModal extends BaseModal {
     const inputRepo = this.dialog.querySelector('#git-input-repo-name') as HTMLInputElement | null;
     if (inputRepo) this.repositoryName = inputRepo.value.trim();
 
-    const inputRemote = this.dialog.querySelector('#git-input-remote-url') as HTMLInputElement | null;
-    if (inputRemote) this.remoteUrl = inputRemote.value.trim();
+    this.syncRemoteUrlWithFields();
 
     const chkRun = this.dialog.querySelector('#git-chk-on-run') as HTMLInputElement | null;
     if (chkRun) this.autoCommitOnRun = chkRun.checked;
@@ -205,6 +253,14 @@ export class GitAccountModal extends BaseModal {
     ` : '';
 
     if (tabId === 'identity') {
+      const gcmAccounts = this.currentStatus?.gcmAccounts ?? [];
+      const authenticated = this.isAuthenticated();
+      const authenticatedAccount = this.getAuthenticatedAccount();
+      const identityManaged = !!this.currentStatus?.isIdentityConfigured;
+      const shownAccounts = authenticated && authenticatedAccount && !gcmAccounts.includes(authenticatedAccount)
+        ? [...gcmAccounts, authenticatedAccount]
+        : gcmAccounts;
+
       return `
         <div style="padding: 16px 20px; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; color: #323130;">
           
@@ -225,15 +281,6 @@ export class GitAccountModal extends BaseModal {
             </label>
           </div>
 
-          <!-- CALLOUT DE SEGURANÇA E PRIVACIDADE -->
-          <div style="margin-bottom: 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 4px; padding: 12px 16px; display: flex; align-items: flex-start; gap: 12px;">
-            <span style="font-size: 20px; line-height: 1;">🛡️</span>
-            <div style="font-size: 12px; color: #166534; line-height: 1.45;">
-              <strong style="font-weight: 700;">${t('git_sync.security_rule_title', 'Segurança Absoluta de Credenciais:')}</strong>
-              ${t('git_sync.security_rule_desc', 'Nenhum dado de senha ou token é registrado no Arestrix. O processo de autenticação é executado e mantido exclusivamente pelo cofre seguro do seu Sistema Operacional (Git Credential Manager / Windows Credential Locker).')}
-            </div>
-          </div>
-
           ${feedbackHtml}
 
           <!-- IDENTIDADE NO SISTEMA OPERACIONAL -->
@@ -247,23 +294,47 @@ export class GitAccountModal extends BaseModal {
               </span>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: flex-end;">
-              <div>
-                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
-                  ${t('git_sync.user_name_label', 'Nome do Usuário (user.name):')}
-                </label>
-                <input type="text" id="git-input-user-name" class="office-input" value="${this.escapeHtml(this.identityName)}" placeholder="ex: Seu Nome" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #d2d0ce; border-radius: 4px; box-sizing: border-box;">
+            ${identityManaged ? `
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div>
+                  <div style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
+                    ${t('git_sync.user_name_label', 'Nome do Usuário (user.name):')}
+                  </div>
+                  <div style="min-height: 32px; padding: 6px 8px; font-size: 12px; color: #201f1e; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; box-sizing: border-box;">
+                    <strong>${this.escapeHtml(this.identityName || '—')}</strong>
+                  </div>
+                </div>
+                <div>
+                  <div style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
+                    ${t('git_sync.user_email_label', 'E-mail do Usuário (user.email):')}
+                  </div>
+                  <div style="min-height: 32px; padding: 6px 8px; font-size: 12px; color: #201f1e; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; box-sizing: border-box; word-break: break-all;">
+                    <strong>${this.escapeHtml(this.identityEmail || '—')}</strong>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
-                  ${t('git_sync.user_email_label', 'E-mail do Usuário (user.email):')}
-                </label>
-                <input type="email" id="git-input-user-email" class="office-input" value="${this.escapeHtml(this.identityEmail)}" placeholder="ex: seu.email@exemplo.com" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #d2d0ce; border-radius: 4px; box-sizing: border-box;">
+              <p style="margin: 10px 0 0 0; font-size: 11px; color: #0f6cbd; line-height: 1.4;">
+                ${t('git_sync.identity_managed_in_studio', 'Identidade definida nas Propriedades do Studio. Altere por lá.')}
+              </p>
+            ` : `
+              <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: flex-end;">
+                <div>
+                  <label style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
+                    ${t('git_sync.user_name_label', 'Nome do Usuário (user.name):')}
+                  </label>
+                  <input type="text" id="git-input-user-name" class="office-input" value="${this.escapeHtml(this.identityName)}" placeholder="ex: Seu Nome" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #d2d0ce; border-radius: 4px; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
+                    ${t('git_sync.user_email_label', 'E-mail do Usuário (user.email):')}
+                  </label>
+                  <input type="email" id="git-input-user-email" class="office-input" value="${this.escapeHtml(this.identityEmail)}" placeholder="ex: seu.email@exemplo.com" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #d2d0ce; border-radius: 4px; box-sizing: border-box;">
+                </div>
+                <button id="btn-save-os-identity" class="tool-btn btn-secondary" style="height: 32px; padding: 0 14px; font-size: 11.5px; font-weight: 600; white-space: nowrap;">
+                  ${t('git_sync.btn_save_identity', 'Gravar no SO')}
+                </button>
               </div>
-              <button id="btn-save-os-identity" class="tool-btn btn-secondary" style="height: 32px; padding: 0 14px; font-size: 11.5px; font-weight: 600; white-space: nowrap;">
-                ${t('git_sync.btn_save_identity', 'Gravar no SO')}
-              </button>
-            </div>
+            `}
           </div>
 
           <!-- COFRE DO SO (GCM) -->
@@ -275,18 +346,36 @@ export class GitAccountModal extends BaseModal {
               <div>
                 <div style="font-size: 11.5px; color: #605e5c; margin-bottom: 4px;">
                   <strong>${t('git_sync.gcm_accounts_found', 'Contas detectadas no Cofre do SO:')}</strong>
-                  ${this.currentStatus?.gcmAccounts?.length
-                    ? this.currentStatus.gcmAccounts.map(a => `<span style="display: inline-block; background: #edebe9; color: #201f1e; padding: 1px 6px; border-radius: 3px; font-weight: 700; margin-left: 4px;">${this.escapeHtml(a)}</span>`).join('')
+                  ${shownAccounts.length
+                    ? shownAccounts.map(a => `<span style="display: inline-block; background: #edebe9; color: #201f1e; padding: 1px 6px; border-radius: 3px; font-weight: 700; margin-left: 4px;">${this.escapeHtml(a)}</span>`).join('')
                     : `<span style="color: #a19f9d; font-style: italic;"> ${t('git_sync.no_gcm_accounts', 'Nenhuma conta registrada')}</span>`
                   }
                 </div>
                 <div style="font-size: 11px; color: #a19f9d;">
                   ${t('git_sync.gcm_desc', 'O Git Credential Manager gerencia os tokens e senhas com segurança nativa de hardware/SO.')}
                 </div>
+                ${authenticated ? `
+                  <div style="margin-top: 6px; font-size: 11.5px; color: #15803d; font-weight: 700;">
+                    ✓ ${authenticatedAccount
+                      ? t('git_sync.gcm_connected_as', { account: authenticatedAccount }, 'Conectado como {{account}}')
+                      : t('git_sync.gcm_authenticated', 'Autenticado')}
+                  </div>
+                ` : ''}
               </div>
-              <button id="btn-launch-os-login" class="tool-btn btn-action" style="height: 32px; padding: 0 16px; font-size: 11.5px; font-weight: 600; background: #0f6cbd; color: #fff; border-radius: 4px; border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;">
-                ${t('git_sync.btn_launch_login', 'Efetuar login')}
-              </button>
+              ${authenticated ? `
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 230px;">
+                  <button class="tool-btn" disabled style="height: 32px; padding: 0 16px; font-size: 11.5px; font-weight: 600; background: #e1dfdd; color: #605e5c; border-radius: 4px; border: none; cursor: default; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;">
+                    ${t('git_sync.btn_logged_in', 'Conectado')}
+                  </button>
+                  <span style="font-size: 10.5px; color: #a19f9d; text-align: right; line-height: 1.35;">
+                    ${t('git_sync.login_managed_in_studio', 'Autenticação gerenciada nas Propriedades do Studio. Use lá para trocar de conta.')}
+                  </span>
+                </div>
+              ` : `
+                <button id="btn-launch-os-login" class="tool-btn btn-action" ${this.isAuthenticating ? 'disabled' : ''} style="height: 32px; padding: 0 16px; font-size: 11.5px; font-weight: 600; background: ${this.isAuthenticating ? '#e1dfdd' : '#0f6cbd'}; color: ${this.isAuthenticating ? '#605e5c' : '#fff'}; border-radius: 4px; border: none; cursor: ${this.isAuthenticating ? 'default' : 'pointer'}; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;">
+                  ${this.isAuthenticating ? t('git_sync.login_in_progress', 'Autenticando...') : t('git_sync.btn_launch_login', 'Efetuar login')}
+                </button>
+              `}
             </div>
           </div>
         </div>
@@ -294,6 +383,9 @@ export class GitAccountModal extends BaseModal {
     }
 
     if (tabId === 'repository') {
+      const remoteUrlPreview = this.buildComposedRemoteUrl();
+      const remoteUrlIncomplete = t('git_sync.remote_url_preview_incomplete', 'Informe a conta e o nome do repositório para gerar a URL.');
+      const accountManaged = this.isAuthenticated();
       return `
         <div style="padding: 16px 20px; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; color: #323130;">
           ${feedbackHtml}
@@ -328,10 +420,19 @@ export class GitAccountModal extends BaseModal {
                 <label style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
                   ${t('git_sync.account_username_label', 'Conta / Usuário Remoto:')}
                 </label>
-                <input type="text" id="git-input-username" class="office-input" value="${this.escapeHtml(this.username)}" placeholder="ex: usuario" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #d2d0ce; border-radius: 4px; box-sizing: border-box;">
-                <span style="display: block; font-size: 10.5px; color: #a19f9d; margin-top: 3px;">
-                  ${t('git_sync.account_username_tip', 'Usado apenas para compor a URL remota (ex: github.com/usuario/repo). Sem senhas.')}
-                </span>
+                ${accountManaged ? `
+                  <div style="min-height: 32px; padding: 6px 8px; font-size: 12px; color: #201f1e; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; box-sizing: border-box; word-break: break-all;">
+                    <strong>${this.escapeHtml(this.username || '—')}</strong>
+                  </div>
+                  <span style="display: block; font-size: 10.5px; color: #0f6cbd; margin-top: 3px;">
+                    ${t('git_sync.account_managed_in_studio', 'Conta definida nas Propriedades do Studio.')}
+                  </span>
+                ` : `
+                  <input type="text" id="git-input-username" class="office-input" value="${this.escapeHtml(this.username)}" placeholder="ex: usuario" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #d2d0ce; border-radius: 4px; box-sizing: border-box;">
+                  <span style="display: block; font-size: 10.5px; color: #a19f9d; margin-top: 3px;">
+                    ${t('git_sync.account_username_tip', 'Usado apenas para compor a URL remota (ex: github.com/usuario/repo). Sem senhas.')}
+                  </span>
+                `}
               </div>
               <div>
                 <label style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
@@ -340,16 +441,11 @@ export class GitAccountModal extends BaseModal {
                 <input type="text" id="git-input-repo-name" class="office-input" value="${this.escapeHtml(this.repositoryName)}" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #d2d0ce; border-radius: 4px; box-sizing: border-box;">
               </div>
             </div>
-          </div>
 
-          <div style="background: #ffffff; border: 1px solid #edebe9; border-radius: 4px; padding: 16px;">
-            <label style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
-              ${t('git_sync.remote_url_label', 'URL Remota Git (Opcional - sobrescreve a geração automática):')}
-            </label>
-            <input type="text" id="git-input-remote-url" class="office-input" value="${this.escapeHtml(this.remoteUrl)}" placeholder="ex: https://github.com/usuario/projeto.git" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #d2d0ce; border-radius: 4px; box-sizing: border-box;">
-            <span style="display: block; font-size: 10.5px; color: #a19f9d; margin-top: 3px;">
-              ${t('git_sync.remote_url_hint', 'Deixe em branco para conectar automaticamente ao repositório baseado no usuário e nome informados.')}
-            </span>
+            <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid #edebe9; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;">
+              <span style="font-size: 11px; color: #605e5c;">${t('git_sync.remote_url_label', 'URL Remota Git:')}</span>
+              <strong id="git-remote-url-preview" style="font-size: 11.5px; font-weight: 700; color: ${remoteUrlPreview ? '#201f1e' : '#a19f9d'}; font-style: ${remoteUrlPreview ? 'normal' : 'italic'}; word-break: break-all;">${this.escapeHtml(remoteUrlPreview || remoteUrlIncomplete)}</strong>
+            </div>
           </div>
         </div>
       `;
@@ -439,16 +535,26 @@ export class GitAccountModal extends BaseModal {
   }
 
   protected override renderFooter(): string {
+    const securityTitle = t('git_sync.security_rule_title', 'Segurança Absoluta de Credenciais:');
     return this.renderStandardFooter({
       primaryLabel: this.isProcessing ? t('common.loading', 'Processando...') : t('git_sync.btn_save_and_sync', 'Salvar & Sincronizar Agora'),
       primaryId: 'btn-git-save-and-sync',
       secondaryLabel: t('common.cancel', 'Cancelar'),
       secondaryId: 'btn-git-cancel',
       extraHtml: `
-        <div style="font-size: 11px; color: #605e5c; display: flex; align-items: center; gap: 6px;">
-          <span>🔒</span>
-          <span>${t('git_sync.zero_secrets_label', 'Sem senhas ou credenciais no Arestrix')}</span>
-        </div>
+        <details class="git-security-help">
+          <summary id="btn-git-security-info" class="git-security-trigger" title="${this.escapeHtml(securityTitle)}">
+            <svg class="git-security-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <span>${t('git_sync.zero_secrets_label', 'Sem senhas ou credenciais no Arestrix')}</span>
+          </summary>
+          <div id="git-security-popover" class="git-security-popover" role="dialog" aria-label="${this.escapeHtml(securityTitle)}">
+            <strong style="display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 6px;">${securityTitle}</strong>
+            <div>${t('git_sync.security_rule_desc', 'Nenhum dado de senha ou token é registrado no Arestrix. O processo de autenticação é executado e mantido exclusivamente pelo cofre seguro do seu Sistema Operacional (Git Credential Manager / Windows Credential Locker).')}</div>
+          </div>
+        </details>
       `
     });
   }
@@ -467,6 +573,9 @@ export class GitAccountModal extends BaseModal {
       if (res.ok) {
         this.identityName = name;
         this.identityEmail = email;
+        await this.loadData();
+        this.applyDetectedUsername();
+        this.syncRemoteUrlWithFields();
         this.feedbackMessage = t('git_sync.identity_saved_success', 'Identidade do Git gravada no Sistema Operacional com sucesso!');
         this.feedbackType = 'success';
       } else {
@@ -477,31 +586,64 @@ export class GitAccountModal extends BaseModal {
     });
 
     // 2. Disparar Login no SO (Git Credential Manager)
-    const btnLogin = this.dialog.querySelector('#btn-launch-os-login') as HTMLButtonElement | null;
-    btnLogin?.addEventListener('click', async () => {
+    const handleLogin = async () => {
+      if (this.isAuthenticating) return;
       const provider = this.provider || 'github';
-      if (btnLogin) btnLogin.disabled = true;
+      this.isAuthenticating = true;
       this.feedbackMessage = t('git_sync.login_launching', 'Abrindo assistente de autenticação seguro no Sistema Operacional...');
       this.feedbackType = 'info';
       this.render();
 
       const res = await this.gitManager.launchGcmLogin(provider);
-      if (btnLogin) btnLogin.disabled = false;
+      this.isAuthenticating = false;
       if (res.ok) {
-        this.feedbackMessage = t('git_sync.login_success', 'Autenticação no SO concluída com sucesso!');
+        await this.loadData();
+        this.applyDetectedUsername();
+        this.syncRemoteUrlWithFields();
+        const account = this.getAuthenticatedAccount();
+        this.feedbackMessage = account
+          ? t('git_sync.login_success_account', { account }, `Autenticação concluída como ${account}.`)
+          : t('git_sync.login_success', 'Autenticação no SO concluída com sucesso!');
         this.feedbackType = 'success';
       } else {
         this.feedbackMessage = res.error || t('git_sync.login_error', 'Processo de login encerrado ou pendente no SO.');
         this.feedbackType = 'error';
       }
-      await this.loadData();
       this.render();
-    });
+    };
+
+    const btnLogin = this.dialog.querySelector('#btn-launch-os-login') as HTMLButtonElement | null;
+    btnLogin?.addEventListener('click', handleLogin);
 
     // 3. Atualizar provedor ou serverUrl dinamicamente para sincronizar campos
+    const updateRemoteUrlPreview = () => {
+      const inputServer = this.dialog?.querySelector('#git-input-server-url') as HTMLInputElement | null;
+      const inputUser = this.dialog?.querySelector('#git-input-username') as HTMLInputElement | null;
+      const inputRepo = this.dialog?.querySelector('#git-input-repo-name') as HTMLInputElement | null;
+      const preview = this.buildComposedRemoteUrl(
+        inputServer?.value ?? this.serverUrl,
+        inputUser?.value ?? this.username,
+        inputRepo?.value ?? this.repositoryName
+      );
+      const target = this.dialog?.querySelector('#git-remote-url-preview') as HTMLElement | null;
+      if (!target) return;
+      target.textContent = preview || t('git_sync.remote_url_preview_incomplete', 'Informe a conta e o nome do repositório para gerar a URL.');
+      target.style.color = preview ? '#201f1e' : '#a19f9d';
+      target.style.fontStyle = preview ? 'normal' : 'italic';
+    };
+    this.dialog.querySelector('#git-input-server-url')?.addEventListener('input', updateRemoteUrlPreview);
+    this.dialog.querySelector('#git-input-username')?.addEventListener('input', updateRemoteUrlPreview);
+    this.dialog.querySelector('#git-input-repo-name')?.addEventListener('input', updateRemoteUrlPreview);
+
     const selProvider = this.dialog.querySelector('#git-select-provider') as HTMLSelectElement | null;
     selProvider?.addEventListener('change', () => {
       const prov = selProvider.value as any;
+      const inputServer = this.dialog.querySelector('#git-input-server-url') as HTMLInputElement | null;
+      const inputUser = this.dialog.querySelector('#git-input-username') as HTMLInputElement | null;
+      const inputRepo = this.dialog.querySelector('#git-input-repo-name') as HTMLInputElement | null;
+      if (inputServer) this.serverUrl = inputServer.value.trim();
+      if (inputUser) this.username = inputUser.value.trim();
+      if (inputRepo) this.repositoryName = inputRepo.value.trim();
       this.provider = prov;
       if (prov === 'github') this.serverUrl = 'https://github.com';
       else if (prov === 'gitlab') this.serverUrl = 'https://gitlab.com';
