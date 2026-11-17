@@ -311,9 +311,11 @@ describe('Git Auto-Save & Synchronization System', () => {
 
       expect(loginButton).not.toContain('disabled');
       expect(html).not.toContain('btn-switch-os-account');
+      expect(html).toContain('id="git-input-user-name"');
+      expect(html).toContain('id="git-input-user-email"');
     });
 
-    it('deve desabilitar o login e oferecer troca de conta quando já autenticado', () => {
+    it('deve tornar o login somente leitura quando já autenticado', () => {
       const modal = new GitAccountModal(bus);
       (modal as any).provider = 'github';
       (modal as any).currentStatus = {
@@ -328,11 +330,57 @@ describe('Git Auto-Save & Synchronization System', () => {
       };
 
       const html = (modal as any).renderTabContent('identity');
-      const loginButton = html.match(/<button id="btn-launch-os-login"[^>]*>/)?.[0] || '';
 
-      expect(loginButton).toContain('disabled');
-      expect(html).toContain('btn-switch-os-account');
+      expect(html).not.toContain('id="btn-launch-os-login"');
+      expect(html).not.toContain('btn-switch-os-account');
       expect(html).toContain('frankalcantara');
+      expect(html).toContain(t('git_sync.login_managed_in_studio', 'Autenticação gerenciada nas Propriedades do Studio. Use lá para trocar de conta.'));
+    });
+
+    it('deve mostrar a identidade como somente leitura quando já configurada', () => {
+      const modal = new GitAccountModal(bus);
+      (modal as any).provider = 'github';
+      (modal as any).identityName = 'Frank Coelho de Alcantara';
+      (modal as any).identityEmail = 'usuario@example.com';
+      (modal as any).currentStatus = {
+        gitInstalled: true,
+        isIdentityConfigured: true,
+        gcmAccounts: [],
+        isRepo: false,
+        hasUncommittedChanges: false,
+        hasUnpushedCommits: false,
+        unpushedCommitsCount: 0
+      };
+
+      const html = (modal as any).renderTabContent('identity');
+
+      expect(html).not.toContain('id="git-input-user-name"');
+      expect(html).not.toContain('id="git-input-user-email"');
+      expect(html).toContain('Frank Coelho de Alcantara');
+      expect(html).toContain('usuario@example.com');
+      expect(html).toContain(t('git_sync.identity_managed_in_studio', 'Identidade definida nas Propriedades do Studio. Altere por lá.'));
+    });
+
+    it('deve mostrar a conta remota como somente leitura quando autenticada', () => {
+      const modal = new GitAccountModal(bus);
+      (modal as any).provider = 'github';
+      (modal as any).username = 'frankalcantara';
+      (modal as any).currentStatus = {
+        gitInstalled: true,
+        isIdentityConfigured: true,
+        gcmAccounts: ['frankalcantara'],
+        accountUsername: 'frankalcantara',
+        isRepo: false,
+        hasUncommittedChanges: false,
+        hasUnpushedCommits: false,
+        unpushedCommitsCount: 0
+      };
+
+      const html = (modal as any).renderTabContent('repository');
+
+      expect(html).not.toContain('id="git-input-username"');
+      expect(html).toContain('frankalcantara');
+      expect(html).toContain(t('git_sync.account_managed_in_studio', 'Conta definida nas Propriedades do Studio.'));
     });
 
     it('deve preencher a conta remota com o login detectado', () => {

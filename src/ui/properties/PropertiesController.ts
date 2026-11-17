@@ -3,6 +3,7 @@ import { Graph } from '../../core/Graph.ts';
 import { ProjectManager } from '../../core/ProjectManager.ts';
 import { WorkspaceManager } from '../../core/workspace/WorkspaceManager.ts';
 import { DEFAULT_PIPELINE_DEFAULTS } from '../../core/types.ts';
+import { GitSyncManager, type IGitStatusResult } from '../../core/git/GitSyncManager.ts';
 import { LibraryRegistry, type LibraryScope } from '../../core/libraries/LibraryRegistry.ts';
 import { LibraryService } from '../../core/libraries/LibraryService.ts';
 import { ProjectLibraryStore } from '../../core/libraries/ProjectLibraryStore.ts';
@@ -42,6 +43,7 @@ export class PropertiesController {
   private readonly libraryService = LibraryService.getInstance();
   private readonly projectLibraryStore = new ProjectLibraryStore();
   private workspaceSettings?: IWorkspaceSettings;
+  private gitManager?: GitSyncManager;
 
   constructor(
     graph: Graph,
@@ -58,6 +60,7 @@ export class PropertiesController {
       saveStudio: values => this.saveStudio(values),
       saveStudioModel: values => this.saveStudioModel(values),
       saveStudioCredentials: values => this.saveStudioCredentials(values),
+      saveStudioGit: values => this.saveStudioGit(values),
       saveWorkspace: values => this.saveWorkspace(values),
       saveProject: values => this.saveProject(values),
       saveProjectDefaults: values => this.saveProjectDefaults(values),
@@ -71,6 +74,11 @@ export class PropertiesController {
     this.projectStore = new ProjectSettingsStore(projectManager, graph);
   }
 
+  private getGitManager(): GitSyncManager {
+    if (!this.gitManager) this.gitManager = GitSyncManager.getInstance();
+    return this.gitManager;
+  }
+
   public async show(scope: PropertiesScope, sectionId?: string): Promise<void> {
     try {
       await this.libraryService.hydrate('workspace');
@@ -78,9 +86,18 @@ export class PropertiesController {
       // O arquivo nativo é opcional; o registro local continua disponível.
     }
     const settings = await this.loadSettings();
+    let gitStatus: IGitStatusResult | undefined;
+    if (scope === 'studio') {
+      try {
+        gitStatus = await this.getGitManager().getStatus();
+      } catch {
+        // O status do Git é opcional; a seção mostra o estado indisponível.
+      }
+    }
     const config = buildPropertiesScopeConfig(scope, {
       ...this.context,
       settings,
+      gitStatus,
       canvasBackground: this.viewport?.getCanvasBackground?.()
     });
     let window = this.windows.get(scope);
@@ -157,6 +174,38 @@ export class PropertiesController {
       gatewayRequire: values.gatewayRequire === 'true',
       apiKeys
     });
+  }
+
+  private async saveStudioGit(values: Record<string, string>): Promise<boolean> {
+    const name = (values.userName || '').trim();
+    const email = (values.userEmail || '').trim();
+    const result = await this.getGitManager().setSystemIdentity(name, email);
+    if (!result.ok) {
+      globalEventBus.emit('notification:show', {
+        title: t('git_sync.os_identity_title', 'Identidade no Sistema Operacional (Git Config)'),
+        message: result.error || t('git_sync.identity_saved_error', 'Falha ao gravar identidade no SO.'),
+        severity: 'error'
+      });
+      return false;
+    }
+    globalEventBus.emit('notification:show', {
+      title: t('git_sync.os_identity_title', 'Identidade no Sistema Operacional (Git Config)'),
+      message: t('git_sync.identity_saved_success', 'Identidade gravada no Sistema Operacional com sucesso!'),
+      severity: 'success'
+    });
+    return true;
+  }
+
+  private async launchGitLogin(): Promise<void> {
+    const result = await this.getGitManager().launchGcmLogin('github');
+    globalEventBus.emit('notification:show', {
+      title: t('git_sync.gcm_title', 'Autenticação & Cofre de Senhas do SO'),
+      message: result.ok
+        ? t('git_sync.login_success', 'Autenticação no SO concluída com sucesso!')
+        : (result.error || t('git_sync.login_error', 'Processo de login encerrado ou pendente no SO.')),
+      severity: result.ok ? 'success' : 'error'
+    });
+    await this.show('studio', 'git-account');
   }
 
   private async saveWorkspace(values: Record<string, string>): Promise<boolean> {
@@ -544,6 +593,14 @@ export class PropertiesController {
       void this.resetStudioPreferences();
       return;
     }
+    if (actionId === 'studio.git-login') {
+      void this.launchGitLogin();
+      return;
+    }
+    if (actionId === 'studio.open-git') {
+      void this.show('studio', 'git-account');
+      return;
+    }
     if (actionId === 'workspace.rebuild') {
       void this.rebuildWorkspace();
       return;
@@ -586,7 +643,6 @@ export class PropertiesController {
       case 'workspace.open-github':
         void this.show('workspace', 'libraries');
         return;
-      case 'studio.open-git':
       case 'project.open-git':
         globalEventBus.emit('modal:open-git-account');
         return;

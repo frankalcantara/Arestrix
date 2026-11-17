@@ -256,15 +256,10 @@ export class GitAccountModal extends BaseModal {
       const gcmAccounts = this.currentStatus?.gcmAccounts ?? [];
       const authenticated = this.isAuthenticated();
       const authenticatedAccount = this.getAuthenticatedAccount();
+      const identityManaged = !!this.currentStatus?.isIdentityConfigured;
       const shownAccounts = authenticated && authenticatedAccount && !gcmAccounts.includes(authenticatedAccount)
         ? [...gcmAccounts, authenticatedAccount]
         : gcmAccounts;
-      const loginDisabled = authenticated || this.isAuthenticating;
-      const loginLabel = this.isAuthenticating
-        ? t('git_sync.login_in_progress', 'Autenticando...')
-        : authenticated
-          ? t('git_sync.btn_logged_in', 'Conectado')
-          : t('git_sync.btn_launch_login', 'Efetuar login');
 
       return `
         <div style="padding: 16px 20px; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; color: #323130;">
@@ -299,23 +294,47 @@ export class GitAccountModal extends BaseModal {
               </span>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: flex-end;">
-              <div>
-                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
-                  ${t('git_sync.user_name_label', 'Nome do Usuário (user.name):')}
-                </label>
-                <input type="text" id="git-input-user-name" class="office-input" value="${this.escapeHtml(this.identityName)}" placeholder="ex: Seu Nome" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #d2d0ce; border-radius: 4px; box-sizing: border-box;">
+            ${identityManaged ? `
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div>
+                  <div style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
+                    ${t('git_sync.user_name_label', 'Nome do Usuário (user.name):')}
+                  </div>
+                  <div style="min-height: 32px; padding: 6px 8px; font-size: 12px; color: #201f1e; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; box-sizing: border-box;">
+                    <strong>${this.escapeHtml(this.identityName || '—')}</strong>
+                  </div>
+                </div>
+                <div>
+                  <div style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
+                    ${t('git_sync.user_email_label', 'E-mail do Usuário (user.email):')}
+                  </div>
+                  <div style="min-height: 32px; padding: 6px 8px; font-size: 12px; color: #201f1e; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; box-sizing: border-box; word-break: break-all;">
+                    <strong>${this.escapeHtml(this.identityEmail || '—')}</strong>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
-                  ${t('git_sync.user_email_label', 'E-mail do Usuário (user.email):')}
-                </label>
-                <input type="email" id="git-input-user-email" class="office-input" value="${this.escapeHtml(this.identityEmail)}" placeholder="ex: seu.email@exemplo.com" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #d2d0ce; border-radius: 4px; box-sizing: border-box;">
+              <p style="margin: 10px 0 0 0; font-size: 11px; color: #0f6cbd; line-height: 1.4;">
+                ${t('git_sync.identity_managed_in_studio', 'Identidade definida nas Propriedades do Studio. Altere por lá.')}
+              </p>
+            ` : `
+              <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: flex-end;">
+                <div>
+                  <label style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
+                    ${t('git_sync.user_name_label', 'Nome do Usuário (user.name):')}
+                  </label>
+                  <input type="text" id="git-input-user-name" class="office-input" value="${this.escapeHtml(this.identityName)}" placeholder="ex: Seu Nome" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #d2d0ce; border-radius: 4px; box-sizing: border-box;">
+                </div>
+                <div>
+                  <label style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
+                    ${t('git_sync.user_email_label', 'E-mail do Usuário (user.email):')}
+                  </label>
+                  <input type="email" id="git-input-user-email" class="office-input" value="${this.escapeHtml(this.identityEmail)}" placeholder="ex: seu.email@exemplo.com" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #d2d0ce; border-radius: 4px; box-sizing: border-box;">
+                </div>
+                <button id="btn-save-os-identity" class="tool-btn btn-secondary" style="height: 32px; padding: 0 14px; font-size: 11.5px; font-weight: 600; white-space: nowrap;">
+                  ${t('git_sync.btn_save_identity', 'Gravar no SO')}
+                </button>
               </div>
-              <button id="btn-save-os-identity" class="tool-btn btn-secondary" style="height: 32px; padding: 0 14px; font-size: 11.5px; font-weight: 600; white-space: nowrap;">
-                ${t('git_sync.btn_save_identity', 'Gravar no SO')}
-              </button>
-            </div>
+            `}
           </div>
 
           <!-- COFRE DO SO (GCM) -->
@@ -343,16 +362,20 @@ export class GitAccountModal extends BaseModal {
                   </div>
                 ` : ''}
               </div>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <button id="btn-launch-os-login" class="tool-btn btn-action" ${loginDisabled ? 'disabled' : ''} style="height: 32px; padding: 0 16px; font-size: 11.5px; font-weight: 600; background: ${loginDisabled ? '#e1dfdd' : '#0f6cbd'}; color: ${loginDisabled ? '#605e5c' : '#fff'}; border-radius: 4px; border: none; cursor: ${loginDisabled ? 'default' : 'pointer'}; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;">
-                  ${loginLabel}
-                </button>
-                ${authenticated && !this.isAuthenticating ? `
-                  <button id="btn-switch-os-account" class="tool-btn btn-secondary" style="height: 32px; padding: 0 14px; font-size: 11.5px; font-weight: 600; white-space: nowrap;">
-                    ${t('git_sync.btn_switch_account', 'Trocar conta')}
+              ${authenticated ? `
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 230px;">
+                  <button class="tool-btn" disabled style="height: 32px; padding: 0 16px; font-size: 11.5px; font-weight: 600; background: #e1dfdd; color: #605e5c; border-radius: 4px; border: none; cursor: default; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;">
+                    ${t('git_sync.btn_logged_in', 'Conectado')}
                   </button>
-                ` : ''}
-              </div>
+                  <span style="font-size: 10.5px; color: #a19f9d; text-align: right; line-height: 1.35;">
+                    ${t('git_sync.login_managed_in_studio', 'Autenticação gerenciada nas Propriedades do Studio. Use lá para trocar de conta.')}
+                  </span>
+                </div>
+              ` : `
+                <button id="btn-launch-os-login" class="tool-btn btn-action" ${this.isAuthenticating ? 'disabled' : ''} style="height: 32px; padding: 0 16px; font-size: 11.5px; font-weight: 600; background: ${this.isAuthenticating ? '#e1dfdd' : '#0f6cbd'}; color: ${this.isAuthenticating ? '#605e5c' : '#fff'}; border-radius: 4px; border: none; cursor: ${this.isAuthenticating ? 'default' : 'pointer'}; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;">
+                  ${this.isAuthenticating ? t('git_sync.login_in_progress', 'Autenticando...') : t('git_sync.btn_launch_login', 'Efetuar login')}
+                </button>
+              `}
             </div>
           </div>
         </div>
@@ -362,6 +385,7 @@ export class GitAccountModal extends BaseModal {
     if (tabId === 'repository') {
       const remoteUrlPreview = this.buildComposedRemoteUrl();
       const remoteUrlIncomplete = t('git_sync.remote_url_preview_incomplete', 'Informe a conta e o nome do repositório para gerar a URL.');
+      const accountManaged = this.isAuthenticated();
       return `
         <div style="padding: 16px 20px; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; color: #323130;">
           ${feedbackHtml}
@@ -396,10 +420,19 @@ export class GitAccountModal extends BaseModal {
                 <label style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
                   ${t('git_sync.account_username_label', 'Conta / Usuário Remoto:')}
                 </label>
-                <input type="text" id="git-input-username" class="office-input" value="${this.escapeHtml(this.username)}" placeholder="ex: usuario" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #d2d0ce; border-radius: 4px; box-sizing: border-box;">
-                <span style="display: block; font-size: 10.5px; color: #a19f9d; margin-top: 3px;">
-                  ${t('git_sync.account_username_tip', 'Usado apenas para compor a URL remota (ex: github.com/usuario/repo). Sem senhas.')}
-                </span>
+                ${accountManaged ? `
+                  <div style="min-height: 32px; padding: 6px 8px; font-size: 12px; color: #201f1e; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; box-sizing: border-box; word-break: break-all;">
+                    <strong>${this.escapeHtml(this.username || '—')}</strong>
+                  </div>
+                  <span style="display: block; font-size: 10.5px; color: #0f6cbd; margin-top: 3px;">
+                    ${t('git_sync.account_managed_in_studio', 'Conta definida nas Propriedades do Studio.')}
+                  </span>
+                ` : `
+                  <input type="text" id="git-input-username" class="office-input" value="${this.escapeHtml(this.username)}" placeholder="ex: usuario" style="width: 100%; height: 32px; padding: 4px 8px; font-size: 12px; border: 1px solid #d2d0ce; border-radius: 4px; box-sizing: border-box;">
+                  <span style="display: block; font-size: 10.5px; color: #a19f9d; margin-top: 3px;">
+                    ${t('git_sync.account_username_tip', 'Usado apenas para compor a URL remota (ex: github.com/usuario/repo). Sem senhas.')}
+                  </span>
+                `}
               </div>
               <div>
                 <label style="display: block; font-size: 11.5px; font-weight: 600; color: #605e5c; margin-bottom: 4px;">
@@ -540,6 +573,9 @@ export class GitAccountModal extends BaseModal {
       if (res.ok) {
         this.identityName = name;
         this.identityEmail = email;
+        await this.loadData();
+        this.applyDetectedUsername();
+        this.syncRemoteUrlWithFields();
         this.feedbackMessage = t('git_sync.identity_saved_success', 'Identidade do Git gravada no Sistema Operacional com sucesso!');
         this.feedbackType = 'success';
       } else {
@@ -578,8 +614,6 @@ export class GitAccountModal extends BaseModal {
 
     const btnLogin = this.dialog.querySelector('#btn-launch-os-login') as HTMLButtonElement | null;
     btnLogin?.addEventListener('click', handleLogin);
-    const btnSwitch = this.dialog.querySelector('#btn-switch-os-account') as HTMLButtonElement | null;
-    btnSwitch?.addEventListener('click', handleLogin);
 
     // 3. Atualizar provedor ou serverUrl dinamicamente para sincronizar campos
     const updateRemoteUrlPreview = () => {
