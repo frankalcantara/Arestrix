@@ -330,6 +330,20 @@ describe('Standalone Runner Engine & Manager', () => {
     modal.hide();
   });
 
+  it('deve restaurar a tela de origem ao fechar o Runner Standalone', () => {
+    graph.createNode('node_teste', 'Tarefa Teste', 'static', 100, 100);
+    const modal = new StandaloneRunnerModal(graph);
+    let restored = 0;
+
+    modal.open('progress', () => { restored += 1; });
+    modal.hide();
+    expect(restored).toBe(1);
+
+    // O callback vale apenas para a abertura atual.
+    modal.hide();
+    expect(restored).toBe(1);
+  });
+
   it('deve auditar e bloquear qualquer tentativa de exportar segredos ou chaves reais (fail-closed)', async () => {
     // 1. Textos limpos passam
     expect(RunnerManager.auditTextForSecrets('Executando modelo com ${DEEPSEEK_API_KEY}').ok).toBe(true);

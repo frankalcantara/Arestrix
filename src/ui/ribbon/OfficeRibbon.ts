@@ -955,8 +955,16 @@ export class OfficeRibbon {
       }
     });
 
-    globalEventBus.on('runner:open-modal', (tab?: any) => {
-      this.standaloneRunnerModal.open(tab);
+    globalEventBus.on('runner:open-modal', (payload?: any) => {
+      const tab = typeof payload === 'string' ? payload : payload?.tab;
+      if (payload && typeof payload === 'object' && payload.returnToBackstage) {
+        const section = (payload.section || 'info') as 'info' | 'new' | 'open' | 'save' | 'saveas' | 'export' | 'options' | 'properties';
+        this.standaloneRunnerModal.open(tab, () => {
+          void this.backstageView.open(section);
+        });
+      } else {
+        this.standaloneRunnerModal.open(tab);
+      }
     });
 
     // Consulta inicial silenciosa de status do Git
