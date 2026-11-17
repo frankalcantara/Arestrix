@@ -18,7 +18,6 @@ export class StandaloneRunnerModal extends BaseModal {
   private exportStatusMessage: string = '';
   private exportStatusType: 'info' | 'success' | 'error' = 'info';
   private lastExportResult: any = null;
-  private onCloseCallback?: () => void;
 
   constructor(graph: Graph) {
     super({
@@ -74,8 +73,7 @@ export class StandaloneRunnerModal extends BaseModal {
     this.activeTabId = val;
   }
 
-  public override open(initialTab?: RunnerTab, onClose?: () => void): void {
-    this.onCloseCallback = onClose;
+  public override open(initialTab?: RunnerTab): void {
     const cur = this.projectManager.getCurrentProject();
     if (initialTab) {
       this.activeTabId = initialTab;
@@ -87,13 +85,6 @@ export class StandaloneRunnerModal extends BaseModal {
 
     this.runnerManager.initGraph(this.graph);
     super.open();
-  }
-
-  public override hide(): void {
-    super.hide();
-    const callback = this.onCloseCallback;
-    this.onCloseCallback = undefined;
-    callback?.();
   }
 
   protected override renderBody(): string {
