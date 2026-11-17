@@ -511,6 +511,82 @@ html[data-theme="dark"] {
   line-height: 1.4;
 }
 
+/* Aviso de segurança do modal de conta Git, ancorado no cadeado do rodapé. */
+.git-security-help {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.git-security-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  margin-left: -6px;
+  border-radius: 4px;
+  color: var(--modal-ink-3);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.git-security-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.git-security-trigger:hover,
+.git-security-trigger:focus-visible,
+.git-security-help[open] .git-security-trigger {
+  background: var(--modal-accent-wash);
+  color: var(--modal-accent);
+}
+
+.git-security-trigger:focus-visible {
+  outline: 2px solid var(--modal-accent);
+  outline-offset: 1px;
+}
+
+.git-security-icon {
+  flex: 0 0 auto;
+  display: block;
+}
+
+.git-security-popover {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 10px);
+  z-index: 30;
+  width: 360px;
+  max-width: calc(100vw - 64px);
+  padding: 14px 16px;
+  box-sizing: border-box;
+  background: var(--modal-surface);
+  color: var(--modal-ink);
+  border: 1px solid var(--modal-line-strong);
+  border-radius: 6px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.git-security-popover::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  background: var(--modal-surface);
+  border-right: 1px solid var(--modal-line-strong);
+  border-bottom: 1px solid var(--modal-line-strong);
+  transform: rotate(45deg);
+}
+
 /* --- Botões -------------------------------------------------------------- */
 
 :is(.modal-dialog, .modal-window) :is(

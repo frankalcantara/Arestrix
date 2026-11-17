@@ -3,6 +3,7 @@ import { GitSyncManager } from '../src/core/git/GitSyncManager.ts';
 import { ProjectManager } from '../src/core/ProjectManager.ts';
 import { EventBus } from '../src/core/EventBus.ts';
 import { GitAccountModal } from '../src/ui/modals/GitAccountModal.ts';
+import { t } from '../src/i18n/index.ts';
 
 // Mock simples de DOM para o ambiente Node do Vitest
 class MockElement {
@@ -238,6 +239,141 @@ describe('Git Auto-Save & Synchronization System', () => {
       await modal.open();
       expect(modal).toBeDefined();
       modal.hide();
+    });
+
+    it('deve mover o aviso de segurança para o cadeado do rodapé', () => {
+      const modal = new GitAccountModal(bus);
+      const footer = (modal as any).renderFooter();
+      const identity = (modal as any).renderTabContent('identity');
+
+      expect(footer).toContain('git-security-help');
+      expect(footer).toContain('git-security-trigger');
+      expect(footer).toContain('git-security-popover');
+      expect(footer).toContain(t('git_sync.security_rule_title', 'Segurança Absoluta de Credenciais:'));
+      expect(identity).not.toContain('🛡️');
+    });
+
+    it('deve exibir a URL remota composta como texto, sem campo editável', () => {
+      const modal = new GitAccountModal(bus);
+      (modal as any).provider = 'github';
+      (modal as any).serverUrl = 'https://github.com';
+      (modal as any).username = 'frankalcantara';
+      (modal as any).repositoryName = 'meu projeto';
+
+      const html = (modal as any).renderTabContent('repository');
+
+      expect(html).toContain('id="git-remote-url-preview"');
+      expect(html).toContain('https://github.com/frankalcantara/meu-projeto.git');
+      expect(html).not.toContain('git-input-remote-url');
+    });
+
+    it('deve descartar a URL antiga quando os campos não correspondem mais', () => {
+      const modal = new GitAccountModal(bus);
+      (modal as any).provider = 'github';
+      (modal as any).serverUrl = 'https://github.com';
+      (modal as any).username = 'frankalcantara';
+      (modal as any).repositoryName = 'meu-projeto';
+      (modal as any).remoteUrl = 'https://github.com/outra-conta/repo-antigo.git';
+
+      (modal as any).syncRemoteUrlWithFields();
+
+      expect((modal as any).remoteUrl).toBe('');
+    });
+
+    it('deve preservar a URL quando ela corresponde aos campos', () => {
+      const modal = new GitAccountModal(bus);
+      (modal as any).provider = 'github';
+      (modal as any).serverUrl = 'https://github.com';
+      (modal as any).username = 'frankalcantara';
+      (modal as any).repositoryName = 'meu-projeto';
+      (modal as any).remoteUrl = 'https://github.com/frankalcantara/meu-projeto.git';
+
+      (modal as any).syncRemoteUrlWithFields();
+
+      expect((modal as any).remoteUrl).toBe('https://github.com/frankalcantara/meu-projeto.git');
+    });
+
+    it('deve manter o login ativo quando nenhuma conta está autenticada', () => {
+      const modal = new GitAccountModal(bus);
+      (modal as any).provider = 'github';
+      (modal as any).currentStatus = {
+        gitInstalled: true,
+        isIdentityConfigured: false,
+        gcmAccounts: [],
+        isRepo: false,
+        hasUncommittedChanges: false,
+        hasUnpushedCommits: false,
+        unpushedCommitsCount: 0
+      };
+
+      const html = (modal as any).renderTabContent('identity');
+      const loginButton = html.match(/<button id="btn-launch-os-login"[^>]*>/)?.[0] || '';
+
+      expect(loginButton).not.toContain('disabled');
+      expect(html).not.toContain('btn-switch-os-account');
+    });
+
+    it('deve desabilitar o login e oferecer troca de conta quando já autenticado', () => {
+      const modal = new GitAccountModal(bus);
+      (modal as any).provider = 'github';
+      (modal as any).currentStatus = {
+        gitInstalled: true,
+        isIdentityConfigured: true,
+        gcmAccounts: ['frankalcantara'],
+        accountUsername: 'frankalcantara',
+        isRepo: false,
+        hasUncommittedChanges: false,
+        hasUnpushedCommits: false,
+        unpushedCommitsCount: 0
+      };
+
+      const html = (modal as any).renderTabContent('identity');
+      const loginButton = html.match(/<button id="btn-launch-os-login"[^>]*>/)?.[0] || '';
+
+      expect(loginButton).toContain('disabled');
+      expect(html).toContain('btn-switch-os-account');
+      expect(html).toContain('frankalcantara');
+    });
+
+    it('deve preencher a conta remota com o login detectado', () => {
+      const modal = new GitAccountModal(bus);
+      (modal as any).provider = 'github';
+      (modal as any).identityName = 'Frank Coelho de Alcantara';
+      (modal as any).username = '';
+      (modal as any).currentStatus = {
+        gitInstalled: true,
+        isIdentityConfigured: true,
+        gcmAccounts: ['frankalcantara'],
+        accountUsername: 'frankalcantara',
+        isRepo: false,
+        hasUncommittedChanges: false,
+        hasUnpushedCommits: false,
+        unpushedCommitsCount: 0
+      };
+
+      (modal as any).applyDetectedUsername();
+
+      expect((modal as any).username).toBe('frankalcantara');
+    });
+
+    it('deve desabilitar o botão enquanto o login está em andamento', () => {
+      const modal = new GitAccountModal(bus);
+      (modal as any).provider = 'github';
+      (modal as any).currentStatus = {
+        gitInstalled: true,
+        isIdentityConfigured: false,
+        gcmAccounts: [],
+        isRepo: false,
+        hasUncommittedChanges: false,
+        hasUnpushedCommits: false,
+        unpushedCommitsCount: 0
+      };
+      (modal as any).isAuthenticating = true;
+
+      const html = (modal as any).renderTabContent('identity');
+      const loginButton = html.match(/<button id="btn-launch-os-login"[^>]*>/)?.[0] || '';
+
+      expect(loginButton).toContain('disabled');
     });
   });
 });
