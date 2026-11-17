@@ -6,7 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **Beta 2.3**.
 
-## [Unreleased]
+## [2.10.0] - 2026-11-13
+
+### Added
+
+- Debian package (`arestrix_<version>_amd64.deb`) built from the same validated
+  staging tree as the portable package. It installs the portable layout in
+  `/usr/lib/arestrix`, exposes `arestrix`, `arestrix-cli`, `arestrix-gateway`
+  and `arestrix-memory` in `/usr/bin`, adds a desktop entry and hicolor icons,
+  and ships Debian documentation (`copyright`, `changelog.Debian.gz` and links
+  to the README, CHANGELOG and SBOM). `package_release.py --format deb` builds
+  it; `--format both` produces the Linux tarball and the `.deb`. The builder
+  validates the package with `dpkg-deb --info`, `dpkg-deb -x`, CLI/memory smoke
+  tests on the extracted tree and `desktop-file-validate`. The `native-linux`
+  CI job now builds and validates the `.deb` on every pull request.
+- Linux install instructions for Debian/Ubuntu in both READMEs and the release
+  guide.
+
+### Changed
+
+- Debian metadata declares `libc6 (>= 2.38)`, `libstdc++6 (>= 13)` and
+  `libgcc-s1`, with GTK 3/WebKitGTK 4.1 and a C++ compiler as recommends. The
+  builder reads the GLIBC/GLIBCXX symbols referenced by the binaries and
+  refuses to package when `control` understates them.
+
+## [2.9.0] - 2026-11-13
 
 ### Added
 
@@ -96,8 +120,22 @@ Pre-release identifiers follow SemVer (`2.3.0-beta.2`); the marketing name is **
   1.000 vs 0.000 with 1.58x tokens and 1.09x latency. Reports:
   `tests/fixtures/memory-ab-live-gate-enforce-jev-report.json` and
   `tests/fixtures/memory-ab-live-value-gate-enforce-jev-report.json`.
+- Linux release validation on Ubuntu 24.04/WSL2: native C++20 build and CTest,
+  Vitest/TypeScript, gateway smoke, tutorial and 14 examples, CPU llama.cpp
+  runtime (download, SHA-256, extraction, loopback router and chat completion),
+  Studio GUI under WSLg and the `linux-x64` portable tarball. The `native-linux`
+  CI job now runs gateway smoke and the tutorial/examples E2E. Report:
+  Rodada #008 in `docs/quality/test-audit-log.md`.
 
 ### Fixed
+
+- The Studio now opens the GTK/WebKit WebView before the browser fallback on
+  Linux, so it works where `xdg-open` exits with 0 without opening anything
+  (WSL without interoperability). Machines without GTK 3/WebKitGTK 4.1 still fall
+  back to the default browser; the Windows path is unchanged.
+- Native Linux/macOS build outputs in the repository root (`arestrix`,
+  `arestrix-cli`, `arestrix-gateway`, `arestrix-memory`) are ignored by Git so the
+  release gate sees a clean tree.
 
 - Beam traversal now resolves anchors from natural-language queries by
   tokenizing the prompt when the whole phrase is not a canonical alias. Before

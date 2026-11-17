@@ -9,6 +9,12 @@ __pycache__/
 *.ilk
 *.exp
 *.lib
+
+# Executaveis gerados na raiz pelo build nativo (Linux/macOS; o Windows usa .exe)
+/arestrix
+/arestrix-cli
+/arestrix-gateway
+/arestrix-memory
 .DS_Store
 *.local
 

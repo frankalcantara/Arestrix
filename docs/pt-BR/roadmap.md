@@ -1,6 +1,6 @@
 # Roadmap e limitações conhecidas
 
-> **Aplica-se a:** Arestrix 2.8 (`2.8.0`) · Última revisão: 2026-11-12
+> **Aplica-se a:** Arestrix 2.10 (`2.10.0`) · Última revisão: 2026-11-13
 >
 > Esta página registra o que está intencionalmente incompleto e a ordem planejada para resolver. Não é
 > um compromisso de datas.
@@ -25,12 +25,15 @@
 
 ### Plataforma e CI
 
-- Runtime local e gateway foram validados ponta a ponta apenas no **Windows**.
-- Os caminhos Linux existem, mas build, download/extração do runtime, router e gateway ainda não têm
-  teste end-to-end no Linux.
-- Os workflows `ci.yml` e `deploy.yml` existem; o `deploy.yml` roda em pushes para `main`, mas a
-  proteção da `main` ainda não exige status checks. A matriz Windows/Linux não é obrigatória e o CI
-  de pull request não bloqueia merges nem pushes diretos.
+- Runtime local, gateway e pacote portátil foram validados ponta a ponta no **Windows** e no
+  **Linux** (Ubuntu 24.04/WSL2, 2026-11-13): build C++20, CTest, Vitest, gateway smoke, tutorial,
+  14 exemplos, runtime llama.cpp em CPU (download, SHA-256, extração, router em loopback) e Studio
+  em WSLg. Evidências no [gate de release](release.md) e no
+  [registro de auditoria](../quality/test-audit-log.md).
+- O job `native-linux` é check obrigatório (ruleset `main-protection`) e cobre build nativo, CTest,
+  gateway smoke, E2E de tutorial/exemplos e build/smoke do pacote `.deb` no `ci.yml`.
+- A matriz de release ainda não cobre macOS; o CI valida o `.deb`, mas nenhum job publica artefatos
+  Linux automaticamente.
 
 ### Performance e profiling (Tracy)
 
@@ -47,8 +50,10 @@
 
 ### Distribuição
 
-- O pacote portátil (5B1) está implementado. O empacotamento de instalador (MSI/WiX, MSIX ou Inno
-  Setup; AppImage/deb/tarball no Linux) está pendente na 5B2.
+- O pacote portátil (5B1) e o pacote Debian (5B2 Linux) estão implementados. O tarball `linux-x64`
+  e o `.deb` amd64 foram gerados, extraídos e validados fora do checkout em 2026-11-13; o `.deb`
+  instala em `/usr/lib/arestrix`, cria atalhos em `/usr/bin` e adiciona uma entrada no menu. O
+  AppImage continua pendente.
 - Catálogo/manifesto remoto assinado (Ed25519/minisign) não foi implementado. O catálogo embutido é
   protegido pelo binário; atualizações remotas exigem par de chaves e decisão de hospedagem.
 - Atualizações de runtime dependem de uma nova versão do aplicativo, porque o manifesto é embutido.
@@ -243,11 +248,13 @@ Pendente após a pré-release `2.1.0-beta.1`:
 > ser iniciado agora.
 
 1. **Linux + CI**
-   - Build Linux, instalação do runtime, extração do llama.cpp, router e gateway end-to-end.
-   - Matriz Windows/Linux e validação automatizada de catálogo/manifesto.
+   - [x] Build Linux, runtime llama.cpp em CPU, router, gateway e E2E.
+   - [x] Tarball `linux-x64`, pacote `.deb` amd64 e job `native-linux` com gateway smoke, E2E e
+         empacotamento Debian.
+   - [ ] AppImage, matriz macOS e validação automatizada do catálogo/manifesto.
 
 2. **Distribuição final**
-   - Escolher e implementar o empacotamento do instalador.
+   - Implementar o AppImage e concluir a validação em máquina limpa dos instaladores.
    - Definir par de chaves, custódia, rotação e hospedagem do catálogo assinado.
    - Publicar checksums, notices e notas de release.
 
