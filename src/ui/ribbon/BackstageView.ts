@@ -1499,9 +1499,8 @@ export class BackstageView {
 
     // Abrir Runner Standalone do Projeto
     this.overlay.querySelector('#btn-backstage-open-runner')?.addEventListener('click', () => {
-      const section = this.activeSection;
-      this.close();
-      globalEventBus.emit('runner:open-modal', { returnToBackstage: true, section });
+      // Mantém o Backstage aberto atrás do modal para preservar a tela de origem.
+      globalEventBus.emit('runner:open-modal');
     });
 
     // Criar Projeto
