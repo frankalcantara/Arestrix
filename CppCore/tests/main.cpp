@@ -13002,6 +13002,75 @@ TEST(runner_security_cryptographic_signature_fail_closed) {
     fs::remove_all(tempRoot);
 }
 
+TEST(runner_security_ed25519_signature) {
+    using namespace taskforge::project;
+
+    // Vetor RFC 8032 (Ed25519): seed e chave publica conhecidas.
+    const std::string seed = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
+    const std::string expectedPublic = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
+    std::string keyError;
+    CHECK(RunnerSecurity::ed25519PublicKey(seed, keyError) == expectedPublic);
+    CHECK(keyError.empty());
+
+    std::string generatedSeed = RunnerSecurity::generateEd25519Seed(keyError);
+    CHECK(generatedSeed.size() == 64);
+    CHECK(!RunnerSecurity::ed25519PublicKey(generatedSeed, keyError).empty());
+
+    auto tempRoot = makeTempDir("runner-ed25519-test");
+    auto manifestPath = tempRoot / "runner_manifest.json";
+    {
+        std::ofstream out(manifestPath);
+        out << "{\n  \"name\": \"Ed25519Pipeline\",\n  \"version\": \"1.0.0\"\n}\n";
+    }
+
+    auto sigRes = RunnerSecurity::signPackage(
+        manifestPath,
+        seed,
+        "ed25519",
+        "Arestrix Enterprise Security",
+        "corp-ed25519-key-1",
+        true
+    );
+    CHECK(sigRes.ok == true);
+    CHECK(sigRes.publicKey == expectedPublic);
+    CHECK(sigRes.signature.size() == 128);
+    CHECK(fs::exists(tempRoot / "runner_manifest.json.sig"));
+
+    std::string verifyError;
+    CHECK(RunnerSecurity::verifyPackage(manifestPath, expectedPublic, true, verifyError) == true);
+    CHECK(verifyError.empty());
+
+    // Sem trust anchor nao pode autenticar (fail-closed).
+    CHECK(RunnerSecurity::verifyPackage(manifestPath, "", true, verifyError) == false);
+    CHECK(!verifyError.empty());
+
+    // Chave publica errada deve bloquear.
+    const std::string wrongPublic = "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
+    CHECK(RunnerSecurity::verifyPackage(manifestPath, wrongPublic, true, verifyError) == false);
+
+    // Adulteracao do manifesto deve bloquear.
+    {
+        auto jTamper = taskforge::jsonutil::parseFile(manifestPath);
+        jTamper["version"] = "9.9.9-malicious";
+        std::ofstream out(manifestPath, std::ios::trunc);
+        out << jTamper.dump(2);
+    }
+    CHECK(RunnerSecurity::verifyPackage(manifestPath, expectedPublic, true, verifyError) == false);
+
+    // Algoritmo nao implementado deve falhar explicitamente.
+    auto unsupportedManifest = tempRoot / "unsupported_manifest.json";
+    {
+        std::ofstream out(unsupportedManifest);
+        out << "{\n  \"name\": \"Unsupported\"\n}\n";
+    }
+    auto unsupported = RunnerSecurity::signPackage(
+        unsupportedManifest, seed, "sha256-rsa", "Arestrix Enterprise Security", "key", true);
+    CHECK(unsupported.ok == false);
+    CHECK(unsupported.error.find("nao suportado") != std::string::npos);
+
+    fs::remove_all(tempRoot);
+}
+
 TEST(runner_corporate_vault_and_memory_purging) {
     using namespace taskforge::project;
 

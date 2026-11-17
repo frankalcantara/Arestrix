@@ -133,7 +133,7 @@ inline void from_json(const taskforge::Json& j, ProjectRunnerParameter& p) {
 // Fase 2: Governanca e Assinatura Criptografica de Pacotes
 struct RunnerSignatureConfig {
     bool enabled = false;
-    std::string algorithm = "ed25519"; // "ed25519", "sha256-rsa", "hmac-sha256"
+    std::string algorithm = "ed25519"; // "ed25519" (recomendado) ou "hmac-sha256" (legado; "sha256-rsa" nao implementado)
     std::string keyId;
     std::string publicKey;
     bool requiredForExecution = false; // Se true, o runner recusa executar pacotes sem assinatura valida (fail-closed)

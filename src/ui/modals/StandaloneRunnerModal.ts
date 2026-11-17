@@ -461,7 +461,7 @@ export class StandaloneRunnerModal extends BaseModal {
 
     const sig = runnerConfig.signature || {
       enabled: false,
-      algorithm: 'hmac-sha256',
+      algorithm: 'ed25519',
       keyId: 'corp-signing-key-1',
       requiredForExecution: false,
       issuer: 'Arestrix Enterprise Security'
@@ -634,9 +634,8 @@ export class StandaloneRunnerModal extends BaseModal {
                 <div>
                   <label style="display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 3px;">Algoritmo:</label>
                   <select id="runner-select-sig-algo" class="office-select" style="width: 100%; height: 30px; padding: 3px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; background: #ffffff;">
-                    <option value="hmac-sha256" ${sig.algorithm === 'hmac-sha256' ? 'selected' : ''}>HMAC-SHA256 (NIST FIPS)</option>
-                    <option value="ed25519" ${sig.algorithm === 'ed25519' ? 'selected' : ''}>Ed25519 (Chave Pública)</option>
-                    <option value="sha256-rsa" ${sig.algorithm === 'sha256-rsa' ? 'selected' : ''}>SHA256-RSA PKCS#1</option>
+                    <option value="ed25519" ${sig.algorithm === 'ed25519' ? 'selected' : ''}>Ed25519 (recomendado)</option>
+                    <option value="hmac-sha256" ${sig.algorithm === 'hmac-sha256' ? 'selected' : ''}>HMAC-SHA256 (legado)</option>
                   </select>
                 </div>
                 <div>
@@ -647,6 +646,11 @@ export class StandaloneRunnerModal extends BaseModal {
               <div>
                 <label style="display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 3px;">Emissor / Autoridade Corporativa:</label>
                 <input type="text" id="runner-input-sig-issuer" class="office-input" value="${this.escapeHtml(sig.issuer || 'Arestrix Enterprise Security')}" style="width: 100%; height: 30px; padding: 3px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box;">
+              </div>
+              <div style="font-size: 10.5px; color: #64748b; line-height: 1.4;">
+                A chave privada não é gravada no projeto. Para Ed25519, defina
+                <code>ARESTRIX_RUNNER_SIGNING_KEY</code> com uma seed hexadecimal de 32 bytes
+                no ambiente de exportação. HMAC-SHA256 permanece apenas para pacotes antigos.
               </div>
               <label style="display: flex; align-items: center; gap: 6px; font-size: 11.5px; cursor: pointer; margin-top: 4px;">
                 <input type="checkbox" id="runner-chk-sig-required" ${sig.requiredForExecution ? 'checked' : ''}>

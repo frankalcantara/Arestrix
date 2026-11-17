@@ -247,6 +247,14 @@ Alternativamente, use `ARESTRIX_SIGN_THUMBPRINT` para um certificado no reposit�
 aceita `-RuntimePath` para assinar um runtime preparado para distribuição. Nenhum segredo é gravado no
 repositório.
 
+Para distribuição open source, o **SignPath Foundation** oferece assinatura Authenticode gratuita
+para projetos que atendem aos termos de open source (o publisher exibido é o SignPath Foundation).
+O **Certum Open Source Code Signing** é uma opção paga de baixo custo (a partir de €49), mostra seu
+nome, mas proíbe uso comercial. Certificado autoassinado é gratuito, mas não é confiável pelo
+Windows SmartScreen em outras máquinas; Sigstore não fornece confiança Authenticode no Windows.
+Builds comerciais devem usar um certificado OV/EV ou **Azure Trusted Signing** (pago), sempre com
+timestamp (o script já usa um servidor de timestamp).
+
 A atualização do runtime é controlada pelo manifesto embutido: quando o Arestrix sobe de versão, a nova
 versão do `llama.cpp` é baixada, verificada e as versões antigas são removidas. Catálogo remoto assinado
 (Ed25519/minisign) ainda depende da definição de par de chaves e hospedagem; até lá o catálogo é embutido no

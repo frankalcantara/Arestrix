@@ -1,7 +1,9 @@
 #include "project/RunnerSecurity.hpp"
 #include "util/Json.hpp"
+#include "ed25519.h"
 
 #include <chrono>
+#include <cctype>
 #include <cstring>
 #include <fstream>
 #include <iomanip>
@@ -161,6 +163,24 @@ static std::string hexEncode(const uint8_t* data, size_t len) {
     return ss.str();
 }
 
+static bool hexDecode(const std::string& hex, std::vector<uint8_t>& out) {
+    if (hex.empty() || (hex.size() % 2) != 0) return false;
+    auto nibble = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        return -1;
+    };
+    out.resize(hex.size() / 2);
+    for (size_t i = 0; i < out.size(); ++i) {
+        const int hi = nibble(hex[i * 2]);
+        const int lo = nibble(hex[i * 2 + 1]);
+        if (hi < 0 || lo < 0) return false;
+        out[i] = static_cast<uint8_t>((hi << 4) | lo);
+    }
+    return true;
+}
+
 static std::string hmacSha256(const std::string& key, const std::string& data) {
     uint8_t k[64] = {0};
     if (key.size() > 64) {
@@ -227,6 +247,27 @@ std::string RunnerSecurity::sha256File(const fs::path& filePath, std::string& ou
     return hexEncode(digest, 32);
 }
 
+std::string RunnerSecurity::ed25519PublicKey(const std::string& seedHex, std::string& outError) {
+    std::vector<uint8_t> seed;
+    if (!hexDecode(seedHex, seed) || seed.size() != 32) {
+        outError = "Seed Ed25519 invalida: informe 32 bytes em hexadecimal (64 caracteres).";
+        return "";
+    }
+    unsigned char publicKey[32];
+    unsigned char privateKey[64];
+    ed25519_create_keypair(publicKey, privateKey, seed.data());
+    return hexEncode(publicKey, 32);
+}
+
+std::string RunnerSecurity::generateEd25519Seed(std::string& outError) {
+    unsigned char seed[32];
+    if (ed25519_create_seed(seed) != 0) {
+        outError = "Falha ao gerar seed Ed25519 usando o CSPRNG do sistema.";
+        return "";
+    }
+    return hexEncode(seed, 32);
+}
+
 // ---------------------------------------------------------------------------
 // Assinatura e Verificação de Pacotes
 // ---------------------------------------------------------------------------
@@ -236,10 +277,13 @@ PackageSignatureResult RunnerSecurity::signPackage(
     const std::string& privateKeyOrSecret,
     const std::string& algorithm,
     const std::string& issuer,
-    const std::string& keyId
+    const std::string& keyId,
+    bool requiredForExecution
 ) {
     PackageSignatureResult res;
-    res.algorithm = algorithm.empty() ? "hmac-sha256" : algorithm;
+    std::string algo = algorithm.empty() ? "ed25519" : algorithm;
+    for (char& c : algo) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    res.algorithm = algo;
     res.issuer = issuer.empty() ? "Arestrix Enterprise Security" : issuer;
 
     if (privateKeyOrSecret.empty()) {
@@ -280,9 +324,33 @@ PackageSignatureResult RunnerSecurity::signPackage(
     std::string packageHash = sha256(canonicalJson);
     res.packageHash = packageHash;
 
-    // Gera a assinatura usando HMAC-SHA256 ou simulação criptográfica
-    std::string sigStr = hmacSha256(privateKeyOrSecret, packageHash);
-    res.signature = sigStr;
+    if (algo == "ed25519") {
+        std::vector<uint8_t> seed;
+        if (!hexDecode(privateKeyOrSecret, seed) || seed.size() != 32) {
+            res.ok = false;
+            res.error = "Chave privada Ed25519 invalida: informe uma seed de 32 bytes em hexadecimal (64 caracteres).";
+            return res;
+        }
+        unsigned char publicKey[32];
+        unsigned char privateKey[64];
+        unsigned char signature[64];
+        ed25519_create_keypair(publicKey, privateKey, seed.data());
+        ed25519_sign(signature,
+                     reinterpret_cast<const unsigned char*>(packageHash.data()),
+                     packageHash.size(),
+                     publicKey,
+                     privateKey);
+        res.publicKey = hexEncode(publicKey, 32);
+        res.signature = hexEncode(signature, 64);
+    } else if (algo == "hmac-sha256") {
+        // Legado: segredo simetrico. Mantido apenas para pacotes antigos.
+        res.signature = hmacSha256(privateKeyOrSecret, packageHash);
+        res.publicKey = sha256(privateKeyOrSecret + "_public");
+    } else {
+        res.ok = false;
+        res.error = "Algoritmo de assinatura nao suportado: " + algo + ". Use ed25519.";
+        return res;
+    }
 
     // Timestamp atual
     auto now = std::chrono::system_clock::now();
@@ -298,15 +366,13 @@ PackageSignatureResult RunnerSecurity::signPackage(
     std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm_buf);
     res.signedAt = std::string(buf);
 
-    res.publicKey = sha256(privateKeyOrSecret + "_public");
-
     // Injeta metadados de assinatura no runner_manifest.json
     j["signature"] = {
         {"enabled", true},
         {"algorithm", res.algorithm},
         {"keyId", keyId.empty() ? "corp-signing-key-1" : keyId},
         {"publicKey", res.publicKey},
-        {"requiredForExecution", true},
+        {"requiredForExecution", requiredForExecution},
         {"signature", res.signature},
         {"signedAt", res.signedAt},
         {"issuer", res.issuer},
@@ -366,7 +432,7 @@ bool RunnerSecurity::verifyPackage(
 
     auto sigObj = j["signature"];
     std::string expectedSig = sigObj.value("signature", "");
-    std::string algo = sigObj.value("algorithm", "hmac-sha256");
+    std::string algo = sigObj.value("algorithm", "");
     bool required = sigObj.value("requiredForExecution", false) || requiredForExecution;
 
     if (expectedSig.empty()) {
@@ -377,30 +443,75 @@ bool RunnerSecurity::verifyPackage(
         return true;
     }
 
+    if (algo.empty()) {
+        // Pacotes antigos podem nao declarar o algoritmo. 128 hex = Ed25519; 64 hex = HMAC-SHA256.
+        algo = expectedSig.size() == 128 ? "ed25519" : "hmac-sha256";
+    }
+    for (char& c : algo) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
     // Remove signature para recriar o hash canônico
     j.erase("signature");
     std::string canonicalJson = j.dump();
     std::string computedHash = sha256(canonicalJson);
 
-    // Valida com o segredo corporativo ou chave pública
-    if (!publicKeyOrSecret.empty()) {
-        std::string computedSig = hmacSha256(publicKeyOrSecret, computedHash);
-        if (computedSig != expectedSig) {
-            outError = "Bloqueio de seguranca (fail-closed): assinatura criptografica invalida ou pacote adulterado.";
+    // O hash anotado no manifesto sempre precisa coincidir com o conteudo atual.
+    if (sigObj.contains("packageHash")) {
+        std::string origHash = sigObj["packageHash"].get<std::string>();
+        if (origHash != computedHash) {
+            outError = "Bloqueio de seguranca (fail-closed): integridade violada! Hash do manifesto difere da assinatura.";
             return false;
-        }
-    } else {
-        // Se a chave não foi fornecida mas havia hash anotado no manifesto
-        if (sigObj.contains("packageHash")) {
-            std::string origHash = sigObj["packageHash"].get<std::string>();
-            if (origHash != computedHash) {
-                outError = "Bloqueio de seguranca (fail-closed): integridade violada! Hash do grafo difere da assinatura corporativa.";
-                return false;
-            }
         }
     }
 
-    return true;
+    if (algo == "ed25519") {
+        std::vector<uint8_t> signatureBytes;
+        if (!hexDecode(expectedSig, signatureBytes) || signatureBytes.size() != 64) {
+            outError = "Bloqueio de seguranca (fail-closed): assinatura Ed25519 invalida ou malformada.";
+            return false;
+        }
+
+        if (publicKeyOrSecret.empty()) {
+            if (required) {
+                outError = "Bloqueio de seguranca (fail-closed): chave publica Ed25519 de confianca ausente. "
+                           "Configure a trust anchor do runner.";
+                return false;
+            }
+            // Sem trust anchor, a checagem acima garante apenas integridade, nao autenticidade.
+            return true;
+        }
+
+        std::vector<uint8_t> publicKeyBytes;
+        if (!hexDecode(publicKeyOrSecret, publicKeyBytes) || publicKeyBytes.size() != 32) {
+            outError = "Chave publica Ed25519 invalida: informe 32 bytes em hexadecimal (64 caracteres).";
+            return false;
+        }
+
+        if (ed25519_verify(signatureBytes.data(),
+                           reinterpret_cast<const unsigned char*>(computedHash.data()),
+                           computedHash.size(),
+                           publicKeyBytes.data()) != 1) {
+            outError = "Bloqueio de seguranca (fail-closed): assinatura Ed25519 invalida ou pacote adulterado.";
+            return false;
+        }
+        return true;
+    }
+
+    if (algo == "hmac-sha256") {
+        if (!publicKeyOrSecret.empty()) {
+            std::string computedSig = hmacSha256(publicKeyOrSecret, computedHash);
+            if (computedSig != expectedSig) {
+                outError = "Bloqueio de seguranca (fail-closed): assinatura HMAC invalida ou pacote adulterado.";
+                return false;
+            }
+        } else if (required) {
+            outError = "Bloqueio de seguranca (fail-closed): segredo HMAC de confianca ausente.";
+            return false;
+        }
+        return true;
+    }
+
+    outError = "Bloqueio de seguranca (fail-closed): algoritmo de assinatura nao suportado: " + algo;
+    return false;
 }
 
 } // namespace project
