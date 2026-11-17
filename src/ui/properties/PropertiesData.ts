@@ -10,6 +10,7 @@ import { claimAgentKeyFromValue, claimExtractionEnabled, memoryModeOf } from '..
 import { sanitizeEnvReferences } from '../../core/env/EnvironmentManager.ts';
 import type { CanvasBackground } from '../../view/CanvasPreferences.ts';
 import type { IProjectSettings, IResolvedSettings, IStudioCredentialsSnapshot, IStudioModelSettings, IStudioSettings, IWorkspaceSettings } from '../../core/settings/types.ts';
+import { defaultWorkspaceRunnerSettings } from '../../core/settings/WorkspaceSettingsStore.ts';
 import { t } from '../../i18n/index.ts';
 import type { IGitStatusResult } from '../../core/git/GitSyncManager.ts';
 import type {
@@ -40,6 +41,7 @@ export interface IPropertiesContext {
   saveStudioGit?: (values: Record<string, string>) => Promise<boolean>;
   gitStatus?: IGitStatusResult;
   saveWorkspace?: (values: Record<string, string>) => Promise<boolean>;
+  saveWorkspaceRunner?: (values: Record<string, string>) => Promise<boolean>;
   saveProject?: (values: Record<string, string>) => Promise<boolean>;
   saveProjectDefaults?: (values: Record<string, string>) => Promise<boolean>;
   saveProjectMemory?: (values: Record<string, string>) => Promise<boolean>;
@@ -490,6 +492,7 @@ function buildWorkspace(context: IPropertiesContext): IPropertiesScopeConfig {
     autoVerifySkills: true,
     strictSecurityMode: true
   };
+  const runnerConfig = context.settings?.workspace.runner || defaultWorkspaceRunnerSettings();
 
   return {
     scope: 'workspace',
@@ -600,6 +603,107 @@ function buildWorkspace(context: IPropertiesContext): IPropertiesScopeConfig {
         `,
         save: context.saveWorkspace
           ? (values) => context.saveWorkspace!(values)
+          : undefined
+      }),
+      section({
+        id: 'runner',
+        title: label('section.workspace_runner', 'Runner corporativo'),
+        description: label('workspace.runner_desc', 'Empacotamento, cofre de segredos e assinatura dos runners standalone.'),
+        icon: 'rocket',
+        badge: label('badge.workspace', 'Workspace'),
+        content: `
+          <div class="properties-subsection-title">${escapeHtml(label('runner.packaging_title', 'Empacotamento (Intune & SCCM)'))}</div>
+          <div class="form-row-grid properties-form-grid">
+            <div class="form-group">
+              <label class="form-label" for="properties-runner-pkg-format">${escapeHtml(label('runner.pkg_format', 'Formato de distribuição'))}</label>
+              <select id="properties-runner-pkg-format" class="form-select" data-property-input="runnerPkgFormat">
+                <option value="standalone-folder" ${runnerConfig.packaging.format === 'standalone-folder' ? 'selected' : ''}>Pasta standalone com scripts (.bat)</option>
+                <option value="msi-installer" ${runnerConfig.packaging.format === 'msi-installer' ? 'selected' : ''}>Instalador MSI (WiX)</option>
+                <option value="msix-package" ${runnerConfig.packaging.format === 'msix-package' ? 'selected' : ''}>Pacote MSIX</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="properties-runner-pkg-appid">${escapeHtml(label('runner.pkg_appid', 'ID da aplicação'))}</label>
+              <input id="properties-runner-pkg-appid" class="form-input" type="text" data-property-input="runnerPkgAppId" value="${escapeHtml(runnerConfig.packaging.appId || '')}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="properties-runner-pkg-publisher">${escapeHtml(label('runner.pkg_publisher', 'Fabricante / Publisher'))}</label>
+              <input id="properties-runner-pkg-publisher" class="form-input" type="text" data-property-input="runnerPkgPublisher" value="${escapeHtml(runnerConfig.packaging.publisher || '')}" />
+            </div>
+          </div>
+          <div class="properties-check-grid properties-form-grid">
+            <label class="properties-check-row">
+              <input type="checkbox" data-property-input="runnerPkgDesktop" ${runnerConfig.packaging.createDesktopShortcut !== false ? 'checked' : ''} />
+              <span>${escapeHtml(label('runner.pkg_desktop', 'Atalho no Desktop'))}</span>
+            </label>
+            <label class="properties-check-row">
+              <input type="checkbox" data-property-input="runnerPkgStartMenu" ${runnerConfig.packaging.createStartMenuShortcut !== false ? 'checked' : ''} />
+              <span>${escapeHtml(label('runner.pkg_startmenu', 'Atalho no Menu Iniciar'))}</span>
+            </label>
+          </div>
+
+          <div class="properties-subsection-title">${escapeHtml(label('runner.vault_title', 'Cofre corporativo (zero secrets)'))}</div>
+          <div class="form-row-grid properties-form-grid">
+            <div class="form-group">
+              <label class="form-label" for="properties-runner-vault-provider">${escapeHtml(label('runner.vault_provider', 'Provedor de segredos'))}</label>
+              <select id="properties-runner-vault-provider" class="form-select" data-property-input="runnerVaultProvider">
+                <option value="windows-credential-vault" ${runnerConfig.vault.provider === 'windows-credential-vault' ? 'selected' : ''}>Cofre do Windows (DPAPI)</option>
+                <option value="azure-key-vault" ${runnerConfig.vault.provider === 'azure-key-vault' ? 'selected' : ''}>Azure Key Vault</option>
+                <option value="hybrid" ${runnerConfig.vault.provider === 'hybrid' ? 'selected' : ''}>Híbrido (Azure + DPAPI)</option>
+                <option value="none" ${runnerConfig.vault.provider === 'none' ? 'selected' : ''}>Somente variáveis do SO</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="properties-runner-akv-url">${escapeHtml(label('runner.akv_url', 'URL do Azure Key Vault (opcional)'))}</label>
+              <input id="properties-runner-akv-url" class="form-input properties-code-input" type="text" data-property-input="runnerAkvUrl" value="${escapeHtml(runnerConfig.vault.azureKeyVaultUrl || '')}" placeholder="https://corp-vault.vault.azure.net" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="properties-runner-akv-auth">${escapeHtml(label('runner.akv_auth', 'Autenticação Azure'))}</label>
+              <select id="properties-runner-akv-auth" class="form-select" data-property-input="runnerAkvAuth">
+                <option value="managed-identity" ${runnerConfig.vault.azureAuthMethod === 'managed-identity' ? 'selected' : ''}>Managed Identity (IMDS)</option>
+                <option value="service-principal" ${runnerConfig.vault.azureAuthMethod === 'service-principal' ? 'selected' : ''}>Service Principal</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="properties-runner-secret-prefix">${escapeHtml(label('runner.secret_prefix', 'Prefixo dos segredos'))}</label>
+              <input id="properties-runner-secret-prefix" class="form-input" type="text" data-property-input="runnerSecretPrefix" value="${escapeHtml(runnerConfig.vault.secretPrefix || 'Arestrix_')}" />
+            </div>
+          </div>
+          <label class="properties-check-row">
+            <input type="checkbox" checked disabled />
+            <span>${escapeHtml(label('runner.auto_purge_always', 'Limpeza imediata de memória RAM (SecureZeroMemory) — sempre habilitada'))}</span>
+          </label>
+
+          <div class="properties-subsection-title">${escapeHtml(label('runner.signature_title', 'Assinatura & integridade (fail-closed)'))}</div>
+          <label class="properties-check-row">
+            <input type="checkbox" checked disabled />
+            <span>${escapeHtml(label('runner.signature_always', 'Assinatura digital do pacote — sempre habilitada'))}</span>
+          </label>
+          <div class="form-row-grid properties-form-grid">
+            <div class="form-group">
+              <label class="form-label" for="properties-runner-sig-algorithm">${escapeHtml(label('runner.sig_algorithm', 'Algoritmo'))}</label>
+              <select id="properties-runner-sig-algorithm" class="form-select" data-property-input="runnerSigAlgorithm">
+                <option value="ed25519" ${runnerConfig.signature.algorithm === 'ed25519' ? 'selected' : ''}>Ed25519 (recomendado)</option>
+                <option value="hmac-sha256" ${runnerConfig.signature.algorithm === 'hmac-sha256' ? 'selected' : ''}>HMAC-SHA256 (legado)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="properties-runner-sig-keyid">${escapeHtml(label('runner.sig_keyid', 'Alias da chave / KeyId'))}</label>
+              <input id="properties-runner-sig-keyid" class="form-input" type="text" data-property-input="runnerSigKeyId" value="${escapeHtml(runnerConfig.signature.keyId || 'corp-signing-key-1')}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="properties-runner-sig-issuer">${escapeHtml(label('runner.sig_issuer', 'Emissor / autoridade'))}</label>
+              <input id="properties-runner-sig-issuer" class="form-input" type="text" data-property-input="runnerSigIssuer" value="${escapeHtml(runnerConfig.signature.issuer || 'Arestrix Enterprise Security')}" />
+            </div>
+          </div>
+          <label class="properties-check-row">
+            <input type="checkbox" checked disabled />
+            <span>${escapeHtml(label('runner.signature_required_always', 'Exigir assinatura válida para execução — sempre habilitado'))}</span>
+          </label>
+          <p class="properties-hint">${escapeHtml(label('runner.hint', 'O runner standalone usa o cofre do Windows, limpa a memória após o uso e exige assinatura válida. A chave privada de assinatura continua no ambiente do sistema.'))}</p>
+        `,
+        save: context.saveWorkspaceRunner
+          ? (values) => context.saveWorkspaceRunner!(values)
           : undefined
       }),
       section({

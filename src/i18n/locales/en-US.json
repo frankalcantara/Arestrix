@@ -2326,7 +2326,10 @@
     "artifacts_title": "Deliverables & Artifacts",
     "export_settings_title": "Runner Executable Configuration",
     "card_title": "Standalone Runner",
-    "btn_open_runner": "Open Standalone Runner Panel..."
+    "btn_open_runner": "Open Standalone Runner Panel...",
+    "export_workspace_settings_title": "Packaging, vault and signing",
+    "export_workspace_settings_desc": "Defined in Workspace Properties. Defaults: Windows vault, immediate memory cleanup, signing enabled and required.",
+    "export_open_workspace_settings": "Open Workspace Properties"
   },
   "graphviz_export": {
     "title": "Graph Architecture (Graphviz)",
@@ -2409,6 +2412,7 @@
       "sandbox": "Default sandbox",
       "studio_model": "Studio model",
       "git_account": "Git Account",
+      "workspace_runner": "Corporate runner",
       "environment": "Project environment"
     },
     "label": {
@@ -2570,6 +2574,7 @@
       "general_desc": "Physical folder and infrastructure shared by the active project.",
       "catalogs_desc": "Skills, MCP servers and asset libraries approved for use in the workspace.",
       "security_desc": "Policies applied to skills, MCPs and workspace executions.",
+      "runner_desc": "Packaging, secret vault and signing for standalone runners.",
       "memory_desc": "Shared database used only by explicit project promotions.",
       "advanced_desc": "Workspace configuration manifest.",
       "security_hint": "These policies apply to the current workspace and take effect on the next synchronization.",
@@ -2582,6 +2587,27 @@
       "reset_title": "Workspace",
       "reset_success": "Workspace defaults restored.",
       "reset_failed": "Could not restore Workspace defaults."
+    },
+    "runner": {
+      "packaging_title": "Packaging (Intune & SCCM)",
+      "pkg_format": "Distribution format",
+      "pkg_appid": "Application ID",
+      "pkg_publisher": "Manufacturer / Publisher",
+      "pkg_desktop": "Desktop shortcut",
+      "pkg_startmenu": "Start menu shortcut",
+      "vault_title": "Corporate vault (zero secrets)",
+      "vault_provider": "Secret provider",
+      "akv_url": "Azure Key Vault URL (optional)",
+      "akv_auth": "Azure authentication",
+      "secret_prefix": "Secret prefix",
+      "auto_purge_always": "Immediate RAM cleanup (SecureZeroMemory) — always enabled",
+      "signature_title": "Signing & integrity (fail-closed)",
+      "signature_always": "Package digital signature — always enabled",
+      "sig_algorithm": "Algorithm",
+      "sig_keyid": "Key alias / KeyId",
+      "sig_issuer": "Issuer / authority",
+      "signature_required_always": "Require a valid signature for execution — always enabled",
+      "hint": "The standalone runner uses the Windows vault, wipes memory after use and requires a valid signature. Set ARESTRIX_RUNNER_SIGNING_KEY (32-byte hexadecimal seed) in the export environment."
     },
     "origin": {
       "default": "Default",
