@@ -14,6 +14,7 @@ struct GitStatusResult {
     std::string gitVersion;
     std::string userName;
     std::string userEmail;
+    std::string accountUsername; // login da conta autenticada (nunca o nome de exibicao)
     bool isIdentityConfigured = false;
     std::vector<std::string> gcmAccounts;
     bool isRepo = false;
@@ -33,6 +34,7 @@ inline void to_json(taskforge::Json& j, const GitStatusResult& r) {
         {"gitVersion", r.gitVersion},
         {"userName", r.userName},
         {"userEmail", r.userEmail},
+        {"accountUsername", r.accountUsername},
         {"isIdentityConfigured", r.isIdentityConfigured},
         {"gcmAccounts", r.gcmAccounts},
         {"isRepo", r.isRepo},
@@ -64,6 +66,14 @@ public:
     // Lista contas gerenciadas pelo Git Credential Manager no SO
     static std::vector<std::string> listGcmAccounts(const std::string& provider);
 
+    // Resolve o username (login) da conta autenticada no provedor, nunca o nome de exibicao.
+    // allowGhCli habilita `gh api user` como ultimo recurso (requer rede).
+    static std::string detectAccountUsername(const std::string& provider, bool allowGhCli = false);
+
+    // Valida/normaliza um username para compor a URL remota. Retorna vazio quando o valor
+    // nao e um login valido (ex.: nome completo com espacos ou e-mail).
+    static std::string normalizeAccountLogin(const std::string& value);
+
     // Dispara o fluxo seguro de login no SO (GCM)
     static bool launchGcmLogin(const std::string& provider, std::string& error);
 
@@ -83,6 +93,7 @@ public:
                                  const std::string& username,
                                  const std::string& serverUrl,
                                  std::string& remoteUrl,
+                                 std::string& resolvedUsername,
                                  std::string& error);
 
     // Executa git add e commit local (sem enviar para o remote, ideal para F5 / syncOnRun)

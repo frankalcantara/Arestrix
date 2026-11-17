@@ -68,6 +68,63 @@ bool hasGitIdentity(const std::filesystem::path& projectRoot) {
     return true;
 }
 
+/**
+ * Le uma chave do git config global/sistema (sem projeto, sem credencial secreta).
+ */
+std::string gitConfigGet(const std::string& key) {
+    if (!platform::commandExists("git")) return "";
+    platform::ProcessSpec s;
+    s.argv = {"git", "config", "--get", key};
+    s.scrubSecrets = true;
+    auto r = platform::run(s, 3000);
+    return r.ok() ? trim(r.output) : "";
+}
+
+/**
+ * Resolve o login da conta no provedor. O nome de exibicao (user.name) nunca e
+ * usado: ele costuma conter espacos e nao identifica a conta no servidor.
+ */
+std::string detectAccountUsernameImpl(const std::string& provider,
+                                      bool allowGhCli,
+                                      const std::vector<std::string>* gcmAccounts) {
+    std::string prov = toLower(provider);
+    if (prov.empty()) prov = "github";
+
+    std::vector<std::string> keys;
+    if (prov == "github") {
+        keys = {"github.user", "credential.https://github.com.username", "credential.username"};
+    } else if (prov == "gitlab") {
+        keys = {"gitlab.user", "credential.https://gitlab.com.username", "credential.username"};
+    } else {
+        keys = {"credential.username"};
+    }
+
+    for (const auto& key : keys) {
+        std::string candidate = GitSyncService::normalizeAccountLogin(gitConfigGet(key));
+        if (!candidate.empty()) return candidate;
+    }
+
+    const std::vector<std::string> localAccounts =
+        gcmAccounts ? *gcmAccounts : GitSyncService::listGcmAccounts(prov);
+    for (const auto& account : localAccounts) {
+        std::string candidate = GitSyncService::normalizeAccountLogin(account);
+        if (!candidate.empty()) return candidate;
+    }
+
+    if (allowGhCli && prov == "github" && platform::commandExists("gh")) {
+        platform::ProcessSpec s;
+        s.argv = {"gh", "api", "user", "--jq", ".login"};
+        s.scrubSecrets = true;
+        auto r = platform::run(s, 8000);
+        if (r.ok()) {
+            std::string candidate = GitSyncService::normalizeAccountLogin(r.output);
+            if (!candidate.empty()) return candidate;
+        }
+    }
+
+    return "";
+}
+
 } // namespace
 
 bool GitSyncService::isCommercialService(const std::string& serverOrProvider) {
@@ -168,6 +225,27 @@ std::vector<std::string> GitSyncService::listGcmAccounts(const std::string& prov
     return accounts;
 }
 
+std::string GitSyncService::normalizeAccountLogin(const std::string& value) {
+    std::string login = trim(value);
+    if (login.empty() || login.size() > 100) return "";
+
+    // Um login nunca contem espacos, e-mail ou separadores de URL. Valores assim
+    // (tipicamente o nome completo do user.name) sao rejeitados de proposito.
+    for (char c : login) {
+        unsigned char uc = static_cast<unsigned char>(c);
+        if (std::isspace(uc)) return "";
+        if (c == '/' || c == '\\' || c == '@' || c == ':' || c == '?' || c == '#' ||
+            c == '&' || c == '=' || c == '%') {
+            return "";
+        }
+    }
+    return login;
+}
+
+std::string GitSyncService::detectAccountUsername(const std::string& provider, bool allowGhCli) {
+    return detectAccountUsernameImpl(provider, allowGhCli, nullptr);
+}
+
 bool GitSyncService::launchGcmLogin(const std::string& provider, std::string& error) {
     if (!platform::commandExists("git")) {
         error = "Git nao encontrado no sistema operacional.";
@@ -198,6 +276,7 @@ GitStatusResult GitSyncService::getStatus(const std::filesystem::path& projectRo
 
     st.isIdentityConfigured = getSystemIdentity(st.userName, st.userEmail);
     st.gcmAccounts = listGcmAccounts("github");
+    st.accountUsername = detectAccountUsernameImpl("github", false, &st.gcmAccounts);
 
     if (projectRoot.empty() || !std::filesystem::exists(projectRoot)) {
         return st;
@@ -453,26 +532,72 @@ bool GitSyncService::createRemoteRepo(const std::string& provider,
                                      const std::string& username,
                                      const std::string& serverUrl,
                                      std::string& remoteUrl,
+                                     std::string& resolvedUsername,
                                      std::string& error) {
+    remoteUrl.clear();
+    resolvedUsername.clear();
+
     std::string safeRepoName = sanitizeRepoName(repoName);
     std::string prov = toLower(provider);
     if (prov.empty()) prov = "github";
 
-    // 1. Tenta GitHub CLI (gh) se disponivel
-    if (prov == "github" && platform::commandExists("gh")) {
-        platform::ProcessSpec spec;
-        spec.argv = {"gh", "repo", "create", safeRepoName, isPrivate ? "--private" : "--public", "--confirm"};
-        spec.scrubSecrets = true;
-        auto res = platform::run(spec, 30000);
-        // Mesmo se falhar porque ja existe, continua para montar a URL
+    // O username informado pode vir do campo errado (ex.: nome completo do user.name).
+    // Nesse caso ele e descartado e o login real da conta e resolvido no SO.
+    resolvedUsername = normalizeAccountLogin(username);
+    if (resolvedUsername.empty()) {
+        resolvedUsername = detectAccountUsername(prov, true);
     }
 
-    // 2. Monta a URL remota padrao segundo as diretrizes de privacidade e seguranca
     std::string baseHost = !serverUrl.empty() ? serverUrl : "https://github.com";
-    if (baseHost.back() == '/') baseHost.pop_back();
+    while (!baseHost.empty() && baseHost.back() == '/') baseHost.pop_back();
+    if (baseHost.empty()) baseHost = "https://github.com";
 
-    std::string user = !username.empty() ? username : "usuario";
-    remoteUrl = baseHost + "/" + user + "/" + safeRepoName + ".git";
+    // 1. Tenta GitHub CLI (gh) apenas no github.com; a URL canonica vem do proprio gh,
+    // evitando compor owner/repo com um username incorreto.
+    const bool isGithubDotCom = baseHost.find("github.com") != std::string::npos;
+    if (prov == "github" && isGithubDotCom && platform::commandExists("gh")) {
+        platform::ProcessSpec spec;
+        spec.argv = {"gh", "repo", "create", safeRepoName, isPrivate ? "--private" : "--public"};
+        spec.scrubSecrets = true;
+        auto res = platform::run(spec, 30000);
+
+        // Consulta a URL mesmo quando o repo ja existia (create retorna erro nesse caso).
+        platform::ProcessSpec view;
+        view.argv = {"gh", "repo", "view", safeRepoName, "--json", "url", "-q", ".url"};
+        view.scrubSecrets = true;
+        auto viewRes = platform::run(view, 15000);
+
+        std::string ghUrl = viewRes.ok() ? trim(viewRes.output) : "";
+        if (ghUrl.empty() && res.ok()) {
+            std::smatch match;
+            static const std::regex urlPattern(R"(https?://[^\s]+)");
+            if (std::regex_search(res.output, match, urlPattern)) ghUrl = match.str(0);
+        }
+
+        if (!ghUrl.empty() && ghUrl.rfind("http", 0) == 0) {
+            if (ghUrl.size() < 4 || ghUrl.substr(ghUrl.size() - 4) != ".git") ghUrl += ".git";
+            remoteUrl = ghUrl;
+            if (resolvedUsername.empty()) {
+                std::smatch ownerMatch;
+                static const std::regex ownerPattern(R"(^https?://[^/]+/([^/]+)/)");
+                if (std::regex_search(remoteUrl, ownerMatch, ownerPattern)) {
+                    resolvedUsername = normalizeAccountLogin(ownerMatch[1].str());
+                }
+            }
+            std::cout << "[GitSyncService] Repositorio remoto privado preparado: " << remoteUrl << "\n";
+            return true;
+        }
+    }
+
+    // 2. Sem gh, monta a URL remota com o login validado (nunca o nome de exibicao).
+    if (resolvedUsername.empty()) {
+        error = prov == "github"
+            ? "Nao foi possivel identificar o username da conta GitHub no SO. Informe a Conta / Usuario Remoto (ex.: frankalcantara), nao o nome de exibicao."
+            : "Nao foi possivel identificar o username da conta remota. Informe a Conta / Usuario Remoto na aba Repositorio.";
+        return false;
+    }
+
+    remoteUrl = baseHost + "/" + resolvedUsername + "/" + safeRepoName + ".git";
 
     std::cout << "[GitSyncService] Repositorio remoto privado preparado: " << remoteUrl << "\n";
     return true;

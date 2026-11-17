@@ -9,6 +9,7 @@ export interface IGitStatusResult {
   gitVersion?: string;
   userName?: string;
   userEmail?: string;
+  accountUsername?: string;
   isIdentityConfigured: boolean;
   gcmAccounts: string[];
   isRepo: boolean;
@@ -250,7 +251,7 @@ export class GitSyncManager {
     username: string = '',
     serverUrl: string = 'https://github.com',
     provider: 'github' | 'gitlab' | 'gitea' | 'custom' = 'github'
-  ): Promise<{ ok: boolean; remoteUrl: string; error?: string }> {
+  ): Promise<{ ok: boolean; remoteUrl: string; username?: string; error?: string }> {
     if (!this.hasWebUI()) return { ok: false, remoteUrl: '', error: 'Sem backend WebUI.' };
     const proj = this.projectManager.getCurrentProject();
 
@@ -268,12 +269,16 @@ export class GitSyncManager {
       if (raw) {
         const res = JSON.parse(raw);
         if (res.ok && res.remoteUrl) {
+          // O backend devolve o login efetivamente usado na URL (nunca o nome de exibição).
+          const resolvedUsername = res.username || this.usernameFromRemoteUrl(res.remoteUrl) || username;
+          res.username = resolvedUsername;
+
           // Atualiza as configurações Git no manifesto do projeto ativo
           const gitConfig: IProjectGitConfig = {
             enabled: true,
             provider,
             serverUrl,
-            username,
+            username: resolvedUsername,
             repositoryName: repoName || proj.name,
             remoteUrl: res.remoteUrl,
             isPrivate: true,
@@ -291,6 +296,19 @@ export class GitSyncManager {
       return { ok: false, remoteUrl: '', error: e?.message || String(e) };
     }
     return { ok: false, remoteUrl: '', error: 'Falha na chamada de criação de repositório remoto.' };
+  }
+
+  /** Extrai o login do dono a partir da URL remota (fallback para backends antigos). */
+  private usernameFromRemoteUrl(remoteUrl: string): string {
+    if (!remoteUrl) return '';
+    try {
+      const parts = new URL(remoteUrl).pathname.split('/').filter(Boolean);
+      if (parts.length >= 2) return decodeURIComponent(parts[parts.length - 2]);
+    } catch {
+      // URLs SSH (git@host:owner/repo.git) não passam pelo parser de URL.
+    }
+    const sshMatch = remoteUrl.match(/^[^@]+@[^:]+:([^/]+)\//);
+    return sshMatch ? sshMatch[1] : '';
   }
 
   /**

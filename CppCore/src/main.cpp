@@ -2633,13 +2633,13 @@ void ui_git_create_remote_repo(webui::window::event* e) {
         std::string root = j.value("rootPath", "");
         if (root.empty()) root = taskforge::project::ProjectManager::getInstance().getCurrentProject().rootPath;
 
-        std::string remoteUrl, err;
-        bool ok = taskforge::project::GitSyncService::createRemoteRepo(provider, repoName, isPrivate, username, serverUrl, remoteUrl, err);
+        std::string remoteUrl, resolvedUsername, err;
+        bool ok = taskforge::project::GitSyncService::createRemoteRepo(provider, repoName, isPrivate, username, serverUrl, remoteUrl, resolvedUsername, err);
         if (ok && !root.empty()) {
             std::string initErr;
             taskforge::project::GitSyncService::initProjectRepo(root, remoteUrl, initErr);
         }
-        taskforge::Json res = {{"ok", ok}, {"remoteUrl", remoteUrl}, {"error", err}};
+        taskforge::Json res = {{"ok", ok}, {"remoteUrl", remoteUrl}, {"username", resolvedUsername}, {"error", err}};
         e->return_string(res.dump());
     } catch (const std::exception& ex) {
         taskforge::Json res = {{"ok", false}, {"error", ex.what()}};

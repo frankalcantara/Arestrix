@@ -12669,6 +12669,40 @@ TEST(git_sync_service_and_project_manifest_config) {
         CHECK(!uEmail.empty());
     }
 
+    // 4.1 A conta remota e sempre um login: nome de exibicao e e-mail sao rejeitados
+    CHECK(GitSyncService::normalizeAccountLogin("frankalcantara") == "frankalcantara");
+    CHECK(GitSyncService::normalizeAccountLogin("  frankalcantara  ") == "frankalcantara");
+    CHECK(GitSyncService::normalizeAccountLogin("frank-alcantara_2").empty() == false);
+    CHECK(GitSyncService::normalizeAccountLogin("Frank Coelho de Alcantara").empty());
+    CHECK(GitSyncService::normalizeAccountLogin("usuario@example.com").empty());
+    CHECK(GitSyncService::normalizeAccountLogin("Frank/alcantara").empty());
+    CHECK(GitSyncService::normalizeAccountLogin("").empty());
+
+    // 4.2 O status expoe o login detectado, nunca o user.name com espacos
+    auto stIdentity = GitSyncService::getStatus("");
+    CHECK(stIdentity.accountUsername.find(' ') == std::string::npos);
+    if (!stIdentity.accountUsername.empty() && hasId) {
+        CHECK(stIdentity.accountUsername != stIdentity.userName);
+    }
+
+    // 4.3 A URL remota e montada com o login validado (provedor sem gh CLI)
+    std::string remoteUrl, resolvedUser, createErr;
+    bool composed = GitSyncService::createRemoteRepo("gitea", "Projeto Git Teste", true,
+                                                     "frankalcantara", "https://git.empresa.com.br",
+                                                     remoteUrl, resolvedUser, createErr);
+    CHECK(composed);
+    CHECK(resolvedUser == "frankalcantara");
+    CHECK(remoteUrl == "https://git.empresa.com.br/frankalcantara/Projeto-Git-Teste.git");
+
+    // Nome completo nao pode virar dono da URL: sem conta detectavel, o servico recusa.
+    if (GitSyncService::detectAccountUsername("gitea").empty()) {
+        bool rejected = GitSyncService::createRemoteRepo("gitea", "projeto", true,
+                                                         "Frank Coelho de Alcantara", "https://git.empresa.com.br",
+                                                         remoteUrl, resolvedUser, createErr);
+        CHECK(!rejected);
+        CHECK(createErr.find("username") != std::string::npos);
+    }
+
     // 5. Teste de commitLocal em repositorio temporario
     std::filesystem::path tempDir = std::filesystem::temp_directory_path() / ("arx_test_git_commit_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(tempDir);

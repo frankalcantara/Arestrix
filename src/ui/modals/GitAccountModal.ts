@@ -83,10 +83,46 @@ export class GitAccountModal extends BaseModal {
 
     super.open();
     await this.loadData();
-    if (!this.username && (this.identityName || this.currentStatus?.gcmAccounts?.[0])) {
-      this.username = this.identityName || (this.currentStatus?.gcmAccounts?.[0] || '');
+
+    // A conta remota é o login da conta (ex.: frankalcantara), nunca o nome de
+    // exibição do git config (user.name), que costuma ter espaços e quebra a URL.
+    const detectedUsername = this.getDetectedUsername();
+    const storedUsername = (this.username || '').trim();
+    const storedLooksWrong = !storedUsername || !this.isAccountLogin(storedUsername) ||
+      (!!this.identityName && storedUsername === this.identityName);
+    if (storedLooksWrong && detectedUsername) {
+      // Remove a URL remota que foi gerada com o nome de exibição; ela será
+      // reconstruída com o login correto ao salvar.
+      if (this.remoteUrl && this.remoteUrlOwner(this.remoteUrl) === storedUsername) {
+        this.remoteUrl = '';
+      }
+      this.username = detectedUsername;
     }
     this.render();
+  }
+
+  private getDetectedUsername(): string {
+    if (!this.currentStatus) return '';
+    if (this.provider === 'github') {
+      return this.currentStatus.accountUsername || this.currentStatus.gcmAccounts?.[0] || '';
+    }
+    return this.currentStatus.gcmAccounts?.[0] || '';
+  }
+
+  private isAccountLogin(value: string): boolean {
+    return !!value && value.length <= 100 && /^[^\s@/\\:?#%&=]+$/.test(value);
+  }
+
+  private remoteUrlOwner(remoteUrl: string): string {
+    if (!remoteUrl) return '';
+    try {
+      const parts = new URL(remoteUrl).pathname.split('/').filter(Boolean);
+      if (parts.length >= 2) return decodeURIComponent(parts[parts.length - 2]);
+      return '';
+    } catch {
+      const sshMatch = remoteUrl.match(/^[^@]+@[^:]+:([^/]+)\//);
+      return sshMatch ? sshMatch[1] : '';
+    }
   }
 
   private async loadData(): Promise<void> {
@@ -95,6 +131,10 @@ export class GitAccountModal extends BaseModal {
       const id = await this.gitManager.getSystemIdentity();
       this.identityName = id.userName || this.currentStatus.userName || '';
       this.identityEmail = id.userEmail || this.currentStatus.userEmail || '';
+      if (this.provider !== 'github') {
+        // getStatus detecta a conta do GitHub; para outros provedores consulta o cofre específico.
+        this.currentStatus.gcmAccounts = await this.gitManager.listGcmAccounts(this.provider);
+      }
     } catch (e) {
       console.warn('[GitAccountModal] Falha ao carregar status do Git:', e);
     }
@@ -117,6 +157,12 @@ export class GitAccountModal extends BaseModal {
 
     const inputUser = this.dialog.querySelector('#git-input-username') as HTMLInputElement | null;
     if (inputUser) this.username = inputUser.value.trim();
+
+    // Protege contra gravar o nome de exibição (user.name) como conta remota.
+    if (!this.isAccountLogin(this.username) || this.username === this.identityName) {
+      const detectedUsername = this.getDetectedUsername();
+      if (detectedUsername) this.username = detectedUsername;
+    }
 
     const inputRepo = this.dialog.querySelector('#git-input-repo-name') as HTMLInputElement | null;
     if (inputRepo) this.repositoryName = inputRepo.value.trim();
@@ -553,10 +599,12 @@ export class GitAccountModal extends BaseModal {
       let remoteUrl = this.remoteUrl;
       if (!remoteUrl) {
         const createRes = await this.gitManager.createRemoteRepo(this.repositoryName, true, this.username, this.serverUrl, this.provider);
-        if (createRes.ok && createRes.remoteUrl) {
-          remoteUrl = createRes.remoteUrl;
-          this.remoteUrl = remoteUrl;
+        if (!createRes.ok) {
+          throw new Error(createRes.error || t('git_sync.remote_repo_create_error', 'Falha ao criar o repositório remoto privado.'));
         }
+        remoteUrl = createRes.remoteUrl;
+        this.remoteUrl = remoteUrl;
+        if (createRes.username) this.username = createRes.username;
       }
 
       // 2. Inicializa o repositório Git local e configura o remote
