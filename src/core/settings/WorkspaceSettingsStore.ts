@@ -8,6 +8,34 @@ function storageKey(root: string): string {
   return `${STORAGE_PREFIX}${root.replace(/\\/g, '/').replace(/\/$/, '') || '.'}`;
 }
 
+export function defaultWorkspaceRunnerSettings(): IWorkspaceSettings['runner'] {
+  return {
+    packaging: {
+      format: 'standalone-folder',
+      appId: 'Arestrix.Company.PipelineRunner',
+      publisher: 'CN=Corporate, O=Enterprise, C=BR',
+      silentInstallArgs: '/qn ALLUSERS=1',
+      createDesktopShortcut: true,
+      createStartMenuShortcut: true
+    },
+    vault: {
+      provider: 'windows-credential-vault',
+      azureKeyVaultUrl: '',
+      azureAuthMethod: 'managed-identity',
+      secretPrefix: 'Arestrix_',
+      fallbackToEnvironment: true,
+      autoPurgeMemory: true
+    },
+    signature: {
+      enabled: true,
+      algorithm: 'ed25519',
+      keyId: 'corp-signing-key-1',
+      requiredForExecution: true,
+      issuer: 'Arestrix Enterprise Security'
+    }
+  };
+}
+
 function defaultSettings(manager: WorkspaceManager): IWorkspaceSettings {
   const directories = manager.getWorkspaceDirectories();
   return {
@@ -26,7 +54,8 @@ function defaultSettings(manager: WorkspaceManager): IWorkspaceSettings {
     security: {
       autoVerifySkills: true,
       strictSecurityMode: true
-    }
+    },
+    runner: defaultWorkspaceRunnerSettings()
   };
 }
 
@@ -40,6 +69,10 @@ function normalize(raw: unknown, manager: WorkspaceManager): IWorkspaceSettings 
   const directories = (properties.directories || {}) as Partial<IWorkspaceSettings['directories']>;
   const defaults = (properties.defaults || {}) as Partial<IWorkspaceSettings['defaults']>;
   const security = (properties.security || {}) as Partial<IWorkspaceSettings['security']>;
+  const runner = (properties.runner || {}) as Partial<IWorkspaceSettings['runner']>;
+  const runnerPackaging = (runner.packaging || {}) as Partial<IWorkspaceSettings['runner']['packaging']>;
+  const runnerVault = (runner.vault || {}) as Partial<IWorkspaceSettings['runner']['vault']>;
+  const runnerSignature = (runner.signature || {}) as Partial<IWorkspaceSettings['runner']['signature']>;
 
   return {
     version: 1,
@@ -59,6 +92,30 @@ function normalize(raw: unknown, manager: WorkspaceManager): IWorkspaceSettings 
     security: {
       autoVerifySkills: security.autoVerifySkills ?? (typeof input.autoVerifySkills === 'boolean' ? input.autoVerifySkills : base.security.autoVerifySkills),
       strictSecurityMode: security.strictSecurityMode ?? (typeof input.strictSecurityMode === 'boolean' ? input.strictSecurityMode : base.security.strictSecurityMode)
+    },
+    runner: {
+      packaging: {
+        ...base.runner.packaging,
+        ...runnerPackaging,
+        format: runnerPackaging.format === 'msi-installer' || runnerPackaging.format === 'msix-package'
+          ? runnerPackaging.format
+          : 'standalone-folder'
+      },
+      vault: {
+        ...base.runner.vault,
+        ...runnerVault,
+        provider: runnerVault.provider === 'azure-key-vault' || runnerVault.provider === 'hybrid' || runnerVault.provider === 'none'
+          ? runnerVault.provider
+          : 'windows-credential-vault',
+        autoPurgeMemory: true
+      },
+      signature: {
+        ...base.runner.signature,
+        ...runnerSignature,
+        enabled: true,
+        requiredForExecution: true,
+        algorithm: runnerSignature.algorithm === 'hmac-sha256' ? 'hmac-sha256' : 'ed25519'
+      }
     },
     lastSyncTimestamp: typeof properties.lastSyncTimestamp === 'string'
       ? properties.lastSyncTimestamp

@@ -397,6 +397,27 @@ Lists servers, discovers tools and tests the connection before the pipeline.
 
 Inspects the manifest, lists pipelines and validates graph + codegen without compiling.
 
+### `runner-keygen`, `sign-runner` and `verify-runner`
+
+Ed25519 signing and verification for standalone runner manifests:
+
+```powershell
+# Generate a seed and its public key (keep the seed secret)
+.\arestrix-cli.exe runner-keygen --json
+
+# Sign a manifest with the private seed
+.\arestrix-cli.exe sign-runner .\dist\runner\runner_manifest.json `
+  --key $env:ARESTRIX_RUNNER_SIGNING_KEY --required --json
+
+# Verify with the public key (CI, operations or before launch)
+.\arestrix-cli.exe verify-runner .\dist\runner\runner_manifest.json `
+  --public-key $env:ARESTRIX_RUNNER_PUBLIC_KEY --required
+```
+
+`sign-runner` accepts `--key`/`--key-file`, `--algorithm`, `--issuer`, `--key-id` and `--required`.
+The private seed is never written to the manifest. `verify-runner` exits `0` for a valid signature
+and `5` for a fail-closed rejection.
+
 ### `completion`
 
 ```powershell

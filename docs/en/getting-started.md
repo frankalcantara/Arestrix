@@ -243,6 +243,14 @@ pwsh scripts/sign-windows.ps1
 Alternatively, use `ARESTRIX_SIGN_THUMBPRINT` for a certificate in the `My` store. The script also accepts
 `-RuntimePath` to sign a runtime staged for distribution. No secret is written to the repository.
 
+For open-source distribution, **SignPath Foundation** offers free Authenticode signing for projects
+that meet its open-source terms (the publisher shown is SignPath Foundation). **Certum Open Source
+Code Signing** is a low-cost paid option (from €49) that shows your name but forbids commercial use.
+A self-signed certificate is free but is not trusted by Windows SmartScreen on other machines, and
+Sigstore does not provide Windows Authenticode trust. Commercial builds should use an OV/EV
+code-signing certificate or **Azure Trusted Signing** (paid), and should always timestamp the
+signature (the script already uses a timestamp server).
+
 Runtime upgrades are controlled by the embedded manifest: when Arestrix moves to a new version, the new
 `llama.cpp` build is downloaded, verified and older versions are removed. A signed remote catalog
 (Ed25519/minisign) still depends on a key pair and hosting decision; until then the catalog is embedded in the

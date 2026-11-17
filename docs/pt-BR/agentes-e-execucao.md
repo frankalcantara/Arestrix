@@ -223,9 +223,12 @@ Por diretriz rígida de segurança e conformidade, **nenhum segredo, senha ou ch
 A Fase 2 estabelece os pilares de segurança corporativa, integridade criptográfica e homologação para equipes de TI e Segurança da Informação (SecOps).
 
 ### 1. Validação Criptográfica de Pacotes (Fail-Closed)
-- **Hash Canônico SHA-256 e HMAC-SHA256 / Ed25519:** Cada pacote gerado recebe um hash criptográfico canônico do manifesto do pipeline.
-- **Assinatura Desanexada e no Manifesto:** O arquivo `runner_manifest.json` recebe a seção `"signature"` e opcionalmente emite o arquivo `runner_manifest.json.sig`.
-- **Execução Estrita (Fail-Closed):** Quando `"requiredForExecution": true`, o Runner verifica a integridade e autenticidade da assinatura digital antes de inicializar o runtime. Qualquer divergência de hash, corrupção de dados ou ausência de assinatura corporativa autorizada bloqueia a execução imediatamente com log explícito de auditoria.
+- **Ed25519 (recomendado):** O manifesto do runner é canonicalizado e assinado com Ed25519. A seed privada é fornecida fora do pacote por `ARESTRIX_RUNNER_SIGNING_KEY` ou `ARESTRIX_RUNNER_SIGNING_KEY_FILE` e nunca é gravada no manifesto, projeto ou repositório.
+- **Assinatura no Manifesto e Desanexada:** O `runner_manifest.json` recebe a seção `"signature"` e o arquivo `runner_manifest.json.sig` é emitido.
+- **Trust anchor:** A verificação exige a chave pública Ed25519. Informe-a por `ARESTRIX_RUNNER_PUBLIC_KEY` / `ARESTRIX_RUNNER_PUBLIC_KEY_FILE` ou compile-a no Studio com `-DARESTRIX_RUNNER_TRUST_ANCHOR=<hex>`. Em produção, prefira a chave compilada: uma chave presente apenas no `run.bat` pode ser trocada junto com o pacote.
+- **Execução Estrita (Fail-Closed):** Quando `"requiredForExecution": true`, o Runner verifica a assinatura antes de inicializar o runtime. Ausência de chave, assinatura ausente, payload modificado ou assinatura inválida bloqueiam a execução.
+- **Fluxo de CLI:** `arestrix-cli runner-keygen` gera o par seed/chave pública; `arestrix-cli sign-runner` assina um manifesto; `arestrix-cli verify-runner` verifica em CI ou operação.
+- **HMAC-SHA256 legado:** Suportado apenas para pacotes antigos e proibido com `requiredForExecution`. Novas implantações devem usar Ed25519.
 
 ### 2. Integração com Cofres Corporativos (Zero Secrets em Disco e Memória)
 Os agentes e pipelines corporativos não precisam e **não devem** manter chaves de API ou segredos gravados em arquivos locais:

@@ -224,9 +224,12 @@ Under strict security guidelines, **no secrets, passwords, or API keys are ever 
 Phase 2 establishes enterprise security foundations, cryptographic integrity enforcement, and deployment packaging certified for IT and InfoSec (SecOps) teams.
 
 ### 1. Fail-Closed Cryptographic Package Validation
-- **Canonical SHA-256 and HMAC-SHA256 / Ed25519 Hashing:** Every generated runner distribution package is hashed canonically using NIST FIPS 180-4 SHA-256.
-- **Embedded & Detached Signatures:** The `runner_manifest.json` file embeds a dedicated `"signature"` section and emits a detached `runner_manifest.json.sig` file.
-- **Fail-Closed Execution Policy:** When `"requiredForExecution": true` is enforced, the runner strictly validates digital signature authenticity and payload integrity prior to bootstrapping the pipeline. Any signature tampering, payload modification, or missing corporate issuer blocks startup immediately with an explicit security audit log.
+- **Ed25519 (recommended):** Every generated runner manifest is canonicalized and signed with Ed25519. The private seed is supplied out-of-band through `ARESTRIX_RUNNER_SIGNING_KEY` or `ARESTRIX_RUNNER_SIGNING_KEY_FILE` and is never written to the manifest, project or repository.
+- **Embedded and detached signatures:** The `runner_manifest.json` embeds a `"signature"` section and a detached `runner_manifest.json.sig` file is emitted.
+- **Trust anchor:** Verification requires the Ed25519 public key. Supply it with `ARESTRIX_RUNNER_PUBLIC_KEY` / `ARESTRIX_RUNNER_PUBLIC_KEY_FILE`, or compile it into the Studio with `-DARESTRIX_RUNNER_TRUST_ANCHOR=<hex>`. For production, prefer the compiled-in anchor: a key shipped only in `run.bat` can be replaced together with the package.
+- **Fail-Closed Execution Policy:** When `"requiredForExecution": true`, the runner verifies the signature before bootstrapping the pipeline. A missing key, missing signature, payload modification or invalid signature blocks startup.
+- **CLI workflow:** `arestrix-cli runner-keygen` generates a seed/public-key pair; `arestrix-cli sign-runner` signs a manifest; `arestrix-cli verify-runner` verifies it in CI or operations.
+- **Legacy HMAC-SHA256:** Supported only for old packages and not allowed with `requiredForExecution`. New deployments should use Ed25519.
 
 ### 2. Native Enterprise Vault Integration (Zero Secrets in Disk & RAM)
 Enterprise pipelines and autonomous agents do not store secrets or API tokens on local disk files:

@@ -62,6 +62,7 @@ export class PropertiesController {
       saveStudioCredentials: values => this.saveStudioCredentials(values),
       saveStudioGit: values => this.saveStudioGit(values),
       saveWorkspace: values => this.saveWorkspace(values),
+      saveWorkspaceRunner: values => this.saveWorkspaceRunner(values),
       saveProject: values => this.saveProject(values),
       saveProjectDefaults: values => this.saveProjectDefaults(values),
       saveProjectMemory: values => this.saveProjectMemory(values),
@@ -206,6 +207,49 @@ export class PropertiesController {
       severity: result.ok ? 'success' : 'error'
     });
     await this.show('studio', 'git-account');
+  }
+
+  private async saveWorkspaceRunner(values: Record<string, string>): Promise<boolean> {
+    const settings = this.workspaceSettings || await this.workspaceStore.load();
+    const format = values.runnerPkgFormat === 'msi-installer' || values.runnerPkgFormat === 'msix-package'
+      ? values.runnerPkgFormat
+      : 'standalone-folder';
+    const vaultProvider = values.runnerVaultProvider === 'azure-key-vault' ||
+      values.runnerVaultProvider === 'hybrid' ||
+      values.runnerVaultProvider === 'none'
+      ? values.runnerVaultProvider
+      : 'windows-credential-vault';
+    const azureAuth = values.runnerAkvAuth === 'service-principal' ? 'service-principal' : 'managed-identity';
+    settings.runner = {
+      packaging: {
+        ...settings.runner.packaging,
+        format,
+        appId: values.runnerPkgAppId || settings.runner.packaging.appId,
+        publisher: values.runnerPkgPublisher || settings.runner.packaging.publisher,
+        createDesktopShortcut: values.runnerPkgDesktop === 'true',
+        createStartMenuShortcut: values.runnerPkgStartMenu === 'true'
+      },
+      vault: {
+        ...settings.runner.vault,
+        provider: vaultProvider,
+        azureKeyVaultUrl: values.runnerAkvUrl || '',
+        azureAuthMethod: azureAuth,
+        secretPrefix: values.runnerSecretPrefix || 'Arestrix_',
+        autoPurgeMemory: true,
+        fallbackToEnvironment: true
+      },
+      signature: {
+        ...settings.runner.signature,
+        enabled: true,
+        algorithm: values.runnerSigAlgorithm === 'hmac-sha256' ? 'hmac-sha256' : 'ed25519',
+        keyId: values.runnerSigKeyId || 'corp-signing-key-1',
+        issuer: values.runnerSigIssuer || 'Arestrix Enterprise Security',
+        requiredForExecution: true
+      }
+    };
+    const saved = await this.workspaceStore.save(settings);
+    if (saved) this.workspaceSettings = settings;
+    return saved;
   }
 
   private async saveWorkspace(values: Record<string, string>): Promise<boolean> {

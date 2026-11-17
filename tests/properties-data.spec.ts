@@ -47,7 +47,7 @@ const context = {
 describe('PropertiesData', () => {
   it('builds the three scopes with their expected sections', () => {
     expect(buildPropertiesScopeConfig('studio', context).sections.map(s => s.id)).toEqual(['general', 'studio-model', 'credentials', 'git-account', 'integrations', 'libraries', 'advanced']);
-    expect(buildPropertiesScopeConfig('workspace', context).sections.map(s => s.id)).toEqual(['general', 'catalogs', 'libraries', 'sandbox', 'security', 'memory', 'advanced']);
+    expect(buildPropertiesScopeConfig('workspace', context).sections.map(s => s.id)).toEqual(['general', 'catalogs', 'libraries', 'sandbox', 'security', 'runner', 'memory', 'advanced']);
     expect(buildPropertiesScopeConfig('project', context).sections.map(s => s.id)).toEqual(['general', 'pipelines', 'defaults', 'memory', 'compression', 'libraries', 'environment', 'git', 'runner', 'advanced']);
   });
 
@@ -89,6 +89,17 @@ describe('PropertiesData', () => {
     const credentials = studio.sections.find(section => section.id === 'credentials');
     expect(credentials).toBeDefined();
     expect(credentials?.content).toContain('Nenhum valor secreto');
+  });
+
+  it('expõe o runner corporativo nas Propriedades do Workspace', () => {
+    const workspace = buildPropertiesScopeConfig('workspace', context);
+    const runner = workspace.sections.find(section => section.id === 'runner');
+    expect(runner).toBeDefined();
+    expect(runner?.content).toContain('data-property-input="runnerPkgFormat"');
+    expect(runner?.content).toContain('data-property-input="runnerVaultProvider"');
+    expect(runner?.content).toContain('data-property-input="runnerSigAlgorithm"');
+    expect(runner?.content).toContain('value="windows-credential-vault"');
+    expect(runner?.content).toContain('value="ed25519"');
   });
 
   it('expõe a conta Git global nas Propriedades do Studio', () => {

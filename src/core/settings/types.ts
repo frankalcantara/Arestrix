@@ -6,6 +6,9 @@ import type {
   INodeMemoryConfig,
   IProjectManifest,
   IProjectMemoryConfig,
+  IRunnerPackagingConfig,
+  IRunnerSignatureConfig,
+  IRunnerVaultConfig,
   ISandboxPolicy
 } from '../types.ts';
 
@@ -44,6 +47,11 @@ export interface IWorkspaceSettings {
   security: {
     autoVerifySkills: boolean;
     strictSecurityMode: boolean;
+  };
+  runner: {
+    packaging: IRunnerPackagingConfig;
+    vault: IRunnerVaultConfig;
+    signature: IRunnerSignatureConfig;
   };
   lastSyncTimestamp?: string;
 }

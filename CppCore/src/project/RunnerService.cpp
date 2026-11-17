@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <regex>
@@ -395,7 +396,84 @@ RunnerExportResult RunnerService::exportRunner(
         res.executablePath = finalExePath.string();
     }
 
-    // 6. Gera scripts de inicializacao limpos e sem segredos (.bat)
+    // 7. Assinatura Criptografica Corporativa do Pacote
+    std::string signedPublicKey;
+    bool signatureRequired = false;
+    if (manifest.runner.signature.enabled) {
+        std::string algorithm = manifest.runner.signature.algorithm.empty()
+            ? "ed25519"
+            : manifest.runner.signature.algorithm;
+        for (char& c : algorithm) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+        std::string signingKey;
+        if (algorithm == "ed25519") {
+            if (const char* envKey = std::getenv("ARESTRIX_RUNNER_SIGNING_KEY")) {
+                signingKey = envKey;
+            } else if (const char* envKeyFile = std::getenv("ARESTRIX_RUNNER_SIGNING_KEY_FILE")) {
+                std::ifstream keyFile(envKeyFile);
+                if (keyFile.is_open()) {
+                    std::stringstream keyStream;
+                    keyStream << keyFile.rdbuf();
+                    signingKey = keyStream.str();
+                }
+            }
+            signingKey.erase(0, signingKey.find_first_not_of(" \t\r\n"));
+            signingKey.erase(signingKey.find_last_not_of(" \t\r\n") + 1);
+            if (signingKey.empty()) {
+                res.ok = false;
+                res.error = "Assinatura Ed25519 habilitada, mas ARESTRIX_RUNNER_SIGNING_KEY ou "
+                            "ARESTRIX_RUNNER_SIGNING_KEY_FILE nao foi definido.";
+                return res;
+            }
+        } else if (algorithm == "hmac-sha256") {
+            if (const char* envSecret = std::getenv("ARESTRIX_RUNNER_SIGNING_SECRET")) {
+                signingKey = envSecret;
+            }
+            if (signingKey.empty()) {
+                res.ok = false;
+                res.error = "Assinatura HMAC legada habilitada, mas ARESTRIX_RUNNER_SIGNING_SECRET nao foi definido.";
+                return res;
+            }
+            if (manifest.runner.signature.requiredForExecution) {
+                res.ok = false;
+                res.error = "HMAC-SHA256 legado nao pode ser usado com requiredForExecution. Use Ed25519.";
+                return res;
+            }
+        } else {
+            res.ok = false;
+            res.error = "Algoritmo de assinatura nao suportado: " + algorithm + ". Use ed25519.";
+            return res;
+        }
+
+        auto sigRes = RunnerSecurity::signPackage(
+            manifestPath,
+            signingKey,
+            algorithm,
+            manifest.runner.signature.issuer.empty() ? "Arestrix Enterprise Security" : manifest.runner.signature.issuer,
+            manifest.runner.signature.keyId,
+            manifest.runner.signature.requiredForExecution
+        );
+        if (!sigRes.ok) {
+            res.ok = false;
+            res.error = "Falha ao assinar o pacote do runner: " + sigRes.error;
+            return res;
+        }
+
+        const std::string verifyKey = algorithm == "ed25519" ? sigRes.publicKey : signingKey;
+        std::string verifyError;
+        if (!RunnerSecurity::verifyPackage(manifestPath, verifyKey,
+                                           manifest.runner.signature.requiredForExecution,
+                                           verifyError)) {
+            res.ok = false;
+            res.error = "Falha na verificacao pos-assinatura do runner: " + verifyError;
+            return res;
+        }
+        signedPublicKey = sigRes.publicKey;
+        signatureRequired = manifest.runner.signature.requiredForExecution;
+        res.signaturePath = (manifestPath.parent_path() / "runner_manifest.json.sig").string();
+    }
+
+    // 8. Gera scripts de inicializacao limpos e sem segredos (.bat)
 #ifdef _WIN32
     fs::path batPath = targetDir / "run.bat";
     {
@@ -409,6 +487,15 @@ RunnerExportResult RunnerService::exportRunner(
         bat << "echo [Aviso de Seguranca] As credenciais devem estar no ambiente do SO.\r\n";
         bat << "echo ================================================================\r\n";
         bat << "cd /d \"%~dp0\"\r\n";
+        if (signatureRequired && !signedPublicKey.empty()) {
+            bat << "set \"ARESTRIX_RUNNER_PUBLIC_KEY=" << signedPublicKey << "\"\r\n";
+            bat << "\"" << appName << "\" --verify-runner \"%~dp0runner_manifest.json\" --public-key \"%ARESTRIX_RUNNER_PUBLIC_KEY%\"\r\n";
+            bat << "if errorlevel 1 (\r\n";
+            bat << "    echo [Seguranca] Assinatura do runner invalida. Execucao bloqueada.\r\n";
+            bat << "    pause\r\n";
+            bat << "    exit /b 1\r\n";
+            bat << ")\r\n";
+        }
         bat << "if exist \"" << appName << "\" (\r\n";
         bat << "    start \"\" \"" << appName << "\"\r\n";
         bat << ") else (\r\n";
@@ -419,25 +506,7 @@ RunnerExportResult RunnerService::exportRunner(
     }
 #endif
 
-    // 7. Assinatura Criptografica Corporativa do Pacote
-    if (manifest.runner.signature.enabled) {
-        std::string signKey = manifest.runner.signature.keyId;
-        if (signKey.empty()) {
-            signKey = "arestrix-corp-security-default-key";
-        }
-        auto sigRes = RunnerSecurity::signPackage(
-            manifestPath,
-            signKey,
-            manifest.runner.signature.algorithm.empty() ? "hmac-sha256" : manifest.runner.signature.algorithm,
-            manifest.runner.signature.issuer.empty() ? "Arestrix Enterprise Security" : manifest.runner.signature.issuer,
-            manifest.runner.signature.keyId
-        );
-        if (sigRes.ok) {
-            res.signaturePath = (manifestPath.parent_path() / "runner_manifest.json.sig").string();
-        }
-    }
-
-    // 8. Empacotamento Corporativo (WiX MSI / MSIX / Intune Detection Rules & Checksums)
+    // 9. Empacotamento Corporativo (WiX MSI / MSIX / Intune Detection Rules & Checksums)
     auto packRes = RunnerPackaging::generatePackagingArtifacts(targetDir, manifest, appName);
     if (packRes.ok) {
         res.packagingArtifacts = packRes.generatedFiles;
@@ -447,7 +516,7 @@ RunnerExportResult RunnerService::exportRunner(
         return res;
     }
 
-    // 9. Auditoria profunda final de todo o diretorio de saida (fail-closed)
+    // 10. Auditoria profunda final de todo o diretorio de saida (fail-closed)
     std::string dirAuditErr;
     if (!auditDirectoryForSecrets(targetDir, dirAuditErr)) {
         // Remove arquivos gerados para prevenir pacote vulneravel

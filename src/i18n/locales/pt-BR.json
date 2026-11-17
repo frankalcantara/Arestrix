@@ -2326,7 +2326,10 @@
     "artifacts_title": "Entregáveis & Artefatos",
     "export_settings_title": "Configuração do Executável do Runner",
     "card_title": "Runner Standalone",
-    "btn_open_runner": "Abrir Painel do Runner Standalone..."
+    "btn_open_runner": "Abrir Painel do Runner Standalone...",
+    "export_workspace_settings_title": "Empacotamento, cofre e assinatura",
+    "export_workspace_settings_desc": "Definidos nas Propriedades do Workspace. Padrões: Cofre do Windows, limpeza imediata de memória, assinatura habilitada e exigida.",
+    "export_open_workspace_settings": "Abrir Propriedades do Workspace"
   },
   "graphviz_export": {
     "title": "Arquitetura de Grafo (Graphviz)",
@@ -2409,6 +2412,7 @@
       "sandbox": "Sandbox padrão",
       "studio_model": "Modelo do Studio",
       "git_account": "Conta Git",
+      "workspace_runner": "Runner corporativo",
       "environment": "Ambiente do Projeto"
     },
     "label": {
@@ -2570,6 +2574,7 @@
       "general_desc": "Pasta física e infraestrutura compartilhada pelo projeto ativo.",
       "catalogs_desc": "Skills, servidores MCP e bibliotecas de assets aprovados para uso no workspace.",
       "security_desc": "Políticas aplicadas às skills, MCPs e execuções do workspace.",
+      "runner_desc": "Empacotamento, cofre de segredos e assinatura dos runners standalone.",
       "memory_desc": "Banco compartilhado usado apenas por promoções explícitas do projeto.",
       "advanced_desc": "Manifesto de configuração do workspace.",
       "security_hint": "Essas políticas valem para o workspace atual e são aplicadas na próxima sincronização.",
@@ -2582,6 +2587,27 @@
       "reset_title": "Workspace",
       "reset_success": "Padrões do Workspace restaurados.",
       "reset_failed": "Não foi possível restaurar os padrões do Workspace."
+    },
+    "runner": {
+      "packaging_title": "Empacotamento (Intune & SCCM)",
+      "pkg_format": "Formato de distribuição",
+      "pkg_appid": "ID da aplicação",
+      "pkg_publisher": "Fabricante / Publisher",
+      "pkg_desktop": "Atalho no Desktop",
+      "pkg_startmenu": "Atalho no Menu Iniciar",
+      "vault_title": "Cofre corporativo (zero secrets)",
+      "vault_provider": "Provedor de segredos",
+      "akv_url": "URL do Azure Key Vault (opcional)",
+      "akv_auth": "Autenticação Azure",
+      "secret_prefix": "Prefixo dos segredos",
+      "auto_purge_always": "Limpeza imediata de memória RAM (SecureZeroMemory) — sempre habilitada",
+      "signature_title": "Assinatura & integridade (fail-closed)",
+      "signature_always": "Assinatura digital do pacote — sempre habilitada",
+      "sig_algorithm": "Algoritmo",
+      "sig_keyid": "Alias da chave / KeyId",
+      "sig_issuer": "Emissor / autoridade",
+      "signature_required_always": "Exigir assinatura válida para execução — sempre habilitado",
+      "hint": "O runner standalone usa o cofre do Windows, limpa a memória após o uso e exige assinatura válida. Defina ARESTRIX_RUNNER_SIGNING_KEY (seed hexadecimal de 32 bytes) no ambiente de exportação."
     },
     "origin": {
       "default": "Padrão",

@@ -203,7 +203,7 @@ export class ProjectManager {
         parameters: [],
         signature: {
           enabled: false,
-          algorithm: 'hmac-sha256',
+          algorithm: 'ed25519',
           keyId: 'corp-signing-key-1',
           requiredForExecution: false,
           issuer: 'Arestrix Enterprise Security'
