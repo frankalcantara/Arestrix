@@ -395,6 +395,27 @@ Lista servidores, descobre ferramentas e testa a conexão antes do pipeline.
 
 Inspeciona o manifesto, lista pipelines e valida grafo + codegen sem compilar.
 
+### `runner-keygen`, `sign-runner` e `verify-runner`
+
+Assinatura e verificação Ed25519 de manifestos de runner standalone:
+
+```powershell
+# Gera uma seed e a chave pública (guarde a seed em segredo)
+.\arestrix-cli.exe runner-keygen --json
+
+# Assina o manifesto com a seed privada
+.\arestrix-cli.exe sign-runner .\dist\runner\runner_manifest.json `
+  --key $env:ARESTRIX_RUNNER_SIGNING_KEY --required --json
+
+# Verifica com a chave pública (CI, operação ou antes de iniciar)
+.\arestrix-cli.exe verify-runner .\dist\runner\runner_manifest.json `
+  --public-key $env:ARESTRIX_RUNNER_PUBLIC_KEY --required
+```
+
+`sign-runner` aceita `--key`/`--key-file`, `--algorithm`, `--issuer`, `--key-id` e `--required`.
+A seed privada nunca é gravada no manifesto. `verify-runner` retorna `0` para assinatura válida
+e `5` para bloqueio fail-closed.
+
 ### `completion`
 
 ```powershell

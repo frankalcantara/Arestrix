@@ -3477,8 +3477,109 @@ void refreshStudioClaimAgentsFromActiveProject() {
 }
 
 
+static std::string trimRunnerKey(std::string value) {
+    const auto first = value.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return "";
+    const auto last = value.find_last_not_of(" \t\r\n");
+    return value.substr(first, last - first + 1);
+}
+
+static std::string runnerTrustAnchor() {
+    std::string key;
+    if (const char* envKey = std::getenv("ARESTRIX_RUNNER_PUBLIC_KEY")) {
+        key = envKey;
+    } else if (const char* envFile = std::getenv("ARESTRIX_RUNNER_PUBLIC_KEY_FILE")) {
+        std::ifstream in(envFile);
+        if (in.is_open()) {
+            std::stringstream ss;
+            ss << in.rdbuf();
+            key = ss.str();
+        }
+    }
+    if (key.empty()) {
+#ifndef ARESTRIX_RUNNER_TRUST_ANCHOR
+#define ARESTRIX_RUNNER_TRUST_ANCHOR ""
+#endif
+        key = ARESTRIX_RUNNER_TRUST_ANCHOR;
+    }
+    return trimRunnerKey(key);
+}
+
+static int runRunnerVerifyCli(int argc, char** argv) {
+    if (argc < 3) {
+        std::cerr << "Uso: arestrix --verify-runner <runner_manifest.json> "
+                     "[--public-key <hex> | --public-key-file <arquivo>]\n";
+        return 2;
+    }
+    const std::string manifest = argv[2];
+    std::string publicKey;
+    for (int i = 3; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg == "--public-key" && i + 1 < argc) {
+            publicKey = argv[++i];
+        } else if (arg == "--public-key-file" && i + 1 < argc) {
+            std::ifstream in(argv[++i]);
+            if (!in.is_open()) {
+                std::cerr << "Nao foi possivel abrir a chave publica.\n";
+                return 3;
+            }
+            std::stringstream ss;
+            ss << in.rdbuf();
+            publicKey = ss.str();
+        } else {
+            std::cerr << "Opcao desconhecida: " << arg << "\n";
+            return 2;
+        }
+    }
+    publicKey = trimRunnerKey(publicKey);
+    if (publicKey.empty()) publicKey = runnerTrustAnchor();
+    std::string error;
+    const bool ok = taskforge::project::RunnerService::verifyPackage(manifest, publicKey, true, error);
+    if (ok) {
+        std::cout << "Assinatura valida: " << manifest << "\n";
+        return 0;
+    }
+    std::cerr << "Falha na verificacao do runner: " << error << "\n";
+    return 5;
+}
+
+static bool verifyStandaloneRunnerStartup() {
+    const fs::path executable = taskforge::platform::executablePath();
+    if (executable.empty()) return true;
+    const fs::path manifest = executable.parent_path() / "runner_manifest.json";
+    if (!fs::exists(manifest)) return true;
+
+    taskforge::Json j;
+    try {
+        j = taskforge::jsonutil::parseFile(manifest);
+    } catch (const std::exception& e) {
+        std::cerr << "[Seguranca] runner_manifest.json invalido: " << e.what() << "\n";
+        return false;
+    }
+    if (j.value("format", std::string()) != "arestrix-standalone-runner") return true;
+    if (!j.contains("signature") || !j["signature"].is_object()) return true;
+    if (!j["signature"].value("requiredForExecution", false)) return true;
+
+    const std::string publicKey = runnerTrustAnchor();
+    if (publicKey.empty()) {
+        std::cerr << "[Seguranca] Assinatura obrigatoria, mas nenhuma trust anchor Ed25519 foi configurada. "
+                     "Defina ARESTRIX_RUNNER_PUBLIC_KEY ou compile ARESTRIX_RUNNER_TRUST_ANCHOR.\n";
+        return false;
+    }
+    std::string error;
+    if (!taskforge::project::RunnerService::verifyPackage(manifest, publicKey, true, error)) {
+        std::cerr << "[Seguranca] Execucao bloqueada (fail-closed): " << error << "\n";
+        return false;
+    }
+    return true;
+}
+
 int main(int argc, char** argv) {
     taskforge::platform::setupStudioConsole();
+    if (argc >= 2 && std::string(argv[1]) == "--verify-runner") {
+        return runRunnerVerifyCli(argc, argv);
+    }
+    if (!verifyStandaloneRunnerStartup()) return 1;
     if (argc >= 2 && (std::string(argv[1]) == "run" || std::string(argv[1]) == "gen")) {
         return taskforge::cli::runCli(argc, argv);
     }

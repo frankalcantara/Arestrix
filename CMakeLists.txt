@@ -71,6 +71,8 @@ option(ARESTRIX_ENABLE_CLANG_TIDY "Ativa analise estatica Clang-Tidy integrada a
 option(ARESTRIX_ENABLE_CPPCHECK "Ativa analise estatica Cppcheck integrada ao build" OFF)
 option(ARESTRIX_WARNINGS_AS_ERRORS "Trata avisos do compilador como erros fatais (/WX ou -Werror)" OFF)
 option(ARESTRIX_ENABLE_TRACY "Instrumenta o build com o cliente Tracy (somente desenvolvimento)" OFF)
+set(ARESTRIX_RUNNER_TRUST_ANCHOR "" CACHE STRING
+  "Chave publica Ed25519 (hex) embutida no Studio para verificar runners standalone")
 
 # Integracao com Clang-Tidy
 if(ARESTRIX_ENABLE_CLANG_TIDY)
@@ -281,13 +283,24 @@ add_library(arestrix_core STATIC
   ${SRC}/native/NativeMisc.cpp
   ${SRC}/native/NativeSqlite.cpp
   ${TP}/sqlite/sqlite3.c
-  ${TP}/simdjson/singleheader/simdjson.cpp)
+  ${TP}/simdjson/singleheader/simdjson.cpp
+  ${TP}/ed25519/add_scalar.c
+  ${TP}/ed25519/fe.c
+  ${TP}/ed25519/ge.c
+  ${TP}/ed25519/keypair.c
+  ${TP}/ed25519/key_exchange.c
+  ${TP}/ed25519/sc.c
+  ${TP}/ed25519/seed.c
+  ${TP}/ed25519/sha512.c
+  ${TP}/ed25519/sign.c
+  ${TP}/ed25519/verify.c)
 
 target_include_directories(arestrix_core PUBLIC
   ${CMAKE_CURRENT_BINARY_DIR}/generated
   ${SRC}
   ${TP}/sqlite
   ${TP}/simdjson/singleheader
+  ${TP}/ed25519
   ${TP}/taskflow)
 
 # ---------------------------------------------------------------------------
@@ -348,9 +361,15 @@ endif()
 set_source_files_properties(${TP}/sqlite/sqlite3.c PROPERTIES
   COMPILE_DEFINITIONS "SQLITE_OMIT_LOAD_EXTENSION;SQLITE_DQS=0;SQLITE_THREADSAFE=1;SQLITE_DEFAULT_FOREIGN_KEYS=1;SQLITE_OMIT_DEPRECATED;SQLITE_OMIT_SHARED_CACHE;SQLITE_USE_URI=0;SQLITE_DEFAULT_MEMSTATUS=0;SQLITE_ENABLE_FTS5")
 if(MSVC)
-  set_source_files_properties(${TP}/sqlite/sqlite3.c ${TP}/simdjson/singleheader/simdjson.cpp PROPERTIES COMPILE_OPTIONS "/w")
+  set_source_files_properties(${TP}/sqlite/sqlite3.c ${TP}/simdjson/singleheader/simdjson.cpp
+    ${TP}/ed25519/add_scalar.c ${TP}/ed25519/fe.c ${TP}/ed25519/ge.c ${TP}/ed25519/keypair.c
+    ${TP}/ed25519/key_exchange.c ${TP}/ed25519/sc.c ${TP}/ed25519/seed.c ${TP}/ed25519/sha512.c ${TP}/ed25519/sign.c
+    ${TP}/ed25519/verify.c PROPERTIES COMPILE_OPTIONS "/w")
 else()
-  set_source_files_properties(${TP}/sqlite/sqlite3.c ${TP}/simdjson/singleheader/simdjson.cpp PROPERTIES COMPILE_OPTIONS "-w")
+  set_source_files_properties(${TP}/sqlite/sqlite3.c ${TP}/simdjson/singleheader/simdjson.cpp
+    ${TP}/ed25519/add_scalar.c ${TP}/ed25519/fe.c ${TP}/ed25519/ge.c ${TP}/ed25519/keypair.c
+    ${TP}/ed25519/key_exchange.c ${TP}/ed25519/sc.c ${TP}/ed25519/seed.c ${TP}/ed25519/sha512.c ${TP}/ed25519/sign.c
+    ${TP}/ed25519/verify.c PROPERTIES COMPILE_OPTIONS "-w")
 endif()
 
 find_package(Threads REQUIRED)
@@ -477,6 +496,9 @@ if(ARESTRIX_BUILD_STUDIO)
     ${SRC}/platform/StudioConsole.cpp)
   target_link_libraries(arestrix PRIVATE arestrix_gateway_core arestrix_core arestrix_security_flags webui)
   target_compile_definitions(arestrix PRIVATE ARESTRIX_STUDIO_VERSION="${ARESTRIX_VERSION}")
+  if(ARESTRIX_RUNNER_TRUST_ANCHOR)
+    target_compile_definitions(arestrix PRIVATE ARESTRIX_RUNNER_TRUST_ANCHOR="${ARESTRIX_RUNNER_TRUST_ANCHOR}")
+  endif()
   if(WIN32)
     arestrix_add_version_info(arestrix "Arestrix Studio" "arestrix.exe" "arestrix")
   endif()

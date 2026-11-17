@@ -66,6 +66,10 @@ describe('Settings stores', () => {
     const reloaded = await store.load();
     expect(reloaded.defaults.sandbox?.maxMemoryMB).toBe(2048);
     expect(reloaded.security.autoVerifySkills).toBe(false);
+    expect(reloaded.runner.vault.provider).toBe('windows-credential-vault');
+    expect(reloaded.runner.vault.autoPurgeMemory).toBe(true);
+    expect(reloaded.runner.signature.enabled).toBe(true);
+    expect(reloaded.runner.signature.requiredForExecution).toBe(true);
   });
 
   it('uses .workspace/workspace.config.json with the native backend', async () => {

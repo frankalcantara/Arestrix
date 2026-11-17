@@ -3,6 +3,11 @@
 # Requer um certificado de assinatura de código. Nenhum segredo é gravado no repositório:
 # use ARESTRIX_SIGN_PFX + ARESTRIX_SIGN_PFX_PASSWORD ou ARESTRIX_SIGN_THUMBPRINT.
 #
+# Opções para open source: SignPath Foundation oferece assinatura gratuita para projetos
+# qualificados (publisher = SignPath Foundation); Certum Open Source é uma opção paga de
+# baixo custo. Certificado autoassinado é gratuito, mas não é confiável pelo Windows em
+# outras máquinas. Para distribuição comercial, use OV/EV ou Azure Trusted Signing.
+#
 # Exemplos:
 #   $env:ARESTRIX_SIGN_PFX = "C:\secrets\arestrix.pfx"
 #   $env:ARESTRIX_SIGN_PFX_PASSWORD = "..."

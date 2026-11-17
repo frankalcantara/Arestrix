@@ -344,6 +344,18 @@ describe('Standalone Runner Engine & Manager', () => {
     expect(restored).toBe(1);
   });
 
+  it('deve manter apenas o bloco Executável na aba Exportar', () => {
+    graph.createNode('node_teste', 'Tarefa Teste', 'static', 100, 100);
+    const modal = new StandaloneRunnerModal(graph);
+    const html = (modal as any).renderExportScreen();
+
+    expect(html).toContain('Executável & Pipeline');
+    expect(html).not.toContain('runner-chk-sig-enabled');
+    expect(html).not.toContain('runner-select-vault-provider');
+    expect(html).not.toContain('runner-select-pkg-format');
+    expect(html).toContain('btn-open-workspace-runner-settings');
+  });
+
   it('deve auditar e bloquear qualquer tentativa de exportar segredos ou chaves reais (fail-closed)', async () => {
     // 1. Textos limpos passam
     expect(RunnerManager.auditTextForSecrets('Executando modelo com ${DEEPSEEK_API_KEY}').ok).toBe(true);

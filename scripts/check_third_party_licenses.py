@@ -38,6 +38,7 @@ COMPONENTS = {
     "fonts/inter":   ("OFL-1.1",    "OFL-Inter.txt", "SIL Open Font License"),
     "sqlite":        ("blessing",   "LICENSE.md",  "May you do good and not evil"),   # dominio publico
     "httplib":       ("MIT",        "LICENSE",     "MIT License"),
+    "ed25519":       ("Zlib",       "license.txt", "Permission is granted to anyone to use this software"),
 }
 
 errors = []

@@ -30,6 +30,7 @@ Vendored (not submodules):
 | Path | Version | License |
 | :--- | :--- | :--- |
 | `sqlite/` | 3.54.0 amalgamation | Public domain |
+| `ed25519/` | orlp/ed25519 (`master`, 2026-11-17) | Zlib |
 | `fonts/inter/` | Inter | SIL OFL-1.1 |
 
 ## Updating a submodule

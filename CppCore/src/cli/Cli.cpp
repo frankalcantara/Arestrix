@@ -135,6 +135,9 @@ void printHelp() {
         "  arestrix-cli memory report|trace|health|claims|paths|bridges|prune|purge|proposals|embeddings|reindex|consolidate|workspace|promote|unpromote|state|ab [--project <pasta>] [opcoes]\n"
         "  arestrix-cli mcp list|test|tools [id] [--project <pasta>] [--json]\n"
         "  arestrix-cli project info|validate|graphs [--project <pasta>] [--json]\n"
+        "  arestrix-cli verify-runner <runner_manifest.json> [--public-key <hex> | --public-key-file <arquivo>] [--required] [--json]\n"
+        "  arestrix-cli sign-runner <runner_manifest.json> [--key <hex> | --key-file <arquivo>] [--algorithm ed25519|hmac-sha256] [--issuer <nome>] [--key-id <id>] [--required] [--json]\n"
+        "  arestrix-cli runner-keygen [--json]\n"
         "  arestrix-cli completion powershell|bash|zsh\n"
         "  arestrix-cli version [--json]\n\n"
         "  --ci                    Equivale a --json --quiet --no-color e timeout padrao de 900s\n\n"
@@ -3657,6 +3660,181 @@ int runCompress(const std::vector<std::string>& args) {
     return 0;
 }
 
+int runVerifyRunner(const std::vector<std::string>& args) {
+    if (args.size() < 2 || args[1] == "--help" || args[1] == "-h") {
+        std::cout << "arestrix-cli verify-runner <runner_manifest.json> "
+                     "[--public-key <hex> | --public-key-file <arquivo>] [--required] [--json]\n";
+        return args.size() < 2 ? kExitUsage : 0;
+    }
+
+    const std::string manifest = args[1];
+    std::string publicKey;
+    bool required = false;
+    bool asJson = false;
+    for (size_t i = 2; i < args.size(); ++i) {
+        const std::string& arg = args[i];
+        if (arg == "--public-key" && i + 1 < args.size()) {
+            publicKey = args[++i];
+        } else if (arg == "--public-key-file" && i + 1 < args.size()) {
+            std::ifstream in(args[++i]);
+            if (!in.is_open()) {
+                std::cerr << "Nao foi possivel abrir a chave publica: " << args[i] << "\n";
+                return kExitConfig;
+            }
+            std::stringstream ss;
+            ss << in.rdbuf();
+            publicKey = ss.str();
+        } else if (arg == "--required") {
+            required = true;
+        } else if (arg == "--json") {
+            asJson = true;
+        } else {
+            std::cerr << "Opcao desconhecida em verify-runner: " << arg << "\n";
+            return kExitUsage;
+        }
+    }
+
+    const auto trim = [](std::string value) {
+        const auto first = value.find_first_not_of(" \t\r\n");
+        if (first == std::string::npos) return std::string();
+        const auto last = value.find_last_not_of(" \t\r\n");
+        return value.substr(first, last - first + 1);
+    };
+    publicKey = trim(publicKey);
+    if (publicKey.empty()) {
+        if (const char* envKey = std::getenv("ARESTRIX_RUNNER_PUBLIC_KEY")) {
+            publicKey = trim(envKey);
+        }
+    }
+
+    std::string error;
+    const bool ok = taskforge::project::RunnerSecurity::verifyPackage(manifest, publicKey, required, error);
+    if (asJson) {
+        std::cout << taskforge::Json{{"ok", ok}, {"error", error}, {"manifest", manifest}}.dump() << "\n";
+    } else if (ok) {
+        std::cout << "Assinatura valida: " << manifest << "\n";
+    } else {
+        std::cerr << "Falha na verificacao do runner: " << error << "\n";
+    }
+    return ok ? 0 : kExitPreflight;
+}
+
+int runRunnerKeygen(const std::vector<std::string>& args) {
+    const bool asJson = std::find(args.begin() + 1, args.end(), "--json") != args.end();
+    std::string error;
+    const std::string seed = taskforge::project::RunnerSecurity::generateEd25519Seed(error);
+    if (seed.empty()) {
+        std::cerr << "Falha ao gerar a chave: " << error << "\n";
+        return kExitRuntime;
+    }
+    const std::string publicKey = taskforge::project::RunnerSecurity::ed25519PublicKey(seed, error);
+    if (publicKey.empty()) {
+        std::cerr << "Falha ao derivar a chave publica: " << error << "\n";
+        return kExitRuntime;
+    }
+    if (asJson) {
+        std::cout << taskforge::Json{{"seed", seed}, {"publicKey", publicKey}}.dump() << "\n";
+    } else {
+        std::cout << "seed=" << seed << "\n";
+        std::cout << "publicKey=" << publicKey << "\n";
+        std::cout << "Guarde a seed fora do repositorio e distribua apenas a chave publica.\n";
+    }
+    return 0;
+}
+
+int runSignRunner(const std::vector<std::string>& args) {
+    if (args.size() < 2 || args[1] == "--help" || args[1] == "-h") {
+        std::cout << "arestrix-cli sign-runner <runner_manifest.json> "
+                     "[--key <hex> | --key-file <arquivo>] [--algorithm ed25519|hmac-sha256] "
+                     "[--issuer <nome>] [--key-id <id>] [--required] [--json]\n";
+        return args.size() < 2 ? kExitUsage : 0;
+    }
+
+    const std::string manifest = args[1];
+    std::string key;
+    std::string algorithm = "ed25519";
+    std::string issuer = "Arestrix Enterprise Security";
+    std::string keyId = "corp-signing-key-1";
+    bool required = false;
+    bool asJson = false;
+
+    const auto trim = [](std::string value) {
+        const auto first = value.find_first_not_of(" \t\r\n");
+        if (first == std::string::npos) return std::string();
+        const auto last = value.find_last_not_of(" \t\r\n");
+        return value.substr(first, last - first + 1);
+    };
+
+    for (size_t i = 2; i < args.size(); ++i) {
+        const std::string& arg = args[i];
+        if (arg == "--key" && i + 1 < args.size()) {
+            key = args[++i];
+        } else if (arg == "--key-file" && i + 1 < args.size()) {
+            std::ifstream in(args[++i]);
+            if (!in.is_open()) {
+                std::cerr << "Nao foi possivel abrir a chave: " << args[i] << "\n";
+                return kExitConfig;
+            }
+            std::stringstream ss;
+            ss << in.rdbuf();
+            key = ss.str();
+        } else if (arg == "--algorithm" && i + 1 < args.size()) {
+            algorithm = args[++i];
+        } else if (arg == "--issuer" && i + 1 < args.size()) {
+            issuer = args[++i];
+        } else if (arg == "--key-id" && i + 1 < args.size()) {
+            keyId = args[++i];
+        } else if (arg == "--required") {
+            required = true;
+        } else if (arg == "--json") {
+            asJson = true;
+        } else {
+            std::cerr << "Opcao desconhecida em sign-runner: " << arg << "\n";
+            return kExitUsage;
+        }
+    }
+
+    key = trim(key);
+    if (key.empty()) {
+        if (const char* envKey = std::getenv("ARESTRIX_RUNNER_SIGNING_KEY")) {
+            key = trim(envKey);
+        } else if (const char* envFile = std::getenv("ARESTRIX_RUNNER_SIGNING_KEY_FILE")) {
+            std::ifstream in(envFile);
+            if (in.is_open()) {
+                std::stringstream ss;
+                ss << in.rdbuf();
+                key = trim(ss.str());
+            }
+        }
+    }
+    if (key.empty()) {
+        std::cerr << "Chave de assinatura ausente. Use --key/--key-file ou ARESTRIX_RUNNER_SIGNING_KEY.\n";
+        return kExitConfig;
+    }
+
+    auto result = taskforge::project::RunnerSecurity::signPackage(
+        manifest, key, algorithm, issuer, keyId, required);
+    if (asJson) {
+        std::cout << taskforge::Json{
+            {"ok", result.ok},
+            {"error", result.error},
+            {"algorithm", result.algorithm},
+            {"issuer", result.issuer},
+            {"publicKey", result.publicKey},
+            {"signature", result.signature},
+            {"packageHash", result.packageHash},
+            {"signedAt", result.signedAt}
+        }.dump() << "\n";
+    } else if (result.ok) {
+        std::cout << "Assinatura criada: " << manifest << "\n";
+        std::cout << "publicKey=" << result.publicKey << "\n";
+        std::cout << "packageHash=" << result.packageHash << "\n";
+    } else {
+        std::cerr << "Falha ao assinar: " << result.error << "\n";
+    }
+    return result.ok ? 0 : kExitRuntime;
+}
+
 int runCli(int argc, char** argv) {
     bool noUserEnv = false;
     for (int i = 1; i < argc; ++i) {
@@ -3692,6 +3870,9 @@ int runCli(int argc, char** argv) {
     if (args[0] == "memory") return runMemory(args);
     if (args[0] == "mcp") return runMcp(args);
     if (args[0] == "project") return runProject(args);
+    if (args[0] == "verify-runner") return runVerifyRunner(args);
+    if (args[0] == "sign-runner") return runSignRunner(args);
+    if (args[0] == "runner-keygen") return runRunnerKeygen(args);
     if (args[0] == "completion") return runCompletion(args);
     if (args[0] == "run") return runGraph(args, false);
     if (args[0] == "gen") return runGraph(args, true);
