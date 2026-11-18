@@ -57,6 +57,9 @@ export class BackstageView {
   private propertiesController: PropertiesController;
   private activeSection: 'info' | 'new' | 'open' | 'saveas' | 'export' | 'options' | 'properties' = 'info';
 
+  // Estado do dropdown único da tela Informações (Identificação + Arquivos + Grafo e Pipelines)
+  private infoDropdownOpen = false;
+
   // Estado da Tela "Salvar" unificada (Estilo Office: Projeto Completo vs Apenas um Grafo + Navegação de Pastas)
   private saveAsPlace: SavePlace = 'computer';
   private saveAsTarget: SaveTarget = 'project';
@@ -868,51 +871,54 @@ export class BackstageView {
           <h2 class="backstage-header-title">${t('backstage.info.title')}</h2>
           <p class="backstage-header-sub">${t('backstage.info.subtitle')}</p>
 
+          <!-- DROPDOWN ÚNICO: Identificação + Arquivos + Grafo e Pipelines -->
+          <div class="backstage-info-dropdown">
+            <div class="backstage-info-dropdown-head">
+              <div class="backstage-info-dropdown-label">
+                <strong style="font-size: 16px;">${this.escapeHtml(proj.name)}</strong>
+                <strong style="font-size: 14px; margin-left: 8px; opacity: 0.85;">v${this.escapeHtml(proj.version)}</strong>
+              </div>
+              <button type="button" class="btn btn-secondary-office" id="btn-backstage-info-toggle">
+                ${this.infoDropdownOpen ? t('backstage.info.btn_hide_details') : t('backstage.info.btn_show_details')}
+              </button>
+            </div>
+            ${this.infoDropdownOpen ? `
+              <div class="backstage-info-dropdown-body">
+                <div class="backstage-info-dropdown-section">
+                  <div class="backstage-info-dropdown-section-title">${t('backstage.info.card_ident')}</div>
+                  <p style="margin-bottom: 8px;"><strong>${t('backstage.info.id_label')}</strong>
+                    <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.projectId)}</code>
+                  </p>
+                  <p style="margin-bottom: 8px;"><strong>${t('backstage.info.desc_label')}</strong> ${this.escapeHtml(proj.description || t('backstage.info.no_desc'))}</p>
+                </div>
+                <div class="backstage-info-dropdown-section">
+                  <div class="backstage-info-dropdown-section-title">${t('backstage.info.card_storage')}</div>
+                  <p style="margin-bottom: 8px;"><strong>${t('backstage.info.persist_type')}</strong> ${proj.database?.type || t('backstage.info.sqlite_default')}</p>
+                  <p style="margin-bottom: 8px;">
+                    <strong>${t('backstage.info.db_file')}</strong>
+                    <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.database?.filePath || 'storage/database.sqlite')}</code>
+                  </p>
+                  <p style="margin-bottom: 8px;">
+                    <strong>${t('backstage.info.phys_dir')}</strong>
+                    <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.rootPath)}</code>
+                  </p>
+                  <p style="margin-bottom: 8px;">
+                    <strong>${t('backstage.info.output_dir')}</strong>
+                    <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.outputDir || 'Output')}</code>
+                  </p>
+                </div>
+                <div class="backstage-info-dropdown-section">
+                  <div class="backstage-info-dropdown-section-title">${t('backstage.info.card_graph')}</div>
+                  <p style="margin-bottom: 8px;"><strong>${t('backstage.info.active_nodes')}</strong> ${this.graph.getAllNodes().filter(n => !n.hidden).length}</p>
+                  <p style="margin-bottom: 8px;"><strong>${t('backstage.info.edges_links')}</strong> ${this.graph.getAllEdges().filter(e => !this.graph.getNode(e.sourceNodeId)?.hidden && !this.graph.getNode(e.targetNodeId)?.hidden).length}</p>
+                  <p style="margin-bottom: 8px;"><strong>${t('backstage.info.registered_pipelines')}</strong> ${proj.pipelines ? proj.pipelines.length : 0}</p>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- TRÊS CARDS ABAIXO DO DROPDOWN -->
           <div class="backstage-cards-grid">
-            <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h4 class="backstage-card-title" style="margin: 0; min-width: 0;"><span class="backstage-card-icon">${ribbonIcon('file', 18)}</span><span class="backstage-card-title-text">${t('backstage.info.card_ident')}</span></h4>
-                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">📦 ${t('backstage.info.scope_proj')}</span>
-              </div>
-              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>${t('backstage.info.name_label')}</strong> ${this.escapeHtml(proj.name)}</p>
-              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;">
-                <strong>${t('backstage.info.id_label')}</strong>
-                <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.projectId)}</code>
-              </p>
-              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>${t('backstage.info.version_label')}</strong> ${this.escapeHtml(proj.version)}</p>
-              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>${t('backstage.info.desc_label')}</strong> ${this.escapeHtml(proj.description || t('backstage.info.no_desc'))}</p>
-            </div>
-
-            <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h4 class="backstage-card-title" style="margin: 0; min-width: 0;"><span class="backstage-card-icon">${ribbonIcon('database', 18)}</span><span class="backstage-card-title-text">${t('backstage.info.card_storage')}</span></h4>
-                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">🛠️ ${t('backstage.info.scope_workspace')}</span>
-              </div>
-              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;"><strong>${t('backstage.info.persist_type')}</strong> ${proj.database?.type || t('backstage.info.sqlite_default')}</p>
-              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;">
-                <strong>${t('backstage.info.db_file')}</strong>
-                <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.database?.filePath || 'storage/database.sqlite')}</code>
-              </p>
-              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;">
-                <strong>${t('backstage.info.phys_dir')}</strong>
-                <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.rootPath)}</code>
-              </p>
-              <p style="word-break: break-word; overflow-wrap: anywhere; margin-bottom: 8px;">
-                <strong>${t('backstage.info.output_dir')}</strong>
-                <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.outputDir || 'Output')}</code>
-              </p>
-            </div>
-
-            <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
-                <h4 class="backstage-card-title" style="margin: 0; min-width: 0;"><span class="backstage-card-icon">${ribbonIcon('subflow', 18)}</span><span class="backstage-card-title-text">${t('backstage.info.card_graph')}</span></h4>
-                <span class="badge-inherited" style="font-size: 9px; padding: 1px 6px; flex-shrink: 0;">📦 ${t('backstage.info.scope_proj')}</span>
-              </div>
-              <p style="margin-bottom: 8px;"><strong>${t('backstage.info.active_nodes')}</strong> ${this.graph.getAllNodes().filter(n => !n.hidden).length}</p>
-              <p style="margin-bottom: 8px;"><strong>${t('backstage.info.edges_links')}</strong> ${this.graph.getAllEdges().filter(e => !this.graph.getNode(e.sourceNodeId)?.hidden && !this.graph.getNode(e.targetNodeId)?.hidden).length}</p>
-              <p style="margin-bottom: 8px;"><strong>${t('backstage.info.registered_pipelines')}</strong> ${proj.pipelines ? proj.pipelines.length : 0}</p>
-            </div>
-
             <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
                 <h4 class="backstage-card-title" style="margin: 0; min-width: 0;"><span class="backstage-card-icon">${ribbonIcon('git', 18)}</span><span class="backstage-card-title-text">${t('git_sync.card_git_title', 'Repositório Git Remoto')}</span></h4>
@@ -941,13 +947,16 @@ export class BackstageView {
                 ${t('runner.btn_open_runner', 'Abrir Painel do Runner Standalone...')}
               </button>
             </div>
-          </div>
 
-          <div style="margin-top: 14px;">
-            <h4 class="backstage-section-heading"><span class="backstage-section-icon">${ribbonIcon('wrench', 18)}</span>${t('backstage.info.quick_maintenance')}</h4>
-            <div style="display: flex; gap: 10px;">
-              <button class="tool-btn btn-secondary" id="btn-quick-sync-db" style="font-weight: 700;">${t('backstage.info.btn_sync_db')}</button>
-              <button class="tool-btn btn-secondary" id="btn-quick-clean-cache" style="font-weight: 700;">${t('backstage.info.btn_clean_cache')}</button>
+            <div class="backstage-info-card" style="min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
+                <h4 class="backstage-card-title" style="margin: 0; min-width: 0;"><span class="backstage-card-icon">${ribbonIcon('wrench', 18)}</span><span class="backstage-card-title-text">${t('backstage.info.card_maintenance')}</span></h4>
+              </div>
+              <p style="margin-bottom: 10px; font-size: 12.5px; color: #64748b;">${t('backstage.info.maintenance_desc')}</p>
+              <div style="display: flex; gap: 10px;">
+                <button class="tool-btn btn-secondary" id="btn-quick-sync-db" style="font-weight: 700;">${t('backstage.info.btn_sync_db')}</button>
+                <button class="tool-btn btn-secondary" id="btn-quick-clean-cache" style="font-weight: 700;">${t('backstage.info.btn_clean_cache')}</button>
+              </div>
             </div>
           </div>
 
@@ -1466,6 +1475,12 @@ export class BackstageView {
     this.overlay.querySelector('#btn-backstage-open-runner')?.addEventListener('click', () => {
       // Mantém o Backstage aberto atrás do modal para preservar a tela de origem.
       globalEventBus.emit('runner:open-modal');
+    });
+
+    // Alternar dropdown único de Informações do Projeto
+    this.overlay.querySelector('#btn-backstage-info-toggle')?.addEventListener('click', () => {
+      this.infoDropdownOpen = !this.infoDropdownOpen;
+      this.render();
     });
 
     // Criar Projeto
