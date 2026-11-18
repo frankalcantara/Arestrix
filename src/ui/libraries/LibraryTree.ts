@@ -14,7 +14,18 @@ interface ILibraryBrowserState {
   selectedAssetId?: string;
   search: string;
   kind: 'all' | 'skill' | 'mcp' | 'agent-template' | 'pipeline';
+  domain: string;
+  subdomain: string;
+  showAllAssets: boolean;
 }
+
+type RestoreCapableLibraryService = LibraryService & {
+  getInstallDefaultAsset?: (assetId: string) => ILibraryAsset | undefined;
+  restoreBuiltinAsset?: (assetId: string) => Promise<ILibraryAsset | boolean | { ok: boolean; asset?: ILibraryAsset; reason?: string } | undefined>;
+  resetBuiltinLibrary?: () => Promise<{ restored?: number; imported?: ILibraryAsset[]; ok?: boolean } | number | void>;
+};
+
+const ASSET_RENDER_LIMIT = 80;
 
 const stateByRoot = new WeakMap<HTMLElement, ILibraryBrowserState>();
 
@@ -62,6 +73,80 @@ function statusLabel(status: ILibraryAsset['status']): string {
   return lbl(`status_${status}`, status);
 }
 
+function assetDomain(asset: ILibraryAsset): string {
+  if (asset.domain) return asset.domain.trim();
+  if (asset.payload.kind === 'agent-template' || asset.payload.kind === 'pipeline') {
+    return (asset.payload.template.domain || '').trim();
+  }
+  return '';
+}
+
+function assetSubdomain(asset: ILibraryAsset): string {
+  if (asset.subdomain) return asset.subdomain.trim();
+  if (asset.payload.kind === 'agent-template' || asset.payload.kind === 'pipeline') {
+    return (asset.payload.template.subdomain || '').trim();
+  }
+  return '';
+}
+
+function isBundledAsset(asset: ILibraryAsset): boolean {
+  return Boolean(asset.bundledInProduct || asset.origin?.bundledInProduct);
+}
+
+function bundledOriginText(asset: ILibraryAsset): string {
+  const repo = asset.origin?.repo || asset.provenance.repo || '';
+  const license = asset.origin?.license || asset.license || '';
+  return [repo, license].filter(Boolean).join(' · ');
+}
+
+function safeHttpUrl(raw?: string): string {
+  return raw && /^https?:\/\//i.test(raw) ? raw : '';
+}
+
+function isBundledAssetModified(asset: ILibraryAsset, service: RestoreCapableLibraryService): boolean {
+  if (!isBundledAsset(asset)) return false;
+  const installDefault = service.getInstallDefaultAsset?.(asset.id);
+  if (installDefault) {
+    return installDefault.audit.hash !== asset.audit.hash || installDefault.version !== asset.version;
+  }
+  return Boolean(asset.origin?.installHash && asset.audit.hash !== asset.origin.installHash);
+}
+
+function collectDomains(assets: ILibraryAsset[]): string[] {
+  const set = new Set<string>();
+  for (const asset of assets) {
+    const d = assetDomain(asset);
+    if (d) set.add(d);
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+
+function collectSubdomains(assets: ILibraryAsset[], domain: string): string[] {
+  const set = new Set<string>();
+  for (const asset of assets) {
+    if (domain && assetDomain(asset) !== domain) continue;
+    const s = assetSubdomain(asset);
+    if (s) set.add(s);
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+
+function renderDomainOptions(assets: ILibraryAsset[], selected: string): string {
+  const domains = collectDomains(assets);
+  return [
+    `<option value="">${esc(lbl('tree_filter_domain_all', 'Todos os domínios'))}</option>`,
+    ...domains.map(d => `<option value="${esc(d)}" ${d === selected ? 'selected' : ''}>${esc(d)}</option>`)
+  ].join('');
+}
+
+function renderSubdomainOptions(assets: ILibraryAsset[], domain: string, selected: string): string {
+  const subdomains = collectSubdomains(assets, domain);
+  return [
+    `<option value="">${esc(lbl('tree_filter_subdomain_all', 'Todos os subdomínios'))}</option>`,
+    ...subdomains.map(s => `<option value="${esc(s)}" ${s === selected ? 'selected' : ''}>${esc(s)}</option>`)
+  ].join('');
+}
+
 function defaultState(options: ILibraryBrowserOptions, registry: LibraryRegistry): ILibraryBrowserState {
   const libraries = registry.list(options.scope);
   const first = options.scope === 'workspace'
@@ -71,7 +156,10 @@ function defaultState(options: ILibraryBrowserOptions, registry: LibraryRegistry
     selectedLibraryId: first?.id,
     selectedAssetId: undefined,
     search: '',
-    kind: 'all'
+    kind: 'all',
+    domain: '',
+    subdomain: '',
+    showAllAssets: false
   };
 }
 
@@ -79,11 +167,20 @@ function filteredAssets(registry: LibraryRegistry, libraryId: string, state: ILi
   const query = state.search.trim().toLowerCase();
   return registry.listAssets(libraryId)
     .filter(asset => state.kind === 'all' || asset.kind === state.kind)
+    .filter(asset => !state.domain || assetDomain(asset) === state.domain)
+    .filter(asset => !state.subdomain || assetSubdomain(asset) === state.subdomain)
     .filter(asset => !query
       || asset.name.toLowerCase().includes(query)
       || asset.description.toLowerCase().includes(query)
-      || asset.category.toLowerCase().includes(query))
-    .sort((a, b) => a.name.localeCompare(b.name));
+      || asset.category.toLowerCase().includes(query)
+      || assetDomain(asset).toLowerCase().includes(query)
+      || assetSubdomain(asset).toLowerCase().includes(query)
+      || (asset.origin?.repo || '').toLowerCase().includes(query))
+    .sort((a, b) => {
+      const rank = (k: LibraryAssetKind): number => (k === 'skill' ? 0 : k === 'mcp' ? 1 : k === 'pipeline' ? 2 : 3);
+      const kindDelta = rank(a.kind) - rank(b.kind);
+      return kindDelta !== 0 ? kindDelta : a.name.localeCompare(b.name);
+    });
 }
 
 function renderTree(registry: LibraryRegistry, options: ILibraryBrowserOptions, state: ILibraryBrowserState): string {
@@ -103,6 +200,10 @@ function renderTree(registry: LibraryRegistry, options: ILibraryBrowserOptions, 
     const isSelected = library.id === state.selectedLibraryId;
     const isBuiltin = library.isBuiltin;
     const kind = isBuiltin ? lbl('kind_builtin', 'Embutida') : library.kind === 'repository' ? lbl('kind_repository', 'Repositório') : lbl('kind_local', 'Local');
+    const visibleAssets = state.showAllAssets || assets.length <= ASSET_RENDER_LIMIT
+      ? assets
+      : assets.slice(0, ASSET_RENDER_LIMIT);
+    const hasMore = assets.length > visibleAssets.length;
 
     return `
       <div class="properties-library-group">
@@ -115,13 +216,21 @@ function renderTree(registry: LibraryRegistry, options: ILibraryBrowserOptions, 
           <div class="properties-library-assets">
             ${assets.length === 0
               ? `<div class="properties-library-assets-empty">${esc(lbl('tree_empty_assets', 'Nenhum asset. Importe um catálogo ou crie um derivado.'))}</div>`
-              : assets.map(asset => `
-                <button type="button" class="properties-library-asset ${asset.id === state.selectedAssetId ? 'active' : ''}" data-asset-select="${esc(asset.id)}">
-                  <span class="properties-library-asset-name">${esc(asset.name)}</span>
-                  <span class="properties-library-asset-meta">${esc(kindLabel(asset.kind))}</span>
-                  ${badge(verdictLabel(asset.audit.verdict), verdictTone(asset.audit.verdict))}
-                </button>
-              `).join('')}
+              : `${visibleAssets.map(asset => {
+                  const bundled = isBundledAsset(asset);
+                  return `
+                    <button type="button" class="properties-library-asset ${asset.id === state.selectedAssetId ? 'active' : ''}" data-asset-select="${esc(asset.id)}">
+                      <span class="properties-library-asset-name">${esc(asset.name)}</span>
+                      ${bundled ? badge(lbl('badge_bundled', 'Nativo Arestrix'), 'success') : `<span class="properties-library-asset-meta">${esc(kindLabel(asset.kind))}</span>`}
+                      ${badge(verdictLabel(asset.audit.verdict), verdictTone(asset.audit.verdict))}
+                    </button>
+                  `;
+                }).join('')}
+                ${hasMore ? `
+                  <button type="button" class="properties-library-more-btn" data-library-show-all="${esc(library.id)}">
+                    ${esc(lblv('show_all_assets', 'Mostrar todos ({{count}})', { count: assets.length }))}
+                  </button>
+                ` : ''}`}
           </div>
         ` : ''}
       </div>
@@ -139,6 +248,7 @@ function renderMetaRow(label: string, value: string): string {
 }
 
 function renderAssetDetail(asset: ILibraryAsset, library: ILibraryEntry | undefined): string {
+  const service = LibraryService.getInstance() as RestoreCapableLibraryService;
   const hasContent = asset.payload.kind === 'skill'
     ? asset.payload.markdownContent.length > 0
     : asset.payload.kind === 'mcp'
@@ -147,15 +257,24 @@ function renderAssetDetail(asset: ILibraryAsset, library: ILibraryEntry | undefi
   const showDownload = Boolean(asset.remote) && (asset.audit.verdict === 'PENDING' || !hasContent || asset.status === 'disabled');
   const installDisabled = !hasContent || asset.audit.verdict === 'REJECT' || asset.audit.verdict === 'PENDING';
   const canInstall = asset.payload.kind === 'skill' || asset.payload.kind === 'mcp';
-  const origin = [asset.provenance.sourceKind, asset.provenance.authority, asset.provenance.sourceId]
-    .filter(Boolean)
-    .join(' · ');
+  const bundled = isBundledAsset(asset);
+  const bundledOrigin = bundledOriginText(asset);
+  const originUrl = safeHttpUrl(asset.origin?.url || asset.provenance.url);
+  const origin = bundled && bundledOrigin
+    ? bundledOrigin
+    : [asset.provenance.sourceKind, asset.provenance.authority, asset.provenance.sourceId]
+      .filter(Boolean)
+      .join(' · ');
+  const domain = assetDomain(asset);
+  const subdomain = assetSubdomain(asset);
+  const canRestoreBuiltin = isBundledAssetModified(asset, service);
 
   return `
     <div class="properties-library-detail-header">
       <div>
         <div class="properties-library-detail-title">${esc(asset.name)}</div>
         <div class="properties-library-detail-subtitle">
+          ${bundled ? badge(lbl('badge_bundled', 'Nativo Arestrix'), 'success') : ''}
           ${badge(kindLabel(asset.kind), 'accent')}
           ${badge(verdictLabel(asset.audit.verdict), verdictTone(asset.audit.verdict))}
           ${badge(statusLabel(asset.status), asset.status === 'installed' ? 'success' : 'neutral')}
@@ -171,9 +290,16 @@ function renderAssetDetail(asset: ILibraryAsset, library: ILibraryEntry | undefi
       ${renderMetaRow(lbl('meta_version', 'Versão'), esc(asset.version))}
       ${renderMetaRow(lbl('meta_license', 'Licença'), esc(asset.license))}
       ${renderMetaRow(lbl('meta_category', 'Categoria'), esc(asset.category))}
+      ${domain ? renderMetaRow(lbl('meta_domain', 'Domínio'), esc(domain)) : ''}
+      ${subdomain ? renderMetaRow(lbl('meta_subdomain', 'Subdomínio'), esc(subdomain)) : ''}
       ${renderMetaRow(lbl('meta_hash', 'Hash SHA-256'), `<code class="properties-code">${esc(asset.audit.hash ? asset.audit.hash.slice(0, 20) + '…' : '—')}</code>`)}
       ${renderMetaRow(lbl('meta_policy', 'Política'), `<code class="properties-code">${esc(asset.audit.policyVersion || '—')}</code>`)}
-      ${renderMetaRow(lbl('meta_origin', 'Origem'), esc(origin || '—'))}
+      ${renderMetaRow(
+        lbl('meta_origin', 'Origem'),
+        originUrl
+          ? `${esc(origin || '—')} · <a href="${esc(originUrl)}" target="_blank" rel="noopener noreferrer">${esc(originUrl)}</a>`
+          : esc(origin || '—')
+      )}
       ${asset.remote ? renderMetaRow(lbl('meta_remote_path', 'Caminho remoto'), `<code class="properties-code">${esc(asset.remote.path)}</code>`) : ''}
       ${asset.remote ? renderMetaRow(lbl('meta_blob', 'Blob SHA'), `<code class="properties-code">${esc(asset.remote.blobSha.slice(0, 16))}…</code>`) : ''}
       ${asset.derivedFrom ? renderMetaRow(lbl('meta_derived_from', 'Derivado de'), esc(asset.derivedFrom.originName)) : ''}
@@ -200,6 +326,7 @@ function renderAssetDetail(asset: ILibraryAsset, library: ILibraryEntry | undefi
       ${showDownload ? `<button type="button" class="btn btn-primary-office" data-asset-action="download" data-asset-id="${esc(asset.id)}">${esc(lbl('action_download', 'Baixar e auditar'))}</button>` : ''}
       <button type="button" class="btn btn-secondary-office" data-asset-action="audit" data-asset-id="${esc(asset.id)}">${esc(lbl('action_audit', 'Reauditar'))}</button>
       <button type="button" class="btn btn-secondary-office" data-asset-action="derive" data-asset-id="${esc(asset.id)}">${esc(lbl('action_derive', 'Duplicar e editar'))}</button>
+      ${canRestoreBuiltin ? `<button type="button" class="btn btn-secondary-office" data-asset-action="restore-builtin" data-asset-id="${esc(asset.id)}">${esc(lbl('action_restore_builtin', 'Restaurar padrão de instalação'))}</button>` : ''}
       ${canInstall ? `<button type="button" class="btn btn-primary-office" data-asset-action="install" data-asset-id="${esc(asset.id)}" ${installDisabled ? 'disabled' : ''}>${esc(lbl('action_install', 'Instalar no Workspace'))}</button>` : ''}
       <button type="button" class="btn btn-secondary-office" data-asset-action="remove" data-asset-id="${esc(asset.id)}">${esc(lbl('action_remove_asset', 'Remover asset'))}</button>
     </div>
@@ -276,6 +403,7 @@ function renderLibraryDetail(
       <button type="button" class="btn btn-secondary-office" data-library-action="import-file" data-library-id="${esc(library.id)}">${esc(lbl('action_import_file', 'Importar arquivo'))}</button>
       <button type="button" class="btn btn-secondary-office" data-library-action="export" data-library-id="${esc(library.id)}">${esc(lbl('action_export', 'Exportar'))}</button>
       <button type="button" class="btn btn-secondary-office" data-library-action="clone" data-library-id="${esc(library.id)}">${esc(lbl('action_clone', 'Clonar'))}</button>
+      ${(library.id === 'library-arestrix' || library.isBuiltin) ? `<button type="button" class="btn btn-secondary-office" data-library-action="reset-builtin" data-library-id="${esc(library.id)}">${esc(lbl('action_reset_builtin', 'Restaurar padrão de instalação'))}</button>` : ''}
       ${library.isBuiltin ? '' : `<button type="button" class="btn btn-secondary-office" data-library-action="remove" data-library-id="${esc(library.id)}">${esc(lbl('action_remove_library', 'Remover biblioteca'))}</button>`}
     </div>
   `;
@@ -283,6 +411,8 @@ function renderLibraryDetail(
 
 export function renderLibraryBrowser(options: ILibraryBrowserOptions): string {
   const state = defaultState(options, options.registry);
+  const selectedAssets = state.selectedLibraryId ? options.registry.listAssets(state.selectedLibraryId) : [];
+  const hasTaxonomy = collectDomains(selectedAssets).length > 0 || collectSubdomains(selectedAssets, state.domain).length > 0;
   return `
     <div class="properties-library-browser" data-library-browser>
       <aside class="properties-library-tree-pane">
@@ -296,6 +426,16 @@ export function renderLibraryBrowser(options: ILibraryBrowserOptions): string {
             <option value="pipeline">${esc(lbl('tree_filter_pipelines', 'Pipelines'))}</option>
           </select>
         </div>
+        ${hasTaxonomy ? `
+        <div class="properties-library-taxonomy-filters">
+          <select class="form-select" data-library-domain>
+            ${renderDomainOptions(selectedAssets, state.domain)}
+          </select>
+          <select class="form-select" data-library-subdomain>
+            ${renderSubdomainOptions(selectedAssets, state.domain, state.subdomain)}
+          </select>
+        </div>
+        ` : ''}
         <div class="properties-library-tree" data-library-tree>
           ${renderTree(options.registry, options, state)}
         </div>
@@ -355,14 +495,39 @@ export function bindLibraryBrowser(root: HTMLElement, options: ILibraryBrowserOp
   const detail = root.querySelector<HTMLElement>('[data-library-detail]');
   const search = root.querySelector<HTMLInputElement>('[data-library-search]');
   const filter = root.querySelector<HTMLSelectElement>('[data-library-filter]');
+  const domainSelect = root.querySelector<HTMLSelectElement>('[data-library-domain]');
+  const subdomainSelect = root.querySelector<HTMLSelectElement>('[data-library-subdomain]');
+
+  const syncTaxonomySelects = (): void => {
+    const libraryAssets = state.selectedLibraryId ? options.registry.listAssets(state.selectedLibraryId) : [];
+    const validDomains = new Set(collectDomains(libraryAssets));
+    if (state.domain && !validDomains.has(state.domain)) {
+      state.domain = '';
+      state.subdomain = '';
+    }
+    const validSubdomains = new Set(collectSubdomains(libraryAssets, state.domain));
+    if (state.subdomain && !validSubdomains.has(state.subdomain)) {
+      state.subdomain = '';
+    }
+    if (domainSelect) {
+      domainSelect.innerHTML = renderDomainOptions(libraryAssets, state.domain);
+      domainSelect.value = state.domain;
+    }
+    if (subdomainSelect) {
+      subdomainSelect.innerHTML = renderSubdomainOptions(libraryAssets, state.domain, state.subdomain);
+      subdomainSelect.value = state.subdomain;
+    }
+  };
 
   const rerender = (): void => {
+    syncTaxonomySelects();
     if (tree) tree.innerHTML = renderTree(options.registry, options, state);
     if (detail) detail.innerHTML = renderLibraryDetail(options.registry, options, state);
   };
 
   search?.addEventListener('input', () => {
     state.search = search.value;
+    state.showAllAssets = false;
     rerender();
   });
 
@@ -370,6 +535,20 @@ export function bindLibraryBrowser(root: HTMLElement, options: ILibraryBrowserOp
     state.kind = filter.value === 'skill' || filter.value === 'mcp' || filter.value === 'agent-template' || filter.value === 'pipeline'
       ? filter.value
       : 'all';
+    state.showAllAssets = false;
+    rerender();
+  });
+
+  domainSelect?.addEventListener('change', () => {
+    state.domain = domainSelect.value;
+    state.subdomain = '';
+    state.showAllAssets = false;
+    rerender();
+  });
+
+  subdomainSelect?.addEventListener('change', () => {
+    state.subdomain = subdomainSelect.value;
+    state.showAllAssets = false;
     rerender();
   });
 
@@ -377,12 +556,20 @@ export function bindLibraryBrowser(root: HTMLElement, options: ILibraryBrowserOp
     const target = event.target as HTMLElement | null;
     if (!target) return;
 
+    const showAll = target.closest<HTMLElement>('[data-library-show-all]');
+    if (showAll) {
+      state.showAllAssets = true;
+      rerender();
+      return;
+    }
+
     const librarySelect = target.closest<HTMLElement>('[data-library-select]');
     if (librarySelect) {
       const id = librarySelect.dataset.librarySelect;
       if (id) {
         state.selectedLibraryId = id;
         state.selectedAssetId = undefined;
+        state.showAllAssets = false;
         rerender();
       }
       return;
@@ -483,6 +670,19 @@ async function handleAssetAction(
       notify('success', lbl('msg_downloaded', 'Asset baixado e auditado com sucesso.'));
     } else {
       notify('warning', first.reason || lbl('msg_download_failed', 'Não foi possível baixar o asset.'));
+    }
+    rerender();
+    return;
+  }
+
+  if (action === 'restore-builtin') {
+    const restoreService = service as RestoreCapableLibraryService;
+    const restored = await restoreService.restoreBuiltinAsset?.(assetId);
+    const ok = Boolean(restored && (typeof restored !== 'object' || !('ok' in restored) || restored.ok));
+    if (ok) {
+      notify('success', lbl('msg_restore_builtin_success', 'Asset restaurado para o padrão de instalação.'));
+    } else {
+      notify('warning', lbl('msg_restore_builtin_failed', 'Não foi possível restaurar o padrão de instalação.'));
     }
     rerender();
     return;
@@ -591,6 +791,22 @@ async function handleLibraryAction(
       notify('success', lbl('msg_clone_success', 'Biblioteca clonada: {{name}}.').replace('{{name}}', result.library.name));
     } else {
       notify('error', lbl('msg_clone_failed', 'Não foi possível clonar a biblioteca.'));
+    }
+    rerender();
+    return;
+  }
+
+  if (action === 'reset-builtin') {
+    if (!confirmAction(lbl('msg_reset_builtin_confirm', 'Restaurar todos os itens nativos da Biblioteca Arestrix para o padrão de instalação?'))) {
+      rerender();
+      return;
+    }
+    const restoreService = service as RestoreCapableLibraryService;
+    const result = await restoreService.resetBuiltinLibrary?.();
+    if (result !== undefined) {
+      notify('success', lbl('msg_reset_builtin_success', 'Biblioteca Arestrix restaurada para o padrão de instalação.'));
+    } else {
+      notify('warning', lbl('msg_restore_builtin_failed', 'Não foi possível restaurar o padrão de instalação.'));
     }
     rerender();
     return;

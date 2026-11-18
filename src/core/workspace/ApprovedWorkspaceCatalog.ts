@@ -326,6 +326,25 @@ export const APPROVED_WORKSPACE_MCPS: IWorkspaceApprovedMcp[] = [
     tools: [
       { name: 'search_web_pages', description: 'Pesquisa páginas web para consulta factual', riskLevel: 'safe' }
     ]
+  },
+  {
+    id: 'arestrix-biblioteca',
+    name: 'Biblioteca de Vértices e Agentes do Arestrix',
+    description: 'Acesso programático à biblioteca de vértices e agentes: listar, obter, instalar, derivar, restaurar e auditar assets.',
+    category: 'Biblioteca & Agentes',
+    transport: 'stdio',
+    command: 'arestrix-mcp-biblioteca',
+    args: ['--scope', '.'],
+    isPreApproved: true,
+    tools: [
+      { name: 'library_list_assets', description: 'Lista assets de uma biblioteca, com filtro por tipo e domínio', riskLevel: 'safe' },
+      { name: 'library_get_asset', description: 'Obtém os detalhes completos de um asset da biblioteca (audit, payload, proveniência)', riskLevel: 'safe' },
+      { name: 'library_install_asset', description: 'Instala um asset aprovado no workspace físico (.workspace/skills ou .workspace/mcps)', riskLevel: 'moderate' },
+      { name: 'library_derive_asset', description: 'Cria um derivado editável de um asset em "Minha biblioteca"', riskLevel: 'moderate' },
+      { name: 'library_restore_asset', description: 'Restaura um asset nativo ao padrão de instalação de fábrica', riskLevel: 'safe' },
+      { name: 'library_search_assets', description: 'Busca assets por nome, descrição, categoria, domínio ou subdomínio', riskLevel: 'safe' },
+      { name: 'library_audit_asset', description: 'Reaudita um asset existente e atualiza seu veredito de segurança', riskLevel: 'safe' }
+    ]
   }
 ];
 
@@ -349,5 +368,15 @@ export const WORKSPACE_GOVERNANCE_AGENTS: IWorkspaceAgent[] = [
     version: '1.0.0',
     enabled: true,
     systemPrompt: 'Você é o Validador de Grafos do Workspace. Garanta integridade de arestas, parâmetros e ausência de ciclos.'
+  },
+  {
+    id: 'agent-workspace-biblioteca',
+    name: 'Agente de Biblioteca de Vértices e Agentes',
+    role: 'Library Agent',
+    description: 'Agente responsável por gerenciar a biblioteca de vértices e agentes: listar, instalar, derivar, restaurar e auditar assets.',
+    category: 'automation',
+    version: '1.0.0',
+    enabled: true,
+    systemPrompt: 'Você é o Agente de Biblioteca de Vértices e Agentes do Arestrix. Use as ferramentas MCP da biblioteca (arestrix-biblioteca) para listar, obter, instalar, derivar, restaurar e auditar assets de vértices e agentes. Sempre audite antes de instalar e informe o usuário sobre o veredito de segurança de cada asset.'
   }
 ];

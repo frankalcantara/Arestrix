@@ -48,7 +48,8 @@ export const NATIVE_EMBEDDED_MCPS: Array<{ id: string; name: string; tools: stri
   { id: 'arestrix.dados', name: 'Transformação Pura de Dados (Nativo C++)', tools: ['json_query', 'csv_to_json', 'json_to_csv', 'regex_extract', 'base64_encode', 'base64_decode'] },
   { id: 'arestrix.tempo', name: 'Tempo e Fusos ISO 8601 (Nativo C++)', tools: ['now', 'add_duration', 'diff'] },
   { id: 'arestrix.git', name: 'Git Read-Only (Nativo C++)', tools: ['git_status', 'git_log', 'git_diff', 'git_show_file'] },
-  { id: 'arestrix.sqlite', name: 'SQLite Embutido Transacional (Nativo C++)', tools: ['list_tables', 'describe_table', 'sql_query', 'sql_execute'] }
+  { id: 'arestrix.sqlite', name: 'SQLite Embutido Transacional (Nativo C++)', tools: ['list_tables', 'describe_table', 'sql_query', 'sql_execute'] },
+  { id: 'arestrix.biblioteca', name: 'Biblioteca de Vértices e Agentes (Nativo C++)', tools: ['library_list_assets', 'library_get_asset', 'library_install_asset', 'library_derive_asset', 'library_restore_asset', 'library_search_assets', 'library_audit_asset'] }
 ];
 
 /**

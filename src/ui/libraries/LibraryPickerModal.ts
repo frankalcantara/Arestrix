@@ -18,7 +18,18 @@ interface IPickerState {
   selectedLibraryId?: string;
   selectedAssetId?: string;
   search: string;
+  domain: string;
+  subdomain: string;
+  showAllAssets: boolean;
 }
+
+type RestoreCapableLibraryService = LibraryService & {
+  getInstallDefaultAsset?: (assetId: string) => ILibraryAsset | undefined;
+  restoreBuiltinAsset?: (assetId: string) => Promise<ILibraryAsset | boolean | { ok: boolean; asset?: ILibraryAsset; reason?: string } | undefined>;
+  resetBuiltinLibrary?: () => Promise<{ restored?: number; imported?: ILibraryAsset[]; ok?: boolean } | number | void>;
+};
+
+const ASSET_RENDER_LIMIT = 80;
 
 function lbl(key: string, fallback: string): string {
   return t(`library_picker.${key}`, fallback);
@@ -40,7 +51,7 @@ export class LibraryPickerModal extends BaseModal {
   private readonly service = LibraryService.getInstance();
   private readonly projectStore = new ProjectLibraryStore();
   private options?: ILibraryPickerOptions;
-  private state: IPickerState = { search: '' };
+  private state: IPickerState = { search: '', domain: '', subdomain: '', showAllAssets: false };
 
   constructor() {
     super({
@@ -55,7 +66,7 @@ export class LibraryPickerModal extends BaseModal {
 
   public override open(options: ILibraryPickerOptions): void {
     this.options = options;
-    this.state = { search: '' };
+    this.state = { search: '', domain: '', subdomain: '', showAllAssets: false };
 
     // O catálogo de MCPs vive no Workspace; garante a biblioteca antes de abrir.
     if ((options.kind === 'mcp' || options.kind === 'agent-template' || options.kind === 'pipeline')
@@ -77,6 +88,8 @@ export class LibraryPickerModal extends BaseModal {
   }
 
   protected override renderBody(): string {
+    const libraryAssets = this.kindAssetsFor(this.state.selectedLibraryId);
+    const hasTaxonomy = this.collectDomains(libraryAssets).length > 0 || this.collectSubdomains(libraryAssets, this.state.domain).length > 0;
     return `
       <div style="padding: 14px 18px 18px;">
         <div class="properties-library-browser" style="margin-top: 0;">
@@ -84,6 +97,16 @@ export class LibraryPickerModal extends BaseModal {
             <div class="properties-library-toolbar" style="grid-template-columns: 1fr;">
               <input type="search" class="form-input" data-picker-search placeholder="${this.escapeHtml(lbl('search', 'Buscar assets...'))}" value="${this.escapeHtml(this.state.search)}" />
             </div>
+            ${hasTaxonomy ? `
+            <div class="properties-library-taxonomy-filters">
+              <select class="form-select" data-picker-domain>
+                ${this.renderDomainOptions(libraryAssets)}
+              </select>
+              <select class="form-select" data-picker-subdomain>
+                ${this.renderSubdomainOptions(libraryAssets)}
+              </select>
+            </div>
+            ` : ''}
             <div class="properties-library-tree" data-picker-tree>
               ${this.renderTree()}
             </div>
@@ -116,6 +139,24 @@ export class LibraryPickerModal extends BaseModal {
     const search = this.dialog.querySelector<HTMLInputElement>('[data-picker-search]');
     search?.addEventListener('input', () => {
       this.state.search = search.value;
+      this.state.showAllAssets = false;
+      this.rerender();
+    });
+
+    const domainSelect = this.dialog.querySelector<HTMLSelectElement>('[data-picker-domain]');
+    domainSelect?.addEventListener('change', () => {
+      this.state.domain = domainSelect.value;
+      this.state.subdomain = '';
+      this.state.showAllAssets = false;
+      this.ensureValidSelectedAsset();
+      this.rerender();
+    });
+
+    const subdomainSelect = this.dialog.querySelector<HTMLSelectElement>('[data-picker-subdomain]');
+    subdomainSelect?.addEventListener('change', () => {
+      this.state.subdomain = subdomainSelect.value;
+      this.state.showAllAssets = false;
+      this.ensureValidSelectedAsset();
       this.rerender();
     });
 
@@ -131,6 +172,25 @@ export class LibraryPickerModal extends BaseModal {
   private handleDelegatedClick = (event: MouseEvent): void => {
     const target = event.target as HTMLElement | null;
     if (!target) return;
+
+    const showAllButton = target.closest<HTMLElement>('[data-picker-show-all]');
+    if (showAllButton) {
+      this.state.showAllAssets = true;
+      this.rerender();
+      return;
+    }
+
+    const restoreButton = target.closest<HTMLElement>('[data-picker-restore-builtin]');
+    if (restoreButton) {
+      void this.restoreBuiltinAsset(restoreButton.dataset.pickerRestoreBuiltin || '');
+      return;
+    }
+
+    const resetBuiltinButton = target.closest<HTMLElement>('[data-picker-reset-builtin]');
+    if (resetBuiltinButton) {
+      void this.resetBuiltinLibrary();
+      return;
+    }
 
     const importButton = target.closest<HTMLElement>('[data-picker-import]');
     if (importButton) {
@@ -149,6 +209,7 @@ export class LibraryPickerModal extends BaseModal {
       const id = library.dataset.pickerLibrary;
       if (id) {
         this.state.selectedLibraryId = id;
+        this.state.showAllAssets = false;
         this.state.selectedAssetId = this.firstSelectableAsset(id)?.id;
         this.rerender();
       }
@@ -191,6 +252,84 @@ export class LibraryPickerModal extends BaseModal {
     return result;
   }
 
+  private assetDomain(asset: ILibraryAsset): string {
+    if (asset.domain) return asset.domain.trim();
+    if (asset.payload.kind === 'agent-template' || asset.payload.kind === 'pipeline') {
+      return (asset.payload.template.domain || '').trim();
+    }
+    return '';
+  }
+
+  private assetSubdomain(asset: ILibraryAsset): string {
+    if (asset.subdomain) return asset.subdomain.trim();
+    if (asset.payload.kind === 'agent-template' || asset.payload.kind === 'pipeline') {
+      return (asset.payload.template.subdomain || '').trim();
+    }
+    return '';
+  }
+
+  private isBundledAsset(asset: ILibraryAsset): boolean {
+    return Boolean(asset.bundledInProduct || asset.origin?.bundledInProduct);
+  }
+
+  private isBundledAssetModified(asset: ILibraryAsset): boolean {
+    if (!this.isBundledAsset(asset)) return false;
+    const restoreService = this.service as RestoreCapableLibraryService;
+    const installDefault = restoreService.getInstallDefaultAsset?.(asset.id);
+    if (installDefault) {
+      return installDefault.audit.hash !== asset.audit.hash || installDefault.version !== asset.version;
+    }
+    return Boolean(asset.origin?.installHash && asset.audit.hash !== asset.origin.installHash);
+  }
+
+  private kindAssetsFor(libraryId?: string): ILibraryAsset[] {
+    if (!libraryId || !this.options) return [];
+    const kind = this.options.kind;
+    return this.registry.listAssets(libraryId).filter(asset => asset.kind === kind);
+  }
+
+  private collectDomains(assets: ILibraryAsset[]): string[] {
+    const set = new Set<string>();
+    for (const asset of assets) {
+      const d = this.assetDomain(asset);
+      if (d) set.add(d);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }
+
+  private collectSubdomains(assets: ILibraryAsset[], domain: string): string[] {
+    const set = new Set<string>();
+    for (const asset of assets) {
+      if (domain && this.assetDomain(asset) !== domain) continue;
+      const s = this.assetSubdomain(asset);
+      if (s) set.add(s);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }
+
+  private renderDomainOptions(assets: ILibraryAsset[]): string {
+    const domains = this.collectDomains(assets);
+    return [
+      `<option value="">${this.escapeHtml(lbl('filter_domain_all', 'Todos os domínios'))}</option>`,
+      ...domains.map(d => `<option value="${this.escapeHtml(d)}" ${d === this.state.domain ? 'selected' : ''}>${this.escapeHtml(d)}</option>`)
+    ].join('');
+  }
+
+  private renderSubdomainOptions(assets: ILibraryAsset[]): string {
+    const subdomains = this.collectSubdomains(assets, this.state.domain);
+    return [
+      `<option value="">${this.escapeHtml(lbl('filter_subdomain_all', 'Todos os subdomínios'))}</option>`,
+      ...subdomains.map(s => `<option value="${this.escapeHtml(s)}" ${s === this.state.subdomain ? 'selected' : ''}>${this.escapeHtml(s)}</option>`)
+    ].join('');
+  }
+
+  private ensureValidSelectedAsset(): void {
+    const filtered = this.assetsFor(this.state.selectedLibraryId);
+    if (!this.state.selectedAssetId || !filtered.some(a => a.id === this.state.selectedAssetId)) {
+      this.state.selectedAssetId = this.firstSelectableAsset(this.state.selectedLibraryId)?.id;
+    }
+  }
+
   private assetsFor(libraryId?: string): ILibraryAsset[] {
     if (!libraryId || !this.options) return [];
     const kind = this.options.kind;
@@ -201,10 +340,15 @@ export class LibraryPickerModal extends BaseModal {
 
     return this.registry.listAssets(libraryId)
       .filter(asset => asset.kind === kind)
+      .filter(asset => !this.state.domain || this.assetDomain(asset) === this.state.domain)
+      .filter(asset => !this.state.subdomain || this.assetSubdomain(asset) === this.state.subdomain)
       .filter(asset => !query
         || asset.name.toLowerCase().includes(query)
         || asset.description.toLowerCase().includes(query)
-        || asset.category.toLowerCase().includes(query))
+        || asset.category.toLowerCase().includes(query)
+        || this.assetDomain(asset).toLowerCase().includes(query)
+        || this.assetSubdomain(asset).toLowerCase().includes(query)
+        || (asset.origin?.repo || '').toLowerCase().includes(query))
       .sort((a, b) => {
         const pinnedDelta = Number(pinned.has(b.id)) - Number(pinned.has(a.id));
         return pinnedDelta !== 0 ? pinnedDelta : a.name.localeCompare(b.name);
@@ -236,6 +380,10 @@ export class LibraryPickerModal extends BaseModal {
     return libraries.map(library => {
       const assets = this.assetsFor(library.id);
       const selected = library.id === this.state.selectedLibraryId;
+      const visibleAssets = this.state.showAllAssets || assets.length <= ASSET_RENDER_LIMIT
+        ? assets
+        : assets.slice(0, ASSET_RENDER_LIMIT);
+      const hasMore = assets.length > visibleAssets.length;
       return `
         <div class="properties-library-group">
           <button type="button" class="properties-library-item ${selected ? 'active' : ''}" data-picker-library="${this.escapeHtml(library.id)}">
@@ -247,12 +395,21 @@ export class LibraryPickerModal extends BaseModal {
             <div class="properties-library-assets">
               ${assets.length === 0
                 ? `<div class="properties-library-assets-empty">${this.escapeHtml(lbl('empty_library', 'Nenhum asset deste tipo. Importe um catálogo.'))}</div>`
-                : assets.map(asset => `
-                  <button type="button" class="properties-library-asset ${asset.id === this.state.selectedAssetId ? 'active' : ''}" data-picker-asset="${this.escapeHtml(asset.id)}">
-                    <span class="properties-library-asset-name">${this.escapeHtml(asset.name)}</span>
-                    ${badge(this.escapeHtml(asset.audit.verdict), verdictTone(asset.audit.verdict))}
-                  </button>
-                `).join('')}
+                : `${visibleAssets.map(asset => {
+                    const bundled = this.isBundledAsset(asset);
+                    return `
+                      <button type="button" class="properties-library-asset ${asset.id === this.state.selectedAssetId ? 'active' : ''}" data-picker-asset="${this.escapeHtml(asset.id)}">
+                        <span class="properties-library-asset-name">${this.escapeHtml(asset.name)}</span>
+                        ${bundled ? badge(this.escapeHtml(lbl('badge_bundled', 'Nativo Arestrix')), 'success') : ''}
+                        ${badge(this.escapeHtml(asset.audit.verdict), verdictTone(asset.audit.verdict))}
+                      </button>
+                    `;
+                  }).join('')}
+                  ${hasMore ? `
+                    <button type="button" class="properties-library-more-btn" data-picker-show-all="${this.escapeHtml(library.id)}">
+                      ${this.escapeHtml(lbl('show_all', 'Mostrar todos ({{count}})').replace('{{count}}', String(assets.length)))}
+                    </button>
+                  ` : ''}`}
             </div>
           ` : ''}
         </div>
@@ -265,6 +422,7 @@ export class LibraryPickerModal extends BaseModal {
     const library = this.state.selectedLibraryId ? this.registry.get(this.state.selectedLibraryId) : undefined;
     if (!asset) {
       const canImportCatalog = this.options?.kind !== 'agent-template' && this.options?.kind !== 'pipeline';
+      const isBuiltinLib = library?.id === 'library-arestrix' || library?.isBuiltin;
       return `
         <div class="properties-library-empty">
           ${this.escapeHtml(this.options?.kind === 'agent-template'
@@ -272,9 +430,10 @@ export class LibraryPickerModal extends BaseModal {
             : this.options?.kind === 'pipeline'
               ? lbl('empty_pipeline_detail', 'Nenhum pipeline nesta biblioteca. Salve o pipeline atual ou importe um projeto.')
               : lbl('empty_detail', 'Selecione um asset na árvore. Se a biblioteca estiver vazia, importe o catálogo nas Propriedades.'))}
-          ${canImportCatalog ? `<div class="properties-library-actions">
-            <button type="button" class="btn btn-secondary-office" data-picker-import="${this.escapeHtml(library?.id || '')}">${this.escapeHtml(lbl('import_catalog', 'Importar catálogo'))}</button>
-          </div>` : ''}
+          <div class="properties-library-actions">
+            ${canImportCatalog ? `<button type="button" class="btn btn-secondary-office" data-picker-import="${this.escapeHtml(library?.id || '')}">${this.escapeHtml(lbl('import_catalog', 'Importar catálogo'))}</button>` : ''}
+            ${isBuiltinLib ? `<button type="button" class="btn btn-secondary-office" data-picker-reset-builtin="${this.escapeHtml(library?.id || 'library-arestrix')}">${this.escapeHtml(lbl('restore_install_default', 'Restaurar padrão de instalação'))}</button>` : ''}
+          </div>
         </div>
       `;
     }
@@ -295,11 +454,25 @@ export class LibraryPickerModal extends BaseModal {
       || (asset.payload.kind === 'skill' && !asset.payload.markdownContent)
     );
 
+    const bundled = this.isBundledAsset(asset);
+    const domain = this.assetDomain(asset);
+    const subdomain = this.assetSubdomain(asset);
+    const repo = asset.origin?.repo || asset.provenance.repo || '';
+    const originLicense = asset.origin?.license || asset.license || '';
+    const rawOriginUrl = asset.origin?.url || asset.provenance.url || '';
+    const safeOriginUrl = /^https?:\/\//i.test(rawOriginUrl) ? rawOriginUrl : '';
+    const originText = bundled
+      ? [repo, originLicense].filter(Boolean).join(' · ')
+      : [asset.provenance.sourceKind, asset.provenance.authority || ''].filter(Boolean).join(' · ');
+    const canRestoreBuiltin = this.isBundledAssetModified(asset);
+    const isBuiltinLib = library?.id === 'library-arestrix' || library?.isBuiltin;
+
     return `
       <div class="properties-library-detail-header">
         <div>
           <div class="properties-library-detail-title">${this.escapeHtml(asset.name)}</div>
           <div class="properties-library-detail-subtitle">
+            ${bundled ? badge(this.escapeHtml(lbl('badge_bundled', 'Nativo Arestrix')), 'success') : ''}
             ${badge(asset.kind === 'skill' ? 'Skill' : asset.kind === 'agent-template'
               ? (asset.payload.kind === 'agent-template' && asset.payload.template.assetKind === 'pipeline'
                 ? lbl('kind_pipeline', 'Pipeline')
@@ -316,14 +489,22 @@ export class LibraryPickerModal extends BaseModal {
       </div>
       <p class="properties-library-description">${this.escapeHtml(asset.description)}</p>
       <div class="properties-library-meta">
-        <div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('source', 'Origem')}</span><span class="properties-library-meta-value">${this.escapeHtml(asset.provenance.sourceKind)} · ${this.escapeHtml(asset.provenance.authority || '')}</span></div>
+        <div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('source', 'Origem')}</span><span class="properties-library-meta-value">${this.escapeHtml(originText)}${safeOriginUrl ? ` · <a href="${this.escapeHtml(safeOriginUrl)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(lbl('origin_link', 'Referência'))}</a>` : ''}</span></div>
         <div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('license', 'Licença')}</span><span class="properties-library-meta-value">${this.escapeHtml(asset.license)}</span></div>
+        ${domain ? `<div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('meta_domain', 'Domínio')}</span><span class="properties-library-meta-value">${this.escapeHtml(domain)}</span></div>` : ''}
+        ${subdomain ? `<div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('meta_subdomain', 'Subdomínio')}</span><span class="properties-library-meta-value">${this.escapeHtml(subdomain)}</span></div>` : ''}
         <div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('version', 'Versão')}</span><span class="properties-library-meta-value">${this.escapeHtml(asset.version)}</span></div>
         <div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('content', 'Conteúdo')}</span><span class="properties-library-meta-value">${this.escapeHtml(payload)}</span></div>
         <div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('risk', 'Risco')}</span><span class="properties-library-meta-value">${asset.audit.riskScore}/100</span></div>
         ${asset.changelog ? `<div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('changelog', 'Alteração')}</span><span class="properties-library-meta-value">${this.escapeHtml(asset.changelog)}</span></div>` : ''}
         ${asset.remote ? `<div class="properties-library-meta-item"><span class="properties-library-meta-label">${lbl('remote_path', 'Caminho remoto')}</span><span class="properties-library-meta-value">${this.escapeHtml(asset.remote.path)}</span></div>` : ''}
       </div>
+      ${(canRestoreBuiltin || isBuiltinLib) ? `
+        <div class="properties-library-actions" style="margin-top: 8px; margin-bottom: 8px;">
+          ${canRestoreBuiltin ? `<button type="button" class="btn btn-secondary-office" data-picker-restore-builtin="${this.escapeHtml(asset.id)}">${this.escapeHtml(lbl('restore_install_default', 'Restaurar padrão de instalação'))}</button>` : ''}
+          ${!canRestoreBuiltin && isBuiltinLib ? `<button type="button" class="btn btn-secondary-office" data-picker-reset-builtin="${this.escapeHtml(library?.id || 'library-arestrix')}">${this.escapeHtml(lbl('restore_install_default', 'Restaurar padrão de instalação'))}</button>` : ''}
+        </div>
+      ` : ''}
       ${(asset.history?.length || 0) > 0 ? `
         <div class="properties-library-history">
           <div class="properties-library-meta-label">${lbl('history', 'Histórico de versões')}</div>
@@ -353,11 +534,63 @@ export class LibraryPickerModal extends BaseModal {
   }
 
   private rerender(): void {
+    const libraryAssets = this.kindAssetsFor(this.state.selectedLibraryId);
+    const validDomains = new Set(this.collectDomains(libraryAssets));
+    if (this.state.domain && !validDomains.has(this.state.domain)) {
+      this.state.domain = '';
+      this.state.subdomain = '';
+    }
+    const validSubdomains = new Set(this.collectSubdomains(libraryAssets, this.state.domain));
+    if (this.state.subdomain && !validSubdomains.has(this.state.subdomain)) {
+      this.state.subdomain = '';
+    }
+    const domainSelect = this.dialog.querySelector<HTMLSelectElement>('[data-picker-domain]');
+    const subdomainSelect = this.dialog.querySelector<HTMLSelectElement>('[data-picker-subdomain]');
+    if (domainSelect) {
+      domainSelect.innerHTML = this.renderDomainOptions(libraryAssets);
+      domainSelect.value = this.state.domain;
+    }
+    if (subdomainSelect) {
+      subdomainSelect.innerHTML = this.renderSubdomainOptions(libraryAssets);
+      subdomainSelect.value = this.state.subdomain;
+    }
+
     const tree = this.dialog.querySelector<HTMLElement>('[data-picker-tree]');
     const detail = this.dialog.querySelector<HTMLElement>('[data-picker-detail]');
     if (tree) tree.innerHTML = this.renderTree();
     if (detail) detail.innerHTML = this.renderDetail();
     this.updateFooter();
+  }
+
+  private async restoreBuiltinAsset(assetId: string): Promise<void> {
+    if (!assetId) return;
+    const restoreService = this.service as RestoreCapableLibraryService;
+    const restored = await restoreService.restoreBuiltinAsset?.(assetId);
+    const ok = Boolean(restored && (typeof restored !== 'object' || !('ok' in restored) || restored.ok));
+    this.notify(
+      ok ? 'success' : 'warning',
+      ok
+        ? lbl('msg_restored_asset', 'Asset restaurado para o padrão de instalação.')
+        : lbl('msg_restore_failed', 'Não foi possível restaurar o padrão de instalação.')
+    );
+    this.rerender();
+  }
+
+  private async resetBuiltinLibrary(): Promise<void> {
+    const okConfirm = typeof window === 'undefined' || typeof window.confirm !== 'function'
+      ? true
+      : window.confirm(lbl('confirm_reset_builtin', 'Restaurar a Biblioteca Arestrix para o padrão de instalação?'));
+    if (!okConfirm) return;
+    const restoreService = this.service as RestoreCapableLibraryService;
+    const result = await restoreService.resetBuiltinLibrary?.();
+    this.notify(
+      result !== undefined ? 'success' : 'warning',
+      result !== undefined
+        ? lbl('msg_reset_builtin', 'Biblioteca Arestrix restaurada para o padrão de instalação.')
+        : lbl('msg_restore_failed', 'Não foi possível restaurar o padrão de instalação.')
+    );
+    this.state.selectedAssetId = this.firstSelectableAsset(this.state.selectedLibraryId)?.id;
+    this.rerender();
   }
 
   private updateFooter(): void {
