@@ -16,6 +16,8 @@ import { dirName, joinPath, pathCrumbs, stripExtension } from '../../core/paths.
 import { CodeModal } from '../CodeModal.ts';
 import { GlobalDefaultsModal } from '../GlobalDefaultsModal.ts';
 import { WorkspaceManager } from '../../core/workspace/WorkspaceManager.ts';
+import { LibraryRegistry } from '../../core/libraries/LibraryRegistry.ts';
+import { bindLibraryBrowser, renderLibraryBrowser } from '../libraries/LibraryTree.ts';
 import { t, getLocale } from '../../i18n/index.ts';
 import { PropertiesController } from '../properties/PropertiesController.ts';
 import { ribbonIcon } from './RibbonIcons.ts';
@@ -49,13 +51,14 @@ export function recencyGroup(iso: string | undefined, now: Date = new Date()): R
 }
 
 export class BackstageView {
+  private static instance: BackstageView | null = null;
   private overlay?: HTMLElement;
   private graph: Graph;
   private viewport: Viewport;
   private projectManager: ProjectManager;
   private codeModal: CodeModal;
   private propertiesController: PropertiesController;
-  private activeSection: 'info' | 'new' | 'open' | 'saveas' | 'export' | 'options' | 'properties' = 'info';
+  private activeSection: 'info' | 'new' | 'open' | 'saveas' | 'export' | 'options' | 'properties' | 'library' = 'info';
 
   // Estado do dropdown único da tela Informações (Identificação + Arquivos + Grafo e Pipelines)
   private infoDropdownOpen = false;
@@ -95,6 +98,8 @@ export class BackstageView {
       this.viewport
     );
 
+    BackstageView.instance = this;
+
     if (typeof document !== 'undefined') {
       this.overlay = document.createElement('div');
       this.overlay.className = 'office-backstage-overlay';
@@ -130,6 +135,10 @@ export class BackstageView {
         }
       });
     }
+  }
+
+  public static getInstance(): BackstageView | null {
+    return BackstageView.instance;
   }
 
   public async initSaveAsState(): Promise<void> {
@@ -198,7 +207,7 @@ export class BackstageView {
     }
   }
 
-  public async open(section: 'info' | 'new' | 'open' | 'save' | 'saveas' | 'export' | 'options' | 'properties' = 'info'): Promise<void> {
+  public async open(section: 'info' | 'new' | 'open' | 'save' | 'saveas' | 'export' | 'options' | 'properties' | 'library' = 'info'): Promise<void> {
     this.activeSection = section === 'save' ? 'saveas' : section;
     try {
       if (this.activeSection !== 'properties') {
@@ -272,6 +281,9 @@ export class BackstageView {
           <ul class="backstage-nav-list">
             <li class="backstage-nav-item ${this.activeSection === 'info' ? 'active' : ''}" data-section="info">
               <span>ℹ️</span> ${t('backstage.sidebar.info')}
+            </li>
+            <li class="backstage-nav-item ${this.activeSection === 'library' ? 'active' : ''}" data-section="library">
+              <span>📚</span> ${t('backstage.sidebar.library')}
             </li>
             <li class="backstage-nav-item ${this.activeSection === 'new' ? 'active' : ''}" data-section="new">
               <span>📄</span> ${t('backstage.sidebar.new')}
@@ -906,6 +918,7 @@ export class BackstageView {
                     <strong>${t('backstage.info.output_dir')}</strong>
                     <code style="display: block; margin-top: 4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; color: #334155; font-size: 11px; border: 1px solid #e2e8f0; max-width: 100%; box-sizing: border-box;">${this.escapeHtml(proj.outputDir || 'Output')}</code>
                   </p>
+                  <button type="button" class="btn btn-secondary-office" id="btn-backstage-library-from-info" style="margin-top: 8px; width: 100%;">${t('backstage.info.btn_open_library', 'Gerenciar Biblioteca de Assets')}</button>
                 </div>
                 <div class="backstage-info-dropdown-section">
                   <div class="backstage-info-dropdown-section-title">${t('backstage.info.card_graph')}</div>
@@ -967,6 +980,9 @@ export class BackstageView {
             ${this.renderRecentProjectsTable(recentList)}
           </div>
         `;
+
+      case 'library':
+        return this.renderLibrarySection();
 
       case 'new':
         return `
@@ -1151,6 +1167,18 @@ export class BackstageView {
         `;
       }
     }
+  }
+
+  private renderLibrarySection(): string {
+    const scope: 'workspace' | 'studio' | 'project' = 'workspace';
+    const libraryHtml = renderLibraryBrowser({ registry: LibraryRegistry.getInstance(), scope });
+    return `
+      <h2 class="backstage-header-title">${t('backstage.library.title', 'Asset Library')}</h2>
+      <p class="backstage-header-sub">${t('backstage.library.subtitle', 'Manage vertex and agent assets in the Arestrix Library.')}</p>
+      <div class="backstage-library-container" id="backstage-library-container">
+        ${libraryHtml}
+      </div>
+    `;
   }
 
   private hasActiveModal(): boolean {
@@ -1483,6 +1511,12 @@ export class BackstageView {
       this.render();
     });
 
+    // Abrir página da Biblioteca de Assets a partir do card Arquivos na tela Informações
+    this.overlay.querySelector('#btn-backstage-library-from-info')?.addEventListener('click', () => {
+      this.activeSection = 'library';
+      this.render();
+    });
+
     // Criar Projeto
     this.overlay.querySelector('#btn-backstage-create-submit')?.addEventListener('click', async () => {
       if (!this.overlay) return;
@@ -1554,6 +1588,16 @@ export class BackstageView {
 
     if (this.activeSection === 'open') {
       this.bindOpenSectionEvents();
+    }
+
+    if (this.activeSection === 'library') {
+      const container = this.overlay?.querySelector('#backstage-library-container');
+      if (container) {
+        bindLibraryBrowser(container as HTMLElement, {
+          registry: LibraryRegistry.getInstance(),
+          scope: 'workspace'
+        });
+      }
     }
 
     // Exportações (Abre diretamente sobre a BackstageView)

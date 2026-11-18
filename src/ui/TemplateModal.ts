@@ -6,11 +6,18 @@ import { AddNodeCommand, AddEdgeCommand, CompoundCommand } from '../core/history
 import { INodeData, IEdgeData, defaultCallSettings, defaultCallVertexSettings } from '../core/types.ts';
 import { ModalWindowManager, IModalWindowController } from './modals/ModalWindowManager.ts';
 import { t, onLocaleChange } from '../i18n/index.ts';
-import { LibraryPickerModal } from './libraries/LibraryPickerModal.ts';
+import { BackstageView } from './ribbon/BackstageView.ts';
 import { LibraryService } from '../core/libraries/LibraryService.ts';
 import type { ILibraryAsset } from '../core/libraries/types.ts';
+import type { IAssetOriginMetadata } from '../core/types.ts';
 import { globalEventBus } from '../core/EventBus.ts';
 import { selectProjectPipelineFiles } from '../core/templates/ProjectPipelineImport.ts';
+
+type RestoreCapableLibraryService = LibraryService & {
+  resetBuiltinLibrary?: () => Promise<{ restored?: number; imported?: ILibraryAsset[]; ok?: boolean } | number | void>;
+};
+
+const GRID_RENDER_LIMIT = 60;
 
 const CATEGORY_MAP: { id: string; labelKey: string }[] = [
   { id: 'Todos', labelKey: 'template_modal.cat_all' },
@@ -30,7 +37,10 @@ export class TemplateModal {
   private registry: AgentTemplateRegistry;
   private windowController?: IModalWindowController;
   private activeCategory: string = 'Todos';
-  private libraryPicker?: LibraryPickerModal;
+  private searchQuery: string = '';
+  private activeDomain: string = '';
+  private activeSubdomain: string = '';
+  private showAllTemplates: boolean = false;
   private readonly libraryService = LibraryService.getInstance();
 
   constructor(graph: Graph, viewport: Viewport) {
@@ -53,6 +63,10 @@ export class TemplateModal {
 
   public show(): void {
     this.activeCategory = 'Todos';
+    this.searchQuery = '';
+    this.activeDomain = '';
+    this.activeSubdomain = '';
+    this.showAllTemplates = false;
     this.render();
     this.overlay.classList.remove('hidden');
     this.windowController?.bringToFront();
@@ -62,11 +76,95 @@ export class TemplateModal {
     this.overlay.classList.add('hidden');
   }
 
-  private render(): void {
-    const allTemplates = this.registry.getAllTemplates();
-    const filtered = this.activeCategory === 'Todos'
+  private categoryTemplates(allTemplates: IAgentTemplate[]): IAgentTemplate[] {
+    return this.activeCategory === 'Todos'
       ? allTemplates
       : allTemplates.filter(tpl => tpl.category === this.activeCategory);
+  }
+
+  private filteredTemplates(allTemplates: IAgentTemplate[]): IAgentTemplate[] {
+    const q = this.searchQuery.trim().toLowerCase();
+    return this.categoryTemplates(allTemplates)
+      .filter(tpl => !this.activeDomain || (tpl.domain || '').trim() === this.activeDomain)
+      .filter(tpl => !this.activeSubdomain || (tpl.subdomain || '').trim() === this.activeSubdomain)
+      .filter(tpl => !q
+        || tpl.name.toLowerCase().includes(q)
+        || tpl.description.toLowerCase().includes(q)
+        || (tpl.domain || '').toLowerCase().includes(q)
+        || (tpl.subdomain || '').toLowerCase().includes(q)
+        || (tpl.origin?.repo || '').toLowerCase().includes(q));
+  }
+
+  private collectDomains(templates: IAgentTemplate[]): string[] {
+    const set = new Set<string>();
+    for (const tpl of templates) {
+      const d = (tpl.domain || '').trim();
+      if (d) set.add(d);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }
+
+  private collectSubdomains(templates: IAgentTemplate[], domain: string): string[] {
+    const set = new Set<string>();
+    for (const tpl of templates) {
+      if (domain && (tpl.domain || '').trim() !== domain) continue;
+      const s = (tpl.subdomain || '').trim();
+      if (s) set.add(s);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }
+
+  private renderDomainOptions(templates: IAgentTemplate[]): string {
+    const domains = this.collectDomains(templates);
+    return [
+      `<option value="">${this.escapeHtml(t('template_modal.filter_domain_all', 'Todos os domínios'))}</option>`,
+      ...domains.map(d => `<option value="${this.escapeHtml(d)}" ${d === this.activeDomain ? 'selected' : ''}>${this.escapeHtml(d)}</option>`)
+    ].join('');
+  }
+
+  private renderSubdomainOptions(templates: IAgentTemplate[]): string {
+    const subdomains = this.collectSubdomains(templates, this.activeDomain);
+    return [
+      `<option value="">${this.escapeHtml(t('template_modal.filter_subdomain_all', 'Todos os subdomínios'))}</option>`,
+      ...subdomains.map(s => `<option value="${this.escapeHtml(s)}" ${s === this.activeSubdomain ? 'selected' : ''}>${this.escapeHtml(s)}</option>`)
+    ].join('');
+  }
+
+  private renderGridMarkup(filtered: IAgentTemplate[]): string {
+    if (filtered.length === 0) {
+      return `
+        <div class="templates-grid">
+          <div class="templates-empty">
+            <div class="empty-icon">🔍</div>
+            <div class="empty-title">${t('template_modal.empty_title')}</div>
+            <div class="empty-desc">${this.activeCategory === 'Agentes'
+              ? t('template_modal.empty_agents_desc', 'Salve um vértice agente como template ou adicione um agente da biblioteca.')
+              : t('template_modal.empty_desc')}</div>
+          </div>
+        </div>
+      `;
+    }
+    const visible = this.showAllTemplates || filtered.length <= GRID_RENDER_LIMIT
+      ? filtered
+      : filtered.slice(0, GRID_RENDER_LIMIT);
+    const hasMore = filtered.length > visible.length;
+    return `
+      <div class="templates-grid">
+        ${visible.map(tpl => this.renderTemplateCard(tpl)).join('')}
+      </div>
+      ${hasMore ? `
+        <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 12px;">
+          <span style="font-size: 12px; color: #616161;">${this.escapeHtml(t('template_modal.showing_subset', 'Mostrando {{shown}} de {{total}} templates', { shown: visible.length, total: filtered.length }))}</span>
+          <button type="button" id="btn-show-all-templates" class="btn btn-secondary-pill">${this.escapeHtml(t('template_modal.show_all', 'Mostrar todos ({{count}})', { count: filtered.length }))}</button>
+        </div>
+      ` : ''}
+    `;
+  }
+
+  private render(): void {
+    const allTemplates = this.registry.getAllTemplates();
+    const catTemplates = this.categoryTemplates(allTemplates);
+    const filtered = this.filteredTemplates(allTemplates);
 
     const titleBarHtml = ModalWindowManager.createTitleBarHTML({
       title: t('template_modal.title'),
@@ -111,6 +209,9 @@ export class TemplateModal {
                 ${t('template_modal.btn_library_pipelines', 'Pipelines')}
               </button>
             ` : ''}
+            <button id="btn-restore-builtin-templates" class="btn btn-secondary-pill" title="${t('template_modal.btn_restore_builtin', 'Restaurar padrão de instalação')}">
+              ${t('template_modal.btn_restore_builtin', 'Restaurar padrão de instalação')}
+            </button>
             <button id="btn-import-plugin" class="btn btn-secondary-pill" title="${t('template_modal.btn_import_tip')}">
               ${t('template_modal.btn_import')}
             </button>
@@ -134,19 +235,20 @@ export class TemplateModal {
           }).join('')}
         </div>
 
+        <!-- Busca e Taxonomia (Domínio → Subdomínio) -->
+        <div class="template-filter-bar" id="template-taxonomy-bar">
+          <input type="search" id="template-search-input" class="form-input" placeholder="${this.escapeHtml(t('template_modal.search_placeholder', 'Buscar templates por nome, domínio ou descrição...'))}" value="${this.escapeHtml(this.searchQuery)}" />
+          <select id="template-domain-select" class="form-select">
+            ${this.renderDomainOptions(catTemplates)}
+          </select>
+          <select id="template-subdomain-select" class="form-select">
+            ${this.renderSubdomainOptions(catTemplates)}
+          </select>
+        </div>
+
         <!-- Grid de Cards de Templates -->
-        <div class="template-modal-body">
-          <div class="templates-grid">
-            ${filtered.length === 0 ? `
-              <div class="templates-empty">
-                <div class="empty-icon">🔍</div>
-                <div class="empty-title">${t('template_modal.empty_title')}</div>
-                <div class="empty-desc">${this.activeCategory === 'Agentes'
-                  ? t('template_modal.empty_agents_desc', 'Salve um vértice agente como template ou adicione um agente da biblioteca.')
-                  : t('template_modal.empty_desc')}</div>
-              </div>
-            ` : filtered.map(tpl => this.renderTemplateCard(tpl)).join('')}
-          </div>
+        <div class="template-modal-body" id="templates-grid-container">
+          ${this.renderGridMarkup(filtered)}
         </div>
 
         <div class="modal-footer">
@@ -186,6 +288,9 @@ export class TemplateModal {
       ? paramKeys.slice(0, 3).join(', ') + (paramKeys.length > 3 ? '...' : '')
       : t('template_modal.none');
 
+    const isBundled = Boolean(tpl.bundledInProduct || tpl.origin?.bundledInProduct);
+    const originText = [tpl.origin?.repo, tpl.origin?.license].filter(Boolean).join(' · ');
+
     return `
       <div class="template-card" data-template-id="${tpl.id}">
         <div class="template-card-header">
@@ -194,12 +299,20 @@ export class TemplateModal {
             <div class="template-name">${this.escapeHtml(tpl.name)}</div>
             <div class="template-badges">
               <span class="inspector-badge badge-${tpl.taskType}">${tpl.taskType.toUpperCase()}</span>
+              ${isBundled ? `<span class="properties-badge properties-badge--success">${t('template_modal.bundled_badge', 'Nativo Arestrix')}</span>` : ''}
               ${tpl.assetKind === 'pipeline' ? `<span class="plugin-custom-badge">${t('template_modal.pipeline_badge', 'PIPELINE')}</span>` : ''}
               ${tpl.taskType === 'agent' ? `<span class="plugin-custom-badge">${t('template_modal.preset_badge', 'PRÉ-CONFIGURADO')}</span>` : ''}
-              ${tpl.isCustomPlugin && tpl.assetKind !== 'pipeline' ? `<span class="plugin-custom-badge">${t('template_modal.dynamic_plugin_badge')}</span>` : ''}
+              ${tpl.isCustomPlugin && !isBundled && tpl.assetKind !== 'pipeline' ? `<span class="plugin-custom-badge">${t('template_modal.dynamic_plugin_badge')}</span>` : ''}
             </div>
           </div>
         </div>
+
+        ${(tpl.domain || tpl.subdomain || originText) ? `
+          <div style="font-size: 11px; color: #616161; margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 6px;">
+            ${tpl.domain ? `<span>${this.escapeHtml(tpl.domain)}${tpl.subdomain ? ` → ${this.escapeHtml(tpl.subdomain)}` : ''}</span>` : ''}
+            ${originText ? `<span>(${this.escapeHtml(originText)})</span>` : ''}
+          </div>
+        ` : ''}
 
         <p class="template-desc">${this.escapeHtml(tpl.description)}</p>
 
@@ -324,11 +437,76 @@ export class TemplateModal {
         const cat = (e.currentTarget as HTMLElement).getAttribute('data-cat');
         if (cat) {
           this.activeCategory = cat;
+          this.activeDomain = '';
+          this.activeSubdomain = '';
+          this.showAllTemplates = false;
           this.render();
         }
       });
     });
 
+    const searchInput = this.overlay.querySelector('#template-search-input') as HTMLInputElement | null;
+    searchInput?.addEventListener('input', () => {
+      this.searchQuery = searchInput.value;
+      this.showAllTemplates = false;
+      this.updateGridAndTaxonomy();
+    });
+
+    const domainSelect = this.overlay.querySelector('#template-domain-select') as HTMLSelectElement | null;
+    domainSelect?.addEventListener('change', () => {
+      this.activeDomain = domainSelect.value;
+      this.activeSubdomain = '';
+      this.showAllTemplates = false;
+      this.updateGridAndTaxonomy();
+    });
+
+    const subdomainSelect = this.overlay.querySelector('#template-subdomain-select') as HTMLSelectElement | null;
+    subdomainSelect?.addEventListener('change', () => {
+      this.activeSubdomain = subdomainSelect.value;
+      this.showAllTemplates = false;
+      this.updateGridAndTaxonomy();
+    });
+
+    this.overlay.querySelector('#btn-restore-builtin-templates')?.addEventListener('click', () => {
+      const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
+        ? true
+        : window.confirm(t('template_modal.confirm_restore_builtin', 'Restaurar a Biblioteca Arestrix para o padrão de instalação?'));
+      if (!confirmed) return;
+      const restoreService = this.libraryService as RestoreCapableLibraryService;
+      void Promise.resolve(restoreService.resetBuiltinLibrary?.()).then((result) => {
+        globalEventBus.emit('notification:show', {
+          severity: result !== undefined ? 'success' : 'warning',
+          title: t('template_modal.btn_restore_builtin', 'Restaurar padrão de instalação'),
+          message: result !== undefined
+            ? t('template_modal.restore_builtin_success', 'Padrão de instalação restaurado.')
+            : t('template_modal.restore_builtin_failed', 'Não foi possível restaurar o padrão de instalação.')
+        });
+        this.render();
+      });
+    });
+
+    this.bindGridEvents();
+
+    // Inserir template vindo da biblioteca
+    this.overlay.querySelector('#btn-library-templates')?.addEventListener('click', () => {
+      const backstage = BackstageView.getInstance();
+      if (backstage) {
+        backstage.open('library');
+      }
+    });
+
+    // Inserir pipeline vindo da biblioteca como agente
+    this.overlay.querySelector('#btn-library-pipelines')?.addEventListener('click', () => {
+      const backstage = BackstageView.getInstance();
+      if (backstage) {
+        backstage.open('library');
+      }
+    });
+
+    this.bindRemainingTemplateEvents();
+  }
+
+  private bindGridEvents(): void {
     // Inserir nó individual
     this.overlay.querySelectorAll('.btn-insert-node').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -342,64 +520,9 @@ export class TemplateModal {
       });
     });
 
-    // Inserir template vindo da biblioteca
-    this.overlay.querySelector('#btn-library-templates')?.addEventListener('click', () => {
-      if (!this.libraryPicker) this.libraryPicker = new LibraryPickerModal();
-      this.libraryPicker.open({
-        kind: 'agent-template',
-        projectId: this.graph.getProjectId(),
-        title: t('template_modal.library_title', 'Inserir template da biblioteca'),
-        subtitle: t('template_modal.library_subtitle', 'O template será registrado no catálogo e inserido no grafo.'),
-        onSelect: async (asset) => {
-          if (asset.payload.kind !== 'agent-template') return;
-          const result = this.registry.importTemplatesFromJSON(JSON.stringify(asset.payload.template));
-          if (result.success === 0) {
-            alert(t('template_modal.library_insert_failed', 'Não foi possível importar o template: {{errors}}', { errors: result.errors.join('; ') }));
-            return;
-          }
-          this.activeCategory = this.registry.getTemplate(asset.payload.template.id)?.category || 'Agentes';
-          this.render();
-          const importedTemplate = this.registry.getTemplate(asset.payload.template.id);
-          const source = this.librarySourceForAsset(asset);
-          if (importedTemplate?.assetKind === 'pipeline') this.insertPipelineAsAgent(importedTemplate, source);
-          else this.insertTemplateNode(asset.payload.template.id, source);
-          this.hide();
-          globalEventBus.emit('notification:show', {
-            severity: 'success',
-            title: t('template_modal.library_title', 'Inserir template da biblioteca'),
-            message: t('template_modal.library_inserted', 'Template "{{name}}" inserido no grafo.', { name: asset.name })
-          });
-        }
-      });
-    });
-
-    // Inserir pipeline vindo da biblioteca como agente
-    this.overlay.querySelector('#btn-library-pipelines')?.addEventListener('click', () => {
-      if (!this.libraryPicker) this.libraryPicker = new LibraryPickerModal();
-      this.libraryPicker.open({
-        kind: 'pipeline',
-        projectId: this.graph.getProjectId(),
-        title: t('template_modal.library_pipeline_title', 'Inserir pipeline da biblioteca'),
-        subtitle: t('template_modal.library_pipeline_subtitle', 'O pipeline será empacotado como um único agente visual.'),
-        onSelect: async (asset) => {
-          if (asset.payload.kind !== 'pipeline') return;
-          const result = this.registry.importTemplatesFromJSON(JSON.stringify(asset.payload.template));
-          if (result.success === 0) {
-            alert(t('template_modal.library_insert_failed', 'Não foi possível importar o template: {{errors}}', { errors: result.errors.join('; ') }));
-            return;
-          }
-          const importedTemplate = this.registry.getTemplate(asset.payload.template.id);
-          this.activeCategory = 'Agentes';
-          this.render();
-          if (importedTemplate) this.insertPipelineAsAgent(importedTemplate, this.librarySourceForAsset(asset));
-          this.hide();
-          globalEventBus.emit('notification:show', {
-            severity: 'success',
-            title: t('template_modal.library_pipeline_title', 'Inserir pipeline da biblioteca'),
-            message: t('template_modal.pipeline_inserted', 'Pipeline "{{name}}" inserido como agente visual.', { name: asset.name })
-          });
-        }
-      });
+    this.overlay.querySelector('#btn-show-all-templates')?.addEventListener('click', () => {
+      this.showAllTemplates = true;
+      this.updateGridAndTaxonomy();
     });
 
     // Salvar template customizado na biblioteca
@@ -444,6 +567,29 @@ export class TemplateModal {
         if (tpl) this.showCodePreview(tpl);
       });
     });
+  }
+
+  private updateGridAndTaxonomy(): void {
+    const allTemplates = this.registry.getAllTemplates();
+    const catTemplates = this.categoryTemplates(allTemplates);
+    const domainSelect = this.overlay.querySelector('#template-domain-select') as HTMLSelectElement | null;
+    const subdomainSelect = this.overlay.querySelector('#template-subdomain-select') as HTMLSelectElement | null;
+    if (domainSelect) {
+      domainSelect.innerHTML = this.renderDomainOptions(catTemplates);
+      domainSelect.value = this.activeDomain;
+    }
+    if (subdomainSelect) {
+      subdomainSelect.innerHTML = this.renderSubdomainOptions(catTemplates);
+      subdomainSelect.value = this.activeSubdomain;
+    }
+    const container = this.overlay.querySelector('#templates-grid-container') as HTMLElement | null;
+    if (container) {
+      container.innerHTML = this.renderGridMarkup(this.filteredTemplates(allTemplates));
+      this.bindGridEvents();
+    }
+  }
+
+  private bindRemainingTemplateEvents(): void {
 
     // Preset Arquitetura Completa
     this.overlay.querySelector('#btn-preset-pipeline')?.addEventListener('click', () => {
@@ -524,55 +670,10 @@ export class TemplateModal {
 
     // Publicar o pipeline atual como nova versão de um asset da biblioteca
     this.overlay.querySelector('#btn-publish-pipeline-version')?.addEventListener('click', () => {
-      if (!this.libraryPicker) this.libraryPicker = new LibraryPickerModal();
-      this.libraryPicker.open({
-        kind: 'pipeline',
-        projectId: this.graph.getProjectId(),
-        title: t('template_modal.publish_version_title', 'Publicar nova versão'),
-        subtitle: t('template_modal.publish_version_subtitle', 'Escolha o pipeline da biblioteca que receberá o pipeline atual como nova versão.'),
-        onSelect: async (asset) => {
-          if (asset.payload.kind !== 'pipeline') return;
-          const note = typeof window !== 'undefined' && typeof window.prompt === 'function'
-            ? window.prompt(
-              t('template_modal.publish_version_prompt', 'Descreva a alteração desta versão (opcional):'),
-              ''
-            )
-            : '';
-          if (note === null) return;
-
-          let template: IAgentTemplate | undefined;
-          try {
-            template = this.registry.saveGraphAsPipelineTemplate(this.graph, asset.name);
-            const json = this.registry.exportTemplateAsJSON(template.id);
-            if (!json) throw new Error('não foi possível serializar o pipeline atual');
-            const updated = await this.libraryService.saveTemplateToLibrary(JSON.parse(json), {
-              assetId: asset.id,
-              name: asset.name,
-              changelog: note.trim() || t('template_modal.publish_version_default_note', 'Publicado a partir do pipeline atual.')
-            });
-            if (!updated) throw new Error('o asset não pertence a uma biblioteca editável');
-            globalEventBus.emit('notification:show', {
-              severity: 'success',
-              title: t('template_modal.publish_version_title', 'Publicar nova versão'),
-              message: t('template_modal.publish_version_success', 'Versão {{version}} publicada para "{{name}}".', {
-                version: updated.version,
-                name: updated.name
-              })
-            });
-            this.render();
-          } catch (error: any) {
-            globalEventBus.emit('notification:show', {
-              severity: 'error',
-              title: t('template_modal.publish_version_title', 'Publicar nova versão'),
-              message: t('template_modal.publish_version_failed', 'Não foi possível publicar a versão: {{error}}', {
-                error: error?.message || String(error)
-              })
-            });
-          } finally {
-            if (template) this.registry.unregisterTemplate(template.id);
-          }
-        }
-      });
+      const backstage = BackstageView.getInstance();
+      if (backstage) {
+        backstage.open('library');
+      }
     });
 
     // Importar a pasta de outro projeto, usando pipelines/main.json
@@ -664,7 +765,11 @@ export class TemplateModal {
     });
   }
 
-  private insertTemplateNode(templateId: string, source?: INodeData['librarySource']): void {
+  private insertTemplateNode(
+    templateId: string,
+    source?: INodeData['librarySource'],
+    origin?: IAssetOriginMetadata
+  ): void {
     const center = this.viewport.getCameraCenter();
     const existingCount = this.graph.getAllNodes().length;
     const offset = (existingCount % 5) * 40;
@@ -672,7 +777,25 @@ export class TemplateModal {
     const y = Math.round((center.y - offset) / 10) * 10;
 
     const node = this.registry.instantiateNode(templateId, undefined, x, y);
-    if (source) node.librarySource = { ...source };
+    const tpl = this.registry.getTemplate(templateId);
+    if (source) {
+      node.librarySource = { ...source };
+    } else if (tpl?.bundledInProduct || tpl?.origin?.bundledInProduct) {
+      node.librarySource = {
+        libraryId: tpl.origin?.libraryId || 'library-arestrix',
+        assetId: tpl.origin?.assetId || `asset-library-arestrix-agent-${tpl.id}`,
+        hash: tpl.origin?.installHash || '',
+        version: tpl.origin?.installVersion || tpl.version || '1.0.0',
+        bundledInProduct: true,
+        originRepo: tpl.origin?.repo,
+        originUrl: tpl.origin?.url,
+        originLicense: tpl.origin?.license
+      };
+    }
+    const resolvedOrigin = origin || tpl?.origin;
+    if (resolvedOrigin) {
+      node.origin = JSON.parse(JSON.stringify(resolvedOrigin));
+    }
     const cmd = new AddNodeCommand(this.graph, node);
     this.graph.commandManager.execute(cmd);
 
@@ -680,20 +803,15 @@ export class TemplateModal {
     this.viewport.selectNode(node.id);
   }
 
-  private librarySourceForAsset(asset: ILibraryAsset): NonNullable<INodeData['librarySource']> {
-    return {
-      libraryId: asset.libraryId,
-      assetId: asset.id,
-      hash: asset.audit.hash,
-      version: asset.version
-    };
-  }
-
   /**
    * Pipeline importado como agente: um único vértice visível (tipo Call com
    * apresentação de agente) executa um subflow interno oculto.
    */
-  private insertPipelineAsAgent(tpl: IAgentTemplate, source?: INodeData['librarySource']): void {
+  private insertPipelineAsAgent(
+    tpl: IAgentTemplate,
+    source?: INodeData['librarySource'],
+    origin?: IAssetOriginMetadata
+  ): void {
     if (!tpl.childGraph) return;
     const center = this.viewport.getCameraCenter();
     const stamp = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
@@ -733,6 +851,7 @@ export class TemplateModal {
       presentation: 'agent',
       pipelineInterface: tpl.pipelineInterface ? JSON.parse(JSON.stringify(tpl.pipelineInterface)) : undefined,
       librarySource: source ? { ...source } : undefined,
+      origin: (origin || tpl.origin) ? JSON.parse(JSON.stringify(origin || tpl.origin)) : undefined,
       requiredHeaders: tpl.requiredHeaders
     };
 

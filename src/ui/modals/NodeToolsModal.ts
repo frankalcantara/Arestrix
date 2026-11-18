@@ -4,15 +4,11 @@ import { INodeData, ICodeModeConfig, CodeModeTool } from '../../core/types.ts';
 import { UpdateNodeCommand } from '../../core/history/GraphCommands.ts';
 import { t } from '../../i18n/index.ts';
 import { McpToolPicker } from '../McpToolPicker.ts';
-import { globalEventBus } from '../../core/EventBus.ts';
-import { LibraryService } from '../../core/libraries/LibraryService.ts';
-import { LibraryPickerModal } from '../libraries/LibraryPickerModal.ts';
+import { BackstageView } from '../ribbon/BackstageView.ts';
 
 export class NodeToolsModal extends BaseModal {
   private graph: Graph;
   private mcpPicker?: McpToolPicker;
-  private libraryPicker?: LibraryPickerModal;
-  private readonly libraryService = LibraryService.getInstance();
   private activeNodeId: string | null = null;
   private activeTab: 'native' | 'mcp' | 'governance' = 'native';
 
@@ -227,31 +223,10 @@ export class NodeToolsModal extends BaseModal {
     }
 
     this.dialog.querySelector('#btn-node-tools-add-library')?.addEventListener('click', () => {
-      if (!this.libraryPicker) this.libraryPicker = new LibraryPickerModal();
-      this.libraryPicker.open({
-        kind: 'mcp',
-        projectId: this.graph.getProjectId(),
-        title: t('node_modals.library_mcp_title', 'Adicionar MCP da Biblioteca'),
-        subtitle: t('node_modals.library_mcp_subtitle', 'O servidor será instalado no Workspace antes de entrar no agente.'),
-        onSelect: async (asset) => {
-          const install = await this.libraryService.installAsset(asset.id, { allowCaution: true });
-          if (!install.ok) {
-            globalEventBus.emit('notification:show', {
-              severity: 'warning',
-              title: t('node_modals.library_mcp_title', 'Adicionar MCP da Biblioteca'),
-              message: install.reason || t('node_modals.library_mcp_install_failed', 'Não foi possível instalar o MCP.')
-            });
-            return;
-          }
-          const current = this.mcpPicker?.getValue() ?? { servers: [], tools: [] };
-          await this.mcpPicker?.load(current, isInherited);
-          globalEventBus.emit('notification:show', {
-            severity: 'success',
-            title: t('node_modals.library_mcp_title', 'Adicionar MCP da Biblioteca'),
-            message: t('node_modals.library_mcp_installed', 'MCP "{{name}}" instalado no Workspace.', { name: asset.name })
-          });
-        }
-      });
+      const backstage = BackstageView.getInstance();
+      if (backstage) {
+        backstage.open('library');
+      }
     });
 
     this.dialog.querySelector('#btn-cancel-tools-modal')?.addEventListener('click', () => this.hide());
